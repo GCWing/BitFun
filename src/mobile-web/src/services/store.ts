@@ -30,6 +30,7 @@ interface MobileStore {
   setSessions: (s: SessionInfo[]) => void;
   appendSessions: (s: SessionInfo[]) => void;
   updateSessionName: (sessionId: string, name: string) => void;
+  removeSession: (sessionId: string) => void;
 
   activeSessionId: string | null;
   setActiveSessionId: (id: string | null) => void;
@@ -74,6 +75,16 @@ export const useMobileStore = create<MobileStore>((set, get) => ({
         s.session_id === sessionId ? { ...s, name } : s,
       ),
     })),
+  removeSession: (sessionId) =>
+    set((state) => {
+      const { [sessionId]: _, ...restMessages } = state.messagesBySession;
+      const { [sessionId]: __, ...restDeleted } = state.deletedMessageIds;
+      return {
+        sessions: state.sessions.filter((s) => s.session_id !== sessionId),
+        messagesBySession: restMessages,
+        deletedMessageIds: restDeleted,
+      };
+    }),
 
   activeSessionId: null,
   setActiveSessionId: (activeSessionId) => set({ activeSessionId }),

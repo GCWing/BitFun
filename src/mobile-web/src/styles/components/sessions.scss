@@ -812,3 +812,74 @@
     transition: none !important;
   }
 }
+
+// Session long-press menu-active state
+.session-list__item--menu-active {
+  opacity: 0.7;
+}
+
+// Delete confirmation dialog
+.session-list__confirm-dialog {
+  width: 85%;
+  max-width: 340px;
+  background: var(--color-bg-elevated);
+  border-radius: 20px;
+  padding: var(--size-gap-5) var(--size-gap-4) var(--size-gap-4);
+  text-align: center;
+  animation: menuSlideUp var(--motion-base) var(--easing-decelerate);
+}
+
+.session-list__confirm-title {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin: 0 0 var(--size-gap-2);
+}
+
+.session-list__confirm-desc {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  margin: 0 0 var(--size-gap-4);
+}
+
+.session-list__confirm-actions {
+  display: flex;
+  gap: var(--size-gap-2);
+}
+
+.session-list__confirm-btn {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  border-radius: 14px;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+
+  &:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  &:disabled {
+    opacity: var(--opacity-disabled);
+    cursor: not-allowed;
+  }
+
+  &--cancel {
+    background: var(--color-bg-secondary);
+    color: var(--color-text-secondary);
+
+    &:active:not(:disabled) {
+      background: var(--element-bg-subtle);
+    }
+  }
+
+  &--danger {
+    background: var(--color-error);
+    color: #fff;
+
+    &:active:not(:disabled) {
+      opacity: 0.85;
+    }
+  }
+}

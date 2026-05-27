@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import LanguageToggleButton from '../components/LanguageToggleButton';
 import { useI18n } from '../i18n';
-import { RemoteSessionManager, type RecentWorkspaceEntry } from '../services/RemoteSessionManager';
+import { RemoteSessionManager, type RecentWorkspaceEntry, type SessionInfo } from '../services/RemoteSessionManager';
 import { useMobileStore } from '../services/store';
 import { useTheme } from '../theme';
 import logoIcon from '../assets/Logo-ICON.png';
@@ -174,6 +174,16 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
   const touchStartY = useRef(0);
   const isPulling = useRef(false);
 
+  // Session long-press context menu
+  const [menuSession, setMenuSession] = useState<SessionInfo | null>(null);
+  const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<SessionInfo | null>(null);
+  const [actionToast, setActionToast] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const sessionLongPressTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const sessionLongPressPosRef = useRef({ x: 0, y: 0 });
+  const sessionLongPressFiredRef = useRef(false);
+  const sessionToastTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
   // Load assistant list when entering assistant mode
   const loadAssistantList = useCallback(async () => {
     try {
@@ -340,6 +350,63 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
     const poll = setInterval(refreshData, 10000);
     return () => clearInterval(poll);
   }, [refreshData]);
+
+  // ── Session long-press context menu ──────────────────────────────
+  const clearSessionLongPressTimer = () => {
+    if (sessionLongPressTimerRef.current) {
+      clearTimeout(sessionLongPressTimerRef.current);
+      sessionLongPressTimerRef.current = undefined;
+    }
+  };
+
+  const handleSessionTouchStart = useCallback((s: SessionInfo, e: React.TouchEvent) => {
+    if (deleting) return;
+    clearSessionLongPressTimer();
+    sessionLongPressPosRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    sessionLongPressTimerRef.current = setTimeout(() => {
+      setMenuSession(s);
+      sessionLongPressTimerRef.current = undefined;
+      sessionLongPressFiredRef.current = true;
+    }, 500);
+  }, [deleting]);
+
+  const handleSessionTouchMove = useCallback((e: React.TouchEvent) => {
+    const dx = Math.abs(e.touches[0].clientX - sessionLongPressPosRef.current.x);
+    const dy = Math.abs(e.touches[0].clientY - sessionLongPressPosRef.current.y);
+    if (dx > 10 || dy > 10) clearSessionLongPressTimer();
+  }, []);
+
+  const handleSessionTouchEnd = useCallback(() => {
+    clearSessionLongPressTimer();
+  }, []);
+
+  const showSessionToast = useCallback((msg: string) => {
+    if (sessionToastTimerRef.current) clearTimeout(sessionToastTimerRef.current);
+    setActionToast(msg);
+    sessionToastTimerRef.current = setTimeout(() => setActionToast(null), 2000);
+  }, []);
+
+  const handleDeleteSession = useCallback(async () => {
+    if (!deleteConfirmTarget) return;
+    const sid = deleteConfirmTarget.session_id;
+    setDeleteConfirmTarget(null);
+    setMenuSession(null);
+    setDeleting(true);
+    try {
+      await sessionMgr.deleteSession(sid);
+      useMobileStore.getState().removeSession(sid);
+      showSessionToast(t('sessions.sessionDeleted'));
+    } catch (e: any) {
+      showSessionToast(t('sessions.deleteSessionFailed'));
+    } finally {
+      setDeleting(false);
+    }
+  }, [deleteConfirmTarget, sessionMgr, showSessionToast, t]);
+
+  useEffect(() => () => {
+    clearSessionLongPressTimer();
+    if (sessionToastTimerRef.current) clearTimeout(sessionToastTimerRef.current);
+  }, []);
 
   const PULL_THRESHOLD = 60;
 
@@ -705,8 +772,19 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
                 {sessions.map((s) => (
                   <div
                     key={s.session_id}
-                    className="session-list__item"
-                    onClick={() => onSelectSession(s.session_id, s.name)}
+                    className={`session-list__item${menuSession?.session_id === s.session_id ? ' session-list__item--menu-active' : ''}`}
+                    onClick={() => {
+                      if (sessionLongPressFiredRef.current) {
+                        sessionLongPressFiredRef.current = false;
+                        return;
+                      }
+                      onSelectSession(s.session_id, s.name);
+                    }}
+                    onTouchStart={(e) => handleSessionTouchStart(s, e)}
+                    onTouchMove={handleSessionTouchMove}
+                    onTouchEnd={handleSessionTouchEnd}
+                    onTouchCancel={handleSessionTouchEnd}
+                    onContextMenu={(e) => { e.preventDefault(); setMenuSession(s); }}
                   >
                     <div className={`session-list__item-icon session-list__item-icon--${s.agent_type}`}>
                       <SessionTypeIcon agentType={s.agent_type} />
@@ -729,6 +807,64 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
               )}
             </section>
       </div>
+
+      {/* Session Context Menu */}
+      {menuSession && (
+        <div className="chat-msg__menu-overlay" onClick={() => setMenuSession(null)}>
+          <div className="chat-msg__menu-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="chat-msg__menu-handle" />
+            <div className="chat-msg__menu-actions">
+              <button
+                className="chat-msg__menu-btn chat-msg__menu-btn--danger"
+                onClick={() => {
+                  setMenuSession(null);
+                  setDeleteConfirmTarget(menuSession);
+                }}
+                disabled={deleting}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                </svg>
+                <span>{deleting ? '...' : t('sessions.deleteSession')}</span>
+              </button>
+            </div>
+            <button className="chat-msg__menu-cancel" onClick={() => setMenuSession(null)}>
+              {t('common.cancel')}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      {deleteConfirmTarget && (
+        <div className="chat-msg__menu-overlay" onClick={() => setDeleteConfirmTarget(null)}>
+          <div className="session-list__confirm-dialog" onClick={(e) => e.stopPropagation()}>
+            <p className="session-list__confirm-title">{t('sessions.confirmDeleteTitle')}</p>
+            <p className="session-list__confirm-desc">{t('sessions.confirmDeleteDesc')}</p>
+            <div className="session-list__confirm-actions">
+              <button
+                className="session-list__confirm-btn session-list__confirm-btn--cancel"
+                onClick={() => setDeleteConfirmTarget(null)}
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                className="session-list__confirm-btn session-list__confirm-btn--danger"
+                onClick={handleDeleteSession}
+                disabled={deleting}
+              >
+                {t('sessions.deleteSession')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Action Toast */}
+      {actionToast && (
+        <div className="chat-page__toast" role="alert" aria-live="assertive">{actionToast}</div>
+      )}
     </div>
   );
 };
