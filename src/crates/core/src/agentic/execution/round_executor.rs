@@ -1306,6 +1306,11 @@ fn extract_bitfun_contents(text: &str) -> String {
             // opening tag (the model may still be streaming or forgot to close).
             &text[content_start..]
         }
+    } else if let Some(end) = text.find(CLOSE_TAG) {
+        // The request includes an assistant prefill of the opening tag. Some
+        // providers stream only the generated continuation back to us, so the
+        // captured text can be `content</bitfun_contents>` without the open tag.
+        &text[..end]
     } else {
         // No tags at all — return the full text as a fallback
         text
@@ -1662,6 +1667,12 @@ mod tests {
     #[test]
     fn extract_bitfun_contents_open_tag_only() {
         let text = "<bitfun_contents>\nfn main() {}";
+        assert_eq!(extract_bitfun_contents(text), "fn main() {}");
+    }
+
+    #[test]
+    fn extract_bitfun_contents_close_tag_only() {
+        let text = "fn main() {}\n</bitfun_contents>";
         assert_eq!(extract_bitfun_contents(text), "fn main() {}");
     }
 

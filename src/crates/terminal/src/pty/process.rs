@@ -16,14 +16,14 @@
 
 use std::ffi::OsStr;
 use std::io::{Read, Write};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::thread;
 
 #[cfg(windows)]
 use log::debug;
-use log::{error, warn};
-use portable_pty::{native_pty_system, CommandBuilder, PtySize};
+use log::{error, info, warn};
+use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 use tokio::sync::mpsc;
 
 use crate::config::ShellConfig;
@@ -36,6 +36,20 @@ use super::flow_control::{HIGH_WATER_MARK, LOW_WATER_MARK};
 mod shutdown {
     /// Time to wait for data flush after exit is queued
     pub const DATA_FLUSH_TIMEOUT_MS: u64 = 250;
+    /// Time to wait for a foreground process group to exit after SIGTERM.
+    pub const PROCESS_GROUP_TERM_GRACE_MS: u64 = 750;
+}
+
+#[cfg(unix)]
+const SIGNAL_TERM: i32 = 15;
+#[cfg(unix)]
+const SIGNAL_KILL: i32 = 9;
+#[cfg(unix)]
+const ESRCH: i32 = 3;
+
+#[cfg(unix)]
+unsafe extern "C" {
+    fn kill(pid: i32, sig: i32) -> i32;
 }
 
 /// Resize constants for Windows ConPTY
@@ -105,6 +119,57 @@ pub struct PtyInfo {
     pub initial_cwd: String,
     /// Shell type
     pub shell_type: ShellType,
+}
+
+#[cfg(unix)]
+fn signal_process_group(
+    process_group_leader: Option<i32>,
+    shell_pid: u32,
+    signal_name: &str,
+    signal_number: i32,
+) -> bool {
+    let Some(process_group_leader) = process_group_leader else {
+        return false;
+    };
+
+    if process_group_leader <= 1 || process_group_leader as u32 == std::process::id() {
+        warn!(
+            "Refusing to send {} to suspicious PTY process group: pgid={} shell_pid={}",
+            signal_name, process_group_leader, shell_pid
+        );
+        return false;
+    }
+
+    let target = -process_group_leader;
+    let result = unsafe { kill(target, signal_number) };
+    if result == 0 {
+        return true;
+    }
+
+    let error = std::io::Error::last_os_error();
+    if error.raw_os_error() == Some(ESRCH) {
+        info!(
+            "PTY process group already exited before {}: pgid={} shell_pid={}",
+            signal_name, process_group_leader, shell_pid
+        );
+    } else {
+        warn!(
+            "Failed to send {} to PTY process group: pgid={} shell_pid={} error={}",
+            signal_name, process_group_leader, shell_pid, error
+        );
+    }
+
+    false
+}
+
+#[cfg(unix)]
+fn terminate_process_group(process_group_leader: Option<i32>, shell_pid: u32) -> bool {
+    signal_process_group(process_group_leader, shell_pid, "SIGTERM", SIGNAL_TERM)
+}
+
+#[cfg(unix)]
+fn kill_process_group(process_group_leader: Option<i32>, shell_pid: u32) -> bool {
+    signal_process_group(process_group_leader, shell_pid, "SIGKILL", SIGNAL_KILL)
 }
 
 // ============================================================================
@@ -573,6 +638,21 @@ pub fn spawn_pty(
                 InternalCommand::Shutdown { immediate } => {
                     has_exited_cmd.store(true, Ordering::Relaxed);
 
+                    #[cfg(unix)]
+                    let process_group_leader = master
+                        .lock()
+                        .ok()
+                        .and_then(|master_guard| master_guard.process_group_leader());
+
+                    #[cfg(unix)]
+                    if immediate {
+                        terminate_process_group(process_group_leader, pid);
+                        tokio::time::sleep(tokio::time::Duration::from_millis(
+                            shutdown::PROCESS_GROUP_TERM_GRACE_MS,
+                        ))
+                        .await;
+                    }
+
                     if !immediate {
                         // Wait for data flush
                         tokio::time::sleep(tokio::time::Duration::from_millis(
@@ -586,6 +666,10 @@ pub fn spawn_pty(
                         Ok(Some(status)) => Some(status.exit_code()),
                         _ => {
                             let _ = child.kill();
+                            #[cfg(unix)]
+                            if immediate {
+                                kill_process_group(process_group_leader, pid);
+                            }
                             child.try_wait().ok().flatten().map(|s| s.exit_code())
                         }
                     };
@@ -674,7 +758,67 @@ pub enum PtyCommand {
 
 #[cfg(test)]
 mod tests {
-    use super::is_tauri_host_env;
+    use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn kill_process_group_uses_system_signal_without_external_kill_binary() {
+        use std::os::unix::process::CommandExt;
+        use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+        let marker = std::env::temp_dir().join(format!(
+            "bitfun-pgid-test-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+
+        let mut child = std::process::Command::new("bash")
+            .arg("-c")
+            .arg(format!(
+                "trap '' TERM; echo $$ > {}; sleep 30",
+                marker.display()
+            ))
+            .process_group(0)
+            .spawn()
+            .expect("spawn process group leader");
+
+        for _ in 0..50 {
+            if marker.exists() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+
+        let process_group_leader = std::fs::read_to_string(&marker)
+            .expect("process group marker")
+            .trim()
+            .parse::<i32>()
+            .expect("process group id");
+
+        terminate_process_group(Some(process_group_leader), child.id());
+        std::thread::sleep(Duration::from_millis(100));
+        kill_process_group(Some(process_group_leader), child.id());
+
+        let mut exited = false;
+        for _ in 0..50 {
+            if child.try_wait().expect("child status").is_some() {
+                exited = true;
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+
+        let _ = std::fs::remove_file(marker);
+        if !exited {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+
+        assert!(exited, "process group should exit after SIGKILL");
+    }
 
     #[test]
     fn strips_tauri_host_configuration_from_parent_env() {
