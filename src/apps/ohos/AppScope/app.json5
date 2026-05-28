@@ -1,6 +1,6 @@
 {
   "app": {
-    "bundleName": "com.huawei.BitFun",
+    "bundleName": "com.develop.opensource.ohpcd.bitfun",
     "vendor": "example",
     "versionCode": 1000000,
     "versionName": "1.0.0",
