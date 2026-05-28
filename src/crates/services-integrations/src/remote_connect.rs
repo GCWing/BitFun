@@ -1207,6 +1207,7 @@ pub enum RemoteCommand {
         workspace_path: Option<String>,
         limit: Option<usize>,
         offset: Option<usize>,
+        query: Option<String>,
     },
     CreateSession {
         agent_type: Option<String>,
@@ -1219,6 +1220,10 @@ pub enum RemoteCommand {
     SetSessionModel {
         session_id: String,
         model_id: String,
+    },
+    UpdateSessionTitle {
+        session_id: String,
+        title: String,
     },
     GetSessionMessages {
         session_id: String,
@@ -1323,6 +1328,10 @@ pub enum RemoteResponse {
     SessionModelUpdated {
         session_id: String,
         model_id: String,
+    },
+    SessionTitleUpdated {
+        session_id: String,
+        title: String,
     },
     Messages {
         session_id: String,

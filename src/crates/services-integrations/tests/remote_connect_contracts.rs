@@ -1278,6 +1278,24 @@ fn remote_connect_command_wire_shape_lives_in_owner_contract() {
     assert_eq!(cancel["cmd"], "cancel_task");
     assert_eq!(cancel["turn_id"], "turn-1");
 
+    let list = serde_json::to_value(RemoteCommand::ListSessions {
+        workspace_path: Some("/workspace/project".to_string()),
+        limit: Some(30),
+        offset: Some(0),
+        query: Some("alpha".to_string()),
+    })
+    .expect("serialize list command");
+    assert_eq!(list["cmd"], "list_sessions");
+    assert_eq!(list["query"], "alpha");
+
+    let rename = serde_json::to_value(RemoteCommand::UpdateSessionTitle {
+        session_id: "session-1".to_string(),
+        title: "Renamed session".to_string(),
+    })
+    .expect("serialize rename command");
+    assert_eq!(rename["cmd"], "update_session_title");
+    assert_eq!(rename["title"], "Renamed session");
+
     let poll = serde_json::to_value(RemoteCommand::PollSession {
         session_id: "session-1".to_string(),
         since_version: 7,
@@ -1349,6 +1367,14 @@ fn remote_connect_response_wire_shape_lives_in_owner_contract() {
     .expect("serialize sent response");
     assert_eq!(sent["resp"], "message_sent");
     assert_eq!(sent["turn_id"], "turn-1");
+
+    let title_updated = serde_json::to_value(RemoteResponse::SessionTitleUpdated {
+        session_id: "session-1".to_string(),
+        title: "Renamed session".to_string(),
+    })
+    .expect("serialize title response");
+    assert_eq!(title_updated["resp"], "session_title_updated");
+    assert_eq!(title_updated["title"], "Renamed session");
 }
 
 fn sample_remote_model_catalog(version: u64) -> RemoteModelCatalog {

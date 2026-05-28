@@ -213,6 +213,7 @@ export class RemoteSessionManager {
     workspacePath?: string,
     limit = 30,
     offset = 0,
+    query?: string,
   ): Promise<{ sessions: SessionInfo[]; has_more: boolean }> {
     const resp = await this.request<{
       resp: string;
@@ -223,6 +224,7 @@ export class RemoteSessionManager {
       workspace_path: workspacePath ?? null,
       limit,
       offset,
+      query: query?.trim() || null,
     });
     return {
       sessions: resp.sessions || [],

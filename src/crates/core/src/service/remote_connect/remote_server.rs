@@ -249,6 +249,7 @@ impl RemoteServer {
             | RemoteCommand::CreateSession { .. }
             | RemoteCommand::GetModelCatalog { .. }
             | RemoteCommand::SetSessionModel { .. }
+            | RemoteCommand::UpdateSessionTitle { .. }
             | RemoteCommand::GetSessionMessages { .. }
             | RemoteCommand::DeleteSession { .. } => self.handle_session_command(cmd).await,
 
@@ -556,6 +557,7 @@ impl RemoteServer {
                 workspace_path,
                 limit,
                 offset,
+                query,
             } => {
                 use crate::agentic::persistence::PersistenceManager;
                 use crate::infrastructure::PathManager;
@@ -583,8 +585,18 @@ impl RemoteServer {
                     match PersistenceManager::new(pm) {
                         Ok(store) => match store.list_session_metadata(&workspace_path).await {
                             Ok(all_meta) => {
+                                let query = query
+                                    .as_deref()
+                                    .map(str::trim)
+                                    .filter(|value| !value.is_empty())
+                                    .map(str::to_lowercase);
                                 let sessions: Vec<RemoteSessionMetadata> = all_meta
                                     .into_iter()
+                                    .filter(|session| {
+                                        query.as_ref().map_or(true, |query| {
+                                            session.session_name.to_lowercase().contains(query)
+                                        })
+                                    })
                                     .map(|s| RemoteSessionMetadata {
                                         session_id: s.session_id,
                                         name: s.session_name,
@@ -728,6 +740,42 @@ impl RemoteServer {
                         normalized_model_id,
                     ),
                     Err(message) => RemoteResponse::Error { message },
+                }
+            }
+            RemoteCommand::UpdateSessionTitle { session_id, title } => {
+                if coordinator
+                    .get_session_manager()
+                    .get_session(session_id)
+                    .is_none()
+                {
+                    let Some(workspace_path) =
+                        CoreServiceAgentRuntime::resolve_session_workspace_path(session_id).await
+                    else {
+                        return RemoteResponse::Error {
+                            message: format!(
+                                "Workspace path not available for session: {}",
+                                session_id
+                            ),
+                        };
+                    };
+                    if let Err(e) = coordinator
+                        .restore_session(&workspace_path, session_id)
+                        .await
+                    {
+                        return RemoteResponse::Error {
+                            message: format!("Failed to restore session: {e}"),
+                        };
+                    }
+                }
+
+                match coordinator.update_session_title(session_id, title).await {
+                    Ok(normalized_title) => RemoteResponse::SessionTitleUpdated {
+                        session_id: session_id.clone(),
+                        title: normalized_title,
+                    },
+                    Err(e) => RemoteResponse::Error {
+                        message: e.to_string(),
+                    },
                 }
             }
             RemoteCommand::GetSessionMessages {
@@ -1103,6 +1151,24 @@ mod tests {
         assert_eq!(cancel["cmd"], "cancel_task");
         assert_eq!(cancel["turn_id"], "turn-1");
 
+        let list = serde_json::to_value(RemoteCommand::ListSessions {
+            workspace_path: Some("/workspace/project".to_string()),
+            limit: Some(30),
+            offset: Some(0),
+            query: Some("alpha".to_string()),
+        })
+        .expect("serialize list command");
+        assert_eq!(list["cmd"], "list_sessions");
+        assert_eq!(list["query"], "alpha");
+
+        let rename = serde_json::to_value(RemoteCommand::UpdateSessionTitle {
+            session_id: "session-1".to_string(),
+            title: "Renamed session".to_string(),
+        })
+        .expect("serialize rename command");
+        assert_eq!(rename["cmd"], "update_session_title");
+        assert_eq!(rename["title"], "Renamed session");
+
         let poll = serde_json::to_value(RemoteCommand::PollSession {
             session_id: "session-1".to_string(),
             since_version: 7,
@@ -1176,5 +1242,13 @@ mod tests {
         .expect("serialize cancelled response");
         assert_eq!(cancelled["resp"], "task_cancelled");
         assert_eq!(cancelled["session_id"], "session-1");
+
+        let title_updated = serde_json::to_value(RemoteResponse::SessionTitleUpdated {
+            session_id: "session-1".to_string(),
+            title: "Renamed session".to_string(),
+        })
+        .expect("serialize title response");
+        assert_eq!(title_updated["resp"], "session_title_updated");
+        assert_eq!(title_updated["title"], "Renamed session");
     }
 }

@@ -179,11 +179,10 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
 
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const longPressPosRef = useRef({ x: 0, y: 0 });
+  const longPressTriggeredRef = useRef(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
-  const filteredSessions = searchQuery.trim()
-    ? sessions.filter((s) => (s.name || t('sessions.untitledSession')).toLowerCase().includes(searchQuery.toLowerCase()))
-    : sessions;
+  const hasSearchQuery = searchQuery.trim().length > 0;
 
   // ── Long-press context menu ─────────────────────────────────────
   const clearLongPressTimer = () => {
@@ -196,8 +195,10 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
   const handleSessionTouchStart = useCallback((s: SessionInfo, e: React.TouchEvent) => {
     if (deleting || renaming) return;
     clearLongPressTimer();
+    longPressTriggeredRef.current = false;
     longPressPosRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
     longPressTimerRef.current = setTimeout(() => {
+      longPressTriggeredRef.current = true;
       setMenuSession(s);
       longPressTimerRef.current = undefined;
     }, 500);
@@ -214,6 +215,16 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
   const handleSessionTouchEnd = useCallback(() => {
     clearLongPressTimer();
   }, []);
+
+  const handleSessionClick = useCallback((s: SessionInfo, e: React.MouseEvent) => {
+    if (longPressTriggeredRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      longPressTriggeredRef.current = false;
+      return;
+    }
+    onSelectSession(s.session_id, s.name);
+  }, [onSelectSession]);
 
   // ── Session actions ─────────────────────────────────────────────
   const showToast = useCallback((msg: string) => {
@@ -265,6 +276,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
   const [refreshing, setRefreshing] = useState(false);
   const offsetRef = useRef(0);
   const listRef = useRef<HTMLDivElement>(null);
+  const listRequestSeqRef = useRef(0);
   const touchStartY = useRef(0);
   const isPulling = useRef(false);
 
@@ -286,18 +298,23 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
     }
   }, [sessionMgr, currentAssistant, setCurrentAssistant, setError]);
 
-  const loadFirstPage = useCallback(async (workspacePath: string | undefined) => {
+  const loadFirstPage = useCallback(async (workspacePath: string | undefined, query = '') => {
+    const requestSeq = ++listRequestSeqRef.current;
     setLoading(true);
     offsetRef.current = 0;
     try {
-      const resp = await sessionMgr.listSessions(workspacePath, PAGE_SIZE, 0);
+      const resp = await sessionMgr.listSessions(workspacePath, PAGE_SIZE, 0, query);
+      if (requestSeq !== listRequestSeqRef.current) return;
       setSessions(resp.sessions);
       setHasMore(resp.has_more);
       offsetRef.current = resp.sessions.length;
     } catch (e: any) {
+      if (requestSeq !== listRequestSeqRef.current) return;
       setError(e.message);
     } finally {
-      setLoading(false);
+      if (requestSeq === listRequestSeqRef.current) {
+        setLoading(false);
+      }
     }
   }, [sessionMgr, setSessions, setError]);
 
@@ -321,14 +338,14 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
           project_name: result.project_name || workspace.name,
         });
         setShowWorkspacePicker(false);
-        loadFirstPage(workspace.path);
+        loadFirstPage(workspace.path, searchQuery);
       } else {
         setError(result.error || 'Failed to set workspace');
       }
     } catch (e: any) {
       setError(e.message);
     }
-  }, [sessionMgr, setCurrentWorkspace, setError, loadFirstPage]);
+  }, [sessionMgr, setCurrentWorkspace, setError, loadFirstPage, searchQuery]);
 
   const trySelectFirstProWorkspace = useCallback(async (): Promise<boolean> => {
     try {
@@ -342,7 +359,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
           path: result.path || candidate.path,
           project_name: result.project_name || candidate.name,
         });
-        await loadFirstPage(result.path || candidate.path);
+        await loadFirstPage(result.path || candidate.path, searchQuery);
         return true;
       }
       setError(result.error || t('workspace.failedToSetWorkspace'));
@@ -351,17 +368,20 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
       setError(e.message);
       return false;
     }
-  }, [sessionMgr, setCurrentWorkspace, setError, loadFirstPage, t]);
+  }, [sessionMgr, setCurrentWorkspace, setError, loadFirstPage, searchQuery, t]);
 
-  const loadNextPage = useCallback(async (workspacePath: string | undefined) => {
+  const loadNextPage = useCallback(async (workspacePath: string | undefined, query = '') => {
     if (loadingMore || !hasMore) return;
+    const requestSeq = listRequestSeqRef.current;
     setLoadingMore(true);
     try {
-      const resp = await sessionMgr.listSessions(workspacePath, PAGE_SIZE, offsetRef.current);
+      const resp = await sessionMgr.listSessions(workspacePath, PAGE_SIZE, offsetRef.current, query);
+      if (requestSeq !== listRequestSeqRef.current) return;
       appendSessions(resp.sessions);
       setHasMore(resp.has_more);
       offsetRef.current += resp.sessions.length;
     } catch (e: any) {
+      if (requestSeq !== listRequestSeqRef.current) return;
       setError(e.message);
     } finally {
       setLoadingMore(false);
@@ -404,6 +424,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
   }, []);
 
   const refreshData = useCallback(async () => {
+    const requestSeq = ++listRequestSeqRef.current;
     try {
       if (displayMode === 'pro') {
         const info = await sessionMgr.getWorkspaceInfo();
@@ -416,24 +437,35 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
         }
         const ws = info.has_workspace ? info : null;
         setCurrentWorkspace(ws);
-        const resp = await sessionMgr.listSessions(ws?.path, PAGE_SIZE, 0);
+        const resp = await sessionMgr.listSessions(ws?.path, PAGE_SIZE, 0, searchQuery);
+        if (requestSeq !== listRequestSeqRef.current) return;
         setSessions(resp.sessions);
         setHasMore(resp.has_more);
         offsetRef.current = resp.sessions.length;
       } else {
         // Assistant mode: use currentAssistant path
-        const resp = await sessionMgr.listSessions(currentAssistant?.path, PAGE_SIZE, 0);
+        const resp = await sessionMgr.listSessions(currentAssistant?.path, PAGE_SIZE, 0, searchQuery);
+        if (requestSeq !== listRequestSeqRef.current) return;
         setSessions(resp.sessions);
         setHasMore(resp.has_more);
         offsetRef.current = resp.sessions.length;
       }
     } catch { /* ignore */ }
-  }, [sessionMgr, setSessions, setCurrentWorkspace, currentAssistant?.path, displayMode]);
+  }, [sessionMgr, setSessions, setCurrentWorkspace, currentAssistant?.path, displayMode, searchQuery]);
 
   useEffect(() => {
     const poll = setInterval(refreshData, 10000);
     return () => clearInterval(poll);
   }, [refreshData]);
+
+  useEffect(() => {
+    const workspacePath = displayMode === 'assistant' ? currentAssistant?.path : currentWorkspace?.path;
+    if (!workspacePath) return;
+    const timer = setTimeout(() => {
+      loadFirstPage(workspacePath, searchQuery);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [currentAssistant?.path, currentWorkspace?.path, displayMode, loadFirstPage, searchQuery]);
 
   const PULL_THRESHOLD = 60;
 
@@ -471,9 +503,9 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
     const el = e.currentTarget;
     if (el.scrollHeight - el.scrollTop - el.clientHeight < 150) {
       const workspacePath = displayMode === 'assistant' ? currentAssistant?.path : currentWorkspace?.path;
-      loadNextPage(workspacePath);
+      loadNextPage(workspacePath, searchQuery);
     }
-  }, [displayMode, currentAssistant?.path, currentWorkspace?.path, loadNextPage]);
+  }, [displayMode, currentAssistant?.path, currentWorkspace?.path, loadNextPage, searchQuery]);
 
   const handleCreate = useCallback(async (agentType: string) => {
     if (creating) return;
@@ -483,7 +515,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
       // For pro mode (Code/Cowork), use currentWorkspace.path
       const workspacePath = displayMode === 'assistant' ? currentAssistant?.path : currentWorkspace?.path;
       const id = await sessionMgr.createSession(agentType, undefined, workspacePath);
-      await loadFirstPage(workspacePath);
+      await loadFirstPage(workspacePath, searchQuery);
       const label = isClawAgent(agentType)
         ? t('sessions.remoteClawSession')
         : isCoworkAgent(agentType)
@@ -495,33 +527,33 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
     } finally {
       setCreating(false);
     }
-  }, [creating, currentWorkspace?.path, currentAssistant?.path, displayMode, loadFirstPage, onSelectSession, sessionMgr, setError, t]);
+  }, [creating, currentWorkspace?.path, currentAssistant?.path, displayMode, loadFirstPage, onSelectSession, searchQuery, sessionMgr, setError, t]);
 
   const handleSelectMode = useCallback(async (mode: DisplayMode) => {
     setDisplayMode(mode);
     setShowAssistantPicker(false);
     if (mode === 'assistant') {
       const assistantPath = await loadAssistantList();
-      loadFirstPage(assistantPath);
+      loadFirstPage(assistantPath, searchQuery);
     } else {
       if (currentWorkspace?.path) {
-        await loadFirstPage(currentWorkspace.path);
+        await loadFirstPage(currentWorkspace.path, searchQuery);
       } else {
         await trySelectFirstProWorkspace();
       }
     }
-  }, [currentWorkspace?.path, loadFirstPage, loadAssistantList, trySelectFirstProWorkspace]);
+  }, [currentWorkspace?.path, loadFirstPage, loadAssistantList, searchQuery, trySelectFirstProWorkspace]);
 
   const handleSelectAssistant = useCallback(async (assistant: { path: string; name: string; assistant_id?: string }) => {
     try {
       await sessionMgr.setAssistant(assistant.path);
       setCurrentAssistant(assistant);
       setShowAssistantPicker(false);
-      loadFirstPage(assistant.path);
+      loadFirstPage(assistant.path, searchQuery);
     } catch (e: any) {
       setError(e.message);
     }
-  }, [sessionMgr, setCurrentAssistant, setError, loadFirstPage]);
+  }, [sessionMgr, setCurrentAssistant, setError, loadFirstPage, searchQuery]);
 
   const workspaceDisplayName = currentWorkspace?.project_name || t('sessions.noWorkspaceSelected');
   const assistantDisplayName = currentAssistant?.name || t('sessions.defaultAssistant');
@@ -785,7 +817,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
                   <div className="session-list__section-kicker">{t('sessions.recent')}</div>
                   <div className="session-list__section-title">{t('sessions.sessionHistory')}</div>
                 </div>
-                <div className="session-list__section-meta">{t('common.itemCount', { count: filteredSessions.length })}</div>
+                <div className="session-list__section-meta">{t('common.itemCount', { count: sessions.length })}</div>
               </div>
 
               {/* Search */}
@@ -812,22 +844,23 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
               {loading && sessions.length === 0 && (
                 <div className="session-list__empty">{t('sessions.loadingSessions')}</div>
               )}
-              {!loading && sessions.length === 0 && (
+              {!loading && sessions.length === 0 && !hasSearchQuery && (
                 <div className="session-list__empty">{t('sessions.noSessions')}</div>
               )}
-              {!loading && sessions.length > 0 && filteredSessions.length === 0 && (
+              {!loading && sessions.length === 0 && hasSearchQuery && (
                 <div className="session-list__empty">{t('sessions.emptySearch')}</div>
               )}
 
               <div className="session-list__cards">
-                {filteredSessions.map((s) => (
+                {sessions.map((s) => (
                   <div
                     key={s.session_id}
                     className={`session-list__item${menuSession?.session_id === s.session_id ? ' session-list__item--active' : ''}`}
-                    onClick={() => onSelectSession(s.session_id, s.name)}
+                    onClick={(e) => handleSessionClick(s, e)}
                     onTouchStart={(e) => handleSessionTouchStart(s, e)}
                     onTouchMove={handleSessionTouchMove}
                     onTouchEnd={handleSessionTouchEnd}
+                    onTouchCancel={handleSessionTouchEnd}
                     onContextMenu={(e) => { e.preventDefault(); setMenuSession(s); }}
                   >
                     <div className={`session-list__item-icon session-list__item-icon--${s.agent_type}`}>
