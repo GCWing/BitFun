@@ -93,6 +93,11 @@ pub struct AgentInfo {
     pub is_review: bool,
     pub tool_count: usize,
     pub default_tools: Vec<String>,
+    /// Combined prompt-cache compatibility key for frontend mode-switch guards.
+    ///
+    /// Modes that share this key can reuse the same session-level prompt cache
+    /// for the next accepted submission.
+    pub prompt_cache_scope_key: String,
     #[serde(default)]
     pub default_enabled: bool,
     #[serde(default = "default_true")]
@@ -182,6 +187,11 @@ impl AgentInfo {
             is_review: is_review_agent_entry(entry),
             tool_count: default_tools.len(),
             default_tools,
+            prompt_cache_scope_key: format!(
+                "{}||{}",
+                agent.system_prompt_cache_identity(None).scope_key,
+                agent.user_context_cache_identity().scope_key
+            ),
             default_enabled: true,
             effective_enabled: true,
             override_state: None,

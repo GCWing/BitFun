@@ -46,7 +46,7 @@ import {
   launchDeepReviewSession,
 } from '../services/DeepReviewService';
 import { createLogger } from '@/shared/utils/logger';
-import { Tooltip, IconButton } from '@/component-library';
+import { Tooltip, IconButton, confirmWarning } from '@/component-library';
 import { PendingQueuePanel } from './PendingQueuePanel';
 import { useAgentCanvasStore } from '@/app/components/panels/content-canvas/stores';
 import { openBtwSessionInAuxPane, selectActiveBtwSessionTab } from '../services/openBtwSession';
@@ -513,6 +513,57 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     // agentic when the user selected Team or another mode.
     currentAgentType: modeState.current,
   });
+
+  const modeInfoById = useMemo(
+    () => new Map(modeState.available.map(mode => [mode.id, mode])),
+    [modeState.available],
+  );
+
+  const getModeDisplayName = useCallback((modeId?: string) => {
+    if (!modeId) {
+      return '';
+    }
+
+    return (
+      t(`chatInput.modeNames.${modeId}`, { defaultValue: '' }) ||
+      modeInfoById.get(modeId)?.name ||
+      modeId
+    );
+  }, [modeInfoById, t]);
+
+  const confirmPromptCacheGuardIfNeeded = useCallback(async () => {
+    const nextMode = currentMode.trim();
+    const lastSubmittedMode = effectiveTargetSession?.lastSubmittedMode?.trim();
+    if (!nextMode || !lastSubmittedMode || nextMode === lastSubmittedMode) {
+      return true;
+    }
+
+    const nextScopeKey = modeInfoById.get(nextMode)?.promptCacheScopeKey;
+    const previousScopeKey = modeInfoById.get(lastSubmittedMode)?.promptCacheScopeKey;
+    if (!nextScopeKey || !previousScopeKey || nextScopeKey === previousScopeKey) {
+      return true;
+    }
+
+    return confirmWarning(
+      t('chatInput.promptCacheGuardTitle', {
+        defaultValue: 'Switching this mode will reset prompt cache reuse',
+      }),
+      t('chatInput.promptCacheGuardBody', {
+        defaultValue:
+          'The next request will switch from {{fromMode}} to {{toMode}}, so this session will stop reusing its current prompt cache. Continue?',
+        fromMode: getModeDisplayName(lastSubmittedMode),
+        toMode: getModeDisplayName(nextMode),
+      }),
+      {
+        confirmText: t('chatInput.promptCacheGuardConfirm', {
+          defaultValue: 'Send anyway',
+        }),
+        cancelText: t('chatInput.promptCacheGuardCancel', {
+          defaultValue: 'Stay here',
+        }),
+      },
+    );
+  }, [currentMode, effectiveTargetSession?.lastSubmittedMode, getModeDisplayName, modeInfoById, t]);
 
   const [mcpPromptCommands, setMcpPromptCommands] = useState<SlashMcpPromptItem[]>([]);
   const [mcpPromptCommandsLoading, setMcpPromptCommandsLoading] = useState(false);
@@ -1796,6 +1847,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       return;
     }
 
+    const confirmed = await confirmPromptCacheGuardIfNeeded();
+    if (!confirmed) {
+      return;
+    }
+
     const originalPendingLargePastes = { ...pendingLargePastesRef.current };
     if (effectiveTargetSessionId) {
       addToHistory(effectiveTargetSessionId, originalMessage);
@@ -1850,6 +1906,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [
     clearPendingLargePastes,
     addToHistory,
+    confirmPromptCacheGuardIfNeeded,
     effectiveTargetSessionId,
     inputState.value,
     loadMcpPromptCommands,
@@ -1953,18 +2010,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       return;
     }
     
-    // Add to history before clearing (session-scoped)
-    if (effectiveTargetSessionId) {
-      addToHistory(effectiveTargetSessionId, message);
-    }
-    setHistoryIndex(-1);
-    setSavedDraft('');
-    
-    dispatchInput({ type: 'CLEAR_VALUE' });
-    clearPendingLargePastes();
-    // Clear machine queue too; otherwise the queuedInput→input sync effect puts the text back after send.
-    setQueuedInput(null);
-
     if (messageCharCount > CHAT_INPUT_CONFIG.largePaste.maxMessageChars) {
       notificationService.error(
         t('input.messageTooLarge', {
@@ -1979,6 +2024,23 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       dispatchInput({ type: 'SET_VALUE', payload: originalMessage });
       return;
     }
+
+    const confirmed = await confirmPromptCacheGuardIfNeeded();
+    if (!confirmed) {
+      return;
+    }
+
+    // Add to history before clearing (session-scoped)
+    if (effectiveTargetSessionId) {
+      addToHistory(effectiveTargetSessionId, message);
+    }
+    setHistoryIndex(-1);
+    setSavedDraft('');
+
+    dispatchInput({ type: 'CLEAR_VALUE' });
+    clearPendingLargePastes();
+    // Clear machine queue too; otherwise the queuedInput→input sync effect puts the text back after send.
+    setQueuedInput(null);
 
     try {
       await sendMessage(message, {
@@ -2014,6 +2076,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     submitInitFromInput,
     submitDeepreviewFromInput,
     submitMcpPromptFromInput,
+    confirmPromptCacheGuardIfNeeded,
     t,
     resolveTypedMcpPromptCommand,
   ]);

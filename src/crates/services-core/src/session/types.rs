@@ -20,17 +20,41 @@ pub enum SessionRelationshipKind {
 pub struct SessionRelationship {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kind: Option<SessionRelationshipKind>,
-    #[serde(default, skip_serializing_if = "Option::is_none", alias = "parent_session_id")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "parent_session_id"
+    )]
     pub parent_session_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", alias = "parent_request_id")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "parent_request_id"
+    )]
     pub parent_request_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", alias = "parent_dialog_turn_id")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "parent_dialog_turn_id"
+    )]
     pub parent_dialog_turn_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", alias = "parent_turn_index")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "parent_turn_index"
+    )]
     pub parent_turn_index: Option<usize>,
-    #[serde(default, skip_serializing_if = "Option::is_none", alias = "parent_tool_call_id")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "parent_tool_call_id"
+    )]
     pub parent_tool_call_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", alias = "subagent_type")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "subagent_type"
+    )]
     pub subagent_type: Option<String>,
 }
 
@@ -49,6 +73,26 @@ pub struct SessionMetadata {
     /// Agent type
     #[serde(alias = "agent_type")]
     pub agent_type: String,
+    /// Mode of the last surviving user dialog turn in the persisted history.
+    ///
+    /// This follows rollback and turn-truncation semantics and is used for
+    /// first-entry vs ongoing mode reminders.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "last_user_dialog_agent_type"
+    )]
+    pub last_user_dialog_agent_type: Option<String>,
+    /// Mode of the most recent user submission accepted by the scheduler.
+    ///
+    /// This is a session-level prompt-cache guard signal and intentionally does
+    /// not rewind when history is rolled back.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "last_submitted_agent_type"
+    )]
+    pub last_submitted_agent_type: Option<String>,
 
     /// Creator identity for future permission checks
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "created_by")]
@@ -668,6 +712,8 @@ impl SessionMetadata {
             session_id,
             session_name,
             agent_type,
+            last_user_dialog_agent_type: None,
+            last_submitted_agent_type: None,
             created_by: None,
             session_kind: SessionKind::Standard,
             model_name,

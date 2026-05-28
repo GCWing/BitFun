@@ -236,6 +236,7 @@ export async function sendMessage(
     const dialogTurn: DialogTurn = {
       id: dialogTurnId,
       sessionId: sessionId,
+      agentType: currentAgentType,
       userMessage: {
         id: `user_${Date.now()}`,
         content: displayMessage || message,
@@ -317,6 +318,7 @@ export async function sendMessage(
         remoteConnectionId: updatedSession.remoteConnectionId,
         remoteSshHost: updatedSession.remoteSshHost,
       });
+      context.flowChatStore.updateSessionLastSubmittedMode(sessionId, currentAgentType);
     } else {
       try {
         await agentAPI.startDialogTurn({
@@ -329,6 +331,7 @@ export async function sendMessage(
           imageContexts: options?.imageContexts,
           userMessageMetadata: options?.userMessageMetadata,
         });
+        context.flowChatStore.updateSessionLastSubmittedMode(sessionId, currentAgentType);
       } catch (error: any) {
         if (error?.message?.includes('Session does not exist') || error?.message?.includes('Not found')) {
           log.warn('Backend session still not found, retrying creation', {
@@ -346,7 +349,9 @@ export async function sendMessage(
             agentType: currentAgentType,
             workspacePath,
             imageContexts: options?.imageContexts,
+            userMessageMetadata: options?.userMessageMetadata,
           });
+          context.flowChatStore.updateSessionLastSubmittedMode(sessionId, currentAgentType);
         } else {
           throw error;
         }

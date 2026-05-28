@@ -419,6 +419,8 @@ impl DialogScheduler {
         match state {
             None => {
                 let tid = self.start_turn(&session_id, &queued_turn).await?;
+                self.record_last_submitted_agent_type(&session_id, &queued_turn.agent_type)
+                    .await;
                 Ok(DialogSubmitOutcome::Started {
                     session_id,
                     turn_id: tid,
@@ -428,6 +430,8 @@ impl DialogScheduler {
             Some(SessionState::Error { .. }) => {
                 self.clear_queue(&session_id);
                 let tid = self.start_turn(&session_id, &queued_turn).await?;
+                self.record_last_submitted_agent_type(&session_id, &queued_turn.agent_type)
+                    .await;
                 Ok(DialogSubmitOutcome::Started {
                     session_id,
                     turn_id: tid,
@@ -443,6 +447,8 @@ impl DialogScheduler {
 
                 if queue_non_empty {
                     self.enqueue(&session_id, queued_turn.clone())?;
+                    self.record_last_submitted_agent_type(&session_id, &queued_turn.agent_type)
+                        .await;
                     let started_tid = self.try_start_next_queued(&session_id).await?;
                     let outcome = match started_tid {
                         Some(tid) if tid == resolved_turn_id => DialogSubmitOutcome::Started {
@@ -457,6 +463,8 @@ impl DialogScheduler {
                     Ok(outcome)
                 } else {
                     let tid = self.start_turn(&session_id, &queued_turn).await?;
+                    self.record_last_submitted_agent_type(&session_id, &queued_turn.agent_type)
+                        .await;
                     Ok(DialogSubmitOutcome::Started {
                         session_id,
                         turn_id: tid,
@@ -466,7 +474,10 @@ impl DialogScheduler {
 
             Some(SessionState::Processing { .. }) => {
                 let may_preempt = Self::user_message_may_preempt(&queued_turn.policy);
+                let accepted_agent_type = queued_turn.agent_type.clone();
                 self.enqueue(&session_id, queued_turn)?;
+                self.record_last_submitted_agent_type(&session_id, &accepted_agent_type)
+                    .await;
                 if may_preempt {
                     self.round_yield_flags.request_yield(&session_id);
                 }
@@ -475,6 +486,19 @@ impl DialogScheduler {
                     turn_id: resolved_turn_id,
                 })
             }
+        }
+    }
+
+    async fn record_last_submitted_agent_type(&self, session_id: &str, agent_type: &str) {
+        if let Err(error) = self
+            .coordinator
+            .update_last_submitted_agent_type(session_id, agent_type)
+            .await
+        {
+            warn!(
+                "Failed to record last submitted agent type: session_id={}, agent_type={}, error={}",
+                session_id, agent_type, error
+            );
         }
     }
 

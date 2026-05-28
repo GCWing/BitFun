@@ -193,6 +193,11 @@ export interface DialogTurn {
   id: string;
   sessionId: string; // Used for event filtering.
   kind?: DialogTurnKind;
+  /**
+   * Mode used when this user-facing dialog turn was submitted.
+   * Local utility turns may leave this empty.
+   */
+  agentType?: string;
   userMessage: {
     id: string;
     content: string;
@@ -310,8 +315,22 @@ export interface Session {
   currentAcpContextUsage?: AcpContextUsage;
   maxContextTokens?: number;
   
-  // Session mode is synced to the input when switching sessions.
+  /**
+   * Current/default mode selection in the chat input for this session.
+   * This controls what the next dialog turn should use by default.
+   */
   mode?: string;
+  /**
+   * Mode of the last surviving user dialog turn in the current session
+   * history. Rollback and turn truncation should follow this value.
+   */
+  lastUserDialogMode?: string;
+  /**
+   * Mode of the most recent user submission accepted by the runtime.
+   * This is used for prompt-cache guard semantics and does not rewind on
+   * rollback.
+   */
+  lastSubmittedMode?: string;
 
   // Workspace this session belongs to. Used for sidebar display filtering.
   // Sessions are always kept in store for event processing; only display is filtered.

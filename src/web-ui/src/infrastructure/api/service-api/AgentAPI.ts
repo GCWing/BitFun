@@ -86,8 +86,13 @@ export interface CompactSessionRequest {
  
 export interface SessionInfo {
   sessionId: string;
+  /** Current/default mode selection for the next dialog turn. */
   sessionName: string;
   agentType: string;
+  /** Mode of the last surviving user dialog turn in session history. */
+  lastUserDialogAgentType?: string;
+  /** Mode of the most recent user submission accepted by the runtime. */
+  lastSubmittedAgentType?: string;
   state: string;
   turnCount: number;
   createdAt: number;
@@ -154,6 +159,11 @@ export interface ModeInfo {
   isReadonly: boolean;
   toolCount: number;
   defaultTools?: string[];
+  /**
+   * Combined prompt-cache compatibility key for mode-switch guards. Modes that
+   * share the same key can reuse the same session-level prompt cache.
+   */
+  promptCacheScopeKey: string;
 }
 
 
@@ -793,6 +803,7 @@ export class AgentAPI {
       description: `${agentType} agent`,
       isReadonly: false,
       toolCount: 0,
+      promptCacheScopeKey: agentType,
       agent_type: agentType,
       when_to_use: `Use ${agentType} for related tasks`,
       tools: 'all',

@@ -27,6 +27,7 @@ import {
 import { elapsedMs, nowMs } from '@/shared/utils/timing';
 import { i18nService } from '@/infrastructure/i18n/core/I18nService';
 import type { DialogTurnData, LocalCommandMetadata, SessionKind } from '@/shared/types/session-history';
+import type { SessionInfo as AgentSessionInfo } from '@/infrastructure/api/service-api/AgentAPI';
 import {
   deriveLastFinishedAtFromMetadata,
   deriveSessionRelationshipFromMetadata,
@@ -292,6 +293,19 @@ export class FlowChatStore {
     this.onPersistUnreadCompletion = callback;
   }
 
+  private deriveLastUserDialogMode(dialogTurns: DialogTurn[]): string | undefined {
+    for (let index = dialogTurns.length - 1; index >= 0; index -= 1) {
+      const turn = dialogTurns[index];
+      const kind = turn.kind || 'user_dialog';
+      const agentType = turn.agentType?.trim();
+      if (kind === 'user_dialog' && agentType) {
+        return agentType;
+      }
+    }
+
+    return undefined;
+  }
+
   public createSession(
     sessionId: string,
     config: SessionConfig,
@@ -331,6 +345,8 @@ export class FlowChatStore {
         historyState: 'new',
         maxContextTokens: maxContextTokens || 128128,
         mode: mode || 'agentic',
+        lastUserDialogMode: undefined,
+        lastSubmittedMode: undefined,
         workspacePath,
         workspaceId: config.workspaceId,
         remoteConnectionId,
@@ -403,6 +419,8 @@ export class FlowChatStore {
         error: null,
         maxContextTokens: 128128,
         mode: mode || 'agentic',
+        lastUserDialogMode: undefined,
+        lastSubmittedMode: undefined,
         isHistorical: false,
         historyState: 'new',
         workspacePath,
@@ -482,6 +500,36 @@ export class FlowChatStore {
       return {
         ...prev,
         sessions: newSessions
+      };
+    });
+  }
+
+  /**
+   * Record the mode used by the most recent user submission accepted by the runtime.
+   * Unlike `lastUserDialogMode`, this does not rewind when history is rolled back.
+   */
+  public updateSessionLastSubmittedMode(sessionId: string, mode: string): void {
+    const normalizedMode = mode.trim();
+    if (!normalizedMode) {
+      return;
+    }
+
+    this.setState(prev => {
+      const session = prev.sessions.get(sessionId);
+      if (!session || session.lastSubmittedMode === normalizedMode) {
+        return prev;
+      }
+
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(sessionId, {
+        ...session,
+        lastSubmittedMode: normalizedMode,
+        lastActiveAt: Date.now(),
+      });
+
+      return {
+        ...prev,
+        sessions: newSessions,
       };
     });
   }
@@ -952,9 +1000,11 @@ export class FlowChatStore {
         return prev;
       }
 
+      const updatedDialogTurns = [...session.dialogTurns, dialogTurn];
       const updatedSession = {
         ...session,
-        dialogTurns: [...session.dialogTurns, dialogTurn],
+        dialogTurns: updatedDialogTurns,
+        lastUserDialogMode: this.deriveLastUserDialogMode(updatedDialogTurns),
         lastActiveAt: Date.now()
       };
 
@@ -1176,6 +1226,7 @@ export class FlowChatStore {
       const updatedSession = {
         ...session,
         dialogTurns: updatedDialogTurns,
+        lastUserDialogMode: this.deriveLastUserDialogMode(updatedDialogTurns),
         lastActiveAt: Date.now()
       };
 
@@ -1200,9 +1251,11 @@ export class FlowChatStore {
       if (!session) return prev;
 
       const clampedIndex = Math.max(0, Math.min(turnIndex, session.dialogTurns.length));
+      const updatedDialogTurns = session.dialogTurns.slice(0, clampedIndex);
       const updatedSession = {
         ...session,
-        dialogTurns: session.dialogTurns.slice(0, clampedIndex),
+        dialogTurns: updatedDialogTurns,
+        lastUserDialogMode: this.deriveLastUserDialogMode(updatedDialogTurns),
         lastActiveAt: Date.now()
       };
 
@@ -2166,6 +2219,8 @@ export class FlowChatStore {
               todos: (metadata as any).todos || [],
               maxContextTokens,
               mode: validatedAgentType,
+              lastUserDialogMode: metadata.lastUserDialogAgentType,
+              lastSubmittedMode: metadata.lastSubmittedAgentType,
               workspacePath: (metadata as any).workspacePath || workspacePath,
               remoteConnectionId: metadata.remoteConnectionId || remoteConnectionId,
               remoteSshHost:
@@ -2290,6 +2345,7 @@ export class FlowChatStore {
       const isAcpSession = existingSession?.mode?.startsWith('acp:') ||
         existingSession?.config.agentType?.startsWith('acp:');
       let turns: DialogTurnData[] | undefined;
+      let restoredSessionInfo: AgentSessionInfo | undefined;
       let contextRestoreState: SessionContextRestoreState = 'ready';
       if (!isAcpSession) {
         const restoreStartedAt = nowMs();
@@ -2320,6 +2376,7 @@ export class FlowChatStore {
                   sessionTraceId,
                   options?.includeInternal,
                 );
+                restoredSessionInfo = restored.session;
                 turns = restored.turns;
                 contextRestoreState = 'ready';
                 return;
@@ -2338,7 +2395,7 @@ export class FlowChatStore {
               }
             }
 
-            await agentAPI.restoreSession(
+            restoredSessionInfo = await agentAPI.restoreSession(
               sessionId,
               workspacePath,
               remoteConnectionId,
@@ -2362,6 +2419,7 @@ export class FlowChatStore {
                 sessionTraceId,
                 options?.includeInternal,
               );
+              restoredSessionInfo = restored.session;
               turns = restored.turns;
               contextRestoreState =
                 restored.contextRestoreState === 'ready' ? 'ready' : 'pending';
@@ -2426,6 +2484,8 @@ export class FlowChatStore {
       
       const convertStartedAt = nowMs();
       const dialogTurns = this.convertToDialogTurns(turns);
+      const restoredLastUserDialogMode =
+        restoredSessionInfo?.lastUserDialogAgentType || this.deriveLastUserDialogMode(dialogTurns);
       startupTrace.markPhase('historical_session_convert_end', {
         remote,
         sessionTraceId,
@@ -2445,6 +2505,10 @@ export class FlowChatStore {
           historyState: 'ready' as const,
           contextRestoreState,
           error: null,
+          mode: restoredSessionInfo?.agentType || session.mode,
+          lastUserDialogMode: restoredLastUserDialogMode,
+          lastSubmittedMode:
+            restoredSessionInfo?.lastSubmittedAgentType ?? session.lastSubmittedMode,
         };
         
         const newSessions = new Map(prev.sessions);
@@ -2550,6 +2614,7 @@ export class FlowChatStore {
       id: turn.turnId,
       sessionId: turn.sessionId,
       kind: turn.kind || 'user_dialog',
+      agentType: turn.agentType,
       userMessage: {
         id: turn.userMessage.id,
         type: 'user' as const,

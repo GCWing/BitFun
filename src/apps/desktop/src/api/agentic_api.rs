@@ -200,7 +200,12 @@ pub struct GetSessionRequest {
 pub struct SessionResponse {
     pub session_id: String,
     pub session_name: String,
+    /// Current/default mode selection for the next dialog turn.
     pub agent_type: String,
+    /// Mode of the last surviving user dialog turn in session history.
+    pub last_user_dialog_agent_type: Option<String>,
+    /// Mode of the most recent user submission accepted by the scheduler.
+    pub last_submitted_agent_type: Option<String>,
     pub state: String,
     pub turn_count: usize,
     pub created_at: u64,
@@ -1459,6 +1464,8 @@ pub async fn list_sessions(
             session_id: summary.session_id,
             session_name: summary.session_name,
             agent_type: summary.agent_type,
+            last_user_dialog_agent_type: summary.last_user_dialog_agent_type,
+            last_submitted_agent_type: summary.last_submitted_agent_type,
             state: format!("{:?}", summary.state),
             turn_count: summary.turn_count,
             created_at: system_time_to_unix_secs(summary.created_at),
@@ -1522,6 +1529,7 @@ pub async fn get_available_modes(state: State<'_, AppState>) -> Result<Vec<ModeI
             is_readonly: info.is_readonly,
             tool_count: info.tool_count,
             default_tools: info.default_tools,
+            prompt_cache_scope_key: info.prompt_cache_scope_key,
         })
         .collect();
 
@@ -1542,6 +1550,7 @@ pub struct ModeInfoDTO {
     pub is_readonly: bool,
     pub tool_count: usize,
     pub default_tools: Vec<String>,
+    pub prompt_cache_scope_key: String,
 }
 
 fn assistant_bootstrap_outcome_to_response(
@@ -1600,6 +1609,8 @@ fn session_to_response(session: Session) -> SessionResponse {
         session_id: session.session_id,
         session_name: session.session_name,
         agent_type: session.agent_type,
+        last_user_dialog_agent_type: session.last_user_dialog_agent_type,
+        last_submitted_agent_type: session.last_submitted_agent_type,
         state: format!("{:?}", session.state),
         turn_count: session.dialog_turn_ids.len(),
         created_at: system_time_to_unix_secs(session.created_at),

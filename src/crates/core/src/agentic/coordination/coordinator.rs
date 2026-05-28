@@ -1257,6 +1257,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 session_id: session_id.to_string(),
                 session_name: "Recovered Session".to_string(),
                 agent_type: "agentic".to_string(),
+                last_user_dialog_agent_type: None,
+                last_submitted_agent_type: None,
                 created_by: None,
                 session_kind: SessionKind::Standard,
                 model_name: "default".to_string(),
@@ -1391,7 +1393,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             }
         }
 
-        (crate::service::session::TurnStatus::Completed, final_response)
+        (
+            crate::service::session::TurnStatus::Completed,
+            final_response,
+        )
     }
 
     async fn persist_cancelled_dialog_turn(
@@ -1401,7 +1406,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         session_id: &str,
         turn_id: &str,
     ) -> crate::service::session::TurnStatus {
-        info!("Dialog turn cancelled: session={}, turn={}", session_id, turn_id);
+        info!(
+            "Dialog turn cancelled: session={}, turn={}",
+            session_id, turn_id
+        );
 
         // The execution engine only emits DialogTurnCancelled when cancellation is
         // detected between rounds. If cancellation interrupted streaming mid-round,
@@ -1422,7 +1430,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             );
         }
 
-        if let Err(error) = session_manager.cancel_dialog_turn(session_id, turn_id).await {
+        if let Err(error) = session_manager
+            .cancel_dialog_turn(session_id, turn_id)
+            .await
+        {
             error!(
                 "Failed to cancel dialog turn in persistence: session_id={}, turn_id={}, error={}",
                 session_id, turn_id, error
@@ -2812,19 +2823,17 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 )
                 .await
             {
-                Ok(execution_result) => {
-                    Some(
-                        Self::persist_completed_dialog_turn(
-                            session_manager.as_ref(),
-                            scheduler_notify_tx.as_ref(),
-                            &session_id_clone,
-                            &turn_id_clone,
-                            &execution_result,
-                        )
-                        .await
-                        .0,
+                Ok(execution_result) => Some(
+                    Self::persist_completed_dialog_turn(
+                        session_manager.as_ref(),
+                        scheduler_notify_tx.as_ref(),
+                        &session_id_clone,
+                        &turn_id_clone,
+                        &execution_result,
                     )
-                }
+                    .await
+                    .0,
+                ),
                 Err(e) => {
                     if matches!(&e, BitFunError::Cancelled(_)) {
                         Some(
@@ -4241,14 +4250,16 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
 
         // Persist turn lifecycle before cleaning up the hidden subagent runtime.
         let (workspace_turn_status, response_text) = match result {
-            Ok(exec_result) => Self::persist_completed_dialog_turn(
-                self.session_manager.as_ref(),
-                None,
-                &session_id,
-                &dialog_turn_id,
-                &exec_result,
-            )
-            .await,
+            Ok(exec_result) => {
+                Self::persist_completed_dialog_turn(
+                    self.session_manager.as_ref(),
+                    None,
+                    &session_id,
+                    &dialog_turn_id,
+                    &exec_result,
+                )
+                .await
+            }
             Err(e) => {
                 let turn_status = if matches!(&e, BitFunError::Cancelled(_)) {
                     Self::persist_cancelled_dialog_turn(
@@ -4833,6 +4844,19 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let normalized = Self::normalize_agent_type(agent_type);
         self.session_manager
             .update_session_agent_type(session_id, &normalized)
+            .await
+    }
+
+    /// Update the session-level prompt-cache guard mode for the latest
+    /// scheduler-accepted user submission.
+    pub async fn update_last_submitted_agent_type(
+        &self,
+        session_id: &str,
+        agent_type: &str,
+    ) -> BitFunResult<()> {
+        let normalized = Self::normalize_agent_type(agent_type);
+        self.session_manager
+            .update_last_submitted_agent_type(session_id, &normalized)
             .await
     }
 
