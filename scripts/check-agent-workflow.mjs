@@ -123,7 +123,7 @@ const dependencyRiskSignals = [
   {
     level: 'L2',
     label: 'Rust dependency graph impact',
-    pattern: /(^|\/)cargo\.toml$/,
+    pattern: /(^|\/)(cargo\.toml|cargo\.lock)$/,
   },
   {
     level: 'L2',
@@ -247,7 +247,10 @@ function sectionContent(markdown, sectionName) {
 
   const contentLines = [];
   for (let index = startIndex + 1; index < lines.length; index += 1) {
-    if (/^##\s+/.test(lines[index])) {
+    // Only treat sibling `##` headings as section terminators. The previous
+    // pattern matched `###` too, silently truncating sections that used
+    // nested subheadings (e.g. `## Repair Loop` followed by `### Attempts`).
+    if (/^##(?!#)\s+/.test(lines[index])) {
       break;
     }
     contentLines.push(lines[index]);
@@ -272,9 +275,20 @@ function taskSlug(filePath, prefix) {
 }
 
 function validateEvidenceIntentReference(filePath, markdown) {
-  const match = markdown.match(/\.agent\/intents\/intent-[^\s`)]+\.md/);
+  // Restrict the search to the Provenance Chain section so a stray mention
+  // elsewhere (e.g. inside Summary) can't satisfy the requirement.
+  const provenance = sectionContent(markdown, 'Provenance Chain');
+  const searchText = provenance || markdown;
+  const match = searchText.match(/\.agent\/intents\/intent-[^\s`)]+\.md/);
   if (!match) {
-    reportError(`${rel(filePath)} does not reference an Intent Record path`);
+    reportError(
+      `${rel(filePath)} does not reference an Intent Record path under "## Provenance Chain"`,
+    );
+    return;
+  }
+
+  if (!isInsideAgentSubdir(match[0], 'intents')) {
+    reportError(`${rel(filePath)} Intent Record reference escapes .agent/intents/: ${match[0]}`);
     return;
   }
 
@@ -282,6 +296,24 @@ function validateEvidenceIntentReference(filePath, markdown) {
   if (!fs.existsSync(intentPath)) {
     reportError(`${rel(filePath)} references missing Intent Record ${match[0]}`);
   }
+}
+
+/**
+ * Resolve a repo-relative path and assert it stays under
+ * `.agent/<subdir>/` (no `..` escape).
+ */
+function isInsideAgentSubdir(relPath, subdir) {
+  const base = path.resolve(root, '.agent', subdir);
+  const resolved = path.resolve(root, relPath);
+  const baseWithSep = base.endsWith(path.sep) ? base : base + path.sep;
+  return resolved === base || resolved.startsWith(baseWithSep);
+}
+
+function isInsideSessionStoreRoot(relPath) {
+  const base = path.resolve(root, '.bitfun', 'sessions');
+  const resolved = path.resolve(root, relPath);
+  const baseWithSep = base.endsWith(path.sep) ? base : base + path.sep;
+  return resolved === base || resolved.startsWith(baseWithSep);
 }
 
 function acceptedCheckLineHasStatus(line) {
@@ -359,7 +391,9 @@ function validateEvidenceContextInputs(filePath, markdown) {
   }
 
   for (const line of contextLines) {
-    const inputMatch = line.match(/^[-*]\s+\[([a-z_]+)\]\s+([^:]+):\s*(.+)$/i);
+    // Accept colons in the reference itself (URLs, `file.md:42`, Windows
+    // paths). Split on the LAST `: ` separator instead of the first `:`.
+    const inputMatch = line.match(/^[-*]\s+\[([a-z_]+)\]\s+(.+?):\s+(.+)$/i);
     if (!inputMatch) {
       reportError(
         `${rel(filePath)} Context Input must use "- [type] reference: reason": ${line}`,
@@ -473,6 +507,16 @@ function validateEvidenceProvenanceChain(filePath, markdown) {
       return;
     }
 
+    // Reject any `..` segments that could escape the sessions root —
+    // `.bitfun/sessions/../../etc/foo.json` would otherwise satisfy the
+    // startsWith check above and let the validator read arbitrary local files.
+    if (!isInsideSessionStoreRoot(normalizedRecord)) {
+      reportError(
+        `${rel(filePath)} session_store Provenance record escapes .bitfun/sessions/: ${normalizedRecord}`,
+      );
+      return;
+    }
+
     const recordPath = path.join(root, normalizedRecord);
     if (!fs.existsSync(recordPath)) {
       reportWarn(
@@ -528,7 +572,10 @@ function requiredPolicyGatesForEvidence(markdown, riskLevel, changedFiles) {
   }
 
   if (
-    changedFilesInclude(changedFiles, /(^|\/)(cargo\.toml|package\.json|pnpm-lock\.yaml)$/)
+    changedFilesInclude(
+      changedFiles,
+      /(^|\/)(cargo\.toml|cargo\.lock|package\.json|pnpm-lock\.yaml)$/,
+    )
   ) {
     requiredGates.add('dependencies');
   }
