@@ -17,7 +17,6 @@ use log::{debug, trace};
 /// Context compressor configuration
 #[derive(Debug, Clone)]
 pub struct CompressionConfig {
-    pub model_request_max_tokens_ratio: f32,
     pub fallback_max_tokens_ratio: f32,
     pub fallback_user_chars: usize,
     pub fallback_assistant_chars: usize,
@@ -28,7 +27,6 @@ pub struct CompressionConfig {
 impl Default for CompressionConfig {
     fn default() -> Self {
         Self {
-            model_request_max_tokens_ratio: 0.95,
             fallback_max_tokens_ratio: 0.25,
             fallback_user_chars: 1000,
             fallback_assistant_chars: 1000,
@@ -120,9 +118,6 @@ impl ContextCompressor {
     }
 
     /// Collect all non-system conversation turns for an automatic compression pass.
-    ///
-    /// Auto-compression should not collapse the only active dialog turn mid-flight.
-    /// Within-turn pressure is handled by tool-result budgeting and emergency truncation.
     pub fn collect_turns_for_auto_compression(
         &self,
         session_id: &str,
@@ -137,15 +132,6 @@ impl ContextCompressor {
         if turns.is_empty() {
             return Ok(Vec::new());
         }
-        let turns_count = turns.len();
-
-        if turns_count == 1 {
-            debug!(
-                "Single-turn session skipped for auto compression: session_id={}",
-                session_id
-            );
-            return Ok(Vec::new());
-        }
 
         Ok(turns)
     }
@@ -157,10 +143,6 @@ impl ContextCompressor {
         messages: Vec<Message>,
     ) -> BitFunResult<Vec<TurnWithTokens>> {
         self.collect_conversation_turns(session_id, messages)
-    }
-
-    pub fn max_model_request_tokens(&self, context_window: usize) -> usize {
-        ((context_window as f32 * self.config.model_request_max_tokens_ratio) as usize).max(256)
     }
 
     pub fn compress_turns(
@@ -718,7 +700,7 @@ mod tests {
     }
 
     #[test]
-    fn auto_turn_collection_skips_single_active_turn() {
+    fn auto_turn_collection_keeps_single_active_turn() {
         let compressor = ContextCompressor::new(Default::default());
         let messages = vec![
             Message::system("system".to_string()),
@@ -730,7 +712,7 @@ mod tests {
             .collect_turns_for_auto_compression("session", messages)
             .expect("collection succeeds");
 
-        assert!(turns.is_empty());
+        assert_eq!(turns.len(), 1);
     }
 
     #[test]

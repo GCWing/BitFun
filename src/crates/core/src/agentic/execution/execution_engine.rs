@@ -1261,7 +1261,6 @@ impl ExecutionEngine {
         tool_definitions: &Option<Vec<ToolDefinition>>,
         prepended_prompt_reminders: &PrependedPromptReminders,
         primary_supports_image_understanding: bool,
-        context_window: usize,
         contract: Option<&crate::agentic::core::CompressionContract>,
     ) -> BitFunResult<Option<String>> {
         let request_messages = self
@@ -1275,20 +1274,6 @@ impl ExecutionEngine {
                 contract,
             )
             .await?;
-        let request_tokens =
-            TokenCounter::estimate_request_tokens(&request_messages, tool_definitions.as_deref());
-        let max_request_tokens = self
-            .context_compressor
-            .max_model_request_tokens(context_window);
-        if request_tokens > max_request_tokens {
-            debug!(
-                "Skipping model-based compression because full-prefix request exceeds budget: dialog_turn_id={}, request_tokens={}, max_request_tokens={}",
-                dialog_turn_id,
-                request_tokens,
-                max_request_tokens
-            );
-            return Ok(None);
-        }
 
         let raw_summary = self
             .request_compression_summary_with_retry(
@@ -1568,7 +1553,6 @@ impl ExecutionEngine {
                 tool_definitions,
                 prepended_prompt_reminders,
                 primary_supports_image_understanding,
-                context_window,
                 compression_contract.as_ref(),
             )
             .await
@@ -1775,7 +1759,6 @@ impl ExecutionEngine {
                 &scaffold.tool_definitions,
                 &scaffold.prepended_prompt_reminders,
                 scaffold.primary_supports_image_understanding,
-                context_window,
                 compression_contract.as_ref(),
             )
             .await
