@@ -10,7 +10,8 @@ BitFun 是一个由 Rust workspace 与共享 React 前端组成的项目。
 
 1. 在修改架构敏感代码前，先阅读 `README.md` 和 `CONTRIBUTING.md`。
 2. 桌面端开发优先使用 `pnpm run desktop:dev` — 提供完整热更新（Vite HMR + Rust 自动重编译并重启）。仅在需要更快冷启动且只迭代前端时使用 `pnpm run desktop:preview:debug`（Rust 改动不会自动重编译）。
-3. 改完后按下方表格执行与改动范围匹配的最小验证。
+3. 修改 Rust 文件后，优先使用 `pnpm run fmt:rs`，只格式化已改动或已暂存的 `.rs` 文件。只有在你明确需要更大范围格式化时才使用 `cargo fmt`。
+4. 改完后按下方表格执行与改动范围匹配的最小验证。
 
 ## 模块索引
 
@@ -45,6 +46,7 @@ pnpm run dev:web                   # 纯浏览器前端
 pnpm run cli:dev                   # CLI 运行时
 
 # 检查
+pnpm run fmt:rs                     # 只格式化已改动 / 已暂存的 Rust 文件
 pnpm run lint:web
 pnpm run type-check:web
 cargo check --workspace

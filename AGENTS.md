@@ -10,7 +10,8 @@ Repository rule: **keep product logic platform-agnostic, then expose it through 
 
 1. Read `README.md` and `CONTRIBUTING.md` before architecture-sensitive changes.
 2. For desktop development, prefer `pnpm run desktop:dev` — it provides full hot-reload (Vite HMR + Rust auto-rebuild & restart). Use `pnpm run desktop:preview:debug` only when you need a faster cold-start for frontend-only iteration (Rust changes are not auto-rebuilt).
-3. After changes, run the smallest matching verification from the table below.
+3. After Rust file changes, prefer `pnpm run fmt:rs` to format only changed or staged `.rs` files. Use `cargo fmt` only when you intentionally want broader formatting coverage.
+4. After changes, run the smallest matching verification from the table below.
 
 ## Module index
 
@@ -48,6 +49,7 @@ pnpm run dev:web                   # browser-only frontend
 pnpm run cli:dev                   # CLI runtime
 
 # Check
+pnpm run fmt:rs                     # format only changed / staged Rust files
 pnpm run lint:web
 pnpm run type-check:web
 cargo check --workspace
