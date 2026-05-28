@@ -69,7 +69,7 @@ impl MCPConnection {
         Self {
             transport: TransportType::Local(transport),
             pending_requests,
-            request_timeout: None,
+            request_timeout: Some(Duration::from_secs(30)),
             event_tx,
         }
     }
@@ -173,6 +173,21 @@ impl MCPConnection {
                     });
                 }
             }
+        }
+
+        // Drain all pending request waiters when the message channel closes,
+        // so that callers don't hang forever waiting for a response that will
+        // never arrive (e.g. server process exited).
+        {
+            let mut pending = pending_requests.write().await;
+            let count = pending.len();
+            if count > 0 {
+                warn!(
+                    "Message channel closed with {} pending request(s) — cancelling waiters",
+                    count
+                );
+            }
+            pending.clear();
         }
 
         let _ = event_tx.send(MCPConnectionEvent::Closed);

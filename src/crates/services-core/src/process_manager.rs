@@ -103,16 +103,30 @@ pub fn create_command<S: AsRef<std::ffi::OsStr>>(program: S) -> Command {
 
 /// Create Tokio async Command (Windows automatically adds CREATE_NO_WINDOW)
 pub fn create_tokio_command<S: AsRef<std::ffi::OsStr>>(program: S) -> TokioCommand {
-    let cmd = TokioCommand::new(program.as_ref());
+    let mut cmd = TokioCommand::new(program.as_ref());
+
+    // macOS GUI apps inherit a minimal PATH (/usr/bin:/bin:/usr/sbin:/sbin)
+    // which is missing common tool locations like /opt/homebrew/bin and
+    // /usr/local/bin.  Resolve the shell PATH so that shebang-driven tools
+    // (npx, uvx, node, etc.) work out of the box.
+    #[cfg(target_os = "macos")]
+    {
+        if let Ok(shell_path) = std::process::Command::new("/bin/zsh")
+            .args(["-ilc", "echo -n $PATH"])
+            .output()
+        {
+            let path = String::from_utf8_lossy(&shell_path.stdout);
+            if !path.is_empty() {
+                cmd.env("PATH", path.as_ref());
+            }
+        }
+    }
 
     #[cfg(windows)]
     {
-        let mut cmd = cmd;
         cmd.creation_flags(CREATE_NO_WINDOW);
-        cmd
     }
 
-    #[cfg(not(windows))]
     cmd
 }
 
