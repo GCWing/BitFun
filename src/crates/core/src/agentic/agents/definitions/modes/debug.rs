@@ -1,7 +1,8 @@
 //! Debug Mode - Evidence-driven debugging mode
 
 use crate::agentic::agents::{
-    get_embedded_prompt, Agent, PromptBuilder, PromptBuilderContext, UserContextPolicy,
+    get_embedded_prompt, shared_coding_mode_tools, Agent, UserContextPolicy,
+    SHARED_CODING_MODE_PROMPT_TEMPLATE,
 };
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::config::types::{DebugModeConfig, LanguageDebugTemplate};
@@ -13,7 +14,8 @@ use std::path::Path;
 
 pub struct DebugMode;
 
-const DEBUG_MODE_PROMPT_TEMPLATE: &str = "debug_mode";
+const DEBUG_MODE_FIRST_ENTRY_REMINDER_TEMPLATE: &str = "debug_mode_first_entry_reminder";
+const DEBUG_MODE_ONGOING_REMINDER_TEMPLATE: &str = "debug_mode_ongoing_reminder";
 
 impl Default for DebugMode {
     fn default() -> Self {
@@ -40,6 +42,17 @@ impl DebugMode {
     async fn detect_project_info(&self, workspace_path: &str) -> ProjectInfo {
         let path = Path::new(workspace_path);
         ProjectDetector::detect(path).await.unwrap_or_default()
+    }
+
+    fn load_reminder_template(&self, template_name: &str) -> BitFunResult<String> {
+        get_embedded_prompt(template_name)
+            .map(str::to_string)
+            .ok_or_else(|| {
+                crate::util::errors::BitFunError::Agent(format!(
+                    "{} not found in embedded files",
+                    template_name
+                ))
+            })
     }
 
     const BUILTIN_JS_TEMPLATE: &'static str = r#"fetch('http://127.0.0.1:{PORT}/ingest/{SESSION_ID}',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'{LOCATION}',message:'{MESSAGE}',data:{DATA},timestamp:Date.now(),sessionId:'{SESSION_ID}',hypothesisId:'{HYPOTHESIS_ID}',runId:'{RUN_ID}'})}).catch(()=>{});"#;
@@ -181,13 +194,17 @@ impl DebugMode {
         section
     }
 
-    /// Builds session-level reminder details with dynamic values like server endpoint and log path.
-    fn build_session_level_rule(&self, config: &DebugModeConfig, workspace_path: &str) -> String {
-        let log_path = if config.log_path.starts_with('/') || config.log_path.starts_with('.') {
+    fn resolve_log_path(config: &DebugModeConfig, workspace_path: &str) -> String {
+        if config.log_path.starts_with('/') || config.log_path.starts_with('.') {
             config.log_path.clone()
         } else {
             format!("{}/{}", workspace_path, config.log_path)
-        };
+        }
+    }
+
+    /// Builds session-level reminder details with dynamic values like server endpoint and log path.
+    fn build_session_level_rule(&self, config: &DebugModeConfig, workspace_path: &str) -> String {
+        let log_path = Self::resolve_log_path(config, workspace_path);
 
         format!(
             r#"
@@ -206,13 +223,36 @@ Use these exact values when inserting instrumentation code. The server automatic
         )
     }
 
-    /// Builds a system reminder appended after each dialog turn.
-    fn build_system_reminder(&self) -> String {
-        r#"Debug mode is still active. You must debug with **runtime evidence**.
+    /// Builds the ongoing reminder appended after each dialog turn while staying in Debug mode.
+    fn build_ongoing_reminder(&self) -> BitFunResult<String> {
+        self.load_reminder_template(DEBUG_MODE_ONGOING_REMINDER_TEMPLATE)
+    }
 
-**Before each run:** Use Delete tool to clear the log file, do not use shell commands like rm, touch, etc.
-**During fixes:** Do NOT remove instrumentation until user confirms success with post-fix verification logs.
-**If fix failed:** Generate NEW hypotheses from different subsystems and add more instrumentation. You MUST conclude your response with the `<reproduction_steps>` block unless the issue is fixed."#.to_string()
+    fn build_first_entry_reminder(
+        &self,
+        debug_config: &DebugModeConfig,
+        project_info: &ProjectInfo,
+        workspace_path: &str,
+    ) -> BitFunResult<String> {
+        let reminder_template =
+            self.load_reminder_template(DEBUG_MODE_FIRST_ENTRY_REMINDER_TEMPLATE)?;
+
+        let language_templates =
+            Self::build_language_templates_prompt(debug_config, &project_info.languages);
+
+        debug!(
+            "Debug mode language templates length: {}",
+            language_templates.len()
+        );
+
+        let log_path = Self::resolve_log_path(debug_config, workspace_path);
+        let session_rule = self.build_session_level_rule(debug_config, workspace_path);
+
+        Ok(reminder_template
+            .replace("{LOG_PATH}", &log_path)
+            .replace("{INGEST_PORT}", &debug_config.ingest_port.to_string())
+            .replace("{LANGUAGE_TEMPLATES}", &language_templates)
+            + &session_rule)
     }
 
     /// Renders general instrumentation guidelines for non-web projects.
@@ -281,7 +321,7 @@ impl Agent for DebugMode {
     }
 
     fn prompt_template_name(&self, _model_name: Option<&str>) -> &str {
-        DEBUG_MODE_PROMPT_TEMPLATE
+        SHARED_CODING_MODE_PROMPT_TEMPLATE
     }
 
     fn user_context_policy(&self) -> UserContextPolicy {
@@ -292,67 +332,31 @@ impl Agent for DebugMode {
             .with_project_layout()
     }
 
-    async fn build_prompt(&self, context: &PromptBuilderContext) -> BitFunResult<String> {
-        let workspace_path = context.workspace_path.as_str();
-        let prompt_components = PromptBuilder::new(context.clone());
-        let env_info = prompt_components.get_env_info();
+    async fn get_system_reminder(
+        &self,
+        previous_agent_type: Option<&str>,
+        workspace: Option<&crate::agentic::WorkspaceBinding>,
+    ) -> BitFunResult<String> {
+        if previous_agent_type == Some(self.id()) {
+            return self.build_ongoing_reminder();
+        }
 
+        let workspace_path = workspace
+            .map(|binding| binding.root_path_string())
+            .unwrap_or_else(|| ".".to_string());
         let debug_config = self.get_debug_config().await;
-        let project_info = self.detect_project_info(workspace_path).await;
+        let project_info = self.detect_project_info(&workspace_path).await;
 
         debug!(
             "Debug mode project detection: languages={:?}, types={:?}",
             project_info.languages, project_info.project_types
         );
 
-        let system_prompt_template = get_embedded_prompt(DEBUG_MODE_PROMPT_TEMPLATE)
-            .unwrap_or("Debug mode prompt not found in embedded files");
-
-        let language_templates =
-            Self::build_language_templates_prompt(&debug_config, &project_info.languages);
-
-        let main_prompt = system_prompt_template
-            .replace("{ENV_INFO}", &env_info)
-            .replace("{LOG_PATH}", &debug_config.log_path)
-            .replace("{INGEST_PORT}", &debug_config.ingest_port.to_string())
-            .replace("{LANGUAGE_TEMPLATES}", &language_templates);
-
-        let mut prompt_list = vec![main_prompt];
-
-        debug!(
-            "Debug mode language templates length: {}",
-            language_templates.len()
-        );
-
-        let session_rule = self.build_session_level_rule(&debug_config, workspace_path);
-        prompt_list.push(session_rule);
-
-        Ok(prompt_list.join(""))
-    }
-
-    async fn get_system_reminder(
-        &self,
-        _previous_agent_type: Option<&str>,
-        _workspace: Option<&crate::agentic::WorkspaceBinding>,
-    ) -> BitFunResult<String> {
-        Ok(self.build_system_reminder())
+        self.build_first_entry_reminder(&debug_config, &project_info, &workspace_path)
     }
 
     fn default_tools(&self) -> Vec<String> {
-        vec![
-            "Read".to_string(),
-            "Write".to_string(),
-            "Edit".to_string(),
-            "Delete".to_string(),
-            "Bash".to_string(),
-            "Grep".to_string(),
-            "Glob".to_string(),
-            "WebSearch".to_string(),
-            "TodoWrite".to_string(),
-            "Log".to_string(),
-            "TerminalControl".to_string(),
-            "ControlHub".to_string(),
-        ]
+        shared_coding_mode_tools()
     }
 
     fn is_readonly(&self) -> bool {

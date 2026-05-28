@@ -71,7 +71,9 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
         "GenerativeUI".to_string(),
         "Skill".to_string(),
         "AskUserQuestion".to_string(),
+        "CreatePlan".to_string(),
         "Git".to_string(),
+        "Log".to_string(),
         "TerminalControl".to_string(),
         "ControlHub".to_string(),
         "InitMiniApp".to_string(),
@@ -187,20 +189,46 @@ pub trait Agent: Send + Sync + 'static {
 
 #[cfg(test)]
 mod tests {
-    use super::{Agent, AgenticMode, MultitaskMode};
+    use super::{shared_coding_mode_tools, Agent, AgenticMode, DebugMode, MultitaskMode, PlanMode};
 
     #[test]
     fn shared_template_modes_share_system_prompt_cache_identity() {
         let agentic = AgenticMode::new();
         let multitask = MultitaskMode::new();
+        let plan = PlanMode::new();
+        let debug = DebugMode::new();
 
         assert_eq!(
             agentic.system_prompt_cache_identity(None),
             multitask.system_prompt_cache_identity(None)
         );
         assert_eq!(
+            agentic.system_prompt_cache_identity(None),
+            plan.system_prompt_cache_identity(None)
+        );
+        assert_eq!(
+            agentic.system_prompt_cache_identity(None),
+            debug.system_prompt_cache_identity(None)
+        );
+        assert_eq!(
             agentic.user_context_cache_identity(),
             multitask.user_context_cache_identity()
         );
+        assert_eq!(
+            agentic.user_context_cache_identity(),
+            plan.user_context_cache_identity()
+        );
+        assert_eq!(
+            agentic.user_context_cache_identity(),
+            debug.user_context_cache_identity()
+        );
+    }
+
+    #[test]
+    fn shared_coding_mode_tools_include_plan_and_debug_specific_tools() {
+        let tools = shared_coding_mode_tools();
+
+        assert!(tools.contains(&"CreatePlan".to_string()));
+        assert!(tools.contains(&"Log".to_string()));
     }
 }

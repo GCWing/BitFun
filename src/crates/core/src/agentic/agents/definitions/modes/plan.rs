@@ -1,13 +1,17 @@
 //! Plan Mode
 
-use crate::agentic::agents::{Agent, UserContextPolicy};
+use crate::agentic::agents::{
+    get_embedded_prompt, shared_coding_mode_tools, Agent, UserContextPolicy,
+    SHARED_CODING_MODE_PROMPT_TEMPLATE,
+};
 use async_trait::async_trait;
-
-const PLAN_MODE_PROMPT_TEMPLATE: &str = "plan_mode";
 
 pub struct PlanMode {
     default_tools: Vec<String>,
 }
+
+const PLAN_MODE_FIRST_ENTRY_REMINDER_TEMPLATE: &str = "plan_mode_first_entry_reminder";
+const PLAN_MODE_ONGOING_REMINDER_TEMPLATE: &str = "plan_mode_ongoing_reminder";
 
 impl Default for PlanMode {
     fn default() -> Self {
@@ -18,19 +22,22 @@ impl Default for PlanMode {
 impl PlanMode {
     pub fn new() -> Self {
         Self {
-            default_tools: vec![
-                "Task".to_string(),
-                "LS".to_string(),
-                "Read".to_string(),
-                "Write".to_string(),
-                "Edit".to_string(),
-                "Grep".to_string(),
-                "Glob".to_string(),
-                "AskUserQuestion".to_string(),
-                "CreatePlan".to_string(),
-                "ControlHub".to_string(),
-            ],
+            default_tools: shared_coding_mode_tools(),
         }
+    }
+
+    fn load_reminder_template(
+        &self,
+        template_name: &str,
+    ) -> crate::util::errors::BitFunResult<String> {
+        get_embedded_prompt(template_name)
+            .map(str::to_string)
+            .ok_or_else(|| {
+                crate::util::errors::BitFunError::Agent(format!(
+                    "{} not found in embedded files",
+                    template_name
+                ))
+            })
     }
 }
 
@@ -53,7 +60,7 @@ impl Agent for PlanMode {
     }
 
     fn prompt_template_name(&self, _model_name: Option<&str>) -> &str {
-        PLAN_MODE_PROMPT_TEMPLATE
+        SHARED_CODING_MODE_PROMPT_TEMPLATE
     }
 
     fn default_tools(&self) -> Vec<String> {
@@ -66,6 +73,18 @@ impl Agent for PlanMode {
             .with_workspace_instructions()
             .with_workspace_memory_files()
             .with_project_layout()
+    }
+
+    async fn get_system_reminder(
+        &self,
+        previous_agent_type: Option<&str>,
+        _workspace: Option<&crate::agentic::WorkspaceBinding>,
+    ) -> crate::util::errors::BitFunResult<String> {
+        if previous_agent_type == Some(self.id()) {
+            self.load_reminder_template(PLAN_MODE_ONGOING_REMINDER_TEMPLATE)
+        } else {
+            self.load_reminder_template(PLAN_MODE_FIRST_ENTRY_REMINDER_TEMPLATE)
+        }
     }
 
     fn is_readonly(&self) -> bool {
