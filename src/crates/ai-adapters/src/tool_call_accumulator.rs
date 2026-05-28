@@ -97,6 +97,10 @@ pub fn is_write_like_tool_name(tool_name: &str) -> bool {
 
 fn is_truncation_safe_to_recover(tool_name: &str) -> bool {
     is_write_like_tool_name(tool_name)
+        || matches!(
+            tool_name,
+            "AskUserQuestion" | "TodoWrite"
+        )
 }
 
 /// Remove inline body fields that PlaintextFollowup Write must not carry in
@@ -1074,5 +1078,58 @@ mod tests {
             parsed["content"].as_str(),
             Some("she said \"hello\" and then")
         );
+    }
+
+    #[test]
+    fn ask_user_question_truncated_mid_chinese_string_is_recovered() {
+        let raw = r#"{"questions": [{"header": "重试场景", "multiSelect": true, "options": [{"description": "当消息发送后后端返回失败（消息气泡显示为红色失败状态，有 model rounds 但 status='error'），在失败气泡旁增加重试按钮，点击后重新发送该消息", "label": "失败消息气泡上加重试按钮"}]}]}"#;
+        // Truncate mid-Chinese-string, after a colon that opened the value
+        let truncated = &raw[..raw.find("消息气泡显示为红色失败状态").unwrap() + "消息气泡显示为红色失败状态".len()];
+        let mut pending = PendingToolCall::default();
+        pending.start_new("call_1".to_string(), Some("AskUserQuestion".to_string()));
+        pending.append_arguments(truncated);
+
+        let finalized = pending
+            .finalize(ToolCallBoundary::FinishReason, false)
+            .expect("finalized tool");
+
+        assert!(!finalized.is_error);
+        assert!(finalized.recovered_from_truncation);
+    }
+
+    #[test]
+    fn ask_user_question_truncated_mid_options_is_recovered() {
+        // Truncation right after a completed description value's closing quote + comma
+        let raw = r#"{"questions": [{"header": "场景", "multiSelect": true, "options": [{"description": "第一条描述", "label": "选项一"}, {"description": "第二条描"#;
+        let mut pending = PendingToolCall::default();
+        pending.start_new("call_1".to_string(), Some("AskUserQuestion".to_string()));
+        pending.append_arguments(raw);
+
+        let finalized = pending
+            .finalize(ToolCallBoundary::FinishReason, false)
+            .expect("finalized tool");
+
+        assert!(!finalized.is_error);
+        assert!(finalized.recovered_from_truncation);
+        let questions = finalized.arguments["questions"].as_array().unwrap();
+        assert_eq!(questions.len(), 1);
+        assert_eq!(questions[0]["options"].as_array().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn todo_write_truncated_mid_content_is_recovered() {
+        let raw = r#"{"todos": [{"id": "1", "content": "完成重构并优化性能", "status": "in_progress"}, {"id": "2", "content": "编写单元测"#;
+        let mut pending = PendingToolCall::default();
+        pending.start_new("call_1".to_string(), Some("TodoWrite".to_string()));
+        pending.append_arguments(raw);
+
+        let finalized = pending
+            .finalize(ToolCallBoundary::FinishReason, false)
+            .expect("finalized tool");
+
+        assert!(!finalized.is_error);
+        assert!(finalized.recovered_from_truncation);
+        let todos = finalized.arguments["todos"].as_array().unwrap();
+        assert_eq!(todos.len(), 2);
     }
 }

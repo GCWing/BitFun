@@ -55,6 +55,31 @@ function makeToolContext(): any {
   };
 }
 
+function makeAskUserQuestionTool(
+  id: string,
+  status: FlowToolItem['status'],
+  error?: string,
+): FlowToolItem {
+  return {
+    id,
+    type: 'tool',
+    toolName: 'AskUserQuestion',
+    timestamp: 1000,
+    status,
+    toolCall: {
+      id,
+      input: {},
+    },
+    toolResult: error
+      ? {
+          result: null,
+          success: false,
+          error,
+        }
+      : undefined,
+  };
+}
+
 describe('processToolParamsPartialInternal', () => {
   afterEach(() => {
     resetStore();
@@ -252,5 +277,98 @@ describe('processToolEvent late Started event behavior', () => {
 
     const updatedTurn = FlowChatStore.getInstance().getState().sessions.get('session-1')?.dialogTurns[0];
     expect(updatedTurn?.modelRounds[0]?.items.some(item => item.id === 'tool-late-1')).toBe(false);
+  });
+});
+
+describe('processToolEvent AskUserQuestion retry cleanup', () => {
+  afterEach(() => {
+    resetStore();
+  });
+
+  it('removes stale parse failure cards when a retry question is early detected', () => {
+    const staleTool = makeAskUserQuestionTool(
+      'ask-stale',
+      'error',
+      'Failed to parse input parameters: missing field `questions`',
+    );
+    const cancelledTool = makeAskUserQuestionTool(
+      'ask-cancelled',
+      'cancelled',
+      'User cancelled operation',
+    );
+    const ordinaryFailedTool = makeAskUserQuestionTool(
+      'ask-failed',
+      'error',
+      'User input channel closed',
+    );
+
+    const turn: DialogTurn = {
+      id: 'turn-1',
+      sessionId: 'session-1',
+      userMessage: {
+        id: 'user-1',
+        content: 'Ask me if needed',
+        timestamp: 800,
+      },
+      modelRounds: [
+        {
+          id: 'round-1',
+          index: 0,
+          items: [staleTool, cancelledTool, ordinaryFailedTool],
+          isStreaming: false,
+          isComplete: true,
+          status: 'completed',
+          startTime: 900,
+        },
+        {
+          id: 'round-2',
+          index: 1,
+          items: [],
+          isStreaming: true,
+          isComplete: false,
+          status: 'streaming',
+          startTime: 1200,
+        },
+      ],
+      status: 'processing',
+      startTime: 800,
+    };
+
+    const session: Session = {
+      sessionId: 'session-1',
+      title: 'Session 1',
+      dialogTurns: [turn],
+      status: 'active',
+      config: { agentType: 'agentic' },
+      createdAt: 700,
+      lastActiveAt: 1200,
+      error: null,
+      sessionKind: 'normal',
+    };
+
+    FlowChatStore.getInstance().setState(() => ({
+      sessions: new Map([['session-1', session]]),
+      activeSessionId: 'session-1',
+    }));
+
+    processToolEvent(
+      makeToolContext(),
+      'session-1',
+      'turn-1',
+      'round-2',
+      {
+        event_type: 'EarlyDetected',
+        tool_id: 'ask-retry',
+        tool_name: 'AskUserQuestion',
+      },
+    );
+
+    const updatedTurn = FlowChatStore.getInstance().getState().sessions.get('session-1')?.dialogTurns[0];
+    const allItemIds = updatedTurn?.modelRounds.flatMap(round => round.items.map(item => item.id)) || [];
+
+    expect(allItemIds).not.toContain('ask-stale');
+    expect(allItemIds).toContain('ask-cancelled');
+    expect(allItemIds).toContain('ask-failed');
+    expect(allItemIds).toContain('ask-retry');
   });
 });

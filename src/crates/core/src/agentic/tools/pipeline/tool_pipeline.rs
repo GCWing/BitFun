@@ -55,6 +55,22 @@ struct RecentToolCall {
     arguments: serde_json::Value,
 }
 
+fn is_write_like_tool_name(tool_name: &str) -> bool {
+    matches!(tool_name, "Write" | "file_write" | "write_notebook")
+}
+
+fn build_truncation_recovery_notice(tool_name: &str) -> String {
+    if is_write_like_tool_name(tool_name) {
+        return format!(
+            "[Your previous {tool_name} call was truncated mid-stream by max_tokens and was auto-repaired before execution; the file was written with the partial content. The full truncated content — including the exact stopping point — is visible in the `input` of your previous tool_use message, so you do NOT need to read the file again. To finish it, issue ONE Edit call where `old_string` is the final unique substring of your truncated content and `new_string` is that same substring plus the continuation. If you do not have a concrete plan for the continuation, stop tool-calling and tell the user the output was truncated (suggest raising max_tokens). Do NOT call Read on this file and do NOT rewrite the whole file with Write.]\n\nOriginal tool result follows.\n\n"
+        );
+    }
+
+    format!(
+        "[Your previous {tool_name} call was truncated mid-stream by max_tokens and was auto-repaired before execution. The tool ran with the repaired, potentially incomplete arguments. Review the tool result and continue normally; if important information is missing, issue a fresh complete {tool_name} call rather than trying to continue a file write.]\n\nOriginal tool result follows.\n\n"
+    )
+}
+
 /// Convert framework::ToolResult to core::ToolResult
 ///
 /// Ensure always has result_for_assistant, avoid tool message content being empty
@@ -984,14 +1000,11 @@ impl ToolPipeline {
 
                 // The tool call succeeded with arguments that we patched
                 // because the model's output was truncated mid-stream. Tell
-                // the model so it can decide whether the partial write needs
+                // the model so it can decide whether the partial call needs
                 // to be continued or regenerated.
                 if recovered_from_truncation {
                     let original = tool_result.result_for_assistant.unwrap_or_default();
-                    let notice = format!(
-                        "[Your previous {} call was truncated mid-stream by max_tokens and was auto-repaired before execution; the file was written with the partial content. The full truncated content — including the exact stopping point — is visible in the `input` of your previous tool_use message, so you do NOT need to read the file again. To finish it, issue ONE Edit call where `old_string` is the final unique substring of your truncated content and `new_string` is that same substring plus the continuation. If you do not have a concrete plan for the continuation, stop tool-calling and tell the user the output was truncated (suggest raising max_tokens). Do NOT call Read on this file and do NOT rewrite the whole file with Write.]\n\nOriginal tool result follows.\n\n",
-                        tool_name
-                    );
+                    let notice = build_truncation_recovery_notice(&tool_name);
                     tool_result.result_for_assistant = Some(if original.is_empty() {
                         notice.trim_end().to_string()
                     } else {
@@ -1551,6 +1564,24 @@ mod tests {
         assert!(assistant_text.contains("\"exit_code\": 1"));
         assert!(assistant_text.contains("\"working_directory\": \"/private/tmp\""));
         assert!(!assistant_text.contains("completed with error"));
+    }
+
+    #[test]
+    fn truncation_notice_for_interactive_tools_does_not_claim_file_write() {
+        let notice = build_truncation_recovery_notice("AskUserQuestion");
+
+        assert!(notice.contains("AskUserQuestion call was truncated"));
+        assert!(notice.contains("fresh complete AskUserQuestion call"));
+        assert!(!notice.contains("file was written"));
+        assert!(!notice.contains("issue ONE Edit call"));
+    }
+
+    #[test]
+    fn truncation_notice_for_write_tools_keeps_write_continuation_guidance() {
+        let notice = build_truncation_recovery_notice("Write");
+
+        assert!(notice.contains("file was written with the partial content"));
+        assert!(notice.contains("issue ONE Edit call"));
     }
 
     #[test]
