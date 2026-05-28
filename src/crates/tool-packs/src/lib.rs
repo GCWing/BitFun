@@ -128,6 +128,7 @@ const PRODUCT_TOOL_PROVIDER_GROUP_PLAN: &[ToolProviderGroupPlan] = &[
             "GetToolSpec",
             "GetFileDiff",
             "Log",
+            "Calendar",
         ],
     },
     ToolProviderGroupPlan {
