@@ -1,4 +1,4 @@
-import { notificationService } from '@/shared/notification-system';
+import { notificationService } from '@/shared/notification-system/services/NotificationService';
 import { flowChatStore } from '../store/FlowChatStore';
 
 export type GoalVerificationOutcome = 'achieved' | 'continuing' | 'failed' | 'limit_reached';

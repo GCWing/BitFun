@@ -49,6 +49,7 @@ vi.mock('../services/openBtwSession', () => ({
 
 vi.mock('../store/FlowChatStore', () => ({
   flowChatStore: {
+    subscribe: () => () => {},
     getState: () => ({
       sessions: new Map([
         ['parent-session', {
