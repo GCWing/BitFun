@@ -640,44 +640,6 @@
   }
 }
 
-// ==================== Privacy document layout ====================
-
-.bitfun-about-dialog__privacy-doc {
-  padding: 24px 28px 28px;
-  max-height: min(520px, calc(100vh - 200px));
-  overflow-y: auto;
-  line-height: 1.8;
-}
-
-.bitfun-about-dialog__privacy-title {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--color-text-primary);
-  margin: 0 0 16px 0;
-  line-height: 1.4;
-  text-align: center;
-}
-
-.bitfun-about-dialog__privacy-section {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  margin: 16px 0 6px 0;
-  line-height: 1.5;
-
-  &:first-of-type {
-    margin-top: 0;
-  }
-}
-
-.bitfun-about-dialog__privacy-text {
-  font-size: 12px;
-  color: var(--color-text-secondary);
-  margin: 0 0 6px 0;
-  line-height: 1.8;
-  text-align: justify;
-}
-
 .bitfun-about-dialog__sub-footnote {
   font-size: 11px;
   color: var(--color-text-muted);

@@ -116,7 +116,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
   const updateProgress = useUpdateInstallStore(state => state.progress);
   const updateError = useUpdateInstallStore(state => state.error);
   const startUpdateInstall = useUpdateInstallStore(state => state.startInstall);
-  const [subDialog, setSubDialog] = useState<'openSource' | 'userAgreement' | null>(null);
+  const [subDialog, setSubDialog] = useState<'openSource' | null>(null);
 
   const aboutInfo = getAboutInfo();
   const { version, license } = aboutInfo;
@@ -375,7 +375,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
                 <span className="bitfun-about-dialog__link-sep">·</span>
                 <button
                     className="bitfun-about-dialog__link"
-                    onClick={() => setSubDialog('userAgreement')}
+                    onClick={() => systemAPI.openExternal('https://agreement-drcn.hispace.dbankcloud.cn/index.html?lang=zh&agreementId=1959693293117791424')}
                     type="button"
                 >
                   {t('about.userAgreement')}
@@ -478,39 +478,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
           </div>
         </Modal>
 
-    {/* Privacy Agreement dialog */}
-    <Modal
-      isOpen={subDialog === 'userAgreement'}
-      onClose={() => setSubDialog(null)}
-      title={t('about.userAgreement')}
-      showCloseButton={true}
-      size="medium"
-    >
-      <div className="bitfun-about-dialog__privacy-doc">
-        <h2 className="bitfun-about-dialog__privacy-title">{t('about.privacyTitle')}</h2>
-        <p className="bitfun-about-dialog__privacy-text">{t('about.privacyIntro')}</p>
-        <p className="bitfun-about-dialog__privacy-text">{t('about.privacyCommitment')}</p>
-
-        <h3 className="bitfun-about-dialog__privacy-section">{t('about.privacyS1Title')}</h3>
-        <p className="bitfun-about-dialog__privacy-text">{t('about.privacyS1P1')}</p>
-        <p className="bitfun-about-dialog__privacy-text">{t('about.privacyS1P2')}</p>
-        <p className="bitfun-about-dialog__privacy-text">{t('about.privacyS1P3')}</p>
-
-        <h3 className="bitfun-about-dialog__privacy-section">{t('about.privacyS2Title')}</h3>
-        <p className="bitfun-about-dialog__privacy-text">{t('about.privacyS2P1')}</p>
-
-        <h3 className="bitfun-about-dialog__privacy-section">{t('about.privacyS3Title')}</h3>
-        <p className="bitfun-about-dialog__privacy-text">{t('about.privacyS3P1')}</p>
-        <p className="bitfun-about-dialog__privacy-text">{t('about.privacyS3P2')}</p>
-
-        <h3 className="bitfun-about-dialog__privacy-section">{t('about.privacyS4Title')}</h3>
-        <p className="bitfun-about-dialog__privacy-text">{t('about.privacyS4P1')}</p>
-        <p className="bitfun-about-dialog__privacy-text">{t('about.privacyS4P2')}</p>
-        <p className="bitfun-about-dialog__privacy-text">{t('about.privacyS4P3')}</p>
-      </div>
-    </Modal>
-
-          <UpdateAvailableDialog
+    <UpdateAvailableDialog
               isOpen={manualOpen}
               variant="manual"
               data={manualData}
