@@ -129,7 +129,7 @@ use napi_ohos::threadsafe_function::ThreadsafeFunctionCallMode;
 
 pub fn call_calender(args: String) -> Result<String, String>{
     let result = Ok(args);
-    match JS_THREADSAFE_FUNCTION.write().get("call_calender") {
+    match JS_THREADSAFE_FUNCTION.write().get("call_calendar") {
         None => {
             return Err("The Arkts has not register the functions".to_string());
         }

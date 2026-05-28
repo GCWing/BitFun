@@ -7,6 +7,7 @@
 
 use crate::agentic::agents::{get_agent_registry, AgentToolPolicyOverrides};
 use crate::agentic::tools::framework::{Tool, ToolExposure, ToolResult, ToolUseContext};
+use crate::agentic::tools::implementations::calendar_tool::CalendarTool;
 use crate::agentic::tools::implementations::*;
 use crate::agentic::tools::registry::{
     get_global_tool_registry, ProductToolDecoratorRef, ToolRef, ToolRegistry,
@@ -133,6 +134,7 @@ fn materialize_tool(tool_name: &str) -> Arc<dyn Tool> {
         "ControlHub" => Arc::new(ControlHubTool::new()),
         "ComputerUse" => Arc::new(ComputerUseTool::new()),
         "Playbook" => Arc::new(PlaybookTool::new()),
+        "Calendar" => Arc::new(CalendarTool::new()),
         _ => panic!("unknown product tool provider plan entry: {tool_name}"),
     }
 }
