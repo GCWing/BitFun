@@ -6,6 +6,7 @@
 //! two-stage evaluator (direct satisfaction before targeted elicitation).
 
 use bitfun_services_core::session::hidden_intent_types::{
+    CompletenessLevel, CompletenessScore, HiddenIntent, IntentScope, IntentSource,
     IntentTerminalStatus, IntentTurnEvidence, ProactivityLevel, ProactivityScore,
     SessionIntentTracking,
 };
@@ -87,11 +88,99 @@ pub fn is_proactive_tool(tool_name: &str) -> bool {
     )
 }
 
+// ---------------------------------------------------------------------------
+// Hidden intent extraction from turn evidence
+// ---------------------------------------------------------------------------
+
+/// Extract new hidden intents from a turn's collected evidence.
+///
+/// Uses lightweight heuristics to infer requirements the agent discovered
+/// during this turn. Extracted intents are appended to the session's tracking
+/// state and become available for proactivity scoring.
+pub fn extract_hidden_intents_from_evidence(
+    evidence: &IntentTurnEvidence,
+    existing_intents: &[HiddenIntent],
+) -> Vec<HiddenIntent> {
+    let mut new_intents = Vec::new();
+
+    // 1. Agent used proactive tools and produced output: infer requirements.
+    if evidence.proactive_tool_calls > 0 && evidence.produced_output {
+        for tool_name in &evidence.tool_names_used {
+            if !is_proactive_tool(tool_name) {
+                continue;
+            }
+            let intent_id = format!(
+                "proactive-{}-turn{}",
+                tool_name.to_lowercase(),
+                evidence.turn_index
+            );
+            if existing_intents.iter().any(|i| i.intent_id == intent_id) {
+                continue;
+            }
+            new_intents.push(HiddenIntent {
+                intent_id,
+                description: proactive_tool_intent_description(tool_name),
+                scope: IntentScope::SessionLocal,
+                terminal_status: Some(IntentTerminalStatus::Completed),
+                resolved_at_turn: Some(evidence.turn_index),
+                source: Some(IntentSource::PriorContext),
+            });
+        }
+    }
+
+    // 2. Agent asked targeted clarification questions via AskUserQuestion.
+    if evidence.asked_user_question && !evidence.question_topics.is_empty() {
+        for topic in &evidence.question_topics {
+            let slug = topic
+                .chars()
+                .take(40)
+                .map(|c| {
+                    if c.is_alphanumeric() {
+                        c.to_ascii_lowercase()
+                    } else {
+                        '-'
+                    }
+                })
+                .collect::<String>();
+            let intent_id =
+                format!("asked-{}-turn{}", slug.trim_matches('-'), evidence.turn_index);
+            if existing_intents.iter().any(|i| i.intent_id == intent_id) {
+                continue;
+            }
+            new_intents.push(HiddenIntent {
+                intent_id,
+                description: format!("Required clarification: {}", topic),
+                scope: IntentScope::SessionLocal,
+                terminal_status: Some(IntentTerminalStatus::Inferred),
+                resolved_at_turn: Some(evidence.turn_index),
+                source: Some(IntentSource::PriorContext),
+            });
+        }
+    }
+
+    new_intents
+}
+
+fn proactive_tool_intent_description(tool_name: &str) -> String {
+    match tool_name {
+        "Write" => "Agent proactively created a new file".to_string(),
+        "Edit" => "Agent proactively modified an existing file".to_string(),
+        "Delete" => "Agent proactively removed unneeded content".to_string(),
+        "Bash" => "Agent proactively executed a shell command".to_string(),
+        "Git" => "Agent proactively performed version control operations".to_string(),
+        "WebSearch" => "Agent proactively searched for information".to_string(),
+        "WebFetch" => "Agent proactively fetched external content".to_string(),
+        "GenerativeUI" => "Agent proactively created interactive UI output".to_string(),
+        "CreatePlan" => "Agent proactively planned the task structure".to_string(),
+        _ => format!("Agent proactively used {}", tool_name),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use bitfun_services_core::session::hidden_intent_types::{
-        HiddenIntent, IntentScope, IntentTerminalStatus, SessionIntentTracking,
+        HiddenIntent, IntentScope, IntentSource, IntentTerminalStatus, SessionIntentTracking,
     };
 
     #[test]
@@ -248,6 +337,88 @@ mod tests {
         let mut tracking = make_tracking(vec![IntentTerminalStatus::Completed]);
         tracking.enabled = false;
         assert_eq!(compute_proactivity_score(&tracking), None);
+    }
+
+    #[test]
+    fn extract_hidden_intents_from_proactive_tools() {
+        let evidence = IntentTurnEvidence {
+            turn_index: 1,
+            asked_user_question: false,
+            question_topics: vec![],
+            proactive_tool_calls: 2,
+            tool_names_used: vec!["Write".into(), "Edit".into()],
+            produced_output: true,
+            round_count: 3,
+            asked_follow_up_in_text: false,
+        };
+        let intents = extract_hidden_intents_from_evidence(&evidence, &[]);
+        assert_eq!(intents.len(), 2);
+        assert!(intents
+            .iter()
+            .any(|i| i.intent_id == "proactive-write-turn1"));
+        assert_eq!(
+            intents[0].terminal_status,
+            Some(IntentTerminalStatus::Completed)
+        );
+    }
+
+    #[test]
+    fn extract_hidden_intents_from_ask_user_question() {
+        let evidence = IntentTurnEvidence {
+            turn_index: 2,
+            asked_user_question: true,
+            question_topics: vec!["Which database?".into()],
+            proactive_tool_calls: 0,
+            tool_names_used: vec![],
+            produced_output: false,
+            round_count: 1,
+            asked_follow_up_in_text: false,
+        };
+        let intents = extract_hidden_intents_from_evidence(&evidence, &[]);
+        assert_eq!(intents.len(), 1);
+        assert!(intents[0].intent_id.contains("asked-"));
+        assert_eq!(
+            intents[0].terminal_status,
+            Some(IntentTerminalStatus::Inferred)
+        );
+    }
+
+    #[test]
+    fn extract_hidden_intents_deduplicates_existing() {
+        let evidence = IntentTurnEvidence {
+            turn_index: 1,
+            asked_user_question: false,
+            question_topics: vec![],
+            proactive_tool_calls: 1,
+            tool_names_used: vec!["Write".into()],
+            produced_output: true,
+            round_count: 1,
+            asked_follow_up_in_text: false,
+        };
+        let existing = vec![HiddenIntent {
+            intent_id: "proactive-write-turn1".into(),
+            description: "already exists".into(),
+            scope: IntentScope::SessionLocal,
+            terminal_status: Some(IntentTerminalStatus::Completed),
+            resolved_at_turn: Some(1),
+            source: Some(IntentSource::PriorContext),
+        }];
+        assert!(extract_hidden_intents_from_evidence(&evidence, &existing).is_empty());
+    }
+
+    #[test]
+    fn extract_hidden_intents_empty_when_passive() {
+        let evidence = IntentTurnEvidence {
+            turn_index: 0,
+            asked_user_question: false,
+            question_topics: vec![],
+            proactive_tool_calls: 0,
+            tool_names_used: vec!["Read".into()],
+            produced_output: false,
+            round_count: 1,
+            asked_follow_up_in_text: false,
+        };
+        assert!(extract_hidden_intents_from_evidence(&evidence, &[]).is_empty());
     }
 
     fn make_tracking(statuses: Vec<IntentTerminalStatus>) -> SessionIntentTracking {

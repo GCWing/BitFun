@@ -2827,6 +2827,24 @@ impl SessionManager {
         });
         tracking.enabled = true;
 
+        // Extract new hidden intents from this turn's evidence.
+        // These are appended to hidden_intents so they become available
+        // for proactivity scoring and cross-turn persistence.
+        let new_intents =
+            crate::agentic::execution::intent_evidence::extract_hidden_intents_from_evidence(
+                &evidence,
+                &tracking.hidden_intents,
+            );
+        for intent in new_intents {
+            if !tracking
+                .hidden_intents
+                .iter()
+                .any(|i| i.intent_id == intent.intent_id)
+            {
+                tracking.hidden_intents.push(intent);
+            }
+        }
+
         tracking
             .turn_evidence
             .retain(|existing| existing.turn_index != evidence.turn_index);
@@ -2865,6 +2883,40 @@ impl SessionManager {
         );
 
         Ok(())
+    }
+
+    /// Load unresolved hidden intents for the given session.
+    ///
+    /// Returns intents whose `terminal_status` is `None` (not yet resolved).
+    /// These can be injected into subsequent turn prompts so the agent is aware
+    /// of previously discovered requirements.
+    pub async fn load_unresolved_hidden_intents(
+        &self,
+        session_id: &str,
+    ) -> Vec<bitfun_services_core::session::hidden_intent_types::HiddenIntent> {
+        let workspace_path = match self.effective_session_workspace_path(session_id).await {
+            Some(p) => p,
+            None => return Vec::new(),
+        };
+
+        let metadata = match self
+            .persistence_manager
+            .load_session_metadata(&workspace_path, session_id)
+            .await
+        {
+            Ok(Some(m)) => m,
+            _ => return Vec::new(),
+        };
+
+        match metadata.intent_tracking {
+            Some(ref tracking) if tracking.enabled => tracking
+                .hidden_intents
+                .iter()
+                .filter(|i| i.terminal_status.is_none())
+                .cloned()
+                .collect(),
+            _ => Vec::new(),
+        }
     }
 
     /// Mark a dialog turn as failed and persist it.
