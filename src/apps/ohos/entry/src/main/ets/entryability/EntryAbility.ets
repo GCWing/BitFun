@@ -239,7 +239,7 @@ export async function createMeetingEvent(input: string): Promise<string> {
   const calendarAccount: calendarManager.CalendarAccount = {
     name: info.title,
     type: calendarManager.CalendarType.LOCAL,
-    displayName: 'vcoder',
+    displayName: 'bitfun',
   };
   const startTime = new Date(info.startTime).valueOf();
 
