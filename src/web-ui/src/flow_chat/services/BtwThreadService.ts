@@ -127,9 +127,8 @@ export async function createBtwChildSession(params: {
             enableContextCompression: params.enableContextCompression ?? true,
             remoteConnectionId,
             remoteSshHost,
-            ...(params.enableIntentTracking !== undefined
-              ? { enableIntentTracking: params.enableIntentTracking }
-              : {}),
+            enableIntentTracking:
+              params.enableIntentTracking ?? agentType === 'IntentCoding',
           },
         })
       ).sessionId

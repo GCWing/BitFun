@@ -80,7 +80,10 @@ import {
 const log = createLogger('EventHandlerModule');
 const TURN_COMPLETION_QUIET_WINDOW_MS = 500;
 const INTENT_CODING_MODE_ID = 'IntentCoding';
-const INTENT_CODING_EVIDENCE_SIGNAL = /(?:Evidence Package|\.agent\/evidence\/|evidence-[^\s`"')]+\.md)/i;
+// Match only file-path style evidence anchors. The earlier looser pattern
+// (`/Evidence Package/i`) false-positived on any user message echoing the
+// phrase, which could either suppress real misses or fire on aborted turns.
+const INTENT_CODING_EVIDENCE_SIGNAL = /\.agent\/evidence\/|evidence-[^\s`"')]+\.md/i;
 
 interface MCPInteractionRequestEvent {
   interactionId: string;
@@ -143,6 +146,11 @@ function itemEvidenceSearchText(item: unknown): string {
   }
 
   const record = item as Record<string, unknown>;
+  // Skip user-originated items so an end-user message containing the phrase
+  // can't satisfy the detector or trigger a false positive.
+  if (record.type === 'user-steering') {
+    return '';
+  }
   const textParts = [
     typeof record.content === 'string' ? record.content : '',
     typeof record.toolName === 'string' ? record.toolName : '',
@@ -168,7 +176,17 @@ function dialogTurnHasIntentCodingEvidenceSignal(dialogTurn: DialogTurn): boolea
   );
 }
 
-function maybeWarnIntentCodingEvidenceMissing(session: Session, dialogTurn: DialogTurn): void {
+function maybeWarnIntentCodingEvidenceMissing(
+  session: Session,
+  dialogTurn: DialogTurn,
+  options: { skipReason?: 'cancelled' | 'errored' | null } = {},
+): void {
+  if (options.skipReason) {
+    return;
+  }
+  if (dialogTurn.status !== 'completed') {
+    return;
+  }
   if (!isIntentCodingSession(session) || dialogTurnHasIntentCodingEvidenceSignal(dialogTurn)) {
     return;
   }
@@ -960,7 +978,10 @@ function finalizeTurnCompletionState(
 
   const dialogTurn = store.getState().sessions.get(sessionId)?.dialogTurns.find(t => t.id === turnId);
   if (dialogTurn) {
-    maybeWarnIntentCodingEvidenceMissing(session, dialogTurn);
+    const skipReason: 'cancelled' | null = context.userCancelledSessionIds.has(sessionId)
+      ? 'cancelled'
+      : null;
+    maybeWarnIntentCodingEvidenceMissing(session, dialogTurn, { skipReason });
     appendPlanDisplayItemsIfNeeded(context, sessionId, turnId, dialogTurn);
   }
 

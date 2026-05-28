@@ -430,9 +430,8 @@ export async function createChatSession(
           enableContextCompression: true,
           remoteConnectionId,
           remoteSshHost,
-          ...(config.enableIntentTracking !== undefined
-            ? { enableIntentTracking: config.enableIntentTracking }
-            : {}),
+          enableIntentTracking:
+            config.enableIntentTracking ?? agentType === 'IntentCoding',
         }
       });
 

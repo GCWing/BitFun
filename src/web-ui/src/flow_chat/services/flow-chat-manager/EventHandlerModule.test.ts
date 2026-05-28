@@ -321,7 +321,7 @@ describe('IntentCoding evidence reminder', () => {
       mode: 'IntentCoding',
       config: { agentType: 'IntentCoding' },
     };
-    const turn = createFinishingTurn();
+    const turn = createCompletedTurn();
 
     __test_only__.maybeWarnIntentCodingEvidenceMissing(session, turn);
 
@@ -331,19 +331,19 @@ describe('IntentCoding evidence reminder', () => {
     );
   });
 
-  it('does not warn when an IntentCoding turn references an Evidence Package', () => {
+  it('does not warn when an IntentCoding turn references an Evidence Package path', () => {
     const session = {
       ...createFinishingSession(),
       mode: 'IntentCoding',
       config: { agentType: 'IntentCoding' },
     };
     const turn = {
-      ...createFinishingTurn(),
+      ...createCompletedTurn(),
       modelRounds: [
         makeRound('round-1', [{
           id: 'text-1',
           type: 'text',
-          content: 'Evidence Package: .agent/evidence/evidence-20260525-task.md',
+          content: 'Wrote .agent/evidence/evidence-20260525-task.md with results.',
           isStreaming: false,
           timestamp: 1000,
           status: 'completed',
@@ -357,10 +357,54 @@ describe('IntentCoding evidence reminder', () => {
     expect(notificationService.warning).not.toHaveBeenCalled();
   });
 
+  it('does not treat a user-steering message echoing the phrase as evidence', () => {
+    const turn = {
+      ...createCompletedTurn(),
+      modelRounds: [
+        makeRound('round-1', [{
+          id: 'steering-1',
+          type: 'user-steering',
+          steeringId: 'steer-1',
+          roundIndex: 0,
+          content: 'Please remember to write an Evidence Package at the end.',
+          timestamp: 1000,
+          status: 'completed',
+        } as any]),
+      ],
+    };
+
+    expect(__test_only__.dialogTurnHasIntentCodingEvidenceSignal(turn)).toBe(false);
+  });
+
+  it('does not warn when the turn was cancelled by the user', () => {
+    const session = {
+      ...createFinishingSession(),
+      mode: 'IntentCoding',
+      config: { agentType: 'IntentCoding' },
+    };
+    const turn = createCompletedTurn();
+
+    __test_only__.maybeWarnIntentCodingEvidenceMissing(session, turn, { skipReason: 'cancelled' });
+
+    expect(notificationService.warning).not.toHaveBeenCalled();
+  });
+
+  it('does not warn when the turn has not yet reached completed status', () => {
+    const session = {
+      ...createFinishingSession(),
+      mode: 'IntentCoding',
+      config: { agentType: 'IntentCoding' },
+    };
+
+    __test_only__.maybeWarnIntentCodingEvidenceMissing(session, createFinishingTurn());
+
+    expect(notificationService.warning).not.toHaveBeenCalled();
+  });
+
   it('does not warn for non-IntentCoding sessions', () => {
     __test_only__.maybeWarnIntentCodingEvidenceMissing(
       createFinishingSession(),
-      createFinishingTurn(),
+      createCompletedTurn(),
     );
 
     expect(notificationService.warning).not.toHaveBeenCalled();
@@ -407,6 +451,14 @@ function createFinishingTurn(): DialogTurn {
     }],
     status: 'finishing',
     startTime: 900,
+  };
+}
+
+function createCompletedTurn(): DialogTurn {
+  return {
+    ...createFinishingTurn(),
+    status: 'completed',
+    endTime: 1000,
   };
 }
 

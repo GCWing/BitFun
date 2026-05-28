@@ -2930,7 +2930,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
                   {canSwitchModes && modeState.current !== 'agentic' && (
                     <div
-                      className={`bitfun-chat-input__agent-capsule bitfun-chat-input__agent-capsule--${modeState.current === 'debug' ? 'debug' : modeState.current}`}
+                      className={`bitfun-chat-input__agent-capsule bitfun-chat-input__agent-capsule--${modeState.current.toLowerCase()}`}
                     >
                       <span className="bitfun-chat-input__agent-capsule-label">
                         {t(`chatInput.modeNames.${modeState.current}`, { defaultValue: '' }) ||
