@@ -64,7 +64,6 @@ import { useSessionReviewActivity } from '../hooks/useSessionReviewActivity';
 import { shouldBlockDeepReviewCommand } from '../utils/deepReviewCommandGuard';
 import { deriveDeepReviewSessionConcurrencyGuard } from '../utils/deepReviewCapacityGuard';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
-import { getModeDisplayDescription, getModeDisplayName } from './modeDisplay';
 import { ModePickerOption } from './ModePickerOption';
 import './ChatInput.scss';
 
