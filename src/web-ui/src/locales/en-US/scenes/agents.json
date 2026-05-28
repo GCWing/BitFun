@@ -111,6 +111,9 @@
     "save": "Save",
     "skillToggleFailed": "Failed to toggle skill",
     "subagentToggleFailed": "Failed to toggle sub-agent",
+    "sharedProfileLabel": "Shared profile",
+    "sharedProfileDefaultLabel": "Shared coding profile",
+    "sharedProfileDescription": "Changes here also apply to: {{modes}}.",
     "skillShadowed": "shadowed by a higher-priority skill with the same name",
     "noSkills": "No skills enabled",
     "skillGroups": {

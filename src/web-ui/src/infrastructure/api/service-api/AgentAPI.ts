@@ -164,6 +164,9 @@ export interface ModeInfo {
    * share the same key can reuse the same session-level prompt cache.
    */
   promptCacheScopeKey: string;
+  configProfileId: string;
+  configProfileLabel?: string;
+  configProfileMemberModeIds: string[];
 }
 
 
@@ -804,6 +807,8 @@ export class AgentAPI {
       isReadonly: false,
       toolCount: 0,
       promptCacheScopeKey: agentType,
+      configProfileId: agentType,
+      configProfileMemberModeIds: [agentType],
       agent_type: agentType,
       when_to_use: `Use ${agentType} for related tasks`,
       tools: 'all',

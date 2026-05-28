@@ -1,7 +1,8 @@
 //! Agentic Mode
 
 use crate::agentic::agents::{
-    shared_coding_mode_tools, Agent, UserContextPolicy, SHARED_CODING_MODE_PROMPT_TEMPLATE,
+    shared_coding_mode_tools, shared_coding_mode_user_context_policy, Agent, UserContextPolicy,
+    SHARED_CODING_MODE_PROMPT_TEMPLATE,
 };
 use async_trait::async_trait;
 pub struct AgenticMode {
@@ -49,11 +50,7 @@ impl Agent for AgenticMode {
     }
 
     fn user_context_policy(&self) -> UserContextPolicy {
-        UserContextPolicy::empty()
-            .with_workspace_context()
-            .with_workspace_instructions()
-            .with_workspace_memory_files()
-            .with_project_layout()
+        shared_coding_mode_user_context_policy()
     }
 
     fn is_readonly(&self) -> bool {

@@ -105,13 +105,15 @@ impl GlobalConfigManager {
 
         #[cfg(feature = "product-full")]
         {
-            match super::mode_config_canonicalizer::canonicalize_mode_configs().await {
+            match super::mode_config_canonicalizer::canonicalize_agent_profile_configs().await {
                 Ok(report) => {
-                    if !report.removed_mode_configs.is_empty() || !report.updated_modes.is_empty() {
+                    if !report.removed_profile_configs.is_empty()
+                        || !report.updated_profiles.is_empty()
+                    {
                         info!(
-                            "Mode config canonicalization completed: removed_modes={}, updated_modes={}",
-                            report.removed_mode_configs.len(),
-                            report.updated_modes.len()
+                            "Mode config canonicalization completed: removed_profiles={}, updated_profiles={}",
+                            report.removed_profile_configs.len(),
+                            report.updated_profiles.len()
                         );
                     }
                 }
@@ -162,7 +164,9 @@ impl GlobalConfigManager {
         let service = Self::get_service().await?;
         service.reload().await?;
         #[cfg(feature = "product-full")]
-        if let Err(error) = super::mode_config_canonicalizer::canonicalize_mode_configs().await {
+        if let Err(error) =
+            super::mode_config_canonicalizer::canonicalize_agent_profile_configs().await
+        {
             warn!(
                 "Mode config canonicalization failed after reload: {}",
                 error

@@ -22,9 +22,7 @@ use crate::agentic::image_analysis::{
 use crate::agentic::round_preempt::RoundInjectionKind;
 use crate::agentic::session::{CompressionMode, ContextCompressor, SessionManager};
 use crate::agentic::tools::implementations::{GetToolSpecTool, SkillTool, TaskTool};
-use crate::agentic::tools::{
-    resolve_tool_manifest, tool_context_runtime, ResolvedToolManifest, SubagentParentInfo,
-};
+use crate::agentic::tools::{resolve_tool_manifest, tool_context_runtime, ResolvedToolManifest};
 use crate::agentic::util::build_remote_workspace_layout_preview;
 use crate::agentic::{WorkspaceBackend, WorkspaceBinding};
 use crate::infrastructure::ai::get_global_ai_client_factory;
@@ -1494,7 +1492,6 @@ impl ExecutionEngine {
         &self,
         session_id: &str,
         dialog_turn_id: &str,
-        _subagent_parent_info: Option<SubagentParentInfo>,
         runtime_messages: Vec<Message>,
         current_tokens: usize,
         context_window: usize,
@@ -2358,7 +2355,6 @@ impl ExecutionEngine {
                     .compress_messages(
                         &context.session_id,
                         &context.dialog_turn_id,
-                        context.subagent_parent_info.clone(),
                         messages.clone(),
                         current_tokens,
                         context_window,

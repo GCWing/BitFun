@@ -15,7 +15,7 @@ import '@/app/components/GalleryLayout/GalleryLayout.scss';
 import { Select, Switch, type SelectOption } from '@/component-library';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
-import type { AIModelConfig, ModeConfigItem, ModeSkillInfo } from '@/infrastructure/config/types';
+import type { AIModelConfig, AgentProfileConfigItem, ModeSkillInfo } from '@/infrastructure/config/types';
 import { MCPAPI, type MCPServerInfo } from '@/infrastructure/api/service-api/MCPAPI';
 import { notificationService } from '@/shared/notification-system';
 import type { DynamicToolInfo } from '@/shared/types/agent-api';
@@ -132,7 +132,7 @@ const TemplateConfigPage: React.FC = () => {
 
   const [models, setModels] = useState<AIModelConfig[]>([]);
   const [funcAgentModels, setFuncAgentModels] = useState<Record<string, string>>({});
-  const [assistantModeConfig, setAssistantModeConfig] = useState<ModeConfigItem | null>(null);
+  const [assistantModeConfig, setAssistantModeConfig] = useState<AgentProfileConfigItem | null>(null);
   const [availableTools, setAvailableTools] = useState<ToolInfo[]>([]);
   const [mcpServers, setMcpServers] = useState<MCPServerInfo[]>([]);
   const [modeSkills, setModeSkills] = useState<ModeSkillInfo[]>([]);
@@ -218,7 +218,7 @@ const TemplateConfigPage: React.FC = () => {
         const [allModels, funcModels, modeConf, tools, skillList, servers] = await Promise.all([
           configManager.getConfig<AIModelConfig[]>('ai.models').catch(() => [] as AIModelConfig[]),
           configManager.getConfig<Record<string, string>>('ai.func_agent_models').catch(() => ({} as Record<string, string>)),
-          configAPI.getModeConfig(ASSISTANT_MODE_ID).catch(() => null as ModeConfigItem | null),
+          configAPI.getAgentProfileConfig(ASSISTANT_MODE_ID).catch(() => null as AgentProfileConfigItem | null),
           invoke<ToolInfo[]>('get_all_tools_info').catch(() => [] as ToolInfo[]),
           configAPI.getModeSkillConfigs({ modeId: ASSISTANT_MODE_ID }).catch(() => [] as ModeSkillInfo[]),
           MCPAPI.getServers().catch(() => [] as MCPServerInfo[]),
@@ -291,7 +291,7 @@ const TemplateConfigPage: React.FC = () => {
     const newConfig = { ...assistantModeConfig, enabled_tools: newTools };
     setAssistantModeConfig(newConfig);
     try {
-      await configAPI.setModeConfig(ASSISTANT_MODE_ID, newConfig);
+      await configAPI.setAgentProfileConfig(ASSISTANT_MODE_ID, newConfig);
       const { globalEventBus } = await import('@/infrastructure/event-bus');
       globalEventBus.emit('mode:config:updated');
     } catch (e) {
@@ -305,9 +305,9 @@ const TemplateConfigPage: React.FC = () => {
 
   const handleResetTools = useCallback(async () => {
     try {
-      await configAPI.resetModeConfig(ASSISTANT_MODE_ID);
+      await configAPI.resetAgentProfileConfig(ASSISTANT_MODE_ID);
       const [modeConf, skills] = await Promise.all([
-        configAPI.getModeConfig(ASSISTANT_MODE_ID),
+        configAPI.getAgentProfileConfig(ASSISTANT_MODE_ID),
         configAPI.getModeSkillConfigs({ modeId: ASSISTANT_MODE_ID }),
       ]);
       setAssistantModeConfig(modeConf);
@@ -331,7 +331,7 @@ const TemplateConfigPage: React.FC = () => {
     const newConfig = { ...assistantModeConfig, enabled_tools: newTools };
     setAssistantModeConfig(newConfig);
     try {
-      await configAPI.setModeConfig(ASSISTANT_MODE_ID, newConfig);
+      await configAPI.setAgentProfileConfig(ASSISTANT_MODE_ID, newConfig);
       const { globalEventBus } = await import('@/infrastructure/event-bus');
       globalEventBus.emit('mode:config:updated');
     } catch (e) {

@@ -1,17 +1,20 @@
-//! Mode-specific skill override helpers.
+//! Mode-profile specific skill override helpers.
 
+use crate::agentic::agents::resolve_mode_config_profile_id;
 use crate::agentic::workspace::WorkspaceFileSystem;
-use crate::infrastructure::get_path_manager_arc;
+use crate::service::config::agent_profile_project_store::{
+    deserialize_project_agent_profiles_document, get_disabled_project_skills,
+    load_project_agent_profiles_document_local, project_agent_profiles_path_for_remote,
+    save_project_agent_profiles_document_local, set_disabled_project_skills,
+    set_project_skill_disabled, ProjectAgentProfilesDocument,
+};
 use crate::service::config::global::GlobalConfigManager;
-use crate::service::config::mode_config_canonicalizer::persist_mode_config_from_value;
-use crate::service::config::types::ModeConfig;
+use crate::service::config::mode_config_canonicalizer::persist_agent_profile_from_value;
+use crate::service::config::types::AgentProfileConfig;
 use crate::util::errors::{BitFunError, BitFunResult};
-use serde_json::{json, Map, Value};
+use serde_json::json;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
-
-const PROJECT_MODE_SKILLS_FILE_NAME: &str = "mode_skills.json";
-const DISABLED_SKILLS_KEY: &str = "disabled_skills";
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct UserModeSkillOverrides {
@@ -52,14 +55,19 @@ fn normalize_user_overrides(
     }
 }
 
+fn resolve_profile_id(mode_id: &str) -> String {
+    resolve_mode_config_profile_id(mode_id).into_owned()
+}
+
 pub async fn load_user_mode_skill_overrides(mode_id: &str) -> BitFunResult<UserModeSkillOverrides> {
     let config_service = GlobalConfigManager::get_service().await?;
-    let stored_configs: HashMap<String, ModeConfig> = config_service
-        .get_config(Some("ai.mode_configs"))
+    let stored_configs: HashMap<String, AgentProfileConfig> = config_service
+        .get_config(Some("ai.agent_profiles"))
         .await
         .unwrap_or_default();
+    let profile_id = resolve_profile_id(mode_id);
 
-    let config = stored_configs.get(mode_id);
+    let config = stored_configs.get(&profile_id);
     Ok(normalize_user_overrides(
         config
             .map(|item| item.disabled_user_skills.clone())
@@ -84,15 +92,13 @@ pub async fn set_user_mode_skill_state(
         if !enabled {
             overrides.disabled_skills.push(skill_key.to_string());
         }
-    } else {
-        if enabled {
-            overrides.enabled_skills.push(skill_key.to_string());
-        }
+    } else if enabled {
+        overrides.enabled_skills.push(skill_key.to_string());
     }
 
     let overrides = normalize_user_overrides(overrides.disabled_skills, overrides.enabled_skills);
 
-    persist_mode_config_from_value(
+    persist_agent_profile_from_value(
         mode_id,
         json!({
             "disabled_user_skills": overrides.disabled_skills,
@@ -107,7 +113,7 @@ pub async fn set_user_mode_skill_state(
 pub async fn clear_user_mode_skill_overrides(
     mode_id: &str,
 ) -> BitFunResult<UserModeSkillOverrides> {
-    persist_mode_config_from_value(
+    persist_agent_profile_from_value(
         mode_id,
         json!({
             "disabled_user_skills": Vec::<String>::new(),
@@ -120,178 +126,64 @@ pub async fn clear_user_mode_skill_overrides(
 }
 
 pub fn project_mode_skills_path_for_remote(remote_root: &str) -> String {
-    format!(
-        "{}/.bitfun/config/{}",
-        remote_root.trim_end_matches('/'),
-        PROJECT_MODE_SKILLS_FILE_NAME
-    )
+    project_agent_profiles_path_for_remote(remote_root)
 }
 
-fn normalize_project_document_value(value: Value) -> Value {
-    match value {
-        Value::Object(_) => value,
-        _ => Value::Object(Map::new()),
-    }
-}
-
-fn mode_skills_object_mut(document: &mut Value) -> BitFunResult<&mut Map<String, Value>> {
-    if !document.is_object() {
-        *document = Value::Object(Map::new());
-    }
-
-    document
-        .as_object_mut()
-        .ok_or_else(|| BitFunError::config("Project mode skills must be a JSON object".to_string()))
-}
-
-fn mode_skills_object(document: &Value) -> Option<&Map<String, Value>> {
-    document.as_object()
-}
-
-pub fn get_disabled_mode_skills_from_document(document: &Value, mode_id: &str) -> Vec<String> {
-    let Some(mode_object) = mode_skills_object(document)
-        .and_then(|map| map.get(mode_id))
-        .and_then(Value::as_object)
-    else {
-        return Vec::new();
-    };
-
-    let keys = mode_object
-        .get(DISABLED_SKILLS_KEY)
-        .cloned()
-        .and_then(|value| serde_json::from_value::<Vec<String>>(value).ok())
-        .unwrap_or_default();
-
-    dedupe_skill_keys(keys)
+pub fn get_disabled_mode_skills_from_document(
+    document: &ProjectAgentProfilesDocument,
+    mode_id: &str,
+) -> Vec<String> {
+    get_disabled_project_skills(document, &resolve_profile_id(mode_id))
 }
 
 pub fn set_mode_skill_disabled_in_document(
-    document: &mut Value,
+    document: &mut ProjectAgentProfilesDocument,
     mode_id: &str,
     skill_key: &str,
     disabled: bool,
 ) -> BitFunResult<Vec<String>> {
-    let mode_skills = mode_skills_object_mut(document)?;
-    let mode_entry = mode_skills
-        .entry(mode_id.to_string())
-        .or_insert_with(|| Value::Object(Map::new()));
-
-    if !mode_entry.is_object() {
-        *mode_entry = Value::Object(Map::new());
-    }
-
-    let mode_object = mode_entry.as_object_mut().ok_or_else(|| {
-        BitFunError::config("Mode skills entry must be a JSON object".to_string())
-    })?;
-
-    let current = mode_object
-        .get(DISABLED_SKILLS_KEY)
-        .cloned()
-        .and_then(|value| serde_json::from_value::<Vec<String>>(value).ok())
-        .unwrap_or_default();
-
-    let mut next = dedupe_skill_keys(current);
-    if disabled {
-        next.push(skill_key.to_string());
-        next = dedupe_skill_keys(next);
-    } else {
-        next.retain(|value| value != skill_key);
-    }
-
-    if next.is_empty() {
-        mode_object.remove(DISABLED_SKILLS_KEY);
-    } else {
-        mode_object.insert(
-            DISABLED_SKILLS_KEY.to_string(),
-            serde_json::to_value(&next)?,
-        );
-    }
-
-    if mode_object.is_empty() {
-        mode_skills.remove(mode_id);
-    }
-
-    Ok(next)
+    Ok(set_project_skill_disabled(
+        document,
+        &resolve_profile_id(mode_id),
+        skill_key,
+        disabled,
+    ))
 }
 
 pub fn set_disabled_mode_skills_in_document(
-    document: &mut Value,
+    document: &mut ProjectAgentProfilesDocument,
     mode_id: &str,
     skill_keys: Vec<String>,
 ) -> BitFunResult<Vec<String>> {
-    let mode_skills = mode_skills_object_mut(document)?;
-    let next = dedupe_skill_keys(skill_keys);
-
-    if next.is_empty() {
-        if let Some(mode_entry) = mode_skills.get_mut(mode_id) {
-            if !mode_entry.is_object() {
-                *mode_entry = Value::Object(Map::new());
-            }
-
-            if let Some(mode_object) = mode_entry.as_object_mut() {
-                mode_object.remove(DISABLED_SKILLS_KEY);
-                if mode_object.is_empty() {
-                    mode_skills.remove(mode_id);
-                }
-            }
-        }
-
-        return Ok(Vec::new());
-    }
-
-    let mode_entry = mode_skills
-        .entry(mode_id.to_string())
-        .or_insert_with(|| Value::Object(Map::new()));
-
-    if !mode_entry.is_object() {
-        *mode_entry = Value::Object(Map::new());
-    }
-
-    let mode_object = mode_entry.as_object_mut().ok_or_else(|| {
-        BitFunError::config("Mode skills entry must be a JSON object".to_string())
-    })?;
-
-    mode_object.insert(
-        DISABLED_SKILLS_KEY.to_string(),
-        serde_json::to_value(&next)?,
-    );
-
-    Ok(next)
+    Ok(set_disabled_project_skills(
+        document,
+        &resolve_profile_id(mode_id),
+        skill_keys,
+    ))
 }
 
-pub async fn load_project_mode_skills_document_local(workspace_root: &Path) -> BitFunResult<Value> {
-    let path = get_path_manager_arc().project_mode_skills_file(workspace_root);
-    match tokio::fs::read_to_string(&path).await {
-        Ok(content) => Ok(normalize_project_document_value(serde_json::from_str(
-            &content,
-        )?)),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Value::Object(Map::new())),
-        Err(error) => Err(BitFunError::config(format!(
-            "Failed to read project skill overrides file '{}': {}",
-            path.display(),
-            error
-        ))),
-    }
+pub async fn load_project_mode_skills_document_local(
+    workspace_root: &Path,
+) -> BitFunResult<ProjectAgentProfilesDocument> {
+    load_project_agent_profiles_document_local(workspace_root).await
 }
 
 pub async fn save_project_mode_skills_document_local(
     workspace_root: &Path,
-    document: &Value,
+    document: &ProjectAgentProfilesDocument,
 ) -> BitFunResult<()> {
-    let path = get_path_manager_arc().project_mode_skills_file(workspace_root);
-    if let Some(parent) = path.parent() {
-        tokio::fs::create_dir_all(parent).await?;
-    }
-    tokio::fs::write(&path, serde_json::to_vec_pretty(document)?).await?;
-    Ok(())
+    save_project_agent_profiles_document_local(workspace_root, document).await
 }
 
 pub async fn load_disabled_mode_skills_local(
     workspace_root: &Path,
     mode_id: &str,
 ) -> BitFunResult<Vec<String>> {
-    let document = load_project_mode_skills_document_local(workspace_root).await?;
-    Ok(get_disabled_mode_skills_from_document(&document, mode_id))
+    let document = load_project_agent_profiles_document_local(workspace_root).await?;
+    Ok(get_disabled_project_skills(
+        &document,
+        &resolve_profile_id(mode_id),
+    ))
 }
 
 pub async fn load_disabled_mode_skills_remote(
@@ -299,7 +191,7 @@ pub async fn load_disabled_mode_skills_remote(
     remote_root: &str,
     mode_id: &str,
 ) -> BitFunResult<Vec<String>> {
-    let path = project_mode_skills_path_for_remote(remote_root);
+    let path = project_agent_profiles_path_for_remote(remote_root);
     let exists = fs.exists(&path).await.unwrap_or(false);
     if !exists {
         return Ok(Vec::new());
@@ -307,10 +199,13 @@ pub async fn load_disabled_mode_skills_remote(
 
     let content = fs.read_file_text(&path).await.map_err(|error| {
         BitFunError::config(format!(
-            "Failed to read remote project skill overrides: {}",
+            "Failed to read remote project mode profiles: {}",
             error
         ))
     })?;
-    let document = normalize_project_document_value(serde_json::from_str(&content)?);
-    Ok(get_disabled_mode_skills_from_document(&document, mode_id))
+    let document = deserialize_project_agent_profiles_document(&content)?;
+    Ok(get_disabled_project_skills(
+        &document,
+        &resolve_profile_id(mode_id),
+    ))
 }

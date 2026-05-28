@@ -1,5 +1,5 @@
 use super::types::{subagent_key_for, AgentEntry, SubagentStateReason};
-use crate::agentic::agents::SubAgentSource;
+use crate::agentic::agents::{resolve_mode_config_profile_id, SubAgentSource};
 use crate::service::config::types::{
     AgentSubagentOverrideConfig, AgentSubagentOverrideState, ParentSubagentOverrideConfig,
 };
@@ -47,10 +47,11 @@ fn user_reason(state: AgentSubagentOverrideState) -> SubagentStateReason {
     }
 }
 
-pub fn normalize_parent_agent_id(parent_agent_type: Option<&str>) -> Option<&str> {
+pub fn normalize_parent_agent_id(parent_agent_type: Option<&str>) -> Option<String> {
     parent_agent_type
         .map(str::trim)
         .filter(|value| !value.is_empty())
+        .map(|value| resolve_mode_config_profile_id(value).into_owned())
 }
 
 pub fn override_for_parent<'a>(
@@ -58,7 +59,7 @@ pub fn override_for_parent<'a>(
     parent_agent_type: Option<&str>,
 ) -> Option<&'a ParentSubagentOverrideConfig> {
     let parent_agent_type = normalize_parent_agent_id(parent_agent_type)?;
-    overrides.get(parent_agent_type)
+    overrides.get(&parent_agent_type)
 }
 
 pub fn subagent_override_for_parent(
@@ -150,10 +151,11 @@ pub fn prune_override_config(
     parent_agent_type: &str,
     subagent_key: &str,
 ) {
-    if let Some(parent_entry) = overrides.get_mut(parent_agent_type) {
+    let profile_id = resolve_mode_config_profile_id(parent_agent_type).into_owned();
+    if let Some(parent_entry) = overrides.get_mut(&profile_id) {
         parent_entry.remove(subagent_key);
         if parent_entry.is_empty() {
-            overrides.remove(parent_agent_type);
+            overrides.remove(&profile_id);
         }
     }
 }
@@ -164,8 +166,9 @@ pub fn set_override_state(
     subagent_key: &str,
     state: AgentSubagentOverrideState,
 ) {
+    let profile_id = resolve_mode_config_profile_id(parent_agent_type).into_owned();
     overrides
-        .entry(parent_agent_type.to_string())
+        .entry(profile_id)
         .or_insert_with(HashMap::new)
         .insert(subagent_key.to_string(), state);
 }
@@ -216,11 +219,8 @@ mod tests {
         subagent_key: &str,
         state: AgentSubagentOverrideState,
     ) -> AgentSubagentOverrideConfig {
-        let mut parent_overrides = HashMap::new();
-        parent_overrides.insert(subagent_key.to_string(), state);
-
         let mut all = HashMap::new();
-        all.insert(parent.to_string(), parent_overrides);
+        set_override_state(&mut all, parent, subagent_key, state);
         all
     }
 

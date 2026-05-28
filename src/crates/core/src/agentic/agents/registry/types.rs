@@ -2,7 +2,10 @@ use crate::agentic::agents::definitions::custom::{CustomSubagent, CustomSubagent
 use crate::agentic::agents::registry::visibility::{
     SubagentVisibilityPolicy, SubagentVisibilitySummary,
 };
-use crate::agentic::agents::{Agent, AgentToolPolicyOverrides};
+use crate::agentic::agents::{
+    mode_config_profile_label, mode_config_profile_member_mode_ids, resolve_mode_config_profile_id,
+    Agent, AgentToolPolicyOverrides,
+};
 use crate::agentic::deep_review_policy::{
     REVIEWER_ARCHITECTURE_AGENT_TYPE, REVIEWER_BUSINESS_LOGIC_AGENT_TYPE,
     REVIEWER_FRONTEND_AGENT_TYPE, REVIEWER_PERFORMANCE_AGENT_TYPE, REVIEWER_SECURITY_AGENT_TYPE,
@@ -98,6 +101,12 @@ pub struct AgentInfo {
     /// Modes that share this key can reuse the same session-level prompt cache
     /// for the next accepted submission.
     pub prompt_cache_scope_key: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub config_profile_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub config_profile_label: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub config_profile_member_mode_ids: Vec<String>,
     #[serde(default)]
     pub default_enabled: bool,
     #[serde(default = "default_true")]
@@ -164,6 +173,26 @@ impl AgentInfo {
     pub(crate) fn from_agent_entry(entry: &AgentEntry) -> Self {
         let agent = entry.agent.as_ref();
         let default_tools = agent.default_tools();
+        let config_profile_id = (entry.category == AgentCategory::Mode)
+            .then(|| resolve_mode_config_profile_id(agent.id()).into_owned());
+        let config_profile_label = config_profile_id
+            .as_deref()
+            .and_then(mode_config_profile_label)
+            .map(str::to_string);
+        let config_profile_member_mode_ids = if let Some(profile_id) = config_profile_id.as_deref()
+        {
+            let members = mode_config_profile_member_mode_ids(profile_id);
+            if members.is_empty() {
+                vec![agent.id().to_string()]
+            } else {
+                members
+                    .iter()
+                    .map(|mode_id| (*mode_id).to_string())
+                    .collect()
+            }
+        } else {
+            Vec::new()
+        };
 
         // get model from custom_config; path by downcast
         let model = entry
@@ -192,6 +221,9 @@ impl AgentInfo {
                 agent.system_prompt_cache_identity(None).scope_key,
                 agent.user_context_cache_identity().scope_key
             ),
+            config_profile_id,
+            config_profile_label,
+            config_profile_member_mode_ids,
             default_enabled: true,
             effective_enabled: true,
             override_state: None,

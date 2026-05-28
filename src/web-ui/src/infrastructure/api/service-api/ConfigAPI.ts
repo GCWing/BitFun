@@ -3,9 +3,9 @@
 import { api } from './ApiClient';
 import { createTauriCommandError } from '../errors/TauriCommandError';
 import type {
+  AgentProfileConfigItem,
   DiagnosticsBundleInfo,
   ModeSkillInfo,
-  ModeConfigItem,
   RuntimeLoggingInfo,
   SkillInfo,
   SkillLevel,
@@ -230,38 +230,35 @@ export class ConfigAPI {
   
 
    
-  async getModeConfigs(): Promise<Record<string, ModeConfigItem>> {
+  async getAgentProfileConfigs(): Promise<Record<string, AgentProfileConfigItem>> {
     try {
-      return await api.invoke<Record<string, ModeConfigItem>>('get_mode_configs');
+      return await api.invoke<Record<string, AgentProfileConfigItem>>('get_agent_profile_configs');
     } catch (error) {
-      throw createTauriCommandError('get_mode_configs', error);
+      throw createTauriCommandError('get_agent_profile_configs', error);
     }
   }
 
-   
-  async getModeConfig(modeId: string): Promise<ModeConfigItem> {
+  async getAgentProfileConfig(agentId: string): Promise<AgentProfileConfigItem> {
     try {
-      return await api.invoke<ModeConfigItem>('get_mode_config', { modeId });
+      return await api.invoke<AgentProfileConfigItem>('get_agent_profile_config', { agentId });
     } catch (error) {
-      throw createTauriCommandError('get_mode_config', error, { modeId });
+      throw createTauriCommandError('get_agent_profile_config', error, { agentId });
     }
   }
 
-   
-  async setModeConfig(modeId: string, config: any): Promise<string> {
+  async setAgentProfileConfig(agentId: string, config: any): Promise<string> {
     try {
-      return await api.invoke('set_mode_config', { modeId, config });
+      return await api.invoke('set_agent_profile_config', { agentId, config });
     } catch (error) {
-      throw createTauriCommandError('set_mode_config', error, { modeId, config });
+      throw createTauriCommandError('set_agent_profile_config', error, { agentId, config });
     }
   }
 
-   
-  async resetModeConfig(modeId: string): Promise<string> {
+  async resetAgentProfileConfig(agentId: string): Promise<string> {
     try {
-      return await api.invoke('reset_mode_config', { modeId });
+      return await api.invoke('reset_agent_profile_config', { agentId });
     } catch (error) {
-      throw createTauriCommandError('reset_mode_config', error, { modeId });
+      throw createTauriCommandError('reset_agent_profile_config', error, { agentId });
     }
   }
 

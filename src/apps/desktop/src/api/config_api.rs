@@ -316,94 +316,97 @@ pub async fn export_diagnostics_bundle(
 }
 
 #[tauri::command]
-pub async fn get_mode_configs(_state: State<'_, AppState>) -> Result<Value, String> {
-    let mode_configs =
-        bitfun_core::service::config::mode_config_canonicalizer::get_mode_config_views()
+pub async fn get_agent_profile_configs(_state: State<'_, AppState>) -> Result<Value, String> {
+    let agent_profiles =
+        bitfun_core::service::config::mode_config_canonicalizer::get_agent_profile_views()
             .await
-            .map_err(|e| format!("Failed to get mode configs: {}", e))?;
+            .map_err(|e| format!("Failed to get agent profile configs: {}", e))?;
 
-    to_json_value(mode_configs, "mode configs")
+    to_json_value(agent_profiles, "agent profile configs")
 }
 
 #[tauri::command]
-pub async fn get_mode_config(
+pub async fn get_agent_profile_config(
     _state: State<'_, AppState>,
-    mode_id: String,
+    agent_id: String,
 ) -> Result<Value, String> {
     let config =
-        bitfun_core::service::config::mode_config_canonicalizer::get_mode_config_view(&mode_id)
+        bitfun_core::service::config::mode_config_canonicalizer::get_agent_profile_view(&agent_id)
             .await
-            .map_err(|e| format!("Failed to get mode config: {}", e))?;
+            .map_err(|e| format!("Failed to get agent profile config: {}", e))?;
 
-    to_json_value(config, "mode config")
+    to_json_value(config, "agent profile config")
 }
 
 #[tauri::command]
-pub async fn set_mode_config(
+pub async fn set_agent_profile_config(
     state: State<'_, AppState>,
-    mode_id: String,
+    agent_id: String,
     config: Value,
 ) -> Result<String, String> {
     let _ = state;
 
-    match bitfun_core::service::config::mode_config_canonicalizer::persist_mode_config_from_value(
-        &mode_id, config,
+    match bitfun_core::service::config::mode_config_canonicalizer::persist_agent_profile_from_value(
+        &agent_id, config,
     )
     .await
     {
-        Ok(_) => Ok(format!("Mode '{}' configuration set successfully", mode_id)),
+        Ok(_) => Ok(format!("Agent profile for '{}' set successfully", agent_id)),
         Err(e) => {
             error!(
-                "Failed to set mode config: mode_id={}, error={}",
-                mode_id, e
+                "Failed to set agent profile config: agent_id={}, error={}",
+                agent_id, e
             );
-            Err(format!("Failed to set mode config: {}", e))
+            Err(format!("Failed to set agent profile config: {}", e))
         }
     }
 }
 
 #[tauri::command]
-pub async fn reset_mode_config(
+pub async fn reset_agent_profile_config(
     _state: State<'_, AppState>,
-    mode_id: String,
+    agent_id: String,
 ) -> Result<String, String> {
-    match bitfun_core::service::config::mode_config_canonicalizer::reset_mode_config_to_default(
-        &mode_id,
+    match bitfun_core::service::config::mode_config_canonicalizer::reset_agent_profile_to_default(
+        &agent_id,
     )
     .await
     {
         Ok(_) => Ok(format!(
-            "Mode '{}' configuration reset successfully",
-            mode_id
+            "Agent profile for '{}' reset successfully",
+            agent_id
         )),
         Err(e) => {
             error!(
-                "Failed to reset mode config: mode_id={}, error={}",
-                mode_id, e
+                "Failed to reset agent profile config: agent_id={}, error={}",
+                agent_id, e
             );
-            Err(format!("Failed to reset mode config: {}", e))
+            Err(format!("Failed to reset agent profile config: {}", e))
         }
     }
 }
 
 #[tauri::command]
-pub async fn canonicalize_mode_configs(_state: State<'_, AppState>) -> Result<Value, String> {
-    match bitfun_core::service::config::mode_config_canonicalizer::canonicalize_mode_configs().await
-    {
+pub async fn canonicalize_agent_profile_configs(
+    _state: State<'_, AppState>,
+) -> Result<Value, String> {
+    match bitfun_core::service::config::mode_config_canonicalizer::canonicalize_agent_profile_configs(
+    )
+    .await {
         Ok(report) => {
             info!(
-                "Mode configs canonicalized: removed_modes={}, updated_modes={}",
-                report.removed_mode_configs.len(),
-                report.updated_modes.len()
+                "Agent profile configs canonicalized: removed_profiles={}, updated_profiles={}",
+                report.removed_profile_configs.len(),
+                report.updated_profiles.len()
             );
             Ok(to_json_value(
                 report,
-                "mode config canonicalization report",
+                "agent profile config canonicalization report",
             )?)
         }
         Err(e) => {
-            error!("Failed to canonicalize mode configs: {}", e);
-            Err(format!("Failed to canonicalize mode configs: {}", e))
+            error!("Failed to canonicalize agent profile configs: {}", e);
+            Err(format!("Failed to canonicalize agent profile configs: {}", e))
         }
     }
 }

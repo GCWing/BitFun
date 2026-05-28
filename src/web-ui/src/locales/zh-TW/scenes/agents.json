@@ -106,6 +106,9 @@
     "save": "保存",
     "skillToggleFailed": "Skill 切換失敗",
     "subagentToggleFailed": "Sub-Agent 切換失敗",
+    "sharedProfileLabel": "共享配置",
+    "sharedProfileDefaultLabel": "共享編碼配置",
+    "sharedProfileDescription": "這裡的改動也會同時套用到：{{modes}}。",
     "skillShadowed": "該 Skill 被同名且優先級更高的 Skill 遮蔽，運行時不會生效",
     "noSkills": "未啟用任何 Skill",
     "skillGroups": {

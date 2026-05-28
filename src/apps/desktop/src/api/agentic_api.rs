@@ -1522,14 +1522,23 @@ pub async fn get_available_modes(state: State<'_, AppState>) -> Result<Vec<ModeI
 
     let dtos: Vec<ModeInfoDTO> = mode_infos
         .into_iter()
-        .map(|info| ModeInfoDTO {
-            id: info.id,
-            name: info.name,
-            description: info.description,
-            is_readonly: info.is_readonly,
-            tool_count: info.tool_count,
-            default_tools: info.default_tools,
-            prompt_cache_scope_key: info.prompt_cache_scope_key,
+        .map(|info| {
+            let config_profile_id = info
+                .config_profile_id
+                .clone()
+                .unwrap_or_else(|| info.id.clone());
+            ModeInfoDTO {
+                id: info.id,
+                name: info.name,
+                description: info.description,
+                is_readonly: info.is_readonly,
+                tool_count: info.tool_count,
+                default_tools: info.default_tools,
+                prompt_cache_scope_key: info.prompt_cache_scope_key,
+                config_profile_id,
+                config_profile_label: info.config_profile_label,
+                config_profile_member_mode_ids: info.config_profile_member_mode_ids,
+            }
         })
         .collect();
 
@@ -1551,6 +1560,11 @@ pub struct ModeInfoDTO {
     pub tool_count: usize,
     pub default_tools: Vec<String>,
     pub prompt_cache_scope_key: String,
+    pub config_profile_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub config_profile_label: Option<String>,
+    #[serde(default)]
+    pub config_profile_member_mode_ids: Vec<String>,
 }
 
 fn assistant_bootstrap_outcome_to_response(

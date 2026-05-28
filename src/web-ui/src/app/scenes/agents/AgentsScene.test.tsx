@@ -67,13 +67,17 @@ vi.mock('./hooks/useAgentsList', () => ({
     filteredAgents: [],
     loading: false,
     availableTools: [],
+    getModeProfile: () => null,
     getModeSkills: () => [],
+    getModeManageableSubagents: () => [],
     counts: { builtin: 0, user: 0, project: 0, mode: 0, subagent: 0 },
     loadAgents: vi.fn(),
     getModeConfig: () => undefined,
     handleSetTools: vi.fn(),
     handleResetTools: vi.fn(),
     handleSetSkills: vi.fn(),
+    handleResetSkills: vi.fn(),
+    handleSetSubagentEnabled: vi.fn(),
   }),
 }));
 

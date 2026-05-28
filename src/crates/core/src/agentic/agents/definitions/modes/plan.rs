@@ -1,8 +1,8 @@
 //! Plan Mode
 
 use crate::agentic::agents::{
-    get_embedded_prompt, shared_coding_mode_tools, Agent, UserContextPolicy,
-    SHARED_CODING_MODE_PROMPT_TEMPLATE,
+    get_embedded_prompt, shared_coding_mode_tools, shared_coding_mode_user_context_policy, Agent,
+    UserContextPolicy, SHARED_CODING_MODE_PROMPT_TEMPLATE,
 };
 use async_trait::async_trait;
 
@@ -68,11 +68,7 @@ impl Agent for PlanMode {
     }
 
     fn user_context_policy(&self) -> UserContextPolicy {
-        UserContextPolicy::empty()
-            .with_workspace_context()
-            .with_workspace_instructions()
-            .with_workspace_memory_files()
-            .with_project_layout()
+        shared_coding_mode_user_context_policy()
     }
 
     async fn get_system_reminder(

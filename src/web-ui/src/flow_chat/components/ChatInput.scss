@@ -76,11 +76,6 @@
         padding: 0 2px 0 4px;
         animation: none;
 
-        // In capsule, hide the mode capsule badge (not enough space)
-        .bitfun-chat-input__agent-capsule {
-          display: none !important;
-        }
-
         // Enlarge the Plus button to match the capsule height
         .bitfun-chat-input__agent-boost-add {
           width: 28px !important;

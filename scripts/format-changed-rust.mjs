@@ -1,4 +1,11 @@
 #!/usr/bin/env node
+// Formats only the Rust files that are already changed, staged, or untracked.
+// This avoids `cargo fmt` sweeping the whole workspace, while also compensating
+// for rustfmt's stable behavior of recursively formatting out-of-line modules
+// referenced by an entry file. After formatting the intended target set, the
+// script restores any additional `.rs` files that became dirty only because
+// rustfmt expanded into child modules, so the final diff stays scoped to the
+// files the user actually touched.
 import { existsSync, readFileSync } from 'fs';
 import { spawnSync } from 'child_process';
 import { dirname, relative, resolve } from 'path';
@@ -46,6 +53,10 @@ for (const batch of buildBatches(changedFiles, 6000)) {
   }
 }
 
+if (!checkMode) {
+  restoreCollateralRustFiles(changedFiles);
+}
+
 function collectChangedRustFiles() {
   const candidates = new Set();
 
@@ -84,6 +95,63 @@ function collectChangedRustFiles() {
     .filter((file) => file.endsWith('.rs'))
     .filter((file) => existsSync(resolve(repoRoot, file)))
     .sort();
+}
+
+function collectDirtyRustFiles() {
+  const candidates = new Set();
+
+  for (const file of runGit([
+    'diff',
+    '--name-only',
+    '--diff-filter=ACMR',
+    '--',
+    '*.rs',
+  ])) {
+    candidates.add(normalizeFile(file));
+  }
+
+  for (const file of runGit([
+    'ls-files',
+    '--others',
+    '--exclude-standard',
+    '--',
+    '*.rs',
+  ])) {
+    candidates.add(normalizeFile(file));
+  }
+
+  return [...candidates]
+    .filter((file) => file.endsWith('.rs'))
+    .filter((file) => existsSync(resolve(repoRoot, file)))
+    .sort();
+}
+
+function restoreCollateralRustFiles(targetFiles) {
+  const targetSet = new Set(targetFiles);
+  const collateralFiles = collectDirtyRustFiles().filter((file) => !targetSet.has(file));
+
+  if (collateralFiles.length === 0) {
+    return;
+  }
+
+  console.log(
+    `[format-changed-rust] Restoring ${collateralFiles.length} collateral Rust file(s) touched through module expansion.`
+  );
+
+  for (const batch of buildBatches(collateralFiles, 6000)) {
+    const result = spawnSync('git', ['restore', '--worktree', '--', ...batch], {
+      cwd: repoRoot,
+      stdio: 'inherit',
+    });
+
+    if (result.error) {
+      fail(`Failed to restore collateral Rust files: ${result.error.message}`);
+    }
+
+    if (result.status !== 0) {
+      process.exit(result.status ?? 1);
+    }
+  }
 }
 
 function normalizeFile(file) {

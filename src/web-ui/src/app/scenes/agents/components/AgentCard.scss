@@ -315,6 +315,13 @@
     flex-shrink: 0;
   }
 
+  &__section-note {
+    margin: 0;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+  }
+
   &__tab-list {
     flex: 1 1 auto;
     display: flex;
