@@ -941,7 +941,17 @@ fn collect_redacted_fields(report: &SessionUsageReport) -> Vec<String> {
 }
 
 fn build_proactivity_report(turns: &[DialogTurnData]) -> Option<ProactivityReport> {
-    // Collect intent assignments from all turns
+    // Prefer assignment-based reporting (populated by a hidden-intent evaluator).
+    if let Some(report) = build_proactivity_from_assignments(turns) {
+        return Some(report);
+    }
+    // Fallback: synthesize a trajectory-based report from per-turn evidence
+    // collected by IntentEvidenceCollector. This is coarser than assignment-based
+    // scoring but preserves the user-visible report when no evaluator has run.
+    build_proactivity_from_evidence(turns)
+}
+
+fn build_proactivity_from_assignments(turns: &[DialogTurnData]) -> Option<ProactivityReport> {
     let mut completed: u32 = 0;
     let mut inferred: u32 = 0;
     let mut provided: u32 = 0;
@@ -974,25 +984,30 @@ fn build_proactivity_report(turns: &[DialogTurnData]) -> Option<ProactivityRepor
                     provided += 1;
                 }
             }
-            // Extract proactive tool count from trigger description
+            // Extract proactive tool count from trigger description. Take the
+            // max across this turn's assignments so multi-assignment turns
+            // don't report a last-wins value.
             if let Some(ref desc) = assignment.trigger_description {
-                if let Some(proactive_str) = desc
+                if let Some(val) = desc
                     .split_whitespace()
-                    .find(|w| w.starts_with("proactive_tools="))
+                    .find_map(|w| w.strip_prefix("proactive_tools="))
+                    .and_then(|s| s.parse::<usize>().ok())
                 {
-                    if let Some(val) = proactive_str
-                        .strip_prefix("proactive_tools=")
-                        .and_then(|s| s.parse::<usize>().ok())
-                    {
-                        proactive_tools = val;
-                    }
+                    proactive_tools = proactive_tools.max(val);
                 }
             }
-            if assignment
-                .trigger_description
-                .as_ref()
-                .is_some_and(|d| d.contains("asked=true"))
-            {
+            // Strict token match so benign descriptions don't false-positive.
+            if assignment.trigger_description.as_ref().is_some_and(|d| {
+                d.split_whitespace().any(|w| w == "asked=true")
+            }) {
+                asked_question = true;
+            }
+        }
+
+        // Prefer the authoritative per-turn evidence count when present.
+        if let Some(ev) = &turn.intent_evidence {
+            proactive_tools = proactive_tools.max(ev.proactive_tool_calls);
+            if ev.asked_user_question {
                 asked_question = true;
             }
         }
@@ -1027,6 +1042,63 @@ fn build_proactivity_report(turns: &[DialogTurnData]) -> Option<ProactivityRepor
         return None;
     }
 
+    Some(ProactivityReport {
+        completed,
+        inferred,
+        provided,
+        score,
+        level: proactivity_level_label(score),
+        turn_details,
+    })
+}
+
+/// Trajectory-based fallback. Each turn contributes at most one signal:
+/// asked-user → "inferred", acted proactively → "completed", produced output
+/// passively → "provided". Counts are turn-based, not intent-based, so the
+/// numbers reflect trajectory rather than a true pi-Bench evaluation.
+fn build_proactivity_from_evidence(turns: &[DialogTurnData]) -> Option<ProactivityReport> {
+    let mut completed: u32 = 0;
+    let mut inferred: u32 = 0;
+    let mut provided: u32 = 0;
+    let mut turn_details: Vec<TurnProactivityDetail> = Vec::new();
+
+    for turn in turns {
+        let Some(ev) = &turn.intent_evidence else {
+            continue;
+        };
+        let mut tc = 0u32;
+        let mut ti = 0u32;
+        let mut tp = 0u32;
+        if ev.asked_user_question {
+            ti = 1;
+            inferred += 1;
+        } else if ev.proactive_tool_calls > 0 {
+            tc = 1;
+            completed += 1;
+        } else if ev.produced_output {
+            tp = 1;
+            provided += 1;
+        }
+        if tc + ti + tp > 0 {
+            turn_details.push(TurnProactivityDetail {
+                turn_index: turn.turn_index,
+                asked_question: ev.asked_user_question,
+                proactive_tool_count: ev.proactive_tool_calls,
+                intents_completed: tc,
+                intents_inferred: ti,
+                intents_provided: tp,
+            });
+        }
+    }
+
+    let total = completed + inferred + provided;
+    if total == 0 {
+        return None;
+    }
+    if total == 1 && provided == 1 {
+        return None;
+    }
+    let score = (completed + inferred) as f32 / total as f32;
     Some(ProactivityReport {
         completed,
         inferred,

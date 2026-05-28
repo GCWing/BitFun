@@ -2578,38 +2578,29 @@ impl ExecutionEngine {
             // Hook A: Collect intent evidence from this round
             // Only runs when intent tracking is enabled for this session.
             if let Some(ref collector) = context.intent_evidence {
-                match collector.lock() {
-                    Ok(mut c) => {
-                        if round_result.used_ask_user_question {
-                            c.asked_user_question = true;
-                            c.question_topics
-                                .extend(round_result.ask_user_question_topics.clone());
-                        }
-                        c.tool_names_used.extend(
-                            round_result
-                                .tool_calls
-                                .iter()
-                                .map(|tc| tc.tool_name.clone()),
-                        );
-                        c.proactive_tool_calls += round_result
-                            .tool_calls
-                            .iter()
-                            .filter(|tc| {
-                                crate::agentic::execution::intent_evidence::is_proactive_tool(
-                                    &tc.tool_name,
-                                )
-                            })
-                            .count();
-                        c.produced_output |= round_result.had_assistant_text;
-                        c.round_count += 1;
-                    }
-                    Err(_) => {
-                        warn!(
-                            "Intent evidence collector mutex poisoned, skipping round evidence: session_id={}, turn_id={}",
-                            context.session_id, context.dialog_turn_id
-                        );
-                    }
+                let mut c = collector.lock().await;
+                if round_result.used_ask_user_question {
+                    c.asked_user_question = true;
+                    c.question_topics
+                        .extend(round_result.ask_user_question_topics.clone());
                 }
+                c.tool_names_used.extend(
+                    round_result
+                        .tool_calls
+                        .iter()
+                        .map(|tc| tc.tool_name.clone()),
+                );
+                c.proactive_tool_calls += round_result
+                    .tool_calls
+                    .iter()
+                    .filter(|tc| {
+                        crate::agentic::execution::intent_evidence::is_proactive_tool(
+                            &tc.tool_name,
+                        )
+                    })
+                    .count();
+                c.produced_output |= round_result.had_assistant_text;
+                c.round_count += 1;
             }
 
             // Track partial recovery reason from the last round
@@ -2959,12 +2950,11 @@ impl ExecutionEngine {
 
         // Hook B: Persist collected intent evidence for this turn.
         // Called after the dialog turn loop exits (all rounds complete).
-        let evidence = context.intent_evidence.as_ref().and_then(|collector| {
-            collector
-                .lock()
-                .ok()
-                .map(|c| c.snapshot(context.turn_index))
-        });
+        let evidence = if let Some(collector) = context.intent_evidence.as_ref() {
+            Some(collector.lock().await.snapshot(context.turn_index))
+        } else {
+            None
+        };
         if let Some(evidence) = evidence {
             if let Err(e) = self
                 .session_manager

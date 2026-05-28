@@ -12,7 +12,8 @@ use crate::agentic::WorkspaceBinding;
 use bitfun_runtime_ports::DelegationPolicy;
 use serde_json::Value;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use tokio::sync::Mutex as AsyncMutex;
 use tokio_util::sync::CancellationToken;
 
 /// Execution context
@@ -40,8 +41,11 @@ pub struct ExecutionContext {
     pub recover_partial_on_cancel: bool,
 
     /// When intent tracking is enabled, this collector gathers raw signals
-    /// during execution for later intent analysis.
-    pub intent_evidence: Option<Arc<Mutex<IntentEvidenceCollector>>>,
+    /// during execution for later intent analysis. Uses `tokio::sync::Mutex`
+    /// because it lives in `Arc` and is touched from async contexts; a
+    /// `std::sync::Mutex` would be a latent deadlock footgun if any future
+    /// call site held the guard across an `.await`.
+    pub intent_evidence: Option<Arc<AsyncMutex<IntentEvidenceCollector>>>,
 }
 
 /// Round context

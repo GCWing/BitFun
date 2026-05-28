@@ -2677,7 +2677,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             round_injection: self.round_injection_source.get().cloned(),
             recover_partial_on_cancel: false,
             intent_evidence: if session.config.enable_intent_tracking {
-                Some(std::sync::Arc::new(std::sync::Mutex::new(
+                Some(std::sync::Arc::new(tokio::sync::Mutex::new(
                     crate::agentic::execution::intent_evidence::IntentEvidenceCollector::default(),
                 )))
             } else {

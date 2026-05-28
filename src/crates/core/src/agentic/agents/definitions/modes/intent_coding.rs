@@ -6,6 +6,7 @@ use crate::agentic::agents::{
 };
 use crate::util::errors::*;
 use async_trait::async_trait;
+use std::sync::OnceLock;
 
 const INTENT_CODING_MODE_PROMPT_TEMPLATE: &str = "intent_coding_mode";
 
@@ -135,26 +136,13 @@ impl Agent for IntentCodingMode {
             .build_prompt_from_template(system_prompt_template)
             .await?;
 
-        // Inject embedded Intent Coding rules as a context section.
+        // Inject embedded Intent Coding rules as a context section. The rules
+        // section is rendered once per process — concatenating ~10 include_str!
+        // blocks per dialog turn was wasted work.
         if !prompt.is_empty() {
             prompt.push_str("\n\n");
         }
-        prompt.push_str("## Intent Coding rules\n\n");
-        prompt.push_str(
-            "The following rules are built into the IntentCoding mode. Follow them for every task.\n\n",
-        );
-        prompt.push_str("### Loaded rule manifest\n\n");
-        for rule in EMBEDDED_RULES {
-            prompt.push_str(&format!("- `{}`: {}\n", rule.name, rule.purpose));
-        }
-        prompt.push_str("\n### Loaded rule documents\n\n");
-        for rule in EMBEDDED_RULES {
-            prompt.push_str(&format!(
-                "<document name=\"intent_coding_rules/{}.md\">\n{}\n</document>\n\n",
-                rule.name,
-                rule.content.trim()
-            ));
-        }
+        prompt.push_str(rendered_rules_section());
 
         Ok(prompt)
     }
@@ -162,6 +150,30 @@ impl Agent for IntentCodingMode {
     fn is_readonly(&self) -> bool {
         false
     }
+}
+
+fn rendered_rules_section() -> &'static str {
+    static CACHED: OnceLock<String> = OnceLock::new();
+    CACHED.get_or_init(|| {
+        let mut s = String::with_capacity(8 * 1024);
+        s.push_str("## Intent Coding rules\n\n");
+        s.push_str(
+            "The following rules are built into the IntentCoding mode. Follow them for every task.\n\n",
+        );
+        s.push_str("### Loaded rule manifest\n\n");
+        for rule in EMBEDDED_RULES {
+            s.push_str(&format!("- `{}`: {}\n", rule.name, rule.purpose));
+        }
+        s.push_str("\n### Loaded rule documents\n\n");
+        for rule in EMBEDDED_RULES {
+            s.push_str(&format!(
+                "<document name=\"intent_coding_rules/{}.md\">\n{}\n</document>\n\n",
+                rule.name,
+                rule.content.trim()
+            ));
+        }
+        s
+    })
 }
 
 #[cfg(test)]

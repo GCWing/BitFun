@@ -100,6 +100,11 @@ pub struct SessionManager {
     evidence_ledger: Arc<SessionEvidenceLedger>,
     persistence_manager: Arc<PersistenceManager>,
 
+    /// Per-session async lock serializing intent-evidence read-modify-write on
+    /// `SessionMetadata`. Without this, concurrent turns can clobber each
+    /// other's `intent_tracking` additions in the gap between load and save.
+    intent_metadata_locks: Arc<DashMap<String, Arc<tokio::sync::Mutex<()>>>>,
+
     /// Configuration
     config: SessionManagerConfig,
 }
@@ -803,6 +808,7 @@ impl SessionManager {
             file_read_state_store: Arc::new(FileReadStateStore::new()),
             evidence_ledger: Arc::new(SessionEvidenceLedger::new()),
             persistence_manager,
+            intent_metadata_locks: Arc::new(DashMap::new()),
             config,
         };
 
@@ -990,6 +996,7 @@ impl SessionManager {
         let file_read_state_store = self.file_read_state_store.clone();
         let evidence_ledger = self.evidence_ledger.clone();
         let persistence_manager = self.persistence_manager.clone();
+        let intent_metadata_locks = self.intent_metadata_locks.clone();
         let manager_config = self.config.clone();
 
         tokio::spawn(async move {
@@ -1011,6 +1018,7 @@ impl SessionManager {
                 file_read_state_store,
                 evidence_ledger,
                 persistence_manager,
+                intent_metadata_locks,
                 config: manager_config,
             };
 
@@ -1752,6 +1760,7 @@ impl SessionManager {
             elapsed_ms_u64(memory_stage_started_at)
         );
         self.session_workspace_index.remove(session_id);
+        self.intent_metadata_locks.remove(session_id);
 
         info!(
             "Session deletion completed: session_id={}, workspace_path={}, duration_ms={}",
@@ -3058,6 +3067,11 @@ impl SessionManager {
     /// Record intent evidence collected during a dialog turn.
     /// Appends the evidence to the session's intent tracking state.
     /// The turn is identified via `evidence.turn_index`.
+    ///
+    /// Missing workspace path or metadata is treated as a no-op (ephemeral or
+    /// already-deleted sessions are routine and should not warn). The
+    /// read-modify-write of `SessionMetadata` is serialized via a per-session
+    /// async lock so concurrent turns can't clobber each other.
     pub async fn record_intent_evidence(
         &self,
         session_id: &str,
@@ -3067,23 +3081,32 @@ impl SessionManager {
             return Ok(());
         }
 
-        let workspace_path = self
-            .effective_session_workspace_path(session_id)
-            .await
-            .ok_or_else(|| {
-                BitFunError::Validation(format!(
-                    "Session workspace_path is missing: {}",
-                    session_id
-                ))
-            })?;
+        let Some(workspace_path) = self.effective_session_workspace_path(session_id).await else {
+            debug!(
+                "Skipping intent evidence record; no workspace path for session {}",
+                session_id
+            );
+            return Ok(());
+        };
 
-        let mut metadata = self
+        let lock = self
+            .intent_metadata_locks
+            .entry(session_id.to_string())
+            .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+            .clone();
+        let _guard = lock.lock().await;
+
+        let Some(mut metadata) = self
             .persistence_manager
             .load_session_metadata(&workspace_path, session_id)
             .await?
-            .ok_or_else(|| {
-                BitFunError::NotFound(format!("Session metadata not found: {}", session_id))
-            })?;
+        else {
+            debug!(
+                "Skipping intent evidence record; no metadata for session {}",
+                session_id
+            );
+            return Ok(());
+        };
 
         // Initialize intent tracking if not present
         let tracking = metadata.intent_tracking.get_or_insert_with(|| {
@@ -3116,6 +3139,20 @@ impl SessionManager {
             .turn_evidence
             .retain(|existing| existing.turn_index != evidence.turn_index);
         tracking.turn_evidence.push(evidence.clone());
+
+        // Bound unbounded growth on long sessions: keep only the most recent
+        // evidence/intent entries. Older turns can still be reconstructed from
+        // the per-turn `intent_evidence` field on dialog turn files.
+        let evidence_cap = crate::agentic::execution::intent_evidence::MAX_TURN_EVIDENCE_RETAINED;
+        if tracking.turn_evidence.len() > evidence_cap {
+            let drop_count = tracking.turn_evidence.len() - evidence_cap;
+            tracking.turn_evidence.drain(0..drop_count);
+        }
+        let intents_cap = crate::agentic::execution::intent_evidence::MAX_HIDDEN_INTENTS_RETAINED;
+        if tracking.hidden_intents.len() > intents_cap {
+            let drop_count = tracking.hidden_intents.len() - intents_cap;
+            tracking.hidden_intents.drain(0..drop_count);
+        }
 
         self.persistence_manager
             .save_session_metadata(&workspace_path, &metadata)

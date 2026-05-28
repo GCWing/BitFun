@@ -6,10 +6,17 @@
 //! two-stage evaluator (direct satisfaction before targeted elicitation).
 
 use bitfun_services_core::session::hidden_intent_types::{
-    CompletenessLevel, CompletenessScore, HiddenIntent, IntentScope, IntentSource,
-    IntentTerminalStatus, IntentTurnEvidence, ProactivityLevel, ProactivityScore,
-    SessionIntentTracking,
+    HiddenIntent, IntentScope, IntentSource, IntentTerminalStatus, IntentTurnEvidence,
+    ProactivityLevel, ProactivityScore, SessionIntentTracking,
 };
+
+/// Per-turn caps to keep evidence storage bounded. Long sessions used to grow
+/// `tool_names_used` / `question_topics` without limit.
+const MAX_TOOL_NAMES_PER_TURN: usize = 64;
+const MAX_QUESTION_TOPICS_PER_TURN: usize = 16;
+/// Per-session caps applied at persistence time.
+pub const MAX_TURN_EVIDENCE_RETAINED: usize = 64;
+pub const MAX_HIDDEN_INTENTS_RETAINED: usize = 256;
 
 /// Evidence collected during a single dialog turn for later intent analysis.
 /// The collector is stateless per-turn: it gathers raw signals from model
@@ -27,12 +34,22 @@ pub struct IntentEvidenceCollector {
 
 impl IntentEvidenceCollector {
     pub fn snapshot(&self, turn_index: usize) -> IntentTurnEvidence {
+        let tool_names_used = if self.tool_names_used.len() > MAX_TOOL_NAMES_PER_TURN {
+            self.tool_names_used[..MAX_TOOL_NAMES_PER_TURN].to_vec()
+        } else {
+            self.tool_names_used.clone()
+        };
+        let question_topics = if self.question_topics.len() > MAX_QUESTION_TOPICS_PER_TURN {
+            self.question_topics[..MAX_QUESTION_TOPICS_PER_TURN].to_vec()
+        } else {
+            self.question_topics.clone()
+        };
         IntentTurnEvidence {
             turn_index,
             asked_user_question: self.asked_user_question,
-            question_topics: self.question_topics.clone(),
+            question_topics,
             proactive_tool_calls: self.proactive_tool_calls,
-            tool_names_used: self.tool_names_used.clone(),
+            tool_names_used,
             produced_output: self.produced_output,
             round_count: self.round_count,
             asked_follow_up_in_text: self.asked_follow_up_in_text,
@@ -92,18 +109,21 @@ pub fn is_proactive_tool(tool_name: &str) -> bool {
 // Hidden intent extraction from turn evidence
 // ---------------------------------------------------------------------------
 
-/// Extract new hidden intents from a turn's collected evidence.
+/// Extract candidate hidden intents from a turn's collected evidence.
 ///
-/// Uses lightweight heuristics to infer requirements the agent discovered
-/// during this turn. Extracted intents are appended to the session's tracking
-/// state and become available for proactivity scoring.
+/// Intents emitted here are *trajectory markers*, not evaluated assignments.
+/// `terminal_status` is intentionally left `None` so a downstream evaluator can
+/// stamp them. Auto-stamping `Completed`/`Inferred` would make
+/// `all_intents_resolved()` trivially true and inflate proactivity scores; the
+/// module-level doc explicitly forbids that.
 pub fn extract_hidden_intents_from_evidence(
     evidence: &IntentTurnEvidence,
     existing_intents: &[HiddenIntent],
 ) -> Vec<HiddenIntent> {
     let mut new_intents = Vec::new();
 
-    // 1. Agent used proactive tools and produced output: infer requirements.
+    // 1. Agent used proactive tools and produced output: record a trajectory
+    //    marker per distinct proactive tool. No terminal status.
     if evidence.proactive_tool_calls > 0 && evidence.produced_output {
         for tool_name in &evidence.tool_names_used {
             if !is_proactive_tool(tool_name) {
@@ -121,7 +141,7 @@ pub fn extract_hidden_intents_from_evidence(
                 intent_id,
                 description: proactive_tool_intent_description(tool_name),
                 scope: IntentScope::SessionLocal,
-                terminal_status: Some(IntentTerminalStatus::Completed),
+                terminal_status: None,
                 resolved_at_turn: Some(evidence.turn_index),
                 source: Some(IntentSource::PriorContext),
             });
@@ -131,19 +151,11 @@ pub fn extract_hidden_intents_from_evidence(
     // 2. Agent asked targeted clarification questions via AskUserQuestion.
     if evidence.asked_user_question && !evidence.question_topics.is_empty() {
         for topic in &evidence.question_topics {
-            let slug = topic
-                .chars()
-                .take(40)
-                .map(|c| {
-                    if c.is_alphanumeric() {
-                        c.to_ascii_lowercase()
-                    } else {
-                        '-'
-                    }
-                })
-                .collect::<String>();
-            let intent_id =
-                format!("asked-{}-turn{}", slug.trim_matches('-'), evidence.turn_index);
+            let intent_id = format!(
+                "asked-{}-turn{}",
+                slugify_topic(topic, evidence.turn_index),
+                evidence.turn_index
+            );
             if existing_intents.iter().any(|i| i.intent_id == intent_id) {
                 continue;
             }
@@ -151,7 +163,7 @@ pub fn extract_hidden_intents_from_evidence(
                 intent_id,
                 description: format!("Required clarification: {}", topic),
                 scope: IntentScope::SessionLocal,
-                terminal_status: Some(IntentTerminalStatus::Inferred),
+                terminal_status: None,
                 resolved_at_turn: Some(evidence.turn_index),
                 source: Some(IntentSource::PriorContext),
             });
@@ -159,6 +171,34 @@ pub fn extract_hidden_intents_from_evidence(
     }
 
     new_intents
+}
+
+/// Build a stable, ASCII-safe slug from a free-text question topic. Falls back
+/// to a short hash digest when stripping non-alphanumerics leaves nothing
+/// (common with CJK / emoji headers) so per-turn IDs don't collide.
+fn slugify_topic(topic: &str, turn_index: usize) -> String {
+    let ascii: String = topic
+        .chars()
+        .take(40)
+        .map(|c| {
+            if c.is_alphanumeric() && c.is_ascii() {
+                c.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    let trimmed = ascii.trim_matches('-');
+    if !trimmed.is_empty() {
+        return trimmed.to_string();
+    }
+    // Fallback: short deterministic hash of (topic, turn_index) to avoid
+    // collisions when the slug collapses to empty.
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    topic.hash(&mut hasher);
+    turn_index.hash(&mut hasher);
+    format!("h{:08x}", hasher.finish() as u32)
 }
 
 fn proactive_tool_intent_description(tool_name: &str) -> String {
@@ -356,10 +396,9 @@ mod tests {
         assert!(intents
             .iter()
             .any(|i| i.intent_id == "proactive-write-turn1"));
-        assert_eq!(
-            intents[0].terminal_status,
-            Some(IntentTerminalStatus::Completed)
-        );
+        // Trajectory markers must not carry a terminal status; only a
+        // downstream evaluator may stamp Completed/Inferred/Provided.
+        assert!(intents.iter().all(|i| i.terminal_status.is_none()));
     }
 
     #[test]
@@ -377,10 +416,22 @@ mod tests {
         let intents = extract_hidden_intents_from_evidence(&evidence, &[]);
         assert_eq!(intents.len(), 1);
         assert!(intents[0].intent_id.contains("asked-"));
-        assert_eq!(
-            intents[0].terminal_status,
-            Some(IntentTerminalStatus::Inferred)
-        );
+        assert!(intents[0].terminal_status.is_none());
+    }
+
+    #[test]
+    fn slugify_topic_falls_back_to_hash_for_non_ascii() {
+        let s1 = slugify_topic("ヘッダ確認", 1);
+        let s2 = slugify_topic("ヘッダ確認", 2);
+        let s3 = slugify_topic("コンテキスト", 1);
+        assert!(s1.starts_with('h') && s1.len() == 9);
+        assert_ne!(s1, s2, "different turns must produce distinct fallback slugs");
+        assert_ne!(s1, s3, "different topics must produce distinct fallback slugs");
+    }
+
+    #[test]
+    fn slugify_topic_preserves_ascii_prefix() {
+        assert_eq!(slugify_topic("Which database?", 7), "which-database");
     }
 
     #[test]
