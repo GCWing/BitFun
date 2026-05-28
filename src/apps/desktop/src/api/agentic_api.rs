@@ -14,8 +14,8 @@ use bitfun_core::agentic::coordination::{
 };
 use bitfun_core::agentic::core::*;
 use bitfun_core::agentic::deep_review_policy::{
-    apply_deep_review_queue_control, default_review_team_definition, DeepReviewQueueControlAction,
-    ReviewTeamDefinition,
+    DeepReviewQueueControlAction, ReviewTeamDefinition, apply_deep_review_queue_control,
+    default_review_team_definition,
 };
 use bitfun_core::agentic::image_analysis::ImageContextData;
 use bitfun_core::agentic::tools::image_context::get_image_context;
@@ -63,6 +63,8 @@ pub struct SessionConfigDTO {
     pub remote_connection_id: Option<String>,
     #[serde(default)]
     pub remote_ssh_host: Option<String>,
+    #[serde(default)]
+    pub enable_intent_tracking: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -585,6 +587,7 @@ pub async fn create_session(
             remote_connection_id: remote_conn.clone(),
             remote_ssh_host: remote_ssh_host.clone(),
             model_id: c.model_name,
+            enable_intent_tracking: c.enable_intent_tracking.unwrap_or(false),
         })
         .unwrap_or(SessionConfig {
             workspace_path: Some(request.workspace_path.clone()),
@@ -1706,6 +1709,8 @@ mod tests {
             end_time: Some(2),
             duration_ms: Some(1),
             status: TurnStatus::Completed,
+            intent_assignments: vec![],
+            intent_evidence: None,
         };
 
         let stats = restore_turn_payload_stats(&[turn]);
@@ -1768,6 +1773,8 @@ mod tests {
             end_time: Some(2),
             duration_ms: Some(1),
             status: TurnStatus::Completed,
+            intent_assignments: vec![],
+            intent_evidence: None,
         }];
 
         omit_assistant_only_tool_results_for_session_view(&mut turns);
@@ -1826,6 +1833,8 @@ mod tests {
             end_time: Some(2),
             duration_ms: Some(1),
             status: TurnStatus::Completed,
+            intent_assignments: vec![],
+            intent_evidence: None,
         }];
 
         omit_assistant_only_tool_results_for_session_view(&mut turns);

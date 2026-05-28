@@ -1,6 +1,7 @@
 //! Execution Engine Type Definitions
 
 use crate::agentic::core::Message;
+use crate::agentic::execution::intent_evidence::IntentEvidenceCollector;
 use crate::agentic::round_preempt::{
     DialogRoundInjectionInterrupt, DialogRoundInjectionSource, DialogRoundPreemptSource,
 };
@@ -11,7 +12,7 @@ use crate::agentic::WorkspaceBinding;
 use bitfun_runtime_ports::DelegationPolicy;
 use serde_json::Value;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tokio_util::sync::CancellationToken;
 
 /// Execution context
@@ -37,6 +38,10 @@ pub struct ExecutionContext {
     /// When true, stream cancellation may be converted into a partial assistant
     /// result if text/tool output has already been produced.
     pub recover_partial_on_cancel: bool,
+
+    /// When intent tracking is enabled, this collector gathers raw signals
+    /// during execution for later intent analysis.
+    pub intent_evidence: Option<Arc<Mutex<IntentEvidenceCollector>>>,
 }
 
 /// Round context
@@ -88,6 +93,13 @@ pub struct RoundResult {
     /// True when the model emitted any non-empty thinking / reasoning content
     /// in this round.
     pub had_thinking_content: bool,
+
+    /// Whether the agent called AskUserQuestion in this round.
+    /// Set by the round executor when processing tool calls.
+    pub used_ask_user_question: bool,
+
+    /// If AskUserQuestion was called, the parsed questions from its input.
+    pub ask_user_question_topics: Vec<String>,
 }
 
 /// Finish reason

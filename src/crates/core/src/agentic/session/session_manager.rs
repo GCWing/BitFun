@@ -3,8 +3,8 @@
 //! Responsible for session CRUD, lifecycle management, and resource association
 
 use crate::agentic::core::{
-    new_turn_id, CompressionContract, CompressionState, Message, MessageSemanticKind,
-    ProcessingPhase, Session, SessionConfig, SessionKind, SessionState, SessionSummary, TurnStats,
+    CompressionContract, CompressionState, Message, MessageSemanticKind, ProcessingPhase, Session,
+    SessionConfig, SessionKind, SessionState, SessionSummary, TurnStats, new_turn_id,
 };
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::persistence::PersistenceManager;
@@ -17,8 +17,8 @@ use crate::agentic::session::{
 };
 use crate::infrastructure::ai::get_global_ai_client_factory;
 use crate::service::config::{
-    get_app_language_code, get_global_config_service, short_model_user_language_instruction,
-    subscribe_config_updates, ConfigUpdateEvent,
+    ConfigUpdateEvent, get_app_language_code, get_global_config_service,
+    short_model_user_language_instruction, subscribe_config_updates,
 };
 use crate::service::session::{
     DialogTurnData, DialogTurnKind, ModelRoundData, SessionMetadata, SessionRelationship,
@@ -1470,9 +1470,7 @@ impl SessionManager {
         if session.session_name != expected_current_title {
             debug!(
                 "Skipping auto-generated title because current title changed: session_id={}, expected_title={}, current_title={}",
-                session_id,
-                expected_current_title,
-                session.session_name
+                session_id, expected_current_title, session.session_name
             );
             return Ok(false);
         }
@@ -3057,6 +3055,137 @@ impl SessionManager {
         Ok(())
     }
 
+    /// Record intent evidence collected during a dialog turn.
+    /// Appends the evidence to the session's intent tracking state.
+    /// The turn is identified via `evidence.turn_index`.
+    pub async fn record_intent_evidence(
+        &self,
+        session_id: &str,
+        evidence: bitfun_services_core::session::hidden_intent_types::IntentTurnEvidence,
+    ) -> BitFunResult<()> {
+        if !self.should_persist_session_id(session_id) {
+            return Ok(());
+        }
+
+        let workspace_path = self
+            .effective_session_workspace_path(session_id)
+            .await
+            .ok_or_else(|| {
+                BitFunError::Validation(format!(
+                    "Session workspace_path is missing: {}",
+                    session_id
+                ))
+            })?;
+
+        let mut metadata = self
+            .persistence_manager
+            .load_session_metadata(&workspace_path, session_id)
+            .await?
+            .ok_or_else(|| {
+                BitFunError::NotFound(format!("Session metadata not found: {}", session_id))
+            })?;
+
+        // Initialize intent tracking if not present
+        let tracking = metadata.intent_tracking.get_or_insert_with(|| {
+            bitfun_services_core::session::hidden_intent_types::SessionIntentTracking {
+                enabled: true,
+                ..Default::default()
+            }
+        });
+        tracking.enabled = true;
+
+        // Extract new hidden intents from this turn's evidence.
+        // These are appended to hidden_intents so they become available
+        // for proactivity scoring and cross-turn persistence.
+        let new_intents =
+            crate::agentic::execution::intent_evidence::extract_hidden_intents_from_evidence(
+                &evidence,
+                &tracking.hidden_intents,
+            );
+        for intent in new_intents {
+            if !tracking
+                .hidden_intents
+                .iter()
+                .any(|i| i.intent_id == intent.intent_id)
+            {
+                tracking.hidden_intents.push(intent);
+            }
+        }
+
+        tracking
+            .turn_evidence
+            .retain(|existing| existing.turn_index != evidence.turn_index);
+        tracking.turn_evidence.push(evidence.clone());
+
+        self.persistence_manager
+            .save_session_metadata(&workspace_path, &metadata)
+            .await?;
+
+        // Also update the turn file so future trajectory evaluators can load
+        // turn-local evidence without reading session metadata first.
+        if let Ok(Some(mut turn)) = self
+            .persistence_manager
+            .load_dialog_turn(&workspace_path, session_id, evidence.turn_index)
+            .await
+        {
+            turn.intent_evidence = Some(evidence.clone());
+            if let Err(e) = self
+                .persistence_manager
+                .save_dialog_turn(&workspace_path, &turn)
+                .await
+            {
+                warn!(
+                    "Failed to save dialog turn with intent evidence: session_id={}, turn_index={}, error={}",
+                    session_id, evidence.turn_index, e
+                );
+            }
+        }
+
+        debug!(
+            "Intent evidence recorded: session_id={}, turn_index={}, asked_user_question={}, proactive_tools={}",
+            session_id,
+            evidence.turn_index,
+            evidence.asked_user_question,
+            evidence.proactive_tool_calls
+        );
+
+        Ok(())
+    }
+
+    /// Load unresolved hidden intents for the given session.
+    ///
+    /// Returns intents whose `terminal_status` is `None` (not yet resolved).
+    /// These can be injected into subsequent turn prompts so the agent is aware
+    /// of previously discovered requirements.
+    pub async fn load_unresolved_hidden_intents(
+        &self,
+        session_id: &str,
+    ) -> Vec<bitfun_services_core::session::hidden_intent_types::HiddenIntent> {
+        let workspace_path = match self.effective_session_workspace_path(session_id).await {
+            Some(p) => p,
+            None => return Vec::new(),
+        };
+
+        let metadata = match self
+            .persistence_manager
+            .load_session_metadata(&workspace_path, session_id)
+            .await
+        {
+            Ok(Some(m)) => m,
+            _ => return Vec::new(),
+        };
+
+        match metadata.intent_tracking {
+            Some(ref tracking) if tracking.enabled => tracking
+                .hidden_intents
+                .iter()
+                .filter(|i| i.terminal_status.is_none())
+                .cloned()
+                .collect(),
+            _ => Vec::new(),
+        }
+    }
+
     /// Mark a dialog turn as failed and persist it.
     /// Unlike `complete_dialog_turn`, this sets the state to `Failed` with an error message.
     pub async fn fail_dialog_turn(
@@ -3595,8 +3724,7 @@ impl SessionManager {
         // Construct system prompt
         let system_prompt = format!(
             "You are a professional session title generation assistant. Based on the user's message content, generate a concise and accurate session title.\n\nRequirements:\n- Title should not exceed {} characters\n- {}\n- Concise and accurate, reflecting the conversation topic\n- Do not add quotes or other decorative symbols\n- Return only the title text, no other content",
-            max_length,
-            language_instruction
+            max_length, language_instruction
         );
 
         // Truncate message to save tokens (max 200 characters)
@@ -4074,9 +4202,11 @@ mod tests {
             .expect("session should create");
 
         let snapshots = SessionManager::collect_auto_save_snapshots(&manager.sessions);
-        assert!(snapshots
-            .iter()
-            .any(|snapshot| snapshot.session_id == session.session_id));
+        assert!(
+            snapshots
+                .iter()
+                .any(|snapshot| snapshot.session_id == session.session_id)
+        );
 
         match manager.sessions.try_get_mut(&session.session_id) {
             TryResult::Present(_) => {}
@@ -4241,10 +4371,12 @@ mod tests {
             .get_session(&session.session_id)
             .expect("session should remain active");
         assert_eq!(active.dialog_turn_ids, vec!["local-usage-1".to_string()]);
-        assert!(manager
-            .context_store
-            .get_context_messages(&session.session_id)
-            .is_empty());
+        assert!(
+            manager
+                .context_store
+                .get_context_messages(&session.session_id)
+                .is_empty()
+        );
 
         let persisted_turns = persistence_manager
             .load_session_turns(workspace.path(), &session.session_id)
@@ -4331,11 +4463,13 @@ mod tests {
             .expect("ephemeral child session should create");
 
         assert!(manager.get_session(&session.session_id).is_some());
-        assert!(persistence_manager
-            .load_session_metadata(workspace.path(), &session.session_id)
-            .await
-            .expect("metadata lookup should succeed")
-            .is_none());
+        assert!(
+            persistence_manager
+                .load_session_metadata(workspace.path(), &session.session_id)
+                .await
+                .expect("metadata lookup should succeed")
+                .is_none()
+        );
     }
 
     #[tokio::test]
@@ -4591,10 +4725,12 @@ mod tests {
         assert_eq!(view_session.dialog_turn_ids, vec!["turn-1".to_string()]);
         assert_eq!(turns.len(), 1);
         assert!(manager.get_session(&session_id).is_none());
-        assert!(manager
-            .context_store
-            .get_context_messages(&session_id)
-            .is_empty());
+        assert!(
+            manager
+                .context_store
+                .get_context_messages(&session_id)
+                .is_empty()
+        );
     }
 
     #[tokio::test]
@@ -4888,11 +5024,13 @@ mod tests {
         assert_eq!(turns.len(), 1);
         assert_eq!(turns[0].user_message.content, "prompt 0");
         assert_eq!(turns[0].agent_type.as_deref(), Some("agentic"));
-        assert!(persistence_manager
-            .load_turn_context_snapshot(workspace.path(), &session.session_id, 1)
-            .await
-            .expect("snapshot load should succeed")
-            .is_none());
+        assert!(
+            persistence_manager
+                .load_turn_context_snapshot(workspace.path(), &session.session_id, 1)
+                .await
+                .expect("snapshot load should succeed")
+                .is_none()
+        );
 
         manager.sessions.remove(&session.session_id);
         let restored = manager
@@ -5007,10 +5145,12 @@ mod tests {
             .await
             .expect("session should delete");
 
-        assert!(manager
-            .session_workspace_index
-            .get(&session.session_id)
-            .is_none());
+        assert!(
+            manager
+                .session_workspace_index
+                .get(&session.session_id)
+                .is_none()
+        );
     }
 
     #[test]

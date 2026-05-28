@@ -111,6 +111,9 @@ export const useFlowChat = () => {
           enableContextCompression: true,
           remoteConnectionId,
           remoteSshHost,
+          ...(config?.enableIntentTracking !== undefined
+            ? { enableIntentTracking: config.enableIntentTracking }
+            : {}),
         }
       });
       

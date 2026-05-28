@@ -1,5 +1,9 @@
 use super::state::SessionState;
 pub use bitfun_core_types::SessionKind;
+pub use bitfun_services_core::session::hidden_intent_types::{
+    HiddenIntent, IntentAssignment, IntentScope, IntentSource, IntentTerminalStatus,
+    PersistentIntent, SessionIntentTracking,
+};
 use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 use uuid::Uuid;
@@ -149,6 +153,12 @@ pub struct SessionConfig {
     /// Model config ID used by this session (for token usage tracking)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model_id: Option<String>,
+
+    /// Whether hidden intent tracking is enabled for this session.
+    /// When enabled, the agent loop tracks which hidden requirements were
+    /// proactively resolved vs passively waited-for.
+    #[serde(default)]
+    pub enable_intent_tracking: bool,
 }
 
 impl Default for SessionConfig {
@@ -166,6 +176,7 @@ impl Default for SessionConfig {
             remote_connection_id: None,
             remote_ssh_host: None,
             model_id: None,
+            enable_intent_tracking: false,
         }
     }
 }

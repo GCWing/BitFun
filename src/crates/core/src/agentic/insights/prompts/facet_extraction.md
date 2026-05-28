@@ -27,6 +27,21 @@ CRITICAL GUIDELINES:
 
 5. **languages_used**: Optional. The insights report's language chart is computed from edited file paths (Edit/Write tool), not from this field; you may still list languages you infer for context.
 
+6. **proactivity**: Assess how proactively the AI handled underspecified or ambiguous parts of the user's request.
+   - proactive_hidden_intents: Number of hidden requirements the AI surfaced and resolved without the user having to explicitly state them. This includes: inferring preferences from prior context, filling in reasonable defaults, and applying established conventions without asking.
+   - reactive_hidden_intents: Number of requirements the user had to explicitly provide step by step because the AI did not proactively address them.
+   - inferred_from_context: The AI recovered requirements from prior sessions, workspace files, or established user preferences.
+   - targeted_questions_asked: The AI asked focused, specific clarifying questions that targeted missing information.
+   - passive_waiting_events: The AI restated the request or asked vague open-ended questions without making progress.
+   - proactivity_level: "high" (most requirements proactively resolved), "moderate" (mix of proactive and reactive), "low" (mostly waited for user to provide every detail), "reactive" (entirely step-by-step instruction following).
+   - proactivity_detail: "One sentence describing the AI's proactivity pattern or empty"
+
+7. **completeness**: Assess whether the final deliverables satisfied the user's task requirements.
+   - requirements_satisfied: Number of verifiable requirements that were met in the final output.
+   - requirements_missed: Number of requirements the user explicitly asked for that were not satisfied.
+   - completeness_level: "full" (all requirements met), "partial" (most met, some gaps), "minimal" (only surface request handled), "incomplete" (significant gaps).
+   - completeness_detail: "One sentence describing completeness gaps or empty"
+
 SESSION:
 {session_transcript}
 
@@ -43,5 +58,20 @@ RESPOND WITH ONLY A VALID JSON OBJECT matching this schema:
   "primary_success": "fast_accurate_search|correct_code_edits|good_explanations|proactive_help|multi_file_changes|good_debugging",
   "brief_summary": "One sentence: what user wanted and whether they got it",
   "languages_used": ["programing_language1", "programing_language2"],
-  "user_instructions": ["Any explicit instructions user gave to AI about how to behave"]
+  "user_instructions": ["Any explicit instructions user gave to AI about how to behave"],
+  "proactivity": {
+    "proactive_hidden_intents": 0,
+    "reactive_hidden_intents": 0,
+    "inferred_from_context": 0,
+    "targeted_questions_asked": 0,
+    "passive_waiting_events": 0,
+    "proactivity_level": "high|moderate|low|reactive",
+    "proactivity_detail": "One sentence or empty"
+  },
+  "completeness": {
+    "requirements_satisfied": 0,
+    "requirements_missed": 0,
+    "completeness_level": "full|partial|minimal|incomplete",
+    "completeness_detail": "One sentence or empty"
+  }
 }

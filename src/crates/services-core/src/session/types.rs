@@ -20,17 +20,41 @@ pub enum SessionRelationshipKind {
 pub struct SessionRelationship {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kind: Option<SessionRelationshipKind>,
-    #[serde(default, skip_serializing_if = "Option::is_none", alias = "parent_session_id")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "parent_session_id"
+    )]
     pub parent_session_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", alias = "parent_request_id")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "parent_request_id"
+    )]
     pub parent_request_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", alias = "parent_dialog_turn_id")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "parent_dialog_turn_id"
+    )]
     pub parent_dialog_turn_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", alias = "parent_turn_index")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "parent_turn_index"
+    )]
     pub parent_turn_index: Option<usize>,
-    #[serde(default, skip_serializing_if = "Option::is_none", alias = "parent_tool_call_id")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "parent_tool_call_id"
+    )]
     pub parent_tool_call_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none", alias = "subagent_type")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "subagent_type"
+    )]
     pub subagent_type: Option<String>,
 }
 
@@ -174,6 +198,31 @@ pub struct SessionMetadata {
         alias = "needsUserAttention"
     )]
     pub needs_user_attention: Option<String>,
+
+    /// Hidden intent tracking for proactive assistance evaluation.
+    /// None when intent tracking is not enabled for this session.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "intent_tracking"
+    )]
+    pub intent_tracking: Option<crate::session::hidden_intent_types::SessionIntentTracking>,
+
+    /// Proactivity score computed after session completion.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "proactivity_score"
+    )]
+    pub proactivity_score: Option<crate::session::hidden_intent_types::ProactivityScore>,
+
+    /// Completeness score computed after session completion.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "completeness_score"
+    )]
+    pub completeness_score: Option<crate::session::hidden_intent_types::CompletenessScore>,
 }
 
 /// Session status
@@ -292,6 +341,27 @@ pub struct DialogTurnData {
 
     /// Turn status
     pub status: TurnStatus,
+
+    /// Hidden intent assignments made during this turn.
+    /// Each entry records a terminal status assignment for a tracked intent.
+    #[serde(
+        default,
+        skip_serializing_if = "Vec::is_empty",
+        alias = "intent_assignments"
+    )]
+    pub intent_assignments: Vec<crate::session::hidden_intent_types::IntentAssignment>,
+
+    /// Raw hidden-intent evidence collected during this turn.
+    ///
+    /// Evidence is intentionally separate from `intent_assignments`: assigning
+    /// completed / inferred / provided requires comparing the trajectory
+    /// against concrete hidden intents.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "intent_evidence"
+    )]
+    pub intent_evidence: Option<crate::session::hidden_intent_types::IntentTurnEvidence>,
 }
 
 /// Persisted dialog turn kind.
@@ -689,6 +759,9 @@ impl SessionMetadata {
             workspace_hostname: None,
             unread_completion: None,
             needs_user_attention: None,
+            intent_tracking: None,
+            proactivity_score: None,
+            completeness_score: None,
         }
     }
 
@@ -791,6 +864,8 @@ impl DialogTurnData {
             end_time: None,
             duration_ms: None,
             status: TurnStatus::InProgress,
+            intent_assignments: Vec::new(),
+            intent_evidence: None,
         }
     }
 
