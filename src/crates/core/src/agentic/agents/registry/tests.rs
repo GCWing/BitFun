@@ -115,7 +115,7 @@ async fn computer_use_is_builtin_subagent_not_mode() {
 
 #[test]
 fn non_deep_review_builtin_subagents_default_to_primary() {
-    for agent_type in ["Explore", "FileFinder", "CodeReview", "GenerateDoc", "Init"] {
+    for agent_type in ["Explore", "FileFinder", "CodeReview", "GenerateDoc"] {
         assert_eq!(
             default_model_id_for_builtin_agent(agent_type),
             "primary",

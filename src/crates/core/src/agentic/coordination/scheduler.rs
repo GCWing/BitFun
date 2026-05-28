@@ -14,6 +14,7 @@ use super::coordinator::{ConversationCoordinator, DialogTriggerSource};
 use super::turn_outcome::{TurnOutcome, TurnOutcomeQueueAction, TurnOutcomeStatus};
 use crate::agentic::core::{PromptEnvelope, SessionState};
 use crate::agentic::image_analysis::ImageContextData;
+use crate::agentic::init_agents_md::build_init_agents_md_user_input;
 use crate::agentic::round_preempt::{
     DialogRoundInjectionSource, DialogRoundPreemptSource, RoundInjection, RoundInjectionKind,
     RoundInjectionTarget, SessionRoundInjectionBuffer, SessionRoundYieldFlags,
@@ -22,6 +23,7 @@ use crate::agentic::session::SessionManager;
 use dashmap::DashMap;
 use log::{debug, info, warn};
 use std::collections::VecDeque;
+use std::path::Path;
 use std::sync::Arc;
 use std::sync::OnceLock;
 use std::time::{Duration, SystemTime};
@@ -353,6 +355,34 @@ impl DialogScheduler {
         }
     }
 
+    pub async fn submit_init_agents_md(
+        &self,
+        session_id: String,
+        workspace_path: Option<String>,
+        policy: DialogSubmissionPolicy,
+    ) -> Result<DialogSubmitOutcome, String> {
+        let agent_type = self
+            .resolve_session_agent_type(&session_id, workspace_path.as_deref())
+            .await?;
+        let (user_input, original_user_input) = build_init_agents_md_user_input()
+            .await
+            .map_err(|error| error.to_string())?;
+
+        self.submit(
+            session_id,
+            user_input,
+            Some(original_user_input),
+            None,
+            agent_type,
+            workspace_path,
+            policy,
+            None,
+            None,
+            None,
+        )
+        .await
+    }
+
     fn user_message_may_preempt(policy: &DialogSubmissionPolicy) -> bool {
         matches!(
             policy.trigger_source,
@@ -401,6 +431,44 @@ impl DialogScheduler {
             image_contexts,
             enqueued_at: SystemTime::now(),
         };
+        self.submit_queued_turn(session_id, resolved_turn_id, queued_turn)
+            .await
+    }
+
+    async fn resolve_session_agent_type(
+        &self,
+        session_id: &str,
+        workspace_path: Option<&str>,
+    ) -> Result<String, String> {
+        let session = match self.session_manager.get_session(session_id) {
+            Some(session) => session,
+            None => {
+                let workspace_path = workspace_path.ok_or_else(|| {
+                    format!(
+                        "workspace_path is required when restoring session: {}",
+                        session_id
+                    )
+                })?;
+                self.session_manager
+                    .restore_session(Path::new(workspace_path), session_id)
+                    .await
+                    .map_err(|error| error.to_string())?
+            }
+        };
+        let agent_type = session.agent_type.trim();
+        if agent_type.is_empty() {
+            Ok("agentic".to_string())
+        } else {
+            Ok(agent_type.to_string())
+        }
+    }
+
+    async fn submit_queued_turn(
+        &self,
+        session_id: String,
+        resolved_turn_id: String,
+        queued_turn: QueuedTurn,
+    ) -> Result<DialogSubmitOutcome, String> {
         let state = self
             .session_manager
             .get_session(&session_id)

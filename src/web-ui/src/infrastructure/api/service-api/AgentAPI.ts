@@ -71,6 +71,11 @@ export interface StartDialogTurnRequest {
   userMessageMetadata?: Record<string, unknown>;
 }
 
+export interface StartDialogTurnResponse {
+  success: boolean;
+  message: string;
+}
+
 export interface CompactSessionRequest {
   sessionId: string;
   workspacePath?: string;
@@ -102,6 +107,13 @@ export interface RestoreSessionViewResponse {
 export interface EnsureAssistantBootstrapRequest {
   sessionId: string;
   workspacePath: string;
+}
+
+export interface RunInitAgentsMdRequest {
+  sessionId: string;
+  workspacePath?: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
 }
 
 export type EnsureAssistantBootstrapStatus = 'started' | 'skipped' | 'blocked';
@@ -348,6 +360,18 @@ export class AgentAPI {
       });
     } catch (error) {
       throw createTauriCommandError('ensure_assistant_bootstrap', error, request);
+    }
+  }
+
+  async runInitAgentsMd(
+    request: RunInitAgentsMdRequest
+  ): Promise<StartDialogTurnResponse> {
+    try {
+      return await api.invoke<StartDialogTurnResponse>('run_init_agents_md', {
+        request,
+      });
+    } catch (error) {
+      throw createTauriCommandError('run_init_agents_md', error, request);
     }
   }
 

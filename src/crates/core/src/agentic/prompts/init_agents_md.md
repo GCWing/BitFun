@@ -1,4 +1,4 @@
-Please analyze this codebase and generate the content of an AGENTS.md file, which will be given to future instances of coding agents to operate in this repository.
+The user is asking you to create or update AGENTS.md for this repository. You should analyze this codebase and generate an AGENTS.md file, which will be given to future instances of coding agents to operate in this repository.
 
 Operate conservatively:
 - Inspect existing docs and repo structure before writing.
@@ -18,6 +18,3 @@ Usage notes:
 - If there are Cursor rules (in .cursor/rules/ or .cursorrules), make sure to include the important parts.
 - If there is a README.md, make sure to include the important parts.
 - Do not make up information such as "Common Development Tasks", "Tips for Development", "Support and Documentation" unless this is expressly included in other files that you read.
-
-{LANGUAGE_PREFERENCE}
-{ENV_INFO}

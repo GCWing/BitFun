@@ -67,6 +67,7 @@ import { useAgentCompanionActivity } from '../hooks/useAgentCompanionActivity';
 import { useSessionReviewActivity } from '../hooks/useSessionReviewActivity';
 import { shouldBlockDeepReviewCommand } from '../utils/deepReviewCommandGuard';
 import { deriveDeepReviewSessionConcurrencyGuard } from '../utils/deepReviewCapacityGuard';
+import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import './ChatInput.scss';
 
 const log = createLogger('ChatInput');
@@ -1506,23 +1507,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       return;
     }
 
-    const initInstruction = t('chatInput.initPrompt', {
-      defaultValue: 'Please generate or update AGENTS.md so it matches the current project. Write it in English and keep the English version complete.',
-    });
-
     dispatchInput({ type: 'CLEAR_VALUE' });
     setQueuedInput(null);
     setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
 
     try {
-      const flowChatManager = FlowChatManager.getInstance();
-      await flowChatManager.sendMessage(
-        initInstruction,
-        effectiveTargetSessionId,
-        initInstruction,
-        'Init'
-      );
-      onSendMessage?.(initInstruction);
+      await agentAPI.runInitAgentsMd({
+        sessionId: effectiveTargetSessionId,
+        workspacePath: effectiveTargetSession.workspacePath,
+        remoteConnectionId: effectiveTargetSession.remoteConnectionId,
+        remoteSshHost: effectiveTargetSession.remoteSshHost,
+      });
       dispatchInput({ type: 'DEACTIVATE' });
     } catch (error) {
       log.error('Failed to trigger /init', {
@@ -1544,7 +1539,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     effectiveTargetSession,
     effectiveTargetSessionId,
     inputState.value,
-    onSendMessage,
     setQueuedInput,
     t,
   ]);

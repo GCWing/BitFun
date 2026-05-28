@@ -502,7 +502,6 @@
     "initBusy": "请等待当前会话空闲后再使用 /init。",
     "initUsage": "请直接使用 /init，不要附加额外参数。",
     "initFailed": "初始化 AGENTS.md 失败",
-    "initPrompt": "请根据当前项目内容生成或更新 AGENTS.md",
     "deepreviewAction": "深度审核",
     "deepreviewNoSession": "当前没有可用于深度审核的会话",
     "deepreviewUsage": "请使用 /DeepReview，可附加聚焦说明，例如 /DeepReview 审核提交 abc123 的安全风险。",

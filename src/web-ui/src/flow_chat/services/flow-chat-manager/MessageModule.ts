@@ -29,8 +29,6 @@ import { pendingQueueManager } from './PendingQueueModule';
 
 const log = createLogger('MessageModule');
 
-const ONE_SHOT_AGENT_TYPES_FOR_SESSION = new Set(['Init']);
-
 function acpClientIdFromMode(mode: string | undefined): string | null {
   const value = mode?.trim();
   if (!value?.startsWith('acp:')) return null;
@@ -193,7 +191,6 @@ export async function sendMessage(
     if (
       !acpClientId &&
       agentType?.trim() &&
-      !ONE_SHOT_AGENT_TYPES_FOR_SESSION.has(currentAgentType) &&
       refreshedSession.mode !== currentAgentType
     ) {
       context.flowChatStore.updateSessionMode(sessionId, currentAgentType);

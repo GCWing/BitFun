@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next';
 import { DotMatrixArrowRightIcon } from './DotMatrixArrowRightIcon';
 import { Button, ConfirmDialog, Modal, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
-import { i18nService } from '@/infrastructure/i18n';
 import { aiExperienceConfigService } from '@/infrastructure/config/services/AIExperienceConfigService';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import {
@@ -16,6 +15,7 @@ import { useNavSceneStore } from '@/app/stores/navSceneStore';
 import { useApp } from '@/app/hooks/useApp';
 import { useGitBasicInfo } from '@/tools/git/hooks/useGitState';
 import { workspaceAPI } from '@/infrastructure/api';
+import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import { notificationService } from '@/shared/notification-system';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
 import { openMainSession } from '@/flow_chat/services/openBtwSession';
@@ -533,6 +533,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     setMenuOpen(false);
 
     try {
+      const preferredMode = workspace.workspaceKind === WorkspaceKind.Assistant ? 'Claw' : undefined;
       const sessionId = await flowChatManager.createChatSession(
         {
           workspacePath: workspace.rootPath,
@@ -543,7 +544,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
             ? { remoteSshHost: workspace.sshHost }
             : {}),
         },
-        'Init'
+        preferredMode
       );
 
       await openMainSession(sessionId, {
@@ -551,11 +552,16 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
         activateWorkspace: setActiveWorkspace,
       });
 
-      const initPrompt = i18nService.t('flow-chat:chatInput.initPrompt', {
-        defaultValue: 'Please generate or update AGENTS.md so it matches the current project. Write it in English and keep the English version complete.',
+      await agentAPI.runInitAgentsMd({
+        sessionId,
+        workspacePath: workspace.rootPath,
+        ...(isRemoteWorkspace(workspace) && workspace.connectionId
+          ? { remoteConnectionId: workspace.connectionId }
+          : {}),
+        ...(isRemoteWorkspace(workspace) && workspace.sshHost
+          ? { remoteSshHost: workspace.sshHost }
+          : {}),
       });
-
-      await flowChatManager.sendMessage(initPrompt, sessionId, initPrompt, 'Init');
     } catch (error) {
       notificationService.error(
         error instanceof Error ? error.message : t('nav.workspaces.initSessionFailed'),

@@ -168,6 +168,17 @@ pub struct EnsureAssistantBootstrapRequest {
     pub workspace_path: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RunInitAgentsMdRequest {
+    pub session_id: String,
+    pub workspace_path: Option<String>,
+    #[serde(default)]
+    pub remote_connection_id: Option<String>,
+    #[serde(default)]
+    pub remote_ssh_host: Option<String>,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EnsureAssistantBootstrapResponse {
@@ -720,13 +731,13 @@ pub async fn ensure_coordinator_session(
     )
     .await;
     let restore_result = if request.include_internal {
-        coordinator.restore_internal_session(&effective, session_id).await
+        coordinator
+            .restore_internal_session(&effective, session_id)
+            .await
     } else {
         coordinator.restore_session(&effective, session_id).await
     };
-    restore_result
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+    restore_result.map(|_| ()).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -897,6 +908,66 @@ pub async fn ensure_assistant_bootstrap(
         .map_err(|e| format!("Failed to ensure assistant bootstrap: {}", e))?;
 
     Ok(assistant_bootstrap_outcome_to_response(outcome))
+}
+
+#[tauri::command]
+pub async fn run_init_agents_md(
+    coordinator: State<'_, Arc<ConversationCoordinator>>,
+    scheduler: State<'_, Arc<DialogScheduler>>,
+    app_state: State<'_, AppState>,
+    request: RunInitAgentsMdRequest,
+) -> Result<StartDialogTurnResponse, String> {
+    let session_id = request.session_id.trim();
+    if session_id.is_empty() {
+        return Err("session_id is required".to_string());
+    }
+
+    if coordinator
+        .get_session_manager()
+        .get_session(session_id)
+        .is_none()
+    {
+        let workspace_path = request
+            .workspace_path
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| {
+                "workspace_path is required when the session is not loaded".to_string()
+            })?;
+        let effective = desktop_effective_session_storage_path(
+            &app_state,
+            workspace_path,
+            request.remote_connection_id.as_deref(),
+            request.remote_ssh_host.as_deref(),
+        )
+        .await;
+        coordinator
+            .restore_session(&effective, session_id)
+            .await
+            .map_err(|e| format!("Failed to restore session before running /init: {e}"))?;
+    }
+
+    let workspace_path = request
+        .workspace_path
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+
+    scheduler
+        .submit_init_agents_md(
+            session_id.to_string(),
+            workspace_path,
+            DialogSubmissionPolicy::for_source(DialogTriggerSource::DesktopUi),
+        )
+        .await
+        .map_err(|e| format!("Failed to run /init: {e}"))?;
+
+    Ok(StartDialogTurnResponse {
+        success: true,
+        message: "Init dialog turn started".to_string(),
+    })
 }
 
 fn is_blank_text(value: Option<&String>) -> bool {
@@ -1774,10 +1845,9 @@ mod tests {
 
     #[test]
     fn deserializes_set_subagent_timeout_disable_without_payload_field() {
-        let request: SetSubagentTimeoutRequest = serde_json::from_str(
-            r#"{"sessionId":"subagent-session","action":{"type":"Disable"}}"#,
-        )
-        .expect("disable action without payload should deserialize");
+        let request: SetSubagentTimeoutRequest =
+            serde_json::from_str(r#"{"sessionId":"subagent-session","action":{"type":"Disable"}}"#)
+                .expect("disable action without payload should deserialize");
         assert_eq!(request.session_id, "subagent-session");
         assert!(matches!(
             request.action,

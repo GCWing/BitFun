@@ -508,7 +508,6 @@
     "initBusy": "Wait until the session is idle before using /init.",
     "initUsage": "Use /init without extra arguments.",
     "initFailed": "AGENTS.md initialization failed",
-    "initPrompt": "Please generate or update AGENTS.md based on the current project content",
     "deepreviewAction": "Deep review",
     "deepreviewNoSession": "No active session for /DeepReview",
     "deepreviewUsage": "Use /DeepReview with optional focus text, for example /DeepReview review commit abc123 for security.",

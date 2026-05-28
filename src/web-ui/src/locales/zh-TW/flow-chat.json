@@ -502,7 +502,6 @@
     "initBusy": "請等待當前會話空閒後再使用 /init。",
     "initUsage": "請直接使用 /init，不要附加額外參數。",
     "initFailed": "初始化 AGENTS.md 失敗",
-    "initPrompt": "請根據當前項目內容生成或更新 AGENTS.md",
     "deepreviewAction": "深度審核",
     "deepreviewNoSession": "當前沒有可用於深度審核的會話",
     "deepreviewUsage": "請使用 /DeepReview，可附加聚焦說明，例如 /DeepReview 審核提交 abc123 的安全風險。",
