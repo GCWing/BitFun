@@ -2127,6 +2127,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             round_preempt: None,
             round_injection: None,
             recover_partial_on_cancel: false,
+            intent_evidence: None,
         };
         let session_max_tokens = session.config.max_context_tokens;
 
