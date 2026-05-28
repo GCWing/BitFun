@@ -695,6 +695,51 @@ const forbiddenContentRules = [
     ],
   },
   {
+    path: 'src/crates/core/src/agentic/subagent_runtime/mod.rs',
+    patterns: [
+      {
+        regex: /\bstruct\s+DelegationPolicy\b/,
+        message:
+          'core subagent runtime must not redefine DelegationPolicy; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\benum\s+SubagentContextMode\b/,
+        message:
+          'core subagent runtime must not redefine SubagentContextMode; use bitfun-runtime-ports',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/coordination/coordinator.rs',
+    patterns: [
+      {
+        regex: /\benum\s+DialogTriggerSource\b/,
+        message:
+          'core coordinator must not redefine DialogTriggerSource; use bitfun-runtime-ports',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/coordination/scheduler.rs',
+    patterns: [
+      {
+        regex: /\benum\s+DialogQueuePriority\b/,
+        message:
+          'core scheduler must not redefine DialogQueuePriority; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\bstruct\s+DialogSubmissionPolicy\b/,
+        message:
+          'core scheduler must not redefine DialogSubmissionPolicy; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\benum\s+DialogSubmitOutcome\b/,
+        message:
+          'core scheduler must not redefine DialogSubmitOutcome; use bitfun-runtime-ports',
+      },
+    ],
+  },
+  {
     path: 'src/crates/core/src/agentic/tools/file_read_state_runtime.rs',
     patterns: [
       {
@@ -1682,6 +1727,19 @@ const forbiddenContentRules = [
 
 const forbiddenContentUnderRules = [
   {
+    path: 'src/crates/core/src',
+    reason:
+      'core must use runtime-ports as the owner path for portable subagent contracts',
+    patterns: [
+      {
+        regex:
+          /crate::agentic::subagent_runtime(?:::|\s*::|::\{)(?:[^;\n]*\b(?:DelegationPolicy|SubagentContextMode)\b)/,
+        message:
+          'DelegationPolicy and SubagentContextMode must be imported from bitfun-runtime-ports, not the core compatibility re-export',
+      },
+    ],
+  },
+  {
     path: 'src/crates/product-domains/src',
     reason:
       'product-domains must not own IO/process/Git/AI/platform runtime behavior without an approved port/provider migration',
@@ -1840,6 +1898,128 @@ const requiredContentRules = [
       {
         regex: /map_filesystem_error/,
         message: 'core filesystem wrapper must map services-core errors at the compatibility boundary',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/session/session_manager.rs',
+    reason:
+      'core session manager must keep forked Task prompt-cache and existing-context turn baselines until session branch ownership migrates',
+    patterns: [
+      {
+        regex: /\bpub async fn clone_prompt_cache\b/,
+        message: 'missing prompt cache clone runtime entry point',
+      },
+      {
+        regex: /\bpub async fn start_dialog_turn_with_existing_context\b/,
+        message: 'missing existing-context dialog turn entry point',
+      },
+      {
+        regex: /\bstart_dialog_turn_with_existing_context_persists_turn_and_snapshot\b/,
+        message: 'missing existing-context dialog turn persistence regression',
+      },
+      {
+        regex: /\bclone_prompt_cache_copies_runtime_and_persisted_entries\b/,
+        message: 'missing prompt cache clone runtime/disk regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/pipeline/tool_pipeline.rs',
+    reason:
+      'core tool pipeline must keep latest-main truncation and per-tool denial behavior until tool runtime ownership migrates',
+    patterns: [
+      {
+        regex: /\bfn build_truncation_recovery_notice\b/,
+        message: 'missing tool-call truncation recovery notice helper',
+      },
+      {
+        regex: /\btruncation_notice_for_interactive_tools_does_not_claim_file_write\b/,
+        message: 'missing interactive-tool truncation recovery regression',
+      },
+      {
+        regex: /\btruncation_notice_for_write_tools_keeps_write_continuation_guidance\b/,
+        message: 'missing write-tool truncation recovery regression',
+      },
+      {
+        regex: /\bdenied_tool_messages\b/,
+        message: 'missing per-tool denial message propagation',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/restrictions.rs',
+    reason:
+      'core tool restrictions facade must preserve per-tool denial messages while runtime restrictions live in agent-tools',
+    patterns: [
+      {
+        regex: /\bdenied_tool_messages\b/,
+        message: 'missing per-tool denial message field propagation',
+      },
+      {
+        regex: /\bcustom_deny_message_overrides_generic_runtime_error\b/,
+        message: 'missing custom deny message regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/tool_result_storage.rs',
+    reason:
+      'core tool-result storage must keep explicit file flush until runtime artifact ownership migrates',
+    patterns: [
+      {
+        regex: /\basync fn write_once\b/,
+        message: 'missing single-write persistence helper',
+      },
+      {
+        regex: /file\.flush\(\)\.await/,
+        message: 'missing explicit persisted tool-result flush',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services-integrations/src/mcp/server/connection.rs',
+    reason:
+      'services-integrations MCP connection must keep initialize-scoped timeout and channel-close cleanup until MCP owner migration is reviewed',
+    patterns: [
+      {
+        regex: /\bsend_request_with_id\b/,
+        message: 'missing stable local JSON-RPC request id path',
+      },
+      {
+        regex: /\binitialize_timeout\b/,
+        message: 'missing initialize-scoped timeout',
+      },
+      {
+        regex: /notifications\/initialized/,
+        message: 'missing MCP initialized notification',
+      },
+      {
+        regex: /\bpending\.clear\(\)/,
+        message: 'missing pending request waiter drain on channel close',
+      },
+      {
+        regex: /\blocal_tool_calls_do_not_inherit_initialize_timeout\b/,
+        message: 'missing local tool request timeout-scope regression',
+      },
+      {
+        regex: /\blocal_initialize_uses_initialize_timeout\b/,
+        message: 'missing local initialize timeout regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services-integrations/src/mcp/protocol/transport.rs',
+    reason:
+      'services-integrations MCP local transport must keep explicit request ids and stdin flush semantics',
+    patterns: [
+      {
+        regex: /\bpub async fn send_request_with_id\b/,
+        message: 'missing explicit JSON-RPC request id send path',
+      },
+      {
+        regex: /\.flush\(\)\s*\.await/,
+        message: 'missing local MCP stdin flush',
       },
     ],
   },
@@ -2031,7 +2211,7 @@ const requiredContentRules = [
   {
     path: 'src/crates/runtime-ports/src/lib.rs',
     reason:
-      'runtime-ports must keep remote runtime boundary contracts DTO/trait-only',
+      'runtime-ports must keep remote and subagent runtime boundary contracts DTO/trait-only',
     patterns: [
       {
         regex: /\bpub trait AgentTurnCancellationPort\b/,
@@ -2048,6 +2228,65 @@ const requiredContentRules = [
       {
         regex: /\bpub fn remote_image\b/,
         message: 'missing remote image attachment helper contract',
+      },
+      {
+        regex: /\bpub type DialogTriggerSource = AgentSubmissionSource\b/,
+        message: 'missing dialog trigger source compatibility contract',
+      },
+      {
+        regex: /\bdialog_trigger_source_reuses_agent_submission_source_contract\b/,
+        message: 'missing dialog trigger source alias regression',
+      },
+      {
+        regex: /\bpub enum DialogQueuePriority\b/,
+        message: 'missing dialog queue priority contract',
+      },
+      {
+        regex: /\bpub struct DialogSubmissionPolicy\b/,
+        message: 'missing dialog submission policy contract',
+      },
+      {
+        regex: /\bdialog_submission_policy_preserves_current_surface_queue_defaults\b/,
+        message: 'missing dialog submission policy regression',
+      },
+      {
+        regex: /\bpub enum DialogSubmitOutcome\b/,
+        message: 'missing dialog submit outcome contract',
+      },
+      {
+        regex: /\bdialog_submit_outcome_preserves_started_and_queued_fields\b/,
+        message: 'missing dialog submit outcome regression',
+      },
+      {
+        regex: /\bpub struct DelegationPolicy\b/,
+        message: 'missing delegation policy contract',
+      },
+      {
+        regex: /\bpub enum SubagentContextMode\b/,
+        message: 'missing subagent context mode contract',
+      },
+      {
+        regex: /\bdelegation_policy_child_blocks_recursive_spawn_without_losing_depth\b/,
+        message: 'missing delegation policy contract regression',
+      },
+      {
+        regex: /\bsubagent_context_mode_preserves_fork_wire_value\b/,
+        message: 'missing subagent context mode contract regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/subagent_runtime/mod.rs',
+    reason:
+      'core subagent runtime must preserve legacy import path while runtime-ports owns portable subagent contracts',
+    patterns: [
+      {
+        regex: /pub\(crate\) use bitfun_runtime_ports::\{DelegationPolicy, SubagentContextMode\};/,
+        message: 'missing core compatibility re-export for subagent runtime contracts',
+      },
+      {
+        regex: /pub\(crate\) mod queue_timing;/,
+        message: 'queue timing must remain core-owned until it has a reviewed non-DTO owner',
       },
     ],
   },
@@ -2468,6 +2707,22 @@ const requiredContentRules = [
       {
         regex: /agent submission port does not yet accept generic attachments/,
         message: 'missing generic attachment guard on agent submission port',
+      },
+      {
+        regex: /pub use bitfun_runtime_ports::DialogTriggerSource;/,
+        message: 'missing dialog trigger source compatibility re-export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/coordination/scheduler.rs',
+    reason:
+      'core scheduler must preserve legacy submission policy import path while runtime-ports owns portable dialog policy contracts',
+    patterns: [
+      {
+        regex:
+          /pub use bitfun_runtime_ports::\{DialogQueuePriority, DialogSubmissionPolicy, DialogSubmitOutcome\};/,
+        message: 'missing dialog submission policy compatibility re-export',
       },
     ],
   },
@@ -3770,8 +4025,20 @@ const requiredContentRules = [
   {
     path: 'src/crates/core/src/agentic/tools/implementations/task_tool.rs',
     reason:
-      'core Task tool must continue owning background subagent launch semantics until a reviewed agent-runtime port preserves delivery behavior',
+      'core Task tool must continue owning fork-aware background subagent launch semantics until a reviewed agent-runtime port preserves delivery behavior',
     patterns: [
+      {
+        regex: /\bfork_context\b/,
+        message: 'missing Task fork_context schema and validation surface',
+      },
+      {
+        regex: /\bSubagentContextMode::Fork\b/,
+        message: 'missing forked subagent context mode path',
+      },
+      {
+        regex: /delegation_policy\(\)\.spawn_child\(\)/,
+        message: 'missing child delegation policy propagation',
+      },
       {
         regex: /"run_in_background"/,
         message: 'missing Task run_in_background schema flag',
@@ -3785,8 +4052,16 @@ const requiredContentRules = [
         message: 'missing background task id result contract',
       },
       {
-        regex: /Background subagent/,
-        message: 'missing assistant-visible background subagent acknowledgement',
+        regex: /Background \{\} started successfully/,
+        message: 'missing assistant-visible background start acknowledgement',
+      },
+      {
+        regex: /<background_task status=\\"started\\"/,
+        message: 'missing structured background task start acknowledgement',
+      },
+      {
+        regex: /\bbackground_subagent_start_acknowledgement_keeps_structured_task_marker\b/,
+        message: 'missing background task start acknowledgement regression',
       },
     ],
   },
@@ -5834,6 +6109,62 @@ function runManifestParserSelfTest() {
       throw new Error(`core tool registry boundary rule must forbid contract: ${contract}`);
     }
   }
+  const coreSubagentRuntimeRule = forbiddenContentRules.find(
+    (rule) => rule.path === 'src/crates/core/src/agentic/subagent_runtime/mod.rs',
+  );
+  if (!coreSubagentRuntimeRule) {
+    throw new Error('missing core subagent runtime boundary rule');
+  }
+  const coreSubagentRuntimeRuleText = coreSubagentRuntimeRule.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n');
+  for (const contract of ['DelegationPolicy', 'SubagentContextMode']) {
+    if (!coreSubagentRuntimeRuleText.includes(contract)) {
+      throw new Error(`core subagent runtime boundary rule must forbid contract: ${contract}`);
+    }
+  }
+  const coreCoordinatorRule = forbiddenContentRules.find(
+    (rule) => rule.path === 'src/crates/core/src/agentic/coordination/coordinator.rs',
+  );
+  if (!coreCoordinatorRule) {
+    throw new Error('missing core coordinator boundary rule');
+  }
+  const coreCoordinatorRuleText = coreCoordinatorRule.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n');
+  if (!coreCoordinatorRuleText.includes('DialogTriggerSource')) {
+    throw new Error('core coordinator boundary rule must forbid DialogTriggerSource redefinition');
+  }
+  const coreSchedulerRule = forbiddenContentRules.find(
+    (rule) => rule.path === 'src/crates/core/src/agentic/coordination/scheduler.rs',
+  );
+  if (!coreSchedulerRule) {
+    throw new Error('missing core scheduler boundary rule');
+  }
+  const coreSchedulerRuleText = coreSchedulerRule.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n');
+  for (const contract of ['DialogQueuePriority', 'DialogSubmissionPolicy', 'DialogSubmitOutcome']) {
+    if (!coreSchedulerRuleText.includes(contract)) {
+      throw new Error(`core scheduler boundary rule must forbid contract: ${contract}`);
+    }
+  }
+  const coreSubagentRuntimeOwnerPathRule = forbiddenContentUnderRules.find(
+    (rule) => rule.path === 'src/crates/core/src',
+  );
+  if (!coreSubagentRuntimeOwnerPathRule) {
+    throw new Error('missing core subagent runtime owner-path boundary rule');
+  }
+  const coreSubagentRuntimeOwnerPathRuleText = coreSubagentRuntimeOwnerPathRule.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n');
+  for (const contract of ['DelegationPolicy', 'SubagentContextMode']) {
+    if (!coreSubagentRuntimeOwnerPathRuleText.includes(contract)) {
+      throw new Error(
+        `core subagent runtime owner-path rule must forbid compatibility import: ${contract}`,
+      );
+    }
+  }
 
   const productDomainProfile = dependencyProfileRules.find(
     (rule) => rule.crateName === 'product-domains',
@@ -5984,7 +6315,68 @@ function runManifestParserSelfTest() {
         'RemoteControlStatePort',
         'RuntimeEventSink',
         'remote_image',
+        'DialogTriggerSource',
+        'dialog_trigger_source_reuses_agent_submission_source_contract',
+        'DialogQueuePriority',
+        'DialogSubmissionPolicy',
+        'dialog_submission_policy_preserves_current_surface_queue_defaults',
+        'DialogSubmitOutcome',
+        'dialog_submit_outcome_preserves_started_and_queued_fields',
+        'DelegationPolicy',
+        'SubagentContextMode',
+        'delegation_policy_child_blocks_recursive_spawn_without_losing_depth',
+        'subagent_context_mode_preserves_fork_wire_value',
       ],
+    },
+    {
+      path: 'src/crates/core/src/agentic/subagent_runtime/mod.rs',
+      contracts: [
+        'bitfun_runtime_ports',
+        'DelegationPolicy',
+        'SubagentContextMode',
+        'queue_timing',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/agentic/session/session_manager.rs',
+      contracts: [
+        'clone_prompt_cache',
+        'start_dialog_turn_with_existing_context',
+        'start_dialog_turn_with_existing_context_persists_turn_and_snapshot',
+        'clone_prompt_cache_copies_runtime_and_persisted_entries',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/agentic/tools/pipeline/tool_pipeline.rs',
+      contracts: [
+        'build_truncation_recovery_notice',
+        'truncation_notice_for_interactive_tools_does_not_claim_file_write',
+        'truncation_notice_for_write_tools_keeps_write_continuation_guidance',
+        'denied_tool_messages',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/agentic/tools/restrictions.rs',
+      contracts: ['denied_tool_messages', 'custom_deny_message_overrides_generic_runtime_error'],
+    },
+    {
+      path: 'src/crates/core/src/agentic/tools/tool_result_storage.rs',
+      contracts: ['write_once', 'file\\.flush\\(\\)\\.await'],
+    },
+    {
+      path: 'src/crates/services-integrations/src/mcp/server/connection.rs',
+      contracts: [
+        'send_request_with_id',
+        'initialize_timeout',
+        'notifications/initialized',
+        'pending\\.clear\\(\\)',
+        'local_tool_calls_do_not_inherit_initialize_timeout',
+        'local_initialize_uses_initialize_timeout',
+      ],
+    },
+    {
+      path: 'src/crates/services-integrations/src/mcp/protocol/transport.rs',
+      contracts: ['send_request_with_id', '\\.flush\\(\\)\\s*\\.await'],
     },
     {
       path: 'src/crates/agent-tools/src/framework.rs',
@@ -6095,7 +6487,12 @@ function runManifestParserSelfTest() {
         'AgentTurnCancellationPort',
         'RemoteControlStatePort',
         'generic attachments',
+        'DialogTriggerSource',
       ],
+    },
+    {
+      path: 'src/crates/core/src/agentic/coordination/scheduler.rs',
+      contracts: ['DialogQueuePriority', 'DialogSubmissionPolicy', 'DialogSubmitOutcome'],
     },
     {
       path: 'src/crates/core/src/service_agent_runtime.rs',
@@ -6410,7 +6807,17 @@ function runManifestParserSelfTest() {
     },
     {
       path: 'src/crates/core/src/agentic/tools/implementations/task_tool.rs',
-      contracts: ['run_in_background', 'start_background_subagent', 'background_task_id', 'Background subagent'],
+      contracts: [
+        'fork_context',
+        'SubagentContextMode::Fork',
+        'delegation_policy\\(\\)\\.spawn_child\\(\\)',
+        'run_in_background',
+        'start_background_subagent',
+        'background_task_id',
+        'Background \\{\\} started successfully',
+        '<background_task status=\\\\"started\\\\"',
+        'background_subagent_start_acknowledgement_keeps_structured_task_marker',
+      ],
     },
     {
       path: 'src/crates/core/src/agentic/coordination/scheduler.rs',

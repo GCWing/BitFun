@@ -28,7 +28,6 @@ use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::round_preempt::{DialogRoundInjectionSource, DialogRoundPreemptSource};
 use crate::agentic::session::SessionManager;
 use crate::agentic::side_question::build_btw_user_input;
-use crate::agentic::subagent_runtime::{DelegationPolicy, SubagentContextMode};
 use crate::agentic::tools::pipeline::{SubagentParentInfo, ToolPipeline};
 use crate::agentic::tools::ToolRuntimeRestrictions;
 use crate::agentic::WorkspaceBinding;
@@ -42,6 +41,7 @@ use crate::service::workspace::{
     get_global_workspace_service, WorkspaceCreateOptions, WorkspaceKind,
 };
 use crate::util::errors::{BitFunError, BitFunResult};
+use bitfun_runtime_ports::{DelegationPolicy, SubagentContextMode};
 use dashmap::DashMap;
 use log::{debug, error, info, warn};
 use std::collections::{HashMap, HashSet};
@@ -203,16 +203,7 @@ struct HiddenSubagentExecutionRequest {
     prompt_cache_source_session_id: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DialogTriggerSource {
-    DesktopUi,
-    DesktopApi,
-    AgentSession,
-    ScheduledJob,
-    RemoteRelay,
-    Bot,
-    Cli,
-}
+pub use bitfun_runtime_ports::DialogTriggerSource;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AssistantBootstrapSkipReason {
@@ -5022,28 +5013,7 @@ impl bitfun_runtime_ports::AgentSubmissionPort for ConversationCoordinator {
 
         let turn_id = resolve_agent_submission_turn_id(&request);
 
-        let trigger_source = match request
-            .source
-            .unwrap_or(bitfun_runtime_ports::AgentSubmissionSource::Bot)
-        {
-            bitfun_runtime_ports::AgentSubmissionSource::DesktopUi => {
-                DialogTriggerSource::DesktopUi
-            }
-            bitfun_runtime_ports::AgentSubmissionSource::DesktopApi => {
-                DialogTriggerSource::DesktopApi
-            }
-            bitfun_runtime_ports::AgentSubmissionSource::AgentSession => {
-                DialogTriggerSource::AgentSession
-            }
-            bitfun_runtime_ports::AgentSubmissionSource::ScheduledJob => {
-                DialogTriggerSource::ScheduledJob
-            }
-            bitfun_runtime_ports::AgentSubmissionSource::RemoteRelay => {
-                DialogTriggerSource::RemoteRelay
-            }
-            bitfun_runtime_ports::AgentSubmissionSource::Bot => DialogTriggerSource::Bot,
-            bitfun_runtime_ports::AgentSubmissionSource::Cli => DialogTriggerSource::Cli,
-        };
+        let trigger_source = request.source.unwrap_or(DialogTriggerSource::Bot);
         let user_message_metadata = if request.metadata.is_empty() {
             None
         } else {

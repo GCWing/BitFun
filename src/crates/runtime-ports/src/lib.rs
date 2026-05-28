@@ -89,6 +89,68 @@ pub enum AgentSubmissionSource {
     Cli,
 }
 
+pub type DialogTriggerSource = AgentSubmissionSource;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DialogQueuePriority {
+    Low = 0,
+    Normal = 1,
+    High = 2,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DialogSubmissionPolicy {
+    pub trigger_source: DialogTriggerSource,
+    pub queue_priority: DialogQueuePriority,
+    pub skip_tool_confirmation: bool,
+}
+
+impl DialogSubmissionPolicy {
+    pub const fn new(
+        trigger_source: DialogTriggerSource,
+        queue_priority: DialogQueuePriority,
+        skip_tool_confirmation: bool,
+    ) -> Self {
+        Self {
+            trigger_source,
+            queue_priority,
+            skip_tool_confirmation,
+        }
+    }
+
+    pub const fn for_source(trigger_source: DialogTriggerSource) -> Self {
+        let (queue_priority, skip_tool_confirmation) = match trigger_source {
+            DialogTriggerSource::AgentSession => (DialogQueuePriority::Low, true),
+            DialogTriggerSource::ScheduledJob => (DialogQueuePriority::Low, true),
+            DialogTriggerSource::DesktopUi
+            | DialogTriggerSource::DesktopApi
+            | DialogTriggerSource::Cli => (DialogQueuePriority::Normal, false),
+            DialogTriggerSource::RemoteRelay | DialogTriggerSource::Bot => {
+                (DialogQueuePriority::Normal, true)
+            }
+        };
+        Self::new(trigger_source, queue_priority, skip_tool_confirmation)
+    }
+
+    pub const fn with_queue_priority(mut self, queue_priority: DialogQueuePriority) -> Self {
+        self.queue_priority = queue_priority;
+        self
+    }
+
+    pub const fn with_skip_tool_confirmation(mut self, skip_tool_confirmation: bool) -> Self {
+        self.skip_tool_confirmation = skip_tool_confirmation;
+        self
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DialogSubmitOutcome {
+    Started { session_id: String, turn_id: String },
+    Queued { session_id: String, turn_id: String },
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentInputAttachment {
@@ -296,6 +358,52 @@ pub trait SessionTranscriptReader: Send + Sync {
     ) -> PortResult<SessionTranscript>;
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct DelegationPolicy {
+    pub allow_subagent_spawn: bool,
+    pub nesting_depth: u8,
+}
+
+impl Default for DelegationPolicy {
+    fn default() -> Self {
+        Self::top_level()
+    }
+}
+
+impl DelegationPolicy {
+    pub fn top_level() -> Self {
+        Self {
+            allow_subagent_spawn: true,
+            nesting_depth: 0,
+        }
+    }
+
+    pub fn spawn_child(self) -> Self {
+        Self {
+            allow_subagent_spawn: false,
+            nesting_depth: self.nesting_depth.saturating_add(1),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SubagentContextMode {
+    #[default]
+    Fresh,
+    Fork,
+}
+
+impl SubagentContextMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Fresh => "fresh",
+            Self::Fork => "fork",
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -344,6 +452,54 @@ mod tests {
 
         assert_eq!(json["source"], "remote_relay");
         assert!(json.get("turnId").is_none());
+    }
+
+    #[test]
+    fn dialog_trigger_source_reuses_agent_submission_source_contract() {
+        let json = serde_json::to_value(DialogTriggerSource::Cli)
+            .expect("serialize dialog trigger source");
+
+        assert_eq!(json, serde_json::json!("cli"));
+    }
+
+    #[test]
+    fn dialog_submission_policy_preserves_current_surface_queue_defaults() {
+        let remote = DialogSubmissionPolicy::for_source(DialogTriggerSource::RemoteRelay);
+        assert_eq!(remote.queue_priority, DialogQueuePriority::Normal);
+        assert!(remote.skip_tool_confirmation);
+
+        let bot = DialogSubmissionPolicy::for_source(DialogTriggerSource::Bot);
+        assert_eq!(bot.queue_priority, DialogQueuePriority::Normal);
+        assert!(bot.skip_tool_confirmation);
+
+        let agent_session = DialogSubmissionPolicy::for_source(DialogTriggerSource::AgentSession);
+        assert_eq!(agent_session.queue_priority, DialogQueuePriority::Low);
+        assert!(agent_session.skip_tool_confirmation);
+
+        let cli = DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli);
+        assert_eq!(cli.queue_priority, DialogQueuePriority::Normal);
+        assert!(!cli.skip_tool_confirmation);
+    }
+
+    #[test]
+    fn dialog_submit_outcome_preserves_started_and_queued_fields() {
+        let started = DialogSubmitOutcome::Started {
+            session_id: "session_1".to_string(),
+            turn_id: "turn_1".to_string(),
+        };
+        let queued = DialogSubmitOutcome::Queued {
+            session_id: "session_1".to_string(),
+            turn_id: "turn_2".to_string(),
+        };
+
+        assert_eq!(
+            started,
+            DialogSubmitOutcome::Started {
+                session_id: "session_1".to_string(),
+                turn_id: "turn_1".to_string(),
+            }
+        );
+        assert_ne!(started, queued);
     }
 
     #[test]
@@ -467,6 +623,31 @@ mod tests {
         assert_eq!(json["inputSchema"]["type"], "object");
         assert_eq!(json["providerId"], "provider-a");
         assert!(json.get("provider_id").is_none());
+    }
+
+    #[test]
+    fn subagent_context_mode_preserves_fork_wire_value() {
+        assert_eq!(SubagentContextMode::default(), SubagentContextMode::Fresh);
+        assert_eq!(SubagentContextMode::Fresh.as_str(), "fresh");
+        assert_eq!(SubagentContextMode::Fork.as_str(), "fork");
+
+        let json = serde_json::to_value(SubagentContextMode::Fork)
+            .expect("serialize subagent context mode");
+
+        assert_eq!(json, serde_json::json!("fork"));
+    }
+
+    #[test]
+    fn delegation_policy_child_blocks_recursive_spawn_without_losing_depth() {
+        let top_level = DelegationPolicy::top_level();
+        assert!(top_level.allow_subagent_spawn);
+        assert_eq!(top_level.nesting_depth, 0);
+
+        let child = top_level.spawn_child();
+
+        assert!(!child.allow_subagent_spawn);
+        assert_eq!(child.nesting_depth, 1);
+        assert_eq!(child.spawn_child().nesting_depth, 2);
     }
 
     #[test]

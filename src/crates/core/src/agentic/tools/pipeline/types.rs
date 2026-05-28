@@ -3,10 +3,10 @@
 use crate::agentic::core::{ToolCall, ToolExecutionState};
 use crate::agentic::events::SubagentParentInfo as EventSubagentParentInfo;
 use crate::agentic::round_preempt::DialogRoundInjectionInterrupt;
-use crate::agentic::subagent_runtime::DelegationPolicy;
 use crate::agentic::tools::ToolRuntimeRestrictions;
 use crate::agentic::workspace::WorkspaceServices;
 use crate::agentic::WorkspaceBinding;
+use bitfun_runtime_ports::DelegationPolicy;
 use std::collections::HashMap;
 use std::time::SystemTime;
 

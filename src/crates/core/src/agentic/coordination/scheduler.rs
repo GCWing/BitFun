@@ -32,65 +32,7 @@ use uuid::Uuid;
 
 const MAX_QUEUE_DEPTH: usize = 20;
 
-/// Result of [`DialogScheduler::submit`]: whether this message began executing immediately
-/// or was placed in the per-session queue.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum DialogSubmitOutcome {
-    Started { session_id: String, turn_id: String },
-    Queued { session_id: String, turn_id: String },
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum DialogQueuePriority {
-    Low = 0,
-    Normal = 1,
-    High = 2,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct DialogSubmissionPolicy {
-    pub trigger_source: DialogTriggerSource,
-    pub queue_priority: DialogQueuePriority,
-    pub skip_tool_confirmation: bool,
-}
-
-impl DialogSubmissionPolicy {
-    pub const fn new(
-        trigger_source: DialogTriggerSource,
-        queue_priority: DialogQueuePriority,
-        skip_tool_confirmation: bool,
-    ) -> Self {
-        Self {
-            trigger_source,
-            queue_priority,
-            skip_tool_confirmation,
-        }
-    }
-
-    pub const fn for_source(trigger_source: DialogTriggerSource) -> Self {
-        let (queue_priority, skip_tool_confirmation) = match trigger_source {
-            DialogTriggerSource::AgentSession => (DialogQueuePriority::Low, true),
-            DialogTriggerSource::ScheduledJob => (DialogQueuePriority::Low, true),
-            DialogTriggerSource::DesktopUi
-            | DialogTriggerSource::DesktopApi
-            | DialogTriggerSource::Cli => (DialogQueuePriority::Normal, false),
-            DialogTriggerSource::RemoteRelay | DialogTriggerSource::Bot => {
-                (DialogQueuePriority::Normal, true)
-            }
-        };
-        Self::new(trigger_source, queue_priority, skip_tool_confirmation)
-    }
-
-    pub const fn with_queue_priority(mut self, queue_priority: DialogQueuePriority) -> Self {
-        self.queue_priority = queue_priority;
-        self
-    }
-
-    pub const fn with_skip_tool_confirmation(mut self, skip_tool_confirmation: bool) -> Self {
-        self.skip_tool_confirmation = skip_tool_confirmation;
-        self
-    }
-}
+pub use bitfun_runtime_ports::{DialogQueuePriority, DialogSubmissionPolicy, DialogSubmitOutcome};
 
 #[derive(Debug, Clone)]
 pub struct AgentSessionReplyRoute {

@@ -1854,7 +1854,7 @@ mod tests {
             model_name: "test-model".to_string(),
             agent_type: "test-agent".to_string(),
             context_vars: HashMap::new(),
-            delegation_policy: crate::agentic::subagent_runtime::DelegationPolicy::top_level(),
+            delegation_policy: bitfun_runtime_ports::DelegationPolicy::top_level(),
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
             steering_interrupt: None,
             cancellation_token: CancellationToken::new(),
