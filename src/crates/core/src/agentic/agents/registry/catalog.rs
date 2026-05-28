@@ -2,10 +2,10 @@ use super::types::AgentCategory;
 use super::visibility::SubagentVisibilityPolicy;
 use crate::agentic::agents::{
     Agent, AgenticMode, ArchitectureReviewerAgent, BusinessLogicReviewerAgent, ClawMode,
-    CodeReviewAgent, ComputerUseMode, CoworkMode, DebugMode, DeepResearchMode, DeepReviewAgent,
-    ExploreAgent, FileFinderAgent, FrontendReviewerAgent, GeneralPurposeAgent, GenerateDocAgent,
-    InitAgent, MultitaskMode, PerformanceReviewerAgent, PlanMode, ResearchSpecialistAgent,
-    ReviewFixerAgent, ReviewJudgeAgent, SecurityReviewerAgent, TeamMode,
+    CodeReviewAgent, CoworkMode, DebugMode, DeepResearchMode, DeepReviewAgent, ExploreAgent,
+    FileFinderAgent, FrontendReviewerAgent, GeneralPurposeAgent, GenerateDocAgent, InitAgent,
+    MultitaskMode, PerformanceReviewerAgent, PlanMode, ResearchSpecialistAgent, ReviewFixerAgent,
+    ReviewJudgeAgent, SecurityReviewerAgent, TeamMode,
 };
 use std::sync::Arc;
 
@@ -58,11 +58,11 @@ pub fn builtin_agent_specs() -> Vec<BuiltinAgentSpec> {
             category: AgentCategory::Mode,
             visibility_policy: SubagentVisibilityPolicy::default(),
         },
-        BuiltinAgentSpec {
-            factory: || Arc::new(ComputerUseMode::new()),
-            category: AgentCategory::SubAgent,
-            visibility_policy: SubagentVisibilityPolicy::restricted(["Claw", "Team"]),
-        },
+        // BuiltinAgentSpec {
+        //     factory: || Arc::new(ComputerUseMode::new()),
+        //     category: AgentCategory::SubAgent,
+        //     visibility_policy: SubagentVisibilityPolicy::restricted(["Claw", "Team"]),
+        // },
         BuiltinAgentSpec {
             factory: || Arc::new(ExploreAgent::new()),
             category: AgentCategory::SubAgent,
