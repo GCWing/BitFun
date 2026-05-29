@@ -3017,12 +3017,28 @@ const requiredContentRules = [
         message: 'missing remote session model id normalization regression hook',
       },
       {
+        regex: /\bnormalize_remote_session_model_id_contract\b/,
+        message: 'missing remote session model id owner delegation',
+      },
+      {
         regex: /\bfn normalize_remote_model_selection\b/,
         message: 'missing remote model selection normalization regression hook',
       },
       {
+        regex: /\bnormalize_remote_model_selection_contract\b/,
+        message: 'missing remote model selection owner delegation',
+      },
+      {
         regex: /\bfn remote_chat_messages_from_turns\b/,
         message: 'missing remote chat history conversion owner adapter',
+      },
+      {
+        regex: /\bRemoteChatHistoryTurn\b/,
+        message: 'missing remote chat history owner DTO projection',
+      },
+      {
+        regex: /\bbuild_remote_chat_messages\b/,
+        message: 'missing remote chat history assembly delegation',
       },
       {
         regex: /\bfn strip_remote_user_input_tags\b/,
@@ -3212,6 +3228,22 @@ const requiredContentRules = [
         message: 'missing remote dialog orchestration owner',
       },
       {
+        regex: /\bpub struct RemoteChatHistoryTurn\b/,
+        message: 'missing remote chat history turn DTO',
+      },
+      {
+        regex: /\bpub struct RemoteChatHistoryRound\b/,
+        message: 'missing remote chat history round DTO',
+      },
+      {
+        regex: /\bpub struct RemoteChatHistoryToolItem\b/,
+        message: 'missing remote chat history tool item DTO',
+      },
+      {
+        regex: /\bpub fn build_remote_chat_messages\b/,
+        message: 'missing remote chat history assembly owner',
+      },
+      {
         regex: /\bpub const REMOTE_FILE_MAX_READ_BYTES\b/,
         message: 'missing remote file max-read policy',
       },
@@ -3336,6 +3368,18 @@ const requiredContentRules = [
         message: 'missing remote model catalog poll delta',
       },
       {
+        regex: /\bpub fn normalize_remote_session_model_id\b/,
+        message: 'missing remote session model normalization policy',
+      },
+      {
+        regex: /\bpub fn normalize_remote_model_selection\b/,
+        message: 'missing remote model selection policy',
+      },
+      {
+        regex: /\bpub fn remote_model_selection_needs_config\b/,
+        message: 'missing remote model selection config-gate policy',
+      },
+      {
         regex: /\bpub enum RemoteCommand\b/,
         message: 'missing remote command wire contract',
       },
@@ -3382,6 +3426,10 @@ const requiredContentRules = [
         message: 'missing remote model catalog delta contract test',
       },
       {
+        regex: /\bremote_connect_model_selection_policy_owns_alias_and_config_reference_rules\b/,
+        message: 'missing remote model selection policy contract test',
+      },
+      {
         regex: /\bremote_connect_poll_helpers_preserve_delta_and_completion_policy\b/,
         message: 'missing remote poll helper contract test',
       },
@@ -3412,6 +3460,14 @@ const requiredContentRules = [
       {
         regex: /\bremote_connect_dialog_runtime_keeps_legacy_restore_failure_tolerance\b/,
         message: 'missing restore failure tolerance test',
+      },
+      {
+        regex: /\bremote_chat_history_assembly_preserves_message_shape_and_item_order\b/,
+        message: 'missing remote chat history assembly shape/order test',
+      },
+      {
+        regex: /\bremote_chat_history_assembly_skips_in_progress_assistant_history\b/,
+        message: 'missing remote chat history in-progress guard test',
       },
       {
         regex: /\bremote_connect_file_transfer_policy_preserves_limits_and_chunk_ranges\b/,
@@ -6899,8 +6955,12 @@ function runManifestParserSelfTest() {
         'load_remote_model_catalog',
         'update_remote_session_model',
         'normalize_remote_session_model_id',
+        'normalize_remote_session_model_id_contract',
         'normalize_remote_model_selection',
+        'normalize_remote_model_selection_contract',
         'remote_chat_messages_from_turns',
+        'RemoteChatHistoryTurn',
+        'build_remote_chat_messages',
         'strip_remote_user_input_tags',
         'compress_remote_chat_data_url_for_mobile',
         'load_remote_chat_messages',
@@ -6944,6 +7004,10 @@ function runManifestParserSelfTest() {
         'RemoteCancelTaskRequest',
         'RemoteCancelRuntimeHost',
         'cancel_remote_task',
+        'RemoteChatHistoryTurn',
+        'RemoteChatHistoryRound',
+        'RemoteChatHistoryToolItem',
+        'build_remote_chat_messages',
         'REMOTE_FILE_MAX_READ_BYTES',
         'REMOTE_FILE_MAX_CHUNK_BYTES',
         'resolve_remote_file_chunk_range',
@@ -6961,6 +7025,9 @@ function runManifestParserSelfTest() {
         'RemoteModelConfig',
         'RemoteModelCatalog',
         'RemoteModelCatalogPollDelta',
+        'normalize_remote_session_model_id',
+        'normalize_remote_model_selection',
+        'remote_model_selection_needs_config',
         'RemoteCommand',
         'RemoteResponse',
         'should_send_remote_model_catalog',
@@ -6976,10 +7043,13 @@ function runManifestParserSelfTest() {
         'remote_connect_command_wire_shape_lives_in_owner_contract',
         'remote_connect_response_wire_shape_lives_in_owner_contract',
         'remote_connect_model_catalog_delta_preserves_poll_invalidation_policy',
+        'remote_connect_model_selection_policy_owns_alias_and_config_reference_rules',
         'remote_connect_poll_helpers_preserve_delta_and_completion_policy',
         'remote_connect_image_context_policy_preserves_legacy_fallback_shape',
         'remote_connect_image_context_policy_prefers_explicit_contexts',
         'remote_connect_cancel_and_restore_policy_preserve_runtime_decisions',
+        'remote_chat_history_assembly_preserves_message_shape_and_item_order',
+        'remote_chat_history_assembly_skips_in_progress_assistant_history',
         'remote_connect_file_transfer_policy_preserves_limits_and_chunk_ranges',
         'remote_connect_file_transfer_policy_preserves_name_fallback',
         'remote_connect_tracker_keeps_finished_turn_snapshot_until_persistence_finalizes',

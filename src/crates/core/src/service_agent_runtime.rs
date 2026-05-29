@@ -11,19 +11,24 @@ use bitfun_runtime_ports::{
     RemoteControlStateSnapshot,
 };
 use bitfun_services_integrations::remote_connect::{
-    ChatImageAttachment, ChatMessage, ChatMessageItem, RemoteCancelRuntimeHost,
-    RemoteConnectSubmissionSource, RemoteDefaultModelsConfig, RemoteDialogQueuePriority,
-    RemoteDialogResolvedSubmission, RemoteDialogRuntimeHost, RemoteDialogSubmissionPolicy,
-    RemoteDialogSubmitOutcome, RemoteImageContext, RemoteImageContextAdapter, RemoteModelCatalog,
-    RemoteModelConfig, RemoteSessionStateTracker, RemoteSessionTrackerHost,
-    RemoteTerminalPrewarmRequest, RemoteToolStatus, RemoteWorkspaceFileRuntimeHost,
+    ChatImageAttachment, ChatMessage, RemoteCancelRuntimeHost, RemoteChatHistoryRound,
+    RemoteChatHistoryTextItem, RemoteChatHistoryThinkingItem, RemoteChatHistoryToolCall,
+    RemoteChatHistoryToolItem, RemoteChatHistoryTurn, RemoteConnectSubmissionSource,
+    RemoteDefaultModelsConfig, RemoteDialogQueuePriority, RemoteDialogResolvedSubmission,
+    RemoteDialogRuntimeHost, RemoteDialogSubmissionPolicy, RemoteDialogSubmitOutcome,
+    RemoteImageContext, RemoteImageContextAdapter, RemoteModelCatalog, RemoteModelConfig,
+    RemoteSessionStateTracker, RemoteSessionTrackerHost, RemoteTerminalPrewarmRequest,
+    RemoteWorkspaceFileRuntimeHost, build_remote_chat_messages,
+    normalize_remote_model_selection as normalize_remote_model_selection_contract,
+    normalize_remote_session_model_id as normalize_remote_session_model_id_contract,
+    remote_model_selection_needs_config as remote_model_selection_needs_config_contract,
 };
 use log::{debug, info};
 use std::sync::Arc;
 
 use crate::agentic::coordination::{
-    get_global_coordinator, get_global_scheduler, ConversationCoordinator, DialogQueuePriority,
-    DialogScheduler, DialogSubmissionPolicy, DialogSubmitOutcome, DialogTriggerSource,
+    ConversationCoordinator, DialogQueuePriority, DialogScheduler, DialogSubmissionPolicy,
+    DialogSubmitOutcome, DialogTriggerSource, get_global_coordinator, get_global_scheduler,
 };
 use crate::agentic::image_analysis::ImageContextData;
 use crate::service::remote_connect::remote_server::RemoteExecutionDispatcher;
@@ -40,56 +45,32 @@ fn current_workspace_path() -> Option<std::path::PathBuf> {
 }
 
 fn normalize_remote_session_model_id(model_id: Option<String>) -> Option<String> {
-    match model_id {
-        Some(value) => {
-            let trimmed = value.trim();
-            if trimmed.is_empty() || trimmed == "default" {
-                Some("auto".to_string())
-            } else {
-                Some(trimmed.to_string())
-            }
-        }
-        None => Some("auto".to_string()),
-    }
+    normalize_remote_session_model_id_contract(model_id.as_deref())
 }
 
 fn normalize_remote_model_selection(
     requested_model_id: &str,
     ai_config: Option<&AIConfig>,
 ) -> Result<String, String> {
-    let requested_model_id = requested_model_id.trim();
-    if requested_model_id.is_empty() {
-        return Err("model_id is required".to_string());
-    }
-
-    if matches!(requested_model_id, "auto" | "default" | "primary" | "fast") {
-        return Ok(if requested_model_id == "default" {
-            "auto".to_string()
-        } else {
-            requested_model_id.to_string()
-        });
-    }
-
-    let Some(ai_config) = ai_config else {
+    if remote_model_selection_needs_config(requested_model_id) && ai_config.is_none() {
         return Err("Config service not available".to_string());
-    };
-    ai_config
-        .resolve_model_reference(requested_model_id)
-        .ok_or_else(|| format!("Unknown model selection: {requested_model_id}"))
+    }
+
+    normalize_remote_model_selection_contract(requested_model_id, |model_id| {
+        ai_config.and_then(|config| config.resolve_model_reference(model_id))
+    })
 }
 
 fn remote_model_selection_needs_config(requested_model_id: &str) -> bool {
-    let requested_model_id = requested_model_id.trim();
-    !requested_model_id.is_empty()
-        && !matches!(requested_model_id, "auto" | "default" | "primary" | "fast")
+    remote_model_selection_needs_config_contract(requested_model_id)
 }
 
 /// Compress a base64 data-URL image to a small thumbnail for mobile display.
 /// Falls back to the original if decoding/compression fails or the image is
 /// already within `max_bytes`.
 fn compress_remote_chat_data_url_for_mobile(data_url: &str, max_bytes: usize) -> String {
-    use base64::engine::general_purpose::STANDARD as BASE64;
     use base64::Engine;
+    use base64::engine::general_purpose::STANDARD as BASE64;
     use image::imageops::FilterType;
 
     const MAX_THUMBNAIL_DIM: u32 = 400;
@@ -139,212 +120,99 @@ fn compress_remote_chat_data_url_for_mobile(data_url: &str, max_bytes: usize) ->
 /// Convert persisted turns into mobile ChatMessages.
 /// This is the same data source the desktop frontend uses.
 fn remote_chat_messages_from_turns(turns: &[DialogTurnData]) -> Vec<ChatMessage> {
-    let mut result = Vec::new();
+    let projected_turns = turns
+        .iter()
+        .filter(|turn| turn.kind.is_model_visible())
+        .map(remote_chat_history_turn_from_core_turn)
+        .collect::<Vec<_>>();
+    build_remote_chat_messages(projected_turns)
+}
 
-    for turn in turns {
-        if !turn.kind.is_model_visible() {
-            continue;
-        }
+fn remote_chat_history_turn_from_core_turn(turn: &DialogTurnData) -> RemoteChatHistoryTurn {
+    let user_images = turn
+        .user_message
+        .metadata
+        .as_ref()
+        .and_then(|m| m.get("images"))
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| {
+                    let name = v.get("name")?.as_str()?.to_string();
+                    let raw_url = v.get("data_url")?.as_str()?;
+                    let data_url =
+                        compress_remote_chat_data_url_for_mobile(raw_url, MOBILE_IMAGE_MAX_BYTES);
+                    Some(ChatImageAttachment { name, data_url })
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
 
-        let images = turn
-            .user_message
-            .metadata
-            .as_ref()
-            .and_then(|m| m.get("images"))
-            .and_then(|v| v.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|v| {
-                        let name = v.get("name")?.as_str()?.to_string();
-                        let raw_url = v.get("data_url")?.as_str()?;
-                        let data_url = compress_remote_chat_data_url_for_mobile(
-                            raw_url,
-                            MOBILE_IMAGE_MAX_BYTES,
-                        );
-                        Some(ChatImageAttachment { name, data_url })
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .filter(|v| !v.is_empty());
+    // Prefer original_text from metadata (pre-enhancement) for display.
+    let user_display_content = turn
+        .user_message
+        .metadata
+        .as_ref()
+        .and_then(|m| m.get("original_text"))
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| strip_remote_user_input_tags(&turn.user_message.content));
 
-        // Prefer original_text from metadata (pre-enhancement) for display.
-        let display_content = turn
-            .user_message
-            .metadata
-            .as_ref()
-            .and_then(|m| m.get("original_text"))
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| strip_remote_user_input_tags(&turn.user_message.content));
-
-        result.push(ChatMessage {
-            id: turn.user_message.id.clone(),
-            role: "user".to_string(),
-            content: display_content,
-            timestamp: (turn.user_message.timestamp / 1000).to_string(),
-            metadata: None,
-            tools: None,
-            thinking: None,
-            items: None,
-            images,
-        });
-
-        // Skip assistant message for in-progress turns. The active turn's
-        // content is delivered via the real-time overlay, not the historical
-        // list. Including an empty or partial assistant message here would
-        // consume a slot in the count-based skip cursor and prevent the final
-        // version from ever being delivered.
-        if turn.status == TurnStatus::InProgress {
-            continue;
-        }
-
-        // Collect ordered items across all rounds, preserving interleaved order.
-        struct OrderedEntry {
-            order_index: Option<usize>,
-            sequence: usize,
-            round_idx: usize,
-            item: ChatMessageItem,
-        }
-
-        let mut ordered: Vec<OrderedEntry> = Vec::new();
-        let mut tools_flat = Vec::new();
-        let mut thinking_parts = Vec::new();
-        let mut text_parts = Vec::new();
-        let mut sequence = 0usize;
-
-        for (round_idx, round) in turn.model_rounds.iter().enumerate() {
-            // Iterate in streaming order: thinking, text, tools.
-            // The model first thinks, then outputs text, and finally the tools
-            // are detected/executed. This matches the real-time tracker order.
-            for t in &round.thinking_items {
-                if t.is_subagent_item.unwrap_or(false) {
-                    continue;
-                }
-                if !t.content.is_empty() {
-                    thinking_parts.push(t.content.clone());
-                    ordered.push(OrderedEntry {
-                        order_index: t.order_index,
-                        sequence,
-                        round_idx,
-                        item: ChatMessageItem {
-                            item_type: "thinking".to_string(),
-                            content: Some(t.content.clone()),
-                            tool: None,
-                            is_subagent: None,
-                        },
-                    });
-                    sequence += 1;
-                }
-            }
-            for t in &round.text_items {
-                if t.is_subagent_item.unwrap_or(false) {
-                    continue;
-                }
-                if !t.content.is_empty() {
-                    text_parts.push(t.content.clone());
-                    ordered.push(OrderedEntry {
-                        order_index: t.order_index,
-                        sequence,
-                        round_idx,
-                        item: ChatMessageItem {
-                            item_type: "text".to_string(),
-                            content: Some(t.content.clone()),
-                            tool: None,
-                            is_subagent: None,
-                        },
-                    });
-                    sequence += 1;
-                }
-            }
-            for t in &round.tool_items {
-                if t.is_subagent_item.unwrap_or(false) {
-                    continue;
-                }
-                let status_str = t.status.as_deref().unwrap_or(if t.tool_result.is_some() {
-                    "completed"
-                } else {
-                    "running"
-                });
-                let tool_status = RemoteToolStatus {
-                    id: t.id.clone(),
-                    name: t.tool_name.clone(),
-                    status: status_str.to_string(),
-                    duration_ms: t.duration_ms,
-                    start_ms: Some(t.start_time),
-                    input_preview:
-                        bitfun_services_integrations::remote_connect::make_slim_tool_params(
-                            &t.tool_call.input,
-                        ),
-                    tool_input: if t.tool_name == "AskUserQuestion"
-                        || t.tool_name == "Task"
-                        || t.tool_name == "TodoWrite"
-                    {
-                        Some(t.tool_call.input.clone())
-                    } else {
-                        None
+    let rounds = turn
+        .model_rounds
+        .iter()
+        .map(|round| RemoteChatHistoryRound {
+            start_time_ms: round.start_time,
+            end_time_ms: round.end_time,
+            text_items: round
+                .text_items
+                .iter()
+                .map(|item| RemoteChatHistoryTextItem {
+                    content: item.content.clone(),
+                    order_index: item.order_index,
+                    is_subagent: item.is_subagent_item.unwrap_or(false),
+                })
+                .collect(),
+            thinking_items: round
+                .thinking_items
+                .iter()
+                .map(|item| RemoteChatHistoryThinkingItem {
+                    content: item.content.clone(),
+                    order_index: item.order_index,
+                    is_subagent: item.is_subagent_item.unwrap_or(false),
+                })
+                .collect(),
+            tool_items: round
+                .tool_items
+                .iter()
+                .map(|item| RemoteChatHistoryToolItem {
+                    id: item.id.clone(),
+                    name: item.tool_name.clone(),
+                    call: RemoteChatHistoryToolCall {
+                        id: item.tool_call.id.clone(),
+                        input: item.tool_call.input.clone(),
                     },
-                };
-                tools_flat.push(tool_status.clone());
-                ordered.push(OrderedEntry {
-                    order_index: t.order_index,
-                    sequence,
-                    round_idx,
-                    item: ChatMessageItem {
-                        item_type: "tool".to_string(),
-                        content: None,
-                        tool: Some(tool_status),
-                        is_subagent: None,
-                    },
-                });
-                sequence += 1;
-            }
-        }
+                    has_result: item.tool_result.is_some(),
+                    status: item.status.clone(),
+                    duration_ms: item.duration_ms,
+                    start_ms: item.start_time,
+                    order_index: item.order_index,
+                    is_subagent: item.is_subagent_item.unwrap_or(false),
+                })
+                .collect(),
+        })
+        .collect();
 
-        // Sort by round first (rounds are strictly sequential), then by
-        // order_index within each round. order_index is per-round, so it must
-        // not be compared across rounds.
-        ordered.sort_by(|a, b| {
-            let round_cmp = a.round_idx.cmp(&b.round_idx);
-            if round_cmp != std::cmp::Ordering::Equal {
-                return round_cmp;
-            }
-            match (a.order_index, b.order_index) {
-                (Some(a_idx), Some(b_idx)) => a_idx.cmp(&b_idx),
-                (Some(_), None) => std::cmp::Ordering::Less,
-                (None, Some(_)) => std::cmp::Ordering::Greater,
-                (None, None) => a.sequence.cmp(&b.sequence),
-            }
-        });
-        let items: Vec<ChatMessageItem> = ordered.into_iter().map(|e| e.item).collect();
-
-        let ts = turn
-            .model_rounds
-            .last()
-            .map(|r| r.end_time.unwrap_or(r.start_time))
-            .unwrap_or(turn.start_time);
-
-        result.push(ChatMessage {
-            id: format!("{}_assistant", turn.turn_id),
-            role: "assistant".to_string(),
-            content: text_parts.join("\n\n"),
-            timestamp: (ts / 1000).to_string(),
-            metadata: None,
-            tools: if tools_flat.is_empty() {
-                None
-            } else {
-                Some(tools_flat)
-            },
-            thinking: if thinking_parts.is_empty() {
-                None
-            } else {
-                Some(thinking_parts.join("\n\n"))
-            },
-            items: if items.is_empty() { None } else { Some(items) },
-            images: None,
-        });
+    RemoteChatHistoryTurn {
+        turn_id: turn.turn_id.clone(),
+        user_message_id: turn.user_message.id.clone(),
+        user_display_content,
+        user_timestamp_ms: turn.user_message.timestamp,
+        user_images,
+        is_in_progress: turn.status == TurnStatus::InProgress,
+        start_time_ms: turn.start_time,
+        rounds,
     }
-
-    result
 }
 
 fn strip_remote_user_input_tags(content: &str) -> String {
@@ -979,6 +847,10 @@ mod tests {
         assert_eq!(
             normalize_remote_model_selection("   ", None).unwrap_err(),
             "model_id is required"
+        );
+        assert_eq!(
+            normalize_remote_model_selection("custom-alias", None).unwrap_err(),
+            "Config service not available"
         );
     }
 

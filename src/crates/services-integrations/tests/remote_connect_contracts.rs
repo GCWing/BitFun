@@ -7,33 +7,35 @@ use bitfun_runtime_ports::{
 use bitfun_services_integrations::remote_connect::{
     ActiveTurnSnapshot, ChatImageAttachment, ChatMessage, ChatMessageItem, ImageAttachment,
     REMOTE_FILE_MAX_CHUNK_BYTES, REMOTE_FILE_MAX_READ_BYTES, RemoteAssistantWorkspaceFacts,
-    RemoteCancelDecision, RemoteCancelRuntimeHost, RemoteCancelTaskRequest, RemoteCommand,
-    RemoteConnectSubmissionSource, RemoteDefaultModelsConfig, RemoteDialogQueuePriority,
-    RemoteDialogResolvedSubmission, RemoteDialogRuntimeHost, RemoteDialogSubmissionPolicy,
-    RemoteDialogSubmissionRequest, RemoteDialogSubmitOutcome, RemoteImageContext,
-    RemoteImageContextAdapter, RemoteModelCatalog, RemoteModelConfig, RemoteRecentWorkspaceFacts,
-    RemoteResponse, RemoteSessionMetadata, RemoteSessionStateTracker, RemoteSessionTrackerHost,
-    RemoteSessionTrackerRegistry, RemoteTerminalPrewarmRequest, RemoteToolStatus,
-    RemoteWorkspaceFacts, RemoteWorkspaceFileChunk, RemoteWorkspaceFileContent,
-    RemoteWorkspaceFileInfo, RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind,
-    RemoteWorkspaceUpdate, TrackerEvent, build_remote_image_attachment,
-    build_remote_image_contexts, build_remote_image_submission_request,
-    build_remote_session_create_request, build_remote_submission_request, cancel_remote_task,
-    handle_remote_workspace_file_command, make_slim_tool_params, read_remote_workspace_file,
-    read_remote_workspace_file_chunk, read_remote_workspace_file_info,
+    RemoteCancelDecision, RemoteCancelRuntimeHost, RemoteCancelTaskRequest, RemoteChatHistoryRound,
+    RemoteChatHistoryTextItem, RemoteChatHistoryThinkingItem, RemoteChatHistoryToolCall,
+    RemoteChatHistoryToolItem, RemoteChatHistoryTurn, RemoteCommand, RemoteConnectSubmissionSource,
+    RemoteDefaultModelsConfig, RemoteDialogQueuePriority, RemoteDialogResolvedSubmission,
+    RemoteDialogRuntimeHost, RemoteDialogSubmissionPolicy, RemoteDialogSubmissionRequest,
+    RemoteDialogSubmitOutcome, RemoteImageContext, RemoteImageContextAdapter, RemoteModelCatalog,
+    RemoteModelConfig, RemoteRecentWorkspaceFacts, RemoteResponse, RemoteSessionMetadata,
+    RemoteSessionStateTracker, RemoteSessionTrackerHost, RemoteSessionTrackerRegistry,
+    RemoteTerminalPrewarmRequest, RemoteToolStatus, RemoteWorkspaceFacts, RemoteWorkspaceFileChunk,
+    RemoteWorkspaceFileContent, RemoteWorkspaceFileInfo, RemoteWorkspaceFileRuntimeHost,
+    RemoteWorkspaceKind, RemoteWorkspaceUpdate, TrackerEvent, build_remote_chat_messages,
+    build_remote_image_attachment, build_remote_image_contexts,
+    build_remote_image_submission_request, build_remote_session_create_request,
+    build_remote_submission_request, cancel_remote_task, handle_remote_workspace_file_command,
+    make_slim_tool_params, normalize_remote_model_selection, normalize_remote_session_model_id,
+    read_remote_workspace_file, read_remote_workspace_file_chunk, read_remote_workspace_file_info,
     remote_answer_question_response, remote_assistant_list_response,
     remote_assistant_updated_response, remote_dialog_submit_response, remote_file_chunk_response,
     remote_file_content_response, remote_file_display_name, remote_file_info_response,
     remote_initial_sync_response, remote_interaction_accepted_response, remote_messages_response,
-    remote_model_catalog_poll_delta, remote_no_change_poll_response,
-    remote_persisted_poll_response, remote_recent_workspaces_response,
-    remote_session_created_response, remote_session_deleted_response, remote_session_info,
-    remote_session_list_response, remote_session_model_updated_response,
-    remote_session_restore_target, remote_snapshot_poll_response, remote_task_cancel_response,
-    remote_workspace_info_response, remote_workspace_updated_response, resolve_remote_agent_type,
-    resolve_remote_cancel_decision, resolve_remote_execution_image_contexts,
-    resolve_remote_file_chunk_range, resolve_remote_workspace_path,
-    should_send_remote_model_catalog, submit_remote_dialog,
+    remote_model_catalog_poll_delta, remote_model_selection_needs_config,
+    remote_no_change_poll_response, remote_persisted_poll_response,
+    remote_recent_workspaces_response, remote_session_created_response,
+    remote_session_deleted_response, remote_session_info, remote_session_list_response,
+    remote_session_model_updated_response, remote_session_restore_target,
+    remote_snapshot_poll_response, remote_task_cancel_response, remote_workspace_info_response,
+    remote_workspace_updated_response, resolve_remote_agent_type, resolve_remote_cancel_decision,
+    resolve_remote_execution_image_contexts, resolve_remote_file_chunk_range,
+    resolve_remote_workspace_path, should_send_remote_model_catalog, submit_remote_dialog,
 };
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -209,6 +211,56 @@ fn remote_connect_image_context_adapter_owns_portable_conversion_shape() {
 }
 
 #[test]
+fn remote_chat_history_assembly_preserves_message_shape_and_item_order() {
+    let turn = remote_history_contract_turn(false);
+
+    let messages = build_remote_chat_messages(vec![turn]);
+
+    assert_eq!(messages.len(), 2);
+    assert_eq!(messages[0].id, "user-1");
+    assert_eq!(messages[0].role, "user");
+    assert_eq!(messages[0].content, "original question");
+    assert_eq!(messages[0].timestamp, "1");
+    assert_eq!(
+        messages[0].images.as_ref().unwrap()[0],
+        ChatImageAttachment {
+            name: "screenshot.png".to_string(),
+            data_url: "data:image/png;base64,abcd".to_string(),
+        }
+    );
+
+    assert_eq!(messages[1].id, "turn-1_assistant");
+    assert_eq!(messages[1].role, "assistant");
+    assert_eq!(messages[1].content, "visible text");
+    assert_eq!(messages[1].timestamp, "1");
+    assert_eq!(messages[1].thinking.as_deref(), Some("visible thought"));
+    let items = messages[1].items.as_ref().expect("assistant items");
+    assert_eq!(items.len(), 3);
+    assert_eq!(items[0].item_type, "thinking");
+    assert_eq!(items[1].item_type, "text");
+    assert_eq!(items[2].item_type, "tool");
+    let tool = items[2].tool.as_ref().expect("tool item");
+    assert_eq!(tool.name, "AskUserQuestion");
+    assert_eq!(tool.status, "running");
+    assert_eq!(tool.duration_ms, Some(25));
+    assert_eq!(
+        tool.input_preview.as_deref(),
+        Some(r#"{"question":"confirm?"}"#)
+    );
+    assert_eq!(tool.tool_input.as_ref().unwrap()["question"], "confirm?");
+}
+
+#[test]
+fn remote_chat_history_assembly_skips_in_progress_assistant_history() {
+    let turn = remote_history_contract_turn(true);
+
+    let messages = build_remote_chat_messages(vec![turn]);
+
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0].role, "user");
+}
+
+#[test]
 fn remote_connect_cancel_and_restore_policy_preserve_runtime_decisions() {
     assert_eq!(
         remote_session_restore_target(false, Some("D:/workspace/project")),
@@ -240,6 +292,56 @@ fn remote_connect_cancel_and_restore_policy_preserve_runtime_decisions() {
         resolve_remote_cancel_decision(None, None),
         RemoteCancelDecision::NoRunningTask
     );
+}
+
+fn remote_history_contract_turn(is_in_progress: bool) -> RemoteChatHistoryTurn {
+    RemoteChatHistoryTurn {
+        turn_id: "turn-1".to_string(),
+        user_message_id: "user-1".to_string(),
+        user_display_content: "original question".to_string(),
+        user_timestamp_ms: 1_000,
+        user_images: vec![ChatImageAttachment {
+            name: "screenshot.png".to_string(),
+            data_url: "data:image/png;base64,abcd".to_string(),
+        }],
+        is_in_progress,
+        start_time_ms: 1_000,
+        rounds: vec![RemoteChatHistoryRound {
+            start_time_ms: 1_100,
+            end_time_ms: Some(1_200),
+            text_items: vec![
+                RemoteChatHistoryTextItem {
+                    content: "hidden text".to_string(),
+                    order_index: Some(1),
+                    is_subagent: true,
+                },
+                RemoteChatHistoryTextItem {
+                    content: "visible text".to_string(),
+                    order_index: Some(1),
+                    is_subagent: false,
+                },
+            ],
+            thinking_items: vec![RemoteChatHistoryThinkingItem {
+                content: "visible thought".to_string(),
+                order_index: Some(0),
+                is_subagent: false,
+            }],
+            tool_items: vec![RemoteChatHistoryToolItem {
+                id: "tool-1".to_string(),
+                name: "AskUserQuestion".to_string(),
+                call: RemoteChatHistoryToolCall {
+                    id: "call-1".to_string(),
+                    input: serde_json::json!({ "question": "confirm?" }),
+                },
+                has_result: false,
+                status: Some("running".to_string()),
+                duration_ms: Some(25),
+                start_ms: 1_130,
+                order_index: Some(2),
+                is_subagent: false,
+            }],
+        }],
+    }
 }
 
 struct RecordingDialogHost {
@@ -1664,6 +1766,52 @@ fn remote_connect_model_catalog_delta_preserves_poll_invalidation_policy() {
     let unavailable_initial = remote_model_catalog_poll_delta(None, None);
     assert!(!unavailable_initial.changed);
     assert!(unavailable_initial.catalog.is_none());
+}
+
+#[test]
+fn remote_connect_model_selection_policy_owns_alias_and_config_reference_rules() {
+    assert_eq!(
+        normalize_remote_session_model_id(None),
+        Some("auto".to_string())
+    );
+    assert_eq!(
+        normalize_remote_session_model_id(Some("  default  ")),
+        Some("auto".to_string())
+    );
+    assert_eq!(
+        normalize_remote_session_model_id(Some(" model-1 ")),
+        Some("model-1".to_string())
+    );
+
+    assert!(!remote_model_selection_needs_config("auto"));
+    assert!(!remote_model_selection_needs_config("default"));
+    assert!(!remote_model_selection_needs_config("primary"));
+    assert!(!remote_model_selection_needs_config("fast"));
+    assert!(remote_model_selection_needs_config("custom-alias"));
+
+    assert_eq!(
+        normalize_remote_model_selection("default", |_| None).unwrap(),
+        "auto"
+    );
+    assert_eq!(
+        normalize_remote_model_selection("primary", |_| None).unwrap(),
+        "primary"
+    );
+    assert_eq!(
+        normalize_remote_model_selection("custom-alias", |id| {
+            (id == "custom-alias").then(|| "model-1".to_string())
+        })
+        .unwrap(),
+        "model-1"
+    );
+    assert_eq!(
+        normalize_remote_model_selection("unknown", |_| None).unwrap_err(),
+        "Unknown model selection: unknown"
+    );
+    assert_eq!(
+        normalize_remote_model_selection("   ", |_| None).unwrap_err(),
+        "model_id is required"
+    );
 }
 
 #[test]

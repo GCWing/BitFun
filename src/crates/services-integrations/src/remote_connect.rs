@@ -1017,6 +1017,47 @@ pub struct RemoteModelCatalog {
     pub session_model_id: Option<String>,
 }
 
+pub fn normalize_remote_session_model_id(model_id: Option<&str>) -> Option<String> {
+    match model_id {
+        Some(value) => {
+            let trimmed = value.trim();
+            if trimmed.is_empty() || trimmed == "default" {
+                Some("auto".to_string())
+            } else {
+                Some(trimmed.to_string())
+            }
+        }
+        None => Some("auto".to_string()),
+    }
+}
+
+pub fn remote_model_selection_needs_config(requested_model_id: &str) -> bool {
+    let requested_model_id = requested_model_id.trim();
+    !requested_model_id.is_empty()
+        && !matches!(requested_model_id, "auto" | "default" | "primary" | "fast")
+}
+
+pub fn normalize_remote_model_selection(
+    requested_model_id: &str,
+    resolve_model_reference: impl FnOnce(&str) -> Option<String>,
+) -> Result<String, String> {
+    let requested_model_id = requested_model_id.trim();
+    if requested_model_id.is_empty() {
+        return Err("model_id is required".to_string());
+    }
+
+    if matches!(requested_model_id, "auto" | "default" | "primary" | "fast") {
+        return Ok(if requested_model_id == "default" {
+            "auto".to_string()
+        } else {
+            requested_model_id.to_string()
+        });
+    }
+
+    resolve_model_reference(requested_model_id)
+        .ok_or_else(|| format!("Unknown model selection: {requested_model_id}"))
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteModelCatalogPollDelta {
     pub changed: bool,
@@ -1088,6 +1129,221 @@ pub struct ChatMessageItem {
     pub tool: Option<RemoteToolStatus>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_subagent: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RemoteChatHistoryTurn {
+    pub turn_id: String,
+    pub user_message_id: String,
+    pub user_display_content: String,
+    pub user_timestamp_ms: u64,
+    pub user_images: Vec<ChatImageAttachment>,
+    pub is_in_progress: bool,
+    pub start_time_ms: u64,
+    pub rounds: Vec<RemoteChatHistoryRound>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RemoteChatHistoryRound {
+    pub start_time_ms: u64,
+    pub end_time_ms: Option<u64>,
+    pub text_items: Vec<RemoteChatHistoryTextItem>,
+    pub thinking_items: Vec<RemoteChatHistoryThinkingItem>,
+    pub tool_items: Vec<RemoteChatHistoryToolItem>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteChatHistoryTextItem {
+    pub content: String,
+    pub order_index: Option<usize>,
+    pub is_subagent: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteChatHistoryThinkingItem {
+    pub content: String,
+    pub order_index: Option<usize>,
+    pub is_subagent: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RemoteChatHistoryToolItem {
+    pub id: String,
+    pub name: String,
+    pub call: RemoteChatHistoryToolCall,
+    pub has_result: bool,
+    pub status: Option<String>,
+    pub duration_ms: Option<u64>,
+    pub start_ms: u64,
+    pub order_index: Option<usize>,
+    pub is_subagent: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RemoteChatHistoryToolCall {
+    pub id: String,
+    pub input: serde_json::Value,
+}
+
+pub fn build_remote_chat_messages(turns: Vec<RemoteChatHistoryTurn>) -> Vec<ChatMessage> {
+    let mut result = Vec::new();
+
+    for turn in turns {
+        result.push(ChatMessage {
+            id: turn.user_message_id,
+            role: "user".to_string(),
+            content: turn.user_display_content,
+            timestamp: (turn.user_timestamp_ms / 1000).to_string(),
+            metadata: None,
+            tools: None,
+            thinking: None,
+            items: None,
+            images: if turn.user_images.is_empty() {
+                None
+            } else {
+                Some(turn.user_images)
+            },
+        });
+
+        if turn.is_in_progress {
+            continue;
+        }
+
+        struct OrderedEntry {
+            order_index: Option<usize>,
+            sequence: usize,
+            round_idx: usize,
+            item: ChatMessageItem,
+        }
+
+        let mut ordered = Vec::new();
+        let mut tools_flat = Vec::new();
+        let mut thinking_parts = Vec::new();
+        let mut text_parts = Vec::new();
+        let mut sequence = 0usize;
+        let assistant_ts = turn
+            .rounds
+            .last()
+            .map(|round| round.end_time_ms.unwrap_or(round.start_time_ms))
+            .unwrap_or(turn.start_time_ms);
+
+        for (round_idx, round) in turn.rounds.into_iter().enumerate() {
+            for item in round.thinking_items {
+                if item.is_subagent || item.content.is_empty() {
+                    continue;
+                }
+                thinking_parts.push(item.content.clone());
+                ordered.push(OrderedEntry {
+                    order_index: item.order_index,
+                    sequence,
+                    round_idx,
+                    item: ChatMessageItem {
+                        item_type: "thinking".to_string(),
+                        content: Some(item.content.clone()),
+                        tool: None,
+                        is_subagent: None,
+                    },
+                });
+                sequence += 1;
+            }
+
+            for item in round.text_items {
+                if item.is_subagent || item.content.is_empty() {
+                    continue;
+                }
+                text_parts.push(item.content.clone());
+                ordered.push(OrderedEntry {
+                    order_index: item.order_index,
+                    sequence,
+                    round_idx,
+                    item: ChatMessageItem {
+                        item_type: "text".to_string(),
+                        content: Some(item.content.clone()),
+                        tool: None,
+                        is_subagent: None,
+                    },
+                });
+                sequence += 1;
+            }
+
+            for item in round.tool_items {
+                if item.is_subagent {
+                    continue;
+                }
+                let status = item.status.as_deref().unwrap_or(if item.has_result {
+                    "completed"
+                } else {
+                    "running"
+                });
+                let tool_status = RemoteToolStatus {
+                    id: item.id,
+                    name: item.name.clone(),
+                    status: status.to_string(),
+                    duration_ms: item.duration_ms,
+                    start_ms: Some(item.start_ms),
+                    input_preview: make_slim_tool_params(&item.call.input),
+                    tool_input: if item.name == "AskUserQuestion"
+                        || item.name == "Task"
+                        || item.name == "TodoWrite"
+                    {
+                        Some(item.call.input.clone())
+                    } else {
+                        None
+                    },
+                };
+                tools_flat.push(tool_status.clone());
+                ordered.push(OrderedEntry {
+                    order_index: item.order_index,
+                    sequence,
+                    round_idx,
+                    item: ChatMessageItem {
+                        item_type: "tool".to_string(),
+                        content: None,
+                        tool: Some(tool_status),
+                        is_subagent: None,
+                    },
+                });
+                sequence += 1;
+            }
+        }
+
+        ordered.sort_by(|a, b| {
+            let round_cmp = a.round_idx.cmp(&b.round_idx);
+            if round_cmp != std::cmp::Ordering::Equal {
+                return round_cmp;
+            }
+            match (a.order_index, b.order_index) {
+                (Some(a_idx), Some(b_idx)) => a_idx.cmp(&b_idx),
+                (Some(_), None) => std::cmp::Ordering::Less,
+                (None, Some(_)) => std::cmp::Ordering::Greater,
+                (None, None) => a.sequence.cmp(&b.sequence),
+            }
+        });
+
+        let items: Vec<ChatMessageItem> = ordered.into_iter().map(|entry| entry.item).collect();
+
+        result.push(ChatMessage {
+            id: format!("{}_assistant", turn.turn_id),
+            role: "assistant".to_string(),
+            content: text_parts.join("\n\n"),
+            timestamp: (assistant_ts / 1000).to_string(),
+            metadata: None,
+            tools: if tools_flat.is_empty() {
+                None
+            } else {
+                Some(tools_flat)
+            },
+            thinking: if thinking_parts.is_empty() {
+                None
+            } else {
+                Some(thinking_parts.join("\n\n"))
+            },
+            items: if items.is_empty() { None } else { Some(items) },
+            images: None,
+        });
+    }
+
+    result
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
