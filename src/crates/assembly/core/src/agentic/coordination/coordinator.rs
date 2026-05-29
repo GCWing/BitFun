@@ -3447,6 +3447,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         }
     }
 
+    pub fn has_active_turn(&self, dialog_turn_id: &str) -> bool {
+        self.execution_engine.has_active_turn(dialog_turn_id)
+    }
+
     async fn cancel_active_subagents_for_parent_turn(
         &self,
         parent_session_id: &str,

@@ -165,6 +165,7 @@ mod tests {
                 max_context_tokens: None,
                 is_subagent: false,
                 cached_tokens: None,
+                llm_latency_ms: None,
                 token_details: None,
             },
             EventPriority::Normal,
