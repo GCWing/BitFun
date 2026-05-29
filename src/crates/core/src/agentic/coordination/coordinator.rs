@@ -28,8 +28,12 @@ use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::round_preempt::{DialogRoundInjectionSource, DialogRoundPreemptSource};
 use crate::agentic::session::SessionManager;
 use crate::agentic::side_question::build_btw_user_input;
+use crate::agentic::skill_agent_snapshot::{
+    diff_skill_agent_snapshot, resolve_skill_agent_snapshot, TurnSkillAgentSnapshot,
+};
 use crate::agentic::tools::pipeline::{SubagentParentInfo, ToolPipeline};
 use crate::agentic::tools::ToolRuntimeRestrictions;
+use crate::agentic::workspace::WorkspaceServices;
 use crate::agentic::WorkspaceBinding;
 use crate::service::bootstrap::{
     ensure_workspace_persona_files_for_prompt, is_workspace_bootstrap_pending,
@@ -88,6 +92,44 @@ pub(crate) struct SubagentExecutionRequest {
     pub(crate) context: HashMap<String, String>,
     /// Execution policy for the child subagent session being launched.
     pub(crate) delegation_policy: DelegationPolicy,
+}
+
+struct WrappedUserInputPayload {
+    content: String,
+    skill_agent_snapshot: TurnSkillAgentSnapshot,
+    snapshot_persistence: SkillAgentSnapshotPersistence,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SkillAgentSnapshotPersistence {
+    None,
+    SaveCurrentTurn,
+    RecoverFirstTurnBaseline,
+}
+
+fn render_wrapped_user_input_content(
+    user_input: String,
+    embedded_reminders: Vec<String>,
+) -> String {
+    if has_prompt_markup(&user_input) {
+        if embedded_reminders.is_empty() {
+            return user_input;
+        }
+
+        let mut envelope = PromptEnvelope::new();
+        for reminder in embedded_reminders {
+            envelope.push_system_reminder(reminder);
+        }
+        let reminder_prefix = envelope.render();
+        return format!("{}\n{}", reminder_prefix, user_input);
+    }
+
+    let mut envelope = PromptEnvelope::new();
+    for reminder in embedded_reminders {
+        envelope.push_system_reminder(reminder);
+    }
+    envelope.push_user_query(user_input);
+    envelope.render()
 }
 
 impl SubagentResult {
@@ -1653,41 +1695,94 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
 
     async fn wrap_user_input(
         &self,
+        session_id: &str,
+        turn_index: usize,
         agent_type: &str,
         previous_agent_type: Option<&str>,
         user_input: String,
         workspace: Option<&WorkspaceBinding>,
-    ) -> BitFunResult<String> {
+        workspace_services: Option<&WorkspaceServices>,
+        enable_tools: bool,
+        skill_agent_context_vars: &HashMap<String, String>,
+    ) -> BitFunResult<WrappedUserInputPayload> {
         let agent_registry = get_agent_registry();
         if let Some(workspace) = workspace {
-            agent_registry
-                .load_custom_subagents(workspace.root_path())
-                .await;
+            if !workspace.is_remote() {
+                agent_registry
+                    .load_custom_subagents(workspace.root_path())
+                    .await;
+            }
         }
         let current_agent = agent_registry
             .get_agent(agent_type, workspace.map(|binding| binding.root_path()))
             .ok_or_else(|| BitFunError::NotFound(format!("Agent not found: {}", agent_type)))?;
-        let system_reminder = current_agent
+        let current_agent_reminder = current_agent
             .get_system_reminder(previous_agent_type, workspace)
             .await?;
+        let surface_resolution = resolve_skill_agent_snapshot(
+            agent_type,
+            workspace,
+            workspace_services,
+            enable_tools,
+            skill_agent_context_vars,
+        )
+        .await;
 
-        if has_prompt_markup(&user_input) {
-            if system_reminder.is_empty() {
-                Ok(user_input)
+        let mut embedded_reminders = Vec::new();
+
+        let snapshot_persistence = if turn_index == 0 {
+            SkillAgentSnapshotPersistence::SaveCurrentTurn
+        } else if self
+            .session_manager
+            .turn_skill_agent_snapshot(session_id, 0)
+            .await
+            .is_none()
+        {
+            warn!(
+                "First-turn skill-agent snapshot missing; recovering baseline from current skill-agent snapshot: session_id={}, turn_index={}",
+                session_id, turn_index
+            );
+            SkillAgentSnapshotPersistence::RecoverFirstTurnBaseline
+        } else if let Some((baseline_turn_index, previous_snapshot)) = self
+            .session_manager
+            .latest_turn_skill_agent_snapshot_at_or_before(session_id, turn_index - 1)
+            .await
+        {
+            let diff = diff_skill_agent_snapshot(&previous_snapshot, &surface_resolution.snapshot);
+            if let Some(skill_update) = diff.render_skill_listing_update() {
+                embedded_reminders.push(skill_update);
+            }
+            if let Some(agent_update) = diff.render_agent_listing_update() {
+                embedded_reminders.push(agent_update);
+            }
+            if diff.is_empty() {
+                SkillAgentSnapshotPersistence::None
             } else {
-                let mut envelope = PromptEnvelope::new();
-                envelope.push_system_reminder(system_reminder);
-                envelope.push_user_query(user_input);
-                Ok(envelope.render())
+                debug!(
+                    "Skill-agent snapshot changed; persisting sparse snapshot: session_id={}, turn_index={}, baseline_turn_index={}",
+                    session_id, turn_index, baseline_turn_index
+                );
+                SkillAgentSnapshotPersistence::SaveCurrentTurn
             }
         } else {
-            let mut envelope = PromptEnvelope::new();
-            if !system_reminder.is_empty() {
-                envelope.push_system_reminder(system_reminder);
-            }
-            envelope.push_user_query(user_input);
-            Ok(envelope.render())
+            warn!(
+                "No prior skill-agent snapshot available for diff; skipping skill-agent diff: session_id={}, turn_index={}",
+                session_id, turn_index
+            );
+            SkillAgentSnapshotPersistence::None
+        };
+
+        if !current_agent_reminder.is_empty() {
+            embedded_reminders.push(current_agent_reminder);
         }
+
+        let content = render_wrapped_user_input_content(user_input, embedded_reminders);
+
+        Ok(WrappedUserInputPayload {
+            content,
+            skill_agent_snapshot: surface_resolution.snapshot,
+            snapshot_persistence,
+        })
     }
 
     pub async fn ensure_assistant_bootstrap(
@@ -2516,8 +2611,23 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             }
         );
 
-        let mut wrapped_user_input = self
+        let turn_index = self.session_manager.get_turn_count(&session_id);
+        let mut skill_agent_context_vars = HashMap::new();
+        if user_message_metadata
+            .as_ref()
+            .and_then(|metadata| metadata.get("acp_transport"))
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false)
+        {
+            skill_agent_context_vars.insert("acp_transport".to_string(), "true".to_string());
+            skill_agent_context_vars
+                .insert("write_tool_mode".to_string(), "inline_content".to_string());
+        }
+
+        let wrapped_user_input_payload = self
             .wrap_user_input(
+                &session_id,
+                turn_index,
                 &effective_agent_type,
                 previous_agent_type
                     .as_deref()
@@ -2525,8 +2635,12 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     .filter(|value| !value.is_empty()),
                 user_input,
                 session_workspace.as_ref(),
+                workspace_services.as_ref(),
+                session.config.enable_tools,
+                &skill_agent_context_vars,
             )
             .await?;
+        let mut wrapped_user_input = wrapped_user_input_payload.content.clone();
 
         if let Ok(Some(goal_state)) = self.load_active_goal_mode(&session_id).await {
             if !should_skip_goal_verification_for_turn(
@@ -2551,7 +2665,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         }
 
         // Start new dialog turn (sets state to Processing internally)
-        let turn_index = self.session_manager.get_turn_count(&session_id);
         // Pass frontend turnId, generate if not provided
         let turn_id = self
             .session_manager
@@ -2564,6 +2677,26 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 user_message_metadata.clone(),
             )
             .await?;
+        match wrapped_user_input_payload.snapshot_persistence {
+            SkillAgentSnapshotPersistence::None => {}
+            SkillAgentSnapshotPersistence::SaveCurrentTurn => {
+                self.session_manager
+                    .remember_turn_skill_agent_snapshot(
+                        &session_id,
+                        turn_index,
+                        wrapped_user_input_payload.skill_agent_snapshot.clone(),
+                    )
+                    .await;
+            }
+            SkillAgentSnapshotPersistence::RecoverFirstTurnBaseline => {
+                self.session_manager
+                    .recover_first_turn_skill_agent_snapshot(
+                        &session_id,
+                        wrapped_user_input_payload.skill_agent_snapshot.clone(),
+                    )
+                    .await;
+            }
+        }
 
         // Register this turn as in-flight immediately after it becomes visible
         // as Processing. Later await points must not leave a cancel/start
@@ -5271,8 +5404,8 @@ pub fn get_global_coordinator() -> Option<Arc<ConversationCoordinator>> {
 #[cfg(test)]
 mod tests {
     use super::{
-        normalize_subagent_max_concurrency, resolve_agent_submission_turn_id,
-        ConversationCoordinator,
+        normalize_subagent_max_concurrency, render_wrapped_user_input_content,
+        resolve_agent_submission_turn_id, ConversationCoordinator,
     };
     use crate::service::remote_ssh::workspace_state::init_remote_workspace_manager;
     use bitfun_runtime_ports::{AgentSubmissionRequest, AgentSubmissionSource};
@@ -5391,6 +5524,59 @@ mod tests {
             resolve_agent_submission_turn_id(&request),
             "legacy_metadata_turn"
         );
+    }
+
+    #[test]
+    fn render_wrapped_user_input_content_wraps_plain_input_without_reminders() {
+        let rendered = render_wrapped_user_input_content("hello".to_string(), Vec::new());
+
+        assert_eq!(rendered, "<user_query>\nhello\n</user_query>");
+    }
+
+    #[test]
+    fn render_wrapped_user_input_content_keeps_existing_markup_when_no_reminders() {
+        let original = "<user_query>\nhello\n</user_query>".to_string();
+
+        let rendered = render_wrapped_user_input_content(original.clone(), Vec::new());
+
+        assert_eq!(rendered, original);
+    }
+
+    #[test]
+    fn render_wrapped_user_input_content_preserves_existing_markup_without_nesting() {
+        let original = "<user_query>\nhello\n</user_query>".to_string();
+
+        let rendered = render_wrapped_user_input_content(
+            original.clone(),
+            vec!["# Skill Listing Update\n## Added Skills".to_string()],
+        );
+
+        assert!(rendered.starts_with(
+            "<system_reminder>\n# Skill Listing Update\n## Added Skills\n</system_reminder>\n"
+        ));
+        assert!(rendered.ends_with(&original));
+        assert_eq!(rendered.matches("<user_query>").count(), 1);
+    }
+
+    #[test]
+    fn render_wrapped_user_input_content_preserves_reminder_order_before_user_query() {
+        let rendered = render_wrapped_user_input_content(
+            "hello".to_string(),
+            vec![
+                "# Skill Listing Update\n## Added Skills".to_string(),
+                "# Agent Listing Update\n## Added Agents".to_string(),
+                "mode switch reminder".to_string(),
+            ],
+        );
+
+        let skill_index = rendered.find("# Skill Listing Update").unwrap();
+        let agent_index = rendered.find("# Agent Listing Update").unwrap();
+        let system_index = rendered.find("mode switch reminder").unwrap();
+        let user_query_index = rendered.find("<user_query>").unwrap();
+
+        assert!(skill_index < agent_index);
+        assert!(agent_index < system_index);
+        assert!(system_index < user_query_index);
     }
 
     #[tokio::test]

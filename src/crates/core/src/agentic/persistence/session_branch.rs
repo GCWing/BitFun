@@ -160,6 +160,22 @@ impl PersistenceManager {
                     )
                     .await?;
                 }
+                if let Some(snapshot) = self
+                    .load_turn_skill_agent_snapshot(
+                        workspace_path,
+                        &request.source_session_id,
+                        source_turn.turn_index,
+                    )
+                    .await?
+                {
+                    self.save_turn_skill_agent_snapshot(
+                        workspace_path,
+                        &target_session_id,
+                        new_index,
+                        &snapshot,
+                    )
+                    .await?;
+                }
             }
 
             for turn in &branched_turns {

@@ -7,6 +7,7 @@ use crate::agentic::core::{
     SessionKind, SessionState, SessionSummary,
 };
 use crate::agentic::session::{SessionPromptCache, PROMPT_CACHE_SCHEMA_VERSION};
+use crate::agentic::skill_agent_snapshot::TurnSkillAgentSnapshot;
 use crate::infrastructure::PathManager;
 use crate::service::remote_ssh::workspace_state::{
     resolve_workspace_session_identity, LOCAL_WORKSPACE_SSH_HOST,
@@ -95,6 +96,14 @@ pub struct SessionMetadataPage {
 struct SessionMetadataPageCursor {
     last_active_at: u64,
     session_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct StoredTurnSkillAgentSnapshotFile {
+    schema_version: u32,
+    session_id: String,
+    turn_index: usize,
+    snapshot: TurnSkillAgentSnapshot,
 }
 
 #[derive(Debug, Default)]
@@ -448,6 +457,16 @@ impl PersistenceManager {
     ) -> PathBuf {
         self.snapshots_dir(workspace_path, session_id)
             .join(format!("context-{:04}.json", turn_index))
+    }
+
+    fn skill_agent_snapshot_path(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        turn_index: usize,
+    ) -> PathBuf {
+        self.snapshots_dir(workspace_path, session_id)
+            .join(format!("skill-agent-{:04}.json", turn_index))
     }
 
     fn transcript_path(&self, workspace_path: &Path, session_id: &str) -> PathBuf {
@@ -2104,6 +2123,83 @@ impl PersistenceManager {
         Ok(Some((turn_index, messages)))
     }
 
+    pub async fn save_turn_skill_agent_snapshot(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        turn_index: usize,
+        snapshot: &TurnSkillAgentSnapshot,
+    ) -> BitFunResult<()> {
+        self.ensure_runtime_for_write(workspace_path).await?;
+        self.ensure_snapshots_dir(workspace_path, session_id)
+            .await?;
+
+        self.write_json_atomic(
+            &self.skill_agent_snapshot_path(workspace_path, session_id, turn_index),
+            &StoredTurnSkillAgentSnapshotFile {
+                schema_version: SESSION_STORAGE_SCHEMA_VERSION,
+                session_id: session_id.to_string(),
+                turn_index,
+                snapshot: snapshot.clone(),
+            },
+        )
+        .await
+    }
+
+    pub async fn load_turn_skill_agent_snapshot(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        turn_index: usize,
+    ) -> BitFunResult<Option<TurnSkillAgentSnapshot>> {
+        let stored = self
+            .read_json_optional::<StoredTurnSkillAgentSnapshotFile>(
+                &self.skill_agent_snapshot_path(workspace_path, session_id, turn_index),
+            )
+            .await?;
+        Ok(stored.map(|value| value.snapshot))
+    }
+
+    pub async fn delete_turn_skill_agent_snapshots_from(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        turn_index: usize,
+    ) -> BitFunResult<()> {
+        let dir = self.snapshots_dir(workspace_path, session_id);
+        if !dir.exists() {
+            return Ok(());
+        }
+
+        let mut rd = fs::read_dir(&dir)
+            .await
+            .map_err(|e| BitFunError::io(format!("Failed to read snapshots directory: {}", e)))?;
+        while let Some(entry) = rd
+            .next_entry()
+            .await
+            .map_err(|e| BitFunError::io(format!("Failed to iterate snapshots directory: {}", e)))?
+        {
+            let path = entry.path();
+            if path.extension().and_then(|value| value.to_str()) != Some("json") {
+                continue;
+            }
+            let Some(stem) = path.file_stem().and_then(|value| value.to_str()) else {
+                continue;
+            };
+            let Some(index_str) = stem.strip_prefix("skill-agent-") else {
+                continue;
+            };
+            let Ok(index) = index_str.parse::<usize>() else {
+                continue;
+            };
+            if index >= turn_index {
+                let _ = fs::remove_file(&path).await;
+            }
+        }
+
+        Ok(())
+    }
+
     pub async fn delete_turn_context_snapshots_from(
         &self,
         workspace_path: &Path,
@@ -2130,7 +2226,11 @@ impl PersistenceManager {
             let Some(stem) = path.file_stem().and_then(|value| value.to_str()) else {
                 continue;
             };
-            let Some(index_str) = stem.strip_prefix("context-") else {
+            let index_str = if let Some(index) = stem.strip_prefix("context-") {
+                index
+            } else if let Some(index) = stem.strip_prefix("skill-agent-") {
+                index
+            } else {
                 continue;
             };
             let Ok(index) = index_str.parse::<usize>() else {
@@ -3053,6 +3153,9 @@ impl PersistenceManager {
 mod tests {
     use super::{context_snapshot_payload_stats, PersistenceManager};
     use crate::agentic::core::{Message, Session, SessionConfig, SessionKind, ToolResult};
+    use crate::agentic::skill_agent_snapshot::{
+        AgentSnapshotEntry, SkillSnapshotEntry, TurnSkillAgentSnapshot,
+    };
     use crate::infrastructure::PathManager;
     use crate::service::session::{
         DialogTurnData, ModelRoundData, SessionMetadata, SessionRelationship,
@@ -3833,5 +3936,62 @@ mod tests {
         assert!(runtime.snapshot_operations_dir.exists());
         assert!(runtime.plans_dir.exists());
         assert!(runtime.layout_state_file.exists());
+    }
+
+    #[tokio::test]
+    async fn skill_agent_snapshots_persist_and_truncate_with_context_snapshots() {
+        let workspace = TestWorkspace::new();
+        let manager = PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
+            .expect("persistence manager");
+        let session_id = Uuid::new_v4().to_string();
+        let snapshot = TurnSkillAgentSnapshot {
+            skills: vec![SkillSnapshotEntry {
+                name: "skill-a".to_string(),
+                description: "desc-a".to_string(),
+                location: "/skills/a".to_string(),
+            }],
+            subagents: vec![AgentSnapshotEntry {
+                id: "agent-a".to_string(),
+                description: "desc-a".to_string(),
+                default_tools: vec!["Read".to_string()],
+            }],
+        };
+
+        manager
+            .save_turn_context_snapshot(
+                workspace.path(),
+                &session_id,
+                0,
+                &[Message::user("hi".to_string())],
+            )
+            .await
+            .expect("context snapshot should save");
+        manager
+            .save_turn_skill_agent_snapshot(workspace.path(), &session_id, 0, &snapshot)
+            .await
+            .expect("skill-agent snapshot should save");
+
+        let loaded = manager
+            .load_turn_skill_agent_snapshot(workspace.path(), &session_id, 0)
+            .await
+            .expect("skill-agent snapshot should load")
+            .expect("skill-agent snapshot should exist");
+        assert_eq!(loaded, snapshot);
+
+        manager
+            .delete_turn_context_snapshots_from(workspace.path(), &session_id, 0)
+            .await
+            .expect("snapshot deletion should succeed");
+
+        assert!(manager
+            .load_turn_skill_agent_snapshot(workspace.path(), &session_id, 0)
+            .await
+            .expect("skill-agent snapshot reload should succeed")
+            .is_none());
+        assert!(manager
+            .load_turn_context_snapshot(workspace.path(), &session_id, 0)
+            .await
+            .expect("context snapshot reload should succeed")
+            .is_none());
     }
 }

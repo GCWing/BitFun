@@ -13,8 +13,9 @@ use crate::agentic::session::{
     EvidenceLedgerEventStatus, EvidenceLedgerSummary, EvidenceLedgerTargetKind, FileReadState,
     FileReadStateStore, PromptCacheLookup, PromptCachePolicy, PromptCacheScope,
     SessionContextStore, SessionEvidenceLedger, SessionPromptCache, SessionPromptCacheStore,
-    SystemPromptCacheIdentity, UserContextCacheIdentity,
+    SystemPromptCacheIdentity, TurnSkillAgentSnapshotStore, UserContextCacheIdentity,
 };
+use crate::agentic::skill_agent_snapshot::TurnSkillAgentSnapshot;
 use crate::infrastructure::ai::get_global_ai_client_factory;
 use crate::service::config::{
     get_app_language_code, get_global_config_service, short_model_user_language_instruction,
@@ -96,6 +97,7 @@ pub struct SessionManager {
     /// Sub-components
     context_store: Arc<SessionContextStore>,
     prompt_cache_store: Arc<SessionPromptCacheStore>,
+    turn_skill_agent_snapshot_store: Arc<TurnSkillAgentSnapshotStore>,
     file_read_state_store: Arc<FileReadStateStore>,
     evidence_ledger: Arc<SessionEvidenceLedger>,
     persistence_manager: Arc<PersistenceManager>,
@@ -715,6 +717,17 @@ impl SessionManager {
         self.prompt_cache_store.replace_cache(session_id, cache);
     }
 
+    async fn load_turn_skill_agent_snapshot_from_persistence(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        turn_index: usize,
+    ) -> BitFunResult<Option<TurnSkillAgentSnapshot>> {
+        self.persistence_manager
+            .load_turn_skill_agent_snapshot(workspace_path, session_id, turn_index)
+            .await
+    }
+
     async fn load_prompt_cache_from_persistence(
         &self,
         workspace_path: &Path,
@@ -800,6 +813,7 @@ impl SessionManager {
             session_workspace_index: Arc::new(DashMap::new()),
             context_store,
             prompt_cache_store: Arc::new(SessionPromptCacheStore::new()),
+            turn_skill_agent_snapshot_store: Arc::new(TurnSkillAgentSnapshotStore::new()),
             file_read_state_store: Arc::new(FileReadStateStore::new()),
             evidence_ledger: Arc::new(SessionEvidenceLedger::new()),
             persistence_manager,
@@ -987,6 +1001,7 @@ impl SessionManager {
         let session_workspace_index = self.session_workspace_index.clone();
         let context_store = self.context_store.clone();
         let prompt_cache_store = self.prompt_cache_store.clone();
+        let turn_skill_agent_snapshot_store = self.turn_skill_agent_snapshot_store.clone();
         let file_read_state_store = self.file_read_state_store.clone();
         let evidence_ledger = self.evidence_ledger.clone();
         let persistence_manager = self.persistence_manager.clone();
@@ -1008,6 +1023,7 @@ impl SessionManager {
                 session_workspace_index,
                 context_store,
                 prompt_cache_store,
+                turn_skill_agent_snapshot_store,
                 file_read_state_store,
                 evidence_ledger,
                 persistence_manager,
@@ -1147,6 +1163,8 @@ impl SessionManager {
 
         // 2. Initialize the in-memory context cache.
         self.context_store.create_session(&session_id);
+        self.turn_skill_agent_snapshot_store
+            .create_session(&session_id);
         self.file_read_state_store.create_session(&session_id);
 
         // 3. Persist to local path (handles remote workspaces correctly)
@@ -1260,6 +1278,190 @@ impl SessionManager {
         self.persist_prompt_cache_best_effort(target_session_id, "prompt_cache_cloned")
             .await;
         true
+    }
+
+    pub async fn turn_skill_agent_snapshot(
+        &self,
+        session_id: &str,
+        turn_index: usize,
+    ) -> Option<TurnSkillAgentSnapshot> {
+        if let Some(snapshot) = self
+            .turn_skill_agent_snapshot_store
+            .get_snapshot(session_id, turn_index)
+        {
+            return Some(snapshot);
+        }
+
+        if !self.should_persist_session_id(session_id) {
+            return None;
+        }
+
+        let workspace_path = self.effective_session_workspace_path(session_id).await?;
+        match self
+            .load_turn_skill_agent_snapshot_from_persistence(
+                &workspace_path,
+                session_id,
+                turn_index,
+            )
+            .await
+        {
+            Ok(Some(snapshot)) => {
+                self.turn_skill_agent_snapshot_store.set_snapshot(
+                    session_id,
+                    turn_index,
+                    snapshot.clone(),
+                );
+                Some(snapshot)
+            }
+            Ok(None) => None,
+            Err(error) => {
+                warn!(
+                    "Failed to load turn skill-agent snapshot: session_id={}, turn_index={}, workspace_path={}, error={}",
+                    session_id,
+                    turn_index,
+                    workspace_path.display(),
+                    error
+                );
+                None
+            }
+        }
+    }
+
+    pub async fn latest_turn_skill_agent_snapshot_at_or_before(
+        &self,
+        session_id: &str,
+        turn_index: usize,
+    ) -> Option<(usize, TurnSkillAgentSnapshot)> {
+        let cached_snapshot = self
+            .turn_skill_agent_snapshot_store
+            .latest_snapshot_at_or_before(session_id, turn_index);
+        if let Some(snapshot) = cached_snapshot.as_ref() {
+            if snapshot.0 == turn_index || !self.should_persist_session_id(session_id) {
+                return cached_snapshot;
+            }
+        }
+
+        if !self.should_persist_session_id(session_id) {
+            return cached_snapshot;
+        }
+
+        let workspace_path = self.effective_session_workspace_path(session_id).await?;
+        let scan_floor_exclusive = cached_snapshot.as_ref().map(|snapshot| snapshot.0);
+        for index in (0..=turn_index).rev() {
+            if scan_floor_exclusive.is_some_and(|floor| index <= floor) {
+                break;
+            }
+            match self
+                .load_turn_skill_agent_snapshot_from_persistence(&workspace_path, session_id, index)
+                .await
+            {
+                Ok(Some(snapshot)) => {
+                    self.turn_skill_agent_snapshot_store.set_snapshot(
+                        session_id,
+                        index,
+                        snapshot.clone(),
+                    );
+                    return Some((index, snapshot));
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    warn!(
+                        "Failed to load turn skill-agent snapshot while scanning backwards: session_id={}, turn_index={}, workspace_path={}, error={}",
+                        session_id,
+                        index,
+                        workspace_path.display(),
+                        error
+                    );
+                }
+            }
+        }
+
+        cached_snapshot
+    }
+
+    pub async fn remember_turn_skill_agent_snapshot(
+        &self,
+        session_id: &str,
+        turn_index: usize,
+        snapshot: TurnSkillAgentSnapshot,
+    ) {
+        self.turn_skill_agent_snapshot_store
+            .set_snapshot(session_id, turn_index, snapshot.clone());
+
+        if !self.should_persist_session_id(session_id) {
+            return;
+        }
+
+        let Some(workspace_path) = self.effective_session_workspace_path(session_id).await else {
+            debug!(
+                "Skipping turn skill-agent snapshot persistence because workspace path is unavailable: session_id={}, turn_index={}",
+                session_id, turn_index
+            );
+            return;
+        };
+
+        if let Err(error) = self
+            .persistence_manager
+            .save_turn_skill_agent_snapshot(&workspace_path, session_id, turn_index, &snapshot)
+            .await
+        {
+            warn!(
+                "Failed to persist turn skill-agent snapshot: session_id={}, turn_index={}, workspace_path={}, error={}",
+                session_id,
+                turn_index,
+                workspace_path.display(),
+                error
+            );
+        }
+    }
+
+    pub async fn recover_first_turn_skill_agent_snapshot(
+        &self,
+        session_id: &str,
+        snapshot: TurnSkillAgentSnapshot,
+    ) {
+        self.turn_skill_agent_snapshot_store
+            .remove_from(session_id, 1);
+        self.turn_skill_agent_snapshot_store
+            .set_snapshot(session_id, 0, snapshot.clone());
+
+        if !self.should_persist_session_id(session_id) {
+            return;
+        }
+
+        let Some(workspace_path) = self.effective_session_workspace_path(session_id).await else {
+            debug!(
+                "Skipping first-turn skill-agent baseline recovery persistence because workspace path is unavailable: session_id={}",
+                session_id
+            );
+            return;
+        };
+
+        if let Err(error) = self
+            .persistence_manager
+            .delete_turn_skill_agent_snapshots_from(&workspace_path, session_id, 1)
+            .await
+        {
+            warn!(
+                "Failed to prune turn skill-agent snapshots during baseline recovery: session_id={}, workspace_path={}, error={}",
+                session_id,
+                workspace_path.display(),
+                error
+            );
+        }
+
+        if let Err(error) = self
+            .persistence_manager
+            .save_turn_skill_agent_snapshot(&workspace_path, session_id, 0, &snapshot)
+            .await
+        {
+            warn!(
+                "Failed to persist recovered first-turn skill-agent snapshot: session_id={}, workspace_path={}, error={}",
+                session_id,
+                workspace_path.display(),
+                error
+            );
+        }
     }
 
     pub async fn invalidate_prompt_cache(
@@ -1701,6 +1903,8 @@ impl SessionManager {
         );
         self.context_store.delete_session(session_id);
         self.prompt_cache_store.delete_session(session_id);
+        self.turn_skill_agent_snapshot_store
+            .delete_session(session_id);
         self.file_read_state_store.delete_session(session_id);
         debug!(
             "Session deletion stage completed: session_id={}, stage=context_store_delete, duration_ms={}",
@@ -2184,6 +2388,8 @@ impl SessionManager {
         if session_already_in_memory {
             self.context_store.delete_session(session_id);
             self.prompt_cache_store.delete_session(session_id);
+            self.turn_skill_agent_snapshot_store
+                .delete_session(session_id);
             self.file_read_state_store.delete_session(session_id);
         }
 
@@ -2361,6 +2567,8 @@ impl SessionManager {
                 .delete_turn_context_snapshots_from(workspace_path, session_id, target_turn)
                 .await?;
         }
+        self.turn_skill_agent_snapshot_store
+            .remove_from(session_id, target_turn);
 
         Ok(())
     }
@@ -3841,6 +4049,7 @@ impl SessionManager {
         let enable_persistence = self.config.enable_persistence;
         let context_store = self.context_store.clone();
         let prompt_cache_store = self.prompt_cache_store.clone();
+        let turn_skill_agent_snapshot_store = self.turn_skill_agent_snapshot_store.clone();
         let file_read_state_store = self.file_read_state_store.clone();
 
         tokio::spawn(async move {
@@ -3899,6 +4108,7 @@ impl SessionManager {
                     {
                         context_store.delete_session(&candidate.session_id);
                         prompt_cache_store.delete_session(&candidate.session_id);
+                        turn_skill_agent_snapshot_store.delete_session(&candidate.session_id);
                         file_read_state_store.delete_session(&candidate.session_id);
                     }
                 }
@@ -4993,6 +5203,98 @@ mod tests {
             .expect("metadata should load")
             .expect("metadata should exist");
         assert_eq!(metadata.turn_count, 1);
+    }
+
+    #[tokio::test]
+    async fn latest_skill_agent_snapshot_scans_persistence_beyond_stale_cache_hit() {
+        use crate::agentic::skill_agent_snapshot::{
+            AgentSnapshotEntry, SkillSnapshotEntry, TurnSkillAgentSnapshot,
+        };
+
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager);
+        let session = manager
+            .create_session(
+                "Skill agent snapshot".to_string(),
+                "agent".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+
+        manager
+            .remember_turn_skill_agent_snapshot(
+                &session.session_id,
+                0,
+                TurnSkillAgentSnapshot {
+                    skills: vec![SkillSnapshotEntry {
+                        name: "skill-a".to_string(),
+                        description: "desc-a".to_string(),
+                        location: "/a".to_string(),
+                    }],
+                    subagents: vec![AgentSnapshotEntry {
+                        id: "agent-a".to_string(),
+                        description: "desc-a".to_string(),
+                        default_tools: vec!["Read".to_string()],
+                    }],
+                },
+            )
+            .await;
+        manager
+            .remember_turn_skill_agent_snapshot(
+                &session.session_id,
+                1,
+                TurnSkillAgentSnapshot {
+                    skills: vec![SkillSnapshotEntry {
+                        name: "skill-a".to_string(),
+                        description: "desc-a".to_string(),
+                        location: "/a".to_string(),
+                    }],
+                    subagents: vec![AgentSnapshotEntry {
+                        id: "agent-b".to_string(),
+                        description: "desc-b".to_string(),
+                        default_tools: vec!["Read".to_string(), "Grep".to_string()],
+                    }],
+                },
+            )
+            .await;
+
+        manager
+            .turn_skill_agent_snapshot_store
+            .delete_session(&session.session_id);
+        manager
+            .turn_skill_agent_snapshot_store
+            .create_session(&session.session_id);
+        manager.turn_skill_agent_snapshot_store.set_snapshot(
+            &session.session_id,
+            0,
+            TurnSkillAgentSnapshot {
+                skills: vec![SkillSnapshotEntry {
+                    name: "skill-a".to_string(),
+                    description: "desc-a".to_string(),
+                    location: "/a".to_string(),
+                }],
+                subagents: vec![AgentSnapshotEntry {
+                    id: "agent-a".to_string(),
+                    description: "desc-a".to_string(),
+                    default_tools: vec!["Read".to_string()],
+                }],
+            },
+        );
+
+        let latest = manager
+            .latest_turn_skill_agent_snapshot_at_or_before(&session.session_id, 1)
+            .await
+            .expect("latest snapshot should exist");
+
+        assert_eq!(latest.0, 1);
+        assert_eq!(latest.1.subagents[0].id, "agent-b");
     }
 
     #[tokio::test]

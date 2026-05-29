@@ -5,8 +5,8 @@
 use super::round_executor::RoundExecutor;
 use super::types::{ExecutionContext, ExecutionResult, RoundContext, RoundResult};
 use crate::agentic::agents::{
-    get_agent_registry, PrependedPromptReminders, PromptBuilder, PromptBuilderContext,
-    RemoteExecutionHints, ToolListingSections,
+    build_prompt_context_for_workspace, get_agent_registry, PrependedPromptReminders,
+    PromptBuilder, PromptBuilderContext, ToolListingSections,
 };
 use crate::agentic::context_profile::{ContextProfilePolicy, ModelCapabilityProfile};
 use crate::agentic::core::{
@@ -21,15 +21,13 @@ use crate::agentic::image_analysis::{
 };
 use crate::agentic::round_preempt::RoundInjectionKind;
 use crate::agentic::session::{CompressionMode, ContextCompressor, SessionManager};
+use crate::agentic::skill_agent_snapshot::build_skill_agent_tool_listing_sections_from_snapshot;
 use crate::agentic::tools::implementations::{GetToolSpecTool, SkillTool, TaskTool};
 use crate::agentic::tools::{resolve_tool_manifest, tool_context_runtime, ResolvedToolManifest};
-use crate::agentic::util::build_remote_workspace_layout_preview;
-use crate::agentic::{WorkspaceBackend, WorkspaceBinding};
+use crate::agentic::WorkspaceBinding;
 use crate::infrastructure::ai::get_global_ai_client_factory;
 use crate::service::config::get_global_config_service;
 use crate::service::config::types::{ModelCapability, ModelCategory, WriteToolMode};
-use crate::service::remote_ssh::workspace_state::get_remote_workspace_manager;
-use crate::service::workspace::get_global_workspace_service;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::token_counter::TokenCounter;
 use crate::util::types::Message as AIMessage;
@@ -609,94 +607,16 @@ impl ExecutionEngine {
         supports_image_understanding: bool,
         tool_listing_sections: ToolListingSections,
     ) -> Option<PromptBuilderContext> {
-        let workspace_path = context
-            .workspace
-            .as_ref()
-            .map(|workspace| workspace.root_path_string())?;
-
-        let related_paths = if let Some(workspace_id) = context
-            .workspace
-            .as_ref()
-            .and_then(|workspace| workspace.workspace_id.as_deref())
-        {
-            if let Some(workspace_service) = get_global_workspace_service() {
-                workspace_service
-                    .get_workspace(workspace_id)
-                    .await
-                    .map(|workspace| workspace.related_paths)
-                    .unwrap_or_default()
-            } else {
-                Vec::new()
-            }
-        } else {
-            Vec::new()
-        };
-
-        let base = PromptBuilderContext::new(
-            workspace_path.clone(),
-            Some(context.session_id.clone()),
+        let workspace = context.workspace.as_ref()?;
+        build_prompt_context_for_workspace(
+            workspace,
+            workspace.workspace_id.as_deref(),
+            &context.session_id,
             Some(model_name.to_string()),
+            Some(supports_image_understanding),
+            tool_listing_sections,
         )
-        .with_related_paths(related_paths)
-        .with_supports_image_understanding(supports_image_understanding)
-        .with_tool_listing_sections(tool_listing_sections);
-
-        let Some(workspace) = context.workspace.as_ref() else {
-            return Some(base);
-        };
-        if !workspace.is_remote() {
-            return Some(base);
-        }
-
-        let Some(connection_id) = workspace.connection_id() else {
-            return Some(base);
-        };
-        let Some(manager) = get_remote_workspace_manager() else {
-            warn!(
-                "Remote workspace active but RemoteWorkspaceStateManager is missing; using client OS hints only"
-            );
-            return Some(base);
-        };
-
-        let ssh_manager = manager.get_ssh_manager().await;
-        let file_service = manager.get_file_service().await;
-        let (kernel_name, hostname) = if let Some(ref ssh) = ssh_manager {
-            if let Some(info) = ssh.get_server_info(connection_id).await {
-                (info.os_type, info.hostname)
-            } else {
-                ("Linux".to_string(), "remote".to_string())
-            }
-        } else {
-            ("Linux".to_string(), "remote".to_string())
-        };
-        let connection_display_name = match &workspace.backend {
-            WorkspaceBackend::Remote {
-                connection_name, ..
-            } => connection_name.clone(),
-            _ => connection_id.to_string(),
-        };
-        let remote_layout = if let Some(ref fs) = file_service {
-            match build_remote_workspace_layout_preview(fs, connection_id, &workspace_path, 200)
-                .await
-            {
-                Ok((_, preview)) => Some(preview),
-                Err(e) => {
-                    warn!("Remote workspace layout for prompt failed: {}", e);
-                    None
-                }
-            }
-        } else {
-            None
-        };
-
-        Some(base.with_remote_prompt_overlay(
-            RemoteExecutionHints {
-                connection_display_name,
-                kernel_name,
-                hostname,
-            },
-            remote_layout,
-        ))
+        .await
     }
 
     async fn build_cached_prepended_prompt_reminders(
@@ -704,12 +624,24 @@ impl ExecutionEngine {
         session_id: &str,
         current_agent: &dyn crate::agentic::agents::Agent,
         prompt_context: Option<&PromptBuilderContext>,
+        _context_vars: &HashMap<String, String>,
     ) -> PrependedPromptReminders {
         let Some(prompt_context) = prompt_context.cloned() else {
             return PrependedPromptReminders::default();
         };
 
         let prompt_builder = PromptBuilder::new(prompt_context);
+        let baseline_tool_sections = self
+            .session_manager
+            .turn_skill_agent_snapshot(session_id, 0)
+            .await
+            .map(|snapshot| build_skill_agent_tool_listing_sections_from_snapshot(&snapshot));
+        if baseline_tool_sections.is_none() {
+            warn!(
+                "First-turn skill-agent snapshot unavailable while building prepended reminders: session_id={}",
+                session_id
+            );
+        }
         let user_context_identity = current_agent.user_context_cache_identity();
         let user_context = if let Some(cached_user_context) = self
             .session_manager
@@ -742,8 +674,12 @@ impl ExecutionEngine {
         };
 
         PrependedPromptReminders {
-            skill_listing: prompt_builder.build_skill_listing_reminder(),
-            agent_listing: prompt_builder.build_agent_listing_reminder(),
+            skill_listing: baseline_tool_sections
+                .as_ref()
+                .and_then(|sections| sections.render_skill_listing_reminder()),
+            agent_listing: baseline_tool_sections
+                .as_ref()
+                .and_then(|sections| sections.render_agent_listing_reminder()),
             collapsed_tool_listing: prompt_builder.build_collapsed_tool_listing_reminder(),
             user_context,
         }
@@ -1464,6 +1400,7 @@ impl ExecutionEngine {
                 &context.session_id,
                 current_agent.as_ref(),
                 prompt_context.as_ref(),
+                &context.context,
             )
             .await;
         let system_prompt = self
@@ -2151,6 +2088,7 @@ impl ExecutionEngine {
                 &context.session_id,
                 current_agent.as_ref(),
                 prompt_context.as_ref(),
+                &context.context,
             )
             .await;
         let prepended_reminders = prepended_prompt_reminders.ordered_reminders();

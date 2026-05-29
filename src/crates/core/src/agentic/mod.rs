@@ -7,6 +7,7 @@
 pub mod core;
 pub mod events;
 pub mod persistence;
+pub mod skill_agent_snapshot;
 
 // Session management module
 pub mod session;
@@ -67,5 +68,6 @@ pub use round_preempt::{
 };
 pub use session::*;
 pub use side_question::*;
+pub use skill_agent_snapshot::*;
 pub use system::{init_agentic_system, AgenticSystem};
 pub use workspace::{WorkspaceBackend, WorkspaceBinding};

@@ -31,8 +31,9 @@ pub use definitions::subagents::{
 };
 use indexmap::IndexMap;
 pub use prompt_builder::{
-    PrependedPromptReminders, PromptBuilder, PromptBuilderContext, RemoteExecutionHints,
-    ToolListingSections, UserContextPolicy, UserContextSection,
+    build_prompt_context_for_workspace, PrependedPromptReminders, PromptBuilder,
+    PromptBuilderContext, RemoteExecutionHints, ToolListingSections, UserContextPolicy,
+    UserContextSection,
 };
 pub use registry::catalog::{builtin_agent_specs, BuiltinAgentSpec};
 pub use registry::types::{

@@ -1,5 +1,8 @@
 //! System prompts module providing main dialogue and agent dialogue prompts
 use super::user_context::{UserContextPolicy, UserContextSection};
+use crate::agentic::util::remote_workspace_layout::build_remote_workspace_layout_preview;
+use crate::agentic::workspace::WorkspaceBackend;
+use crate::agentic::WorkspaceBinding;
 use crate::service::agent_memory::{
     build_workspace_agent_memory_prompt, build_workspace_instruction_files_context,
     build_workspace_memory_files_context,
@@ -9,6 +12,8 @@ use crate::service::config::get_app_language_code;
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::filesystem::get_formatted_directory_listing;
 use crate::service::i18n::LocaleId;
+use crate::service::remote_ssh::workspace_state::get_remote_workspace_manager;
+use crate::service::workspace::get_global_workspace_service;
 use crate::service::workspace::RelatedPath;
 use crate::util::errors::{BitFunError, BitFunResult};
 use log::{debug, warn};
@@ -49,7 +54,7 @@ impl ToolListingSections {
             && self.collapsed_tool_listing.is_none()
     }
 
-    fn render_skill_listing_reminder(&self) -> Option<String> {
+    pub fn render_skill_listing_reminder(&self) -> Option<String> {
         self.skill_listing.as_deref().map(|skill_listing| {
             Self::render_section(
                 SKILL_LISTING_TITLE,
@@ -59,7 +64,7 @@ impl ToolListingSections {
         })
     }
 
-    fn render_agent_listing_reminder(&self) -> Option<String> {
+    pub fn render_agent_listing_reminder(&self) -> Option<String> {
         self.agent_listing.as_deref().map(|agent_listing| {
             Self::render_section(
                 AGENT_LISTING_TITLE,
@@ -69,7 +74,7 @@ impl ToolListingSections {
         })
     }
 
-    fn render_collapsed_tool_listing_reminder(&self) -> Option<String> {
+    pub fn render_collapsed_tool_listing_reminder(&self) -> Option<String> {
         self.collapsed_tool_listing
             .as_deref()
             .map(|collapsed_tool_listing| {
@@ -100,14 +105,14 @@ pub struct PrependedPromptReminders {
 impl PrependedPromptReminders {
     pub fn ordered_reminders(&self) -> Vec<&str> {
         let mut reminders = Vec::new();
+        if let Some(collapsed_tool_listing) = self.collapsed_tool_listing.as_deref() {
+            reminders.push(collapsed_tool_listing);
+        }
         if let Some(skill_listing) = self.skill_listing.as_deref() {
             reminders.push(skill_listing);
         }
         if let Some(agent_listing) = self.agent_listing.as_deref() {
             reminders.push(agent_listing);
-        }
-        if let Some(collapsed_tool_listing) = self.collapsed_tool_listing.as_deref() {
-            reminders.push(collapsed_tool_listing);
         }
         if let Some(user_context) = self.user_context.as_deref() {
             reminders.push(user_context);
@@ -182,6 +187,94 @@ impl PromptBuilderContext {
         self.remote_project_layout = project_layout;
         self
     }
+}
+
+pub async fn build_prompt_context_for_workspace(
+    workspace: &WorkspaceBinding,
+    workspace_id: Option<&str>,
+    session_id: &str,
+    model_name: Option<String>,
+    supports_image_understanding: Option<bool>,
+    tool_listing_sections: ToolListingSections,
+) -> Option<PromptBuilderContext> {
+    let workspace_path = workspace.root_path_string();
+
+    let related_paths = if let Some(workspace_id) = workspace_id {
+        if let Some(workspace_service) = get_global_workspace_service() {
+            workspace_service
+                .get_workspace(workspace_id)
+                .await
+                .map(|workspace| workspace.related_paths)
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        }
+    } else {
+        Vec::new()
+    };
+
+    let mut base = PromptBuilderContext::new(
+        workspace_path.clone(),
+        Some(session_id.to_string()),
+        model_name,
+    )
+    .with_related_paths(related_paths)
+    .with_tool_listing_sections(tool_listing_sections);
+    if let Some(supports_image_understanding) = supports_image_understanding {
+        base = base.with_supports_image_understanding(supports_image_understanding);
+    }
+
+    if !workspace.is_remote() {
+        return Some(base);
+    }
+
+    let Some(connection_id) = workspace.connection_id() else {
+        return Some(base);
+    };
+    let Some(manager) = get_remote_workspace_manager() else {
+        warn!(
+            "Remote workspace active but RemoteWorkspaceStateManager is missing; using client OS hints only"
+        );
+        return Some(base);
+    };
+
+    let ssh_manager = manager.get_ssh_manager().await;
+    let file_service = manager.get_file_service().await;
+    let (kernel_name, hostname) = if let Some(ref ssh) = ssh_manager {
+        if let Some(info) = ssh.get_server_info(connection_id).await {
+            (info.os_type, info.hostname)
+        } else {
+            ("Linux".to_string(), "remote".to_string())
+        }
+    } else {
+        ("Linux".to_string(), "remote".to_string())
+    };
+    let connection_display_name = match &workspace.backend {
+        WorkspaceBackend::Remote {
+            connection_name, ..
+        } => connection_name.clone(),
+        _ => connection_id.to_string(),
+    };
+    let remote_layout = if let Some(ref fs) = file_service {
+        match build_remote_workspace_layout_preview(fs, connection_id, &workspace_path, 200).await {
+            Ok((_, preview)) => Some(preview),
+            Err(e) => {
+                warn!("Remote workspace layout for prompt failed: {}", e);
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    Some(base.with_remote_prompt_overlay(
+        RemoteExecutionHints {
+            connection_display_name,
+            kernel_name,
+            hostname,
+        },
+        remote_layout,
+    ))
 }
 
 pub struct PromptBuilder {
@@ -639,9 +732,9 @@ mod tests {
         assert_eq!(
             ordered_reminders,
             vec![
+                collapsed_tool_listing.as_str(),
                 skill_listing.as_str(),
                 agent_listing.as_str(),
-                collapsed_tool_listing.as_str(),
                 user_context.as_str(),
             ]
         );
