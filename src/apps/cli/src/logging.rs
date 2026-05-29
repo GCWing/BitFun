@@ -12,19 +12,11 @@ pub fn resolve_log_dir() -> PathBuf {
         .unwrap_or_else(|| std::env::temp_dir().join("bitfun-cli"))
 }
 
-pub fn resolve_log_file_path() -> PathBuf {
-    resolve_log_dir().join("bitfun-cli.log")
-}
-
 pub fn init_file_logging_at(log_dir: &Path, log_level: tracing::Level) -> PathBuf {
     fs::create_dir_all(log_dir).ok();
     let log_file = log_dir.join("bitfun-cli.log");
 
-    if let Ok(file) = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&log_file)
-    {
+    if let Ok(file) = OpenOptions::new().create(true).append(true).open(&log_file) {
         tracing_subscriber::fmt()
             .with_max_level(log_level)
             .with_writer(move || file.try_clone().expect("log file clone"))
