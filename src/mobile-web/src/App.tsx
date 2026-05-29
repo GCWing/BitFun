@@ -3,7 +3,7 @@ import PairingPage from './pages/PairingPage';
 import WorkspacePage from './pages/WorkspacePage';
 import SessionListPage from './pages/SessionListPage';
 import ChatPage from './pages/ChatPage';
-import { I18nProvider } from './i18n';
+import { I18nProvider, useI18n } from './i18n';
 import { RelayHttpClient } from './services/RelayHttpClient';
 import { RemoteSessionManager } from './services/RemoteSessionManager';
 import { ThemeProvider } from './theme';
@@ -29,12 +29,15 @@ function getNavClass(
 }
 
 const AppContent: React.FC = () => {
+  const { t } = useI18n();
   const [page, setPage] = useState<Page>('pairing');
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [activeSessionName, setActiveSessionName] = useState<string>('Session');
   const [chatAutoFocus, setChatAutoFocus] = useState(false);
+  const [isReconnecting, setIsReconnecting] = useState(false);
   const clientRef = useRef<RelayHttpClient | null>(null);
   const sessionMgrRef = useRef<RemoteSessionManager | null>(null);
+  const [sessionMgr, setSessionMgr] = useState<RemoteSessionManager | null>(null);
 
   const [navDir, setNavDir] = useState<NavDirection>(null);
   const [prevPage, setPrevPage] = useState<Page | null>(null);
@@ -102,12 +105,53 @@ const AppContent: React.FC = () => {
     (client: RelayHttpClient, sessionMgr: RemoteSessionManager) => {
       clientRef.current = client;
       sessionMgrRef.current = sessionMgr;
+      setSessionMgr(sessionMgr);
       pageStackRef.current = ['pairing', 'sessions'];
       history.pushState({ page: 'sessions' }, '');
       setPage('sessions');
     },
     [],
   );
+
+  // Periodic connection health check
+  useEffect(() => {
+    const shouldMonitor = page === 'sessions' || page === 'chat';
+    if (!shouldMonitor || !sessionMgr) {
+      setIsReconnecting(false);
+      return;
+    }
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+
+    const pingWithTimeout = (ms: number): Promise<void> =>
+      Promise.race([
+        sessionMgr.ping(),
+        new Promise<void>((_, reject) =>
+          setTimeout(() => reject(new Error('ping timeout')), ms),
+        ),
+      ]);
+
+    const loop = async () => {
+      try {
+        await pingWithTimeout(10000);
+        if (!cancelled) setIsReconnecting(false);
+      } catch {
+        if (!cancelled) setIsReconnecting(true);
+      }
+
+      if (!cancelled) {
+        timer = setTimeout(loop, 15000);
+      }
+    };
+
+    loop();
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [sessionMgr, page]);
 
   // Pop navigation handlers that can be called from both UI buttons and popstate
   const doPopFromChat = useCallback(() => {
@@ -174,6 +218,12 @@ const AppContent: React.FC = () => {
 
   return (
     <div className="mobile-app">
+      {isReconnecting && (
+        <div className="mobile-reconnect-banner">
+          <span className="mobile-reconnect-spinner" />
+          {t('sessions.reconnecting')}
+        </div>
+      )}
       {page === 'pairing' && <PairingPage onPaired={handlePaired} />}
       {shouldShow('workspace') && sessionMgrRef.current && (
         <div className={`nav-page ${getNavClass('workspace', currentPage, navDir, isAnimating)}`}>
