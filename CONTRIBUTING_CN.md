@@ -78,6 +78,13 @@ pnpm run e2e:test
 - 前端：`createLogger('ModuleName')`
 - 后端：`log::{info, debug, warn, error}` 宏
 
+### 国际化
+
+- Locale 元数据统一维护在 `src/shared/i18n/contract/locales.json`；修改后运行
+  `pnpm run i18n:generate`。
+- 跨形态稳定标签放在 `src/shared/i18n/resources/shared`；流程文案留在所属形态资源中。
+- Web UI 路由或功能文案使用 `useI18n(namespace)`。不要把 Web UI locale 资源导入 mobile-web、installer、backend 或静态页面。
+
 ### 平台无关核心
 
 `core` 中禁止引入平台相关依赖：
@@ -164,16 +171,23 @@ UI 改动请附前后对比截图或短录屏，方便快速评审。
 
 按改动范围运行相关测试；不需要跑完下方所有命令，只选择与本次改动文件和行为匹配的最小集合：
 
+完整构建和大范围测试由 CI 保护。本地预检应保持聚焦；只有改动直接触及构建、打包，
+或 CI 不覆盖对应路径时才运行更重命令。
+
 修改 `/usage` UI 文案时，请同步 `en-US`、`zh-CN`、`zh-TW` 多语言文本。
 
 | 改动类型 | 推荐验证 |
 | --- | --- |
 | 仓库元信息、PR/Issue 模板或 GitHub workflow | `pnpm run check:repo-hygiene && pnpm run check:github-config && git diff --check` |
-| Web UI、状态、适配层或多语言文案 | `pnpm run lint:web && pnpm run type-check:web && pnpm --dir src/web-ui run test:run` |
-| Mobile web UI、配对、重连、断开或聊天流程 | `pnpm --dir src/mobile-web run type-check && pnpm run build:mobile-web` |
-| Rust core、transport、API layer、services 或共享运行时逻辑 | `cargo check --workspace && cargo test --workspace` |
-| 桌面端集成、Tauri API 或桌面端专属行为 | `cargo check -p bitfun-desktop && cargo test -p bitfun-desktop` |
-| E2E 覆盖的行为 | 先构建最近的 app target，再运行最接近的 E2E spec 或 `pnpm run e2e:test:l0` |
+| 仅 locale 资源改动 | `pnpm run i18n:audit` |
+| Locale contract 或 shared terms | `pnpm run i18n:generate && pnpm run i18n:contract:test && pnpm run i18n:audit` |
+| Web UI 状态、适配层或运行时代码 | `pnpm run type-check:web`；行为变化时再加最近的 focused test |
+| Web UI i18n runtime 或 namespace loading 改动 | `pnpm run i18n:contract:test && pnpm run type-check:web && pnpm --dir src/web-ui run test:run src/infrastructure/i18n/core/I18nService.test.ts` |
+| Mobile web UI、配对、重连、断开或聊天流程 | `pnpm --dir src/mobile-web run type-check` |
+| 不涉及打包的安装器前端或 i18n runtime | `pnpm --dir BitFun-Installer run type-check` |
+| Rust core、transport、API layer、services 或共享运行时逻辑 | `cargo check --workspace`；行为变化时再加最近的 focused `cargo test` |
+| 桌面端集成、Tauri API 或桌面端专属行为 | `cargo check -p bitfun-desktop`；行为变化时再加 focused desktop tests |
+| E2E 覆盖的行为 | 运行最近的 focused E2E/smoke check；除非影响构建，否则 broad build/test 交给 CI |
 
 Mobile web 配对、重连、断开或聊天流程改动，需要在 PR 中补充手动验证步骤；涉及 UI 变化时，请附截图或短录屏。
 

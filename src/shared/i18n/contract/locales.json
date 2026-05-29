@@ -50,6 +50,10 @@
     "core": {
       "resourceRoot": "src/crates/core/locales",
       "loading": "backend-service"
+    },
+    "relay-static-homepage": {
+      "resourceRoot": "src/apps/relay-server/static/homepage",
+      "loading": "self-contained-static"
     }
   },
   "locales": [

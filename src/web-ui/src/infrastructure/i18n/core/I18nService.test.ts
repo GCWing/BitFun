@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
 import { I18nService } from './I18nService';
+import { DEFAULT_LOCALE, WEB_UI_BOOTSTRAP_NAMESPACES } from '../presets';
 
 describe('I18nService shared namespace contract', () => {
+  it('keeps bootstrap translations available synchronously after construction', () => {
+    const service = new I18nService();
+
+    expect(service.t('common:actions.copy')).not.toBe('common:actions.copy');
+  });
+
   it('keeps shared terms explicit so surface namespaces retain priority', () => {
     const service = new I18nService();
     const i18n = service.getI18nInstance();
@@ -27,5 +34,19 @@ describe('I18nService shared namespace contract', () => {
     await i18n.changeLanguage('zh-TW');
 
     expect(service.t('fallbackProbe')).toBe('simplified fallback');
+  });
+
+  it('keeps non-bootstrap web-ui namespaces out of the startup resource bundle', async () => {
+    const service = new I18nService();
+    const i18n = service.getI18nInstance();
+
+    for (const namespace of WEB_UI_BOOTSTRAP_NAMESPACES) {
+      expect(i18n.hasResourceBundle(DEFAULT_LOCALE, namespace)).toBe(true);
+    }
+    expect(i18n.hasResourceBundle(DEFAULT_LOCALE, 'settings/basics')).toBe(false);
+
+    await service.loadNamespace('settings/basics');
+
+    expect(i18n.hasResourceBundle(DEFAULT_LOCALE, 'settings/basics')).toBe(true);
   });
 });

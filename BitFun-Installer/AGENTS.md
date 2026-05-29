@@ -28,23 +28,26 @@ Language Select → Options → Progress → Model Setup → Theme Setup
 
 ## Commands
 
+These are command references, not the default precheck list. Use Verification
+below for PR scope.
+
 ```bash
 pnpm --dir BitFun-Installer run installer:dev
 pnpm --dir BitFun-Installer run tauri:dev
 pnpm --dir BitFun-Installer run type-check
-pnpm --dir BitFun-Installer run build
-pnpm --dir BitFun-Installer run installer:build
+pnpm --dir BitFun-Installer run build            # React build / CI reproduction
+pnpm --dir BitFun-Installer run installer:build  # packaging only
 ```
 
 ## Verification
 
-For frontend, i18n, language-contract, or non-packaging installer changes, prefer
-the lighter focused checks:
+Use the smallest matching check:
 
 ```bash
-pnpm --dir BitFun-Installer run type-check
-cargo check --manifest-path BitFun-Installer/src-tauri/Cargo.toml
-pnpm --dir BitFun-Installer run build
+pnpm run i18n:audit                                                   # resource-only i18n
+pnpm run i18n:generate && pnpm run i18n:contract:test && pnpm run i18n:audit
+pnpm --dir BitFun-Installer run type-check                            # frontend i18n/runtime
+cargo check --manifest-path BitFun-Installer/src-tauri/Cargo.toml      # Tauri/Rust changes
 ```
 
 Run the full installer build only for packaging, payload, native bundling,

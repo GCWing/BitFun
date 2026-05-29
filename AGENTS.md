@@ -37,7 +37,11 @@ Repository rule: **keep product logic platform-agnostic, then expose it through 
 | Installer | `BitFun-Installer` | [AGENTS.md](BitFun-Installer/AGENTS.md) |
 | E2E tests | `tests/e2e` | [AGENTS.md](tests/e2e/AGENTS.md) |
 
-## Most-used commands
+## Common commands
+
+These are command references, not a pre-PR checklist. Use the Verification table
+to choose the smallest local precheck; broad suites and builds are mainly for CI
+reproduction or build-impacting changes.
 
 ```bash
 # Install
@@ -54,24 +58,25 @@ pnpm run fmt:rs                     # format only changed / staged Rust files
 pnpm run lint:web
 pnpm run type-check:web
 pnpm --dir src/mobile-web run type-check
+pnpm run i18n:contract:test          # i18n contract / resources only
+pnpm run i18n:audit                  # i18n contract / resources only
 pnpm run check:repo-hygiene
 pnpm run check:github-config
 cargo check --workspace
 
-# Test
-pnpm --dir src/web-ui run test:run
-cargo test --workspace
+# Test (prefer focused paths locally; broad suites are CI-backed)
+pnpm --dir src/web-ui run test:run      # broad suite; prefer focused paths locally
+cargo test --workspace                  # broad suite; CI-backed
 
-# Build
-cargo build -p bitfun-desktop
-pnpm run build:web
-pnpm run build:mobile-web
+# Build (only for build-impacting changes or CI reproduction)
+cargo build -p bitfun-desktop           # build-impacting changes / CI reproduction
+pnpm run build:web                      # build-impacting changes / CI reproduction
+pnpm run build:mobile-web               # build-impacting changes / CI reproduction
 
-# Fast builds (for development / CI speed)
+# Fast builds (manual build/debug flows)
 pnpm run desktop:build:fast           # debug build, no bundling
 pnpm run desktop:build:release-fast   # release with reduced LTO
 pnpm run desktop:build:nsis:fast      # Windows installer, release-fast profile
-pnpm run installer:build:fast         # installer app, fast mode
 ```
 
 For the full script list, see [`package.json`](package.json).
@@ -88,6 +93,9 @@ For the full script list, see [`package.json`](package.json).
   in the owning product surface.
 - Do not import Web UI locale resources into smaller product surfaces such as
   `src/mobile-web` or `BitFun-Installer`. See `docs/architecture/i18n.md`.
+- Web UI loads only bootstrap namespaces eagerly; use `useI18n(namespace)` for
+  route or feature copy and keep direct `i18nService.t(...)` calls in bootstrap
+  namespaces.
 
 ### Logging
 
@@ -184,16 +192,24 @@ Session data is stored under `.bitfun/sessions/{session_id}/`.
 
 ## Verification
 
+Run the smallest local precheck that matches the touched files. CI is expected to
+cover full builds and broad test suites; run heavier local commands only when the
+change directly affects build, packaging, or CI cannot protect the path.
+
 | Change type | Minimum verification |
 |---|---|
-| Frontend UI, state, adapters, or locales | `pnpm run lint:web && pnpm run type-check:web && pnpm --dir src/web-ui run test:run` |
-| Mobile web UI, state, pairing, disconnect, or reconnect behavior | `pnpm --dir src/mobile-web run type-check && pnpm run build:mobile-web`; include manual pairing / reconnect verification when behavior changes |
-| Deep Review / Code Review Team behavior | Web UI verification above, plus `cargo test -p bitfun-core deep_review -- --nocapture`; also run the Rust / desktop rows below when backend or Tauri APIs are touched |
-| Shared Rust logic in `core`, `transport`, `api-layer`, or services | `cargo check --workspace && cargo test --workspace` |
-| Desktop integration, Tauri APIs, browser/computer-use, or desktop-only behavior | `cargo check -p bitfun-desktop && cargo test -p bitfun-desktop` |
-| Behavior covered by desktop smoke/functional flows | `cargo build -p bitfun-desktop` then the nearest E2E spec or `pnpm run e2e:test:l0` |
-| `src/crates/ai-adapters` | Relevant Rust checks above **and** `cargo test -p bitfun-agent-stream` for stream contracts |
-| Installer frontend, i18n, or locale contract | `pnpm --dir BitFun-Installer run type-check && cargo check --manifest-path BitFun-Installer/src-tauri/Cargo.toml && pnpm --dir BitFun-Installer run build` |
+| Frontend UI, state, or adapters without i18n resource/contract changes | `pnpm run type-check:web`, plus the nearest focused test when behavior changed |
+| Locale resource-only changes | `pnpm run i18n:audit` |
+| Locale contract or shared terms | `pnpm run i18n:generate && pnpm run i18n:contract:test && pnpm run i18n:audit` |
+| Web UI i18n runtime, namespace loading, or direct `i18nService.t(...)` usage | `pnpm run i18n:contract:test && pnpm run type-check:web && pnpm --dir src/web-ui run test:run src/infrastructure/i18n/core/I18nService.test.ts` |
+| Mobile web UI, state, pairing, disconnect, or reconnect behavior | `pnpm --dir src/mobile-web run type-check`; include manual pairing / reconnect notes when behavior changes |
+| Deep Review / Code Review Team behavior | Nearest Web UI check above, plus `cargo test -p bitfun-core deep_review -- --nocapture`; also run Rust / desktop checks when backend or Tauri APIs are touched |
+| Shared Rust logic in `core`, `transport`, `api-layer`, or services | `cargo check --workspace`, plus the nearest focused `cargo test` when behavior changed |
+| Desktop integration, Tauri APIs, browser/computer-use, or desktop-only behavior | `cargo check -p bitfun-desktop`, plus focused desktop tests when behavior changed |
+| Behavior covered by desktop smoke/functional flows | Prefer the nearest focused E2E/smoke check; rely on CI for broad build/test coverage unless build behavior changed |
+| `src/crates/ai-adapters` | Relevant Rust checks above; add `cargo test -p bitfun-agent-stream` only when stream contracts changed |
+| Installer frontend or i18n runtime without packaging changes | `pnpm --dir BitFun-Installer run type-check` |
+| Installer Tauri/Rust changes | `cargo check --manifest-path BitFun-Installer/src-tauri/Cargo.toml` |
 | Installer packaging, payload, install/uninstall flow, or native bundling | `pnpm run installer:build` |
 
 ## Where to look first

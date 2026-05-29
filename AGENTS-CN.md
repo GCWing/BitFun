@@ -37,7 +37,10 @@ BitFun 是一个由 Rust workspace 与 React 前端组成的项目。
 | 安装器 | `BitFun-Installer` | [AGENTS.md](BitFun-Installer/AGENTS.md) |
 | E2E 测试 | `tests/e2e` | [AGENTS.md](tests/e2e/AGENTS.md) |
 
-## 最常用命令
+## 常用命令
+
+这些是命令参考，不是 PR 前置检查清单。预检请按下方“验证”表选择最小本地检查；
+大范围测试和构建主要用于复现 CI 或验证构建相关改动。
 
 ```bash
 # 安装
@@ -54,29 +57,42 @@ pnpm run fmt:rs                     # 只格式化已改动 / 已暂存的 Rust 
 pnpm run lint:web
 pnpm run type-check:web
 pnpm --dir src/mobile-web run type-check
+pnpm run i18n:contract:test          # 仅 i18n contract / resources
+pnpm run i18n:audit                  # 仅 i18n contract / resources
 pnpm run check:repo-hygiene
 pnpm run check:github-config
 cargo check --workspace
 
-# 测试
-pnpm --dir src/web-ui run test:run
-cargo test --workspace
+# 测试（本地优先用精确测试路径；大范围测试由 CI 兜底）
+pnpm --dir src/web-ui run test:run      # 大范围测试；本地优先用精确测试路径
+cargo test --workspace                  # 大范围测试；CI 兜底
 
-# 构建
-cargo build -p bitfun-desktop
-pnpm run build:web
-pnpm run build:mobile-web
+# 构建（仅构建相关改动或复现 CI 时运行）
+cargo build -p bitfun-desktop           # 构建相关改动 / 复现 CI
+pnpm run build:web                      # 构建相关改动 / 复现 CI
+pnpm run build:mobile-web               # 构建相关改动 / 复现 CI
 
-# 快速构建（开发 / CI 提速）
+# 快速构建（手动构建 / 调试流程）
 pnpm run desktop:build:fast           # debug 构建，不打包
 pnpm run desktop:build:release-fast   # release 但降低 LTO
 pnpm run desktop:build:nsis:fast      # Windows 安装器，release-fast profile
-pnpm run installer:build:fast         # 安装器应用，快速模式
 ```
 
 完整脚本列表见 [`package.json`](package.json)。
 
 ## 全局规则
+
+### 国际化
+
+- Locale id、alias、fallback 和各形态默认语言统一由
+  `src/shared/i18n/contract/locales.json` 管理；修改后运行
+  `pnpm run i18n:generate`。
+- 跨形态稳定标签放在
+  `src/shared/i18n/resources/shared/<locale>/terms.json`；流程文案留在所属
+  产品形态资源中。
+- 不要把 Web UI locale 资源导入 `src/mobile-web`、`BitFun-Installer` 等较小形态。
+- Web UI 只急切加载 bootstrap namespace；路由或功能文案使用
+  `useI18n(namespace)`，直接 `i18nService.t(...)` 只用于 bootstrap namespace。
 
 ### 日志
 
@@ -169,16 +185,24 @@ SessionManager → Session → DialogTurn → ModelRound
 
 ## 验证
 
+按触及文件选择最小本地预检。完整构建和大范围测试默认由 CI 保护；只有改动直接影响构建、
+打包，或 CI 无法覆盖对应路径时，才在本地运行更重的命令。
+
 | 改动类型 | 最低验证要求 |
 |---|---|
-| 前端 UI、状态、适配层或多语言文案 | `pnpm run lint:web && pnpm run type-check:web && pnpm --dir src/web-ui run test:run` |
-| Mobile web UI、状态、配对、断开或重连行为 | `pnpm --dir src/mobile-web run type-check && pnpm run build:mobile-web`；行为变化还需要在 PR 中说明手动配对 / 重连验证 |
-| Deep Review / 代码审核团队行为 | 运行上面的前端验证，再运行 `cargo test -p bitfun-core deep_review -- --nocapture`；如果触及后端或 Tauri API，还需要运行下方 Rust / 桌面端验证 |
-| `core`、`transport`、`api-layer` 或共享服务中的 Rust 逻辑 | `cargo check --workspace && cargo test --workspace` |
-| 桌面端集成、Tauri API、browser/computer-use 或桌面专属行为 | `cargo check -p bitfun-desktop && cargo test -p bitfun-desktop` |
-| 被桌面端 smoke/functional 流覆盖的行为 | `cargo build -p bitfun-desktop` 后运行最接近的 E2E spec，或 `pnpm run e2e:test:l0` |
-| `src/crates/ai-adapters` | 运行上面相关 Rust 检查，**并且**运行 `cargo test -p bitfun-agent-stream` 验证 stream contract |
-| 安装器应用 | `pnpm run installer:build` |
+| 不涉及 i18n 资源/契约的前端 UI、状态或适配层 | `pnpm run type-check:web`；行为变化时再加最近的 focused test |
+| 仅 locale 资源改动 | `pnpm run i18n:audit` |
+| Locale contract 或 shared terms | `pnpm run i18n:generate && pnpm run i18n:contract:test && pnpm run i18n:audit` |
+| Web UI i18n runtime、namespace loading 或直接 `i18nService.t(...)` 调用 | `pnpm run i18n:contract:test && pnpm run type-check:web && pnpm --dir src/web-ui run test:run src/infrastructure/i18n/core/I18nService.test.ts` |
+| Mobile web UI、状态、配对、断开或重连行为 | `pnpm --dir src/mobile-web run type-check`；行为变化还需要在 PR 中说明手动配对 / 重连验证 |
+| Deep Review / 代码审核团队行为 | 运行最近的 Web UI 检查，再运行 `cargo test -p bitfun-core deep_review -- --nocapture`；如果触及后端或 Tauri API，还需要运行对应 Rust / 桌面端检查 |
+| `core`、`transport`、`api-layer` 或共享服务中的 Rust 逻辑 | `cargo check --workspace`；行为变化时再加最近的 focused `cargo test` |
+| 桌面端集成、Tauri API、browser/computer-use 或桌面专属行为 | `cargo check -p bitfun-desktop`；行为变化时再加 focused desktop tests |
+| 被桌面端 smoke/functional 流覆盖的行为 | 优先运行最近的 focused E2E/smoke check；除非改动影响构建，否则 broad build/test 交给 CI |
+| `src/crates/ai-adapters` | 运行上面相关 Rust 检查；只有 stream contract 改动时再加 `cargo test -p bitfun-agent-stream` |
+| 不涉及打包的安装器前端或 i18n runtime | `pnpm --dir BitFun-Installer run type-check` |
+| 安装器 Tauri/Rust 改动 | `cargo check --manifest-path BitFun-Installer/src-tauri/Cargo.toml` |
+| 安装器打包、payload、安装/卸载流程或 native bundling | `pnpm run installer:build` |
 
 ## 先看哪里
 

@@ -78,6 +78,15 @@ Captured data is logged as structured JSON under the `bitfun::devtools` target.
 - Frontend: `createLogger('ModuleName')`
 - Backend: `log::{info, debug, warn, error}` macros
 
+### Internationalization
+
+- Locale metadata lives in `src/shared/i18n/contract/locales.json`; run
+  `pnpm run i18n:generate` after editing it.
+- Put stable cross-surface labels in `src/shared/i18n/resources/shared`; keep
+  workflow copy in the owning surface.
+- Web UI route or feature copy should use `useI18n(namespace)`. Do not import
+  Web UI locale catalogs into mobile-web, installer, backend, or static pages.
+
 ### Platform-agnostic core
 
 Do not use platform-specific dependencies in `core`:
@@ -170,16 +179,23 @@ Keep PRs small and focused. Avoid bundling unrelated changes.
 
 Run relevant tests for your change. You do not need to run every row below; choose the smallest set that matches the files and behavior you touched:
 
+CI covers full builds and broad test suites. Local prechecks should stay focused
+unless the change directly touches build, packaging, or a path not covered by CI.
+
 For `/usage` UI copy changes, keep `en-US`, `zh-CN`, and `zh-TW` locale strings in sync.
 
 | Change type | Recommended verification |
 | --- | --- |
 | Repository metadata, PR/issue templates, or GitHub workflows | `pnpm run check:repo-hygiene && pnpm run check:github-config && git diff --check` |
-| Web UI, state, adapters, or locale changes | `pnpm run lint:web && pnpm run type-check:web && pnpm --dir src/web-ui run test:run` |
-| Mobile web UI, pairing, reconnect, disconnect, or chat-flow changes | `pnpm --dir src/mobile-web run type-check && pnpm run build:mobile-web` |
-| Rust core, transport, API layer, services, or shared runtime logic | `cargo check --workspace && cargo test --workspace` |
-| Desktop integration, Tauri APIs, or desktop-only behavior | `cargo check -p bitfun-desktop && cargo test -p bitfun-desktop` |
-| E2E-covered behavior | Build the nearest app target, then run the closest E2E spec or `pnpm run e2e:test:l0` |
+| Locale resource-only changes | `pnpm run i18n:audit` |
+| Locale contract or shared terms | `pnpm run i18n:generate && pnpm run i18n:contract:test && pnpm run i18n:audit` |
+| Web UI state, adapters, or runtime code | `pnpm run type-check:web`, plus the nearest focused test when behavior changed |
+| Web UI i18n runtime or namespace-loading changes | `pnpm run i18n:contract:test && pnpm run type-check:web && pnpm --dir src/web-ui run test:run src/infrastructure/i18n/core/I18nService.test.ts` |
+| Mobile web UI, pairing, reconnect, disconnect, or chat-flow changes | `pnpm --dir src/mobile-web run type-check` |
+| Installer frontend or i18n runtime without packaging changes | `pnpm --dir BitFun-Installer run type-check` |
+| Rust core, transport, API layer, services, or shared runtime logic | `cargo check --workspace`, plus the nearest focused `cargo test` when behavior changed |
+| Desktop integration, Tauri APIs, or desktop-only behavior | `cargo check -p bitfun-desktop`, plus focused desktop tests when behavior changed |
+| E2E-covered behavior | Run the closest focused E2E/smoke check; rely on CI for broad build/test coverage unless build behavior changed |
 
 For mobile-web pairing, reconnect, disconnect, or chat-flow changes, include manual verification steps and screenshots or a short recording when the UI changes.
 

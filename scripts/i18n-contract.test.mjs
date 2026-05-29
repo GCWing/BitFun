@@ -33,6 +33,28 @@ function flattenKeys(value, prefix = '') {
     .sort();
 }
 
+function listFiles(dir, predicate) {
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  return entries.flatMap((entry) => {
+    const absolutePath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      return listFiles(absolutePath, predicate);
+    }
+
+    return predicate(absolutePath) ? [absolutePath] : [];
+  });
+}
+
+function extractStringArrayConstant(source, exportName) {
+  const marker = `export const ${exportName} = [`;
+  const start = source.indexOf(marker);
+  assert.notEqual(start, -1, `missing ${exportName} constant`);
+  const body = source.slice(start + marker.length);
+  const end = body.indexOf('] as const');
+  assert.notEqual(end, -1, `${exportName} must be an as const string array`);
+  return [...body.slice(0, end).matchAll(/'([^']+)'/g)].map((entry) => entry[1]);
+}
+
 test('i18n contract generated files are in sync with the canonical contract', () => {
   assert.ok(fs.existsSync(contractPath), 'missing shared i18n locale contract');
 
@@ -129,12 +151,78 @@ test('frontend runtimes use generated locale defaults and fallback chains', () =
   assert.match(installerI18nSource, /getInstallerUiFallbackChain/, 'installer i18next should use the generated locale fallback chain');
 });
 
+test('web-ui runtime keeps locale namespaces lazy outside its bootstrap set', () => {
+  const webI18nSource = readText('src/web-ui/src/infrastructure/i18n/core/I18nService.ts');
+
+  assert.match(webI18nSource, /WEB_UI_BOOTSTRAP_NAMESPACES/, 'Web UI should declare the small eager namespace set');
+  assert.match(webI18nSource, /import\.meta\.glob\('\.\.\/\.\.\/\.\.\/locales\/\*\*\/\*\.json'/, 'Web UI should keep a lazy namespace glob for non-bootstrap resources');
+  const lazyGlobBlock = webI18nSource.match(/const lazyLocaleModules = import\.meta\.glob\([\s\S]*?\) as/)?.[0] ?? '';
+  assert.doesNotMatch(
+    lazyGlobBlock,
+    /eager:\s*true/,
+    'Web UI must not eagerly import every locale namespace',
+  );
+});
+
+test('web-ui synchronous i18nService.t namespaces stay in the bootstrap set', () => {
+  const registrySource = readText('src/web-ui/src/infrastructure/i18n/presets/namespaceRegistry.ts');
+  const bootstrapNamespaces = new Set(extractStringArrayConstant(registrySource, 'WEB_UI_BOOTSTRAP_NAMESPACES'));
+  const sourceRoot = path.join(root, 'src', 'web-ui', 'src');
+  const missing = new Set();
+
+  const sourceFiles = listFiles(sourceRoot, (file) => {
+    const normalized = file.replace(/\\/g, '/');
+    return (
+      /\.(ts|tsx)$/.test(file) &&
+      !normalized.includes('/locales/') &&
+      !normalized.endsWith('.test.ts') &&
+      !normalized.endsWith('.test.tsx') &&
+      !normalized.endsWith('.spec.ts') &&
+      !normalized.endsWith('.spec.tsx')
+    );
+  });
+
+  for (const file of sourceFiles) {
+    const text = fs.readFileSync(file, 'utf8');
+    const patterns = [/i18nService\.t\(\s*(['"`])([^'"`:]+):/g];
+    if (text.includes('i18nService.getT()')) {
+      patterns.push(/\bt\(\s*(['"`])([^'"`:]+):/g);
+    }
+
+    for (const pattern of patterns) {
+      for (const match of text.matchAll(pattern)) {
+        const namespace = match[2];
+        if (!bootstrapNamespaces.has(namespace)) {
+          missing.add(`${namespace} (${path.relative(root, file).replace(/\\/g, '/')})`);
+        }
+      }
+    }
+  }
+
+  assert.deepEqual(
+    [...missing].sort(),
+    [],
+    'synchronous i18nService.t(...) call sites require eager bootstrap namespaces',
+  );
+});
+
+test('i18n audit enforces the checked-in hardcoded source candidate budget', () => {
+  const baselineSource = readText('scripts/i18n-hardcoded-baseline.json');
+  const auditSource = readText('scripts/i18n-audit.mjs');
+
+  assert.doesNotThrow(() => JSON.parse(baselineSource));
+  assert.match(auditSource, /i18n-hardcoded-baseline\.json/, 'i18n:audit should read the hardcoded copy baseline');
+  assert.match(auditSource, /auditHardcodedSourceBudgets/, 'i18n:audit should fail when hardcoded candidate budgets grow');
+});
+
 test('i18n audit treats locale key parity as an error', () => {
   const auditSource = readText('scripts/i18n-audit.mjs');
   const parityFunction = auditSource.match(/function auditKeyParity\(namespaces\) \{[\s\S]*?\n\}/)?.[0] ?? '';
 
   assert.match(parityFunction, /reportError\(`\$\{locale\}\/\$\{namespace\}\.json is missing/, 'missing locale keys should fail i18n:audit');
   assert.match(parityFunction, /reportError\(`\$\{locale\}\/\$\{namespace\}\.json has/, 'extra locale keys should fail i18n:audit');
+  assert.match(auditSource, /auditMobileWebMessageParity/, 'mobile-web message keys should be covered by i18n:audit');
+  assert.match(auditSource, /auditInstallerKeyParity/, 'installer locale keys should be covered by i18n:audit');
 });
 
 test('installer Rust locale contract is generated from the installer surface order', () => {

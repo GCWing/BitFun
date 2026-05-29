@@ -69,6 +69,7 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       defaultAssistant: 'Default Assistant',
       switchAssistant: 'Switch assistant',
       selectAssistant: 'Select Assistant',
+      launch: 'Launch',
       startRemoteFlow: 'Start a new remote flow',
       codeSession: 'Code Session',
       codeSessionDesc: 'For coding anywhere, anytime.',
