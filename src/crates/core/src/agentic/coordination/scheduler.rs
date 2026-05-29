@@ -36,6 +36,12 @@ pub use bitfun_runtime_ports::{
     AgentSessionReplyRoute, DialogQueuePriority, DialogSteerOutcome, DialogSubmissionPolicy,
     DialogSubmitOutcome,
 };
+use bitfun_runtime_ports::{
+    DialogSessionStateFact, DialogSubmitQueueAction, DialogSubmitQueueFacts, DialogTurnOutcomeKind,
+    resolve_dialog_submit_queue_action,
+    should_skip_agent_session_reply as should_skip_agent_session_reply_contract,
+    should_suppress_agent_session_cancelled_reply as should_suppress_agent_session_cancelled_reply_contract,
+};
 
 #[derive(Debug, Clone)]
 struct ActiveTurn {
@@ -70,11 +76,13 @@ impl ActiveTurn {
     }
 
     fn should_suppress_cancelled_reply_for_requester(&self, requester_session_id: &str) -> bool {
-        self.is_agent_session_request()
-            && self
-                .reply_route
+        should_suppress_agent_session_cancelled_reply_contract(
+            &self.policy,
+            self.reply_route
                 .as_ref()
-                .is_some_and(|reply_route| reply_route.source_session_id == requester_session_id)
+                .map(|reply_route| reply_route.source_session_id.as_str()),
+            requester_session_id,
+        )
     }
 }
 
@@ -310,15 +318,21 @@ impl DialogScheduler {
         .await
     }
 
-    fn user_message_may_preempt(policy: &DialogSubmissionPolicy) -> bool {
-        matches!(
-            policy.trigger_source,
-            DialogTriggerSource::DesktopUi
-                | DialogTriggerSource::DesktopApi
-                | DialogTriggerSource::Cli
-                | DialogTriggerSource::RemoteRelay
-                | DialogTriggerSource::Bot
-        )
+    fn session_state_fact(state: Option<&SessionState>) -> DialogSessionStateFact {
+        match state {
+            None => DialogSessionStateFact::Missing,
+            Some(SessionState::Idle) => DialogSessionStateFact::Idle,
+            Some(SessionState::Processing { .. }) => DialogSessionStateFact::Processing,
+            Some(SessionState::Error { .. }) => DialogSessionStateFact::Error,
+        }
+    }
+
+    fn turn_outcome_kind(outcome: &TurnOutcome) -> DialogTurnOutcomeKind {
+        match outcome {
+            TurnOutcome::Completed { .. } => DialogTurnOutcomeKind::Completed,
+            TurnOutcome::Cancelled { .. } => DialogTurnOutcomeKind::Cancelled,
+            TurnOutcome::Failed { .. } => DialogTurnOutcomeKind::Failed,
+        }
     }
 
     /// Submit a user message for a session.
@@ -401,8 +415,19 @@ impl DialogScheduler {
             .get_session(&session_id)
             .map(|s| s.state.clone());
 
-        match state {
-            None => {
+        let queue_has_items = self
+            .queues
+            .get(&session_id)
+            .map(|q| !q.is_empty())
+            .unwrap_or(false);
+        let action = resolve_dialog_submit_queue_action(DialogSubmitQueueFacts {
+            session_state: Self::session_state_fact(state.as_ref()),
+            queue_has_items,
+            policy: queued_turn.policy,
+        });
+
+        match action {
+            DialogSubmitQueueAction::StartImmediately => {
                 let tid = self.start_turn(&session_id, &queued_turn).await?;
                 self.record_last_submitted_agent_type(&session_id, &queued_turn.agent_type)
                     .await;
@@ -412,7 +437,7 @@ impl DialogScheduler {
                 })
             }
 
-            Some(SessionState::Error { .. }) => {
+            DialogSubmitQueueAction::ClearQueueAndStartImmediately => {
                 self.clear_queue(&session_id);
                 let tid = self.start_turn(&session_id, &queued_turn).await?;
                 self.record_last_submitted_agent_type(&session_id, &queued_turn.agent_type)
@@ -423,47 +448,30 @@ impl DialogScheduler {
                 })
             }
 
-            Some(SessionState::Idle) => {
-                let queue_non_empty = self
-                    .queues
-                    .get(&session_id)
-                    .map(|q| !q.is_empty())
-                    .unwrap_or(false);
-
-                if queue_non_empty {
-                    self.enqueue(&session_id, queued_turn.clone())?;
-                    self.record_last_submitted_agent_type(&session_id, &queued_turn.agent_type)
-                        .await;
-                    let started_tid = self.try_start_next_queued(&session_id).await?;
-                    let outcome = match started_tid {
-                        Some(tid) if tid == resolved_turn_id => DialogSubmitOutcome::Started {
-                            session_id: session_id.clone(),
-                            turn_id: tid,
-                        },
-                        _ => DialogSubmitOutcome::Queued {
-                            session_id: session_id.clone(),
-                            turn_id: resolved_turn_id,
-                        },
-                    };
-                    Ok(outcome)
-                } else {
-                    let tid = self.start_turn(&session_id, &queued_turn).await?;
-                    self.record_last_submitted_agent_type(&session_id, &queued_turn.agent_type)
-                        .await;
-                    Ok(DialogSubmitOutcome::Started {
-                        session_id,
+            DialogSubmitQueueAction::EnqueueThenStartNext => {
+                self.enqueue(&session_id, queued_turn.clone())?;
+                self.record_last_submitted_agent_type(&session_id, &queued_turn.agent_type)
+                    .await;
+                let started_tid = self.try_start_next_queued(&session_id).await?;
+                let outcome = match started_tid {
+                    Some(tid) if tid == resolved_turn_id => DialogSubmitOutcome::Started {
+                        session_id: session_id.clone(),
                         turn_id: tid,
-                    })
-                }
+                    },
+                    _ => DialogSubmitOutcome::Queued {
+                        session_id: session_id.clone(),
+                        turn_id: resolved_turn_id,
+                    },
+                };
+                Ok(outcome)
             }
 
-            Some(SessionState::Processing { .. }) => {
-                let may_preempt = Self::user_message_may_preempt(&queued_turn.policy);
+            DialogSubmitQueueAction::EnqueueForActiveTurn { request_yield } => {
                 let accepted_agent_type = queued_turn.agent_type.clone();
                 self.enqueue(&session_id, queued_turn)?;
                 self.record_last_submitted_agent_type(&session_id, &accepted_agent_type)
                     .await;
-                if may_preempt {
+                if request_yield {
                     self.round_yield_flags.request_yield(&session_id);
                 }
                 Ok(DialogSubmitOutcome::Queued {
@@ -761,7 +769,10 @@ impl DialogScheduler {
         outcome: &TurnOutcome,
         suppressed_cancelled_reply: bool,
     ) -> bool {
-        matches!(outcome, TurnOutcome::Cancelled { .. }) && suppressed_cancelled_reply
+        should_skip_agent_session_reply_contract(
+            Self::turn_outcome_kind(outcome),
+            suppressed_cancelled_reply,
+        )
     }
 
     fn format_agent_session_reply(
@@ -987,8 +998,10 @@ mod tests {
         assert!(
             DialogScheduler::goal_verification_observation_text(&cancelled).contains("cancelled")
         );
-        assert!(DialogScheduler::goal_verification_observation_text(&failed)
-            .contains("network offline"));
+        assert!(
+            DialogScheduler::goal_verification_observation_text(&failed)
+                .contains("network offline")
+        );
     }
 
     #[test]
@@ -996,16 +1009,18 @@ mod tests {
         let remote = DialogSubmissionPolicy::for_source(DialogTriggerSource::RemoteRelay);
         assert_eq!(remote.queue_priority, DialogQueuePriority::Normal);
         assert!(remote.skip_tool_confirmation);
-        assert!(DialogScheduler::user_message_may_preempt(&remote));
+        assert!(bitfun_runtime_ports::dialog_policy_may_preempt(&remote));
 
         let bot = DialogSubmissionPolicy::for_source(DialogTriggerSource::Bot);
         assert_eq!(bot.queue_priority, DialogQueuePriority::Normal);
         assert!(bot.skip_tool_confirmation);
-        assert!(DialogScheduler::user_message_may_preempt(&bot));
+        assert!(bitfun_runtime_ports::dialog_policy_may_preempt(&bot));
 
         let agent_session = DialogSubmissionPolicy::for_source(DialogTriggerSource::AgentSession);
         assert_eq!(agent_session.queue_priority, DialogQueuePriority::Low);
         assert!(agent_session.skip_tool_confirmation);
-        assert!(!DialogScheduler::user_message_may_preempt(&agent_session));
+        assert!(!bitfun_runtime_ports::dialog_policy_may_preempt(
+            &agent_session
+        ));
     }
 }

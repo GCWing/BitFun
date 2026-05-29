@@ -2365,6 +2365,46 @@ const requiredContentRules = [
         message: 'missing dialog submit outcome regression',
       },
       {
+        regex: /\bpub enum DialogSessionStateFact\b/,
+        message: 'missing dialog session state fact contract',
+      },
+      {
+        regex: /\bpub struct DialogSubmitQueueFacts\b/,
+        message: 'missing dialog submit queue facts contract',
+      },
+      {
+        regex: /\bpub enum DialogSubmitQueueAction\b/,
+        message: 'missing dialog submit queue action contract',
+      },
+      {
+        regex: /\bpub const fn dialog_policy_may_preempt\b/,
+        message: 'missing dialog preempt policy contract',
+      },
+      {
+        regex: /\bpub const fn resolve_dialog_submit_queue_action\b/,
+        message: 'missing dialog submit queue action resolver',
+      },
+      {
+        regex: /\bdialog_submit_queue_action_preserves_current_scheduler_routing_policy\b/,
+        message: 'missing dialog submit queue action regression',
+      },
+      {
+        regex: /\bpub fn should_suppress_agent_session_cancelled_reply\b/,
+        message: 'missing agent-session cancel suppression contract',
+      },
+      {
+        regex: /\bpub enum DialogTurnOutcomeKind\b/,
+        message: 'missing dialog turn outcome kind contract',
+      },
+      {
+        regex: /\bpub const fn should_skip_agent_session_reply\b/,
+        message: 'missing agent-session reply skip contract',
+      },
+      {
+        regex: /\bagent_session_reply_decisions_preserve_cancel_suppression_boundary\b/,
+        message: 'missing agent-session reply decision regression',
+      },
+      {
         regex: /\bpub struct AgentSessionReplyRoute\b/,
         message: 'missing agent session reply route contract',
       },
@@ -2926,6 +2966,11 @@ const requiredContentRules = [
         regex:
           /pub use bitfun_runtime_ports::\{[\s\S]*AgentSessionReplyRoute[\s\S]*DialogQueuePriority[\s\S]*DialogSteerOutcome[\s\S]*DialogSubmissionPolicy[\s\S]*DialogSubmitOutcome[\s\S]*\};/,
         message: 'missing dialog submission policy compatibility re-export',
+      },
+      {
+        regex:
+          /use bitfun_runtime_ports::\{[\s\S]*DialogSessionStateFact[\s\S]*DialogSubmitQueueAction[\s\S]*DialogSubmitQueueFacts[\s\S]*DialogTurnOutcomeKind[\s\S]*resolve_dialog_submit_queue_action[\s\S]*should_skip_agent_session_reply_contract[\s\S]*should_suppress_agent_session_cancelled_reply_contract[\s\S]*\};/,
+        message: 'missing dialog scheduler decision contract import',
       },
     ],
   },
@@ -6770,6 +6815,16 @@ function runManifestParserSelfTest() {
         'dialog_submission_policy_preserves_current_surface_queue_defaults',
         'DialogSubmitOutcome',
         'dialog_submit_outcome_preserves_started_and_queued_fields',
+        'DialogSessionStateFact',
+        'DialogSubmitQueueFacts',
+        'DialogSubmitQueueAction',
+        'dialog_policy_may_preempt',
+        'resolve_dialog_submit_queue_action',
+        'dialog_submit_queue_action_preserves_current_scheduler_routing_policy',
+        'should_suppress_agent_session_cancelled_reply',
+        'DialogTurnOutcomeKind',
+        'should_skip_agent_session_reply',
+        'agent_session_reply_decisions_preserve_cancel_suppression_boundary',
         'AgentSessionReplyRoute',
         'agent_session_reply_route_keeps_requester_fields',
         'DialogSteerOutcome',
@@ -6967,9 +7022,17 @@ function runManifestParserSelfTest() {
       contracts: [
         'AgentSessionReplyRoute',
         'DialogQueuePriority',
+        'DialogSessionStateFact',
         'DialogSteerOutcome',
         'DialogSubmissionPolicy',
         'DialogSubmitOutcome',
+        'DialogSubmitQueueAction',
+        'DialogSubmitQueueFacts',
+        'DialogTurnOutcomeKind',
+        'dialog_policy_may_preempt',
+        'resolve_dialog_submit_queue_action',
+        'should_skip_agent_session_reply_contract',
+        'should_suppress_agent_session_cancelled_reply_contract',
       ],
     },
     {

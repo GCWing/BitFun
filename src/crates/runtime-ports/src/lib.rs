@@ -151,6 +151,83 @@ pub enum DialogSubmitOutcome {
     Queued { session_id: String, turn_id: String },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DialogSessionStateFact {
+    Missing,
+    Idle,
+    Processing,
+    Error,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DialogSubmitQueueFacts {
+    pub session_state: DialogSessionStateFact,
+    pub queue_has_items: bool,
+    pub policy: DialogSubmissionPolicy,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DialogSubmitQueueAction {
+    StartImmediately,
+    ClearQueueAndStartImmediately,
+    EnqueueThenStartNext,
+    EnqueueForActiveTurn { request_yield: bool },
+}
+
+pub const fn dialog_policy_may_preempt(policy: &DialogSubmissionPolicy) -> bool {
+    matches!(
+        policy.trigger_source,
+        DialogTriggerSource::DesktopUi
+            | DialogTriggerSource::DesktopApi
+            | DialogTriggerSource::Cli
+            | DialogTriggerSource::RemoteRelay
+            | DialogTriggerSource::Bot
+    )
+}
+
+pub const fn resolve_dialog_submit_queue_action(
+    facts: DialogSubmitQueueFacts,
+) -> DialogSubmitQueueAction {
+    match facts.session_state {
+        DialogSessionStateFact::Missing => DialogSubmitQueueAction::StartImmediately,
+        DialogSessionStateFact::Error => DialogSubmitQueueAction::ClearQueueAndStartImmediately,
+        DialogSessionStateFact::Idle => {
+            if facts.queue_has_items {
+                DialogSubmitQueueAction::EnqueueThenStartNext
+            } else {
+                DialogSubmitQueueAction::StartImmediately
+            }
+        }
+        DialogSessionStateFact::Processing => DialogSubmitQueueAction::EnqueueForActiveTurn {
+            request_yield: dialog_policy_may_preempt(&facts.policy),
+        },
+    }
+}
+
+pub fn should_suppress_agent_session_cancelled_reply(
+    policy: &DialogSubmissionPolicy,
+    reply_source_session_id: Option<&str>,
+    requester_session_id: &str,
+) -> bool {
+    policy.trigger_source == DialogTriggerSource::AgentSession
+        && reply_source_session_id.is_some_and(|source| source == requester_session_id)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DialogTurnOutcomeKind {
+    Completed,
+    Cancelled,
+    Failed,
+}
+
+pub const fn should_skip_agent_session_reply(
+    outcome_kind: DialogTurnOutcomeKind,
+    suppressed_cancelled_reply: bool,
+) -> bool {
+    matches!(outcome_kind, DialogTurnOutcomeKind::Cancelled) && suppressed_cancelled_reply
+}
+
 /// Source session route used when an agent-session request should reply to the
 /// requester after the target session finishes.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -773,6 +850,107 @@ mod tests {
             }
         );
         assert_ne!(started, queued);
+    }
+
+    #[test]
+    fn dialog_submit_queue_action_preserves_current_scheduler_routing_policy() {
+        let remote = DialogSubmissionPolicy::for_source(DialogTriggerSource::RemoteRelay);
+        assert!(dialog_policy_may_preempt(&remote));
+
+        let agent_session = DialogSubmissionPolicy::for_source(DialogTriggerSource::AgentSession);
+        assert!(!dialog_policy_may_preempt(&agent_session));
+
+        assert_eq!(
+            resolve_dialog_submit_queue_action(DialogSubmitQueueFacts {
+                session_state: DialogSessionStateFact::Missing,
+                queue_has_items: true,
+                policy: remote,
+            }),
+            DialogSubmitQueueAction::StartImmediately
+        );
+        assert_eq!(
+            resolve_dialog_submit_queue_action(DialogSubmitQueueFacts {
+                session_state: DialogSessionStateFact::Error,
+                queue_has_items: true,
+                policy: remote,
+            }),
+            DialogSubmitQueueAction::ClearQueueAndStartImmediately
+        );
+        assert_eq!(
+            resolve_dialog_submit_queue_action(DialogSubmitQueueFacts {
+                session_state: DialogSessionStateFact::Idle,
+                queue_has_items: false,
+                policy: remote,
+            }),
+            DialogSubmitQueueAction::StartImmediately
+        );
+        assert_eq!(
+            resolve_dialog_submit_queue_action(DialogSubmitQueueFacts {
+                session_state: DialogSessionStateFact::Idle,
+                queue_has_items: true,
+                policy: remote,
+            }),
+            DialogSubmitQueueAction::EnqueueThenStartNext
+        );
+        assert_eq!(
+            resolve_dialog_submit_queue_action(DialogSubmitQueueFacts {
+                session_state: DialogSessionStateFact::Processing,
+                queue_has_items: false,
+                policy: remote,
+            }),
+            DialogSubmitQueueAction::EnqueueForActiveTurn {
+                request_yield: true
+            }
+        );
+        assert_eq!(
+            resolve_dialog_submit_queue_action(DialogSubmitQueueFacts {
+                session_state: DialogSessionStateFact::Processing,
+                queue_has_items: false,
+                policy: agent_session,
+            }),
+            DialogSubmitQueueAction::EnqueueForActiveTurn {
+                request_yield: false
+            }
+        );
+    }
+
+    #[test]
+    fn agent_session_reply_decisions_preserve_cancel_suppression_boundary() {
+        let policy = DialogSubmissionPolicy::for_source(DialogTriggerSource::AgentSession);
+        assert!(should_suppress_agent_session_cancelled_reply(
+            &policy,
+            Some("requester"),
+            "requester",
+        ));
+        assert!(!should_suppress_agent_session_cancelled_reply(
+            &policy,
+            Some("requester"),
+            "other",
+        ));
+
+        let remote = DialogSubmissionPolicy::for_source(DialogTriggerSource::RemoteRelay);
+        assert!(!should_suppress_agent_session_cancelled_reply(
+            &remote,
+            Some("requester"),
+            "requester",
+        ));
+
+        assert!(should_skip_agent_session_reply(
+            DialogTurnOutcomeKind::Cancelled,
+            true,
+        ));
+        assert!(!should_skip_agent_session_reply(
+            DialogTurnOutcomeKind::Cancelled,
+            false,
+        ));
+        assert!(!should_skip_agent_session_reply(
+            DialogTurnOutcomeKind::Completed,
+            true,
+        ));
+        assert!(!should_skip_agent_session_reply(
+            DialogTurnOutcomeKind::Failed,
+            true,
+        ));
     }
 
     #[test]
