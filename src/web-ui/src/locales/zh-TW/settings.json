@@ -7,6 +7,14 @@
     "searchNoResults": "沒有匹配的配置",
     "searchClear": "清除搜索",
     "beta": "Beta",
+    "searchAliases": {
+      "archivedSessions": ["歸檔", "會話"],
+      "keyboard": ["快捷鍵", "鍵位"],
+      "sessionPersonalization": ["夥伴", "個性化"],
+      "sessionPermissions": ["權限"],
+      "quickActions": ["快捷動作", "提交"],
+      "review": ["審核", "程式碼審核"]
+    },
     "tabDescriptions": {
       "basics": "日誌、終端 Shell、通知與開機啟動。",
       "appearance": "語言、主題與介面字體大小。",

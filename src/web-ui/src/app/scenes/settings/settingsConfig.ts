@@ -107,8 +107,6 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
           'sessions',
           'restore',
           'unarchive',
-          '\u5f52\u6863',
-          '\u4f1a\u8bdd',
         ],
       },
       {
@@ -121,8 +119,6 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
           'keybinding',
           'hotkey',
           'shortcut key',
-          '\u5feb\u6377\u952e',
-          '\u952e\u4f4d',
         ],
       },
     ],
@@ -143,8 +139,6 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
           'pixel',
           'pet',
           'partner',
-          '\u4f19\u4f34',
-          '\u4e2a\u6027\u5316',
         ],
       },
       {
@@ -167,7 +161,6 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
           'search',
           'flashgrep',
           'index',
-          '\u6743\u9650',
         ],
       },
       {
@@ -182,8 +175,6 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
           'pull request',
           'post-coding',
           'shortcut',
-          '快捷动作',
-          '提交',
         ],
       },
       {
@@ -198,8 +189,6 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
           'subagent',
           'readonly',
           'audit',
-          '\u5ba1\u6838',
-          '\u4ee3\u7801\u5ba1\u6838',
         ],
       },
       {

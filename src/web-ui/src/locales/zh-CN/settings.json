@@ -7,6 +7,14 @@
     "searchNoResults": "没有匹配的配置",
     "searchClear": "清除搜索",
     "beta": "Beta",
+    "searchAliases": {
+      "archivedSessions": ["归档", "会话"],
+      "keyboard": ["快捷键", "键位"],
+      "sessionPersonalization": ["伙伴", "个性化"],
+      "sessionPermissions": ["权限"],
+      "quickActions": ["快捷动作", "提交"],
+      "review": ["审核", "代码审核"]
+    },
     "tabDescriptions": {
       "basics": "日志、终端 Shell、通知与开机启动。",
       "appearance": "语言、主题与界面字体大小。",

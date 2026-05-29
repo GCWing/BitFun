@@ -858,6 +858,7 @@
     "fixPreview": "Fix Preview",
     "gitDiff": "Git Diff",
     "gitSettings": "Git Settings",
+    "pullRequests": "Pull Requests",
     "taskPlanner": "Task Planner",
     "fileBrowser": "File Browser",
     "editor": "Editor",

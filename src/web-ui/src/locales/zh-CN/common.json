@@ -858,6 +858,7 @@
     "fixPreview": "修复预览",
     "gitDiff": "Git Diff",
     "gitSettings": "Git 设置",
+    "pullRequests": "Pull Requests",
     "taskPlanner": "任务规划器",
     "fileBrowser": "文件浏览器",
     "editor": "编辑器",

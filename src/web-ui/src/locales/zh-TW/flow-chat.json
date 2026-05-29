@@ -44,6 +44,7 @@
     "loadingDescription": "正在準備該會話的歷史內容。",
     "failedTitle": "歷史會話載入失敗",
     "failedDescription": "可以重新載入已儲存的會話內容。",
+    "remoteSessionMissing": "在後端找不到該會話資料。若剛重新連接過 SSH 遠端工作區，請關閉並重新打開該遠端項目，或新建會話後再試。",
     "retry": "重試"
   },
   "usage": {

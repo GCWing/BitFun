@@ -86,6 +86,8 @@ Captured data is logged as structured JSON under the `bitfun::devtools` target.
   workflow copy in the owning surface.
 - Web UI route or feature copy should use `useI18n(namespace)`. Do not import
   Web UI locale catalogs into mobile-web, installer, backend, or static pages.
+- `pnpm run i18n:audit` enforces key/placeholder parity, direct static key
+  existence, and the no-hardcoded-CJK source budget.
 
 ### Platform-agnostic core
 

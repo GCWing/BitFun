@@ -1,0 +1,53 @@
+{
+  "zh-CN": {
+    "languageToggle": "语言：简体",
+    "status": "服务运行中",
+    "desc": "桌面端与移动端之间的中继服务，提供配对与消息转发能力。",
+    "f1t": "建立连接",
+    "f1d": "承接配对请求，建立远程会话。",
+    "f2t": "消息转发",
+    "f2d": "桥接 WebSocket 与 HTTP 双向通信。",
+    "f3t": "自托管友好",
+    "f3d": "私有部署、自定义域名与反向代理。",
+    "flowDesktop": "桌面端",
+    "flowDesktopSub": "BitFun Agent",
+    "flowRelay": "中继服务",
+    "flowRelaySub": "配对 & 转发",
+    "flowMobile": "移动端",
+    "flowMobileSub": "远程控制"
+  },
+  "zh-TW": {
+    "languageToggle": "語言：繁體",
+    "status": "服務運行中",
+    "desc": "桌面端與移動端之間的中繼服務，提供配對與消息轉發能力。",
+    "f1t": "建立連接",
+    "f1d": "承接配對請求，建立遠程會話。",
+    "f2t": "消息轉發",
+    "f2d": "橋接 WebSocket 與 HTTP 雙向通信。",
+    "f3t": "自託管友好",
+    "f3d": "私有部署、自定義域名與反向代理。",
+    "flowDesktop": "桌面端",
+    "flowDesktopSub": "BitFun Agent",
+    "flowRelay": "中繼服務",
+    "flowRelaySub": "配對 & 轉發",
+    "flowMobile": "移動端",
+    "flowMobileSub": "遠程控制"
+  },
+  "en-US": {
+    "languageToggle": "Language: EN",
+    "status": "Service Running",
+    "desc": "Relay service between desktop and mobile, enabling pairing and message forwarding.",
+    "f1t": "Connect",
+    "f1d": "Handle pairing requests, create remote sessions.",
+    "f2t": "Relay",
+    "f2d": "Bridge WebSocket and HTTP bidirectionally.",
+    "f3t": "Self-Host",
+    "f3d": "Private deploy, custom domains and reverse proxy.",
+    "flowDesktop": "Desktop",
+    "flowDesktopSub": "BitFun Agent",
+    "flowRelay": "Relay Server",
+    "flowRelaySub": "Pair and Forward",
+    "flowMobile": "Mobile",
+    "flowMobileSub": "Remote Control"
+  }
+}

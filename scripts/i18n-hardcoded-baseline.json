@@ -3,11 +3,11 @@
   "budgets": [
     {
       "id": "web-ui-source",
-      "maxCjkLines": 198
+      "maxCjkLines": 0
     },
     {
       "id": "mobile-web-source",
-      "maxCjkLines": 8
+      "maxCjkLines": 0
     },
     {
       "id": "installer-source",
@@ -15,7 +15,7 @@
     },
     {
       "id": "relay-static-homepage",
-      "maxCjkLines": 17
+      "maxCjkLines": 0
     }
   ]
 }

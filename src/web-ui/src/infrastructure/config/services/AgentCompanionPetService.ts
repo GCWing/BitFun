@@ -3,9 +3,11 @@ import { readFile } from '@tauri-apps/plugin-fs';
 import type { AgentCompanionPetSelection } from './AIExperienceConfigService';
 import { isTauriRuntime } from '@/infrastructure/runtime';
 import { createLogger } from '@/shared/utils/logger';
+import builtinPetMetadata from './agentCompanionBuiltinPetMetadata.json';
 
 const log = createLogger('AgentCompanionPetService');
 const BUILTIN_PET_BASE = '/agent-companion-pets';
+const BUILTIN_PET_DISPLAY_NAMES = builtinPetMetadata.displayNames;
 
 export const DEFAULT_AGENT_COMPANION_PET: AgentCompanionPetSelection = {
   id: 'panda-pix',
@@ -89,7 +91,7 @@ const BUILTIN_PETS: AgentCompanionPetSelection[] = [
   },
   {
     id: 'gugugaga',
-    displayName: '咕咕嘎嘎',
+    displayName: BUILTIN_PET_DISPLAY_NAMES.gugugaga,
     description: 'A cheerful chibi girl in a black penguin suit with a simple silver collar pendant.',
     source: 'preset',
     packagePath: `${BUILTIN_PET_BASE}/gugugaga`,
@@ -117,7 +119,7 @@ const BUILTIN_PETS: AgentCompanionPetSelection[] = [
   },
   {
     id: 'jiyi',
-    displayName: '吉伊',
+    displayName: BUILTIN_PET_DISPLAY_NAMES.jiyi,
     description:
       'A round white chibi bear with dark chocolate outlines, pink cheeks, tiny limbs, curled ears, and a small pink bear pouch.',
     source: 'preset',

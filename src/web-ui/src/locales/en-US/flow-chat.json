@@ -44,6 +44,7 @@
     "loadingDescription": "Preparing the conversation history.",
     "failedTitle": "Session history did not load",
     "failedDescription": "Retry loading the saved conversation.",
+    "remoteSessionMissing": "The backend session data was not found. If you just reconnected an SSH remote workspace, close and reopen the remote project, or create a new session and try again.",
     "retry": "Retry"
   },
   "usage": {

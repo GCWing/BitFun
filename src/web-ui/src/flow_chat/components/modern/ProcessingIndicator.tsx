@@ -8,7 +8,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { DotMatrixLoader } from '@/component-library';
-import { processingHintsZh, processingHintsEn } from '../../constants/processingHints';
 import './ProcessingIndicator.scss';
 
 interface ProcessingIndicatorProps {
@@ -18,8 +17,11 @@ interface ProcessingIndicatorProps {
 }
 
 export const ProcessingIndicator: React.FC<ProcessingIndicatorProps> = ({ visible, reserveSpace = false }) => {
-  const { i18n } = useTranslation();
-  const hints = i18n.language.startsWith('zh') ? processingHintsZh : processingHintsEn;
+  const { t } = useTranslation('flow-chat/processing-hints');
+  const rawHints = t('items', { returnObjects: true });
+  const hints = Array.isArray(rawHints)
+    ? rawHints.filter((item): item is string => typeof item === 'string')
+    : [];
 
   const [showHint, setShowHint] = useState(false);
   const [hintIndex, setHintIndex] = useState(0);
@@ -28,7 +30,7 @@ export const ProcessingIndicator: React.FC<ProcessingIndicatorProps> = ({ visibl
   const rotateTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    if (visible) {
+    if (visible && hints.length > 0) {
       const initialIndex = Math.floor(Math.random() * hints.length);
       setHintIndex(initialIndex);
 

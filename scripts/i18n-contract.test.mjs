@@ -225,6 +225,40 @@ test('i18n audit treats locale key parity as an error', () => {
   assert.match(auditSource, /auditInstallerKeyParity/, 'installer locale keys should be covered by i18n:audit');
 });
 
+test('CI runs i18n contract and audit guards before frontend builds', () => {
+  const ciSource = readText('.github/workflows/ci.yml');
+  const contractIndex = ciSource.indexOf('pnpm run i18n:contract:test');
+  const auditIndex = ciSource.indexOf('pnpm run i18n:audit');
+  const buildIndex = ciSource.indexOf('pnpm run build:web');
+
+  assert.notEqual(contractIndex, -1, 'CI should run pnpm run i18n:contract:test');
+  assert.notEqual(auditIndex, -1, 'CI should run pnpm run i18n:audit');
+  assert.ok(contractIndex < buildIndex, 'i18n contract checks should run before web build');
+  assert.ok(auditIndex < buildIndex, 'i18n audit should run before web build');
+});
+
+test('i18n audit enforces interpolation parameter parity across resource formats', () => {
+  const auditSource = readText('scripts/i18n-audit.mjs');
+
+  assert.match(auditSource, /auditWebI18nextPlaceholderParity/, 'Web UI JSON placeholders should be audited');
+  assert.match(auditSource, /auditMobileWebPlaceholderParity/, 'mobile-web placeholders should be audited');
+  assert.match(auditSource, /auditInstallerPlaceholderParity/, 'installer placeholders should be audited');
+  assert.match(auditSource, /auditCoreFluentParity/, 'core Fluent keys and placeholders should be audited');
+  assert.match(auditSource, /auditRelayStaticHomepageResources/, 'relay static homepage resources should be audited');
+  assert.match(auditSource, /extractI18nextPlaceholders/, 'i18next placeholder extraction should be explicit');
+  assert.match(auditSource, /extractMobilePlaceholders/, 'mobile placeholder extraction should be explicit');
+  assert.match(auditSource, /extractFluentPlaceholders/, 'Fluent placeholder extraction should be explicit');
+});
+
+test('i18n audit fails literal fallbacks and unknown static keys', () => {
+  const auditSource = readText('scripts/i18n-audit.mjs');
+  const sourceTextAudit = auditSource.match(/function auditSourceText\(\) \{[\s\S]*?\n\}/)?.[0] ?? '';
+
+  assert.match(sourceTextAudit, /reportError/, 'literal t(key, "fallback") candidates should fail audit');
+  assert.match(auditSource, /auditWebUiStaticTranslationKeys/, 'static Web UI translation keys should be checked');
+  assert.match(auditSource, /collectWebUiStaticTranslationKeys/, 'static key collection should be explicit');
+});
+
 test('installer Rust locale contract is generated from the installer surface order', () => {
   const generatorSource = readText('scripts/generate-i18n-contract.mjs');
   const installerRustGenerator = generatorSource.match(/function generateInstallerRustLocaleContract\(contract\) \{[\s\S]*?\n\}/)?.[0] ?? '';

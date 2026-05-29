@@ -84,6 +84,8 @@ pnpm run e2e:test
   `pnpm run i18n:generate`。
 - 跨形态稳定标签放在 `src/shared/i18n/resources/shared`；流程文案留在所属形态资源中。
 - Web UI 路由或功能文案使用 `useI18n(namespace)`。不要把 Web UI locale 资源导入 mobile-web、installer、backend 或静态页面。
+- `pnpm run i18n:audit` 会检查 key / 占位符一致性、直接静态 key 是否存在，以及
+  source 中不再新增硬编码 CJK 文案。
 
 ### 平台无关核心
 

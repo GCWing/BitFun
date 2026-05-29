@@ -123,6 +123,12 @@ jobs:
       - name: Validate GitHub config
         run: pnpm run check:github-config
 
+      - name: Validate i18n contract
+        run: pnpm run i18n:contract:test
+
+      - name: Audit i18n resources
+        run: pnpm run i18n:audit
+
       - name: Lint web UI
         run: pnpm run lint:web
 

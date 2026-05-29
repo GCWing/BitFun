@@ -96,6 +96,8 @@ For the full script list, see [`package.json`](package.json).
 - Web UI loads only bootstrap namespaces eagerly; use `useI18n(namespace)` for
   route or feature copy and keep direct `i18nService.t(...)` calls in bootstrap
   namespaces.
+- `pnpm run i18n:audit` enforces key/placeholder parity, direct static key
+  existence, and the no-hardcoded-CJK source budget.
 
 ### Logging
 
