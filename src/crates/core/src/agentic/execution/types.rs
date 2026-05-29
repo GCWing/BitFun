@@ -75,6 +75,8 @@ pub struct RoundResult {
     pub finish_reason: FinishReason,
     /// Token usage statistics (from model response)
     pub usage: Option<crate::util::types::ai::GeminiUsage>,
+    /// LLM call latency for this round, excluding tool execution time.
+    pub llm_latency_ms: u64,
     /// Provider-specific metadata returned by the model.
     pub provider_metadata: Option<Value>,
     /// When set, this round's stream was partially recovered (aborted mid-way
