@@ -36,7 +36,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Utilities
 uuid = { version = "1.0", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde", "clock"] }
-dashmap = "5.5"
+dashmap = { workspace = true }
 rand = "0.8"
 base64 = "0.21"
 sha2 = "0.10"

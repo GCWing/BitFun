@@ -68,7 +68,7 @@ regex = "1"
 base64 = "0.22"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }
 md5 = "0.7"
-dashmap = "5"
+dashmap = "6"
 indexmap = "2"
 include_dir = "0.7"
 

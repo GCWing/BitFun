@@ -44,7 +44,7 @@ dunce = { workspace = true }
 pulldown-cmark = "0.11"
 
 # Diff computation for tool card rendering
-similar = "2"
+similar = { workspace = true }
 
 # Syntax highlighting for code blocks and tool cards
 syntect = { version = "5", default-features = false, features = ["default-syntaxes", "default-themes", "regex-fancy"] }
