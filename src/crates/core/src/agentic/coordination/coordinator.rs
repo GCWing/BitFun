@@ -19,8 +19,8 @@ use crate::agentic::execution::{
 use crate::agentic::fork_agent::ForkAgentContextSnapshot;
 use crate::agentic::goal_mode::{
     build_goal_continuation_plan, build_goal_kickoff_messages, clear_goal_mode_patch,
-    effective_subagent_timeout_seconds, ensure_final_response_in_goal_context,
-    generate_goal_from_context, goal_mode_from_custom_metadata, goal_mode_patch, now_ms,
+    ensure_final_response_in_goal_context, generate_goal_from_context,
+    goal_mode_from_custom_metadata, goal_mode_patch, now_ms,
     should_skip_goal_verification_for_turn, user_facing_goal_mode_error, verify_goal_achievement,
     wrap_user_input_with_goal_reminder, GoalActivationResult, GoalContinuationPlan,
     GoalModeInitialGoal, GoalModeState, MAX_GOAL_CONTINUATIONS,
@@ -2914,6 +2914,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             }
             sleep(Duration::from_millis(20)).await;
         }
+    }
+
+    pub fn has_active_turn(&self, dialog_turn_id: &str) -> bool {
+        self.execution_engine.has_active_turn(dialog_turn_id)
     }
 
     async fn cancel_active_subagents_for_parent_turn(
