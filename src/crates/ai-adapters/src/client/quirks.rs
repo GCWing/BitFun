@@ -100,16 +100,7 @@ pub(crate) fn apply_openai_compatible_reasoning_fields(
         return;
     }
 
-    let normalized_effort = reasoning_effort.and_then(normalize_deepseek_reasoning_effort);
-    if let Some(effort) = normalized_effort {
+    if let Some(effort) = reasoning_effort.and_then(normalize_deepseek_reasoning_effort) {
         request_body["reasoning_effort"] = serde_json::json!(effort);
     }
-    log::info!(
-        target: "ai::reasoning_effort",
-        "Effective reasoning_effort: raw={:?}, normalized={:?}, model={}, mode={:?}",
-        reasoning_effort,
-        normalized_effort,
-        model_name,
-        mode,
-    );
 }

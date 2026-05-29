@@ -11,8 +11,9 @@ pub use bitfun_ai_adapters::providers;
 pub use bitfun_ai_adapters::stream as ai_stream_handlers;
 
 pub use bitfun_ai_adapters::{
-    AIClient, StreamOptions, StreamResponse, DEFAULT_STREAM_IDLE_TIMEOUT_SECS,
-    DEFAULT_STREAM_TTFT_TIMEOUT_SECS, REASONING_STREAM_TTFT_TIMEOUT_SECS,
+    AIClient, StreamOptions, StreamResponse, WireReasoningFields,
+    DEFAULT_STREAM_IDLE_TIMEOUT_SECS, DEFAULT_STREAM_TTFT_TIMEOUT_SECS,
+    REASONING_STREAM_TTFT_TIMEOUT_SECS,
 };
 pub use client_factory::{
     get_global_ai_client_factory, initialize_global_ai_client_factory, AIClientFactory,

@@ -6,6 +6,7 @@ pub mod providers;
 pub mod stream;
 pub mod tool_call_accumulator;
 pub mod types;
+mod wire_reasoning;
 
 pub use client::{
     AIClient, StreamOptions, StreamResponse, DEFAULT_STREAM_IDLE_TIMEOUT_SECS,
@@ -17,3 +18,4 @@ pub use types::{
     GeminiUsage, Message, ProxyConfig, ReasoningMode, RemoteModelInfo, ToolCall, ToolDefinition,
     ToolImageAttachment,
 };
+pub use wire_reasoning::{extract_wire_reasoning_fields, WireReasoningFields};

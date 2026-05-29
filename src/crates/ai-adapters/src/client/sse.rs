@@ -1,6 +1,7 @@
 use crate::client::utils::elapsed_ms_u64;
 use crate::client::StreamResponse;
 use crate::stream::UnifiedResponse;
+use crate::extract_wire_reasoning_fields;
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc};
 use log::{debug, error, warn};
@@ -108,6 +109,7 @@ where
         Option<mpsc::UnboundedSender<String>>,
     ),
 {
+    let wire_reasoning = extract_wire_reasoning_fields(request_body);
     let mut last_error = None;
     for attempt in 0..max_tries {
         let request_start_time = std::time::Instant::now();
@@ -229,6 +231,7 @@ where
         return Ok(StreamResponse {
             stream: Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(rx)),
             raw_sse_rx: Some(rx_raw),
+            wire_reasoning: wire_reasoning.clone(),
         });
     }
 

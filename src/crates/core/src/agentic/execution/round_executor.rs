@@ -124,7 +124,7 @@ impl RoundExecutor {
 
         let max_attempts = Self::MAX_STREAM_ATTEMPTS;
         let mut attempt_index = 0usize;
-        let (stream_result, send_to_stream_ms, stream_processing_ms) = loop {
+        let (stream_result, send_to_stream_ms, stream_processing_ms, wire_reasoning) = loop {
             // Check cancellation before opening a model stream. This catches
             // early cancellation registered before the first round starts.
             if cancel_token.is_cancelled() {
@@ -193,6 +193,7 @@ impl RoundExecutor {
             };
 
             // Destructure StreamResponse: get stream and raw SSE data receiver
+            let wire_reasoning = stream_response.wire_reasoning.clone();
             let ai_stream = stream_response.stream;
             let raw_sse_rx = stream_response.raw_sse_rx;
 
@@ -289,7 +290,7 @@ impl RoundExecutor {
                             recovered
                                 .tool_calls
                                 .retain(|tool_call| tool_call.is_valid());
-                            break (recovered, send_to_stream_ms, stream_processing_ms);
+                            break (recovered, send_to_stream_ms, stream_processing_ms, wire_reasoning);
                         }
 
                         self.emit_failed_partial_tool_calls(
@@ -392,7 +393,7 @@ impl RoundExecutor {
                         );
                     }
 
-                    break (result, send_to_stream_ms, stream_processing_ms);
+                    break (result, send_to_stream_ms, stream_processing_ms, wire_reasoning);
                 }
                 Err(stream_err) => {
                     let err_msg = stream_err.error.to_string();
@@ -442,16 +443,30 @@ impl RoundExecutor {
             .iter()
             .map(|tc| tc.tool_name.as_str())
             .collect();
+        let output_tokens = stream_result
+            .usage
+            .as_ref()
+            .map(|usage| usage.candidates_token_count);
+        let tps = match (output_tokens, stream_processing_ms) {
+            (Some(tokens), ms) if ms > 0 && tokens > 0 => {
+                Some(tokens as f64 / (ms as f64 / 1000.0))
+            }
+            _ => None,
+        };
         debug!(
             target: "ai::model_response",
-            "Model response received: text_length={}, tool_calls={}, token_usage={:?}, send_to_stream_ms={}, stream_processing_ms={}, first_chunk_ms={:?}, first_visible_output_ms={:?}",
+            "Model response received: text_length={}, tool_calls={}, token_usage={:?}, send_to_stream_ms={}, stream_processing_ms={}, first_chunk_ms={:?}, first_visible_output_ms={:?}, output_tokens={:?}, tps={:?}, wire_thinking={:?}, wire_effort={:?}",
             stream_result.full_text.len(),
             if tool_names.is_empty() { "none".to_string() } else { tool_names.join(", ") },
             stream_result.usage.as_ref().map(|u| format!("input={}, output={}, total={}", u.prompt_token_count, u.candidates_token_count, u.total_token_count)).unwrap_or_else(|| "none".to_string()),
             send_to_stream_ms,
             stream_processing_ms,
             stream_result.first_chunk_ms,
-            stream_result.first_visible_output_ms
+            stream_result.first_visible_output_ms,
+            output_tokens,
+            tps,
+            wire_reasoning.thinking.as_deref(),
+            wire_reasoning.effort.as_deref()
         );
 
         // Check cancellation token again after stream processing completes

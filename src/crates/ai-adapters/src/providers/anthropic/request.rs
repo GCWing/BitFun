@@ -8,7 +8,6 @@ use crate::client::{AIClient, StreamResponse};
 use crate::providers::shared;
 use crate::stream::handle_anthropic_stream;
 use crate::types::ReasoningMode;
-use log::info;
 use crate::types::{Message, ToolDefinition};
 use anyhow::Result;
 use log::{debug, warn};
@@ -147,20 +146,6 @@ fn apply_reasoning_fields(
             model_name
         );
     }
-
-    let normalized_effort = if is_deepseek_reasoning_target {
-        reasoning_effort.and_then(normalize_deepseek_reasoning_effort)
-    } else {
-        None
-    };
-    info!(
-        target: "ai::reasoning_effort",
-        "Effective reasoning_effort: raw={:?}, normalized={:?}, model={}, mode={:?}",
-        reasoning_effort,
-        normalized_effort,
-        model_name,
-        mode,
-    );
 }
 
 pub(crate) fn build_request_body(
