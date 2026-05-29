@@ -9,6 +9,7 @@ export const ALL_NAMESPACES = [
   'components',
   'errors',
   'flow-chat',
+  'flow-chat/processing-hints',
   'notifications',
   'panels/files',
   'panels/git',
@@ -36,5 +37,19 @@ export const ALL_NAMESPACES = [
   'settings/review',
   'settings/session-config',
   'settings/skills',
+  'shared',
   'tools',
 ] as const;
+
+export const WEB_UI_BOOTSTRAP_NAMESPACES = [
+  'common',
+  'components',
+  'errors',
+  'flow-chat',
+  'panels/files',
+  'panels/git',
+  'settings/ai-model',
+  'settings/lsp',
+  'shared',
+  'tools',
+] as const satisfies readonly (typeof ALL_NAMESPACES)[number][];

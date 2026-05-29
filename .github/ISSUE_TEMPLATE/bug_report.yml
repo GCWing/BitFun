@@ -1,0 +1,49 @@
+name: Bug report
+description: Report a reproducible bug or regression.
+title: "[Bug]: "
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What went wrong, and what did you expect instead?
+      placeholder: Briefly describe the bug and the expected behavior.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Desktop app
+        - Web UI
+        - Mobile web
+        - Agent runtime / core
+        - AI provider / model adapter
+        - Remote workspace / relay
+        - Installer / packaging
+        - Documentation
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction or evidence
+      description: Steps, screenshots, logs, or a short recording. Remove tokens, keys, user IDs, and private data.
+      placeholder: |
+        1. Open ...
+        2. Click ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment, if relevant
+      description: Include the version, commit, OS, browser, desktop/mobile device, model/provider, or deployment mode if relevant.
+      placeholder: |
+        BitFun version/commit:
+        OS:
+        Browser/device:
+        Model/provider:

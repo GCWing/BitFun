@@ -11,15 +11,8 @@ import { useToolCardHeightContract } from './useToolCardHeightContract';
 import { useDialogTurnTodos } from '../hooks/useDialogTurnTodos';
 import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
 import { ToolCardStatusSlot } from './ToolCardStatusSlot';
+import { createTodoRenderItems, type TodoLike } from './todoRenderItems';
 import './TodoWriteDisplay.scss';
-
-type TodoStatus = 'completed' | 'in_progress' | 'pending' | 'cancelled';
-
-interface TodoLike {
-  id?: string | number;
-  content?: string;
-  status?: TodoStatus | string;
-}
 
 export const TodoWriteDisplay: React.FC<ToolCardProps> = ({
   toolItem,
@@ -51,6 +44,11 @@ export const TodoWriteDisplay: React.FC<ToolCardProps> = ({
     }
     return [];
   }, [partialParams, toolResult, isParamsStreaming, turnTodos]);
+
+  const todoRenderItems = useMemo(
+    () => createTodoRenderItems(todosToDisplay),
+    [todosToDisplay],
+  );
 
   const taskStats = useMemo(() => {
     if (todosToDisplay.length === 0) return { completed: 0, total: 0 };
@@ -96,8 +94,8 @@ export const TodoWriteDisplay: React.FC<ToolCardProps> = ({
     });
   }, [applyExpandedState, isExpanded, todosToDisplay.length]);
 
-  const renderTodoItem = (todo: TodoLike, index: number) => (
-    <div key={todo.id ?? index} className={`todo-item status-${todo.status}`}>
+  const renderTodoItem = (todo: TodoLike, key: string) => (
+    <div key={key} className={`todo-item status-${todo.status}`}>
       <div className="todo-item-left">
         {todo.status === 'completed' && (
           <CheckCircle2 size={12} className="todo-status-icon todo-status-icon--completed" />
@@ -210,7 +208,7 @@ export const TodoWriteDisplay: React.FC<ToolCardProps> = ({
   const expandedContent = hasTodos ? (
     <div className="todo-expanded-body">
       <div className="todo-full-list">
-        {todosToDisplay.map((todo, idx) => renderTodoItem(todo, idx))}
+        {todoRenderItems.map(({ todo, key }) => renderTodoItem(todo, key))}
       </div>
     </div>
   ) : undefined;

@@ -1,43 +1,34 @@
+import {
+  DEFAULT_INSTALLER_UI_LANGUAGE,
+  INSTALLER_LANGUAGE_DEFINITIONS,
+  SHARED_TERMS_BY_APP_LANGUAGE,
+  type AppLanguage,
+  type InstallerUiLanguage,
+} from './generatedLocaleContract';
 import en from './locales/en.json';
 import zh from './locales/zh.json';
 import zhTW from './locales/zh-TW.json';
 
-export const INSTALLER_LANGUAGES = [
-  {
-    uiCode: 'en',
-    appCode: 'en-US',
-    label: 'English',
-    nativeName: 'English',
-    continueLabel: 'Continue',
-    aliases: ['en', 'en-US'],
-    resource: en,
+const installerResourceByUiCode = {
+  en,
+  zh,
+  'zh-TW': zhTW,
+} satisfies Record<InstallerUiLanguage, Record<string, unknown>>;
+
+export const INSTALLER_LANGUAGES = INSTALLER_LANGUAGE_DEFINITIONS.map(language => ({
+  ...language,
+  resource: {
+    ...installerResourceByUiCode[language.uiCode],
+    shared: SHARED_TERMS_BY_APP_LANGUAGE[language.appCode],
   },
-  {
-    uiCode: 'zh',
-    appCode: 'zh-CN',
-    label: 'Chinese',
-    nativeName: '简体中文',
-    continueLabel: '继续',
-    aliases: ['zh', 'zh-Hans', 'zh-CN'],
-    resource: zh,
-  },
-  {
-    uiCode: 'zh-TW',
-    appCode: 'zh-TW',
-    label: 'Traditional Chinese',
-    nativeName: '繁體中文',
-    continueLabel: '繼續',
-    aliases: ['zh-TW', 'zh-Hant', 'zh-HK', 'zh-MO'],
-    resource: zhTW,
-  },
-] as const;
+}));
 
 const installerAliasesByPriority = INSTALLER_LANGUAGES
   .flatMap(language => language.aliases.map(alias => ({ language, alias: alias.toLowerCase() })))
   .sort((a, b) => b.alias.length - a.alias.length);
 
-export type InstallerUiLanguage = (typeof INSTALLER_LANGUAGES)[number]['uiCode'];
-export type AppLanguage = (typeof INSTALLER_LANGUAGES)[number]['appCode'];
+export type { AppLanguage, InstallerUiLanguage };
+export { DEFAULT_INSTALLER_UI_LANGUAGE };
 
 export const installerResources = Object.fromEntries(
   INSTALLER_LANGUAGES.map(language => [
@@ -55,7 +46,11 @@ export function mapUiLanguageToAppLanguage(uiLanguage: InstallerUiLanguage): App
 }
 
 export function mapAppLanguageToUiLanguage(appLanguage: string | null | undefined): InstallerUiLanguage | null {
-  return resolveInstallerUiLanguage(appLanguage);
+  const normalized = appLanguage?.trim();
+  if (!normalized) return null;
+
+  const exact = INSTALLER_LANGUAGES.find(language => language.appCode === normalized);
+  return exact?.uiCode ?? resolveInstallerUiLanguage(normalized);
 }
 
 export function resolveInstallerUiLanguage(value: string | null | undefined): InstallerUiLanguage | null {
@@ -73,8 +68,32 @@ export function resolveInstallerUiLanguage(value: string | null | undefined): In
     ?.language.uiCode ?? null;
 }
 
+export function getInstallerUiFallbackChain(
+  uiLanguage: string | null | undefined,
+  includeSelf = false,
+): InstallerUiLanguage[] {
+  const resolvedUiLanguage = resolveInstallerUiLanguage(uiLanguage);
+  const language = INSTALLER_LANGUAGES.find(item => item.uiCode === resolvedUiLanguage);
+  if (!language) {
+    return [DEFAULT_INSTALLER_UI_LANGUAGE];
+  }
+
+  const chain: InstallerUiLanguage[] = [];
+  if (includeSelf) {
+    chain.push(language.uiCode);
+  }
+  for (const appLanguage of language.contentFallbacks) {
+    const uiLanguage = mapAppLanguageToUiLanguage(appLanguage);
+    if (uiLanguage) {
+      chain.push(uiLanguage);
+    }
+  }
+
+  return Array.from(new Set(chain));
+}
+
 export function detectInstallerUiLanguage(appLanguage?: string | null): InstallerUiLanguage {
   return mapAppLanguageToUiLanguage(appLanguage)
     ?? resolveInstallerUiLanguage(typeof navigator !== 'undefined' ? navigator.language : null)
-    ?? 'en';
+    ?? DEFAULT_INSTALLER_UI_LANGUAGE;
 }

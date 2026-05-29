@@ -1,0 +1,50 @@
+{
+  "product": {
+    "name": "BitFun",
+    "remote": "BitFun Remote"
+  },
+  "features": {
+    "remoteControl": "遠端控制",
+    "codeAgent": "程式碼助手",
+    "deepReview": "深度程式碼審查",
+    "settings": "設定",
+    "workspace": "工作區"
+  },
+  "modes": {
+    "agentic": "代理模式",
+    "assistant": "助手模式",
+    "expert": "專家模式",
+    "review": "審查模式"
+  },
+  "agents": {
+    "code": "程式碼會話",
+    "cowork": "協作會話",
+    "claw": "Claw",
+    "default": "預設助手"
+  },
+  "tools": {
+    "explore": "探索",
+    "read": "讀取",
+    "write": "寫入",
+    "shell": "命令列",
+    "search": "搜尋",
+    "edit": "編輯",
+    "todo": "待辦"
+  },
+  "connectionMethods": {
+    "lan": "區域網路",
+    "ngrok": "Ngrok",
+    "bitfunServer": "BitFun Server",
+    "customServer": "自訂伺服器",
+    "botFeishu": "飛書機器人",
+    "botTelegram": "Telegram Bot",
+    "botWeixin": "微信機器人"
+  },
+  "statuses": {
+    "loading": "載入中",
+    "running": "執行中",
+    "done": "已完成",
+    "failed": "失敗",
+    "cancelled": "已取消"
+  }
+}

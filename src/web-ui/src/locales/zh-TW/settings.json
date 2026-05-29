@@ -7,6 +7,14 @@
     "searchNoResults": "沒有匹配的配置",
     "searchClear": "清除搜索",
     "beta": "Beta",
+    "searchAliases": {
+      "archivedSessions": ["歸檔", "會話"],
+      "keyboard": ["快捷鍵", "鍵位"],
+      "sessionPersonalization": ["夥伴", "個性化"],
+      "sessionPermissions": ["權限"],
+      "quickActions": ["快捷動作", "提交"],
+      "review": ["審核", "程式碼審核"]
+    },
     "tabDescriptions": {
       "basics": "日誌、終端 Shell、通知與開機啟動。",
       "appearance": "語言、主題與介面字體大小。",
@@ -19,7 +27,8 @@
       "editor": "編輯器字體、顯示與格式化。",
       "lsp": "語言服務與代碼智能。",
       "keyboard": "快捷鍵與鍵位。",
-      "archivedSessions": "檢視、恢復或永久刪除已歸檔的會話。"
+      "archivedSessions": "檢視、恢復或永久刪除已歸檔的會話。",
+      "quickActions": "程式碼完成後的一鍵 AI 動作，支援內建和自訂指令。"
     },
     "categories": {
       "general": "通用",
@@ -40,7 +49,8 @@
       "editor": "編輯器",
       "lsp": "語言服務",
       "keyboard": "快捷鍵",
-      "archivedSessions": "已歸檔會話"
+      "archivedSessions": "已歸檔會話",
+      "quickActions": "快捷動作"
     }
   },
   "general": {

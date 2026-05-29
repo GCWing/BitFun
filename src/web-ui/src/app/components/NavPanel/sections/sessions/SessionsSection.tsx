@@ -101,6 +101,8 @@ interface SessionsSectionProps {
   assistantLabel?: string;
   /** When false, hide the leading mode / running icon on each row (e.g. assistant detail page). */
   showSessionModeIcon?: boolean;
+  /** Prevents startup metadata fetching while the surrounding section is collapsed. */
+  isVisible?: boolean;
 }
 
 const SessionsSection: React.FC<SessionsSectionProps> = ({
@@ -111,6 +113,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   isActiveWorkspace: _isActiveWorkspace = true,
   assistantLabel,
   showSessionModeIcon = true,
+  isVisible = true,
 }) => {
   const { t } = useI18n('common');
   const { setActiveWorkspace, currentWorkspace } = useWorkspaceContext();
@@ -125,12 +128,24 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
   const [expandLevel, setExpandLevel] = useState<0 | 1 | 2>(0);
+  const [metadataPageState, setMetadataPageState] = useState<{
+    totalTopLevelCount: number | null;
+    nextCursor?: string;
+    hasMore: boolean;
+    isLoading: boolean;
+  }>({
+    totalTopLevelCount: null,
+    nextCursor: undefined,
+    hasMore: false,
+    isLoading: false,
+  });
   const [openMenuSessionId, setOpenMenuSessionId] = useState<string | null>(null);
   const [sessionMenuPosition, setSessionMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const [runningSessionIds, setRunningSessionIds] = useState<Set<string>>(new Set());
   const editInputRef = useRef<HTMLInputElement>(null);
   const sessionMenuPopoverRef = useRef<HTMLDivElement>(null);
   const sessionMenuAnchorRef = useRef<HTMLButtonElement>(null);
+  const metadataLoadRequestIdRef = useRef(0);
 
   // Subscribe to state machine changes for running status
   useEffect(() => {
@@ -169,8 +184,62 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   }, [editingSessionId]);
 
   useEffect(() => {
+    metadataLoadRequestIdRef.current += 1;
     setExpandLevel(0);
+    setMetadataPageState({
+      totalTopLevelCount: null,
+      nextCursor: undefined,
+      hasMore: false,
+      isLoading: false,
+    });
   }, [workspaceId, workspacePath, remoteConnectionId, remoteSshHost]);
+
+  const loadMetadataPage = useCallback(
+    async (limit: number, cursor: string | undefined, source: string) => {
+      if (!workspacePath || limit <= 0) {
+        return null;
+      }
+
+      const requestId = metadataLoadRequestIdRef.current + 1;
+      metadataLoadRequestIdRef.current = requestId;
+      setMetadataPageState(prev => ({ ...prev, isLoading: true }));
+
+      try {
+        const page = await flowChatStore.loadSessionMetadataPage(
+          workspacePath,
+          limit,
+          cursor,
+          remoteConnectionId || undefined,
+          remoteSshHost || undefined,
+          source
+        );
+        if (metadataLoadRequestIdRef.current === requestId) {
+          setMetadataPageState({
+            totalTopLevelCount: page.totalTopLevelCount,
+            nextCursor: page.nextCursor,
+            hasMore: page.hasMore,
+            isLoading: false,
+          });
+        }
+        return page;
+      } catch (error) {
+        if (metadataLoadRequestIdRef.current === requestId) {
+          setMetadataPageState(prev => ({ ...prev, isLoading: false }));
+        }
+        log.warn('Failed to load visible session metadata page', { error, workspacePath, cursor, limit });
+        return null;
+      }
+    },
+    [workspacePath, remoteConnectionId, remoteSshHost]
+  );
+
+  useEffect(() => {
+    if (!isVisible || !workspacePath) {
+      return;
+    }
+
+    void loadMetadataPage(SESSIONS_LEVEL_0, undefined, 'sessions_nav_initial');
+  }, [isVisible, workspacePath, remoteConnectionId, remoteSshHost, loadMetadataPage]);
 
   useEffect(() => {
     if (!openMenuSessionId) return;
@@ -288,6 +357,10 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     if (expandLevel === 1) return Math.min(total, SESSIONS_LEVEL_1);
     return SESSIONS_LEVEL_0;
   }, [topLevelSessions.length, expandLevel]);
+
+  const totalTopLevelSessionCount = metadataPageState.totalTopLevelCount ?? topLevelSessions.length;
+  const hasMoreUnloadedSessions =
+    metadataPageState.hasMore || topLevelSessions.length < totalTopLevelSessionCount;
 
   const visibleItems = useMemo(() => {
     const visibleParents = topLevelSessions.slice(0, sessionDisplayLimit);
@@ -476,7 +549,69 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     [handleConfirmEdit, handleCancelEdit]
   );
 
+  const handleExpandToggle = useCallback(async () => {
+    if (metadataPageState.isLoading) {
+      return;
+    }
+
+    const loadedTopLevelCount = topLevelSessions.length;
+    const total = totalTopLevelSessionCount;
+
+    if (expandLevel === 0) {
+      const targetCount = Math.min(total, SESSIONS_LEVEL_1);
+      if (
+        loadedTopLevelCount < targetCount &&
+        hasMoreUnloadedSessions &&
+        metadataPageState.nextCursor
+      ) {
+        await loadMetadataPage(
+          targetCount - loadedTopLevelCount,
+          metadataPageState.nextCursor,
+          'sessions_nav_expand_level_1'
+        );
+      }
+      setExpandLevel(1);
+      return;
+    }
+
+    if (expandLevel === 1 && total > SESSIONS_LEVEL_1) {
+      if (
+        loadedTopLevelCount < total &&
+        hasMoreUnloadedSessions &&
+        metadataPageState.nextCursor
+      ) {
+        await loadMetadataPage(
+          total - loadedTopLevelCount,
+          metadataPageState.nextCursor,
+          'sessions_nav_expand_all'
+        );
+      }
+      setExpandLevel(2);
+      return;
+    }
+
+    setExpandLevel(0);
+  }, [
+    expandLevel,
+    hasMoreUnloadedSessions,
+    loadMetadataPage,
+    metadataPageState.isLoading,
+    metadataPageState.nextCursor,
+    topLevelSessions.length,
+    totalTopLevelSessionCount,
+  ]);
+
   if (topLevelSessions.length === 0) {
+    if (metadataPageState.isLoading) {
+      return (
+        <div className="bitfun-nav-panel__inline-list">
+          <div className="bitfun-nav-panel__inline-loading">
+            <Loader2 size={12} />
+            <span>{t('nav.sessions.loading', { defaultValue: 'Loading sessions...' })}</span>
+          </div>
+        </div>
+      );
+    }
     return null;
   }
 
@@ -730,38 +865,36 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           );
         })}
 
-      {topLevelSessions.length > SESSIONS_LEVEL_0 && (
+      {(totalTopLevelSessionCount > SESSIONS_LEVEL_0 || hasMoreUnloadedSessions) && (
         <button
           type="button"
-          className="bitfun-nav-panel__inline-toggle"
-          onClick={() => {
-            const total = topLevelSessions.length;
-            if (expandLevel === 0) {
-              setExpandLevel(1);
-              return;
-            }
-            if (expandLevel === 1 && total > SESSIONS_LEVEL_1) {
-              setExpandLevel(2);
-              return;
-            }
-            setExpandLevel(0);
-          }}
+          className={`bitfun-nav-panel__inline-toggle${metadataPageState.isLoading ? ' is-loading' : ''}`}
+          disabled={metadataPageState.isLoading}
+          onClick={() => { void handleExpandToggle(); }}
         >
           {expandLevel === 0 ? (
             <>
-              <span className="bitfun-nav-panel__inline-toggle-dots">···</span>
+              {metadataPageState.isLoading ? (
+                <Loader2 size={12} className="bitfun-nav-panel__inline-toggle-spinner" />
+              ) : (
+                <span className="bitfun-nav-panel__inline-toggle-dots">···</span>
+              )}
               <span>
                 {t('nav.sessions.showMore', {
-                  count: topLevelSessions.length - SESSIONS_LEVEL_0,
+                  count: Math.max(totalTopLevelSessionCount - SESSIONS_LEVEL_0, 0),
                 })}
               </span>
             </>
-          ) : expandLevel === 1 && topLevelSessions.length > SESSIONS_LEVEL_1 ? (
+          ) : expandLevel === 1 && totalTopLevelSessionCount > SESSIONS_LEVEL_1 ? (
             <>
-              <span className="bitfun-nav-panel__inline-toggle-dots">···</span>
+              {metadataPageState.isLoading ? (
+                <Loader2 size={12} className="bitfun-nav-panel__inline-toggle-spinner" />
+              ) : (
+                <span className="bitfun-nav-panel__inline-toggle-dots">···</span>
+              )}
               <span>
                 {t('nav.sessions.showAll', {
-                  count: topLevelSessions.length - SESSIONS_LEVEL_1,
+                  count: Math.max(totalTopLevelSessionCount - SESSIONS_LEVEL_1, 0),
                 })}
               </span>
             </>

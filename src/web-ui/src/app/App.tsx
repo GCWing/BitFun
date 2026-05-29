@@ -18,12 +18,14 @@ import { syncAgentCompanionDesktopWindow } from '@/infrastructure/config/service
 import { isTauriRuntime } from '@/infrastructure/runtime';
 import { buildAgentCompanionActivity, subscribeAgentCompanionActivity } from '@/flow_chat/utils/agentCompanionActivity';
 import { emitAgentCompanionActivity } from '@/flow_chat/services/AgentCompanionActivityBridge';
+import { BackgroundTaskCancelledError } from '@/shared/utils/backgroundTaskScheduler';
 import { useWorkspaceContext } from '../infrastructure/contexts/WorkspaceContext';
 import SplashScreen from './components/SplashScreen/SplashScreen';
 import { useGlobalSceneShortcuts } from './hooks/useGlobalSceneShortcuts';
 import { useDebugInspector } from '@/infrastructure/debug/useDebugInspector';
 import { openAgentCompanionSession } from './services/openAgentCompanionSession';
 import { useI18n } from '@/infrastructure/i18n';
+import { scheduleDeferredStartupSystems } from './startup/deferredStartupSystems';
 
 // Toolbar Mode
 import { ToolbarModeProvider } from '../flow_chat';
@@ -85,6 +87,7 @@ function App() {
       await invoke('show_main_window');
       log.debug('Main window shown', { reason });
       startupTrace.markPhase('main_window_shown', { reason });
+      window.dispatchEvent(new CustomEvent('bitfun:main-window-shown', { detail: { reason } }));
     } catch (error: any) {
       log.error('Failed to show main window', error);
 
@@ -95,6 +98,7 @@ function App() {
         await mainWindow.setFocus();
         log.debug('Main window shown via fallback', { reason });
         startupTrace.markPhase('main_window_shown_fallback', { reason });
+        window.dispatchEvent(new CustomEvent('bitfun:main-window-shown', { detail: { reason } }));
       } catch (fallbackError) {
         log.error('Fallback window show failed', fallbackError);
         mainWindowShownRef.current = false;
@@ -102,11 +106,39 @@ function App() {
     }
   }, []);
 
-  // Reveal the native window as soon as React has painted a frame.
-  // The splash still covers the UI, so users see immediate feedback instead
-  // of waiting on a hidden window while startup continues in the background.
+  const verifyMainWindowVisible = useCallback(async (reason: string) => {
+    if (!isTauriRuntime()) {
+      void showMainWindow(reason);
+      return;
+    }
+
+    try {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
+      const mainWindow = getCurrentWindow();
+      if (await mainWindow.isVisible()) {
+        return;
+      }
+
+      log.warn('Main window is not visible after native startup show, retrying', { reason });
+      mainWindowShownRef.current = false;
+      await showMainWindow(reason);
+    } catch (error) {
+      log.warn('Failed to verify main window visibility after native startup show', { reason, error });
+    }
+  }, [showMainWindow]);
+
+  // Desktop shows the startup splash from the native window creation path.
+  // Mark it here so deferred work can wait until the first visible shell exists.
   useEffect(() => {
     startupTrace.markPhase('app_effect_mounted');
+    if (isTauriRuntime()) {
+      mainWindowShownRef.current = true;
+      startupTrace.markPhase('main_window_shown', { reason: 'startup-native' });
+      window.dispatchEvent(new CustomEvent('bitfun:main-window-shown', {
+        detail: { reason: 'startup-native' },
+      }));
+      return;
+    }
     void showMainWindow('startup-overlay');
   }, [showMainWindow]);
 
@@ -126,69 +158,37 @@ function App() {
     }
 
     const timer = window.setTimeout(() => {
-      void showMainWindow('startup-complete');
+      void verifyMainWindowVisible('startup-complete');
     }, 50);
 
     return () => window.clearTimeout(timer);
-  }, [showMainWindow, splashVisible]);
+  }, [splashVisible, verifyMainWindowVisible]);
 
   // Safety net: if startup gets stuck, reveal the window so the user can see errors.
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      void showMainWindow('startup-watchdog');
+      void verifyMainWindowVisible('startup-watchdog');
     }, 10000);
 
     return () => window.clearTimeout(timer);
-  }, [showMainWindow]);
+  }, [verifyMainWindowVisible]);
 
-  // Startup logs and initialization
+  // Non-critical systems are delayed until the shell is interactive.
   useEffect(() => {
-    log.info('Application started, initializing systems');
-    
-    // Initialize IDE control system
-    const initIdeControl = async () => {
-      try {
-        const { initializeIdeControl } = await import('../shared/services/ide-control');
-        await initializeIdeControl();
-        log.debug('IDE control system initialized');
-      } catch (error) {
-        log.error('Failed to initialize IDE control system', error);
-      }
-    };
-    
-    // Initialize MCP servers
-    const initMCPServers = async () => {
-      try {
-        const { MCPAPI } = await import('../infrastructure/api/service-api/MCPAPI');
-        await MCPAPI.initializeServers();
-        log.debug('MCP servers initialized');
-      } catch (error) {
-        log.error('Failed to initialize MCP servers', error);
-      }
-    };
+    if (!interactiveShellReady) {
+      return;
+    }
 
-    const initACPClients = async () => {
-      try {
-        const { ACPClientAPI } = await import('../infrastructure/api/service-api/ACPClientAPI');
-        await ACPClientAPI.initializeClients();
-        log.debug('ACP clients initialized');
-        void ACPClientAPI.probeClientRequirements()
-          .then(() => {
-            log.debug('ACP client requirements probed');
-          })
-          .catch((error) => {
-            log.warn('Failed to probe ACP client requirements during startup', error);
-          });
-      } catch (error) {
-        log.error('Failed to initialize ACP clients', error);
+    log.info('Application interactive, scheduling deferred systems');
+    const startupSystemsHandle = scheduleDeferredStartupSystems();
+    startupSystemsHandle.promise.catch(error => {
+      if (!(error instanceof BackgroundTaskCancelledError)) {
+        log.warn('Deferred startup systems task failed', error);
       }
-    };
+    });
 
-    initIdeControl();
-    initMCPServers();
-    initACPClients();
-    
-  }, []);
+    return () => startupSystemsHandle.cancel();
+  }, [interactiveShellReady]);
 
   useEffect(() => {
     if (!isTauriRuntime() || !interactiveShellReady) return;

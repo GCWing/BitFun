@@ -1,13 +1,14 @@
-import { DEFAULT_LANGUAGE, type MobileLanguage } from './localeRegistry';
+import { DEFAULT_LANGUAGE, SHARED_TERMS_BY_LOCALE, type MobileLanguage } from './localeRegistry';
 
 export { DEFAULT_LANGUAGE };
 export type { MobileLanguage };
 
 type MessageLeaf = string;
-type MessageTree = { [key: string]: MessageLeaf | MessageTree };
+type MessageTree = { readonly [key: string]: MessageLeaf | MessageTree };
 
 export const messages: Record<MobileLanguage, MessageTree> = {
   'en-US': {
+    shared: SHARED_TERMS_BY_LOCALE['en-US'],
     common: {
       appName: 'BitFun Remote',
       back: 'Back',
@@ -68,6 +69,7 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       defaultAssistant: 'Default Assistant',
       switchAssistant: 'Switch assistant',
       selectAssistant: 'Select Assistant',
+      launch: 'Launch',
       startRemoteFlow: 'Start a new remote flow',
       codeSession: 'Code Session',
       codeSessionDesc: 'For coding anywhere, anytime.',
@@ -102,6 +104,13 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       deleted: 'Session deleted',
       deleteFailed: 'Delete failed',
       renameFailed: 'Rename failed',
+      disconnect: 'Disconnect',
+      disconnectConfirm: 'Disconnect from current desktop? You can re-pair later.',
+      reconnecting: 'Reconnecting...',
+      connectionUnpaired: 'Not connected',
+      connectionChecking: 'Checking connection...',
+      connectionConnected: 'Connected',
+      connectionUnreachable: 'Connection lost',
     },
     workspace: {
       title: 'Workspace',
@@ -181,6 +190,7 @@ export const messages: Record<MobileLanguage, MessageTree> = {
     },
   },
   'zh-CN': {
+    shared: SHARED_TERMS_BY_LOCALE['zh-CN'],
     common: {
       appName: 'BitFun Remote',
       back: '返回',
@@ -276,6 +286,13 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       deleted: '会话已删除',
       deleteFailed: '删除失败',
       renameFailed: '重命名失败',
+      disconnect: '断开连接',
+      disconnectConfirm: '断开当前桌面连接？之后可重新配对。',
+      reconnecting: '正在重新连接...',
+      connectionUnpaired: '未连接',
+      connectionChecking: '检测连接中...',
+      connectionConnected: '已连接',
+      connectionUnreachable: '连接断开',
     },
     workspace: {
       title: '工作区',
@@ -310,7 +327,7 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       modelPrimary: 'Primary 模型',
       modelFast: 'Fast 模型',
       modelNotConfigured: '模型未配置',
-      askQuestionCount: '{count} 个问题',
+      askQuestionCount: '{count} 个问题{suffix}',
       waiting: '等待中',
       modeAgentic: 'Agentic',
       modePlan: 'Plan',
@@ -318,7 +335,7 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       thinking: '思考中...',
       allTasksCompleted: '所有任务已完成',
       task: '任务',
-      toolCalls: '{count} 次工具调用',
+      toolCalls: '{count} 次工具调用{suffix}',
       done: '已完成 {count}',
       running: '运行中 {count}',
       thoughtCharacters: '思考 {count} 个字符',
@@ -355,6 +372,7 @@ export const messages: Record<MobileLanguage, MessageTree> = {
     },
   },
   'zh-TW': {
+    shared: SHARED_TERMS_BY_LOCALE['zh-TW'],
     common: {
       appName: 'BitFun Remote',
       back: '返回',
@@ -450,6 +468,13 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       deleted: '會話已刪除',
       deleteFailed: '刪除失敗',
       renameFailed: '重新命名失敗',
+      disconnect: '斷開連接',
+      disconnectConfirm: '斷開當前桌面連接？之後可重新配對。',
+      reconnecting: '正在重新連接...',
+      connectionUnpaired: '未連接',
+      connectionChecking: '檢測連接中...',
+      connectionConnected: '已連接',
+      connectionUnreachable: '連接斷開',
     },
     workspace: {
       title: '工作區',
@@ -484,7 +509,7 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       modelPrimary: 'Primary 模型',
       modelFast: 'Fast 模型',
       modelNotConfigured: '模型未配置',
-      askQuestionCount: '{count} 個問題',
+      askQuestionCount: '{count} 個問題{suffix}',
       waiting: '等待中',
       modeAgentic: 'Agentic',
       modePlan: 'Plan',
@@ -492,7 +517,7 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       thinking: '思考中...',
       allTasksCompleted: '所有任務已完成',
       task: '任務',
-      toolCalls: '{count} 次工具調用',
+      toolCalls: '{count} 次工具調用{suffix}',
       done: '已完成 {count}',
       running: '運行中 {count}',
       thoughtCharacters: '思考 {count} 個字符',
@@ -529,4 +554,3 @@ export const messages: Record<MobileLanguage, MessageTree> = {
     },
   }
 };
-

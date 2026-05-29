@@ -13,6 +13,20 @@ use anyhow::Result;
 use log::{debug, warn};
 use reqwest::RequestBuilder;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AnthropicThinkingCapability {
+    ManualOnly,
+    AdaptivePreferred,
+    AdaptiveOnly,
+    AdaptiveDefaultNoDisabled,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ClaudeModelVersion {
+    major: u32,
+    minor: u32,
+}
+
 pub(crate) fn apply_headers(
     client: &AIClient,
     builder: RequestBuilder,
@@ -37,13 +51,40 @@ pub(crate) fn apply_headers(
     })
 }
 
-fn anthropic_supports_adaptive_reasoning(model_name: &str) -> bool {
-    matches!(
-        model_name,
-        name if name.starts_with("claude-opus-4-6")
-            || name.starts_with("claude-sonnet-4-6")
-            || name.starts_with("claude-mythos")
-    )
+fn parse_claude_model_version(model_name: &str, family: &str) -> Option<ClaudeModelVersion> {
+    let prefix = format!("claude-{family}-");
+    let rest = model_name.strip_prefix(&prefix)?;
+    let mut parts = rest.split('-');
+    let major = parts.next()?.parse().ok()?;
+    let minor = parts.next().and_then(|part| part.parse().ok()).unwrap_or(0);
+    Some(ClaudeModelVersion { major, minor })
+}
+
+fn anthropic_thinking_capability(model_name: &str) -> AnthropicThinkingCapability {
+    if model_name.starts_with("claude-mythos") {
+        return AnthropicThinkingCapability::AdaptiveDefaultNoDisabled;
+    }
+
+    if let Some(version) = parse_claude_model_version(model_name, "opus") {
+        if version.major == 4 && version.minor >= 7 {
+            return AnthropicThinkingCapability::AdaptiveOnly;
+        }
+        if version.major > 4 || (version.major == 4 && version.minor >= 6) {
+            return AnthropicThinkingCapability::AdaptivePreferred;
+        }
+    }
+
+    if let Some(version) = parse_claude_model_version(model_name, "sonnet") {
+        if version.major > 4 || (version.major == 4 && version.minor >= 6) {
+            return AnthropicThinkingCapability::AdaptivePreferred;
+        }
+    }
+
+    AnthropicThinkingCapability::ManualOnly
+}
+
+fn anthropic_supports_adaptive_reasoning(capability: AnthropicThinkingCapability) -> bool {
+    !matches!(capability, AnthropicThinkingCapability::ManualOnly)
 }
 
 fn default_anthropic_budget_tokens(max_tokens: Option<u32>) -> Option<u32> {
@@ -77,6 +118,7 @@ fn apply_reasoning_fields(
 ) {
     let is_deepseek_reasoning_target =
         is_deepseek_url(url) || is_deepseek_reasoning_effort_model(model_name);
+    let capability = anthropic_thinking_capability(model_name);
 
     match mode {
         ReasoningMode::Default => {
@@ -90,10 +132,18 @@ fn apply_reasoning_fields(
             }
         }
         ReasoningMode::Disabled => {
-            request_body["thinking"] = serde_json::json!({ "type": "disabled" });
+            if capability == AnthropicThinkingCapability::AdaptiveDefaultNoDisabled {
+                warn!(
+                    target: "ai::anthropic_stream_request",
+                    "Model {} does not support thinking.type=disabled; omitting the field and relying on provider defaults",
+                    model_name
+                );
+            } else {
+                request_body["thinking"] = serde_json::json!({ "type": "disabled" });
+            }
         }
         ReasoningMode::Enabled => {
-            if anthropic_supports_adaptive_reasoning(model_name) {
+            if anthropic_supports_adaptive_reasoning(capability) {
                 apply_anthropic_adaptive_reasoning(request_body, reasoning_effort);
                 return;
             }
@@ -115,7 +165,7 @@ fn apply_reasoning_fields(
             }
         }
         ReasoningMode::Adaptive => {
-            if anthropic_supports_adaptive_reasoning(model_name) {
+            if anthropic_supports_adaptive_reasoning(capability) {
                 apply_anthropic_adaptive_reasoning(request_body, reasoning_effort);
             } else {
                 warn!(
@@ -137,7 +187,7 @@ fn apply_reasoning_fields(
     }
 
     if mode != ReasoningMode::Adaptive
-        && !anthropic_supports_adaptive_reasoning(model_name)
+        && !anthropic_supports_adaptive_reasoning(capability)
         && reasoning_effort.is_some_and(|value| !value.trim().is_empty())
     {
         warn!(

@@ -277,7 +277,7 @@ export function createConfigCenterTab(
 export function createReviewPlatformTab(workspacePath?: string): void {
   const detail = {
     type: 'review-platform',
-    title: i18nService.getT()('common:tabs.pullRequests', { defaultValue: 'Pull Requests' }),
+    title: i18nService.getT()('common:tabs.pullRequests'),
     data: { workspacePath },
     metadata: {
       workspacePath,

@@ -21,9 +21,16 @@ import { taskCollapseStateManager } from '../../store/TaskCollapseStateManager';
 import { ExportImageButton } from './ExportImageButton';
 import { ForkSessionButton } from './ForkSessionButton';
 import { buildModelRoundItemGroups, COMPLETED_TOOL_TRANSIENT_MS } from './modelRoundItemGrouping';
+import {
+  MODEL_ROUND_GROUP_RENDER_CHUNK_DELAY_MS,
+  getInitialModelRoundGroupRenderCount,
+  getNextModelRoundGroupRenderCount,
+  getSynchronizedModelRoundGroupRenderCount,
+} from './modelRoundProgressiveRender';
 import { Tooltip } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
 import { SubagentProjectionView } from '../subagent/SubagentProjectionView';
+import { formatSessionViewPreviewText } from '../../utils/sessionViewPreview';
 import './ModelRoundItem.scss';
 import './SubagentItems.scss';
 
@@ -169,6 +176,71 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
       });
     }, [round.isStreaming, round.renderHints?.disableExploreGrouping, sortedItems, transientNowMs]);
 
+    const initialGroupRenderCount = useMemo(() => (
+      getInitialModelRoundGroupRenderCount({
+        groupCount: groupedItems.length,
+        isStreaming: round.isStreaming,
+      })
+    ), [groupedItems.length, round.isStreaming]);
+
+    const [renderedGroupState, setRenderedGroupState] = useState(() => ({
+      roundId: round.id,
+      count: initialGroupRenderCount,
+    }));
+
+    useEffect(() => {
+      setRenderedGroupState((current) => {
+        if (current.roundId !== round.id) {
+          return { roundId: round.id, count: initialGroupRenderCount };
+        }
+
+        const nextCount = getSynchronizedModelRoundGroupRenderCount({
+          currentCount: current.count,
+          groupCount: groupedItems.length,
+          initialCount: initialGroupRenderCount,
+          isStreaming: round.isStreaming,
+        });
+
+        return current.count === nextCount
+          ? current
+          : { roundId: round.id, count: nextCount };
+      });
+    }, [groupedItems.length, initialGroupRenderCount, round.id, round.isStreaming]);
+
+    const renderedGroupCount = renderedGroupState.roundId === round.id
+      ? renderedGroupState.count
+      : initialGroupRenderCount;
+
+    useEffect(() => {
+      if (round.isStreaming || renderedGroupCount >= groupedItems.length) {
+        return;
+      }
+
+      const timeoutId = window.setTimeout(() => {
+        setRenderedGroupState((current) => {
+          if (current.roundId !== round.id) {
+            return current;
+          }
+
+          return {
+            roundId: round.id,
+            count: getNextModelRoundGroupRenderCount({
+              currentCount: current.count,
+              groupCount: groupedItems.length,
+            }),
+          };
+        });
+      }, MODEL_ROUND_GROUP_RENDER_CHUNK_DELAY_MS);
+
+      return () => window.clearTimeout(timeoutId);
+    }, [groupedItems.length, renderedGroupCount, round.id, round.isStreaming]);
+
+    const visibleGroupedItems = useMemo(
+      () => groupedItems.slice(0, renderedGroupCount),
+      [groupedItems, renderedGroupCount],
+    );
+    const hasDeferredGroups = renderedGroupCount < groupedItems.length;
+
     const extractDialogTurnContent = useCallback(() => {
       const flowChatStore = FlowChatStore.getInstance();
       const state = flowChatStore.getState();
@@ -218,7 +290,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                 const resultStr = typeof item.toolResult.result === 'string'
                   ? item.toolResult.result
                   : JSON.stringify(item.toolResult.result, null, 2);
-                toolContent += `\n[Result]\n\`\`\`\n${resultStr}\n\`\`\`\n`;
+                toolContent += `\n[Result]\n\`\`\`\n${formatSessionViewPreviewText(resultStr)}\n\`\`\`\n`;
               }
             }
             
@@ -260,8 +332,8 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
       <div 
         className={`model-round-item model-round-item--${round.isStreaming ? 'streaming' : 'complete'}`}
       >
-        {groupedItems.map((group, groupIndex) => {
-          const isLastGroup = groupIndex === groupedItems.length - 1;
+        {visibleGroupedItems.map((group, groupIndex) => {
+          const isLastGroup = !hasDeferredGroups && groupIndex === groupedItems.length - 1;
           const isLast = isLastRound && isLastGroup;
           switch (group.type) {
             case 'explore':
@@ -304,6 +376,12 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
               return null;
           }
         })}
+
+        {hasDeferredGroups && (
+          <div className="model-round-item__history-loader">
+            {t('modelRound.loadingMoreHistory', { defaultValue: 'Loading more history...' })}
+          </div>
+        )}
         
         {isTurnComplete && isLastRound && hasContent && !round.isStreaming && (
           <div className="model-round-item__footer">

@@ -110,8 +110,10 @@ export class FlowChatManager {
         }
       );
 
-      await this.context.flowChatStore.initializeFromDisk(
+      const initialMetadataPage = await this.context.flowChatStore.loadSessionMetadataPage(
         workspacePath,
+        5,
+        undefined,
         remoteConnectionId,
         remoteSshHost,
         'flow_chat_manager'
@@ -135,9 +137,35 @@ export class FlowChatManager {
         );
       };
 
-      const state = this.context.flowChatStore.getState();
-      const workspaceSessions = Array.from(state.sessions.values()).filter(sessionMatchesWorkspace);
-      const hasHistoricalSessions = workspaceSessions.length > 0;
+      let state = this.context.flowChatStore.getState();
+      let workspaceSessions = Array.from(state.sessions.values()).filter(sessionMatchesWorkspace);
+      if (
+        preferredMode &&
+        initialMetadataPage.hasMore &&
+        !workspaceSessions.some(session => session.mode === preferredMode)
+      ) {
+        let nextCursor = initialMetadataPage.nextCursor;
+        while (nextCursor) {
+          const nextPage = await this.context.flowChatStore.loadSessionMetadataPage(
+            workspacePath,
+            5,
+            nextCursor,
+            remoteConnectionId,
+            remoteSshHost,
+            'flow_chat_manager_preferred_mode'
+          );
+          state = this.context.flowChatStore.getState();
+          workspaceSessions = Array.from(state.sessions.values()).filter(sessionMatchesWorkspace);
+          if (workspaceSessions.some(session => session.mode === preferredMode) || !nextPage.hasMore) {
+            break;
+          }
+          nextCursor = nextPage.nextCursor;
+        }
+      }
+      const hasHistoricalSessions =
+        workspaceSessions.length > 0 ||
+        initialMetadataPage.totalTopLevelCount > 0 ||
+        initialMetadataPage.sessions.length > 0;
       const activeSession = state.activeSessionId
         ? state.sessions.get(state.activeSessionId) ?? null
         : null;

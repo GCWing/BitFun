@@ -31,6 +31,7 @@ import { ToolCardCopyAction, ToolCardHeaderActions } from './ToolCardHeaderActio
 import { ToolCommandPreview } from './ToolCommandPreview';
 import { hasAcpPermissionOptions } from './AcpPermissionActions.utils';
 import { AcpPermissionActions } from './AcpPermissionActions';
+import { formatSessionViewPreviewText } from '../utils/sessionViewPreview';
 import './TerminalToolCard.scss';
 
 const log = createLogger('TerminalToolCard');
@@ -199,7 +200,7 @@ function parseTerminalResult(raw: unknown, durationMs?: number): ParsedTerminalR
   const stderr = typeof record.stderr === 'string' ? record.stderr : '';
   const combinedOutput = [stdout, stderr].filter((value) => value.length > 0).join('\n');
   const outputField = typeof record.output === 'string' ? record.output : '';
-  const output = outputField || combinedOutput;
+  const output = formatSessionViewPreviewText(outputField || combinedOutput);
 
   return {
     output,

@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "budgets": [
+    {
+      "id": "web-ui-source",
+      "maxCjkLines": 0
+    },
+    {
+      "id": "mobile-web-source",
+      "maxCjkLines": 0
+    },
+    {
+      "id": "installer-source",
+      "maxCjkLines": 0
+    },
+    {
+      "id": "relay-static-homepage",
+      "maxCjkLines": 0
+    }
+  ]
+}

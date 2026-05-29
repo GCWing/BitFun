@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus, vs } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { useI18n } from '../i18n';
+import { messages } from '../i18n/messages';
 import {
   RemoteSessionManager,
   SessionPoller,
@@ -31,6 +32,10 @@ interface ChatPageProps {
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${Math.round(ms)}ms`;
   return `${(ms / 1000).toFixed(1)}s`;
+}
+
+function getEnglishPluralSuffix(language: string, count: number): string {
+  return language === 'en-US' && count !== 1 ? 's' : '';
 }
 
 function truncateMiddle(str: string, maxLen: number): string {
@@ -151,7 +156,7 @@ function normalizeFileLikeHref(rawHref: string): string {
     }
   }
 
-  // Normalize URI-like Windows absolute paths such as `/C:/Users/...`.
+  // Normalize URI-like Windows absolute paths with a leading slash before the drive letter.
   if (/^\/[A-Za-z]:[\\/]/.test(filePath)) {
     filePath = filePath.slice(1);
   }
@@ -474,7 +479,7 @@ const MarkdownContent: React.FC<MarkdownContentProps> = ({ content, onFileDownlo
       // Fallback: render as plain text for computer:// links without handler,
       // or as a regular link for http(s) links.
       if (typeof href === 'string') {
-        // 所有外部链接都在新标签页打开
+        // Open all external links in a new tab.
         const isExternalLink = href.startsWith('http://') || href.startsWith('https://');
         if (isExternalLink) {
           return (
@@ -745,7 +750,7 @@ const TaskToolCard: React.FC<{
   subItems?: ChatMessageItem[];
   onCancelTool?: (toolId: string) => void;
 }> = ({ tool, now, subItems = [], onCancelTool }) => {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const scrollRef = useRef<HTMLDivElement>(null);
   const prevCountRef = useRef(0);
   const [stepsExpanded, setStepsExpanded] = useState(false);
@@ -818,7 +823,7 @@ const TaskToolCard: React.FC<{
         <>
           <div className="chat-task-card__summary" onClick={() => setStepsExpanded(e => !e)}>
             <span className="chat-task-card__stat">
-              {t('chat.toolCalls', { count: subTools.length, suffix: subTools.length === 1 ? '' : 's' })}
+              {t('chat.toolCalls', { count: subTools.length, suffix: getEnglishPluralSuffix(language, subTools.length) })}
             </span>
             <span className="chat-task-card__stat-right">
               <span className="chat-task-card__stat--done">{t('chat.done', { count: subToolsDone })}</span>
@@ -1081,7 +1086,7 @@ const ToolList: React.FC<{
   now: number;
   onCancelTool?: (toolId: string) => void;
 }> = ({ tools, now, onCancelTool }) => {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const scrollRef = useRef<HTMLDivElement>(null);
   const prevCountRef = useRef(0);
   const [expanded, setExpanded] = useState(false);
@@ -1111,7 +1116,7 @@ const ToolList: React.FC<{
   return (
     <div className="chat-tool-list chat-tool-list--collapsed">
       <div className="chat-tool-list__header" onClick={() => setExpanded(e => !e)}>
-        <span className="chat-tool-list__count">{t('chat.toolCalls', { count: tools.length, suffix: tools.length === 1 ? '' : 's' })}</span>
+        <span className="chat-tool-list__count">{t('chat.toolCalls', { count: tools.length, suffix: getEnglishPluralSuffix(language, tools.length) })}</span>
         <span className="chat-tool-list__stats">
           {doneCount > 0 && <span className="chat-tool-list__stat chat-tool-list__stat--done">{t('chat.done', { count: doneCount })}</span>}
           {runningCount > 0 && <span className="chat-tool-list__stat chat-tool-list__stat--running">{t('chat.running', { count: runningCount })}</span>}
@@ -1224,13 +1229,35 @@ const isPendingAskUserQuestion = (tool?: RemoteToolStatus | null) => {
   return !['completed', 'failed', 'cancelled', 'rejected'].includes(tool.status);
 };
 
-const isOtherQuestionOption = (label?: string) => {
+function getMessageByPath(source: unknown, path: string): string | null {
+  const segments = path.split('.');
+  let current: unknown = source;
+
+  for (const segment of segments) {
+    if (!current || typeof current !== 'object' || !(segment in current)) {
+      return null;
+    }
+    current = (current as Record<string, unknown>)[segment];
+  }
+
+  return typeof current === 'string' ? current : null;
+}
+
+const OTHER_QUESTION_OPTION_LABELS = new Set([
+  'other',
+  ...Object.values(messages)
+    .map((localeMessages) => getMessageByPath(localeMessages, 'common.other'))
+    .filter((label): label is string => !!label)
+    .map((label) => label.trim().toLowerCase()),
+]);
+
+const isOtherQuestionOption = (label: string | undefined) => {
   const normalized = (label || '').trim().toLowerCase();
-  return normalized === 'other' || normalized === '其他';
+  return OTHER_QUESTION_OPTION_LABELS.has(normalized);
 };
 
 const AskQuestionCard: React.FC<AskQuestionCardProps> = ({ tool, onAnswer }) => {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const questions: any[] = tool.tool_input?.questions || [];
   const [selected, setSelected] = useState<Record<number, string | string[]>>({});
   const [customTexts, setCustomTexts] = useState<Record<number, string>>({});
@@ -1295,7 +1322,7 @@ const AskQuestionCard: React.FC<AskQuestionCardProps> = ({ tool, onAnswer }) => 
   return (
     <div className="chat-ask-card">
       <div className="chat-ask-card__header">
-        <span className="chat-ask-card__count">{t('chat.askQuestionCount', { count: questions.length, suffix: questions.length > 1 ? 's' : '' })}</span>
+        <span className="chat-ask-card__count">{t('chat.askQuestionCount', { count: questions.length, suffix: getEnglishPluralSuffix(language, questions.length) })}</span>
         {!submitted && !submitting && (
           <span className="chat-ask-card__waiting">{t('chat.waiting')}</span>
         )}

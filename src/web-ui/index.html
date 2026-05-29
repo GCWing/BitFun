@@ -12,8 +12,8 @@
         /* Keep in sync with presets/light-theme.ts colors.background.primary */
         var light = '#f3f3f5';
         var m = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
-        var bg = m && m.matches ? dark : light;
         var root = document.documentElement;
+        var bg = root.style.backgroundColor || (m && m.matches ? dark : light);
         root.style.backgroundColor = bg;
         function paintBody() {
           if (document.body) document.body.style.backgroundColor = bg;
@@ -51,6 +51,11 @@
       
       body {
         background-color: inherit;
+      }
+
+      #root {
+        width: 100%;
+        height: 100%;
       }
     </style>
   </head>

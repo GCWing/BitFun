@@ -43,6 +43,7 @@
       "delete": "删除"
     },
     "codeEditor": {
+      "preparingEditor": "正在准备编辑器...",
       "loadingFile": "正在加载文件...",
       "saving": "正在保存...",
       "initFailedWithMessage": "编辑器初始化失败: {{message}}",

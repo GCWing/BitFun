@@ -1,6 +1,6 @@
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Folder, FolderOpen, MoreHorizontal, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw, Copy, FileText, GitBranch, Bot, Link2, Archive } from 'lucide-react';
+import { Folder, FolderOpen, MoreHorizontal, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw, Copy, FileText, GitBranch, Bot, Link2, Archive, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { DotMatrixArrowRightIcon } from './DotMatrixArrowRightIcon';
 import { Button, ConfirmDialog, Modal, Tooltip } from '@/component-library';
@@ -91,6 +91,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     () => aiExperienceConfigService.getSettings().enable_workspace_search,
   );
   const [acpClients, setAcpClients] = useState<AcpClientInfo[]>([]);
+  const [acpClientsLoading, setAcpClientsLoading] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuAnchorRef = useRef<HTMLDivElement>(null);
   const menuPopoverRef = useRef<HTMLDivElement>(null);
@@ -316,10 +317,16 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   }, [menuOpen, updateMenuPosition]);
 
   useEffect(() => {
+    if (!menuOpen) {
+      return;
+    }
+
     let cancelled = false;
     const remoteWorkspace = isRemoteWorkspace(workspace);
 
     const loadAcpClients = async () => {
+      setAcpClients([]);
+      setAcpClientsLoading(true);
       try {
         const clients = await loadWorkspaceAcpMenuClients({
           remoteWorkspace,
@@ -329,7 +336,13 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
           setAcpClients(clients);
         }
       } catch (_error) {
-        setAcpClients([]);
+        if (!cancelled) {
+          setAcpClients([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setAcpClientsLoading(false);
+        }
       }
     };
 
@@ -341,7 +354,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
       window.removeEventListener('bitfun:acp-clients-changed', loadAcpClients);
       window.removeEventListener('bitfun:acp-requirements-changed', loadAcpClients);
     };
-  }, [workspace]);
+  }, [menuOpen, workspace]);
 
   const handleActivate = useCallback(async () => {
     if (!isActive) {
@@ -825,6 +838,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
             remoteSshHost={isRemoteWorkspace(workspace) ? workspace.sshHost : null}
             isActiveWorkspace={isActive}
             assistantLabel={workspaceDisplayName}
+            isVisible={!sessionsCollapsed}
           />
         </div>
 
@@ -1091,6 +1105,16 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                     </button>
                   );
                 })}
+                {acpClientsLoading ? (
+                  <button
+                    type="button"
+                    className="bitfun-nav-panel__workspace-item-menu-item"
+                    disabled
+                  >
+                    <Loader2 size={13} />
+                    <span className="bitfun-nav-panel__workspace-item-menu-label">{t('app.loading')}</span>
+                  </button>
+                ) : null}
                 <button type="button" className="bitfun-nav-panel__workspace-item-menu-item" onClick={() => { void handleCreateInitSession(); }}>
                   <FileText size={13} />
                   <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.initAgents')}</span>
@@ -1178,6 +1202,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
           remoteConnectionId={isRemoteWorkspace(workspace) ? workspace.connectionId : null}
           remoteSshHost={isRemoteWorkspace(workspace) ? workspace.sshHost : null}
           isActiveWorkspace={isActive}
+          isVisible={!sessionsCollapsed}
         />
       </div>
 

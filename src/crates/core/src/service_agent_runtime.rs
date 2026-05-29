@@ -6,19 +6,31 @@
 //! implementations until a reviewed port/provider migration proves equivalence.
 
 use bitfun_runtime_ports::{
-    AgentSubmissionPort, AgentSubmissionSource, AgentTurnCancellationPort,
-    AgentTurnCancellationRequest, RemoteControlStatePort, RemoteControlStateRequest,
-    RemoteControlStateSnapshot,
+    AgentSessionCreateRequest, AgentSubmissionPort, AgentSubmissionSource,
+    AgentTurnCancellationPort, AgentTurnCancellationRequest, RemoteControlStatePort,
+    RemoteControlStateRequest, RemoteControlStateSnapshot,
 };
 use bitfun_services_integrations::remote_connect::{
-    ChatImageAttachment, ChatMessage, ChatMessageItem, RemoteCancelRuntimeHost,
+    build_remote_chat_messages, build_remote_model_catalog,
+    normalize_remote_model_selection as normalize_remote_model_selection_contract,
+    normalize_remote_session_model_id as normalize_remote_session_model_id_contract,
+    remote_dialog_submit_outcome_from_scheduler,
+    remote_model_selection_needs_config as remote_model_selection_needs_config_contract,
+    ChatImageAttachment, ChatMessage, RemoteAssistantWorkspaceFacts, RemoteCancelRuntimeHost,
+    RemoteChatHistoryRound, RemoteChatHistoryTextItem, RemoteChatHistoryThinkingItem,
+    RemoteChatHistoryToolCall, RemoteChatHistoryToolItem, RemoteChatHistoryTurn,
     RemoteConnectSubmissionSource, RemoteDefaultModelsConfig, RemoteDialogQueuePriority,
-    RemoteDialogResolvedSubmission, RemoteDialogRuntimeHost, RemoteDialogSubmissionPolicy,
-    RemoteDialogSubmitOutcome, RemoteImageContext, RemoteImageContextAdapter, RemoteModelCatalog,
-    RemoteModelConfig, RemoteSessionStateTracker, RemoteSessionTrackerHost,
-    RemoteTerminalPrewarmRequest, RemoteToolStatus, RemoteWorkspaceFileRuntimeHost,
+    RemoteDialogResolvedSubmission, RemoteDialogRuntimeHost, RemoteDialogSchedulerOutcomeFact,
+    RemoteDialogSubmissionPolicy, RemoteDialogSubmitOutcome, RemoteImageContext,
+    RemoteImageContextAdapter, RemoteInitialSyncRuntimeHost, RemoteInteractionRuntimeHost,
+    RemoteModelCapabilityFact, RemoteModelCatalog, RemoteModelCatalogFacts, RemoteModelFacts,
+    RemotePollRuntimeHost, RemoteReasoningModeFact, RemoteRecentWorkspaceFacts,
+    RemoteSessionMetadata, RemoteSessionRuntimeHost, RemoteSessionStateTracker,
+    RemoteSessionTrackerHost, RemoteTerminalPrewarmRequest, RemoteWorkspaceFacts,
+    RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind as RemoteConnectWorkspaceKind,
+    RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate,
 };
-use log::{debug, info};
+use log::{debug, error, info};
 use std::sync::Arc;
 
 use crate::agentic::coordination::{
@@ -39,49 +51,142 @@ fn current_workspace_path() -> Option<std::path::PathBuf> {
         .and_then(|service| service.try_get_current_workspace_path())
 }
 
-fn normalize_remote_session_model_id(model_id: Option<String>) -> Option<String> {
-    match model_id {
-        Some(value) => {
-            let trimmed = value.trim();
-            if trimmed.is_empty() || trimmed == "default" {
-                Some("auto".to_string())
-            } else {
-                Some(trimmed.to_string())
-            }
+fn remote_workspace_kind(
+    kind: crate::service::workspace::WorkspaceKind,
+) -> RemoteConnectWorkspaceKind {
+    match kind {
+        crate::service::workspace::WorkspaceKind::Normal => RemoteConnectWorkspaceKind::Normal,
+        crate::service::workspace::WorkspaceKind::Assistant => {
+            RemoteConnectWorkspaceKind::Assistant
         }
-        None => Some("auto".to_string()),
+        crate::service::workspace::WorkspaceKind::Remote => RemoteConnectWorkspaceKind::Remote,
     }
+}
+
+fn git_branch_for_workspace_path(path: &std::path::Path) -> Option<String> {
+    git2::Repository::open(path).ok().and_then(|repo| {
+        repo.head()
+            .ok()
+            .and_then(|head| head.shorthand().ok().map(String::from))
+    })
+}
+
+async fn current_remote_workspace_facts() -> Option<RemoteWorkspaceFacts> {
+    let workspace_service = crate::service::workspace::get_global_workspace_service()?;
+    workspace_service
+        .get_current_workspace()
+        .await
+        .map(|workspace| {
+            let root_path = workspace.root_path.clone();
+            RemoteWorkspaceFacts {
+                path: root_path.to_string_lossy().to_string(),
+                name: workspace.name,
+                git_branch: git_branch_for_workspace_path(&root_path),
+                kind: remote_workspace_kind(workspace.workspace_kind),
+                assistant_id: workspace.assistant_id,
+            }
+        })
+}
+
+async fn open_workspace_with_snapshot(
+    path: &str,
+    snapshot_log_context: &str,
+) -> Result<RemoteWorkspaceUpdate, String> {
+    let workspace_service = crate::service::workspace::get_global_workspace_service()
+        .ok_or_else(|| "Workspace service not available".to_string())?;
+    let path_buf = std::path::PathBuf::from(path);
+    let info = workspace_service
+        .open_workspace(path_buf)
+        .await
+        .map_err(|error| error.to_string())?;
+    if let Err(error) = crate::service::snapshot::initialize_snapshot_manager_for_workspace(
+        info.root_path.clone(),
+        None,
+    )
+    .await
+    {
+        error!("Failed to initialize snapshot after {snapshot_log_context}: {error}");
+    }
+    Ok(RemoteWorkspaceUpdate {
+        path: info.root_path.to_string_lossy().to_string(),
+        name: info.name,
+    })
+}
+
+async fn load_remote_session_metadata_for_workspace(
+    workspace_path: &std::path::Path,
+) -> Result<Vec<RemoteSessionMetadata>, String> {
+    let workspace_path_display = workspace_path.to_string_lossy().to_string();
+    let path_manager = crate::infrastructure::PathManager::new()
+        .map_err(|_| "Failed to initialize path manager".to_string())?;
+    let path_manager = std::sync::Arc::new(path_manager);
+    let store =
+        crate::agentic::persistence::PersistenceManager::new(path_manager).map_err(|error| {
+            debug!("PersistenceManager init failed for {workspace_path_display}: {error}");
+            format!("Failed to initialize session storage: {error}")
+        })?;
+    let metadata = store
+        .list_session_metadata(workspace_path)
+        .await
+        .map_err(|error| {
+            debug!("Session list read failed for {workspace_path_display}: {error}");
+            format!("Failed to list sessions for workspace: {error}")
+        })?;
+
+    Ok(metadata
+        .into_iter()
+        .map(|session| RemoteSessionMetadata {
+            session_id: session.session_id,
+            name: session.session_name,
+            agent_type: session.agent_type,
+            created_at_ms: session.created_at,
+            last_active_at_ms: session.last_active_at,
+            turn_count: session.turn_count,
+        })
+        .collect())
+}
+
+fn normalize_remote_session_model_id(model_id: Option<String>) -> Option<String> {
+    normalize_remote_session_model_id_contract(model_id.as_deref())
 }
 
 fn normalize_remote_model_selection(
     requested_model_id: &str,
     ai_config: Option<&AIConfig>,
 ) -> Result<String, String> {
-    let requested_model_id = requested_model_id.trim();
-    if requested_model_id.is_empty() {
-        return Err("model_id is required".to_string());
-    }
-
-    if matches!(requested_model_id, "auto" | "default" | "primary" | "fast") {
-        return Ok(if requested_model_id == "default" {
-            "auto".to_string()
-        } else {
-            requested_model_id.to_string()
-        });
-    }
-
-    let Some(ai_config) = ai_config else {
+    if remote_model_selection_needs_config(requested_model_id) && ai_config.is_none() {
         return Err("Config service not available".to_string());
-    };
-    ai_config
-        .resolve_model_reference(requested_model_id)
-        .ok_or_else(|| format!("Unknown model selection: {requested_model_id}"))
+    }
+
+    normalize_remote_model_selection_contract(requested_model_id, |model_id| {
+        ai_config.and_then(|config| config.resolve_model_reference(model_id))
+    })
 }
 
 fn remote_model_selection_needs_config(requested_model_id: &str) -> bool {
-    let requested_model_id = requested_model_id.trim();
-    !requested_model_id.is_empty()
-        && !matches!(requested_model_id, "auto" | "default" | "primary" | "fast")
+    remote_model_selection_needs_config_contract(requested_model_id)
+}
+
+fn remote_model_capability_fact(capability: ModelCapability) -> RemoteModelCapabilityFact {
+    match capability {
+        ModelCapability::TextChat => RemoteModelCapabilityFact::TextChat,
+        ModelCapability::ImageUnderstanding => RemoteModelCapabilityFact::ImageUnderstanding,
+        ModelCapability::ImageGeneration => RemoteModelCapabilityFact::ImageGeneration,
+        ModelCapability::Embedding => RemoteModelCapabilityFact::Embedding,
+        ModelCapability::Search => RemoteModelCapabilityFact::Search,
+        ModelCapability::CodeSpecialized => RemoteModelCapabilityFact::CodeSpecialized,
+        ModelCapability::FunctionCalling => RemoteModelCapabilityFact::FunctionCalling,
+        ModelCapability::SpeechRecognition => RemoteModelCapabilityFact::SpeechRecognition,
+    }
+}
+
+fn remote_reasoning_mode_fact(reasoning_mode: ReasoningMode) -> RemoteReasoningModeFact {
+    match reasoning_mode {
+        ReasoningMode::Default => RemoteReasoningModeFact::Default,
+        ReasoningMode::Enabled => RemoteReasoningModeFact::Enabled,
+        ReasoningMode::Disabled => RemoteReasoningModeFact::Disabled,
+        ReasoningMode::Adaptive => RemoteReasoningModeFact::Adaptive,
+    }
 }
 
 /// Compress a base64 data-URL image to a small thumbnail for mobile display.
@@ -139,212 +244,99 @@ fn compress_remote_chat_data_url_for_mobile(data_url: &str, max_bytes: usize) ->
 /// Convert persisted turns into mobile ChatMessages.
 /// This is the same data source the desktop frontend uses.
 fn remote_chat_messages_from_turns(turns: &[DialogTurnData]) -> Vec<ChatMessage> {
-    let mut result = Vec::new();
+    let projected_turns = turns
+        .iter()
+        .filter(|turn| turn.kind.is_model_visible())
+        .map(remote_chat_history_turn_from_core_turn)
+        .collect::<Vec<_>>();
+    build_remote_chat_messages(projected_turns)
+}
 
-    for turn in turns {
-        if !turn.kind.is_model_visible() {
-            continue;
-        }
+fn remote_chat_history_turn_from_core_turn(turn: &DialogTurnData) -> RemoteChatHistoryTurn {
+    let user_images = turn
+        .user_message
+        .metadata
+        .as_ref()
+        .and_then(|m| m.get("images"))
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| {
+                    let name = v.get("name")?.as_str()?.to_string();
+                    let raw_url = v.get("data_url")?.as_str()?;
+                    let data_url =
+                        compress_remote_chat_data_url_for_mobile(raw_url, MOBILE_IMAGE_MAX_BYTES);
+                    Some(ChatImageAttachment { name, data_url })
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
 
-        let images = turn
-            .user_message
-            .metadata
-            .as_ref()
-            .and_then(|m| m.get("images"))
-            .and_then(|v| v.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|v| {
-                        let name = v.get("name")?.as_str()?.to_string();
-                        let raw_url = v.get("data_url")?.as_str()?;
-                        let data_url = compress_remote_chat_data_url_for_mobile(
-                            raw_url,
-                            MOBILE_IMAGE_MAX_BYTES,
-                        );
-                        Some(ChatImageAttachment { name, data_url })
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .filter(|v| !v.is_empty());
+    // Prefer original_text from metadata (pre-enhancement) for display.
+    let user_display_content = turn
+        .user_message
+        .metadata
+        .as_ref()
+        .and_then(|m| m.get("original_text"))
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| strip_remote_user_input_tags(&turn.user_message.content));
 
-        // Prefer original_text from metadata (pre-enhancement) for display.
-        let display_content = turn
-            .user_message
-            .metadata
-            .as_ref()
-            .and_then(|m| m.get("original_text"))
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| strip_remote_user_input_tags(&turn.user_message.content));
-
-        result.push(ChatMessage {
-            id: turn.user_message.id.clone(),
-            role: "user".to_string(),
-            content: display_content,
-            timestamp: (turn.user_message.timestamp / 1000).to_string(),
-            metadata: None,
-            tools: None,
-            thinking: None,
-            items: None,
-            images,
-        });
-
-        // Skip assistant message for in-progress turns. The active turn's
-        // content is delivered via the real-time overlay, not the historical
-        // list. Including an empty or partial assistant message here would
-        // consume a slot in the count-based skip cursor and prevent the final
-        // version from ever being delivered.
-        if turn.status == TurnStatus::InProgress {
-            continue;
-        }
-
-        // Collect ordered items across all rounds, preserving interleaved order.
-        struct OrderedEntry {
-            order_index: Option<usize>,
-            sequence: usize,
-            round_idx: usize,
-            item: ChatMessageItem,
-        }
-
-        let mut ordered: Vec<OrderedEntry> = Vec::new();
-        let mut tools_flat = Vec::new();
-        let mut thinking_parts = Vec::new();
-        let mut text_parts = Vec::new();
-        let mut sequence = 0usize;
-
-        for (round_idx, round) in turn.model_rounds.iter().enumerate() {
-            // Iterate in streaming order: thinking, text, tools.
-            // The model first thinks, then outputs text, and finally the tools
-            // are detected/executed. This matches the real-time tracker order.
-            for t in &round.thinking_items {
-                if t.is_subagent_item.unwrap_or(false) {
-                    continue;
-                }
-                if !t.content.is_empty() {
-                    thinking_parts.push(t.content.clone());
-                    ordered.push(OrderedEntry {
-                        order_index: t.order_index,
-                        sequence,
-                        round_idx,
-                        item: ChatMessageItem {
-                            item_type: "thinking".to_string(),
-                            content: Some(t.content.clone()),
-                            tool: None,
-                            is_subagent: None,
-                        },
-                    });
-                    sequence += 1;
-                }
-            }
-            for t in &round.text_items {
-                if t.is_subagent_item.unwrap_or(false) {
-                    continue;
-                }
-                if !t.content.is_empty() {
-                    text_parts.push(t.content.clone());
-                    ordered.push(OrderedEntry {
-                        order_index: t.order_index,
-                        sequence,
-                        round_idx,
-                        item: ChatMessageItem {
-                            item_type: "text".to_string(),
-                            content: Some(t.content.clone()),
-                            tool: None,
-                            is_subagent: None,
-                        },
-                    });
-                    sequence += 1;
-                }
-            }
-            for t in &round.tool_items {
-                if t.is_subagent_item.unwrap_or(false) {
-                    continue;
-                }
-                let status_str = t.status.as_deref().unwrap_or(if t.tool_result.is_some() {
-                    "completed"
-                } else {
-                    "running"
-                });
-                let tool_status = RemoteToolStatus {
-                    id: t.id.clone(),
-                    name: t.tool_name.clone(),
-                    status: status_str.to_string(),
-                    duration_ms: t.duration_ms,
-                    start_ms: Some(t.start_time),
-                    input_preview:
-                        bitfun_services_integrations::remote_connect::make_slim_tool_params(
-                            &t.tool_call.input,
-                        ),
-                    tool_input: if t.tool_name == "AskUserQuestion"
-                        || t.tool_name == "Task"
-                        || t.tool_name == "TodoWrite"
-                    {
-                        Some(t.tool_call.input.clone())
-                    } else {
-                        None
+    let rounds = turn
+        .model_rounds
+        .iter()
+        .map(|round| RemoteChatHistoryRound {
+            start_time_ms: round.start_time,
+            end_time_ms: round.end_time,
+            text_items: round
+                .text_items
+                .iter()
+                .map(|item| RemoteChatHistoryTextItem {
+                    content: item.content.clone(),
+                    order_index: item.order_index,
+                    is_subagent: item.is_subagent_item.unwrap_or(false),
+                })
+                .collect(),
+            thinking_items: round
+                .thinking_items
+                .iter()
+                .map(|item| RemoteChatHistoryThinkingItem {
+                    content: item.content.clone(),
+                    order_index: item.order_index,
+                    is_subagent: item.is_subagent_item.unwrap_or(false),
+                })
+                .collect(),
+            tool_items: round
+                .tool_items
+                .iter()
+                .map(|item| RemoteChatHistoryToolItem {
+                    id: item.id.clone(),
+                    name: item.tool_name.clone(),
+                    call: RemoteChatHistoryToolCall {
+                        id: item.tool_call.id.clone(),
+                        input: item.tool_call.input.clone(),
                     },
-                };
-                tools_flat.push(tool_status.clone());
-                ordered.push(OrderedEntry {
-                    order_index: t.order_index,
-                    sequence,
-                    round_idx,
-                    item: ChatMessageItem {
-                        item_type: "tool".to_string(),
-                        content: None,
-                        tool: Some(tool_status),
-                        is_subagent: None,
-                    },
-                });
-                sequence += 1;
-            }
-        }
+                    has_result: item.tool_result.is_some(),
+                    status: item.status.clone(),
+                    duration_ms: item.duration_ms,
+                    start_ms: item.start_time,
+                    order_index: item.order_index,
+                    is_subagent: item.is_subagent_item.unwrap_or(false),
+                })
+                .collect(),
+        })
+        .collect();
 
-        // Sort by round first (rounds are strictly sequential), then by
-        // order_index within each round. order_index is per-round, so it must
-        // not be compared across rounds.
-        ordered.sort_by(|a, b| {
-            let round_cmp = a.round_idx.cmp(&b.round_idx);
-            if round_cmp != std::cmp::Ordering::Equal {
-                return round_cmp;
-            }
-            match (a.order_index, b.order_index) {
-                (Some(a_idx), Some(b_idx)) => a_idx.cmp(&b_idx),
-                (Some(_), None) => std::cmp::Ordering::Less,
-                (None, Some(_)) => std::cmp::Ordering::Greater,
-                (None, None) => a.sequence.cmp(&b.sequence),
-            }
-        });
-        let items: Vec<ChatMessageItem> = ordered.into_iter().map(|e| e.item).collect();
-
-        let ts = turn
-            .model_rounds
-            .last()
-            .map(|r| r.end_time.unwrap_or(r.start_time))
-            .unwrap_or(turn.start_time);
-
-        result.push(ChatMessage {
-            id: format!("{}_assistant", turn.turn_id),
-            role: "assistant".to_string(),
-            content: text_parts.join("\n\n"),
-            timestamp: (ts / 1000).to_string(),
-            metadata: None,
-            tools: if tools_flat.is_empty() {
-                None
-            } else {
-                Some(tools_flat)
-            },
-            thinking: if thinking_parts.is_empty() {
-                None
-            } else {
-                Some(thinking_parts.join("\n\n"))
-            },
-            items: if items.is_empty() { None } else { Some(items) },
-            images: None,
-        });
+    RemoteChatHistoryTurn {
+        turn_id: turn.turn_id.clone(),
+        user_message_id: turn.user_message.id.clone(),
+        user_display_content,
+        user_timestamp_ms: turn.user_message.timestamp,
+        user_images,
+        is_in_progress: turn.status == TurnStatus::InProgress,
+        start_time_ms: turn.start_time,
+        rounds,
     }
-
-    result
 }
 
 fn strip_remote_user_input_tags(content: &str) -> String {
@@ -390,6 +382,27 @@ fn core_dialog_submission_policy(policy: RemoteDialogSubmissionPolicy) -> Dialog
         queue_priority,
         policy.skip_tool_confirmation,
     )
+}
+
+fn remote_dialog_scheduler_outcome_fact(
+    outcome: DialogSubmitOutcome,
+) -> RemoteDialogSchedulerOutcomeFact {
+    match outcome {
+        DialogSubmitOutcome::Started {
+            session_id,
+            turn_id,
+        } => RemoteDialogSchedulerOutcomeFact::Started {
+            session_id,
+            turn_id,
+        },
+        DialogSubmitOutcome::Queued {
+            session_id,
+            turn_id,
+        } => RemoteDialogSchedulerOutcomeFact::Queued {
+            session_id,
+            turn_id,
+        },
+    }
 }
 
 impl RemoteImageContextAdapter for ImageContextData {
@@ -440,6 +453,28 @@ impl CoreServiceAgentRuntime {
         CoreRemoteWorkspaceFileRuntimeHost::new()
     }
 
+    pub(crate) fn remote_workspace_host() -> CoreRemoteWorkspaceRuntimeHost {
+        CoreRemoteWorkspaceRuntimeHost::new()
+    }
+
+    pub(crate) fn remote_initial_sync_host() -> CoreRemoteWorkspaceRuntimeHost {
+        CoreRemoteWorkspaceRuntimeHost::new()
+    }
+
+    pub(crate) fn remote_session_host() -> Result<CoreRemoteSessionRuntimeHost, String> {
+        CoreRemoteSessionRuntimeHost::new()
+    }
+
+    pub(crate) fn remote_poll_host(
+        dispatcher: &RemoteExecutionDispatcher,
+    ) -> CoreRemotePollRuntimeHost<'_> {
+        CoreRemotePollRuntimeHost::new(dispatcher)
+    }
+
+    pub(crate) fn remote_interaction_host() -> CoreRemoteInteractionRuntimeHost {
+        CoreRemoteInteractionRuntimeHost::new()
+    }
+
     pub(crate) fn remote_image_context(context: RemoteImageContext) -> ImageContextData {
         ImageContextData::from_remote_image_context(context)
     }
@@ -473,13 +508,13 @@ impl CoreServiceAgentRuntime {
             .map_err(|e| format!("Failed to load global config: {e}"))?;
         let ai_config: AIConfig = global_config.ai;
 
-        let models: Vec<RemoteModelConfig> = ai_config
+        let models: Vec<RemoteModelFacts> = ai_config
             .models
             .into_iter()
             .map(|model| {
                 let reasoning_mode = model.effective_reasoning_mode();
 
-                RemoteModelConfig {
+                RemoteModelFacts {
                     id: model.id,
                     name: model.name,
                     provider: model.provider,
@@ -490,30 +525,10 @@ impl CoreServiceAgentRuntime {
                     capabilities: model
                         .capabilities
                         .into_iter()
-                        .map(|capability| {
-                            match capability {
-                                ModelCapability::TextChat => "text_chat",
-                                ModelCapability::ImageUnderstanding => "image_understanding",
-                                ModelCapability::ImageGeneration => "image_generation",
-                                ModelCapability::Embedding => "embedding",
-                                ModelCapability::Search => "search",
-                                ModelCapability::CodeSpecialized => "code_specialized",
-                                ModelCapability::FunctionCalling => "function_calling",
-                                ModelCapability::SpeechRecognition => "speech_recognition",
-                            }
-                            .to_string()
-                        })
+                        .map(remote_model_capability_fact)
                         .collect(),
                     enable_thinking_process: model.enable_thinking_process,
-                    reasoning_mode: Some(
-                        match reasoning_mode {
-                            ReasoningMode::Default => "default",
-                            ReasoningMode::Enabled => "enabled",
-                            ReasoningMode::Disabled => "disabled",
-                            ReasoningMode::Adaptive => "adaptive",
-                        }
-                        .to_string(),
-                    ),
+                    reasoning_mode: Some(remote_reasoning_mode_fact(reasoning_mode)),
                     reasoning_effort: model.reasoning_effort,
                     thinking_budget_tokens: model.thinking_budget_tokens,
                 }
@@ -525,8 +540,8 @@ impl CoreServiceAgentRuntime {
         } else {
             None
         };
-        Ok(RemoteModelCatalog {
-            version: global_config.last_modified.timestamp_millis().max(0) as u64,
+        Ok(build_remote_model_catalog(RemoteModelCatalogFacts {
+            last_modified_ms: global_config.last_modified.timestamp_millis(),
             models,
             default_models: RemoteDefaultModelsConfig {
                 primary: ai_config.default_models.primary,
@@ -537,7 +552,7 @@ impl CoreServiceAgentRuntime {
                 speech_recognition: ai_config.default_models.speech_recognition,
             },
             session_model_id,
-        })
+        }))
     }
 
     pub(crate) async fn update_remote_session_model(
@@ -693,6 +708,54 @@ impl CoreRemoteWorkspaceFileRuntimeHost {
     }
 }
 
+pub(crate) struct CoreRemoteWorkspaceRuntimeHost;
+
+impl CoreRemoteWorkspaceRuntimeHost {
+    pub(crate) fn new() -> Self {
+        Self
+    }
+}
+
+pub(crate) struct CoreRemoteSessionRuntimeHost {
+    coordinator: Arc<ConversationCoordinator>,
+}
+
+impl CoreRemoteSessionRuntimeHost {
+    pub(crate) fn new() -> Result<Self, String> {
+        let coordinator = get_global_coordinator()
+            .ok_or_else(|| "Desktop session system not ready".to_string())?;
+        Ok(Self { coordinator })
+    }
+}
+
+pub(crate) struct CoreRemotePollRuntimeHost<'a> {
+    dispatcher: &'a RemoteExecutionDispatcher,
+}
+
+impl<'a> CoreRemotePollRuntimeHost<'a> {
+    pub(crate) fn new(dispatcher: &'a RemoteExecutionDispatcher) -> Self {
+        Self { dispatcher }
+    }
+}
+
+pub(crate) struct CoreRemoteInteractionRuntimeHost {
+    coordinator: Option<Arc<ConversationCoordinator>>,
+}
+
+impl CoreRemoteInteractionRuntimeHost {
+    pub(crate) fn new() -> Self {
+        Self {
+            coordinator: get_global_coordinator(),
+        }
+    }
+
+    fn coordinator(&self) -> Result<&ConversationCoordinator, String> {
+        self.coordinator
+            .as_deref()
+            .ok_or_else(|| "Desktop session system not ready".to_string())
+    }
+}
+
 #[async_trait::async_trait]
 impl RemoteDialogRuntimeHost for CoreRemoteDialogRuntimeHost<'_> {
     type ImageContext = ImageContextData;
@@ -795,22 +858,8 @@ impl RemoteDialogRuntimeHost for CoreRemoteDialogRuntimeHost<'_> {
                 image_payload,
             )
             .await
-            .map(|outcome| match outcome {
-                DialogSubmitOutcome::Started {
-                    session_id,
-                    turn_id,
-                } => RemoteDialogSubmitOutcome::Started {
-                    session_id,
-                    turn_id,
-                },
-                DialogSubmitOutcome::Queued {
-                    session_id,
-                    turn_id,
-                } => RemoteDialogSubmitOutcome::Queued {
-                    session_id,
-                    turn_id,
-                },
-            })
+            .map(remote_dialog_scheduler_outcome_fact)
+            .map(remote_dialog_submit_outcome_from_scheduler)
     }
 }
 
@@ -821,6 +870,250 @@ impl RemoteWorkspaceFileRuntimeHost for CoreRemoteWorkspaceFileRuntimeHost {
         session_id: Option<&str>,
     ) -> Option<std::path::PathBuf> {
         CoreServiceAgentRuntime::resolve_remote_file_workspace_root(session_id).await
+    }
+}
+
+#[async_trait::async_trait]
+impl RemoteWorkspaceRuntimeHost for CoreRemoteWorkspaceRuntimeHost {
+    async fn current_workspace(&self) -> Option<RemoteWorkspaceFacts> {
+        current_remote_workspace_facts().await
+    }
+
+    async fn recent_workspaces(&self) -> Vec<RemoteRecentWorkspaceFacts> {
+        let Some(workspace_service) = crate::service::workspace::get_global_workspace_service()
+        else {
+            return Vec::new();
+        };
+        workspace_service
+            .get_recent_workspaces()
+            .await
+            .into_iter()
+            .map(|workspace| RemoteRecentWorkspaceFacts {
+                path: workspace.root_path.to_string_lossy().to_string(),
+                name: workspace.name,
+                last_opened: workspace.last_accessed.to_rfc3339(),
+                kind: remote_workspace_kind(workspace.workspace_kind),
+            })
+            .collect()
+    }
+
+    async fn open_workspace(&self, path: &str) -> Result<RemoteWorkspaceUpdate, String> {
+        open_workspace_with_snapshot(path, "remote workspace set").await
+    }
+
+    async fn assistant_workspaces(&self) -> Vec<RemoteAssistantWorkspaceFacts> {
+        let Some(workspace_service) = crate::service::workspace::get_global_workspace_service()
+        else {
+            return Vec::new();
+        };
+        workspace_service
+            .get_assistant_workspaces()
+            .await
+            .into_iter()
+            .map(|workspace| RemoteAssistantWorkspaceFacts {
+                path: workspace.root_path.to_string_lossy().to_string(),
+                name: workspace.name,
+                assistant_id: workspace.assistant_id,
+            })
+            .collect()
+    }
+
+    async fn open_assistant_workspace(&self, path: &str) -> Result<RemoteWorkspaceUpdate, String> {
+        open_workspace_with_snapshot(path, "remote assistant set").await
+    }
+}
+
+#[async_trait::async_trait]
+impl RemoteInitialSyncRuntimeHost for CoreRemoteWorkspaceRuntimeHost {
+    async fn current_workspace(&self) -> Option<RemoteWorkspaceFacts> {
+        current_remote_workspace_facts().await
+    }
+
+    async fn list_session_metadata(
+        &self,
+        workspace_path: &std::path::Path,
+    ) -> Result<Vec<RemoteSessionMetadata>, String> {
+        load_remote_session_metadata_for_workspace(workspace_path).await
+    }
+}
+
+#[async_trait::async_trait]
+impl RemoteSessionRuntimeHost for CoreRemoteSessionRuntimeHost {
+    async fn list_session_metadata(
+        &self,
+        workspace_path: &std::path::Path,
+    ) -> Result<Vec<RemoteSessionMetadata>, String> {
+        load_remote_session_metadata_for_workspace(workspace_path).await
+    }
+
+    async fn resolve_default_assistant_workspace_path(&self) -> Result<String, String> {
+        let workspace_service = crate::service::workspace::get_global_workspace_service()
+            .ok_or_else(|| "Workspace service not available".to_string())?;
+        let workspaces = workspace_service.get_assistant_workspaces().await;
+        if let Some(default_workspace) = workspaces
+            .into_iter()
+            .find(|workspace| workspace.assistant_id.is_none())
+        {
+            return Ok(default_workspace.root_path.to_string_lossy().to_string());
+        }
+
+        workspace_service
+            .create_assistant_workspace(None)
+            .await
+            .map(|workspace| workspace.root_path.to_string_lossy().to_string())
+            .map_err(|error| format!("Failed to create assistant workspace: {}", error))
+    }
+
+    async fn create_session(&self, request: AgentSessionCreateRequest) -> Result<String, String> {
+        let submission_port =
+            CoreServiceAgentRuntime::agent_submission_port(self.coordinator.as_ref());
+        submission_port
+            .create_session(request)
+            .await
+            .map(|session| session.session_id)
+            .map_err(|error| error.message)
+    }
+
+    async fn load_model_catalog(
+        &self,
+        session_id: Option<&str>,
+    ) -> Result<RemoteModelCatalog, String> {
+        CoreServiceAgentRuntime::load_remote_model_catalog(session_id).await
+    }
+
+    async fn update_session_model(
+        &self,
+        session_id: &str,
+        model_id: &str,
+    ) -> Result<String, String> {
+        CoreServiceAgentRuntime::update_remote_session_model(
+            self.coordinator.as_ref(),
+            session_id,
+            model_id,
+        )
+        .await
+    }
+
+    async fn ensure_session_loaded(&self, session_id: &str) -> Result<(), String> {
+        if self
+            .coordinator
+            .get_session_manager()
+            .get_session(session_id)
+            .is_some()
+        {
+            return Ok(());
+        }
+
+        let Some(workspace_path) =
+            CoreServiceAgentRuntime::resolve_session_workspace_path(session_id).await
+        else {
+            return Err(format!(
+                "Workspace path not available for session: {}",
+                session_id
+            ));
+        };
+        self.coordinator
+            .restore_session(&workspace_path, session_id)
+            .await
+            .map(|_| ())
+            .map_err(|error| format!("Failed to restore session: {error}"))
+    }
+
+    async fn update_session_title(&self, session_id: &str, title: &str) -> Result<String, String> {
+        self.coordinator
+            .update_session_title(session_id, title)
+            .await
+            .map_err(|error| error.to_string())
+    }
+
+    async fn resolve_session_workspace_path(&self, session_id: &str) -> Option<std::path::PathBuf> {
+        CoreServiceAgentRuntime::resolve_session_workspace_path(session_id).await
+    }
+
+    async fn load_remote_chat_messages(
+        &self,
+        workspace_path: &std::path::Path,
+        session_id: &str,
+    ) -> (Vec<ChatMessage>, bool) {
+        CoreServiceAgentRuntime::load_remote_chat_messages(workspace_path, session_id).await
+    }
+
+    async fn delete_session(
+        &self,
+        workspace_path: &std::path::Path,
+        session_id: &str,
+    ) -> Result<(), String> {
+        self.coordinator
+            .delete_session(workspace_path, session_id)
+            .await
+            .map(|_| ())
+            .map_err(|error| error.to_string())
+    }
+
+    fn remove_tracker(&self, session_id: &str) {
+        crate::service::remote_connect::remote_server::get_or_init_global_dispatcher()
+            .remove_tracker(session_id);
+    }
+}
+
+#[async_trait::async_trait]
+impl RemotePollRuntimeHost for CoreRemotePollRuntimeHost<'_> {
+    fn ensure_tracker(&self, session_id: &str) -> Arc<RemoteSessionStateTracker> {
+        self.dispatcher.ensure_tracker(session_id)
+    }
+
+    async fn load_model_catalog(&self, session_id: &str) -> Option<RemoteModelCatalog> {
+        CoreServiceAgentRuntime::load_remote_model_catalog(Some(session_id))
+            .await
+            .ok()
+    }
+
+    async fn resolve_session_workspace_path(&self, session_id: &str) -> Option<std::path::PathBuf> {
+        CoreServiceAgentRuntime::resolve_session_workspace_path(session_id).await
+    }
+
+    async fn load_remote_chat_messages(
+        &self,
+        workspace_path: &std::path::Path,
+        session_id: &str,
+    ) -> (Vec<ChatMessage>, bool) {
+        CoreServiceAgentRuntime::load_remote_chat_messages(workspace_path, session_id).await
+    }
+}
+
+#[async_trait::async_trait]
+impl RemoteInteractionRuntimeHost for CoreRemoteInteractionRuntimeHost {
+    async fn confirm_tool(
+        &self,
+        tool_id: &str,
+        updated_input: Option<serde_json::Value>,
+    ) -> Result<(), String> {
+        self.coordinator()?
+            .confirm_tool(tool_id, updated_input)
+            .await
+            .map(|_| ())
+            .map_err(|error| error.to_string())
+    }
+
+    async fn reject_tool(&self, tool_id: &str, reason: String) -> Result<(), String> {
+        self.coordinator()?
+            .reject_tool(tool_id, reason)
+            .await
+            .map(|_| ())
+            .map_err(|error| error.to_string())
+    }
+
+    async fn cancel_tool(&self, tool_id: &str, reason: String) -> Result<(), String> {
+        self.coordinator()?
+            .cancel_tool(tool_id, reason)
+            .await
+            .map(|_| ())
+            .map_err(|error| error.to_string())
+    }
+
+    fn answer_question(&self, tool_id: &str, answers: serde_json::Value) -> Result<(), String> {
+        crate::agentic::tools::user_input_manager::get_user_input_manager()
+            .send_answer(tool_id, answers)
     }
 }
 
@@ -979,6 +1272,10 @@ mod tests {
         assert_eq!(
             normalize_remote_model_selection("   ", None).unwrap_err(),
             "model_id is required"
+        );
+        assert_eq!(
+            normalize_remote_model_selection("custom-alias", None).unwrap_err(),
+            "Config service not available"
         );
     }
 

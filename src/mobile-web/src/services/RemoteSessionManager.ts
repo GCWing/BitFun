@@ -514,7 +514,7 @@ export class SessionPoller {
   private getInterval(): number {
     if (document.visibilityState !== 'visible') return 5000;
     
-    // 如果在宽限期内（turn 刚刚结束），继续保持快速轮询
+    // Keep fast polling during the short grace period after a turn ends.
     const now = Date.now();
     if (this.turnJustEndedAt != null && (now - this.turnJustEndedAt) < this.TURN_JUST_ENDED_GRACE_PERIOD_MS) {
       return 1000;
@@ -560,12 +560,12 @@ export class SessionPoller {
         const isActiveNow = resp.active_turn != null && resp.active_turn.status === 'active';
         this.hasActiveTurn = isActiveNow;
         
-        // 检测到 active_turn 刚刚结束，设置宽限期
+        // Start the grace period when active_turn just ended.
         if (wasActive && !isActiveNow) {
           this.turnJustEndedAt = Date.now();
         }
         
-        // 如果有新消息或者 active_turn 仍然活跃，重置宽限期
+        // Clear the grace period once new messages arrive.
         if (resp.new_messages && resp.new_messages.length > 0) {
           this.turnJustEndedAt = null;
         }

@@ -7,6 +7,14 @@
     "searchNoResults": "No matching settings",
     "searchClear": "Clear search",
     "beta": "Beta",
+    "searchAliases": {
+      "archivedSessions": [],
+      "keyboard": [],
+      "sessionPersonalization": [],
+      "sessionPermissions": [],
+      "quickActions": [],
+      "review": []
+    },
     "tabDescriptions": {
       "basics": "Logging, terminal shell, notifications, and launch at login.",
       "appearance": "Language, theme, and UI font size.",

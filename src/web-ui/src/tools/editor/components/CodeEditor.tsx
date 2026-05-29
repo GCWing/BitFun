@@ -42,6 +42,7 @@ import {
 import { useI18n } from '@/infrastructure/i18n';
 import { EditorBreadcrumb } from './EditorBreadcrumb';
 import { EditorStatusBar } from './EditorStatusBar';
+import largeFileExpansionLabels from './largeFileExpansionLabels.json';
 
 const log = createLogger('CodeEditor');
 import {
@@ -100,7 +101,7 @@ const LARGE_FILE_SIZE_THRESHOLD_BYTES = 1 * 1024 * 1024; // 1MB
 const LARGE_FILE_MAX_LINE_LENGTH = 20000;
 const LARGE_FILE_RENDER_LINE_LIMIT = 10000;
 const LARGE_FILE_MAX_TOKENIZATION_LINE_LENGTH = 2000;
-const LARGE_FILE_EXPANSION_LABELS = ['show more', '显示更多', '展开更多'];
+const LARGE_FILE_EXPANSION_LABELS = largeFileExpansionLabels;
 
 /** Poll disk metadata for open file; only while tab is active (see isActiveTab). */
 const FILE_SYNC_POLL_INTERVAL_MS = 1000;
@@ -159,7 +160,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   autoSave = false,
   autoSaveDelayMs = 800,
 }) => {
-  // Decode URL-encoded paths (e.g. d%3A/path -> d:/path)
+  // Decode URL-encoded paths before handing them to the editor.
   const filePath = useMemo(() => {
     try {
       if (rawFilePath.includes('%')) {
@@ -1015,10 +1016,38 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   }, [monacoReady, applyExternalContentToModel]);
 
   useEffect(() => {
-    if (content && !lspReady) {
-      setLspReady(true);
+    if (!content || lspReady) {
+      return;
     }
-  }, [content, lspReady]);
+
+    let cancelled = false;
+    void (async () => {
+      if (!enableLsp || largeFileMode) {
+        if (!cancelled) {
+          setLspReady(true);
+        }
+        return;
+      }
+
+      try {
+        const { ensureWorkspaceLspInitialized, initializeLsp } = await import('@/tools/lsp/initializeLsp');
+        await initializeLsp();
+        if (lspExtensionRegistry.isFileSupported(filePath)) {
+          await ensureWorkspaceLspInitialized(workspacePath);
+        }
+      } catch (error) {
+        log.warn('Failed to initialize LSP on editor open', { filePath, workspacePath, error });
+      }
+
+      if (!cancelled) {
+        setLspReady(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [content, enableLsp, filePath, largeFileMode, lspReady, workspacePath]);
 
   useEffect(() => {
     if (modelRef.current && monacoReady) {
@@ -2094,6 +2123,10 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     };
   }, [monacoReady]);
 
+  const loadingOverlayText = monacoReady
+    ? t('editor.codeEditor.loadingFile')
+    : t('editor.codeEditor.preparingEditor');
+
   return (
     <div 
       className={`code-editor-tool ${className} ${loading && showLoadingOverlay ? 'is-loading' : ''} ${error ? 'is-error' : ''} ${largeFileMode ? 'is-large-file-mode' : ''}`}
@@ -2123,7 +2156,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
 
       {loading && showLoadingOverlay && (
         <div className="code-editor-tool__loading-overlay">
-          <CubeLoading size="medium" text={t('editor.codeEditor.loadingFile')} />
+          <CubeLoading size="medium" text={loadingOverlayText} />
         </div>
       )}
 

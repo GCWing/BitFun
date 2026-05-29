@@ -48,6 +48,16 @@ interface SessionUsageReportCardProps {
   onOpenDetails?: (report: SessionUsageReport, initialTab?: SessionUsagePanelTab) => void;
 }
 
+const UsageMiniListFilePathLabel = React.forwardRef<HTMLSpanElement, { pathLabel: string }>(
+  function UsageMiniListFilePathLabel({ pathLabel }, ref) {
+    return (
+      <span ref={ref} className="session-usage-report-card__mini-list-file-name">
+        {getUsageFileNameFromPath(pathLabel)}
+      </span>
+    );
+  }
+);
+
 export const SessionUsageReportCard: React.FC<SessionUsageReportCardProps> = ({
   report,
   markdown = '',
@@ -463,14 +473,6 @@ function UsageMiniListLabelView({ label }: { label: UsageMiniListLabel }) {
   return typeof label !== 'string' && label.help
     ? <Tooltip content={label.help}>{node}</Tooltip>
     : node;
-}
-
-function UsageMiniListFilePathLabel({ pathLabel }: { pathLabel: string }) {
-  return (
-    <span className="session-usage-report-card__mini-list-file-name">
-      {getUsageFileNameFromPath(pathLabel)}
-    </span>
-  );
 }
 
 function UsageFileChangeDetail({

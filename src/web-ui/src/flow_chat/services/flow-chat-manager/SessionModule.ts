@@ -747,7 +747,7 @@ export async function ensureBackendSession(
       const raw = typeof e?.message === 'string' ? e.message : String(e);
       const hint =
         raw.includes('Session metadata not found') || raw.includes('Not found')
-          ? '在后端找不到该会话数据。若刚重新连接过 SSH 远程工作区，请关闭并重新打开该远程项目，或新建会话后再试。'
+          ? i18nService.t('flow-chat:historyState.remoteSessionMissing')
           : raw;
       throw new Error(hint);
     }

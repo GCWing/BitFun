@@ -51,27 +51,28 @@ ignore = { workspace = true }
 urlencoding = { workspace = true }
 reqwest = { workspace = true }
 zip = { workspace = true }
-thiserror = "1.0"
+thiserror = { workspace = true }
 futures = { workspace = true }
 async-trait = { workspace = true }
 sha1 = { workspace = true }
-screenshots = "0.8"
-enigo = "0.2"
+screenshots = { workspace = true }
+enigo = { workspace = true }
 image = { version = "0.24", default-features = false, features = ["png", "jpeg"] }
-resvg = { version = "0.47.0", default-features = false }
+resvg = { workspace = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-core-foundation = "0.9"
-core-graphics = { version = "0.23", features = ["elcapitan", "highsierra"] }
-dispatch = "0.2"
-objc2 = { version = "0.6", features = ["exception"] }
-objc2-foundation = "0.3"
-objc2-app-kit = "0.3"
-objc2-vision = { version = "0.3.2", features = ["VNRecognizeTextRequest", "VNRequest", "VNObservation", "VNRequestHandler", "VNUtils", "VNTypes", "objc2-core-foundation"] }
+bitflags = { workspace = true }
+core-foundation = { workspace = true }
+core-graphics = { workspace = true }
+dispatch = { workspace = true }
+objc2 = { workspace = true, features = ["exception"] }
+objc2-foundation = { workspace = true }
+objc2-app-kit = { workspace = true }
+objc2-vision = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 win32job = { workspace = true }
-windows = { version = "0.61.3", features = [
+windows = { workspace = true, features = [
   "Foundation",
   "Globalization",
   "Graphics_Imaging",
@@ -82,7 +83,7 @@ windows = { version = "0.61.3", features = [
   "Win32_UI_Accessibility",
   "Win32_UI_WindowsAndMessaging",
 ] }
-windows-core = "0.61.2"
+windows-core = { workspace = true }
 
 [features]
 default = []
@@ -92,5 +93,5 @@ default = []
 devtools = ["tauri/devtools"]
 
 [target.'cfg(target_os = "linux")'.dependencies]
-atspi = "0.29"
-leptess = "0.14.0"
+atspi = { workspace = true }
+leptess = { workspace = true }

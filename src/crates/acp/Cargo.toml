@@ -12,7 +12,7 @@ name = "bitfun_acp"
 bitfun-core = { path = "../core", default-features = false, features = ["product-full"] }
 bitfun-events = { path = "../events" }
 
-agent-client-protocol = { version = "=0.11.1", features = ["unstable"] }
+agent-client-protocol = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true, features = ["compat"] }
 futures = { workspace = true }

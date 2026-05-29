@@ -22,7 +22,7 @@ use crate::util::errors::{BitFunError, BitFunResult};
 use log::{debug, info, warn};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
@@ -78,6 +78,23 @@ struct StoredTurnContextSnapshotFile {
     session_id: String,
     turn_index: usize,
     messages: Vec<Message>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionMetadataPage {
+    pub sessions: Vec<SessionMetadata>,
+    pub total_top_level_count: usize,
+    pub loaded_top_level_count: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_cursor: Option<String>,
+    pub has_more: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SessionMetadataPageCursor {
+    last_active_at: u64,
+    session_id: String,
 }
 
 #[derive(Debug, Default)]
@@ -1502,14 +1519,16 @@ impl PersistenceManager {
         workspace_path: &Path,
     ) -> BitFunResult<Vec<SessionMetadata>> {
         let metadata_list = self.scan_session_metadata_dirs(workspace_path).await?;
+        let metadata_file_count = metadata_list.len();
         let visible_sessions = metadata_list
             .into_iter()
             .filter(|metadata| !metadata.should_hide_from_user_lists())
             .collect::<Vec<_>>();
 
-        let index = StoredSessionIndexFile::new(
+        let index = StoredSessionIndexFile::with_metadata_file_count(
             Self::system_time_to_unix_ms(SystemTime::now()),
             visible_sessions.clone(),
+            metadata_file_count,
         );
         self.write_json_atomic(&self.index_path(workspace_path), &index)
             .await?;
@@ -1521,16 +1540,22 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
         metadata: &SessionMetadata,
+        metadata_file_created: bool,
     ) -> BitFunResult<()> {
         let index_path = self.index_path(workspace_path);
-        let mut index = self
+        let existing_index = self
             .read_json_optional::<StoredSessionIndexFile>(&index_path)
-            .await?
-            .unwrap_or(StoredSessionIndexFile {
+            .await?;
+        let had_index = existing_index.is_some();
+        let mut index = match existing_index {
+            Some(index) => index,
+            None => StoredSessionIndexFile {
                 schema_version: SESSION_STORAGE_SCHEMA_VERSION,
                 updated_at: 0,
+                metadata_file_count: self.count_session_metadata_dirs(workspace_path).await?,
                 sessions: Vec::new(),
-            });
+            },
+        };
 
         if let Some(existing) = index
             .sessions
@@ -1545,6 +1570,9 @@ impl PersistenceManager {
         index
             .sessions
             .sort_by(|a, b| b.last_active_at.cmp(&a.last_active_at));
+        if had_index && metadata_file_created {
+            index.metadata_file_count = index.metadata_file_count.saturating_add(1);
+        }
         index.updated_at = Self::system_time_to_unix_ms(SystemTime::now());
         index.schema_version = SESSION_STORAGE_SCHEMA_VERSION;
         self.write_json_atomic(&index_path, &index).await
@@ -1554,6 +1582,7 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
         session_id: &str,
+        metadata_file_count_delta: isize,
     ) -> BitFunResult<()> {
         let index_path = self.index_path(workspace_path);
         let Some(mut index) = self
@@ -1566,30 +1595,17 @@ impl PersistenceManager {
         index
             .sessions
             .retain(|value| value.session_id != session_id);
+        if metadata_file_count_delta > 0 {
+            index.metadata_file_count = index
+                .metadata_file_count
+                .saturating_add(metadata_file_count_delta as usize);
+        } else if metadata_file_count_delta < 0 {
+            index.metadata_file_count = index
+                .metadata_file_count
+                .saturating_sub(metadata_file_count_delta.unsigned_abs());
+        }
         index.updated_at = Self::system_time_to_unix_ms(SystemTime::now());
         self.write_json_atomic(&index_path, &index).await
-    }
-
-    async fn upsert_index_entry(
-        &self,
-        workspace_path: &Path,
-        metadata: &SessionMetadata,
-    ) -> BitFunResult<()> {
-        let lock = self.get_session_index_lock(workspace_path).await;
-        let _guard = lock.lock().await;
-        self.upsert_index_entry_locked(workspace_path, metadata)
-            .await
-    }
-
-    async fn remove_index_entry(
-        &self,
-        workspace_path: &Path,
-        session_id: &str,
-    ) -> BitFunResult<()> {
-        let lock = self.get_session_index_lock(workspace_path).await;
-        let _guard = lock.lock().await;
-        self.remove_index_entry_locked(workspace_path, session_id)
-            .await
     }
 
     pub async fn list_session_metadata(
@@ -1625,10 +1641,10 @@ impl PersistenceManager {
             }
 
             let disk_count = self.count_session_metadata_dirs(workspace_path).await?;
-            if index.sessions.len() != disk_count {
+            if index.metadata_file_count != disk_count {
                 warn!(
                     "Session index incomplete (index: {}, disk: {}), rebuilding: {}",
-                    index.sessions.len(),
+                    index.metadata_file_count,
                     disk_count,
                     index_path.display()
                 );
@@ -1639,6 +1655,211 @@ impl PersistenceManager {
         }
 
         self.rebuild_index_locked(workspace_path).await
+    }
+
+    fn session_parent_id(metadata: &SessionMetadata) -> Option<String> {
+        if let Some(parent_id) = metadata
+            .relationship
+            .as_ref()
+            .and_then(|relationship| relationship.parent_session_id.as_deref())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            return Some(parent_id.to_string());
+        }
+
+        metadata
+            .custom_metadata
+            .as_ref()
+            .and_then(|custom| {
+                custom
+                    .get("parentSessionId")
+                    .or_else(|| custom.get("parent_session_id"))
+            })
+            .and_then(|value| value.as_str())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToOwned::to_owned)
+    }
+
+    fn session_metadata_page_offset(
+        cursor: Option<&str>,
+        top_level_sessions: &[SessionMetadata],
+    ) -> usize {
+        let Some(cursor) = cursor else {
+            return 0;
+        };
+
+        if let Ok(parsed) = serde_json::from_str::<SessionMetadataPageCursor>(cursor) {
+            if let Some(index) = top_level_sessions.iter().position(|metadata| {
+                metadata.session_id == parsed.session_id
+                    && metadata.last_active_at == parsed.last_active_at
+            }) {
+                return index + 1;
+            }
+
+            if let Some(index) = top_level_sessions
+                .iter()
+                .position(|metadata| metadata.session_id == parsed.session_id)
+            {
+                return index + 1;
+            }
+        }
+
+        cursor.parse::<usize>().unwrap_or(0)
+    }
+
+    fn session_metadata_page_cursor(metadata: &SessionMetadata) -> String {
+        serde_json::to_string(&SessionMetadataPageCursor {
+            last_active_at: metadata.last_active_at,
+            session_id: metadata.session_id.clone(),
+        })
+        .unwrap_or_else(|_| metadata.session_id.clone())
+    }
+
+    fn build_session_metadata_page(
+        indexed_sessions: Vec<SessionMetadata>,
+        cursor: Option<&str>,
+        limit: usize,
+    ) -> SessionMetadataPage {
+        let visible_sessions = indexed_sessions
+            .into_iter()
+            .filter(|metadata| {
+                !metadata.should_hide_from_user_lists()
+                    && metadata.status != SessionStatus::Archived
+            })
+            .collect::<Vec<_>>();
+        let visible_ids = visible_sessions
+            .iter()
+            .map(|metadata| metadata.session_id.clone())
+            .collect::<HashSet<_>>();
+
+        let mut top_level_sessions = Vec::new();
+        let mut children_by_parent: HashMap<String, Vec<SessionMetadata>> = HashMap::new();
+        for metadata in visible_sessions {
+            if let Some(parent_id) = Self::session_parent_id(&metadata) {
+                if visible_ids.contains(&parent_id) {
+                    children_by_parent
+                        .entry(parent_id)
+                        .or_default()
+                        .push(metadata);
+                    continue;
+                }
+            }
+
+            top_level_sessions.push(metadata);
+        }
+
+        let total_top_level_count = top_level_sessions.len();
+        let offset = Self::session_metadata_page_offset(cursor, &top_level_sessions);
+        let offset = offset.min(total_top_level_count);
+        let next_offset = offset.saturating_add(limit).min(total_top_level_count);
+        let selected_top_level = top_level_sessions
+            .iter()
+            .skip(offset)
+            .take(limit)
+            .cloned()
+            .collect::<Vec<_>>();
+        let loaded_top_level_count = selected_top_level.len();
+        let has_more = next_offset < total_top_level_count;
+        let next_cursor = has_more
+            .then(|| {
+                selected_top_level
+                    .last()
+                    .map(Self::session_metadata_page_cursor)
+            })
+            .flatten();
+
+        let mut sessions = Vec::new();
+        for metadata in selected_top_level {
+            let session_id = metadata.session_id.clone();
+            sessions.push(metadata);
+
+            if let Some(mut children) = children_by_parent.remove(&session_id) {
+                children.sort_by(|a, b| b.last_active_at.cmp(&a.last_active_at));
+                sessions.extend(children);
+            }
+        }
+
+        SessionMetadataPage {
+            sessions,
+            total_top_level_count,
+            loaded_top_level_count,
+            next_cursor,
+            has_more,
+        }
+    }
+
+    pub async fn list_session_metadata_page(
+        &self,
+        workspace_path: &Path,
+        cursor: Option<&str>,
+        limit: usize,
+    ) -> BitFunResult<SessionMetadataPage> {
+        if !workspace_path.exists() {
+            return Ok(SessionMetadataPage {
+                sessions: Vec::new(),
+                total_top_level_count: 0,
+                loaded_top_level_count: 0,
+                next_cursor: None,
+                has_more: false,
+            });
+        }
+
+        if self.existing_project_sessions_dir(workspace_path).is_none() {
+            return Ok(SessionMetadataPage {
+                sessions: Vec::new(),
+                total_top_level_count: 0,
+                loaded_top_level_count: 0,
+                next_cursor: None,
+                has_more: false,
+            });
+        }
+
+        let limit = limit.max(1);
+
+        let lock = self.get_session_index_lock(workspace_path).await;
+        let _guard = lock.lock().await;
+        let index_path = self.index_path(workspace_path);
+        let indexed_sessions = if let Some(index) = self
+            .read_json_optional::<StoredSessionIndexFile>(&index_path)
+            .await?
+        {
+            if index.metadata_file_count < index.sessions.len() {
+                warn!(
+                    "Session index has invalid metadata count before page read (index: {}, sessions: {}), rebuilding: {}",
+                    index.metadata_file_count,
+                    index.sessions.len(),
+                    index_path.display()
+                );
+                self.rebuild_index_locked(workspace_path).await?
+            } else {
+                index.sessions
+            }
+        } else {
+            self.rebuild_index_locked(workspace_path).await?
+        };
+
+        let page = Self::build_session_metadata_page(indexed_sessions, cursor, limit);
+        let has_stale_page_entry = page.sessions.iter().any(|metadata| {
+            !self
+                .metadata_path(workspace_path, &metadata.session_id)
+                .exists()
+        });
+        if !has_stale_page_entry {
+            return Ok(page);
+        }
+
+        warn!(
+            "Session index page contains stale entries, rebuilding before page read: {}",
+            index_path.display()
+        );
+        let rebuilt_sessions = self.rebuild_index_locked(workspace_path).await?;
+        Ok(Self::build_session_metadata_page(
+            rebuilt_sessions,
+            cursor,
+            limit,
+        ))
     }
 
     pub async fn list_session_metadata_including_internal(
@@ -1664,19 +1885,23 @@ impl PersistenceManager {
         self.ensure_runtime_for_write(workspace_path).await?;
         self.ensure_session_dir(workspace_path, &metadata.session_id)
             .await?;
-
+        let metadata_path = self.metadata_path(workspace_path, &metadata.session_id);
         let file = StoredSessionMetadataFile::new(metadata.clone());
 
-        self.write_json_atomic(
-            &self.metadata_path(workspace_path, &metadata.session_id),
-            &file,
-        )
-        .await?;
+        let lock = self.get_session_index_lock(workspace_path).await;
+        let _guard = lock.lock().await;
+        let metadata_file_created = !metadata_path.exists();
+        self.write_json_atomic(&metadata_path, &file).await?;
         if !metadata.should_hide_from_user_lists() {
-            self.upsert_index_entry(workspace_path, metadata).await
-        } else {
-            self.remove_index_entry(workspace_path, &metadata.session_id)
+            self.upsert_index_entry_locked(workspace_path, metadata, metadata_file_created)
                 .await
+        } else {
+            self.remove_index_entry_locked(
+                workspace_path,
+                &metadata.session_id,
+                if metadata_file_created { 1 } else { 0 },
+            )
+            .await
         }
     }
 
@@ -2071,14 +2296,22 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<()> {
+        let lock = self.get_session_index_lock(workspace_path).await;
+        let _guard = lock.lock().await;
         let dir = self.session_dir(workspace_path, session_id);
+        let metadata_file_removed = self.metadata_path(workspace_path, session_id).exists();
         if dir.exists() {
             fs::remove_dir_all(&dir).await.map_err(|e| {
                 BitFunError::io(format!("Failed to delete session directory: {}", e))
             })?;
         }
 
-        self.remove_index_entry(workspace_path, session_id).await?;
+        self.remove_index_entry_locked(
+            workspace_path,
+            session_id,
+            if metadata_file_removed { -1 } else { 0 },
+        )
+        .await?;
         info!("Session deleted: session_id={}", session_id);
         Ok(())
     }
@@ -2728,11 +2961,13 @@ mod tests {
     use crate::agentic::core::{Message, Session, SessionConfig, SessionKind, ToolResult};
     use crate::infrastructure::PathManager;
     use crate::service::session::{
-        DialogTurnData, ModelRoundData, SessionMetadata, SessionTranscriptExportOptions,
+        DialogTurnData, ModelRoundData, SessionMetadata, SessionRelationship,
+        SessionRelationshipKind, SessionTranscriptExportOptions, StoredSessionIndexFile,
         TextItemData, UserMessageData,
     };
     use std::path::{Path, PathBuf};
     use std::sync::Arc;
+    use std::time::Instant;
     use uuid::Uuid;
 
     struct TestWorkspace {
@@ -3216,6 +3451,211 @@ mod tests {
         assert!(
             !manager.project_sessions_dir(workspace.path()).exists(),
             "listing sessions should not create the runtime sessions directory"
+        );
+    }
+
+    #[tokio::test]
+    async fn list_session_metadata_page_returns_visible_top_level_page_with_children() {
+        let workspace = TestWorkspace::new();
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
+
+        for index in 0..12 {
+            let mut metadata = SessionMetadata::new(
+                format!("parent-{index}"),
+                format!("Parent {index}"),
+                "agent".to_string(),
+                "model".to_string(),
+            );
+            metadata.last_active_at = 1_000 + index;
+            manager
+                .save_session_metadata(workspace.path(), &metadata)
+                .await
+                .expect("parent metadata should save");
+        }
+
+        let mut child = SessionMetadata::new(
+            "child-latest".to_string(),
+            "Child latest".to_string(),
+            "agent".to_string(),
+            "model".to_string(),
+        );
+        child.last_active_at = 2_000;
+        child.relationship = Some(SessionRelationship {
+            kind: Some(SessionRelationshipKind::Btw),
+            parent_session_id: Some("parent-11".to_string()),
+            ..Default::default()
+        });
+        manager
+            .save_session_metadata(workspace.path(), &child)
+            .await
+            .expect("child metadata should save");
+
+        let page = manager
+            .list_session_metadata_page(workspace.path(), None, 5)
+            .await
+            .expect("session metadata page should load");
+        let session_ids = page
+            .sessions
+            .iter()
+            .map(|metadata| metadata.session_id.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(page.total_top_level_count, 12);
+        assert_eq!(page.loaded_top_level_count, 5);
+        assert!(page.next_cursor.is_some());
+        assert!(page.has_more);
+        assert_eq!(
+            session_ids,
+            vec![
+                "parent-11",
+                "child-latest",
+                "parent-10",
+                "parent-9",
+                "parent-8",
+                "parent-7",
+            ]
+        );
+
+        let second_page = manager
+            .list_session_metadata_page(workspace.path(), page.next_cursor.as_deref(), 5)
+            .await
+            .expect("second session metadata page should load");
+        let second_page_session_ids = second_page
+            .sessions
+            .iter()
+            .map(|metadata| metadata.session_id.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(second_page.loaded_top_level_count, 5);
+        assert_eq!(
+            second_page_session_ids,
+            vec!["parent-6", "parent-5", "parent-4", "parent-3", "parent-2"]
+        );
+    }
+
+    #[tokio::test]
+    async fn list_session_metadata_page_rebuilds_stale_visible_page_entry() {
+        let workspace = TestWorkspace::new();
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
+
+        let mut older = SessionMetadata::new(
+            "older-session".to_string(),
+            "Older session".to_string(),
+            "agent".to_string(),
+            "model".to_string(),
+        );
+        older.last_active_at = 1_000;
+        let mut newer = SessionMetadata::new(
+            "newer-session".to_string(),
+            "Newer session".to_string(),
+            "agent".to_string(),
+            "model".to_string(),
+        );
+        newer.last_active_at = 2_000;
+
+        manager
+            .save_session_metadata(workspace.path(), &older)
+            .await
+            .expect("older metadata should save");
+        manager
+            .save_session_metadata(workspace.path(), &newer)
+            .await
+            .expect("newer metadata should save");
+
+        let mut missing = SessionMetadata::new(
+            "missing-session".to_string(),
+            "Missing session".to_string(),
+            "agent".to_string(),
+            "model".to_string(),
+        );
+        missing.last_active_at = 3_000;
+
+        let stale_index = StoredSessionIndexFile::new(0, vec![missing, older]);
+        manager
+            .write_json_atomic(&manager.index_path(workspace.path()), &stale_index)
+            .await
+            .expect("stale index should be written");
+
+        let page = manager
+            .list_session_metadata_page(workspace.path(), None, 5)
+            .await
+            .expect("session metadata page should rebuild stale index");
+        let session_ids = page
+            .sessions
+            .iter()
+            .map(|metadata| metadata.session_id.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(page.total_top_level_count, 2);
+        assert_eq!(session_ids, vec!["newer-session", "older-session"]);
+    }
+
+    #[tokio::test]
+    #[ignore = "local performance benchmark; prints timing data only"]
+    async fn bench_session_metadata_page_vs_full_list() {
+        const SESSION_COUNT: usize = 1_000;
+        const ITERATIONS: usize = 10;
+
+        let workspace = TestWorkspace::new();
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
+
+        for index in 0..SESSION_COUNT {
+            let mut metadata = SessionMetadata::new(
+                format!("bench-parent-{index}"),
+                format!("Bench parent {index}"),
+                "agent".to_string(),
+                "model".to_string(),
+            );
+            metadata.last_active_at = 1_000_000 + index as u64;
+            manager
+                .save_session_metadata(workspace.path(), &metadata)
+                .await
+                .expect("benchmark metadata should save");
+        }
+
+        manager
+            .list_session_metadata(workspace.path())
+            .await
+            .expect("warm full list should load");
+        manager
+            .list_session_metadata_page(workspace.path(), None, 5)
+            .await
+            .expect("warm page should load");
+
+        let mut full_list_total_ms = 0.0;
+        for _ in 0..ITERATIONS {
+            let started = Instant::now();
+            let full = manager
+                .list_session_metadata(workspace.path())
+                .await
+                .expect("full list should load");
+            assert_eq!(full.len(), SESSION_COUNT);
+            full_list_total_ms += started.elapsed().as_secs_f64() * 1000.0;
+        }
+
+        let mut page_total_ms = 0.0;
+        for _ in 0..ITERATIONS {
+            let started = Instant::now();
+            let page = manager
+                .list_session_metadata_page(workspace.path(), None, 5)
+                .await
+                .expect("page should load");
+            assert_eq!(page.loaded_top_level_count, 5);
+            assert_eq!(page.total_top_level_count, SESSION_COUNT);
+            page_total_ms += started.elapsed().as_secs_f64() * 1000.0;
+        }
+
+        let full_avg_ms = full_list_total_ms / ITERATIONS as f64;
+        let page_avg_ms = page_total_ms / ITERATIONS as f64;
+        println!(
+            "session_metadata_bench sessions={} iterations={} full_list_avg_ms={:.3} page5_avg_ms={:.3} speedup={:.1}x",
+            SESSION_COUNT,
+            ITERATIONS,
+            full_avg_ms,
+            page_avg_ms,
+            full_avg_ms / page_avg_ms.max(0.001)
         );
     }
 

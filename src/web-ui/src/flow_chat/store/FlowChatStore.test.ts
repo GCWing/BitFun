@@ -4,6 +4,7 @@ import type { FlowChatState, Session } from '../types/flow-chat';
 
 const apiMocks = vi.hoisted(() => ({
   listSessions: vi.fn(),
+  listSessionsPage: vi.fn(),
   loadSessionTurns: vi.fn(),
   saveSessionTurn: vi.fn(),
   restoreSession: vi.fn(),
@@ -27,6 +28,7 @@ const stateMachineManagerMock = vi.hoisted(() => ({
 vi.mock('@/infrastructure/api', () => ({
   sessionAPI: {
     listSessions: apiMocks.listSessions,
+    listSessionsPage: apiMocks.listSessionsPage,
     loadSessionTurns: apiMocks.loadSessionTurns,
     saveSessionTurn: apiMocks.saveSessionTurn,
   },
@@ -57,6 +59,15 @@ const resetStore = () => {
     }
   });
   metadataListRequests?.clear();
+  const metadataPageRequests = (flowChatStore as any).metadataPageRequests as
+    | Map<string, { cleanupTimer?: ReturnType<typeof setTimeout> }>
+    | undefined;
+  metadataPageRequests?.forEach(request => {
+    if (request.cleanupTimer) {
+      clearTimeout(request.cleanupTimer);
+    }
+  });
+  metadataPageRequests?.clear();
   ((flowChatStore as any).unsupportedRestoreCommands as Set<string> | undefined)?.clear();
   flowChatStore.setState((): FlowChatState => ({
     sessions: new Map(),
@@ -489,6 +500,52 @@ describe('FlowChatStore historical session hydration state', () => {
     await flowChatStore.initializeFromDisk('D:/workspace/BitFun', undefined, undefined, 'second-source');
 
     expect(apiMocks.listSessions).toHaveBeenCalledTimes(1);
+    expect(flowChatStore.getState().sessions.get('history-1')).toMatchObject({
+      sessionId: 'history-1',
+      historyState: 'metadata-only',
+    });
+  });
+
+  it('loads a paged metadata slice without requesting the full session list', async () => {
+    apiMocks.listSessionsPage.mockResolvedValueOnce({
+      sessions: [
+        {
+          sessionId: 'history-1',
+          title: 'Saved session',
+          agentType: 'agentic',
+          modelName: 'auto',
+          createdAt: 10,
+          lastActiveAt: 20,
+        },
+      ],
+      totalTopLevelCount: 12,
+      loadedTopLevelCount: 5,
+      nextCursor: '5',
+      hasMore: true,
+    });
+
+    const page = await flowChatStore.loadSessionMetadataPage(
+      'D:/workspace/BitFun',
+      5,
+      undefined,
+      undefined,
+      undefined,
+      'nav_initial'
+    );
+
+    expect(apiMocks.listSessions).not.toHaveBeenCalled();
+    expect(apiMocks.listSessionsPage).toHaveBeenCalledWith({
+      workspacePath: 'D:/workspace/BitFun',
+      limit: 5,
+      cursor: undefined,
+      remoteConnectionId: undefined,
+      remoteSshHost: undefined,
+    });
+    expect(page).toMatchObject({
+      totalTopLevelCount: 12,
+      nextCursor: '5',
+      hasMore: true,
+    });
     expect(flowChatStore.getState().sessions.get('history-1')).toMatchObject({
       sessionId: 'history-1',
       historyState: 'metadata-only',

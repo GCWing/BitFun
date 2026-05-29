@@ -12,7 +12,6 @@ import { DotMatrixLoader } from '@/component-library';
 import type { FlowTextItem } from '../types/flow-chat';
 import { useFlowChatContext } from './modern/FlowChatContext';
 import { useTypewriter } from '../hooks/useTypewriter';
-import { processingHintsZh, processingHintsEn } from '../constants/processingHints';
 import './FlowTextBlock.scss';
 
 // Idle timeout (ms) after content stops growing.
@@ -24,6 +23,25 @@ interface FlowTextBlockProps {
   replayStreamingOnMount?: boolean;
 }
 
+const RuntimeStatusBlock: React.FC<Pick<FlowTextBlockProps, 'textItem' | 'className'>> = ({ textItem, className = '' }) => {
+  const { t } = useTranslation('flow-chat/processing-hints');
+  const rawHints = t('items', { returnObjects: true });
+  const hints = Array.isArray(rawHints)
+    ? rawHints.filter((item): item is string => typeof item === 'string')
+    : [];
+  const hintIndex = hints.length > 0
+    ? Math.abs(textItem.id.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0)) % hints.length
+    : 0;
+  const hint = hints[hintIndex] ?? '';
+
+  return (
+    <div className={`flow-text-block flow-text-block--runtime-status ${className}`}>
+      <DotMatrixLoader size="medium" className="flow-text-block__runtime-status-icon" />
+      {hint && <span className="flow-text-block__runtime-status-text">{hint}</span>}
+    </div>
+  );
+};
+
 /**
  * Use React.memo to avoid unnecessary re-renders.
  * Re-render only when key textItem fields change.
@@ -34,7 +52,6 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
   replayStreamingOnMount = true
 }) => {
   const { onFileViewRequest, onTabOpen, onHttpLinkClick, onOpenVisualization } = useFlowChatContext();
-  const { i18n } = useTranslation();
 
   // Normalize content to a string.
   const content = typeof textItem.content === 'string'
@@ -84,16 +101,7 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
     isContentGrowing;
 
   if (textItem.runtimeStatus) {
-    const hints = i18n.language.startsWith('zh') ? processingHintsZh : processingHintsEn;
-    const hintIndex = Math.abs(textItem.id.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0)) % hints.length;
-    const hint = hints[hintIndex];
-
-    return (
-      <div className={`flow-text-block flow-text-block--runtime-status ${className}`}>
-        <DotMatrixLoader size="medium" className="flow-text-block__runtime-status-icon" />
-        <span className="flow-text-block__runtime-status-text">{hint}</span>
-      </div>
-    );
+    return <RuntimeStatusBlock textItem={textItem} className={className} />;
   }
 
   return (

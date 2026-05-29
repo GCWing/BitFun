@@ -2,6 +2,7 @@
 //!
 //! Provides i18n support for backend text.
 
+pub mod generated_locale_contract;
 mod locale_registry;
 mod model_copy;
 mod service;

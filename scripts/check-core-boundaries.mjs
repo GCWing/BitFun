@@ -737,6 +737,113 @@ const forbiddenContentRules = [
         message:
           'core scheduler must not redefine DialogSubmitOutcome; use bitfun-runtime-ports',
       },
+      {
+        regex: /\bstruct\s+AgentSessionReplyRoute\b/,
+        message:
+          'core scheduler must not redefine AgentSessionReplyRoute; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\benum\s+DialogSteerOutcome\b/,
+        message:
+          'core scheduler must not redefine DialogSteerOutcome; use bitfun-runtime-ports',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/round_preempt.rs',
+    patterns: [
+      {
+        regex: /\btrait\s+DialogRoundPreemptSource\b/,
+        message:
+          'core round preempt runtime must not redefine DialogRoundPreemptSource; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\bstruct\s+RoundInjection\b/,
+        message:
+          'core round preempt runtime must not redefine RoundInjection; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\btrait\s+DialogRoundInjectionSource\b/,
+        message:
+          'core round preempt runtime must not redefine DialogRoundInjectionSource; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\benum\s+RoundInjectionKind\b/,
+        message:
+          'core round preempt runtime must not redefine RoundInjectionKind; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\benum\s+RoundInjectionTarget\b/,
+        message:
+          'core round preempt runtime must not redefine RoundInjectionTarget; use bitfun-runtime-ports',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/goal_mode/types.rs',
+    patterns: [
+      {
+        regex: /\bconst\s+GOAL_MODE_METADATA_KEY\b/,
+        message: 'core goal mode types must not redefine GOAL_MODE_METADATA_KEY; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\bconst\s+MAX_GOAL_CONTINUATIONS\b/,
+        message: 'core goal mode types must not redefine MAX_GOAL_CONTINUATIONS; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\bconst\s+MAX_CONTEXT_SUMMARY_CHARS\b/,
+        message: 'core goal mode types must not redefine MAX_CONTEXT_SUMMARY_CHARS; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\bstruct\s+GoalModeInitialGoal\b/,
+        message: 'core goal mode types must not redefine GoalModeInitialGoal; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\bstruct\s+GoalModeState\b/,
+        message: 'core goal mode types must not redefine GoalModeState; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\bstruct\s+GoalGenerationResult\b/,
+        message: 'core goal mode types must not redefine GoalGenerationResult; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\bstruct\s+GoalVerificationResult\b/,
+        message: 'core goal mode types must not redefine GoalVerificationResult; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\bstruct\s+GoalActivationResult\b/,
+        message: 'core goal mode types must not redefine GoalActivationResult; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\bstruct\s+GoalContinuationPlan\b/,
+        message: 'core goal mode types must not redefine GoalContinuationPlan; use bitfun-runtime-ports',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/core/message.rs',
+    patterns: [
+      {
+        regex: /\bstruct\s+CompressionContract\b/,
+        message: 'core message model must not redefine CompressionContract; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\bstruct\s+CompressionContractItem\b/,
+        message: 'core message model must not redefine CompressionContractItem; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\bfn\s+render_contract_items\b/,
+        message: 'core message model must not own compression contract rendering; use bitfun-runtime-ports',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/workspace/manager.rs',
+    patterns: [
+      {
+        regex: /\bstruct\s+RelatedPath\b/,
+        message: 'core workspace manager must not redefine RelatedPath; use bitfun-runtime-ports',
+      },
     ],
   },
   {
@@ -2258,6 +2365,142 @@ const requiredContentRules = [
         message: 'missing dialog submit outcome regression',
       },
       {
+        regex: /\bpub enum DialogSessionStateFact\b/,
+        message: 'missing dialog session state fact contract',
+      },
+      {
+        regex: /\bpub struct DialogSubmitQueueFacts\b/,
+        message: 'missing dialog submit queue facts contract',
+      },
+      {
+        regex: /\bpub enum DialogSubmitQueueAction\b/,
+        message: 'missing dialog submit queue action contract',
+      },
+      {
+        regex: /\bpub const fn dialog_policy_may_preempt\b/,
+        message: 'missing dialog preempt policy contract',
+      },
+      {
+        regex: /\bpub const fn resolve_dialog_submit_queue_action\b/,
+        message: 'missing dialog submit queue action resolver',
+      },
+      {
+        regex: /\bdialog_submit_queue_action_preserves_current_scheduler_routing_policy\b/,
+        message: 'missing dialog submit queue action regression',
+      },
+      {
+        regex: /\bpub fn should_suppress_agent_session_cancelled_reply\b/,
+        message: 'missing agent-session cancel suppression contract',
+      },
+      {
+        regex: /\bpub enum DialogTurnOutcomeKind\b/,
+        message: 'missing dialog turn outcome kind contract',
+      },
+      {
+        regex: /\bpub const fn should_skip_agent_session_reply\b/,
+        message: 'missing agent-session reply skip contract',
+      },
+      {
+        regex: /\bagent_session_reply_decisions_preserve_cancel_suppression_boundary\b/,
+        message: 'missing agent-session reply decision regression',
+      },
+      {
+        regex: /\bpub struct AgentSessionReplyRoute\b/,
+        message: 'missing agent session reply route contract',
+      },
+      {
+        regex: /\bagent_session_reply_route_keeps_requester_fields\b/,
+        message: 'missing agent session reply route regression',
+      },
+      {
+        regex: /\bpub enum DialogSteerOutcome\b/,
+        message: 'missing dialog steer outcome contract',
+      },
+      {
+        regex: /\bdialog_steer_outcome_preserves_buffered_fields\b/,
+        message: 'missing dialog steer outcome regression',
+      },
+      {
+        regex: /\bpub enum RoundInjectionKind\b/,
+        message: 'missing round injection kind contract',
+      },
+      {
+        regex: /\bpub enum RoundInjectionTarget\b/,
+        message: 'missing round injection target contract',
+      },
+      {
+        regex: /\bpub struct RoundInjection\b/,
+        message: 'missing round injection message contract',
+      },
+      {
+        regex: /\bpub trait DialogRoundPreemptSource\b/,
+        message: 'missing dialog round preempt source contract',
+      },
+      {
+        regex: /\bpub trait DialogRoundInjectionSource\b/,
+        message: 'missing dialog round injection source contract',
+      },
+      {
+        regex: /\bround_injection_contract_keeps_kind_and_target_identity\b/,
+        message: 'missing round injection contract regression',
+      },
+      {
+        regex: /\bround_injection_source_contract_drains_portable_injections\b/,
+        message: 'missing round injection source contract regression',
+      },
+      {
+        regex: /\bpub struct GoalModeInitialGoal\b/,
+        message: 'missing goal mode initial goal contract',
+      },
+      {
+        regex: /\bpub struct GoalModeState\b/,
+        message: 'missing goal mode state contract',
+      },
+      {
+        regex: /\bpub struct GoalGenerationResult\b/,
+        message: 'missing goal generation result contract',
+      },
+      {
+        regex: /\bpub struct GoalVerificationResult\b/,
+        message: 'missing goal verification result contract',
+      },
+      {
+        regex: /\bpub struct GoalActivationResult\b/,
+        message: 'missing goal activation result contract',
+      },
+      {
+        regex: /\bpub struct GoalContinuationPlan\b/,
+        message: 'missing goal continuation plan contract',
+      },
+      {
+        regex: /\bgoal_mode_state_requires_active_non_empty_goal\b/,
+        message: 'missing goal mode state contract regression',
+      },
+      {
+        regex: /\bgoal_verification_result_serializes_current_wire_shape\b/,
+        message: 'missing goal verification wire-shape regression',
+      },
+      {
+        regex: /\bpub struct CompressionContract\b/,
+        message: 'missing compression contract',
+      },
+      {
+        regex: /\bpub struct CompressionContractItem\b/,
+        message: 'missing compression contract item',
+      },
+      {
+        regex: /\bcompression_contract_renders_model_visible_fields\b/,
+        message: 'missing compression contract rendering regression',
+      },
+      {
+        regex: /\bpub struct RelatedPath\b/,
+        message: 'missing related path request-context contract',
+      },
+      {
+        regex: /\brelated_path_serializes_as_request_context_fact\b/,
+        message: 'missing related path serialization regression',
+      },
+      {
         regex: /\bpub struct DelegationPolicy\b/,
         message: 'missing delegation policy contract',
       },
@@ -2721,8 +2964,67 @@ const requiredContentRules = [
     patterns: [
       {
         regex:
-          /pub use bitfun_runtime_ports::\{DialogQueuePriority, DialogSubmissionPolicy, DialogSubmitOutcome\};/,
+          /pub use bitfun_runtime_ports::\{[\s\S]*AgentSessionReplyRoute[\s\S]*DialogQueuePriority[\s\S]*DialogSteerOutcome[\s\S]*DialogSubmissionPolicy[\s\S]*DialogSubmitOutcome[\s\S]*\};/,
         message: 'missing dialog submission policy compatibility re-export',
+      },
+      {
+        regex:
+          /use bitfun_runtime_ports::\{[\s\S]*DialogSessionStateFact[\s\S]*DialogSubmitQueueAction[\s\S]*DialogSubmitQueueFacts[\s\S]*DialogTurnOutcomeKind[\s\S]*resolve_dialog_submit_queue_action[\s\S]*should_skip_agent_session_reply_contract[\s\S]*should_suppress_agent_session_cancelled_reply_contract[\s\S]*\};/,
+        message: 'missing dialog scheduler decision contract import',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/round_preempt.rs',
+    reason:
+      'core round preempt runtime must preserve legacy injection import path while runtime-ports owns portable injection contracts',
+    patterns: [
+      {
+        regex:
+          /pub use bitfun_runtime_ports::\{[\s\S]*DialogRoundInjectionSource[\s\S]*DialogRoundPreemptSource[\s\S]*RoundInjection[\s\S]*RoundInjectionKind[\s\S]*RoundInjectionTarget[\s\S]*\};/,
+        message: 'missing round injection compatibility re-export',
+      },
+      {
+        regex: /\bpub struct SessionRoundInjectionBuffer\b/,
+        message: 'round injection buffer must remain core-owned until concrete runtime migration',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/goal_mode/types.rs',
+    reason:
+      'core goal mode types must preserve legacy import path while runtime-ports owns portable goal contracts',
+    patterns: [
+      {
+        regex:
+          /pub use bitfun_runtime_ports::\{[\s\S]*GoalActivationResult[\s\S]*GoalContinuationPlan[\s\S]*GoalGenerationResult[\s\S]*GoalModeInitialGoal[\s\S]*GoalModeState[\s\S]*GoalVerificationResult[\s\S]*GOAL_MODE_METADATA_KEY[\s\S]*MAX_CONTEXT_SUMMARY_CHARS[\s\S]*MAX_GOAL_CONTINUATIONS[\s\S]*\};/,
+        message: 'missing goal mode compatibility re-export',
+      },
+      {
+        regex: /\bpub const GOAL_MODE_FUNC_AGENT\b/,
+        message: 'goal mode function-agent marker must remain core-owned',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/core/message.rs',
+    reason:
+      'core message model must preserve legacy compression contract import path while runtime-ports owns portable compaction facts',
+    patterns: [
+      {
+        regex: /pub use bitfun_runtime_ports::\{CompressionContract, CompressionContractItem\};/,
+        message: 'missing compression contract compatibility re-export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/workspace/manager.rs',
+    reason:
+      'core workspace manager must preserve legacy related-path import path while runtime-ports owns portable request-context facts',
+    patterns: [
+      {
+        regex: /pub use bitfun_runtime_ports::RelatedPath;/,
+        message: 'missing related path compatibility re-export',
       },
     ],
   },
@@ -2752,6 +3054,22 @@ const requiredContentRules = [
         message: 'missing remote model catalog owner adapter',
       },
       {
+        regex: /\bRemoteModelCatalogFacts\b/,
+        message: 'missing remote model catalog fact projection',
+      },
+      {
+        regex: /\bRemoteModelCapabilityFact\b/,
+        message: 'missing remote model capability fact projection',
+      },
+      {
+        regex: /\bRemoteReasoningModeFact\b/,
+        message: 'missing remote reasoning mode fact projection',
+      },
+      {
+        regex: /\bbuild_remote_model_catalog\b/,
+        message: 'missing remote model catalog assembly delegation',
+      },
+      {
         regex: /\bfn update_remote_session_model\b/,
         message: 'missing remote session model update owner adapter',
       },
@@ -2760,12 +3078,36 @@ const requiredContentRules = [
         message: 'missing remote session model id normalization regression hook',
       },
       {
+        regex: /\bnormalize_remote_session_model_id_contract\b/,
+        message: 'missing remote session model id owner delegation',
+      },
+      {
         regex: /\bfn normalize_remote_model_selection\b/,
         message: 'missing remote model selection normalization regression hook',
       },
       {
+        regex: /\bnormalize_remote_model_selection_contract\b/,
+        message: 'missing remote model selection owner delegation',
+      },
+      {
         regex: /\bfn remote_chat_messages_from_turns\b/,
         message: 'missing remote chat history conversion owner adapter',
+      },
+      {
+        regex: /\bRemoteDialogSchedulerOutcomeFact\b/,
+        message: 'missing remote dialog scheduler outcome fact projection',
+      },
+      {
+        regex: /\bremote_dialog_submit_outcome_from_scheduler\b/,
+        message: 'missing remote dialog submit outcome assembly delegation',
+      },
+      {
+        regex: /\bRemoteChatHistoryTurn\b/,
+        message: 'missing remote chat history owner DTO projection',
+      },
+      {
+        regex: /\bbuild_remote_chat_messages\b/,
+        message: 'missing remote chat history assembly delegation',
       },
       {
         regex: /\bfn strip_remote_user_input_tags\b/,
@@ -2955,6 +3297,22 @@ const requiredContentRules = [
         message: 'missing remote dialog orchestration owner',
       },
       {
+        regex: /\bpub struct RemoteChatHistoryTurn\b/,
+        message: 'missing remote chat history turn DTO',
+      },
+      {
+        regex: /\bpub struct RemoteChatHistoryRound\b/,
+        message: 'missing remote chat history round DTO',
+      },
+      {
+        regex: /\bpub struct RemoteChatHistoryToolItem\b/,
+        message: 'missing remote chat history tool item DTO',
+      },
+      {
+        regex: /\bpub fn build_remote_chat_messages\b/,
+        message: 'missing remote chat history assembly owner',
+      },
+      {
         regex: /\bpub const REMOTE_FILE_MAX_READ_BYTES\b/,
         message: 'missing remote file max-read policy',
       },
@@ -3075,12 +3433,52 @@ const requiredContentRules = [
         message: 'missing remote model catalog DTO',
       },
       {
+        regex: /\bpub enum RemoteModelCapabilityFact\b/,
+        message: 'missing remote model capability owner fact',
+      },
+      {
+        regex: /\bpub enum RemoteReasoningModeFact\b/,
+        message: 'missing remote reasoning mode owner fact',
+      },
+      {
+        regex: /\bpub struct RemoteModelFacts\b/,
+        message: 'missing remote model owner facts',
+      },
+      {
+        regex: /\bpub struct RemoteModelCatalogFacts\b/,
+        message: 'missing remote model catalog owner facts',
+      },
+      {
+        regex: /\bpub fn build_remote_model_catalog\b/,
+        message: 'missing remote model catalog assembly owner',
+      },
+      {
         regex: /\bpub struct RemoteModelCatalogPollDelta\b/,
         message: 'missing remote model catalog poll delta',
       },
       {
+        regex: /\bpub fn normalize_remote_session_model_id\b/,
+        message: 'missing remote session model normalization policy',
+      },
+      {
+        regex: /\bpub fn normalize_remote_model_selection\b/,
+        message: 'missing remote model selection policy',
+      },
+      {
+        regex: /\bpub fn remote_model_selection_needs_config\b/,
+        message: 'missing remote model selection config-gate policy',
+      },
+      {
         regex: /\bpub enum RemoteCommand\b/,
         message: 'missing remote command wire contract',
+      },
+      {
+        regex: /\bpub enum RemoteDialogSchedulerOutcomeFact\b/,
+        message: 'missing remote dialog scheduler outcome fact',
+      },
+      {
+        regex: /\bpub fn remote_dialog_submit_outcome_from_scheduler\b/,
+        message: 'missing remote dialog submit outcome assembly owner',
       },
       {
         regex: /\bpub enum RemoteResponse\b/,
@@ -3125,6 +3523,14 @@ const requiredContentRules = [
         message: 'missing remote model catalog delta contract test',
       },
       {
+        regex: /\bremote_connect_model_catalog_builder_preserves_config_shape\b/,
+        message: 'missing remote model catalog builder contract test',
+      },
+      {
+        regex: /\bremote_connect_model_selection_policy_owns_alias_and_config_reference_rules\b/,
+        message: 'missing remote model selection policy contract test',
+      },
+      {
         regex: /\bremote_connect_poll_helpers_preserve_delta_and_completion_policy\b/,
         message: 'missing remote poll helper contract test',
       },
@@ -3153,8 +3559,20 @@ const requiredContentRules = [
         message: 'missing dialog explicit-turn test',
       },
       {
+        regex: /\bremote_connect_dialog_submit_outcome_builder_preserves_scheduler_shape\b/,
+        message: 'missing remote dialog outcome builder contract test',
+      },
+      {
         regex: /\bremote_connect_dialog_runtime_keeps_legacy_restore_failure_tolerance\b/,
         message: 'missing restore failure tolerance test',
+      },
+      {
+        regex: /\bremote_chat_history_assembly_preserves_message_shape_and_item_order\b/,
+        message: 'missing remote chat history assembly shape/order test',
+      },
+      {
+        regex: /\bremote_chat_history_assembly_skips_in_progress_assistant_history\b/,
+        message: 'missing remote chat history in-progress guard test',
       },
       {
         regex: /\bremote_connect_file_transfer_policy_preserves_limits_and_chunk_ranges\b/,
@@ -3256,56 +3674,28 @@ const requiredContentRules = [
         message: 'missing remote cancel response assembly delegation',
       },
       {
-        regex: /\bremote_interaction_accepted_response\b/,
-        message: 'missing remote interaction response assembly delegation',
+        regex: /\bhandle_remote_interaction_command\b/,
+        message: 'missing remote interaction command owner orchestration delegation',
       },
       {
-        regex: /\bremote_answer_question_response\b/,
-        message: 'missing remote answer response assembly delegation',
+        regex: /\bgenerate_remote_initial_sync\b/,
+        message: 'missing remote initial-sync owner orchestration delegation',
       },
       {
-        regex: /\bremote_workspace_info_response\b/,
-        message: 'missing remote workspace-info response assembly delegation',
+        regex: /\bhandle_remote_workspace_command\b/,
+        message: 'missing remote workspace command owner orchestration delegation',
       },
       {
-        regex: /\bremote_recent_workspaces_response\b/,
-        message: 'missing remote recent-workspaces response assembly delegation',
+        regex: /\bhandle_remote_session_command\b/,
+        message: 'missing remote session command owner orchestration delegation',
       },
       {
-        regex: /\bremote_assistant_list_response\b/,
-        message: 'missing remote assistant-list response assembly delegation',
+        regex: /\bhandle_remote_poll_command\b/,
+        message: 'missing remote poll command owner orchestration delegation',
       },
       {
-        regex: /\bremote_workspace_updated_response\b/,
-        message: 'missing remote workspace-updated response assembly delegation',
-      },
-      {
-        regex: /\bremote_assistant_updated_response\b/,
-        message: 'missing remote assistant-updated response assembly delegation',
-      },
-      {
-        regex: /\bremote_session_list_response\b/,
-        message: 'missing remote session-list response assembly delegation',
-      },
-      {
-        regex: /\bremote_initial_sync_response\b/,
-        message: 'missing remote initial-sync response assembly delegation',
-      },
-      {
-        regex: /\bremote_session_created_response\b/,
-        message: 'missing remote session-created response assembly delegation',
-      },
-      {
-        regex: /\bremote_session_model_updated_response\b/,
-        message: 'missing remote session-model response assembly delegation',
-      },
-      {
-        regex: /\bremote_messages_response\b/,
-        message: 'missing remote messages response assembly delegation',
-      },
-      {
-        regex: /\bremote_session_deleted_response\b/,
-        message: 'missing remote session-deleted response assembly delegation',
+        regex: /\bhandle_remote_interaction_command\b/,
+        message: 'missing remote interaction command owner orchestration delegation',
       },
       {
         regex: /\bremote_image_context\b/,
@@ -6144,10 +6534,85 @@ function runManifestParserSelfTest() {
   const coreSchedulerRuleText = coreSchedulerRule.patterns
     .map((pattern) => pattern.regex.source)
     .join('\n');
-  for (const contract of ['DialogQueuePriority', 'DialogSubmissionPolicy', 'DialogSubmitOutcome']) {
+  for (const contract of [
+    'DialogQueuePriority',
+    'DialogSubmissionPolicy',
+    'DialogSubmitOutcome',
+    'AgentSessionReplyRoute',
+    'DialogSteerOutcome',
+  ]) {
     if (!coreSchedulerRuleText.includes(contract)) {
       throw new Error(`core scheduler boundary rule must forbid contract: ${contract}`);
     }
+  }
+  const coreRoundPreemptRule = forbiddenContentRules.find(
+    (rule) => rule.path === 'src/crates/core/src/agentic/round_preempt.rs',
+  );
+  if (!coreRoundPreemptRule) {
+    throw new Error('missing core round preempt boundary rule');
+  }
+  const coreRoundPreemptRuleText = coreRoundPreemptRule.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n');
+  for (const contract of [
+    'DialogRoundPreemptSource',
+    'RoundInjection',
+    'DialogRoundInjectionSource',
+    'RoundInjectionKind',
+    'RoundInjectionTarget',
+  ]) {
+    if (!coreRoundPreemptRuleText.includes(contract)) {
+      throw new Error(`core round preempt boundary rule must forbid contract: ${contract}`);
+    }
+  }
+  const coreGoalModeTypesRule = forbiddenContentRules.find(
+    (rule) => rule.path === 'src/crates/core/src/agentic/goal_mode/types.rs',
+  );
+  if (!coreGoalModeTypesRule) {
+    throw new Error('missing core goal mode types boundary rule');
+  }
+  const coreGoalModeTypesRuleText = coreGoalModeTypesRule.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n');
+  for (const contract of [
+    'GoalModeState',
+    'GoalModeInitialGoal',
+    'GoalGenerationResult',
+    'GoalVerificationResult',
+    'GoalActivationResult',
+    'GoalContinuationPlan',
+  ]) {
+    if (!coreGoalModeTypesRuleText.includes(contract)) {
+      throw new Error(`core goal mode types boundary rule must forbid contract: ${contract}`);
+    }
+  }
+  const coreMessageRule = forbiddenContentRules.find(
+    (rule) => rule.path === 'src/crates/core/src/agentic/core/message.rs',
+  );
+  if (!coreMessageRule) {
+    throw new Error('missing core message boundary rule');
+  }
+  const coreMessageRuleText = coreMessageRule.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n');
+  for (const contract of ['CompressionContract', 'CompressionContractItem']) {
+    if (!coreMessageRuleText.includes(contract)) {
+      throw new Error(`core message boundary rule must forbid contract: ${contract}`);
+    }
+  }
+  const coreWorkspaceRule = forbiddenContentRules.find(
+    (rule) => rule.path === 'src/crates/core/src/service/workspace/manager.rs',
+  );
+  if (!coreWorkspaceRule) {
+    throw new Error('missing core workspace manager boundary rule');
+  }
+  if (
+    !coreWorkspaceRule.patterns
+      .map((pattern) => pattern.regex.source)
+      .join('\n')
+      .includes('RelatedPath')
+  ) {
+    throw new Error('core workspace manager boundary rule must forbid contract: RelatedPath');
   }
   const coreSubagentRuntimeOwnerPathRule = forbiddenContentUnderRules.find(
     (rule) => rule.path === 'src/crates/core/src',
@@ -6322,6 +6787,40 @@ function runManifestParserSelfTest() {
         'dialog_submission_policy_preserves_current_surface_queue_defaults',
         'DialogSubmitOutcome',
         'dialog_submit_outcome_preserves_started_and_queued_fields',
+        'DialogSessionStateFact',
+        'DialogSubmitQueueFacts',
+        'DialogSubmitQueueAction',
+        'dialog_policy_may_preempt',
+        'resolve_dialog_submit_queue_action',
+        'dialog_submit_queue_action_preserves_current_scheduler_routing_policy',
+        'should_suppress_agent_session_cancelled_reply',
+        'DialogTurnOutcomeKind',
+        'should_skip_agent_session_reply',
+        'agent_session_reply_decisions_preserve_cancel_suppression_boundary',
+        'AgentSessionReplyRoute',
+        'agent_session_reply_route_keeps_requester_fields',
+        'DialogSteerOutcome',
+        'dialog_steer_outcome_preserves_buffered_fields',
+        'RoundInjectionKind',
+        'RoundInjectionTarget',
+        'RoundInjection',
+        'DialogRoundPreemptSource',
+        'DialogRoundInjectionSource',
+        'round_injection_contract_keeps_kind_and_target_identity',
+        'round_injection_source_contract_drains_portable_injections',
+        'GoalModeState',
+        'GoalModeInitialGoal',
+        'GoalGenerationResult',
+        'GoalVerificationResult',
+        'GoalActivationResult',
+        'GoalContinuationPlan',
+        'goal_mode_state_requires_active_non_empty_goal',
+        'goal_verification_result_serializes_current_wire_shape',
+        'CompressionContract',
+        'CompressionContractItem',
+        'compression_contract_renders_model_visible_fields',
+        'RelatedPath',
+        'related_path_serializes_as_request_context_fact',
         'DelegationPolicy',
         'SubagentContextMode',
         'delegation_policy_child_blocks_recursive_spawn_without_losing_depth',
@@ -6492,7 +6991,54 @@ function runManifestParserSelfTest() {
     },
     {
       path: 'src/crates/core/src/agentic/coordination/scheduler.rs',
-      contracts: ['DialogQueuePriority', 'DialogSubmissionPolicy', 'DialogSubmitOutcome'],
+      contracts: [
+        'AgentSessionReplyRoute',
+        'DialogQueuePriority',
+        'DialogSessionStateFact',
+        'DialogSteerOutcome',
+        'DialogSubmissionPolicy',
+        'DialogSubmitOutcome',
+        'DialogSubmitQueueAction',
+        'DialogSubmitQueueFacts',
+        'DialogTurnOutcomeKind',
+        'dialog_policy_may_preempt',
+        'resolve_dialog_submit_queue_action',
+        'should_skip_agent_session_reply_contract',
+        'should_suppress_agent_session_cancelled_reply_contract',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/agentic/round_preempt.rs',
+      contracts: [
+        'bitfun_runtime_ports',
+        'DialogRoundInjectionSource',
+        'DialogRoundPreemptSource',
+        'RoundInjection',
+        'RoundInjectionKind',
+        'RoundInjectionTarget',
+        'SessionRoundInjectionBuffer',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/agentic/goal_mode/types.rs',
+      contracts: [
+        'bitfun_runtime_ports',
+        'GoalActivationResult',
+        'GoalContinuationPlan',
+        'GoalGenerationResult',
+        'GoalModeInitialGoal',
+        'GoalModeState',
+        'GoalVerificationResult',
+        'GOAL_MODE_FUNC_AGENT',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/agentic/core/message.rs',
+      contracts: ['bitfun_runtime_ports', 'CompressionContract', 'CompressionContractItem'],
+    },
+    {
+      path: 'src/crates/core/src/service/workspace/manager.rs',
+      contracts: ['bitfun_runtime_ports', 'RelatedPath'],
     },
     {
       path: 'src/crates/core/src/service_agent_runtime.rs',
@@ -6502,10 +7048,20 @@ function runManifestParserSelfTest() {
         'remote_cancel_host',
         'remote_image_context',
         'load_remote_model_catalog',
+        'RemoteModelCatalogFacts',
+        'RemoteModelCapabilityFact',
+        'RemoteReasoningModeFact',
+        'build_remote_model_catalog',
         'update_remote_session_model',
         'normalize_remote_session_model_id',
+        'normalize_remote_session_model_id_contract',
         'normalize_remote_model_selection',
+        'normalize_remote_model_selection_contract',
         'remote_chat_messages_from_turns',
+        'RemoteDialogSchedulerOutcomeFact',
+        'remote_dialog_submit_outcome_from_scheduler',
+        'RemoteChatHistoryTurn',
+        'build_remote_chat_messages',
         'strip_remote_user_input_tags',
         'compress_remote_chat_data_url_for_mobile',
         'load_remote_chat_messages',
@@ -6515,6 +7071,10 @@ function runManifestParserSelfTest() {
         'CoreRemoteDialogRuntimeHost',
         'CoreRemoteCancelRuntimeHost',
         'CoreRemoteWorkspaceFileRuntimeHost',
+        'CoreRemoteWorkspaceRuntimeHost',
+        'CoreRemoteSessionRuntimeHost',
+        'CoreRemotePollRuntimeHost',
+        'CoreRemoteInteractionRuntimeHost',
         'CoreRemoteSessionTrackerHost',
         'RemoteExecutionDispatcher',
         'ImageContextData',
@@ -6549,6 +7109,10 @@ function runManifestParserSelfTest() {
         'RemoteCancelTaskRequest',
         'RemoteCancelRuntimeHost',
         'cancel_remote_task',
+        'RemoteChatHistoryTurn',
+        'RemoteChatHistoryRound',
+        'RemoteChatHistoryToolItem',
+        'build_remote_chat_messages',
         'REMOTE_FILE_MAX_READ_BYTES',
         'REMOTE_FILE_MAX_CHUNK_BYTES',
         'resolve_remote_file_chunk_range',
@@ -6558,14 +7122,39 @@ function runManifestParserSelfTest() {
         'remote_workspace_info_response',
         'remote_recent_workspaces_response',
         'remote_assistant_list_response',
+        'RemoteWorkspaceRuntimeHost',
+        'handle_remote_workspace_command',
+        'remote_workspace_handler_preserves_response_shapes',
+        'RemoteInitialSyncRuntimeHost',
+        'generate_remote_initial_sync',
         'remote_session_info',
         'remote_session_list_response',
         'remote_initial_sync_response',
         'remote_messages_response',
+        'RemoteSessionRuntimeHost',
+        'handle_remote_session_command',
+        'remote_session_handler_preserves_list_and_create_policy',
+        'remote_session_handler_removes_tracker_after_delete_success',
+        'RemotePollRuntimeHost',
+        'handle_remote_poll_command',
+        'remote_poll_handler_preserves_missing_workspace_error',
+        'RemoteInteractionRuntimeHost',
+        'handle_remote_interaction_command',
+        'remote_interaction_handler_preserves_default_reject_reason',
         'RemoteDefaultModelsConfig',
         'RemoteModelConfig',
         'RemoteModelCatalog',
+        'RemoteModelCapabilityFact',
+        'RemoteReasoningModeFact',
+        'RemoteModelFacts',
+        'RemoteModelCatalogFacts',
+        'build_remote_model_catalog',
         'RemoteModelCatalogPollDelta',
+        'normalize_remote_session_model_id',
+        'normalize_remote_model_selection',
+        'remote_model_selection_needs_config',
+        'RemoteDialogSchedulerOutcomeFact',
+        'remote_dialog_submit_outcome_from_scheduler',
         'RemoteCommand',
         'RemoteResponse',
         'should_send_remote_model_catalog',
@@ -6581,10 +7170,15 @@ function runManifestParserSelfTest() {
         'remote_connect_command_wire_shape_lives_in_owner_contract',
         'remote_connect_response_wire_shape_lives_in_owner_contract',
         'remote_connect_model_catalog_delta_preserves_poll_invalidation_policy',
+        'remote_connect_model_catalog_builder_preserves_config_shape',
+        'remote_connect_model_selection_policy_owns_alias_and_config_reference_rules',
         'remote_connect_poll_helpers_preserve_delta_and_completion_policy',
         'remote_connect_image_context_policy_preserves_legacy_fallback_shape',
         'remote_connect_image_context_policy_prefers_explicit_contexts',
         'remote_connect_cancel_and_restore_policy_preserve_runtime_decisions',
+        'remote_connect_dialog_submit_outcome_builder_preserves_scheduler_shape',
+        'remote_chat_history_assembly_preserves_message_shape_and_item_order',
+        'remote_chat_history_assembly_skips_in_progress_assistant_history',
         'remote_connect_file_transfer_policy_preserves_limits_and_chunk_ranges',
         'remote_connect_file_transfer_policy_preserves_name_fallback',
         'remote_connect_tracker_keeps_finished_turn_snapshot_until_persistence_finalizes',
@@ -6600,10 +7194,11 @@ function runManifestParserSelfTest() {
       contracts: [
         'CoreServiceAgentRuntime',
         'remote_image_context',
-        'remote_workspace_info_response',
-        'remote_session_list_response',
-        'remote_initial_sync_response',
-        'remote_messages_response',
+        'handle_remote_workspace_command',
+        'handle_remote_session_command',
+        'generate_remote_initial_sync',
+        'handle_remote_poll_command',
+        'handle_remote_interaction_command',
         'core_service_agent_runtime_owner_maps_remote_image_context',
         'remote_execution_prefers_unified_image_contexts_over_legacy_images',
         'remote_cancel_decision_preserves_current_turn_boundaries',

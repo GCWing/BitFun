@@ -28,16 +28,9 @@ git2 = { workspace = true, optional = true }
 notify = { workspace = true, optional = true }
 rand = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
-rmcp = { version = "0.12.0", default-features = false, features = [
-    "auth",
-    "base64",
-    "client",
-    "macros",
-    "schemars",
-    "server",
-], optional = true }
+rmcp = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
-sse-stream = { version = "0.2.1", optional = true }
+sse-stream = { workspace = true, optional = true }
 thiserror = { workspace = true, optional = true }
 tokio-util = { workspace = true, optional = true }
 uuid = { workspace = true, optional = true }

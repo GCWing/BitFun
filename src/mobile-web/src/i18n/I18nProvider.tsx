@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useLayoutEffect, useMemo, useState } from 'react';
 import { DEFAULT_LANGUAGE, messages, type MobileLanguage } from './messages';
 import {
+  getMobileFallbackChain,
   getNextMobileLanguage,
   isMobileLanguage,
   resolveMobileLanguage,
@@ -42,8 +43,9 @@ function interpolate(template: string, params?: TranslateParams): string {
 }
 
 export function translate(language: MobileLanguage, key: string, params?: TranslateParams): string {
-  const template = getByPath(messages[language], key)
-    ?? getByPath(messages[DEFAULT_LANGUAGE], key)
+  const template = getMobileFallbackChain(language, true)
+    .map(locale => getByPath(messages[locale], key))
+    .find((value): value is string => value !== null)
     ?? key;
   return interpolate(template, params);
 }

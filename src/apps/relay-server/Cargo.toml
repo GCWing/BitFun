@@ -15,28 +15,28 @@ path = "src/main.rs"
 
 [dependencies]
 # Web framework
-axum = { version = "0.7", features = ["json", "ws"] }
-tower-http = { version = "0.6", features = ["cors", "fs"] }
+axum = { workspace = true }
+tower-http = { workspace = true }
 
 # Async runtime
-tokio = { version = "1.0", features = ["full"] }
-futures-util = "0.3"
+tokio = { workspace = true }
+futures-util = { workspace = true }
 
 # Serialization
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 # Error handling
-anyhow = "1.0"
+anyhow = { workspace = true }
 
 # Logging
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 
 # Utilities
-uuid = { version = "1.0", features = ["v4", "serde"] }
-chrono = { version = "0.4", features = ["serde", "clock"] }
-dashmap = "5.5"
-rand = "0.8"
-base64 = "0.21"
-sha2 = "0.10"
+uuid = { workspace = true }
+chrono = { workspace = true }
+dashmap = { workspace = true }
+rand = { workspace = true }
+base64 = { workspace = true }
+sha2 = { workspace = true }
