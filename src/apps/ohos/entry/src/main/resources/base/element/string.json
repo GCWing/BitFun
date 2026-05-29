@@ -10,6 +10,38 @@
         {
             "name": "EntryAbility_label",
             "value": "BitFun"
+        },
+        {
+            "name": "permission_internet_reason",
+            "value": "Used to access the network for communicating with remote AI services"
+        },
+        {
+            "name": "permission_user_file_reason",
+            "value": "Used to read and write user-selected files for code editing and project management"
+        },
+        {
+            "name": "permission_custom_sandbox_reason",
+            "value": "Used to access custom sandbox paths for project workspace operations"
+        },
+        {
+            "name": "permission_read_calendar_reason",
+            "value": "Used to read calendar events for task scheduling and reminders"
+        },
+        {
+            "name": "permission_write_calendar_reason",
+            "value": "Used to write calendar events for task scheduling and reminders"
+        },
+        {
+            "name": "permission_desktop_directory_reason",
+            "value": "Used to access desktop directory for file management and project operations"
+        },
+        {
+            "name": "permission_documents_directory_reason",
+            "value": "Used to access documents directory for file management and project operations"
+        },
+        {
+            "name": "permission_download_directory_reason",
+            "value": "Used to access download directory for file management and project operations"
         }
     ]
 }

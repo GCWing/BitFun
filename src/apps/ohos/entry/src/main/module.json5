@@ -33,17 +33,20 @@
     ],
     "requestPermissions": [
       {
-        "name": "ohos.permission.INTERNET"
+        "name": "ohos.permission.INTERNET",
+        "reason": "$string:permission_internet_reason"
       },
       {
-        "name": "ohos.permission.READ_WRITE_USER_FILE"
+        "name": "ohos.permission.READ_WRITE_USER_FILE",
+        "reason": "$string:permission_user_file_reason"
       },
       {
-        "name": "ohos.permission.CUSTOM_SANDBOX"
+        "name": "ohos.permission.CUSTOM_SANDBOX",
+        "reason": "$string:permission_custom_sandbox_reason"
       },
       {
         "name": "ohos.permission.READ_CALENDAR",
-        "reason": "$string:module_desc",
+        "reason": "$string:permission_read_calendar_reason",
         "usedScene": {
           "abilities": [
             "EntryAbility"
@@ -53,7 +56,7 @@
       },
       {
         "name": "ohos.permission.WRITE_CALENDAR",
-        "reason": "$string:module_desc",
+        "reason": "$string:permission_write_calendar_reason",
         "usedScene": {
           "abilities": [
             "EntryAbility"
@@ -63,7 +66,7 @@
       },
       {
         "name": "ohos.permission.READ_WRITE_DESKTOP_DIRECTORY",
-        "reason": "$string:module_desc",
+        "reason": "$string:permission_desktop_directory_reason",
         "usedScene": {
           "abilities": [
             "EntryAbility"
@@ -73,7 +76,7 @@
       },
       {
         "name": "ohos.permission.READ_WRITE_DOCUMENTS_DIRECTORY",
-        "reason": "$string:module_desc",
+        "reason": "$string:permission_documents_directory_reason",
         "usedScene": {
           "abilities": [
             "EntryAbility"
@@ -83,7 +86,7 @@
       },
       {
         "name": "ohos.permission.READ_WRITE_DOWNLOAD_DIRECTORY",
-        "reason": "$string:module_desc",
+        "reason": "$string:permission_download_directory_reason",
         "usedScene": {
           "abilities": [
             "EntryAbility"
