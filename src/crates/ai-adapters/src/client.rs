@@ -15,7 +15,6 @@ pub(crate) mod utils;
 use crate::providers::{anthropic, gemini, openai};
 use crate::types::ProxyConfig;
 use crate::types::*;
-use crate::WireReasoningFields;
 use anyhow::Result;
 use format::ApiFormat;
 use log::warn;
@@ -32,8 +31,6 @@ pub struct StreamResponse {
         Box<dyn futures::Stream<Item = Result<crate::stream::UnifiedResponse>> + Send>,
     >,
     pub raw_sse_rx: Option<mpsc::UnboundedReceiver<String>>,
-    /// Thinking / effort values extracted from the final outbound request body.
-    pub wire_reasoning: WireReasoningFields,
 }
 
 /// Default time to wait for the first response headers / stream body to start.
