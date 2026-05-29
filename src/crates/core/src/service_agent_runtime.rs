@@ -6,27 +6,31 @@
 //! implementations until a reviewed port/provider migration proves equivalence.
 
 use bitfun_runtime_ports::{
-    AgentSubmissionPort, AgentSubmissionSource, AgentTurnCancellationPort,
-    AgentTurnCancellationRequest, RemoteControlStatePort, RemoteControlStateRequest,
-    RemoteControlStateSnapshot,
+    AgentSessionCreateRequest, AgentSubmissionPort, AgentSubmissionSource,
+    AgentTurnCancellationPort, AgentTurnCancellationRequest, RemoteControlStatePort,
+    RemoteControlStateRequest, RemoteControlStateSnapshot,
 };
 use bitfun_services_integrations::remote_connect::{
-    ChatImageAttachment, ChatMessage, RemoteCancelRuntimeHost, RemoteChatHistoryRound,
-    RemoteChatHistoryTextItem, RemoteChatHistoryThinkingItem, RemoteChatHistoryToolCall,
-    RemoteChatHistoryToolItem, RemoteChatHistoryTurn, RemoteConnectSubmissionSource,
-    RemoteDefaultModelsConfig, RemoteDialogQueuePriority, RemoteDialogResolvedSubmission,
-    RemoteDialogRuntimeHost, RemoteDialogSchedulerOutcomeFact, RemoteDialogSubmissionPolicy,
-    RemoteDialogSubmitOutcome, RemoteImageContext, RemoteImageContextAdapter,
+    ChatImageAttachment, ChatMessage, RemoteAssistantWorkspaceFacts, RemoteCancelRuntimeHost,
+    RemoteChatHistoryRound, RemoteChatHistoryTextItem, RemoteChatHistoryThinkingItem,
+    RemoteChatHistoryToolCall, RemoteChatHistoryToolItem, RemoteChatHistoryTurn,
+    RemoteConnectSubmissionSource, RemoteDefaultModelsConfig, RemoteDialogQueuePriority,
+    RemoteDialogResolvedSubmission, RemoteDialogRuntimeHost, RemoteDialogSchedulerOutcomeFact,
+    RemoteDialogSubmissionPolicy, RemoteDialogSubmitOutcome, RemoteImageContext,
+    RemoteImageContextAdapter, RemoteInitialSyncRuntimeHost, RemoteInteractionRuntimeHost,
     RemoteModelCapabilityFact, RemoteModelCatalog, RemoteModelCatalogFacts, RemoteModelFacts,
-    RemoteReasoningModeFact, RemoteSessionStateTracker, RemoteSessionTrackerHost,
-    RemoteTerminalPrewarmRequest, RemoteWorkspaceFileRuntimeHost, build_remote_chat_messages,
+    RemotePollRuntimeHost, RemoteReasoningModeFact, RemoteRecentWorkspaceFacts,
+    RemoteSessionMetadata, RemoteSessionRuntimeHost, RemoteSessionStateTracker,
+    RemoteSessionTrackerHost, RemoteTerminalPrewarmRequest, RemoteWorkspaceFacts,
+    RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind as RemoteConnectWorkspaceKind,
+    RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate, build_remote_chat_messages,
     build_remote_model_catalog,
     normalize_remote_model_selection as normalize_remote_model_selection_contract,
     normalize_remote_session_model_id as normalize_remote_session_model_id_contract,
     remote_dialog_submit_outcome_from_scheduler,
     remote_model_selection_needs_config as remote_model_selection_needs_config_contract,
 };
-use log::{debug, info};
+use log::{debug, error, info};
 use std::sync::Arc;
 
 use crate::agentic::coordination::{
@@ -45,6 +49,101 @@ const MOBILE_IMAGE_MAX_BYTES: usize = 100 * 1024;
 fn current_workspace_path() -> Option<std::path::PathBuf> {
     crate::service::workspace::get_global_workspace_service()
         .and_then(|service| service.try_get_current_workspace_path())
+}
+
+fn remote_workspace_kind(
+    kind: crate::service::workspace::WorkspaceKind,
+) -> RemoteConnectWorkspaceKind {
+    match kind {
+        crate::service::workspace::WorkspaceKind::Normal => RemoteConnectWorkspaceKind::Normal,
+        crate::service::workspace::WorkspaceKind::Assistant => {
+            RemoteConnectWorkspaceKind::Assistant
+        }
+        crate::service::workspace::WorkspaceKind::Remote => RemoteConnectWorkspaceKind::Remote,
+    }
+}
+
+fn git_branch_for_workspace_path(path: &std::path::Path) -> Option<String> {
+    git2::Repository::open(path).ok().and_then(|repo| {
+        repo.head()
+            .ok()
+            .and_then(|head| head.shorthand().map(String::from))
+    })
+}
+
+async fn current_remote_workspace_facts() -> Option<RemoteWorkspaceFacts> {
+    let workspace_service = crate::service::workspace::get_global_workspace_service()?;
+    workspace_service
+        .get_current_workspace()
+        .await
+        .map(|workspace| {
+            let root_path = workspace.root_path.clone();
+            RemoteWorkspaceFacts {
+                path: root_path.to_string_lossy().to_string(),
+                name: workspace.name,
+                git_branch: git_branch_for_workspace_path(&root_path),
+                kind: remote_workspace_kind(workspace.workspace_kind),
+                assistant_id: workspace.assistant_id,
+            }
+        })
+}
+
+async fn open_workspace_with_snapshot(
+    path: &str,
+    snapshot_log_context: &str,
+) -> Result<RemoteWorkspaceUpdate, String> {
+    let workspace_service = crate::service::workspace::get_global_workspace_service()
+        .ok_or_else(|| "Workspace service not available".to_string())?;
+    let path_buf = std::path::PathBuf::from(path);
+    let info = workspace_service
+        .open_workspace(path_buf)
+        .await
+        .map_err(|error| error.to_string())?;
+    if let Err(error) = crate::service::snapshot::initialize_snapshot_manager_for_workspace(
+        info.root_path.clone(),
+        None,
+    )
+    .await
+    {
+        error!("Failed to initialize snapshot after {snapshot_log_context}: {error}");
+    }
+    Ok(RemoteWorkspaceUpdate {
+        path: info.root_path.to_string_lossy().to_string(),
+        name: info.name,
+    })
+}
+
+async fn load_remote_session_metadata_for_workspace(
+    workspace_path: &std::path::Path,
+) -> Result<Vec<RemoteSessionMetadata>, String> {
+    let workspace_path_display = workspace_path.to_string_lossy().to_string();
+    let path_manager = crate::infrastructure::PathManager::new()
+        .map_err(|_| "Failed to initialize path manager".to_string())?;
+    let path_manager = std::sync::Arc::new(path_manager);
+    let store =
+        crate::agentic::persistence::PersistenceManager::new(path_manager).map_err(|error| {
+            debug!("PersistenceManager init failed for {workspace_path_display}: {error}");
+            format!("Failed to initialize session storage: {error}")
+        })?;
+    let metadata = store
+        .list_session_metadata(workspace_path)
+        .await
+        .map_err(|error| {
+            debug!("Session list read failed for {workspace_path_display}: {error}");
+            format!("Failed to list sessions for workspace: {error}")
+        })?;
+
+    Ok(metadata
+        .into_iter()
+        .map(|session| RemoteSessionMetadata {
+            session_id: session.session_id,
+            name: session.session_name,
+            agent_type: session.agent_type,
+            created_at_ms: session.created_at,
+            last_active_at_ms: session.last_active_at,
+            turn_count: session.turn_count,
+        })
+        .collect())
 }
 
 fn normalize_remote_session_model_id(model_id: Option<String>) -> Option<String> {
@@ -354,6 +453,28 @@ impl CoreServiceAgentRuntime {
         CoreRemoteWorkspaceFileRuntimeHost::new()
     }
 
+    pub(crate) fn remote_workspace_host() -> CoreRemoteWorkspaceRuntimeHost {
+        CoreRemoteWorkspaceRuntimeHost::new()
+    }
+
+    pub(crate) fn remote_initial_sync_host() -> CoreRemoteWorkspaceRuntimeHost {
+        CoreRemoteWorkspaceRuntimeHost::new()
+    }
+
+    pub(crate) fn remote_session_host() -> Result<CoreRemoteSessionRuntimeHost, String> {
+        CoreRemoteSessionRuntimeHost::new()
+    }
+
+    pub(crate) fn remote_poll_host(
+        dispatcher: &RemoteExecutionDispatcher,
+    ) -> CoreRemotePollRuntimeHost<'_> {
+        CoreRemotePollRuntimeHost::new(dispatcher)
+    }
+
+    pub(crate) fn remote_interaction_host() -> CoreRemoteInteractionRuntimeHost {
+        CoreRemoteInteractionRuntimeHost::new()
+    }
+
     pub(crate) fn remote_image_context(context: RemoteImageContext) -> ImageContextData {
         ImageContextData::from_remote_image_context(context)
     }
@@ -587,6 +708,54 @@ impl CoreRemoteWorkspaceFileRuntimeHost {
     }
 }
 
+pub(crate) struct CoreRemoteWorkspaceRuntimeHost;
+
+impl CoreRemoteWorkspaceRuntimeHost {
+    pub(crate) fn new() -> Self {
+        Self
+    }
+}
+
+pub(crate) struct CoreRemoteSessionRuntimeHost {
+    coordinator: Arc<ConversationCoordinator>,
+}
+
+impl CoreRemoteSessionRuntimeHost {
+    pub(crate) fn new() -> Result<Self, String> {
+        let coordinator = get_global_coordinator()
+            .ok_or_else(|| "Desktop session system not ready".to_string())?;
+        Ok(Self { coordinator })
+    }
+}
+
+pub(crate) struct CoreRemotePollRuntimeHost<'a> {
+    dispatcher: &'a RemoteExecutionDispatcher,
+}
+
+impl<'a> CoreRemotePollRuntimeHost<'a> {
+    pub(crate) fn new(dispatcher: &'a RemoteExecutionDispatcher) -> Self {
+        Self { dispatcher }
+    }
+}
+
+pub(crate) struct CoreRemoteInteractionRuntimeHost {
+    coordinator: Option<Arc<ConversationCoordinator>>,
+}
+
+impl CoreRemoteInteractionRuntimeHost {
+    pub(crate) fn new() -> Self {
+        Self {
+            coordinator: get_global_coordinator(),
+        }
+    }
+
+    fn coordinator(&self) -> Result<&ConversationCoordinator, String> {
+        self.coordinator
+            .as_deref()
+            .ok_or_else(|| "Desktop session system not ready".to_string())
+    }
+}
+
 #[async_trait::async_trait]
 impl RemoteDialogRuntimeHost for CoreRemoteDialogRuntimeHost<'_> {
     type ImageContext = ImageContextData;
@@ -701,6 +870,250 @@ impl RemoteWorkspaceFileRuntimeHost for CoreRemoteWorkspaceFileRuntimeHost {
         session_id: Option<&str>,
     ) -> Option<std::path::PathBuf> {
         CoreServiceAgentRuntime::resolve_remote_file_workspace_root(session_id).await
+    }
+}
+
+#[async_trait::async_trait]
+impl RemoteWorkspaceRuntimeHost for CoreRemoteWorkspaceRuntimeHost {
+    async fn current_workspace(&self) -> Option<RemoteWorkspaceFacts> {
+        current_remote_workspace_facts().await
+    }
+
+    async fn recent_workspaces(&self) -> Vec<RemoteRecentWorkspaceFacts> {
+        let Some(workspace_service) = crate::service::workspace::get_global_workspace_service()
+        else {
+            return Vec::new();
+        };
+        workspace_service
+            .get_recent_workspaces()
+            .await
+            .into_iter()
+            .map(|workspace| RemoteRecentWorkspaceFacts {
+                path: workspace.root_path.to_string_lossy().to_string(),
+                name: workspace.name,
+                last_opened: workspace.last_accessed.to_rfc3339(),
+                kind: remote_workspace_kind(workspace.workspace_kind),
+            })
+            .collect()
+    }
+
+    async fn open_workspace(&self, path: &str) -> Result<RemoteWorkspaceUpdate, String> {
+        open_workspace_with_snapshot(path, "remote workspace set").await
+    }
+
+    async fn assistant_workspaces(&self) -> Vec<RemoteAssistantWorkspaceFacts> {
+        let Some(workspace_service) = crate::service::workspace::get_global_workspace_service()
+        else {
+            return Vec::new();
+        };
+        workspace_service
+            .get_assistant_workspaces()
+            .await
+            .into_iter()
+            .map(|workspace| RemoteAssistantWorkspaceFacts {
+                path: workspace.root_path.to_string_lossy().to_string(),
+                name: workspace.name,
+                assistant_id: workspace.assistant_id,
+            })
+            .collect()
+    }
+
+    async fn open_assistant_workspace(&self, path: &str) -> Result<RemoteWorkspaceUpdate, String> {
+        open_workspace_with_snapshot(path, "remote assistant set").await
+    }
+}
+
+#[async_trait::async_trait]
+impl RemoteInitialSyncRuntimeHost for CoreRemoteWorkspaceRuntimeHost {
+    async fn current_workspace(&self) -> Option<RemoteWorkspaceFacts> {
+        current_remote_workspace_facts().await
+    }
+
+    async fn list_session_metadata(
+        &self,
+        workspace_path: &std::path::Path,
+    ) -> Result<Vec<RemoteSessionMetadata>, String> {
+        load_remote_session_metadata_for_workspace(workspace_path).await
+    }
+}
+
+#[async_trait::async_trait]
+impl RemoteSessionRuntimeHost for CoreRemoteSessionRuntimeHost {
+    async fn list_session_metadata(
+        &self,
+        workspace_path: &std::path::Path,
+    ) -> Result<Vec<RemoteSessionMetadata>, String> {
+        load_remote_session_metadata_for_workspace(workspace_path).await
+    }
+
+    async fn resolve_default_assistant_workspace_path(&self) -> Result<String, String> {
+        let workspace_service = crate::service::workspace::get_global_workspace_service()
+            .ok_or_else(|| "Workspace service not available".to_string())?;
+        let workspaces = workspace_service.get_assistant_workspaces().await;
+        if let Some(default_workspace) = workspaces
+            .into_iter()
+            .find(|workspace| workspace.assistant_id.is_none())
+        {
+            return Ok(default_workspace.root_path.to_string_lossy().to_string());
+        }
+
+        workspace_service
+            .create_assistant_workspace(None)
+            .await
+            .map(|workspace| workspace.root_path.to_string_lossy().to_string())
+            .map_err(|error| format!("Failed to create assistant workspace: {}", error))
+    }
+
+    async fn create_session(&self, request: AgentSessionCreateRequest) -> Result<String, String> {
+        let submission_port =
+            CoreServiceAgentRuntime::agent_submission_port(self.coordinator.as_ref());
+        submission_port
+            .create_session(request)
+            .await
+            .map(|session| session.session_id)
+            .map_err(|error| error.message)
+    }
+
+    async fn load_model_catalog(
+        &self,
+        session_id: Option<&str>,
+    ) -> Result<RemoteModelCatalog, String> {
+        CoreServiceAgentRuntime::load_remote_model_catalog(session_id).await
+    }
+
+    async fn update_session_model(
+        &self,
+        session_id: &str,
+        model_id: &str,
+    ) -> Result<String, String> {
+        CoreServiceAgentRuntime::update_remote_session_model(
+            self.coordinator.as_ref(),
+            session_id,
+            model_id,
+        )
+        .await
+    }
+
+    async fn ensure_session_loaded(&self, session_id: &str) -> Result<(), String> {
+        if self
+            .coordinator
+            .get_session_manager()
+            .get_session(session_id)
+            .is_some()
+        {
+            return Ok(());
+        }
+
+        let Some(workspace_path) =
+            CoreServiceAgentRuntime::resolve_session_workspace_path(session_id).await
+        else {
+            return Err(format!(
+                "Workspace path not available for session: {}",
+                session_id
+            ));
+        };
+        self.coordinator
+            .restore_session(&workspace_path, session_id)
+            .await
+            .map(|_| ())
+            .map_err(|error| format!("Failed to restore session: {error}"))
+    }
+
+    async fn update_session_title(&self, session_id: &str, title: &str) -> Result<String, String> {
+        self.coordinator
+            .update_session_title(session_id, title)
+            .await
+            .map_err(|error| error.to_string())
+    }
+
+    async fn resolve_session_workspace_path(&self, session_id: &str) -> Option<std::path::PathBuf> {
+        CoreServiceAgentRuntime::resolve_session_workspace_path(session_id).await
+    }
+
+    async fn load_remote_chat_messages(
+        &self,
+        workspace_path: &std::path::Path,
+        session_id: &str,
+    ) -> (Vec<ChatMessage>, bool) {
+        CoreServiceAgentRuntime::load_remote_chat_messages(workspace_path, session_id).await
+    }
+
+    async fn delete_session(
+        &self,
+        workspace_path: &std::path::Path,
+        session_id: &str,
+    ) -> Result<(), String> {
+        self.coordinator
+            .delete_session(workspace_path, session_id)
+            .await
+            .map(|_| ())
+            .map_err(|error| error.to_string())
+    }
+
+    fn remove_tracker(&self, session_id: &str) {
+        crate::service::remote_connect::remote_server::get_or_init_global_dispatcher()
+            .remove_tracker(session_id);
+    }
+}
+
+#[async_trait::async_trait]
+impl RemotePollRuntimeHost for CoreRemotePollRuntimeHost<'_> {
+    fn ensure_tracker(&self, session_id: &str) -> Arc<RemoteSessionStateTracker> {
+        self.dispatcher.ensure_tracker(session_id)
+    }
+
+    async fn load_model_catalog(&self, session_id: &str) -> Option<RemoteModelCatalog> {
+        CoreServiceAgentRuntime::load_remote_model_catalog(Some(session_id))
+            .await
+            .ok()
+    }
+
+    async fn resolve_session_workspace_path(&self, session_id: &str) -> Option<std::path::PathBuf> {
+        CoreServiceAgentRuntime::resolve_session_workspace_path(session_id).await
+    }
+
+    async fn load_remote_chat_messages(
+        &self,
+        workspace_path: &std::path::Path,
+        session_id: &str,
+    ) -> (Vec<ChatMessage>, bool) {
+        CoreServiceAgentRuntime::load_remote_chat_messages(workspace_path, session_id).await
+    }
+}
+
+#[async_trait::async_trait]
+impl RemoteInteractionRuntimeHost for CoreRemoteInteractionRuntimeHost {
+    async fn confirm_tool(
+        &self,
+        tool_id: &str,
+        updated_input: Option<serde_json::Value>,
+    ) -> Result<(), String> {
+        self.coordinator()?
+            .confirm_tool(tool_id, updated_input)
+            .await
+            .map(|_| ())
+            .map_err(|error| error.to_string())
+    }
+
+    async fn reject_tool(&self, tool_id: &str, reason: String) -> Result<(), String> {
+        self.coordinator()?
+            .reject_tool(tool_id, reason)
+            .await
+            .map(|_| ())
+            .map_err(|error| error.to_string())
+    }
+
+    async fn cancel_tool(&self, tool_id: &str, reason: String) -> Result<(), String> {
+        self.coordinator()?
+            .cancel_tool(tool_id, reason)
+            .await
+            .map(|_| ())
+            .map_err(|error| error.to_string())
+    }
+
+    fn answer_question(&self, tool_id: &str, answers: serde_json::Value) -> Result<(), String> {
+        crate::agentic::tools::user_input_manager::get_user_input_manager()
+            .send_answer(tool_id, answers)
     }
 }
 

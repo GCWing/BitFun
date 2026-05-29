@@ -971,6 +971,91 @@ pub fn remote_initial_sync_response(
     }
 }
 
+#[async_trait::async_trait]
+pub trait RemoteWorkspaceRuntimeHost: Send + Sync {
+    async fn current_workspace(&self) -> Option<RemoteWorkspaceFacts>;
+    async fn recent_workspaces(&self) -> Vec<RemoteRecentWorkspaceFacts>;
+    async fn open_workspace(&self, path: &str) -> Result<RemoteWorkspaceUpdate, String>;
+    async fn assistant_workspaces(&self) -> Vec<RemoteAssistantWorkspaceFacts>;
+    async fn open_assistant_workspace(&self, path: &str) -> Result<RemoteWorkspaceUpdate, String>;
+}
+
+pub async fn handle_remote_workspace_command<H>(host: &H, command: &RemoteCommand) -> RemoteResponse
+where
+    H: RemoteWorkspaceRuntimeHost + ?Sized,
+{
+    match command {
+        RemoteCommand::GetWorkspaceInfo => {
+            remote_workspace_info_response(host.current_workspace().await)
+        }
+        RemoteCommand::ListRecentWorkspaces => {
+            remote_recent_workspaces_response(host.recent_workspaces().await)
+        }
+        RemoteCommand::SetWorkspace { path } => {
+            remote_workspace_updated_response(host.open_workspace(path).await)
+        }
+        RemoteCommand::ListAssistants => {
+            remote_assistant_list_response(host.assistant_workspaces().await)
+        }
+        RemoteCommand::SetAssistant { path } => {
+            remote_assistant_updated_response(host.open_assistant_workspace(path).await)
+        }
+        _ => RemoteResponse::Error {
+            message: "Unknown workspace command".into(),
+        },
+    }
+}
+
+#[async_trait::async_trait]
+pub trait RemoteInitialSyncRuntimeHost: Send + Sync {
+    async fn current_workspace(&self) -> Option<RemoteWorkspaceFacts>;
+    async fn list_session_metadata(
+        &self,
+        workspace_path: &Path,
+    ) -> Result<Vec<RemoteSessionMetadata>, String>;
+}
+
+pub async fn generate_remote_initial_sync<H>(
+    host: &H,
+    authenticated_user_id: Option<String>,
+) -> RemoteResponse
+where
+    H: RemoteInitialSyncRuntimeHost + ?Sized,
+{
+    let workspace = host.current_workspace().await;
+    let workspace_path = workspace
+        .as_ref()
+        .map(|workspace| PathBuf::from(&workspace.path));
+    let workspace_name = workspace_path
+        .as_ref()
+        .and_then(|path| path.file_name())
+        .map(|name| name.to_string_lossy().to_string());
+
+    let (sessions, has_more) = if let Some(path) = workspace_path.as_deref() {
+        match host.list_session_metadata(path).await {
+            Ok(metadata) => {
+                let total = metadata.len();
+                let page_size = 100usize;
+                (
+                    metadata.into_iter().take(page_size).collect(),
+                    total > page_size,
+                )
+            }
+            Err(_) => (Vec::new(), false),
+        }
+    } else {
+        (Vec::new(), false)
+    };
+
+    remote_initial_sync_response(
+        workspace,
+        sessions,
+        workspace_name.as_deref(),
+        has_more,
+        authenticated_user_id,
+    )
+}
+
 pub fn remote_session_created_response(session_id: impl Into<String>) -> RemoteResponse {
     RemoteResponse::SessionCreated {
         session_id: session_id.into(),
@@ -1002,6 +1087,330 @@ pub fn remote_messages_response(
 pub fn remote_session_deleted_response(session_id: impl Into<String>) -> RemoteResponse {
     RemoteResponse::SessionDeleted {
         session_id: session_id.into(),
+    }
+}
+
+#[async_trait::async_trait]
+pub trait RemoteSessionRuntimeHost: Send + Sync {
+    async fn list_session_metadata(
+        &self,
+        workspace_path: &Path,
+    ) -> Result<Vec<RemoteSessionMetadata>, String>;
+    async fn resolve_default_assistant_workspace_path(&self) -> Result<String, String>;
+    async fn create_session(&self, request: AgentSessionCreateRequest) -> Result<String, String>;
+    async fn load_model_catalog(
+        &self,
+        session_id: Option<&str>,
+    ) -> Result<RemoteModelCatalog, String>;
+    async fn update_session_model(
+        &self,
+        session_id: &str,
+        model_id: &str,
+    ) -> Result<String, String>;
+    async fn ensure_session_loaded(&self, session_id: &str) -> Result<(), String>;
+    async fn update_session_title(&self, session_id: &str, title: &str) -> Result<String, String>;
+    async fn resolve_session_workspace_path(&self, session_id: &str) -> Option<PathBuf>;
+    async fn load_remote_chat_messages(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> (Vec<ChatMessage>, bool);
+    async fn delete_session(&self, workspace_path: &Path, session_id: &str) -> Result<(), String>;
+    fn remove_tracker(&self, session_id: &str);
+}
+
+pub async fn handle_remote_session_command<H>(host: &H, command: &RemoteCommand) -> RemoteResponse
+where
+    H: RemoteSessionRuntimeHost + ?Sized,
+{
+    match command {
+        RemoteCommand::ListSessions {
+            workspace_path,
+            limit,
+            offset,
+            query,
+        } => {
+            let page_size = limit.unwrap_or(30).min(100);
+            let page_offset = offset.unwrap_or(0);
+
+            let Some(workspace_path) = workspace_path
+                .as_deref()
+                .filter(|path| !path.is_empty())
+                .map(PathBuf::from)
+            else {
+                return RemoteResponse::Error {
+                    message: "workspace_path is required for ListSessions".to_string(),
+                };
+            };
+
+            let workspace_path_str = workspace_path.to_string_lossy().to_string();
+            let workspace_name = workspace_path
+                .file_name()
+                .map(|name| name.to_string_lossy().to_string());
+
+            match host.list_session_metadata(&workspace_path).await {
+                Ok(metadata) => {
+                    let query = query
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|value| !value.is_empty())
+                        .map(str::to_lowercase);
+                    let sessions = metadata
+                        .into_iter()
+                        .filter(|session| {
+                            query
+                                .as_ref()
+                                .is_none_or(|query| session.name.to_lowercase().contains(query))
+                        })
+                        .collect();
+                    remote_session_list_response(
+                        sessions,
+                        Some(workspace_path_str.as_str()),
+                        workspace_name.as_deref(),
+                        page_size,
+                        page_offset,
+                    )
+                }
+                Err(message) => RemoteResponse::Error { message },
+            }
+        }
+        RemoteCommand::CreateSession {
+            agent_type,
+            session_name,
+            workspace_path,
+        } => {
+            let agent = resolve_remote_agent_type(agent_type.as_deref());
+            let is_claw = agent == "Claw";
+            let session_name = session_name
+                .as_deref()
+                .filter(|name| !name.is_empty())
+                .unwrap_or(match agent {
+                    "Cowork" => "Remote Cowork Session",
+                    "Claw" => "Remote Claw Session",
+                    _ => "Remote Code Session",
+                });
+
+            let binding_workspace = if is_claw {
+                match host.resolve_default_assistant_workspace_path().await {
+                    Ok(path) => Some(path),
+                    Err(message) => return RemoteResponse::Error { message },
+                }
+            } else {
+                workspace_path
+                    .as_deref()
+                    .filter(|path| !path.is_empty())
+                    .map(ToOwned::to_owned)
+            };
+
+            let Some(binding_workspace) = binding_workspace else {
+                return RemoteResponse::Error {
+                    message: if is_claw {
+                        "Failed to get or create assistant workspace".to_string()
+                    } else {
+                        "workspace_path is required for CreateSession".to_string()
+                    },
+                };
+            };
+
+            let request = build_remote_session_create_request(
+                session_name,
+                agent,
+                Some(binding_workspace),
+                RemoteConnectSubmissionSource::Relay,
+            );
+            match host.create_session(request).await {
+                Ok(session_id) => remote_session_created_response(session_id),
+                Err(message) => RemoteResponse::Error { message },
+            }
+        }
+        RemoteCommand::GetModelCatalog { session_id } => {
+            match host.load_model_catalog(session_id.as_deref()).await {
+                Ok(catalog) => RemoteResponse::ModelCatalog { catalog },
+                Err(message) => RemoteResponse::Error { message },
+            }
+        }
+        RemoteCommand::SetSessionModel {
+            session_id,
+            model_id,
+        } => match host.update_session_model(session_id, model_id).await {
+            Ok(normalized_model_id) => {
+                remote_session_model_updated_response(session_id.clone(), normalized_model_id)
+            }
+            Err(message) => RemoteResponse::Error { message },
+        },
+        RemoteCommand::UpdateSessionTitle { session_id, title } => {
+            if let Err(message) = host.ensure_session_loaded(session_id).await {
+                return RemoteResponse::Error { message };
+            }
+
+            match host.update_session_title(session_id, title).await {
+                Ok(normalized_title) => RemoteResponse::SessionTitleUpdated {
+                    session_id: session_id.clone(),
+                    title: normalized_title,
+                },
+                Err(message) => RemoteResponse::Error { message },
+            }
+        }
+        RemoteCommand::GetSessionMessages {
+            session_id,
+            limit: _,
+            before_message_id: _,
+        } => {
+            let Some(workspace_path) = host.resolve_session_workspace_path(session_id).await else {
+                return RemoteResponse::Error {
+                    message: format!("Workspace path not available for session: {}", session_id),
+                };
+            };
+            let (chat_messages, has_more) = host
+                .load_remote_chat_messages(&workspace_path, session_id)
+                .await;
+            remote_messages_response(session_id.clone(), chat_messages, has_more)
+        }
+        RemoteCommand::DeleteSession { session_id } => {
+            let Some(workspace_path) = host.resolve_session_workspace_path(session_id).await else {
+                return RemoteResponse::Error {
+                    message: format!("Workspace path not available for session: {}", session_id),
+                };
+            };
+
+            match host.delete_session(&workspace_path, session_id).await {
+                Ok(()) => {
+                    host.remove_tracker(session_id);
+                    remote_session_deleted_response(session_id.clone())
+                }
+                Err(message) => RemoteResponse::Error { message },
+            }
+        }
+        _ => RemoteResponse::Error {
+            message: "Unknown session command".into(),
+        },
+    }
+}
+
+#[async_trait::async_trait]
+pub trait RemotePollRuntimeHost: Send + Sync {
+    fn ensure_tracker(&self, session_id: &str) -> Arc<RemoteSessionStateTracker>;
+    async fn load_model_catalog(&self, session_id: &str) -> Option<RemoteModelCatalog>;
+    async fn resolve_session_workspace_path(&self, session_id: &str) -> Option<PathBuf>;
+    async fn load_remote_chat_messages(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> (Vec<ChatMessage>, bool);
+}
+
+pub async fn handle_remote_poll_command<H>(host: &H, command: &RemoteCommand) -> RemoteResponse
+where
+    H: RemotePollRuntimeHost + ?Sized,
+{
+    let RemoteCommand::PollSession {
+        session_id,
+        since_version,
+        known_msg_count,
+        known_model_catalog_version,
+    } = command
+    else {
+        return RemoteResponse::Error {
+            message: "expected poll_session".into(),
+        };
+    };
+
+    let tracker = host.ensure_tracker(session_id);
+    let current_version = tracker.version();
+    let current_model_catalog = host.load_model_catalog(session_id).await;
+    let model_catalog_delta =
+        remote_model_catalog_poll_delta(current_model_catalog, *known_model_catalog_version);
+
+    if *since_version == current_version && *since_version > 0 && !model_catalog_delta.changed {
+        return remote_no_change_poll_response(current_version);
+    }
+
+    let needs_persistence = *since_version == 0 || tracker.is_persistence_dirty();
+    if !needs_persistence {
+        return remote_snapshot_poll_response(
+            &tracker,
+            current_version,
+            model_catalog_delta.catalog,
+        );
+    }
+
+    let Some(workspace_path) = host.resolve_session_workspace_path(session_id).await else {
+        return RemoteResponse::Error {
+            message: format!("Workspace path not available for session: {}", session_id),
+        };
+    };
+    let (all_chat_messages, _) = host
+        .load_remote_chat_messages(&workspace_path, session_id)
+        .await;
+    let total_msg_count = all_chat_messages.len();
+    let new_messages = all_chat_messages
+        .into_iter()
+        .skip(*known_msg_count)
+        .collect();
+
+    remote_persisted_poll_response(
+        &tracker,
+        current_version,
+        new_messages,
+        total_msg_count,
+        model_catalog_delta.catalog,
+    )
+}
+
+#[async_trait::async_trait]
+pub trait RemoteInteractionRuntimeHost: Send + Sync {
+    async fn confirm_tool(
+        &self,
+        tool_id: &str,
+        updated_input: Option<serde_json::Value>,
+    ) -> Result<(), String>;
+    async fn reject_tool(&self, tool_id: &str, reason: String) -> Result<(), String>;
+    async fn cancel_tool(&self, tool_id: &str, reason: String) -> Result<(), String>;
+    fn answer_question(&self, tool_id: &str, answers: serde_json::Value) -> Result<(), String>;
+}
+
+pub async fn handle_remote_interaction_command<H>(
+    host: &H,
+    command: &RemoteCommand,
+) -> RemoteResponse
+where
+    H: RemoteInteractionRuntimeHost + ?Sized,
+{
+    match command {
+        RemoteCommand::ConfirmTool {
+            tool_id,
+            updated_input,
+        } => remote_interaction_accepted_response(
+            "confirm_tool",
+            tool_id.clone(),
+            host.confirm_tool(tool_id, updated_input.clone()).await,
+        ),
+        RemoteCommand::RejectTool { tool_id, reason } => {
+            let reject_reason = reason
+                .clone()
+                .unwrap_or_else(|| "User rejected".to_string());
+            remote_interaction_accepted_response(
+                "reject_tool",
+                tool_id.clone(),
+                host.reject_tool(tool_id, reject_reason).await,
+            )
+        }
+        RemoteCommand::CancelTool { tool_id, reason } => {
+            let cancel_reason = reason
+                .clone()
+                .unwrap_or_else(|| "User cancelled".to_string());
+            remote_interaction_accepted_response(
+                "cancel_tool",
+                tool_id.clone(),
+                host.cancel_tool(tool_id, cancel_reason).await,
+            )
+        }
+        RemoteCommand::AnswerQuestion { tool_id, answers } => {
+            remote_answer_question_response(host.answer_question(tool_id, answers.clone()))
+        }
+        _ => RemoteResponse::Error {
+            message: "Unknown execution command".into(),
+        },
     }
 }
 
@@ -2619,4 +3028,396 @@ pub fn remote_persisted_poll_response(
 
 fn non_empty_title(title: String) -> Option<String> {
     if title.is_empty() { None } else { Some(title) }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    struct FakeWorkspaceHost;
+
+    #[async_trait::async_trait]
+    impl RemoteWorkspaceRuntimeHost for FakeWorkspaceHost {
+        async fn current_workspace(&self) -> Option<RemoteWorkspaceFacts> {
+            Some(RemoteWorkspaceFacts {
+                path: "/workspace/project".to_string(),
+                name: "project".to_string(),
+                git_branch: Some("main".to_string()),
+                kind: RemoteWorkspaceKind::Normal,
+                assistant_id: None,
+            })
+        }
+
+        async fn recent_workspaces(&self) -> Vec<RemoteRecentWorkspaceFacts> {
+            vec![RemoteRecentWorkspaceFacts {
+                path: "/workspace/project".to_string(),
+                name: "project".to_string(),
+                last_opened: "2026-05-29T00:00:00Z".to_string(),
+                kind: RemoteWorkspaceKind::Normal,
+            }]
+        }
+
+        async fn open_workspace(&self, path: &str) -> Result<RemoteWorkspaceUpdate, String> {
+            Ok(RemoteWorkspaceUpdate {
+                path: path.to_string(),
+                name: "opened".to_string(),
+            })
+        }
+
+        async fn assistant_workspaces(&self) -> Vec<RemoteAssistantWorkspaceFacts> {
+            vec![RemoteAssistantWorkspaceFacts {
+                path: "/workspace/assistant".to_string(),
+                name: "assistant".to_string(),
+                assistant_id: None,
+            }]
+        }
+
+        async fn open_assistant_workspace(
+            &self,
+            path: &str,
+        ) -> Result<RemoteWorkspaceUpdate, String> {
+            Ok(RemoteWorkspaceUpdate {
+                path: path.to_string(),
+                name: "assistant".to_string(),
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn remote_workspace_handler_preserves_response_shapes() {
+        let host = FakeWorkspaceHost;
+
+        assert_eq!(
+            handle_remote_workspace_command(&host, &RemoteCommand::GetWorkspaceInfo).await,
+            RemoteResponse::WorkspaceInfo {
+                has_workspace: true,
+                path: Some("/workspace/project".to_string()),
+                project_name: Some("project".to_string()),
+                git_branch: Some("main".to_string()),
+                workspace_kind: Some("normal".to_string()),
+                assistant_id: None,
+            }
+        );
+
+        assert_eq!(
+            handle_remote_workspace_command(
+                &host,
+                &RemoteCommand::SetWorkspace {
+                    path: "/workspace/next".to_string(),
+                },
+            )
+            .await,
+            RemoteResponse::WorkspaceUpdated {
+                success: true,
+                path: Some("/workspace/next".to_string()),
+                project_name: Some("opened".to_string()),
+                error: None,
+            }
+        );
+    }
+
+    #[derive(Default)]
+    struct FakeSessionHost {
+        created_requests: Mutex<Vec<AgentSessionCreateRequest>>,
+        removed_trackers: Mutex<Vec<String>>,
+    }
+
+    #[async_trait::async_trait]
+    impl RemoteSessionRuntimeHost for FakeSessionHost {
+        async fn list_session_metadata(
+            &self,
+            _workspace_path: &Path,
+        ) -> Result<Vec<RemoteSessionMetadata>, String> {
+            Ok(vec![
+                RemoteSessionMetadata {
+                    session_id: "session-a".to_string(),
+                    name: "keep me".to_string(),
+                    agent_type: "agentic".to_string(),
+                    created_at_ms: 1_000,
+                    last_active_at_ms: 2_000,
+                    turn_count: 3,
+                },
+                RemoteSessionMetadata {
+                    session_id: "session-b".to_string(),
+                    name: "other".to_string(),
+                    agent_type: "agentic".to_string(),
+                    created_at_ms: 1_000,
+                    last_active_at_ms: 2_000,
+                    turn_count: 1,
+                },
+            ])
+        }
+
+        async fn resolve_default_assistant_workspace_path(&self) -> Result<String, String> {
+            Ok("/workspace/assistant".to_string())
+        }
+
+        async fn create_session(
+            &self,
+            request: AgentSessionCreateRequest,
+        ) -> Result<String, String> {
+            self.created_requests.lock().unwrap().push(request);
+            Ok("created-session".to_string())
+        }
+
+        async fn load_model_catalog(
+            &self,
+            _session_id: Option<&str>,
+        ) -> Result<RemoteModelCatalog, String> {
+            Ok(RemoteModelCatalog {
+                version: 1,
+                models: Vec::new(),
+                default_models: RemoteDefaultModelsConfig::default(),
+                session_model_id: None,
+            })
+        }
+
+        async fn update_session_model(
+            &self,
+            _session_id: &str,
+            model_id: &str,
+        ) -> Result<String, String> {
+            Ok(model_id.to_string())
+        }
+
+        async fn ensure_session_loaded(&self, _session_id: &str) -> Result<(), String> {
+            Ok(())
+        }
+
+        async fn update_session_title(
+            &self,
+            _session_id: &str,
+            title: &str,
+        ) -> Result<String, String> {
+            Ok(title.trim().to_string())
+        }
+
+        async fn resolve_session_workspace_path(&self, _session_id: &str) -> Option<PathBuf> {
+            Some(PathBuf::from("/workspace/project"))
+        }
+
+        async fn load_remote_chat_messages(
+            &self,
+            _workspace_path: &Path,
+            _session_id: &str,
+        ) -> (Vec<ChatMessage>, bool) {
+            (
+                vec![ChatMessage {
+                    id: "message-1".to_string(),
+                    role: "user".to_string(),
+                    content: "hello".to_string(),
+                    timestamp: "1".to_string(),
+                    metadata: None,
+                    images: None,
+                    thinking: None,
+                    tools: None,
+                    items: None,
+                }],
+                false,
+            )
+        }
+
+        async fn delete_session(
+            &self,
+            _workspace_path: &Path,
+            _session_id: &str,
+        ) -> Result<(), String> {
+            Ok(())
+        }
+
+        fn remove_tracker(&self, session_id: &str) {
+            self.removed_trackers
+                .lock()
+                .unwrap()
+                .push(session_id.to_string());
+        }
+    }
+
+    #[tokio::test]
+    async fn remote_session_handler_preserves_list_and_create_policy() {
+        let host = FakeSessionHost::default();
+
+        let list = handle_remote_session_command(
+            &host,
+            &RemoteCommand::ListSessions {
+                workspace_path: Some("/workspace/project".to_string()),
+                limit: Some(20),
+                offset: Some(0),
+                query: Some("keep".to_string()),
+            },
+        )
+        .await;
+        let RemoteResponse::SessionList { sessions, has_more } = list else {
+            panic!("expected session list");
+        };
+        assert!(!has_more);
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].session_id, "session-a");
+        assert_eq!(
+            sessions[0].workspace_path.as_deref(),
+            Some("/workspace/project")
+        );
+
+        let created = handle_remote_session_command(
+            &host,
+            &RemoteCommand::CreateSession {
+                agent_type: Some("Cowork".to_string()),
+                session_name: None,
+                workspace_path: Some("/workspace/project".to_string()),
+            },
+        )
+        .await;
+        assert_eq!(
+            created,
+            RemoteResponse::SessionCreated {
+                session_id: "created-session".to_string(),
+            }
+        );
+        let created_requests = host.created_requests.lock().unwrap();
+        assert_eq!(created_requests[0].session_name, "Remote Cowork Session");
+        assert_eq!(created_requests[0].agent_type, "Cowork");
+        assert_eq!(
+            created_requests[0].workspace_path.as_deref(),
+            Some("/workspace/project")
+        );
+    }
+
+    #[tokio::test]
+    async fn remote_session_handler_removes_tracker_after_delete_success() {
+        let host = FakeSessionHost::default();
+
+        let deleted = handle_remote_session_command(
+            &host,
+            &RemoteCommand::DeleteSession {
+                session_id: "session-a".to_string(),
+            },
+        )
+        .await;
+
+        assert_eq!(
+            deleted,
+            RemoteResponse::SessionDeleted {
+                session_id: "session-a".to_string(),
+            }
+        );
+        assert_eq!(
+            host.removed_trackers.lock().unwrap().as_slice(),
+            ["session-a"]
+        );
+    }
+
+    struct FakePollHost {
+        tracker: Arc<RemoteSessionStateTracker>,
+    }
+
+    #[async_trait::async_trait]
+    impl RemotePollRuntimeHost for FakePollHost {
+        fn ensure_tracker(&self, _session_id: &str) -> Arc<RemoteSessionStateTracker> {
+            self.tracker.clone()
+        }
+
+        async fn load_model_catalog(&self, _session_id: &str) -> Option<RemoteModelCatalog> {
+            None
+        }
+
+        async fn resolve_session_workspace_path(&self, _session_id: &str) -> Option<PathBuf> {
+            None
+        }
+
+        async fn load_remote_chat_messages(
+            &self,
+            _workspace_path: &Path,
+            _session_id: &str,
+        ) -> (Vec<ChatMessage>, bool) {
+            (Vec::new(), false)
+        }
+    }
+
+    #[tokio::test]
+    async fn remote_poll_handler_preserves_missing_workspace_error() {
+        let host = FakePollHost {
+            tracker: Arc::new(RemoteSessionStateTracker::new("session-a".to_string())),
+        };
+
+        let response = handle_remote_poll_command(
+            &host,
+            &RemoteCommand::PollSession {
+                session_id: "session-a".to_string(),
+                since_version: 0,
+                known_msg_count: 0,
+                known_model_catalog_version: None,
+            },
+        )
+        .await;
+
+        assert_eq!(
+            response,
+            RemoteResponse::Error {
+                message: "Workspace path not available for session: session-a".to_string(),
+            }
+        );
+    }
+
+    #[derive(Default)]
+    struct FakeInteractionHost {
+        rejected: Mutex<Vec<(String, String)>>,
+    }
+
+    #[async_trait::async_trait]
+    impl RemoteInteractionRuntimeHost for FakeInteractionHost {
+        async fn confirm_tool(
+            &self,
+            _tool_id: &str,
+            _updated_input: Option<serde_json::Value>,
+        ) -> Result<(), String> {
+            Ok(())
+        }
+
+        async fn reject_tool(&self, tool_id: &str, reason: String) -> Result<(), String> {
+            self.rejected
+                .lock()
+                .unwrap()
+                .push((tool_id.to_string(), reason));
+            Ok(())
+        }
+
+        async fn cancel_tool(&self, _tool_id: &str, _reason: String) -> Result<(), String> {
+            Ok(())
+        }
+
+        fn answer_question(
+            &self,
+            _tool_id: &str,
+            _answers: serde_json::Value,
+        ) -> Result<(), String> {
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn remote_interaction_handler_preserves_default_reject_reason() {
+        let host = FakeInteractionHost::default();
+
+        let response = handle_remote_interaction_command(
+            &host,
+            &RemoteCommand::RejectTool {
+                tool_id: "tool-1".to_string(),
+                reason: None,
+            },
+        )
+        .await;
+
+        assert_eq!(
+            response,
+            RemoteResponse::InteractionAccepted {
+                action: "reject_tool".to_string(),
+                target_id: "tool-1".to_string(),
+            }
+        );
+        assert_eq!(
+            host.rejected.lock().unwrap().as_slice(),
+            [("tool-1".to_string(), "User rejected".to_string())]
+        );
+    }
 }
