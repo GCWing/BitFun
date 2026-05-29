@@ -3355,11 +3355,12 @@ impl ExecutionEngine {
 
 #[cfg(test)]
 mod tests {
-    use super::{ContextHealthSnapshot, ExecutionEngine};
+    use super::{ContextHealthSnapshot, ExecutionEngine, TurnTokenUsageTotals};
     use crate::agentic::core::{InternalReminderKind, Message, MessageRole, ToolCall, ToolResult};
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::service::config::types::AIConfig;
     use crate::service::config::types::AIModelConfig;
+    use crate::util::types::ai::GeminiUsage;
     use crate::util::types::ToolDefinition;
     use serde_json::json;
     use sha2::{Digest, Sha256};
