@@ -65,9 +65,13 @@ function readJsonFile(file) {
 
 function listLocaleNamespaces(locale) {
   const localeDir = path.join(webLocalesDir, locale);
-  return listFiles(localeDir, (file) => file.endsWith('.json'))
+  const namespaces = listFiles(localeDir, (file) => file.endsWith('.json'))
     .map((file) => toPosixPath(path.relative(localeDir, file)).replace(/\.json$/, ''))
     .sort();
+  if (fs.existsSync(path.join(sharedTermsDir, locale, 'terms.json'))) {
+    namespaces.push('shared');
+  }
+  return namespaces.sort();
 }
 
 function readRegistryNamespaces() {
@@ -105,7 +109,9 @@ function flattenKeys(value, prefix = '') {
 }
 
 function readJsonKeys(locale, namespace) {
-  const file = path.join(webLocalesDir, locale, `${namespace}.json`);
+  const file = namespace === 'shared'
+    ? path.join(sharedTermsDir, locale, 'terms.json')
+    : path.join(webLocalesDir, locale, `${namespace}.json`);
   try {
     return flattenKeys(readJsonFile(file));
   } catch (error) {
@@ -156,6 +162,39 @@ function auditNamespaceCoverage() {
   }
 
   return registryNamespaces;
+}
+
+function auditSurfaceResourceRoots() {
+  const localeById = new Map(localeContract.locales.map((locale) => [locale.id, locale]));
+  for (const [surface, config] of Object.entries(localeContract.surfaces ?? {})) {
+    const resourceRoot = path.join(root, config.resourceRoot);
+    if (!fs.existsSync(resourceRoot)) {
+      reportError(`${surface} resourceRoot does not exist: ${config.resourceRoot}`);
+      continue;
+    }
+
+    for (const localeId of localeContract.surfaceOrders?.[surface] ?? []) {
+      if (surface === 'web-ui') {
+        const localeDir = path.join(resourceRoot, localeId);
+        if (!fs.existsSync(localeDir)) {
+          reportError(`${surface} is missing ${localeId} locale directory`);
+        }
+      } else if (surface === 'installer') {
+        const installerLocale = localeById.get(localeId)?.installer?.uiCode;
+        if (!installerLocale || !fs.existsSync(path.join(resourceRoot, `${installerLocale}.json`))) {
+          reportError(`${surface} is missing ${localeId} resource JSON`);
+        }
+      } else if (surface === 'core') {
+        if (!fs.existsSync(path.join(resourceRoot, `${localeId}.ftl`))) {
+          reportError(`${surface} is missing ${localeId} Fluent resource`);
+        }
+      } else if (surface === 'mobile-web') {
+        if (!fs.existsSync(path.join(resourceRoot, 'messages.ts'))) {
+          reportError(`${surface} is missing messages.ts`);
+        }
+      }
+    }
+  }
 }
 
 function auditGeneratedContract() {
@@ -238,10 +277,10 @@ function auditKeyParity(namespaces) {
       const extra = diffSets(localeKeys, baselineKeys);
 
       if (missing.length > 0) {
-        reportWarning(`${locale}/${namespace}.json is missing ${missing.length} key(s): ${missing.slice(0, 8).join(', ')}`);
+        reportError(`${locale}/${namespace}.json is missing ${missing.length} key(s): ${missing.slice(0, 8).join(', ')}`);
       }
       if (extra.length > 0) {
-        reportWarning(`${locale}/${namespace}.json has ${extra.length} extra key(s): ${extra.slice(0, 8).join(', ')}`);
+        reportError(`${locale}/${namespace}.json has ${extra.length} extra key(s): ${extra.slice(0, 8).join(', ')}`);
       }
     }
   }
@@ -290,12 +329,13 @@ function auditSourceText() {
     reportWarning(`Found ${fallbackFindings.length} t(key, "literal fallback") candidate(s). First entries: ${fallbackFindings.slice(0, 12).join(', ')}`);
   }
   if (cjkFindings.length > 0) {
-    reportWarning(`Found ${cjkFindings.length} CJK source line candidate(s). First entries: ${cjkFindings.slice(0, 12).join(', ')}`);
+    reportWarning(`Found ${cjkFindings.length} CJK source line candidate(s) outside locale/test/generated files; review user-facing literals for extraction. First entries: ${cjkFindings.slice(0, 12).join(', ')}`);
   }
 }
 
 auditGeneratedContract();
 auditSharedTermsCoverage();
+auditSurfaceResourceRoots();
 auditMobileWebBoundary();
 
 const namespaces = auditNamespaceCoverage();

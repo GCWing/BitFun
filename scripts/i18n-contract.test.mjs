@@ -19,6 +19,10 @@ function readJson(relativePath) {
   return JSON.parse(fs.readFileSync(path.join(root, relativePath), 'utf8'));
 }
 
+function readText(relativePath) {
+  return fs.readFileSync(path.join(root, relativePath), 'utf8');
+}
+
 function flattenKeys(value, prefix = '') {
   if (value == null || typeof value !== 'object' || Array.isArray(value)) {
     return prefix ? [prefix] : [];
@@ -63,5 +67,104 @@ test('shared i18n terms exist for every canonical locale with matching keys', ()
     const relativePath = `src/shared/i18n/resources/shared/${localeId}/terms.json`;
     const terms = readJson(relativePath);
     assert.deepEqual(flattenKeys(terms), baselineKeys, `${relativePath} key set differs from baseline`);
+  }
+});
+
+test('core runtime uses the generated locale contract for language identity', () => {
+  const typesSource = readText('src/crates/core/src/service/i18n/types.rs');
+  assert.match(
+    typesSource,
+    /generated_locale_contract::\{[\s\S]*GENERATED_LOCALE_CONTRACT/,
+    'LocaleId and LocaleMetadata should derive identity fields from the generated contract',
+  );
+  assert.doesNotMatch(
+    typesSource,
+    /locale_registry::\{[\s\S]*(LOCALE_REGISTRY|locale_entry|locale_entry_from_code)/,
+    'types.rs must not read language identity from the backend resource registry',
+  );
+
+  const resourceRegistrySource = readText('src/crates/core/src/service/i18n/locale_registry.rs');
+  assert.doesNotMatch(
+    resourceRegistrySource,
+    /\b(name|english_name|native_name|rtl|model_language_name|short_model_instruction|aliases):/,
+    'backend locale_registry.rs should only own Fluent resource wiring, not duplicate locale identity',
+  );
+});
+
+test('shared i18n terms are consumed by each product surface runtime', () => {
+  const webI18nSource = readText('src/web-ui/src/infrastructure/i18n/core/I18nService.ts');
+  assert.match(webI18nSource, /SHARED_TERMS_BY_LOCALE/, 'Web UI should merge shared terms into i18next resources');
+
+  const mobileMessagesSource = readText('src/mobile-web/src/i18n/messages.ts');
+  assert.match(mobileMessagesSource, /SHARED_TERMS_BY_LOCALE/, 'mobile-web should expose shared terms through its message tree');
+
+  const installerLanguagesSource = readText('BitFun-Installer/src/i18n/languages.ts');
+  assert.match(installerLanguagesSource, /SHARED_TERMS_BY_APP_LANGUAGE/, 'installer should merge shared terms into its i18next resources');
+
+  const coreServiceSource = readText('src/crates/core/src/service/i18n/service.rs');
+  assert.match(coreServiceSource, /generated_shared_term/, 'core i18n service should resolve generated shared terms');
+});
+
+test('frontend runtimes use generated locale defaults and fallback chains', () => {
+  const webPresetIndexSource = readText('src/web-ui/src/infrastructure/i18n/presets/index.ts');
+  assert.doesNotMatch(
+    webPresetIndexSource,
+    /export const DEFAULT_(?:FALLBACK_)?LOCALE\s*=\s*['"]/,
+    'Web UI preset defaults should be re-exported from the generated contract, not hard-coded',
+  );
+
+  const webI18nSource = readText('src/web-ui/src/infrastructure/i18n/core/I18nService.ts');
+  assert.match(webI18nSource, /getLocaleFallbackChain/, 'Web UI i18next should use the generated locale fallback chain');
+
+  const mobileProviderSource = readText('src/mobile-web/src/i18n/I18nProvider.tsx');
+  assert.match(mobileProviderSource, /getMobileFallbackChain/, 'mobile-web translate should use the generated locale fallback chain');
+  assert.doesNotMatch(
+    mobileProviderSource,
+    /messages\[DEFAULT_LANGUAGE\]/,
+    'mobile-web translate should not fall back directly to the surface default only',
+  );
+
+  const installerI18nSource = readText('BitFun-Installer/src/i18n/index.ts');
+  assert.match(installerI18nSource, /DEFAULT_INSTALLER_UI_LANGUAGE/, 'installer i18next should use the generated default UI language');
+  assert.match(installerI18nSource, /getInstallerUiFallbackChain/, 'installer i18next should use the generated locale fallback chain');
+});
+
+test('i18n audit treats locale key parity as an error', () => {
+  const auditSource = readText('scripts/i18n-audit.mjs');
+  const parityFunction = auditSource.match(/function auditKeyParity\(namespaces\) \{[\s\S]*?\n\}/)?.[0] ?? '';
+
+  assert.match(parityFunction, /reportError\(`\$\{locale\}\/\$\{namespace\}\.json is missing/, 'missing locale keys should fail i18n:audit');
+  assert.match(parityFunction, /reportError\(`\$\{locale\}\/\$\{namespace\}\.json has/, 'extra locale keys should fail i18n:audit');
+});
+
+test('installer Rust locale contract is generated from the installer surface order', () => {
+  const generatorSource = readText('scripts/generate-i18n-contract.mjs');
+  const installerRustGenerator = generatorSource.match(/function generateInstallerRustLocaleContract\(contract\) \{[\s\S]*?\n\}/)?.[0] ?? '';
+
+  assert.match(installerRustGenerator, /orderedLocales\(contract, 'installer'\)/);
+  assert.doesNotMatch(installerRustGenerator, /orderedLocales\(contract, 'core'\)/);
+});
+
+test('i18n contract surface resource roots point at existing owned resources', () => {
+  const contract = readJson('src/shared/i18n/contract/locales.json');
+  const localeById = new Map(contract.locales.map((locale) => [locale.id, locale]));
+
+  for (const [surface, config] of Object.entries(contract.surfaces)) {
+    const resourceRoot = path.join(root, config.resourceRoot);
+    assert.ok(fs.existsSync(resourceRoot), `${surface} resourceRoot does not exist: ${config.resourceRoot}`);
+
+    for (const localeId of contract.surfaceOrders[surface] ?? []) {
+      if (surface === 'web-ui') {
+        assert.ok(fs.existsSync(path.join(resourceRoot, localeId)), `${surface} is missing ${localeId} locale directory`);
+      } else if (surface === 'installer') {
+        const locale = localeById.get(localeId);
+        assert.ok(locale?.installer?.uiCode, `${localeId} is missing installer.uiCode`);
+        assert.ok(fs.existsSync(path.join(resourceRoot, `${locale.installer.uiCode}.json`)), `${surface} is missing ${localeId} resource JSON`);
+      } else if (surface === 'core') {
+        assert.ok(fs.existsSync(path.join(resourceRoot, `${localeId}.ftl`)), `${surface} is missing ${localeId} Fluent resource`);
+      } else if (surface === 'mobile-web') {
+        assert.ok(fs.existsSync(path.join(resourceRoot, 'messages.ts')), `${surface} is missing messages.ts`);
+      }
+    }
   }
 });

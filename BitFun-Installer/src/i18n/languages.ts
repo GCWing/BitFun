@@ -1,6 +1,7 @@
 import {
   DEFAULT_INSTALLER_UI_LANGUAGE,
   INSTALLER_LANGUAGE_DEFINITIONS,
+  SHARED_TERMS_BY_APP_LANGUAGE,
   type AppLanguage,
   type InstallerUiLanguage,
 } from './generatedLocaleContract';
@@ -16,7 +17,10 @@ const installerResourceByUiCode = {
 
 export const INSTALLER_LANGUAGES = INSTALLER_LANGUAGE_DEFINITIONS.map(language => ({
   ...language,
-  resource: installerResourceByUiCode[language.uiCode],
+  resource: {
+    ...installerResourceByUiCode[language.uiCode],
+    shared: SHARED_TERMS_BY_APP_LANGUAGE[language.appCode],
+  },
 }));
 
 const installerAliasesByPriority = INSTALLER_LANGUAGES
@@ -24,6 +28,7 @@ const installerAliasesByPriority = INSTALLER_LANGUAGES
   .sort((a, b) => b.alias.length - a.alias.length);
 
 export type { AppLanguage, InstallerUiLanguage };
+export { DEFAULT_INSTALLER_UI_LANGUAGE };
 
 export const installerResources = Object.fromEntries(
   INSTALLER_LANGUAGES.map(language => [
@@ -41,7 +46,11 @@ export function mapUiLanguageToAppLanguage(uiLanguage: InstallerUiLanguage): App
 }
 
 export function mapAppLanguageToUiLanguage(appLanguage: string | null | undefined): InstallerUiLanguage | null {
-  return resolveInstallerUiLanguage(appLanguage);
+  const normalized = appLanguage?.trim();
+  if (!normalized) return null;
+
+  const exact = INSTALLER_LANGUAGES.find(language => language.appCode === normalized);
+  return exact?.uiCode ?? resolveInstallerUiLanguage(normalized);
 }
 
 export function resolveInstallerUiLanguage(value: string | null | undefined): InstallerUiLanguage | null {
@@ -57,6 +66,30 @@ export function resolveInstallerUiLanguage(value: string | null | undefined): In
   return installerAliasesByPriority
     .find(({ alias }) => normalized === alias || normalized.startsWith(`${alias}-`))
     ?.language.uiCode ?? null;
+}
+
+export function getInstallerUiFallbackChain(
+  uiLanguage: string | null | undefined,
+  includeSelf = false,
+): InstallerUiLanguage[] {
+  const resolvedUiLanguage = resolveInstallerUiLanguage(uiLanguage);
+  const language = INSTALLER_LANGUAGES.find(item => item.uiCode === resolvedUiLanguage);
+  if (!language) {
+    return [DEFAULT_INSTALLER_UI_LANGUAGE];
+  }
+
+  const chain: InstallerUiLanguage[] = [];
+  if (includeSelf) {
+    chain.push(language.uiCode);
+  }
+  for (const appLanguage of language.contentFallbacks) {
+    const uiLanguage = mapAppLanguageToUiLanguage(appLanguage);
+    if (uiLanguage) {
+      chain.push(uiLanguage);
+    }
+  }
+
+  return Array.from(new Set(chain));
 }
 
 export function detectInstallerUiLanguage(appLanguage?: string | null): InstallerUiLanguage {

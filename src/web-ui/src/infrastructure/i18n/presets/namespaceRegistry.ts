@@ -36,5 +36,6 @@ export const ALL_NAMESPACES = [
   'settings/review',
   'settings/session-config',
   'settings/skills',
+  'shared',
   'tools',
 ] as const;

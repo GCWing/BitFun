@@ -37,7 +37,7 @@
   "surfaces": {
     "web-ui": {
       "resourceRoot": "src/web-ui/src/locales",
-      "loading": "namespace-lazy"
+      "loading": "eager-namespaces"
     },
     "mobile-web": {
       "resourceRoot": "src/mobile-web/src/i18n",
@@ -48,7 +48,7 @@
       "loading": "surface-minimal"
     },
     "core": {
-      "resourceRoot": "src/crates/core/src/locales",
+      "resourceRoot": "src/crates/core/locales",
       "loading": "backend-service"
     }
   },

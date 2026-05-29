@@ -7,9 +7,11 @@
 export {
   DEFAULT_LANGUAGE,
   MOBILE_LOCALES,
+  getMobileFallbackChain,
   getMobileLanguageShortName,
   getNextMobileLanguage,
   isMobileLanguage,
   resolveMobileLanguage,
+  SHARED_TERMS_BY_LOCALE,
 } from './generatedLocaleContract';
 export type { MobileLanguage } from './generatedLocaleContract';

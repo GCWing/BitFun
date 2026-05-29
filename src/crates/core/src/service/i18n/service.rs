@@ -10,7 +10,8 @@ use std::sync::{Arc, LazyLock};
 use tokio::sync::RwLock;
 use unic_langid::LanguageIdentifier;
 
-use super::locale_registry::LOCALE_REGISTRY;
+use super::generated_locale_contract::generated_shared_term;
+use super::locale_registry::LOCALE_RESOURCE_REGISTRY;
 use super::types::{FluentValue, LocaleId, LocaleMetadata, TranslationArgs};
 use crate::service::config::ConfigService;
 use crate::util::errors::*;
@@ -101,8 +102,8 @@ impl I18nService {
     async fn load_all_bundles(&self) -> BitFunResult<()> {
         let mut bundles = self.bundles.write().await;
 
-        for locale in LOCALE_REGISTRY {
-            if let Some(bundle) = Self::create_bundle(locale.code, locale.fluent_source) {
+        for locale in LOCALE_RESOURCE_REGISTRY {
+            if let Some(bundle) = Self::create_bundle(locale.id.as_str(), locale.fluent_source) {
                 bundles.insert(locale.id, bundle);
             }
         }
@@ -168,14 +169,12 @@ impl I18nService {
     ) -> String {
         let bundles = self.bundles.read().await;
 
-        if let Some(bundle) = bundles.get(locale) {
-            if let Some(result) = Self::format_message(bundle, key, args.as_ref()) {
+        for candidate in std::iter::once(*locale).chain(locale.content_fallbacks().iter().copied())
+        {
+            if let Some(result) = Self::format_shared_term(candidate, key) {
                 return result;
             }
-        }
-
-        if locale != &LocaleId::EnUS {
-            if let Some(bundle) = bundles.get(&LocaleId::EnUS) {
+            if let Some(bundle) = bundles.get(&candidate) {
                 if let Some(result) = Self::format_message(bundle, key, args.as_ref()) {
                     return result;
                 }
@@ -183,6 +182,11 @@ impl I18nService {
         }
 
         key.to_string()
+    }
+
+    fn format_shared_term(locale: LocaleId, key: &str) -> Option<String> {
+        let shared_key = key.strip_prefix("shared.")?;
+        generated_shared_term(locale, shared_key).map(str::to_string)
     }
 
     /// Formats a message.
@@ -242,6 +246,37 @@ impl I18nService {
 impl Default for I18nService {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn translate_resolves_generated_shared_terms() {
+        let service = I18nService::new();
+        service.initialize().await.unwrap();
+
+        assert_eq!(
+            service
+                .translate_with_locale(&LocaleId::EnUS, "shared.features.deepReview", None)
+                .await,
+            "Deep Review"
+        );
+    }
+
+    #[tokio::test]
+    async fn translate_returns_key_when_shared_term_and_fluent_message_are_missing() {
+        let service = I18nService::new();
+        service.initialize().await.unwrap();
+
+        assert_eq!(
+            service
+                .translate_with_locale(&LocaleId::EnUS, "shared.features.notReal", None)
+                .await,
+            "shared.features.notReal"
+        );
     }
 }
 

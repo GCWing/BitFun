@@ -18,7 +18,9 @@ import {
   DEFAULT_FALLBACK_LOCALE,
   DEFAULT_NAMESPACE,
   ALL_NAMESPACES,
+  getLocaleFallbackChain,
   isLocaleSupported,
+  SHARED_TERMS_BY_LOCALE,
 } from '../presets';
 import { useI18nStore } from '../store/i18nStore';
 import { i18nAPI } from '@/infrastructure/api/service-api/I18nAPI';
@@ -37,7 +39,7 @@ const localeModules = import.meta.glob('../../../locales/**/*.json', {
 }) as Record<string, Record<string, unknown>>;
 
 function buildResources(): Resource {
-  return Object.entries(localeModules).reduce<Resource>((acc, [modulePath, messages]) => {
+  const resources = Object.entries(localeModules).reduce<Resource>((acc, [modulePath, messages]) => {
     const match = modulePath.match(/locales\/([^/]+)\/(.+)\.json$/);
     if (!match) return acc;
 
@@ -48,6 +50,15 @@ function buildResources(): Resource {
     };
     return acc;
   }, {});
+
+  for (const [locale, sharedTerms] of Object.entries(SHARED_TERMS_BY_LOCALE)) {
+    resources[locale] = {
+      ...(resources[locale] ?? {}),
+      shared: sharedTerms,
+    };
+  }
+
+  return resources;
 }
 
 const resourcesResult = measureSync(() => buildResources());
@@ -78,8 +89,11 @@ export class I18nService {
       .init({
         resources,
         lng: DEFAULT_LOCALE,
-        fallbackLng: DEFAULT_FALLBACK_LOCALE,
+        fallbackLng: (code) => getLocaleFallbackChain(code ?? DEFAULT_FALLBACK_LOCALE),
         defaultNS: DEFAULT_NAMESPACE,
+        // Shared terms are an explicit namespace, not a global fallback. Product
+        // surfaces should opt in with local-first fallback keys when needed.
+        fallbackNS: false,
         ns: [...ALL_NAMESPACES],
         interpolation: {
           escapeValue: false,

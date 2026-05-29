@@ -1,13 +1,14 @@
-import { DEFAULT_LANGUAGE, type MobileLanguage } from './localeRegistry';
+import { DEFAULT_LANGUAGE, SHARED_TERMS_BY_LOCALE, type MobileLanguage } from './localeRegistry';
 
 export { DEFAULT_LANGUAGE };
 export type { MobileLanguage };
 
 type MessageLeaf = string;
-type MessageTree = { [key: string]: MessageLeaf | MessageTree };
+type MessageTree = { readonly [key: string]: MessageLeaf | MessageTree };
 
 export const messages: Record<MobileLanguage, MessageTree> = {
   'en-US': {
+    shared: SHARED_TERMS_BY_LOCALE['en-US'],
     common: {
       appName: 'BitFun Remote',
       back: 'Back',
@@ -188,6 +189,7 @@ export const messages: Record<MobileLanguage, MessageTree> = {
     },
   },
   'zh-CN': {
+    shared: SHARED_TERMS_BY_LOCALE['zh-CN'],
     common: {
       appName: 'BitFun Remote',
       back: '返回',
@@ -369,6 +371,7 @@ export const messages: Record<MobileLanguage, MessageTree> = {
     },
   },
   'zh-TW': {
+    shared: SHARED_TERMS_BY_LOCALE['zh-TW'],
     common: {
       appName: 'BitFun Remote',
       back: '返回',

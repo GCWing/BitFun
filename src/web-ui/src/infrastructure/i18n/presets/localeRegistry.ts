@@ -14,5 +14,6 @@ export {
   getSupportedLocaleIds,
   isLocaleSupported,
   resolveLocaleId,
+  SHARED_TERMS_BY_LOCALE,
 } from './generatedLocaleContract';
 export type { LocaleId, LocaleMetadata } from './generatedLocaleContract';
