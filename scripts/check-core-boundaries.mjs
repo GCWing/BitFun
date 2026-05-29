@@ -737,6 +737,113 @@ const forbiddenContentRules = [
         message:
           'core scheduler must not redefine DialogSubmitOutcome; use bitfun-runtime-ports',
       },
+      {
+        regex: /\bstruct\s+AgentSessionReplyRoute\b/,
+        message:
+          'core scheduler must not redefine AgentSessionReplyRoute; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\benum\s+DialogSteerOutcome\b/,
+        message:
+          'core scheduler must not redefine DialogSteerOutcome; use bitfun-runtime-ports',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/round_preempt.rs',
+    patterns: [
+      {
+        regex: /\btrait\s+DialogRoundPreemptSource\b/,
+        message:
+          'core round preempt runtime must not redefine DialogRoundPreemptSource; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\bstruct\s+RoundInjection\b/,
+        message:
+          'core round preempt runtime must not redefine RoundInjection; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\btrait\s+DialogRoundInjectionSource\b/,
+        message:
+          'core round preempt runtime must not redefine DialogRoundInjectionSource; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\benum\s+RoundInjectionKind\b/,
+        message:
+          'core round preempt runtime must not redefine RoundInjectionKind; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\benum\s+RoundInjectionTarget\b/,
+        message:
+          'core round preempt runtime must not redefine RoundInjectionTarget; use bitfun-runtime-ports',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/goal_mode/types.rs',
+    patterns: [
+      {
+        regex: /\bconst\s+GOAL_MODE_METADATA_KEY\b/,
+        message: 'core goal mode types must not redefine GOAL_MODE_METADATA_KEY; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\bconst\s+MAX_GOAL_CONTINUATIONS\b/,
+        message: 'core goal mode types must not redefine MAX_GOAL_CONTINUATIONS; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\bconst\s+MAX_CONTEXT_SUMMARY_CHARS\b/,
+        message: 'core goal mode types must not redefine MAX_CONTEXT_SUMMARY_CHARS; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\bstruct\s+GoalModeInitialGoal\b/,
+        message: 'core goal mode types must not redefine GoalModeInitialGoal; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\bstruct\s+GoalModeState\b/,
+        message: 'core goal mode types must not redefine GoalModeState; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\bstruct\s+GoalGenerationResult\b/,
+        message: 'core goal mode types must not redefine GoalGenerationResult; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\bstruct\s+GoalVerificationResult\b/,
+        message: 'core goal mode types must not redefine GoalVerificationResult; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\bstruct\s+GoalActivationResult\b/,
+        message: 'core goal mode types must not redefine GoalActivationResult; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\bstruct\s+GoalContinuationPlan\b/,
+        message: 'core goal mode types must not redefine GoalContinuationPlan; use bitfun-runtime-ports',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/core/message.rs',
+    patterns: [
+      {
+        regex: /\bstruct\s+CompressionContract\b/,
+        message: 'core message model must not redefine CompressionContract; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\bstruct\s+CompressionContractItem\b/,
+        message: 'core message model must not redefine CompressionContractItem; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\bfn\s+render_contract_items\b/,
+        message: 'core message model must not own compression contract rendering; use bitfun-runtime-ports',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/workspace/manager.rs',
+    patterns: [
+      {
+        regex: /\bstruct\s+RelatedPath\b/,
+        message: 'core workspace manager must not redefine RelatedPath; use bitfun-runtime-ports',
+      },
     ],
   },
   {
@@ -2258,6 +2365,102 @@ const requiredContentRules = [
         message: 'missing dialog submit outcome regression',
       },
       {
+        regex: /\bpub struct AgentSessionReplyRoute\b/,
+        message: 'missing agent session reply route contract',
+      },
+      {
+        regex: /\bagent_session_reply_route_keeps_requester_fields\b/,
+        message: 'missing agent session reply route regression',
+      },
+      {
+        regex: /\bpub enum DialogSteerOutcome\b/,
+        message: 'missing dialog steer outcome contract',
+      },
+      {
+        regex: /\bdialog_steer_outcome_preserves_buffered_fields\b/,
+        message: 'missing dialog steer outcome regression',
+      },
+      {
+        regex: /\bpub enum RoundInjectionKind\b/,
+        message: 'missing round injection kind contract',
+      },
+      {
+        regex: /\bpub enum RoundInjectionTarget\b/,
+        message: 'missing round injection target contract',
+      },
+      {
+        regex: /\bpub struct RoundInjection\b/,
+        message: 'missing round injection message contract',
+      },
+      {
+        regex: /\bpub trait DialogRoundPreemptSource\b/,
+        message: 'missing dialog round preempt source contract',
+      },
+      {
+        regex: /\bpub trait DialogRoundInjectionSource\b/,
+        message: 'missing dialog round injection source contract',
+      },
+      {
+        regex: /\bround_injection_contract_keeps_kind_and_target_identity\b/,
+        message: 'missing round injection contract regression',
+      },
+      {
+        regex: /\bround_injection_source_contract_drains_portable_injections\b/,
+        message: 'missing round injection source contract regression',
+      },
+      {
+        regex: /\bpub struct GoalModeInitialGoal\b/,
+        message: 'missing goal mode initial goal contract',
+      },
+      {
+        regex: /\bpub struct GoalModeState\b/,
+        message: 'missing goal mode state contract',
+      },
+      {
+        regex: /\bpub struct GoalGenerationResult\b/,
+        message: 'missing goal generation result contract',
+      },
+      {
+        regex: /\bpub struct GoalVerificationResult\b/,
+        message: 'missing goal verification result contract',
+      },
+      {
+        regex: /\bpub struct GoalActivationResult\b/,
+        message: 'missing goal activation result contract',
+      },
+      {
+        regex: /\bpub struct GoalContinuationPlan\b/,
+        message: 'missing goal continuation plan contract',
+      },
+      {
+        regex: /\bgoal_mode_state_requires_active_non_empty_goal\b/,
+        message: 'missing goal mode state contract regression',
+      },
+      {
+        regex: /\bgoal_verification_result_serializes_current_wire_shape\b/,
+        message: 'missing goal verification wire-shape regression',
+      },
+      {
+        regex: /\bpub struct CompressionContract\b/,
+        message: 'missing compression contract',
+      },
+      {
+        regex: /\bpub struct CompressionContractItem\b/,
+        message: 'missing compression contract item',
+      },
+      {
+        regex: /\bcompression_contract_renders_model_visible_fields\b/,
+        message: 'missing compression contract rendering regression',
+      },
+      {
+        regex: /\bpub struct RelatedPath\b/,
+        message: 'missing related path request-context contract',
+      },
+      {
+        regex: /\brelated_path_serializes_as_request_context_fact\b/,
+        message: 'missing related path serialization regression',
+      },
+      {
         regex: /\bpub struct DelegationPolicy\b/,
         message: 'missing delegation policy contract',
       },
@@ -2721,8 +2924,62 @@ const requiredContentRules = [
     patterns: [
       {
         regex:
-          /pub use bitfun_runtime_ports::\{DialogQueuePriority, DialogSubmissionPolicy, DialogSubmitOutcome\};/,
+          /pub use bitfun_runtime_ports::\{[\s\S]*AgentSessionReplyRoute[\s\S]*DialogQueuePriority[\s\S]*DialogSteerOutcome[\s\S]*DialogSubmissionPolicy[\s\S]*DialogSubmitOutcome[\s\S]*\};/,
         message: 'missing dialog submission policy compatibility re-export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/round_preempt.rs',
+    reason:
+      'core round preempt runtime must preserve legacy injection import path while runtime-ports owns portable injection contracts',
+    patterns: [
+      {
+        regex:
+          /pub use bitfun_runtime_ports::\{[\s\S]*DialogRoundInjectionSource[\s\S]*DialogRoundPreemptSource[\s\S]*RoundInjection[\s\S]*RoundInjectionKind[\s\S]*RoundInjectionTarget[\s\S]*\};/,
+        message: 'missing round injection compatibility re-export',
+      },
+      {
+        regex: /\bpub struct SessionRoundInjectionBuffer\b/,
+        message: 'round injection buffer must remain core-owned until concrete runtime migration',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/goal_mode/types.rs',
+    reason:
+      'core goal mode types must preserve legacy import path while runtime-ports owns portable goal contracts',
+    patterns: [
+      {
+        regex:
+          /pub use bitfun_runtime_ports::\{[\s\S]*GoalActivationResult[\s\S]*GoalContinuationPlan[\s\S]*GoalGenerationResult[\s\S]*GoalModeInitialGoal[\s\S]*GoalModeState[\s\S]*GoalVerificationResult[\s\S]*GOAL_MODE_METADATA_KEY[\s\S]*MAX_CONTEXT_SUMMARY_CHARS[\s\S]*MAX_GOAL_CONTINUATIONS[\s\S]*\};/,
+        message: 'missing goal mode compatibility re-export',
+      },
+      {
+        regex: /\bpub const GOAL_MODE_FUNC_AGENT\b/,
+        message: 'goal mode function-agent marker must remain core-owned',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/core/message.rs',
+    reason:
+      'core message model must preserve legacy compression contract import path while runtime-ports owns portable compaction facts',
+    patterns: [
+      {
+        regex: /pub use bitfun_runtime_ports::\{CompressionContract, CompressionContractItem\};/,
+        message: 'missing compression contract compatibility re-export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/workspace/manager.rs',
+    reason:
+      'core workspace manager must preserve legacy related-path import path while runtime-ports owns portable request-context facts',
+    patterns: [
+      {
+        regex: /pub use bitfun_runtime_ports::RelatedPath;/,
+        message: 'missing related path compatibility re-export',
       },
     ],
   },
@@ -6144,10 +6401,85 @@ function runManifestParserSelfTest() {
   const coreSchedulerRuleText = coreSchedulerRule.patterns
     .map((pattern) => pattern.regex.source)
     .join('\n');
-  for (const contract of ['DialogQueuePriority', 'DialogSubmissionPolicy', 'DialogSubmitOutcome']) {
+  for (const contract of [
+    'DialogQueuePriority',
+    'DialogSubmissionPolicy',
+    'DialogSubmitOutcome',
+    'AgentSessionReplyRoute',
+    'DialogSteerOutcome',
+  ]) {
     if (!coreSchedulerRuleText.includes(contract)) {
       throw new Error(`core scheduler boundary rule must forbid contract: ${contract}`);
     }
+  }
+  const coreRoundPreemptRule = forbiddenContentRules.find(
+    (rule) => rule.path === 'src/crates/core/src/agentic/round_preempt.rs',
+  );
+  if (!coreRoundPreemptRule) {
+    throw new Error('missing core round preempt boundary rule');
+  }
+  const coreRoundPreemptRuleText = coreRoundPreemptRule.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n');
+  for (const contract of [
+    'DialogRoundPreemptSource',
+    'RoundInjection',
+    'DialogRoundInjectionSource',
+    'RoundInjectionKind',
+    'RoundInjectionTarget',
+  ]) {
+    if (!coreRoundPreemptRuleText.includes(contract)) {
+      throw new Error(`core round preempt boundary rule must forbid contract: ${contract}`);
+    }
+  }
+  const coreGoalModeTypesRule = forbiddenContentRules.find(
+    (rule) => rule.path === 'src/crates/core/src/agentic/goal_mode/types.rs',
+  );
+  if (!coreGoalModeTypesRule) {
+    throw new Error('missing core goal mode types boundary rule');
+  }
+  const coreGoalModeTypesRuleText = coreGoalModeTypesRule.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n');
+  for (const contract of [
+    'GoalModeState',
+    'GoalModeInitialGoal',
+    'GoalGenerationResult',
+    'GoalVerificationResult',
+    'GoalActivationResult',
+    'GoalContinuationPlan',
+  ]) {
+    if (!coreGoalModeTypesRuleText.includes(contract)) {
+      throw new Error(`core goal mode types boundary rule must forbid contract: ${contract}`);
+    }
+  }
+  const coreMessageRule = forbiddenContentRules.find(
+    (rule) => rule.path === 'src/crates/core/src/agentic/core/message.rs',
+  );
+  if (!coreMessageRule) {
+    throw new Error('missing core message boundary rule');
+  }
+  const coreMessageRuleText = coreMessageRule.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n');
+  for (const contract of ['CompressionContract', 'CompressionContractItem']) {
+    if (!coreMessageRuleText.includes(contract)) {
+      throw new Error(`core message boundary rule must forbid contract: ${contract}`);
+    }
+  }
+  const coreWorkspaceRule = forbiddenContentRules.find(
+    (rule) => rule.path === 'src/crates/core/src/service/workspace/manager.rs',
+  );
+  if (!coreWorkspaceRule) {
+    throw new Error('missing core workspace manager boundary rule');
+  }
+  if (
+    !coreWorkspaceRule.patterns
+      .map((pattern) => pattern.regex.source)
+      .join('\n')
+      .includes('RelatedPath')
+  ) {
+    throw new Error('core workspace manager boundary rule must forbid contract: RelatedPath');
   }
   const coreSubagentRuntimeOwnerPathRule = forbiddenContentUnderRules.find(
     (rule) => rule.path === 'src/crates/core/src',
@@ -6322,6 +6654,30 @@ function runManifestParserSelfTest() {
         'dialog_submission_policy_preserves_current_surface_queue_defaults',
         'DialogSubmitOutcome',
         'dialog_submit_outcome_preserves_started_and_queued_fields',
+        'AgentSessionReplyRoute',
+        'agent_session_reply_route_keeps_requester_fields',
+        'DialogSteerOutcome',
+        'dialog_steer_outcome_preserves_buffered_fields',
+        'RoundInjectionKind',
+        'RoundInjectionTarget',
+        'RoundInjection',
+        'DialogRoundPreemptSource',
+        'DialogRoundInjectionSource',
+        'round_injection_contract_keeps_kind_and_target_identity',
+        'round_injection_source_contract_drains_portable_injections',
+        'GoalModeState',
+        'GoalModeInitialGoal',
+        'GoalGenerationResult',
+        'GoalVerificationResult',
+        'GoalActivationResult',
+        'GoalContinuationPlan',
+        'goal_mode_state_requires_active_non_empty_goal',
+        'goal_verification_result_serializes_current_wire_shape',
+        'CompressionContract',
+        'CompressionContractItem',
+        'compression_contract_renders_model_visible_fields',
+        'RelatedPath',
+        'related_path_serializes_as_request_context_fact',
         'DelegationPolicy',
         'SubagentContextMode',
         'delegation_policy_child_blocks_recursive_spawn_without_losing_depth',
@@ -6492,7 +6848,46 @@ function runManifestParserSelfTest() {
     },
     {
       path: 'src/crates/core/src/agentic/coordination/scheduler.rs',
-      contracts: ['DialogQueuePriority', 'DialogSubmissionPolicy', 'DialogSubmitOutcome'],
+      contracts: [
+        'AgentSessionReplyRoute',
+        'DialogQueuePriority',
+        'DialogSteerOutcome',
+        'DialogSubmissionPolicy',
+        'DialogSubmitOutcome',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/agentic/round_preempt.rs',
+      contracts: [
+        'bitfun_runtime_ports',
+        'DialogRoundInjectionSource',
+        'DialogRoundPreemptSource',
+        'RoundInjection',
+        'RoundInjectionKind',
+        'RoundInjectionTarget',
+        'SessionRoundInjectionBuffer',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/agentic/goal_mode/types.rs',
+      contracts: [
+        'bitfun_runtime_ports',
+        'GoalActivationResult',
+        'GoalContinuationPlan',
+        'GoalGenerationResult',
+        'GoalModeInitialGoal',
+        'GoalModeState',
+        'GoalVerificationResult',
+        'GOAL_MODE_FUNC_AGENT',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/agentic/core/message.rs',
+      contracts: ['bitfun_runtime_ports', 'CompressionContract', 'CompressionContractItem'],
+    },
+    {
+      path: 'src/crates/core/src/service/workspace/manager.rs',
+      contracts: ['bitfun_runtime_ports', 'RelatedPath'],
     },
     {
       path: 'src/crates/core/src/service_agent_runtime.rs',

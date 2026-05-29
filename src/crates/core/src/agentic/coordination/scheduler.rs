@@ -32,13 +32,10 @@ use uuid::Uuid;
 
 const MAX_QUEUE_DEPTH: usize = 20;
 
-pub use bitfun_runtime_ports::{DialogQueuePriority, DialogSubmissionPolicy, DialogSubmitOutcome};
-
-#[derive(Debug, Clone)]
-pub struct AgentSessionReplyRoute {
-    pub source_session_id: String,
-    pub source_workspace_path: String,
-}
+pub use bitfun_runtime_ports::{
+    AgentSessionReplyRoute, DialogQueuePriority, DialogSteerOutcome, DialogSubmissionPolicy,
+    DialogSubmitOutcome,
+};
 
 #[derive(Debug, Clone)]
 struct ActiveTurn {
@@ -119,18 +116,6 @@ pub struct DialogScheduler {
     /// Per-session FIFO buffer of round injections drained at round boundaries
     /// by the engine and injected into the running dialog turn.
     round_injection_buffer: Arc<SessionRoundInjectionBuffer>,
-}
-
-/// Outcome of [`DialogScheduler::submit_steering`].
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum DialogSteerOutcome {
-    /// Steering message was buffered for the running turn. The engine will pick it up
-    /// at the next model-round boundary.
-    Buffered {
-        session_id: String,
-        turn_id: String,
-        steering_id: String,
-    },
 }
 
 impl DialogScheduler {

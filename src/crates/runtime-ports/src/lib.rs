@@ -151,6 +151,279 @@ pub enum DialogSubmitOutcome {
     Queued { session_id: String, turn_id: String },
 }
 
+/// Source session route used when an agent-session request should reply to the
+/// requester after the target session finishes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentSessionReplyRoute {
+    pub source_session_id: String,
+    pub source_workspace_path: String,
+}
+
+/// Outcome for steering a message into an already-running dialog turn.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DialogSteerOutcome {
+    /// Steering was buffered for the running turn and will be consumed at the
+    /// next model-round boundary.
+    Buffered {
+        session_id: String,
+        turn_id: String,
+        steering_id: String,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RoundInjectionKind {
+    UserSteering,
+    BackgroundResult,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RoundInjectionTarget {
+    /// Only inject into the exact targeted running turn.
+    ExactTurn(String),
+    /// Inject into whichever turn is currently running for the session.
+    CurrentRunningTurn,
+}
+
+/// A message to inject into the currently running dialog turn at the next
+/// model-round boundary.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoundInjection {
+    pub id: String,
+    pub kind: RoundInjectionKind,
+    pub target: RoundInjectionTarget,
+    pub content: String,
+    pub display_content: String,
+    pub created_at: std::time::SystemTime,
+}
+
+/// Observes whether the current dialog turn should end after the latest model
+/// round so a queued user message can start as a new turn.
+pub trait DialogRoundPreemptSource: Send + Sync {
+    fn should_yield_after_round(&self, session_id: &str) -> bool;
+    fn clear_yield_after_round(&self, session_id: &str);
+}
+
+/// Observes round-boundary injections for a given running turn.
+pub trait DialogRoundInjectionSource: Send + Sync {
+    fn has_pending(&self, session_id: &str, turn_id: &str) -> bool;
+    fn take_pending(&self, session_id: &str, turn_id: &str) -> Vec<RoundInjection>;
+}
+
+pub const GOAL_MODE_METADATA_KEY: &str = "goal_mode";
+pub const MAX_GOAL_CONTINUATIONS: u32 = 100;
+pub const MAX_CONTEXT_SUMMARY_CHARS: usize = 12_000;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GoalModeInitialGoal {
+    pub goal_text: String,
+    #[serde(default)]
+    pub success_criteria: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_hint: Option<String>,
+    #[serde(default)]
+    pub created_at_ms: u64,
+}
+
+impl Default for GoalModeInitialGoal {
+    fn default() -> Self {
+        Self {
+            goal_text: String::new(),
+            success_criteria: Vec::new(),
+            user_hint: None,
+            created_at_ms: 0,
+        }
+    }
+}
+
+impl GoalModeInitialGoal {
+    pub fn new(
+        goal_text: String,
+        success_criteria: Vec<String>,
+        user_hint: Option<String>,
+        created_at_ms: u64,
+    ) -> Self {
+        Self {
+            goal_text,
+            success_criteria,
+            user_hint,
+            created_at_ms,
+        }
+    }
+
+    pub fn is_set(&self) -> bool {
+        !self.goal_text.trim().is_empty()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GoalModeState {
+    pub active: bool,
+    #[serde(default)]
+    pub initial_goal: GoalModeInitialGoal,
+    pub goal_text: String,
+    #[serde(default)]
+    pub success_criteria: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_hint: Option<String>,
+    #[serde(default)]
+    pub activated_at_ms: u64,
+    #[serde(default)]
+    pub continuation_count: u32,
+}
+
+impl GoalModeState {
+    pub fn is_active(&self) -> bool {
+        self.active && !self.initial_goal_text().trim().is_empty()
+    }
+
+    pub fn initial_goal_text(&self) -> &str {
+        if self.initial_goal.is_set() {
+            self.initial_goal.goal_text.as_str()
+        } else {
+            self.goal_text.as_str()
+        }
+    }
+
+    pub fn initial_success_criteria(&self) -> &[String] {
+        if self.initial_goal.is_set() {
+            self.initial_goal.success_criteria.as_slice()
+        } else {
+            self.success_criteria.as_slice()
+        }
+    }
+
+    pub fn initial_user_hint(&self) -> Option<&str> {
+        self.initial_goal
+            .user_hint
+            .as_deref()
+            .or(self.user_hint.as_deref())
+    }
+
+    pub fn initial_goal_created_at_ms(&self) -> u64 {
+        if self.initial_goal.is_set() {
+            self.initial_goal.created_at_ms
+        } else {
+            self.activated_at_ms
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GoalGenerationResult {
+    pub goal_text: String,
+    #[serde(default)]
+    pub success_criteria: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct GoalVerificationResult {
+    pub achieved: bool,
+    #[serde(default)]
+    pub confidence: f32,
+    #[serde(default)]
+    pub gaps: Vec<String>,
+    #[serde(default)]
+    pub guidance: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GoalActivationResult {
+    pub goal_text: String,
+    pub success_criteria: Vec<String>,
+    pub kickoff_message: String,
+    pub display_message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GoalContinuationPlan {
+    pub wrapped_message: String,
+    pub display_message: String,
+    pub user_message_metadata: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CompressionContract {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub touched_files: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub verification_commands: Vec<CompressionContractItem>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub blocking_failures: Vec<CompressionContractItem>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub subagent_statuses: Vec<CompressionContractItem>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CompressionContractItem {
+    pub target: String,
+    pub status: String,
+    pub summary: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_kind: Option<String>,
+}
+
+impl CompressionContract {
+    pub fn is_empty(&self) -> bool {
+        self.touched_files.is_empty()
+            && self.verification_commands.is_empty()
+            && self.blocking_failures.is_empty()
+            && self.subagent_statuses.is_empty()
+    }
+
+    pub fn render_for_model(&self) -> String {
+        let mut lines = vec![
+            "Compaction contract: preserve these factual fields when continuing the task."
+                .to_string(),
+        ];
+
+        if !self.touched_files.is_empty() {
+            lines.push("Touched files:".to_string());
+            for file in &self.touched_files {
+                lines.push(format!("- {}", file));
+            }
+        }
+
+        render_contract_items(
+            &mut lines,
+            "Verification commands:",
+            &self.verification_commands,
+        );
+        render_contract_items(&mut lines, "Blocking failures:", &self.blocking_failures);
+        render_contract_items(&mut lines, "Subagent statuses:", &self.subagent_statuses);
+
+        lines.join("\n")
+    }
+}
+
+fn render_contract_items(lines: &mut Vec<String>, title: &str, items: &[CompressionContractItem]) {
+    if items.is_empty() {
+        return;
+    }
+
+    lines.push(title.to_string());
+    for item in items {
+        let mut rendered = format!("- {} [{}]: {}", item.target, item.status, item.summary);
+        if let Some(error_kind) = item.error_kind.as_ref() {
+            rendered.push_str(&format!(" ({})", error_kind));
+        }
+        lines.push(rendered);
+    }
+}
+
+/// User-managed related directory reference for request-context prompts.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RelatedPath {
+    pub path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentInputAttachment {
@@ -500,6 +773,190 @@ mod tests {
             }
         );
         assert_ne!(started, queued);
+    }
+
+    #[test]
+    fn agent_session_reply_route_keeps_requester_fields() {
+        let route = AgentSessionReplyRoute {
+            source_session_id: "requester_session".to_string(),
+            source_workspace_path: "D:\\workspace\\requester".to_string(),
+        };
+
+        assert_eq!(route.source_session_id, "requester_session");
+        assert_eq!(route.source_workspace_path, "D:\\workspace\\requester");
+    }
+
+    #[test]
+    fn dialog_steer_outcome_preserves_buffered_fields() {
+        let outcome = DialogSteerOutcome::Buffered {
+            session_id: "session_1".to_string(),
+            turn_id: "turn_1".to_string(),
+            steering_id: "steer_1".to_string(),
+        };
+
+        assert_eq!(
+            outcome,
+            DialogSteerOutcome::Buffered {
+                session_id: "session_1".to_string(),
+                turn_id: "turn_1".to_string(),
+                steering_id: "steer_1".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn round_injection_contract_keeps_kind_and_target_identity() {
+        assert_eq!(
+            RoundInjectionKind::UserSteering,
+            RoundInjectionKind::UserSteering
+        );
+        assert_ne!(
+            RoundInjectionKind::UserSteering,
+            RoundInjectionKind::BackgroundResult
+        );
+
+        let target = RoundInjectionTarget::ExactTurn("turn_1".to_string());
+        assert_eq!(
+            target,
+            RoundInjectionTarget::ExactTurn("turn_1".to_string())
+        );
+        assert_ne!(target, RoundInjectionTarget::CurrentRunningTurn);
+    }
+
+    #[test]
+    fn round_injection_source_contract_drains_portable_injections() {
+        struct StaticInjectionSource {
+            injection: RoundInjection,
+        }
+
+        impl DialogRoundInjectionSource for StaticInjectionSource {
+            fn has_pending(&self, session_id: &str, turn_id: &str) -> bool {
+                session_id == "session_1" && turn_id == "turn_1"
+            }
+
+            fn take_pending(&self, session_id: &str, turn_id: &str) -> Vec<RoundInjection> {
+                if self.has_pending(session_id, turn_id) {
+                    vec![self.injection.clone()]
+                } else {
+                    Vec::new()
+                }
+            }
+        }
+
+        let source = StaticInjectionSource {
+            injection: RoundInjection {
+                id: "injection_1".to_string(),
+                kind: RoundInjectionKind::BackgroundResult,
+                target: RoundInjectionTarget::CurrentRunningTurn,
+                content: "result".to_string(),
+                display_content: "result".to_string(),
+                created_at: std::time::SystemTime::UNIX_EPOCH,
+            },
+        };
+
+        assert!(source.has_pending("session_1", "turn_1"));
+        assert!(!source.has_pending("session_2", "turn_1"));
+        let drained = source.take_pending("session_1", "turn_1");
+        assert_eq!(drained.len(), 1);
+        assert_eq!(drained[0].id, "injection_1");
+        assert_eq!(drained[0].kind, RoundInjectionKind::BackgroundResult);
+    }
+
+    #[test]
+    fn goal_mode_state_requires_active_non_empty_goal() {
+        let active = GoalModeState {
+            active: true,
+            initial_goal: GoalModeInitialGoal::new(
+                "Initial HR-C".to_string(),
+                vec!["Initial check".to_string()],
+                Some("preserve main baseline".to_string()),
+                7,
+            ),
+            goal_text: "Ship HR-C".to_string(),
+            success_criteria: vec!["Checks pass".to_string()],
+            user_hint: None,
+            activated_at_ms: 42,
+            continuation_count: 1,
+        };
+        assert!(active.is_active());
+        assert_eq!(active.initial_goal_text(), "Initial HR-C");
+        assert_eq!(
+            active.initial_success_criteria(),
+            &["Initial check".to_string()]
+        );
+        assert_eq!(active.initial_user_hint(), Some("preserve main baseline"));
+        assert_eq!(active.initial_goal_created_at_ms(), 7);
+
+        let empty = GoalModeState {
+            initial_goal: GoalModeInitialGoal::default(),
+            goal_text: "  ".to_string(),
+            ..active
+        };
+        assert!(!empty.is_active());
+    }
+
+    #[test]
+    fn goal_verification_result_serializes_current_wire_shape() {
+        let result = GoalVerificationResult {
+            achieved: false,
+            confidence: 0.7,
+            gaps: vec!["missing docs".to_string()],
+            guidance: "update docs".to_string(),
+        };
+
+        let json = serde_json::to_value(result).expect("serialize goal verification");
+
+        assert_eq!(json["achieved"], false);
+        let confidence = json["confidence"].as_f64().expect("confidence number");
+        assert!((confidence - 0.7).abs() < 0.000_001);
+        assert_eq!(json["gaps"][0], "missing docs");
+        assert_eq!(json["guidance"], "update docs");
+    }
+
+    #[test]
+    fn compression_contract_renders_model_visible_fields() {
+        let contract = CompressionContract {
+            touched_files: vec!["src/lib.rs".to_string()],
+            verification_commands: vec![CompressionContractItem {
+                target: "cargo test -p bitfun-runtime-ports".to_string(),
+                status: "passed".to_string(),
+                summary: "runtime ports contract tests passed".to_string(),
+                error_kind: None,
+            }],
+            blocking_failures: vec![CompressionContractItem {
+                target: "cargo check".to_string(),
+                status: "failed".to_string(),
+                summary: "compile error before migration".to_string(),
+                error_kind: Some("compile".to_string()),
+            }],
+            subagent_statuses: Vec::new(),
+        };
+
+        let rendered = contract.render_for_model();
+
+        assert!(rendered.contains("Compaction contract"));
+        assert!(rendered.contains("Touched files:"));
+        assert!(rendered.contains("- src/lib.rs"));
+        assert!(rendered.contains(
+            "- cargo test -p bitfun-runtime-ports [passed]: runtime ports contract tests passed"
+        ));
+        assert!(
+            rendered.contains("- cargo check [failed]: compile error before migration (compile)")
+        );
+    }
+
+    #[test]
+    fn related_path_serializes_as_request_context_fact() {
+        let related = RelatedPath {
+            path: "D:/workspace/shared".to_string(),
+            description: Some("shared fixtures".to_string()),
+        };
+
+        let json = serde_json::to_value(related).expect("serialize related path");
+
+        assert_eq!(json["path"], "D:/workspace/shared");
+        assert_eq!(json["description"], "shared fixtures");
+        assert!(json.get("related_path").is_none());
     }
 
     #[test]
