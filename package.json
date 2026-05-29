@@ -18,6 +18,8 @@
     "lint:web": "pnpm --dir src/web-ui run lint",
     "lint:web:fix": "pnpm --dir src/web-ui run lint:fix",
     "i18n:audit": "node scripts/i18n-audit.mjs",
+    "check:repo-hygiene": "node scripts/check-repo-hygiene.mjs",
+    "check:github-config": "pnpm --dir src/web-ui exec node ../../scripts/check-github-config.mjs",
     "fmt:rs": "node scripts/format-changed-rust.mjs",
     "prebuild": "pnpm run prebuild:web",
     "prebuild:web": "pnpm run copy-assets --silent && pnpm run generate-all --silent",

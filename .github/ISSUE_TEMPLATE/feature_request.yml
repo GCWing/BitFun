@@ -1,0 +1,71 @@
+name: Feature or product proposal
+description: Suggest a user-facing feature, workflow improvement, or product direction.
+title: "[Feature]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for product ideas, UX improvements, and new workflows. For small bugs, use the bug report form.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / opportunity
+      description: What user problem, workflow gap, or product opportunity should this address?
+      placeholder: Describe the current pain point and who experiences it.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: What should BitFun do differently?
+      placeholder: Describe the desired behavior or workflow.
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Product surface
+      options:
+        - Desktop app
+        - Web UI
+        - Mobile web
+        - Agent runtime / core
+        - AI provider / model adapter
+        - Remote workspace / relay
+        - Installer / packaging
+        - Documentation
+        - Cross-cutting
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: What must be true for this to feel complete?
+      placeholder: |
+        - Users can ...
+        - The UI shows ...
+        - It works when ...
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Optional. Mention other approaches or existing tools/workarounds.
+  - type: textarea
+    id: risks
+    attributes:
+      label: Risks or open questions
+      description: Optional. Include compatibility, privacy, performance, remote workspace, or UX concerns.
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution intent
+      options:
+        - label: I plan to open a PR for this.
+          required: false
+        - label: I can help test or provide feedback.
+          required: false

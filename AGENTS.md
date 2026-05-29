@@ -2,7 +2,7 @@
 
 # AGENTS.md
 
-BitFun is a Rust workspace plus a shared React frontend.
+BitFun is a Rust workspace plus React frontends.
 
 Repository rule: **keep product logic platform-agnostic, then expose it through platform adapters**.
 
@@ -33,6 +33,7 @@ Repository rule: **keep product logic platform-agnostic, then expose it through 
 | CLI | `src/apps/cli` | (use core guide) |
 | Relay server | `src/apps/relay-server` | (use core guide) |
 | Shared frontend | `src/web-ui` | [AGENTS.md](src/web-ui/AGENTS.md) |
+| Mobile web | `src/mobile-web` | [AGENTS.md](src/mobile-web/AGENTS.md) |
 | Installer | `BitFun-Installer` | [AGENTS.md](BitFun-Installer/AGENTS.md) |
 | E2E tests | `tests/e2e` | [AGENTS.md](tests/e2e/AGENTS.md) |
 
@@ -52,6 +53,9 @@ pnpm run cli:dev                   # CLI runtime
 pnpm run fmt:rs                     # format only changed / staged Rust files
 pnpm run lint:web
 pnpm run type-check:web
+pnpm --dir src/mobile-web run type-check
+pnpm run check:repo-hygiene
+pnpm run check:github-config
 cargo check --workspace
 
 # Test
@@ -61,6 +65,7 @@ cargo test --workspace
 # Build
 cargo build -p bitfun-desktop
 pnpm run build:web
+pnpm run build:mobile-web
 
 # Fast builds (for development / CI speed)
 pnpm run desktop:build:fast           # debug build, no bundling
@@ -171,6 +176,7 @@ Session data is stored under `.bitfun/sessions/{session_id}/`.
 | Change type | Minimum verification |
 |---|---|
 | Frontend UI, state, adapters, or locales | `pnpm run lint:web && pnpm run type-check:web && pnpm --dir src/web-ui run test:run` |
+| Mobile web UI, state, pairing, disconnect, or reconnect behavior | `pnpm --dir src/mobile-web run type-check && pnpm run build:mobile-web`; include manual pairing / reconnect verification when behavior changes |
 | Deep Review / Code Review Team behavior | Web UI verification above, plus `cargo test -p bitfun-core deep_review -- --nocapture`; also run the Rust / desktop rows below when backend or Tauri APIs are touched |
 | Shared Rust logic in `core`, `transport`, `api-layer`, or services | `cargo check --workspace && cargo test --workspace` |
 | Desktop integration, Tauri APIs, browser/computer-use, or desktop-only behavior | `cargo check -p bitfun-desktop && cargo test -p bitfun-desktop` |
@@ -183,7 +189,8 @@ Session data is stored under `.bitfun/sessions/{session_id}/`.
 | Feature | Key paths |
 |---|---|
 | Agent modes | `src/crates/core/src/agentic/agents/`, `src/crates/core/src/agentic/agents/prompts/`, `src/web-ui/src/locales/*/scenes/agents.json` |
-| Deep Review / Code Review Team | `src/crates/core/src/agentic/deep_review/`, `src/crates/core/src/agentic/deep_review_policy.rs`, `src/crates/core/src/agentic/agents/deep_review_agent.rs`, `src/crates/core/src/agentic/tools/implementations/{task_tool.rs,code_review_tool.rs}`, `src/web-ui/src/shared/services/review-team/`, `src/web-ui/src/flow_chat/deep-review/`, `src/web-ui/src/app/scenes/agents/components/ReviewTeamPage.tsx` |
+| Deep Review / Code Review Team | `src/crates/core/src/agentic/deep_review/`, `src/crates/core/src/agentic/deep_review_policy.rs`, `src/crates/core/src/agentic/agents/definitions/hidden/deep_review.rs`, `src/crates/core/src/agentic/tools/implementations/{task_tool.rs,code_review_tool.rs}`, `src/web-ui/src/shared/services/review-team/`, `src/web-ui/src/flow_chat/deep-review/`, `src/web-ui/src/app/scenes/agents/components/ReviewTeamPage.tsx` |
+| Mobile web pairing / remote control | `src/mobile-web/src/pages/PairingPage.tsx`, `src/mobile-web/src/pages/SessionListPage.tsx`, `src/mobile-web/src/pages/ChatPage.tsx`, `src/mobile-web/src/services/RemoteSessionManager.ts`, `src/mobile-web/src/services/RelayHttpClient.ts`, `src/mobile-web/src/services/store.ts` |
 | Session usage report (`/usage`) | `src/crates/core/src/service/session_usage/`, `src/web-ui/src/flow_chat/components/usage/`, `src/web-ui/src/locales/*/flow-chat.json` |
 | Tools | `src/crates/core/src/agentic/tools/implementations/`, `src/crates/core/src/agentic/tools/registry.rs` |
 | MCP / LSP / remote | `src/crates/core/src/service/mcp/`, `src/crates/core/src/service/lsp/`, `src/crates/core/src/service/remote_connect/`, `src/crates/core/src/service/remote_ssh/` |

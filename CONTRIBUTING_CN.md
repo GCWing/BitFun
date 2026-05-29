@@ -133,6 +133,7 @@ await api.invoke("your_command", { request: { /* ... */ } });
 
 - 先开 Issue 说明问题或方案，尤其是较大改动，以避免重复与设计冲突
 - 新功能或 UI 变更建议先讨论设计方向，确保符合产品体验
+- 使用 Issue 和 PR 模板；如果某个字段不适用，请写 `N/A`，不要直接删除该部分。
 
 ### PR 标题与描述
 
@@ -149,6 +150,8 @@ UI 改动请附前后对比截图或短录屏，方便快速评审。
 
 如为 AI 辅助产出，请在 PR 中注明并说明测试程度（未测/轻测/已测），便于评审风险。
 
+不要提交临时 AI prompt、本地绝对路径、生成的草稿文件、配对密钥、token、证书或无关产物。PR 应聚焦于本次产品或维护改动。
+
 ### 分支管理
 
 **`main` 分支为默认协作分支，并接受特性 PR。** 本仓库欢迎产品经理、开发者使用 AI 生成代码进行快速验证或提交想法，因此 **所有 PR 请直接提交到 `main` 分支**。
@@ -163,13 +166,16 @@ UI 改动请附前后对比截图或短录屏，方便快速评审。
 
 修改 `/usage` UI 文案时，请同步 `en-US`、`zh-CN`、`zh-TW` 多语言文本。
 
-```bash
-# Rust
-cargo test --workspace
+| 改动类型 | 推荐验证 |
+| --- | --- |
+| 仓库元信息、PR/Issue 模板或 GitHub workflow | `pnpm run check:repo-hygiene && pnpm run check:github-config && git diff --check` |
+| Web UI、状态、适配层或多语言文案 | `pnpm run lint:web && pnpm run type-check:web && pnpm --dir src/web-ui run test:run` |
+| Mobile web UI、配对、重连、断开或聊天流程 | `pnpm --dir src/mobile-web run type-check && pnpm run build:mobile-web` |
+| Rust core、transport、API layer、services 或共享运行时逻辑 | `cargo check --workspace && cargo test --workspace` |
+| 桌面端集成、Tauri API 或桌面端专属行为 | `cargo check -p bitfun-desktop && cargo test -p bitfun-desktop` |
+| E2E 覆盖的行为 | 先构建最近的 app target，再运行最接近的 E2E spec 或 `pnpm run e2e:test:l0` |
 
-# E2E
-pnpm run e2e:test
-```
+Mobile web 配对、重连、断开或聊天流程改动，需要在 PR 中补充手动验证步骤；涉及 UI 变化时，请附截图或短录屏。
 
 如暂时无法运行测试，请在 PR 描述中说明原因，并提供手动验证步骤。
 

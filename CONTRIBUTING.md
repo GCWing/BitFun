@@ -139,6 +139,7 @@ We welcome contributions beyond standard feature or bug-fix PRs. Examples includ
 
 - Open an issue to describe the problem or proposal, especially for larger changes, to avoid duplication and design conflicts
 - For new features or UI changes, discuss the design direction early to ensure it fits the product experience
+- Use the issue and PR templates. If a field does not apply, write "N/A" instead of deleting the section.
 
 ### PR title and description
 
@@ -155,6 +156,8 @@ UI changes should include before/after screenshots or a short recording for fast
 
 If your work is AI-assisted, please note it in the PR and indicate testing level (untested/lightly tested/fully tested) to help reviewers assess risk.
 
+Do not commit transient AI prompts, local absolute paths, generated scratch files, pairing secrets, tokens, certificates, or unrelated artifacts. Keep the PR focused on the intended product or maintenance change.
+
 ### Branch management
 
 **The `main` branch is the default collaboration branch and accepts feature PRs.** Since this repo encourages product managers and developers to use AI-generated code for rapid validation or idea submission, **please open all PRs targeting the `main` branch**.
@@ -169,13 +172,16 @@ Run relevant tests for your change:
 
 For `/usage` UI copy changes, keep `en-US`, `zh-CN`, and `zh-TW` locale strings in sync.
 
-```bash
-# Rust
-cargo test --workspace
+| Change type | Recommended verification |
+| --- | --- |
+| Repository metadata, PR/issue templates, or GitHub workflows | `pnpm run check:repo-hygiene && pnpm run check:github-config && git diff --check` |
+| Web UI, state, adapters, or locale changes | `pnpm run lint:web && pnpm run type-check:web && pnpm --dir src/web-ui run test:run` |
+| Mobile web UI, pairing, reconnect, disconnect, or chat-flow changes | `pnpm --dir src/mobile-web run type-check && pnpm run build:mobile-web` |
+| Rust core, transport, API layer, services, or shared runtime logic | `cargo check --workspace && cargo test --workspace` |
+| Desktop integration, Tauri APIs, or desktop-only behavior | `cargo check -p bitfun-desktop && cargo test -p bitfun-desktop` |
+| E2E-covered behavior | Build the nearest app target, then run the closest E2E spec or `pnpm run e2e:test:l0` |
 
-# E2E
-pnpm run e2e:test
-```
+For mobile-web pairing, reconnect, disconnect, or chat-flow changes, include manual verification steps and screenshots or a short recording when the UI changes.
 
 If you cannot run tests, explain why in the PR and provide manual verification steps.
 

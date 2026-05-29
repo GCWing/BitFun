@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/GCWing/BitFun/security/advisories/new
+    about: Please report security issues privately instead of opening a public issue.
