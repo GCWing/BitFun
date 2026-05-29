@@ -8,6 +8,7 @@ import { I18nProvider, useI18n } from './i18n';
 import { RelayHttpClient } from './services/RelayHttpClient';
 import { RemoteSessionManager } from './services/RemoteSessionManager';
 import { ThemeProvider } from './theme';
+import { useConnectionHealth } from './hooks/useConnectionHealth';
 import { useMobileStore } from './services/store';
 import './styles/index.scss';
 
@@ -40,6 +41,8 @@ const AppContent: React.FC = () => {
   const clientRef = useRef<RelayHttpClient | null>(null);
   const sessionMgrRef = useRef<RemoteSessionManager | null>(null);
   const [sessionMgr, setSessionMgr] = useState<RemoteSessionManager | null>(null);
+
+  useConnectionHealth(sessionMgr);
 
   const [navDir, setNavDir] = useState<NavDirection>(null);
   const [prevPage, setPrevPage] = useState<Page | null>(null);

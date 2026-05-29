@@ -8,10 +8,13 @@ import type {
 } from './RemoteSessionManager';
 
 export type ConnectionStatus = 'idle' | 'pairing' | 'paired' | 'error';
+export type ConnectionHealth = 'unpaired' | 'checking' | 'connected' | 'unreachable';
 
 interface MobileStore {
   connectionStatus: ConnectionStatus;
   setConnectionStatus: (s: ConnectionStatus) => void;
+  connectionHealth: ConnectionHealth;
+  setConnectionHealth: (h: ConnectionHealth) => void;
 
   currentWorkspace: WorkspaceInfo | null;
   setCurrentWorkspace: (w: WorkspaceInfo | null) => void;
@@ -54,6 +57,8 @@ interface MobileStore {
 export const useMobileStore = create<MobileStore>((set, get) => ({
   connectionStatus: 'idle',
   setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
+  connectionHealth: 'unpaired',
+  setConnectionHealth: (connectionHealth) => set({ connectionHealth }),
 
   currentWorkspace: null,
   setCurrentWorkspace: (currentWorkspace) => set({ currentWorkspace }),

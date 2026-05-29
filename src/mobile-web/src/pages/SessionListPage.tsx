@@ -151,6 +151,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
     setCurrentAssistant,
     setPairedDisplayMode,
     authenticatedUserId,
+    connectionHealth,
   } = useMobileStore();
   const { isDark, toggleTheme } = useTheme();
   const [creating, setCreating] = useState(false);
@@ -570,7 +571,10 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
           <div className="session-list__header-copy">
             <h1>{t('common.appName')}</h1>
             {authenticatedUserId && (
-              <span className="session-list__header-user-id">{authenticatedUserId}</span>
+              <span className="session-list__header-user-id">
+                <span className={`session-list__health-dot session-list__health-dot--${connectionHealth}`} title={(() => { switch (connectionHealth) { case 'connected': return t('sessions.connectionConnected'); case 'checking': return t('sessions.connectionChecking'); case 'unreachable': return t('sessions.connectionUnreachable'); default: return t('sessions.connectionUnpaired'); } })()} />
+                {authenticatedUserId}
+              </span>
             )}
           </div>
         </div>
