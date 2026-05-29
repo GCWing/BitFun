@@ -11,22 +11,25 @@ use bitfun_services_integrations::remote_connect::{
     RemoteChatHistoryTextItem, RemoteChatHistoryThinkingItem, RemoteChatHistoryToolCall,
     RemoteChatHistoryToolItem, RemoteChatHistoryTurn, RemoteCommand, RemoteConnectSubmissionSource,
     RemoteDefaultModelsConfig, RemoteDialogQueuePriority, RemoteDialogResolvedSubmission,
-    RemoteDialogRuntimeHost, RemoteDialogSubmissionPolicy, RemoteDialogSubmissionRequest,
-    RemoteDialogSubmitOutcome, RemoteImageContext, RemoteImageContextAdapter, RemoteModelCatalog,
-    RemoteModelConfig, RemoteRecentWorkspaceFacts, RemoteResponse, RemoteSessionMetadata,
-    RemoteSessionStateTracker, RemoteSessionTrackerHost, RemoteSessionTrackerRegistry,
-    RemoteTerminalPrewarmRequest, RemoteToolStatus, RemoteWorkspaceFacts, RemoteWorkspaceFileChunk,
-    RemoteWorkspaceFileContent, RemoteWorkspaceFileInfo, RemoteWorkspaceFileRuntimeHost,
-    RemoteWorkspaceKind, RemoteWorkspaceUpdate, TrackerEvent, build_remote_chat_messages,
-    build_remote_image_attachment, build_remote_image_contexts,
-    build_remote_image_submission_request, build_remote_session_create_request,
-    build_remote_submission_request, cancel_remote_task, handle_remote_workspace_file_command,
-    make_slim_tool_params, normalize_remote_model_selection, normalize_remote_session_model_id,
-    read_remote_workspace_file, read_remote_workspace_file_chunk, read_remote_workspace_file_info,
+    RemoteDialogRuntimeHost, RemoteDialogSchedulerOutcomeFact, RemoteDialogSubmissionPolicy,
+    RemoteDialogSubmissionRequest, RemoteDialogSubmitOutcome, RemoteImageContext,
+    RemoteImageContextAdapter, RemoteModelCapabilityFact, RemoteModelCatalog,
+    RemoteModelCatalogFacts, RemoteModelConfig, RemoteModelFacts, RemoteReasoningModeFact,
+    RemoteRecentWorkspaceFacts, RemoteResponse, RemoteSessionMetadata, RemoteSessionStateTracker,
+    RemoteSessionTrackerHost, RemoteSessionTrackerRegistry, RemoteTerminalPrewarmRequest,
+    RemoteToolStatus, RemoteWorkspaceFacts, RemoteWorkspaceFileChunk, RemoteWorkspaceFileContent,
+    RemoteWorkspaceFileInfo, RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind,
+    RemoteWorkspaceUpdate, TrackerEvent, build_remote_chat_messages, build_remote_image_attachment,
+    build_remote_image_contexts, build_remote_image_submission_request, build_remote_model_catalog,
+    build_remote_session_create_request, build_remote_submission_request, cancel_remote_task,
+    handle_remote_workspace_file_command, make_slim_tool_params, normalize_remote_model_selection,
+    normalize_remote_session_model_id, read_remote_workspace_file,
+    read_remote_workspace_file_chunk, read_remote_workspace_file_info,
     remote_answer_question_response, remote_assistant_list_response,
-    remote_assistant_updated_response, remote_dialog_submit_response, remote_file_chunk_response,
-    remote_file_content_response, remote_file_display_name, remote_file_info_response,
-    remote_initial_sync_response, remote_interaction_accepted_response, remote_messages_response,
+    remote_assistant_updated_response, remote_dialog_submit_outcome_from_scheduler,
+    remote_dialog_submit_response, remote_file_chunk_response, remote_file_content_response,
+    remote_file_display_name, remote_file_info_response, remote_initial_sync_response,
+    remote_interaction_accepted_response, remote_messages_response,
     remote_model_catalog_poll_delta, remote_model_selection_needs_config,
     remote_no_change_poll_response, remote_persisted_poll_response,
     remote_recent_workspaces_response, remote_session_created_response,
@@ -678,6 +681,30 @@ async fn remote_connect_dialog_runtime_preserves_explicit_turn_without_restore()
     assert_eq!(submitted.resolved_agent_type, "Cowork");
     assert_eq!(submitted.turn_id, "turn-bot");
     assert_eq!(submitted.policy.source, RemoteConnectSubmissionSource::Bot);
+}
+
+#[test]
+fn remote_connect_dialog_submit_outcome_builder_preserves_scheduler_shape() {
+    assert_eq!(
+        remote_dialog_submit_outcome_from_scheduler(RemoteDialogSchedulerOutcomeFact::Started {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-1".to_string(),
+        }),
+        RemoteDialogSubmitOutcome::Started {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-1".to_string(),
+        }
+    );
+    assert_eq!(
+        remote_dialog_submit_outcome_from_scheduler(RemoteDialogSchedulerOutcomeFact::Queued {
+            session_id: "session-2".to_string(),
+            turn_id: "turn-2".to_string(),
+        }),
+        RemoteDialogSubmitOutcome::Queued {
+            session_id: "session-2".to_string(),
+            turn_id: "turn-2".to_string(),
+        }
+    );
 }
 
 #[tokio::test]
@@ -1502,6 +1529,57 @@ fn sample_remote_model_catalog(version: u64) -> RemoteModelCatalog {
         },
         session_model_id: Some("model-1".to_string()),
     }
+}
+
+#[test]
+fn remote_connect_model_catalog_builder_preserves_config_shape() {
+    let catalog = build_remote_model_catalog(RemoteModelCatalogFacts {
+        last_modified_ms: -7,
+        models: vec![RemoteModelFacts {
+            id: "model-1".to_string(),
+            name: "Model One".to_string(),
+            provider: "openai".to_string(),
+            base_url: "https://api.example.com".to_string(),
+            model_name: "gpt-test".to_string(),
+            context_window: Some(128_000),
+            enabled: true,
+            capabilities: vec![
+                RemoteModelCapabilityFact::TextChat,
+                RemoteModelCapabilityFact::ImageUnderstanding,
+                RemoteModelCapabilityFact::FunctionCalling,
+            ],
+            enable_thinking_process: true,
+            reasoning_mode: Some(RemoteReasoningModeFact::Adaptive),
+            reasoning_effort: Some("medium".to_string()),
+            thinking_budget_tokens: Some(4096),
+        }],
+        default_models: RemoteDefaultModelsConfig {
+            primary: Some("model-1".to_string()),
+            fast: Some("fast-model".to_string()),
+            search: Some("search-model".to_string()),
+            ..RemoteDefaultModelsConfig::default()
+        },
+        session_model_id: Some("session-model".to_string()),
+    });
+
+    assert_eq!(catalog.version, 0);
+    assert_eq!(catalog.session_model_id.as_deref(), Some("session-model"));
+    assert_eq!(catalog.default_models.fast.as_deref(), Some("fast-model"));
+    let model = catalog.models.first().expect("model config");
+    assert_eq!(model.id, "model-1");
+    assert_eq!(model.context_window, Some(128_000));
+    assert_eq!(
+        model.capabilities,
+        vec![
+            "text_chat".to_string(),
+            "image_understanding".to_string(),
+            "function_calling".to_string(),
+        ]
+    );
+    assert!(model.enable_thinking_process);
+    assert_eq!(model.reasoning_mode.as_deref(), Some("adaptive"));
+    assert_eq!(model.reasoning_effort.as_deref(), Some("medium"));
+    assert_eq!(model.thinking_budget_tokens, Some(4096));
 }
 
 #[derive(Default)]

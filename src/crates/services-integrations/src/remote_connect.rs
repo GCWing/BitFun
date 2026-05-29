@@ -314,6 +314,33 @@ pub enum RemoteDialogSubmitOutcome {
     Queued { session_id: String, turn_id: String },
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RemoteDialogSchedulerOutcomeFact {
+    Started { session_id: String, turn_id: String },
+    Queued { session_id: String, turn_id: String },
+}
+
+pub fn remote_dialog_submit_outcome_from_scheduler(
+    fact: RemoteDialogSchedulerOutcomeFact,
+) -> RemoteDialogSubmitOutcome {
+    match fact {
+        RemoteDialogSchedulerOutcomeFact::Started {
+            session_id,
+            turn_id,
+        } => RemoteDialogSubmitOutcome::Started {
+            session_id,
+            turn_id,
+        },
+        RemoteDialogSchedulerOutcomeFact::Queued {
+            session_id,
+            turn_id,
+        } => RemoteDialogSubmitOutcome::Queued {
+            session_id,
+            turn_id,
+        },
+    }
+}
+
 /// Host callbacks required by remote-connect dialog execution.
 ///
 /// The owner crate keeps the remote dialog orchestration order stable, while
@@ -1015,6 +1042,108 @@ pub struct RemoteModelCatalog {
     pub default_models: RemoteDefaultModelsConfig,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub session_model_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteModelCapabilityFact {
+    TextChat,
+    ImageUnderstanding,
+    ImageGeneration,
+    Embedding,
+    Search,
+    CodeSpecialized,
+    FunctionCalling,
+    SpeechRecognition,
+}
+
+impl RemoteModelCapabilityFact {
+    const fn wire_value(self) -> &'static str {
+        match self {
+            RemoteModelCapabilityFact::TextChat => "text_chat",
+            RemoteModelCapabilityFact::ImageUnderstanding => "image_understanding",
+            RemoteModelCapabilityFact::ImageGeneration => "image_generation",
+            RemoteModelCapabilityFact::Embedding => "embedding",
+            RemoteModelCapabilityFact::Search => "search",
+            RemoteModelCapabilityFact::CodeSpecialized => "code_specialized",
+            RemoteModelCapabilityFact::FunctionCalling => "function_calling",
+            RemoteModelCapabilityFact::SpeechRecognition => "speech_recognition",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteReasoningModeFact {
+    Default,
+    Enabled,
+    Disabled,
+    Adaptive,
+}
+
+impl RemoteReasoningModeFact {
+    const fn wire_value(self) -> &'static str {
+        match self {
+            RemoteReasoningModeFact::Default => "default",
+            RemoteReasoningModeFact::Enabled => "enabled",
+            RemoteReasoningModeFact::Disabled => "disabled",
+            RemoteReasoningModeFact::Adaptive => "adaptive",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteModelFacts {
+    pub id: String,
+    pub name: String,
+    pub provider: String,
+    pub base_url: String,
+    pub model_name: String,
+    pub context_window: Option<u32>,
+    pub enabled: bool,
+    pub capabilities: Vec<RemoteModelCapabilityFact>,
+    pub enable_thinking_process: bool,
+    pub reasoning_mode: Option<RemoteReasoningModeFact>,
+    pub reasoning_effort: Option<String>,
+    pub thinking_budget_tokens: Option<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteModelCatalogFacts {
+    pub last_modified_ms: i64,
+    pub models: Vec<RemoteModelFacts>,
+    pub default_models: RemoteDefaultModelsConfig,
+    pub session_model_id: Option<String>,
+}
+
+pub fn build_remote_model_catalog(facts: RemoteModelCatalogFacts) -> RemoteModelCatalog {
+    RemoteModelCatalog {
+        version: facts.last_modified_ms.max(0) as u64,
+        models: facts
+            .models
+            .into_iter()
+            .map(|model| RemoteModelConfig {
+                id: model.id,
+                name: model.name,
+                provider: model.provider,
+                base_url: model.base_url,
+                model_name: model.model_name,
+                context_window: model.context_window,
+                enabled: model.enabled,
+                capabilities: model
+                    .capabilities
+                    .into_iter()
+                    .map(|capability| capability.wire_value().to_string())
+                    .collect(),
+                enable_thinking_process: model.enable_thinking_process,
+                reasoning_mode: model
+                    .reasoning_mode
+                    .map(|reasoning_mode| reasoning_mode.wire_value().to_string()),
+                reasoning_effort: model.reasoning_effort,
+                thinking_budget_tokens: model.thinking_budget_tokens,
+            })
+            .collect(),
+        default_models: facts.default_models,
+        session_model_id: facts.session_model_id,
+    }
 }
 
 pub fn normalize_remote_session_model_id(model_id: Option<&str>) -> Option<String> {

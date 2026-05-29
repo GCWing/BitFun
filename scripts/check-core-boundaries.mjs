@@ -3009,6 +3009,22 @@ const requiredContentRules = [
         message: 'missing remote model catalog owner adapter',
       },
       {
+        regex: /\bRemoteModelCatalogFacts\b/,
+        message: 'missing remote model catalog fact projection',
+      },
+      {
+        regex: /\bRemoteModelCapabilityFact\b/,
+        message: 'missing remote model capability fact projection',
+      },
+      {
+        regex: /\bRemoteReasoningModeFact\b/,
+        message: 'missing remote reasoning mode fact projection',
+      },
+      {
+        regex: /\bbuild_remote_model_catalog\b/,
+        message: 'missing remote model catalog assembly delegation',
+      },
+      {
         regex: /\bfn update_remote_session_model\b/,
         message: 'missing remote session model update owner adapter',
       },
@@ -3031,6 +3047,14 @@ const requiredContentRules = [
       {
         regex: /\bfn remote_chat_messages_from_turns\b/,
         message: 'missing remote chat history conversion owner adapter',
+      },
+      {
+        regex: /\bRemoteDialogSchedulerOutcomeFact\b/,
+        message: 'missing remote dialog scheduler outcome fact projection',
+      },
+      {
+        regex: /\bremote_dialog_submit_outcome_from_scheduler\b/,
+        message: 'missing remote dialog submit outcome assembly delegation',
       },
       {
         regex: /\bRemoteChatHistoryTurn\b/,
@@ -3364,6 +3388,26 @@ const requiredContentRules = [
         message: 'missing remote model catalog DTO',
       },
       {
+        regex: /\bpub enum RemoteModelCapabilityFact\b/,
+        message: 'missing remote model capability owner fact',
+      },
+      {
+        regex: /\bpub enum RemoteReasoningModeFact\b/,
+        message: 'missing remote reasoning mode owner fact',
+      },
+      {
+        regex: /\bpub struct RemoteModelFacts\b/,
+        message: 'missing remote model owner facts',
+      },
+      {
+        regex: /\bpub struct RemoteModelCatalogFacts\b/,
+        message: 'missing remote model catalog owner facts',
+      },
+      {
+        regex: /\bpub fn build_remote_model_catalog\b/,
+        message: 'missing remote model catalog assembly owner',
+      },
+      {
         regex: /\bpub struct RemoteModelCatalogPollDelta\b/,
         message: 'missing remote model catalog poll delta',
       },
@@ -3382,6 +3426,14 @@ const requiredContentRules = [
       {
         regex: /\bpub enum RemoteCommand\b/,
         message: 'missing remote command wire contract',
+      },
+      {
+        regex: /\bpub enum RemoteDialogSchedulerOutcomeFact\b/,
+        message: 'missing remote dialog scheduler outcome fact',
+      },
+      {
+        regex: /\bpub fn remote_dialog_submit_outcome_from_scheduler\b/,
+        message: 'missing remote dialog submit outcome assembly owner',
       },
       {
         regex: /\bpub enum RemoteResponse\b/,
@@ -3426,6 +3478,10 @@ const requiredContentRules = [
         message: 'missing remote model catalog delta contract test',
       },
       {
+        regex: /\bremote_connect_model_catalog_builder_preserves_config_shape\b/,
+        message: 'missing remote model catalog builder contract test',
+      },
+      {
         regex: /\bremote_connect_model_selection_policy_owns_alias_and_config_reference_rules\b/,
         message: 'missing remote model selection policy contract test',
       },
@@ -3456,6 +3512,10 @@ const requiredContentRules = [
       {
         regex: /\bremote_connect_dialog_runtime_preserves_explicit_turn_without_restore\b/,
         message: 'missing dialog explicit-turn test',
+      },
+      {
+        regex: /\bremote_connect_dialog_submit_outcome_builder_preserves_scheduler_shape\b/,
+        message: 'missing remote dialog outcome builder contract test',
       },
       {
         regex: /\bremote_connect_dialog_runtime_keeps_legacy_restore_failure_tolerance\b/,
@@ -6953,12 +7013,18 @@ function runManifestParserSelfTest() {
         'remote_cancel_host',
         'remote_image_context',
         'load_remote_model_catalog',
+        'RemoteModelCatalogFacts',
+        'RemoteModelCapabilityFact',
+        'RemoteReasoningModeFact',
+        'build_remote_model_catalog',
         'update_remote_session_model',
         'normalize_remote_session_model_id',
         'normalize_remote_session_model_id_contract',
         'normalize_remote_model_selection',
         'normalize_remote_model_selection_contract',
         'remote_chat_messages_from_turns',
+        'RemoteDialogSchedulerOutcomeFact',
+        'remote_dialog_submit_outcome_from_scheduler',
         'RemoteChatHistoryTurn',
         'build_remote_chat_messages',
         'strip_remote_user_input_tags',
@@ -7024,10 +7090,17 @@ function runManifestParserSelfTest() {
         'RemoteDefaultModelsConfig',
         'RemoteModelConfig',
         'RemoteModelCatalog',
+        'RemoteModelCapabilityFact',
+        'RemoteReasoningModeFact',
+        'RemoteModelFacts',
+        'RemoteModelCatalogFacts',
+        'build_remote_model_catalog',
         'RemoteModelCatalogPollDelta',
         'normalize_remote_session_model_id',
         'normalize_remote_model_selection',
         'remote_model_selection_needs_config',
+        'RemoteDialogSchedulerOutcomeFact',
+        'remote_dialog_submit_outcome_from_scheduler',
         'RemoteCommand',
         'RemoteResponse',
         'should_send_remote_model_catalog',
@@ -7043,11 +7116,13 @@ function runManifestParserSelfTest() {
         'remote_connect_command_wire_shape_lives_in_owner_contract',
         'remote_connect_response_wire_shape_lives_in_owner_contract',
         'remote_connect_model_catalog_delta_preserves_poll_invalidation_policy',
+        'remote_connect_model_catalog_builder_preserves_config_shape',
         'remote_connect_model_selection_policy_owns_alias_and_config_reference_rules',
         'remote_connect_poll_helpers_preserve_delta_and_completion_policy',
         'remote_connect_image_context_policy_preserves_legacy_fallback_shape',
         'remote_connect_image_context_policy_prefers_explicit_contexts',
         'remote_connect_cancel_and_restore_policy_preserve_runtime_decisions',
+        'remote_connect_dialog_submit_outcome_builder_preserves_scheduler_shape',
         'remote_chat_history_assembly_preserves_message_shape_and_item_order',
         'remote_chat_history_assembly_skips_in_progress_assistant_history',
         'remote_connect_file_transfer_policy_preserves_limits_and_chunk_ranges',

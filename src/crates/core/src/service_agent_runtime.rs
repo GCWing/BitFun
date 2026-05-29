@@ -15,12 +15,15 @@ use bitfun_services_integrations::remote_connect::{
     RemoteChatHistoryTextItem, RemoteChatHistoryThinkingItem, RemoteChatHistoryToolCall,
     RemoteChatHistoryToolItem, RemoteChatHistoryTurn, RemoteConnectSubmissionSource,
     RemoteDefaultModelsConfig, RemoteDialogQueuePriority, RemoteDialogResolvedSubmission,
-    RemoteDialogRuntimeHost, RemoteDialogSubmissionPolicy, RemoteDialogSubmitOutcome,
-    RemoteImageContext, RemoteImageContextAdapter, RemoteModelCatalog, RemoteModelConfig,
-    RemoteSessionStateTracker, RemoteSessionTrackerHost, RemoteTerminalPrewarmRequest,
-    RemoteWorkspaceFileRuntimeHost, build_remote_chat_messages,
+    RemoteDialogRuntimeHost, RemoteDialogSchedulerOutcomeFact, RemoteDialogSubmissionPolicy,
+    RemoteDialogSubmitOutcome, RemoteImageContext, RemoteImageContextAdapter,
+    RemoteModelCapabilityFact, RemoteModelCatalog, RemoteModelCatalogFacts, RemoteModelFacts,
+    RemoteReasoningModeFact, RemoteSessionStateTracker, RemoteSessionTrackerHost,
+    RemoteTerminalPrewarmRequest, RemoteWorkspaceFileRuntimeHost, build_remote_chat_messages,
+    build_remote_model_catalog,
     normalize_remote_model_selection as normalize_remote_model_selection_contract,
     normalize_remote_session_model_id as normalize_remote_session_model_id_contract,
+    remote_dialog_submit_outcome_from_scheduler,
     remote_model_selection_needs_config as remote_model_selection_needs_config_contract,
 };
 use log::{debug, info};
@@ -63,6 +66,28 @@ fn normalize_remote_model_selection(
 
 fn remote_model_selection_needs_config(requested_model_id: &str) -> bool {
     remote_model_selection_needs_config_contract(requested_model_id)
+}
+
+fn remote_model_capability_fact(capability: ModelCapability) -> RemoteModelCapabilityFact {
+    match capability {
+        ModelCapability::TextChat => RemoteModelCapabilityFact::TextChat,
+        ModelCapability::ImageUnderstanding => RemoteModelCapabilityFact::ImageUnderstanding,
+        ModelCapability::ImageGeneration => RemoteModelCapabilityFact::ImageGeneration,
+        ModelCapability::Embedding => RemoteModelCapabilityFact::Embedding,
+        ModelCapability::Search => RemoteModelCapabilityFact::Search,
+        ModelCapability::CodeSpecialized => RemoteModelCapabilityFact::CodeSpecialized,
+        ModelCapability::FunctionCalling => RemoteModelCapabilityFact::FunctionCalling,
+        ModelCapability::SpeechRecognition => RemoteModelCapabilityFact::SpeechRecognition,
+    }
+}
+
+fn remote_reasoning_mode_fact(reasoning_mode: ReasoningMode) -> RemoteReasoningModeFact {
+    match reasoning_mode {
+        ReasoningMode::Default => RemoteReasoningModeFact::Default,
+        ReasoningMode::Enabled => RemoteReasoningModeFact::Enabled,
+        ReasoningMode::Disabled => RemoteReasoningModeFact::Disabled,
+        ReasoningMode::Adaptive => RemoteReasoningModeFact::Adaptive,
+    }
 }
 
 /// Compress a base64 data-URL image to a small thumbnail for mobile display.
@@ -260,6 +285,27 @@ fn core_dialog_submission_policy(policy: RemoteDialogSubmissionPolicy) -> Dialog
     )
 }
 
+fn remote_dialog_scheduler_outcome_fact(
+    outcome: DialogSubmitOutcome,
+) -> RemoteDialogSchedulerOutcomeFact {
+    match outcome {
+        DialogSubmitOutcome::Started {
+            session_id,
+            turn_id,
+        } => RemoteDialogSchedulerOutcomeFact::Started {
+            session_id,
+            turn_id,
+        },
+        DialogSubmitOutcome::Queued {
+            session_id,
+            turn_id,
+        } => RemoteDialogSchedulerOutcomeFact::Queued {
+            session_id,
+            turn_id,
+        },
+    }
+}
+
 impl RemoteImageContextAdapter for ImageContextData {
     fn from_remote_image_context(context: RemoteImageContext) -> Self {
         Self {
@@ -341,13 +387,13 @@ impl CoreServiceAgentRuntime {
             .map_err(|e| format!("Failed to load global config: {e}"))?;
         let ai_config: AIConfig = global_config.ai;
 
-        let models: Vec<RemoteModelConfig> = ai_config
+        let models: Vec<RemoteModelFacts> = ai_config
             .models
             .into_iter()
             .map(|model| {
                 let reasoning_mode = model.effective_reasoning_mode();
 
-                RemoteModelConfig {
+                RemoteModelFacts {
                     id: model.id,
                     name: model.name,
                     provider: model.provider,
@@ -358,30 +404,10 @@ impl CoreServiceAgentRuntime {
                     capabilities: model
                         .capabilities
                         .into_iter()
-                        .map(|capability| {
-                            match capability {
-                                ModelCapability::TextChat => "text_chat",
-                                ModelCapability::ImageUnderstanding => "image_understanding",
-                                ModelCapability::ImageGeneration => "image_generation",
-                                ModelCapability::Embedding => "embedding",
-                                ModelCapability::Search => "search",
-                                ModelCapability::CodeSpecialized => "code_specialized",
-                                ModelCapability::FunctionCalling => "function_calling",
-                                ModelCapability::SpeechRecognition => "speech_recognition",
-                            }
-                            .to_string()
-                        })
+                        .map(remote_model_capability_fact)
                         .collect(),
                     enable_thinking_process: model.enable_thinking_process,
-                    reasoning_mode: Some(
-                        match reasoning_mode {
-                            ReasoningMode::Default => "default",
-                            ReasoningMode::Enabled => "enabled",
-                            ReasoningMode::Disabled => "disabled",
-                            ReasoningMode::Adaptive => "adaptive",
-                        }
-                        .to_string(),
-                    ),
+                    reasoning_mode: Some(remote_reasoning_mode_fact(reasoning_mode)),
                     reasoning_effort: model.reasoning_effort,
                     thinking_budget_tokens: model.thinking_budget_tokens,
                 }
@@ -393,8 +419,8 @@ impl CoreServiceAgentRuntime {
         } else {
             None
         };
-        Ok(RemoteModelCatalog {
-            version: global_config.last_modified.timestamp_millis().max(0) as u64,
+        Ok(build_remote_model_catalog(RemoteModelCatalogFacts {
+            last_modified_ms: global_config.last_modified.timestamp_millis(),
             models,
             default_models: RemoteDefaultModelsConfig {
                 primary: ai_config.default_models.primary,
@@ -405,7 +431,7 @@ impl CoreServiceAgentRuntime {
                 speech_recognition: ai_config.default_models.speech_recognition,
             },
             session_model_id,
-        })
+        }))
     }
 
     pub(crate) async fn update_remote_session_model(
@@ -663,22 +689,8 @@ impl RemoteDialogRuntimeHost for CoreRemoteDialogRuntimeHost<'_> {
                 image_payload,
             )
             .await
-            .map(|outcome| match outcome {
-                DialogSubmitOutcome::Started {
-                    session_id,
-                    turn_id,
-                } => RemoteDialogSubmitOutcome::Started {
-                    session_id,
-                    turn_id,
-                },
-                DialogSubmitOutcome::Queued {
-                    session_id,
-                    turn_id,
-                } => RemoteDialogSubmitOutcome::Queued {
-                    session_id,
-                    turn_id,
-                },
-            })
+            .map(remote_dialog_scheduler_outcome_fact)
+            .map(remote_dialog_submit_outcome_from_scheduler)
     }
 }
 
