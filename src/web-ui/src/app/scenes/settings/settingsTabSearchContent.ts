@@ -45,6 +45,14 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
     { ns: 'settings/ai-model', key: 'proxy.enableHint' },
   ],
 
+  'archived-sessions': [
+    { ns: 'common', key: 'nav.sessions.archivedSessions' },
+    { ns: 'common', key: 'nav.sessions.noArchivedSessions' },
+    { ns: 'common', key: 'nav.sessions.restore' },
+    { ns: 'common', key: 'nav.sessions.deleteArchived' },
+    { ns: 'common', key: 'nav.sessions.deleteAllArchived' },
+  ],
+
   'session-personalization': [
     { ns: 'settings/session-config', key: 'personalizationPage.title' },
     { ns: 'settings/session-config', key: 'personalizationPage.subtitle' },

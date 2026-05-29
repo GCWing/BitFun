@@ -103,6 +103,8 @@ jobs:
       NODE_OPTIONS: --max-old-space-size=6144
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -112,14 +114,29 @@ jobs:
           node-version: 20
           cache: pnpm
 
+      - name: Check repository hygiene
+        run: pnpm run check:repo-hygiene
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Validate GitHub config
+        run: pnpm run check:github-config
 
       - name: Lint web UI
         run: pnpm run lint:web
 
+      - name: Run web UI tests
+        run: pnpm --dir src/web-ui run test:run
+
       - name: Build web UI
         run: pnpm run build:web
+
+      - name: Type-check mobile web
+        run: pnpm --dir src/mobile-web run type-check
+
+      - name: Build mobile web
+        run: pnpm run build:mobile-web
 
       - name: Upload frontend build artifacts
         uses: actions/upload-artifact@v4

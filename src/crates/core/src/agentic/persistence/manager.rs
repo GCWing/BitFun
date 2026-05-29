@@ -56,6 +56,11 @@ struct StoredSessionStateFile {
     // on persisted dialog turns via `DialogTurnData.agent_type`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     last_user_dialog_agent_type: Option<String>,
+    // Session-level prompt-cache guard state. This records the most recent user
+    // submission accepted by the scheduler and intentionally does not rewind on
+    // history rollback.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    last_submitted_agent_type: Option<String>,
     compression_state: CompressionState,
     runtime_state: SessionState,
 }
@@ -867,6 +872,8 @@ impl PersistenceManager {
             session_id: session.session_id.clone(),
             session_name: session.session_name.clone(),
             agent_type: session.agent_type.clone(),
+            last_user_dialog_agent_type: session.last_user_dialog_agent_type.clone(),
+            last_submitted_agent_type: session.last_submitted_agent_type.clone(),
             created_by: session
                 .created_by
                 .clone()
@@ -1934,6 +1941,7 @@ impl PersistenceManager {
             config: session.config.clone(),
             snapshot_session_id: session.snapshot_session_id.clone(),
             last_user_dialog_agent_type: session.last_user_dialog_agent_type.clone(),
+            last_submitted_agent_type: session.last_submitted_agent_type.clone(),
             compression_state: session.compression_state.clone(),
             runtime_state: Self::sanitize_runtime_state(&session.state),
         };
@@ -2005,7 +2013,12 @@ impl PersistenceManager {
             agent_type: metadata.agent_type.clone(),
             last_user_dialog_agent_type: stored_state
                 .as_ref()
-                .and_then(|value| value.last_user_dialog_agent_type.clone()),
+                .and_then(|value| value.last_user_dialog_agent_type.clone())
+                .or_else(|| metadata.last_user_dialog_agent_type.clone()),
+            last_submitted_agent_type: stored_state
+                .as_ref()
+                .and_then(|value| value.last_submitted_agent_type.clone())
+                .or_else(|| metadata.last_submitted_agent_type.clone()),
             created_by: metadata.created_by.clone(),
             kind: metadata.session_kind,
             snapshot_session_id: stored_state
@@ -2042,6 +2055,7 @@ impl PersistenceManager {
                 },
                 snapshot_session_id: None,
                 last_user_dialog_agent_type: None,
+                last_submitted_agent_type: None,
                 compression_state: CompressionState::default(),
                 runtime_state: SessionState::Idle,
             });
@@ -2085,6 +2099,8 @@ impl PersistenceManager {
                 session_id: metadata.session_id,
                 session_name: metadata.session_name,
                 agent_type: metadata.agent_type,
+                last_user_dialog_agent_type: metadata.last_user_dialog_agent_type,
+                last_submitted_agent_type: metadata.last_submitted_agent_type,
                 created_by: metadata.created_by,
                 kind: metadata.session_kind,
                 turn_count: metadata.turn_count,

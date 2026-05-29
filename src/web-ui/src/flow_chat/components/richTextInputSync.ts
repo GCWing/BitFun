@@ -9,7 +9,9 @@ export function getRichTextExternalSyncAction(
   }
 
   if (!value) {
-    return currentContent ? 'clear' : 'noop';
+    // Always clear when value is empty so residual <br> nodes left by the browser
+    // after deleting the last character are removed, allowing :empty::before to show.
+    return 'clear';
   }
 
   return 'replace';

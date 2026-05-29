@@ -9,10 +9,10 @@ use super::types::{
     FileConflictAction, ImportedDocument, ProjectContextConfig,
 };
 use crate::agentic::coordination::{get_global_coordinator, SubagentExecutionRequest};
-use crate::agentic::subagent_runtime::{DelegationPolicy, SubagentContextMode};
 use crate::agentic::tools::pipeline::SubagentParentInfo;
 use crate::service::bootstrap::ensure_workspace_gitignore_ignores_bitfun;
 use crate::util::errors::{BitFunError, BitFunResult};
+use bitfun_runtime_ports::{DelegationPolicy, SubagentContextMode};
 use log::{debug, warn};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};

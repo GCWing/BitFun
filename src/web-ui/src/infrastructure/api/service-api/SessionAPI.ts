@@ -337,6 +337,95 @@ export class SessionAPI {
       });
     }
   }
+
+  async archiveSession(
+    sessionId: string,
+    workspacePath: string,
+    remoteConnectionId?: string,
+    remoteSshHost?: string
+  ): Promise<void> {
+    try {
+      await api.invoke('archive_session', {
+        request: {
+          session_id: sessionId,
+          workspace_path: workspacePath,
+          ...remoteSessionFields(remoteConnectionId, remoteSshHost),
+        }
+      });
+    } catch (error) {
+      throw createTauriCommandError('archive_session', error, { sessionId, workspacePath });
+    }
+  }
+
+  async unarchiveSession(
+    sessionId: string,
+    workspacePath: string,
+    remoteConnectionId?: string,
+    remoteSshHost?: string
+  ): Promise<void> {
+    try {
+      await api.invoke('unarchive_session', {
+        request: {
+          session_id: sessionId,
+          workspace_path: workspacePath,
+          ...remoteSessionFields(remoteConnectionId, remoteSshHost),
+        }
+      });
+    } catch (error) {
+      throw createTauriCommandError('unarchive_session', error, { sessionId, workspacePath });
+    }
+  }
+
+  async archiveAllSessions(
+    workspacePath: string,
+    remoteConnectionId?: string,
+    remoteSshHost?: string
+  ): Promise<number> {
+    try {
+      return await api.invoke('archive_all_sessions', {
+        request: {
+          workspace_path: workspacePath,
+          ...remoteSessionFields(remoteConnectionId, remoteSshHost),
+        }
+      });
+    } catch (error) {
+      throw createTauriCommandError('archive_all_sessions', error, { workspacePath });
+    }
+  }
+
+  async listArchivedSessions(
+    workspacePath: string,
+    remoteConnectionId?: string,
+    remoteSshHost?: string
+  ): Promise<SessionMetadata[]> {
+    try {
+      return await api.invoke('list_archived_sessions', {
+        request: {
+          workspace_path: workspacePath,
+          ...remoteSessionFields(remoteConnectionId, remoteSshHost),
+        }
+      });
+    } catch (error) {
+      throw createTauriCommandError('list_archived_sessions', error, { workspacePath });
+    }
+  }
+
+  async deleteAllArchivedSessions(
+    workspacePath: string,
+    remoteConnectionId?: string,
+    remoteSshHost?: string
+  ): Promise<number> {
+    try {
+      return await api.invoke('delete_all_archived_sessions', {
+        request: {
+          workspace_path: workspacePath,
+          ...remoteSessionFields(remoteConnectionId, remoteSshHost),
+        }
+      });
+    } catch (error) {
+      throw createTauriCommandError('delete_all_archived_sessions', error, { workspacePath });
+    }
+  }
 }
 
 export const sessionAPI = new SessionAPI();

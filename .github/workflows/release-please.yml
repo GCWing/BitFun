@@ -69,10 +69,27 @@ jobs:
           echo "Current version: ${{ steps.detect.outputs.current_version }}"
           echo "Tag: ${{ steps.detect.outputs.tag_name }}"
 
-      - name: Create GitHub release
+      - name: Create release tag
         if: steps.detect.outputs.should_release == 'true'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.detect.outputs.tag_name }}
-          target_commitish: ${{ github.sha }}
-          generate_release_notes: true
+        shell: bash
+        env:
+          TAG_NAME: ${{ steps.detect.outputs.tag_name }}
+        run: |
+          set -euo pipefail
+
+          git tag "${TAG_NAME}" "${GITHUB_SHA}"
+          git push origin "refs/tags/${TAG_NAME}"
+
+      - name: Trigger desktop package
+        if: steps.detect.outputs.should_release == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ steps.detect.outputs.tag_name }}
+        run: |
+          set -euo pipefail
+
+          gh workflow run desktop-package.yml \
+            --ref "${GITHUB_REF_NAME}" \
+            -f "tag_name=${TAG_NAME}" \
+            -f "upload_to_release=true"

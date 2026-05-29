@@ -160,6 +160,7 @@ pub struct RuntimeLoggingInfo {
     pub ai_log_path: String,
     pub flashgrep_log_path: String,
     pub webview_log_path: String,
+    pub previous_unexpected_exit: Option<crate::crash_diagnostics::UnexpectedExitInfo>,
 }
 
 pub fn get_runtime_logging_info() -> RuntimeLoggingInfo {
@@ -179,6 +180,7 @@ pub fn get_runtime_logging_info() -> RuntimeLoggingInfo {
             .join("webview.log")
             .to_string_lossy()
             .to_string(),
+        previous_unexpected_exit: crate::crash_diagnostics::previous_unexpected_exit(),
     }
 }
 

@@ -298,6 +298,12 @@ impl PathManager {
         self.project_root(workspace_path).join("config")
     }
 
+    /// Get project agent profiles file: {project}/.bitfun/config/agent_profiles.json
+    pub fn project_agent_profiles_file(&self, workspace_path: &Path) -> PathBuf {
+        self.project_internal_config_dir(workspace_path)
+            .join("agent_profiles.json")
+    }
+
     /// Get project mode skills file: {project}/.bitfun/config/mode_skills.json
     pub fn project_mode_skills_file(&self, workspace_path: &Path) -> PathBuf {
         self.project_internal_config_dir(workspace_path)

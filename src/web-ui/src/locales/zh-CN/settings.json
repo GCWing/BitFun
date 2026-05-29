@@ -19,7 +19,8 @@
       "acpAgents": "opencode、Claude Code、Codex 等外部 ACP Agent。",
       "editor": "编辑器字体、显示与格式化。",
       "lsp": "语言服务与代码智能。",
-      "keyboard": "快捷键与键位。"
+      "keyboard": "快捷键与键位。",
+      "archivedSessions": "查看、恢复或永久删除已归档的会话。"
     },
     "categories": {
       "general": "通用",
@@ -40,7 +41,8 @@
       "agents": "智能体",
       "editor": "编辑器",
       "lsp": "语言服务",
-      "keyboard": "快捷键"
+      "keyboard": "快捷键",
+      "archivedSessions": "已归档会话"
     }
   },
   "general": {

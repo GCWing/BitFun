@@ -9,7 +9,7 @@ use crate::agentic::agents::registry::types::{
 use crate::agentic::agents::registry::visibility::{
     BuiltinSubagentExposure, SubagentVisibilityPolicy,
 };
-use crate::agentic::agents::{Agent, UserContextPolicy};
+use crate::agentic::agents::{resolve_mode_config_profile_id, Agent, UserContextPolicy};
 use crate::service::config::types::AgentSubagentOverrideState;
 use async_trait::async_trait;
 use std::collections::HashMap;
@@ -115,7 +115,7 @@ async fn computer_use_is_builtin_subagent_not_mode() {
 
 #[test]
 fn non_deep_review_builtin_subagents_default_to_primary() {
-    for agent_type in ["Explore", "FileFinder", "CodeReview", "GenerateDoc", "Init"] {
+    for agent_type in ["Explore", "FileFinder", "CodeReview", "GenerateDoc"] {
         assert_eq!(
             default_model_id_for_builtin_agent(agent_type),
             "primary",
@@ -443,7 +443,10 @@ async fn parent_subagent_overrides_follow_source_scopes() {
         AgentSubagentOverrideState::Disabled,
     );
     let mut project_overrides = HashMap::new();
-    project_overrides.insert("agentic".to_string(), project_parent_map);
+    project_overrides.insert(
+        resolve_mode_config_profile_id("agentic").into_owned(),
+        project_parent_map,
+    );
 
     let mut user_parent_map = HashMap::new();
     user_parent_map.insert(
@@ -453,7 +456,10 @@ async fn parent_subagent_overrides_follow_source_scopes() {
     user_parent_map.insert(user_override_key, AgentSubagentOverrideState::Disabled);
     user_parent_map.insert(builtin_override_key, AgentSubagentOverrideState::Disabled);
     let mut user_overrides = HashMap::new();
-    user_overrides.insert("agentic".to_string(), user_parent_map);
+    user_overrides.insert(
+        resolve_mode_config_profile_id("agentic").into_owned(),
+        user_parent_map,
+    );
 
     let visible = {
         use crate::agentic::agents::registry::availability::resolve_availability;

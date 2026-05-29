@@ -21,14 +21,13 @@ use crate::agentic::goal_mode::{
     effective_subagent_timeout_seconds, ensure_final_response_in_goal_context,
     generate_goal_from_context, goal_mode_from_custom_metadata, goal_mode_patch, now_ms,
     should_skip_goal_verification_for_turn, user_facing_goal_mode_error, verify_goal_achievement,
-    wrap_user_input_with_goal_reminder, GoalActivationResult, GoalContinuationPlan, GoalModeState,
-    MAX_GOAL_CONTINUATIONS,
+    wrap_user_input_with_goal_reminder, GoalActivationResult, GoalContinuationPlan,
+    GoalModeInitialGoal, GoalModeState, MAX_GOAL_CONTINUATIONS,
 };
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::round_preempt::{DialogRoundInjectionSource, DialogRoundPreemptSource};
 use crate::agentic::session::SessionManager;
 use crate::agentic::side_question::build_btw_user_input;
-use crate::agentic::subagent_runtime::{DelegationPolicy, SubagentContextMode};
 use crate::agentic::tools::pipeline::{SubagentParentInfo, ToolPipeline};
 use crate::agentic::tools::ToolRuntimeRestrictions;
 use crate::agentic::WorkspaceBinding;
@@ -42,6 +41,7 @@ use crate::service::workspace::{
     get_global_workspace_service, WorkspaceCreateOptions, WorkspaceKind,
 };
 use crate::util::errors::{BitFunError, BitFunResult};
+use bitfun_runtime_ports::{DelegationPolicy, SubagentContextMode};
 use dashmap::DashMap;
 use log::{debug, error, info, warn};
 use std::collections::{HashMap, HashSet};
@@ -203,16 +203,7 @@ struct HiddenSubagentExecutionRequest {
     prompt_cache_source_session_id: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DialogTriggerSource {
-    DesktopUi,
-    DesktopApi,
-    AgentSession,
-    ScheduledJob,
-    RemoteRelay,
-    Bot,
-    Cli,
-}
+pub use bitfun_runtime_ports::DialogTriggerSource;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AssistantBootstrapSkipReason {
@@ -1266,6 +1257,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 session_id: session_id.to_string(),
                 session_name: "Recovered Session".to_string(),
                 agent_type: "agentic".to_string(),
+                last_user_dialog_agent_type: None,
+                last_submitted_agent_type: None,
                 created_by: None,
                 session_kind: SessionKind::Standard,
                 model_name: "default".to_string(),
@@ -1400,7 +1393,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             }
         }
 
-        (crate::service::session::TurnStatus::Completed, final_response)
+        (
+            crate::service::session::TurnStatus::Completed,
+            final_response,
+        )
     }
 
     async fn persist_cancelled_dialog_turn(
@@ -1410,7 +1406,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         session_id: &str,
         turn_id: &str,
     ) -> crate::service::session::TurnStatus {
-        info!("Dialog turn cancelled: session={}, turn={}", session_id, turn_id);
+        info!(
+            "Dialog turn cancelled: session={}, turn={}",
+            session_id, turn_id
+        );
 
         // The execution engine only emits DialogTurnCancelled when cancellation is
         // detected between rounds. If cancellation interrupted streaming mid-round,
@@ -1431,7 +1430,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             );
         }
 
-        if let Err(error) = session_manager.cancel_dialog_turn(session_id, turn_id).await {
+        if let Err(error) = session_manager
+            .cancel_dialog_turn(session_id, turn_id)
+            .await
+        {
             error!(
                 "Failed to cancel dialog turn in persistence: session_id={}, turn_id={}, error={}",
                 session_id, turn_id, error
@@ -1914,13 +1916,20 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .await
             .map_err(user_facing_goal_mode_error)?;
         let activation = build_goal_kickoff_messages(&generation, trimmed_hint);
+        let activated_at_ms = now_ms();
 
         let state = GoalModeState {
             active: true,
+            initial_goal: GoalModeInitialGoal::new(
+                activation.goal_text.clone(),
+                activation.success_criteria.clone(),
+                trimmed_hint.map(str::to_string),
+                activated_at_ms,
+            ),
             goal_text: activation.goal_text.clone(),
             success_criteria: activation.success_criteria.clone(),
             user_hint: trimmed_hint.map(str::to_string),
-            activated_at_ms: now_ms(),
+            activated_at_ms,
             continuation_count: 0,
         };
 
@@ -1936,14 +1945,14 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         Ok(activation)
     }
 
-    /// Verify the active session goal after a dialog turn completes.
+    /// Verify the active session goal after a dialog turn stops.
     pub async fn prepare_goal_continuation_after_turn(
         &self,
         session_id: &str,
         source_turn_id: &str,
         user_input: &str,
         user_message_metadata: Option<&serde_json::Value>,
-        final_response: &str,
+        turn_observation: &str,
     ) -> BitFunResult<Option<GoalContinuationPlan>> {
         if should_skip_goal_verification_for_turn(user_input, user_message_metadata) {
             return Ok(None);
@@ -1991,8 +2000,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .session_manager
             .get_context_messages(session_id)
             .await?;
-        let context_messages =
-            ensure_final_response_in_goal_context(context_messages, final_response, source_turn_id);
+        let context_messages = ensure_final_response_in_goal_context(
+            context_messages,
+            turn_observation,
+            source_turn_id,
+        );
         let verification = match verify_goal_achievement(&goal_state, &context_messages).await {
             Ok(result) => result,
             Err(error) => {
@@ -2821,19 +2833,17 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 )
                 .await
             {
-                Ok(execution_result) => {
-                    Some(
-                        Self::persist_completed_dialog_turn(
-                            session_manager.as_ref(),
-                            scheduler_notify_tx.as_ref(),
-                            &session_id_clone,
-                            &turn_id_clone,
-                            &execution_result,
-                        )
-                        .await
-                        .0,
+                Ok(execution_result) => Some(
+                    Self::persist_completed_dialog_turn(
+                        session_manager.as_ref(),
+                        scheduler_notify_tx.as_ref(),
+                        &session_id_clone,
+                        &turn_id_clone,
+                        &execution_result,
                     )
-                }
+                    .await
+                    .0,
+                ),
                 Err(e) => {
                     if matches!(&e, BitFunError::Cancelled(_)) {
                         Some(
@@ -4250,14 +4260,16 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
 
         // Persist turn lifecycle before cleaning up the hidden subagent runtime.
         let (workspace_turn_status, response_text) = match result {
-            Ok(exec_result) => Self::persist_completed_dialog_turn(
-                self.session_manager.as_ref(),
-                None,
-                &session_id,
-                &dialog_turn_id,
-                &exec_result,
-            )
-            .await,
+            Ok(exec_result) => {
+                Self::persist_completed_dialog_turn(
+                    self.session_manager.as_ref(),
+                    None,
+                    &session_id,
+                    &dialog_turn_id,
+                    &exec_result,
+                )
+                .await
+            }
             Err(e) => {
                 let turn_status = if matches!(&e, BitFunError::Cancelled(_)) {
                     Self::persist_cancelled_dialog_turn(
@@ -4845,6 +4857,19 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .await
     }
 
+    /// Update the session-level prompt-cache guard mode for the latest
+    /// scheduler-accepted user submission.
+    pub async fn update_last_submitted_agent_type(
+        &self,
+        session_id: &str,
+        agent_type: &str,
+    ) -> BitFunResult<()> {
+        let normalized = Self::normalize_agent_type(agent_type);
+        self.session_manager
+            .update_last_submitted_agent_type(session_id, &normalized)
+            .await
+    }
+
     /// Emit event
     async fn emit_event(&self, event: AgenticEvent) {
         let _ = self
@@ -5022,28 +5047,7 @@ impl bitfun_runtime_ports::AgentSubmissionPort for ConversationCoordinator {
 
         let turn_id = resolve_agent_submission_turn_id(&request);
 
-        let trigger_source = match request
-            .source
-            .unwrap_or(bitfun_runtime_ports::AgentSubmissionSource::Bot)
-        {
-            bitfun_runtime_ports::AgentSubmissionSource::DesktopUi => {
-                DialogTriggerSource::DesktopUi
-            }
-            bitfun_runtime_ports::AgentSubmissionSource::DesktopApi => {
-                DialogTriggerSource::DesktopApi
-            }
-            bitfun_runtime_ports::AgentSubmissionSource::AgentSession => {
-                DialogTriggerSource::AgentSession
-            }
-            bitfun_runtime_ports::AgentSubmissionSource::ScheduledJob => {
-                DialogTriggerSource::ScheduledJob
-            }
-            bitfun_runtime_ports::AgentSubmissionSource::RemoteRelay => {
-                DialogTriggerSource::RemoteRelay
-            }
-            bitfun_runtime_ports::AgentSubmissionSource::Bot => DialogTriggerSource::Bot,
-            bitfun_runtime_ports::AgentSubmissionSource::Cli => DialogTriggerSource::Cli,
-        };
+        let trigger_source = request.source.unwrap_or(DialogTriggerSource::Bot);
         let user_message_metadata = if request.metadata.is_empty() {
             None
         } else {

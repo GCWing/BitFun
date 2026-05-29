@@ -50,7 +50,7 @@ const NurseryGallery: React.FC = () => {
         const [allModels, funcModels, modeConf] = await Promise.all([
           configManager.getConfig<AIModelConfig[]>('ai.models').catch(() => [] as AIModelConfig[]),
           configManager.getConfig<Record<string, string>>('ai.func_agent_models').catch(() => ({} as Record<string, string>)),
-          configAPI.getModeConfig('agentic').catch(() => null),
+          configAPI.getAgentProfileConfig('agentic').catch(() => null),
         ]);
         const models = allModels ?? [];
         const fm = funcModels ?? {};

@@ -43,7 +43,23 @@ export interface SessionCustomMetadata extends Record<string, unknown> {
 export interface SessionMetadata {
   sessionId: string;
   sessionName: string;
+  /**
+   * Current/default mode selection for the next dialog turn in this session.
+   * This is not guaranteed to match either the last surviving history turn or
+   * the most recent submission accepted by the runtime.
+   */
   agentType: string;
+  /**
+   * Mode of the last surviving user dialog turn in persisted history.
+   * Rollback and turn truncation update this value.
+   */
+  lastUserDialogAgentType?: string;
+  /**
+   * Mode of the most recent user submission accepted by the runtime.
+   * This is used for prompt-cache guard semantics and does not rewind on
+   * rollback.
+   */
+  lastSubmittedAgentType?: string;
   sessionKind?: PersistedSessionKind;
   modelName: string;
   createdAt: number;
@@ -124,6 +140,11 @@ export interface DialogTurnData {
   sessionId: string;
   timestamp: number;
   kind?: DialogTurnKind;
+  /**
+   * Mode used when this turn was submitted as a user dialog. Local utility
+   * turns may leave this empty.
+   */
+  agentType?: string;
   userMessage: UserMessageData;
   modelRounds: ModelRoundData[];
   startTime: number;

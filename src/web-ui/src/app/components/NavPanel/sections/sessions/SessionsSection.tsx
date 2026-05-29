@@ -7,7 +7,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Pencil, Trash2, Check, X, Bot, Code2, ClipboardList, Panda, MoreHorizontal, Loader2 } from 'lucide-react';
+import { Pencil, Trash2, Check, X, Bot, Code2, ClipboardList, Panda, MoreHorizontal, Loader2, Archive } from 'lucide-react';
 import { IconButton, Input, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { flowChatStore } from '../../../../../flow_chat/store/FlowChatStore';
@@ -37,6 +37,8 @@ import {
   isReviewActivityBlocking,
 } from '@/flow_chat/utils/sessionReviewActivity';
 import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
+import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
+import { confirmWarning } from '@/component-library/components/ConfirmDialog/confirmService';
 import './SessionsSection.scss';
 
 /** Top-level parent sessions shown at each expand step (children still nest under visible parents). */
@@ -413,6 +415,26 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     []
   );
 
+  const handleArchive = useCallback(
+    async (e: React.MouseEvent, sessionId: string) => {
+      e.stopPropagation();
+      const confirmed = await confirmWarning(
+        t('nav.sessions.archiveConfirmTitle'),
+        t('nav.sessions.archiveConfirmMessage')
+      );
+      if (!confirmed) return;
+      try {
+        await sessionAPI.archiveSession(sessionId, workspacePath || '', remoteConnectionId || undefined, remoteSshHost || undefined);
+        // Remove from in-memory state only — do NOT delete from disk
+        flowChatManager.discardLocalSession(sessionId);
+        window.dispatchEvent(new CustomEvent('bitfun:session-archived'));
+      } catch (err) {
+        log.error('Failed to archive session', err);
+      }
+    },
+    [workspacePath, remoteConnectionId, remoteSshHost, t]
+  );
+
   const handleStartEdit = useCallback(
     (e: React.MouseEvent, session: Session) => {
       e.stopPropagation();
@@ -677,6 +699,14 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                       >
                         <Pencil size={13} />
                         <span>{t('nav.sessions.rename')}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="bitfun-nav-panel__inline-item-menu-item"
+                        onClick={e => { setOpenMenuSessionId(null); void handleArchive(e, session.sessionId); }}
+                      >
+                        <Archive size={13} />
+                        <span>{t('nav.sessions.archive')}</span>
                       </button>
                       <button
                         type="button"

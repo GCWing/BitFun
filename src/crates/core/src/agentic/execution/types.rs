@@ -4,11 +4,11 @@ use crate::agentic::core::Message;
 use crate::agentic::round_preempt::{
     DialogRoundInjectionInterrupt, DialogRoundInjectionSource, DialogRoundPreemptSource,
 };
-use crate::agentic::subagent_runtime::DelegationPolicy;
 use crate::agentic::tools::pipeline::SubagentParentInfo;
 use crate::agentic::tools::ToolRuntimeRestrictions;
 use crate::agentic::workspace::WorkspaceServices;
 use crate::agentic::WorkspaceBinding;
+use bitfun_runtime_ports::DelegationPolicy;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;

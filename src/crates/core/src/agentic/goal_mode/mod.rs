@@ -14,13 +14,25 @@ use crate::util::extract_json_from_ai_response;
 use crate::util::sanitize_plain_model_output;
 use crate::util::types::Message as AIMessage;
 use log::warn;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+const GOAL_VERIFICATION_RETRY_BASE_DELAY_MS: u64 = 1_000;
+const GOAL_VERIFICATION_RETRY_MAX_DELAY_MS: u64 = 30_000;
 
 pub fn goal_mode_from_custom_metadata(
     custom_metadata: Option<&serde_json::Value>,
 ) -> Option<GoalModeState> {
     let value = custom_metadata?.get(GOAL_MODE_METADATA_KEY)?;
-    serde_json::from_value(value.clone()).ok()
+    let mut state: GoalModeState = serde_json::from_value(value.clone()).ok()?;
+    if !state.initial_goal.is_set() && !state.goal_text.trim().is_empty() {
+        state.initial_goal = GoalModeInitialGoal::new(
+            state.goal_text.clone(),
+            state.success_criteria.clone(),
+            state.user_hint.clone(),
+            state.activated_at_ms,
+        );
+    }
+    Some(state)
 }
 
 pub fn goal_mode_patch(state: &GoalModeState) -> serde_json::Value {
@@ -115,24 +127,42 @@ pub fn user_facing_goal_mode_error(error: BitFunError) -> BitFunError {
     }
 }
 
-pub fn build_goal_system_reminder(state: &GoalModeState) -> String {
-    let criteria = if state.success_criteria.is_empty() {
+fn format_success_criteria(criteria: &[String]) -> String {
+    if criteria.is_empty() {
         "- Use your best judgment to decide when the goal is fully complete.".to_string()
     } else {
-        state
-            .success_criteria
+        criteria
             .iter()
             .map(|item| format!("- {item}"))
             .collect::<Vec<_>>()
             .join("\n")
-    };
+    }
+}
+
+fn current_goal_note(state: &GoalModeState) -> String {
+    let initial_goal = state.initial_goal_text().trim();
+    let current_goal = state.goal_text.trim();
+    if current_goal.is_empty() || current_goal == initial_goal {
+        String::new()
+    } else {
+        format!(
+            "\nCurrent continuation target: {current_goal}\n\
+Use it only as tactical guidance; the initial session goal remains the source of truth.\n"
+        )
+    }
+}
+
+pub fn build_goal_system_reminder(state: &GoalModeState) -> String {
+    let criteria = format_success_criteria(state.initial_success_criteria());
+    let current_goal_note = current_goal_note(state);
 
     format!(
         "Active session goal mode is ON.\n\
-Goal: {}\n\
+Initial session goal: {}\n\
+{current_goal_note}\
 Success criteria:\n{}\n\
-Keep working toward this goal. Do not declare the task finished until every criterion is truly satisfied.",
-        state.goal_text.trim(),
+Keep working toward the initial session goal. Do not declare the task finished until every criterion is truly satisfied.",
+        state.initial_goal_text().trim(),
         criteria
     )
 }
@@ -200,6 +230,11 @@ pub fn build_goal_continuation_plan(
     state: &GoalModeState,
     verification: &GoalVerificationResult,
 ) -> GoalContinuationPlan {
+    let initial_goal_text = state.initial_goal_text().trim();
+    let initial_success_criteria = state.initial_success_criteria();
+    let initial_user_hint = state.initial_user_hint();
+    let initial_created_at_ms = state.initial_goal_created_at_ms();
+    let current_goal_note = current_goal_note(state);
     let gaps = verification
         .gaps
         .iter()
@@ -213,16 +248,17 @@ pub fn build_goal_continuation_plan(
     let wrapped_message = {
         let mut envelope = PromptEnvelope::new();
         envelope.push_system_reminder(format!(
-            "Goal verification found the active session goal is NOT yet achieved.\n\
-Goal: {}\n\
+            "Goal verification found the initial session goal is NOT yet achieved.\n\
+Initial session goal: {}\n\
+{current_goal_note}\
 Remaining gaps:\n{gaps}\n\
 Next steps:\n{guidance}\n\
-Continue working until the goal is fully satisfied. Do not stop early.",
-            state.goal_text.trim()
+Continue working until the initial session goal is fully satisfied. Do not stop early.",
+            initial_goal_text
         ));
         envelope.push_user_query(format!(
-            "Continue working toward the session goal. Address the remaining gaps and complete the goal before stopping.\n\nGoal: {}",
-            state.goal_text.trim()
+            "Continue working toward the initial session goal. Address the remaining gaps and complete the goal before stopping.\n\nInitial session goal: {}",
+            initial_goal_text
         ));
         envelope.render()
     };
@@ -233,6 +269,12 @@ Continue working until the goal is fully satisfied. Do not stop early.",
         user_message_metadata: serde_json::json!({
             "goalModeContinuation": true,
             "goalText": state.goal_text,
+            "initialGoal": {
+                "goalText": initial_goal_text,
+                "successCriteria": initial_success_criteria,
+                "userHint": initial_user_hint,
+                "createdAtMs": initial_created_at_ms,
+            },
         }),
     }
 }
@@ -295,6 +337,37 @@ async fn call_goal_func_agent_with_context(
         tool_image_attachments: None,
     });
 
+    call_goal_func_agent_messages(messages).await
+}
+
+async fn call_goal_func_agent_with_appended_prompt(
+    context_messages: &[Message],
+    final_user_prompt: String,
+) -> BitFunResult<String> {
+    let messages = build_appended_prompt_ai_messages(context_messages, final_user_prompt);
+    call_goal_func_agent_messages(messages).await
+}
+
+fn build_appended_prompt_ai_messages(
+    context_messages: &[Message],
+    final_user_prompt: String,
+) -> Vec<AIMessage> {
+    let mut messages = build_goal_context_ai_messages(context_messages);
+    messages.push(AIMessage {
+        role: "user".to_string(),
+        content: Some(final_user_prompt),
+        reasoning_content: None,
+        thinking_signature: None,
+        tool_calls: None,
+        tool_call_id: None,
+        name: None,
+        is_error: None,
+        tool_image_attachments: None,
+    });
+    messages
+}
+
+async fn call_goal_func_agent_messages(messages: Vec<AIMessage>) -> BitFunResult<String> {
     let ai_client_factory = crate::infrastructure::ai::get_global_ai_client_factory()
         .await
         .map_err(|error| {
@@ -384,21 +457,76 @@ pub async fn verify_goal_achievement(
     state: &GoalModeState,
     context_messages: &[Message],
 ) -> BitFunResult<GoalVerificationResult> {
-    let criteria = if state.success_criteria.is_empty() {
-        "- Use the goal text itself as the completion standard.".to_string()
+    let mut final_user_prompt = build_goal_verification_user_prompt(state);
+    let mut repair_attempt = 0_u32;
+    let mut retry_count = 0_u32;
+
+    loop {
+        let raw_result =
+            call_goal_func_agent_with_appended_prompt(context_messages, final_user_prompt.clone())
+                .await;
+
+        let error = match raw_result {
+            Ok(raw) => match parse_goal_verification(&raw) {
+                Ok(result) => return Ok(result),
+                Err(BitFunError::Validation(error)) => {
+                    repair_attempt = repair_attempt.saturating_add(1);
+                    warn!(
+                        "Goal verification returned an invalid verdict; requesting repaired verdict: repair_attempt={}, error={}",
+                        repair_attempt, error
+                    );
+                    final_user_prompt =
+                        build_goal_verification_repair_prompt(&raw, &error, repair_attempt);
+                    BitFunError::Validation(error)
+                }
+                Err(error) => error,
+            },
+            Err(error) => error,
+        };
+
+        if retry_count >= MAX_GOAL_CONTINUATIONS {
+            return Err(error);
+        }
+
+        retry_count = retry_count.saturating_add(1);
+        let delay_ms = goal_verification_retry_delay_ms(retry_count);
+        warn!(
+            "Goal verification attempt failed; retrying: retry={}/{}, delay_ms={}, error={}",
+            retry_count, MAX_GOAL_CONTINUATIONS, delay_ms, error
+        );
+        tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+    }
+}
+
+fn goal_verification_retry_delay_ms(retry_count: u32) -> u64 {
+    if retry_count == 0 {
+        return GOAL_VERIFICATION_RETRY_BASE_DELAY_MS;
+    }
+    GOAL_VERIFICATION_RETRY_BASE_DELAY_MS
+        .saturating_mul(1_u64 << retry_count.saturating_sub(1).min(5))
+        .min(GOAL_VERIFICATION_RETRY_MAX_DELAY_MS)
+}
+
+fn build_goal_verification_user_prompt(state: &GoalModeState) -> String {
+    let criteria = if state.initial_success_criteria().is_empty() {
+        "- Use the initial session goal text itself as the completion standard.".to_string()
     } else {
         state
-            .success_criteria
+            .initial_success_criteria()
             .iter()
             .map(|item| format!("- {item}"))
             .collect::<Vec<_>>()
             .join("\n")
     };
+    let current_goal_note = current_goal_note(state);
 
-    let system_prompt = format!(
-        "You verify whether a coding-agent session goal has truly been achieved, then produce focused recovery guidance if it has not.\n\
-Active goal: {}\n\
+    format!(
+        "Verify whether the initial session goal has been fully achieved.\n\
+You are verifying a coding-agent session goal and producing focused recovery guidance if it has not been achieved.\n\
+Initial session goal: {}\n\
+{current_goal_note}\
 Success criteria:\n{criteria}\n\
+Use the initial session goal as the source of truth. If later continuation turns, summaries, or assistant messages narrow, broaden, or drift from it, judge completion against the initial session goal above.\n\
 Use the full conversation transcript above, especially the latest assistant work.\n\
 Return ONLY valid JSON with this shape:\n\
 {{\"achieved\":true|false,\"confidence\":0.0,\"gaps\":[\"...\"],\"guidance\":\"...\"}}\n\
@@ -414,35 +542,8 @@ Rules:\n\
 - If the previous attempt used a wrong approach, guidance must redirect the approach and explain the correction\n\
 - If verification is the main gap, guidance must name the exact verification needed\n\
 - Do not include markdown or commentary",
-        state.goal_text.trim()
-    );
-
-    let mut final_user_prompt =
-        "Verify whether the active session goal has been fully achieved. If not, return precise recovery guidance for the next agent turn, grounded in the transcript. Return the JSON verdict."
-            .to_string();
-    let mut repair_attempt = 0_u32;
-
-    loop {
-        let raw = call_goal_func_agent_with_context(
-            system_prompt.clone(),
-            context_messages,
-            final_user_prompt.clone(),
-        )
-        .await?;
-        match parse_goal_verification(&raw) {
-            Ok(result) => return Ok(result),
-            Err(BitFunError::Validation(error)) => {
-                repair_attempt = repair_attempt.saturating_add(1);
-                warn!(
-                    "Goal verification returned an invalid verdict; requesting repaired verdict: attempt={}, error={}",
-                    repair_attempt, error
-                );
-                final_user_prompt =
-                    build_goal_verification_repair_prompt(&raw, &error, repair_attempt);
-            }
-            Err(error) => return Err(error),
-        }
-    }
+        state.initial_goal_text().trim()
+    )
 }
 
 fn build_goal_verification_repair_prompt(
@@ -556,6 +657,12 @@ mod tests {
     fn goal_mode_patch_round_trips() {
         let state = GoalModeState {
             active: true,
+            initial_goal: GoalModeInitialGoal::new(
+                "Fix login".to_string(),
+                vec!["Tests pass".to_string()],
+                None,
+                1,
+            ),
             goal_text: "Fix login".to_string(),
             success_criteria: vec!["Tests pass".to_string()],
             user_hint: None,
@@ -565,6 +672,93 @@ mod tests {
         let patch = goal_mode_patch(&state);
         let parsed = goal_mode_from_custom_metadata(Some(&patch)).expect("goal mode");
         assert_eq!(parsed, state);
+    }
+
+    #[test]
+    fn legacy_goal_mode_state_falls_back_to_goal_text_as_initial_goal() {
+        let metadata = serde_json::json!({
+            GOAL_MODE_METADATA_KEY: {
+                "active": true,
+                "goalText": "Fix legacy goal drift",
+                "successCriteria": ["Legacy tests pass"],
+                "activatedAtMs": 7,
+                "continuationCount": 2,
+            }
+        });
+
+        let parsed = goal_mode_from_custom_metadata(Some(&metadata)).expect("goal mode");
+        assert!(parsed.is_active());
+        assert_eq!(parsed.initial_goal_text(), "Fix legacy goal drift");
+        assert_eq!(
+            parsed.initial_success_criteria(),
+            &["Legacy tests pass".to_string()]
+        );
+        assert_eq!(parsed.initial_goal_created_at_ms(), 7);
+    }
+
+    #[test]
+    fn goal_verification_prompt_uses_initial_goal_as_source_of_truth() {
+        let state = GoalModeState {
+            active: true,
+            initial_goal: GoalModeInitialGoal::new(
+                "Fix the login bug without changing signup".to_string(),
+                vec!["Login regression test passes".to_string()],
+                Some("login only".to_string()),
+                3,
+            ),
+            goal_text: "Only run final checks".to_string(),
+            success_criteria: vec!["Current narrow check".to_string()],
+            user_hint: Some("login only".to_string()),
+            activated_at_ms: 3,
+            continuation_count: 4,
+        };
+
+        let user_prompt = build_goal_verification_user_prompt(&state);
+
+        assert!(
+            user_prompt.contains("Initial session goal: Fix the login bug without changing signup")
+        );
+        assert!(user_prompt.contains("Current continuation target: Only run final checks"));
+        assert!(user_prompt.contains("source of truth"));
+        assert!(user_prompt.contains("Login regression test passes"));
+        assert!(!user_prompt.contains("Current narrow check"));
+    }
+
+    #[test]
+    fn appended_prompt_messages_preserve_session_context_prefix() {
+        let context_messages = vec![
+            Message::user("Original user request".to_string()),
+            Message::assistant("Original assistant progress".to_string()),
+        ];
+
+        let messages =
+            build_appended_prompt_ai_messages(&context_messages, "Check the goal now".to_string());
+
+        assert_eq!(messages.len(), 3);
+        assert_eq!(messages[0].role, "user");
+        assert_eq!(
+            messages[0].content.as_deref(),
+            Some("Original user request")
+        );
+        assert_eq!(messages[1].role, "assistant");
+        assert_eq!(
+            messages[1].content.as_deref(),
+            Some("Original assistant progress")
+        );
+        assert_eq!(messages[2].role, "user");
+        assert_eq!(messages[2].content.as_deref(), Some("Check the goal now"));
+    }
+
+    #[test]
+    fn goal_verification_retry_delay_grows_and_caps() {
+        assert_eq!(goal_verification_retry_delay_ms(1), 1_000);
+        assert_eq!(goal_verification_retry_delay_ms(2), 2_000);
+        assert_eq!(goal_verification_retry_delay_ms(3), 4_000);
+        assert_eq!(goal_verification_retry_delay_ms(6), 30_000);
+        assert_eq!(
+            goal_verification_retry_delay_ms(MAX_GOAL_CONTINUATIONS),
+            30_000
+        );
     }
 
     #[test]
@@ -637,6 +831,7 @@ mod tests {
     fn continuation_plan_includes_goal_text() {
         let state = GoalModeState {
             active: true,
+            initial_goal: GoalModeInitialGoal::new("Ship feature".to_string(), vec![], None, 0),
             goal_text: "Ship feature".to_string(),
             success_criteria: vec![],
             user_hint: None,
@@ -653,6 +848,46 @@ mod tests {
         assert!(plan.wrapped_message.contains("Ship feature"));
         assert!(plan.display_message.contains("Add tests"));
         assert!(!plan.display_message.contains("Ship feature"));
+    }
+
+    #[test]
+    fn continuation_plan_preserves_initial_goal_when_current_goal_drifts() {
+        let state = GoalModeState {
+            active: true,
+            initial_goal: GoalModeInitialGoal::new(
+                "Ship the importer fix with tests".to_string(),
+                vec!["Importer tests pass".to_string()],
+                None,
+                9,
+            ),
+            goal_text: "Summarize current progress".to_string(),
+            success_criteria: vec!["Write summary".to_string()],
+            user_hint: None,
+            activated_at_ms: 9,
+            continuation_count: 3,
+        };
+        let verification = GoalVerificationResult {
+            achieved: false,
+            confidence: 0.2,
+            gaps: vec!["Importer tests were not run".to_string()],
+            guidance: "Run importer tests".to_string(),
+        };
+
+        let plan = build_goal_continuation_plan(&state, &verification);
+        assert!(plan
+            .wrapped_message
+            .contains("Initial session goal: Ship the importer fix with tests"));
+        assert!(plan
+            .wrapped_message
+            .contains("Current continuation target: Summarize current progress"));
+        assert_eq!(
+            plan.user_message_metadata["initialGoal"]["goalText"],
+            "Ship the importer fix with tests"
+        );
+        assert_eq!(
+            plan.user_message_metadata["initialGoal"]["successCriteria"][0],
+            "Importer tests pass"
+        );
     }
 
     #[test]

@@ -1518,6 +1518,45 @@ impl SessionManager {
         Ok(())
     }
 
+    /// Update the most recent scheduler-accepted user submission mode.
+    ///
+    /// This state is intentionally independent from rollback-sensitive history
+    /// semantics. Prompt-cache guards should read this instead of deriving from
+    /// surviving dialog turns.
+    pub async fn update_last_submitted_agent_type(
+        &self,
+        session_id: &str,
+        agent_type: &str,
+    ) -> BitFunResult<()> {
+        if let Some(mut session) = self.sessions.get_mut(session_id) {
+            session.last_submitted_agent_type = Some(agent_type.to_string());
+            session.updated_at = SystemTime::now();
+            session.last_activity_at = SystemTime::now();
+        } else {
+            return Err(BitFunError::NotFound(format!(
+                "Session not found: {}",
+                session_id
+            )));
+        }
+
+        if self.should_persist_session_id(session_id) {
+            let effective_path = self.effective_session_workspace_path(session_id).await;
+            let session_snapshot = self.sessions.get(session_id).map(|s| s.clone());
+            if let (Some(workspace_path), Some(session)) = (effective_path, session_snapshot) {
+                self.persistence_manager
+                    .save_session(&workspace_path, &session)
+                    .await?;
+            }
+        }
+
+        debug!(
+            "Session last submitted agent type updated: session_id={}, agent_type={}",
+            session_id, agent_type
+        );
+
+        Ok(())
+    }
+
     fn derive_last_user_dialog_agent_type_from_turns(
         turns: &[DialogTurnData],
         fallback_agent_type: Option<&str>,
@@ -2305,6 +2344,8 @@ impl SessionManager {
                         session_id: session.session_id.clone(),
                         session_name: session.session_name.clone(),
                         agent_type: session.agent_type.clone(),
+                        last_user_dialog_agent_type: session.last_user_dialog_agent_type.clone(),
+                        last_submitted_agent_type: session.last_submitted_agent_type.clone(),
                         created_by: session.created_by.clone(),
                         kind: session.kind,
                         turn_count: session.dialog_turn_ids.len(),
@@ -3876,8 +3917,7 @@ fn extract_subagent_relationship(
 mod tests {
     use super::{SessionManager, SessionManagerConfig};
     use crate::agentic::core::{
-        Message, MessageContent, MessageRole, ProcessingPhase, Session, SessionConfig,
-        SessionState,
+        Message, MessageContent, MessageRole, ProcessingPhase, Session, SessionConfig, SessionState,
     };
     use crate::agentic::persistence::PersistenceManager;
     use crate::agentic::session::{

@@ -17,7 +17,6 @@ use crate::agentic::deep_review_policy::{
     DeepReviewRunManifestGate, DeepReviewSubagentRole, DEEP_REVIEW_AGENT_TYPE,
 };
 use crate::agentic::events::DeepReviewQueueStatus;
-use crate::agentic::subagent_runtime::SubagentContextMode;
 use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
@@ -28,6 +27,7 @@ use crate::service::config::types::AIConfig;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::timing::elapsed_ms_u64;
 use async_trait::async_trait;
+use bitfun_runtime_ports::SubagentContextMode;
 use log::{debug, warn};
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -521,6 +521,16 @@ Usage notes:
             .into_iter()
             .map(|agent| agent.id)
             .collect()
+    }
+
+    fn background_subagent_started_assistant_message(
+        delegate_target_label: &str,
+        background_task_id: &str,
+    ) -> String {
+        format!(
+            "Background {} started successfully.\n<background_task status=\"started\" id=\"{}\">Its final result will be delivered back automatically to you when it is finished. Do not poll for status updates. If your current path is blocked on this result and there is no other useful local work to do, it is fine to end the current turn.</background_task>",
+            delegate_target_label, background_task_id
+        )
     }
 }
 
@@ -1295,9 +1305,9 @@ impl Tool for TaskTool {
                     "run_in_background": true,
                     "background_task_id": background_result.background_task_id,
                 }),
-                result_for_assistant: Some(format!(
-                    "Background {} started successfully.\n<background_task status=\"started\" id=\"{}\">Its final result will be delivered back automatically to you when it is finished. Do not poll for status updates. If your current path is blocked on this result and there is no other useful local work to do, it is fine to end the current turn.</background_task>",
-                    delegate_target_label, background_result.background_task_id
+                result_for_assistant: Some(Self::background_subagent_started_assistant_message(
+                    &delegate_target_label,
+                    &background_result.background_task_id,
                 )),
                 image_attachments: None,
             }]);
@@ -1693,11 +1703,11 @@ mod tests {
     use crate::agentic::deep_review_policy::{
         DeepReviewBudgetTracker, DeepReviewExecutionPolicy, DeepReviewSubagentRole,
     };
-    use crate::agentic::subagent_runtime::DelegationPolicy;
     use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::util::BitFunError;
     use async_trait::async_trait;
+    use bitfun_runtime_ports::DelegationPolicy;
     use serde_json::json;
     use std::collections::HashMap;
     use std::sync::Arc;
@@ -1803,6 +1813,20 @@ mod tests {
             .unwrap()
             .contains("Do not include top-level Task arguments"));
         assert!(schema.get("allOf").is_none());
+    }
+
+    #[test]
+    fn background_subagent_start_acknowledgement_keeps_structured_task_marker() {
+        let message = TaskTool::background_subagent_started_assistant_message(
+            "GeneralPurpose",
+            "bg-subagent-123",
+        );
+
+        assert!(message.starts_with("Background GeneralPurpose started successfully."));
+        assert!(message.contains("<background_task status=\"started\" id=\"bg-subagent-123\">"));
+        assert!(message.contains("Do not poll for status updates."));
+        assert!(message.ends_with("</background_task>"));
+        assert!(!message.contains("background_task_id="));
     }
 
     #[tokio::test]

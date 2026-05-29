@@ -19,7 +19,8 @@
       "acpAgents": "External ACP agents such as opencode, Claude Code, and Codex.",
       "editor": "Editor font, display, and formatting.",
       "lsp": "Language servers and code intelligence.",
-      "keyboard": "Shortcuts and key bindings."
+      "keyboard": "Shortcuts and key bindings.",
+      "archivedSessions": "View, restore, or permanently delete archived sessions."
     },
     "categories": {
       "general": "General",
@@ -40,7 +41,8 @@
       "agents": "Agents",
       "editor": "Editor",
       "lsp": "LSP",
-      "keyboard": "Keyboard"
+      "keyboard": "Keyboard",
+      "archivedSessions": "Archived Sessions"
     }
   },
   "general": {

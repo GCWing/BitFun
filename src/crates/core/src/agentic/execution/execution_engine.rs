@@ -22,9 +22,7 @@ use crate::agentic::image_analysis::{
 use crate::agentic::round_preempt::RoundInjectionKind;
 use crate::agentic::session::{CompressionMode, ContextCompressor, SessionManager};
 use crate::agentic::tools::implementations::{GetToolSpecTool, SkillTool, TaskTool};
-use crate::agentic::tools::{
-    resolve_tool_manifest, tool_context_runtime, ResolvedToolManifest, SubagentParentInfo,
-};
+use crate::agentic::tools::{resolve_tool_manifest, tool_context_runtime, ResolvedToolManifest};
 use crate::agentic::util::build_remote_workspace_layout_preview;
 use crate::agentic::{WorkspaceBackend, WorkspaceBinding};
 use crate::infrastructure::ai::get_global_ai_client_factory;
@@ -1261,7 +1259,6 @@ impl ExecutionEngine {
         tool_definitions: &Option<Vec<ToolDefinition>>,
         prepended_prompt_reminders: &PrependedPromptReminders,
         primary_supports_image_understanding: bool,
-        context_window: usize,
         contract: Option<&crate::agentic::core::CompressionContract>,
     ) -> BitFunResult<Option<String>> {
         let request_messages = self
@@ -1275,20 +1272,6 @@ impl ExecutionEngine {
                 contract,
             )
             .await?;
-        let request_tokens =
-            TokenCounter::estimate_request_tokens(&request_messages, tool_definitions.as_deref());
-        let max_request_tokens = self
-            .context_compressor
-            .max_model_request_tokens(context_window);
-        if request_tokens > max_request_tokens {
-            debug!(
-                "Skipping model-based compression because full-prefix request exceeds budget: dialog_turn_id={}, request_tokens={}, max_request_tokens={}",
-                dialog_turn_id,
-                request_tokens,
-                max_request_tokens
-            );
-            return Ok(None);
-        }
 
         let raw_summary = self
             .request_compression_summary_with_retry(
@@ -1509,7 +1492,6 @@ impl ExecutionEngine {
         &self,
         session_id: &str,
         dialog_turn_id: &str,
-        _subagent_parent_info: Option<SubagentParentInfo>,
         runtime_messages: Vec<Message>,
         current_tokens: usize,
         context_window: usize,
@@ -1568,7 +1550,6 @@ impl ExecutionEngine {
                 tool_definitions,
                 prepended_prompt_reminders,
                 primary_supports_image_understanding,
-                context_window,
                 compression_contract.as_ref(),
             )
             .await
@@ -1775,7 +1756,6 @@ impl ExecutionEngine {
                 &scaffold.tool_definitions,
                 &scaffold.prepended_prompt_reminders,
                 scaffold.primary_supports_image_understanding,
-                context_window,
                 compression_contract.as_ref(),
             )
             .await
@@ -2375,7 +2355,6 @@ impl ExecutionEngine {
                     .compress_messages(
                         &context.session_id,
                         &context.dialog_turn_id,
-                        context.subagent_parent_info.clone(),
                         messages.clone(),
                         current_tokens,
                         context_window,

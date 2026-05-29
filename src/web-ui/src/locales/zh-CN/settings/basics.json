@@ -117,6 +117,18 @@
     "path": {
       "description": "本次启动写入日志文件所在的目录。"
     },
+    "diagnostics": {
+      "label": "诊断包",
+      "description": "将最近的本地日志、崩溃报告与运行时元数据导出为 zip 文件。BitFun 不会自动上传。"
+    },
+    "previousCrash": {
+      "title": "上次会话异常结束",
+      "description": "上次会话日志位于 {{path}}。"
+    },
+    "startupRecovery": {
+      "title": "上次没有正常关闭",
+      "message": "BitFun 已从一次异常退出后重新打开。如需反馈问题，可以导出诊断包。"
+    },
     "levels": {
       "trace": "Trace",
       "debug": "Debug",
@@ -128,7 +140,9 @@
     "actions": {
       "refreshTooltip": "刷新运行时状态",
       "openFolder": "打开文件夹",
-      "openFolderTooltip": "在文件管理器中打开日志文件夹"
+      "openFolderTooltip": "在文件管理器中打开日志文件夹",
+      "exportDiagnostics": "导出诊断包",
+      "openLoggingSettings": "打开日志设置"
     },
     "messages": {
       "loading": "加载中...",
@@ -139,7 +153,9 @@
       "refreshed": "运行时状态已刷新",
       "openedFolder": "日志文件夹已打开",
       "openFailed": "打开日志文件夹失败",
-      "pathUnavailable": "日志文件夹路径不可用"
+      "pathUnavailable": "日志文件夹路径不可用",
+      "diagnosticsExported": "诊断包已导出",
+      "diagnosticsExportFailed": "导出诊断包失败"
     }
   },
   "terminal": {

@@ -8,7 +8,7 @@ import { SSHRemoteProvider } from '../features/ssh-remote';
 import AppLayout from './layout/AppLayout';
 import { useCurrentModelConfig } from '../hooks/useModelConfigs';
 import { ContextMenuRenderer } from '../shared/context-menu-system/components/ContextMenuRenderer';
-import { NotificationContainer, NotificationCenter } from '../shared/notification-system';
+import { NotificationContainer, NotificationCenter, notificationService } from '../shared/notification-system';
 import { AnnouncementProvider } from '../shared/announcement-system';
 import { ConfirmDialogRenderer } from '../component-library';
 import { createLogger } from '@/shared/utils/logger';
@@ -23,6 +23,7 @@ import SplashScreen from './components/SplashScreen/SplashScreen';
 import { useGlobalSceneShortcuts } from './hooks/useGlobalSceneShortcuts';
 import { useDebugInspector } from '@/infrastructure/debug/useDebugInspector';
 import { openAgentCompanionSession } from './services/openAgentCompanionSession';
+import { useI18n } from '@/infrastructure/i18n';
 
 // Toolbar Mode
 import { ToolbarModeProvider } from '../flow_chat';
@@ -45,6 +46,7 @@ function App() {
   // AI initialization
   const { currentConfig } = useCurrentModelConfig();
   const { isInitialized: aiInitialized, isInitializing: aiInitializing, error: aiError } = useAIInitialization(currentConfig);
+  const { t } = useI18n('settings/basics');
 
   // Workspace loading state — drives splash exit timing
   const { loading: workspaceLoading } = useWorkspaceContext();
@@ -345,6 +347,70 @@ function App() {
 
   // Debug inspector shortcuts (desktop devtools only)
   useDebugInspector();
+
+  useEffect(() => {
+    if (!isTauriRuntime() || !interactiveShellReady) {
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { configAPI, workspaceAPI } = await import('@/infrastructure/api');
+        const runtimeInfo = await configAPI.getRuntimeLoggingInfo();
+        if (cancelled || !runtimeInfo.previousUnexpectedExit?.detected) {
+          return;
+        }
+        const recoveryKey = `bitfun:unexpected-exit-notice:${runtimeInfo.previousUnexpectedExit.sessionLogDir || 'unknown'}`;
+        if (sessionStorage.getItem(recoveryKey) === 'shown') {
+          return;
+        }
+        sessionStorage.setItem(recoveryKey, 'shown');
+
+        notificationService.warning(t('logging.startupRecovery.message'), {
+          title: t('logging.startupRecovery.title'),
+          duration: 0,
+          actions: [
+            {
+              label: t('logging.actions.exportDiagnostics'),
+              variant: 'primary',
+              onClick: () => {
+                void (async () => {
+                  try {
+                    const result = await configAPI.exportDiagnosticsBundle();
+                    notificationService.success(t('logging.messages.diagnosticsExported'), { duration: 3000 });
+                    await workspaceAPI.revealInExplorer(result.bundlePath);
+                  } catch (error) {
+                    log.error('Failed to export diagnostics bundle from startup notification', error);
+                    notificationService.error(t('logging.messages.diagnosticsExportFailed'), { duration: 5000 });
+                  }
+                })();
+              },
+            },
+            {
+              label: t('logging.actions.openLoggingSettings'),
+              onClick: () => {
+                void import('@/shared/services/ide-control').then(({ quickActions }) => {
+                  quickActions.openSettings('basics');
+                });
+              },
+            },
+          ],
+          metadata: {
+            source: 'startup-crash-diagnostics',
+            sessionLogDir: runtimeInfo.previousUnexpectedExit.sessionLogDir,
+            crashReportPath: runtimeInfo.previousUnexpectedExit.crashReportPath,
+          },
+        });
+      } catch (error) {
+        log.warn('Failed to check previous unexpected exit status', error);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [interactiveShellReady, t]);
 
   // Unified layout via a single AppLayout
   return (

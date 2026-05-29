@@ -103,6 +103,18 @@
     "path": {
       "description": "本次啟動寫入日誌文件所在的目錄。"
     },
+    "diagnostics": {
+      "label": "診斷包",
+      "description": "將最近的本機日誌、崩潰報告與運行時元資料匯出為 zip 文件。BitFun 不會自動上傳。"
+    },
+    "previousCrash": {
+      "title": "上次會話異常結束",
+      "description": "上次會話日誌位於 {{path}}。"
+    },
+    "startupRecovery": {
+      "title": "上次沒有正常關閉",
+      "message": "BitFun 已從一次異常退出後重新打開。如需回報問題，可以匯出診斷包。"
+    },
     "levels": {
       "trace": "Trace",
       "debug": "Debug",
@@ -114,7 +126,9 @@
     "actions": {
       "refreshTooltip": "刷新運行時狀態",
       "openFolder": "打開文件夾",
-      "openFolderTooltip": "在文件管理器中打開日誌文件夾"
+      "openFolderTooltip": "在文件管理器中打開日誌文件夾",
+      "exportDiagnostics": "匯出診斷包",
+      "openLoggingSettings": "打開日誌設置"
     },
     "messages": {
       "loading": "加載中...",
@@ -125,7 +139,9 @@
       "refreshed": "運行時狀態已刷新",
       "openedFolder": "日誌文件夾已打開",
       "openFailed": "打開日誌文件夾失敗",
-      "pathUnavailable": "日誌文件夾路徑不可用"
+      "pathUnavailable": "日誌文件夾路徑不可用",
+      "diagnosticsExported": "診斷包已匯出",
+      "diagnosticsExportFailed": "匯出診斷包失敗"
     }
   },
   "terminal": {

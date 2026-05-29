@@ -7,17 +7,17 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-fn deserialize_mode_configs<'de, D>(
+fn deserialize_agent_profiles<'de, D>(
     deserializer: D,
-) -> Result<HashMap<String, ModeConfig>, D::Error>
+) -> Result<HashMap<String, AgentProfileConfig>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
-    let raw = Option::<HashMap<String, Option<ModeConfig>>>::deserialize(deserializer)?;
+    let raw = Option::<HashMap<String, Option<AgentProfileConfig>>>::deserialize(deserializer)?;
     Ok(raw
         .unwrap_or_default()
         .into_iter()
-        .filter_map(|(mode_id, config)| config.map(|config| (mode_id, config)))
+        .filter_map(|(profile_id, config)| config.map(|config| (profile_id, config)))
         .collect())
 }
 
@@ -572,15 +572,10 @@ pub struct AIConfig {
     #[serde(default)]
     pub default_models: DefaultModelsConfig,
 
-    /// Mode configuration.
-    /// mode_id -> ModeConfig
-    #[serde(default, deserialize_with = "deserialize_mode_configs")]
-    pub mode_configs: HashMap<String, ModeConfig>,
-
-    /// Per-parent sparse subagent availability overrides.
-    /// parent_agent_id -> (subagent_key -> override_state)
-    #[serde(default)]
-    pub agent_subagent_overrides: AgentSubagentOverrideConfig,
+    /// Shared agent-profile configuration.
+    /// profile_id -> AgentProfileConfig
+    #[serde(default, deserialize_with = "deserialize_agent_profiles")]
+    pub agent_profiles: HashMap<String, AgentProfileConfig>,
 
     /// Review team configuration.
     /// team_id -> ReviewTeamConfig
@@ -714,14 +709,14 @@ impl AIConfig {
     }
 }
 
-/// Mode configuration (tool configuration per mode).
+/// Shared agent-profile configuration.
 ///
-/// Model mapping has moved to `AIConfig.agent_models`, keyed by `mode_id`.
+/// Model mapping has moved to `AIConfig.agent_models`, keyed by agent id.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
-pub struct ModeConfig {
-    /// Mode ID (e.g. agentic, debug, requirement, ui-design).
-    pub mode_id: String,
+pub struct AgentProfileConfig {
+    /// Shared profile ID (e.g. agentic, coding_shared, requirement, ui-design).
+    pub profile_id: String,
 
     /// Tools explicitly enabled by the user that are not part of the mode defaults.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -738,13 +733,17 @@ pub struct ModeConfig {
     /// User-level built-in skills explicitly enabled even though the mode default disables them.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub enabled_user_skills: Vec<String>,
+
+    /// User-level subagent availability overrides for this shared profile.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub subagent_overrides: ParentSubagentOverrideConfig,
 }
 
 /// API view of a mode configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
-pub struct ModeConfigView {
-    pub mode_id: String,
+pub struct AgentProfileView {
+    pub profile_id: String,
     pub enabled_tools: Vec<String>,
     pub default_tools: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -791,22 +790,23 @@ fn default_max_rounds() -> usize {
     DEFAULT_MAX_ROUNDS
 }
 
-impl Default for ModeConfig {
+impl Default for AgentProfileConfig {
     fn default() -> Self {
         Self {
-            mode_id: String::new(),
+            profile_id: String::new(),
             added_tools: Vec::new(),
             removed_tools: Vec::new(),
             disabled_user_skills: Vec::new(),
             enabled_user_skills: Vec::new(),
+            subagent_overrides: HashMap::new(),
         }
     }
 }
 
-impl Default for ModeConfigView {
+impl Default for AgentProfileView {
     fn default() -> Self {
         Self {
-            mode_id: String::new(),
+            profile_id: String::new(),
             enabled_tools: Vec::new(),
             default_tools: Vec::new(),
             disabled_user_skills: Vec::new(),
@@ -1582,8 +1582,7 @@ impl Default for AIConfig {
             agent_models: std::collections::HashMap::new(),
             func_agent_models: std::collections::HashMap::new(),
             default_models: DefaultModelsConfig::default(),
-            mode_configs: std::collections::HashMap::new(),
-            agent_subagent_overrides: std::collections::HashMap::new(),
+            agent_profiles: std::collections::HashMap::new(),
             review_teams: default_review_team_configs(),
             review_team_rate_limit_status: default_review_team_rate_limit_status(),
             review_team_project_strategy_overrides: std::collections::HashMap::new(),
@@ -2057,8 +2056,7 @@ mod tests {
             "agent_models": {},
             "func_agent_models": {},
             "default_models": {},
-            "mode_configs": {},
-            "agent_subagent_overrides": {},
+            "agent_profiles": {},
             "proxy": {
                 "enabled": false,
                 "url": ""
@@ -2089,8 +2087,7 @@ mod tests {
             "agent_models": {},
             "func_agent_models": {},
             "default_models": {},
-            "mode_configs": {},
-            "agent_subagent_overrides": {},
+            "agent_profiles": {},
             "subagent_max_concurrency": 9,
             "proxy": {
                 "enabled": false,
@@ -2103,20 +2100,19 @@ mod tests {
     }
 
     #[test]
-    fn deserializes_mode_configs_with_null_entries() {
+    fn deserializes_mode_profiles_with_null_entries() {
         let config: AIConfig = serde_json::from_value(serde_json::json!({
             "models": [],
             "agent_models": {},
             "func_agent_models": {},
             "default_models": {},
-            "mode_configs": {
+            "agent_profiles": {
                 "Claw": null,
                 "Cowork": {
-                    "mode_id": "Cowork",
+                    "profile_id": "Cowork",
                     "removed_tools": ["shell"]
                 }
             },
-            "agent_subagent_overrides": {},
             "proxy": {
                 "enabled": false,
                 "url": ""
@@ -2124,10 +2120,10 @@ mod tests {
         }))
         .expect("config with null mode config entries should deserialize");
 
-        assert!(!config.mode_configs.contains_key("Claw"));
+        assert!(!config.agent_profiles.contains_key("Claw"));
         assert_eq!(
             config
-                .mode_configs
+                .agent_profiles
                 .get("Cowork")
                 .expect("non-null mode config should be retained")
                 .removed_tools,
@@ -2142,8 +2138,7 @@ mod tests {
             "agent_models": {},
             "func_agent_models": {},
             "default_models": {},
-            "mode_configs": {},
-            "agent_subagent_overrides": {},
+            "agent_profiles": {},
             "review_teams": {
                 "default": {
                     "extra_subagent_ids": ["ExtraReviewer"],

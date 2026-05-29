@@ -7,7 +7,6 @@
 
 use crate::agentic::coordination::get_global_coordinator;
 use crate::agentic::deep_review::tool_context;
-use crate::agentic::subagent_runtime::DelegationPolicy;
 use crate::agentic::session::EvidenceLedgerCheckpoint;
 use crate::agentic::tools::computer_use_host::ComputerUseHostRef;
 use crate::agentic::tools::framework::{
@@ -33,6 +32,7 @@ use crate::service::remote_ssh::workspace_state::remote_workspace_runtime_root;
 use crate::service::{get_workspace_runtime_service_arc, WorkspaceRuntimeContext};
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_agent_tools::{PortableToolContextProvider, ToolContextFacts, ToolWorkspaceKind};
+use bitfun_runtime_ports::DelegationPolicy;
 use log::warn;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -1317,6 +1317,7 @@ mod task_context_tests {
         SubagentParentInfo, ToolExecutionContext, ToolExecutionOptions, ToolTask,
     };
     use crate::agentic::tools::ToolRuntimeRestrictions;
+    use bitfun_runtime_ports::DelegationPolicy;
     use serde_json::json;
     use std::collections::{BTreeSet, HashMap};
     use tokio_util::sync::CancellationToken;
@@ -1365,8 +1366,7 @@ mod task_context_tests {
                     session_id: "parent_session".to_string(),
                     dialog_turn_id: "parent_turn".to_string(),
                 }),
-                delegation_policy:
-                    crate::agentic::subagent_runtime::DelegationPolicy::top_level().spawn_child(),
+                delegation_policy: DelegationPolicy::top_level().spawn_child(),
                 collapsed_tools: vec!["WebFetch".to_string()],
                 unlocked_collapsed_tools: vec!["WebFetch".to_string()],
                 allowed_tools: vec!["WebFetch".to_string()],

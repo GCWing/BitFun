@@ -117,6 +117,18 @@
     "path": {
       "description": "Directory where log files for this run are written."
     },
+    "diagnostics": {
+      "label": "Diagnostics Bundle",
+      "description": "Export recent local logs, crash reports, and runtime metadata as a zip file. BitFun does not upload it automatically."
+    },
+    "previousCrash": {
+      "title": "Previous session ended unexpectedly",
+      "description": "Last session logs are available at {{path}}."
+    },
+    "startupRecovery": {
+      "title": "Previous session did not close normally",
+      "message": "BitFun reopened after an unexpected quit. You can export diagnostics if you want to report the issue."
+    },
     "levels": {
       "trace": "Trace",
       "debug": "Debug",
@@ -128,7 +140,9 @@
     "actions": {
       "refreshTooltip": "Refresh runtime status",
       "openFolder": "Open Folder",
-      "openFolderTooltip": "Open log folder in file explorer"
+      "openFolderTooltip": "Open log folder in file explorer",
+      "exportDiagnostics": "Export Diagnostics",
+      "openLoggingSettings": "Open Logging Settings"
     },
     "messages": {
       "loading": "Loading...",
@@ -139,7 +153,9 @@
       "refreshed": "Runtime status refreshed",
       "openedFolder": "Log folder opened",
       "openFailed": "Failed to open log folder",
-      "pathUnavailable": "Log folder path is unavailable"
+      "pathUnavailable": "Log folder path is unavailable",
+      "diagnosticsExported": "Diagnostics bundle exported",
+      "diagnosticsExportFailed": "Failed to export diagnostics bundle"
     }
   },
   "terminal": {

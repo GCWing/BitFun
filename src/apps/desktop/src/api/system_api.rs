@@ -377,6 +377,7 @@ fn read_main_window_fullscreen_response(
 #[tauri::command]
 pub async fn quit_app(app: tauri::AppHandle) -> Result<(), String> {
     log::info!("Quit requested via quit_app command");
+    crate::crash_diagnostics::mark_clean_shutdown("quit_app_command");
     crate::perform_process_exit_cleanup();
     app.exit(0);
     Ok(())

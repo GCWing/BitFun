@@ -168,6 +168,17 @@ pub struct EnsureAssistantBootstrapRequest {
     pub workspace_path: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RunInitAgentsMdRequest {
+    pub session_id: String,
+    pub workspace_path: Option<String>,
+    #[serde(default)]
+    pub remote_connection_id: Option<String>,
+    #[serde(default)]
+    pub remote_ssh_host: Option<String>,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EnsureAssistantBootstrapResponse {
@@ -189,7 +200,12 @@ pub struct GetSessionRequest {
 pub struct SessionResponse {
     pub session_id: String,
     pub session_name: String,
+    /// Current/default mode selection for the next dialog turn.
     pub agent_type: String,
+    /// Mode of the last surviving user dialog turn in session history.
+    pub last_user_dialog_agent_type: Option<String>,
+    /// Mode of the most recent user submission accepted by the scheduler.
+    pub last_submitted_agent_type: Option<String>,
     pub state: String,
     pub turn_count: usize,
     pub created_at: u64,
@@ -720,13 +736,13 @@ pub async fn ensure_coordinator_session(
     )
     .await;
     let restore_result = if request.include_internal {
-        coordinator.restore_internal_session(&effective, session_id).await
+        coordinator
+            .restore_internal_session(&effective, session_id)
+            .await
     } else {
         coordinator.restore_session(&effective, session_id).await
     };
-    restore_result
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+    restore_result.map(|_| ()).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -897,6 +913,66 @@ pub async fn ensure_assistant_bootstrap(
         .map_err(|e| format!("Failed to ensure assistant bootstrap: {}", e))?;
 
     Ok(assistant_bootstrap_outcome_to_response(outcome))
+}
+
+#[tauri::command]
+pub async fn run_init_agents_md(
+    coordinator: State<'_, Arc<ConversationCoordinator>>,
+    scheduler: State<'_, Arc<DialogScheduler>>,
+    app_state: State<'_, AppState>,
+    request: RunInitAgentsMdRequest,
+) -> Result<StartDialogTurnResponse, String> {
+    let session_id = request.session_id.trim();
+    if session_id.is_empty() {
+        return Err("session_id is required".to_string());
+    }
+
+    if coordinator
+        .get_session_manager()
+        .get_session(session_id)
+        .is_none()
+    {
+        let workspace_path = request
+            .workspace_path
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| {
+                "workspace_path is required when the session is not loaded".to_string()
+            })?;
+        let effective = desktop_effective_session_storage_path(
+            &app_state,
+            workspace_path,
+            request.remote_connection_id.as_deref(),
+            request.remote_ssh_host.as_deref(),
+        )
+        .await;
+        coordinator
+            .restore_session(&effective, session_id)
+            .await
+            .map_err(|e| format!("Failed to restore session before running /init: {e}"))?;
+    }
+
+    let workspace_path = request
+        .workspace_path
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+
+    scheduler
+        .submit_init_agents_md(
+            session_id.to_string(),
+            workspace_path,
+            DialogSubmissionPolicy::for_source(DialogTriggerSource::DesktopUi),
+        )
+        .await
+        .map_err(|e| format!("Failed to run /init: {e}"))?;
+
+    Ok(StartDialogTurnResponse {
+        success: true,
+        message: "Init dialog turn started".to_string(),
+    })
 }
 
 fn is_blank_text(value: Option<&String>) -> bool {
@@ -1388,6 +1464,8 @@ pub async fn list_sessions(
             session_id: summary.session_id,
             session_name: summary.session_name,
             agent_type: summary.agent_type,
+            last_user_dialog_agent_type: summary.last_user_dialog_agent_type,
+            last_submitted_agent_type: summary.last_submitted_agent_type,
             state: format!("{:?}", summary.state),
             turn_count: summary.turn_count,
             created_at: system_time_to_unix_secs(summary.created_at),
@@ -1444,13 +1522,23 @@ pub async fn get_available_modes(state: State<'_, AppState>) -> Result<Vec<ModeI
 
     let dtos: Vec<ModeInfoDTO> = mode_infos
         .into_iter()
-        .map(|info| ModeInfoDTO {
-            id: info.id,
-            name: info.name,
-            description: info.description,
-            is_readonly: info.is_readonly,
-            tool_count: info.tool_count,
-            default_tools: info.default_tools,
+        .map(|info| {
+            let config_profile_id = info
+                .config_profile_id
+                .clone()
+                .unwrap_or_else(|| info.id.clone());
+            ModeInfoDTO {
+                id: info.id,
+                name: info.name,
+                description: info.description,
+                is_readonly: info.is_readonly,
+                tool_count: info.tool_count,
+                default_tools: info.default_tools,
+                prompt_cache_scope_key: info.prompt_cache_scope_key,
+                config_profile_id,
+                config_profile_label: info.config_profile_label,
+                config_profile_member_mode_ids: info.config_profile_member_mode_ids,
+            }
         })
         .collect();
 
@@ -1471,6 +1559,12 @@ pub struct ModeInfoDTO {
     pub is_readonly: bool,
     pub tool_count: usize,
     pub default_tools: Vec<String>,
+    pub prompt_cache_scope_key: String,
+    pub config_profile_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub config_profile_label: Option<String>,
+    #[serde(default)]
+    pub config_profile_member_mode_ids: Vec<String>,
 }
 
 fn assistant_bootstrap_outcome_to_response(
@@ -1529,6 +1623,8 @@ fn session_to_response(session: Session) -> SessionResponse {
         session_id: session.session_id,
         session_name: session.session_name,
         agent_type: session.agent_type,
+        last_user_dialog_agent_type: session.last_user_dialog_agent_type,
+        last_submitted_agent_type: session.last_submitted_agent_type,
         state: format!("{:?}", session.state),
         turn_count: session.dialog_turn_ids.len(),
         created_at: system_time_to_unix_secs(session.created_at),
@@ -1774,10 +1870,9 @@ mod tests {
 
     #[test]
     fn deserializes_set_subagent_timeout_disable_without_payload_field() {
-        let request: SetSubagentTimeoutRequest = serde_json::from_str(
-            r#"{"sessionId":"subagent-session","action":{"type":"Disable"}}"#,
-        )
-        .expect("disable action without payload should deserialize");
+        let request: SetSubagentTimeoutRequest =
+            serde_json::from_str(r#"{"sessionId":"subagent-session","action":{"type":"Disable"}}"#)
+                .expect("disable action without payload should deserialize");
         assert_eq!(request.session_id, "subagent-session");
         assert!(matches!(
             request.action,

@@ -9,6 +9,7 @@ export type ConfigTab =
   | 'basics'
   | 'appearance'
   | 'models'
+  | 'archived-sessions'
   | 'session-personalization'
   | 'session-permissions'
   | 'quick-actions'
@@ -93,6 +94,21 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
           'model',
           'temperature',
           'token',
+        ],
+      },
+      {
+        id: 'archived-sessions',
+        labelKey: 'configCenter.tabs.archivedSessions',
+        descriptionKey: 'configCenter.tabDescriptions.archivedSessions',
+        keywords: [
+          'archive',
+          'archived',
+          'session',
+          'sessions',
+          'restore',
+          'unarchive',
+          '\u5f52\u6863',
+          '\u4f1a\u8bdd',
         ],
       },
       {

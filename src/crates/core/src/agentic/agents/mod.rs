@@ -16,7 +16,7 @@ use crate::agentic::WorkspaceBinding;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 pub use definitions::custom::{CustomSubagent, CustomSubagentKind};
-pub use definitions::hidden::{CodeReviewAgent, DeepReviewAgent, GenerateDocAgent, InitAgent};
+pub use definitions::hidden::{CodeReviewAgent, DeepReviewAgent, GenerateDocAgent};
 pub use definitions::modes::{
     AgenticMode, ClawMode, CoworkMode, DebugMode, DeepResearchMode, MultitaskMode, PlanMode,
     TeamMode,
@@ -44,6 +44,7 @@ pub use registry::visibility::{
 };
 pub use registry::{get_agent_registry, AgentRegistry, CustomSubagentDetail};
 use std::any::Any;
+use std::borrow::Cow;
 
 // Include embedded prompts generated at compile time
 include!(concat!(env!("OUT_DIR"), "/embedded_agents_prompt.rs"));
@@ -54,6 +55,32 @@ static EMPTY_AGENT_TOOL_POLICY_OVERRIDES: std::sync::LazyLock<AgentToolPolicyOve
     std::sync::LazyLock::new(AgentToolPolicyOverrides::default);
 
 pub const SHARED_CODING_MODE_PROMPT_TEMPLATE: &str = "agentic_mode";
+pub const SHARED_CODING_MODE_CONFIG_PROFILE_ID: &str = "coding_shared";
+pub const SHARED_CODING_MODE_CONFIG_PROFILE_LABEL: &str = "Coding Shared";
+pub const SHARED_CODING_MODE_IDS: &[&str] = &["agentic", "Plan", "debug", "Multitask"];
+
+pub fn resolve_mode_config_profile_id<'a>(mode_id: &'a str) -> Cow<'a, str> {
+    match mode_id.trim() {
+        "agentic" | "Plan" | "debug" | "Multitask" => {
+            Cow::Borrowed(SHARED_CODING_MODE_CONFIG_PROFILE_ID)
+        }
+        _ => Cow::Borrowed(mode_id),
+    }
+}
+
+pub fn mode_config_profile_member_mode_ids(profile_id: &str) -> &'static [&'static str] {
+    match profile_id.trim() {
+        SHARED_CODING_MODE_CONFIG_PROFILE_ID => SHARED_CODING_MODE_IDS,
+        _ => &[],
+    }
+}
+
+pub fn mode_config_profile_label(profile_id: &str) -> Option<&'static str> {
+    match profile_id.trim() {
+        SHARED_CODING_MODE_CONFIG_PROFILE_ID => Some(SHARED_CODING_MODE_CONFIG_PROFILE_LABEL),
+        _ => None,
+    }
+}
 
 pub fn shared_coding_mode_tools() -> Vec<String> {
     vec![
@@ -71,11 +98,21 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
         "GenerativeUI".to_string(),
         "Skill".to_string(),
         "AskUserQuestion".to_string(),
+        "CreatePlan".to_string(),
         "Git".to_string(),
+        "Log".to_string(),
         "TerminalControl".to_string(),
         "ControlHub".to_string(),
         "InitMiniApp".to_string(),
     ]
+}
+
+pub fn shared_coding_mode_user_context_policy() -> UserContextPolicy {
+    UserContextPolicy::empty()
+        .with_workspace_context()
+        .with_workspace_instructions()
+        .with_workspace_memory_files()
+        .with_project_layout()
 }
 
 /// Agent trait defining the interface for all agents
@@ -187,20 +224,59 @@ pub trait Agent: Send + Sync + 'static {
 
 #[cfg(test)]
 mod tests {
-    use super::{Agent, AgenticMode, MultitaskMode};
+    use super::{
+        shared_coding_mode_tools, shared_coding_mode_user_context_policy, Agent, AgenticMode,
+        DebugMode, MultitaskMode, PlanMode,
+    };
 
     #[test]
     fn shared_template_modes_share_system_prompt_cache_identity() {
         let agentic = AgenticMode::new();
         let multitask = MultitaskMode::new();
+        let plan = PlanMode::new();
+        let debug = DebugMode::new();
 
         assert_eq!(
             agentic.system_prompt_cache_identity(None),
             multitask.system_prompt_cache_identity(None)
         );
         assert_eq!(
+            agentic.system_prompt_cache_identity(None),
+            plan.system_prompt_cache_identity(None)
+        );
+        assert_eq!(
+            agentic.system_prompt_cache_identity(None),
+            debug.system_prompt_cache_identity(None)
+        );
+        assert_eq!(
             agentic.user_context_cache_identity(),
             multitask.user_context_cache_identity()
         );
+        assert_eq!(
+            agentic.user_context_cache_identity(),
+            plan.user_context_cache_identity()
+        );
+        assert_eq!(
+            agentic.user_context_cache_identity(),
+            debug.user_context_cache_identity()
+        );
+    }
+
+    #[test]
+    fn shared_coding_mode_tools_include_plan_and_debug_specific_tools() {
+        let tools = shared_coding_mode_tools();
+
+        assert!(tools.contains(&"CreatePlan".to_string()));
+        assert!(tools.contains(&"Log".to_string()));
+    }
+
+    #[test]
+    fn shared_coding_mode_user_context_policy_matches_all_shared_modes() {
+        let shared_policy = shared_coding_mode_user_context_policy();
+
+        assert_eq!(AgenticMode::new().user_context_policy(), shared_policy);
+        assert_eq!(MultitaskMode::new().user_context_policy(), shared_policy);
+        assert_eq!(PlanMode::new().user_context_policy(), shared_policy);
+        assert_eq!(DebugMode::new().user_context_policy(), shared_policy);
     }
 }

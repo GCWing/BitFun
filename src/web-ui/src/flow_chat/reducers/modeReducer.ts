@@ -9,6 +9,11 @@ export interface ModeInfo {
   isReadonly: boolean;
   toolCount: number;
   defaultTools?: string[];
+  /**
+   * Combined prompt-cache compatibility key returned by the backend.
+   * Modes with the same key can reuse the same session-level prompt cache.
+   */
+  promptCacheScopeKey: string;
 }
 
 export interface ModeState {
