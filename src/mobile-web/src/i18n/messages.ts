@@ -102,6 +102,8 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       deleted: 'Session deleted',
       deleteFailed: 'Delete failed',
       renameFailed: 'Rename failed',
+      disconnect: 'Disconnect',
+      disconnectConfirm: 'Disconnect from current desktop? You can re-pair later.',
     },
     workspace: {
       title: 'Workspace',
@@ -276,6 +278,8 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       deleted: '会话已删除',
       deleteFailed: '删除失败',
       renameFailed: '重命名失败',
+      disconnect: '断开连接',
+      disconnectConfirm: '断开当前桌面连接？之后可重新配对。',
     },
     workspace: {
       title: '工作区',
@@ -450,6 +454,8 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       deleted: '會話已刪除',
       deleteFailed: '刪除失敗',
       renameFailed: '重新命名失敗',
+      disconnect: '斷開連接',
+      disconnectConfirm: '斷開當前桌面連接？之後可重新配對。',
     },
     workspace: {
       title: '工作區',

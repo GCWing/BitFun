@@ -14,6 +14,7 @@ interface SessionListPageProps {
   sessionMgr: RemoteSessionManager;
   onSelectSession: (sessionId: string, sessionName?: string, isNew?: boolean) => void;
   onOpenWorkspace: () => void;
+  onDisconnect: () => void;
 }
 
 function formatTime(unixStr: string, language: string, t: (key: string, params?: Record<string, string | number>) => string): string {
@@ -137,7 +138,7 @@ const ThemeToggleIcon: React.FC<{ isDark: boolean }> = ({ isDark }) => (
   </svg>
 );
 
-const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectSession, onOpenWorkspace }) => {
+const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectSession, onOpenWorkspace, onDisconnect }) => {
   const { t, language } = useI18n();
   const {
     sessions,
@@ -176,6 +177,8 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
   const [deleting, setDeleting] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [actionToast, setActionToast] = useState<string | null>(null);
+
+  const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
 
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const longPressPosRef = useRef({ x: 0, y: 0 });
@@ -575,6 +578,13 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
           <LanguageToggleButton />
           <button className="session-list__theme-btn" onClick={toggleTheme} aria-label={t('common.toggleTheme')}>
             <ThemeToggleIcon isDark={isDark} />
+          </button>
+          <button className="session-list__disconnect-btn" onClick={() => setShowDisconnectConfirm(true)} aria-label={t('sessions.disconnect')} title={t('sessions.disconnect')}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
           </button>
         </div>
       </div>
@@ -997,6 +1007,47 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
                 disabled={deleting}
               >
                 {deleting ? '...' : t('sessions.deleteSession')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Disconnect Confirmation */}
+      {showDisconnectConfirm && (
+        <div
+          className="session-list__picker-overlay"
+          role="alertdialog"
+          aria-modal="true"
+          onClick={() => setShowDisconnectConfirm(false)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setShowDisconnectConfirm(false);
+            if (e.key === 'Enter') { setShowDisconnectConfirm(false); onDisconnect(); }
+          }}
+        >
+          <div className="session-list__confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="session-list__confirm-icon">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+            </div>
+            <h3 className="session-list__confirm-title">{t('sessions.disconnect')}</h3>
+            <p className="session-list__confirm-desc">{t('sessions.disconnectConfirm')}</p>
+            <div className="session-list__confirm-actions">
+              <button
+                className="session-list__confirm-btn session-list__confirm-btn--cancel"
+                onClick={() => setShowDisconnectConfirm(false)}
+                autoFocus
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                className="session-list__confirm-btn session-list__confirm-btn--danger"
+                onClick={() => { setShowDisconnectConfirm(false); onDisconnect(); }}
+              >
+                {t('sessions.disconnect')}
               </button>
             </div>
           </div>

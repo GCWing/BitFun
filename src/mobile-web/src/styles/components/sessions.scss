@@ -100,6 +100,15 @@
   }
 }
 
+.session-list__disconnect-btn {
+  @extend .session-list__theme-btn;
+
+  &:active {
+    color: var(--color-error);
+    background: var(--color-error-bg);
+  }
+}
+
 .session-list__workspace-bar {
   position: relative;
   z-index: 1;
