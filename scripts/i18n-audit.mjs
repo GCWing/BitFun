@@ -1,7 +1,10 @@
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
 const root = process.cwd();
+const contractPath = path.join(root, 'src', 'shared', 'i18n', 'contract', 'locales.json');
+const sharedTermsDir = path.join(root, 'src', 'shared', 'i18n', 'resources', 'shared');
 const webLocalesDir = path.join(root, 'src', 'web-ui', 'src', 'locales');
 const namespaceRegistryPath = path.join(
   root,
@@ -13,23 +16,15 @@ const namespaceRegistryPath = path.join(
   'presets',
   'namespaceRegistry.ts',
 );
-const localeRegistryPath = path.join(
-  root,
-  'src',
-  'web-ui',
-  'src',
-  'infrastructure',
-  'i18n',
-  'presets',
-  'localeRegistry.ts',
-);
 const webSourceDir = path.join(root, 'src', 'web-ui', 'src');
+const mobileWebSourceDir = path.join(root, 'src', 'mobile-web', 'src');
 const supportedLocales = fs
   .readdirSync(webLocalesDir, { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
   .map((entry) => entry.name)
   .sort();
 const baselineLocale = supportedLocales.includes('en-US') ? 'en-US' : supportedLocales[0];
+const localeContract = readJsonFile(contractPath);
 
 let errorCount = 0;
 let warningCount = 0;
@@ -64,6 +59,10 @@ function listFiles(dir, predicate) {
   return output;
 }
 
+function readJsonFile(file) {
+  return JSON.parse(fs.readFileSync(file, 'utf8'));
+}
+
 function listLocaleNamespaces(locale) {
   const localeDir = path.join(webLocalesDir, locale);
   return listFiles(localeDir, (file) => file.endsWith('.json'))
@@ -85,10 +84,7 @@ function readRegistryNamespaces() {
 }
 
 function readRegistryLocales() {
-  const source = fs.readFileSync(localeRegistryPath, 'utf8');
-  return Array.from(source.matchAll(/\bid:\s*['"]([^'"]+)['"]/g))
-    .map((item) => item[1])
-    .sort();
+  return [...localeContract.surfaceOrders['web-ui']].sort();
 }
 
 function flattenKeys(value, prefix = '') {
@@ -111,7 +107,7 @@ function flattenKeys(value, prefix = '') {
 function readJsonKeys(locale, namespace) {
   const file = path.join(webLocalesDir, locale, `${namespace}.json`);
   try {
-    return flattenKeys(JSON.parse(fs.readFileSync(file, 'utf8')));
+    return flattenKeys(readJsonFile(file));
   } catch (error) {
     reportError(`Failed to parse ${toPosixPath(path.relative(root, file))}: ${error.message}`);
     return [];
@@ -126,10 +122,10 @@ function diffSets(left, right) {
 function auditNamespaceCoverage() {
   const registryLocales = readRegistryLocales();
   for (const locale of supportedLocales.filter((item) => !registryLocales.includes(item))) {
-    reportError(`${locale} locale directory exists but is not in builtinLocales`);
+    reportError(`${locale} locale directory exists but is not in the web-ui i18n contract surface order`);
   }
   for (const locale of registryLocales.filter((item) => !supportedLocales.includes(item))) {
-    reportError(`builtinLocales includes ${locale} but no matching locale directory exists`);
+    reportError(`web-ui i18n contract surface order includes ${locale} but no matching locale directory exists`);
   }
 
   const registryNamespaces = readRegistryNamespaces();
@@ -162,6 +158,77 @@ function auditNamespaceCoverage() {
   return registryNamespaces;
 }
 
+function auditGeneratedContract() {
+  try {
+    execFileSync(process.execPath, ['scripts/generate-i18n-contract.mjs', '--check'], {
+      cwd: root,
+      stdio: 'pipe',
+    });
+  } catch (error) {
+    const stderr = error.stderr?.toString?.().trim();
+    reportError(`Generated i18n contract files are out of date. Run pnpm run i18n:generate.${stderr ? ` ${stderr}` : ''}`);
+  }
+}
+
+function auditSharedTermsCoverage() {
+  const expectedLocaleIds = localeContract.locales.map((locale) => locale.id);
+  if (!fs.existsSync(sharedTermsDir)) {
+    reportError(`Missing shared i18n terms directory: ${toPosixPath(path.relative(root, sharedTermsDir))}`);
+    return;
+  }
+
+  const baselineTermsPath = path.join(sharedTermsDir, expectedLocaleIds[0], 'terms.json');
+  let baselineKeys = [];
+  try {
+    baselineKeys = flattenKeys(readJsonFile(baselineTermsPath));
+  } catch (error) {
+    reportError(`Failed to parse ${toPosixPath(path.relative(root, baselineTermsPath))}: ${error.message}`);
+    return;
+  }
+
+  for (const localeId of expectedLocaleIds) {
+    const termsPath = path.join(sharedTermsDir, localeId, 'terms.json');
+    if (!fs.existsSync(termsPath)) {
+      reportError(`${localeId} is missing shared terms.json`);
+      continue;
+    }
+
+    let keys = [];
+    try {
+      keys = flattenKeys(readJsonFile(termsPath));
+    } catch (error) {
+      reportError(`Failed to parse ${toPosixPath(path.relative(root, termsPath))}: ${error.message}`);
+      continue;
+    }
+
+    for (const key of diffSets(baselineKeys, keys)) {
+      reportError(`${localeId} shared terms.json is missing key "${key}"`);
+    }
+    for (const key of diffSets(keys, baselineKeys)) {
+      reportError(`${localeId} shared terms.json has extra key "${key}"`);
+    }
+  }
+}
+
+function auditMobileWebBoundary() {
+  const sourceFiles = listFiles(
+    mobileWebSourceDir,
+    (file) => file.endsWith('.ts') || file.endsWith('.tsx'),
+  );
+  const forbiddenPatterns = [
+    /src[/\\]web-ui[/\\]src[/\\]locales/,
+    /src[/\\]web-ui[/\\]src[/\\]infrastructure[/\\]i18n/,
+    /\.\.[/\\]\.\.[/\\]web-ui[/\\]/,
+  ];
+
+  for (const file of sourceFiles) {
+    const text = fs.readFileSync(file, 'utf8');
+    if (forbiddenPatterns.some((pattern) => pattern.test(text))) {
+      reportError(`${toPosixPath(path.relative(root, file))} imports or references web-ui i18n resources`);
+    }
+  }
+}
+
 function auditKeyParity(namespaces) {
   for (const namespace of namespaces) {
     const baselineKeys = readJsonKeys(baselineLocale, namespace);
@@ -184,6 +251,7 @@ function shouldSkipSourceScan(file) {
   const normalized = toPosixPath(path.relative(root, file));
   return (
     normalized.includes('/locales/') ||
+    normalized.endsWith('/generatedLocaleContract.ts') ||
     normalized.endsWith('.test.ts') ||
     normalized.endsWith('.test.tsx') ||
     normalized.endsWith('.spec.ts') ||
@@ -225,6 +293,10 @@ function auditSourceText() {
     reportWarning(`Found ${cjkFindings.length} CJK source line candidate(s). First entries: ${cjkFindings.slice(0, 12).join(', ')}`);
   }
 }
+
+auditGeneratedContract();
+auditSharedTermsCoverage();
+auditMobileWebBoundary();
 
 const namespaces = auditNamespaceCoverage();
 auditKeyParity(namespaces);

@@ -17,6 +17,8 @@ Important areas called out by the module README:
 - `src-tauri/src/installer/shortcut.rs`: shortcut creation
 - `src-tauri/src/installer/extract.rs`: archive extraction
 - `src/hooks/useInstaller.ts`: frontend installer state flow
+- `src/i18n/`: installer-only strings; locale metadata is generated from
+  `src/shared/i18n/contract/locales.json`
 
 Install flow:
 
@@ -35,6 +37,18 @@ pnpm --dir BitFun-Installer run installer:build
 ```
 
 ## Verification
+
+For frontend, i18n, language-contract, or non-packaging installer changes, prefer
+the lighter focused checks:
+
+```bash
+pnpm --dir BitFun-Installer run type-check
+cargo check --manifest-path BitFun-Installer/src-tauri/Cargo.toml
+pnpm --dir BitFun-Installer run build
+```
+
+Run the full installer build only for packaging, payload, native bundling,
+install/uninstall flow, registry, shortcut, or extraction changes:
 
 ```bash
 pnpm --dir BitFun-Installer run type-check && pnpm --dir BitFun-Installer run installer:build

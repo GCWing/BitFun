@@ -8,6 +8,8 @@ Mobile web is the browser-based remote control client for BitFun desktop session
 - Treat pairing, reconnect, disconnect, session list, and chat state as one connected product flow.
 - Keep connection state semantics consistent across persistent indicators, banners, dialogs, and disabled states.
 - User-facing strings should use the mobile-web i18n message system when one is already present for the surface being changed.
+- Locale ids and aliases come from `src/shared/i18n/contract/locales.json`
+  through generated files. Do not import Web UI locale resources to reuse copy.
 - Do not commit local pairing URLs, user IDs, logs, screenshots with sensitive data, or temporary AI prompts.
 
 ## Where to look first

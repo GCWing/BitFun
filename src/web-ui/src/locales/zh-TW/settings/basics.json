@@ -211,5 +211,19 @@
       "saveSuccess": "通知設置已保存",
       "saveFailed": "保存通知設置失敗"
     }
+  },
+  "autoUpdate": {
+    "sections": {
+      "title": "更新",
+      "hint": "啟動後是否自動檢查新版本"
+    },
+    "toggleLabel": "自動檢查更新",
+    "toggleDescription": "開啟後，啟動片刻若發現新版本可能會提示。關閉後仍可在「關於」中手動檢查更新。",
+    "messages": {
+      "loading": "載入中…",
+      "loadFailed": "無法讀取更新相關設定",
+      "saveFailed": "無法儲存更新相關設定",
+      "saved": "已儲存更新偏好"
+    }
   }
 }

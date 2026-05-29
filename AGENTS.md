@@ -78,6 +78,17 @@ For the full script list, see [`package.json`](package.json).
 
 ## Global rules
 
+### Internationalization
+
+- Locale ids, aliases, fallback rules, and surface defaults are owned by
+  `src/shared/i18n/contract/locales.json`. Run `pnpm run i18n:generate`
+  after editing it.
+- Shared stable labels live in
+  `src/shared/i18n/resources/shared/<locale>/terms.json`; workflow copy stays
+  in the owning product surface.
+- Do not import Web UI locale resources into smaller product surfaces such as
+  `src/mobile-web` or `BitFun-Installer`. See `docs/architecture/i18n.md`.
+
 ### Logging
 
 Logs must be English-only, with no emojis.
@@ -182,7 +193,8 @@ Session data is stored under `.bitfun/sessions/{session_id}/`.
 | Desktop integration, Tauri APIs, browser/computer-use, or desktop-only behavior | `cargo check -p bitfun-desktop && cargo test -p bitfun-desktop` |
 | Behavior covered by desktop smoke/functional flows | `cargo build -p bitfun-desktop` then the nearest E2E spec or `pnpm run e2e:test:l0` |
 | `src/crates/ai-adapters` | Relevant Rust checks above **and** `cargo test -p bitfun-agent-stream` for stream contracts |
-| Installer app | `pnpm run installer:build` |
+| Installer frontend, i18n, or locale contract | `pnpm --dir BitFun-Installer run type-check && cargo check --manifest-path BitFun-Installer/src-tauri/Cargo.toml && pnpm --dir BitFun-Installer run build` |
+| Installer packaging, payload, install/uninstall flow, or native bundling | `pnpm run installer:build` |
 
 ## Where to look first
 

@@ -26,6 +26,9 @@ Most changes start in:
 
 - Do not call Tauri APIs directly from UI components; go through the adapter / infrastructure layer
 - Reuse existing theme, i18n, component-library, and Zustand stores before adding new frontend primitives
+- Keep locale metadata in the generated i18n contract files. Edit
+  `src/shared/i18n/contract/locales.json`, run `pnpm run i18n:generate`, and
+  keep Web UI strings under `src/web-ui/src/locales`.
 - Follow `src/web-ui/LOGGING.md`: English only, no emojis, structured logs
 
 ## Commands

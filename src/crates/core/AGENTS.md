@@ -28,6 +28,9 @@ SessionManager → Session → DialogTurn → ModelRound
 - Avoid host-specific APIs such as `tauri::AppHandle`
 - Use shared abstractions such as `bitfun_events::EventEmitter`
 - Desktop-only integrations belong in `src/apps/desktop`, then flow through transport/API layers
+- Backend locale ids, aliases, and fallback rules must stay aligned with
+  `src/shared/i18n/contract/locales.json`; run `pnpm run i18n:generate` when
+  changing supported locales.
 - During core decomposition, `bitfun-core` is a compatibility facade and full
   product runtime assembly point. New modules should prefer the extracted owner
   crate listed in `docs/architecture/core-decomposition.md`.
