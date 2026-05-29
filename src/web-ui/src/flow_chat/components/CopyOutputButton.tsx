@@ -11,6 +11,7 @@ import { createMarkdownEditorTab } from '@/shared/utils/tabUtils';
 import { Tooltip } from '@/component-library';
 import { i18nService } from '@/infrastructure/i18n';
 import { createLogger } from '@/shared/utils/logger';
+import { formatSessionViewPreviewText } from '../utils/sessionViewPreview';
 import './CopyOutputButton.css';
 
 const log = createLogger('CopyOutputButton');
@@ -65,7 +66,7 @@ export const CopyOutputButton: React.FC<CopyOutputButtonProps> = ({
                 const resultStr = typeof toolItem.toolResult.result === 'string'
                   ? toolItem.toolResult.result
                   : JSON.stringify(toolItem.toolResult.result, null, 2);
-                toolContent += `\n[Result]\n\`\`\`\n${resultStr}\n\`\`\`\n`;
+                toolContent += `\n[Result]\n\`\`\`\n${formatSessionViewPreviewText(resultStr)}\n\`\`\`\n`;
               }
             }
             

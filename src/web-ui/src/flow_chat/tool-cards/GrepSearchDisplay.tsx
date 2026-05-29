@@ -9,6 +9,7 @@ import type { ToolCardProps } from '../types/flow-chat';
 import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
 import { ToolCardStatusSlot } from './ToolCardStatusSlot';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
+import { formatSessionViewPreviewText } from '../utils/sessionViewPreview';
 export const GrepSearchDisplay: React.FC<ToolCardProps> = ({
   toolItem,
   onExpand
@@ -119,7 +120,7 @@ export const GrepSearchDisplay: React.FC<ToolCardProps> = ({
             maxHeight: '400px',
             overflow: 'auto'
           }}>
-            {toolResult.result.result}
+            {formatSessionViewPreviewText(String(toolResult.result.result))}
           </pre>
         </div>
       )}

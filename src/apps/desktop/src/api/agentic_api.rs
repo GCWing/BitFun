@@ -23,8 +23,8 @@ use bitfun_core::service::session::{DialogTurnData, SessionRelationship};
 
 const SESSION_VIEW_TOOL_RESULT_TOTAL_CHAR_BUDGET: usize = 512 * 1024;
 const SESSION_VIEW_TOOL_RESULT_STRING_CHAR_LIMIT: usize = 16 * 1024;
-const SESSION_VIEW_TRUNCATED_MARKER: &str = "\n...[truncated for session view]";
-const SESSION_VIEW_OMITTED_MARKER: &str = "[truncated for session view]";
+const SESSION_VIEW_TRUNCATED_MARKER: &str = "\n... Output truncated for session preview";
+const SESSION_VIEW_OMITTED_MARKER: &str = "Output omitted from session preview";
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -1863,7 +1863,8 @@ mod tests {
             .as_str()
             .expect("output should remain a visible string preview");
         assert!(output.len() < 80 * 1024);
-        assert!(output.contains("truncated for session view"));
+        assert!(!output.contains("[truncated for session view]"));
+        assert!(output.contains("Output truncated for session preview"));
         assert_eq!(tool_result.result["exit_code"], 0);
         assert_eq!(tool_result.result_for_assistant, None);
     }
