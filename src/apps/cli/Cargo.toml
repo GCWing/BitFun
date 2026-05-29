@@ -16,11 +16,11 @@ bitfun-events = { path = "../../crates/events" }
 bitfun-acp = { path = "../../crates/acp" }
 
 # CLI framework
-clap = { version = "4", features = ["derive"] }
+clap = { workspace = true }
 
 # TUI framework (Terminal User Interface)
-ratatui = "0.28"
-crossterm = "0.28"
+ratatui = { workspace = true }
+crossterm = { workspace = true }
 
 # Config and serialization
 dirs = { workspace = true }
@@ -35,29 +35,29 @@ dashmap = { workspace = true }
 async-trait = { workspace = true }
 
 # Unicode width calculation (for correct wide-char handling)
-unicode-width = "0.1"
+unicode-width = { workspace = true }
 
 # Path canonicalization without Windows UNC prefix
 dunce = { workspace = true }
 
 # Markdown parsing and rendering
-pulldown-cmark = "0.11"
+pulldown-cmark = { workspace = true }
 
 # Diff computation for tool card rendering
-similar = "2"
+similar = { workspace = true }
 
 # Syntax highlighting for code blocks and tool cards
-syntect = { version = "5", default-features = false, features = ["default-syntaxes", "default-themes", "regex-fancy"] }
-syntect-tui = "3.0"
+syntect = { workspace = true }
+syntect-tui = { workspace = true }
 
 # Lazy initialization for syntax highlighter singleton
-once_cell = "1"
+once_cell = { workspace = true }
 
 # Unix-only best-effort terminal color detection (OSC 11)
-libc = "0.2"
+libc = { workspace = true }
 
 # Clipboard access (for reliable paste on Windows where bracketed paste is broken)
-arboard = "3"
+arboard = { workspace = true }
 
 # Inherited from workspace
 tokio = { workspace = true }

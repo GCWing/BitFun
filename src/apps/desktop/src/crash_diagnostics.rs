@@ -7,7 +7,7 @@ use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
-use zip::write::FileOptions;
+use zip::write::SimpleFileOptions;
 
 const RUN_STATE_FILE: &str = "run-state.json";
 const CRASH_REPORT_FILE: &str = "crash-report.json";
@@ -211,7 +211,7 @@ pub fn export_diagnostics_bundle() -> Result<DiagnosticsBundleInfo, String> {
     let file = File::create(&bundle_path)
         .map_err(|error| format!("Failed to create diagnostics bundle: {}", error))?;
     let mut zip = zip::ZipWriter::new(file);
-    let options = FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
     let metadata = DiagnosticMetadata {
         exported_at: Utc::now().to_rfc3339(),
@@ -309,7 +309,7 @@ fn add_directory_entries(
     zip: &mut zip::ZipWriter<File>,
     dir: &Path,
     archive_prefix: &str,
-    options: FileOptions,
+    options: SimpleFileOptions,
 ) -> Result<(), String> {
     for entry in fs::read_dir(dir)
         .map_err(|error| format!("Failed to read directory {}: {}", dir.display(), error))?
@@ -333,7 +333,7 @@ fn add_json_entry<T: Serialize>(
     zip: &mut zip::ZipWriter<File>,
     archive_path: &str,
     value: &T,
-    options: FileOptions,
+    options: SimpleFileOptions,
 ) -> Result<(), String> {
     let content = serde_json::to_vec_pretty(value)
         .map_err(|error| format!("Failed to serialize {}: {}", archive_path, error))?;
@@ -356,7 +356,7 @@ fn add_file_entry(
     zip: &mut zip::ZipWriter<File>,
     source_path: &Path,
     archive_path: &str,
-    options: FileOptions,
+    options: SimpleFileOptions,
 ) -> Result<(), String> {
     let mut file = File::open(source_path)
         .map_err(|error| format!("Failed to open {}: {}", source_path.display(), error))?;

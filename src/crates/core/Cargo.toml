@@ -34,8 +34,8 @@ regex = { workspace = true }
 base64 = { workspace = true }
 image = { workspace = true, optional = true }
 md5 = { workspace = true, optional = true }
-aes = { version = "0.8", optional = true }
-hex = "0.4"
+aes = { workspace = true, optional = true }
+hex = { workspace = true }
 dashmap = { workspace = true, optional = true }
 indexmap = { workspace = true, optional = true }
 
@@ -69,17 +69,11 @@ globset = { workspace = true, optional = true }
 
 eventsource-stream = { workspace = true, optional = true }
 
-# MCP Streamable HTTP client (official rust-sdk used by Codex)
-rmcp = { version = "0.12.0", default-features = false, features = [
-    "auth",
-    "base64",
-    "client",
-    "macros",
-    "schemars",
-    "server",
+# MCP Streamable HTTP client (official rust-sdk)
+rmcp = { workspace = true, features = [
     "transport-streamable-http-client-reqwest",
 ], optional = true }
-sse-stream = { version = "0.2.1", optional = true }
+sse-stream = { workspace = true, optional = true }
 
 # Shared AI protocol adapters
 bitfun-ai-adapters = { path = "../ai-adapters" }
@@ -130,11 +124,11 @@ qrcode = { workspace = true, optional = true }
 tokio-tungstenite = { workspace = true, optional = true }
 
 # SSH - Remote SSH support (optional feature)
-russh = { version = "0.45", optional = true }
-russh-sftp = { version = "2.1", optional = true }
-russh-keys = { version = "0.45", optional = true }
-shellexpand = { version = "3", optional = true }
-ssh_config = { version = "0.1", optional = true }
+russh = { workspace = true, optional = true }
+russh-sftp = { workspace = true, optional = true }
+russh-keys = { workspace = true, optional = true }
+shellexpand = { workspace = true, optional = true }
+ssh_config = { workspace = true, optional = true }
 
 # Relay server shared library (embedded relay reuses standalone relay logic)
 bitfun-relay-server = { path = "../../apps/relay-server", optional = true }
@@ -156,7 +150,7 @@ git2 = { workspace = true, features = ["vendored-openssl"], optional = true }
 
 [target.'cfg(windows)'.dependencies]
 win32job = { workspace = true }
-rustls = { version = "0.23", default-features = false }
+rustls = { workspace = true }
 rustls-native-certs = "0.8"
 schannel = "0.1"
 

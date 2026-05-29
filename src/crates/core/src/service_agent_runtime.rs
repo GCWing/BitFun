@@ -11,6 +11,11 @@ use bitfun_runtime_ports::{
     RemoteControlStateRequest, RemoteControlStateSnapshot,
 };
 use bitfun_services_integrations::remote_connect::{
+    build_remote_chat_messages, build_remote_model_catalog,
+    normalize_remote_model_selection as normalize_remote_model_selection_contract,
+    normalize_remote_session_model_id as normalize_remote_session_model_id_contract,
+    remote_dialog_submit_outcome_from_scheduler,
+    remote_model_selection_needs_config as remote_model_selection_needs_config_contract,
     ChatImageAttachment, ChatMessage, RemoteAssistantWorkspaceFacts, RemoteCancelRuntimeHost,
     RemoteChatHistoryRound, RemoteChatHistoryTextItem, RemoteChatHistoryThinkingItem,
     RemoteChatHistoryToolCall, RemoteChatHistoryToolItem, RemoteChatHistoryTurn,
@@ -23,19 +28,14 @@ use bitfun_services_integrations::remote_connect::{
     RemoteSessionMetadata, RemoteSessionRuntimeHost, RemoteSessionStateTracker,
     RemoteSessionTrackerHost, RemoteTerminalPrewarmRequest, RemoteWorkspaceFacts,
     RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind as RemoteConnectWorkspaceKind,
-    RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate, build_remote_chat_messages,
-    build_remote_model_catalog,
-    normalize_remote_model_selection as normalize_remote_model_selection_contract,
-    normalize_remote_session_model_id as normalize_remote_session_model_id_contract,
-    remote_dialog_submit_outcome_from_scheduler,
-    remote_model_selection_needs_config as remote_model_selection_needs_config_contract,
+    RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate,
 };
 use log::{debug, error, info};
 use std::sync::Arc;
 
 use crate::agentic::coordination::{
-    ConversationCoordinator, DialogQueuePriority, DialogScheduler, DialogSubmissionPolicy,
-    DialogSubmitOutcome, DialogTriggerSource, get_global_coordinator, get_global_scheduler,
+    get_global_coordinator, get_global_scheduler, ConversationCoordinator, DialogQueuePriority,
+    DialogScheduler, DialogSubmissionPolicy, DialogSubmitOutcome, DialogTriggerSource,
 };
 use crate::agentic::image_analysis::ImageContextData;
 use crate::service::remote_connect::remote_server::RemoteExecutionDispatcher;
@@ -67,7 +67,7 @@ fn git_branch_for_workspace_path(path: &std::path::Path) -> Option<String> {
     git2::Repository::open(path).ok().and_then(|repo| {
         repo.head()
             .ok()
-            .and_then(|head| head.shorthand().map(String::from))
+            .and_then(|head| head.shorthand().ok().map(String::from))
     })
 }
 
@@ -193,8 +193,8 @@ fn remote_reasoning_mode_fact(reasoning_mode: ReasoningMode) -> RemoteReasoningM
 /// Falls back to the original if decoding/compression fails or the image is
 /// already within `max_bytes`.
 fn compress_remote_chat_data_url_for_mobile(data_url: &str, max_bytes: usize) -> String {
-    use base64::Engine;
     use base64::engine::general_purpose::STANDARD as BASE64;
+    use base64::Engine;
     use image::imageops::FilterType;
 
     const MAX_THUMBNAIL_DIM: u32 = 400;

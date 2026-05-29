@@ -74,7 +74,7 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     };
 
     if let Ok(json) = serde_json::to_string(&welcome_msg) {
-        let _ = sender.send(Message::Text(json)).await;
+        let _ = sender.send(Message::Text(json.into())).await;
     }
 
     while let Some(msg) = receiver.next().await {
@@ -141,7 +141,7 @@ async fn handle_text_message(
             };
 
             let json = serde_json::to_string(&response)?;
-            sender.send(Message::Text(json)).await?;
+            sender.send(Message::Text(json.into())).await?;
         }
         WsMessage::Event { event, .. } => {
             tracing::debug!("Received event: {}", event);

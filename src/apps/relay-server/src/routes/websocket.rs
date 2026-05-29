@@ -94,7 +94,12 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
 
     let write_task = tokio::spawn(async move {
         while let Some(msg) = out_rx.recv().await {
-            if !msg.text.is_empty() && ws_sender.send(Message::Text(msg.text)).await.is_err() {
+            if !msg.text.is_empty()
+                && ws_sender
+                    .send(Message::Text(msg.text.into()))
+                    .await
+                    .is_err()
+            {
                 break;
             }
         }

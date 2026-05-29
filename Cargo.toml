@@ -38,21 +38,21 @@ edition = "2021"
 # Shared dependency versions to keep all crates aligned
 [workspace.dependencies]
 # Async runtime
-tokio = { version = "1.0", features = ["full"] }
-tokio-stream = "0.1"
-tokio-util = "0.7"
-async-trait = "0.1"
-futures = "0.3"
-futures-util = "0.3"
+tokio = { version = "1.52", features = ["full"] }
+tokio-stream = "0.1.18"
+tokio-util = "0.7.18"
+async-trait = "0.1.89"
+futures = "0.3.31"
+futures-util = "0.3.31"
 
 # Serialization
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 serde_yaml = "0.9"
 
 # Error handling
 anyhow = "1.0"
-thiserror = "1.0"
+thiserror = "2"
 
 # Logging
 log = "0.4"
@@ -66,38 +66,52 @@ chrono-tz = "0.10.4"
 cron = "0.15.0"
 regex = "1"
 base64 = "0.22"
+# Keep macOS Tauri's dispatch2/bitflags expansion on the known-good bitflags release.
+bitflags = "=2.11.1"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }
 md5 = "0.7"
-dashmap = "5"
+dashmap = "6"
 indexmap = "2"
 include_dir = "0.7"
+aes = "0.8"
+hex = "0.4"
 
 # HTTP client
-reqwest = { version = "0.12", default-features = false, features = ["native-tls", "rustls-tls-native-roots", "json", "stream", "multipart"] }
+reqwest = { version = "0.13.4", default-features = false, features = ["native-tls", "rustls", "json", "stream", "multipart", "query", "form"] }
 
 # Debug Log HTTP Server
-axum = { version = "0.7", features = ["json", "ws"] }
-tower-http = { version = "0.6", features = ["cors", "fs"] }
+axum = { version = "0.8", features = ["json", "ws"] }
+tower-http = { version = "0.6.11", features = ["cors", "fs"] }
 
 # File system
 glob = "0.3"
 ignore = "0.4"
-notify = "6.1"
-dirs = "5.0"
+notify = "8.2"
+dirs = "6.0"
 dark-light = "1.1"
 dunce = "1"
 filetime = "0.2"
 fs2 = "0.4"
-zip = "0.6" # plugin load
+zip = { version = "4.6", default-features = false, features = ["deflate"] } # plugin load
 flate2 = "1.0"
-toml = "0.8"
+toml = "0.9"
 
 # Git
-git2 = { version = "0.18", default-features = false, features = ["https", "vendored-libgit2"] }
+git2 = { version = "0.21", default-features = false, features = ["https", "vendored-libgit2"] }
 
 # Terminal
 portable-pty = "0.8"
 vte = "0.15.0"
+clap = { version = "4.6.1", features = ["derive"] }
+crossterm = "0.28"
+ratatui = "0.29"
+unicode-width = "0.2"
+pulldown-cmark = "0.11"
+syntect = { version = "5", default-features = false, features = ["default-syntaxes", "default-themes", "regex-fancy"] }
+syntect-tui = "3.0"
+once_cell = "1"
+libc = "0.2"
+arboard = "3"
 
 # Grep (search)
 grep-searcher = "0.1"
@@ -106,6 +120,7 @@ globset = "0.4"
 
 # SSE
 eventsource-stream = "0.2.3"
+sse-stream = "0.2.3"
 
 # Command detection (cross-platform)
 which = "8.0"
@@ -113,16 +128,39 @@ similar = "2.5"
 urlencoding = "2.1"
 
 # Tauri (desktop only)
- tauri = { version = "2", features = ["unstable", "macos-private-api", "tray-icon"] }
-tauri-plugin-opener = "2"
-tauri-plugin-dialog = "2.6"
-tauri-plugin-fs = "2"
-tauri-plugin-log = "2"
-tauri-plugin-autostart = "2"
-tauri-plugin-notification = "2"
-tauri-plugin-updater = "2"
-tauri-plugin-global-shortcut = "2"
-tauri-build = { version = "2", features = [] }
+tauri = { version = "2.11", features = ["unstable", "macos-private-api", "tray-icon"] }
+tauri-plugin-opener = "2.5"
+tauri-plugin-dialog = "2.7"
+tauri-plugin-fs = "2.5"
+tauri-plugin-log = "2.8"
+tauri-plugin-autostart = "2.5"
+tauri-plugin-notification = "2.3"
+tauri-plugin-updater = "2.10"
+tauri-plugin-global-shortcut = "2.3"
+tauri-build = { version = "2.6", features = [] }
+
+# Desktop support
+screenshots = "0.8"
+enigo = "0.2"
+resvg = { version = "0.47", default-features = false }
+atspi = "0.29"
+leptess = "0.14"
+core-foundation = "0.9"
+core-graphics = { version = "0.23", features = ["elcapitan", "highsierra"] }
+dispatch = "0.2"
+block2 = "0.6"
+objc2 = "0.6"
+objc2-foundation = "0.3"
+objc2-app-kit = "0.3"
+objc2-vision = { version = "0.3.2", features = ["VNRecognizeTextRequest", "VNRequest", "VNObservation", "VNRequestHandler", "VNUtils", "VNTypes", "objc2-core-foundation"] }
+objc2-web-kit = { version = "0.3", features = ["WKWebView", "WKSnapshotConfiguration", "WKPDFConfiguration", "block2", "objc2-app-kit"] }
+tempfile = "3"
+webview2-com = "0.38"
+windows = "0.61"
+windows-core = "0.61"
+glib = "0.18"
+gtk = "0.18"
+webkit2gtk = "2.0"
 
 # Windows-specific dependencies
 win32job = "2.0"
@@ -147,7 +185,26 @@ hostname = "0.4"
 qrcode = "0.14"
 
 # WebSocket client
-tokio-tungstenite = { version = "0.24", features = ["rustls-tls-native-roots"] }
+tokio-tungstenite = { version = "0.29", features = ["rustls-tls-native-roots"] }
+
+# MCP and remote runtimes
+rmcp = { version = "1.7", default-features = false, features = [
+    "auth",
+    "base64",
+    "client",
+    "elicitation",
+    "macros",
+    "reqwest",
+    "schemars",
+    "server",
+] }
+agent-client-protocol = { version = "0.12", features = ["unstable"] }
+russh = "0.45"
+russh-sftp = "2.1"
+russh-keys = "0.45"
+shellexpand = "3"
+ssh_config = "0.1"
+rustls = { version = "0.23", default-features = false }
 
 [profile.dev]
 incremental = true
