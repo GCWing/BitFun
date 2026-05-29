@@ -89,7 +89,7 @@ export function getAboutInfo(): AboutInfo {
     version: versionInfo,
     license: {
       type: 'MIT',
-      text: 'MIT License - Copyright (c) 2025 BitFun',
+      text: 'MIT License - Copyright (c) 2026 BitFun',
       url: 'https://opensource.org/licenses/MIT'
     },
     links: {
