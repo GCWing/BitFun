@@ -347,7 +347,7 @@
     "GenerateDoc": "Documentation agent: automatically generate code documentation and explanations",
     "Init": "Init agent: help set up project structure and initial configuration",
     "ReviewFixer": "Review fixer agent: automatically fix code issues based on review results",
-    "Multitask": "Multitask mode: decompose work into orthogonal branches or a DAG and use subagents in parallel when beneficial",
+    "Multitask": "Multitask mode: decompose work into orthogonal branches and use subagents in parallel when beneficial",
     "Plan": "Plan mode: create detailed task plans and execution steps",
     "Debug": "Debug mode: systematically diagnose and fix errors in code",
     "Claw": "Claw mode: extract and integrate information from external sources",
