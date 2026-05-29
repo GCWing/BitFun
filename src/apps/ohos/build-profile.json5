@@ -1,19 +1,6 @@
 {
   "app": {
     "signingConfigs": [
-      {
-        "name": "default",
-        "type": "HarmonyOS",
-        "material": {
-          "certpath": "C:\\Users\\lijiale\\.ohos\\config\\default_vcoder_mLoJ04E4ZMVs3NKJi5Yg30Rswoz227jnCV-I8k6sAvc=.cer",
-          "keyAlias": "debugKey",
-          "keyPassword": "0000001B1AC4E38D3159F409BFB38FF2B667CE1FE6E108A4C111EF2A0165222070DE0DE0656D86DB91D77C",
-          "profile": "C:\\Users\\lijiale\\.ohos\\config\\default_vcoder_mLoJ04E4ZMVs3NKJi5Yg30Rswoz227jnCV-I8k6sAvc=.p7b",
-          "signAlg": "SHA256withECDSA",
-          "storeFile": "C:\\Users\\lijiale\\.ohos\\config\\default_vcoder_mLoJ04E4ZMVs3NKJi5Yg30Rswoz227jnCV-I8k6sAvc=.p12",
-          "storePassword": "0000001BF771363E57B97E663BB05D7EF3F6EA63ED750CF7C726306B8714BD0DF072E44D384B69C6FE4F64"
-        }
-      }
     ],
     "products": [
       {
