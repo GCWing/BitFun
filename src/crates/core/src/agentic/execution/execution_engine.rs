@@ -85,20 +85,30 @@ struct TurnTokenUsageTotals {
     prompt_tokens: u64,
     completion_tokens: u64,
     total_tokens: u64,
+    llm_duration_ms: u64,
     cached_tokens: u64,
     cached_tokens_reported_count: usize,
 }
 
 impl TurnTokenUsageTotals {
-    fn add_usage(&mut self, usage: &crate::util::types::ai::GeminiUsage) {
+    fn add_usage(&mut self, usage: &crate::util::types::ai::GeminiUsage, llm_latency_ms: u64) {
         self.usage_count += 1;
         self.prompt_tokens += usage.prompt_token_count as u64;
         self.completion_tokens += usage.candidates_token_count as u64;
         self.total_tokens += usage.total_token_count as u64;
+        self.llm_duration_ms = self.llm_duration_ms.saturating_add(llm_latency_ms);
         if let Some(cached_tokens) = usage.cached_content_token_count {
             self.cached_tokens += cached_tokens as u64;
             self.cached_tokens_reported_count += 1;
         }
+    }
+
+    fn llm_tps(&self) -> Option<f64> {
+        if self.usage_count == 0 || self.llm_duration_ms == 0 {
+            return None;
+        }
+
+        Some(self.completion_tokens as f64 * 1000.0 / self.llm_duration_ms as f64)
     }
 
     fn cache_coverage(&self) -> &'static str {
@@ -1952,7 +1962,7 @@ impl ExecutionEngine {
             completed_rounds += 1;
 
             if let Some(ref usage) = round_result.usage {
-                token_usage_totals.add_usage(usage);
+                token_usage_totals.add_usage(usage, round_result.llm_latency_ms);
             }
 
             // Add assistant message to history
@@ -2335,7 +2345,7 @@ impl ExecutionEngine {
                     !Self::assistant_has_tool_calls(&final_round_result.assistant_message);
                 let mut chosen_assistant_message: Option<Message> = None;
                 if let Some(ref usage) = final_round_result.usage {
-                    token_usage_totals.add_usage(usage);
+                    token_usage_totals.add_usage(usage, final_round_result.llm_latency_ms);
                 }
 
                 if accepted {
@@ -2363,7 +2373,7 @@ impl ExecutionEngine {
                         )
                         .await?;
                     if let Some(ref usage) = retry_result.usage {
-                        token_usage_totals.add_usage(usage);
+                        token_usage_totals.add_usage(usage, retry_result.llm_latency_ms);
                     }
                     finalize_fallback_text_used = true;
                     if Self::assistant_has_tool_calls(&retry_result.assistant_message) {
@@ -2440,14 +2450,20 @@ impl ExecutionEngine {
         // the reported subtotal and mark coverage as partial so downstream
         // consumers do not treat it as a complete total.
         if token_usage_totals.usage_count > 0 {
+            let llm_tps = token_usage_totals
+                .llm_tps()
+                .map(|value| format!("{:.1}", value))
+                .unwrap_or_else(|| "unavailable".to_string());
             if token_usage_totals.has_reported_cache_tokens() {
                 info!(
-                    "Dialog turn completed - Token stats: turn_id={}, rounds={}, model_calls={}, tools={}, duration={}ms, prompt_tokens={}, completion_tokens={}, total_tokens={}, cached_tokens={}, cached_tokens_available={}",
+                    "Dialog turn completed - Token stats: turn_id={}, rounds={}, model_calls={}, tools={}, duration={}ms, llm_duration={}ms, llm_tps={} tokens/s, prompt_tokens={}, completion_tokens={}, total_tokens={}, cached_tokens={}, cached_tokens_available={}",
                     context.dialog_turn_id,
                     completed_rounds,
                     token_usage_totals.usage_count,
                     total_tools,
                     duration_ms,
+                    token_usage_totals.llm_duration_ms,
+                    llm_tps,
                     token_usage_totals.prompt_tokens,
                     token_usage_totals.completion_tokens,
                     token_usage_totals.total_tokens,
@@ -2456,12 +2472,14 @@ impl ExecutionEngine {
                 );
             } else {
                 info!(
-                    "Dialog turn completed - Token stats: turn_id={}, rounds={}, model_calls={}, tools={}, duration={}ms, prompt_tokens={}, completion_tokens={}, total_tokens={}, cached_tokens_available={}",
+                    "Dialog turn completed - Token stats: turn_id={}, rounds={}, model_calls={}, tools={}, duration={}ms, llm_duration={}ms, llm_tps={} tokens/s, prompt_tokens={}, completion_tokens={}, total_tokens={}, cached_tokens_available={}",
                     context.dialog_turn_id,
                     completed_rounds,
                     token_usage_totals.usage_count,
                     total_tools,
                     duration_ms,
+                    token_usage_totals.llm_duration_ms,
+                    llm_tps,
                     token_usage_totals.prompt_tokens,
                     token_usage_totals.completion_tokens,
                     token_usage_totals.total_tokens,
@@ -2608,13 +2626,15 @@ mod tests {
     fn turn_token_usage_totals_accumulates_model_calls() {
         let mut totals = TurnTokenUsageTotals::default();
 
-        totals.add_usage(&usage(10, 2, Some(3)));
-        totals.add_usage(&usage(20, 4, Some(5)));
+        totals.add_usage(&usage(10, 2, Some(3)), 100);
+        totals.add_usage(&usage(20, 4, Some(5)), 200);
 
         assert_eq!(totals.usage_count, 2);
         assert_eq!(totals.prompt_tokens, 30);
         assert_eq!(totals.completion_tokens, 6);
         assert_eq!(totals.total_tokens, 36);
+        assert_eq!(totals.llm_duration_ms, 300);
+        assert_eq!(totals.llm_tps(), Some(20.0));
         assert_eq!(totals.cached_tokens, 8);
         assert!(totals.has_complete_cache_tokens());
         assert_eq!(totals.cache_coverage(), "true");
@@ -2623,8 +2643,8 @@ mod tests {
     #[test]
     fn turn_token_usage_totals_marks_partial_or_missing_cache() {
         let mut partial = TurnTokenUsageTotals::default();
-        partial.add_usage(&usage(10, 2, Some(3)));
-        partial.add_usage(&usage(20, 4, None));
+        partial.add_usage(&usage(10, 2, Some(3)), 100);
+        partial.add_usage(&usage(20, 4, None), 200);
 
         assert_eq!(partial.cached_tokens, 3);
         assert!(partial.has_reported_cache_tokens());
@@ -2632,7 +2652,7 @@ mod tests {
         assert_eq!(partial.cache_coverage(), "partial");
 
         let mut unavailable = TurnTokenUsageTotals::default();
-        unavailable.add_usage(&usage(10, 2, None));
+        unavailable.add_usage(&usage(10, 2, None), 100);
 
         assert_eq!(unavailable.cached_tokens, 0);
         assert!(!unavailable.has_reported_cache_tokens());

@@ -148,6 +148,7 @@ impl TokenUsageService {
         input_tokens: u32,
         output_tokens: u32,
         cached_tokens: Option<u32>,
+        llm_latency_ms: Option<u64>,
         token_details: Option<serde_json::Value>,
         is_subagent: bool,
     ) -> Result<()> {
@@ -166,6 +167,7 @@ impl TokenUsageService {
             cached_tokens,
             cached_tokens_available,
             total_tokens,
+            llm_latency_ms,
             token_details,
             is_subagent,
         };

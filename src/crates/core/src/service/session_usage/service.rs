@@ -1895,6 +1895,7 @@ mod tests {
             cached_tokens,
             cached_tokens_available: false,
             total_tokens: input_tokens + output_tokens,
+            llm_latency_ms: None,
             token_details: None,
             is_subagent: false,
         }

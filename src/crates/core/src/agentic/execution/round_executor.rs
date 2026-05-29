@@ -417,6 +417,7 @@ impl RoundExecutor {
             stream_result.first_chunk_ms,
             stream_result.first_visible_output_ms
         );
+        let llm_latency_ms = send_to_stream_ms.saturating_add(stream_processing_ms);
 
         // Check cancellation token again after stream processing completes
         if cancel_token.is_cancelled() {
@@ -464,6 +465,7 @@ impl RoundExecutor {
                     total_tokens: usage.total_token_count as usize,
                     max_context_tokens: context_window,
                     is_subagent,
+                    llm_latency_ms: Some(llm_latency_ms),
                     cached_tokens: usage.cached_content_token_count.map(|v| v as usize),
                     token_details: token_details_from_usage(usage),
                 },
@@ -552,6 +554,7 @@ impl RoundExecutor {
                 has_more_rounds: false,
                 finish_reason: FinishReason::Complete,
                 usage: stream_result.usage.clone(),
+                llm_latency_ms,
                 provider_metadata: stream_result.provider_metadata.clone(),
                 partial_recovery_reason: stream_result.partial_recovery_reason.clone(),
                 had_assistant_text: Self::has_user_visible_assistant_text(&stream_result.full_text),
@@ -799,6 +802,7 @@ impl RoundExecutor {
                 FinishReason::Complete
             },
             usage: stream_result.usage.clone(),
+            llm_latency_ms,
             provider_metadata: stream_result.provider_metadata.clone(),
             partial_recovery_reason: stream_result.partial_recovery_reason.clone(),
             had_assistant_text: Self::has_user_visible_assistant_text(&stream_result.full_text),
