@@ -797,6 +797,20 @@ Status: {status}"
         envelope.render()
     }
 
+    fn goal_verification_observation_text(outcome: &TurnOutcome) -> String {
+        match outcome {
+            TurnOutcome::Completed { final_response, .. } => final_response.clone(),
+            TurnOutcome::Cancelled { .. } => {
+                "The session turn was cancelled before producing a final answer.".to_string()
+            }
+            TurnOutcome::Failed { error, .. } => {
+                format!(
+                    "The session turn failed before the goal could be confirmed.\nError: {error}"
+                )
+            }
+        }
+    }
+
     async fn dispatch_next_if_idle(&self, session_id: &str) -> Result<(), String> {
         let _ = self.try_start_next_queued(session_id).await?;
         Ok(())
@@ -832,9 +846,15 @@ Status: {status}"
                 }
             }
 
-            if let (Some(active_turn), TurnOutcome::Completed { final_response, .. }) =
-                (active_turn.as_ref(), &outcome)
-            {
+            let status = outcome.status();
+            let queue_action = outcome.queue_action();
+            if queue_action == TurnOutcomeQueueAction::ClearQueue {
+                debug!("Turn {}, clearing queue: session_id={}", status, session_id);
+                self.clear_queue(&session_id);
+            }
+
+            if let Some(active_turn) = active_turn.as_ref() {
+                let outcome_observation = Self::goal_verification_observation_text(&outcome);
                 match self
                     .coordinator
                     .prepare_goal_continuation_after_turn(
@@ -842,7 +862,7 @@ Status: {status}"
                         &outcome.turn_id(),
                         &active_turn.user_input,
                         active_turn.user_message_metadata.as_ref(),
-                        final_response,
+                        &outcome_observation,
                     )
                     .await
                 {
@@ -873,15 +893,14 @@ Status: {status}"
                     Ok(None) => {}
                     Err(error) => {
                         warn!(
-                            "Goal verification failed after turn completion: session_id={}, error={}",
-                            session_id, error
+                            "Goal verification failed after turn stopped: session_id={}, status={}, error={}",
+                            session_id, status, error
                         );
                     }
                 }
             }
 
-            let status = outcome.status();
-            match outcome.queue_action() {
+            match queue_action {
                 TurnOutcomeQueueAction::DispatchNext => {
                     if status == TurnOutcomeStatus::Cancelled {
                         debug!(
@@ -897,10 +916,7 @@ Status: {status}"
                         );
                     }
                 }
-                TurnOutcomeQueueAction::ClearQueue => {
-                    debug!("Turn {}, clearing queue: session_id={}", status, session_id);
-                    self.clear_queue(&session_id);
-                }
+                TurnOutcomeQueueAction::ClearQueue => {}
             }
         }
     }
@@ -963,6 +979,31 @@ mod tests {
         assert!(!DialogScheduler::should_skip_agent_session_reply(
             &completed, true
         ));
+    }
+
+    #[test]
+    fn goal_verification_observation_covers_all_turn_outcomes() {
+        let completed = TurnOutcome::Completed {
+            turn_id: "turn_1".to_string(),
+            final_response: "done".to_string(),
+        };
+        let cancelled = TurnOutcome::Cancelled {
+            turn_id: "turn_2".to_string(),
+        };
+        let failed = TurnOutcome::Failed {
+            turn_id: "turn_3".to_string(),
+            error: "network offline".to_string(),
+        };
+
+        assert_eq!(
+            DialogScheduler::goal_verification_observation_text(&completed),
+            "done"
+        );
+        assert!(
+            DialogScheduler::goal_verification_observation_text(&cancelled).contains("cancelled")
+        );
+        assert!(DialogScheduler::goal_verification_observation_text(&failed)
+            .contains("network offline"));
     }
 
     #[test]

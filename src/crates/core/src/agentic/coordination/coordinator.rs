@@ -21,8 +21,8 @@ use crate::agentic::goal_mode::{
     effective_subagent_timeout_seconds, ensure_final_response_in_goal_context,
     generate_goal_from_context, goal_mode_from_custom_metadata, goal_mode_patch, now_ms,
     should_skip_goal_verification_for_turn, user_facing_goal_mode_error, verify_goal_achievement,
-    wrap_user_input_with_goal_reminder, GoalActivationResult, GoalContinuationPlan, GoalModeState,
-    MAX_GOAL_CONTINUATIONS,
+    wrap_user_input_with_goal_reminder, GoalActivationResult, GoalContinuationPlan,
+    GoalModeInitialGoal, GoalModeState, MAX_GOAL_CONTINUATIONS,
 };
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::round_preempt::{DialogRoundInjectionSource, DialogRoundPreemptSource};
@@ -1916,13 +1916,20 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .await
             .map_err(user_facing_goal_mode_error)?;
         let activation = build_goal_kickoff_messages(&generation, trimmed_hint);
+        let activated_at_ms = now_ms();
 
         let state = GoalModeState {
             active: true,
+            initial_goal: GoalModeInitialGoal::new(
+                activation.goal_text.clone(),
+                activation.success_criteria.clone(),
+                trimmed_hint.map(str::to_string),
+                activated_at_ms,
+            ),
             goal_text: activation.goal_text.clone(),
             success_criteria: activation.success_criteria.clone(),
             user_hint: trimmed_hint.map(str::to_string),
-            activated_at_ms: now_ms(),
+            activated_at_ms,
             continuation_count: 0,
         };
 
@@ -1938,14 +1945,14 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         Ok(activation)
     }
 
-    /// Verify the active session goal after a dialog turn completes.
+    /// Verify the active session goal after a dialog turn stops.
     pub async fn prepare_goal_continuation_after_turn(
         &self,
         session_id: &str,
         source_turn_id: &str,
         user_input: &str,
         user_message_metadata: Option<&serde_json::Value>,
-        final_response: &str,
+        turn_observation: &str,
     ) -> BitFunResult<Option<GoalContinuationPlan>> {
         if should_skip_goal_verification_for_turn(user_input, user_message_metadata) {
             return Ok(None);
@@ -1993,8 +2000,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .session_manager
             .get_context_messages(session_id)
             .await?;
-        let context_messages =
-            ensure_final_response_in_goal_context(context_messages, final_response, source_turn_id);
+        let context_messages = ensure_final_response_in_goal_context(
+            context_messages,
+            turn_observation,
+            source_turn_id,
+        );
         let verification = match verify_goal_achievement(&goal_state, &context_messages).await {
             Ok(result) => result,
             Err(error) => {
