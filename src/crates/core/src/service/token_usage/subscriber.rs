@@ -32,6 +32,7 @@ impl EventSubscriber for TokenUsageSubscriber {
             output_tokens,
             total_tokens,
             is_subagent,
+            llm_latency_ms,
             cached_tokens,
             token_details,
             ..
@@ -60,6 +61,7 @@ impl EventSubscriber for TokenUsageSubscriber {
                     *input_tokens as u32,
                     output as u32,
                     cached_tokens.map(|value| value as u32),
+                    *llm_latency_ms,
                     token_details.clone(),
                     *is_subagent,
                 )

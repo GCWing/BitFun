@@ -170,6 +170,8 @@ pub enum AgenticEvent {
         max_context_tokens: Option<usize>,
         is_subagent: bool,
         #[serde(default, skip_serializing_if = "Option::is_none")]
+        llm_latency_ms: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         cached_tokens: Option<usize>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         token_details: Option<serde_json::Value>,
@@ -502,6 +504,7 @@ mod tests {
             total_tokens: 15,
             max_context_tokens: Some(100),
             is_subagent: false,
+            llm_latency_ms: Some(2500),
             cached_tokens: Some(3),
             token_details: Some(serde_json::json!({ "cachedSource": "provider" })),
         };
@@ -509,6 +512,7 @@ mod tests {
         let json = serde_json::to_value(&event).expect("serialize event");
 
         assert_eq!(json["cached_tokens"], 3);
+        assert_eq!(json["llm_latency_ms"], 2500);
         assert_eq!(json["token_details"]["cachedSource"], "provider");
     }
 

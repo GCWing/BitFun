@@ -275,6 +275,7 @@ impl TransportAdapter for TauriTransportAdapter {
                 total_tokens,
                 max_context_tokens,
                 is_subagent,
+                llm_latency_ms,
                 cached_tokens,
                 token_details,
             } => {
@@ -289,6 +290,7 @@ impl TransportAdapter for TauriTransportAdapter {
                         "totalTokens": total_tokens,
                         "maxContextTokens": max_context_tokens,
                         "isSubagent": is_subagent,
+                        "llmLatencyMs": llm_latency_ms,
                         "cachedTokens": cached_tokens,
                         "tokenDetails": token_details,
                     }),
