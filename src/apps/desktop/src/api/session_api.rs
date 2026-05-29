@@ -3,7 +3,7 @@
 use crate::api::app_state::AppState;
 use crate::api::session_storage_path::desktop_effective_session_storage_path;
 use bitfun_core::agentic::persistence::{
-    PersistenceManager, SessionBranchRequest, SessionBranchResult,
+    PersistenceManager, SessionBranchRequest, SessionBranchResult, SessionMetadataPage,
 };
 use bitfun_core::infrastructure::PathManager;
 use bitfun_core::service::session::{
@@ -20,6 +20,18 @@ use tauri::State;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListPersistedSessionsRequest {
     pub workspace_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ListPersistedSessionsPageRequest {
+    pub workspace_path: String,
+    pub limit: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote_connection_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -191,6 +203,28 @@ pub async fn list_persisted_sessions(
         .list_session_metadata(&workspace_path)
         .await
         .map_err(|e| format!("Failed to list persisted sessions: {}", e))
+}
+
+#[tauri::command]
+pub async fn list_persisted_sessions_page(
+    request: ListPersistedSessionsPageRequest,
+    app_state: State<'_, AppState>,
+    path_manager: State<'_, Arc<PathManager>>,
+) -> Result<SessionMetadataPage, String> {
+    let workspace_path = desktop_effective_session_storage_path(
+        &app_state,
+        &request.workspace_path,
+        request.remote_connection_id.as_deref(),
+        request.remote_ssh_host.as_deref(),
+    )
+    .await;
+    let manager = PersistenceManager::new(path_manager.inner().clone())
+        .map_err(|e| format!("Failed to create persistence manager: {}", e))?;
+
+    manager
+        .list_session_metadata_page(&workspace_path, request.cursor.as_deref(), request.limit)
+        .await
+        .map_err(|e| format!("Failed to list persisted session page: {}", e))
 }
 
 #[tauri::command]

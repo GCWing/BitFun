@@ -3,6 +3,22 @@ import { api } from './ApiClient';
 import { createTauriCommandError } from '../errors/TauriCommandError';
 import type { SessionMetadata, DialogTurnData } from '@/shared/types/session-history';
 
+export interface SessionMetadataPageRequest {
+  workspacePath: string;
+  limit: number;
+  cursor?: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
+}
+
+export interface SessionMetadataPage {
+  sessions: SessionMetadata[];
+  totalTopLevelCount: number;
+  loadedTopLevelCount: number;
+  nextCursor?: string;
+  hasMore: boolean;
+}
+
 export interface SessionUsageReportRequest {
   sessionId: string;
   workspacePath: string;
@@ -195,6 +211,27 @@ export class SessionAPI {
       });
     } catch (error) {
       throw createTauriCommandError('list_persisted_sessions', error, { workspacePath });
+    }
+  }
+
+  async listSessionsPage(
+    request: SessionMetadataPageRequest
+  ): Promise<SessionMetadataPage> {
+    try {
+      return await api.invoke('list_persisted_sessions_page', {
+        request: {
+          workspace_path: request.workspacePath,
+          limit: request.limit,
+          ...(request.cursor ? { cursor: request.cursor } : {}),
+          ...remoteSessionFields(request.remoteConnectionId, request.remoteSshHost),
+        }
+      });
+    } catch (error) {
+      throw createTauriCommandError('list_persisted_sessions_page', error, {
+        workspacePath: request.workspacePath,
+        limit: request.limit,
+        cursor: request.cursor,
+      });
     }
   }
 

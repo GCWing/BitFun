@@ -426,8 +426,7 @@ pub fn create_main_window(app_handle: &tauri::AppHandle, startup_trace_id: &str)
                 }
             }
 
-            #[cfg(not(any(debug_assertions, feature = "devtools")))]
-            let _ = window;
+            show_main_window_for_startup(&window, total_started_at);
         }
         Err(e) => {
             error!(
@@ -437,6 +436,45 @@ pub fn create_main_window(app_handle: &tauri::AppHandle, startup_trace_id: &str)
             );
         }
     }
+}
+
+fn show_main_window_for_startup(window: &tauri::WebviewWindow, total_started_at: Instant) {
+    #[cfg(target_os = "windows")]
+    {
+        let step_started_at = Instant::now();
+        if let Err(error) = window.maximize() {
+            warn!("Failed to maximize main window during startup: {}", error);
+        } else {
+            debug!(
+                "Main window startup show step completed: step=maximize duration_ms={} since_create_start_ms={}",
+                step_started_at.elapsed().as_millis(),
+                total_started_at.elapsed().as_millis()
+            );
+        }
+        std::thread::sleep(std::time::Duration::from_millis(150));
+    }
+
+    let show_started_at = Instant::now();
+    if let Err(error) = window.show() {
+        warn!("Failed to show main window during startup: {}", error);
+        return;
+    }
+    debug!(
+        "Main window startup show step completed: step=show duration_ms={} since_create_start_ms={}",
+        show_started_at.elapsed().as_millis(),
+        total_started_at.elapsed().as_millis()
+    );
+
+    let focus_started_at = Instant::now();
+    if let Err(error) = window.set_focus() {
+        warn!("Failed to focus main window during startup: {}", error);
+        return;
+    }
+    debug!(
+        "Main window startup show step completed: step=focus duration_ms={} since_create_start_ms={}",
+        focus_started_at.elapsed().as_millis(),
+        total_started_at.elapsed().as_millis()
+    );
 }
 
 fn app_url(path: &str) -> WebviewUrl {

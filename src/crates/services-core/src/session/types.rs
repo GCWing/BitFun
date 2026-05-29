@@ -259,14 +259,26 @@ impl StoredSessionMetadataFile {
 pub struct StoredSessionIndexFile {
     pub schema_version: u32,
     pub updated_at: u64,
+    #[serde(default)]
+    pub metadata_file_count: usize,
     pub sessions: Vec<SessionMetadata>,
 }
 
 impl StoredSessionIndexFile {
     pub fn new(updated_at: u64, sessions: Vec<SessionMetadata>) -> Self {
+        let metadata_file_count = sessions.len();
+        Self::with_metadata_file_count(updated_at, sessions, metadata_file_count)
+    }
+
+    pub fn with_metadata_file_count(
+        updated_at: u64,
+        sessions: Vec<SessionMetadata>,
+        metadata_file_count: usize,
+    ) -> Self {
         Self {
             schema_version: SESSION_STORAGE_SCHEMA_VERSION,
             updated_at,
+            metadata_file_count,
             sessions,
         }
     }

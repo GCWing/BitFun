@@ -159,7 +159,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   autoSave = false,
   autoSaveDelayMs = 800,
 }) => {
-  // Decode URL-encoded paths (e.g. d%3A/path -> d:/path)
+  // Decode URL-encoded paths before handing them to the editor.
   const filePath = useMemo(() => {
     try {
       if (rawFilePath.includes('%')) {
@@ -1015,10 +1015,38 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   }, [monacoReady, applyExternalContentToModel]);
 
   useEffect(() => {
-    if (content && !lspReady) {
-      setLspReady(true);
+    if (!content || lspReady) {
+      return;
     }
-  }, [content, lspReady]);
+
+    let cancelled = false;
+    void (async () => {
+      if (!enableLsp || largeFileMode) {
+        if (!cancelled) {
+          setLspReady(true);
+        }
+        return;
+      }
+
+      try {
+        const { ensureWorkspaceLspInitialized, initializeLsp } = await import('@/tools/lsp/initializeLsp');
+        await initializeLsp();
+        if (lspExtensionRegistry.isFileSupported(filePath)) {
+          await ensureWorkspaceLspInitialized(workspacePath);
+        }
+      } catch (error) {
+        log.warn('Failed to initialize LSP on editor open', { filePath, workspacePath, error });
+      }
+
+      if (!cancelled) {
+        setLspReady(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [content, enableLsp, filePath, largeFileMode, lspReady, workspacePath]);
 
   useEffect(() => {
     if (modelRef.current && monacoReady) {
@@ -2094,6 +2122,10 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     };
   }, [monacoReady]);
 
+  const loadingOverlayText = monacoReady
+    ? t('editor.codeEditor.loadingFile')
+    : t('editor.codeEditor.preparingEditor');
+
   return (
     <div 
       className={`code-editor-tool ${className} ${loading && showLoadingOverlay ? 'is-loading' : ''} ${error ? 'is-error' : ''} ${largeFileMode ? 'is-large-file-mode' : ''}`}
@@ -2123,7 +2155,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
 
       {loading && showLoadingOverlay && (
         <div className="code-editor-tool__loading-overlay">
-          <CubeLoading size="medium" text={t('editor.codeEditor.loadingFile')} />
+          <CubeLoading size="medium" text={loadingOverlayText} />
         </div>
       )}
 

@@ -173,6 +173,7 @@
       "delete": "删除",
       "confirmEdit": "确认",
       "cancelEdit": "取消",
+      "loading": "正在加载会话...",
       "showMore": "还有 {{count}} 个会话",
       "showAll": "还有 {{count}} 个（展开全部）",
       "showLess": "收起",

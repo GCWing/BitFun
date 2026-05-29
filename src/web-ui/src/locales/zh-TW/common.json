@@ -173,6 +173,7 @@
       "delete": "刪除",
       "confirmEdit": "確認",
       "cancelEdit": "取消",
+      "loading": "正在加載會話...",
       "showMore": "還有 {{count}} 個會話",
       "showAll": "還有 {{count}} 個（展開全部）",
       "showLess": "收起",

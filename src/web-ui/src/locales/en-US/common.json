@@ -173,6 +173,7 @@
       "delete": "Delete",
       "confirmEdit": "Confirm",
       "cancelEdit": "Cancel",
+      "loading": "Loading sessions...",
       "showMore": "{{count}} more sessions",
       "showAll": "{{count}} more (show all)",
       "showLess": "Show less",

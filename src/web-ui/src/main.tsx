@@ -19,6 +19,7 @@ import { getMonacoPath, getMonacoWorkerPath, logMonacoResourceCheck } from './to
 import { bootstrapLogger, createLogger, initLogger } from './shared/utils/logger';
 import { elapsedMs, logElapsed, measureAsyncAndLog, nowMs } from './shared/utils/timing';
 import { startupTrace } from './shared/utils/startupTrace';
+import { scheduleAfterStartupSignal } from './shared/utils/startupTaskScheduling';
 import {
   buildReactCrashLogPayload,
   isMinifiedReactErrorMessage,
@@ -301,10 +302,6 @@ async function initializeAfterRender(): Promise<void> {
       const { registerNotificationContextMenu } = await import('./shared/notification-system');
       registerNotificationContextMenu();
     })(),
-    (async () => {
-      const { scheduleMonacoStartupWarmup } = await import('./tools/editor/services/MonacoStartupWarmup');
-      scheduleMonacoStartupWarmup();
-    })(),
   ]);
 
   initResults.forEach((result, index) => {
@@ -315,7 +312,6 @@ async function initializeAfterRender(): Promise<void> {
       'RecommendationProviders',
       'Tools',
       'ContextMenu',
-      'EditorWarmup',
     ];
     if (result.status === 'rejected') {
       log.warn('Initialization failed', { module: names[index], error: result.reason });
@@ -392,11 +388,33 @@ async function startApplication(): Promise<void> {
     sinceStartupMs: elapsedMs(appStartedAt),
   });
 
-  try {
-    await initializeAfterRender();
-  } catch (error) {
-    log.error('Failed to complete post-render initialization', error);
-  }
+  startupTrace.markPhase('non_critical_init_scheduled', {
+    signalName: 'bitfun:main-window-shown',
+    fallbackTimeoutMs: 2000,
+    frameCount: 1,
+  });
+  scheduleAfterStartupSignal(async () => {
+    const nonCriticalStartedAt = nowMs();
+    try {
+      await initializeAfterRender();
+      startupTrace.markPhase('non_critical_init_done', {
+        durationMs: elapsedMs(nonCriticalStartedAt),
+      });
+      startupTrace.flushSummary('non_critical_init_completed');
+    } catch (error) {
+      log.error('Failed to complete post-render initialization', error);
+      startupTrace.markPhase('non_critical_init_failed', {
+        durationMs: elapsedMs(nonCriticalStartedAt),
+      });
+    }
+  }, {
+    signalName: 'bitfun:main-window-shown',
+    fallbackTimeoutMs: 2000,
+    frameCount: 1,
+    onError: error => {
+      log.error('Failed to schedule post-render initialization', error);
+    },
+  });
 
   logElapsed(log, 'Startup phase completed', appStartedAt, {
     data: { phase: 'startApplication' },

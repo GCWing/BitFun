@@ -5,6 +5,7 @@ import { createTauriCommandError } from '../errors/TauriCommandError';
 import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('GitAPI');
+const REPOSITORY_PROBE_CACHE_TTL_MS = 1000;
 
 export interface GitRepository {
   path: string;
@@ -178,15 +179,43 @@ export interface GitWorktreeInfo {
 }
 
 export class GitAPI {
+  private repositoryProbeCache = new Map<string, {
+    value: boolean;
+    expiresAt: number;
+  }>();
+  private repositoryProbeInFlight = new Map<string, Promise<boolean>>();
+
    
   async isGitRepository(repositoryPath: string): Promise<boolean> {
-    try {
-      return await api.invoke('git_is_repository', { 
-        request: { repositoryPath } 
-      });
-    } catch (error) {
-      throw createTauriCommandError('git_is_repository', error, { repositoryPath });
+    const now = Date.now();
+    const cached = this.repositoryProbeCache.get(repositoryPath);
+    if (cached && cached.expiresAt > now) {
+      return cached.value;
     }
+
+    const inFlight = this.repositoryProbeInFlight.get(repositoryPath);
+    if (inFlight) {
+      return inFlight;
+    }
+
+    const request = { repositoryPath };
+    const probe = api.invoke<boolean>('git_is_repository', { request })
+      .then((value) => {
+        this.repositoryProbeCache.set(repositoryPath, {
+          value,
+          expiresAt: Date.now() + REPOSITORY_PROBE_CACHE_TTL_MS,
+        });
+        return value;
+      })
+      .catch((error) => {
+        throw createTauriCommandError('git_is_repository', error, { repositoryPath });
+      })
+      .finally(() => {
+        this.repositoryProbeInFlight.delete(repositoryPath);
+      });
+
+    this.repositoryProbeInFlight.set(repositoryPath, probe);
+    return probe;
   }
 
    

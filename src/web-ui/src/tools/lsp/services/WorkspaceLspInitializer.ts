@@ -21,6 +21,10 @@ interface ProjectInfo {
   totalFiles: number;
 }
 
+interface InitializeWorkspaceOptions {
+  prestartServers?: boolean;
+}
+
 class WorkspaceLspInitializer {
   private static instance: WorkspaceLspInitializer | null = null;
   private removeListener: (() => void) | null = null;
@@ -67,6 +71,13 @@ class WorkspaceLspInitializer {
   }
   
   private async handleWorkspaceOpened(workspacePath: string): Promise<void> {
+    await this.initializeWorkspace(workspacePath, { prestartServers: true });
+  }
+
+  async initializeWorkspace(
+    workspacePath: string,
+    options: InitializeWorkspaceOptions = {}
+  ): Promise<void> {
     try {
       const manager = WorkspaceLspManager.getOrCreate(workspacePath);
       
@@ -74,7 +85,7 @@ class WorkspaceLspInitializer {
       
       log.info('LSP initialized for workspace', { workspacePath });
 
-      if (!lspConfigService.isAutoStartEnabled()) {
+      if (!options.prestartServers || !lspConfigService.isAutoStartEnabled()) {
         return;
       }
 

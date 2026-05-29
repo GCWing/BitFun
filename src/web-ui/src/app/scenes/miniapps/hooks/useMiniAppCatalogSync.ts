@@ -4,12 +4,20 @@
 import { useCallback, useEffect } from 'react';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { miniAppAPI } from '@/infrastructure/api/service-api/MiniAppAPI';
+import { BackgroundTaskCancelledError } from '@/shared/utils/backgroundTaskScheduler';
 import { createLogger } from '@/shared/utils/logger';
 import { useMiniAppStore } from '../miniAppStore';
+import { scheduleMiniAppCatalogStartupRefresh } from './miniAppCatalogStartupRefresh';
 
 const log = createLogger('useMiniAppCatalogSync');
 
-export function useMiniAppCatalogSync() {
+export interface UseMiniAppCatalogSyncOptions {
+  enabled?: boolean;
+  initialLoad?: 'immediate' | 'idle' | 'manual';
+}
+
+export function useMiniAppCatalogSync(options: UseMiniAppCatalogSyncOptions = {}) {
+  const { enabled = true, initialLoad = 'immediate' } = options;
   const setApps = useMiniAppStore((state) => state.setApps);
   const setLoading = useMiniAppStore((state) => state.setLoading);
   const setRunningWorkerIds = useMiniAppStore((state) => state.setRunningWorkerIds);
@@ -38,8 +46,27 @@ export function useMiniAppCatalogSync() {
   }, [setRunningWorkerIds]);
 
   useEffect(() => {
-    void refreshApps();
-    void refreshRunningWorkers();
+    if (!enabled) {
+      return;
+    }
+
+    const startupRefreshHandle = initialLoad === 'idle'
+      ? scheduleMiniAppCatalogStartupRefresh({
+          refreshApps,
+          refreshRunningWorkers,
+        })
+      : null;
+
+    if (initialLoad === 'immediate') {
+      void refreshApps();
+      void refreshRunningWorkers();
+    }
+
+    startupRefreshHandle?.promise.catch(error => {
+      if (!(error instanceof BackgroundTaskCancelledError)) {
+        log.warn('Initial miniapp catalog refresh task failed', error);
+      }
+    });
 
     const unlistenCreated = api.listen('miniapp-created', () => {
       void refreshApps();
@@ -65,13 +92,14 @@ export function useMiniAppCatalogSync() {
     });
 
     return () => {
+      startupRefreshHandle?.cancel();
       unlistenCreated();
       unlistenUpdated();
       unlistenDeleted();
       unlistenRestarted();
       unlistenStopped();
     };
-  }, [markWorkerRunning, markWorkerStopped, refreshApps, refreshRunningWorkers]);
+  }, [enabled, initialLoad, markWorkerRunning, markWorkerStopped, refreshApps, refreshRunningWorkers]);
 
   return {
     refreshApps,

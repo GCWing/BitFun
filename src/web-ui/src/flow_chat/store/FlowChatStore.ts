@@ -28,6 +28,7 @@ import { elapsedMs, nowMs } from '@/shared/utils/timing';
 import { i18nService } from '@/infrastructure/i18n/core/I18nService';
 import type { DialogTurnData, LocalCommandMetadata, SessionKind } from '@/shared/types/session-history';
 import type { SessionInfo as AgentSessionInfo } from '@/infrastructure/api/service-api/AgentAPI';
+import type { SessionMetadataPage } from '@/infrastructure/api/service-api/SessionAPI';
 import {
   deriveLastFinishedAtFromMetadata,
   deriveSessionRelationshipFromMetadata,
@@ -68,6 +69,12 @@ const METADATA_LIST_RECENT_DEDUPE_TTL_MS = 1000;
 
 interface MetadataListRequest {
   promise: Promise<void>;
+  completedAtMs?: number;
+  cleanupTimer?: ReturnType<typeof setTimeout>;
+}
+
+interface MetadataPageRequest {
+  promise: Promise<SessionMetadataPage>;
   completedAtMs?: number;
   cleanupTimer?: ReturnType<typeof setTimeout>;
 }
@@ -122,6 +129,7 @@ export class FlowChatStore {
   private listeners: Set<(state: FlowChatState) => void> = new Set();
   private silentMode = false;
   private metadataListRequests = new Map<string, MetadataListRequest>();
+  private metadataPageRequests = new Map<string, MetadataPageRequest>();
   private unsupportedRestoreCommands = new Set<string>();
   private onPersistUnreadCompletion?: (sessionId: string, value: 'completed' | 'error' | 'interrupted' | undefined) => void;
 
@@ -178,6 +186,22 @@ export class FlowChatStore {
       workspacePath,
       remoteConnectionId || '',
       remoteSshHost || '',
+    ]);
+  }
+
+  private getMetadataPageRequestKey(
+    workspacePath: string,
+    limit: number,
+    cursor?: string,
+    remoteConnectionId?: string,
+    remoteSshHost?: string,
+  ): string {
+    return JSON.stringify([
+      workspacePath,
+      remoteConnectionId || '',
+      remoteSshHost || '',
+      cursor || '',
+      limit,
     ]);
   }
 
@@ -2092,6 +2116,305 @@ export class FlowChatStore {
     });
 
     return loadPromise;
+  }
+
+  private async loadSessionMetadataModelConfig(): Promise<{
+    models: any[];
+    defaultModels: Record<string, string>;
+  }> {
+    let models: any[] = [];
+    let defaultModels: Record<string, string> = {};
+    try {
+      const { configManager } = await import('@/infrastructure/config/services/ConfigManager');
+      const [modelsResult, defaultModelsResult] = await Promise.allSettled([
+        configManager.getConfig<any[]>('ai.models'),
+        configManager.getConfig<Record<string, string>>('ai.default_models'),
+      ]);
+
+      if (modelsResult.status === 'fulfilled' && Array.isArray(modelsResult.value)) {
+        models = modelsResult.value;
+      }
+      if (
+        defaultModelsResult.status === 'fulfilled' &&
+        defaultModelsResult.value &&
+        typeof defaultModelsResult.value === 'object'
+      ) {
+        defaultModels = defaultModelsResult.value;
+      }
+    } catch (error) {
+      log.warn('Failed to load model config for session metadata, using defaults', { error });
+    }
+
+    return { models, defaultModels };
+  }
+
+  private async processPersistedSessionMetadataList(
+    sessions: any[],
+    workspacePath: string,
+    remoteConnectionId?: string,
+    remoteSshHost?: string,
+  ): Promise<void> {
+    const { stateMachineManager } = await import('../state-machine');
+    const { models, defaultModels } = await this.loadSessionMetadataModelConfig();
+
+    const processSession = async (metadata: any) => {
+      try {
+        const existingSession = this.state.sessions.get(metadata.sessionId);
+        if (existingSession) {
+          return;
+        }
+        if (isLegacyPersistedBtwSession(metadata)) {
+          return;
+        }
+        // Skip archived sessions - they are managed in the settings page.
+        if (metadata.status === 'archived') {
+          return;
+        }
+
+        stateMachineManager.getOrCreate(metadata.sessionId);
+
+        let maxContextTokens = 128128;
+        if (metadata.modelName) {
+          const model = models.find((m: any) => m.name === metadata.modelName || m.id === metadata.modelName);
+          if (model?.context_window) {
+            maxContextTokens = model.context_window;
+          }
+        }
+
+        if (maxContextTokens === 128128) {
+          const primaryModelId = defaultModels?.primary;
+
+          if (primaryModelId) {
+            const primaryModel = models.find((m: any) => m.id === primaryModelId);
+            if (primaryModel?.context_window) {
+              maxContextTokens = primaryModel.context_window;
+            }
+          }
+        }
+
+        const relationship = deriveSessionRelationshipFromMetadata(metadata);
+        const lastFinishedAt = deriveLastFinishedAtFromMetadata(metadata);
+        const titleState = deriveSessionTitleStateFromMetadata(metadata);
+        const hasDynamicDefaultTitle = titleState.titleSource === 'i18n';
+
+        this.setState(prev => {
+          if (prev.sessions.has(metadata.sessionId)) {
+            return prev;
+          }
+
+          const rawAgentType = metadata.agentType || 'agentic';
+          const validatedAgentType = isValidPersistedAgentType(rawAgentType) ? rawAgentType : 'agentic';
+
+          if (rawAgentType !== validatedAgentType) {
+            log.warn('Invalid agentType, falling back to agentic', { sessionId: metadata.sessionId, rawAgentType, validatedAgentType });
+          }
+
+          const session: Session = {
+            sessionId: metadata.sessionId,
+            title: titleState.title,
+            titleSource: titleState.titleSource,
+            titleI18nKey: titleState.titleI18nKey,
+            titleI18nParams: titleState.titleI18nParams,
+            titleStatus: hasDynamicDefaultTitle ? undefined : 'generated',
+            dialogTurns: [],
+            status: 'idle',
+            config: {
+              agentType: validatedAgentType,
+              modelName: metadata.modelName,
+            },
+            createdAt: metadata.createdAt,
+            lastActiveAt: metadata.lastActiveAt,
+            lastFinishedAt,
+            error: null,
+            isHistorical: true,
+            historyState: 'metadata-only',
+            todos: (metadata as any).todos || [],
+            maxContextTokens,
+            mode: validatedAgentType,
+            lastUserDialogMode: metadata.lastUserDialogAgentType,
+            lastSubmittedMode: metadata.lastSubmittedAgentType,
+            workspacePath: (metadata as any).workspacePath || workspacePath,
+            remoteConnectionId: metadata.remoteConnectionId || remoteConnectionId,
+            remoteSshHost:
+              metadata.remoteSshHost || metadata.workspaceHostname || remoteSshHost,
+            parentSessionId: relationship.parentSessionId,
+            sessionKind: relationship.sessionKind,
+            parentToolCallId: relationship.parentToolCallId,
+            subagentType: relationship.subagentType,
+            btwThreads: [],
+            btwOrigin: relationship.btwOrigin,
+            hasUnreadCompletion: metadata.unreadCompletion,
+            needsUserAttention: metadata.needsUserAttention,
+            deepReviewRunManifest: metadata.deepReviewRunManifest,
+            isTransient: false,
+          };
+
+          const newSessions = new Map(prev.sessions);
+          newSessions.set(metadata.sessionId, session);
+
+          return {
+            ...prev,
+            sessions: newSessions,
+          };
+        });
+      } catch (error) {
+        log.warn('Failed to process persisted session metadata', {
+          sessionId: metadata?.sessionId,
+          error,
+        });
+      }
+    };
+
+    await Promise.all(sessions.map(processSession));
+  }
+
+  public async loadSessionMetadataPage(
+    workspacePath: string,
+    limit: number,
+    cursor?: string,
+    remoteConnectionId?: string,
+    remoteSshHost?: string,
+    traceSource = 'unknown'
+  ): Promise<SessionMetadataPage> {
+    const requestKey = this.getMetadataPageRequestKey(
+      workspacePath,
+      limit,
+      cursor,
+      remoteConnectionId,
+      remoteSshHost,
+    );
+    const existingRequest = this.metadataPageRequests.get(requestKey);
+    const remote = isRemoteTraceContext(remoteConnectionId, remoteSshHost);
+    if (existingRequest) {
+      const completedAtMs = existingRequest.completedAtMs;
+      const isRecentCompletedRequest =
+        completedAtMs !== undefined &&
+        elapsedMs(completedAtMs) <= METADATA_LIST_RECENT_DEDUPE_TTL_MS;
+
+      if (completedAtMs === undefined || isRecentCompletedRequest) {
+        startupTrace.markPhase('session_metadata_page_deduped', {
+          remote,
+          source: traceSource,
+          cursor: cursor || null,
+          limit,
+          dedupeState: completedAtMs === undefined ? 'in-flight' : 'recent',
+        });
+        return existingRequest.promise;
+      }
+
+      if (existingRequest.cleanupTimer) {
+        clearTimeout(existingRequest.cleanupTimer);
+      }
+      this.metadataPageRequests.delete(requestKey);
+    }
+
+    const loadPromise = this.loadSessionMetadataPageUncached(
+      workspacePath,
+      limit,
+      cursor,
+      remoteConnectionId,
+      remoteSshHost,
+      traceSource,
+    );
+
+    const request: MetadataPageRequest = { promise: loadPromise };
+    this.metadataPageRequests.set(requestKey, request);
+
+    loadPromise
+      .then(() => {
+        const currentRequest = this.metadataPageRequests.get(requestKey);
+        if (currentRequest !== request) {
+          return;
+        }
+
+        request.completedAtMs = nowMs();
+        request.cleanupTimer = setTimeout(() => {
+          if (this.metadataPageRequests.get(requestKey) === request) {
+            this.metadataPageRequests.delete(requestKey);
+          }
+        }, METADATA_LIST_RECENT_DEDUPE_TTL_MS);
+      })
+      .catch(() => {
+        if (this.metadataPageRequests.get(requestKey) === request) {
+          this.metadataPageRequests.delete(requestKey);
+        }
+      });
+
+    return loadPromise;
+  }
+
+  private async loadSessionMetadataPageUncached(
+    workspacePath: string,
+    limit: number,
+    cursor?: string,
+    remoteConnectionId?: string,
+    remoteSshHost?: string,
+    traceSource = 'unknown'
+  ): Promise<SessionMetadataPage> {
+    const traceStartedAt = nowMs();
+    const remote = isRemoteTraceContext(remoteConnectionId, remoteSshHost);
+    const metadataListTraceId = `metadata-page-${Math.random().toString(36).slice(2, 8)}`;
+    startupTrace.markPhase('session_metadata_page_start', {
+      remote,
+      source: traceSource,
+      metadataListTraceId,
+      cursor: cursor || null,
+      limit,
+    });
+
+    try {
+      const { sessionAPI } = await import('@/infrastructure/api');
+      let page: SessionMetadataPage;
+      try {
+        page = await sessionAPI.listSessionsPage({
+          workspacePath,
+          limit,
+          cursor,
+          remoteConnectionId,
+          remoteSshHost,
+        });
+      } catch (error) {
+        if (!isUnsupportedTauriCommandError(error, 'list_persisted_sessions_page')) {
+          throw error;
+        }
+
+        const sessions = await sessionAPI.listSessions(workspacePath, remoteConnectionId, remoteSshHost);
+        page = {
+          sessions,
+          totalTopLevelCount: sessions.length,
+          loadedTopLevelCount: sessions.length,
+          nextCursor: undefined,
+          hasMore: false,
+        };
+      }
+
+      await this.processPersistedSessionMetadataList(
+        page.sessions,
+        workspacePath,
+        remoteConnectionId,
+        remoteSshHost,
+      );
+      startupTrace.markPhase('session_metadata_page_end', {
+        remote,
+        source: traceSource,
+        metadataListTraceId,
+        sessionCount: page.sessions.length,
+        totalTopLevelCount: page.totalTopLevelCount,
+        loadedTopLevelCount: page.loadedTopLevelCount,
+        hasMore: page.hasMore,
+        durationMs: elapsedMs(traceStartedAt),
+      });
+      return page;
+    } catch (error) {
+      startupTrace.markPhase('session_metadata_page_failed', {
+        remote,
+        source: traceSource,
+        metadataListTraceId,
+        durationMs: elapsedMs(traceStartedAt),
+      });
+      log.error('Failed to load persisted session metadata page', error);
+      throw error;
+    }
   }
 
   private async initializeFromDiskUncached(
