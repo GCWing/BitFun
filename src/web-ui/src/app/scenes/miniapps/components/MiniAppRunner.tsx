@@ -25,7 +25,7 @@ const MiniAppRunner: React.FC<MiniAppRunnerProps> = ({ app, runScope }) => {
       data-run-scope={runScope?.kind ?? 'active'}
       sandbox="allow-scripts allow-forms allow-modals allow-popups allow-downloads"
       style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
-      title={app.name}
+      aria-label={app.name}
     />
   );
 };
