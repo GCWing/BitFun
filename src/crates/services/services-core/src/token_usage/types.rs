@@ -23,6 +23,9 @@ pub struct TokenUsageRecord {
     #[serde(default)]
     pub cache_write_tokens: u32,
     pub total_tokens: u32,
+    /// LLM call latency in milliseconds, excluding tool execution time.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub llm_latency_ms: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub token_details: Option<serde_json::Value>,
     /// Whether this record is from a subagent call

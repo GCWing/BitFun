@@ -98,6 +98,58 @@ struct ContextHealthSnapshot {
     consecutive_failed_commands: usize,
 }
 
+#[derive(Debug, Default, Clone)]
+struct TurnTokenUsageTotals {
+    usage_count: usize,
+    prompt_tokens: u64,
+    completion_tokens: u64,
+    total_tokens: u64,
+    llm_duration_ms: u64,
+    cached_tokens: u64,
+    cached_tokens_reported_count: usize,
+}
+
+impl TurnTokenUsageTotals {
+    fn add_usage(&mut self, usage: &crate::util::types::ai::GeminiUsage, llm_latency_ms: u64) {
+        self.usage_count += 1;
+        self.prompt_tokens += usage.prompt_token_count as u64;
+        self.completion_tokens += usage.candidates_token_count as u64;
+        self.total_tokens += usage.total_token_count as u64;
+        self.llm_duration_ms = self.llm_duration_ms.saturating_add(llm_latency_ms);
+        if let Some(cached_tokens) = usage.cached_content_token_count {
+            self.cached_tokens += cached_tokens as u64;
+            self.cached_tokens_reported_count += 1;
+        }
+    }
+
+    fn llm_tps(&self) -> Option<f64> {
+        if self.usage_count == 0 || self.llm_duration_ms == 0 {
+            return None;
+        }
+
+        Some(self.completion_tokens as f64 * 1000.0 / self.llm_duration_ms as f64)
+    }
+
+    fn cache_coverage(&self) -> &'static str {
+        if self.usage_count == 0 || self.cached_tokens_reported_count == 0 {
+            "false"
+        } else if self.cached_tokens_reported_count == self.usage_count {
+            "true"
+        } else {
+            "partial"
+        }
+    }
+
+    #[cfg(test)]
+    fn has_complete_cache_tokens(&self) -> bool {
+        self.usage_count > 0 && self.cached_tokens_reported_count == self.usage_count
+    }
+
+    fn has_reported_cache_tokens(&self) -> bool {
+        self.cached_tokens_reported_count > 0
+    }
+}
+
 impl ContextHealthSnapshot {
     fn from_runtime_observations(
         token_usage_ratio: f32,
@@ -2294,8 +2346,10 @@ impl ExecutionEngine {
         let mut full_compression_count = 0usize;
         let mut compression_failure_count = 0u32;
 
-        // Save the last token usage statistics
-        let mut last_usage: Option<crate::util::types::ai::GeminiUsage> = None;
+        // Aggregate usage across every model call in this dialog turn. The
+        // last response alone is not a valid cost/accounting basis for
+        // multi-round agent turns.
+        let mut token_usage_totals = TurnTokenUsageTotals::default();
 
         // Track thinking-only rescue reminders for observability. This counter
         // is not a stop condition.
@@ -2594,9 +2648,8 @@ impl ExecutionEngine {
             );
             completed_rounds += 1;
 
-            // Save the last token usage statistics (update each time, keep the last one)
             if let Some(ref usage) = round_result.usage {
-                last_usage = Some(usage.clone());
+                token_usage_totals.add_usage(usage, round_result.llm_latency_ms);
             }
 
             // Add assistant message to history
@@ -3032,9 +3085,10 @@ impl ExecutionEngine {
 
                 let mut accepted = final_round_result.had_assistant_text
                     && !Self::assistant_has_tool_calls(&final_round_result.assistant_message);
-                let chosen_assistant_message: Option<Message>;
-                let mut chosen_usage: Option<crate::util::types::ai::GeminiUsage> =
-                    final_round_result.usage.clone();
+                let mut chosen_assistant_message: Option<Message> = None;
+                if let Some(ref usage) = final_round_result.usage {
+                    token_usage_totals.add_usage(usage, final_round_result.llm_latency_ms);
+                }
 
                 if accepted {
                     chosen_assistant_message = Some(final_round_result.assistant_message.clone());
@@ -3059,6 +3113,10 @@ impl ExecutionEngine {
                             context_window,
                         )
                         .await?;
+                    if let Some(ref usage) = retry_result.usage {
+                        token_usage_totals.add_usage(usage, retry_result.llm_latency_ms);
+                    }
+                    finalize_fallback_text_used = true;
                     if !retry_result.had_assistant_text
                         || Self::assistant_has_tool_calls(&retry_result.assistant_message)
                     {
@@ -3074,7 +3132,6 @@ impl ExecutionEngine {
                         );
                     } else {
                         accepted = true;
-                        chosen_usage = retry_result.usage.clone();
                         chosen_assistant_message = Some(retry_result.assistant_message);
                     }
                 }
@@ -3102,9 +3159,6 @@ impl ExecutionEngine {
                         }
                     }
                     completed_rounds += 1;
-                    if let Some(usage) = chosen_usage {
-                        last_usage = Some(usage);
-                    }
                     messages.push(msg.clone());
                     if let Err(e) = self
                         .session_manager
@@ -3179,18 +3233,47 @@ impl ExecutionEngine {
 
         debug!("DialogTurnCompleted event sent");
 
-        // Print dialog turn token statistics (from model's last returned usage)
-        if let Some(usage) = last_usage {
-            info!(
-                "Dialog turn completed - Token stats: turn_id={}, rounds={}, tools={}, duration={}ms, prompt_tokens={}, completion_tokens={}, total_tokens={}",
-                context.dialog_turn_id,
-                completed_rounds,
-                total_tools,
-                duration_ms,
-                usage.prompt_token_count,
-                usage.candidates_token_count,
-                usage.total_token_count
-            );
+        // Print dialog turn token statistics aggregated across all model calls
+        // in this turn. If only some model calls report cache-read usage, emit
+        // the reported subtotal and mark coverage as partial so downstream
+        // consumers do not treat it as a complete total.
+        if token_usage_totals.usage_count > 0 {
+            let llm_tps = token_usage_totals
+                .llm_tps()
+                .map(|value| format!("{:.1}", value))
+                .unwrap_or_else(|| "unavailable".to_string());
+            if token_usage_totals.has_reported_cache_tokens() {
+                info!(
+                    "Dialog turn completed - Token stats: turn_id={}, rounds={}, model_calls={}, tools={}, duration={}ms, llm_duration={}ms, llm_tps={} tokens/s, prompt_tokens={}, completion_tokens={}, total_tokens={}, cached_tokens={}, cached_tokens_available={}",
+                    context.dialog_turn_id,
+                    completed_rounds,
+                    token_usage_totals.usage_count,
+                    total_tools,
+                    duration_ms,
+                    token_usage_totals.llm_duration_ms,
+                    llm_tps,
+                    token_usage_totals.prompt_tokens,
+                    token_usage_totals.completion_tokens,
+                    token_usage_totals.total_tokens,
+                    token_usage_totals.cached_tokens,
+                    token_usage_totals.cache_coverage()
+                );
+            } else {
+                info!(
+                    "Dialog turn completed - Token stats: turn_id={}, rounds={}, model_calls={}, tools={}, duration={}ms, llm_duration={}ms, llm_tps={} tokens/s, prompt_tokens={}, completion_tokens={}, total_tokens={}, cached_tokens_available={}",
+                    context.dialog_turn_id,
+                    completed_rounds,
+                    token_usage_totals.usage_count,
+                    total_tools,
+                    duration_ms,
+                    token_usage_totals.llm_duration_ms,
+                    llm_tps,
+                    token_usage_totals.prompt_tokens,
+                    token_usage_totals.completion_tokens,
+                    token_usage_totals.total_tokens,
+                    token_usage_totals.cache_coverage()
+                );
+            }
         } else {
             warn!("Dialog turn completed but token stats not available");
         }
@@ -3291,6 +3374,55 @@ mod tests {
             enabled: true,
             ..Default::default()
         }
+    }
+
+    fn usage(prompt: u32, completion: u32, cached: Option<u32>) -> GeminiUsage {
+        GeminiUsage {
+            prompt_token_count: prompt,
+            candidates_token_count: completion,
+            total_token_count: prompt + completion,
+            reasoning_token_count: None,
+            cached_content_token_count: cached,
+            cache_creation_token_count: None,
+        }
+    }
+
+    #[test]
+    fn turn_token_usage_totals_accumulates_model_calls() {
+        let mut totals = TurnTokenUsageTotals::default();
+
+        totals.add_usage(&usage(10, 2, Some(3)), 100);
+        totals.add_usage(&usage(20, 4, Some(5)), 200);
+
+        assert_eq!(totals.usage_count, 2);
+        assert_eq!(totals.prompt_tokens, 30);
+        assert_eq!(totals.completion_tokens, 6);
+        assert_eq!(totals.total_tokens, 36);
+        assert_eq!(totals.llm_duration_ms, 300);
+        assert_eq!(totals.llm_tps(), Some(20.0));
+        assert_eq!(totals.cached_tokens, 8);
+        assert!(totals.has_complete_cache_tokens());
+        assert_eq!(totals.cache_coverage(), "true");
+    }
+
+    #[test]
+    fn turn_token_usage_totals_marks_partial_or_missing_cache() {
+        let mut partial = TurnTokenUsageTotals::default();
+        partial.add_usage(&usage(10, 2, Some(3)), 100);
+        partial.add_usage(&usage(20, 4, None), 200);
+
+        assert_eq!(partial.cached_tokens, 3);
+        assert!(partial.has_reported_cache_tokens());
+        assert!(!partial.has_complete_cache_tokens());
+        assert_eq!(partial.cache_coverage(), "partial");
+
+        let mut unavailable = TurnTokenUsageTotals::default();
+        unavailable.add_usage(&usage(10, 2, None), 100);
+
+        assert_eq!(unavailable.cached_tokens, 0);
+        assert!(!unavailable.has_reported_cache_tokens());
+        assert!(!unavailable.has_complete_cache_tokens());
+        assert_eq!(unavailable.cache_coverage(), "false");
     }
 
     #[test]
