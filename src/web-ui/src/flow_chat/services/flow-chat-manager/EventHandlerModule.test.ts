@@ -13,6 +13,7 @@ import { SessionExecutionEvent, SessionExecutionState } from '../../state-machin
 import { FlowChatStore } from '../../store/FlowChatStore';
 import type { DialogTurn, FlowUserSteeringItem, ModelRound, Session } from '../../types/flow-chat';
 import type { FlowChatContext } from './types';
+import { notificationService } from '../../../shared/notification-system/services/NotificationService';
 
 vi.mock('@/infrastructure/i18n/core/I18nService', () => ({
   i18nService: {
@@ -23,6 +24,24 @@ vi.mock('@/infrastructure/i18n/core/I18nService', () => ({
       'errors:ai.invalidRequest.message': 'The provider rejected the request format, parameters, model name, or payload size. Adjust the request or choose another model.',
       'errors:ai.actions.copyDiagnostics': 'Copy diagnostics',
     }[key] ?? key),
+  },
+}));
+
+vi.mock('@/infrastructure/theme/integrations/MonacoThemeSync', () => ({
+  monacoThemeSync: {
+    syncTheme: vi.fn(),
+  },
+}));
+
+vi.mock('@/shared/helpers/MonacoHelper', () => ({
+  MonacoHelper: {
+    getEditorFromElement: vi.fn(() => null),
+    getSelection: vi.fn(() => ({ hasSelection: false })),
+    getCursorPosition: vi.fn(() => null),
+    getWordAtCursor: vi.fn(() => undefined),
+    getFileInfo: vi.fn(() => null),
+    getContextInfo: vi.fn(() => null),
+    isInMonacoEditor: vi.fn(() => false),
   },
 }));
 
@@ -291,6 +310,107 @@ describe('formatDialogErrorForNotification', () => {
   });
 });
 
+describe('IntentCoding evidence reminder', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('warns when an IntentCoding turn completes without an evidence signal', () => {
+    const session = {
+      ...createFinishingSession(),
+      mode: 'IntentCoding',
+      config: { agentType: 'IntentCoding' },
+    };
+    const turn = createCompletedTurn();
+
+    __test_only__.maybeWarnIntentCodingEvidenceMissing(session, turn);
+
+    expect(notificationService.warning).toHaveBeenCalledWith(
+      expect.stringContaining('intentCodingEvidenceMissing'),
+      { duration: 6000 },
+    );
+  });
+
+  it('does not warn when an IntentCoding turn references an Evidence Package path', () => {
+    const session = {
+      ...createFinishingSession(),
+      mode: 'IntentCoding',
+      config: { agentType: 'IntentCoding' },
+    };
+    const turn = {
+      ...createCompletedTurn(),
+      modelRounds: [
+        makeRound('round-1', [{
+          id: 'text-1',
+          type: 'text',
+          content: 'Wrote .agent/evidence/evidence-20260525-task.md with results.',
+          isStreaming: false,
+          timestamp: 1000,
+          status: 'completed',
+        } as any]),
+      ],
+    };
+
+    expect(__test_only__.dialogTurnHasIntentCodingEvidenceSignal(turn)).toBe(true);
+    __test_only__.maybeWarnIntentCodingEvidenceMissing(session, turn);
+
+    expect(notificationService.warning).not.toHaveBeenCalled();
+  });
+
+  it('does not treat a user-steering message echoing the phrase as evidence', () => {
+    const turn = {
+      ...createCompletedTurn(),
+      modelRounds: [
+        makeRound('round-1', [{
+          id: 'steering-1',
+          type: 'user-steering',
+          steeringId: 'steer-1',
+          roundIndex: 0,
+          content: 'Please remember to write an Evidence Package at the end.',
+          timestamp: 1000,
+          status: 'completed',
+        } as any]),
+      ],
+    };
+
+    expect(__test_only__.dialogTurnHasIntentCodingEvidenceSignal(turn)).toBe(false);
+  });
+
+  it('does not warn when the turn was cancelled by the user', () => {
+    const session = {
+      ...createFinishingSession(),
+      mode: 'IntentCoding',
+      config: { agentType: 'IntentCoding' },
+    };
+    const turn = createCompletedTurn();
+
+    __test_only__.maybeWarnIntentCodingEvidenceMissing(session, turn, { skipReason: 'cancelled' });
+
+    expect(notificationService.warning).not.toHaveBeenCalled();
+  });
+
+  it('does not warn when the turn has not yet reached completed status', () => {
+    const session = {
+      ...createFinishingSession(),
+      mode: 'IntentCoding',
+      config: { agentType: 'IntentCoding' },
+    };
+
+    __test_only__.maybeWarnIntentCodingEvidenceMissing(session, createFinishingTurn());
+
+    expect(notificationService.warning).not.toHaveBeenCalled();
+  });
+
+  it('does not warn for non-IntentCoding sessions', () => {
+    __test_only__.maybeWarnIntentCodingEvidenceMissing(
+      createFinishingSession(),
+      createCompletedTurn(),
+    );
+
+    expect(notificationService.warning).not.toHaveBeenCalled();
+  });
+});
+
 function resetFlowChatStore(): void {
   FlowChatStore.getInstance().setState(() => ({
     sessions: new Map(),
@@ -331,6 +451,14 @@ function createFinishingTurn(): DialogTurn {
     }],
     status: 'finishing',
     startTime: 900,
+  };
+}
+
+function createCompletedTurn(): DialogTurn {
+  return {
+    ...createFinishingTurn(),
+    status: 'completed',
+    endTime: 1000,
   };
 }
 

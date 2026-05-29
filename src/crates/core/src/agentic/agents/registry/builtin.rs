@@ -9,8 +9,8 @@ use std::sync::Arc;
 
 pub(crate) fn default_model_id_for_builtin_agent(agent_type: &str) -> &'static str {
     match agent_type {
-        "agentic" | "Cowork" | "ComputerUse" | "Plan" | "debug" | "Claw" | "DeepResearch"
-        | "Team" | "Multitask" => "auto",
+        "agentic" | "Cowork" | "ComputerUse" | "Plan" | "debug" | "IntentCoding" | "Claw"
+        | "DeepResearch" | "Team" | "Multitask" => "auto",
         "DeepReview"
         | "ReviewBusinessLogic"
         | "ReviewPerformance"

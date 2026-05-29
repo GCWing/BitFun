@@ -71,3 +71,51 @@ pub(crate) async fn build_workspace_instruction_files_context(
         &instruction_files,
     ))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::build_workspace_instruction_files_context;
+    use std::path::PathBuf;
+    use tokio::fs;
+
+    #[tokio::test]
+    async fn workspace_instructions_load_agents_md() {
+        let workspace = unique_temp_workspace("instructions-root");
+        fs::create_dir_all(&workspace)
+            .await
+            .expect("create workspace");
+        fs::write(
+            workspace.join("AGENTS.md"),
+            "# Root instructions\n\nFollow these rules.",
+        )
+        .await
+        .expect("write AGENTS");
+
+        let context = build_workspace_instruction_files_context(&workspace)
+            .await
+            .expect("context should build")
+            .expect("context should exist");
+
+        assert!(context.contains("<document name=\"AGENTS.md\">"));
+        assert!(context.contains("Follow these rules."));
+
+        let _ = fs::remove_dir_all(&workspace).await;
+    }
+
+    #[tokio::test]
+    async fn workspace_instructions_skips_missing_agents_md() {
+        let workspace = unique_temp_workspace("instructions-empty");
+
+        let context = build_workspace_instruction_files_context(&workspace)
+            .await
+            .expect("context should build");
+
+        assert!(context.is_none(), "empty workspace should produce no context");
+
+        let _ = fs::remove_dir_all(&workspace).await;
+    }
+
+    fn unique_temp_workspace(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!("bitfun-{}-{}", name, uuid::Uuid::new_v4()))
+    }
+}

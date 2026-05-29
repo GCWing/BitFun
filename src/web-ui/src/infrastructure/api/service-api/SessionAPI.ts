@@ -12,6 +12,13 @@ export interface SessionUsageReportRequest {
 
 export type UsageModelIdentitySource = 'recorded' | 'inferred_session_model' | 'legacy_missing';
 
+/** Known proactivity buckets emitted by the backend; future variants are
+ *  permitted via the union with `string` in consumer sites. */
+export type ProactivityLevel = 'high' | 'moderate' | 'low' | 'reactive';
+
+/** Known completeness buckets emitted by the backend. */
+export type CompletenessLevel = 'full' | 'partial' | 'minimal' | 'incomplete';
+
 export interface SessionUsageReport {
   schemaVersion: number;
   reportId: string;
@@ -138,6 +145,29 @@ export interface SessionUsageReport {
     commandOutputsIncluded: boolean;
     fileContentsIncluded: boolean;
     redactedFields: string[];
+  };
+  proactivity?: {
+    completed: number;
+    inferred: number;
+    provided: number;
+    score: number;
+    // Backend serializes ProactivityLevel as a string. Kept loose here so a
+    // newly added backend variant doesn't break TS narrowing in callers.
+    level: ProactivityLevel | (string & {});
+    turnDetails?: Array<{
+      turnIndex: number;
+      askedQuestion: boolean;
+      proactiveToolCount: number;
+      intentsCompleted: number;
+      intentsInferred: number;
+      intentsProvided: number;
+    }>;
+  };
+  completeness?: {
+    requirementsSatisfied: number;
+    requirementsMissed: number;
+    score: number;
+    level: CompletenessLevel | (string & {});
   };
 }
 

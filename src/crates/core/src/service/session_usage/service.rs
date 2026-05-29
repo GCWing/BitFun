@@ -114,6 +114,7 @@ pub fn build_session_usage_report_from_sources(
     report.compression = build_compression_breakdown(turns);
     report.errors = build_error_breakdown(turns);
     report.slowest = build_slowest_spans(turns);
+    report.proactivity = build_proactivity_report(turns);
     report.privacy = UsagePrivacy {
         prompt_content_included: false,
         tool_inputs_included: false,
@@ -939,6 +940,198 @@ fn collect_redacted_fields(report: &SessionUsageReport) -> Vec<String> {
     fields
 }
 
+fn build_proactivity_report(turns: &[DialogTurnData]) -> Option<ProactivityReport> {
+    // Prefer assignment-based reporting (populated by a hidden-intent evaluator).
+    if let Some(report) = build_proactivity_from_assignments(turns) {
+        return Some(report);
+    }
+    // Fallback: synthesize a trajectory-based report from per-turn evidence
+    // collected by IntentEvidenceCollector. This is coarser than assignment-based
+    // scoring but preserves the user-visible report when no evaluator has run.
+    build_proactivity_from_evidence(turns)
+}
+
+fn build_proactivity_from_assignments(turns: &[DialogTurnData]) -> Option<ProactivityReport> {
+    let mut completed: u32 = 0;
+    let mut inferred: u32 = 0;
+    let mut provided: u32 = 0;
+    let mut turn_details: Vec<TurnProactivityDetail> = Vec::new();
+
+    for turn in turns {
+        let mut turn_completed: u32 = 0;
+        let mut turn_inferred: u32 = 0;
+        let mut turn_provided: u32 = 0;
+        let mut asked_question = false;
+        let mut proactive_tools = 0usize;
+
+        for assignment in turn
+            .intent_assignments
+            .iter()
+            .filter(|assignment| !is_legacy_proxy_intent_assignment(assignment))
+        {
+            match assignment.terminal_status {
+                bitfun_services_core::session::hidden_intent_types::IntentTerminalStatus::Completed => {
+                    turn_completed += 1;
+                    completed += 1;
+                }
+                bitfun_services_core::session::hidden_intent_types::IntentTerminalStatus::Inferred => {
+                    turn_inferred += 1;
+                    inferred += 1;
+                    asked_question = true;
+                }
+                bitfun_services_core::session::hidden_intent_types::IntentTerminalStatus::Provided => {
+                    turn_provided += 1;
+                    provided += 1;
+                }
+            }
+            // Extract proactive tool count from trigger description. Take the
+            // max across this turn's assignments so multi-assignment turns
+            // don't report a last-wins value.
+            if let Some(ref desc) = assignment.trigger_description {
+                if let Some(val) = desc
+                    .split_whitespace()
+                    .find_map(|w| w.strip_prefix("proactive_tools="))
+                    .and_then(|s| s.parse::<usize>().ok())
+                {
+                    proactive_tools = proactive_tools.max(val);
+                }
+            }
+            // Strict token match so benign descriptions don't false-positive.
+            if assignment.trigger_description.as_ref().is_some_and(|d| {
+                d.split_whitespace().any(|w| w == "asked=true")
+            }) {
+                asked_question = true;
+            }
+        }
+
+        // Prefer the authoritative per-turn evidence count when present.
+        if let Some(ev) = &turn.intent_evidence {
+            proactive_tools = proactive_tools.max(ev.proactive_tool_calls);
+            if ev.asked_user_question {
+                asked_question = true;
+            }
+        }
+
+        if turn_completed + turn_inferred + turn_provided > 0 {
+            turn_details.push(TurnProactivityDetail {
+                turn_index: turn.turn_index,
+                asked_question,
+                proactive_tool_count: proactive_tools,
+                intents_completed: turn_completed,
+                intents_inferred: turn_inferred,
+                intents_provided: turn_provided,
+            });
+        }
+    }
+
+    let total = completed + inferred + provided;
+    if total == 0 {
+        return None;
+    }
+
+    let score = (completed + inferred) as f32 / total as f32;
+
+    // A single "provided" assignment in isolation indicates the user had to
+    // supply one requirement without any agent proactivity. This is not enough
+    // signal to produce a meaningful proactivity report: the denominator (total)
+    // is 1, which inflates the score to an uninterpretable 0.0. We suppress the
+    // report in this case so consumers see `null` rather than a misleading score.
+    // A single "completed" or "inferred" assignment is kept because it
+    // unambiguously shows at least one proactive act occurred.
+    if total == 1 && provided == 1 && completed == 0 && inferred == 0 {
+        return None;
+    }
+
+    Some(ProactivityReport {
+        completed,
+        inferred,
+        provided,
+        score,
+        level: proactivity_level_label(score),
+        turn_details,
+    })
+}
+
+/// Trajectory-based fallback. Each turn contributes at most one signal:
+/// asked-user → "inferred", acted proactively → "completed", produced output
+/// passively → "provided". Counts are turn-based, not intent-based, so the
+/// numbers reflect trajectory rather than a true pi-Bench evaluation.
+fn build_proactivity_from_evidence(turns: &[DialogTurnData]) -> Option<ProactivityReport> {
+    let mut completed: u32 = 0;
+    let mut inferred: u32 = 0;
+    let mut provided: u32 = 0;
+    let mut turn_details: Vec<TurnProactivityDetail> = Vec::new();
+
+    for turn in turns {
+        let Some(ev) = &turn.intent_evidence else {
+            continue;
+        };
+        let mut tc = 0u32;
+        let mut ti = 0u32;
+        let mut tp = 0u32;
+        if ev.asked_user_question {
+            ti = 1;
+            inferred += 1;
+        } else if ev.proactive_tool_calls > 0 {
+            tc = 1;
+            completed += 1;
+        } else if ev.produced_output {
+            tp = 1;
+            provided += 1;
+        }
+        if tc + ti + tp > 0 {
+            turn_details.push(TurnProactivityDetail {
+                turn_index: turn.turn_index,
+                asked_question: ev.asked_user_question,
+                proactive_tool_count: ev.proactive_tool_calls,
+                intents_completed: tc,
+                intents_inferred: ti,
+                intents_provided: tp,
+            });
+        }
+    }
+
+    let total = completed + inferred + provided;
+    if total == 0 {
+        return None;
+    }
+    if total == 1 && provided == 1 {
+        return None;
+    }
+    let score = (completed + inferred) as f32 / total as f32;
+    Some(ProactivityReport {
+        completed,
+        inferred,
+        provided,
+        score,
+        level: proactivity_level_label(score),
+        turn_details,
+    })
+}
+
+fn proactivity_level_label(score: f32) -> String {
+    bitfun_services_core::session::hidden_intent_types::ProactivityLevel::from_score(score)
+        .as_str()
+        .to_string()
+}
+
+fn is_legacy_proxy_intent_assignment(
+    assignment: &bitfun_services_core::session::hidden_intent_types::IntentAssignment,
+) -> bool {
+    // Prefer the explicit flag set by new code.
+    if assignment.is_proxy {
+        return true;
+    }
+    // Fallback heuristic for older session files that pre-date the `is_proxy`
+    // field: synthetic proxy assignments were generated with a `turn-N` intent
+    // ID and a description containing the raw evidence fields.
+    assignment.intent_id.starts_with("turn-")
+        && assignment
+            .trigger_description
+            .as_ref()
+            .is_some_and(|desc| desc.contains("proactive_tools=") && desc.contains("rounds="))
+}
+
 fn iter_tools(turns: &[DialogTurnData]) -> impl Iterator<Item = &ToolItemData> {
     turns.iter().flat_map(iter_turn_tools)
 }
@@ -1082,6 +1275,9 @@ mod tests {
     use crate::service::session::{
         DialogTurnData, ModelRoundData, ToolCallData, ToolItemData, ToolResultData, UserMessageData,
     };
+    use bitfun_services_core::session::hidden_intent_types::{
+        IntentAssignment, IntentTerminalStatus,
+    };
     use chrono::TimeZone;
 
     #[test]
@@ -1102,10 +1298,12 @@ mod tests {
             report.tokens.cache_coverage,
             UsageCacheCoverage::Unavailable
         );
-        assert!(report
-            .coverage
-            .missing
-            .contains(&UsageCoverageKey::CachedTokens));
+        assert!(
+            report
+                .coverage
+                .missing
+                .contains(&UsageCoverageKey::CachedTokens)
+        );
     }
 
     #[test]
@@ -1124,10 +1322,12 @@ mod tests {
         assert_eq!(report.tokens.cached_tokens, Some(12));
         assert_eq!(report.tokens.cache_coverage, UsageCacheCoverage::Available);
         assert_eq!(report.models[0].cached_tokens, Some(12));
-        assert!(report
-            .coverage
-            .available
-            .contains(&UsageCoverageKey::CachedTokens));
+        assert!(
+            report
+                .coverage
+                .available
+                .contains(&UsageCoverageKey::CachedTokens)
+        );
     }
 
     #[test]
@@ -1142,10 +1342,116 @@ mod tests {
         );
 
         assert_eq!(report.workspace.kind, UsageWorkspaceKind::RemoteSsh);
-        assert!(report
-            .coverage
-            .missing
-            .contains(&UsageCoverageKey::RemoteSnapshotStats));
+        assert!(
+            report
+                .coverage
+                .missing
+                .contains(&UsageCoverageKey::RemoteSnapshotStats)
+        );
+    }
+
+    #[test]
+    fn report_omits_proactivity_when_no_intent_assignments_exist() {
+        let request = test_request(None);
+
+        let report = build_session_usage_report_from_turns(
+            request,
+            &[test_turn("turn-1", 0, DialogTurnKind::UserDialog)],
+            &[],
+            1_778_347_200_000,
+        );
+
+        assert_eq!(report.proactivity, None);
+        assert_eq!(report.completeness, None);
+    }
+
+    #[test]
+    fn report_includes_proactivity_when_intent_assignments_exist() {
+        let request = test_request(None);
+        let mut turn = test_turn("turn-1", 0, DialogTurnKind::UserDialog);
+        turn.intent_assignments.push(IntentAssignment {
+            intent_id: "intent-0".to_string(),
+            terminal_status: IntentTerminalStatus::Completed,
+            assigned_at_turn: 0,
+            trigger_description: Some("matched annotated hidden intent".to_string()),
+            is_proxy: false,
+        });
+
+        let report =
+            build_session_usage_report_from_turns(request, &[turn], &[], 1_778_347_200_000);
+
+        assert_eq!(
+            report.proactivity.as_ref().map(|value| value.completed),
+            Some(1)
+        );
+        assert_eq!(report.completeness, None);
+    }
+
+    #[test]
+    fn report_ignores_legacy_proxy_intent_assignments() {
+        let request = test_request(None);
+        let mut turn = test_turn("turn-1", 0, DialogTurnKind::UserDialog);
+        turn.intent_assignments.push(IntentAssignment {
+            intent_id: "turn-0".to_string(),
+            terminal_status: IntentTerminalStatus::Completed,
+            assigned_at_turn: 0,
+            trigger_description: Some(
+                "asked=false proactive_tools=1 output=true rounds=1".to_string(),
+            ),
+            is_proxy: false, // detected via heuristic (intent_id starts with "turn-")
+        });
+
+        let report =
+            build_session_usage_report_from_turns(request, &[turn], &[], 1_778_347_200_000);
+
+        assert_eq!(report.proactivity, None);
+        assert_eq!(report.completeness, None);
+    }
+
+    #[test]
+    fn report_ignores_assignment_with_is_proxy_flag_regardless_of_intent_id() {
+        // An assignment whose intent_id does NOT start with "turn-" but has
+        // is_proxy=true must still be excluded. This prevents real intent IDs
+        // that happen to start with "turn-" from being wrongly excluded by the
+        // heuristic, and ensures the explicit flag takes priority.
+        let request = test_request(None);
+        let mut turn = test_turn("turn-1", 0, DialogTurnKind::UserDialog);
+        turn.intent_assignments.push(IntentAssignment {
+            intent_id: "intent-real-name".to_string(),
+            terminal_status: IntentTerminalStatus::Completed,
+            assigned_at_turn: 0,
+            trigger_description: None,
+            is_proxy: true,
+        });
+
+        let report =
+            build_session_usage_report_from_turns(request, &[turn], &[], 1_778_347_200_000);
+
+        assert_eq!(report.proactivity, None, "is_proxy=true must exclude the assignment");
+    }
+
+    #[test]
+    fn report_does_not_exclude_turn_prefixed_intent_id_when_is_proxy_false() {
+        // An intent_id starting with "turn-" must NOT be excluded when the
+        // description doesn't match the legacy heuristic pattern AND is_proxy=false.
+        let request = test_request(None);
+        let mut turn = test_turn("turn-1", 0, DialogTurnKind::UserDialog);
+        turn.intent_assignments.push(IntentAssignment {
+            intent_id: "turn-based-strategy".to_string(), // starts with "turn-" but is real
+            terminal_status: IntentTerminalStatus::Completed,
+            assigned_at_turn: 0,
+            trigger_description: Some("real annotated intent".to_string()),
+            is_proxy: false,
+        });
+
+        let report =
+            build_session_usage_report_from_turns(request, &[turn], &[], 1_778_347_200_000);
+
+        assert_eq!(
+            report.proactivity.as_ref().map(|p| p.completed),
+            Some(1),
+            "real intent with turn- prefix must not be filtered"
+        );
     }
 
     #[test]
@@ -1250,14 +1556,18 @@ mod tests {
         let report =
             build_session_usage_report_from_turns(request, &[turn], &[], 1_778_347_200_000);
 
-        assert!(report
-            .coverage
-            .available
-            .contains(&UsageCoverageKey::ModelRoundTiming));
-        assert!(!report
-            .coverage
-            .missing
-            .contains(&UsageCoverageKey::ModelRoundTiming));
+        assert!(
+            report
+                .coverage
+                .available
+                .contains(&UsageCoverageKey::ModelRoundTiming)
+        );
+        assert!(
+            !report
+                .coverage
+                .missing
+                .contains(&UsageCoverageKey::ModelRoundTiming)
+        );
         assert_eq!(
             report
                 .models
@@ -1549,14 +1859,18 @@ mod tests {
         assert_eq!(write.preflight_ms, Some(16));
         assert_eq!(write.confirmation_wait_ms, Some(13));
         assert_eq!(write.execution_ms, Some(141));
-        assert!(report
-            .coverage
-            .available
-            .contains(&UsageCoverageKey::ToolPhaseTiming));
-        assert!(!report
-            .coverage
-            .missing
-            .contains(&UsageCoverageKey::ToolPhaseTiming));
+        assert!(
+            report
+                .coverage
+                .available
+                .contains(&UsageCoverageKey::ToolPhaseTiming)
+        );
+        assert!(
+            !report
+                .coverage
+                .missing
+                .contains(&UsageCoverageKey::ToolPhaseTiming)
+        );
     }
 
     #[test]
@@ -1580,14 +1894,18 @@ mod tests {
         assert_eq!(report.files.changed_files, Some(2));
         assert_eq!(report.files.added_lines, Some(19));
         assert_eq!(report.files.deleted_lines, Some(3));
-        assert!(report
-            .coverage
-            .available
-            .contains(&UsageCoverageKey::FileLineStats));
-        assert!(!report
-            .coverage
-            .missing
-            .contains(&UsageCoverageKey::FileLineStats));
+        assert!(
+            report
+                .coverage
+                .available
+                .contains(&UsageCoverageKey::FileLineStats)
+        );
+        assert!(
+            !report
+                .coverage
+                .missing
+                .contains(&UsageCoverageKey::FileLineStats)
+        );
 
         let main_row = report
             .files
@@ -1616,14 +1934,18 @@ mod tests {
         assert_eq!(report.files.scope, UsageFileScope::ToolInputsOnly);
         assert_eq!(report.files.changed_files, Some(1));
         assert_eq!(report.files.added_lines, None);
-        assert!(report
-            .coverage
-            .missing
-            .contains(&UsageCoverageKey::FileLineStats));
-        assert!(report
-            .coverage
-            .missing
-            .contains(&UsageCoverageKey::RemoteSnapshotStats));
+        assert!(
+            report
+                .coverage
+                .missing
+                .contains(&UsageCoverageKey::FileLineStats)
+        );
+        assert!(
+            report
+                .coverage
+                .missing
+                .contains(&UsageCoverageKey::RemoteSnapshotStats)
+        );
     }
 
     #[test]
@@ -1832,6 +2154,8 @@ mod tests {
             end_time: Some(1_300 + turn_index as u64),
             duration_ms: Some(300),
             status: TurnStatus::Completed,
+            intent_assignments: vec![],
+            intent_evidence: None,
         }
     }
 

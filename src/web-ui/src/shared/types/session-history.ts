@@ -113,6 +113,27 @@ export interface ReviewActionPersistedState {
 
 export type SessionStatus = 'active' | 'archived' | 'completed';
 export type DialogTurnKind = 'user_dialog' | 'manual_compaction' | 'local_command';
+export type IntentTerminalStatus = 'completed' | 'inferred' | 'provided';
+
+export interface IntentAssignment {
+  intentId: string;
+  terminalStatus: IntentTerminalStatus;
+  assignedAtTurn: number;
+  triggerDescription?: string;
+  /** True when this is a synthetic proxy generated from raw evidence rather than a real hidden-intent evaluation. Defaults to false / omitted. */
+  isProxy?: boolean;
+}
+
+export interface IntentTurnEvidence {
+  turnIndex: number;
+  askedUserQuestion: boolean;
+  questionTopics?: string[];
+  proactiveToolCalls: number;
+  toolNamesUsed?: string[];
+  producedOutput: boolean;
+  roundCount: number;
+  askedFollowUpInText: boolean;
+}
 
 export type LocalCommandKind = 'usage_report' | 'goal_pending' | 'goal_verifying';
 
@@ -151,6 +172,8 @@ export interface DialogTurnData {
   endTime?: number;
   durationMs?: number;
   status: TurnStatus;
+  intentAssignments?: IntentAssignment[];
+  intentEvidence?: IntentTurnEvidence;
 }
 
 export interface UserMessageData {

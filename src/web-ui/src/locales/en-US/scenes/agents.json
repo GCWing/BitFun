@@ -337,6 +337,7 @@
   },
   "agentDescriptions": {
     "Agentic": "Autonomous execution mode: automatically analyze requirements, plan tasks, and execute code changes",
+    "IntentCoding": "Intent Coding mode: align on intent, acceptance checks, verification, and evidence before delivery",
     "Cowork": "Cowork mode: work alongside you, asking for confirmation at key steps",
     "ComputerUse": "Computer use mode: capable of operating browsers, desktop apps, and file systems",
     "DeepResearch": "Deep research agent: conduct systematic investigation and analysis on complex topics",

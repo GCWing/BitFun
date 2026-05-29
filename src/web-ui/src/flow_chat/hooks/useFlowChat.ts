@@ -73,6 +73,8 @@ export const useFlowChat = () => {
       const remoteSshHost = isRemote ? workspace?.sshHost : undefined;
 
       const agentTypeForSession = (config?.agentType || 'agentic').trim() || 'agentic';
+      const intentTrackingEnabled =
+        config?.enableIntentTracking ?? agentTypeForSession === 'IntentCoding';
       const maxContextTokens = await getModelMaxTokens(config?.modelName, agentTypeForSession);
       const sessionTitleMode =
         workspace?.workspaceKind === WorkspaceKind.Assistant
@@ -111,6 +113,7 @@ export const useFlowChat = () => {
           enableContextCompression: true,
           remoteConnectionId,
           remoteSshHost,
+          enableIntentTracking: intentTrackingEnabled,
         }
       });
       

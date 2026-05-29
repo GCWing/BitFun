@@ -3,6 +3,7 @@
 //! Responsible for AI interaction and model round control
 
 pub mod execution_engine;
+pub mod intent_evidence;
 pub mod round_executor;
 pub mod stream_processor;
 pub mod types;

@@ -66,6 +66,7 @@ export async function createBtwChildSession(params: {
   safeMode?: boolean;
   autoCompact?: boolean;
   enableContextCompression?: boolean;
+  enableIntentTracking?: boolean;
   requestId?: string;
   addMarker?: boolean;
   isTransient?: boolean;
@@ -126,6 +127,8 @@ export async function createBtwChildSession(params: {
             enableContextCompression: params.enableContextCompression ?? true,
             remoteConnectionId,
             remoteSshHost,
+            enableIntentTracking:
+              params.enableIntentTracking ?? agentType === 'IntentCoding',
           },
         })
       ).sessionId

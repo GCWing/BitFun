@@ -4,6 +4,7 @@ import type { AgentKind, AgentWithCapabilities, CapabilityCategory } from './age
 
 const MODE_DESCRIPTION_KEY_BY_ID: Record<string, string> = {
   agentic: 'Agentic',
+  intentcoding: 'IntentCoding',
   plan: 'Plan',
   debug: 'Debug',
   cowork: 'Cowork',
@@ -92,6 +93,7 @@ function enrichCapabilities(agent: AgentWithCapabilities): AgentWithCapabilities
 
   if (agent.agentKind === 'mode') {
     if (id === 'agentic') return { ...agent, capabilities: [{ category: 'coding', level: 5 }, { category: 'analysis', level: 4 }] };
+    if (id === 'intentcoding') return { ...agent, capabilities: [{ category: 'coding', level: 5 }, { category: 'testing', level: 4 }] };
     if (id === 'plan') return { ...agent, capabilities: [{ category: 'analysis', level: 5 }, { category: 'docs', level: 3 }] };
     if (id === 'debug') return { ...agent, capabilities: [{ category: 'coding', level: 5 }, { category: 'analysis', level: 3 }] };
     if (id === 'cowork') return { ...agent, capabilities: [{ category: 'analysis', level: 4 }, { category: 'creative', level: 3 }] };

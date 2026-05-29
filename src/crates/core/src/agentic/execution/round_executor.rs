@@ -52,6 +52,36 @@ impl RoundExecutor {
         !text.trim().is_empty()
     }
 
+    /// Detects AskUserQuestion calls in a set of tool calls.
+    /// Returns (used_ask_user_question, extracted_question_topics).
+    ///
+    /// Note: `used_ask_user_question` is `true` whenever AskUserQuestion appears
+    /// in the tool call list, regardless of whether any topic headers could be
+    /// extracted. This ensures the call is recorded even when the `questions`
+    /// argument is missing or contains no `header` fields.
+    fn detect_ask_user_question(
+        tool_calls: &[crate::agentic::core::ToolCall],
+    ) -> (bool, Vec<String>) {
+        let mut called = false;
+        let mut topics = Vec::new();
+        for tc in tool_calls {
+            if tc.tool_name == "AskUserQuestion" {
+                called = true;
+                // Extract question topics from the arguments (best-effort)
+                if let Some(questions) = tc.arguments.get("questions") {
+                    if let Some(arr) = questions.as_array() {
+                        for q in arr {
+                            if let Some(header) = q.get("header").and_then(|v| v.as_str()) {
+                                topics.push(header.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        (called, topics)
+    }
+
     fn write_tool_mode(context: &RoundContext) -> WriteToolMode {
         WriteToolMode::from_context_var(
             context
@@ -574,6 +604,8 @@ impl RoundExecutor {
                 partial_recovery_reason: stream_result.partial_recovery_reason.clone(),
                 had_assistant_text: Self::has_user_visible_assistant_text(&stream_result.full_text),
                 had_thinking_content: !stream_result.full_thinking.is_empty(),
+                used_ask_user_question: false,
+                ask_user_question_topics: vec![],
             });
         }
 
@@ -822,6 +854,10 @@ impl RoundExecutor {
         // Note: Do not cleanup cancellation token here, as there may be subsequent model rounds
         // Cancellation token will be cleaned up by ExecutionEngine when the entire dialog turn ends
 
+        // Detect AskUserQuestion calls for intent evidence collection
+        let (used_ask_user_question, ask_user_question_topics) =
+            Self::detect_ask_user_question(&tool_calls);
+
         Ok(RoundResult {
             assistant_message,
             tool_calls: tool_calls.clone(),
@@ -837,6 +873,8 @@ impl RoundExecutor {
             partial_recovery_reason: stream_result.partial_recovery_reason.clone(),
             had_assistant_text: Self::has_user_visible_assistant_text(&stream_result.full_text),
             had_thinking_content: !stream_result.full_thinking.is_empty(),
+            used_ask_user_question,
+            ask_user_question_topics,
         })
     }
 
@@ -1819,6 +1857,7 @@ mod tests {
         extract_bitfun_contents, extract_bitfun_contents_with_options, RoundExecutor,
         StreamProcessor,
     };
+    use crate::agentic::core::ToolCall;
     use crate::agentic::events::{EventQueue, EventQueueConfig};
     use crate::agentic::execution::types::RoundContext;
     use crate::agentic::tools::ToolRuntimeRestrictions;
@@ -1828,6 +1867,15 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::Arc;
     use tokio_util::sync::CancellationToken;
+
+    fn tool_call(tool_id: &str, tool_name: &str, arguments: serde_json::Value) -> ToolCall {
+        ToolCall {
+            tool_id: tool_id.to_string(),
+            tool_name: tool_name.to_string(),
+            arguments,
+            ..Default::default()
+        }
+    }
 
     fn test_round_executor() -> RoundExecutor {
         let event_queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
@@ -2321,5 +2369,89 @@ mod tests {
             cache_creation_token_count: None,
         };
         assert!(super::token_details_from_usage(&usage).is_none());
+    }
+
+    // --- detect_ask_user_question tests ---
+
+    #[test]
+    fn detect_ask_user_question_with_header_topics() {
+        let tc = tool_call(
+            "tc-1",
+            "AskUserQuestion",
+            serde_json::json!({
+                "questions": [
+                    { "header": "Auth method", "question": "Which auth method?" },
+                    { "header": "Library", "question": "Which library?" }
+                ]
+            }),
+        );
+        let (called, topics) = RoundExecutor::detect_ask_user_question(&[tc]);
+        assert!(called, "should be called even with headers");
+        assert_eq!(topics, vec!["Auth method", "Library"]);
+    }
+
+    #[test]
+    fn detect_ask_user_question_without_header_fields_still_marks_called() {
+        // AskUserQuestion called but questions have no `header` field.
+        // The bug being tested: previously returned (false, []) in this case.
+        let tc = tool_call(
+            "tc-1",
+            "AskUserQuestion",
+            serde_json::json!({
+                "questions": [
+                    { "question": "Which auth method?" }
+                ]
+            }),
+        );
+        let (called, topics) = RoundExecutor::detect_ask_user_question(&[tc]);
+        assert!(called, "must be true even when no headers are extractable");
+        assert!(topics.is_empty());
+    }
+
+    #[test]
+    fn detect_ask_user_question_with_empty_questions_array_still_marks_called() {
+        let tc = tool_call(
+            "tc-1",
+            "AskUserQuestion",
+            serde_json::json!({ "questions": [] }),
+        );
+        let (called, topics) = RoundExecutor::detect_ask_user_question(&[tc]);
+        assert!(called);
+        assert!(topics.is_empty());
+    }
+
+    #[test]
+    fn detect_ask_user_question_with_missing_questions_key_still_marks_called() {
+        let tc = tool_call(
+            "tc-1",
+            "AskUserQuestion",
+            serde_json::json!({}),
+        );
+        let (called, topics) = RoundExecutor::detect_ask_user_question(&[tc]);
+        assert!(called);
+        assert!(topics.is_empty());
+    }
+
+    #[test]
+    fn detect_ask_user_question_not_present_returns_false() {
+        let tc = tool_call("tc-1", "Write", serde_json::json!({ "file_path": "a.rs" }));
+        let (called, topics) = RoundExecutor::detect_ask_user_question(&[tc]);
+        assert!(!called);
+        assert!(topics.is_empty());
+    }
+
+    #[test]
+    fn detect_ask_user_question_mixed_tool_calls() {
+        let write_tc = tool_call("tc-1", "Write", serde_json::json!({}));
+        let ask_tc = tool_call(
+            "tc-2",
+            "AskUserQuestion",
+            serde_json::json!({
+                "questions": [{ "header": "Approach" }]
+            }),
+        );
+        let (called, topics) = RoundExecutor::detect_ask_user_question(&[write_tc, ask_tc]);
+        assert!(called);
+        assert_eq!(topics, vec!["Approach"]);
     }
 }

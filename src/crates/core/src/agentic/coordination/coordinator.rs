@@ -760,6 +760,18 @@ impl ConversationCoordinator {
         }
     }
 
+    /// Apply mode-derived defaults that are not part of the caller's contract.
+    /// Today the only one is: IntentCoding sessions enable hidden-intent
+    /// tracking unless the caller has already opted out. This must live at the
+    /// core/port boundary so server/relay/AgentSubmissionPort callers can't
+    /// silently end up with the evaluator disabled by passing the SessionConfig
+    /// default through.
+    fn apply_mode_derived_session_defaults(config: &mut SessionConfig, agent_type: &str) {
+        if !config.enable_intent_tracking && agent_type == "IntentCoding" {
+            config.enable_intent_tracking = true;
+        }
+    }
+
     fn ensure_user_message_metadata_object(
         metadata: Option<serde_json::Value>,
     ) -> serde_json::Value {
@@ -1138,6 +1150,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         config.workspace_path = Some(workspace_path.clone());
         config.workspace_id = Self::resolve_workspace_id_for_config(&config).await;
         let agent_type = Self::normalize_agent_type(&agent_type);
+        Self::apply_mode_derived_session_defaults(&mut config, &agent_type);
         let session = self
             .session_manager
             .create_session_with_id_and_creator(
@@ -1182,6 +1195,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         config.workspace_path = Some(workspace_path);
         config.workspace_id = Self::resolve_workspace_id_for_config(&config).await;
         let agent_type = Self::normalize_agent_type(&agent_type);
+        Self::apply_mode_derived_session_defaults(&mut config, &agent_type);
         self.create_hidden_subagent_session(
             session_id,
             session_name,
@@ -1280,6 +1294,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 workspace_hostname: None,
                 unread_completion: None,
                 needs_user_attention: None,
+                intent_tracking: None,
+                proactivity_score: None,
+                completeness_score: None,
             };
             if let Err(e) = persistence_manager
                 .save_session_metadata(&workspace_path_buf, &metadata)
@@ -1603,9 +1620,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         session_id: Option<String>,
         session_name: String,
         agent_type: String,
-        config: SessionConfig,
+        mut config: SessionConfig,
         created_by: Option<String>,
     ) -> BitFunResult<Session> {
+        Self::apply_mode_derived_session_defaults(&mut config, &agent_type);
         self.session_manager
             .create_session_with_id_and_details(
                 session_id,
@@ -2135,6 +2153,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             round_preempt: None,
             round_injection: None,
             recover_partial_on_cancel: false,
+            intent_evidence: None,
         };
         let session_max_tokens = session.config.max_context_tokens;
 
@@ -2683,6 +2702,13 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             round_preempt: self.round_preempt_source.get().cloned(),
             round_injection: self.round_injection_source.get().cloned(),
             recover_partial_on_cancel: false,
+            intent_evidence: if session.config.enable_intent_tracking {
+                Some(std::sync::Arc::new(tokio::sync::Mutex::new(
+                    crate::agentic::execution::intent_evidence::IntentEvidenceCollector::default(),
+                )))
+            } else {
+                None
+            },
         };
 
         // Auto-generate session title on first message
@@ -3832,6 +3858,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             // that belong to a different (parent) session/turn.
             round_injection: None,
             recover_partial_on_cancel: true,
+            intent_evidence: None,
         };
 
         let execution_engine = self.execution_engine.clone();
@@ -5240,7 +5267,7 @@ pub fn get_global_coordinator() -> Option<Arc<ConversationCoordinator>> {
 mod tests {
     use super::{
         normalize_subagent_max_concurrency, resolve_agent_submission_turn_id,
-        ConversationCoordinator,
+        ConversationCoordinator, SessionConfig,
     };
     use crate::service::remote_ssh::workspace_state::init_remote_workspace_manager;
     use bitfun_runtime_ports::{AgentSubmissionRequest, AgentSubmissionSource};
@@ -5252,6 +5279,42 @@ mod tests {
 
         assert_cancellation_port::<ConversationCoordinator>();
         assert_state_port::<ConversationCoordinator>();
+    }
+
+    #[test]
+    fn apply_mode_derived_defaults_enables_intent_tracking_for_intent_coding() {
+        let mut config = SessionConfig::default();
+        assert!(!config.enable_intent_tracking);
+        ConversationCoordinator::apply_mode_derived_session_defaults(&mut config, "IntentCoding");
+        assert!(
+            config.enable_intent_tracking,
+            "IntentCoding sessions must default-enable intent tracking at the core boundary"
+        );
+    }
+
+    #[test]
+    fn apply_mode_derived_defaults_leaves_other_modes_untouched() {
+        for mode in ["agentic", "Cowork", "ComputerUse", "Plan", "debug", "Claw"] {
+            let mut config = SessionConfig::default();
+            ConversationCoordinator::apply_mode_derived_session_defaults(&mut config, mode);
+            assert!(
+                !config.enable_intent_tracking,
+                "mode {mode} must not default-enable intent tracking",
+            );
+        }
+    }
+
+    #[test]
+    fn apply_mode_derived_defaults_preserves_caller_true() {
+        let mut config = SessionConfig {
+            enable_intent_tracking: true,
+            ..Default::default()
+        };
+        ConversationCoordinator::apply_mode_derived_session_defaults(&mut config, "agentic");
+        assert!(
+            config.enable_intent_tracking,
+            "an explicit true from the caller must survive even for non-IntentCoding modes"
+        );
     }
 
     #[test]
