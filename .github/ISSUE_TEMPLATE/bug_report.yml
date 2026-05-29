@@ -2,16 +2,12 @@ name: Bug report
 description: Report a reproducible bug or regression.
 title: "[Bug]: "
 body:
-  - type: markdown
-    attributes:
-      value: |
-        Thanks for helping improve BitFun. Please provide enough detail for maintainers to reproduce and route the issue.
   - type: textarea
     id: summary
     attributes:
       label: Summary
-      description: What went wrong?
-      placeholder: Briefly describe the bug.
+      description: What went wrong, and what did you expect instead?
+      placeholder: Briefly describe the bug and the expected behavior.
     validations:
       required: true
   - type: dropdown
@@ -31,10 +27,10 @@ body:
     validations:
       required: true
   - type: textarea
-    id: steps
+    id: reproduction
     attributes:
-      label: Steps to reproduce
-      description: List exact steps from a clean state when possible.
+      label: Reproduction or evidence
+      description: Steps, screenshots, logs, or a short recording. Remove tokens, keys, user IDs, and private data.
       placeholder: |
         1. Open ...
         2. Click ...
@@ -42,48 +38,12 @@ body:
     validations:
       required: true
   - type: textarea
-    id: expected
-    attributes:
-      label: Expected behavior
-      placeholder: What should have happened?
-    validations:
-      required: true
-  - type: textarea
-    id: actual
-    attributes:
-      label: Actual behavior
-      placeholder: What happened instead?
-    validations:
-      required: true
-  - type: textarea
     id: environment
     attributes:
-      label: Environment
+      label: Environment, if relevant
       description: Include the version, commit, OS, browser, desktop/mobile device, model/provider, or deployment mode if relevant.
       placeholder: |
         BitFun version/commit:
         OS:
         Browser/device:
         Model/provider:
-    validations:
-      required: true
-  - type: textarea
-    id: logs
-    attributes:
-      label: Logs, screenshots, or recordings
-      description: Paste relevant logs or attach images/recordings. Remove tokens, keys, user IDs, and private data.
-  - type: dropdown
-    id: regression
-    attributes:
-      label: Regression?
-      options:
-        - "No"
-        - "Yes"
-        - "Not sure"
-    validations:
-      required: true
-  - type: textarea
-    id: extra
-    attributes:
-      label: Additional context
-      description: Anything else that may help triage the issue.

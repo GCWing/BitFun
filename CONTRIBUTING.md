@@ -139,7 +139,7 @@ We welcome contributions beyond standard feature or bug-fix PRs. Examples includ
 
 - Open an issue to describe the problem or proposal, especially for larger changes, to avoid duplication and design conflicts
 - For new features or UI changes, discuss the design direction early to ensure it fits the product experience
-- Use the issue and PR templates. If a field does not apply, write "N/A" instead of deleting the section.
+- Use the issue and PR templates as a guide. Keep the PR focused and explain any skipped verification when it matters.
 
 ### PR title and description
 
@@ -168,7 +168,7 @@ Keep PRs small and focused. Avoid bundling unrelated changes.
 
 ## Testing and Verification
 
-Run relevant tests for your change:
+Run relevant tests for your change. You do not need to run every row below; choose the smallest set that matches the files and behavior you touched:
 
 For `/usage` UI copy changes, keep `en-US`, `zh-CN`, and `zh-TW` locale strings in sync.
 

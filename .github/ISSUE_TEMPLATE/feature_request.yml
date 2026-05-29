@@ -2,10 +2,6 @@ name: Feature or product proposal
 description: Suggest a user-facing feature, workflow improvement, or product direction.
 title: "[Feature]: "
 body:
-  - type: markdown
-    attributes:
-      value: |
-        Use this for product ideas, UX improvements, and new workflows. For small bugs, use the bug report form.
   - type: textarea
     id: problem
     attributes:
@@ -40,32 +36,11 @@ body:
     validations:
       required: true
   - type: textarea
-    id: acceptance
+    id: details
     attributes:
-      label: Acceptance criteria
-      description: What must be true for this to feel complete?
+      label: Details, examples, or constraints
+      description: Optional. Include acceptance criteria, screenshots, alternatives, risks, or compatibility concerns.
       placeholder: |
         - Users can ...
         - The UI shows ...
         - It works when ...
-    validations:
-      required: true
-  - type: textarea
-    id: alternatives
-    attributes:
-      label: Alternatives considered
-      description: Optional. Mention other approaches or existing tools/workarounds.
-  - type: textarea
-    id: risks
-    attributes:
-      label: Risks or open questions
-      description: Optional. Include compatibility, privacy, performance, remote workspace, or UX concerns.
-  - type: checkboxes
-    id: contribution
-    attributes:
-      label: Contribution intent
-      options:
-        - label: I plan to open a PR for this.
-          required: false
-        - label: I can help test or provide feedback.
-          required: false

@@ -2,70 +2,32 @@
 
 <!-- Briefly describe what changed. -->
 
-## Motivation / Product Context
-
-<!-- What user or developer problem does this solve? Link issue/discussion if applicable. -->
-
 Fixes #
 
-## PR Type
+## Type and Areas
 
-- [ ] Feature
-- [ ] Bug fix
-- [ ] Regression fix
-- [ ] Refactor
-- [ ] UI / UX
-- [ ] Docs
-- [ ] Tests
-- [ ] Build / CI / release
-- [ ] Dependency update
-- [ ] AI-assisted prototype or iteration
+Type:
 
-## Changed Areas
+<!-- Feature / bug fix / regression fix / refactor / UI/UX / docs / test / CI / dependency / other. -->
 
-- [ ] Rust core / agent runtime
-- [ ] Desktop / Tauri integration
-- [ ] Web UI
-- [ ] Mobile web
-- [ ] Server / relay / remote control
-- [ ] AI adapters / model providers
-- [ ] Installer / packaging
-- [ ] Docs only
+Areas:
 
-## User Impact
+<!-- Rust core, desktop/Tauri, web UI, mobile web, server/relay, AI adapters, installer, docs, etc. -->
 
-<!-- Describe before/after behavior. For non-user-facing changes, write "No direct user-facing change". -->
+## Motivation / Impact
 
-## Design / Architecture Notes
-
-<!-- Required for product behavior, cross-module changes, agent loop changes, remote workspace behavior, or shared abstractions. -->
+<!-- What problem does this solve, and what changes for users or developers? Write "No direct user-facing change" if applicable. -->
 
 ## Verification
 
-Verification scope:
+<!-- List exact commands, manual checks, and outcomes. For docs-only or template-only changes, use the lightest relevant checks or explain why runtime checks were skipped. -->
 
-<!-- Select the relevant checks from CONTRIBUTING.md based on the changed areas. -->
+## Reviewer Notes
 
-Commands run and results:
-
-<!-- List the exact commands and outcomes, for example: `pnpm run lint:web` -> pass. Write "N/A" for docs-only changes with no runnable check. -->
-
-Manual verification:
-
-<!-- Screenshots/recordings for UI changes; reproduction steps for bug fixes. -->
-
-Skipped checks:
-
-<!-- List any relevant checks not run and why. Write "N/A" if none. -->
-
-## Risk and Rollback
-
-<!-- Main risks, compatibility concerns, migration impact, and how to revert or disable if needed. -->
+<!-- Optional: screenshots, architecture notes, compatibility risks, migration notes, or rollback guidance. -->
 
 ## Checklist
 
-- [ ] This PR is focused and does not bundle unrelated changes.
-- [ ] No secrets, tokens, local absolute paths, temporary prompts, generated scratch files, or unrelated artifacts are committed.
-- [ ] User-facing strings are localized where applicable.
-- [ ] Docs are updated or intentionally not needed.
-- [ ] AI-assisted work is disclosed with testing level: untested / lightly tested / fully tested.
+- [ ] This PR is focused and does not include secrets, temporary prompts, generated scratch files, or unrelated artifacts.
+- [ ] Relevant verification is recorded above, or skipped checks are explained.
+- [ ] User-facing strings, docs, and locales are updated where applicable.
