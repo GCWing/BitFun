@@ -156,7 +156,7 @@ export const SessionControlToolCard: React.FC<ToolCardProps> = React.memo(({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       {workspace && (
         <div className="detail-item">
-          <span className="detail-label">{t('toolCards.sessionControl.workspace')}:</span>
+          <span className="detail-label">{t('shared:features.workspace')}:</span>
           <span className="detail-value">{workspace}</span>
         </div>
       )}

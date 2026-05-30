@@ -293,7 +293,7 @@ const SettingsNav: React.FC = () => {
     <div className="bitfun-settings-nav">
       <div className="bitfun-settings-nav__header">
         <span className="bitfun-settings-nav__title">
-          {t('configCenter.title', { defaultValue: t('title', { defaultValue: 'Settings' }) })}
+          {t('shared:features.settings')}
         </span>
       </div>
 

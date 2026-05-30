@@ -43,7 +43,7 @@ function agentLabel(agentType: string, t: (key: string) => string): string {
       return t('sessions.agentCowork');
     case 'claw':
     case 'Claw':
-      return t('sessions.agentClaw');
+      return t('shared.agents.claw');
     default:
       return agentType || t('sessions.agentDefault');
   }
@@ -569,7 +569,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
         <div className="session-list__header-brand">
           <img src={logoIcon} alt="BitFun" className="session-list__logo" />
           <div className="session-list__header-copy">
-            <h1>{t('common.appName')}</h1>
+            <h1>{t('shared.product.remote')}</h1>
             {authenticatedUserId && (
               <span className="session-list__header-user-id">
                 <span className={`session-list__health-dot session-list__health-dot--${connectionHealth}`} title={(() => { switch (connectionHealth) { case 'connected': return t('sessions.connectionConnected'); case 'checking': return t('sessions.connectionChecking'); case 'unreachable': return t('sessions.connectionUnreachable'); default: return t('sessions.connectionUnpaired'); } })()} />
@@ -648,7 +648,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
                 <WorkspaceIcon />
               </span>
               <div className="session-list__workspace-copy">
-                <span className="session-list__workspace-label">{t('sessions.workspace')}</span>
+                <span className="session-list__workspace-label">{t('shared.features.workspace')}</span>
                 <span className="session-list__workspace-name" title={workspaceDisplayName}>{truncateMiddle(workspaceDisplayName, 24)}</span>
               </div>
               {currentWorkspace?.git_branch && (
@@ -792,7 +792,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
                         <SessionTypeIcon agentType="cowork" />
                       </div>
                       <div className="session-list__create-copy">
-                        <span className="session-list__create-title">{t('sessions.coworkSession')}</span>
+                        <span className="session-list__create-title">{t('shared.agents.cowork')}</span>
                         <span className="session-list__create-desc">{t('sessions.coworkSessionDesc')}</span>
                       </div>
                       <span className="session-list__create-arrow">

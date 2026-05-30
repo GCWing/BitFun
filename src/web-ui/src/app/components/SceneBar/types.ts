@@ -27,7 +27,7 @@ export type SceneTabId =
 export interface SceneTabDef {
   id: SceneTabId;
   label: string;
-  /** i18n key under common.scenes — when provided, SceneBar will translate instead of using label */
+  /** i18n key resolved through the common namespace, or an explicit namespace key such as shared:features.settings. */
   labelKey?: string;
   Icon?: LucideIcon;
   /** @deprecated Prefer fixed + closable. Pinned tabs cannot be closed and were protected from eviction. */

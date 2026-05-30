@@ -16,7 +16,6 @@
     "releaseToAdd": "釋放以添加到此欄"
   },
   "layout": {
-    "noPanels": "BitFun",
     "noPanelsHint": "使用底部欄切換面板或按 <kbd>Ctrl+\\</kbd> <kbd>Ctrl+]</kbd> 展開面板",
     "chatHiddenTitle": "聊天已隱藏",
     "chatHiddenDesc": "你可以在右上角點擊“聊天”重新打開。",
@@ -443,7 +442,6 @@
   "toolbar": {
     "newSession": "新建會話",
     "history": "歷史記錄",
-    "settings": "設置",
     "export": "導出對話",
     "clear": "清空對話",
     "fullscreen": "全屏",
@@ -1401,7 +1399,6 @@
       "listingSessions": "正在列出會話",
       "listedSessions": "共找到 {{count}} 個會話",
       "actionFailed": "會話操作失敗",
-      "workspace": "工作區",
       "sessionId": "會話ID",
       "sessionName": "會話名稱",
       "agentType": "Agent 類型",
@@ -1423,7 +1420,6 @@
       "messageAccepted": "消息已提交給 {{session}}",
       "sendFailed": "向 {{session}} 發送消息失敗",
       "targetSession": "目標會話",
-      "workspace": "工作區",
       "agentType": "Agent 類型",
       "message": "消息內容"
     },
@@ -1782,7 +1778,6 @@
     "defaultAction2Command": "繼續之前的工作",
     "defaultAction3": "開始新功能",
     "defaultAction3Command": "開始新功能",
-    "workspace": "工作區",
     "noWorkspace": "未打開工作區",
     "openOtherProject": "打開其他項目...",
     "noWorkspaceHint": "還沒有選擇項目",

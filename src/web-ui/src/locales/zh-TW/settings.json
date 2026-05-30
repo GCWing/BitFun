@@ -1,7 +1,5 @@
 {
-  "title": "設置",
   "configCenter": {
-    "title": "設置",
     "selectConfig": "選擇配置項",
     "searchPlaceholder": "搜索配置…",
     "searchNoResults": "沒有匹配的配置",
@@ -145,7 +143,6 @@
     }
   },
   "workspace": {
-    "title": "工作區",
     "files": {
       "title": "文件",
       "exclude": "排除文件",

@@ -627,7 +627,7 @@ const MainNav: React.FC<MainNavProps> = ({
         {/* Workspace */}
         <div className="bitfun-nav-panel__section">
           <SectionHeader
-            label={t('nav.sections.workspace')}
+            label={t('shared:features.workspace')}
             collapsible
             isOpen={expandedSections.has('workspace')}
             onToggle={() => toggleSection('workspace')}

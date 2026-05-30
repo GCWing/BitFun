@@ -277,7 +277,7 @@ const PairingPage: React.FC<PairingPageProps> = ({ onPaired }) => {
         <LanguageToggleButton />
       </div>
       <CubeLogo />
-      <div className="pairing-page__brand">{t('common.appName')}</div>
+      <div className="pairing-page__brand">{t('shared.product.remote')}</div>
 
       <div className="pairing-page__spinner-wrap">
         {showSpinner && <div className="spinner" />}

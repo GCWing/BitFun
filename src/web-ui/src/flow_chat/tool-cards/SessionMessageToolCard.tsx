@@ -87,7 +87,7 @@ export const SessionMessageToolCard: React.FC<ToolCardProps> = React.memo(({
 
       {workspace && (
         <div className="detail-item">
-          <span className="detail-label">{t('toolCards.sessionMessage.workspace')}:</span>
+          <span className="detail-label">{t('shared:features.workspace')}:</span>
           <span className="detail-value">{workspace}</span>
         </div>
       )}

@@ -1,7 +1,5 @@
 {
-  "title": "Settings",
   "configCenter": {
-    "title": "Settings",
     "selectConfig": "Select Configuration",
     "searchPlaceholder": "Search settings…",
     "searchNoResults": "No matching settings",
@@ -145,7 +143,6 @@
     }
   },
   "workspace": {
-    "title": "Workspace",
     "files": {
       "title": "Files",
       "exclude": "Exclude Files",
