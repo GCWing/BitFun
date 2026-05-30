@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { globalEventBus } from '@/infrastructure/event-bus';
-import { useContextMenuStore } from '@/shared/context-menu-system';
+import { useContextMenuStore } from '@/shared/context-menu-system/store/ContextMenuStore';
 import { ContextType } from '@/shared/context-menu-system/types/context.types';
 import type { MenuItem } from '@/shared/context-menu-system/types/menu.types';
 import { notificationService } from '@/shared/notification-system';

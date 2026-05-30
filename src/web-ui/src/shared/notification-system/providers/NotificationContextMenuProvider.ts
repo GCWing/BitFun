@@ -1,6 +1,6 @@
  
 
-import { contextMenuRegistry } from '@/shared/context-menu-system';
+import { contextMenuRegistry } from '@/shared/context-menu-system/core/ContextMenuRegistry';
 import type { MenuContext, MenuItem } from '@/shared/context-menu-system/types';
 import { i18nService } from '@/infrastructure/i18n';
 import { createLogger } from '@/shared/utils/logger';

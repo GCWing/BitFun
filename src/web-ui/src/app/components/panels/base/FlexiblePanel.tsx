@@ -1,7 +1,6 @@
 import React, { useCallback, memo } from 'react';
 import { Download, Copy, X, AlertCircle } from 'lucide-react';
 import { MarkdownRenderer, IconButton } from '@/component-library';
-import { CodeEditor, MarkdownEditor, ImageViewer, DiffEditor } from '@/tools/editor';
 import { useI18n } from '@/infrastructure/i18n';
 import { createLogger } from '@/shared/utils/logger';
 import { globalEventBus } from '@/infrastructure/event-bus';
@@ -46,8 +45,35 @@ const GitSettingsView = React.lazy(() =>
   import('@/tools/git/components/GitSettingsView/GitSettingsView')
 );
 
-// Directly imported (not lazy-loaded) to avoid loading delay in frequently used Git panel
-import { GitDiffEditor } from '@/tools/git/components/GitDiffEditor/GitDiffEditor';
+const CodeEditor = React.lazy(() =>
+  import('@/tools/editor/components/CodeEditor').then(module => ({
+    default: module.default,
+  }))
+);
+
+const MarkdownEditor = React.lazy(() =>
+  import('@/tools/editor/components/MarkdownEditor').then(module => ({
+    default: module.default,
+  }))
+);
+
+const ImageViewer = React.lazy(() =>
+  import('@/tools/editor/components/ImageViewer').then(module => ({
+    default: module.default,
+  }))
+);
+
+const DiffEditor = React.lazy(() =>
+  import('@/tools/editor/components/DiffEditor').then(module => ({
+    default: module.default,
+  }))
+);
+
+const GitDiffEditor = React.lazy(() =>
+  import('@/tools/git/components/GitDiffEditor/GitDiffEditor').then(module => ({
+    default: module.default,
+  }))
+);
 
 const GitGraphView = React.lazy(() => 
   import('@/tools/git/components/GitGraphView/GitGraphView').then(module => ({ 
@@ -216,6 +242,18 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
     URL.revokeObjectURL(url);
   }, [content]);
 
+  const renderEditorLoading = () => (
+    <div className="bitfun-flexible-panel__loading">
+      {t('select.loading')}
+    </div>
+  );
+
+  const renderLazyEditor = (node: React.ReactNode) => (
+    <React.Suspense fallback={renderEditorLoading()}>
+      {node}
+    </React.Suspense>
+  );
+
   const renderContent = () => {
     if (!content || content.type === 'empty') {
       return (
@@ -260,27 +298,29 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
         return (
           <div className="bitfun-flexible-panel__markdown-editor">
             {markdownFilePath || markdownInitialContent !== undefined ? (
-              <MarkdownEditor
-                filePath={markdownFilePath}
-                initialContent={markdownInitialContent}
-                fileName={markdownFileName}
-                workspacePath={markdownWorkspacePath}
-                readOnly={markdownEditorData.readOnly || false}
-                jumpToLine={markdownJumpToLine}
-                jumpToColumn={markdownJumpToColumn}
-                isActiveTab={isActive}
-                onFileMissingFromDiskChange={onFileMissingFromDiskChange}
-                onContentChange={(_newContent, hasChanges) => {
-                  if (onDirtyStateChange) {
-                    onDirtyStateChange(hasChanges);
-                  }
-                }}
-                onSave={(_savedContent) => {
-                  if (onDirtyStateChange) {
-                    onDirtyStateChange(false);
-                  }
-                }}
-              />
+              renderLazyEditor(
+                <MarkdownEditor
+                  filePath={markdownFilePath}
+                  initialContent={markdownInitialContent}
+                  fileName={markdownFileName}
+                  workspacePath={markdownWorkspacePath}
+                  readOnly={markdownEditorData.readOnly || false}
+                  jumpToLine={markdownJumpToLine}
+                  jumpToColumn={markdownJumpToColumn}
+                  isActiveTab={isActive}
+                  onFileMissingFromDiskChange={onFileMissingFromDiskChange}
+                  onContentChange={(_newContent, hasChanges) => {
+                    if (onDirtyStateChange) {
+                      onDirtyStateChange(hasChanges);
+                    }
+                  }}
+                  onSave={(_savedContent) => {
+                    if (onDirtyStateChange) {
+                      onDirtyStateChange(false);
+                    }
+                  }}
+                />
+              )
             ) : (
               <div className="bitfun-flexible-panel__error-message">
                 <AlertCircle size={20} />
@@ -306,17 +346,19 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
         
         return (
           <div className="bitfun-flexible-panel__code-viewer-container">
-            <CodeEditor
-              filePath={fileViewerData.filePath || ''}
-              fileName={content.title}
-              readOnly={true}
-              showLineNumbers={true}
-              showMinimap={true}
-              theme="vs-dark"
-              className={fileViewerClass}
-              isActiveTab={isActive}
-              onFileMissingFromDiskChange={onFileMissingFromDiskChange}
-            />
+            {renderLazyEditor(
+              <CodeEditor
+                filePath={fileViewerData.filePath || ''}
+                fileName={content.title}
+                readOnly={true}
+                showLineNumbers={true}
+                showMinimap={true}
+                theme="vs-dark"
+                className={fileViewerClass}
+                isActiveTab={isActive}
+                onFileMissingFromDiskChange={onFileMissingFromDiskChange}
+              />
+            )}
           </div>
         );
       }
@@ -326,12 +368,14 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
         
         return (
           <div className="bitfun-flexible-panel__image-viewer-container">
-            <ImageViewer
-              filePath={imageViewerData.filePath || ''}
-              fileName={content.title}
-              workspacePath={workspacePath}
-              className="bitfun-flexible-panel__image-viewer"
-            />
+            {renderLazyEditor(
+              <ImageViewer
+                filePath={imageViewerData.filePath || ''}
+                fileName={content.title}
+                workspacePath={workspacePath}
+                className="bitfun-flexible-panel__image-viewer"
+              />
+            )}
           </div>
         );
       }
@@ -344,18 +388,20 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
         return (
           <div className="bitfun-flexible-panel__code-viewer-container">
             <div className={`bitfun-flexible-panel__code-content ${needsFix ? 'needs-fix' : ''}`}>
-              <CodeEditor
-                filePath={codeData.filePath || ''}
-                fileName={codeData.fileName}
-                language={codeData.language || 'typescript'}
-                readOnly={codeData.readOnly !== false}
-                showLineNumbers={true}
-                showMinimap={true}
-                theme="vs-dark"
-                onContentChange={codeData.onContentChange}
-                isActiveTab={isActive}
-                onFileMissingFromDiskChange={onFileMissingFromDiskChange}
-              />
+              {renderLazyEditor(
+                <CodeEditor
+                  filePath={codeData.filePath || ''}
+                  fileName={codeData.fileName}
+                  language={codeData.language || 'typescript'}
+                  readOnly={codeData.readOnly !== false}
+                  showLineNumbers={true}
+                  showMinimap={true}
+                  theme="vs-dark"
+                  onContentChange={codeData.onContentChange}
+                  isActiveTab={isActive}
+                  onFileMissingFromDiskChange={onFileMissingFromDiskChange}
+                />
+              )}
             </div>
           </div>
         );
@@ -430,7 +476,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
           }
         };
 
-        return (
+        return renderLazyEditor(
           <CodeEditor
             filePath={filePath}
             workspacePath={editorWorkspacePath}
@@ -449,34 +495,34 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
             isActiveTab={isActive}
             onFileMissingFromDiskChange={onFileMissingFromDiskChange}
             onContentChange={(newContent, hasChanges) => {
-                if (onContentChange) {
-                  onContentChange({
-                    ...content,
-                    data: {
-                      ...editorData,
-                      content: newContent,
-                      hasChanges
-                    }
-                  });
-                }
-                
-                if (onDirtyStateChange) {
-                  onDirtyStateChange(hasChanges);
-                }
+              if (onContentChange) {
+                onContentChange({
+                  ...content,
+                  data: {
+                    ...editorData,
+                    content: newContent,
+                    hasChanges
+                  }
+                });
+              }
 
-                void syncGenerativeWidgetToolResult(newContent, false);
-              }}
-              onSave={(content) => {
-                if (onInteraction) {
-                  onInteraction('save', JSON.stringify({ filePath, content }));
-                }
-                
-                if (onDirtyStateChange) {
-                  onDirtyStateChange(false);
-                }
+              if (onDirtyStateChange) {
+                onDirtyStateChange(hasChanges);
+              }
 
-                void syncGenerativeWidgetToolResult(content, true);
-              }}
+              void syncGenerativeWidgetToolResult(newContent, false);
+            }}
+            onSave={(content) => {
+              if (onInteraction) {
+                onInteraction('save', JSON.stringify({ filePath, content }));
+              }
+
+              if (onDirtyStateChange) {
+                onDirtyStateChange(false);
+              }
+
+              void syncGenerativeWidgetToolResult(content, true);
+            }}
           />
         );
       }
@@ -492,7 +538,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
         const diffViewerKey = `diff-${diffFilePath || 'unknown'}-${originalCode.length}-${modifiedCode.length}`;
         
         if (diffRepositoryPath && diffFilePath) {
-          return (
+          return renderLazyEditor(
             <GitDiffEditor
               key={diffViewerKey}
               originalContent={originalCode}
@@ -526,7 +572,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
           );
         }
         
-        return (
+        return renderLazyEditor(
           <DiffEditor
             key={diffViewerKey}
             originalContent={originalCode}

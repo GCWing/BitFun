@@ -11,7 +11,7 @@ import { ContextDropZone, useContextStore } from '../../shared/context-system';
 import { useActiveSessionState } from '@/flow_chat/hooks';
 import { RichTextInput, type MentionState } from './RichTextInput';
 import { FileMentionPicker } from './FileMentionPicker';
-import { globalEventBus } from '@/infrastructure';
+import { globalEventBus } from '@/infrastructure/event-bus';
 import {
   useSessionDerivedState,
   useSessionStateMachine,
