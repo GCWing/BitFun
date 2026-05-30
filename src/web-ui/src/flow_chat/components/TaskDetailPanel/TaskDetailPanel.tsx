@@ -586,9 +586,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
           <div className="task-detail-panel__loading task-detail-panel__loading--inline">
             <DotMatrixLoader size="small" />
             <span>
-              {t('toolCards.taskDetailPanel.loadingMore', {
-                defaultValue: 'Loading more output...',
-              })}
+              {t('toolCards.taskDetailPanel.loadingMore')}
             </span>
           </div>
         )}
@@ -599,9 +597,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
             <span>
               {isSnapshotHydrated
                 ? t('toolCards.taskDetailPanel.status.running')
-                : t('toolCards.taskDetailPanel.loading', {
-                  defaultValue: 'Loading task details...',
-                })}
+                : t('toolCards.taskDetailPanel.loading')}
             </span>
           </div>
         )}

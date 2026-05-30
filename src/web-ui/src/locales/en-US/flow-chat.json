@@ -403,7 +403,9 @@
     "messageTooLarge": "Message exceeds the maximum length of {{max}} characters ({{count}} provided).",
     "openWorkspaceFolder": "Open workspace folder",
     "openWorkspaceFolderFailed": "Failed to open workspace folder: {{error}}",
-    "spaceToActivate": "Press <space>Space</space> to type"
+    "spaceToActivate": "Press <space>Space</space> to type",
+    "assistantPlaceholder": "Message {{name}}...",
+    "sendHint": "Enter to send / Shift+Enter for new line"
   },
   "workspaceStrip": {
     "branchTooltipUnavailable": "Not a git repository or no current branch"
@@ -463,7 +465,8 @@
     "modelError": "Model Error",
     "contextTooLong": "Context Too Long",
     "rateLimited": "Rate Limited",
-    "unknown": "Unknown error"
+    "unknown": "Unknown error",
+    "processingFailed": "Processing failed"
   },
   "chatInput": {
     "addBoostTooltip": "Agent modes, image, or skills",
@@ -559,7 +562,10 @@
     },
     "openFolder": "Open folder…",
     "selectWorkspaceTitle": "Select workspace directory",
-    "switchWorkspaceFailed": "Failed to switch workspace: {{error}}"
+    "switchWorkspaceFailed": "Failed to switch workspace: {{error}}",
+    "mcpPromptMissingArgs": "This MCP prompt requires arguments: {{args}}",
+    "mcpPromptFailed": "MCP prompt failed",
+    "loadingMcpPrompts": "Loading MCP prompts..."
   },
   "planner": {
     "title": "Task Planning",
@@ -953,7 +959,8 @@
     "backgroundSubagents": "Background subagents ({{count}})",
     "backgroundSubagentUntitled": "Background subagent",
     "subagentStatusProcessing": "Running",
-    "subagentStatusFinishing": "Finishing"
+    "subagentStatusFinishing": "Finishing",
+    "pullRequests": "Pull requests"
   },
   "stickyTaskIndicator": {
     "tooltip": "Jump to current task"
@@ -1039,7 +1046,8 @@
     "feedbackThanks": "Thank you for your feedback!",
     "feedbackDevVersion": "Feedback is not available in dev version",
     "userLabel": "👤 User:",
-    "toolCallLabel": "🔧 Tool call: {{name}}"
+    "toolCallLabel": "🔧 Tool call: {{name}}",
+    "loadingMoreHistory": "Loading more history..."
   },
   "exploreRegion": {
     "readFiles_one": "Read {{count}} file",
@@ -1325,7 +1333,9 @@
         "running": "Running",
         "completed": "Completed",
         "failed": "Failed"
-      }
+      },
+      "loadingMore": "Loading more output...",
+      "loading": "Loading task details..."
     },
     "timeout": {
       "disableTooltip": "Disable timeout",
@@ -1655,7 +1665,12 @@
           "high_risk_only": "High-risk-only",
           "risk_expanded": "Risk-expanded",
           "full_depth": "Full-depth"
-        }
+        },
+        "target": "Target",
+        "budget": "Budget",
+        "estimatedCalls": "Estimated calls",
+        "activeGroupTitle": "Will run",
+        "skippedGroupTitle": "Skipped reviewers"
       },
       "sectionItemCount": "{{count}} items",
       "remediationPlan": "Remediation Plan",
@@ -1712,7 +1727,8 @@
         "remediation": "Remediation Plan",
         "strengths": "Code Strengths",
         "team": "Code Review Team",
-        "coverage": "Coverage Notes"
+        "coverage": "Coverage Notes",
+        "runManifest": "Run manifest"
       },
       "groups": {
         "must_fix": "Must fix",
@@ -2001,5 +2017,11 @@
     "injectedAt": "Injected before round {{round}}",
     "statusPending": "Waiting to trigger",
     "statusInjected": "Triggered"
+  },
+  "errors": {
+    "sendFailed": "Failed to send message"
+  },
+  "actions": {
+    "send": "Send"
   }
 }

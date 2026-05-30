@@ -386,8 +386,8 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
           variant="ghost"
           size="xs"
           onClick={handleOpenPullRequests}
-          tooltip={t('flowChatHeader.pullRequests', { defaultValue: 'Pull requests' })}
-          aria-label={t('flowChatHeader.pullRequests', { defaultValue: 'Pull requests' })}
+          tooltip={t('flowChatHeader.pullRequests')}
+          aria-label={t('flowChatHeader.pullRequests')}
           data-testid="flowchat-header-pull-requests"
         >
           <GitPullRequest size={14} />

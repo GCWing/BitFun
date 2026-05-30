@@ -7,6 +7,7 @@ const require = createRequire(import.meta.url);
 const root = process.cwd();
 const contractPath = path.join(root, 'src', 'shared', 'i18n', 'contract', 'locales.json');
 const hardcodedBaselinePath = path.join(root, 'scripts', 'i18n-hardcoded-baseline.json');
+const literalFallbackBaselinePath = path.join(root, 'scripts', 'i18n-literal-fallback-baseline.json');
 const sharedTermsDir = path.join(root, 'src', 'shared', 'i18n', 'resources', 'shared');
 const webLocalesDir = path.join(root, 'src', 'web-ui', 'src', 'locales');
 const namespaceRegistryPath = path.join(
@@ -37,6 +38,7 @@ const localeContract = readJsonFile(contractPath);
 
 let errorCount = 0;
 let warningCount = 0;
+let auditTypeScript = null;
 
 function reportError(message) {
   errorCount += 1;
@@ -46,6 +48,17 @@ function reportError(message) {
 function reportWarning(message) {
   warningCount += 1;
   console.warn(`[i18n:audit] WARN ${message}`);
+}
+
+function loadTypeScriptForAudit() {
+  try {
+    return require('typescript');
+  } catch (error) {
+    reportError(
+      `Failed to load TypeScript for i18n audit: ${error.message}. Run pnpm install before running pnpm run i18n:audit.`,
+    );
+    return null;
+  }
 }
 
 function toPosixPath(value) {
@@ -136,6 +149,10 @@ function flattenStringEntries(value, prefix = '') {
 
 function sortedUnique(values) {
   return Array.from(new Set(values)).sort();
+}
+
+function isPlainObject(value) {
+  return value != null && typeof value === 'object' && !Array.isArray(value);
 }
 
 function extractI18nextPlaceholders(value) {
@@ -272,11 +289,8 @@ function flattenTsObjectEntries(ts, objectLiteral, prefix = '') {
 }
 
 function readMobileMessagesByLocale() {
-  let ts;
-  try {
-    ts = require('typescript');
-  } catch (error) {
-    reportError(`Failed to load TypeScript for mobile-web i18n audit: ${error.message}`);
+  const ts = auditTypeScript;
+  if (!ts) {
     return new Map();
   }
 
@@ -797,32 +811,177 @@ function lineNumberAt(text, index) {
   return text.slice(0, index).split(/\r?\n/).length;
 }
 
-function collectWebUiStaticTranslationKeys() {
+function createAuditSourceFile(file, text) {
+  const ts = auditTypeScript;
+  return ts.createSourceFile(
+    file,
+    text,
+    ts.ScriptTarget.Latest,
+    true,
+    file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
+}
+
+function staticStringLiteral(ts, expression) {
+  const value = unwrapTsExpression(ts, expression);
+  if (!value) return null;
+  if (ts.isStringLiteral(value) || ts.isNoSubstitutionTemplateLiteral(value)) {
+    return value.text;
+  }
+  return null;
+}
+
+function staticStringArrayLiteral(ts, expression) {
+  const value = unwrapTsExpression(ts, expression);
+  if (!value || !ts.isArrayLiteralExpression(value)) return null;
+
+  const values = [];
+  for (const element of value.elements) {
+    const literal = staticStringLiteral(ts, element);
+    if (!literal) return null;
+    values.push(literal);
+  }
+  return values.length > 0 ? values : null;
+}
+
+function isI18nServiceGetTCall(ts, expression) {
+  return (
+    ts.isCallExpression(expression) &&
+    ts.isPropertyAccessExpression(expression.expression) &&
+    expression.expression.name.text === 'getT' &&
+    ts.isIdentifier(expression.expression.expression) &&
+    expression.expression.expression.text === 'i18nService'
+  );
+}
+
+function isI18nServiceTCall(ts, expression) {
+  return (
+    ts.isPropertyAccessExpression(expression) &&
+    expression.name.text === 't' &&
+    ts.isIdentifier(expression.expression) &&
+    expression.expression.text === 'i18nService'
+  );
+}
+
+function isI18nHookCall(ts, expression) {
+  return (
+    ts.isCallExpression(expression) &&
+    ts.isIdentifier(expression.expression) &&
+    (expression.expression.text === 'useI18n' || expression.expression.text === 'useTranslation')
+  );
+}
+
+function collectWebUiTranslationCallFacts() {
+  const ts = auditTypeScript;
   const sourceFiles = listFiles(
     webSourceDir,
     (file) => (file.endsWith('.ts') || file.endsWith('.tsx')) && !shouldSkipSourceScan(file),
   );
   const output = [];
-  const patterns = [
-    /i18nService\.t\(\s*(['"`])([^'"`$]+?)\1/g,
-    /i18nService\.getT\(\)\(\s*(['"`])([^'"`$]+?)\1/g,
-  ];
 
   for (const file of sourceFiles) {
     const text = fs.readFileSync(file, 'utf8');
-    for (const pattern of patterns) {
-      for (const match of text.matchAll(pattern)) {
-        const key = match[2];
-        if (!key.includes(':')) continue;
-        output.push({
-          key,
-          location: `${toPosixPath(path.relative(root, file))}:${lineNumberAt(text, match.index ?? 0)}`,
-        });
+    const sourceFile = createAuditSourceFile(file, text);
+    const hookNamespaceByTranslator = new Map();
+    const hookNamespaceListByTranslator = new Map();
+    const fullKeyTranslatorNames = new Set();
+
+    function rememberHookTranslator(node) {
+      if (!ts.isVariableDeclaration(node) || !node.initializer || !isI18nHookCall(ts, node.initializer)) {
+        return;
+      }
+
+      const namespace = staticStringLiteral(ts, node.initializer.arguments[0]);
+      const namespaces = namespace ? null : staticStringArrayLiteral(ts, node.initializer.arguments[0]);
+      if (!namespace && !namespaces) return;
+
+      function rememberLocalName(localName) {
+        if (!localName) return;
+        if (namespace) {
+          hookNamespaceByTranslator.set(localName, namespace);
+        } else {
+          hookNamespaceListByTranslator.set(localName, namespaces);
+        }
+      }
+
+      if (ts.isObjectBindingPattern(node.name)) {
+        for (const element of node.name.elements) {
+          const propertyName = element.propertyName ? propertyNameToString(ts, element.propertyName) : propertyNameToString(ts, element.name);
+          const localName = propertyNameToString(ts, element.name);
+          if (propertyName === 't' && localName) {
+            rememberLocalName(localName);
+          }
+        }
+      } else if (ts.isArrayBindingPattern(node.name)) {
+        const first = node.name.elements[0];
+        if (first && ts.isBindingElement(first) && ts.isIdentifier(first.name)) {
+          rememberLocalName(first.name.text);
+        }
       }
     }
+
+    function rememberGetTTranslator(node) {
+      if (
+        ts.isVariableDeclaration(node) &&
+        ts.isIdentifier(node.name) &&
+        node.initializer &&
+        isI18nServiceGetTCall(ts, node.initializer)
+      ) {
+        fullKeyTranslatorNames.add(node.name.text);
+      }
+    }
+
+    function recordTranslationCall(node) {
+      if (!ts.isCallExpression(node)) return;
+
+      const key = staticStringLiteral(ts, node.arguments[0]);
+      if (!key) return;
+
+      let fullKey = null;
+      let kind = 'full';
+      if (isI18nServiceTCall(ts, node.expression) || isI18nServiceGetTCall(ts, node.expression)) {
+        if (!key.includes(':')) return;
+        fullKey = key;
+      } else if (ts.isIdentifier(node.expression) && fullKeyTranslatorNames.has(node.expression.text)) {
+        if (!key.includes(':')) return;
+        fullKey = key;
+      } else if (ts.isIdentifier(node.expression) && hookNamespaceByTranslator.has(node.expression.text)) {
+        const namespace = hookNamespaceByTranslator.get(node.expression.text);
+        fullKey = key.includes(':') ? key : `${namespace}:${key}`;
+        kind = key.includes(':') ? 'hook-full' : 'hook-relative';
+      } else if (ts.isIdentifier(node.expression) && hookNamespaceListByTranslator.has(node.expression.text)) {
+        const namespaces = hookNamespaceListByTranslator.get(node.expression.text);
+        fullKey = key.includes(':') ? key : `${namespaces[0]}:${key}`;
+        kind = key.includes(':') ? 'hook-full-array' : 'hook-relative-array';
+      }
+
+      if (!fullKey) return;
+
+      output.push({
+        key: fullKey,
+        kind,
+        options: node.arguments[1],
+        location: `${toPosixPath(path.relative(root, file))}:${lineNumberAt(text, node.getStart(sourceFile))}`,
+        file: toPosixPath(path.relative(root, file)),
+        sourceFile,
+      });
+    }
+
+    function visit(node) {
+      rememberHookTranslator(node);
+      rememberGetTTranslator(node);
+      recordTranslationCall(node);
+      ts.forEachChild(node, visit);
+    }
+
+    visit(sourceFile);
   }
 
   return output;
+}
+
+function collectWebUiStaticTranslationKeys() {
+  return collectWebUiTranslationCallFacts().map(({ key, kind, location }) => ({ key, kind, location }));
 }
 
 function buildWebUiKeySet(namespaces) {
@@ -841,11 +1000,136 @@ function auditWebUiStaticTranslationKeys(namespaces) {
     .filter(({ key }) => !knownKeys.has(key));
 
   if (missing.length > 0) {
+    const relativeCount = missing.filter(({ kind }) => kind === 'hook-relative').length;
     reportError(
-      `Found ${missing.length} unknown static Web UI i18n key(s). First entries: ${
+      `Found ${missing.length} unknown static Web UI i18n key(s), including ${relativeCount} relative static Web UI i18n key(s). First entries: ${
         missing.slice(0, 12).map(({ key, location }) => `${location} ${key}`).join(', ')
       }`,
     );
+  }
+}
+
+function isLiteralFallbackInitializer(ts, initializer) {
+  const value = unwrapTsExpression(ts, initializer);
+  if (!value) return false;
+  if (ts.isStringLiteral(value) || ts.isNoSubstitutionTemplateLiteral(value) || ts.isTemplateExpression(value)) {
+    return true;
+  }
+  if (ts.isArrayLiteralExpression(value)) {
+    return value.elements.some((element) => (
+      ts.isStringLiteral(element) ||
+      ts.isNoSubstitutionTemplateLiteral(element) ||
+      ts.isTemplateExpression(element)
+    ));
+  }
+  return false;
+}
+
+function collectWebUiLiteralFallbackFindings() {
+  const ts = auditTypeScript;
+  const findings = [];
+
+  for (const call of collectWebUiTranslationCallFacts()) {
+    const options = unwrapTsExpression(ts, call.options);
+    if (!options || !ts.isObjectLiteralExpression(options)) continue;
+
+    for (const property of options.properties) {
+      if (!ts.isPropertyAssignment(property)) continue;
+      if (propertyNameToString(ts, property.name) !== 'defaultValue') continue;
+      if (!isLiteralFallbackInitializer(ts, property.initializer)) continue;
+
+      findings.push({
+        file: call.file,
+        location: call.location,
+        key: call.key,
+      });
+    }
+  }
+
+  return findings;
+}
+
+function auditWebUiLiteralFallbackBudget() {
+  if (!fs.existsSync(literalFallbackBaselinePath)) {
+    reportError('Missing scripts/i18n-literal-fallback-baseline.json');
+    return;
+  }
+
+  const baseline = readJsonFile(literalFallbackBaselinePath);
+  const budgetByFile = new Map(
+    (baseline.budgets ?? []).map((entry) => [entry.path, entry]),
+  );
+  const findingsByFile = new Map();
+
+  for (const finding of collectWebUiLiteralFallbackFindings()) {
+    findingsByFile.set(finding.file, [...(findingsByFile.get(finding.file) ?? []), finding]);
+  }
+
+  for (const [file, findings] of findingsByFile.entries()) {
+    const budget = budgetByFile.get(file);
+    if (!budget) {
+      reportError(
+        `${file} has ${findings.length} literal i18next defaultValue fallback(s) but is missing from scripts/i18n-literal-fallback-baseline.json. First entries: ${
+          findings.slice(0, 8).map((finding) => `${finding.location} ${finding.key}`).join(', ')
+        }`,
+      );
+      continue;
+    }
+
+    const actualCountByKey = new Map();
+    for (const finding of findings) {
+      actualCountByKey.set(finding.key, (actualCountByKey.get(finding.key) ?? 0) + 1);
+    }
+
+    if (Array.isArray(budget.literalDefaultValues) || isPlainObject(budget.literalDefaultValues)) {
+      const allowedCountByKey = new Map(
+        Array.isArray(budget.literalDefaultValues)
+          ? budget.literalDefaultValues.map((entry) => [entry.key, entry.count])
+          : Object.entries(budget.literalDefaultValues),
+      );
+
+      for (const [key, count] of actualCountByKey.entries()) {
+        const allowed = allowedCountByKey.get(key);
+        if (typeof allowed !== 'number') {
+          reportError(`${file} has unbudgeted literal i18next defaultValue fallback for "${key}"`);
+        } else if (count > allowed) {
+          reportError(`${file} has ${count} literal i18next defaultValue fallback(s) for "${key}", budget is ${allowed}`);
+        } else if (count < allowed) {
+          reportError(`${file} has ${count} literal i18next defaultValue fallback(s) for "${key}", below baseline ${allowed}; lower scripts/i18n-literal-fallback-baseline.json.`);
+        }
+      }
+
+      for (const [key, allowed] of allowedCountByKey.entries()) {
+        if (allowed > 0 && !actualCountByKey.has(key)) {
+          reportError(`${file} no longer has a literal i18next defaultValue fallback for "${key}"; lower scripts/i18n-literal-fallback-baseline.json.`);
+        }
+      }
+    } else if (typeof budget.maxLiteralDefaultValues === 'number') {
+      if (findings.length > budget.maxLiteralDefaultValues) {
+        reportError(
+          `${file} has ${findings.length} literal i18next defaultValue fallback(s), budget is ${budget.maxLiteralDefaultValues}. First entries: ${
+            findings.slice(0, 8).map((finding) => `${finding.location} ${finding.key}`).join(', ')
+          }`,
+        );
+      } else if (findings.length < budget.maxLiteralDefaultValues) {
+        reportError(
+          `${file} has ${findings.length} literal i18next defaultValue fallback(s), below baseline ${budget.maxLiteralDefaultValues}; lower scripts/i18n-literal-fallback-baseline.json.`,
+        );
+      }
+    } else {
+      reportError(`${file} has an invalid literal fallback baseline entry`);
+    }
+  }
+
+  for (const [file, budget] of budgetByFile.entries()) {
+    const hasBudgetedFindings = Array.isArray(budget.literalDefaultValues) || isPlainObject(budget.literalDefaultValues)
+      ? Object.keys(budget.literalDefaultValues).length > 0
+      : budget.maxLiteralDefaultValues > 0;
+    if (hasBudgetedFindings && !findingsByFile.has(file)) {
+      reportError(
+        `${file} no longer has literal i18next defaultValue fallback(s); remove it from scripts/i18n-literal-fallback-baseline.json.`,
+      );
+    }
   }
 }
 
@@ -919,9 +1203,13 @@ auditMobileWebBoundary();
 const namespaces = auditNamespaceCoverage();
 auditKeyParity(namespaces);
 auditWebI18nextPlaceholderParity(namespaces);
-auditWebUiStaticTranslationKeys(namespaces);
-auditMobileWebMessageParity();
-auditMobileWebPlaceholderParity();
+auditTypeScript = loadTypeScriptForAudit();
+if (auditTypeScript) {
+  auditWebUiStaticTranslationKeys(namespaces);
+  auditWebUiLiteralFallbackBudget();
+  auditMobileWebMessageParity();
+  auditMobileWebPlaceholderParity();
+}
 auditInstallerKeyParity();
 auditInstallerPlaceholderParity();
 auditCoreFluentParity();

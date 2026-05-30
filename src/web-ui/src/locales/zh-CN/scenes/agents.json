@@ -156,7 +156,9 @@
       "cancel": "取消",
       "submit": "创建",
       "createSuccess": "已创建 Agent「{{name}}」",
-      "createFailed": "创建失败："
+      "createFailed": "创建失败：",
+      "review": "评审",
+      "reviewToolsHint": "评审子代理只能使用只读工具。"
     }
   },
   "reviewTeams": {

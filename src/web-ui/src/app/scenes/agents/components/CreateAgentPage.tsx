@@ -310,9 +310,7 @@ const CreateAgentPage: React.FC = () => {
               </div>
               <div className="th-create-panel__readonly-row">
                 <label className="th-create-panel__label">
-                  {t('agentsOverview.form.review', {
-                    defaultValue: 'Review',
-                  })}
+                  {t('agentsOverview.form.review')}
                 </label>
                 <Switch checked={review} onChange={(e) => handleReviewChange(e.target.checked)} size="small" />
               </div>
@@ -324,9 +322,7 @@ const CreateAgentPage: React.FC = () => {
                   {t('agentsOverview.form.tools')}
                   <span className="th-create-panel__label-hint">
                     {review
-                      ? t('agentsOverview.form.reviewToolsHint', {
-                        defaultValue: 'Review Sub-Agents can only use read-only tools.',
-                      })
+                      ? t('agentsOverview.form.reviewToolsHint')
                       : t('agentsOverview.form.toolsHint', {
                         optionalLabel: t('agentsOverview.form.toolsOptional'),
                       })}

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
@@ -21,6 +21,35 @@ function readJson(relativePath) {
 
 function readText(relativePath) {
   return fs.readFileSync(path.join(root, relativePath), 'utf8');
+}
+
+function writeText(relativePath, content) {
+  fs.mkdirSync(path.dirname(path.join(root, relativePath)), { recursive: true });
+  fs.writeFileSync(path.join(root, relativePath), content, 'utf8');
+}
+
+function runI18nAudit() {
+  return spawnSync(process.execPath, ['scripts/i18n-audit.mjs'], {
+    cwd: root,
+    encoding: 'utf8',
+  });
+}
+
+function withTemporaryTextFile(relativePath, content, callback) {
+  const absolutePath = path.join(root, relativePath);
+  const existed = fs.existsSync(absolutePath);
+  const previous = existed ? fs.readFileSync(absolutePath, 'utf8') : null;
+
+  writeText(relativePath, content);
+  try {
+    return callback();
+  } finally {
+    if (existed) {
+      fs.writeFileSync(absolutePath, previous, 'utf8');
+    } else {
+      fs.rmSync(absolutePath, { force: true });
+    }
+  }
 }
 
 function flattenKeys(value, prefix = '') {
@@ -257,6 +286,104 @@ test('i18n audit fails literal fallbacks and unknown static keys', () => {
   assert.match(sourceTextAudit, /reportError/, 'literal t(key, "fallback") candidates should fail audit');
   assert.match(auditSource, /auditWebUiStaticTranslationKeys/, 'static Web UI translation keys should be checked');
   assert.match(auditSource, /collectWebUiStaticTranslationKeys/, 'static key collection should be explicit');
+});
+
+test('i18n audit gates object-form literal fallbacks with an explicit budget', () => {
+  const auditSource = readText('scripts/i18n-audit.mjs');
+  const fallbackBaselineSource = readText('scripts/i18n-literal-fallback-baseline.json');
+  const fallbackBaseline = JSON.parse(fallbackBaselineSource);
+
+  assert.ok(
+    fallbackBaseline.budgets.every((entry) => (
+      entry.literalDefaultValues &&
+      typeof entry.literalDefaultValues === 'object' &&
+      !Array.isArray(entry.literalDefaultValues)
+    )),
+    'literal fallback baseline should allowlist exact keys per file',
+  );
+  assert.match(auditSource, /i18n-literal-fallback-baseline\.json/, 'audit should read the literal fallback baseline');
+  assert.match(auditSource, /auditWebUiLiteralFallbackBudget/, 'object-form defaultValue fallbacks should have a no-growth gate');
+  assert.match(auditSource, /defaultValue/, 'audit should inspect i18next defaultValue options');
+});
+
+test('i18n audit validates static hook translation keys with namespace context', () => {
+  const auditSource = readText('scripts/i18n-audit.mjs');
+
+  assert.match(auditSource, /use(?:I18n|Translation)/, 'audit should inspect hook namespace declarations');
+  assert.match(auditSource, /hookNamespaceByTranslator/, 'audit should remember namespace aliases returned by hooks');
+  assert.match(auditSource, /relative static Web UI i18n key/, 'audit should report missing relative hook keys clearly');
+});
+
+test('i18n audit catches array-namespace keys and stale literal fallback budgets', { concurrency: false }, () => {
+  const arrayNamespaceFixture = 'src/web-ui/src/__i18n_array_namespace_audit_fixture__.tsx';
+  const missingFullKey = 'components:__arrayNamespaceAuditMissingKey__';
+  const missingRelativeKey = 'components:__arrayNamespaceAuditMissingRelativeKey__';
+  const missingUseTranslationKey = 'common:__arrayNamespaceUseTranslationMissingKey__';
+
+  withTemporaryTextFile(
+    arrayNamespaceFixture,
+    [
+      "import { useI18n, useTranslation } from '@/infrastructure/i18n';",
+      'export function I18nArrayNamespaceAuditFixture() {',
+      "  const { t } = useI18n(['components', 'common', 'errors']);",
+      "  const [translate] = useTranslation(['common', 'errors']);",
+      `  return <div>{t('${missingFullKey}')}{t('__arrayNamespaceAuditMissingRelativeKey__')}{translate('${missingUseTranslationKey}')}</div>;`,
+      '}',
+      '',
+    ].join('\n'),
+    () => {
+      const result = runI18nAudit();
+      assert.notEqual(result.status, 0, 'array namespace full keys must be included in unknown-key audit');
+      assert.match(
+        `${result.stdout}\n${result.stderr}`,
+        new RegExp(missingFullKey),
+        'audit output should identify the missing array-namespace key',
+      );
+      assert.match(
+        `${result.stdout}\n${result.stderr}`,
+        new RegExp(missingRelativeKey),
+        'audit output should resolve relative array-namespace keys against the first namespace',
+      );
+      assert.match(
+        `${result.stdout}\n${result.stderr}`,
+        new RegExp(missingUseTranslationKey),
+        'audit output should cover useTranslation array namespace aliases',
+      );
+    },
+  );
+
+  const baselinePath = 'scripts/i18n-literal-fallback-baseline.json';
+  const baseline = readJson(baselinePath);
+  baseline.budgets.push({
+    path: 'src/web-ui/src/__removed_literal_fallback_fixture__.tsx',
+    literalDefaultValues: {
+      'common:actions.close': 1,
+    },
+  });
+
+  withTemporaryTextFile(baselinePath, `${JSON.stringify(baseline, null, 2)}\n`, () => {
+    const result = runI18nAudit();
+    assert.notEqual(result.status, 0, 'stale literal fallback baseline entries must fail audit');
+    assert.match(
+      `${result.stdout}\n${result.stderr}`,
+      /no longer has literal i18next defaultValue fallback/,
+      'audit output should explain the stale literal fallback budget',
+    );
+  });
+});
+
+test('i18n generation checks are stable across line endings', () => {
+  const generatorSource = readText('scripts/generate-i18n-contract.mjs');
+
+  assert.match(generatorSource, /normalizeGeneratedText/, 'generated contract check should normalize line endings');
+  assert.match(generatorSource, /currentContentForCheck/, 'generated contract check should compare normalized current content');
+});
+
+test('i18n audit preflights TypeScript before TypeScript-backed checks', () => {
+  const auditSource = readText('scripts/i18n-audit.mjs');
+
+  assert.match(auditSource, /loadTypeScriptForAudit/, 'audit should load TypeScript through a single preflight helper');
+  assert.match(auditSource, /Run pnpm install/, 'missing TypeScript should tell contributors how to fix the local setup');
 });
 
 test('installer Rust locale contract is generated from the installer surface order', () => {

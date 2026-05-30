@@ -63,7 +63,8 @@
     "switchWorkspace": "切换工作区",
     "recentWorkspaces": "最近工作区",
     "noRecentWorkspaces": "暂无最近工作区",
-    "noWorkspaceOpen": "选择工作区"
+    "noWorkspaceOpen": "选择工作区",
+    "remoteConnectRequiresWorkspace": "请先打开工作区再使用远程控制。"
   },
   "nav": {
     "aria": {
@@ -1104,5 +1105,8 @@
     "message": "请选择关闭操作：退出程序将完全停止运行，最小化到托盘可保持后台运行随时唤回。",
     "quit": "退出程序",
     "minimizeToTray": "最小化到托盘"
-  }
+  },
+  "collapse": "折叠",
+  "expand": "展开",
+  "retry": "重试"
 }

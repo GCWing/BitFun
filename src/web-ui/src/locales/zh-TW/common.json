@@ -63,7 +63,8 @@
     "switchWorkspace": "切換工作區",
     "recentWorkspaces": "最近工作區",
     "noRecentWorkspaces": "暫無最近工作區",
-    "noWorkspaceOpen": "選擇工作區"
+    "noWorkspaceOpen": "選擇工作區",
+    "remoteConnectRequiresWorkspace": "請先開啟工作區再使用遠端控制。"
   },
   "nav": {
     "aria": {
@@ -1104,5 +1105,8 @@
     "message": "請選擇關閉操作：退出程式將完全停止執行，最小化到托盤可保持背景執行隨時喚回。",
     "quit": "退出程式",
     "minimizeToTray": "最小化到托盤"
-  }
+  },
+  "collapse": "收合",
+  "expand": "展開",
+  "retry": "重試"
 }

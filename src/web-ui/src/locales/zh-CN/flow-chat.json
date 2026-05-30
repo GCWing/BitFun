@@ -403,7 +403,9 @@
     "messageTooLarge": "消息超过最大长度 {{max}} 个字符（当前 {{count}} 个字符）。",
     "openWorkspaceFolder": "打开工作区文件夹",
     "openWorkspaceFolderFailed": "打开工作区文件夹失败：{{error}}",
-    "spaceToActivate": "按<space>空格键</space>快速键入"
+    "spaceToActivate": "按<space>空格键</space>快速键入",
+    "assistantPlaceholder": "给 {{name}} 发送消息...",
+    "sendHint": "Enter 发送 / Shift+Enter 换行"
   },
   "workspaceStrip": {
     "branchTooltipUnavailable": "非 Git 仓库或当前无分支"
@@ -463,7 +465,8 @@
     "modelError": "模型错误",
     "contextTooLong": "上下文过长",
     "rateLimited": "请求过于频繁",
-    "unknown": "未知错误"
+    "unknown": "未知错误",
+    "processingFailed": "处理失败"
   },
   "chatInput": {
     "addBoostTooltip": "智能体模式、图片或 Skill",
@@ -559,7 +562,10 @@
     "usageCommandUsage": "请单独输入 /usage，不要附加其他内容。",
     "usageBusy": "请等待当前会话空闲后再使用 /usage。",
     "usageNoWorkspace": "生成用量报告需要先打开一个项目。",
-    "usageFailed": "用量报告生成失败"
+    "usageFailed": "用量报告生成失败",
+    "mcpPromptMissingArgs": "此 MCP 提示词需要参数：{{args}}",
+    "mcpPromptFailed": "MCP 提示词执行失败",
+    "loadingMcpPrompts": "正在加载 MCP 提示词..."
   },
   "planner": {
     "title": "任务规划",
@@ -953,7 +959,8 @@
     "backgroundSubagents": "后台子 Agent（{{count}}）",
     "backgroundSubagentUntitled": "后台子 Agent",
     "subagentStatusProcessing": "运行中",
-    "subagentStatusFinishing": "收尾中"
+    "subagentStatusFinishing": "收尾中",
+    "pullRequests": "拉取请求"
   },
   "stickyTaskIndicator": {
     "tooltip": "跳转到当前任务"
@@ -1039,7 +1046,8 @@
     "feedbackThanks": "感谢您的反馈！",
     "feedbackDevVersion": "开发版本暂不提供反馈功能",
     "userLabel": "👤 用户:",
-    "toolCallLabel": "🔧 工具调用: {{name}}"
+    "toolCallLabel": "🔧 工具调用: {{name}}",
+    "loadingMoreHistory": "正在加载更多历史..."
   },
   "exploreRegion": {
     "readFiles_one": "读取了 {{count}} 个文件",
@@ -1325,7 +1333,9 @@
         "running": "执行中",
         "completed": "已完成",
         "failed": "执行失败"
-      }
+      },
+      "loadingMore": "正在加载更多输出...",
+      "loading": "正在加载任务详情..."
     },
     "timeout": {
       "disableTooltip": "关闭超时限制",
@@ -1655,7 +1665,12 @@
           "high_risk_only": "仅高风险",
           "risk_expanded": "风险扩展",
           "full_depth": "完整深度"
-        }
+        },
+        "target": "目标",
+        "budget": "预算",
+        "estimatedCalls": "预计调用次数",
+        "activeGroupTitle": "将运行",
+        "skippedGroupTitle": "已跳过评审者"
       },
       "sectionItemCount": "{{count}} 项",
       "remediationPlan": "修复计划",
@@ -1712,7 +1727,8 @@
         "remediation": "修复计划",
         "strengths": "代码优点",
         "team": "代码审核团队",
-        "coverage": "覆盖与置信度"
+        "coverage": "覆盖与置信度",
+        "runManifest": "运行清单"
       },
       "groups": {
         "must_fix": "必须修复",
@@ -2001,5 +2017,11 @@
     "injectedAt": "已在第 {{round}} 轮前插入",
     "statusPending": "等待触发",
     "statusInjected": "已触发"
+  },
+  "errors": {
+    "sendFailed": "发送消息失败"
+  },
+  "actions": {
+    "send": "发送"
   }
 }

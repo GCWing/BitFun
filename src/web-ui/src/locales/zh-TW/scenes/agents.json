@@ -151,7 +151,9 @@
       "cancel": "取消",
       "submit": "創建",
       "createSuccess": "已創建 Agent「{{name}}」",
-      "createFailed": "創建失敗："
+      "createFailed": "創建失敗：",
+      "review": "審查",
+      "reviewToolsHint": "審查子代理只能使用唯讀工具。"
     }
   },
   "teamsZone": {

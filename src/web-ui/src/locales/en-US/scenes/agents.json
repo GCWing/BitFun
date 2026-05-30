@@ -156,7 +156,9 @@
       "cancel": "Cancel",
       "submit": "Create",
       "createSuccess": "Created agent \"{{name}}\"",
-      "createFailed": "Create failed: "
+      "createFailed": "Create failed: ",
+      "review": "Review",
+      "reviewToolsHint": "Review Sub-Agents can only use read-only tools."
     }
   },
   "reviewTeams": {

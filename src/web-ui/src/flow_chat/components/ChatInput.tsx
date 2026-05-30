@@ -1840,7 +1840,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       const requiredNames = requiredArgs.map(argument => argument.name).join(', ');
       notificationService.warning(
         t('chatInput.mcpPromptMissingArgs', {
-          defaultValue: 'This MCP prompt requires arguments: {{args}}',
           args: requiredNames,
         })
       );
@@ -1898,7 +1897,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       notificationService.error(
         error instanceof Error ? error.message : t('error.unknown'),
         {
-          title: t('chatInput.mcpPromptFailed', { defaultValue: 'MCP prompt failed' }),
+          title: t('chatInput.mcpPromptFailed'),
           duration: 5000,
         }
       );
@@ -2896,7 +2895,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                       <div className="bitfun-chat-input__slash-command-list">
                         {mcpPromptCommandsLoading && items.length === 0 ? (
                           <div className="bitfun-chat-input__slash-command-empty">
-                            {t('chatInput.loadingMcpPrompts', { defaultValue: 'Loading MCP prompts…' })}
+                            {t('chatInput.loadingMcpPrompts')}
                           </div>
                         ) : items.length > 0 ? (
                           items.map((item, index) => (

@@ -63,7 +63,8 @@
     "switchWorkspace": "Switch Workspace",
     "recentWorkspaces": "Recent Workspaces",
     "noRecentWorkspaces": "No Recent Workspaces",
-    "noWorkspaceOpen": "Select Workspace"
+    "noWorkspaceOpen": "Select Workspace",
+    "remoteConnectRequiresWorkspace": "Open a workspace before using remote control."
   },
   "nav": {
     "aria": {
@@ -1104,5 +1105,8 @@
     "message": "Choose what happens when you click the close button: quit exits the app completely, or minimize to tray keeps it running in the background.",
     "quit": "Quit",
     "minimizeToTray": "Minimize to Tray"
-  }
+  },
+  "collapse": "Collapse",
+  "expand": "Expand",
+  "retry": "Retry"
 }

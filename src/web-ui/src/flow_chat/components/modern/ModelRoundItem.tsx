@@ -379,7 +379,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
 
         {hasDeferredGroups && (
           <div className="model-round-item__history-loader">
-            {t('modelRound.loadingMoreHistory', { defaultValue: 'Loading more history...' })}
+            {t('modelRound.loadingMoreHistory')}
           </div>
         )}
         

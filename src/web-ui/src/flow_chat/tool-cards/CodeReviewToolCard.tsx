@@ -739,7 +739,7 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
 
         {runManifest && (
           <ReviewReportSection
-            title={t('toolCards.codeReview.sections.runManifest', { defaultValue: 'Run manifest' })}
+            title={t('toolCards.codeReview.sections.runManifest')}
             summary={formatRunManifestSummary(runManifest, activeRunManifestReviewers, t)}
             expanded={runManifestExpanded}
             onToggle={handleToggleReportSection('runManifest')}
@@ -747,15 +747,15 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
             <div className="run-manifest">
               <div className="run-manifest__facts">
                 <div className="run-manifest__fact">
-                  <span>{t('toolCards.codeReview.runManifest.target', { defaultValue: 'Target' })}</span>
+                  <span>{t('toolCards.codeReview.runManifest.target')}</span>
                   <strong>{formatRunManifestTarget(runManifest)}</strong>
                 </div>
                 <div className="run-manifest__fact">
-                  <span>{t('toolCards.codeReview.runManifest.budget', { defaultValue: 'Budget' })}</span>
+                  <span>{t('toolCards.codeReview.runManifest.budget')}</span>
                   <strong>{runManifest.tokenBudget.mode}</strong>
                 </div>
                 <div className="run-manifest__fact">
-                  <span>{t('toolCards.codeReview.runManifest.estimatedCalls', { defaultValue: 'Estimated calls' })}</span>
+                  <span>{t('toolCards.codeReview.runManifest.estimatedCalls')}</span>
                   <strong>{runManifest.tokenBudget.estimatedReviewerCalls}</strong>
                 </div>
                 {runManifest.strategyRecommendation && (
@@ -794,7 +794,7 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
               {activeRunManifestReviewers.length > 0 && (
                 <div className="run-manifest__group">
                   <div className="run-manifest__group-title">
-                    {t('toolCards.codeReview.runManifest.activeGroupTitle', { defaultValue: 'Will run' })}
+                    {t('toolCards.codeReview.runManifest.activeGroupTitle')}
                   </div>
                   <div className="run-manifest__chips">
                     {activeRunManifestReviewers.map((member) => (
@@ -810,7 +810,7 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
               {runManifest.skippedReviewers.length > 0 && (
                 <div className="run-manifest__group">
                   <div className="run-manifest__group-title run-manifest__group-title--warning">
-                    {t('toolCards.codeReview.runManifest.skippedGroupTitle', { defaultValue: 'Skipped reviewers' })}
+                    {t('toolCards.codeReview.runManifest.skippedGroupTitle')}
                   </div>
                   <ul className="run-manifest__skipped-list">
                     {runManifest.skippedReviewers.map((member) => (

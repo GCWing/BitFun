@@ -33,6 +33,10 @@ function readJson(file) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
 }
 
+function normalizeGeneratedText(content) {
+  return String(content).replace(/\r\n/g, '\n');
+}
+
 function readSharedTerms(contract) {
   return Object.fromEntries(
     contract.locales.map((locale) => {
@@ -554,7 +558,8 @@ function main() {
     const nextContent = output.generate(contract, sharedTermsByLocale);
     if (checkOnly) {
       const currentContent = fs.existsSync(output.path) ? fs.readFileSync(output.path, 'utf8') : null;
-      if (currentContent !== nextContent) {
+      const currentContentForCheck = currentContent == null ? null : normalizeGeneratedText(currentContent);
+      if (currentContentForCheck !== normalizeGeneratedText(nextContent)) {
         changedFiles.push(path.relative(root, output.path).split(path.sep).join('/'));
       }
     } else {
