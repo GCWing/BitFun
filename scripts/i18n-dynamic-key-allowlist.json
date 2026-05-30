@@ -1,0 +1,141 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "id": "installer-install-path-errors",
+      "surface": "installer",
+      "owner": "BitFun-Installer/src/utils/installPathErrors.ts",
+      "description": "Installer backend returns INSTALL_PATH::snake_case codes that the frontend maps to errors.installPath.camelCase.",
+      "keys": [
+        "errors.installPath.notAbsolute",
+        "errors.installPath.filesystemRoot",
+        "errors.installPath.pathNotDirectory",
+        "errors.installPath.directoryMustBeEmptyOrBitfun",
+        "errors.installPath.inspectDirectoryFailed",
+        "errors.installPath.directoryNotWritable",
+        "errors.installPath.parentNotWritable"
+      ]
+    },
+    {
+      "id": "installer-model-provider-metadata",
+      "surface": "installer",
+      "owner": "BitFun-Installer/src/data/modelProviders.ts",
+      "description": "Installer model-provider templates resolve nameKey, descriptionKey, and noteKey metadata at render time.",
+      "keyPrefixes": [
+        "model.providers."
+      ]
+    },
+    {
+      "id": "web-settings-navigation-metadata",
+      "surface": "web-ui",
+      "namespace": "settings",
+      "owner": "src/web-ui/src/app/scenes/settings/settingsConfig.ts",
+      "description": "Settings categories and tabs store nameKey, labelKey, and descriptionKey metadata resolved with the settings namespace.",
+      "keyPrefixes": [
+        "configCenter.categories.",
+        "configCenter.tabs.",
+        "configCenter.tabDescriptions."
+      ]
+    },
+    {
+      "id": "web-settings-keyboard-shortcut-metadata",
+      "surface": "web-ui",
+      "namespace": "settings",
+      "owner": "src/web-ui/src/shared/constants/shortcuts.ts",
+      "description": "Keyboard shortcut descriptors store descriptionKey metadata resolved with the settings namespace.",
+      "keyPrefixes": [
+        "keyboard.shortcuts."
+      ]
+    },
+    {
+      "id": "web-editor-option-metadata",
+      "surface": "web-ui",
+      "namespace": "settings/editor",
+      "owner": "src/web-ui/src/infrastructure/config/components/EditorConfig.tsx",
+      "description": "Editor option descriptors store labelKey metadata resolved with the settings/editor namespace.",
+      "keys": [
+        "display.minimapPositionLeft",
+        "display.minimapPositionRight",
+        "display.minimapSizeAuto",
+        "display.minimapSizeFill",
+        "display.minimapSizeFit"
+      ],
+      "keyPrefixes": [
+        "appearance.cursorStyles.",
+        "appearance.cursorBlinkings.",
+        "behavior.wordWrapOptions.",
+        "behavior.lineNumberOptions.",
+        "display.whitespaceOptions.",
+        "display.lineHighlightOptions."
+      ]
+    },
+    {
+      "id": "web-quick-action-default-metadata",
+      "surface": "web-ui",
+      "namespace": "settings/quick-actions",
+      "owner": "src/web-ui/src/infrastructure/config/services/quickActionLocalization.ts",
+      "description": "Built-in quick action defaults resolve labelKey metadata with the settings/quick-actions namespace.",
+      "keyPrefixes": [
+        "quickActions.defaults."
+      ]
+    },
+    {
+      "id": "web-flow-chat-agent-companion-activity-metadata",
+      "surface": "web-ui",
+      "namespace": "flow-chat",
+      "owner": "src/web-ui/src/flow_chat/utils/agentCompanionActivity.ts",
+      "description": "Agent companion activity descriptors store labelKey metadata resolved with the flow-chat namespace.",
+      "keyPrefixes": [
+        "agentCompanion.activity."
+      ]
+    },
+    {
+      "id": "web-flow-chat-deep-review-action-metadata",
+      "surface": "web-ui",
+      "namespace": "flow-chat",
+      "owner": "src/web-ui/src/flow_chat/utils/deepReviewExperience.ts",
+      "description": "Deep Review degradation descriptors store labelKey and descriptionKey metadata resolved with the flow-chat namespace.",
+      "keys": [
+        "deepReviewActionBar.degradation.reduceReviewers",
+        "deepReviewActionBar.degradation.reduceReviewersDesc",
+        "deepReviewActionBar.degradation.compressContext",
+        "deepReviewActionBar.degradation.compressContextDesc",
+        "deepReviewActionBar.degradation.viewPartial",
+        "deepReviewActionBar.degradation.viewPartialDesc"
+      ]
+    },
+    {
+      "id": "web-ai-error-action-metadata",
+      "surface": "web-ui",
+      "namespace": "errors",
+      "owner": "src/web-ui/src/shared/ai-errors/aiErrorPresenter.ts",
+      "description": "AI error presenters map action codes to errors:ai.actions.* label keys.",
+      "keyPrefixes": [
+        "ai.actions."
+      ]
+    },
+    {
+      "id": "web-profile-persona-doc-template",
+      "surface": "web-ui",
+      "namespace": "scenes/profile",
+      "owner": "src/web-ui/src/app/scenes/profile/views/AssistantConfigPage.tsx",
+      "description": "Assistant persona document labels are generated from Markdown filenames into nursery.assistant.personaDocs.* keys.",
+      "keyPrefixes": [
+        "nursery.assistant.personaDocs."
+      ]
+    },
+    {
+      "id": "web-skills-filter-and-suite-metadata",
+      "surface": "web-ui",
+      "namespace": "scenes/skills",
+      "owner": "src/web-ui/src/app/scenes/skills",
+      "description": "Skills filters and suite modes store labelKey and descKey metadata resolved with the scenes/skills namespace.",
+      "keyPrefixes": [
+        "filters.",
+        "categories.",
+        "suite.modes.",
+        "suite.modeDescriptions."
+      ]
+    }
+  ]
+}

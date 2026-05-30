@@ -28,8 +28,8 @@ function writeText(relativePath, content) {
   fs.writeFileSync(path.join(root, relativePath), content, 'utf8');
 }
 
-function runI18nAudit() {
-  return spawnSync(process.execPath, ['scripts/i18n-audit.mjs'], {
+function runI18nAudit(args = []) {
+  return spawnSync(process.execPath, ['scripts/i18n-audit.mjs', ...args], {
     cwd: root,
     encoding: 'utf8',
   });
@@ -304,6 +304,92 @@ test('i18n audit gates object-form literal fallbacks with an explicit budget', (
   assert.match(auditSource, /i18n-literal-fallback-baseline\.json/, 'audit should read the literal fallback baseline');
   assert.match(auditSource, /auditWebUiLiteralFallbackBudget/, 'object-form defaultValue fallbacks should have a no-growth gate');
   assert.match(auditSource, /defaultValue/, 'audit should inspect i18next defaultValue options');
+});
+
+test('i18n audit can emit a machine-readable governance report', { concurrency: false }, () => {
+  const reportPath = 'scripts/.tmp-i18n-governance-report.json';
+  const absoluteReportPath = path.join(root, reportPath);
+  fs.rmSync(absoluteReportPath, { force: true });
+
+  try {
+    const result = runI18nAudit(['--report-json', reportPath]);
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.ok(fs.existsSync(absoluteReportPath), 'audit should write the requested report file');
+
+    const report = readJson(reportPath);
+    assert.equal(report.version, 1);
+    assert.equal(report.generatedBy, 'scripts/i18n-audit.mjs');
+    assert.ok(Array.isArray(report.confirmedUnusedKeys), 'report should include confirmed unused keys');
+    assert.ok(Array.isArray(report.dynamicKeyCandidates), 'report should include dynamic key candidates');
+    assert.ok(Array.isArray(report.sharedTermDuplicates), 'report should include shared-term duplicate candidates');
+    assert.ok(Array.isArray(report.l10nQualityCandidates), 'report should include l10n quality candidates');
+    assert.deepEqual(
+      report.summary.counts,
+      {
+        confirmedUnusedKeys: report.confirmedUnusedKeys.length,
+        dynamicKeyCandidates: report.dynamicKeyCandidates.length,
+        sharedTermDuplicates: report.sharedTermDuplicates.length,
+        l10nQualityCandidates: report.l10nQualityCandidates.length,
+      },
+      'report counts should match finding arrays',
+    );
+    assert.ok(
+      report.dynamicKeyCandidates.some((entry) => (
+        entry.allowlistId === 'installer-install-path-errors' &&
+        entry.surface === 'installer' &&
+        entry.key === 'errors.installPath.notAbsolute'
+      )),
+      'installer backend error-code mapping should be reported as a dynamic key contract',
+    );
+    assert.ok(
+      report.sharedTermDuplicates.some((entry) => (
+        entry.sharedKey === 'product.name' &&
+        entry.value === 'BitFun' &&
+        entry.resourceKey !== 'shared:product.name'
+      )),
+      'stable product name duplicates should be reported as shared-term candidates',
+    );
+    assert.ok(
+      report.l10nQualityCandidates.some((entry) => (
+        entry.locale === 'zh-TW' &&
+        entry.comparisonLocale === 'zh-CN' &&
+        entry.reason === 'matches-comparison-locale'
+      )),
+      'unchanged zh-TW copy should be reported as a localization quality candidate',
+    );
+  } finally {
+    fs.rmSync(absoluteReportPath, { force: true });
+  }
+});
+
+test('i18n audit fails stale dynamic key allowlist entries', { concurrency: false }, () => {
+  const allowlistPath = 'scripts/i18n-dynamic-key-allowlist.json';
+  const reportPath = 'scripts/.tmp-i18n-stale-dynamic-key-report.json';
+  const absoluteReportPath = path.join(root, reportPath);
+  const allowlist = readJson(allowlistPath);
+
+  allowlist.entries.push({
+    id: 'stale-test-dynamic-key',
+    surface: 'installer',
+    owner: 'scripts/i18n-contract.test.mjs',
+    description: 'Test fixture for stale dynamic key governance.',
+    keys: ['errors.installPath.__missingGovernanceKey__'],
+  });
+
+  fs.rmSync(absoluteReportPath, { force: true });
+  withTemporaryTextFile(allowlistPath, `${JSON.stringify(allowlist, null, 2)}\n`, () => {
+    try {
+      const result = runI18nAudit(['--report-json', reportPath]);
+      assert.notEqual(result.status, 0, 'stale allowlist keys must fail i18n audit');
+      assert.match(
+        `${result.stdout}\n${result.stderr}`,
+        /stale-test-dynamic-key.*errors\.installPath\.__missingGovernanceKey__/,
+        'audit output should identify the stale allowlist key',
+      );
+    } finally {
+      fs.rmSync(absoluteReportPath, { force: true });
+    }
+  });
 });
 
 test('i18n audit validates static hook translation keys with namespace context', () => {

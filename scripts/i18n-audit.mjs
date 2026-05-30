@@ -8,6 +8,7 @@ const root = process.cwd();
 const contractPath = path.join(root, 'src', 'shared', 'i18n', 'contract', 'locales.json');
 const hardcodedBaselinePath = path.join(root, 'scripts', 'i18n-hardcoded-baseline.json');
 const literalFallbackBaselinePath = path.join(root, 'scripts', 'i18n-literal-fallback-baseline.json');
+const dynamicKeyAllowlistPath = path.join(root, 'scripts', 'i18n-dynamic-key-allowlist.json');
 const sharedTermsDir = path.join(root, 'src', 'shared', 'i18n', 'resources', 'shared');
 const webLocalesDir = path.join(root, 'src', 'web-ui', 'src', 'locales');
 const namespaceRegistryPath = path.join(
@@ -39,6 +40,22 @@ const localeContract = readJsonFile(contractPath);
 let errorCount = 0;
 let warningCount = 0;
 let auditTypeScript = null;
+let cliOptions = { reportJsonPath: null };
+const reportCategories = [
+  'confirmedUnusedKeys',
+  'dynamicKeyCandidates',
+  'sharedTermDuplicates',
+  'l10nQualityCandidates',
+];
+const governanceReport = {
+  version: 1,
+  generatedBy: 'scripts/i18n-audit.mjs',
+  summary: { counts: {} },
+  confirmedUnusedKeys: [],
+  dynamicKeyCandidates: [],
+  sharedTermDuplicates: [],
+  l10nQualityCandidates: [],
+};
 
 function reportError(message) {
   errorCount += 1;
@@ -49,6 +66,40 @@ function reportWarning(message) {
   warningCount += 1;
   console.warn(`[i18n:audit] WARN ${message}`);
 }
+
+function parseCliOptions(args) {
+  const options = { reportJsonPath: null };
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === '--report-json') {
+      const value = args[index + 1];
+      if (!value || value.startsWith('--')) {
+        reportError('--report-json requires an output path');
+      } else {
+        options.reportJsonPath = value;
+        index += 1;
+      }
+      continue;
+    }
+
+    if (arg.startsWith('--report-json=')) {
+      const value = arg.slice('--report-json='.length);
+      if (!value) {
+        reportError('--report-json requires an output path');
+      } else {
+        options.reportJsonPath = value;
+      }
+      continue;
+    }
+
+    reportError(`Unknown i18n audit option "${arg}"`);
+  }
+
+  return options;
+}
+
+cliOptions = parseCliOptions(process.argv.slice(2));
 
 function loadTypeScriptForAudit() {
   try {
@@ -173,6 +224,36 @@ function extractFluentPlaceholders(value) {
 function sameSet(left, right) {
   if (left.length !== right.length) return false;
   return left.every((item, index) => item === right[index]);
+}
+
+function hasHanText(value) {
+  return /\p{Script=Han}/u.test(String(value));
+}
+
+function sortByReportIdentity(left, right) {
+  return JSON.stringify(left).localeCompare(JSON.stringify(right));
+}
+
+function finalizeGovernanceReport() {
+  for (const category of reportCategories) {
+    governanceReport[category].sort(sortByReportIdentity);
+    governanceReport.summary.counts[category] = governanceReport[category].length;
+  }
+}
+
+function writeGovernanceReport() {
+  finalizeGovernanceReport();
+  if (!cliOptions.reportJsonPath) return;
+
+  const outputPath = path.isAbsolute(cliOptions.reportJsonPath)
+    ? cliOptions.reportJsonPath
+    : path.join(root, cliOptions.reportJsonPath);
+  try {
+    fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+    fs.writeFileSync(outputPath, `${JSON.stringify(governanceReport, null, 2)}\n`, 'utf8');
+  } catch (error) {
+    reportError(`Failed to write i18n governance report to ${toPosixPath(path.relative(root, outputPath))}: ${error.message}`);
+  }
 }
 
 function reportPlaceholderParity(surface, locale, key, expected, actual) {
@@ -745,6 +826,332 @@ function auditRelayStaticHomepageResources() {
   }
 }
 
+function maybeNamespaceResourceKey(namespace, key) {
+  return namespace ? `${namespace}:${key}` : key;
+}
+
+function pushResourceEntry(entries, { surface, locale, namespace = null, key, value, file }) {
+  entries.push({
+    surface,
+    locale,
+    namespace,
+    key,
+    resourceKey: maybeNamespaceResourceKey(namespace, key),
+    value: String(value ?? ''),
+    file,
+  });
+}
+
+function collectI18nResourceEntries(namespaces) {
+  const entries = [];
+  const localeById = new Map(localeContract.locales.map((locale) => [locale.id, locale]));
+
+  for (const locale of supportedLocales) {
+    for (const namespace of namespaces) {
+      const surface = namespace === 'shared' ? 'shared' : 'web-ui';
+      const file = namespace === 'shared'
+        ? `src/shared/i18n/resources/shared/${locale}/terms.json`
+        : `src/web-ui/src/locales/${locale}/${namespace}.json`;
+      for (const [key, value] of readJsonEntries(locale, namespace)) {
+        pushResourceEntry(entries, {
+          surface,
+          locale,
+          namespace: namespace === 'shared' ? 'shared' : namespace,
+          key,
+          value,
+          file,
+        });
+      }
+    }
+  }
+
+  if (auditTypeScript) {
+    for (const [locale, messageEntries] of readMobileMessagesByLocale().entries()) {
+      for (const [key, value] of messageEntries.entries()) {
+        pushResourceEntry(entries, {
+          surface: 'mobile-web',
+          locale,
+          key,
+          value,
+          file: 'src/mobile-web/src/i18n/messages.ts',
+        });
+      }
+    }
+  }
+
+  for (const localeId of localeContract.surfaceOrders?.installer ?? []) {
+    const uiLocale = localeById.get(localeId)?.installer?.uiCode;
+    if (!uiLocale) continue;
+    for (const [key, value] of readInstallerJsonEntries(uiLocale).entries()) {
+      pushResourceEntry(entries, {
+        surface: 'installer',
+        locale: localeId,
+        key,
+        value,
+        file: `BitFun-Installer/src/i18n/locales/${uiLocale}.json`,
+      });
+    }
+  }
+
+  for (const locale of localeContract.surfaceOrders?.core ?? []) {
+    for (const [key, value] of readFluentMessages(locale).entries()) {
+      pushResourceEntry(entries, {
+        surface: 'core',
+        locale,
+        key,
+        value,
+        file: `src/crates/core/locales/${locale}.ftl`,
+      });
+    }
+  }
+
+  const relayMessages = readRelayHomepageMessages();
+  for (const [locale, relayEntries] of relayMessages.entriesByLocale.entries()) {
+    for (const [key, value] of relayEntries.entries()) {
+      pushResourceEntry(entries, {
+        surface: 'relay-static-homepage',
+        locale,
+        key,
+        value,
+        file: 'src/apps/relay-server/static/homepage/i18n.json',
+      });
+    }
+  }
+
+  return entries;
+}
+
+function resourceGroupId(entry) {
+  return [entry.surface, entry.namespace ?? '', entry.key].join('\u0000');
+}
+
+function buildResourceGroups(entries) {
+  const groups = new Map();
+
+  for (const entry of entries) {
+    const id = resourceGroupId(entry);
+    const group = groups.get(id) ?? {
+      id,
+      surface: entry.surface,
+      namespace: entry.namespace,
+      key: entry.key,
+      resourceKey: entry.resourceKey,
+      locales: [],
+      files: [],
+      valueByLocale: new Map(),
+    };
+    group.locales.push(entry.locale);
+    group.files.push(entry.file);
+    group.valueByLocale.set(entry.locale, entry.value);
+    groups.set(id, group);
+  }
+
+  return Array.from(groups.values()).map((group) => ({
+    ...group,
+    locales: sortedUnique(group.locales),
+    files: sortedUnique(group.files),
+  }));
+}
+
+function isNonEmptyString(value) {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function readDynamicKeyAllowlist() {
+  if (!fs.existsSync(dynamicKeyAllowlistPath)) {
+    reportError('Missing scripts/i18n-dynamic-key-allowlist.json');
+    return { entries: [] };
+  }
+
+  let allowlist;
+  try {
+    allowlist = readJsonFile(dynamicKeyAllowlistPath);
+  } catch (error) {
+    reportError(`Failed to parse scripts/i18n-dynamic-key-allowlist.json: ${error.message}`);
+    return { entries: [] };
+  }
+
+  if (allowlist.version !== 1) {
+    reportError('scripts/i18n-dynamic-key-allowlist.json must use version 1');
+  }
+  if (!Array.isArray(allowlist.entries)) {
+    reportError('scripts/i18n-dynamic-key-allowlist.json must define an entries array');
+    return { entries: [] };
+  }
+
+  const seenIds = new Set();
+  for (const entry of allowlist.entries) {
+    if (!isNonEmptyString(entry.id)) {
+      reportError('Dynamic key allowlist entries require a non-empty id');
+      continue;
+    }
+    if (seenIds.has(entry.id)) {
+      reportError(`Dynamic key allowlist id "${entry.id}" is duplicated`);
+    }
+    seenIds.add(entry.id);
+
+    for (const field of ['surface', 'owner', 'description']) {
+      if (!isNonEmptyString(entry[field])) {
+        reportError(`Dynamic key allowlist "${entry.id}" requires a non-empty ${field}`);
+      }
+    }
+
+    const keys = Array.isArray(entry.keys) ? entry.keys : [];
+    const prefixes = Array.isArray(entry.keyPrefixes) ? entry.keyPrefixes : [];
+    if (keys.length === 0 && prefixes.length === 0) {
+      reportError(`Dynamic key allowlist "${entry.id}" must define keys or keyPrefixes`);
+    }
+    for (const key of keys) {
+      if (!isNonEmptyString(key)) {
+        reportError(`Dynamic key allowlist "${entry.id}" has an invalid key entry`);
+      }
+    }
+    for (const prefix of prefixes) {
+      if (!isNonEmptyString(prefix)) {
+        reportError(`Dynamic key allowlist "${entry.id}" has an invalid keyPrefixes entry`);
+      }
+    }
+  }
+
+  return allowlist;
+}
+
+function allowlistTargetForGroup(entry, group) {
+  if (entry.surface !== group.surface) return null;
+  if (entry.namespace && entry.namespace !== group.namespace) return null;
+  if (entry.locale && !group.locales.includes(entry.locale)) return null;
+  return entry.namespace ? group.key : group.resourceKey;
+}
+
+function collectDynamicKeyCandidates(resourceGroups) {
+  const allowlist = readDynamicKeyAllowlist();
+  const seen = new Set();
+
+  function addCandidate(entry, group) {
+    const id = [entry.id, group.id].join('\u0000');
+    if (seen.has(id)) return;
+    seen.add(id);
+
+    governanceReport.dynamicKeyCandidates.push({
+      allowlistId: entry.id,
+      surface: group.surface,
+      namespace: group.namespace,
+      key: entry.namespace ? group.key : group.resourceKey,
+      resourceKey: group.resourceKey,
+      owner: entry.owner,
+      reason: entry.description,
+      locales: group.locales,
+      files: group.files,
+    });
+  }
+
+  for (const entry of allowlist.entries ?? []) {
+    const eligibleGroups = resourceGroups.filter((group) => allowlistTargetForGroup(entry, group) != null);
+
+    for (const key of entry.keys ?? []) {
+      const matches = eligibleGroups.filter((group) => allowlistTargetForGroup(entry, group) === key);
+      if (matches.length === 0) {
+        reportError(`Dynamic key allowlist "${entry.id}" references "${key}" but no ${entry.surface} resource matches`);
+      }
+      for (const group of matches) {
+        addCandidate(entry, group);
+      }
+    }
+
+    for (const prefix of entry.keyPrefixes ?? []) {
+      const matches = eligibleGroups.filter((group) => allowlistTargetForGroup(entry, group).startsWith(prefix));
+      if (matches.length === 0) {
+        reportError(`Dynamic key allowlist "${entry.id}" references prefix "${prefix}" but no ${entry.surface} resource matches`);
+      }
+      for (const group of matches) {
+        addCandidate(entry, group);
+      }
+    }
+  }
+}
+
+function collectSharedTermDuplicates(resourceEntries) {
+  const sharedByLocaleAndValue = new Map();
+
+  for (const entry of resourceEntries.filter((item) => item.surface === 'shared')) {
+    if (!entry.value) continue;
+    const localeMap = sharedByLocaleAndValue.get(entry.locale) ?? new Map();
+    localeMap.set(entry.value, [...(localeMap.get(entry.value) ?? []), entry]);
+    sharedByLocaleAndValue.set(entry.locale, localeMap);
+  }
+
+  for (const entry of resourceEntries.filter((item) => item.surface !== 'shared')) {
+    if (!entry.value) continue;
+    const matches = sharedByLocaleAndValue.get(entry.locale)?.get(entry.value) ?? [];
+    for (const shared of matches) {
+      governanceReport.sharedTermDuplicates.push({
+        surface: entry.surface,
+        locale: entry.locale,
+        namespace: entry.namespace,
+        key: entry.key,
+        resourceKey: entry.resourceKey,
+        sharedKey: shared.key,
+        sharedResourceKey: shared.resourceKey,
+        value: entry.value,
+        file: entry.file,
+        reason: 'matches-shared-term-value',
+      });
+    }
+  }
+}
+
+function collectL10nQualityCandidates(resourceGroups) {
+  for (const group of resourceGroups) {
+    const simplified = group.valueByLocale.get('zh-CN');
+    const traditional = group.valueByLocale.get('zh-TW');
+    if (!simplified || !traditional || simplified !== traditional || !hasHanText(traditional)) {
+      continue;
+    }
+
+    governanceReport.l10nQualityCandidates.push({
+      surface: group.surface,
+      namespace: group.namespace,
+      key: group.key,
+      resourceKey: group.resourceKey,
+      locale: 'zh-TW',
+      comparisonLocale: 'zh-CN',
+      value: traditional,
+      files: group.files,
+      reason: 'matches-comparison-locale',
+    });
+  }
+}
+
+function collectConfirmedUnusedKeys() {
+  const expectedLocaleIds = (localeContract.locales ?? []).map((locale) => locale.id).sort();
+  const baselineLocaleId = expectedLocaleIds.includes('en-US') ? 'en-US' : expectedLocaleIds[0];
+  const { entriesByLocale } = readRelayHomepageMessages();
+  const baselineEntries = entriesByLocale.get(baselineLocaleId) ?? new Map();
+  const dataKeys = collectRelayHomepageDataKeys();
+
+  for (const key of diffSets(Array.from(baselineEntries.keys()).sort(), dataKeys)) {
+    governanceReport.confirmedUnusedKeys.push({
+      surface: 'relay-static-homepage',
+      key,
+      resourceKey: key,
+      file: 'src/apps/relay-server/static/homepage/i18n.json',
+      reason: 'not-referenced-by-static-data-i18n-attribute',
+    });
+  }
+}
+
+function auditI18nGovernanceReport(namespaces) {
+  const resourceEntries = collectI18nResourceEntries(namespaces);
+  const resourceGroups = buildResourceGroups(resourceEntries);
+
+  collectDynamicKeyCandidates(resourceGroups);
+  if (cliOptions.reportJsonPath) {
+    collectConfirmedUnusedKeys();
+    collectSharedTermDuplicates(resourceEntries);
+    collectL10nQualityCandidates(resourceGroups);
+  }
+}
+
 function shouldSkipSourceScan(file) {
   const normalized = toPosixPath(path.relative(root, file));
   return (
@@ -1216,6 +1623,8 @@ auditCoreFluentParity();
 auditRelayStaticHomepageResources();
 auditSourceText();
 auditHardcodedSourceBudgets();
+auditI18nGovernanceReport(namespaces);
+writeGovernanceReport();
 
 if (errorCount > 0) {
   console.error(`[i18n:audit] Failed with ${errorCount} error(s) and ${warningCount} warning(s).`);
