@@ -1,0 +1,96 @@
+/**
+ * ACP execution-plan checklist, rendered above the chat input while an ACP
+ * agent streams a plan.
+ */
+
+.bitfun-acp-plan {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--element-bg-medium);
+  border: 1px solid var(--border-color-light);
+  font-size: var(--flowchat-font-size-xs);
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  &__title {
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-size: var(--flowchat-font-size-2xs);
+  }
+
+  &__progress {
+    color: var(--color-text-tertiary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  &__item {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 2px 0;
+    color: var(--color-text-primary);
+
+    &--completed {
+      color: var(--color-text-tertiary);
+
+      .bitfun-acp-plan__content {
+        text-decoration: line-through;
+      }
+    }
+
+    &--pending {
+      color: var(--color-text-secondary);
+    }
+  }
+
+  &__icon {
+    flex-shrink: 0;
+    margin-top: 2px;
+
+    &--done {
+      color: var(--color-success, #4caf50);
+    }
+
+    &--active {
+      color: var(--color-primary, #648cff);
+      animation: bitfun-acp-plan-spin 1.2s linear infinite;
+    }
+
+    &--pending {
+      opacity: 0.5;
+    }
+  }
+
+  &__content {
+    line-height: 1.4;
+    word-break: break-word;
+  }
+}
+
+@keyframes bitfun-acp-plan-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

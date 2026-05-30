@@ -20,6 +20,10 @@ import {
 import { SessionExecutionEvent } from '../state-machine/types';
 import { ModelSelector } from './ModelSelector';
 import { FlowChatStore } from '../store/FlowChatStore';
+import { useAcpSlashCommands } from '../hooks/useAcpSlashCommands';
+import { useAcpPlan } from '../hooks/useAcpPlan';
+import { AcpPlanPanel } from './AcpPlanPanel';
+import { acpSessionRef, acpSlashCommandText } from '../utils/acpSession';
 import type { FlowChatState, Session } from '../types/flow-chat';
 import type { FileContext, DirectoryContext, ImageContext } from '@/types/context.ts';
 import { SmartRecommendations } from './smart-recommendations';
@@ -102,7 +106,14 @@ type SlashMcpPromptItem = {
   }>;
 };
 
-type SlashPickerItem = SlashActionItem | SlashModeItem | SlashMcpPromptItem;
+type SlashAcpCommandItem = {
+  kind: 'acpCommand';
+  id: string; // the agent command name (without leading slash)
+  command: string; // '/<name>'
+  label: string; // description
+};
+
+type SlashPickerItem = SlashActionItem | SlashModeItem | SlashMcpPromptItem | SlashAcpCommandItem;
 type ChatInputTarget = 'main' | 'btw';
 type PendingLargePasteMap = Record<string, string>;
 
@@ -269,6 +280,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     : undefined;
   const effectiveTargetRelationship = resolveSessionRelationship(effectiveTargetSession);
   const isBtwSession = effectiveTargetRelationship.displayAsChild;
+
+  // ACP agent slash commands (empty for non-ACP sessions). Surfaced in the
+  // existing slash picker alongside native actions / MCP prompts.
+  const acpSessionForCommands = useMemo(
+    () => acpSessionRef(effectiveTargetSession),
+    [effectiveTargetSession],
+  );
+  const { commands: acpAgentCommands } = useAcpSlashCommands(acpSessionForCommands);
+  const { entries: acpPlanEntries } = useAcpPlan(acpSessionForCommands?.sessionId ?? null);
   const currentSessionTitle = currentSession?.title?.trim() || t('session.untitled');
   const activeBtwSession = activeBtwSessionId
     ? flowChatState.sessions.get(activeBtwSessionId)
@@ -1258,6 +1278,21 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     });
   }, [mcpPromptCommands, slashCommandState.query]);
 
+  const getFilteredAcpCommands = useCallback((): SlashAcpCommandItem[] => {
+    const items: SlashAcpCommandItem[] = acpAgentCommands.map(command => ({
+      kind: 'acpCommand',
+      id: command.name,
+      command: `/${command.name}`,
+      label: command.description,
+    }));
+    const q = (slashCommandState.query || '').trim().toLowerCase();
+    if (!q) return items;
+    return items.filter(item =>
+      item.command.slice(1).toLowerCase().includes(q) ||
+      item.label.toLowerCase().includes(q),
+    );
+  }, [acpAgentCommands, slashCommandState.query]);
+
   const resolveTypedMcpPromptCommand = useCallback((text: string): SlashMcpPromptItem | null => {
     const trimmed = text.trim();
     if (!trimmed.startsWith('/')) {
@@ -1277,6 +1312,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const getSlashPickerItems = useCallback((): SlashPickerItem[] => {
     const actions = getFilteredActions();
     const mcpPrompts = getFilteredMcpPromptCommands();
+    const acpCommands = getFilteredAcpCommands();
     let modeList = incrementalCodeModes;
     if (canSwitchModes && slashCommandState.query) {
       const q = slashCommandState.query;
@@ -1291,8 +1327,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       id: mode.id,
       name: mode.name,
     }));
-    return [...actions, ...mcpPrompts, ...modes];
-  }, [canSwitchModes, getFilteredActions, getFilteredMcpPromptCommands, incrementalCodeModes, slashCommandState.query]);
+    // ACP agent commands first — for an ACP session they are the primary
+    // commands the user wants.
+    return [...acpCommands, ...actions, ...mcpPrompts, ...modes];
+  }, [canSwitchModes, getFilteredAcpCommands, getFilteredActions, getFilteredMcpPromptCommands, incrementalCodeModes, slashCommandState.query]);
   
   const handleInputChange = useCallback((text: string, activeContexts: import('../../shared/types/context').ContextItem[]) => {
     if (!inputState.isActive && text.length > 0) {
@@ -2209,6 +2247,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     window.setTimeout(() => richTextInputRef.current?.focus(), 0);
   }, [setQueuedInput]);
 
+  const selectSlashAcpCommand = useCallback((item: SlashAcpCommandItem) => {
+    // Insert "/<name> " as prompt text — ACP has no command RPC; the command is
+    // sent as a normal prompt. The trailing space lets the user type arguments.
+    dispatchInput({ type: 'SET_VALUE', payload: acpSlashCommandText(item.id) });
+    setQueuedInput(null);
+    setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+    window.setTimeout(() => richTextInputRef.current?.focus(), 0);
+  }, [setQueuedInput]);
+
   const handleBoostStartBtw = useCallback(
     (e: React.SyntheticEvent) => {
       e.stopPropagation();
@@ -2331,6 +2378,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 selectSlashCommandMode(item.id);
               } else if (item.kind === 'mcpPrompt') {
                 selectSlashPromptCommand(item);
+              } else if (item.kind === 'acpCommand') {
+                selectSlashAcpCommand(item);
               } else {
                 selectSlashCommandAction(item.id);
               }
@@ -2366,6 +2415,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 selectSlashCommandMode(item.id);
               } else if (item.kind === 'mcpPrompt') {
                 selectSlashPromptCommand(item);
+              } else if (item.kind === 'acpCommand') {
+                selectSlashAcpCommand(item);
               } else {
                 selectSlashCommandAction(item.id);
               }
@@ -2743,6 +2794,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         <PendingQueuePanel sessionId={effectiveTargetSessionId || undefined} />
 
         <div className="bitfun-chat-input__container">
+          <AcpPlanPanel entries={acpPlanEntries} />
           <div className={`bitfun-chat-input__box ${isMultiLine ? 'bitfun-chat-input__box--multi-line' : 'bitfun-chat-input__box--capsule'}`}>
             {showTargetSwitcher && (
               <div className="bitfun-chat-input__target-switcher" data-testid="chat-input-target-switcher">
@@ -2908,6 +2960,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                                   selectSlashCommandMode(item.id);
                                 } else if (item.kind === 'mcpPrompt') {
                                   selectSlashPromptCommand(item);
+                                } else if (item.kind === 'acpCommand') {
+                                  selectSlashAcpCommand(item);
                                 } else {
                                   selectSlashCommandAction(item.id);
                                 }
