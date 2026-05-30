@@ -224,6 +224,9 @@ pub struct RestoreSessionViewResponse {
     pub session: SessionResponse,
     pub turns: Vec<DialogTurnData>,
     pub context_restore_state: String,
+    pub is_partial: bool,
+    pub loaded_turn_count: usize,
+    pub total_turn_count: usize,
 }
 
 #[derive(Debug, Default)]
@@ -518,6 +521,8 @@ pub struct RestoreSessionRequest {
     pub include_internal: bool,
     #[serde(default)]
     pub trace_id: Option<String>,
+    #[serde(default)]
+    pub tail_turn_count: Option<usize>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1321,16 +1326,42 @@ pub async fn restore_session_view(
         path_started_at.elapsed().as_millis()
     );
 
-    let (session, mut turns) = if request.include_internal {
+    let tail_turn_count = request.tail_turn_count.filter(|count| *count > 0);
+    let (session, mut turns, total_turn_count) = if let Some(tail_turn_count) = tail_turn_count {
+        let tail_turn_count = tail_turn_count.min(16);
+        if request.include_internal {
+            coordinator
+                .restore_internal_session_view_tail(
+                    &effective_path,
+                    &request.session_id,
+                    tail_turn_count,
+                )
+                .await
+        } else {
+            coordinator
+                .restore_session_view_tail(&effective_path, &request.session_id, tail_turn_count)
+                .await
+        }
+    } else if request.include_internal {
         coordinator
             .restore_internal_session_view(&effective_path, &request.session_id)
             .await
+            .map(|(session, turns)| {
+                let total_turn_count = turns.len();
+                (session, turns, total_turn_count)
+            })
     } else {
         coordinator
             .restore_session_view(&effective_path, &request.session_id)
             .await
+            .map(|(session, turns)| {
+                let total_turn_count = turns.len();
+                (session, turns, total_turn_count)
+            })
     }
     .map_err(|e| format!("Failed to restore session view: {}", e))?;
+    let loaded_turn_count = turns.len();
+    let is_partial = loaded_turn_count < total_turn_count;
 
     if log::log_enabled!(log::Level::Debug) {
         let payload_stats = restore_turn_payload_stats(&turns);
@@ -1338,10 +1369,12 @@ pub async fn restore_session_view(
             || payload_stats.result_for_assistant_chars >= 1024 * 1024
         {
             debug!(
-                "restore_session_view payload diagnostics: trace_id={}, session_id={}, turn_count={}, tool_result_count={}, raw_result_string_chars={}, result_for_assistant_chars={}, largest_raw_result_chars={}, largest_raw_result_path={}, top_raw_results={}",
+                "restore_session_view payload diagnostics: trace_id={}, session_id={}, turn_count={}, total_turn_count={}, is_partial={}, tool_result_count={}, raw_result_string_chars={}, result_for_assistant_chars={}, largest_raw_result_chars={}, largest_raw_result_path={}, top_raw_results={}",
                 trace_id,
                 request.session_id,
                 turns.len(),
+                total_turn_count,
+                is_partial,
                 payload_stats.tool_result_count,
                 payload_stats.raw_result_string_chars,
                 payload_stats.result_for_assistant_chars,
@@ -1355,10 +1388,12 @@ pub async fn restore_session_view(
     compact_tool_results_for_session_view(&mut turns);
 
     debug!(
-        "restore_session_view completed: trace_id={}, session_id={}, turn_count={}, context_restore_state=pending, duration_ms={}",
+        "restore_session_view completed: trace_id={}, session_id={}, turn_count={}, total_turn_count={}, is_partial={}, context_restore_state=pending, duration_ms={}",
         trace_id,
         request.session_id,
         turns.len(),
+        total_turn_count,
+        is_partial,
         started_at.elapsed().as_millis()
     );
 
@@ -1366,6 +1401,9 @@ pub async fn restore_session_view(
         session: session_to_response(session),
         turns,
         context_restore_state: "pending".to_string(),
+        is_partial,
+        loaded_turn_count,
+        total_turn_count,
     })
 }
 

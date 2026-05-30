@@ -66,6 +66,8 @@ const VALID_AGENT_TYPES = new Set([
   'DeepResearch',
 ]);
 const METADATA_LIST_RECENT_DEDUPE_TTL_MS = 1000;
+const HISTORICAL_SESSION_INITIAL_TAIL_TURN_COUNT = 3;
+const HISTORICAL_SESSION_FULL_HISTORY_DELAY_MS = 150;
 
 interface MetadataListRequest {
   promise: Promise<void>;
@@ -77,6 +79,25 @@ interface MetadataPageRequest {
   promise: Promise<SessionMetadataPage>;
   completedAtMs?: number;
   cleanupTimer?: ReturnType<typeof setTimeout>;
+}
+
+interface FullHistoryHydrationRequest {
+  promise: Promise<void>;
+  timer?: ReturnType<typeof setTimeout>;
+}
+
+interface CompleteSessionHistoryLoadRequest {
+  sessionId: string;
+  workspacePath: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
+  includeInternal?: boolean;
+  initialSessionTraceId: string;
+  expectedDialogTurnIds: string[];
+}
+
+function areStringArraysEqual(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 function isUnsupportedTauriCommandError(error: unknown, command: string): boolean {
@@ -130,6 +151,7 @@ export class FlowChatStore {
   private silentMode = false;
   private metadataListRequests = new Map<string, MetadataListRequest>();
   private metadataPageRequests = new Map<string, MetadataPageRequest>();
+  private fullHistoryHydrationRequests = new Map<string, FullHistoryHydrationRequest>();
   private unsupportedRestoreCommands = new Set<string>();
   private onPersistUnreadCompletion?: (sessionId: string, value: 'completed' | 'error' | 'interrupted' | undefined) => void;
 
@@ -203,6 +225,142 @@ export class FlowChatStore {
       cursor || '',
       limit,
     ]);
+  }
+
+  private getFullHistoryHydrationKey(
+    sessionId: string,
+    workspacePath: string,
+    remoteConnectionId?: string,
+    remoteSshHost?: string,
+    includeInternal?: boolean,
+  ): string {
+    return JSON.stringify([
+      sessionId,
+      workspacePath,
+      remoteConnectionId || '',
+      remoteSshHost || '',
+      includeInternal === true,
+    ]);
+  }
+
+  private scheduleCompleteSessionHistoryLoad(request: CompleteSessionHistoryLoadRequest): void {
+    const requestKey = this.getFullHistoryHydrationKey(
+      request.sessionId,
+      request.workspacePath,
+      request.remoteConnectionId,
+      request.remoteSshHost,
+      request.includeInternal,
+    );
+    if (this.fullHistoryHydrationRequests.has(requestKey)) {
+      return;
+    }
+
+    const remote = isRemoteTraceContext(request.remoteConnectionId, request.remoteSshHost);
+    startupTrace.markPhase('historical_session_full_hydrate_scheduled', {
+      remote,
+      sessionTraceId: request.initialSessionTraceId,
+      loadedTurnCount: request.expectedDialogTurnIds.length,
+    });
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const promise = new Promise<void>(resolve => {
+      timer = setTimeout(() => {
+        void this.completeSessionHistoryLoad(request)
+          .catch(error => {
+            startupTrace.markPhase('historical_session_full_hydrate_failed', {
+              remote,
+              sessionTraceId: `${request.initialSessionTraceId}-full`,
+            });
+            log.warn('Failed to complete partial session history restore', {
+              sessionId: request.sessionId,
+              error,
+            });
+          })
+          .finally(resolve);
+      }, HISTORICAL_SESSION_FULL_HISTORY_DELAY_MS);
+    }).finally(() => {
+      const currentRequest = this.fullHistoryHydrationRequests.get(requestKey);
+      if (currentRequest?.promise === promise) {
+        this.fullHistoryHydrationRequests.delete(requestKey);
+      }
+    });
+
+    this.fullHistoryHydrationRequests.set(requestKey, { promise, timer });
+  }
+
+  private async completeSessionHistoryLoad(
+    request: CompleteSessionHistoryLoadRequest
+  ): Promise<void> {
+    const fullTraceId = `${request.initialSessionTraceId}-full`;
+    const startedAt = nowMs();
+    const remote = isRemoteTraceContext(request.remoteConnectionId, request.remoteSshHost);
+    startupTrace.markPhase('historical_session_full_hydrate_start', {
+      remote,
+      sessionTraceId: fullTraceId,
+    });
+
+    const { agentAPI } = await import('@/infrastructure/api');
+    const restored = await agentAPI.restoreSessionView(
+      request.sessionId,
+      request.workspacePath,
+      request.remoteConnectionId,
+      request.remoteSshHost,
+      fullTraceId,
+      request.includeInternal,
+      undefined,
+    );
+
+    const convertStartedAt = nowMs();
+    const dialogTurns = this.convertToDialogTurns(restored.turns);
+    const restoredLastUserDialogMode =
+      restored.session.lastUserDialogAgentType || this.deriveLastUserDialogMode(dialogTurns);
+    const contextRestoreState: SessionContextRestoreState =
+      restored.contextRestoreState === 'ready' ? 'ready' : 'pending';
+    startupTrace.markPhase('historical_session_full_hydrate_convert_end', {
+      remote,
+      sessionTraceId: fullTraceId,
+      turnCount: dialogTurns.length,
+      durationMs: elapsedMs(convertStartedAt),
+    });
+
+    let applied = false;
+    this.setState(prev => {
+      const session = prev.sessions.get(request.sessionId);
+      if (!session || session.historyState !== 'ready') {
+        return prev;
+      }
+
+      const currentDialogTurnIds = session.dialogTurns.map(turn => turn.id);
+      if (!areStringArraysEqual(currentDialogTurnIds, request.expectedDialogTurnIds)) {
+        return prev;
+      }
+
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(request.sessionId, {
+        ...session,
+        dialogTurns,
+        contextRestoreState:
+          session.contextRestoreState === 'ready' ? 'ready' : contextRestoreState,
+        mode: restored.session.agentType || session.mode,
+        lastUserDialogMode: restoredLastUserDialogMode,
+        lastSubmittedMode:
+          restored.session.lastSubmittedAgentType ?? session.lastSubmittedMode,
+      });
+      applied = true;
+
+      return {
+        ...prev,
+        sessions: newSessions,
+      };
+    });
+
+    startupTrace.markPhase('historical_session_full_hydrate_end', {
+      remote,
+      sessionTraceId: fullTraceId,
+      turnCount: dialogTurns.length,
+      applied,
+      durationMs: elapsedMs(startedAt),
+    });
   }
 
   public setState(updater: (prevState: FlowChatState) => FlowChatState): void {
@@ -2670,6 +2828,9 @@ export class FlowChatStore {
       let turns: DialogTurnData[] | undefined;
       let restoredSessionInfo: AgentSessionInfo | undefined;
       let contextRestoreState: SessionContextRestoreState = 'ready';
+      let restoredHistoryPartial = false;
+      let restoredLoadedTurnCount: number | undefined;
+      let restoredTotalTurnCount: number | undefined;
       if (!isAcpSession) {
         const restoreStartedAt = nowMs();
         startupTrace.markPhase('historical_session_restore_start', { remote, sessionTraceId });
@@ -2741,11 +2902,15 @@ export class FlowChatStore {
                 remoteSshHost,
                 sessionTraceId,
                 options?.includeInternal,
+                HISTORICAL_SESSION_INITIAL_TAIL_TURN_COUNT,
               );
               restoredSessionInfo = restored.session;
               turns = restored.turns;
               contextRestoreState =
                 restored.contextRestoreState === 'ready' ? 'ready' : 'pending';
+              restoredHistoryPartial = restored.isPartial === true;
+              restoredLoadedTurnCount = restored.loadedTurnCount;
+              restoredTotalTurnCount = restored.totalTurnCount;
             } catch (error) {
               if (!isUnsupportedTauriCommandError(error, 'restore_session_view')) {
                 throw error;
@@ -2767,6 +2932,9 @@ export class FlowChatStore {
             remote,
             sessionTraceId,
             turnCount: Array.isArray(turns) ? turns.length : 0,
+            loadedTurnCount: restoredLoadedTurnCount,
+            totalTurnCount: restoredTotalTurnCount,
+            isPartial: restoredHistoryPartial,
             contextRestoreState,
             durationMs: elapsedMs(restoreStartedAt),
           });
@@ -2863,8 +3031,21 @@ export class FlowChatStore {
         remote,
         sessionTraceId,
         turnCount: dialogTurns.length,
+        totalTurnCount: restoredTotalTurnCount,
+        isPartial: restoredHistoryPartial,
         durationMs: elapsedMs(traceStartedAt),
       });
+      if (restoredHistoryPartial) {
+        this.scheduleCompleteSessionHistoryLoad({
+          sessionId,
+          workspacePath,
+          remoteConnectionId,
+          remoteSshHost,
+          includeInternal: options?.includeInternal,
+          initialSessionTraceId: sessionTraceId,
+          expectedDialogTurnIds: dialogTurns.map(turn => turn.id),
+        });
+      }
     } catch (error) {
       this.setState(prev => {
         const session = prev.sessions.get(sessionId);

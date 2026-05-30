@@ -107,6 +107,9 @@ export interface RestoreSessionViewResponse {
   session: SessionInfo;
   turns: DialogTurnData[];
   contextRestoreState: 'ready' | 'pending';
+  isPartial?: boolean;
+  loadedTurnCount?: number;
+  totalTurnCount?: number;
 }
 
 export interface EnsureAssistantBootstrapRequest {
@@ -499,6 +502,7 @@ export class AgentAPI {
     remoteSshHost?: string,
     traceId?: string,
     includeInternal?: boolean,
+    tailTurnCount?: number,
   ): Promise<RestoreSessionViewResponse> {
     try {
       return await api.invoke<RestoreSessionViewResponse>('restore_session_view', {
@@ -509,6 +513,7 @@ export class AgentAPI {
           remoteSshHost,
           traceId,
           includeInternal,
+          ...(tailTurnCount !== undefined ? { tailTurnCount } : {}),
         },
       });
     } catch (error) {

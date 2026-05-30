@@ -26,6 +26,8 @@ import {
   getInitialModelRoundGroupRenderCount,
   getNextModelRoundGroupRenderCount,
   getSynchronizedModelRoundGroupRenderCount,
+  getVisibleModelRoundGroupEndIndex,
+  getVisibleModelRoundGroupStartIndex,
 } from './modelRoundProgressiveRender';
 import { Tooltip } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
@@ -235,11 +237,22 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
       return () => window.clearTimeout(timeoutId);
     }, [groupedItems.length, renderedGroupCount, round.id, round.isStreaming]);
 
+    const visibleGroupStartIndex = getVisibleModelRoundGroupStartIndex({
+      renderedCount: renderedGroupCount,
+      groupCount: groupedItems.length,
+      isStreaming: round.isStreaming,
+    });
+    const visibleGroupEndIndex = getVisibleModelRoundGroupEndIndex({
+      renderedCount: renderedGroupCount,
+      groupCount: groupedItems.length,
+      startIndex: visibleGroupStartIndex,
+    });
     const visibleGroupedItems = useMemo(
-      () => groupedItems.slice(0, renderedGroupCount),
-      [groupedItems, renderedGroupCount],
+      () => groupedItems.slice(visibleGroupStartIndex, visibleGroupEndIndex),
+      [groupedItems, visibleGroupEndIndex, visibleGroupStartIndex],
     );
-    const hasDeferredGroups = renderedGroupCount < groupedItems.length;
+    const hasDeferredEarlierGroups = visibleGroupStartIndex > 0;
+    const hasDeferredLaterGroups = visibleGroupEndIndex < groupedItems.length;
 
     const extractDialogTurnContent = useCallback(() => {
       const flowChatStore = FlowChatStore.getInstance();
@@ -332,8 +345,14 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
       <div 
         className={`model-round-item model-round-item--${round.isStreaming ? 'streaming' : 'complete'}`}
       >
+        {hasDeferredEarlierGroups && (
+          <div className="model-round-item__history-loader">
+            {t('modelRound.loadingMoreHistory', { defaultValue: 'Loading more history...' })}
+          </div>
+        )}
+
         {visibleGroupedItems.map((group, groupIndex) => {
-          const isLastGroup = !hasDeferredGroups && groupIndex === groupedItems.length - 1;
+          const isLastGroup = visibleGroupStartIndex + groupIndex === groupedItems.length - 1;
           const isLast = isLastRound && isLastGroup;
           switch (group.type) {
             case 'explore':
@@ -377,12 +396,12 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
           }
         })}
 
-        {hasDeferredGroups && (
+        {hasDeferredLaterGroups && (
           <div className="model-round-item__history-loader">
             {t('modelRound.loadingMoreHistory', { defaultValue: 'Loading more history...' })}
           </div>
         )}
-        
+
         {isTurnComplete && isLastRound && hasContent && !round.isStreaming && (
           <div className="model-round-item__footer">
             <ForkSessionButton sessionId={sessionId} turnId={turnId} />

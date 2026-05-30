@@ -2186,23 +2186,11 @@ impl PersistenceManager {
         Ok(session)
     }
 
-    /// Load session and return the persisted turns read while rebuilding the session header.
-    pub async fn load_session_with_turns(
-        &self,
-        workspace_path: &Path,
-        session_id: &str,
-    ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
-        let metadata = self
-            .load_session_metadata(workspace_path, session_id)
-            .await?
-            .ok_or_else(|| {
-                BitFunError::NotFound(format!("Session metadata not found: {}", session_id))
-            })?;
-        let stored_state = self
-            .load_stored_session_state(workspace_path, session_id)
-            .await?;
-        let turns = self.load_session_turns(workspace_path, session_id).await?;
-
+    fn build_session_from_persisted_parts(
+        metadata: SessionMetadata,
+        stored_state: Option<StoredSessionStateFile>,
+        turns: &[DialogTurnData],
+    ) -> Session {
         let mut config = stored_state
             .as_ref()
             .map(|value| value.config.clone())
@@ -2230,9 +2218,9 @@ impl PersistenceManager {
             .unwrap_or(SessionState::Idle);
         let created_at = Self::unix_ms_to_system_time(metadata.created_at);
         let last_activity_at = Self::unix_ms_to_system_time(metadata.last_active_at);
-
         let dialog_turn_ids = turns.iter().map(|turn| turn.turn_id.clone()).collect();
-        let session = Session {
+
+        Session {
             session_id: metadata.session_id.clone(),
             session_name: metadata.session_name.clone(),
             agent_type: metadata.agent_type.clone(),
@@ -2247,7 +2235,8 @@ impl PersistenceManager {
             created_by: metadata.created_by.clone(),
             kind: metadata.session_kind,
             snapshot_session_id: stored_state
-                .and_then(|value| value.snapshot_session_id)
+                .as_ref()
+                .and_then(|value| value.snapshot_session_id.clone())
                 .or(metadata.snapshot_session_id.clone()),
             dialog_turn_ids,
             state: runtime_state,
@@ -2256,9 +2245,55 @@ impl PersistenceManager {
             created_at,
             updated_at: last_activity_at,
             last_activity_at,
-        };
+        }
+    }
+
+    /// Load session and return the persisted turns read while rebuilding the session header.
+    pub async fn load_session_with_turns(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
+        let metadata = self
+            .load_session_metadata(workspace_path, session_id)
+            .await?
+            .ok_or_else(|| {
+                BitFunError::NotFound(format!("Session metadata not found: {}", session_id))
+            })?;
+        let stored_state = self
+            .load_stored_session_state(workspace_path, session_id)
+            .await?;
+        let turns = self.load_session_turns(workspace_path, session_id).await?;
+        let session = Self::build_session_from_persisted_parts(metadata, stored_state, &turns);
 
         Ok((session, turns))
+    }
+
+    pub async fn load_session_with_tail_turns(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        tail_turn_count: usize,
+    ) -> BitFunResult<(Session, Vec<DialogTurnData>, usize)> {
+        let metadata = self
+            .load_session_metadata(workspace_path, session_id)
+            .await?
+            .ok_or_else(|| {
+                BitFunError::NotFound(format!("Session metadata not found: {}", session_id))
+            })?;
+        let stored_state = self
+            .load_stored_session_state(workspace_path, session_id)
+            .await?;
+        let indexed_paths = self
+            .list_indexed_turn_paths(workspace_path, session_id)
+            .await?;
+        let total_turn_count = indexed_paths.len();
+        let start = indexed_paths.len().saturating_sub(tail_turn_count);
+        let selected_paths = indexed_paths.into_iter().skip(start).collect::<Vec<_>>();
+        let turns = self.read_turn_paths(selected_paths).await?;
+        let session = Self::build_session_from_persisted_parts(metadata, stored_state, &turns);
+
+        Ok((session, turns, total_turn_count))
     }
 
     /// Save session state
@@ -2527,18 +2562,16 @@ impl PersistenceManager {
             .map(|file| file.turn))
     }
 
-    pub async fn load_session_turns(
+    async fn list_indexed_turn_paths(
         &self,
         workspace_path: &Path,
         session_id: &str,
-    ) -> BitFunResult<Vec<DialogTurnData>> {
-        let started_at = Instant::now();
+    ) -> BitFunResult<Vec<(usize, PathBuf)>> {
         let turns_dir = self.turns_dir(workspace_path, session_id);
         if !turns_dir.exists() {
             return Ok(Vec::new());
         }
 
-        let scan_started_at = Instant::now();
         let mut indexed_paths = Vec::new();
         let mut entries = fs::read_dir(&turns_dir)
             .await
@@ -2566,11 +2599,14 @@ impl PersistenceManager {
         }
 
         indexed_paths.sort_by_key(|(index, _)| *index);
-        let scan_duration = scan_started_at.elapsed();
+        Ok(indexed_paths)
+    }
 
-        let read_started_at = Instant::now();
+    async fn read_turn_paths(
+        &self,
+        indexed_paths: Vec<(usize, PathBuf)>,
+    ) -> BitFunResult<Vec<DialogTurnData>> {
         let mut turns = Vec::with_capacity(indexed_paths.len());
-        let turn_file_count = indexed_paths.len();
         for (_, path) in indexed_paths {
             if let Some(file) = self
                 .read_json_optional::<StoredDialogTurnFile>(&path)
@@ -2579,6 +2615,24 @@ impl PersistenceManager {
                 turns.push(file.turn);
             }
         }
+        Ok(turns)
+    }
+
+    pub async fn load_session_turns(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<Vec<DialogTurnData>> {
+        let started_at = Instant::now();
+        let scan_started_at = Instant::now();
+        let indexed_paths = self
+            .list_indexed_turn_paths(workspace_path, session_id)
+            .await?;
+        let scan_duration = scan_started_at.elapsed();
+
+        let read_started_at = Instant::now();
+        let turn_file_count = indexed_paths.len();
+        let turns = self.read_turn_paths(indexed_paths).await?;
         let read_duration = read_started_at.elapsed();
         let total_duration = started_at.elapsed();
         if total_duration >= Duration::from_millis(80) || turn_file_count >= 50 {
@@ -2586,6 +2640,46 @@ impl PersistenceManager {
                 "Loaded session turns: session_id={} turn_count={} turn_file_count={} scan_duration_ms={} read_duration_ms={} total_duration_ms={}",
                 session_id,
                 turns.len(),
+                turn_file_count,
+                scan_duration.as_millis(),
+                read_duration.as_millis(),
+                total_duration.as_millis()
+            );
+        }
+
+        Ok(turns)
+    }
+
+    pub async fn load_session_tail_turns(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        count: usize,
+    ) -> BitFunResult<Vec<DialogTurnData>> {
+        if count == 0 {
+            return Ok(Vec::new());
+        }
+
+        let started_at = Instant::now();
+        let scan_started_at = Instant::now();
+        let indexed_paths = self
+            .list_indexed_turn_paths(workspace_path, session_id)
+            .await?;
+        let scan_duration = scan_started_at.elapsed();
+        let turn_file_count = indexed_paths.len();
+        let start = indexed_paths.len().saturating_sub(count);
+        let selected_paths = indexed_paths.into_iter().skip(start).collect::<Vec<_>>();
+
+        let read_started_at = Instant::now();
+        let turns = self.read_turn_paths(selected_paths).await?;
+        let read_duration = read_started_at.elapsed();
+        let total_duration = started_at.elapsed();
+        if total_duration >= Duration::from_millis(40) || turn_file_count >= 50 {
+            debug!(
+                "Loaded session tail turns: session_id={} turn_count={} requested_count={} turn_file_count={} scan_duration_ms={} read_duration_ms={} total_duration_ms={}",
+                session_id,
+                turns.len(),
+                count,
                 turn_file_count,
                 scan_duration.as_millis(),
                 read_duration.as_millis(),
@@ -3086,6 +3180,58 @@ mod tests {
             .expect("transcript file should be readable");
         assert!(transcript.contains("## Turn 0"));
         assert!(transcript.contains("hello transcript"));
+    }
+
+    #[tokio::test]
+    async fn load_session_tail_turns_returns_latest_turns_in_chronological_order() {
+        let workspace = TestWorkspace::new();
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
+        let session_id = Uuid::new_v4().to_string();
+        let metadata = SessionMetadata::new(
+            session_id.clone(),
+            "Tail turns test".to_string(),
+            "agent".to_string(),
+            "model".to_string(),
+        );
+        manager
+            .save_session_metadata(workspace.path(), &metadata)
+            .await
+            .expect("metadata should save");
+
+        for index in 0..5 {
+            let user_message = UserMessageData {
+                id: format!("user-{index}"),
+                content: format!("prompt {index}"),
+                timestamp: index as u64,
+                metadata: None,
+            };
+            let mut turn = DialogTurnData::new(
+                format!("turn-{index}"),
+                index,
+                session_id.clone(),
+                user_message,
+            );
+            turn.mark_completed();
+            manager
+                .save_dialog_turn(workspace.path(), &turn)
+                .await
+                .expect("turn should save");
+        }
+
+        let tail = manager
+            .load_session_tail_turns(workspace.path(), &session_id, 2)
+            .await
+            .expect("tail turns should load");
+
+        let turn_indices = tail.iter().map(|turn| turn.turn_index).collect::<Vec<_>>();
+        let prompts = tail
+            .iter()
+            .map(|turn| turn.user_message.content.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(turn_indices, vec![3, 4]);
+        assert_eq!(prompts, vec!["prompt 3", "prompt 4"]);
     }
 
     #[tokio::test]

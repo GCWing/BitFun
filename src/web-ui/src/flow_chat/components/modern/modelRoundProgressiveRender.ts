@@ -35,3 +35,25 @@ export function getSynchronizedModelRoundGroupRenderCount(params: {
 
   return Math.min(groupCount, Math.max(currentCount, initialCount));
 }
+
+export function getVisibleModelRoundGroupStartIndex(params: {
+  renderedCount: number;
+  groupCount: number;
+  isStreaming: boolean;
+}): number {
+  const { renderedCount, groupCount, isStreaming } = params;
+  if (isStreaming) {
+    return 0;
+  }
+
+  return Math.max(0, groupCount - Math.min(renderedCount, groupCount));
+}
+
+export function getVisibleModelRoundGroupEndIndex(params: {
+  renderedCount: number;
+  groupCount: number;
+  startIndex: number;
+}): number {
+  const { renderedCount, groupCount, startIndex } = params;
+  return Math.min(groupCount, startIndex + Math.min(renderedCount, groupCount));
+}

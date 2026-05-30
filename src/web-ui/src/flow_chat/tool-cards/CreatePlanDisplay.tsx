@@ -19,6 +19,7 @@ import { Tooltip } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import { basenamePath, dirnameAbsolutePath } from '@/shared/utils/pathUtils';
+import { createTodoRenderItems } from './todoRenderItems';
 import './CreatePlanDisplay.scss';
 
 const log = createLogger('PlanDisplay');
@@ -103,6 +104,10 @@ export const PlanDisplay: React.FC<PlanDisplayProps> = ({
   }, [planFilePath, initialName, initialOverview, initialTodos]);
 
   const planData = refreshedData || initialPlanData;
+  const todoRenderItems = useMemo(
+    () => createTodoRenderItems(planData?.todos ?? []),
+    [planData?.todos],
+  );
 
   // Subscribe to shared build state service for cross-component sync.
   useEffect(() => {
@@ -351,9 +356,9 @@ ${JSON.stringify(simpleTodos, null, 2)}
       {planData.todos && planData.todos.length > 0 && isTodosExpanded && (
         <div className="create-plan-todos create-plan-todos--expanded">
           <div className="todos-list">
-            {planData.todos.map((todo, index) => (
+            {todoRenderItems.map(({ todo, key }) => (
               <div
-                key={todo.id || index}
+                key={key}
                 className={`todo-item status-${todo.status || 'pending'}`}
               >
                 {todo.status === 'completed' && (

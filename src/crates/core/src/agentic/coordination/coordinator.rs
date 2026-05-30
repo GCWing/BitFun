@@ -3240,6 +3240,17 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .await
     }
 
+    pub async fn restore_session_view_tail(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        tail_turn_count: usize,
+    ) -> BitFunResult<(Session, Vec<crate::service::session::DialogTurnData>, usize)> {
+        self.session_manager
+            .restore_session_view_tail(workspace_path, session_id, tail_turn_count)
+            .await
+    }
+
     pub async fn restore_internal_session_view(
         &self,
         workspace_path: &Path,
@@ -3247,6 +3258,17 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     ) -> BitFunResult<(Session, Vec<crate::service::session::DialogTurnData>)> {
         self.session_manager
             .restore_internal_session_view(workspace_path, session_id)
+            .await
+    }
+
+    pub async fn restore_internal_session_view_tail(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        tail_turn_count: usize,
+    ) -> BitFunResult<(Session, Vec<crate::service::session::DialogTurnData>, usize)> {
+        self.session_manager
+            .restore_internal_session_view_tail(workspace_path, session_id, tail_turn_count)
             .await
     }
 

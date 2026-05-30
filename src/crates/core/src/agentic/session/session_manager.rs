@@ -1843,8 +1843,9 @@ impl SessionManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
-        self.restore_session_view_internal(workspace_path, session_id, false)
+        self.restore_session_view_internal(workspace_path, session_id, false, None)
             .await
+            .map(|(session, turns, _)| (session, turns))
     }
 
     pub async fn restore_internal_session_view(
@@ -1852,7 +1853,28 @@ impl SessionManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
-        self.restore_session_view_internal(workspace_path, session_id, true)
+        self.restore_session_view_internal(workspace_path, session_id, true, None)
+            .await
+            .map(|(session, turns, _)| (session, turns))
+    }
+
+    pub async fn restore_session_view_tail(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        tail_turn_count: usize,
+    ) -> BitFunResult<(Session, Vec<DialogTurnData>, usize)> {
+        self.restore_session_view_internal(workspace_path, session_id, false, Some(tail_turn_count))
+            .await
+    }
+
+    pub async fn restore_internal_session_view_tail(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        tail_turn_count: usize,
+    ) -> BitFunResult<(Session, Vec<DialogTurnData>, usize)> {
+        self.restore_session_view_internal(workspace_path, session_id, true, Some(tail_turn_count))
             .await
     }
 
@@ -1861,7 +1883,8 @@ impl SessionManager {
         workspace_path: &Path,
         session_id: &str,
         include_internal: bool,
-    ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
+        tail_turn_count: Option<usize>,
+    ) -> BitFunResult<(Session, Vec<DialogTurnData>, usize)> {
         let restore_started_at = Instant::now();
         let storage_path_started_at = Instant::now();
         let session_storage_path = {
@@ -1899,14 +1922,26 @@ impl SessionManager {
         );
 
         let session_started_at = Instant::now();
-        let (mut session, persisted_turns) = self
-            .persistence_manager
-            .load_session_with_turns(&session_storage_path, session_id)
-            .await?;
+        let (mut session, persisted_turns, total_turn_count) = if let Some(tail_turn_count) =
+            tail_turn_count
+        {
+            self.persistence_manager
+                .load_session_with_tail_turns(&session_storage_path, session_id, tail_turn_count)
+                .await?
+        } else {
+            let (session, turns) = self
+                .persistence_manager
+                .load_session_with_turns(&session_storage_path, session_id)
+                .await?;
+            let total_turn_count = turns.len();
+            (session, turns, total_turn_count)
+        };
         debug!(
-            "Session view restore phase completed: session_id={}, phase=load_session_with_turns, turn_count={}, duration_ms={}",
+            "Session view restore phase completed: session_id={}, phase=load_session_with_turns, turn_count={}, total_turn_count={}, tail_turn_count={:?}, duration_ms={}",
             session_id,
             persisted_turns.len(),
+            total_turn_count,
+            tail_turn_count,
             elapsed_ms_u64(session_started_at)
         );
 
@@ -1941,7 +1976,7 @@ impl SessionManager {
             elapsed_ms_u64(restore_started_at)
         );
 
-        Ok((session, persisted_turns))
+        Ok((session, persisted_turns, total_turn_count))
     }
 
     /// Restore session and return the persisted turns read during restore.

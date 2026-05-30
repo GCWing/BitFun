@@ -68,6 +68,15 @@ const resetStore = () => {
     }
   });
   metadataPageRequests?.clear();
+  const fullHistoryHydrationRequests = (flowChatStore as any).fullHistoryHydrationRequests as
+    | Map<string, { timer?: ReturnType<typeof setTimeout> }>
+    | undefined;
+  fullHistoryHydrationRequests?.forEach(request => {
+    if (request.timer) {
+      clearTimeout(request.timer);
+    }
+  });
+  fullHistoryHydrationRequests?.clear();
   ((flowChatStore as any).unsupportedRestoreCommands as Set<string> | undefined)?.clear();
   flowChatStore.setState((): FlowChatState => ({
     sessions: new Map(),
@@ -762,6 +771,112 @@ describe('FlowChatStore historical session hydration state', () => {
     expect(toolItem?.toolResult?.result?.stdout).toBe(visibleOutput);
     expect(toolItem?.toolResult?.result?.nested?.stderr).toBe('also visible');
     expect(toolItem?.toolResult?.resultForAssistant).toBeUndefined();
+  });
+
+  it('renders tail-restored turns before completing partial history in background', async () => {
+    vi.useFakeTimers();
+    const olderTurn = {
+      turnId: 'turn-1',
+      turnIndex: 0,
+      sessionId: 'history-1',
+      timestamp: 1,
+      userMessage: { id: 'user-1', content: 'older prompt', timestamp: 1 },
+      modelRounds: [],
+      startTime: 1,
+      status: 'completed',
+    };
+    const latestTurn = {
+      turnId: 'turn-2',
+      turnIndex: 1,
+      sessionId: 'history-1',
+      timestamp: 2,
+      userMessage: { id: 'user-2', content: 'latest prompt', timestamp: 2 },
+      modelRounds: [],
+      startTime: 2,
+      status: 'completed',
+    };
+    apiMocks.restoreSessionView
+      .mockResolvedValueOnce({
+        session: {
+          sessionId: 'history-1',
+          sessionName: 'History 1',
+          agentType: 'agentic',
+          state: 'Idle',
+          turnCount: 2,
+          createdAt: 1,
+        },
+        turns: [latestTurn],
+        contextRestoreState: 'pending',
+        isPartial: true,
+        loadedTurnCount: 1,
+        totalTurnCount: 2,
+      })
+      .mockResolvedValueOnce({
+        session: {
+          sessionId: 'history-1',
+          sessionName: 'History 1',
+          agentType: 'agentic',
+          state: 'Idle',
+          turnCount: 2,
+          createdAt: 1,
+        },
+        turns: [olderTurn, latestTurn],
+        contextRestoreState: 'pending',
+        isPartial: false,
+        loadedTurnCount: 2,
+        totalTurnCount: 2,
+      });
+    flowChatStore.setState(() => ({
+      sessions: new Map([
+        ['history-1', createSession({
+          sessionId: 'history-1',
+          isHistorical: true,
+          historyState: 'metadata-only',
+        })],
+      ]),
+      activeSessionId: 'history-1',
+    }));
+
+    try {
+      await flowChatStore.loadSessionHistory('history-1', 'D:/workspace/BitFun');
+
+      expect(apiMocks.restoreSessionView).toHaveBeenCalledTimes(1);
+      expect(apiMocks.restoreSessionView).toHaveBeenNthCalledWith(
+        1,
+        'history-1',
+        'D:/workspace/BitFun',
+        undefined,
+        undefined,
+        expect.any(String),
+        undefined,
+        3,
+      );
+      expect(
+        flowChatStore.getState().sessions.get('history-1')?.dialogTurns.map(turn => turn.userMessage.content)
+      ).toEqual(['latest prompt']);
+      flowChatStore.setSessionContextRestoreState('history-1', 'ready');
+
+      await vi.runOnlyPendingTimersAsync();
+      await flushAsyncWork();
+
+      expect(apiMocks.restoreSessionView).toHaveBeenCalledTimes(2);
+      expect(apiMocks.restoreSessionView).toHaveBeenNthCalledWith(
+        2,
+        'history-1',
+        'D:/workspace/BitFun',
+        undefined,
+        undefined,
+        expect.stringContaining('full'),
+        undefined,
+        undefined,
+      );
+      expect(
+        flowChatStore.getState().sessions.get('history-1')?.dialogTurns.map(turn => turn.userMessage.content)
+      ).toEqual(['older prompt', 'latest prompt']);
+      expect(flowChatStore.getState().sessions.get('history-1')?.contextRestoreState).toBe('ready');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('falls back to restoreSessionWithTurns when view restore is unavailable', async () => {
