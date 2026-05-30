@@ -6,16 +6,16 @@
       "maxTotal": 0
     },
     "sharedTermDuplicates": {
-      "maxTotal": 206,
+      "maxTotal": 201,
       "bySurface": {
         "core": 15,
         "installer": 0,
-        "mobile-web": 8,
+        "mobile-web": 6,
         "relay-static-homepage": 0,
-        "web-ui": 183
+        "web-ui": 180
       },
       "bySharedKey": {
-        "agents.claw": 6,
+        "agents.claw": 3,
         "agents.code": 4,
         "agents.cowork": 2,
         "agents.default": 3,
@@ -37,21 +37,21 @@
         "statuses.running": 13,
         "tools.edit": 33,
         "tools.explore": 2,
-        "tools.search": 14,
+        "tools.search": 12,
         "tools.shell": 8
       }
     },
     "l10nQualityCandidates": {
-      "maxTotal": 1093,
+      "maxTotal": 1087,
       "bySurface": {
         "core": 36,
-        "installer": 28,
-        "mobile-web": 21,
+        "installer": 24,
+        "mobile-web": 19,
         "relay-static-homepage": 1,
         "web-ui": 1007
       },
       "byNamespace": {
-        "<none>": 86,
+        "<none>": 80,
         "common": 158,
         "components": 87,
         "errors": 7,

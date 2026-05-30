@@ -89,7 +89,7 @@ const AssistantQuickInput: React.FC<AssistantQuickInputProps> = ({
 
   const placeholder = assistantName
     ? t('input.assistantPlaceholder', { name: assistantName })
-    : t('input.placeholder', { defaultValue: 'Send a message…' });
+    : t('input.placeholder');
 
   return (
     <div className="aqi">

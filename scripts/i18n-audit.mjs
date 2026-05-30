@@ -8,6 +8,7 @@ const root = process.cwd();
 const contractPath = path.join(root, 'src', 'shared', 'i18n', 'contract', 'locales.json');
 const hardcodedBaselinePath = path.join(root, 'scripts', 'i18n-hardcoded-baseline.json');
 const literalFallbackBaselinePath = path.join(root, 'scripts', 'i18n-literal-fallback-baseline.json');
+const localeFormatBaselinePath = path.join(root, 'scripts', 'i18n-locale-format-baseline.json');
 const dynamicKeyAllowlistPath = path.join(root, 'scripts', 'i18n-dynamic-key-allowlist.json');
 const l10nIdenticalAllowlistPath = path.join(root, 'scripts', 'i18n-l10n-identical-allowlist.json');
 const governanceBaselinePath = path.join(root, 'scripts', 'i18n-governance-baseline.json');
@@ -48,6 +49,8 @@ const reportCategories = [
   'dynamicKeyCandidates',
   'sharedTermDuplicates',
   'l10nQualityCandidates',
+  'literalDefaultValueFallbacks',
+  'localeFormatCandidates',
 ];
 const governanceReport = {
   version: 1,
@@ -64,6 +67,8 @@ const governanceReport = {
   dynamicKeyCandidates: [],
   sharedTermDuplicates: [],
   l10nQualityCandidates: [],
+  literalDefaultValueFallbacks: [],
+  localeFormatCandidates: [],
 };
 
 function reportError(message) {
@@ -280,6 +285,14 @@ function finalizeGovernanceReport() {
       byComparisonLocale: countEntriesBy(governanceReport.l10nQualityCandidates, 'comparisonLocale'),
       byNamespace: countEntriesBy(governanceReport.l10nQualityCandidates, 'namespace', { emptyLabel: '<none>' }),
       bySurface: countEntriesBy(governanceReport.l10nQualityCandidates, 'surface'),
+    },
+    literalDefaultValueFallbacks: {
+      byFile: countEntriesBy(governanceReport.literalDefaultValueFallbacks, 'file'),
+      byNamespace: countEntriesBy(governanceReport.literalDefaultValueFallbacks, 'namespace', { emptyLabel: '<none>' }),
+    },
+    localeFormatCandidates: {
+      byFile: countEntriesBy(governanceReport.localeFormatCandidates, 'file'),
+      bySurface: countEntriesBy(governanceReport.localeFormatCandidates, 'surface'),
     },
   };
 }
@@ -1820,9 +1833,11 @@ function collectWebUiLiteralFallbackFindings() {
       if (propertyNameToString(ts, property.name) !== 'defaultValue') continue;
       if (!isLiteralFallbackInitializer(ts, property.initializer)) continue;
 
+      const [namespace, ...keyParts] = call.key.split(':');
       findings.push({
         file: call.file,
         location: call.location,
+        namespace: keyParts.length > 0 ? namespace : null,
         key: call.key,
       });
     }
@@ -1844,6 +1859,14 @@ function auditWebUiLiteralFallbackBudget() {
   const findingsByFile = new Map();
 
   for (const finding of collectWebUiLiteralFallbackFindings()) {
+    governanceReport.literalDefaultValueFallbacks.push({
+      surface: 'web-ui',
+      namespace: finding.namespace,
+      key: finding.key,
+      file: finding.file,
+      location: finding.location,
+      reason: 'literal-i18next-defaultValue',
+    });
     findingsByFile.set(finding.file, [...(findingsByFile.get(finding.file) ?? []), finding]);
   }
 
@@ -1933,6 +1956,130 @@ function countCjkSourceLines(scanRoot, predicate) {
   return findings;
 }
 
+function shouldSkipLocaleFormatSourceScan(file) {
+  const normalized = toPosixPath(path.relative(root, file));
+  return (
+    normalized === 'src/web-ui/src/infrastructure/i18n/core/I18nService.ts' ||
+    normalized.endsWith('/generatedLocaleContract.ts') ||
+    normalized.endsWith('.test.ts') ||
+    normalized.endsWith('.test.tsx') ||
+    normalized.endsWith('.spec.ts') ||
+    normalized.endsWith('.spec.tsx')
+  );
+}
+
+function collectLocaleFormatUsageFindings() {
+  const formatPattern = /\b(?:new\s+)?Intl\.(?:DateTimeFormat|NumberFormat|RelativeTimeFormat)\s*\(|\.\s*toLocale(?:String|DateString|TimeString)\s*\(/g;
+  const specs = [
+    {
+      surface: 'web-ui',
+      root: webSourceDir,
+      predicate: (file) => (
+        (file.endsWith('.ts') || file.endsWith('.tsx')) &&
+        !shouldSkipSourceScan(file) &&
+        !shouldSkipLocaleFormatSourceScan(file)
+      ),
+    },
+    {
+      surface: 'mobile-web',
+      root: mobileWebSourceDir,
+      predicate: (file) => (
+        (file.endsWith('.ts') || file.endsWith('.tsx')) &&
+        !shouldSkipMobileWebSourceScan(file) &&
+        !shouldSkipLocaleFormatSourceScan(file)
+      ),
+    },
+    {
+      surface: 'installer',
+      root: installerSourceDir,
+      predicate: (file) => (
+        (file.endsWith('.ts') || file.endsWith('.tsx')) &&
+        !shouldSkipInstallerSourceScan(file) &&
+        !shouldSkipLocaleFormatSourceScan(file)
+      ),
+    },
+    {
+      surface: 'core-miniapp',
+      root: path.join(root, 'src', 'crates', 'core', 'src', 'miniapp', 'builtin', 'assets'),
+      predicate: (file) => file.endsWith('.js'),
+    },
+  ];
+  const findings = [];
+
+  for (const spec of specs) {
+    for (const file of listFiles(spec.root, spec.predicate)) {
+      const relativeFile = toPosixPath(path.relative(root, file));
+      const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
+      lines.forEach((line, index) => {
+        formatPattern.lastIndex = 0;
+        let match;
+        while ((match = formatPattern.exec(line)) != null) {
+          findings.push({
+            surface: spec.surface,
+            file: relativeFile,
+            location: `${relativeFile}:${index + 1}`,
+            expression: match[0].trim(),
+            snippet: line.trim().slice(0, 200),
+            reason: 'direct-locale-format-call',
+          });
+        }
+      });
+    }
+  }
+
+  return findings.sort(sortByReportIdentity);
+}
+
+function auditLocaleFormatUsageBudget() {
+  if (!fs.existsSync(localeFormatBaselinePath)) {
+    reportError('Missing scripts/i18n-locale-format-baseline.json');
+    return;
+  }
+
+  const baseline = readJsonFile(localeFormatBaselinePath);
+  if (baseline.version !== 1) {
+    reportError('scripts/i18n-locale-format-baseline.json must use version 1');
+  }
+  if (!Array.isArray(baseline.budgets)) {
+    reportError('scripts/i18n-locale-format-baseline.json must define a budgets array');
+    return;
+  }
+
+  const budgetByFile = new Map((baseline.budgets ?? []).map((budget) => [budget.path, budget]));
+  const findingsByFile = new Map();
+
+  for (const finding of collectLocaleFormatUsageFindings()) {
+    governanceReport.localeFormatCandidates.push(finding);
+    findingsByFile.set(finding.file, [...(findingsByFile.get(finding.file) ?? []), finding]);
+  }
+
+  for (const [file, findings] of findingsByFile.entries()) {
+    const budget = budgetByFile.get(file);
+    if (!budget) {
+      reportError(
+        `${file} has ${findings.length} direct locale formatting call(s) but is missing from scripts/i18n-locale-format-baseline.json. First entries: ${
+          findings.slice(0, 8).map((finding) => `${finding.location} ${finding.expression}`).join(', ')
+        }`,
+      );
+      continue;
+    }
+
+    if (typeof budget.maxLocaleFormatCalls !== 'number') {
+      reportError(`${file} has an invalid locale format baseline entry`);
+    } else if (findings.length > budget.maxLocaleFormatCalls) {
+      reportError(`${file} has ${findings.length} direct locale formatting call(s), budget is ${budget.maxLocaleFormatCalls}`);
+    } else if (findings.length < budget.maxLocaleFormatCalls) {
+      reportError(`${file} has ${findings.length} direct locale formatting call(s), below baseline ${budget.maxLocaleFormatCalls}; lower scripts/i18n-locale-format-baseline.json.`);
+    }
+  }
+
+  for (const [file, budget] of budgetByFile.entries()) {
+    if (budget.maxLocaleFormatCalls > 0 && !findingsByFile.has(file)) {
+      reportError(`${file} no longer has direct locale formatting call(s); remove it from scripts/i18n-locale-format-baseline.json.`);
+    }
+  }
+}
+
 function auditHardcodedSourceBudgets() {
   const baseline = readJsonFile(hardcodedBaselinePath);
   const budgetById = new Map((baseline.budgets ?? []).map((budget) => [budget.id, budget.maxCjkLines]));
@@ -1997,6 +2144,7 @@ auditInstallerPlaceholderParity();
 auditCoreFluentParity();
 auditRelayStaticHomepageResources();
 auditSourceText();
+auditLocaleFormatUsageBudget();
 auditHardcodedSourceBudgets();
 auditI18nGovernanceReport(namespaces);
 writeGovernanceReport();

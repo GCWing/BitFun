@@ -3,12 +3,6 @@
   "description": "Temporary no-growth allowlist for existing Web UI i18next defaultValue literal fallbacks. Lower this file when moving fallback copy into locale resources.",
   "budgets": [
     {
-      "path": "src/web-ui/src/app/components/NavPanel/sections/sessions/SessionsSection.tsx",
-      "literalDefaultValues": {
-        "common:nav.sessions.loading": 1
-      }
-    },
-    {
       "path": "src/web-ui/src/app/scenes/agents/AgentsScene.tsx",
       "literalDefaultValues": {
         "scenes/agents:nav.teams": 1,
@@ -64,12 +58,6 @@
         "scenes/agents:reviewTeams.detail.warning": 1,
         "settings/default-model:selection.fast": 1,
         "settings/default-model:selection.primary": 1
-      }
-    },
-    {
-      "path": "src/web-ui/src/app/scenes/profile/views/AssistantQuickInput.tsx",
-      "literalDefaultValues": {
-        "flow-chat:input.placeholder": 1
       }
     },
     {
@@ -401,66 +389,6 @@
       "path": "src/web-ui/src/flow_chat/services/openBtwSession.ts",
       "literalDefaultValues": {
         "flow-chat:btw.threadLabel": 1
-      }
-    },
-    {
-      "path": "src/web-ui/src/flow_chat/tool-cards/CodeReviewReportExportActions.tsx",
-      "literalDefaultValues": {
-        "flow-chat:toolCards.codeReview.export.copyFailed": 1,
-        "flow-chat:toolCards.codeReview.export.copyMarkdown": 2,
-        "flow-chat:toolCards.codeReview.export.copySuccess": 1,
-        "flow-chat:toolCards.codeReview.export.editorTitle": 1,
-        "flow-chat:toolCards.codeReview.export.fileNamePrefix": 1,
-        "flow-chat:toolCards.codeReview.export.openFailed": 1,
-        "flow-chat:toolCards.codeReview.export.openMarkdown": 3,
-        "flow-chat:toolCards.codeReview.export.saveDialogTitle": 1,
-        "flow-chat:toolCards.codeReview.export.saveFailed": 1,
-        "flow-chat:toolCards.codeReview.export.saveMarkdown": 2,
-        "flow-chat:toolCards.codeReview.export.saveSuccess": 1,
-        "flow-chat:toolCards.codeReview.groups.architecture": 1,
-        "flow-chat:toolCards.codeReview.groups.maintainability": 1,
-        "flow-chat:toolCards.codeReview.groups.must_fix": 1,
-        "flow-chat:toolCards.codeReview.groups.needs_decision": 1,
-        "flow-chat:toolCards.codeReview.groups.other": 1,
-        "flow-chat:toolCards.codeReview.groups.performance": 1,
-        "flow-chat:toolCards.codeReview.groups.security": 1,
-        "flow-chat:toolCards.codeReview.groups.should_improve": 1,
-        "flow-chat:toolCards.codeReview.groups.tests": 1,
-        "flow-chat:toolCards.codeReview.groups.user_experience": 1,
-        "flow-chat:toolCards.codeReview.groups.verification": 1,
-        "flow-chat:toolCards.codeReview.recommendedAction": 1,
-        "flow-chat:toolCards.codeReview.reliabilityStatus.cache_hit.label": 1,
-        "flow-chat:toolCards.codeReview.reliabilityStatus.cache_miss.label": 1,
-        "flow-chat:toolCards.codeReview.reliabilityStatus.compression_preserved.label": 1,
-        "flow-chat:toolCards.codeReview.reliabilityStatus.concurrency_limited.label": 1,
-        "flow-chat:toolCards.codeReview.reliabilityStatus.context_pressure.label": 1,
-        "flow-chat:toolCards.codeReview.reliabilityStatus.partial_reviewer.label": 1,
-        "flow-chat:toolCards.codeReview.reliabilityStatus.reduced_scope.label": 1,
-        "flow-chat:toolCards.codeReview.reliabilityStatus.retry_guidance.label": 1,
-        "flow-chat:toolCards.codeReview.reliabilityStatus.skipped_reviewers.label": 1,
-        "flow-chat:toolCards.codeReview.reliabilityStatus.token_budget_limited.label": 1,
-        "flow-chat:toolCards.codeReview.reliabilityStatus.user_decision.label": 1,
-        "flow-chat:toolCards.codeReview.report.findings": 1,
-        "flow-chat:toolCards.codeReview.report.noIssues": 1,
-        "flow-chat:toolCards.codeReview.report.noItems": 1,
-        "flow-chat:toolCards.codeReview.report.packet": 1,
-        "flow-chat:toolCards.codeReview.report.partialOutput": 1,
-        "flow-chat:toolCards.codeReview.report.reliabilitySignals": 1,
-        "flow-chat:toolCards.codeReview.report.reviewDecision": 1,
-        "flow-chat:toolCards.codeReview.report.source": 1,
-        "flow-chat:toolCards.codeReview.report.status": 1,
-        "flow-chat:toolCards.codeReview.report.titleDeep": 1,
-        "flow-chat:toolCards.codeReview.report.titleStandard": 1,
-        "flow-chat:toolCards.codeReview.report.validation": 1,
-        "flow-chat:toolCards.codeReview.reviewScope": 1,
-        "flow-chat:toolCards.codeReview.riskLevel": 1,
-        "flow-chat:toolCards.codeReview.sections.coverage": 1,
-        "flow-chat:toolCards.codeReview.sections.issues": 1,
-        "flow-chat:toolCards.codeReview.sections.remediation": 1,
-        "flow-chat:toolCards.codeReview.sections.strengths": 1,
-        "flow-chat:toolCards.codeReview.sections.summary": 1,
-        "flow-chat:toolCards.codeReview.sections.team": 1,
-        "flow-chat:toolCards.codeReview.suggestion": 1
       }
     },
     {

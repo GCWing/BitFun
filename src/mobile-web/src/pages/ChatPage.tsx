@@ -629,7 +629,7 @@ const TOOL_TYPE_MAP: Record<string, string> = {
   create_file: 'shared.tools.write',
   delete_file: 'tools.delete',
   Task: 'tools.task',
-  search: 'tools.search',
+  search: 'shared.tools.search',
   edit_file: 'shared.tools.edit',
   web_search: 'tools.web',
   TodoWrite: 'shared.tools.todo',

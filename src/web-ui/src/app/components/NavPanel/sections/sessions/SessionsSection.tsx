@@ -607,7 +607,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         <div className="bitfun-nav-panel__inline-list">
           <div className="bitfun-nav-panel__inline-loading">
             <Loader2 size={12} />
-            <span>{t('nav.sessions.loading', { defaultValue: 'Loading sessions...' })}</span>
+            <span>{t('nav.sessions.loading')}</span>
           </div>
         </div>
       );

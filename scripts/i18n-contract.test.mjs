@@ -318,6 +318,71 @@ test('i18n audit gates object-form literal fallbacks with an explicit budget', (
   assert.match(auditSource, /defaultValue/, 'audit should inspect i18next defaultValue options');
 });
 
+test('i18n audit reports literal fallback and locale formatting candidate baselines', { concurrency: false }, () => {
+  const auditSource = readText('scripts/i18n-audit.mjs');
+  const localeFormatBaselineSource = readText('scripts/i18n-locale-format-baseline.json');
+  const localeFormatBaseline = JSON.parse(localeFormatBaselineSource);
+
+  assert.match(auditSource, /literalDefaultValueFallbacks/, 'governance report should include literal fallback candidates');
+  assert.match(auditSource, /i18n-locale-format-baseline\.json/, 'audit should read the direct locale format baseline');
+  assert.match(auditSource, /auditLocaleFormatUsageBudget/, 'direct locale formatting should have a no-growth gate');
+  assert.ok(
+    localeFormatBaseline.budgets.every((entry) => (
+      typeof entry.path === 'string' &&
+      typeof entry.maxLocaleFormatCalls === 'number'
+    )),
+    'locale format baseline should use exact per-file budgets',
+  );
+
+  const reportPath = 'scripts/.tmp-i18n-locale-format-report.json';
+  const absoluteReportPath = path.join(root, reportPath);
+  fs.rmSync(absoluteReportPath, { force: true });
+
+  try {
+    const result = runI18nAudit(['--report-json', reportPath]);
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    const report = readJson(reportPath);
+    assert.equal(
+      report.summary.byCategory.localeFormatCandidates.bySurface['web-ui'],
+      report.localeFormatCandidates.filter((entry) => entry.surface === 'web-ui').length,
+      'report should summarize direct locale formatting candidates by surface',
+    );
+    assert.ok(
+      report.summary.byCategory.literalDefaultValueFallbacks.byFile,
+      'report should summarize literal fallbacks by file',
+    );
+  } finally {
+    fs.rmSync(absoluteReportPath, { force: true });
+  }
+
+  const baselinePath = 'scripts/i18n-locale-format-baseline.json';
+  const baseline = readJson(baselinePath);
+  baseline.budgets.push({
+    path: 'src/web-ui/src/__removed_locale_format_fixture__.ts',
+    maxLocaleFormatCalls: 1,
+  });
+
+  withTemporaryTextFile(baselinePath, `${JSON.stringify(baseline, null, 2)}\n`, () => {
+    const result = runI18nAudit();
+    assert.notEqual(result.status, 0, 'stale direct locale format baselines must fail audit');
+    assert.match(
+      `${result.stdout}\n${result.stderr}`,
+      /no longer has direct locale formatting call/,
+      'audit output should explain the stale locale format budget',
+    );
+  });
+
+  withTemporaryTextFile('src/web-ui/src/__locale_format_fixture__.ts', 'export const value = Intl.NumberFormat().format(1234);\n', () => {
+    const result = runI18nAudit();
+    assert.notEqual(result.status, 0, 'direct Intl format calls without new must fail audit');
+    assert.match(
+      `${result.stdout}\n${result.stderr}`,
+      /__locale_format_fixture__\.ts has 1 direct locale formatting call/,
+      'audit output should report direct Intl format calls without new',
+    );
+  });
+});
+
 test('i18n audit can emit a machine-readable governance report', { concurrency: false }, () => {
   const reportPath = 'scripts/.tmp-i18n-governance-report.json';
   const absoluteReportPath = path.join(root, reportPath);
@@ -335,6 +400,8 @@ test('i18n audit can emit a machine-readable governance report', { concurrency: 
     assert.ok(Array.isArray(report.dynamicKeyCandidates), 'report should include dynamic key candidates');
     assert.ok(Array.isArray(report.sharedTermDuplicates), 'report should include shared-term duplicate candidates');
     assert.ok(Array.isArray(report.l10nQualityCandidates), 'report should include l10n quality candidates');
+    assert.ok(Array.isArray(report.literalDefaultValueFallbacks), 'report should include literal defaultValue fallback candidates');
+    assert.ok(Array.isArray(report.localeFormatCandidates), 'report should include direct locale formatting candidates');
     assert.deepEqual(
       report.summary.counts,
       {
@@ -342,6 +409,8 @@ test('i18n audit can emit a machine-readable governance report', { concurrency: 
         dynamicKeyCandidates: report.dynamicKeyCandidates.length,
         sharedTermDuplicates: report.sharedTermDuplicates.length,
         l10nQualityCandidates: report.l10nQualityCandidates.length,
+        literalDefaultValueFallbacks: report.literalDefaultValueFallbacks.length,
+        localeFormatCandidates: report.localeFormatCandidates.length,
       },
       'report counts should match finding arrays',
     );
@@ -393,6 +462,14 @@ test('i18n audit can emit a machine-readable governance report', { concurrency: 
         entry.reason === 'matches-comparison-locale'
       )),
       'unchanged zh-TW copy should be reported as a localization quality candidate',
+    );
+    assert.ok(
+      report.literalDefaultValueFallbacks.every((entry) => entry.file && entry.key && entry.location),
+      'literal fallback candidates should include file, key, and location for cleanup reviews',
+    );
+    assert.ok(
+      report.localeFormatCandidates.every((entry) => entry.surface && entry.file && entry.location),
+      'locale format candidates should include surface, file, and location for cleanup reviews',
     );
     assert.equal(
       report.l10nQualityCandidates.some((entry) => entry.resourceKey === 'shared:modes.agentic'),
@@ -488,6 +565,7 @@ test('web-ui uses shared terms for stable navigation and feature labels', { conc
       'flow-chat:toolCards.sessionControl.workspace',
       'flow-chat:toolCards.sessionMessage.workspace',
       'flow-chat:welcome.workspace',
+      'scenes/skills:suite.modes.claw',
       'settings:title',
       'settings:configCenter.title',
       'settings:workspace.title',
@@ -508,6 +586,7 @@ test('web-ui uses shared terms for stable navigation and feature labels', { conc
       'toolCards.sessionControl.workspace',
       'toolCards.sessionMessage.workspace',
       'welcome.workspace',
+      'suite.modes.claw',
       'configCenter.title',
       'workspace.title',
     ];

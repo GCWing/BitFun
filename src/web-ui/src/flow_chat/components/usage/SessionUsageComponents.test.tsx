@@ -41,7 +41,8 @@ vi.mock('@/shared/utils/tabUtils', () => ({
   createDiffEditorTab: tabUtilsMocks.createDiffEditorTab,
 }));
 
-vi.mock('react-i18next', () => ({
+vi.mock('react-i18next', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('react-i18next')>()),
   useTranslation: () => ({
     t: (key: string, options?: Record<string, unknown>) => {
       const labels: Record<string, string> = {

@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { CubeLoading } from '../../component-library';
 import type { FlowToolItem } from '../types/flow-chat';
 import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
+import { i18nService } from '@/infrastructure/i18n';
 import './ContextCompressionDisplay.scss';
 
 interface ContextCompressionDisplayProps {
@@ -76,6 +77,7 @@ export const ContextCompressionDisplay: React.FC<ContextCompressionDisplayProps>
 
   const savedTokens = data.tokensBefore && data.tokensAfter ? 
     data.tokensBefore - data.tokensAfter : undefined;
+  const formatNumber = (value: number): string => i18nService.formatNumber(value);
 
   const isLoading = data.status === 'preparing' || data.status === 'streaming' || data.status === 'running';
 
@@ -112,14 +114,14 @@ export const ContextCompressionDisplay: React.FC<ContextCompressionDisplayProps>
             <>
               <span className="token-stat">
                 {t('toolCards.contextCompression.tokenChange', {
-                  before: data.tokensBefore.toLocaleString(),
-                  after: data.tokensAfter.toLocaleString(),
+                  before: formatNumber(data.tokensBefore),
+                  after: formatNumber(data.tokensAfter),
                 })}
               </span>
               {savedTokens !== undefined && data.compressionRatio !== undefined && (
                 <span className="savings-tag">
                   {t('toolCards.contextCompression.savingsTag', {
-                    saved: savedTokens.toLocaleString(),
+                    saved: formatNumber(savedTokens),
                     ratio: (data.compressionRatio * 100).toFixed(0),
                   })}
                 </span>

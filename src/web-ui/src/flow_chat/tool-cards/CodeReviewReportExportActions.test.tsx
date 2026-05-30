@@ -19,7 +19,14 @@ vi.mock('lucide-react', () => ({
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (_key: string, options?: { defaultValue?: string }) => options?.defaultValue ?? _key,
+    t: (key: string) => {
+      const labels: Record<string, string> = {
+        'toolCards.codeReview.export.copyMarkdown': 'Copy Markdown',
+        'toolCards.codeReview.export.openMarkdown': 'Open as Markdown',
+        'toolCards.codeReview.export.saveMarkdown': 'Save Markdown',
+      };
+      return labels[key] ?? key;
+    },
   }),
 }));
 

@@ -47,7 +47,7 @@
     "modelName": "模型名稱（如 deepseek-v4-flash）",
     "skip": "稍後配置",
     "nextTheme": "下一步：主題",
-    "description": "配置和管理 AI 模型提供商",
+    "description": "設定和管理 AI 模型提供商",
     "providerLabel": "選擇模型提供商",
     "selectProvider": "或選擇預設提供商",
     "customProvider": "自定義配置",
@@ -71,7 +71,7 @@
         "description": "MiniMax 系列模型",
         "urlOptions": {
           "default": "Anthropic格式-默認",
-          "openai": "OpenAI兼容格式"
+          "openai": "OpenAI 相容格式"
         }
       },
       "moonshot": {
@@ -127,13 +127,13 @@
     "testSuccess": "測試成功",
     "testFailed": "測試失敗",
     "fillApiKeyBeforeFetch": "請先填寫 API Key 再獲取模型列表",
-    "fetchingModels": "正在拉取模型列表...",
+    "fetchingModels": "正在擷取模型清單...",
     "fetchFailedFallback": "拉取模型列表失敗，已回退到常用預設模型",
     "fetchEmptyFallback": "供應商未返回可用模型，已回退到常用預設模型",
     "usingPresetModels": "當前顯示的是常用預設模型",
     "addCustomModel": "添加自定義模型",
     "form": {
-      "baseUrl": "API地址",
+      "baseUrl": "API 位址",
       "apiKey": "API密鑰",
       "apiKeyPlaceholder": "輸入您的 API Key",
       "provider": "請求格式",

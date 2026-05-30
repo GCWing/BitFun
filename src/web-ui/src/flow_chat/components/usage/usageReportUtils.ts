@@ -1,4 +1,5 @@
 import type { SessionUsageReport } from '@/infrastructure/api/service-api/SessionAPI';
+import { i18nService } from '@/infrastructure/i18n';
 
 type Translator = (key: string, options?: Record<string, unknown>) => string;
 type ModelIdentitySource = SessionUsageReport['models'][number]['modelIdSource'];
@@ -42,7 +43,7 @@ export function formatUsageNumber(value: number | undefined, t: Translator): str
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return t('usage.unavailable');
   }
-  return new Intl.NumberFormat().format(value);
+  return i18nService.formatNumber(value);
 }
 
 export function formatUsageDuration(value: number | undefined, t: Translator): string {
@@ -77,12 +78,12 @@ export function formatUsageTimestamp(value: number | undefined, t: Translator): 
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return t('usage.unavailable');
   }
-  return new Intl.DateTimeFormat(undefined, {
+  return i18nService.formatDate(new Date(value), {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-  }).format(new Date(value));
+  });
 }
 
 export function formatUsagePercent(value: number | undefined, t: Translator): string {
