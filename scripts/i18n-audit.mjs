@@ -9,6 +9,7 @@ const contractPath = path.join(root, 'src', 'shared', 'i18n', 'contract', 'local
 const hardcodedBaselinePath = path.join(root, 'scripts', 'i18n-hardcoded-baseline.json');
 const literalFallbackBaselinePath = path.join(root, 'scripts', 'i18n-literal-fallback-baseline.json');
 const dynamicKeyAllowlistPath = path.join(root, 'scripts', 'i18n-dynamic-key-allowlist.json');
+const governanceBaselinePath = path.join(root, 'scripts', 'i18n-governance-baseline.json');
 const sharedTermsDir = path.join(root, 'src', 'shared', 'i18n', 'resources', 'shared');
 const webLocalesDir = path.join(root, 'src', 'web-ui', 'src', 'locales');
 const namespaceRegistryPath = path.join(
@@ -50,7 +51,14 @@ const reportCategories = [
 const governanceReport = {
   version: 1,
   generatedBy: 'scripts/i18n-audit.mjs',
-  summary: { counts: {} },
+  summary: {
+    baseline: {
+      path: 'scripts/i18n-governance-baseline.json',
+      enforced: false,
+    },
+    byCategory: {},
+    counts: {},
+  },
   confirmedUnusedKeys: [],
   dynamicKeyCandidates: [],
   sharedTermDuplicates: [],
@@ -234,11 +242,40 @@ function sortByReportIdentity(left, right) {
   return JSON.stringify(left).localeCompare(JSON.stringify(right));
 }
 
+function countEntriesBy(entries, field) {
+  return Object.fromEntries(
+    Array.from(entries.reduce((counts, entry) => {
+      const value = entry[field] ?? '';
+      counts.set(value, (counts.get(value) ?? 0) + 1);
+      return counts;
+    }, new Map()).entries())
+      .sort(([left], [right]) => String(left).localeCompare(String(right))),
+  );
+}
+
 function finalizeGovernanceReport() {
   for (const category of reportCategories) {
     governanceReport[category].sort(sortByReportIdentity);
     governanceReport.summary.counts[category] = governanceReport[category].length;
   }
+
+  governanceReport.summary.byCategory = {
+    confirmedUnusedKeys: {
+      bySurface: countEntriesBy(governanceReport.confirmedUnusedKeys, 'surface'),
+    },
+    dynamicKeyCandidates: {
+      byAllowlistId: countEntriesBy(governanceReport.dynamicKeyCandidates, 'allowlistId'),
+      bySurface: countEntriesBy(governanceReport.dynamicKeyCandidates, 'surface'),
+    },
+    sharedTermDuplicates: {
+      bySharedKey: countEntriesBy(governanceReport.sharedTermDuplicates, 'sharedKey'),
+      bySurface: countEntriesBy(governanceReport.sharedTermDuplicates, 'surface'),
+    },
+    l10nQualityCandidates: {
+      byComparisonLocale: countEntriesBy(governanceReport.l10nQualityCandidates, 'comparisonLocale'),
+      bySurface: countEntriesBy(governanceReport.l10nQualityCandidates, 'surface'),
+    },
+  };
 }
 
 function writeGovernanceReport() {
@@ -1016,6 +1053,31 @@ function readDynamicKeyAllowlist() {
   return allowlist;
 }
 
+function readGovernanceBaseline() {
+  if (!fs.existsSync(governanceBaselinePath)) {
+    reportError('Missing scripts/i18n-governance-baseline.json');
+    return null;
+  }
+
+  let baseline;
+  try {
+    baseline = readJsonFile(governanceBaselinePath);
+  } catch (error) {
+    reportError(`Failed to parse scripts/i18n-governance-baseline.json: ${error.message}`);
+    return null;
+  }
+
+  if (baseline.version !== 1) {
+    reportError('scripts/i18n-governance-baseline.json must use version 1');
+  }
+  if (!isPlainObject(baseline.budgets)) {
+    reportError('scripts/i18n-governance-baseline.json must define a budgets object');
+    return null;
+  }
+
+  return baseline;
+}
+
 function allowlistTargetForGroup(entry, group) {
   if (entry.surface !== group.surface) return null;
   if (entry.namespace && entry.namespace !== group.namespace) return null;
@@ -1140,16 +1202,67 @@ function collectConfirmedUnusedKeys() {
   }
 }
 
+function auditGovernanceCategoryBudget(category, budget) {
+  if (!isPlainObject(budget)) {
+    reportError(`scripts/i18n-governance-baseline.json ${category} budget must be an object`);
+    return;
+  }
+
+  const entries = governanceReport[category] ?? [];
+  if (typeof budget.maxTotal !== 'number') {
+    reportError(`scripts/i18n-governance-baseline.json ${category}.maxTotal must be a number`);
+  } else if (entries.length > budget.maxTotal) {
+    reportError(`${category} has ${entries.length} candidate(s), baseline is ${budget.maxTotal}`);
+  } else if (entries.length < budget.maxTotal) {
+    reportError(`${category} has ${entries.length} candidate(s), below baseline ${budget.maxTotal}; lower scripts/i18n-governance-baseline.json.`);
+  }
+
+  if (budget.bySurface) {
+    if (!isPlainObject(budget.bySurface)) {
+      reportError(`scripts/i18n-governance-baseline.json ${category}.bySurface must be an object`);
+      return;
+    }
+
+    const actualBySurface = countEntriesBy(entries, 'surface');
+    const surfaces = sortedUnique([
+      ...Object.keys(actualBySurface),
+      ...Object.keys(budget.bySurface),
+    ]);
+
+    for (const surface of surfaces) {
+      const actual = actualBySurface[surface] ?? 0;
+      const expected = budget.bySurface[surface];
+      if (typeof expected !== 'number') {
+        reportError(`scripts/i18n-governance-baseline.json ${category}.bySurface.${surface} must be a number`);
+      } else if (actual > expected) {
+        reportError(`${category} ${surface} has ${actual} candidate(s), baseline is ${expected}`);
+      } else if (actual < expected) {
+        reportError(`${category} ${surface} has ${actual} candidate(s), below baseline ${expected}; lower scripts/i18n-governance-baseline.json.`);
+      }
+    }
+  }
+}
+
+function auditGovernanceBaseline() {
+  const baseline = readGovernanceBaseline();
+  if (!baseline) return;
+
+  governanceReport.summary.baseline.enforced = true;
+
+  for (const category of ['confirmedUnusedKeys', 'sharedTermDuplicates', 'l10nQualityCandidates']) {
+    auditGovernanceCategoryBudget(category, baseline.budgets[category]);
+  }
+}
+
 function auditI18nGovernanceReport(namespaces) {
   const resourceEntries = collectI18nResourceEntries(namespaces);
   const resourceGroups = buildResourceGroups(resourceEntries);
 
+  collectConfirmedUnusedKeys();
   collectDynamicKeyCandidates(resourceGroups);
-  if (cliOptions.reportJsonPath) {
-    collectConfirmedUnusedKeys();
-    collectSharedTermDuplicates(resourceEntries);
-    collectL10nQualityCandidates(resourceGroups);
-  }
+  collectSharedTermDuplicates(resourceEntries);
+  collectL10nQualityCandidates(resourceGroups);
+  auditGovernanceBaseline();
 }
 
 function shouldSkipSourceScan(file) {

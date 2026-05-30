@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "description": "No-growth baseline for i18n governance candidates. Lower counts when shared-term or l10n debt is removed; do not raise without review.",
+  "budgets": {
+    "confirmedUnusedKeys": {
+      "maxTotal": 0
+    },
+    "sharedTermDuplicates": {
+      "maxTotal": 281,
+      "bySurface": {
+        "core": 18,
+        "installer": 3,
+        "mobile-web": 38,
+        "relay-static-homepage": 2,
+        "web-ui": 220
+      }
+    },
+    "l10nQualityCandidates": {
+      "maxTotal": 1099,
+      "bySurface": {
+        "core": 36,
+        "installer": 28,
+        "mobile-web": 22,
+        "relay-static-homepage": 1,
+        "shared": 5,
+        "web-ui": 1007
+      }
+    }
+  }
+}

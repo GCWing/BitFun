@@ -97,7 +97,8 @@ For the full script list, see [`package.json`](package.json).
   route or feature copy and keep direct `i18nService.t(...)` calls in bootstrap
   namespaces.
 - `pnpm run i18n:audit` enforces key/placeholder parity, direct static key
-  existence, and the no-hardcoded-CJK source budget.
+  existence, dynamic key governance, no-growth i18n governance baselines, and
+  the no-hardcoded-CJK source budget.
 
 ### Logging
 

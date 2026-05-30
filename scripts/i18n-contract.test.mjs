@@ -333,6 +333,18 @@ test('i18n audit can emit a machine-readable governance report', { concurrency: 
       },
       'report counts should match finding arrays',
     );
+    assert.equal(report.summary.baseline.path, 'scripts/i18n-governance-baseline.json');
+    assert.equal(report.summary.baseline.enforced, true);
+    assert.equal(
+      report.summary.byCategory.sharedTermDuplicates.bySharedKey['product.name'],
+      report.sharedTermDuplicates.filter((entry) => entry.sharedKey === 'product.name').length,
+      'report should summarize shared-term duplicates by shared term',
+    );
+    assert.equal(
+      report.summary.byCategory.l10nQualityCandidates.bySurface['web-ui'],
+      report.l10nQualityCandidates.filter((entry) => entry.surface === 'web-ui').length,
+      'report should summarize l10n candidates by surface',
+    );
     assert.ok(
       report.dynamicKeyCandidates.some((entry) => (
         entry.allowlistId === 'installer-install-path-errors' &&
@@ -360,6 +372,23 @@ test('i18n audit can emit a machine-readable governance report', { concurrency: 
   } finally {
     fs.rmSync(absoluteReportPath, { force: true });
   }
+});
+
+test('i18n audit enforces governance candidate baselines', { concurrency: false }, () => {
+  const baselinePath = 'scripts/i18n-governance-baseline.json';
+  const baseline = readJson(baselinePath);
+
+  baseline.budgets.sharedTermDuplicates.maxTotal = 0;
+
+  withTemporaryTextFile(baselinePath, `${JSON.stringify(baseline, null, 2)}\n`, () => {
+    const result = runI18nAudit();
+    assert.notEqual(result.status, 0, 'shared-term duplicate growth over baseline must fail ordinary i18n:audit');
+    assert.match(
+      `${result.stdout}\n${result.stderr}`,
+      /sharedTermDuplicates has \d+ candidate\(s\), baseline is 0/,
+      'audit output should identify the governance baseline category that failed',
+    );
+  });
 });
 
 test('i18n audit fails stale dynamic key allowlist entries', { concurrency: false }, () => {
