@@ -276,11 +276,15 @@ impl ThemeConfig {
         let theme_type = if self.is_light { "light" } else { "dark" };
         let startup_trace_id_json = serde_json::to_string(startup_trace_id)
             .unwrap_or_else(|_| "\"desktop-unknown\"".to_string());
+        let perf_trace_enabled = cfg!(debug_assertions)
+            || ((cfg!(feature = "devtools") || std::env::var_os("BITFUN_PERF_TRACE").is_some())
+                && std::env::var_os("BITFUN_WEBDRIVER_PORT").is_some());
 
         format!(
             r#"
             (function() {{
                 window.__BITFUN_STARTUP_TRACE_ID__ = {startup_trace_id_json};
+                window.__BITFUN_PERF_TRACE_ENABLED__ = {perf_trace_enabled};
                 function applyTheme() {{
                     var root = document.documentElement;
                     if (!root) return false;
@@ -295,6 +299,7 @@ impl ThemeConfig {
                     root.style.setProperty('--color-bg-flowchat', '{bg_scene}');
                     root.style.setProperty('--color-bg-scene', '{bg_scene}');
                     root.style.setProperty('--color-text-primary', '{text_primary}');
+                    root.style.setProperty('--bitfun-startup-bg', '{bg_primary}');
                     
                     root.style.backgroundColor = '{bg_primary}';
                     
@@ -323,6 +328,7 @@ impl ThemeConfig {
             bg_scene = self.bg_scene,
             text_primary = self.text_primary,
             startup_trace_id_json = startup_trace_id_json,
+            perf_trace_enabled = perf_trace_enabled,
         )
     }
 

@@ -29,7 +29,10 @@ import {
 bootstrapLogger();
 
 const log = createLogger('App');
-startupTrace.markPhase('first_script_eval');
+startupTrace.markPhase('first_script_eval', {
+  viteMode: import.meta.env.MODE,
+  isDev: import.meta.env.DEV,
+});
 
 /** Dedupe only for white-screen heuristic (empty #root), not for Error Boundary logs. */
 const WHITE_SCREEN_LOGGED_FLAG = '__bitfun_white_screen_crash_logged__';

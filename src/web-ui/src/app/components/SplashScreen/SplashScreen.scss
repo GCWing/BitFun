@@ -16,9 +16,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  // Explicit dark background as fallback for Linux WebKitGTK
-  // where CSS variable might not load synchronously
-  background: var(--color-bg-primary, #121214);
+  background: var(--bitfun-startup-bg, var(--color-bg-primary, #f3f3f5));
   pointer-events: none;
 
   // ── Exit state ─────────────────────────────────────────────────────────────

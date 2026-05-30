@@ -297,6 +297,7 @@ export class FlowChatStore {
     startupTrace.markPhase('historical_session_full_hydrate_start', {
       remote,
       sessionTraceId: fullTraceId,
+      loadedTurnCount: request.expectedDialogTurnIds.length,
     });
 
     const { agentAPI } = await import('@/infrastructure/api');
@@ -361,6 +362,16 @@ export class FlowChatStore {
       applied,
       durationMs: elapsedMs(startedAt),
     });
+    if (applied) {
+      markPhaseAfterAnimationFrames(startupTrace, 'historical_session_full_hydrate_after_state_commit_frame', {
+        remote,
+        sessionTraceId: fullTraceId,
+        turnCount: dialogTurns.length,
+        durationMs: elapsedMs(startedAt),
+      }, {
+        frameCount: 2,
+      });
+    }
   }
 
   public setState(updater: (prevState: FlowChatState) => FlowChatState): void {
@@ -3014,12 +3025,17 @@ export class FlowChatStore {
         remote,
         sessionTraceId,
         turnCount: dialogTurns.length,
+        totalTurnCount: restoredTotalTurnCount,
+        isPartial: restoredHistoryPartial,
         durationMs: elapsedMs(stateCommitStartedAt),
       });
       markPhaseAfterAnimationFrames(startupTrace, 'historical_session_after_state_commit_frame', {
         remote,
         sessionTraceId,
         turnCount: dialogTurns.length,
+        totalTurnCount: restoredTotalTurnCount,
+        isPartial: restoredHistoryPartial,
+        durationMs: elapsedMs(traceStartedAt),
       }, {
         frameCount: 2,
       });

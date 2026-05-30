@@ -703,6 +703,9 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
               ]
                 .filter(Boolean)
                 .join(' ')}
+              data-testid="session-nav-item"
+              data-session-id={session.sessionId}
+              data-session-title={sessionTitle}
               onClick={() => handleSwitch(session.sessionId)}
             >
               {showSessionModeIcon ? (
@@ -869,6 +872,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         <button
           type="button"
           className={`bitfun-nav-panel__inline-toggle${metadataPageState.isLoading ? ' is-loading' : ''}`}
+          data-testid="session-nav-show-more"
           disabled={metadataPageState.isLoading}
           onClick={() => { void handleExpandToggle(); }}
         >

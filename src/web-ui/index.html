@@ -14,6 +14,7 @@
         var m = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
         var root = document.documentElement;
         var bg = root.style.backgroundColor || (m && m.matches ? dark : light);
+        root.style.setProperty('--bitfun-startup-bg', bg);
         root.style.backgroundColor = bg;
         function paintBody() {
           if (document.body) document.body.style.backgroundColor = bg;
@@ -64,6 +65,7 @@
         display: flex;
         align-items: center;
         justify-content: center;
+        background: var(--bitfun-startup-bg, inherit);
         color: rgba(143, 143, 153, 0.92);
         font-family: "Noto Sans SC", "Inter", "Segoe UI", system-ui, sans-serif;
         font-size: 13px;

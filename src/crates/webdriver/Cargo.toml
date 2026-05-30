@@ -5,6 +5,10 @@ authors.workspace = true
 edition.workspace = true
 description = "Embedded WebDriver server for BitFun desktop"
 
+[features]
+default = []
+embedded = []
+
 [dependencies]
 anyhow = { workspace = true }
 axum = { workspace = true }

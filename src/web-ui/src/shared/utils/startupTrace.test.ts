@@ -201,6 +201,67 @@ describe('startupTrace', () => {
     });
   });
 
+  it('returns a sanitized immutable snapshot for performance E2E collection', () => {
+    const logger = createTestLogger();
+    let now = 100;
+    const trace = createStartupTrace({
+      logger,
+      traceId: 'trace-test',
+      now: () => now,
+    });
+
+    trace.markPhase('historical_session_hydrate_start', {
+      sessionTraceId: 'session-1',
+      workspacePath: '/workspace/BitFun',
+      remote: false,
+    });
+    trace.recordApiCall({
+      type: 'tauri',
+      command: 'restore_session_view',
+      durationMs: 42.4,
+      responseBytes: 2048,
+      remote: false,
+      cacheOutcome: 'unknown',
+    });
+
+    const snapshot = trace.getSnapshot();
+    expect(snapshot).toMatchObject({
+      traceId: 'trace-test',
+      phases: {
+        count: 1,
+        events: [
+          {
+            traceId: 'trace-test',
+            phase: 'historical_session_hydrate_start',
+            sessionTraceId: 'session-1',
+            atMs: 100,
+            remote: false,
+          },
+        ],
+      },
+      api: {
+        totalCount: 1,
+        successCount: 1,
+        byCommand: [
+          {
+            command: 'restore_session_view',
+            count: 1,
+            totalDurationMs: 42.4,
+            responseBytes: 2048,
+          },
+        ],
+      },
+    });
+    expect(snapshot.phases.events[0]).not.toHaveProperty('workspacePath');
+
+    snapshot.phases.events.push({
+      traceId: 'mutated',
+      phase: 'mutated',
+      atMs: 0,
+    });
+    expect(trace.getSnapshot().phases.events).toHaveLength(1);
+  });
+
   it('does not log when disabled', () => {
     const logger = createTestLogger();
     const trace = createStartupTrace({
