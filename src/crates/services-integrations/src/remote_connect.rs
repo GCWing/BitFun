@@ -1,13 +1,21 @@
 //! Remote-connect integration contracts.
 //!
-//! This module owns stable remote-facing DTOs, runtime-port request
-//! construction, and remote session tracker state. Network lifecycle and
-//! product assembly stay in `bitfun-core` until their ports are explicit.
+//! This module owns remote-connect wire assembly, runtime-port request
+//! construction, compatibility re-exports, and remote session tracker state.
+//! Network lifecycle and product assembly stay in `bitfun-core` until their
+//! ports are explicit.
 
 use bitfun_events::AgenticEvent;
 use bitfun_runtime_ports::{
     AgentInputAttachment, AgentSessionCreateRequest, AgentSubmissionRequest, AgentSubmissionSource,
     RemoteControlStateSnapshot,
+};
+pub use bitfun_runtime_ports::{
+    RemoteAssistantWorkspaceFacts, RemoteFileChunkRange, RemoteInitialSyncRuntimeHost,
+    RemoteProjectionPort, RemoteRecentWorkspaceFacts, RemoteSessionMetadata, RemoteWorkspaceFacts,
+    RemoteWorkspaceFileChunk, RemoteWorkspaceFileContent, RemoteWorkspaceFileInfo,
+    RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind, RemoteWorkspacePort,
+    RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -424,38 +432,6 @@ where
 pub const REMOTE_FILE_MAX_READ_BYTES: u64 = 30 * 1024 * 1024;
 pub const REMOTE_FILE_MAX_CHUNK_BYTES: u64 = 3 * 1024 * 1024;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RemoteWorkspaceFileContent {
-    pub name: String,
-    pub bytes: Vec<u8>,
-    pub mime_type: &'static str,
-    pub size: u64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RemoteWorkspaceFileChunk {
-    pub name: String,
-    pub bytes: Vec<u8>,
-    pub offset: u64,
-    pub chunk_size: u64,
-    pub total_size: u64,
-    pub mime_type: &'static str,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RemoteWorkspaceFileInfo {
-    pub name: String,
-    pub size: u64,
-    pub mime_type: &'static str,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct RemoteFileChunkRange {
-    pub start: usize,
-    pub end: usize,
-    pub chunk_size: u64,
-}
-
 pub fn resolve_remote_file_chunk_range(
     file_len: usize,
     offset: u64,
@@ -648,12 +624,6 @@ pub async fn read_remote_workspace_file_info(
         size,
         mime_type: detect_remote_mime_type(&abs_path),
     })
-}
-
-#[async_trait::async_trait]
-pub trait RemoteWorkspaceFileRuntimeHost: Send + Sync {
-    async fn resolve_remote_file_workspace_root(&self, session_id: Option<&str>)
-    -> Option<PathBuf>;
 }
 
 pub fn remote_file_content_response(
@@ -971,15 +941,6 @@ pub fn remote_initial_sync_response(
     }
 }
 
-#[async_trait::async_trait]
-pub trait RemoteWorkspaceRuntimeHost: Send + Sync {
-    async fn current_workspace(&self) -> Option<RemoteWorkspaceFacts>;
-    async fn recent_workspaces(&self) -> Vec<RemoteRecentWorkspaceFacts>;
-    async fn open_workspace(&self, path: &str) -> Result<RemoteWorkspaceUpdate, String>;
-    async fn assistant_workspaces(&self) -> Vec<RemoteAssistantWorkspaceFacts>;
-    async fn open_assistant_workspace(&self, path: &str) -> Result<RemoteWorkspaceUpdate, String>;
-}
-
 pub async fn handle_remote_workspace_command<H>(host: &H, command: &RemoteCommand) -> RemoteResponse
 where
     H: RemoteWorkspaceRuntimeHost + ?Sized,
@@ -1004,15 +965,6 @@ where
             message: "Unknown workspace command".into(),
         },
     }
-}
-
-#[async_trait::async_trait]
-pub trait RemoteInitialSyncRuntimeHost: Send + Sync {
-    async fn current_workspace(&self) -> Option<RemoteWorkspaceFacts>;
-    async fn list_session_metadata(
-        &self,
-        workspace_path: &Path,
-    ) -> Result<Vec<RemoteSessionMetadata>, String>;
 }
 
 pub async fn generate_remote_initial_sync<H>(
@@ -1898,63 +1850,6 @@ pub struct AssistantEntry {
     pub path: String,
     pub name: String,
     pub assistant_id: Option<String>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RemoteWorkspaceKind {
-    Normal,
-    Assistant,
-    Remote,
-}
-
-impl RemoteWorkspaceKind {
-    pub const fn as_wire_str(self) -> &'static str {
-        match self {
-            RemoteWorkspaceKind::Normal => "normal",
-            RemoteWorkspaceKind::Assistant => "assistant",
-            RemoteWorkspaceKind::Remote => "remote",
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RemoteWorkspaceFacts {
-    pub path: String,
-    pub name: String,
-    pub git_branch: Option<String>,
-    pub kind: RemoteWorkspaceKind,
-    pub assistant_id: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RemoteRecentWorkspaceFacts {
-    pub path: String,
-    pub name: String,
-    pub last_opened: String,
-    pub kind: RemoteWorkspaceKind,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RemoteAssistantWorkspaceFacts {
-    pub path: String,
-    pub name: String,
-    pub assistant_id: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RemoteWorkspaceUpdate {
-    pub path: String,
-    pub name: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RemoteSessionMetadata {
-    pub session_id: String,
-    pub name: String,
-    pub agent_type: String,
-    pub created_at_ms: u64,
-    pub last_active_at_ms: u64,
-    pub turn_count: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -3027,7 +2922,11 @@ pub fn remote_persisted_poll_response(
 }
 
 fn non_empty_title(title: String) -> Option<String> {
-    if title.is_empty() { None } else { Some(title) }
+    if title.is_empty() {
+        None
+    } else {
+        Some(title)
+    }
 }
 
 #[cfg(test)]

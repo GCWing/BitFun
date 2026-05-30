@@ -13,6 +13,7 @@ const noCoreDependencyCrates = [
   'events',
   'ai-adapters',
   'agent-stream',
+  'agent-runtime',
   'runtime-ports',
   'runtime-services',
   'services-core',
@@ -100,6 +101,31 @@ const lightweightBoundaryRules = [
       'bitfun-transport',
       'terminal-core',
       'tool-runtime',
+      'tauri',
+      'reqwest',
+      'git2',
+      'rmcp',
+      'image',
+      'tokio-tungstenite',
+      'bitfun-cli',
+      'ratatui',
+      'crossterm',
+      'arboard',
+      'syntect-tui',
+    ],
+  },
+  {
+    crateName: 'agent-runtime',
+    reason: 'agent-runtime must own portable runtime decisions without concrete service or product implementations',
+    forbiddenDeps: [
+      'bitfun-core',
+      'bitfun-ai-adapters',
+      'bitfun-services-core',
+      'bitfun-services-integrations',
+      'bitfun-tool-packs',
+      'bitfun-product-domains',
+      'bitfun-transport',
+      'terminal-core',
       'tauri',
       'reqwest',
       'git2',
@@ -260,6 +286,32 @@ const dependencyProfileRules = [
       'bitfun-transport',
       'terminal-core',
       'tool-runtime',
+      'tauri',
+      'reqwest',
+      'git2',
+      'rmcp',
+      'image',
+      'tokio-tungstenite',
+      'bitfun-cli',
+      'ratatui',
+      'crossterm',
+      'arboard',
+      'syntect-tui',
+    ],
+  },
+  {
+    crateName: 'agent-runtime',
+    profileName: 'default agent runtime decision profile',
+    reason: 'agent-runtime default profile must not compile concrete services or product surfaces',
+    forbiddenNonOptionalDeps: [
+      'bitfun-core',
+      'bitfun-ai-adapters',
+      'bitfun-services-core',
+      'bitfun-services-integrations',
+      'bitfun-tool-packs',
+      'bitfun-product-domains',
+      'bitfun-transport',
+      'terminal-core',
       'tauri',
       'reqwest',
       'git2',
@@ -3027,8 +3079,13 @@ const requiredContentRules = [
       },
       {
         regex:
-          /use bitfun_runtime_ports::\{[\s\S]*DialogSessionStateFact[\s\S]*DialogSubmitQueueAction[\s\S]*DialogSubmitQueueFacts[\s\S]*DialogTurnOutcomeKind[\s\S]*resolve_dialog_submit_queue_action[\s\S]*should_skip_agent_session_reply_contract[\s\S]*should_suppress_agent_session_cancelled_reply_contract[\s\S]*\};/,
+          /use bitfun_runtime_ports::\{(?=[\s\S]*DialogSessionStateFact)(?=[\s\S]*DialogSubmitQueueAction)(?=[\s\S]*DialogSubmitQueueFacts)(?=[\s\S]*DialogTurnOutcomeKind)(?=[\s\S]*resolve_dialog_submit_queue_action)(?=[\s\S]*should_skip_agent_session_reply_contract)(?=[\s\S]*should_suppress_agent_session_cancelled_reply_contract)[\s\S]*\};/,
         message: 'missing dialog scheduler decision contract import',
+      },
+      {
+        regex:
+          /use bitfun_agent_runtime::scheduler::\{(?=[\s\S]*BackgroundDeliveryAction)(?=[\s\S]*BackgroundDeliveryFacts)(?=[\s\S]*resolve_background_delivery_action)[\s\S]*\};/,
+        message: 'missing agent-runtime background delivery decision import',
       },
     ],
   },
@@ -3276,7 +3333,7 @@ const requiredContentRules = [
   {
     path: 'src/crates/services-integrations/src/remote_connect.rs',
     reason:
-      'services-integrations must own remote-connect wire, tracker, dialog, file, and image adapter contracts',
+      'services-integrations must own remote-connect wire/response assembly and preserve remote owner compatibility re-exports',
     patterns: [
       {
         regex: /\bpub struct RemoteSessionStateTracker\b/,
@@ -3407,7 +3464,7 @@ const requiredContentRules = [
         message: 'missing remote workspace file-info reader',
       },
       {
-        regex: /\bpub trait RemoteWorkspaceFileRuntimeHost\b/,
+        regex: /\bRemoteWorkspaceFileRuntimeHost\b/,
         message: 'missing remote workspace file runtime host contract',
       },
       {
@@ -3443,11 +3500,11 @@ const requiredContentRules = [
         message: 'missing remote answer response assembly helper',
       },
       {
-        regex: /\bpub struct RemoteWorkspaceFacts\b/,
+        regex: /\bRemoteWorkspaceFacts\b/,
         message: 'missing remote workspace response facts DTO',
       },
       {
-        regex: /\bpub struct RemoteSessionMetadata\b/,
+        regex: /\bRemoteSessionMetadata\b/,
         message: 'missing remote session response metadata DTO',
       },
       {
@@ -6803,6 +6860,21 @@ function runManifestParserSelfTest() {
   if (!runtimeServicesProfile?.forbiddenNonOptionalDeps.includes('tool-runtime')) {
     throw new Error('runtime-services dependency profile must forbid tool runtime implementations');
   }
+  const agentRuntimeRule = lightweightBoundaryRules.find(
+    (rule) => rule.crateName === 'agent-runtime',
+  );
+  if (!agentRuntimeRule?.forbiddenDeps.includes('bitfun-core')) {
+    throw new Error('agent-runtime lightweight boundary must forbid bitfun-core');
+  }
+  if (!agentRuntimeRule?.forbiddenDeps.includes('bitfun-services-integrations')) {
+    throw new Error('agent-runtime lightweight boundary must forbid concrete service integrations');
+  }
+  const agentRuntimeProfile = dependencyProfileRules.find(
+    (rule) => rule.crateName === 'agent-runtime',
+  );
+  if (!agentRuntimeProfile?.forbiddenNonOptionalDeps.includes('tauri')) {
+    throw new Error('agent-runtime dependency profile must forbid product surface dependencies');
+  }
   const agentToolsManifestRule = forbiddenContentUnderRules.find(
     (rule) => rule.path === 'src/crates/agent-tools/src',
   );
@@ -6852,6 +6924,14 @@ function runManifestParserSelfTest() {
         'AgentTurnCancellationPort',
         'RemoteControlStatePort',
         'RuntimeEventSink',
+        'RemoteWorkspaceFacts',
+        'RemoteWorkspaceRuntimeHost',
+        'RemoteWorkspacePort',
+        'RemoteWorkspaceFileRuntimeHost',
+        'RemoteProjectionPort',
+        'RemoteInitialSyncRuntimeHost',
+        'remote_workspace_contracts_preserve_workspace_and_session_facts',
+        'remote_projection_contract_preserves_file_chunk_identity',
         'remote_image',
         'DialogTriggerSource',
         'dialog_trigger_source_reuses_agent_submission_source_contract',
@@ -6920,6 +7000,27 @@ function runManifestParserSelfTest() {
         'missing_optional_capability_returns_typed_unsupported_error',
         'capability_availability_reports_optional_service_status_without_side_effects',
         'builder_rejects_port_registered_under_the_wrong_capability',
+        'registered_remote_ports_expose_owner_contract_methods',
+      ],
+    },
+    {
+      path: 'src/crates/agent-runtime/src/scheduler.rs',
+      contracts: [
+        'BackgroundDeliveryFacts',
+        'BackgroundDeliveryAction',
+        'resolve_background_delivery_action',
+        'follow_up_submission_policy',
+        'SubmitAgentSessionFollowUp',
+        'InjectIntoRunningTurn',
+      ],
+    },
+    {
+      path: 'src/crates/agent-runtime/tests/scheduler_contracts.rs',
+      contracts: [
+        'background_delivery_injects_when_session_is_processing',
+        'background_delivery_starts_agent_session_follow_up_when_session_is_not_processing',
+        'background_delivery_follow_up_uses_agent_session_source_semantics',
+        'background_delivery_injection_does_not_expose_follow_up_policy',
       ],
     },
     {

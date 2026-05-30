@@ -86,6 +86,49 @@ PR1 是后续高风险迁移的前置门禁，目标是提供可测试的 typed 
 
 PR1 不迁移任何 concrete service owner，因此预期不会修改产品行为、默认能力集合、权限语义、工具曝光、事件语义、session 生命周期或构建脚本。
 
+### 4.2 PR2 + PR3 合并实施计划
+
+本次 PR 合并推进 PR2 和 PR3，但仍按两个 owner 主题顺序实施，避免把 remote provider、agent scheduler
+和产品 surface 行为混在同一个迁移步骤中。若实现过程中发现必须改变用户可见行为、默认 feature、权限语义或构建形态，
+应暂停并在 PR 描述中单独说明设计偏移原因、影响范围和回滚边界。
+
+#### 4.2.1 PR2：Service / Agent Remote Runtime Owner
+
+目标是在不搬动 concrete SSH / relay / terminal / session restore 实现的前提下，把 remote workspace 与 projection
+的稳定接口归入 `bitfun-runtime-ports`，并保留 `bitfun-services-integrations::remote_connect` 旧路径 re-export。
+
+1. 在 `bitfun-runtime-ports` 中承接 remote workspace facts、remote session metadata、remote workspace file projection DTO
+   和 `RemoteWorkspacePort` / `RemoteProjectionPort` owner trait。
+2. 在 `bitfun-services-integrations::remote_connect` 中删除重复 owner 定义，改为 re-export 新 owner crate 的类型和 trait，
+   保持现有调用方 import 路径兼容。
+3. 让 core 侧 remote workspace / file adapter 继续作为具体 provider，实现新的 stable port；workspace-root、
+   persistence、session restore、terminal pre-warm 和 scheduler submit 仍保留在 `bitfun-core`。
+4. 补充 focused tests，覆盖 remote workspace / file projection 类型通过旧路径与新 owner 路径保持等价，以及
+   `RuntimeServicesBuilder` 能注册带方法的 remote workspace / projection provider。
+5. 更新 boundary check，防止 remote owner contract 回流到 `bitfun-core` 或 concrete service crate。
+
+#### 4.2.2 PR3：Agent Runtime SDK Owner
+
+目标是创建有真实 owner 的 `bitfun-agent-runtime`，只迁移 scheduler/background delivery 这类可纯函数保护的运行时决策，
+不外移 concrete scheduler 生命周期。
+
+1. 新建 `bitfun-agent-runtime` crate，并加入 workspace；该 crate 只依赖 `bitfun-runtime-ports` 等稳定契约，不依赖
+   `bitfun-core`、Tauri、CLI、ACP、Web UI 或 concrete service crate。
+2. 先把 background delivery 的状态决策抽为 `bitfun-agent-runtime` 的纯 contract：Processing 注入当前运行 turn，
+   Missing / Idle / Error 提交 agent-session follow-up turn。
+3. core scheduler 仅调用该决策结果，继续负责 injection buffer、submit、turn id、metadata 和实际生命周期执行。
+4. 补充 `bitfun-agent-runtime` focused tests 与 core scheduler 兼容验证，确保 background reply、cancel suppression、
+   queue/preempt 和 DeepResearch/post-turn 相关语义没有漂移。
+5. 更新 `AGENTS.md` / `AGENTS-CN.md` 和设计文档中的 crate 状态，描述 `bitfun-agent-runtime` 已承接的范围以及仍未外移的
+   scheduler lifecycle、session manager、prompt loop 和 subagent registry。
+
+#### 4.2.3 本次 PR 验收
+
+- 不修改产品命令、UI、默认 feature、release / fast build 脚本或产品能力集合。
+- 不新增反向依赖、无类型 service locator、全局 mutable registry 或重复 runtime materialization。
+- 必须通过 remote / runtime owner focused tests、boundary check、repo hygiene 和最小 Rust 编译验证。
+- 提交前从第三方视角审查功能偏移、性能劣化、跨产品形态遗漏、文档与代码不一致，并修复发现的问题。
+
 ## 5. 每类 PR 的保护重点
 
 ### 5.1 Service / Agent Remote Runtime Owner

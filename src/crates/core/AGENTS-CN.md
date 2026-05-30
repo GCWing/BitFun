@@ -43,9 +43,11 @@ SessionManager → Session → DialogTurn → ModelRound
   `bitfun-product-domains`；bundled asset include、filesystem writes、marker IO、
   customization metadata IO、recompile orchestration、worker process runtime 和
   host dispatch execution 仍由 core 拥有，直到有评审过的迁移和等价测试。
-- Remote-connect wire/tracker/dialog orchestration 与 portable file/image contract
-  可以放在 `bitfun-services-integrations`；workspace-root source selection、
-  response wrapping、concrete scheduler/session restore、terminal pre-warm adapter
+- Remote-connect wire/tracker/dialog orchestration 与 response wrapping 可以放在
+  `bitfun-services-integrations`；remote workspace facts、session metadata、
+  file projection DTO 和 remote workspace/projection host trait 属于
+  `bitfun-runtime-ports`，`remote_connect` 只保留旧路径 re-export。workspace-root
+  source selection、concrete scheduler/session restore、terminal pre-warm adapter
   和 product execution 仍由 core 拥有，直到有评审过的迁移和等价测试。
 - 不要在没有小型 port/interface 边界的情况下新增 `service` 到 `agentic` 的跨层引用。
 - 不要在 core 拆解中把平台专属逻辑、构建脚本行为或产品能力选择下沉到 shared core。

@@ -8,7 +8,8 @@
 use bitfun_runtime_ports::{
     AgentSessionCreateRequest, AgentSubmissionPort, AgentSubmissionSource,
     AgentTurnCancellationPort, AgentTurnCancellationRequest, RemoteControlStatePort,
-    RemoteControlStateRequest, RemoteControlStateSnapshot,
+    RemoteControlStateRequest, RemoteControlStateSnapshot, RuntimeServiceCapability,
+    RuntimeServicePort,
 };
 use bitfun_services_integrations::remote_connect::{
     build_remote_chat_messages, build_remote_model_catalog,
@@ -713,6 +714,18 @@ pub(crate) struct CoreRemoteWorkspaceRuntimeHost;
 impl CoreRemoteWorkspaceRuntimeHost {
     pub(crate) fn new() -> Self {
         Self
+    }
+}
+
+impl RuntimeServicePort for CoreRemoteWorkspaceFileRuntimeHost {
+    fn capability(&self) -> RuntimeServiceCapability {
+        RuntimeServiceCapability::RemoteProjection
+    }
+}
+
+impl RuntimeServicePort for CoreRemoteWorkspaceRuntimeHost {
+    fn capability(&self) -> RuntimeServiceCapability {
+        RuntimeServiceCapability::RemoteWorkspace
     }
 }
 

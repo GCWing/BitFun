@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use bitfun_runtime_ports::FileSystemPort;
-use bitfun_runtime_ports::RuntimeServiceCapability;
+use bitfun_runtime_ports::{RemoteWorkspaceKind, RuntimeServiceCapability};
 use bitfun_runtime_services::test_support::{FakeRuntimePort, FakeRuntimeServicesProvider};
 use bitfun_runtime_services::{
     CapabilityAvailability, RuntimeServicesBuilder, RuntimeServicesError, RuntimeServicesProvider,
@@ -97,4 +97,31 @@ fn builder_rejects_port_registered_under_the_wrong_capability() {
             actual: RuntimeServiceCapability::Git,
         }
     );
+}
+
+#[tokio::test]
+async fn registered_remote_ports_expose_owner_contract_methods() {
+    let services = FakeRuntimeServicesProvider::with_all_required()
+        .with_all_remote()
+        .build_services()
+        .expect("remote fake services should build");
+
+    let workspace = services
+        .remote_workspace
+        .as_ref()
+        .expect("remote workspace port")
+        .current_workspace()
+        .await
+        .expect("fake remote workspace facts");
+    let projection_root = services
+        .remote_projection
+        .as_ref()
+        .expect("remote projection port")
+        .resolve_remote_file_workspace_root(Some("session_1"))
+        .await
+        .expect("fake remote projection root");
+
+    assert_eq!(workspace.kind, RemoteWorkspaceKind::Remote);
+    assert_eq!(workspace.path, "/remote/project");
+    assert_eq!(projection_root.to_string_lossy(), "/remote/project");
 }

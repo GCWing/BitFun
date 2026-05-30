@@ -81,6 +81,9 @@ bitfun-ai-adapters = { path = "../ai-adapters" }
 # Lightweight agent stream processing
 bitfun-agent-stream = { path = "../agent-stream" }
 
+# Agent runtime owner contracts
+bitfun-agent-runtime = { path = "../agent-runtime" }
+
 # Agent tool contracts
 bitfun-agent-tools = { path = "../agent-tools" }
 

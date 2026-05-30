@@ -92,14 +92,14 @@ SessionManager → Session → DialogTurn → ModelRound
   bundled asset includes, filesystem writes, marker IO, customization metadata
   IO, source reads, compile orchestration, worker process runtime, and host dispatch
   execution core-owned until a reviewed migration proves equivalence.
-- Remote-connect wire/tracker/dialog and cancel orchestration plus portable
-  file/image contracts, remote file command/response assembly,
-  dialog/cancel/interaction response helpers, and workspace/session response
-  assembly helpers may live in `bitfun-services-integrations`; keep
-  workspace-root source selection, persistence/workspace service reads,
-  concrete scheduler/session restore, terminal pre-warm adapters, and product
-  execution core-owned until a reviewed migration proves equivalence. Core
-  remote dialog/cancel/file/tracker adapters, remote model catalog/session-model
+- Remote-connect wire/tracker/dialog and cancel orchestration plus response
+  assembly helpers may live in `bitfun-services-integrations`; remote workspace
+  facts, session metadata, file projection DTOs, and remote workspace/projection
+  host traits belong in `bitfun-runtime-ports` with old-path re-exports from
+  `remote_connect`. Keep workspace-root source selection, persistence/workspace
+  service reads, concrete scheduler/session restore, terminal pre-warm adapters,
+  and product execution core-owned until a reviewed migration proves equivalence.
+  Core remote dialog/cancel/file/tracker adapters, remote model catalog/session-model
   selection adapters, remote chat history persistence/message conversion
   adapters, and service/agent runtime bindings are centralized in
   `src/crates/core/src/service_agent_runtime.rs`.

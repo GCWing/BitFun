@@ -2,8 +2,10 @@ use std::sync::Arc;
 
 use bitfun_runtime_ports::{
     ClockPort, FileSystemPort, GitPort, McpCatalogPort, NetworkPort, PermissionDecision,
-    PermissionPort, PermissionRequest, PortResult, RemoteCapabilityPort, RemoteConnectionPort,
-    RemoteProjectionPort, RemoteWorkspacePort, RuntimeEventEnvelope, RuntimeEventSink,
+    PermissionPort, PermissionRequest, PortResult, RemoteAssistantWorkspaceFacts,
+    RemoteCapabilityPort, RemoteConnectionPort, RemoteProjectionPort, RemoteRecentWorkspaceFacts,
+    RemoteWorkspaceFacts, RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind, RemoteWorkspacePort,
+    RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate, RuntimeEventEnvelope, RuntimeEventSink,
     RuntimeServiceCapability, RuntimeServicePort, SessionStorePort, TerminalPort, WorkspacePort,
 };
 
@@ -36,9 +38,52 @@ impl NetworkPort for FakeRuntimePort {}
 impl GitPort for FakeRuntimePort {}
 impl McpCatalogPort for FakeRuntimePort {}
 impl RemoteConnectionPort for FakeRuntimePort {}
-impl RemoteWorkspacePort for FakeRuntimePort {}
-impl RemoteProjectionPort for FakeRuntimePort {}
 impl RemoteCapabilityPort for FakeRuntimePort {}
+
+#[async_trait::async_trait]
+impl RemoteWorkspaceRuntimeHost for FakeRuntimePort {
+    async fn current_workspace(&self) -> Option<RemoteWorkspaceFacts> {
+        Some(RemoteWorkspaceFacts {
+            path: "/remote/project".to_string(),
+            name: "project".to_string(),
+            git_branch: Some("main".to_string()),
+            kind: RemoteWorkspaceKind::Remote,
+            assistant_id: None,
+        })
+    }
+
+    async fn recent_workspaces(&self) -> Vec<RemoteRecentWorkspaceFacts> {
+        Vec::new()
+    }
+
+    async fn open_workspace(&self, path: &str) -> Result<RemoteWorkspaceUpdate, String> {
+        Ok(RemoteWorkspaceUpdate {
+            path: path.to_string(),
+            name: "project".to_string(),
+        })
+    }
+
+    async fn assistant_workspaces(&self) -> Vec<RemoteAssistantWorkspaceFacts> {
+        Vec::new()
+    }
+
+    async fn open_assistant_workspace(&self, path: &str) -> Result<RemoteWorkspaceUpdate, String> {
+        Ok(RemoteWorkspaceUpdate {
+            path: path.to_string(),
+            name: "assistant".to_string(),
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl RemoteWorkspaceFileRuntimeHost for FakeRuntimePort {
+    async fn resolve_remote_file_workspace_root(
+        &self,
+        _session_id: Option<&str>,
+    ) -> Option<std::path::PathBuf> {
+        Some(std::path::PathBuf::from("/remote/project"))
+    }
+}
 
 #[async_trait::async_trait]
 impl PermissionPort for FakeRuntimePort {

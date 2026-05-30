@@ -1,10 +1,10 @@
 # Agent Runtime SDK 与 Runtime Services 设计
 
 本文是 [`core-decomposition.md`](core-decomposition.md) 的开发设计文档，描述目标模块、
-接口、crate 内部结构和迁移保护。`bitfun-runtime-services` 已建立 PR1 基础壳层，
-当前只承载 typed service bundle、builder、provider registry、capability availability 和
-fake provider；`bitfun-agent-runtime`、`bitfun-harness` 仍是目标 crate，在实际创建前不得把它们当作
-已完成事实。
+接口、crate 内部结构和迁移保护。`bitfun-runtime-services` 已建立 typed service bundle、
+builder、provider registry、capability availability 和 fake provider 基础；`bitfun-agent-runtime`
+已创建并只承接可独立构建的 scheduler/background delivery 纯决策。`bitfun-harness` 仍是目标 crate；
+未迁移的 session manager、prompt loop、subagent registry 和 concrete scheduler lifecycle 不得被描述为已完成。
 
 ## 1. 设计目标与边界
 
@@ -24,7 +24,7 @@ bitfun-runtime-ports
 bitfun-runtime-services      # PR1 基础壳层
 bitfun-agent-tools
 tool-runtime
-bitfun-agent-runtime         # 目标
+bitfun-agent-runtime         # 已创建，当前仅承接 scheduler/background delivery 决策
 bitfun-harness               # 目标
 bitfun-services-core
 bitfun-services-integrations
@@ -91,7 +91,7 @@ bitfun-runtime-services
 
 - 只有当 owner 边界、旧路径兼容、focused tests、依赖收益和 boundary check 都能同时落地时，才创建新的目标 crate。
 - `bitfun-runtime-services` 已按该准入建立基础壳层；继续扩展时仍必须保持 typed builder、本地 service、remote service 和 fake provider 三类注入路径可测试。
-- `bitfun-agent-runtime` 的创建前提是 session / turn / scheduler / prompt loop 中至少一个 owner 可以脱离 `bitfun-core` 构建，并有旧路径 facade。
+- `bitfun-agent-runtime` 已通过 scheduler/background delivery 纯决策满足创建准入；继续扩展时仍必须保持旧路径 facade、focused tests 和 boundary check。
 - `bitfun-harness` 的创建前提是至少两个 workflow 可以通过 provider contract 注册，例如 Deep Review 与 MiniApp / DeepResearch。
 - 若目标 crate 只能承接单个 helper 或只能通过 `bitfun-core` 才能测试，继续留在迁移期 facade，不提前拆 crate。
 
@@ -235,7 +235,15 @@ Remote ports 的边界：
 
 ### 3.1 Agent Runtime SDK
 
-目标 crate：`bitfun-agent-runtime`。
+当前 crate：`bitfun-agent-runtime`。
+
+当前已承接范围：
+
+- background delivery 状态决策：Processing 注入当前运行 turn；Missing / Idle / Error 提交 agent-session follow-up turn。
+
+仍留在 `bitfun-core` 的范围：
+
+- concrete scheduler 生命周期、session manager、turn id 生成、injection buffer、submit 执行、prompt loop、subagent registry 和 post-turn hook。
 
 职责：
 

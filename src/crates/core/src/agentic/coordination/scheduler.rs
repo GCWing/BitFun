@@ -32,15 +32,18 @@ use uuid::Uuid;
 
 const MAX_QUEUE_DEPTH: usize = 20;
 
-pub use bitfun_runtime_ports::{
-    AgentSessionReplyRoute, DialogQueuePriority, DialogSteerOutcome, DialogSubmissionPolicy,
-    DialogSubmitOutcome,
+use bitfun_agent_runtime::scheduler::{
+    resolve_background_delivery_action, BackgroundDeliveryAction, BackgroundDeliveryFacts,
 };
 use bitfun_runtime_ports::{
-    DialogSessionStateFact, DialogSubmitQueueAction, DialogSubmitQueueFacts, DialogTurnOutcomeKind,
     resolve_dialog_submit_queue_action,
     should_skip_agent_session_reply as should_skip_agent_session_reply_contract,
     should_suppress_agent_session_cancelled_reply as should_suppress_agent_session_cancelled_reply_contract,
+    DialogSessionStateFact, DialogSubmitQueueAction, DialogSubmitQueueFacts, DialogTurnOutcomeKind,
+};
+pub use bitfun_runtime_ports::{
+    AgentSessionReplyRoute, DialogQueuePriority, DialogSteerOutcome, DialogSubmissionPolicy,
+    DialogSubmitOutcome,
 };
 
 #[derive(Debug, Clone)]
@@ -256,8 +259,10 @@ impl DialogScheduler {
             .get_session(&session_id)
             .map(|s| s.state.clone());
 
-        match state {
-            Some(SessionState::Processing { .. }) => {
+        match resolve_background_delivery_action(BackgroundDeliveryFacts {
+            session_state: Self::session_state_fact(state.as_ref()),
+        }) {
+            BackgroundDeliveryAction::InjectIntoRunningTurn => {
                 let injection_id = Uuid::new_v4().to_string();
                 self.round_injection_buffer.push(
                     &session_id,
@@ -272,7 +277,10 @@ impl DialogScheduler {
                 );
                 Ok(())
             }
-            _ => self
+            BackgroundDeliveryAction::SubmitAgentSessionFollowUp {
+                queue_priority,
+                skip_tool_confirmation,
+            } => self
                 .submit(
                     session_id,
                     content,
@@ -280,7 +288,11 @@ impl DialogScheduler {
                     None,
                     agent_type,
                     workspace_path,
-                    DialogSubmissionPolicy::for_source(DialogTriggerSource::AgentSession),
+                    DialogSubmissionPolicy::new(
+                        DialogTriggerSource::AgentSession,
+                        queue_priority,
+                        skip_tool_confirmation,
+                    ),
                     None,
                     user_message_metadata,
                     None,
@@ -998,10 +1010,8 @@ mod tests {
         assert!(
             DialogScheduler::goal_verification_observation_text(&cancelled).contains("cancelled")
         );
-        assert!(
-            DialogScheduler::goal_verification_observation_text(&failed)
-                .contains("network offline")
-        );
+        assert!(DialogScheduler::goal_verification_observation_text(&failed)
+            .contains("network offline"));
     }
 
     #[test]
