@@ -5,7 +5,7 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { DiffEditor } from '@/tools/editor';
+import { DiffEditor } from '@/tools/editor/components/DiffEditor';
 import { X } from 'lucide-react';
 import { createLogger } from '@/shared/utils/logger';
 import { globalEventBus } from '@/infrastructure/event-bus';

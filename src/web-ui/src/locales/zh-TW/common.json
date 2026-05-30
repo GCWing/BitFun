@@ -904,7 +904,8 @@
     "panelView": "面板視圖"
   },
   "loading": {
-    "scenes": "正在加載場景"
+    "scenes": "正在加載場景",
+    "workspace": "正在加載工作區..."
   },
   "welcomeScene": {
     "tabLabel": "歡迎使用",
