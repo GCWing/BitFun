@@ -384,6 +384,138 @@ test('i18n audit can emit a machine-readable governance report', { concurrency: 
   }
 });
 
+test('mobile-web uses shared terms for stable shared concept labels', { concurrency: false }, () => {
+  const reportPath = 'scripts/.tmp-i18n-mobile-shared-terms-report.json';
+  const absoluteReportPath = path.join(root, reportPath);
+  fs.rmSync(absoluteReportPath, { force: true });
+
+  try {
+    const result = runI18nAudit(['--report-json', reportPath]);
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+
+    const report = readJson(reportPath);
+    const migratedSharedKeys = new Set([
+      'product.remote',
+      'features.workspace',
+      'agents.claw',
+      'agents.cowork',
+      'tools.edit',
+      'tools.explore',
+      'tools.read',
+      'tools.todo',
+      'tools.write',
+    ]);
+    const mobileDuplicates = report.sharedTermDuplicates
+      .filter((entry) => entry.surface === 'mobile-web' && migratedSharedKeys.has(entry.sharedKey))
+      .map((entry) => `${entry.sharedKey}:${entry.key}:${entry.locale}`)
+      .sort();
+    const legacyMobileKeys = [
+      'common.appName',
+      'sessions.workspace',
+      'sessions.coworkSession',
+      'sessions.agentClaw',
+      'workspace.title',
+      'tools.edit',
+      'tools.explore',
+      'tools.read',
+      'tools.todo',
+      'tools.write',
+    ];
+    const mobileSourceFiles = listFiles(path.join(root, 'src', 'mobile-web', 'src'), (file) => (
+      /\.(?:ts|tsx)$/.test(file) && !file.endsWith(`${path.sep}i18n${path.sep}messages.ts`)
+    ));
+    const legacyReferences = mobileSourceFiles.flatMap((file) => {
+      const source = fs.readFileSync(file, 'utf8');
+      return legacyMobileKeys
+        .filter((key) => source.includes(`'${key}'`) || source.includes(`"${key}"`))
+        .map((key) => `${path.relative(root, file)}:${key}`);
+    }).sort();
+
+    assert.deepEqual(
+      mobileDuplicates,
+      [],
+      'mobile-web should read migrated stable labels from shared terms instead of copying values',
+    );
+    assert.deepEqual(
+      legacyReferences,
+      [],
+      'mobile-web source should not call removed local keys for migrated shared terms',
+    );
+  } finally {
+    fs.rmSync(absoluteReportPath, { force: true });
+  }
+});
+
+test('web-ui uses shared terms for stable navigation and feature labels', { concurrency: false }, () => {
+  const reportPath = 'scripts/.tmp-i18n-web-ui-shared-terms-report.json';
+  const absoluteReportPath = path.join(root, reportPath);
+  fs.rmSync(absoluteReportPath, { force: true });
+
+  try {
+    const result = runI18nAudit(['--report-json', reportPath]);
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+
+    const report = readJson(reportPath);
+    const migratedResourceKeys = new Set([
+      'common:app.name',
+      'common:header.remoteConnect',
+      'common:nav.sections.workspace',
+      'common:scenes.settings',
+      'common:tabs.settings',
+      'common:remoteConnect.title',
+      'flow-chat:layout.noPanels',
+      'flow-chat:toolbar.settings',
+      'flow-chat:toolCards.sessionControl.workspace',
+      'flow-chat:toolCards.sessionMessage.workspace',
+      'flow-chat:welcome.workspace',
+      'settings:title',
+      'settings:configCenter.title',
+      'settings:workspace.title',
+      'settings/lsp:tabs.settings',
+    ]);
+    const webUiDuplicates = report.sharedTermDuplicates
+      .filter((entry) => entry.surface === 'web-ui' && migratedResourceKeys.has(entry.resourceKey))
+      .map((entry) => `${entry.sharedKey}:${entry.resourceKey}:${entry.locale}`)
+      .sort();
+    const legacyWebUiKeys = [
+      'header.remoteConnect',
+      'remoteConnect.title',
+      'nav.sections.workspace',
+      'scenes.settings',
+      'tabs.settings',
+      'layout.noPanels',
+      'toolbar.settings',
+      'toolCards.sessionControl.workspace',
+      'toolCards.sessionMessage.workspace',
+      'welcome.workspace',
+      'configCenter.title',
+      'workspace.title',
+    ];
+    const webUiSourceFiles = listFiles(path.join(root, 'src', 'web-ui', 'src'), (file) => (
+      /\.(?:ts|tsx)$/.test(file)
+    ));
+    const legacyReferences = webUiSourceFiles.flatMap((file) => {
+      const source = fs.readFileSync(file, 'utf8');
+      return legacyWebUiKeys
+        .filter((key) => source.includes(`'${key}'`) || source.includes(`"${key}"`))
+        .map((key) => `${path.relative(root, file)}:${key}`);
+    }).sort();
+
+    assert.deepEqual(
+      webUiDuplicates,
+      [],
+      'web-ui should resolve migrated stable labels from shared terms instead of copied values',
+    );
+    assert.deepEqual(
+      legacyReferences,
+      [],
+      'web-ui source should not call removed local keys for migrated shared terms',
+    );
+  } finally {
+    fs.rmSync(absoluteReportPath, { force: true });
+  }
+});
+
 test('i18n audit enforces governance candidate baselines', { concurrency: false }, () => {
   const baselinePath = 'scripts/i18n-governance-baseline.json';
   const baseline = readJson(baselinePath);

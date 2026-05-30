@@ -73,12 +73,6 @@
       }
     },
     {
-      "path": "src/web-ui/src/app/scenes/settings/SettingsNav.tsx",
-      "literalDefaultValues": {
-        "settings:title": 1
-      }
-    },
-    {
       "path": "src/web-ui/src/flow_chat/components/btw/BtwSessionPanel.tsx",
       "literalDefaultValues": {
         "flow-chat:childSession.stoppingReview": 2,

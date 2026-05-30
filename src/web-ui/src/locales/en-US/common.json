@@ -1,6 +1,5 @@
 {
   "app": {
-    "name": "BitFun",
     "version": "Version",
     "loading": "Loading...",
     "welcome": "Welcome to BitFun"
@@ -52,7 +51,6 @@
     "showChatPanel": "Show Chat Panel",
     "hideChatPanel": "Hide Chat Panel",
     "switchToToolbar": "Floating window mode",
-    "remoteConnect": "Remote Control",
     "modeSwitchAriaLabel": "View mode switch",
     "modeCowork": "Cowork",
     "modeCoder": "Coder",
@@ -95,7 +93,6 @@
       "addWorkspace": "Add workspace"
     },
     "sections": {
-      "workspace": "Workspace",
       "extensions": "Customize",
       "shell": "Shell",
       "assistantSessions": "Assistant Sessions"
@@ -174,7 +171,7 @@
       "delete": "Delete",
       "confirmEdit": "Confirm",
       "cancelEdit": "Cancel",
-      "loading": "Loading sessions...",
+      "loading": "Loading...",
       "showMore": "{{count}} more sessions",
       "showAll": "{{count}} more (show all)",
       "showLess": "Show less",
@@ -210,7 +207,6 @@
       "archivedSessions": "Archived Sessions",
       "noArchivedSessions": "No archived sessions",
       "archivedSessionsDescription": "View, restore, or permanently delete archived sessions.",
-      "loading": "Loading...",
       "untitled": "Untitled Session",
       "restore": "Restore",
       "archivedAll": "{{count}} sessions archived",
@@ -442,7 +438,6 @@
     "errorCreateFailed": "Failed to create project"
   },
   "remoteConnect": {
-    "title": "Remote Control",
     "tabLan": "LAN",
     "tabBitfunServer": "BitFun Server",
     "tabNgrok": "NAT Traversal",
@@ -864,7 +859,6 @@
     "fileBrowser": "File Browser",
     "editor": "Editor",
     "markdown": "Markdown",
-    "settings": "Settings",
     "settingsWithSection": "Settings - {{section}}"
   },
   "welcome": {
@@ -898,7 +892,6 @@
     "aiAgent": "Session",
     "terminal": "Terminal",
     "git": "Git",
-    "settings": "Settings",
     "fileViewer": "File Viewer",
     "projectContext": "Profile",
     "agents": "Agents",

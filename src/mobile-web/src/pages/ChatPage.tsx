@@ -619,20 +619,20 @@ const ThinkingBlock: React.FC<{
 // ─── Tool Card ──────────────────────────────────────────────────────────────
 
 const TOOL_TYPE_MAP: Record<string, string> = {
-  explore: 'tools.explore',
-  read_file: 'tools.read',
-  write_file: 'tools.write',
+  explore: 'shared.tools.explore',
+  read_file: 'shared.tools.read',
+  write_file: 'shared.tools.write',
   list_directory: 'tools.ls',
   bash: 'tools.shell',
   glob: 'tools.glob',
   grep: 'tools.grep',
-  create_file: 'tools.write',
+  create_file: 'shared.tools.write',
   delete_file: 'tools.delete',
   Task: 'tools.task',
   search: 'tools.search',
-  edit_file: 'tools.edit',
+  edit_file: 'shared.tools.edit',
   web_search: 'tools.web',
-  TodoWrite: 'tools.todo',
+  TodoWrite: 'shared.tools.todo',
 };
 
 // ─── TodoWrite card ─────────────────────────────────────────────────────────

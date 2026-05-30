@@ -1,6 +1,5 @@
 {
   "app": {
-    "name": "BitFun",
     "version": "版本",
     "loading": "加载中...",
     "welcome": "欢迎使用 BitFun"
@@ -52,7 +51,6 @@
     "showChatPanel": "显示聊天面板",
     "hideChatPanel": "隐藏聊天面板",
     "switchToToolbar": "悬浮窗模式",
-    "remoteConnect": "远程控制",
     "modeSwitchAriaLabel": "视图模式切换",
     "modeCowork": "Cowork",
     "modeCoder": "Coder",
@@ -95,7 +93,6 @@
       "addWorkspace": "添加工作区"
     },
     "sections": {
-      "workspace": "工作区",
       "extensions": "定制",
       "shell": "Shell",
       "assistantSessions": "助理会话"
@@ -174,7 +171,7 @@
       "delete": "删除",
       "confirmEdit": "确认",
       "cancelEdit": "取消",
-      "loading": "正在加载会话...",
+      "loading": "加载中...",
       "showMore": "还有 {{count}} 个会话",
       "showAll": "还有 {{count}} 个（展开全部）",
       "showLess": "收起",
@@ -210,7 +207,6 @@
       "archivedSessions": "已归档会话",
       "noArchivedSessions": "暂无已归档会话",
       "archivedSessionsDescription": "查看、恢复或永久删除已归档的会话。",
-      "loading": "加载中...",
       "untitled": "未命名会话",
       "restore": "恢复",
       "archivedAll": "已归档 {{count}} 个会话",
@@ -442,7 +438,6 @@
     "errorCreateFailed": "创建工作区失败"
   },
   "remoteConnect": {
-    "title": "远程控制",
     "tabLan": "局域网",
     "tabBitfunServer": "BitFun服务器",
     "tabNgrok": "内网穿透",
@@ -864,7 +859,6 @@
     "fileBrowser": "文件浏览器",
     "editor": "编辑器",
     "markdown": "Markdown",
-    "settings": "设置",
     "settingsWithSection": "设置 - {{section}}"
   },
   "welcome": {
@@ -898,7 +892,6 @@
     "aiAgent": "会话",
     "terminal": "终端",
     "git": "Git",
-    "settings": "设置",
     "fileViewer": "文件查看",
     "projectContext": "项目概况",
     "agents": "智能体",

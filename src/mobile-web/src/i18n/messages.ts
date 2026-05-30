@@ -10,7 +10,6 @@ export const messages: Record<MobileLanguage, MessageTree> = {
   'en-US': {
     shared: SHARED_TERMS_BY_LOCALE['en-US'],
     common: {
-      appName: 'BitFun Remote',
       back: 'Back',
       continue: 'Continue',
       cancel: 'Cancel',
@@ -49,7 +48,6 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       continue: 'Continue',
     },
     sessions: {
-      workspace: 'Workspace',
       switchWorkspace: 'Switch workspace',
       selectWorkspace: 'Select Workspace',
       noWorkspaces: 'No workspaces found',
@@ -64,7 +62,6 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       startRemoteFlow: 'Start a new remote flow',
       codeSession: 'Code Session',
       codeSessionDesc: 'For coding anywhere, anytime.',
-      coworkSession: 'Cowork Session',
       coworkSessionDesc: 'For assisting with everyday work.',
       clawSession: 'Claw Session',
       clawSessionDesc: 'Personal assistant for daily tasks.',
@@ -79,7 +76,6 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       remoteClawSession: 'Remote Claw Session',
       agentCode: 'Code',
       agentCowork: 'Cowork',
-      agentClaw: 'Claw',
       agentDefault: 'Default',
       searchSessions: 'Search sessions...',
       renameSession: 'Rename',
@@ -103,7 +99,6 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       connectionUnreachable: 'Connection lost',
     },
     workspace: {
-      title: 'Workspace',
       loadingInfo: 'Loading workspace info...',
       currentWorkspace: 'Current Workspace',
       unknownProject: 'Unknown Project',
@@ -161,9 +156,6 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       copyFailed: 'Copy failed',
     },
     tools: {
-      explore: 'Explore',
-      read: 'Read',
-      write: 'Write',
       ls: 'LS',
       shell: 'Shell',
       glob: 'Glob',
@@ -171,15 +163,12 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       delete: 'Delete',
       task: 'Task',
       search: 'Search',
-      edit: 'Edit',
       web: 'Web',
-      todo: 'Todo',
     },
   },
   'zh-CN': {
     shared: SHARED_TERMS_BY_LOCALE['zh-CN'],
     common: {
-      appName: 'BitFun Remote',
       back: '返回',
       continue: '继续',
       cancel: '取消',
@@ -218,7 +207,6 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       continue: '继续',
     },
     sessions: {
-      workspace: '工作区',
       switchWorkspace: '切换工作区',
       selectWorkspace: '选择工作区',
       noWorkspaces: '暂无工作区',
@@ -233,7 +221,6 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       startRemoteFlow: '开始一个新的远程流程',
       codeSession: '代码会话',
       codeSessionDesc: '随时随地进行编码。',
-      coworkSession: '协作会话',
       coworkSessionDesc: '处理日常协作与办公任务。',
       clawSession: '助理会话',
       clawSessionDesc: '处理日常任务的个人助手。',
@@ -248,7 +235,6 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       remoteClawSession: '远程助理会话',
       agentCode: 'Code',
       agentCowork: 'Cowork',
-      agentClaw: 'Claw',
       agentDefault: '默认',
       searchSessions: '搜索会话...',
       renameSession: '重命名',
@@ -272,7 +258,6 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       connectionUnreachable: '连接断开',
     },
     workspace: {
-      title: '工作区',
       loadingInfo: '正在加载工作区信息...',
       currentWorkspace: '当前工作区',
       unknownProject: '未知项目',
@@ -330,9 +315,6 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       copyFailed: '复制失败',
     },
     tools: {
-      explore: '探索',
-      read: '读取',
-      write: '写入',
       ls: '列表',
       shell: 'Shell',
       glob: 'Glob',
@@ -340,15 +322,12 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       delete: '删除',
       task: '任务',
       search: '搜索',
-      edit: '编辑',
       web: '网络',
-      todo: '待办',
     },
   },
   'zh-TW': {
     shared: SHARED_TERMS_BY_LOCALE['zh-TW'],
     common: {
-      appName: 'BitFun Remote',
       back: '返回',
       continue: '繼續',
       cancel: '取消',
@@ -387,7 +366,6 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       continue: '繼續',
     },
     sessions: {
-      workspace: '工作區',
       switchWorkspace: '切換工作區',
       selectWorkspace: '選擇工作區',
       noWorkspaces: '暫無工作區',
@@ -402,7 +380,6 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       startRemoteFlow: '開始一個新的遠程流程',
       codeSession: '代碼會話',
       codeSessionDesc: '隨時隨地進行編碼。',
-      coworkSession: '協作會話',
       coworkSessionDesc: '處理日常協作與辦公任務。',
       clawSession: '助理會話',
       clawSessionDesc: '處理日常任務的個人助手。',
@@ -417,7 +394,6 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       remoteClawSession: '遠程助理會話',
       agentCode: 'Code',
       agentCowork: 'Cowork',
-      agentClaw: 'Claw',
       agentDefault: '默認',
       searchSessions: '搜尋會話...',
       renameSession: '重新命名',
@@ -441,7 +417,6 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       connectionUnreachable: '連接斷開',
     },
     workspace: {
-      title: '工作區',
       loadingInfo: '正在加載工作區信息...',
       currentWorkspace: '當前工作區',
       unknownProject: '未知項目',
@@ -499,9 +474,6 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       copyFailed: '複製失敗',
     },
     tools: {
-      explore: '探索',
-      read: '讀取',
-      write: '寫入',
       ls: '列表',
       shell: 'Shell',
       glob: 'Glob',
@@ -509,9 +481,7 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       delete: '刪除',
       task: '任務',
       search: '搜索',
-      edit: '編輯',
       web: '網絡',
-      todo: '待辦',
     },
   }
 };

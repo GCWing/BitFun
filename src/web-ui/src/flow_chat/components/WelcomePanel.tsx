@@ -228,7 +228,7 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
                         title={currentWorkspace?.rootPath}
                       >
                         <FolderOpen size={13} className="welcome-panel__inline-icon" />
-                        {currentWorkspace?.name || t('welcome.workspace')}
+                        {currentWorkspace?.name || t('shared:features.workspace')}
                         <ChevronDown
                           size={11}
                           className={`welcome-panel__inline-chevron${workspaceDropdownOpen ? ' welcome-panel__inline-chevron--open' : ''}`}

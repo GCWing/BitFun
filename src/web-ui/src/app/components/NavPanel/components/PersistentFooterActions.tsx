@@ -191,7 +191,7 @@ const PersistentFooterActions: React.FC = () => {
                       onClick={handleRemoteConnect}
                     >
                       <Smartphone size={14} />
-                      <span>{t('header.remoteConnect')}</span>
+                      <span>{t('shared:features.remoteControl')}</span>
                     </button>
                   </Tooltip>
                   <div className="bitfun-nav-panel__footer-menu-divider" />
@@ -221,7 +221,7 @@ const PersistentFooterActions: React.FC = () => {
                     onClick={handleOpenSettings}
                   >
                     <Settings size={14} />
-                    <span>{t('tabs.settings')}</span>
+                    <span>{t('shared:features.settings')}</span>
                   </button>
                   <button
                     type="button"

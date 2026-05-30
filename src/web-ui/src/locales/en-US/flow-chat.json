@@ -16,7 +16,6 @@
     "releaseToAdd": "Release to add to this column"
   },
   "layout": {
-    "noPanels": "BitFun",
     "noPanelsHint": "Use the bottom bar to toggle panels or press <kbd>Ctrl+\\</kbd> <kbd>Ctrl+]</kbd> to expand panels",
     "chatHiddenTitle": "Chat is hidden",
     "chatHiddenDesc": "Use the Chat toggle in the top-right to show it again.",
@@ -443,7 +442,6 @@
   "toolbar": {
     "newSession": "New Session",
     "history": "History",
-    "settings": "Settings",
     "export": "Export Chat",
     "clear": "Clear Chat",
     "fullscreen": "Fullscreen",
@@ -1401,7 +1399,6 @@
       "listingSessions": "Listing sessions",
       "listedSessions": "Found {{count}} sessions",
       "actionFailed": "Session operation failed",
-      "workspace": "Workspace",
       "sessionId": "Session ID",
       "sessionName": "Session name",
       "agentType": "Agent type",
@@ -1423,7 +1420,6 @@
       "messageAccepted": "Message accepted for {{session}}",
       "sendFailed": "Failed to message {{session}}",
       "targetSession": "Target session",
-      "workspace": "Workspace",
       "agentType": "Agent type",
       "message": "Message"
     },
@@ -1782,7 +1778,6 @@
     "defaultAction2Command": "Continue previous work",
     "defaultAction3": "Start a new feature",
     "defaultAction3Command": "Start a new feature",
-    "workspace": "Workspace",
     "noWorkspace": "No workspace open",
     "openOtherProject": "Open other project...",
     "noWorkspaceHint": "No project selected yet",
