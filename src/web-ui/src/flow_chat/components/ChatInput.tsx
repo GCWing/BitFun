@@ -2544,7 +2544,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       e.preventDefault();
       void handleCancelCurrentTask();
     }
-  }, [handleSendOrCancel, submitBtwFromInput, submitGoalFromInput, derivedState, handleCancelCurrentTask, slashCommandState, getFilteredIncrementalModes, getFilteredActions, getSlashPickerItems, selectSlashCommandMode, selectSlashCommandAction, selectSlashPromptCommand, canSwitchModes, historyIndex, inputHistory, savedDraft, inputState.value, currentSessionId, isBtwSession, showTargetSwitcher, setInputTarget, t]);
+  }, [handleSendOrCancel, submitBtwFromInput, submitGoalFromInput, derivedState, handleCancelCurrentTask, slashCommandState, getFilteredIncrementalModes, getFilteredActions, getSlashPickerItems, selectSlashCommandMode, selectSlashCommandAction, selectSlashAcpCommand, selectSlashPromptCommand, canSwitchModes, historyIndex, inputHistory, savedDraft, inputState.value, currentSessionId, isBtwSession, showTargetSwitcher, setInputTarget, t]);
 
   const handleImeCompositionStart = useCallback(() => {
     isImeComposingRef.current = true;
