@@ -156,6 +156,21 @@ pnpm run desktop:dev
 pnpm run desktop:build
 ```
 
+**Harbor 兼容 CLI 二进制：**
+
+用于 Harbor 评测时，构建 static/musl 版 `bitfun-cli`，同一个二进制可以在
+Ubuntu/Debian 和 Alpine 任务镜像中运行：
+
+```bash
+pnpm run harbor:cli:musl
+```
+
+将生成的二进制挂载到 Harbor 任务容器的 `/usr/local/bin/bitfun-cli`：
+
+```text
+target/x86_64-unknown-linux-musl/release/bitfun-cli
+```
+
 更多详情请参阅[贡献指南](./CONTRIBUTING_CN.md)。
 
 ---

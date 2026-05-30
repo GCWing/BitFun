@@ -152,6 +152,22 @@ pnpm run desktop:dev
 pnpm run desktop:build
 ```
 
+**Harbor-compatible CLI binary:**
+
+For Harbor evaluations, build a static/musl `bitfun-cli` so the same binary can
+run in both Ubuntu/Debian and Alpine task images:
+
+```bash
+pnpm run harbor:cli:musl
+```
+
+Mount the generated binary into Harbor task containers at
+`/usr/local/bin/bitfun-cli`:
+
+```text
+target/x86_64-unknown-linux-musl/release/bitfun-cli
+```
+
 For more details, see the [Contributing guide](./CONTRIBUTING.md).
 
 ---
