@@ -22,7 +22,6 @@ export const ALL_NAMESPACES = [
   'settings',
   'settings/acp-agents',
   'settings/agentic-tools',
-  'settings/agents',
   'settings/ai-features',
   'settings/ai-model',
   'settings/appearance',
