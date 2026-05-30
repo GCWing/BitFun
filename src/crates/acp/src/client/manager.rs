@@ -1119,6 +1119,7 @@ impl AcpClientService {
                         .await?;
                         update_session_context_usage(&mut session, &events);
                         update_session_available_commands(&mut session, &events);
+                        update_session_config_options(&mut session, &events);
                         for event in events {
                             for event in round_tracker.apply(event) {
                                 on_event(event)?;
@@ -2260,6 +2261,21 @@ fn update_session_available_commands(
     };
 
     session.available_commands = commands;
+}
+
+fn update_session_config_options(
+    session: &mut AcpRemoteSession,
+    events: &[AcpClientStreamEvent],
+) {
+    // The agent sends the full set each time, so the latest update wins.
+    let Some(options) = events.iter().rev().find_map(|event| match event {
+        AcpClientStreamEvent::ConfigOptionsUpdated(options) => Some(options.clone()),
+        _ => None,
+    }) else {
+        return;
+    };
+
+    session.config_options = options;
 }
 
 fn protocol_error(error: impl std::fmt::Display) -> BitFunError {

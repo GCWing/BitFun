@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use agent_client_protocol::schema::{
-    ContentBlock, ContentChunk, SessionNotification, SessionUpdate, ToolCall, ToolCallContent,
-    ToolCallStatus, ToolCallUpdate,
+    ContentBlock, ContentChunk, SessionConfigOption, SessionNotification, SessionUpdate, ToolCall,
+    ToolCallContent, ToolCallStatus, ToolCallUpdate,
 };
 use agent_client_protocol::util::MatchDispatch;
 use bitfun_core::util::errors::{BitFunError, BitFunResult};
@@ -27,6 +27,10 @@ pub enum AcpClientStreamEvent {
     /// The agent published (or revised) its execution plan. Replaces the prior
     /// plan in full.
     PlanUpdated(Vec<AcpPlanEntry>),
+    /// The agent updated its session configuration options (full set). Used to
+    /// keep the session's stored options fresh so model/options queries stay
+    /// accurate mid-session.
+    ConfigOptionsUpdated(Vec<SessionConfigOption>),
     Completed,
     Cancelled,
 }
@@ -87,6 +91,7 @@ impl AcpStreamRoundTracker {
             | AcpClientStreamEvent::ContextUsageUpdated(_)
             | AcpClientStreamEvent::AvailableCommandsUpdated(_)
             | AcpClientStreamEvent::PlanUpdated(_)
+            | AcpClientStreamEvent::ConfigOptionsUpdated(_)
             | AcpClientStreamEvent::Completed
             | AcpClientStreamEvent::Cancelled => vec![event],
         }
@@ -147,6 +152,11 @@ pub(super) async fn acp_dispatch_to_stream_events_with_tracker(
                 SessionUpdate::Plan(plan) => {
                     let entries = plan.entries.into_iter().map(AcpPlanEntry::from).collect();
                     events.push(AcpClientStreamEvent::PlanUpdated(entries));
+                }
+                SessionUpdate::ConfigOptionUpdate(update) => {
+                    events.push(AcpClientStreamEvent::ConfigOptionsUpdated(
+                        update.config_options,
+                    ));
                 }
                 _ => {}
             }
@@ -453,6 +463,7 @@ mod tests {
                 AcpClientStreamEvent::ContextUsageUpdated(_) => "usage",
                 AcpClientStreamEvent::AvailableCommandsUpdated(_) => "commands",
                 AcpClientStreamEvent::PlanUpdated(_) => "plan",
+                AcpClientStreamEvent::ConfigOptionsUpdated(_) => "config_options",
                 AcpClientStreamEvent::Completed => "completed",
                 AcpClientStreamEvent::Cancelled => "cancelled",
             })
@@ -559,6 +570,45 @@ mod tests {
                 assert_eq!(entries[1].status, "in_progress");
             }
             other => panic!("expected PlanUpdated, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn exposes_config_option_updates() {
+        use agent_client_protocol::schema::{ConfigOptionUpdate, SessionConfigOption};
+        use agent_client_protocol::JsonRpcMessage;
+
+        let mut tracker = AcpToolCallTracker::new();
+        let notification = SessionNotification::new(
+            "session-1",
+            SessionUpdate::ConfigOptionUpdate(ConfigOptionUpdate::new(vec![
+                SessionConfigOption::select(
+                    "model",
+                    "Model",
+                    "fast",
+                    vec![agent_client_protocol::schema::SessionConfigSelectOption::new(
+                        "fast", "Fast",
+                    )],
+                ),
+            ])),
+        )
+        .to_untyped_message()
+        .expect("notification");
+        let dispatch = agent_client_protocol::Dispatch::Notification(notification);
+
+        let events = tokio::runtime::Runtime::new()
+            .expect("runtime")
+            .block_on(acp_dispatch_to_stream_events_with_tracker(
+                dispatch,
+                &mut tracker,
+            ))
+            .expect("dispatch");
+
+        match events.as_slice() {
+            [AcpClientStreamEvent::ConfigOptionsUpdated(options)] => {
+                assert_eq!(options.len(), 1);
+            }
+            other => panic!("expected ConfigOptionsUpdated, got {other:?}"),
         }
     }
 

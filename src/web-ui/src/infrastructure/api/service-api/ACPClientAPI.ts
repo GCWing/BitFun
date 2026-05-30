@@ -154,6 +154,16 @@ export interface AcpPlanUpdatedEvent {
   entries: AcpPlanEntry[];
 }
 
+/**
+ * Live signal emitted on `agentic://acp-session-options-changed` when the agent
+ * updated its config options mid-session. Consumers should refetch via
+ * `getSessionOptions` to get the fresh combined view.
+ */
+export interface AcpSessionOptionsChangedEvent {
+  sessionId: string;
+  clientId: string;
+}
+
 export interface AcpPermissionOption {
   optionId: string;
   name: string;

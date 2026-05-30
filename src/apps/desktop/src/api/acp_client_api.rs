@@ -406,6 +406,21 @@ pub async fn start_acp_dialog_turn(
                                     bitfun_core::util::errors::BitFunError::service(e.to_string())
                                 })?;
                         }
+                        AcpClientStreamEvent::ConfigOptionsUpdated(_) => {
+                            // The stored options were refreshed backend-side; tell
+                            // the frontend to refetch the combined session options.
+                            app_handle
+                                .emit(
+                                    "agentic://acp-session-options-changed",
+                                    serde_json::json!({
+                                        "sessionId": request.session_id,
+                                        "clientId": request.client_id,
+                                    }),
+                                )
+                                .map_err(|e| {
+                                    bitfun_core::util::errors::BitFunError::service(e.to_string())
+                                })?;
+                        }
                         AcpClientStreamEvent::Completed => {
                             app_handle
                                 .emit(
