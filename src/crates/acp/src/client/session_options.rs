@@ -23,6 +23,41 @@ impl From<agent_client_protocol::schema::UsageUpdate> for AcpSessionContextUsage
     }
 }
 
+/// A slash command advertised by an ACP agent via `AvailableCommandsUpdate`.
+///
+/// Surfaced to the frontend so it can render a `/` command menu. Invocation is
+/// plain text: the client sends `session/prompt` with `/<name> <args>` — there
+/// is no dedicated command RPC in ACP.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AcpAvailableCommand {
+    /// Command name without the leading slash (e.g. `create_plan`).
+    pub name: String,
+    /// Human-readable description.
+    pub description: String,
+    /// Hint for the unstructured input typed after the command name, if the
+    /// command takes input. `None` means the command takes no arguments.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_hint: Option<String>,
+}
+
+impl From<agent_client_protocol::schema::AvailableCommand> for AcpAvailableCommand {
+    fn from(command: agent_client_protocol::schema::AvailableCommand) -> Self {
+        use agent_client_protocol::schema::AvailableCommandInput;
+        let input_hint = command.input.and_then(|input| match input {
+            AvailableCommandInput::Unstructured(unstructured) => Some(unstructured.hint),
+            // `AvailableCommandInput` is #[non_exhaustive]; unknown future input
+            // kinds carry no hint we can render.
+            _ => None,
+        });
+        Self {
+            name: command.name,
+            description: command.description,
+            input_hint,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct AcpSessionOptions {
@@ -197,5 +232,26 @@ mod tests {
                 .map(|cost| cost.currency.as_str()),
             Some("USD")
         );
+    }
+
+    #[test]
+    fn converts_available_command_with_and_without_input() {
+        use agent_client_protocol::schema::{
+            AvailableCommand, AvailableCommandInput, UnstructuredCommandInput,
+        };
+
+        let with_input = AvailableCommand::new("create_plan", "Draft an execution plan")
+            .input(AvailableCommandInput::Unstructured(
+                UnstructuredCommandInput::new("what to plan"),
+            ));
+        let converted = AcpAvailableCommand::from(with_input);
+        assert_eq!(converted.name, "create_plan");
+        assert_eq!(converted.description, "Draft an execution plan");
+        assert_eq!(converted.input_hint.as_deref(), Some("what to plan"));
+
+        let no_input = AvailableCommand::new("compact", "Compact the context");
+        let converted = AcpAvailableCommand::from(no_input);
+        assert_eq!(converted.name, "compact");
+        assert!(converted.input_hint.is_none());
     }
 }

@@ -20,5 +20,7 @@ pub use manager::{
     AcpClientPermissionResponse, AcpClientService, CreateAcpFlowSessionRecordResponse,
     SetAcpSessionModelRequest, SubmitAcpPermissionResponseRequest,
 };
-pub use session_options::{AcpSessionContextUsage, AcpSessionModelOption, AcpSessionOptions};
+pub use session_options::{
+    AcpAvailableCommand, AcpSessionContextUsage, AcpSessionModelOption, AcpSessionOptions,
+};
 pub use stream::AcpClientStreamEvent;

@@ -857,6 +857,7 @@ pub async fn run() {
             start_acp_dialog_turn,
             cancel_acp_dialog_turn,
             get_acp_session_options,
+            get_acp_session_commands,
             set_acp_session_model,
             lsp_initialize,
             lsp_start_server_for_file,

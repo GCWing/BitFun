@@ -8,7 +8,7 @@ use agent_client_protocol::util::MatchDispatch;
 use bitfun_core::util::errors::{BitFunError, BitFunResult};
 use bitfun_events::ToolEventData;
 
-use super::session_options::AcpSessionContextUsage;
+use super::session_options::{AcpAvailableCommand, AcpSessionContextUsage};
 use super::tool_card_bridge::{acp_tool_name, normalize_tool_params};
 
 #[derive(Debug, Clone)]
@@ -22,6 +22,8 @@ pub enum AcpClientStreamEvent {
     AgentThought(String),
     ToolEvent(ToolEventData),
     ContextUsageUpdated(AcpSessionContextUsage),
+    /// The agent advertised (or updated) its slash commands.
+    AvailableCommandsUpdated(Vec<AcpAvailableCommand>),
     Completed,
     Cancelled,
 }
@@ -80,6 +82,7 @@ impl AcpStreamRoundTracker {
             }
             AcpClientStreamEvent::ModelRoundStarted { .. }
             | AcpClientStreamEvent::ContextUsageUpdated(_)
+            | AcpClientStreamEvent::AvailableCommandsUpdated(_)
             | AcpClientStreamEvent::Completed
             | AcpClientStreamEvent::Cancelled => vec![event],
         }
@@ -128,6 +131,14 @@ pub(super) async fn acp_dispatch_to_stream_events_with_tracker(
                     events.push(AcpClientStreamEvent::ContextUsageUpdated(
                         AcpSessionContextUsage::from(usage_update),
                     ));
+                }
+                SessionUpdate::AvailableCommandsUpdate(update) => {
+                    let commands = update
+                        .available_commands
+                        .into_iter()
+                        .map(AcpAvailableCommand::from)
+                        .collect();
+                    events.push(AcpClientStreamEvent::AvailableCommandsUpdated(commands));
                 }
                 _ => {}
             }
@@ -432,6 +443,7 @@ mod tests {
                 AcpClientStreamEvent::AgentThought(_) => "thought",
                 AcpClientStreamEvent::ToolEvent(_) => "tool",
                 AcpClientStreamEvent::ContextUsageUpdated(_) => "usage",
+                AcpClientStreamEvent::AvailableCommandsUpdated(_) => "commands",
                 AcpClientStreamEvent::Completed => "completed",
                 AcpClientStreamEvent::Cancelled => "cancelled",
             })
@@ -465,6 +477,41 @@ mod tests {
             events.as_slice(),
             [AcpClientStreamEvent::ContextUsageUpdated(usage)] if usage.used == 1_000 && usage.size == 4_000
         ));
+    }
+
+    #[test]
+    fn exposes_available_commands_updates() {
+        use agent_client_protocol::schema::{AvailableCommand, AvailableCommandsUpdate};
+        use agent_client_protocol::JsonRpcMessage;
+
+        let mut tracker = AcpToolCallTracker::new();
+        let notification = SessionNotification::new(
+            "session-1",
+            SessionUpdate::AvailableCommandsUpdate(AvailableCommandsUpdate::new(vec![
+                AvailableCommand::new("compact", "Compact the context"),
+                AvailableCommand::new("init", "Initialize the project"),
+            ])),
+        )
+        .to_untyped_message()
+        .expect("notification");
+        let dispatch = agent_client_protocol::Dispatch::Notification(notification);
+
+        let events = tokio::runtime::Runtime::new()
+            .expect("runtime")
+            .block_on(acp_dispatch_to_stream_events_with_tracker(
+                dispatch,
+                &mut tracker,
+            ))
+            .expect("dispatch");
+
+        match events.as_slice() {
+            [AcpClientStreamEvent::AvailableCommandsUpdated(commands)] => {
+                assert_eq!(commands.len(), 2);
+                assert_eq!(commands[0].name, "compact");
+                assert_eq!(commands[1].name, "init");
+            }
+            other => panic!("expected AvailableCommandsUpdated, got {other:?}"),
+        }
     }
 
     #[test]

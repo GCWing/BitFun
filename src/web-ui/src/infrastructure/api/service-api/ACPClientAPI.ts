@@ -119,6 +119,24 @@ export interface SubmitAcpPermissionResponseRequest {
   optionId?: string;
 }
 
+/**
+ * A slash command advertised by an ACP agent (AvailableCommandsUpdate).
+ * Invoked by sending a normal prompt of the form `/<name> <args>`.
+ */
+export interface AcpAvailableCommand {
+  name: string;
+  description: string;
+  /** Hint for the text typed after the command name; absent if no input. */
+  inputHint?: string;
+}
+
+/** Live event payload emitted on `agentic://acp-available-commands-updated`. */
+export interface AcpAvailableCommandsUpdatedEvent {
+  sessionId: string;
+  clientId: string;
+  commands: AcpAvailableCommand[];
+}
+
 export interface AcpPermissionOption {
   optionId: string;
   name: string;
@@ -239,6 +257,17 @@ export class ACPClientAPI {
     request: GetAcpSessionOptionsRequest
   ): Promise<AcpSessionOptions> {
     return api.invoke('get_acp_session_options', { request });
+  }
+
+  /**
+   * Slash commands the agent has advertised for this session. Empty until the
+   * agent sends them (typically during/after the first prompt). Pair with the
+   * `agentic://acp-available-commands-updated` event for live updates.
+   */
+  static async getSessionCommands(
+    request: GetAcpSessionOptionsRequest
+  ): Promise<AcpAvailableCommand[]> {
+    return api.invoke('get_acp_session_commands', { request });
   }
 
   static async setSessionModel(

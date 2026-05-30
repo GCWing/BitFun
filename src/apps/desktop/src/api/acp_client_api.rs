@@ -3,9 +3,9 @@
 use crate::api::app_state::AppState;
 use crate::api::session_storage_path::desktop_effective_session_storage_path;
 use bitfun_acp::client::{
-    AcpClientInfo, AcpClientPermissionResponse, AcpClientRequirementProbe, AcpClientStreamEvent,
-    AcpSessionOptions, CreateAcpFlowSessionRecordResponse, SetAcpSessionModelRequest,
-    SubmitAcpPermissionResponseRequest,
+    AcpAvailableCommand, AcpClientInfo, AcpClientPermissionResponse, AcpClientRequirementProbe,
+    AcpClientStreamEvent, AcpSessionOptions, CreateAcpFlowSessionRecordResponse,
+    SetAcpSessionModelRequest, SubmitAcpPermissionResponseRequest,
 };
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
@@ -377,6 +377,20 @@ pub async fn start_acp_dialog_turn(
                                     bitfun_core::util::errors::BitFunError::service(e.to_string())
                                 })?;
                         }
+                        AcpClientStreamEvent::AvailableCommandsUpdated(commands) => {
+                            app_handle
+                                .emit(
+                                    "agentic://acp-available-commands-updated",
+                                    serde_json::json!({
+                                        "sessionId": request.session_id,
+                                        "clientId": request.client_id,
+                                        "commands": commands,
+                                    }),
+                                )
+                                .map_err(|e| {
+                                    bitfun_core::util::errors::BitFunError::service(e.to_string())
+                                })?;
+                        }
                         AcpClientStreamEvent::Completed => {
                             app_handle
                                 .emit(
@@ -472,6 +486,39 @@ pub async fn get_acp_session_options(
     };
     service
         .get_session_options(
+            &request.client_id,
+            request.workspace_path,
+            request.remote_connection_id,
+            session_storage_path,
+            request.session_id,
+        )
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_acp_session_commands(
+    state: State<'_, AppState>,
+    request: GetAcpSessionOptionsRequest,
+) -> Result<Vec<AcpAvailableCommand>, String> {
+    let service = state
+        .acp_client_service
+        .as_ref()
+        .ok_or_else(|| "ACP client service not initialized".to_string())?;
+    let session_storage_path = match request.workspace_path.as_deref() {
+        Some(workspace_path) => Some(
+            desktop_effective_session_storage_path(
+                &state,
+                workspace_path,
+                request.remote_connection_id.as_deref(),
+                request.remote_ssh_host.as_deref(),
+            )
+            .await,
+        ),
+        None => None,
+    };
+    service
+        .get_session_commands(
             &request.client_id,
             request.workspace_path,
             request.remote_connection_id,
