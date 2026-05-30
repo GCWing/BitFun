@@ -58,6 +58,42 @@ impl From<agent_client_protocol::schema::AvailableCommand> for AcpAvailableComma
     }
 }
 
+/// One entry of an agent's execution plan (ACP `Plan` / agent-plan), surfaced to
+/// the frontend so it can render a live task checklist during a turn.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AcpPlanEntry {
+    /// Human-readable description of the task.
+    pub content: String,
+    /// `"high"` | `"medium"` | `"low"`.
+    pub priority: String,
+    /// `"pending"` | `"in_progress"` | `"completed"`.
+    pub status: String,
+}
+
+impl From<agent_client_protocol::schema::PlanEntry> for AcpPlanEntry {
+    fn from(entry: agent_client_protocol::schema::PlanEntry) -> Self {
+        use agent_client_protocol::schema::{PlanEntryPriority, PlanEntryStatus};
+        let priority = match entry.priority {
+            PlanEntryPriority::High => "high",
+            PlanEntryPriority::Medium => "medium",
+            PlanEntryPriority::Low => "low",
+            _ => "medium",
+        };
+        let status = match entry.status {
+            PlanEntryStatus::Pending => "pending",
+            PlanEntryStatus::InProgress => "in_progress",
+            PlanEntryStatus::Completed => "completed",
+            _ => "pending",
+        };
+        Self {
+            content: entry.content,
+            priority: priority.to_string(),
+            status: status.to_string(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct AcpSessionOptions {

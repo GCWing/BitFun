@@ -137,6 +137,23 @@ export interface AcpAvailableCommandsUpdatedEvent {
   commands: AcpAvailableCommand[];
 }
 
+/** One entry of an ACP agent's execution plan (agent-plan). */
+export interface AcpPlanEntry {
+  content: string;
+  /** 'high' | 'medium' | 'low' */
+  priority: string;
+  /** 'pending' | 'in_progress' | 'completed' */
+  status: string;
+}
+
+/** Live event payload emitted on `agentic://acp-plan-updated`. Replaces the plan in full. */
+export interface AcpPlanUpdatedEvent {
+  sessionId: string;
+  turnId: string;
+  clientId: string;
+  entries: AcpPlanEntry[];
+}
+
 export interface AcpPermissionOption {
   optionId: string;
   name: string;

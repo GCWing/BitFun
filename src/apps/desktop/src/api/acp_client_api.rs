@@ -391,6 +391,21 @@ pub async fn start_acp_dialog_turn(
                                     bitfun_core::util::errors::BitFunError::service(e.to_string())
                                 })?;
                         }
+                        AcpClientStreamEvent::PlanUpdated(entries) => {
+                            app_handle
+                                .emit(
+                                    "agentic://acp-plan-updated",
+                                    serde_json::json!({
+                                        "sessionId": request.session_id,
+                                        "turnId": request.turn_id,
+                                        "clientId": request.client_id,
+                                        "entries": entries,
+                                    }),
+                                )
+                                .map_err(|e| {
+                                    bitfun_core::util::errors::BitFunError::service(e.to_string())
+                                })?;
+                        }
                         AcpClientStreamEvent::Completed => {
                             app_handle
                                 .emit(
