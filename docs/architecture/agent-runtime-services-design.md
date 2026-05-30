@@ -1,8 +1,9 @@
 # Agent Runtime SDK 与 Runtime Services 设计
 
 本文是 [`core-decomposition.md`](core-decomposition.md) 的开发设计文档，描述目标模块、
-接口、crate 内部结构和迁移保护。本文中的 `bitfun-runtime-services`、
-`bitfun-agent-runtime`、`bitfun-harness` 是目标 crate；在实际创建前不得把它们当作
+接口、crate 内部结构和迁移保护。`bitfun-runtime-services` 已建立 PR1 基础壳层，
+当前只承载 typed service bundle、builder、provider registry、capability availability 和
+fake provider；`bitfun-agent-runtime`、`bitfun-harness` 仍是目标 crate，在实际创建前不得把它们当作
 已完成事实。
 
 ## 1. 设计目标与边界
@@ -20,7 +21,7 @@
 bitfun-core-types
 bitfun-events
 bitfun-runtime-ports
-bitfun-runtime-services      # 目标
+bitfun-runtime-services      # PR1 基础壳层
 bitfun-agent-tools
 tool-runtime
 bitfun-agent-runtime         # 目标
@@ -68,8 +69,7 @@ tool-runtime
 
 bitfun-runtime-services
   -> bitfun-runtime-ports
-  -> bitfun-core-types
-  -> bitfun-events
+  -> bitfun-core-types / bitfun-events（仅当 service DTO 或 event contract 需要时引入）
 
 具体 service crates
   -> bitfun-runtime-ports
@@ -87,10 +87,10 @@ bitfun-runtime-services
 - `bitfun-agent-runtime` -> Tauri / CLI / ACP protocol / Web UI
 - `bitfun-harness` -> 具体 filesystem / Git / terminal manager
 
-目标 crate 创建准入：
+目标 crate 创建或继续扩展准入：
 
 - 只有当 owner 边界、旧路径兼容、focused tests、依赖收益和 boundary check 都能同时落地时，才创建新的目标 crate。
-- `bitfun-runtime-services` 的创建前提是 typed builder 至少承载本地 service、remote service 和 fake provider 三类注入路径。
+- `bitfun-runtime-services` 已按该准入建立基础壳层；继续扩展时仍必须保持 typed builder、本地 service、remote service 和 fake provider 三类注入路径可测试。
 - `bitfun-agent-runtime` 的创建前提是 session / turn / scheduler / prompt loop 中至少一个 owner 可以脱离 `bitfun-core` 构建，并有旧路径 facade。
 - `bitfun-harness` 的创建前提是至少两个 workflow 可以通过 provider contract 注册，例如 Deep Review 与 MiniApp / DeepResearch。
 - 若目标 crate 只能承接单个 helper 或只能通过 `bitfun-core` 才能测试，继续留在迁移期 facade，不提前拆 crate。
@@ -157,7 +157,7 @@ pub trait WorkspacePort: Send + Sync {
 
 ### 2.2 Runtime Services
 
-目标 crate：`bitfun-runtime-services`。
+当前 crate：`bitfun-runtime-services`。
 
 职责：
 

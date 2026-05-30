@@ -323,7 +323,7 @@ flowchart TB
 | 注册器 / 组装点 | 所属目标层级 | 目标或迁移期模块 | 注册内容 |
 |---|---|---|---|
 | `ProductAssembler` / `ProductAssemblyPlan` | 产品组装层（Product Assembly） | 迁移期在 `bitfun-core` facade 或产品入口；目标可收敛为 assembly owner | `DeliveryProfile`、`CapabilitySet`、feature group、provider 选择 |
-| `RuntimeServicesBuilder` | 运行时服务层（Runtime Services） | 目标 `bitfun-runtime-services`；迁移期连接 `bitfun-runtime-ports`、`bitfun-services-*` 和 `bitfun-core` service wiring | filesystem、workspace、session store、Git、terminal、network、MCP catalog、remote connection / workspace / projection port |
+| `RuntimeServicesBuilder` | 运行时服务层（Runtime Services） | `bitfun-runtime-services` PR1 基础壳层；迁移期连接 `bitfun-runtime-ports`、`bitfun-services-*` 和 `bitfun-core` service wiring | filesystem、workspace、session store、Git、terminal、network、MCP catalog、remote connection / workspace / projection port |
 | `ToolRuntimeBuilder` | 工具运行时（Tool Runtime） | `tool-runtime`、`bitfun-agent-tools`、`bitfun-tool-packs` | tool provider、tool pack、manifest、permission gate、tool hook |
 | `HarnessRegistryBuilder` | 工作流编排层（Harness Layer） | 目标 `bitfun-harness`；迁移期在 `bitfun-core` 和产品能力代码中 | SDD、Deep Review、DeepResearch、MiniApp 等 harness provider |
 | `AgentDefinitionRegistry` | Agent 运行时 SDK（Agent Runtime SDK） | 目标 `bitfun-agent-runtime`；迁移期在 `bitfun-core` agent definition 代码中 | agent、subagent、prompt module、skill definition |

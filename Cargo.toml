@@ -5,6 +5,7 @@ members = [
     "src/crates/ai-adapters",
     "src/crates/agent-stream",
     "src/crates/runtime-ports",
+    "src/crates/runtime-services",
     "src/crates/services-core",
     "src/crates/services-integrations",
     "src/crates/product-domains",

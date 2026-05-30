@@ -14,6 +14,7 @@ const noCoreDependencyCrates = [
   'ai-adapters',
   'agent-stream',
   'runtime-ports',
+  'runtime-services',
   'services-core',
   'services-integrations',
   'agent-tools',
@@ -62,6 +63,34 @@ const lightweightBoundaryRules = [
     reason: 'runtime-ports must stay DTO/trait-only',
     forbiddenDeps: [
       'bitfun-core',
+      'bitfun-agent-stream',
+      'bitfun-services-core',
+      'bitfun-services-integrations',
+      'bitfun-agent-tools',
+      'bitfun-tool-packs',
+      'bitfun-product-domains',
+      'bitfun-transport',
+      'terminal-core',
+      'tool-runtime',
+      'tauri',
+      'reqwest',
+      'git2',
+      'rmcp',
+      'image',
+      'tokio-tungstenite',
+      'bitfun-cli',
+      'ratatui',
+      'crossterm',
+      'arboard',
+      'syntect-tui',
+    ],
+  },
+  {
+    crateName: 'runtime-services',
+    reason: 'runtime-services must stay a typed service assembly contract without concrete runtime implementations',
+    forbiddenDeps: [
+      'bitfun-core',
+      'bitfun-ai-adapters',
       'bitfun-agent-stream',
       'bitfun-services-core',
       'bitfun-services-integrations',
@@ -190,6 +219,35 @@ const dependencyProfileRules = [
     crateName: 'runtime-ports',
     profileName: 'default ports profile',
     reason: 'runtime-ports default profile must stay trait/DTO-only',
+    forbiddenNonOptionalDeps: [
+      'bitfun-core',
+      'bitfun-ai-adapters',
+      'bitfun-agent-stream',
+      'bitfun-services-core',
+      'bitfun-services-integrations',
+      'bitfun-agent-tools',
+      'bitfun-tool-packs',
+      'bitfun-product-domains',
+      'bitfun-transport',
+      'terminal-core',
+      'tool-runtime',
+      'tauri',
+      'reqwest',
+      'git2',
+      'rmcp',
+      'image',
+      'tokio-tungstenite',
+      'bitfun-cli',
+      'ratatui',
+      'crossterm',
+      'arboard',
+      'syntect-tui',
+    ],
+  },
+  {
+    crateName: 'runtime-services',
+    profileName: 'default runtime service assembly profile',
+    reason: 'runtime-services default profile must not compile concrete service or product runtime implementations',
     forbiddenNonOptionalDeps: [
       'bitfun-core',
       'bitfun-ai-adapters',
@@ -6730,6 +6788,21 @@ function runManifestParserSelfTest() {
   if (!runtimePortsProfile?.forbiddenNonOptionalDeps.includes('bitfun-services-core')) {
     throw new Error('runtime-ports dependency profile must forbid service implementations');
   }
+  const runtimeServicesRule = lightweightBoundaryRules.find(
+    (rule) => rule.crateName === 'runtime-services',
+  );
+  if (!runtimeServicesRule?.forbiddenDeps.includes('bitfun-core')) {
+    throw new Error('runtime-services lightweight boundary must forbid bitfun-core');
+  }
+  if (!runtimeServicesRule?.forbiddenDeps.includes('bitfun-services-integrations')) {
+    throw new Error('runtime-services lightweight boundary must forbid concrete service integrations');
+  }
+  const runtimeServicesProfile = dependencyProfileRules.find(
+    (rule) => rule.crateName === 'runtime-services',
+  );
+  if (!runtimeServicesProfile?.forbiddenNonOptionalDeps.includes('tool-runtime')) {
+    throw new Error('runtime-services dependency profile must forbid tool runtime implementations');
+  }
   const agentToolsManifestRule = forbiddenContentUnderRules.find(
     (rule) => rule.path === 'src/crates/agent-tools/src',
   );
@@ -6825,6 +6898,28 @@ function runManifestParserSelfTest() {
         'SubagentContextMode',
         'delegation_policy_child_blocks_recursive_spawn_without_losing_depth',
         'subagent_context_mode_preserves_fork_wire_value',
+      ],
+    },
+    {
+      path: 'src/crates/runtime-services/src/lib.rs',
+      contracts: [
+        'RuntimeServices',
+        'RuntimeServicesBuilder',
+        'CapabilityAvailability',
+        'RuntimeServicesProvider',
+        'RuntimeServicesRegistry',
+        'CapabilityMismatch',
+        'require_capability',
+      ],
+    },
+    {
+      path: 'src/crates/runtime-services/tests/runtime_services_contracts.rs',
+      contracts: [
+        'builder_requires_mandatory_runtime_services',
+        'fake_provider_registers_required_and_remote_services_through_registry',
+        'missing_optional_capability_returns_typed_unsupported_error',
+        'capability_availability_reports_optional_service_status_without_side_effects',
+        'builder_rejects_port_registered_under_the_wrong_capability',
       ],
     },
     {

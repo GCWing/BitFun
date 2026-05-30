@@ -38,10 +38,10 @@
 - SSH、relay、本地隧道、远端 OS 差异、认证方式属于具体 Remote provider。
 - remote workspace、terminal pre-warm、scheduler submit、session restore、file chunk / image fallback 等行为必须用等价测试保护。
 
-### 2.4 目标 crate 创建准入
+### 2.4 目标 crate 创建或扩展准入
 
 - 新目标 crate 不能为了“架构完整”提前创建。必须同时满足 owner 边界清晰、旧路径兼容可保留、focused tests 可落地、依赖收益可解释、boundary check 可防回流。
-- `bitfun-runtime-services` 优先级最高，但创建前必须先有最小 `RuntimeServicesBuilder` skeleton、Remote ports 和 fake provider 测试。
+- `bitfun-runtime-services` 已按该准入建立基础壳层；继续扩展时仍必须保持 `RuntimeServicesBuilder` skeleton、Remote ports 和 fake provider 测试同时成立。
 - `bitfun-agent-runtime` 只能在 session / turn / scheduler / prompt loop 中至少一个 owner 可脱离 `bitfun-core` 构建时创建。
 - `bitfun-harness` 只能在至少两个 workflow 通过 provider contract 接入时创建，不能只为单个 Deep Review 或 MiniApp helper 拆 crate。
 - 若某项迁移只能承接单个 helper，或测试仍必须依赖完整 `bitfun-core`，继续留在迁移期 facade。
@@ -60,17 +60,31 @@
 
 ## 4. 后续迁移队列
 
-| 顺序 | 主题 | 完整范围 | 不允许混入 | 合入门禁 |
-|---|---|---|---|---|
-| 0 | Product Assembly / Runtime Services Foundation | 建立最小 Product Assembly skeleton、`RuntimeServicesBuilder` skeleton、Remote ports、fake provider 和 boundary check 入口 | 具体 remote runtime、tool IO、product-domain IO、default feature 调整 | provider 注册路径可测试，Remote ports 不暴露 SSH / relay concrete handle |
-| 1 | Service / Agent Remote Runtime Owner | 在 remote connection、remote workspace、remote FS / terminal projection、workspace-root / persistence、`ImageContextData`、remote-SSH / relay provider 中选择一个 owner 主题，完成 port、provider、旧路径兼容和行为等价验证 | tool runtime、product-domain runtime、feature matrix、产品命令或 UI 行为变更 | remote/session/file/image/terminal/scheduler 行为等价，产品 surface 不变 |
-| 2 | Agent Runtime SDK Owner | 拆分 mode-scoped subagent visibility、agent registry facts、queue policy decision、scheduler submit/cancel facts 和 background delivery 边界；concrete scheduler 生命周期按保护程度逐步外移 | remote provider、tool IO、product-domain IO、默认 feature 调整 | subagent 可见性、queue/preempt/cancel、background reply、DeepResearch hook 等价 |
-| 3 | Harness / Product Capability Boundary | 建立 Harness provider contract，让 Deep Review、DeepResearch、MiniApp 等 workflow 通过 provider 注册，不侵入 Agent Runtime SDK | concrete service IO、tool IO、surface 命令语义变更 | 至少两个 workflow 可通过 provider contract 表达，旧路径兼容 |
-| 4 | Product-Domain Runtime Owner | MiniApp filesystem IO / worker / host / builtin seed 或 function-agent Git/AI 中选择一个 owner 主题，建立最小 port/provider 和 core adapter | tool runtime、service/agent runtime、surface 行为变更 | MiniApp/function-agent focused regression，PathManager/process/Git/AI 边界清晰 |
-| 5 | Tool Runtime Owner | 仅在收益明确时迁移 `ToolUseContext` projection、manifest execution、`GetToolSpecTool` execution、snapshot wrapper、collapsed unlock state 或具体工具 IO 中的一个 owner 主题 | service/agent runtime、product-domain runtime、feature matrix、产品行为变更 | tool visibility、manifest、`GetToolSpec`、snapshot、Deep Review tool flow 等价 |
-| 6 | Feature / Build-Benefit Evaluation | 评估 feature matrix、dependency profile、no-default 编译面和构建收益数据 | runtime owner 迁移、default feature 副作用、构建脚本变更 | cargo metadata / cargo tree 证据，产品入口完整能力不变 |
+后续迁移固定收敛为 7 个大块 PR。每个 PR 都必须先补保护，再迁移 owner，最后回看文档和边界；如果发现必须改变功能语义，需要在 PR 中单独说明原因、影响范围和回滚边界。
 
-当前优先级更偏向 **Product Assembly / Runtime Services Foundation**，随后进入 **Service / Agent Remote Runtime Owner**。原因是 Remote 与 OS/terminal/file/network 的实现边界最容易继续牵引 core，但必须先有 typed registration 和 Remote ports，避免继续临时接线。
+| PR | 主题 | 完整范围 | 不允许混入 | 合入门禁 |
+|---|---|---|---|---|
+| PR1 | Product Assembly / Runtime Services Foundation | 创建 `bitfun-runtime-services`，补 `RuntimeServicesBuilder`、typed provider registration、capability availability、Remote ports、fake provider 和 boundary check 入口 | 具体 remote runtime、tool IO、product-domain IO、default feature 调整 | provider 注册路径可测试，Remote ports 不暴露 SSH / relay concrete handle，新增 crate 不依赖 `bitfun-core` |
+| PR2 | Service / Agent Remote Runtime Owner | 在 remote connection、remote workspace、remote FS / terminal projection、workspace-root / persistence、`ImageContextData`、remote-SSH / relay provider 中完成一个完整 owner 主题的 port、provider、旧路径兼容和行为等价验证 | tool runtime、product-domain runtime、feature matrix、产品命令或 UI 行为变更 | remote/session/file/image/terminal/scheduler 行为等价，产品 surface 不变 |
+| PR3 | Agent Runtime SDK Owner | 拆分 mode-scoped subagent visibility、agent registry facts、queue policy decision、scheduler submit/cancel facts 和 background delivery 边界；concrete scheduler 生命周期按保护程度逐步外移 | remote provider、tool IO、product-domain IO、默认 feature 调整 | subagent 可见性、queue/preempt/cancel、background reply、DeepResearch hook 等价 |
+| PR4 | Harness / Product Capability Boundary | 建立 Harness provider contract，让 Deep Review、DeepResearch、MiniApp 等 workflow 通过 provider 注册，不侵入 Agent Runtime SDK | concrete service IO、tool IO、surface 命令语义变更 | 至少两个 workflow 可通过 provider contract 表达，旧路径兼容 |
+| PR5 | Product-Domain Runtime Owner | MiniApp filesystem IO / worker / host / builtin seed 或 function-agent Git/AI 中完成一个完整 owner 主题，建立最小 port/provider 和 core adapter | tool runtime、service/agent runtime、surface 行为变更 | MiniApp/function-agent focused regression，PathManager/process/Git/AI 边界清晰 |
+| PR6 | Tool Runtime Owner | 在 `ToolUseContext` projection、manifest execution、`GetToolSpecTool` execution、snapshot wrapper、collapsed unlock state 或具体工具 IO 中完成一个收益明确的完整 owner 主题 | service/agent runtime、product-domain runtime、feature matrix、产品行为变更 | tool visibility、manifest、`GetToolSpec`、snapshot、Deep Review tool flow 等价 |
+| PR7 | Feature / Build-Benefit Evaluation | 评估 feature matrix、dependency profile、no-default 编译面和构建收益数据，确认是否具备收敛默认 feature 的条件 | runtime owner 迁移、default feature 副作用、构建脚本变更 | cargo metadata / cargo tree 证据，产品入口完整能力不变 |
+
+### 4.1 PR1 具体实施计划
+
+PR1 是后续高风险迁移的前置门禁，目标是提供可测试的 typed assembly 基础，而不是移动任何既有业务行为。
+
+1. 新建 `bitfun-runtime-services` crate，并加入 workspace。
+2. 在 `bitfun-runtime-ports` 中补齐 Runtime Services 所需的轻量 port trait 和 Remote port trait；这些 trait 只能描述能力和请求边界，不携带 SSH、relay、Tauri、process、filesystem manager 等 concrete handle。
+3. 在 `bitfun-runtime-services` 中实现 `RuntimeServices`、`RuntimeServicesBuilder`、capability availability、typed unsupported error 和 provider registry。
+4. 提供 `test_support` fake provider，覆盖本地 mandatory service、optional remote service 和 unsupported capability 三类注入路径。
+5. 更新 `scripts/check-core-boundaries.mjs`，把 `bitfun-runtime-services` 纳入 no-core dependency 和轻量依赖边界检查。
+6. 更新仓库入口文档中的模块索引，说明 `bitfun-runtime-services` 仍使用 core decomposition guardrails。
+7. 运行 focused tests、边界检查和最小 Rust 验证；提交前从第三方视角检查是否出现 service locator、全局 mutable registry、反向依赖或功能语义漂移。
+
+PR1 不迁移任何 concrete service owner，因此预期不会修改产品行为、默认能力集合、权限语义、工具曝光、事件语义、session 生命周期或构建脚本。
 
 ## 5. 每类 PR 的保护重点
 

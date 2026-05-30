@@ -44,6 +44,113 @@ impl std::fmt::Display for PortError {
 
 impl std::error::Error for PortError {}
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeServiceCapability {
+    FileSystem,
+    Workspace,
+    SessionStore,
+    Permission,
+    Events,
+    Clock,
+    Terminal,
+    Network,
+    Git,
+    McpCatalog,
+    RemoteConnection,
+    RemoteWorkspace,
+    RemoteProjection,
+    RemoteCapabilities,
+}
+
+impl RuntimeServiceCapability {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::FileSystem => "filesystem",
+            Self::Workspace => "workspace",
+            Self::SessionStore => "session_store",
+            Self::Permission => "permission",
+            Self::Events => "events",
+            Self::Clock => "clock",
+            Self::Terminal => "terminal",
+            Self::Network => "network",
+            Self::Git => "git",
+            Self::McpCatalog => "mcp_catalog",
+            Self::RemoteConnection => "remote_connection",
+            Self::RemoteWorkspace => "remote_workspace",
+            Self::RemoteProjection => "remote_projection",
+            Self::RemoteCapabilities => "remote_capabilities",
+        }
+    }
+}
+
+impl std::fmt::Display for RuntimeServiceCapability {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+pub trait RuntimeServicePort: Send + Sync {
+    fn capability(&self) -> RuntimeServiceCapability;
+}
+
+pub trait FileSystemPort: RuntimeServicePort {}
+
+pub trait WorkspacePort: RuntimeServicePort {}
+
+pub trait SessionStorePort: RuntimeServicePort {}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PermissionRequest {
+    pub scope: String,
+    pub action: String,
+    #[serde(default, skip_serializing_if = "serde_json::Map::is_empty")]
+    pub metadata: serde_json::Map<String, serde_json::Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PermissionDecision {
+    Allow,
+    Deny { reason: String },
+}
+
+#[async_trait::async_trait]
+pub trait PermissionPort: RuntimeServicePort {
+    async fn request_permission(
+        &self,
+        request: PermissionRequest,
+    ) -> PortResult<PermissionDecision>;
+}
+
+pub trait ClockPort: RuntimeServicePort {
+    fn now_unix_millis(&self) -> i64;
+}
+
+pub trait TerminalPort: RuntimeServicePort {}
+
+pub trait NetworkPort: RuntimeServicePort {}
+
+pub trait GitPort: RuntimeServicePort {}
+
+pub trait McpCatalogPort: RuntimeServicePort {}
+
+/// Typed registration boundary for remote connection providers.
+///
+/// PR1 intentionally keeps this trait handle-free; PR2 adds owner-specific
+/// lifecycle methods once behavior-equivalence tests are in place.
+pub trait RemoteConnectionPort: RuntimeServicePort {}
+
+/// Typed registration boundary for remote workspace providers.
+pub trait RemoteWorkspacePort: RuntimeServicePort {}
+
+/// Typed registration boundary for remote filesystem/terminal/image projection providers.
+pub trait RemoteProjectionPort: RuntimeServicePort {}
+
+/// Typed registration boundary for remote host capability facts.
+pub trait RemoteCapabilityPort: RuntimeServicePort {}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentSessionCreateRequest {
@@ -957,11 +1064,11 @@ mod tests {
     fn agent_session_reply_route_keeps_requester_fields() {
         let route = AgentSessionReplyRoute {
             source_session_id: "requester_session".to_string(),
-            source_workspace_path: "D:\\workspace\\requester".to_string(),
+            source_workspace_path: "/workspace/requester".to_string(),
         };
 
         assert_eq!(route.source_session_id, "requester_session");
-        assert_eq!(route.source_workspace_path, "D:\\workspace\\requester");
+        assert_eq!(route.source_workspace_path, "/workspace/requester");
     }
 
     #[test]
@@ -1126,13 +1233,13 @@ mod tests {
     #[test]
     fn related_path_serializes_as_request_context_fact() {
         let related = RelatedPath {
-            path: "D:/workspace/shared".to_string(),
+            path: "/workspace/shared".to_string(),
             description: Some("shared fixtures".to_string()),
         };
 
         let json = serde_json::to_value(related).expect("serialize related path");
 
-        assert_eq!(json["path"], "D:/workspace/shared");
+        assert_eq!(json["path"], "/workspace/shared");
         assert_eq!(json["description"], "shared fixtures");
         assert!(json.get("related_path").is_none());
     }

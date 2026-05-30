@@ -18,7 +18,7 @@ Repository rule: **keep product logic platform-agnostic, then expose it through 
 | Module | Path | Agent doc |
 |---|---|---|
 | Core (product logic) | `src/crates/core` | [AGENTS.md](src/crates/core/AGENTS.md) |
-| Extracted core support | `src/crates/{core-types,agent-stream,runtime-ports,terminal,tool-runtime}` | (use core guide) |
+| Extracted core support | `src/crates/{core-types,agent-stream,runtime-ports,runtime-services,terminal,tool-runtime}` | (use core guide) |
 | Service core owner crate | `src/crates/services-core` | [AGENTS.md](src/crates/services-core/AGENTS.md) |
 | Service integrations owner crate | `src/crates/services-integrations` | [AGENTS.md](src/crates/services-integrations/AGENTS.md) |
 | Agent tool contracts | `src/crates/agent-tools` | [AGENTS.md](src/crates/agent-tools/AGENTS.md) |
