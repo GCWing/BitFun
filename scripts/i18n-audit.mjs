@@ -9,6 +9,7 @@ const contractPath = path.join(root, 'src', 'shared', 'i18n', 'contract', 'local
 const hardcodedBaselinePath = path.join(root, 'scripts', 'i18n-hardcoded-baseline.json');
 const literalFallbackBaselinePath = path.join(root, 'scripts', 'i18n-literal-fallback-baseline.json');
 const dynamicKeyAllowlistPath = path.join(root, 'scripts', 'i18n-dynamic-key-allowlist.json');
+const l10nIdenticalAllowlistPath = path.join(root, 'scripts', 'i18n-l10n-identical-allowlist.json');
 const governanceBaselinePath = path.join(root, 'scripts', 'i18n-governance-baseline.json');
 const sharedTermsDir = path.join(root, 'src', 'shared', 'i18n', 'resources', 'shared');
 const webLocalesDir = path.join(root, 'src', 'web-ui', 'src', 'locales');
@@ -242,11 +243,13 @@ function sortByReportIdentity(left, right) {
   return JSON.stringify(left).localeCompare(JSON.stringify(right));
 }
 
-function countEntriesBy(entries, field) {
+function countEntriesBy(entries, field, options = {}) {
+  const emptyLabel = options.emptyLabel ?? '';
   return Object.fromEntries(
     Array.from(entries.reduce((counts, entry) => {
-      const value = entry[field] ?? '';
-      counts.set(value, (counts.get(value) ?? 0) + 1);
+      const value = entry[field] ?? emptyLabel;
+      const key = value === '' ? emptyLabel : value;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
       return counts;
     }, new Map()).entries())
       .sort(([left], [right]) => String(left).localeCompare(String(right))),
@@ -268,11 +271,13 @@ function finalizeGovernanceReport() {
       bySurface: countEntriesBy(governanceReport.dynamicKeyCandidates, 'surface'),
     },
     sharedTermDuplicates: {
+      byNamespace: countEntriesBy(governanceReport.sharedTermDuplicates, 'namespace', { emptyLabel: '<none>' }),
       bySharedKey: countEntriesBy(governanceReport.sharedTermDuplicates, 'sharedKey'),
       bySurface: countEntriesBy(governanceReport.sharedTermDuplicates, 'surface'),
     },
     l10nQualityCandidates: {
       byComparisonLocale: countEntriesBy(governanceReport.l10nQualityCandidates, 'comparisonLocale'),
+      byNamespace: countEntriesBy(governanceReport.l10nQualityCandidates, 'namespace', { emptyLabel: '<none>' }),
       bySurface: countEntriesBy(governanceReport.l10nQualityCandidates, 'surface'),
     },
   };
@@ -994,6 +999,18 @@ function isNonEmptyString(value) {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
+function optionalStringArray(entry, field) {
+  return Array.isArray(entry[field]) ? entry[field] : [];
+}
+
+function validateOptionalStringArray(entry, field, label) {
+  if (Object.hasOwn(entry, field) && !Array.isArray(entry[field])) {
+    reportError(`${label} "${entry.id}" ${field} must be an array`);
+    return [];
+  }
+  return optionalStringArray(entry, field);
+}
+
 function readDynamicKeyAllowlist() {
   if (!fs.existsSync(dynamicKeyAllowlistPath)) {
     reportError('Missing scripts/i18n-dynamic-key-allowlist.json');
@@ -1033,8 +1050,8 @@ function readDynamicKeyAllowlist() {
       }
     }
 
-    const keys = Array.isArray(entry.keys) ? entry.keys : [];
-    const prefixes = Array.isArray(entry.keyPrefixes) ? entry.keyPrefixes : [];
+    const keys = validateOptionalStringArray(entry, 'keys', 'Dynamic key allowlist');
+    const prefixes = validateOptionalStringArray(entry, 'keyPrefixes', 'Dynamic key allowlist');
     if (keys.length === 0 && prefixes.length === 0) {
       reportError(`Dynamic key allowlist "${entry.id}" must define keys or keyPrefixes`);
     }
@@ -1046,6 +1063,65 @@ function readDynamicKeyAllowlist() {
     for (const prefix of prefixes) {
       if (!isNonEmptyString(prefix)) {
         reportError(`Dynamic key allowlist "${entry.id}" has an invalid keyPrefixes entry`);
+      }
+    }
+  }
+
+  return allowlist;
+}
+
+function readL10nIdenticalAllowlist() {
+  if (!fs.existsSync(l10nIdenticalAllowlistPath)) {
+    reportError('Missing scripts/i18n-l10n-identical-allowlist.json');
+    return { entries: [] };
+  }
+
+  let allowlist;
+  try {
+    allowlist = readJsonFile(l10nIdenticalAllowlistPath);
+  } catch (error) {
+    reportError(`Failed to parse scripts/i18n-l10n-identical-allowlist.json: ${error.message}`);
+    return { entries: [] };
+  }
+
+  if (allowlist.version !== 1) {
+    reportError('scripts/i18n-l10n-identical-allowlist.json must use version 1');
+  }
+  if (!Array.isArray(allowlist.entries)) {
+    reportError('scripts/i18n-l10n-identical-allowlist.json must define an entries array');
+    return { entries: [] };
+  }
+
+  const seenIds = new Set();
+  for (const entry of allowlist.entries) {
+    if (!isNonEmptyString(entry.id)) {
+      reportError('L10n identical allowlist entries require a non-empty id');
+      continue;
+    }
+    if (seenIds.has(entry.id)) {
+      reportError(`L10n identical allowlist id "${entry.id}" is duplicated`);
+    }
+    seenIds.add(entry.id);
+
+    for (const field of ['surface', 'locale', 'comparisonLocale', 'owner', 'reason']) {
+      if (!isNonEmptyString(entry[field])) {
+        reportError(`L10n identical allowlist "${entry.id}" requires a non-empty ${field}`);
+      }
+    }
+
+    const keys = validateOptionalStringArray(entry, 'keys', 'L10n identical allowlist');
+    const prefixes = validateOptionalStringArray(entry, 'keyPrefixes', 'L10n identical allowlist');
+    if (keys.length === 0 && prefixes.length === 0) {
+      reportError(`L10n identical allowlist "${entry.id}" must define keys or keyPrefixes`);
+    }
+    for (const key of keys) {
+      if (!isNonEmptyString(key)) {
+        reportError(`L10n identical allowlist "${entry.id}" has an invalid key entry`);
+      }
+    }
+    for (const prefix of prefixes) {
+      if (!isNonEmptyString(prefix)) {
+        reportError(`L10n identical allowlist "${entry.id}" has an invalid keyPrefixes entry`);
       }
     }
   }
@@ -1110,7 +1186,7 @@ function collectDynamicKeyCandidates(resourceGroups) {
   for (const entry of allowlist.entries ?? []) {
     const eligibleGroups = resourceGroups.filter((group) => allowlistTargetForGroup(entry, group) != null);
 
-    for (const key of entry.keys ?? []) {
+    for (const key of optionalStringArray(entry, 'keys')) {
       const matches = eligibleGroups.filter((group) => allowlistTargetForGroup(entry, group) === key);
       if (matches.length === 0) {
         reportError(`Dynamic key allowlist "${entry.id}" references "${key}" but no ${entry.surface} resource matches`);
@@ -1120,7 +1196,7 @@ function collectDynamicKeyCandidates(resourceGroups) {
       }
     }
 
-    for (const prefix of entry.keyPrefixes ?? []) {
+    for (const prefix of optionalStringArray(entry, 'keyPrefixes')) {
       const matches = eligibleGroups.filter((group) => allowlistTargetForGroup(entry, group).startsWith(prefix));
       if (matches.length === 0) {
         reportError(`Dynamic key allowlist "${entry.id}" references prefix "${prefix}" but no ${entry.surface} resource matches`);
@@ -1130,6 +1206,56 @@ function collectDynamicKeyCandidates(resourceGroups) {
       }
     }
   }
+}
+
+function l10nAllowlistTargetForGroup(entry, group) {
+  if (entry.surface !== group.surface) return null;
+  if (entry.namespace && entry.namespace !== group.namespace) return null;
+  if (!group.valueByLocale.has(entry.locale) || !group.valueByLocale.has(entry.comparisonLocale)) return null;
+  return entry.namespace ? group.key : group.resourceKey;
+}
+
+function l10nIdenticalMatchId(group, locale, comparisonLocale) {
+  return [group.id, locale, comparisonLocale].join('\u0000');
+}
+
+function collectAllowedL10nIdenticalMatches(resourceGroups) {
+  const allowlist = readL10nIdenticalAllowlist();
+  const allowed = new Set();
+
+  function isIdenticalCandidate(group, entry) {
+    const value = group.valueByLocale.get(entry.locale);
+    const comparisonValue = group.valueByLocale.get(entry.comparisonLocale);
+    return Boolean(value && comparisonValue && value === comparisonValue && hasHanText(value));
+  }
+
+  for (const entry of allowlist.entries ?? []) {
+    const eligibleGroups = resourceGroups.filter((group) => (
+      l10nAllowlistTargetForGroup(entry, group) != null && isIdenticalCandidate(group, entry)
+    ));
+
+    for (const key of optionalStringArray(entry, 'keys')) {
+      const matches = eligibleGroups.filter((group) => l10nAllowlistTargetForGroup(entry, group) === key);
+      if (matches.length === 0) {
+        reportError(`L10n identical allowlist "${entry.id}" references "${key}" but no ${entry.surface} identical resource matches`);
+      }
+      for (const group of matches) {
+        allowed.add(l10nIdenticalMatchId(group, entry.locale, entry.comparisonLocale));
+      }
+    }
+
+    for (const prefix of optionalStringArray(entry, 'keyPrefixes')) {
+      const matches = eligibleGroups.filter((group) => l10nAllowlistTargetForGroup(entry, group).startsWith(prefix));
+      if (matches.length === 0) {
+        reportError(`L10n identical allowlist "${entry.id}" references prefix "${prefix}" but no ${entry.surface} identical resource matches`);
+      }
+      for (const group of matches) {
+        allowed.add(l10nIdenticalMatchId(group, entry.locale, entry.comparisonLocale));
+      }
+    }
+  }
+
+  return allowed;
 }
 
 function collectSharedTermDuplicates(resourceEntries) {
@@ -1162,11 +1288,14 @@ function collectSharedTermDuplicates(resourceEntries) {
   }
 }
 
-function collectL10nQualityCandidates(resourceGroups) {
+function collectL10nQualityCandidates(resourceGroups, allowedIdenticalMatches) {
   for (const group of resourceGroups) {
     const simplified = group.valueByLocale.get('zh-CN');
     const traditional = group.valueByLocale.get('zh-TW');
     if (!simplified || !traditional || simplified !== traditional || !hasHanText(traditional)) {
+      continue;
+    }
+    if (allowedIdenticalMatches.has(l10nIdenticalMatchId(group, 'zh-TW', 'zh-CN'))) {
       continue;
     }
 
@@ -1241,6 +1370,37 @@ function auditGovernanceCategoryBudget(category, budget) {
       }
     }
   }
+
+  auditGovernanceDimensionBudget(category, budget, 'byNamespace', 'namespace', 'namespace');
+  auditGovernanceDimensionBudget(category, budget, 'bySharedKey', 'sharedKey', 'sharedKey');
+  auditGovernanceDimensionBudget(category, budget, 'byComparisonLocale', 'comparisonLocale', 'comparisonLocale');
+}
+
+function auditGovernanceDimensionBudget(category, budget, budgetField, entryField, label) {
+  if (!Object.hasOwn(budget, budgetField)) return;
+  if (!isPlainObject(budget[budgetField])) {
+    reportError(`scripts/i18n-governance-baseline.json ${category}.${budgetField} must be an object`);
+    return;
+  }
+
+  const entries = governanceReport[category] ?? [];
+  const actualByValue = countEntriesBy(entries, entryField, { emptyLabel: '<none>' });
+  const values = sortedUnique([
+    ...Object.keys(actualByValue),
+    ...Object.keys(budget[budgetField]),
+  ]);
+
+  for (const value of values) {
+    const actual = actualByValue[value] ?? 0;
+    const expected = budget[budgetField][value];
+    if (typeof expected !== 'number') {
+      reportError(`scripts/i18n-governance-baseline.json ${category}.${budgetField}.${value} must be a number`);
+    } else if (actual > expected) {
+      reportError(`${category} ${label} ${value} has ${actual} candidate(s), baseline is ${expected}`);
+    } else if (actual < expected) {
+      reportError(`${category} ${label} ${value} has ${actual} candidate(s), below baseline ${expected}; lower scripts/i18n-governance-baseline.json.`);
+    }
+  }
 }
 
 function auditGovernanceBaseline() {
@@ -1257,11 +1417,12 @@ function auditGovernanceBaseline() {
 function auditI18nGovernanceReport(namespaces) {
   const resourceEntries = collectI18nResourceEntries(namespaces);
   const resourceGroups = buildResourceGroups(resourceEntries);
+  const allowedIdenticalMatches = collectAllowedL10nIdenticalMatches(resourceGroups);
 
   collectConfirmedUnusedKeys();
   collectDynamicKeyCandidates(resourceGroups);
   collectSharedTermDuplicates(resourceEntries);
-  collectL10nQualityCandidates(resourceGroups);
+  collectL10nQualityCandidates(resourceGroups, allowedIdenticalMatches);
   auditGovernanceBaseline();
 }
 

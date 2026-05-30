@@ -345,6 +345,11 @@ test('i18n audit can emit a machine-readable governance report', { concurrency: 
       report.l10nQualityCandidates.filter((entry) => entry.surface === 'web-ui').length,
       'report should summarize l10n candidates by surface',
     );
+    assert.equal(
+      report.summary.byCategory.l10nQualityCandidates.byNamespace['flow-chat'],
+      report.l10nQualityCandidates.filter((entry) => entry.namespace === 'flow-chat').length,
+      'report should summarize l10n candidates by namespace',
+    );
     assert.ok(
       report.dynamicKeyCandidates.some((entry) => (
         entry.allowlistId === 'installer-install-path-errors' &&
@@ -369,6 +374,11 @@ test('i18n audit can emit a machine-readable governance report', { concurrency: 
       )),
       'unchanged zh-TW copy should be reported as a localization quality candidate',
     );
+    assert.equal(
+      report.l10nQualityCandidates.some((entry) => entry.resourceKey === 'shared:modes.agentic'),
+      false,
+      'intentional zh-CN/zh-TW identical shared terms should be excluded from l10n quality candidates',
+    );
   } finally {
     fs.rmSync(absoluteReportPath, { force: true });
   }
@@ -387,6 +397,66 @@ test('i18n audit enforces governance candidate baselines', { concurrency: false 
       `${result.stdout}\n${result.stderr}`,
       /sharedTermDuplicates has \d+ candidate\(s\), baseline is 0/,
       'audit output should identify the governance baseline category that failed',
+    );
+  });
+});
+
+test('i18n audit enforces governance baseline dimensions', { concurrency: false }, () => {
+  const baselinePath = 'scripts/i18n-governance-baseline.json';
+  const baseline = readJson(baselinePath);
+
+  baseline.budgets.sharedTermDuplicates.bySharedKey['product.name'] = 0;
+
+  withTemporaryTextFile(baselinePath, `${JSON.stringify(baseline, null, 2)}\n`, () => {
+    const result = runI18nAudit();
+    assert.notEqual(result.status, 0, 'shared-term duplicate growth by sharedKey must fail ordinary i18n:audit');
+    assert.match(
+      `${result.stdout}\n${result.stderr}`,
+      /sharedTermDuplicates sharedKey product\.name has \d+ candidate\(s\), baseline is 0/,
+      'audit output should identify the sharedKey dimension that failed',
+    );
+  });
+});
+
+test('i18n audit fails stale l10n identical allowlist entries', { concurrency: false }, () => {
+  const allowlistPath = 'scripts/i18n-l10n-identical-allowlist.json';
+  const allowlist = readJson(allowlistPath);
+
+  allowlist.entries.push({
+    id: 'stale-test-l10n-identical-key',
+    surface: 'shared',
+    namespace: 'shared',
+    locale: 'zh-TW',
+    comparisonLocale: 'zh-CN',
+    owner: 'scripts/i18n-contract.test.mjs',
+    reason: 'Test fixture for stale l10n identical governance.',
+    keys: ['__missingGovernanceKey__'],
+  });
+
+  withTemporaryTextFile(allowlistPath, `${JSON.stringify(allowlist, null, 2)}\n`, () => {
+    const result = runI18nAudit();
+    assert.notEqual(result.status, 0, 'stale l10n identical allowlist keys must fail ordinary i18n:audit');
+    assert.match(
+      `${result.stdout}\n${result.stderr}`,
+      /stale-test-l10n-identical-key.*__missingGovernanceKey__/,
+      'audit output should identify the stale l10n allowlist key',
+    );
+  });
+});
+
+test('i18n audit validates l10n identical allowlist array fields', { concurrency: false }, () => {
+  const allowlistPath = 'scripts/i18n-l10n-identical-allowlist.json';
+  const allowlist = readJson(allowlistPath);
+
+  allowlist.entries[0].keys = 'shared:modes.';
+
+  withTemporaryTextFile(allowlistPath, `${JSON.stringify(allowlist, null, 2)}\n`, () => {
+    const result = runI18nAudit();
+    assert.notEqual(result.status, 0, 'l10n identical allowlist keys must be an array');
+    assert.match(
+      `${result.stdout}\n${result.stderr}`,
+      /L10n identical allowlist "shared-zh-tw-same-han-terms" keys must be an array/,
+      'audit output should identify the invalid l10n allowlist field',
     );
   });
 });

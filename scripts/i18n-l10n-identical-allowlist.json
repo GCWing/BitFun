@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "id": "shared-zh-tw-same-han-terms",
+      "surface": "shared",
+      "namespace": "shared",
+      "locale": "zh-TW",
+      "comparisonLocale": "zh-CN",
+      "owner": "src/shared/i18n/resources/shared/zh-TW/terms.json",
+      "reason": "These stable shared terms are intentionally identical in Simplified and Traditional Chinese.",
+      "keys": [
+        "modes.agentic",
+        "modes.assistant",
+        "statuses.cancelled",
+        "statuses.done",
+        "tools.explore"
+      ]
+    }
+  ]
+}
