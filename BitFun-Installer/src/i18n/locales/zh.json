@@ -191,8 +191,5 @@
     "completed": "卸载已完成，可关闭窗口。",
     "cancel": "取消",
     "close": "关闭"
-  },
-  "titlebar": {
-    "default": "BitFun"
   }
 }

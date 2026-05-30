@@ -1011,6 +1011,32 @@ function validateOptionalStringArray(entry, field, label) {
   return optionalStringArray(entry, field);
 }
 
+function readDynamicKeyOwnerSource(entry) {
+  if (!isNonEmptyString(entry.owner)) {
+    return '';
+  }
+
+  const ownerPath = path.join(root, entry.owner);
+  if (!fs.existsSync(ownerPath)) {
+    reportError(`Dynamic key allowlist "${entry.id}" owner path does not exist: ${entry.owner}`);
+    return '';
+  }
+
+  const stat = fs.statSync(ownerPath);
+  if (stat.isFile()) {
+    return fs.readFileSync(ownerPath, 'utf8');
+  }
+
+  if (!stat.isDirectory()) {
+    reportError(`Dynamic key allowlist "${entry.id}" owner path is not a file or directory: ${entry.owner}`);
+    return '';
+  }
+
+  return listFiles(ownerPath, (file) => /\.(?:cjs|js|jsx|mjs|rs|ts|tsx)$/.test(file))
+    .map((file) => fs.readFileSync(file, 'utf8'))
+    .join('\n');
+}
+
 function readDynamicKeyAllowlist() {
   if (!fs.existsSync(dynamicKeyAllowlistPath)) {
     reportError('Missing scripts/i18n-dynamic-key-allowlist.json');
@@ -1052,8 +1078,12 @@ function readDynamicKeyAllowlist() {
 
     const keys = validateOptionalStringArray(entry, 'keys', 'Dynamic key allowlist');
     const prefixes = validateOptionalStringArray(entry, 'keyPrefixes', 'Dynamic key allowlist');
+    const sourceReferences = validateOptionalStringArray(entry, 'sourceReferences', 'Dynamic key allowlist');
     if (keys.length === 0 && prefixes.length === 0) {
       reportError(`Dynamic key allowlist "${entry.id}" must define keys or keyPrefixes`);
+    }
+    if (sourceReferences.length === 0) {
+      reportError(`Dynamic key allowlist "${entry.id}" must define sourceReferences`);
     }
     for (const key of keys) {
       if (!isNonEmptyString(key)) {
@@ -1063,6 +1093,18 @@ function readDynamicKeyAllowlist() {
     for (const prefix of prefixes) {
       if (!isNonEmptyString(prefix)) {
         reportError(`Dynamic key allowlist "${entry.id}" has an invalid keyPrefixes entry`);
+      }
+    }
+    for (const sourceReference of sourceReferences) {
+      if (!isNonEmptyString(sourceReference)) {
+        reportError(`Dynamic key allowlist "${entry.id}" has an invalid sourceReferences entry`);
+      }
+    }
+
+    const ownerSource = sourceReferences.length > 0 ? readDynamicKeyOwnerSource(entry) : '';
+    for (const sourceReference of sourceReferences.filter(isNonEmptyString)) {
+      if (!ownerSource.includes(sourceReference)) {
+        reportError(`Dynamic key allowlist "${entry.id}" source reference "${sourceReference}" was not found under ${entry.owner}`);
       }
     }
   }
@@ -1178,6 +1220,7 @@ function collectDynamicKeyCandidates(resourceGroups) {
       resourceKey: group.resourceKey,
       owner: entry.owner,
       reason: entry.description,
+      sourceReferences: entry.sourceReferences ?? [],
       locales: group.locales,
       files: group.files,
     });

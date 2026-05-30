@@ -191,8 +191,5 @@
     "completed": "Uninstall completed. You can close this window.",
     "cancel": "Cancel",
     "close": "Close"
-  },
-  "titlebar": {
-    "default": "BitFun"
   }
 }

@@ -6,10 +6,10 @@
       "maxTotal": 0
     },
     "sharedTermDuplicates": {
-      "maxTotal": 214,
+      "maxTotal": 211,
       "bySurface": {
         "core": 18,
-        "installer": 3,
+        "installer": 0,
         "mobile-web": 8,
         "relay-static-homepage": 2,
         "web-ui": 183
@@ -29,7 +29,7 @@
         "modes.assistant": 2,
         "modes.expert": 3,
         "modes.review": 1,
-        "product.name": 6,
+        "product.name": 3,
         "statuses.cancelled": 29,
         "statuses.done": 26,
         "statuses.failed": 44,

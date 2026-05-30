@@ -516,6 +516,35 @@ test('web-ui uses shared terms for stable navigation and feature labels', { conc
   }
 });
 
+test('installer uses the shared product name for titlebar defaults', { concurrency: false }, () => {
+  const appSource = readText('BitFun-Installer/src/App.tsx');
+  const localePaths = [
+    'BitFun-Installer/src/i18n/locales/en.json',
+    'BitFun-Installer/src/i18n/locales/zh.json',
+    'BitFun-Installer/src/i18n/locales/zh-TW.json',
+  ];
+
+  assert.match(
+    appSource,
+    /shared\.product\.name/,
+    'installer titlebar default should read the canonical shared product name',
+  );
+  assert.doesNotMatch(
+    appSource,
+    /titlebar\.default/,
+    'installer source should not call the removed copied titlebar.default key',
+  );
+
+  for (const localePath of localePaths) {
+    const resource = readJson(localePath);
+    assert.equal(
+      resource.titlebar,
+      undefined,
+      `${localePath} should not duplicate the shared product name under titlebar.default`,
+    );
+  }
+});
+
 test('i18n audit enforces governance candidate baselines', { concurrency: false }, () => {
   const baselinePath = 'scripts/i18n-governance-baseline.json';
   const baseline = readJson(baselinePath);
@@ -620,6 +649,28 @@ test('i18n audit fails stale dynamic key allowlist entries', { concurrency: fals
     } finally {
       fs.rmSync(absoluteReportPath, { force: true });
     }
+  });
+});
+
+test('i18n audit fails stale dynamic key source references', { concurrency: false }, () => {
+  const allowlistPath = 'scripts/i18n-dynamic-key-allowlist.json';
+  const allowlist = readJson(allowlistPath);
+
+  assert.ok(
+    allowlist.entries.every((entry) => Array.isArray(entry.sourceReferences) && entry.sourceReferences.length > 0),
+    'dynamic key allowlist entries should include sourceReferences that prove the owning code path',
+  );
+
+  allowlist.entries[0].sourceReferences = ['__missing_i18n_dynamic_key_source_reference__'];
+
+  withTemporaryTextFile(allowlistPath, `${JSON.stringify(allowlist, null, 2)}\n`, () => {
+    const result = runI18nAudit();
+    assert.notEqual(result.status, 0, 'stale dynamic key source references must fail ordinary i18n:audit');
+    assert.match(
+      `${result.stdout}\n${result.stderr}`,
+      /source reference "__missing_i18n_dynamic_key_source_reference__"/,
+      'audit output should identify the missing dynamic key source reference',
+    );
   });
 });
 
