@@ -72,6 +72,21 @@ describe('startup performance contract', () => {
     expect(source).toMatch(/import\s+type\s+\*\s+as\s+monaco\s+from\s+['"]monaco-editor['"]/);
   });
 
+  it('prewarms editor runtime only after the shell is interactive', () => {
+    const source = readSource('../App.tsx');
+
+    expect(source).toContain('interactiveShellReady');
+    expect(source).toContain("import('@/tools/editor/services/MonacoStartupWarmup')");
+    expect(source).toContain('scheduleMonacoStartupWarmup()');
+  });
+
+  it('keeps Git diff editor from importing the broad editor barrel', () => {
+    const source = readSource('../../tools/git/components/GitDiffEditor/GitDiffEditor.tsx');
+
+    expect(source).not.toMatch(/from\s+['"]@\/tools\/editor['"]/);
+    expect(source).toContain("from '@/tools/editor/components/DiffEditor'");
+  });
+
   it('uses narrow context-menu imports from startup-visible modules', () => {
     const sources = [
       '../../app/scenes/shell/ShellNav.tsx',

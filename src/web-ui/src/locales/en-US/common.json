@@ -904,7 +904,8 @@
     "panelView": "Panel View"
   },
   "loading": {
-    "scenes": "Loading scene"
+    "scenes": "Loading scene",
+    "workspace": "Loading workspace..."
   },
   "welcomeScene": {
     "tabLabel": "Welcome",

@@ -45,6 +45,7 @@ const MIN_SPLASH_MS = 900;
 
 function App() {
   const { t } = useI18n('settings/basics');
+  const { t: tCommon } = useI18n('common');
 
   // Workspace loading state — drives splash exit timing
   const { loading: workspaceLoading } = useWorkspaceContext();
@@ -188,6 +189,38 @@ function App() {
 
     return () => startupSystemsHandle.cancel();
   }, [interactiveShellReady]);
+
+  useEffect(() => {
+    if (!interactiveShellReady || splashVisible) {
+      return;
+    }
+
+    let disposed = false;
+    let editorWarmupHandle: { promise: Promise<void>; cancel: () => void } | null = null;
+
+    void import('@/tools/editor/services/MonacoStartupWarmup')
+      .then(({ scheduleMonacoStartupWarmup }) => {
+        if (disposed) {
+          return;
+        }
+        editorWarmupHandle = scheduleMonacoStartupWarmup();
+        editorWarmupHandle.promise.catch(error => {
+          if (!disposed && !(error instanceof BackgroundTaskCancelledError)) {
+            log.warn('Editor startup warmup task failed', error);
+          }
+        });
+      })
+      .catch(error => {
+        if (!disposed) {
+          log.warn('Failed to schedule editor startup warmup', error);
+        }
+      });
+
+    return () => {
+      disposed = true;
+      editorWarmupHandle?.cancel();
+    };
+  }, [interactiveShellReady, splashVisible]);
 
   useEffect(() => {
     if (!isTauriRuntime() || !interactiveShellReady) return;
@@ -418,7 +451,11 @@ function App() {
 
             {/* Startup splash — sits above everything, exits once workspace is ready */}
             {splashVisible && (
-              <SplashScreen isExiting={splashExiting} onExited={handleSplashExited} />
+              <SplashScreen
+                isExiting={splashExiting}
+                onExited={handleSplashExited}
+                delayedMessage={workspaceLoading ? tCommon('loading.workspace') : undefined}
+              />
             )}
           </ToolbarModeProvider>
         </SSHRemoteProvider>
