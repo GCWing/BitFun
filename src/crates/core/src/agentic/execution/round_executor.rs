@@ -1712,8 +1712,11 @@ fn strip_markdown_fences(content: &str) -> String {
         return content.to_string();
     }
 
-    // Find the end of the opening fence line
-    let fence_end = trimmed.find('\n').unwrap_or(3);
+    // Find the end of the opening fence line. If the model emitted only an
+    // opening fence, there is no inner content to keep.
+    let Some(fence_end) = trimmed.find('\n') else {
+        return String::new();
+    };
     // let _lang = &trimmed[3..fence_end].trim(); // language hint, ignored
 
     // Check if content ends with ```
@@ -2067,12 +2070,10 @@ mod tests {
         assert_eq!(messages[3].role, "user");
         assert_eq!(messages[4].role, "assistant");
         assert_eq!(messages[4].content.as_deref(), Some("<bitfun_contents>"));
-        assert!(
-            messages[4]
-                .content
-                .as_deref()
-                .is_some_and(|content| !content.ends_with(char::is_whitespace))
-        );
+        assert!(messages[4]
+            .content
+            .as_deref()
+            .is_some_and(|content| !content.ends_with(char::is_whitespace)));
     }
 
     #[test]
@@ -2166,6 +2167,12 @@ mod tests {
         // Model ignored tag instructions but used markdown fences
         let text = "```rust\nfn main() {}\n```";
         assert_eq!(extract_bitfun_contents(text), "fn main() {}");
+    }
+
+    #[test]
+    fn sanitization_handles_bare_markdown_fence() {
+        assert_eq!(extract_bitfun_contents("```"), "");
+        assert_eq!(extract_bitfun_contents("```rust"), "");
     }
 
     #[test]
