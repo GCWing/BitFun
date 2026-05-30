@@ -93,6 +93,8 @@ For the full script list, see [`package.json`](package.json).
   in the owning product surface.
 - Do not import Web UI locale resources into smaller product surfaces such as
   `src/mobile-web` or `BitFun-Installer`. See `docs/architecture/i18n.md`.
+- Static self-contained pages may use generated page-scoped shared-term files;
+  they must not import Web UI locale catalogs.
 - Web UI loads only bootstrap namespaces eagerly; use `useI18n(namespace)` for
   route or feature copy and keep direct `i18nService.t(...)` calls in bootstrap
   namespaces.

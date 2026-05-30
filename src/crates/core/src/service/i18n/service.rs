@@ -185,8 +185,17 @@ impl I18nService {
     }
 
     fn format_shared_term(locale: LocaleId, key: &str) -> Option<String> {
-        let shared_key = key.strip_prefix("shared.")?;
+        let shared_key = Self::legacy_shared_term_key(key)?;
         generated_shared_term(locale, shared_key).map(str::to_string)
+    }
+
+    fn legacy_shared_term_key(key: &str) -> Option<&str> {
+        match key {
+            // Keep backend callers of the legacy Fluent id working while the
+            // product name is owned by the shared i18n term catalog.
+            "app-name" => Some("product.name"),
+            _ => key.strip_prefix("shared."),
+        }
     }
 
     /// Formats a message.
@@ -263,6 +272,25 @@ mod tests {
                 .translate_with_locale(&LocaleId::EnUS, "shared.features.deepReview", None)
                 .await,
             "Deep Review"
+        );
+    }
+
+    #[tokio::test]
+    async fn translate_keeps_legacy_app_name_alias_on_shared_product_name() {
+        let service = I18nService::new();
+        service.initialize().await.unwrap();
+
+        assert_eq!(
+            service
+                .translate_with_locale(&LocaleId::EnUS, "app-name", None)
+                .await,
+            "BitFun"
+        );
+        assert_eq!(
+            service
+                .translate_with_locale(&LocaleId::ZhTW, "app-name", None)
+                .await,
+            "BitFun"
         );
     }
 

@@ -268,6 +268,7 @@ function finalizeGovernanceReport() {
     },
     dynamicKeyCandidates: {
       byAllowlistId: countEntriesBy(governanceReport.dynamicKeyCandidates, 'allowlistId'),
+      byProofState: countEntriesBy(governanceReport.dynamicKeyCandidates, 'proofState'),
       bySurface: countEntriesBy(governanceReport.dynamicKeyCandidates, 'surface'),
     },
     sharedTermDuplicates: {
@@ -326,6 +327,26 @@ function readJsonEntries(locale, namespace) {
   } catch (error) {
     reportError(`Failed to parse ${toPosixPath(path.relative(root, file))}: ${error.message}`);
     return new Map();
+  }
+}
+
+const sharedTermEntryCache = new Map();
+
+function readSharedTermMap(locale) {
+  if (sharedTermEntryCache.has(locale)) {
+    return sharedTermEntryCache.get(locale);
+  }
+
+  const file = path.join(sharedTermsDir, locale, 'terms.json');
+  try {
+    const entries = new Map(flattenStringEntries(readJsonFile(file)));
+    sharedTermEntryCache.set(locale, entries);
+    return entries;
+  } catch (error) {
+    reportError(`Failed to parse ${toPosixPath(path.relative(root, file))}: ${error.message}`);
+    const entries = new Map();
+    sharedTermEntryCache.set(locale, entries);
+    return entries;
   }
 }
 
@@ -807,13 +828,46 @@ function readRelayHomepageMessages() {
 
   const entriesByLocale = new Map();
   for (const [locale, messages] of Object.entries(resource)) {
-    entriesByLocale.set(locale, new Map(flattenStringEntries(messages)));
+    entriesByLocale.set(locale, new Map(flattenRelayHomepageEntries(messages, locale)));
   }
 
   return {
     localeIds: Object.keys(resource).sort(),
     entriesByLocale,
   };
+}
+
+function flattenRelayHomepageEntries(value, locale, prefix = '') {
+  if (isPlainObject(value) && Object.hasOwn(value, '$shared')) {
+    const keys = Object.keys(value);
+    if (keys.length !== 1) {
+      reportError(`relay static homepage ${locale} key "${prefix}" mixes $shared with local fields`);
+    }
+    const sharedKey = value.$shared;
+    if (!isNonEmptyString(sharedKey)) {
+      reportError(`relay static homepage ${locale} key "${prefix}" has an invalid $shared reference`);
+      return prefix ? [[prefix, '']] : [];
+    }
+    if (!readSharedTermMap(locale).has(sharedKey)) {
+      reportError(`relay static homepage ${locale} key "${prefix}" references missing shared term "${sharedKey}"`);
+    }
+    return prefix ? [[prefix, `shared:${sharedKey}`]] : [];
+  }
+
+  if (typeof value === 'string') {
+    return prefix ? [[prefix, value]] : [];
+  }
+  if (Array.isArray(value)) {
+    const text = value.filter((item) => typeof item === 'string').join('\n');
+    return prefix ? [[prefix, text]] : [];
+  }
+  if (value == null || typeof value !== 'object') {
+    return prefix ? [[prefix, '']] : [];
+  }
+
+  return Object.entries(value)
+    .flatMap(([key, child]) => flattenRelayHomepageEntries(child, locale, prefix ? `${prefix}.${key}` : key))
+    .sort(([left], [right]) => left.localeCompare(right));
 }
 
 function collectRelayHomepageDataKeys() {
@@ -1102,11 +1156,14 @@ function readDynamicKeyAllowlist() {
     }
 
     const ownerSource = sourceReferences.length > 0 ? readDynamicKeyOwnerSource(entry) : '';
+    let proofState = sourceReferences.length > 0 ? 'source-proven' : 'source-unproven';
     for (const sourceReference of sourceReferences.filter(isNonEmptyString)) {
       if (!ownerSource.includes(sourceReference)) {
         reportError(`Dynamic key allowlist "${entry.id}" source reference "${sourceReference}" was not found under ${entry.owner}`);
+        proofState = 'source-unproven';
       }
     }
+    entry.proofState = proofState;
   }
 
   return allowlist;
@@ -1220,6 +1277,7 @@ function collectDynamicKeyCandidates(resourceGroups) {
       resourceKey: group.resourceKey,
       owner: entry.owner,
       reason: entry.description,
+      proofState: entry.proofState ?? 'source-unproven',
       sourceReferences: entry.sourceReferences ?? [],
       locales: group.locales,
       files: group.files,

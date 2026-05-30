@@ -14,7 +14,9 @@
     "flowRelay": "中继服务",
     "flowRelaySub": "配对 & 转发",
     "flowMobile": "移动端",
-    "flowMobileSub": "远程控制"
+    "flowMobileSub": {
+      "$shared": "features.remoteControl"
+    }
   },
   "zh-TW": {
     "languageToggle": "語言：繁體",
@@ -31,7 +33,9 @@
     "flowRelay": "中繼服務",
     "flowRelaySub": "配對 & 轉發",
     "flowMobile": "移動端",
-    "flowMobileSub": "遠程控制"
+    "flowMobileSub": {
+      "$shared": "features.remoteControl"
+    }
   },
   "en-US": {
     "languageToggle": "Language: EN",
@@ -48,6 +52,8 @@
     "flowRelay": "Relay Server",
     "flowRelaySub": "Pair and Forward",
     "flowMobile": "Mobile",
-    "flowMobileSub": "Remote Control"
+    "flowMobileSub": {
+      "$shared": "features.remoteControl"
+    }
   }
 }

@@ -236,14 +236,17 @@
   </div>
 
   <script>
-    var I={'en-US':{languageToggle:'Language: EN',status:'Service Running',desc:'Relay service between desktop and mobile, enabling pairing and message forwarding.',f1t:'Connect',f1d:'Handle pairing requests, create remote sessions.',f2t:'Relay',f2d:'Bridge WebSocket and HTTP bidirectionally.',f3t:'Self-Host',f3d:'Private deploy, custom domains and reverse proxy.',flowDesktop:'Desktop',flowDesktopSub:'BitFun Agent',flowRelay:'Relay Server',flowRelaySub:'Pair and Forward',flowMobile:'Mobile',flowMobileSub:'Remote Control'}};
+    var I={'en-US':{languageToggle:'Language: EN',status:'Service Running',desc:'Relay service between desktop and mobile, enabling pairing and message forwarding.',f1t:'Connect',f1d:'Handle pairing requests, create remote sessions.',f2t:'Relay',f2d:'Bridge WebSocket and HTTP bidirectionally.',f3t:'Self-Host',f3d:'Private deploy, custom domains and reverse proxy.',flowDesktop:'Desktop',flowDesktopSub:'BitFun Agent',flowRelay:'Relay Server',flowRelaySub:'Pair and Forward',flowMobile:'Mobile',flowMobileSub:{$shared:'features.remoteControl'}}};
+    var S={'en-US':{features:{remoteControl:'Remote Control'}}};
     var LOCALES=['en-US','zh-CN','zh-TW'];
     function resolveLocale(){var l=(navigator.language||'').toLowerCase();if(l==='zh-tw'||l.startsWith('zh-hant'))return'zh-TW';if(l.startsWith('zh'))return'zh-CN';return'en-US'}
     function nextLocale(l){var i=LOCALES.indexOf(l);return LOCALES[(i+1)%LOCALES.length]||'en-US'}
     var L=resolveLocale();
-    function set(l){L=l;var effective=I[l]?l:'en-US';document.documentElement.lang=effective;var s=I[effective];document.querySelectorAll('[data-i18n]').forEach(function(e){var k=e.getAttribute('data-i18n');if(s[k])e.textContent=s[k]})}
+    function pathValue(o,p){return p.split('.').reduce(function(v,k){return v&&v[k]},o)}
+    function message(s,k,l){var v=s[k];if(v&&typeof v==='object'&&v.$shared)return pathValue(S[l],v.$shared)||pathValue(S['en-US'],v.$shared)||v.$shared;return v}
+    function set(l){L=l;var effective=I[l]?l:'en-US';document.documentElement.lang=effective;var s=I[effective];document.querySelectorAll('[data-i18n]').forEach(function(e){var k=e.getAttribute('data-i18n');var v=message(s,k,effective);if(v)e.textContent=v})}
     document.getElementById('langToggle').addEventListener('click',function(){set(nextLocale(L))});
-    fetch('i18n.json').then(function(r){return r.ok?r.json():null}).then(function(r){if(r){I=r}set(L)}).catch(function(){set(L)});
+    Promise.allSettled([fetch('i18n.json').then(function(r){return r.ok?r.json():null}),fetch('i18n.shared.json').then(function(r){return r.ok?r.json():null})]).then(function(r){if(r[0].status==='fulfilled'&&r[0].value){I=r[0].value}if(r[1].status==='fulfilled'&&r[1].value){S=r[1].value}set(L)}).catch(function(){set(L)});
   </script>
 </body>
 </html>

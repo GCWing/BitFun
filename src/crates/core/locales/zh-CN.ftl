@@ -2,7 +2,6 @@
 # Chinese Simplified (zh-CN) Fluent Translation File
 
 # ==================== 通用 ====================
-app-name = BitFun
 app-version = 版本 { $version }
 loading = 加载中...
 welcome = 欢迎使用 BitFun
