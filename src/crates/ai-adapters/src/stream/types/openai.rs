@@ -543,7 +543,9 @@ mod tests {
 
         // finish_reason should also be preserved (lives at choice top level).
         assert!(
-            responses.iter().any(|r| r.finish_reason.as_deref() == Some("stop")),
+            responses
+                .iter()
+                .any(|r| r.finish_reason.as_deref() == Some("stop")),
             "finish_reason from MiniMax final chunk must be preserved"
         );
     }
@@ -818,7 +820,11 @@ mod tests {
             }
         }"#;
         let data: OpenAISSEData = serde_json::from_str(raw).expect("valid openai sse data");
-        let usage = data.into_unified_responses()[0].usage.as_ref().expect("usage").clone();
+        let usage = data.into_unified_responses()[0]
+            .usage
+            .as_ref()
+            .expect("usage")
+            .clone();
         assert_eq!(usage.cached_content_token_count, Some(40));
         assert_eq!(usage.cache_creation_token_count, None);
     }
@@ -840,7 +846,11 @@ mod tests {
             }
         }"#;
         let data: OpenAISSEData = serde_json::from_str(raw).expect("valid deepseek sse data");
-        let usage = data.into_unified_responses()[0].usage.as_ref().expect("usage").clone();
+        let usage = data.into_unified_responses()[0]
+            .usage
+            .as_ref()
+            .expect("usage")
+            .clone();
         assert_eq!(usage.cached_content_token_count, Some(64));
     }
 
@@ -861,7 +871,11 @@ mod tests {
             }
         }"#;
         let data: OpenAISSEData = serde_json::from_str(raw).expect("valid proxy payload");
-        let usage = data.into_unified_responses()[0].usage.as_ref().expect("usage").clone();
+        let usage = data.into_unified_responses()[0]
+            .usage
+            .as_ref()
+            .expect("usage")
+            .clone();
         assert_eq!(usage.cached_content_token_count, Some(64));
     }
 
@@ -879,7 +893,11 @@ mod tests {
             }
         }"#;
         let data: OpenAISSEData = serde_json::from_str(raw).expect("valid openai sse data");
-        let usage = data.into_unified_responses()[0].usage.as_ref().expect("usage").clone();
+        let usage = data.into_unified_responses()[0]
+            .usage
+            .as_ref()
+            .expect("usage")
+            .clone();
         assert_eq!(usage.cached_content_token_count, None);
         assert_eq!(usage.cache_creation_token_count, None);
     }

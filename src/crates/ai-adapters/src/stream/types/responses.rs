@@ -129,7 +129,9 @@ pub fn parse_responses_output_item(
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_responses_output_item, ResponsesCompleted, ResponsesStreamEvent, ResponsesUsage};
+    use super::{
+        parse_responses_output_item, ResponsesCompleted, ResponsesStreamEvent, ResponsesUsage,
+    };
     use crate::stream::types::unified::UnifiedTokenUsage;
     use serde_json::json;
 
