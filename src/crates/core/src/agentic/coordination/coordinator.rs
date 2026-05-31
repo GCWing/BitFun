@@ -4658,6 +4658,15 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             )
             .await?;
 
+        let copied = self
+            .session_manager
+            .clone_prompt_cache(parent_session_id, &child_session.session_id)
+            .await;
+        debug!(
+            "Forked prompt cache into /btw child session: parent_session_id={}, child_session_id={}, copied={}",
+            parent_session_id, child_session.session_id, copied
+        );
+
         self.session_manager
             .replace_context_messages(&child_session.session_id, snapshot.messages)
             .await;
