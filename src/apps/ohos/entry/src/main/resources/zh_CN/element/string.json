@@ -1,0 +1,44 @@
+{
+    "string": [
+        {
+            "name": "module_desc",
+            "value": "模块描述"
+        },
+        {
+            "name": "EntryAbility_desc",
+            "value": "描述"
+        },
+        {
+            "name": "EntryAbility_label",
+            "value": "BitFun"
+        },
+        {
+            "name": "permission_internet_reason",
+            "value": "用于访问网络以与远程AI服务通信"
+        },
+        {
+            "name": "permission_user_file_reason",
+            "value": "用于读写用户选择的文件以进行代码编辑和项目管理"
+        },
+        {
+            "name": "permission_custom_sandbox_reason",
+            "value": "用于访问自定义沙箱路径以进行项目工作区操作"
+        },
+        {
+            "name": "permission_calendar_reason",
+            "value": "用于管理日历事件以进行任务调度和提醒"
+        },
+        {
+            "name": "permission_desktop_directory_reason",
+            "value": "用于访问桌面目录以进行文件管理和项目操作"
+        },
+        {
+            "name": "permission_documents_directory_reason",
+            "value": "用于访问文档目录以进行文件管理和项目操作"
+        },
+        {
+            "name": "permission_download_directory_reason",
+            "value": "用于访问下载目录以进行文件管理和项目操作"
+        }
+    ]
+}

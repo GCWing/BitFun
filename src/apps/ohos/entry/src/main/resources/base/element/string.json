@@ -24,12 +24,8 @@
             "value": "Used to access custom sandbox paths for project workspace operations"
         },
         {
-            "name": "permission_read_calendar_reason",
-            "value": "Used to read calendar events for task scheduling and reminders"
-        },
-        {
-            "name": "permission_write_calendar_reason",
-            "value": "Used to write calendar events for task scheduling and reminders"
+            "name": "permission_calendar_reason",
+            "value": "Used to manage calendar events for task scheduling and reminders"
         },
         {
             "name": "permission_desktop_directory_reason",
