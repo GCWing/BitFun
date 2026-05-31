@@ -184,8 +184,9 @@ pub trait Agent: Send + Sync + 'static {
         }
     }
 
-    /// Get the system reminder for this agent, only used for modes
-    /// system_reminder will be appended to the user_query
+    /// Get the system reminder for this agent, only used for modes.
+    /// The returned reminder may be prepended immediately before the user's
+    /// actual message in runtime context.
     /// `previous_agent_type` can be used to distinguish first entry vs staying
     /// in the same mode across turns.
     async fn get_system_reminder(
