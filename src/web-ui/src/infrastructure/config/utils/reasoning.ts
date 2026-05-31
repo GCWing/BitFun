@@ -8,6 +8,10 @@ const DEEPSEEK_REASONING_EFFORT_MODELS = new Set([
   'deepseek-v4-pro',
 ]);
 
+const QWEN_REASONING_EFFORT_MODELS = new Set([
+  'qwen3.7-max',
+]);
+
 export function getEffectiveReasoningMode(
   config?: Pick<AIModelConfig, 'reasoning_mode'> | null
 ): ReasoningMode {
@@ -42,6 +46,10 @@ export function supportsDeepSeekReasoningEffort(
 ): boolean {
   const normalizedModelName = (config?.model_name || '').trim().toLowerCase();
   if (DEEPSEEK_REASONING_EFFORT_MODELS.has(normalizedModelName)) {
+    return true;
+  }
+
+  if (QWEN_REASONING_EFFORT_MODELS.has(normalizedModelName)) {
     return true;
   }
 
