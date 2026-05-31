@@ -1,5 +1,5 @@
 use crate::agentic::agents::get_embedded_prompt;
-use crate::agentic::core::PromptEnvelope;
+use crate::agentic::core::{InternalReminderKind, Message};
 use crate::service::config::get_app_language_code;
 use crate::util::errors::{BitFunError, BitFunResult};
 
@@ -13,7 +13,7 @@ fn init_agents_md_user_query(is_chinese: bool) -> &'static str {
     }
 }
 
-pub(crate) async fn build_init_agents_md_user_input() -> BitFunResult<(String, String)> {
+pub(crate) async fn build_init_agents_md_user_input() -> BitFunResult<(String, Vec<Message>)> {
     let prompt = get_embedded_prompt(INIT_AGENTS_MD_PROMPT_NAME).ok_or_else(|| {
         BitFunError::Agent(format!(
             "{} not found in embedded files",
@@ -22,10 +22,13 @@ pub(crate) async fn build_init_agents_md_user_input() -> BitFunResult<(String, S
     })?;
     let is_chinese = get_app_language_code().await.starts_with("zh");
     let user_query = init_agents_md_user_query(is_chinese).to_string();
-    let mut envelope = PromptEnvelope::new();
-    envelope.push_system_reminder(prompt.to_string());
-    envelope.push_user_query(user_query.clone());
-    Ok((envelope.render(), user_query))
+    Ok((
+        user_query,
+        vec![Message::internal_reminder(
+            InternalReminderKind::InitAgentsMd,
+            prompt.to_string(),
+        )],
+    ))
 }
 
 #[cfg(test)]
@@ -39,14 +42,16 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn init_agents_md_user_input_wraps_reminder_before_query() {
-        let (user_input, original_user_input) = build_init_agents_md_user_input()
+    async fn init_agents_md_user_input_returns_query_and_reminder_message() {
+        let (user_input, prepended_messages) = build_init_agents_md_user_input()
             .await
             .expect("init agents md prompt should build");
 
-        assert!(user_input.contains("<system_reminder>"));
-        assert!(user_input.contains("<user_query>"));
-        assert!(user_input.find("<system_reminder>") < user_input.find("<user_query>"));
-        assert!(!original_user_input.trim().is_empty());
+        assert!(!user_input.trim().is_empty());
+        assert_eq!(prepended_messages.len(), 1);
+        assert_eq!(
+            prepended_messages[0].internal_reminder_kind(),
+            Some(crate::agentic::core::InternalReminderKind::InitAgentsMd)
+        );
     }
 }

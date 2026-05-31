@@ -10,8 +10,8 @@ use crate::agentic::agents::{
 };
 use crate::agentic::context_profile::{ContextProfilePolicy, ModelCapabilityProfile};
 use crate::agentic::core::{
-    render_system_reminder, Message, MessageContent, MessageHelper, MessageRole,
-    MessageSemanticKind, RequestReasoningTokenPolicy, Session,
+    render_system_reminder, InternalReminderKind, Message, MessageContent, MessageHelper,
+    MessageRole, MessageSemanticKind, RequestReasoningTokenPolicy, Session,
 };
 use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue};
 use crate::agentic::execution::types::FinishReason;
@@ -1510,6 +1510,16 @@ impl ExecutionEngine {
                 self.session_manager
                     .replace_context_messages(session_id, compression_result.messages.clone())
                     .await;
+                if self
+                    .session_manager
+                    .rebuild_skill_agent_listing_baseline_to_latest(session_id)
+                    .await
+                {
+                    debug!(
+                        "Rebuilt skill-agent listing baseline after compression: session_id={}",
+                        session_id
+                    );
+                }
                 self.session_manager
                     .invalidate_prompt_cache(
                         session_id,
@@ -1717,6 +1727,16 @@ impl ExecutionEngine {
                 self.session_manager
                     .replace_context_messages(&session_id, compressed_messages.clone())
                     .await;
+                if self
+                    .session_manager
+                    .rebuild_skill_agent_listing_baseline_to_latest(&session_id)
+                    .await
+                {
+                    debug!(
+                        "Rebuilt skill-agent listing baseline after manual compaction: session_id={}",
+                        session_id
+                    );
+                }
                 self.session_manager
                     .invalidate_prompt_cache(
                         &session_id,
@@ -2555,7 +2575,11 @@ impl ExecutionEngine {
                             Do NOT repeat the same tool call again.</system_reminder>",
                             max_consec
                         );
-                        let user_msg = Message::user(reminder);
+                        let user_msg = Message::internal_reminder(
+                            InternalReminderKind::LoopRecovery,
+                            reminder,
+                        )
+                        .with_turn_id(context.dialog_turn_id.clone());
                         messages.push(user_msg.clone());
                         if let Err(e) = self
                             .session_manager
@@ -2610,7 +2634,11 @@ impl ExecutionEngine {
                         Do NOT repeat the same pattern of tool calls.</system_reminder>",
                         window_size
                     );
-                    let user_msg = Message::user(reminder);
+                    let user_msg = Message::internal_reminder(
+                        InternalReminderKind::PeriodicLoopRecovery,
+                        reminder,
+                    )
+                    .with_turn_id(context.dialog_turn_id.clone());
                     messages.push(user_msg.clone());
                     if let Err(e) = self
                         .session_manager
@@ -2661,7 +2689,14 @@ impl ExecutionEngine {
                                 injection.content
                             ),
                         };
-                        let user_msg = Message::user(wrapped);
+                        let reminder_kind = match injection.kind {
+                            RoundInjectionKind::UserSteering => InternalReminderKind::UserSteering,
+                            RoundInjectionKind::BackgroundResult => {
+                                InternalReminderKind::BackgroundResult
+                            }
+                        };
+                        let user_msg = Message::internal_reminder(reminder_kind, wrapped)
+                            .with_turn_id(context.dialog_turn_id.clone());
                         messages.push(user_msg.clone());
                         if let Err(e) = self
                             .session_manager
@@ -2715,7 +2750,11 @@ impl ExecutionEngine {
                                 let reminder = format!(
                                     "<system_reminder>Your previous assistant response was interrupted mid-stream ({reason}). Continue writing from exactly where you stopped. Do not repeat content that was already delivered; pick up seamlessly and complete the answer.</system_reminder>"
                                 );
-                                let user_msg = Message::user(reminder.clone());
+                                let user_msg = Message::internal_reminder(
+                                    InternalReminderKind::InterruptedContinue,
+                                    reminder.clone(),
+                                )
+                                .with_turn_id(context.dialog_turn_id.clone());
                                 messages.push(user_msg.clone());
                                 if let Err(e) = self
                                     .session_manager
@@ -2758,7 +2797,11 @@ impl ExecutionEngine {
                 } else if round_result.had_thinking_content {
                     thinking_only_rescue_attempts += 1;
                     let reminder = "<system_reminder>The previous round produced internal reasoning only — no tool call and no user-visible response. You MUST now either: (1) call the single tool that best advances the user's task, or (2) write your final answer to the user. Do not produce another round of reasoning without taking action.</system_reminder>".to_string();
-                    let user_msg = Message::user(reminder.clone());
+                    let user_msg = Message::internal_reminder(
+                        InternalReminderKind::ThinkingOnlyRescue,
+                        reminder.clone(),
+                    )
+                    .with_turn_id(context.dialog_turn_id.clone());
                     messages.push(user_msg.clone());
                     if let Err(e) = self
                         .session_manager

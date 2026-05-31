@@ -6,8 +6,8 @@ use super::{scheduler::DialogSubmissionPolicy, turn_outcome::TurnOutcome};
 use crate::agentic::agents::get_agent_registry;
 use crate::agentic::context_profile::ContextProfilePolicy;
 use crate::agentic::core::{
-    has_prompt_markup, Message, MessageContent, ProcessingPhase, PromptEnvelope, Session,
-    SessionConfig, SessionKind, SessionState, SessionSummary, TurnStats,
+    InternalReminderKind, Message, MessageContent, ProcessingPhase, Session, SessionConfig,
+    SessionKind, SessionState, SessionSummary, TurnStats,
 };
 use crate::agentic::events::{
     AgenticEvent, DeepReviewQueueState, EventPriority, EventQueue, EventRouter, EventSubscriber,
@@ -17,12 +17,13 @@ use crate::agentic::execution::{
 };
 use crate::agentic::fork_agent::ForkAgentContextSnapshot;
 use crate::agentic::goal_mode::{
-    build_goal_continuation_plan, build_goal_kickoff_messages, clear_goal_mode_patch,
-    effective_subagent_timeout_seconds, ensure_final_response_in_goal_context,
-    generate_goal_from_context, goal_mode_from_custom_metadata, goal_mode_patch, now_ms,
+    build_goal_continuation_plan, build_goal_kickoff_messages, build_goal_system_reminder,
+    clear_goal_mode_patch, effective_subagent_timeout_seconds,
+    ensure_final_response_in_goal_context, generate_goal_from_context,
+    goal_mode_from_custom_metadata, goal_mode_patch, now_ms,
     should_skip_goal_verification_for_turn, user_facing_goal_mode_error, verify_goal_achievement,
-    wrap_user_input_with_goal_reminder, GoalActivationResult, GoalContinuationPlan,
-    GoalModeInitialGoal, GoalModeState, MAX_GOAL_CONTINUATIONS,
+    GoalActivationResult, GoalContinuationPlan, GoalModeInitialGoal, GoalModeState,
+    MAX_GOAL_CONTINUATIONS,
 };
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::round_preempt::{DialogRoundInjectionSource, DialogRoundPreemptSource};
@@ -96,6 +97,7 @@ pub(crate) struct SubagentExecutionRequest {
 
 struct WrappedUserInputPayload {
     content: String,
+    prepended_messages: Vec<Message>,
     skill_agent_snapshot: TurnSkillAgentSnapshot,
     snapshot_persistence: SkillAgentSnapshotPersistence,
 }
@@ -105,31 +107,6 @@ enum SkillAgentSnapshotPersistence {
     None,
     SaveCurrentTurn,
     RecoverFirstTurnBaseline,
-}
-
-fn render_wrapped_user_input_content(
-    user_input: String,
-    embedded_reminders: Vec<String>,
-) -> String {
-    if has_prompt_markup(&user_input) {
-        if embedded_reminders.is_empty() {
-            return user_input;
-        }
-
-        let mut envelope = PromptEnvelope::new();
-        for reminder in embedded_reminders {
-            envelope.push_system_reminder(reminder);
-        }
-        let reminder_prefix = envelope.render();
-        return format!("{}\n{}", reminder_prefix, user_input);
-    }
-
-    let mut envelope = PromptEnvelope::new();
-    for reminder in embedded_reminders {
-        envelope.push_system_reminder(reminder);
-    }
-    envelope.push_user_query(user_input);
-    envelope.render()
 }
 
 impl SubagentResult {
@@ -1728,7 +1705,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         )
         .await;
 
-        let mut embedded_reminders = Vec::new();
+        let mut prepended_messages = Vec::new();
 
         let snapshot_persistence = if turn_index == 0 {
             SkillAgentSnapshotPersistence::SaveCurrentTurn
@@ -1750,10 +1727,16 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         {
             let diff = diff_skill_agent_snapshot(&previous_snapshot, &surface_resolution.snapshot);
             if let Some(skill_update) = diff.render_skill_listing_update() {
-                embedded_reminders.push(skill_update);
+                prepended_messages.push(Message::internal_reminder(
+                    InternalReminderKind::SkillListingDiff,
+                    skill_update,
+                ));
             }
             if let Some(agent_update) = diff.render_agent_listing_update() {
-                embedded_reminders.push(agent_update);
+                prepended_messages.push(Message::internal_reminder(
+                    InternalReminderKind::AgentListingDiff,
+                    agent_update,
+                ));
             }
             if diff.is_empty() {
                 SkillAgentSnapshotPersistence::None
@@ -1773,13 +1756,15 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         };
 
         if !current_agent_reminder.is_empty() {
-            embedded_reminders.push(current_agent_reminder);
+            prepended_messages.push(Message::internal_reminder(
+                InternalReminderKind::AgentMode,
+                current_agent_reminder,
+            ));
         }
 
-        let content = render_wrapped_user_input_content(user_input, embedded_reminders);
-
         Ok(WrappedUserInputPayload {
-            content,
+            content: user_input,
+            prepended_messages,
             skill_agent_snapshot: surface_resolution.snapshot,
             snapshot_persistence,
         })
@@ -1862,12 +1847,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             });
         }
 
-        let mut envelope = PromptEnvelope::new();
-        envelope.push_system_reminder(Self::assistant_bootstrap_system_reminder(
-            kickoff_query,
-            expected_reply_language,
-        ));
-        envelope.push_user_query(kickoff_query.to_string());
+        let kickoff_reminder =
+            Self::assistant_bootstrap_system_reminder(kickoff_query, expected_reply_language);
 
         let turn_id = format!("assistant-bootstrap-{}", uuid::Uuid::new_v4());
         let metadata = serde_json::json!({
@@ -1880,7 +1861,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
 
         self.start_dialog_turn_internal(
             session_id.clone(),
-            envelope.render(),
+            kickoff_query.to_string(),
             Some(kickoff_query.to_string()),
             None,
             Some(turn_id.clone()),
@@ -1889,6 +1870,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             DialogSubmissionPolicy::for_source(DialogTriggerSource::DesktopApi)
                 .with_skip_tool_confirmation(true),
             Some(metadata),
+            vec![Message::internal_reminder(
+                InternalReminderKind::Generic,
+                kickoff_reminder,
+            )],
             true,
         )
         .await?;
@@ -1925,6 +1910,36 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             workspace_path,
             submission_policy,
             user_message_metadata,
+            Vec::new(),
+            false,
+        )
+        .await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn start_dialog_turn_with_prepended_messages(
+        &self,
+        session_id: String,
+        user_input: String,
+        original_user_input: Option<String>,
+        turn_id: Option<String>,
+        agent_type: String,
+        workspace_path: Option<String>,
+        submission_policy: DialogSubmissionPolicy,
+        user_message_metadata: Option<serde_json::Value>,
+        prepended_messages: Vec<Message>,
+    ) -> BitFunResult<()> {
+        self.start_dialog_turn_internal(
+            session_id,
+            user_input,
+            original_user_input,
+            None,
+            turn_id,
+            agent_type,
+            workspace_path,
+            submission_policy,
+            user_message_metadata,
+            prepended_messages,
             false,
         )
         .await
@@ -1953,6 +1968,37 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             workspace_path,
             submission_policy,
             user_message_metadata,
+            Vec::new(),
+            false,
+        )
+        .await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn start_dialog_turn_with_image_contexts_and_prepended_messages(
+        &self,
+        session_id: String,
+        user_input: String,
+        original_user_input: Option<String>,
+        image_contexts: Vec<ImageContextData>,
+        turn_id: Option<String>,
+        agent_type: String,
+        workspace_path: Option<String>,
+        submission_policy: DialogSubmissionPolicy,
+        user_message_metadata: Option<serde_json::Value>,
+        prepended_messages: Vec<Message>,
+    ) -> BitFunResult<()> {
+        self.start_dialog_turn_internal(
+            session_id,
+            user_input,
+            original_user_input,
+            Some(image_contexts),
+            turn_id,
+            agent_type,
+            workspace_path,
+            submission_policy,
+            user_message_metadata,
+            prepended_messages,
             false,
         )
         .await
@@ -2354,6 +2400,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         workspace_path: Option<String>,
         submission_policy: DialogSubmissionPolicy,
         extra_user_message_metadata: Option<serde_json::Value>,
+        additional_prepended_messages: Vec<Message>,
         suppress_session_title_generation: bool,
     ) -> BitFunResult<()> {
         // Get latest session, restoring from persistence on demand so every entry
@@ -2640,19 +2687,23 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 &skill_agent_context_vars,
             )
             .await?;
-        let mut wrapped_user_input = wrapped_user_input_payload.content.clone();
+        let effective_user_input = wrapped_user_input_payload.content.clone();
+        let mut prepended_messages = additional_prepended_messages;
+        prepended_messages.extend(wrapped_user_input_payload.prepended_messages.clone());
 
         if let Ok(Some(goal_state)) = self.load_active_goal_mode(&session_id).await {
             if !should_skip_goal_verification_for_turn(
                 &original_user_input,
                 user_message_metadata.as_ref(),
             ) {
-                wrapped_user_input =
-                    wrap_user_input_with_goal_reminder(wrapped_user_input, &goal_state);
+                prepended_messages.push(Message::internal_reminder(
+                    InternalReminderKind::GoalMode,
+                    build_goal_system_reminder(&goal_state),
+                ));
             }
         }
 
-        if original_user_input != wrapped_user_input {
+        if original_user_input != effective_user_input {
             let mut metadata =
                 Self::ensure_user_message_metadata_object(user_message_metadata.take());
             if let Some(obj) = metadata.as_object_mut() {
@@ -2668,12 +2719,13 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         // Pass frontend turnId, generate if not provided
         let turn_id = self
             .session_manager
-            .start_dialog_turn(
+            .start_dialog_turn_with_prepended_messages(
                 &session_id,
                 effective_agent_type.clone(),
-                wrapped_user_input.clone(),
+                effective_user_input.clone(),
                 turn_id,
                 image_contexts,
+                prepended_messages,
                 user_message_metadata.clone(),
             )
             .await?;
@@ -2694,6 +2746,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         &session_id,
                         wrapped_user_input_payload.skill_agent_snapshot.clone(),
                     )
+                    .await;
+                self.session_manager
+                    .remove_listing_diff_internal_reminders(&session_id)
                     .await;
             }
         }
@@ -2737,8 +2792,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             session_id: session_id.clone(),
             turn_id: turn_id.clone(),
             turn_index,
-            user_input: wrapped_user_input.clone(),
-            original_user_input: if original_user_input != wrapped_user_input {
+            user_input: effective_user_input.clone(),
+            original_user_input: if original_user_input != effective_user_input {
                 Some(original_user_input.clone())
             } else {
                 None
@@ -2875,7 +2930,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let event_queue = self.event_queue.clone();
         let session_id_clone = session_id.clone();
         let turn_id_clone = turn_id.clone();
-        let user_input_for_workspace = wrapped_user_input.clone();
+        let user_input_for_workspace = effective_user_input.clone();
         let session_storage_path_for_finalize = session_storage_path.clone();
         let effective_agent_type_clone = effective_agent_type.clone();
         let user_message_metadata_clone = user_message_metadata;
@@ -4657,9 +4712,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             "parentSessionId": parent_session_id,
         }));
 
+        let (user_input, prepended_messages) = build_btw_user_input(question);
+
         self.start_dialog_turn_internal(
             child_session_id.to_string(),
-            build_btw_user_input(question),
+            user_input,
             Some(question.trim().to_string()),
             None,
             Some(turn_id.clone()),
@@ -4668,6 +4725,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             DialogSubmissionPolicy::for_source(DialogTriggerSource::DesktopApi)
                 .with_skip_tool_confirmation(true),
             user_message_metadata,
+            prepended_messages,
             true,
         )
         .await?;
@@ -4752,7 +4810,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     .capture_fork_agent_context_snapshot(&request.subagent_parent_info.session_id)
                     .await?;
                 let mut initial_messages = snapshot.messages.clone();
-                initial_messages.push(Message::user(fork_subagent_system_reminder()));
+                initial_messages.push(Message::internal_reminder(
+                    InternalReminderKind::ForkSubagent,
+                    fork_subagent_system_reminder(),
+                ));
                 initial_messages.push(Message::user(task_description.clone()));
 
                 Ok(HiddenSubagentExecutionRequest {
@@ -5404,8 +5465,8 @@ pub fn get_global_coordinator() -> Option<Arc<ConversationCoordinator>> {
 #[cfg(test)]
 mod tests {
     use super::{
-        normalize_subagent_max_concurrency, render_wrapped_user_input_content,
-        resolve_agent_submission_turn_id, ConversationCoordinator,
+        normalize_subagent_max_concurrency, resolve_agent_submission_turn_id,
+        ConversationCoordinator,
     };
     use crate::service::remote_ssh::workspace_state::init_remote_workspace_manager;
     use bitfun_runtime_ports::{AgentSubmissionRequest, AgentSubmissionSource};
@@ -5524,59 +5585,6 @@ mod tests {
             resolve_agent_submission_turn_id(&request),
             "legacy_metadata_turn"
         );
-    }
-
-    #[test]
-    fn render_wrapped_user_input_content_wraps_plain_input_without_reminders() {
-        let rendered = render_wrapped_user_input_content("hello".to_string(), Vec::new());
-
-        assert_eq!(rendered, "<user_query>\nhello\n</user_query>");
-    }
-
-    #[test]
-    fn render_wrapped_user_input_content_keeps_existing_markup_when_no_reminders() {
-        let original = "<user_query>\nhello\n</user_query>".to_string();
-
-        let rendered = render_wrapped_user_input_content(original.clone(), Vec::new());
-
-        assert_eq!(rendered, original);
-    }
-
-    #[test]
-    fn render_wrapped_user_input_content_preserves_existing_markup_without_nesting() {
-        let original = "<user_query>\nhello\n</user_query>".to_string();
-
-        let rendered = render_wrapped_user_input_content(
-            original.clone(),
-            vec!["# Skill Listing Update\n## Added Skills".to_string()],
-        );
-
-        assert!(rendered.starts_with(
-            "<system_reminder>\n# Skill Listing Update\n## Added Skills\n</system_reminder>\n"
-        ));
-        assert!(rendered.ends_with(&original));
-        assert_eq!(rendered.matches("<user_query>").count(), 1);
-    }
-
-    #[test]
-    fn render_wrapped_user_input_content_preserves_reminder_order_before_user_query() {
-        let rendered = render_wrapped_user_input_content(
-            "hello".to_string(),
-            vec![
-                "# Skill Listing Update\n## Added Skills".to_string(),
-                "# Agent Listing Update\n## Added Agents".to_string(),
-                "mode switch reminder".to_string(),
-            ],
-        );
-
-        let skill_index = rendered.find("# Skill Listing Update").unwrap();
-        let agent_index = rendered.find("# Agent Listing Update").unwrap();
-        let system_index = rendered.find("mode switch reminder").unwrap();
-        let user_query_index = rendered.find("<user_query>").unwrap();
-
-        assert!(skill_index < agent_index);
-        assert!(agent_index < system_index);
-        assert!(system_index < user_query_index);
     }
 
     #[tokio::test]

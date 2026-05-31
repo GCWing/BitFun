@@ -63,6 +63,8 @@ pub struct MessageMetadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub semantic_kind: Option<MessageSemanticKind>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub internal_reminder_kind: Option<InternalReminderKind>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub compression_payload: Option<CompressionPayload>,
 }
 
@@ -78,6 +80,47 @@ pub enum MessageSemanticKind {
     /// Full-screen snapshot appended after mutating ComputerUse tool results within the same turn;
     /// **included** in the next model request so the agent sees the desktop without calling screenshot again.
     ComputerUsePostActionSnapshot,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InternalReminderKind {
+    Generic,
+    SkillListingDiff,
+    AgentListingDiff,
+    AgentMode,
+    SideQuestion,
+    InitAgentsMd,
+    ScheduledJob,
+    ForkSubagent,
+    GoalMode,
+    GoalContinuation,
+    SessionMessageRequest,
+    SessionMessageReply,
+    LoopRecovery,
+    PeriodicLoopRecovery,
+    UserSteering,
+    BackgroundResult,
+    InterruptedContinue,
+    ThinkingOnlyRescue,
+}
+
+impl InternalReminderKind {
+    pub fn should_drop_during_compaction(self) -> bool {
+        matches!(
+            self,
+            Self::SkillListingDiff
+                | Self::AgentListingDiff
+                | Self::LoopRecovery
+                | Self::PeriodicLoopRecovery
+                | Self::InterruptedContinue
+                | Self::ThinkingOnlyRescue
+        )
+    }
+
+    pub fn is_listing_diff(self) -> bool {
+        matches!(self, Self::SkillListingDiff | Self::AgentListingDiff)
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -346,6 +389,18 @@ impl Message {
         }
     }
 
+    pub fn internal_reminder(reminder_kind: InternalReminderKind, text: impl Into<String>) -> Self {
+        let text = text.into();
+        let rendered = if crate::agentic::core::has_prompt_markup(&text) {
+            text
+        } else {
+            crate::agentic::core::render_system_reminder(&text)
+        };
+        Self::user(rendered)
+            .with_semantic_kind(MessageSemanticKind::InternalReminder)
+            .with_internal_reminder_kind(reminder_kind)
+    }
+
     pub fn user_multimodal(text: String, images: Vec<ImageContextData>) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
@@ -450,6 +505,15 @@ impl Message {
     pub fn with_semantic_kind(mut self, semantic_kind: MessageSemanticKind) -> Self {
         self.metadata.semantic_kind = Some(semantic_kind);
         self
+    }
+
+    pub fn with_internal_reminder_kind(mut self, reminder_kind: InternalReminderKind) -> Self {
+        self.metadata.internal_reminder_kind = Some(reminder_kind);
+        self
+    }
+
+    pub fn internal_reminder_kind(&self) -> Option<InternalReminderKind> {
+        self.metadata.internal_reminder_kind
     }
 
     pub fn with_compression_payload(mut self, compression_payload: CompressionPayload) -> Self {

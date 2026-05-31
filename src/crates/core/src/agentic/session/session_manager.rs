@@ -3,8 +3,9 @@
 //! Responsible for session CRUD, lifecycle management, and resource association
 
 use crate::agentic::core::{
-    new_turn_id, CompressionContract, CompressionState, Message, MessageSemanticKind,
-    ProcessingPhase, Session, SessionConfig, SessionKind, SessionState, SessionSummary, TurnStats,
+    new_turn_id, CompressionContract, CompressionState, InternalReminderKind, Message,
+    MessageSemanticKind, ProcessingPhase, Session, SessionConfig, SessionKind, SessionState,
+    SessionSummary, TurnStats,
 };
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::persistence::PersistenceManager;
@@ -82,6 +83,13 @@ pub struct ResolvedSessionTitle {
     pub title: String,
     pub method: SessionTitleMethod,
 }
+
+// When a full skill/agent listing baseline is rebuilt at turn R, snapshots whose
+// turn_index < R still contain now-redundant listing diff reminders. We do not
+// eagerly rewrite all historical snapshots; instead restore/rollback sanitize those
+// older snapshots lazily based on this persisted cutoff.
+const LISTING_BASELINE_REBUILD_TURN_INDEX_METADATA_KEY: &str = "listingBaselineRebuildTurnIndex";
+
 /// Session manager
 pub struct SessionManager {
     /// Active sessions in memory
@@ -1464,6 +1472,204 @@ impl SessionManager {
         }
     }
 
+    pub async fn rebuild_skill_agent_listing_baseline_to_latest(&self, session_id: &str) -> bool {
+        let Some(turn_index) = self
+            .sessions
+            .get(session_id)
+            .and_then(|session| session.dialog_turn_ids.len().checked_sub(1))
+        else {
+            return false;
+        };
+
+        let Some((_, latest_snapshot)) = self
+            .latest_turn_skill_agent_snapshot_at_or_before(session_id, turn_index)
+            .await
+        else {
+            return false;
+        };
+
+        self.recover_first_turn_skill_agent_snapshot(session_id, latest_snapshot)
+            .await;
+        self.persist_listing_baseline_rebuild_turn_index_best_effort(session_id, turn_index)
+            .await;
+
+        let _ = self
+            .remove_listing_diff_internal_reminders(session_id)
+            .await;
+        true
+    }
+
+    pub async fn remove_listing_diff_internal_reminders(&self, session_id: &str) -> bool {
+        let context_messages = self.context_store.get_context_messages(session_id);
+        if context_messages.is_empty() {
+            return false;
+        }
+
+        let (filtered_messages, changed) =
+            Self::strip_listing_diff_internal_reminders(context_messages);
+        if !changed {
+            return false;
+        }
+
+        self.context_store
+            .replace_context(session_id, filtered_messages);
+        self.persist_current_turn_context_snapshot_best_effort(
+            session_id,
+            "listing_diff_internal_reminders_removed",
+        )
+        .await;
+        true
+    }
+
+    fn strip_listing_diff_internal_reminders(messages: Vec<Message>) -> (Vec<Message>, bool) {
+        let original_len = messages.len();
+        let filtered_messages = messages
+            .into_iter()
+            .filter(|message| {
+                !message
+                    .internal_reminder_kind()
+                    .is_some_and(InternalReminderKind::is_listing_diff)
+            })
+            .collect::<Vec<_>>();
+
+        let changed = filtered_messages.len() != original_len;
+        (filtered_messages, changed)
+    }
+
+    fn listing_baseline_rebuild_turn_index_from_custom_metadata(
+        custom_metadata: Option<&serde_json::Value>,
+    ) -> Option<usize> {
+        custom_metadata?
+            .get(LISTING_BASELINE_REBUILD_TURN_INDEX_METADATA_KEY)?
+            .as_u64()?
+            .try_into()
+            .ok()
+    }
+
+    fn listing_baseline_rebuild_turn_index_from_metadata(
+        metadata: Option<&SessionMetadata>,
+    ) -> Option<usize> {
+        Self::listing_baseline_rebuild_turn_index_from_custom_metadata(
+            metadata.and_then(|metadata| metadata.custom_metadata.as_ref()),
+        )
+    }
+
+    async fn persist_context_snapshot_messages_best_effort(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        turn_index: usize,
+        messages: &[Message],
+        reason: &str,
+    ) {
+        if !self.should_persist_session_id(session_id) {
+            return;
+        }
+
+        if let Err(err) = self
+            .persistence_manager
+            .save_turn_context_snapshot(workspace_path, session_id, turn_index, messages)
+            .await
+        {
+            warn!(
+                "failed to persist explicit context snapshot: session_id={}, turn_index={}, reason={}, err={}",
+                session_id, turn_index, reason, err
+            );
+        }
+    }
+
+    async fn sanitize_listing_diff_context_snapshot_if_needed(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        turn_index: usize,
+        messages: Vec<Message>,
+        cutoff_turn_index: Option<usize>,
+        reason: &str,
+    ) -> Vec<Message> {
+        let Some(cutoff_turn_index) = cutoff_turn_index else {
+            return messages;
+        };
+        // The rebuild performed at turn R already persisted snapshots on and after R against
+        // the new baseline. Only snapshots strictly before that rebuilt turn need diff-reminder
+        // cleanup, so the predicate is `< cutoff`, not `<= cutoff`.
+        if turn_index >= cutoff_turn_index {
+            return messages;
+        }
+
+        let (sanitized_messages, changed) = Self::strip_listing_diff_internal_reminders(messages);
+        if !changed {
+            return sanitized_messages;
+        }
+
+        debug!(
+            "Sanitized listing diff reminders from pre-rebuild context snapshot: session_id={}, turn_index={}, cutoff_turn_index={}, reason={}",
+            session_id, turn_index, cutoff_turn_index, reason
+        );
+        self.persist_context_snapshot_messages_best_effort(
+            workspace_path,
+            session_id,
+            turn_index,
+            &sanitized_messages,
+            reason,
+        )
+        .await;
+        sanitized_messages
+    }
+
+    async fn persist_listing_baseline_rebuild_turn_index_best_effort(
+        &self,
+        session_id: &str,
+        turn_index: usize,
+    ) {
+        if let Err(err) = self
+            .merge_session_custom_metadata(
+                session_id,
+                json!({
+                    LISTING_BASELINE_REBUILD_TURN_INDEX_METADATA_KEY: turn_index,
+                }),
+            )
+            .await
+        {
+            warn!(
+                "failed to persist listing baseline rebuild turn index: session_id={}, turn_index={}, err={}",
+                session_id, turn_index, err
+            );
+        }
+    }
+
+    async fn truncate_listing_baseline_rebuild_turn_index_after_rollback(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        target_turn: usize,
+    ) -> BitFunResult<()> {
+        let metadata = self
+            .persistence_manager
+            .load_session_metadata(workspace_path, session_id)
+            .await?;
+        let Some(existing_cutoff) =
+            Self::listing_baseline_rebuild_turn_index_from_metadata(metadata.as_ref())
+        else {
+            return Ok(());
+        };
+
+        if existing_cutoff <= target_turn {
+            return Ok(());
+        }
+
+        // After rollback, the session branches again from `target_turn`. Keeping a cutoff newer
+        // than that branch point would cause future snapshots on the new branch to be mistaken
+        // for "pre-rebuild" history during the next restore, so clamp the cutoff down.
+        self.merge_session_custom_metadata(
+            session_id,
+            json!({
+                LISTING_BASELINE_REBUILD_TURN_INDEX_METADATA_KEY: target_turn,
+            }),
+        )
+        .await
+    }
+
     pub async fn invalidate_prompt_cache(
         &self,
         session_id: &str,
@@ -2230,10 +2436,12 @@ impl SessionManager {
         );
 
         let metadata_started_at = Instant::now();
-        if self
+        let session_metadata = self
             .persistence_manager
             .load_session_metadata(&session_storage_path, session_id)
-            .await?
+            .await?;
+        if session_metadata
+            .as_ref()
             .is_some_and(|metadata| !include_internal && metadata.should_hide_from_user_lists())
         {
             return Err(BitFunError::NotFound(format!(
@@ -2241,6 +2449,8 @@ impl SessionManager {
                 session_id
             )));
         }
+        let listing_baseline_rebuild_turn_index =
+            Self::listing_baseline_rebuild_turn_index_from_metadata(session_metadata.as_ref());
         debug!(
             "Session restore phase completed: session_id={}, phase=load_metadata, duration_ms={}",
             session_id,
@@ -2349,7 +2559,15 @@ impl SessionManager {
         {
             Some((turn_index, msgs)) => {
                 latest_turn_index = Some(turn_index);
-                msgs
+                self.sanitize_listing_diff_context_snapshot_if_needed(
+                    &session_storage_path,
+                    session_id,
+                    turn_index,
+                    msgs,
+                    listing_baseline_rebuild_turn_index,
+                    "restore_pre_listing_baseline_rebuild_snapshot",
+                )
+                .await
             }
             None => Self::build_messages_from_turns(&persisted_turns),
         };
@@ -2487,11 +2705,25 @@ impl SessionManager {
             let _ = self.restore_session(workspace_path, session_id).await;
         }
 
+        // Rollback may load a historical snapshot from before the latest rebuilt baseline. In
+        // that case we must strip all listing diff reminders before the snapshot re-enters
+        // runtime context, otherwise old diffs reappear after rollback/reopen.
+        let listing_baseline_rebuild_turn_index = if self.config.enable_persistence {
+            let metadata = self
+                .persistence_manager
+                .load_session_metadata(workspace_path, session_id)
+                .await?;
+            Self::listing_baseline_rebuild_turn_index_from_metadata(metadata.as_ref())
+        } else {
+            None
+        };
+
         // 1) Load target context (target_turn == 0 => empty context)
         let messages = if target_turn == 0 {
             Vec::new()
         } else {
-            self.persistence_manager
+            let messages = self
+                .persistence_manager
                 .load_turn_context_snapshot(workspace_path, session_id, target_turn - 1)
                 .await?
                 .ok_or_else(|| {
@@ -2500,7 +2732,16 @@ impl SessionManager {
                         session_id,
                         target_turn - 1
                     ))
-                })?
+                })?;
+            self.sanitize_listing_diff_context_snapshot_if_needed(
+                workspace_path,
+                session_id,
+                target_turn - 1,
+                messages,
+                listing_baseline_rebuild_turn_index,
+                "rollback_restore_pre_listing_baseline_rebuild_snapshot",
+            )
+            .await
         };
 
         // 2) Restore the in-memory context cache.
@@ -2566,6 +2807,12 @@ impl SessionManager {
             self.persistence_manager
                 .delete_turn_context_snapshots_from(workspace_path, session_id, target_turn)
                 .await?;
+            self.truncate_listing_baseline_rebuild_turn_index_after_rollback(
+                workspace_path,
+                session_id,
+                target_turn,
+            )
+            .await?;
         }
         self.turn_skill_agent_snapshot_store
             .remove_from(session_id, target_turn);
@@ -2953,7 +3200,7 @@ impl SessionManager {
         agent_type: Option<String>,
         user_input: String,
         turn_id: Option<String>,
-        context_message: Option<Message>,
+        context_messages: Vec<Message>,
         processing_phase: ProcessingPhase,
         user_message_metadata: Option<serde_json::Value>,
     ) -> BitFunResult<String> {
@@ -2985,7 +3232,7 @@ impl SessionManager {
             session.last_activity_at = SystemTime::now();
         }
 
-        if let Some(message) = context_message {
+        for message in context_messages {
             self.context_store
                 .add_message(session_id, message.with_turn_id(turn_id.clone()));
         }
@@ -3059,13 +3306,56 @@ impl SessionManager {
                 Some(agent_type),
                 user_input,
                 turn_id,
-                Some(user_message),
+                vec![user_message],
                 ProcessingPhase::Starting,
                 user_message_metadata,
             )
             .await?;
 
         debug!("Starting dialog turn: turn_id={}", turn_id);
+
+        Ok(turn_id)
+    }
+
+    pub async fn start_dialog_turn_with_prepended_messages(
+        &self,
+        session_id: &str,
+        agent_type: String,
+        user_input: String,
+        turn_id: Option<String>,
+        image_contexts: Option<Vec<ImageContextData>>,
+        prepended_messages: Vec<Message>,
+        user_message_metadata: Option<serde_json::Value>,
+    ) -> BitFunResult<String> {
+        let user_message =
+            if let Some(images) = image_contexts.as_ref().filter(|v| !v.is_empty()).cloned() {
+                Message::user_multimodal(user_input.clone(), images)
+                    .with_semantic_kind(MessageSemanticKind::ActualUserInput)
+            } else {
+                Message::user(user_input.clone())
+                    .with_semantic_kind(MessageSemanticKind::ActualUserInput)
+            };
+
+        let mut context_messages = prepended_messages;
+        context_messages.push(user_message);
+
+        let turn_id = self
+            .start_persisted_turn(
+                session_id,
+                DialogTurnKind::UserDialog,
+                Some(agent_type),
+                user_input,
+                turn_id,
+                context_messages,
+                ProcessingPhase::Starting,
+                user_message_metadata,
+            )
+            .await?;
+
+        debug!(
+            "Starting dialog turn with prepended messages: turn_id={}",
+            turn_id
+        );
 
         Ok(turn_id)
     }
@@ -3093,7 +3383,7 @@ impl SessionManager {
                 Some(agent_type),
                 user_input,
                 turn_id,
-                None,
+                Vec::new(),
                 ProcessingPhase::Starting,
                 user_message_metadata,
             )
@@ -3122,7 +3412,7 @@ impl SessionManager {
                 None,
                 display_message,
                 turn_id,
-                None,
+                Vec::new(),
                 ProcessingPhase::Compacting,
                 user_message_metadata,
             )
@@ -5215,7 +5505,7 @@ mod tests {
         let persistence_manager = Arc::new(
             PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
         );
-        let manager = test_manager(persistence_manager);
+        let manager = test_manager(persistence_manager.clone());
         let session = manager
             .create_session(
                 "Skill agent snapshot".to_string(),
@@ -5295,6 +5585,352 @@ mod tests {
 
         assert_eq!(latest.0, 1);
         assert_eq!(latest.1.subagents[0].id, "agent-b");
+    }
+
+    #[tokio::test]
+    async fn rebuild_skill_agent_listing_baseline_to_latest_removes_listing_diff_reminders() {
+        use crate::agentic::core::{InternalReminderKind, Message, MessageSemanticKind};
+        use crate::agentic::skill_agent_snapshot::{SkillSnapshotEntry, TurnSkillAgentSnapshot};
+
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let session = manager
+            .create_session(
+                "Listing baseline rebuild".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+
+        {
+            let mut active = manager
+                .sessions
+                .get_mut(&session.session_id)
+                .expect("session should be active");
+            active.dialog_turn_ids = vec!["turn-0".to_string(), "turn-1".to_string()];
+        }
+
+        manager.context_store.replace_context(
+            &session.session_id,
+            vec![
+                Message::internal_reminder(
+                    InternalReminderKind::SkillListingDiff,
+                    "# Skill Listing Update\n\nChanged",
+                )
+                .with_turn_id("turn-1".to_string()),
+                Message::internal_reminder(
+                    InternalReminderKind::AgentListingDiff,
+                    "# Agent Listing Update\n\nChanged",
+                )
+                .with_turn_id("turn-1".to_string()),
+                Message::user("real question".to_string())
+                    .with_turn_id("turn-1".to_string())
+                    .with_semantic_kind(MessageSemanticKind::ActualUserInput),
+            ],
+        );
+
+        manager
+            .remember_turn_skill_agent_snapshot(
+                &session.session_id,
+                0,
+                TurnSkillAgentSnapshot {
+                    skills: vec![SkillSnapshotEntry {
+                        name: "old-skill".to_string(),
+                        description: "old".to_string(),
+                        location: "/old".to_string(),
+                    }],
+                    ..Default::default()
+                },
+            )
+            .await;
+        manager
+            .remember_turn_skill_agent_snapshot(
+                &session.session_id,
+                1,
+                TurnSkillAgentSnapshot {
+                    skills: vec![SkillSnapshotEntry {
+                        name: "new-skill".to_string(),
+                        description: "new".to_string(),
+                        location: "/new".to_string(),
+                    }],
+                    ..Default::default()
+                },
+            )
+            .await;
+
+        assert!(
+            manager
+                .rebuild_skill_agent_listing_baseline_to_latest(&session.session_id)
+                .await
+        );
+
+        let context_messages = manager
+            .context_store
+            .get_context_messages(&session.session_id);
+        assert_eq!(context_messages.len(), 1);
+        assert_eq!(
+            context_messages[0].metadata.semantic_kind,
+            Some(MessageSemanticKind::ActualUserInput)
+        );
+
+        let baseline = manager
+            .turn_skill_agent_snapshot(&session.session_id, 0)
+            .await
+            .expect("baseline snapshot should exist");
+        assert_eq!(baseline.skills[0].name, "new-skill");
+        assert!(manager
+            .turn_skill_agent_snapshot(&session.session_id, 1)
+            .await
+            .is_none());
+
+        let metadata = persistence_manager
+            .load_session_metadata(workspace.path(), &session.session_id)
+            .await
+            .expect("metadata lookup should succeed")
+            .expect("metadata should exist");
+        assert_eq!(
+            SessionManager::listing_baseline_rebuild_turn_index_from_metadata(Some(&metadata)),
+            Some(1)
+        );
+    }
+
+    #[tokio::test]
+    async fn restore_session_sanitizes_pre_cutoff_listing_diff_snapshot() {
+        use crate::agentic::core::{InternalReminderKind, Message, MessageSemanticKind};
+
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let session_id = Uuid::new_v4().to_string();
+        let mut session = Session::new_with_id(
+            session_id.clone(),
+            "Restore sanitize".to_string(),
+            "agentic".to_string(),
+            SessionConfig {
+                workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                ..Default::default()
+            },
+        );
+        session.dialog_turn_ids = vec!["turn-0".to_string(), "turn-1".to_string()];
+
+        persistence_manager
+            .save_session(workspace.path(), &session)
+            .await
+            .expect("session should save");
+
+        let mut metadata = persistence_manager
+            .load_session_metadata(workspace.path(), &session_id)
+            .await
+            .expect("metadata load should succeed")
+            .expect("metadata should exist");
+        metadata.custom_metadata = Some(json!({
+            super::LISTING_BASELINE_REBUILD_TURN_INDEX_METADATA_KEY: 2,
+        }));
+        persistence_manager
+            .save_session_metadata(workspace.path(), &metadata)
+            .await
+            .expect("metadata should save");
+
+        for index in 0..=1 {
+            let turn = DialogTurnData::new(
+                format!("turn-{index}"),
+                index,
+                session_id.clone(),
+                UserMessageData {
+                    id: format!("turn-{index}-user"),
+                    content: format!("prompt {index}"),
+                    timestamp: index as u64,
+                    metadata: None,
+                },
+            );
+            persistence_manager
+                .save_dialog_turn(workspace.path(), &turn)
+                .await
+                .expect("turn should save");
+        }
+
+        persistence_manager
+            .save_turn_context_snapshot(
+                workspace.path(),
+                &session_id,
+                1,
+                &[
+                    Message::internal_reminder(
+                        InternalReminderKind::SkillListingDiff,
+                        "# Skill Listing Update\n\nChanged",
+                    )
+                    .with_turn_id("turn-1".to_string()),
+                    Message::user("prompt 1".to_string())
+                        .with_turn_id("turn-1".to_string())
+                        .with_semantic_kind(MessageSemanticKind::ActualUserInput),
+                ],
+            )
+            .await
+            .expect("snapshot should save");
+
+        let restored = manager
+            .restore_session(workspace.path(), &session_id)
+            .await
+            .expect("session should restore");
+
+        assert_eq!(
+            restored.dialog_turn_ids,
+            vec!["turn-0".to_string(), "turn-1".to_string()]
+        );
+        let context_messages = manager.context_store.get_context_messages(&session_id);
+        assert_eq!(context_messages.len(), 1);
+        assert_eq!(
+            context_messages[0].metadata.semantic_kind,
+            Some(MessageSemanticKind::ActualUserInput)
+        );
+
+        let sanitized_snapshot = persistence_manager
+            .load_turn_context_snapshot(workspace.path(), &session_id, 1)
+            .await
+            .expect("snapshot load should succeed")
+            .expect("snapshot should still exist");
+        assert_eq!(sanitized_snapshot.len(), 1);
+        assert_eq!(
+            sanitized_snapshot[0].metadata.semantic_kind,
+            Some(MessageSemanticKind::ActualUserInput)
+        );
+    }
+
+    #[tokio::test]
+    async fn rollback_sanitizes_pre_cutoff_snapshot_and_truncates_cutoff() {
+        use crate::agentic::core::{InternalReminderKind, Message, MessageSemanticKind};
+
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let session = manager
+            .create_session(
+                "Rollback sanitize".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+
+        for index in 0..=2 {
+            let turn = DialogTurnData::new(
+                format!("turn-{index}"),
+                index,
+                session.session_id.clone(),
+                UserMessageData {
+                    id: format!("turn-{index}-user"),
+                    content: format!("prompt {index}"),
+                    timestamp: index as u64,
+                    metadata: None,
+                },
+            );
+            persistence_manager
+                .save_dialog_turn(workspace.path(), &turn)
+                .await
+                .expect("turn should save");
+        }
+
+        {
+            let mut active = manager
+                .sessions
+                .get_mut(&session.session_id)
+                .expect("session should be active");
+            active.dialog_turn_ids = vec![
+                "turn-0".to_string(),
+                "turn-1".to_string(),
+                "turn-2".to_string(),
+            ];
+        }
+
+        manager
+            .merge_session_custom_metadata(
+                &session.session_id,
+                json!({
+                    super::LISTING_BASELINE_REBUILD_TURN_INDEX_METADATA_KEY: 2,
+                }),
+            )
+            .await
+            .expect("cutoff metadata should save");
+
+        persistence_manager
+            .save_turn_context_snapshot(
+                workspace.path(),
+                &session.session_id,
+                0,
+                &[
+                    Message::internal_reminder(
+                        InternalReminderKind::AgentListingDiff,
+                        "# Agent Listing Update\n\nChanged",
+                    )
+                    .with_turn_id("turn-0".to_string()),
+                    Message::user("prompt 0".to_string())
+                        .with_turn_id("turn-0".to_string())
+                        .with_semantic_kind(MessageSemanticKind::ActualUserInput),
+                ],
+            )
+            .await
+            .expect("snapshot 0 should save");
+        persistence_manager
+            .save_turn_context_snapshot(
+                workspace.path(),
+                &session.session_id,
+                1,
+                &[
+                    Message::user("prompt 0".to_string()),
+                    Message::user("prompt 1".to_string()),
+                ],
+            )
+            .await
+            .expect("snapshot 1 should save");
+
+        manager
+            .rollback_context_to_turn_start(workspace.path(), &session.session_id, 1)
+            .await
+            .expect("rollback should succeed");
+
+        let context_messages = manager
+            .context_store
+            .get_context_messages(&session.session_id);
+        assert_eq!(context_messages.len(), 1);
+        assert_eq!(
+            context_messages[0].metadata.semantic_kind,
+            Some(MessageSemanticKind::ActualUserInput)
+        );
+
+        let sanitized_snapshot = persistence_manager
+            .load_turn_context_snapshot(workspace.path(), &session.session_id, 0)
+            .await
+            .expect("snapshot 0 load should succeed")
+            .expect("snapshot 0 should still exist");
+        assert_eq!(sanitized_snapshot.len(), 1);
+        assert_eq!(
+            sanitized_snapshot[0].metadata.semantic_kind,
+            Some(MessageSemanticKind::ActualUserInput)
+        );
+
+        let metadata = persistence_manager
+            .load_session_metadata(workspace.path(), &session.session_id)
+            .await
+            .expect("metadata load should succeed")
+            .expect("metadata should exist");
+        assert_eq!(
+            SessionManager::listing_baseline_rebuild_turn_index_from_metadata(Some(&metadata)),
+            Some(1)
+        );
     }
 
     #[tokio::test]

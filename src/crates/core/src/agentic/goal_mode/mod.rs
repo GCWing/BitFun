@@ -5,9 +5,7 @@ mod types;
 
 pub use types::*;
 
-use crate::agentic::core::{
-    Message, MessageContent, MessageRole, MessageSemanticKind, PromptEnvelope,
-};
+use crate::agentic::core::{Message, MessageContent, MessageRole, MessageSemanticKind};
 use crate::service::config::{get_app_language_code, short_model_user_language_instruction};
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::extract_json_from_ai_response;
@@ -167,20 +165,6 @@ Keep working toward the initial session goal. Do not declare the task finished u
     )
 }
 
-pub fn wrap_user_input_with_goal_reminder(user_input: String, state: &GoalModeState) -> String {
-    if has_prompt_markup(&user_input) {
-        return user_input;
-    }
-    let mut envelope = PromptEnvelope::new();
-    envelope.push_system_reminder(build_goal_system_reminder(state));
-    envelope.push_user_query(user_input);
-    envelope.render()
-}
-
-fn has_prompt_markup(text: &str) -> bool {
-    crate::agentic::core::has_prompt_markup(text)
-}
-
 pub fn build_goal_kickoff_messages(
     generation: &GoalGenerationResult,
     user_hint: Option<&str>,
@@ -245,26 +229,23 @@ pub fn build_goal_continuation_plan(
 
     let display_message = format!("Goal not yet achieved — continuing work on: {guidance}");
 
-    let wrapped_message = {
-        let mut envelope = PromptEnvelope::new();
-        envelope.push_system_reminder(format!(
-            "Goal verification found the initial session goal is NOT yet achieved.\n\
+    let continuation_reminder = format!(
+        "Goal verification found the initial session goal is NOT yet achieved.\n\
 Initial session goal: {}\n\
 {current_goal_note}\
 Remaining gaps:\n{gaps}\n\
 Next steps:\n{guidance}\n\
 Continue working until the initial session goal is fully satisfied. Do not stop early.",
-            initial_goal_text
-        ));
-        envelope.push_user_query(format!(
-            "Continue working toward the initial session goal. Address the remaining gaps and complete the goal before stopping.\n\nInitial session goal: {}",
-            initial_goal_text
-        ));
-        envelope.render()
-    };
+        initial_goal_text
+    );
+    let user_input = format!(
+        "Continue working toward the initial session goal. Address the remaining gaps and complete the goal before stopping.\n\nInitial session goal: {}",
+        initial_goal_text
+    );
 
     GoalContinuationPlan {
-        wrapped_message,
+        user_input,
+        prepended_reminders: vec![continuation_reminder],
         display_message,
         user_message_metadata: serde_json::json!({
             "goalModeContinuation": true,
@@ -845,7 +826,8 @@ mod tests {
             guidance: "Add tests".to_string(),
         };
         let plan = build_goal_continuation_plan(&state, &verification);
-        assert!(plan.wrapped_message.contains("Ship feature"));
+        assert!(plan.user_input.contains("Ship feature"));
+        assert!(plan.prepended_reminders[0].contains("Ship feature"));
         assert!(plan.display_message.contains("Add tests"));
         assert!(!plan.display_message.contains("Ship feature"));
     }
@@ -874,11 +856,9 @@ mod tests {
         };
 
         let plan = build_goal_continuation_plan(&state, &verification);
-        assert!(plan
-            .wrapped_message
+        assert!(plan.prepended_reminders[0]
             .contains("Initial session goal: Ship the importer fix with tests"));
-        assert!(plan
-            .wrapped_message
+        assert!(plan.prepended_reminders[0]
             .contains("Current continuation target: Summarize current progress"));
         assert_eq!(
             plan.user_message_metadata["initialGoal"]["goalText"],

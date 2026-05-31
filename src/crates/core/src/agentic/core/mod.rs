@@ -13,8 +13,8 @@ pub use dialog_turn::{new_turn_id, TurnStats};
 pub use message::{
     CompressedMessage, CompressedMessageRole, CompressedTodoItem, CompressedTodoSnapshot,
     CompressedToolCall, CompressionContract, CompressionContractItem, CompressionEntry,
-    CompressionPayload, Message, MessageContent, MessageRole, MessageSemanticKind, ToolCall,
-    ToolResult,
+    CompressionPayload, InternalReminderKind, Message, MessageContent, MessageRole,
+    MessageSemanticKind, ToolCall, ToolResult,
 };
 pub use messages_helper::{MessageHelper, RequestReasoningTokenPolicy};
 pub use prompt_markup::{

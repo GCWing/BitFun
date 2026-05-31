@@ -4,8 +4,8 @@ use super::{
 };
 use crate::agentic::core::{
     render_system_reminder, render_user_query, CompressedMessageRole, CompressionContract,
-    CompressionContractItem, CompressionEntry, CompressionPayload, Message, MessageSemanticKind,
-    ToolCall, ToolResult,
+    CompressionContractItem, CompressionEntry, CompressionPayload, InternalReminderKind, Message,
+    MessageSemanticKind, ToolCall, ToolResult,
 };
 use serde_json::json;
 
@@ -122,6 +122,23 @@ fn drops_system_reminder_only_user_messages_from_fallback_summary() {
         vec![vec![Message::user(render_system_reminder(
             "Summarized context boundary marker",
         ))]],
+        &default_options(),
+    );
+
+    assert!(summary_artifact.payload.entries.is_empty());
+    assert_eq!(
+        summary_artifact.summary_text,
+        "No detailed historical entries fit within the remaining context budget."
+    );
+}
+
+#[test]
+fn drops_listing_diff_internal_reminders_from_fallback_summary() {
+    let summary_artifact = build_structured_compression_summary(
+        vec![vec![Message::internal_reminder(
+            InternalReminderKind::SkillListingDiff,
+            "# Skill Listing Update\n\nChanged",
+        )]],
         &default_options(),
     );
 

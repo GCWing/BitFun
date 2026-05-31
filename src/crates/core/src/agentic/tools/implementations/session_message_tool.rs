@@ -3,7 +3,7 @@ use crate::agentic::coordination::{
     get_global_coordinator, get_global_scheduler, AgentSessionReplyRoute, DialogSubmissionPolicy,
     DialogTriggerSource,
 };
-use crate::agentic::core::{PromptEnvelope, SessionConfig};
+use crate::agentic::core::{InternalReminderKind, Message, SessionConfig};
 use crate::agentic::tools::framework::{
     Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
@@ -158,14 +158,15 @@ impl SessionMessageTool {
         Ok(format!("session-{}", creator_session_id))
     }
 
-    fn format_forwarded_message(&self, message: &str) -> String {
-        let mut envelope = PromptEnvelope::new();
-        envelope.push_system_reminder(
-            "This request was sent by another agent, not human user. Do not use interactive tools for this request. In particular, do not call AskUserQuestion."
-                .to_string(),
-        );
-        envelope.push_user_query(message.to_string());
-        envelope.render()
+    fn format_forwarded_message(&self, message: &str) -> (String, Vec<Message>) {
+        (
+            message.to_string(),
+            vec![Message::internal_reminder(
+                InternalReminderKind::SessionMessageRequest,
+                "This request was sent by another agent, not human user. Do not use interactive tools for this request. In particular, do not call AskUserQuestion."
+                    .to_string(),
+            )],
+        )
     }
 }
 
@@ -537,10 +538,11 @@ Allowed agent types when creating a session:
                 )
             };
 
-        let forwarded_message = self.format_forwarded_message(&params.message);
+        let (forwarded_message, prepended_messages) =
+            self.format_forwarded_message(&params.message);
 
         scheduler
-            .submit(
+            .submit_with_prepended_messages(
                 target_session_id.clone(),
                 forwarded_message,
                 Some(params.message.clone()),
@@ -553,6 +555,7 @@ Allowed agent types when creating a session:
                     source_workspace_path: source_workspace,
                 }),
                 None,
+                prepended_messages,
                 None,
             )
             .await

@@ -658,7 +658,8 @@ pub struct GoalActivationResult {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GoalContinuationPlan {
-    pub wrapped_message: String,
+    pub user_input: String,
+    pub prepended_reminders: Vec<String>,
     pub display_message: String,
     pub user_message_metadata: serde_json::Value,
 }

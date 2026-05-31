@@ -1,6 +1,6 @@
 //! Shared `/btw` helpers and runtime-only request tracking.
 
-use crate::agentic::core::PromptEnvelope;
+use crate::agentic::core::{InternalReminderKind, Message};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -101,9 +101,12 @@ CRITICAL CONSTRAINTS:
 Simply answer the question with the information you have, and use tools only when needed."#
 }
 
-pub fn build_btw_user_input(question: &str) -> String {
-    let mut envelope = PromptEnvelope::new();
-    envelope.push_system_reminder(btw_system_reminder());
-    envelope.push_user_query(question.trim());
-    envelope.render()
+pub fn build_btw_user_input(question: &str) -> (String, Vec<Message>) {
+    (
+        question.trim().to_string(),
+        vec![Message::internal_reminder(
+            InternalReminderKind::SideQuestion,
+            btw_system_reminder(),
+        )],
+    )
 }

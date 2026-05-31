@@ -162,6 +162,13 @@ fn extract_nested_compression_entries(message: &Message) -> Option<Vec<Compressi
         return None;
     }
 
+    if message
+        .internal_reminder_kind()
+        .is_some_and(|kind| kind.should_drop_during_compaction())
+    {
+        return Some(Vec::new());
+    }
+
     let raw_text = match &message.content {
         MessageContent::Text(text) => text.clone(),
         MessageContent::Multimodal { text, .. } => text.clone(),

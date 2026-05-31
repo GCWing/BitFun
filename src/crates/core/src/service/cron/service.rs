@@ -11,7 +11,7 @@ use super::types::{
 use crate::agentic::coordination::{
     DialogQueuePriority, DialogScheduler, DialogSubmissionPolicy, DialogTriggerSource,
 };
-use crate::agentic::core::PromptEnvelope;
+use crate::agentic::core::{InternalReminderKind, Message};
 use crate::infrastructure::PathManager;
 use crate::util::errors::{BitFunError, BitFunResult};
 use chrono::{Local, SecondsFormat, TimeZone, Utc};
@@ -476,11 +476,14 @@ impl CronService {
 
                 let turn_id = format!("cronjob_{}_{}", job.id, pending_trigger_at_ms);
                 scheduled_at_ms = Some(pending_trigger_at_ms);
+                let (user_input, prepended_messages) =
+                    format_scheduled_job_user_input(&job.payload.text, current_ms);
                 enqueue_input = Some(EnqueueInput {
                     turn_id,
                     session_id: job.session_id.clone(),
                     workspace_path: job.workspace_path.clone(),
-                    user_input: format_scheduled_job_user_input(&job.payload.text, current_ms),
+                    user_input,
+                    prepended_messages,
                 });
                 should_attempt_enqueue = true;
             }
@@ -509,16 +512,17 @@ impl CronService {
 
         let submit_result = self
             .scheduler
-            .submit(
+            .submit_with_prepended_messages(
                 enqueue_input.session_id.clone(),
-                enqueue_input.user_input,
-                None,
+                enqueue_input.user_input.clone(),
+                Some(enqueue_input.user_input),
                 Some(enqueue_input.turn_id.clone()),
                 String::new(),
                 Some(enqueue_input.workspace_path),
                 scheduled_job_policy(),
                 None,
                 None,
+                enqueue_input.prepended_messages,
                 None,
             )
             .await;
@@ -718,20 +722,23 @@ fn next_wakeup_for_job(job: &CronJob) -> Option<i64> {
     }
 }
 
-fn format_scheduled_job_user_input(payload: &str, current_ms: i64) -> String {
+fn format_scheduled_job_user_input(payload: &str, current_ms: i64) -> (String, Vec<Message>) {
     let current_time = Local
         .timestamp_millis_opt(current_ms)
         .single()
         .map(|datetime| datetime.to_rfc3339_opts(SecondsFormat::Secs, false))
         .unwrap_or_else(|| current_ms.to_string());
 
-    let mut envelope = PromptEnvelope::new();
-    envelope.push_system_reminder(format!(
-        "This message was triggered by a scheduled job.\nCurrent time: {}",
-        current_time
-    ));
-    envelope.push_user_query(payload.to_string());
-    envelope.render()
+    (
+        payload.to_string(),
+        vec![Message::internal_reminder(
+            InternalReminderKind::ScheduledJob,
+            format!(
+                "This message was triggered by a scheduled job.\nCurrent time: {}",
+                current_time
+            ),
+        )],
+    )
 }
 
 fn scheduled_job_policy() -> DialogSubmissionPolicy {
@@ -751,6 +758,7 @@ struct EnqueueInput {
     session_id: String,
     workspace_path: String,
     user_input: String,
+    prepended_messages: Vec<Message>,
 }
 
 /// Permanent failure: coordinator cannot load session metadata (session deleted from disk).

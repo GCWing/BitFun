@@ -12,7 +12,7 @@
 
 use super::coordinator::{ConversationCoordinator, DialogTriggerSource};
 use super::turn_outcome::{TurnOutcome, TurnOutcomeQueueAction, TurnOutcomeStatus};
-use crate::agentic::core::{PromptEnvelope, SessionState};
+use crate::agentic::core::{InternalReminderKind, Message, SessionState};
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::init_agents_md::build_init_agents_md_user_input;
 use crate::agentic::round_preempt::{
@@ -94,6 +94,7 @@ impl ActiveTurn {
 pub struct QueuedTurn {
     pub user_input: String,
     pub original_user_input: Option<String>,
+    pub prepended_messages: Vec<Message>,
     pub turn_id: Option<String>,
     pub agent_type: String,
     pub workspace_path: Option<String>,
@@ -311,20 +312,21 @@ impl DialogScheduler {
         let agent_type = self
             .resolve_session_agent_type(&session_id, workspace_path.as_deref())
             .await?;
-        let (user_input, original_user_input) = build_init_agents_md_user_input()
+        let (user_input, prepended_messages) = build_init_agents_md_user_input()
             .await
             .map_err(|error| error.to_string())?;
 
-        self.submit(
+        self.submit_with_prepended_messages(
             session_id,
-            user_input,
-            Some(original_user_input),
+            user_input.clone(),
+            Some(user_input),
             None,
             agent_type,
             workspace_path,
             policy,
             None,
             None,
+            prepended_messages,
             None,
         )
         .await
@@ -371,10 +373,42 @@ impl DialogScheduler {
         user_message_metadata: Option<serde_json::Value>,
         image_contexts: Option<Vec<ImageContextData>>,
     ) -> Result<DialogSubmitOutcome, String> {
+        self.submit_with_prepended_messages(
+            session_id,
+            user_input,
+            original_user_input,
+            turn_id,
+            agent_type,
+            workspace_path,
+            policy,
+            reply_route,
+            user_message_metadata,
+            Vec::new(),
+            image_contexts,
+        )
+        .await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn submit_with_prepended_messages(
+        &self,
+        session_id: String,
+        user_input: String,
+        original_user_input: Option<String>,
+        turn_id: Option<String>,
+        agent_type: String,
+        workspace_path: Option<String>,
+        policy: DialogSubmissionPolicy,
+        reply_route: Option<AgentSessionReplyRoute>,
+        user_message_metadata: Option<serde_json::Value>,
+        prepended_messages: Vec<Message>,
+        image_contexts: Option<Vec<ImageContextData>>,
+    ) -> Result<DialogSubmitOutcome, String> {
         let resolved_turn_id = turn_id.unwrap_or_else(|| Uuid::new_v4().to_string());
         let queued_turn = QueuedTurn {
             user_input,
             original_user_input,
+            prepended_messages,
             turn_id: Some(resolved_turn_id.clone()),
             agent_type,
             workspace_path,
@@ -671,33 +705,66 @@ impl DialogScheduler {
             .filter(|imgs| !imgs.is_empty())
         {
             Some(imgs) => {
-                self.coordinator
-                    .start_dialog_turn_with_image_contexts(
-                        session_id.to_string(),
-                        queued_turn.user_input.clone(),
-                        queued_turn.original_user_input.clone(),
-                        imgs.clone(),
-                        queued_turn.turn_id.clone(),
-                        queued_turn.agent_type.clone(),
-                        queued_turn.workspace_path.clone(),
-                        queued_turn.policy,
-                        queued_turn.user_message_metadata.clone(),
-                    )
-                    .await
+                if queued_turn.prepended_messages.is_empty() {
+                    self.coordinator
+                        .start_dialog_turn_with_image_contexts(
+                            session_id.to_string(),
+                            queued_turn.user_input.clone(),
+                            queued_turn.original_user_input.clone(),
+                            imgs.clone(),
+                            queued_turn.turn_id.clone(),
+                            queued_turn.agent_type.clone(),
+                            queued_turn.workspace_path.clone(),
+                            queued_turn.policy,
+                            queued_turn.user_message_metadata.clone(),
+                        )
+                        .await
+                } else {
+                    self.coordinator
+                        .start_dialog_turn_with_image_contexts_and_prepended_messages(
+                            session_id.to_string(),
+                            queued_turn.user_input.clone(),
+                            queued_turn.original_user_input.clone(),
+                            imgs.clone(),
+                            queued_turn.turn_id.clone(),
+                            queued_turn.agent_type.clone(),
+                            queued_turn.workspace_path.clone(),
+                            queued_turn.policy,
+                            queued_turn.user_message_metadata.clone(),
+                            queued_turn.prepended_messages.clone(),
+                        )
+                        .await
+                }
             }
             None => {
-                self.coordinator
-                    .start_dialog_turn(
-                        session_id.to_string(),
-                        queued_turn.user_input.clone(),
-                        queued_turn.original_user_input.clone(),
-                        queued_turn.turn_id.clone(),
-                        queued_turn.agent_type.clone(),
-                        queued_turn.workspace_path.clone(),
-                        queued_turn.policy,
-                        queued_turn.user_message_metadata.clone(),
-                    )
-                    .await
+                if queued_turn.prepended_messages.is_empty() {
+                    self.coordinator
+                        .start_dialog_turn(
+                            session_id.to_string(),
+                            queued_turn.user_input.clone(),
+                            queued_turn.original_user_input.clone(),
+                            queued_turn.turn_id.clone(),
+                            queued_turn.agent_type.clone(),
+                            queued_turn.workspace_path.clone(),
+                            queued_turn.policy,
+                            queued_turn.user_message_metadata.clone(),
+                        )
+                        .await
+                } else {
+                    self.coordinator
+                        .start_dialog_turn_with_prepended_messages(
+                            session_id.to_string(),
+                            queued_turn.user_input.clone(),
+                            queued_turn.original_user_input.clone(),
+                            queued_turn.turn_id.clone(),
+                            queued_turn.agent_type.clone(),
+                            queued_turn.workspace_path.clone(),
+                            queued_turn.policy,
+                            queued_turn.user_message_metadata.clone(),
+                            queued_turn.prepended_messages.clone(),
+                        )
+                        .await
+                }
             }
         };
 
@@ -746,13 +813,13 @@ impl DialogScheduler {
             .as_deref()
             .unwrap_or("<unknown workspace>");
         let reply_user_input = outcome.reply_text();
-        let reply_message =
+        let prepended_messages =
             Self::format_agent_session_reply(responder_session_id, responder_workspace, outcome);
 
         if let Err(error) = self
-            .submit(
+            .submit_with_prepended_messages(
                 reply_route.source_session_id.clone(),
-                reply_message,
+                reply_user_input.clone(),
                 Some(reply_user_input),
                 None,
                 String::new(),
@@ -760,6 +827,7 @@ impl DialogScheduler {
                 DialogSubmissionPolicy::for_source(DialogTriggerSource::AgentSession),
                 None,
                 None,
+                prepended_messages,
                 None,
             )
             .await
@@ -791,18 +859,17 @@ impl DialogScheduler {
         responder_session_id: &str,
         responder_workspace: &str,
         outcome: &TurnOutcome,
-    ) -> String {
-        let mut envelope = PromptEnvelope::new();
+    ) -> Vec<Message> {
         let status = outcome.status();
-        let reply_text = outcome.reply_text();
-        envelope.push_system_reminder(format!(
-            "This message is an automated reply to a previous SessionMessage call, not a human user message.\n\
+        vec![Message::internal_reminder(
+            InternalReminderKind::SessionMessageReply,
+            format!(
+                "This message is an automated reply to a previous SessionMessage call, not a human user message.\n\
 From session: {responder_session_id}\n\
 From workspace: {responder_workspace}\n\
 Status: {status}"
-        ));
-        envelope.push_user_query(reply_text);
-        envelope.render()
+            ),
+        )]
     }
 
     fn goal_verification_observation_text(outcome: &TurnOutcome) -> String {
@@ -876,9 +943,9 @@ Status: {status}"
                 {
                     Ok(Some(plan)) => {
                         if let Err(error) = self
-                            .submit(
+                            .submit_with_prepended_messages(
                                 session_id.clone(),
-                                plan.wrapped_message,
+                                plan.user_input,
                                 Some(plan.display_message),
                                 None,
                                 active_turn.agent_type.clone(),
@@ -888,6 +955,15 @@ Status: {status}"
                                 ),
                                 None,
                                 Some(plan.user_message_metadata),
+                                plan.prepended_reminders
+                                    .into_iter()
+                                    .map(|text| {
+                                        Message::internal_reminder(
+                                            InternalReminderKind::GoalContinuation,
+                                            text,
+                                        )
+                                    })
+                                    .collect(),
                                 None,
                             )
                             .await
