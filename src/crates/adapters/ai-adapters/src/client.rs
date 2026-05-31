@@ -714,6 +714,78 @@ mod tests {
     }
 
     #[test]
+    fn build_openai_request_body_maps_qwen_max_effort_to_xhigh() {
+        let client = AIClient::new(AIConfig {
+            name: "qwen".to_string(),
+            base_url: "https://api.openbitfun.com/v1".to_string(),
+            request_url: "https://api.openbitfun.com/v1/chat/completions".to_string(),
+            api_key: "test-key".to_string(),
+            model: "qwen3.7-max".to_string(),
+            format: "openai".to_string(),
+            context_window: 128000,
+            max_tokens: Some(4096),
+            temperature: None,
+            top_p: None,
+            reasoning_mode: ReasoningMode::Enabled,
+            inline_think_in_text: false,
+            custom_headers: None,
+            custom_headers_mode: None,
+            skip_ssl_verify: false,
+            reasoning_effort: Some("max".to_string()),
+            thinking_budget_tokens: None,
+            custom_request_body: None,
+            custom_request_body_mode: None,
+        });
+
+        let request_body = openai::chat::build_request_body(
+            &client,
+            &client.config.request_url,
+            vec![json!({ "role": "user", "content": "hello" })],
+            None,
+            None,
+        );
+
+        assert_eq!(request_body["thinking"]["type"], "enabled");
+        assert_eq!(request_body["reasoning_effort"], "xhigh");
+    }
+
+    #[test]
+    fn build_openai_request_body_preserves_qwen_xhigh_effort() {
+        let client = AIClient::new(AIConfig {
+            name: "qwen".to_string(),
+            base_url: "https://api.openbitfun.com/v1".to_string(),
+            request_url: "https://api.openbitfun.com/v1/chat/completions".to_string(),
+            api_key: "test-key".to_string(),
+            model: "qwen3.7-max".to_string(),
+            format: "openai".to_string(),
+            context_window: 128000,
+            max_tokens: Some(4096),
+            temperature: None,
+            top_p: None,
+            reasoning_mode: ReasoningMode::Enabled,
+            inline_think_in_text: false,
+            custom_headers: None,
+            custom_headers_mode: None,
+            skip_ssl_verify: false,
+            reasoning_effort: Some("xhigh".to_string()),
+            thinking_budget_tokens: None,
+            custom_request_body: None,
+            custom_request_body_mode: None,
+        });
+
+        let request_body = openai::chat::build_request_body(
+            &client,
+            &client.config.request_url,
+            vec![json!({ "role": "user", "content": "hello" })],
+            None,
+            None,
+        );
+
+        assert_eq!(request_body["thinking"]["type"], "enabled");
+        assert_eq!(request_body["reasoning_effort"], "xhigh");
+    }
+
+    #[test]
     fn build_openai_request_body_omits_deepseek_reasoning_effort_when_disabled() {
         let client = AIClient::new(AIConfig {
             name: "deepseek".to_string(),
