@@ -71,6 +71,14 @@ pub(crate) fn build_request_body(
 
     shared::restore_protected_body(&mut request_body, protected_body);
 
+    shared::audit_ai_request_effective_options(
+        "ai::responses_stream_request",
+        "responses",
+        client,
+        &client.config.request_url,
+        &request_body,
+    );
+
     shared::log_request_body(
         "ai::responses_stream_request",
         "Responses stream request body (excluding tools):",
@@ -142,6 +150,15 @@ mod tests {
     use crate::types::{ReasoningMode, ToolDefinition};
     use crate::{client::AIClient, types::AIConfig};
     use serde_json::json;
+    use std::sync::Once;
+
+    static DISABLE_AUDIT: Once = Once::new();
+
+    fn ensure_audit_disabled_for_tests() {
+        DISABLE_AUDIT.call_once(|| {
+            std::env::set_var("BITFUN_AI_REQUEST_AUDIT", "0");
+        });
+    }
 
     fn test_client() -> AIClient {
         AIClient::new(AIConfig {
@@ -169,6 +186,7 @@ mod tests {
 
     #[test]
     fn attaches_flat_tool_schema_for_responses_api() {
+        ensure_audit_disabled_for_tests();
         let client = test_client();
         let request_body = build_request_body(
             &client,
