@@ -46,7 +46,7 @@
       },
       {
         "name": "ohos.permission.READ_CALENDAR",
-        "reason": "$string:permission_read_calendar_reason",
+        "reason": "$string:permission_calendar_reason",
         "usedScene": {
           "abilities": [
             "EntryAbility"
@@ -56,7 +56,7 @@
       },
       {
         "name": "ohos.permission.WRITE_CALENDAR",
-        "reason": "$string:permission_write_calendar_reason",
+        "reason": "$string:permission_calendar_reason",
         "usedScene": {
           "abilities": [
             "EntryAbility"
