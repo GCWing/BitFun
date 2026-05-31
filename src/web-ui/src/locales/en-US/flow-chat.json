@@ -16,7 +16,6 @@
     "releaseToAdd": "Release to add to this column"
   },
   "layout": {
-    "noPanels": "BitFun",
     "noPanelsHint": "Use the bottom bar to toggle panels or press <kbd>Ctrl+\\</kbd> <kbd>Ctrl+]</kbd> to expand panels",
     "chatHiddenTitle": "Chat is hidden",
     "chatHiddenDesc": "Use the Chat toggle in the top-right to show it again.",
@@ -44,6 +43,7 @@
     "loadingDescription": "Preparing the conversation history.",
     "failedTitle": "Session history did not load",
     "failedDescription": "Retry loading the saved conversation.",
+    "remoteSessionMissing": "The backend session data was not found. If you just reconnected an SSH remote workspace, close and reopen the remote project, or create a new session and try again.",
     "retry": "Retry"
   },
   "usage": {
@@ -402,7 +402,9 @@
     "messageTooLarge": "Message exceeds the maximum length of {{max}} characters ({{count}} provided).",
     "openWorkspaceFolder": "Open workspace folder",
     "openWorkspaceFolderFailed": "Failed to open workspace folder: {{error}}",
-    "spaceToActivate": "Press <space>Space</space> to type"
+    "spaceToActivate": "Press <space>Space</space> to type",
+    "assistantPlaceholder": "Message {{name}}...",
+    "sendHint": "Enter to send / Shift+Enter for new line"
   },
   "workspaceStrip": {
     "branchTooltipUnavailable": "Not a git repository or no current branch"
@@ -440,7 +442,6 @@
   "toolbar": {
     "newSession": "New Session",
     "history": "History",
-    "settings": "Settings",
     "export": "Export Chat",
     "clear": "Clear Chat",
     "fullscreen": "Fullscreen",
@@ -462,7 +463,8 @@
     "modelError": "Model Error",
     "contextTooLong": "Context Too Long",
     "rateLimited": "Rate Limited",
-    "unknown": "Unknown error"
+    "unknown": "Unknown error",
+    "processingFailed": "Processing failed"
   },
   "chatInput": {
     "addBoostTooltip": "Agent modes, image, or skills",
@@ -480,6 +482,10 @@
     "resetToAgentic": "Back to default mode",
     "noIncrementalModes": "No add-on modes available",
     "switchMode": "Switch Mode",
+    "promptCacheGuardTitle": "Switching this mode will reset prompt cache reuse",
+    "promptCacheGuardBody": "The next request will switch from {{fromMode}} to {{toMode}}, so this session will stop reusing its current prompt cache. Continue?",
+    "promptCacheGuardConfirm": "Send anyway",
+    "promptCacheGuardCancel": "Stay here",
     "quickAction": "Quick action",
     "compactAction": "Compact session",
     "compactNoSession": "No active session for /compact",
@@ -508,7 +514,6 @@
     "initBusy": "Wait until the session is idle before using /init.",
     "initUsage": "Use /init without extra arguments.",
     "initFailed": "AGENTS.md initialization failed",
-    "initPrompt": "Please generate or update AGENTS.md based on the current project content",
     "deepreviewAction": "Deep review",
     "deepreviewNoSession": "No active session for /DeepReview",
     "deepreviewUsage": "Use /DeepReview with optional focus text, for example /DeepReview review commit abc123 for security.",
@@ -533,7 +538,7 @@
     "sendingToBtw": "Side session: {{title}}",
     "modeDescriptions": {
       "agentic": "Full-featured AI assistant with access to all tools for comprehensive software development tasks",
-      "Multitask": "Multitask mode: decompose work into orthogonal branches or a DAG and proactively use subagents in parallel when it helps",
+      "Multitask": "Multitask mode: decompose work into orthogonal branches and proactively use subagents in parallel when it helps",
       "Claw": "Personal assistant mode for dedicated assistant workspaces and everyday task support",
       "Plan": "Plan first, execute later — clarify requirements and create an implementation plan before coding",
       "debug": "Evidence-driven systematic debugging: form hypotheses, gather runtime evidence, and fix with confidence",
@@ -555,7 +560,10 @@
     },
     "openFolder": "Open folder…",
     "selectWorkspaceTitle": "Select workspace directory",
-    "switchWorkspaceFailed": "Failed to switch workspace: {{error}}"
+    "switchWorkspaceFailed": "Failed to switch workspace: {{error}}",
+    "mcpPromptMissingArgs": "This MCP prompt requires arguments: {{args}}",
+    "mcpPromptFailed": "MCP prompt failed",
+    "loadingMcpPrompts": "Loading MCP prompts..."
   },
   "planner": {
     "title": "Task Planning",
@@ -881,24 +889,6 @@
     "optionalReviewers_one": "{{count}} extra specialist",
     "optionalReviewers_other": "{{count}} extra specialists",
     "summaryFirstReview": "Summary-first coverage",
-    "targetTagLabels": {
-      "frontendUi": "Frontend UI",
-      "frontendStyle": "Frontend styles",
-      "frontendI18n": "Frontend i18n",
-      "frontendContract": "Frontend contract",
-      "desktopContract": "Desktop contract",
-      "webServerContract": "Web server contract",
-      "backendCore": "Backend core",
-      "transport": "Transport",
-      "apiLayer": "API layer",
-      "aiAdapter": "AI adapter",
-      "installerUi": "Installer UI",
-      "test": "Tests",
-      "docs": "Docs",
-      "config": "Config",
-      "generatedOrLock": "Generated or lockfile",
-      "unknown": "Unknown area"
-    },
     "estimatedCalls": "{{count}} reviewer calls",
     "estimatedCalls_one": "{{count}} reviewer call",
     "estimatedCalls_other": "{{count}} reviewer calls",
@@ -949,7 +939,8 @@
     "backgroundSubagents": "Background subagents ({{count}})",
     "backgroundSubagentUntitled": "Background subagent",
     "subagentStatusProcessing": "Running",
-    "subagentStatusFinishing": "Finishing"
+    "subagentStatusFinishing": "Finishing",
+    "pullRequests": "Pull requests"
   },
   "stickyTaskIndicator": {
     "tooltip": "Jump to current task"
@@ -1035,7 +1026,8 @@
     "feedbackThanks": "Thank you for your feedback!",
     "feedbackDevVersion": "Feedback is not available in dev version",
     "userLabel": "👤 User:",
-    "toolCallLabel": "🔧 Tool call: {{name}}"
+    "toolCallLabel": "🔧 Tool call: {{name}}",
+    "loadingMoreHistory": "Loading more history..."
   },
   "exploreRegion": {
     "readFiles_one": "Read {{count}} file",
@@ -1321,7 +1313,9 @@
         "running": "Running",
         "completed": "Completed",
         "failed": "Failed"
-      }
+      },
+      "loadingMore": "Loading more output...",
+      "loading": "Loading task details..."
     },
     "timeout": {
       "disableTooltip": "Disable timeout",
@@ -1334,29 +1328,6 @@
       "failedDurationTooltip": "Failed after {{duration}}",
       "failedDurationTooltipWithReason": "Failed after {{duration}}: {{reason}}",
       "cancelledDurationTooltip": "Cancelled after {{duration}}"
-    },
-    "template": {
-      "get": "Get Template:",
-      "getTemplate": "Get Template",
-      "loading": "Loading",
-      "loaded": "Loaded",
-      "templateDetails": "Template Details",
-      "templateId": "Template ID:",
-      "templateName": "Template Name:",
-      "contentSize": "Content Size:",
-      "characters": "{{count}} characters",
-      "templateReady": "Template Ready",
-      "templateReadyDesc": "Template structure loaded successfully, ready for requirements document creation",
-      "templateLoadFailed": "Template loading failed",
-      "requirementFramework": "Requirement Framework Overview",
-      "productVision": "Product Vision",
-      "businessGoals": "Business Goals",
-      "userPersonas": "User Personas",
-      "userStories": "User Stories",
-      "featureList": "Feature List",
-      "functionalSpecTemplate": "Functional Specification Template",
-      "nonFunctionalRequirements": "Non-functional Requirements",
-      "acceptanceCriteria": "Acceptance Criteria"
     },
     "mcp": {
       "confirmExecute": "Confirm Execute",
@@ -1428,7 +1399,6 @@
       "listingSessions": "Listing sessions",
       "listedSessions": "Found {{count}} sessions",
       "actionFailed": "Session operation failed",
-      "workspace": "Workspace",
       "sessionId": "Session ID",
       "sessionName": "Session name",
       "agentType": "Agent type",
@@ -1450,22 +1420,8 @@
       "messageAccepted": "Message accepted for {{session}}",
       "sendFailed": "Failed to message {{session}}",
       "targetSession": "Target session",
-      "workspace": "Workspace",
       "agentType": "Agent type",
       "message": "Message"
-    },
-    "imageAnalysis": {
-      "parsingAnalysisInfo": "Parsing analysis info...",
-      "unknownImage": "Unknown image",
-      "clipboardImage": "Clipboard image",
-      "analyzeImageContent": "Analyze image content",
-      "imageAnalysis": "Image analysis",
-      "completed": "Completed",
-      "analyzing": "Analyzing",
-      "preparing": "Preparing",
-      "analysisPrompt": "Analysis prompt",
-      "focusAreas": "Focus areas",
-      "analysisResult": "Analysis result"
     },
     "contextCompression": {
       "beforeUserMessage": "Before user message",
@@ -1508,26 +1464,6 @@
       "labelPattern": "Pattern",
       "labelPath": "Path",
       "labelStats": "Stats"
-    },
-    "ideControl": {
-      "parsingOperation": "Parsing operation...",
-      "configCenter": "Config Center",
-      "planner": "Task Planner",
-      "terminal": "Terminal",
-      "fileViewer": "File Viewer",
-      "codeEditor": "Code Editor",
-      "navigateToPosition": "Navigate to position",
-      "adjustIdeLayout": "Adjust IDE layout",
-      "manageTab": "Manage tab",
-      "focusView": "Focus view",
-      "executeIdeOperation": "Execute IDE operation",
-      "operationType": "Operation type",
-      "panelType": "Panel type",
-      "configSection": "Config section",
-      "sessionId": "Session ID",
-      "filePath": "File path",
-      "workspacePath": "Workspace",
-      "panelPosition": "Panel position"
     },
     "linter": {
       "parsingParams": "Parsing parameters...",
@@ -1651,7 +1587,12 @@
           "high_risk_only": "High-risk-only",
           "risk_expanded": "Risk-expanded",
           "full_depth": "Full-depth"
-        }
+        },
+        "target": "Target",
+        "budget": "Budget",
+        "estimatedCalls": "Estimated calls",
+        "activeGroupTitle": "Will run",
+        "skippedGroupTitle": "Skipped reviewers"
       },
       "sectionItemCount": "{{count}} items",
       "remediationPlan": "Remediation Plan",
@@ -1708,7 +1649,8 @@
         "remediation": "Remediation Plan",
         "strengths": "Code Strengths",
         "team": "Code Review Team",
-        "coverage": "Coverage Notes"
+        "coverage": "Coverage Notes",
+        "runManifest": "Run manifest"
       },
       "groups": {
         "must_fix": "Must fix",
@@ -1836,7 +1778,6 @@
     "defaultAction2Command": "Continue previous work",
     "defaultAction3": "Start a new feature",
     "defaultAction3Command": "Start a new feature",
-    "workspace": "Workspace",
     "noWorkspace": "No workspace open",
     "openOtherProject": "Open other project...",
     "noWorkspaceHint": "No project selected yet",
@@ -1977,5 +1918,11 @@
     "injectedAt": "Injected before round {{round}}",
     "statusPending": "Waiting to trigger",
     "statusInjected": "Triggered"
+  },
+  "errors": {
+    "sendFailed": "Failed to send message"
+  },
+  "actions": {
+    "send": "Send"
   }
 }

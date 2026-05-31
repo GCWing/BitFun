@@ -1,4 +1,4 @@
-use crate::agentic::agents::{Agent, AgentToolPolicyOverrides, RequestContextPolicy};
+use crate::agentic::agents::{Agent, AgentToolPolicyOverrides, UserContextPolicy};
 use async_trait::async_trait;
 
 /// Internal helper that holds the common metadata and behaviour for
@@ -10,7 +10,7 @@ pub struct ReadonlySubagent {
     prompt_template: &'static str,
     default_tools: &'static [&'static str],
     tool_exposure_overrides: AgentToolPolicyOverrides,
-    request_context_policy: RequestContextPolicy,
+    user_context_policy: UserContextPolicy,
 }
 
 impl ReadonlySubagent {
@@ -46,7 +46,7 @@ impl ReadonlySubagent {
             prompt_template,
             default_tools,
             tool_exposure_overrides,
-            request_context_policy: RequestContextPolicy::empty().with_workspace_instructions(),
+            user_context_policy: UserContextPolicy::empty().with_workspace_instructions(),
         }
     }
 
@@ -56,7 +56,7 @@ impl ReadonlySubagent {
         description: &'static str,
         prompt_template: &'static str,
         default_tools: &'static [&'static str],
-        request_context_policy: RequestContextPolicy,
+        user_context_policy: UserContextPolicy,
     ) -> Self {
         Self {
             id,
@@ -65,7 +65,7 @@ impl ReadonlySubagent {
             prompt_template,
             default_tools,
             tool_exposure_overrides: AgentToolPolicyOverrides::default(),
-            request_context_policy,
+            user_context_policy,
         }
     }
 }
@@ -96,8 +96,8 @@ impl Agent for ReadonlySubagent {
         self.default_tools.iter().map(|s| s.to_string()).collect()
     }
 
-    fn request_context_policy(&self) -> RequestContextPolicy {
-        self.request_context_policy.clone()
+    fn user_context_policy(&self) -> UserContextPolicy {
+        self.user_context_policy.clone()
     }
 
     fn tool_exposure_overrides(&self) -> &AgentToolPolicyOverrides {
@@ -118,7 +118,7 @@ macro_rules! define_readonly_subagent_with_context_policy {
         $description:literal,
         $prompt:literal,
         $tools:expr,
-        $request_context_policy:expr
+        $user_context_policy:expr
     ) => {
         pub struct $struct_name {
             inner: $crate::agentic::agents::ReadonlySubagent,
@@ -139,7 +139,7 @@ macro_rules! define_readonly_subagent_with_context_policy {
                         $description,
                         $prompt,
                         $tools,
-                        $request_context_policy,
+                        $user_context_policy,
                     ),
                 }
             }
@@ -171,8 +171,8 @@ macro_rules! define_readonly_subagent_with_context_policy {
                 self.inner.default_tools()
             }
 
-            fn request_context_policy(&self) -> $crate::agentic::agents::RequestContextPolicy {
-                self.inner.request_context_policy()
+            fn user_context_policy(&self) -> $crate::agentic::agents::UserContextPolicy {
+                self.inner.user_context_policy()
             }
 
             fn tool_exposure_overrides(
@@ -250,8 +250,8 @@ macro_rules! define_readonly_subagent {
                 self.inner.default_tools()
             }
 
-            fn request_context_policy(&self) -> $crate::agentic::agents::RequestContextPolicy {
-                self.inner.request_context_policy()
+            fn user_context_policy(&self) -> $crate::agentic::agents::UserContextPolicy {
+                self.inner.user_context_policy()
             }
 
             fn tool_exposure_overrides(
@@ -329,8 +329,8 @@ macro_rules! define_readonly_subagent_with_overrides {
                 self.inner.default_tools()
             }
 
-            fn request_context_policy(&self) -> $crate::agentic::agents::RequestContextPolicy {
-                self.inner.request_context_policy()
+            fn user_context_policy(&self) -> $crate::agentic::agents::UserContextPolicy {
+                self.inner.user_context_policy()
             }
 
             fn tool_exposure_overrides(

@@ -1,7 +1,7 @@
 //! MiniApp export engine — export to Electron or Tauri standalone app (skeleton).
 
 pub use bitfun_product_domains::miniapp::exporter::{
-    ExportCheckResult, ExportOptions, ExportResult, ExportTarget,
+    build_export_check_result, ExportCheckResult, ExportOptions, ExportResult, ExportTarget,
 };
 
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -30,23 +30,9 @@ impl MiniAppExporter {
     /// Check if export is possible (runtime, electron-builder, etc.).
     pub async fn check(&self, _app_id: &str) -> BitFunResult<ExportCheckResult> {
         let runtime = crate::miniapp::runtime_detect::detect_runtime();
-        let runtime_str = runtime.as_ref().map(|r| {
-            match r.kind {
-                crate::miniapp::runtime_detect::RuntimeKind::Bun => "bun",
-                crate::miniapp::runtime_detect::RuntimeKind::Node => "node",
-            }
-            .to_string()
-        });
-        let mut missing = Vec::new();
-        if runtime.is_none() {
-            missing.push("No JS runtime (install Bun or Node.js)".to_string());
-        }
-        Ok(ExportCheckResult {
-            ready: missing.is_empty(),
-            runtime: runtime_str,
-            missing,
-            warnings: Vec::new(),
-        })
+        Ok(build_export_check_result(
+            runtime.as_ref().map(|runtime| &runtime.kind),
+        ))
     }
 
     /// Export the MiniApp to a standalone application.

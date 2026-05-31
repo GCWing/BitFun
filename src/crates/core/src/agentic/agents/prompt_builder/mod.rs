@@ -1,7 +1,8 @@
 mod prompt_builder_impl;
-mod request_context;
+mod user_context;
 
 pub use prompt_builder_impl::{
-    PromptBuilder, PromptBuilderContext, RemoteExecutionHints, RequestContextToolSections,
+    PrependedPromptReminders, PromptBuilder, PromptBuilderContext, RemoteExecutionHints,
+    ToolListingSections,
 };
-pub use request_context::{RequestContextPolicy, RequestContextSection};
+pub use user_context::{UserContextPolicy, UserContextSection};

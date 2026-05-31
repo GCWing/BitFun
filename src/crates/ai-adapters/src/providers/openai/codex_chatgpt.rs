@@ -158,12 +158,14 @@ pub(crate) async fn send_stream(
     let request_body =
         build_request_body(client, instructions, response_input, tools_flat, extra_body);
     let idle_timeout = client.stream_options.idle_timeout;
+    let ttft_timeout = client.stream_options.ttft_timeout;
 
     execute_sse_request(
         "Codex ChatGPT Responses API",
         &url,
         &request_body,
         max_tries,
+        ttft_timeout,
         || common::apply_headers(client, client.client.post(&url)),
         move |response, tx, tx_raw| {
             tokio::spawn(handle_responses_stream(response, tx, tx_raw, idle_timeout));

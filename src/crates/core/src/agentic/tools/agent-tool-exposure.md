@@ -21,9 +21,9 @@ Notes:
 | `Skill` | Expanded | None | - |
 | `AskUserQuestion` | Expanded | None | - |
 | `TodoWrite` | Expanded | None | - |
-| `CreatePlan` | Expanded | None | - |
 | `CodeReview` | Expanded | None | - |
 | `GetToolSpec` | Expanded | None | - |
+| `CreatePlan` | Collapsed | None | - |
 | `GetFileDiff` | Collapsed | `ReviewFixer`, `ReviewBusinessLogic`, `ReviewPerformance`, `ReviewSecurity`, `ReviewArchitecture`, `ReviewFrontend`, `ReviewJudge` | Expanded |
 | `Log` | Collapsed | None | - |
 | `TerminalControl` | Collapsed | None | - |

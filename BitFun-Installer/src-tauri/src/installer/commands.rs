@@ -2,6 +2,7 @@
 
 use super::MAIN_APP_EXE;
 use super::extract::{self, ESTIMATED_INSTALL_SIZE};
+use super::generated_locale_contract::INSTALLER_GENERATED_LOCALES;
 use super::types::{
     ConnectionTestResult, DiskSpaceInfo, InstallOptions, InstallProgress, ModelConfig,
     RemoteModelInfo,
@@ -41,29 +42,9 @@ fn create_windows_silent_command<S: AsRef<std::ffi::OsStr>>(program: S) -> std::
     command
 }
 
-struct InstallerAppLanguage {
-    code: &'static str,
-    aliases: &'static [&'static str],
-}
-
-const INSTALLER_APP_LANGUAGES: &[InstallerAppLanguage] = &[
-    InstallerAppLanguage {
-        code: "zh-CN",
-        aliases: &["zh", "zh-Hans", "zh-CN"],
-    },
-    InstallerAppLanguage {
-        code: "zh-TW",
-        aliases: &["zh-TW", "zh-Hant", "zh-HK", "zh-MO"],
-    },
-    InstallerAppLanguage {
-        code: "en-US",
-        aliases: &["en", "en-US"],
-    },
-];
-
 static INSTALLER_APP_LANGUAGE_ALIASES_BY_PRIORITY: LazyLock<Vec<(&'static str, &'static str)>> =
     LazyLock::new(|| {
-        let mut aliases = INSTALLER_APP_LANGUAGES
+        let mut aliases = INSTALLER_GENERATED_LOCALES
             .iter()
             .flat_map(|language| {
                 language
@@ -126,7 +107,8 @@ pub fn get_default_install_path() -> String {
         std::env::var("LOCALAPPDATA")
             .map(PathBuf::from)
             .unwrap_or_else(|_| {
-                dirs::data_local_dir().unwrap_or_else(|| PathBuf::from("C:\\Program Files"))
+                dirs::data_local_dir()
+                    .unwrap_or_else(|| PathBuf::from(["C:", "Program Files"].join("\\")))
             })
     } else if cfg!(target_os = "macos") {
         dirs::home_dir()
@@ -362,7 +344,12 @@ pub fn get_disk_space(path: String) -> Result<DiskSpaceInfo, String> {
         use std::ffi::OsStr;
         use std::os::windows::ffi::OsStrExt;
 
-        let wide_path: Vec<u16> = OsStr::new(check_path.to_str().unwrap_or("C:\\"))
+        let fallback_windows_root = format!("{}{}", "C:", std::path::MAIN_SEPARATOR);
+        let wide_path: Vec<u16> = OsStr::new(
+            check_path
+                .to_str()
+                .unwrap_or(fallback_windows_root.as_str()),
+        )
             .encode_wide()
             .chain(std::iter::once(0))
             .collect();

@@ -3,6 +3,22 @@ import { api } from './ApiClient';
 import { createTauriCommandError } from '../errors/TauriCommandError';
 import type { SessionMetadata, DialogTurnData } from '@/shared/types/session-history';
 
+export interface SessionMetadataPageRequest {
+  workspacePath: string;
+  limit: number;
+  cursor?: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
+}
+
+export interface SessionMetadataPage {
+  sessions: SessionMetadata[];
+  totalTopLevelCount: number;
+  loadedTopLevelCount: number;
+  nextCursor?: string;
+  hasMore: boolean;
+}
+
 export interface SessionUsageReportRequest {
   sessionId: string;
   workspacePath: string;
@@ -198,6 +214,27 @@ export class SessionAPI {
     }
   }
 
+  async listSessionsPage(
+    request: SessionMetadataPageRequest
+  ): Promise<SessionMetadataPage> {
+    try {
+      return await api.invoke('list_persisted_sessions_page', {
+        request: {
+          workspace_path: request.workspacePath,
+          limit: request.limit,
+          ...(request.cursor ? { cursor: request.cursor } : {}),
+          ...remoteSessionFields(request.remoteConnectionId, request.remoteSshHost),
+        }
+      });
+    } catch (error) {
+      throw createTauriCommandError('list_persisted_sessions_page', error, {
+        workspacePath: request.workspacePath,
+        limit: request.limit,
+        cursor: request.cursor,
+      });
+    }
+  }
+
   async loadSessionTurns(
     sessionId: string,
     workspacePath: string,
@@ -335,6 +372,95 @@ export class SessionAPI {
         sessionId: request.sessionId,
         workspacePath: request.workspacePath,
       });
+    }
+  }
+
+  async archiveSession(
+    sessionId: string,
+    workspacePath: string,
+    remoteConnectionId?: string,
+    remoteSshHost?: string
+  ): Promise<void> {
+    try {
+      await api.invoke('archive_session', {
+        request: {
+          session_id: sessionId,
+          workspace_path: workspacePath,
+          ...remoteSessionFields(remoteConnectionId, remoteSshHost),
+        }
+      });
+    } catch (error) {
+      throw createTauriCommandError('archive_session', error, { sessionId, workspacePath });
+    }
+  }
+
+  async unarchiveSession(
+    sessionId: string,
+    workspacePath: string,
+    remoteConnectionId?: string,
+    remoteSshHost?: string
+  ): Promise<void> {
+    try {
+      await api.invoke('unarchive_session', {
+        request: {
+          session_id: sessionId,
+          workspace_path: workspacePath,
+          ...remoteSessionFields(remoteConnectionId, remoteSshHost),
+        }
+      });
+    } catch (error) {
+      throw createTauriCommandError('unarchive_session', error, { sessionId, workspacePath });
+    }
+  }
+
+  async archiveAllSessions(
+    workspacePath: string,
+    remoteConnectionId?: string,
+    remoteSshHost?: string
+  ): Promise<number> {
+    try {
+      return await api.invoke('archive_all_sessions', {
+        request: {
+          workspace_path: workspacePath,
+          ...remoteSessionFields(remoteConnectionId, remoteSshHost),
+        }
+      });
+    } catch (error) {
+      throw createTauriCommandError('archive_all_sessions', error, { workspacePath });
+    }
+  }
+
+  async listArchivedSessions(
+    workspacePath: string,
+    remoteConnectionId?: string,
+    remoteSshHost?: string
+  ): Promise<SessionMetadata[]> {
+    try {
+      return await api.invoke('list_archived_sessions', {
+        request: {
+          workspace_path: workspacePath,
+          ...remoteSessionFields(remoteConnectionId, remoteSshHost),
+        }
+      });
+    } catch (error) {
+      throw createTauriCommandError('list_archived_sessions', error, { workspacePath });
+    }
+  }
+
+  async deleteAllArchivedSessions(
+    workspacePath: string,
+    remoteConnectionId?: string,
+    remoteSshHost?: string
+  ): Promise<number> {
+    try {
+      return await api.invoke('delete_all_archived_sessions', {
+        request: {
+          workspace_path: workspacePath,
+          ...remoteSessionFields(remoteConnectionId, remoteSshHost),
+        }
+      });
+    } catch (error) {
+      throw createTauriCommandError('delete_all_archived_sessions', error, { workspacePath });
     }
   }
 }

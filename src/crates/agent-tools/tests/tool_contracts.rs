@@ -1,33 +1,53 @@
 use bitfun_agent_tools::{
+    build_bitfun_runtime_uri, build_collapsed_tool_stub_definition,
+    build_get_tool_spec_assistant_detail, build_get_tool_spec_catalog_description,
+    build_get_tool_spec_catalog_description_from_provider,
+    build_get_tool_spec_collapsed_tool_entry, build_get_tool_spec_description,
+    build_get_tool_spec_detail_result, build_get_tool_spec_duplicate_load_hint,
+    build_get_tool_spec_duplicate_load_result, build_prompt_visible_tool_manifest_definitions,
+    build_tool_path_policy_denial_message, build_tool_runtime_artifact_reference,
+    build_tool_session_runtime_artifact_reference, collect_loaded_collapsed_tool_names,
+    get_tool_spec_input_schema, get_tool_spec_is_concurrency_safe, get_tool_spec_is_readonly,
+    get_tool_spec_needs_permissions, get_tool_spec_short_description, is_bitfun_runtime_uri,
+    is_remote_posix_path_within_root, is_tool_path_allowed_by_resolved_roots, normalize_host_path,
+    normalize_runtime_relative_path, parse_bitfun_runtime_uri, posix_resolve_path_with_workspace,
+    posix_style_path_is_absolute, render_get_tool_spec_tool_use_message,
+    resolve_contextual_tool_manifest, resolve_contextual_tool_manifest_from_provider,
+    resolve_get_tool_spec_detail, resolve_get_tool_spec_detail_from_provider,
+    resolve_get_tool_spec_execution_result_from_provider, resolve_host_path_with_workspace,
+    resolve_readonly_enabled_tools, resolve_tool_manifest_policy, resolve_tool_path_with_context,
+    resolve_workspace_tool_path, sort_tool_manifest_definitions,
+    summarize_get_tool_spec_collapsed_tools, tool_path_is_effectively_absolute,
+    validate_collapsed_tool_usage, validate_get_tool_spec_input, validate_tool_allowed_by_list,
+    DynamicMcpToolInfo, DynamicToolInfo, GetToolSpecCollapsedToolSummary,
+    GetToolSpecExecutionError, GetToolSpecExecutionPlan, GetToolSpecLoadObservation,
+    GetToolSpecRuntime, InputValidator, PromptVisibleToolManifestItem, ToolContextFacts,
+    ToolExposure, ToolImageAttachment, ToolManifestDefinition, ToolManifestPolicyTool,
+    ToolPathBackend, ToolPathOperation, ToolPathResolution, ToolRenderOptions, ToolResult,
+    ToolRuntimeRestrictions, ToolWorkspaceKind, ValidationResult, GET_TOOL_SPEC_TOOL_NAME,
+};
+use bitfun_agent_tools::{
+    build_invalid_tool_call_error_message, build_tool_execution_error_presentation,
+    build_user_steering_interrupted_presentation, render_tool_result_for_assistant,
+    truncate_raw_tool_arguments_preview_to, truncate_tool_arguments_preview,
+    TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES, USER_STEERING_INTERRUPTED_MESSAGE,
+};
+use bitfun_agent_tools::{
+    build_persisted_tool_output_message, count_tool_result_lines, file_tool_guidance_message,
+    generate_tool_result_preview, is_file_tool_guidance_message,
+    sanitize_tool_result_file_component, select_tool_result_indices_for_persistence,
+    tool_result_is_persisted_output, PersistedToolOutput, ToolResultPersistenceCandidate,
+    FILE_TOOL_GUIDANCE_PREFIX, PERSISTED_OUTPUT_TAG, TOOL_RESULT_PREVIEW_CHARS,
+};
+use bitfun_agent_tools::{
+    file_read_facts_are_fresh, file_read_facts_content_matches, normalize_tool_file_content,
+    FileReadFreshnessFacts,
+};
+use bitfun_agent_tools::{
     ContextualToolManifestItem, DynamicToolDescriptor, DynamicToolProvider,
     GetToolSpecCatalogProvider, PortResult, PortableToolContextProvider, StaticToolProvider,
     StaticToolProviderGroup, ToolCatalogRuntime, ToolCatalogSnapshotProvider, ToolDecorator,
     ToolDecoratorRef, ToolRegistry, ToolRegistryItem, ToolRuntimeAssembly,
-};
-use bitfun_agent_tools::{
-    DynamicMcpToolInfo, DynamicToolInfo, GET_TOOL_SPEC_TOOL_NAME, GetToolSpecCollapsedToolSummary,
-    GetToolSpecExecutionError, GetToolSpecExecutionPlan, GetToolSpecLoadObservation,
-    GetToolSpecRuntime, InputValidator, PromptVisibleToolManifestItem, ToolContextFacts,
-    ToolExposure, ToolImageAttachment, ToolManifestDefinition, ToolManifestPolicyTool,
-    ToolPathBackend, ToolPathResolution, ToolRenderOptions, ToolResult, ToolRuntimeRestrictions,
-    ToolWorkspaceKind, ValidationResult, build_bitfun_runtime_uri,
-    build_collapsed_tool_stub_definition, build_get_tool_spec_assistant_detail,
-    build_get_tool_spec_catalog_description, build_get_tool_spec_catalog_description_from_provider,
-    build_get_tool_spec_collapsed_tool_entry, build_get_tool_spec_description,
-    build_get_tool_spec_detail_result, build_get_tool_spec_duplicate_load_hint,
-    build_get_tool_spec_duplicate_load_result, build_prompt_visible_tool_manifest_definitions,
-    collect_loaded_collapsed_tool_names, get_tool_spec_input_schema,
-    get_tool_spec_is_concurrency_safe, get_tool_spec_is_readonly, get_tool_spec_needs_permissions,
-    get_tool_spec_short_description, is_bitfun_runtime_uri, is_remote_posix_path_within_root,
-    normalize_host_path, normalize_runtime_relative_path, parse_bitfun_runtime_uri,
-    posix_resolve_path_with_workspace, posix_style_path_is_absolute,
-    render_get_tool_spec_tool_use_message, resolve_contextual_tool_manifest,
-    resolve_contextual_tool_manifest_from_provider, resolve_get_tool_spec_detail,
-    resolve_get_tool_spec_detail_from_provider,
-    resolve_get_tool_spec_execution_result_from_provider, resolve_host_path_with_workspace,
-    resolve_readonly_enabled_tools, resolve_tool_manifest_policy, resolve_workspace_tool_path,
-    sort_tool_manifest_definitions, summarize_get_tool_spec_collapsed_tools,
-    validate_collapsed_tool_usage, validate_get_tool_spec_input, validate_tool_allowed_by_list,
 };
 use serde_json::json;
 use std::path::PathBuf;
@@ -58,6 +78,88 @@ fn tool_result_ok_keeps_result_shape() {
     assert_eq!(value["type"], "result");
     assert_eq!(value["data"]["ok"], true);
     assert_eq!(value["result_for_assistant"], "done");
+}
+
+#[test]
+fn tool_result_assistant_fallback_prefers_pretty_json_and_non_empty_fallback() {
+    let rendered = render_tool_result_for_assistant("Read", &json!({"path": "src/main.rs"}));
+    assert_eq!(rendered, "{\n  \"path\": \"src/main.rs\"\n}");
+
+    let rendered = render_tool_result_for_assistant("Empty", &json!(null));
+    assert_eq!(rendered, "null");
+}
+
+#[test]
+fn tool_error_preview_truncates_at_utf8_boundary_with_current_marker() {
+    assert_eq!(TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES, 1024);
+
+    let raw = "ab😀cd";
+    let preview = truncate_raw_tool_arguments_preview_to(raw, 5);
+
+    assert_eq!(preview, "ab…[truncated, total 8 bytes]");
+}
+
+#[test]
+fn tool_error_presentation_preserves_argument_echo_shape() {
+    let arguments = json!({
+        "path": "src/main.rs",
+        "content": "hello"
+    });
+    let preview = truncate_tool_arguments_preview(&arguments);
+    let presentation = build_tool_execution_error_presentation(
+        "Write",
+        "invalid_arguments",
+        "path is required",
+        Some(preview.clone()),
+    );
+
+    assert_eq!(presentation.result_json["category"], "invalid_arguments");
+    assert_eq!(presentation.result_json["tool_name"], "Write");
+    assert_eq!(presentation.result_json["provided_arguments"], preview);
+    assert_eq!(
+        presentation.result_for_assistant,
+        format!(
+            "Tool 'Write' failed (invalid_arguments): path is required\nProvided arguments: {preview}"
+        )
+    );
+}
+
+#[test]
+fn steering_interrupted_presentation_preserves_current_contract() {
+    let presentation = build_user_steering_interrupted_presentation("Read");
+
+    assert_eq!(presentation.result_json["status"], "skipped");
+    assert_eq!(
+        presentation.result_json["category"],
+        "user_steering_interrupted"
+    );
+    assert_eq!(presentation.result_json["tool_name"], "Read");
+    assert_eq!(
+        presentation.result_for_assistant,
+        USER_STEERING_INTERRUPTED_MESSAGE
+    );
+}
+
+#[test]
+fn invalid_tool_call_error_message_preserves_current_contract() {
+    let message =
+        build_invalid_tool_call_error_message("", true, false, Some("{\"path\"".to_string()));
+    assert_eq!(
+        message,
+        "Missing valid tool name and arguments are invalid JSON. Raw arguments: {\"path\""
+    );
+
+    let message = build_invalid_tool_call_error_message("", false, false, None);
+    assert_eq!(message, "Missing valid tool name.");
+
+    let message = build_invalid_tool_call_error_message("Write", false, true, None);
+    assert_eq!(
+        message,
+        "Tool arguments were truncated by the model (likely hit max_tokens). Refusing to execute a partial 'Write' call. Increase max_tokens, split the work into smaller calls, or retry."
+    );
+
+    let message = build_invalid_tool_call_error_message("Write", true, false, None);
+    assert_eq!(message, "Arguments are invalid JSON.");
 }
 
 #[test]
@@ -133,6 +235,7 @@ fn runtime_restrictions_keep_allow_deny_semantics_without_core_dependency() {
     let restrictions = ToolRuntimeRestrictions {
         allowed_tool_names: ["Read", "Write"].into_iter().map(str::to_string).collect(),
         denied_tool_names: ["Write"].into_iter().map(str::to_string).collect(),
+        denied_tool_messages: Default::default(),
         path_policy: Default::default(),
     };
 
@@ -154,6 +257,28 @@ fn runtime_restrictions_keep_allow_deny_semantics_without_core_dependency() {
     assert_eq!(
         not_allowed.to_string(),
         "Tool 'Bash' is not allowed by runtime restrictions"
+    );
+}
+
+#[test]
+fn runtime_restrictions_surface_custom_deny_messages() {
+    let restrictions = ToolRuntimeRestrictions {
+        denied_tool_names: ["Task"].into_iter().map(str::to_string).collect(),
+        denied_tool_messages: [(
+            "Task".to_string(),
+            "Recursive subagent delegation is blocked. Use direct tools instead.".to_string(),
+        )]
+        .into_iter()
+        .collect(),
+        ..Default::default()
+    };
+
+    let denied = restrictions
+        .ensure_tool_allowed("Task")
+        .expect_err("deny message should be returned");
+    assert_eq!(
+        denied.to_string(),
+        "Recursive subagent delegation is blocked. Use direct tools instead."
     );
 }
 
@@ -218,6 +343,118 @@ fn portable_tool_context_provider_exposes_facts_only() {
     assert_eq!(value["workspaceKind"], "local");
     assert!(value.get("workspace_services").is_none());
     assert!(value.get("unlockedCollapsedTools").is_none());
+}
+
+#[test]
+fn file_tool_guidance_marker_is_provider_neutral() {
+    let message = file_tool_guidance_message("Read the file first");
+
+    assert_eq!(FILE_TOOL_GUIDANCE_PREFIX, "[guidance] ");
+    assert_eq!(message, "[guidance] Read the file first");
+    assert!(is_file_tool_guidance_message(&message));
+    assert!(!is_file_tool_guidance_message("Read the file first"));
+}
+
+#[test]
+fn file_read_freshness_policy_preserves_read_edit_write_guardrails() {
+    let full_read = FileReadFreshnessFacts {
+        content: "alpha\r\n",
+        timestamp_ms: 100,
+        is_full_file_read: true,
+    };
+
+    assert_eq!(normalize_tool_file_content("alpha\r\n"), "alpha\n");
+    assert!(file_read_facts_content_matches(full_read, "alpha\n"));
+    assert!(file_read_facts_are_fresh(full_read, "alpha\n", Some(200)));
+    assert!(!file_read_facts_are_fresh(full_read, "beta\n", Some(200)));
+    assert!(file_read_facts_are_fresh(full_read, "beta\n", Some(50)));
+    assert!(!file_read_facts_are_fresh(full_read, "beta\n", None));
+
+    let partial_read = FileReadFreshnessFacts {
+        content: "middle\n",
+        timestamp_ms: 100,
+        is_full_file_read: false,
+    };
+    assert!(!file_read_facts_content_matches(partial_read, "middle\n"));
+    assert!(!file_read_facts_are_fresh(
+        partial_read,
+        "full file\n",
+        Some(200)
+    ));
+    assert!(file_read_facts_are_fresh(partial_read, "full file\n", None));
+}
+
+#[test]
+fn persisted_tool_output_message_keeps_reference_preview_and_metadata_shape() {
+    let rendered = build_persisted_tool_output_message(
+        &PersistedToolOutput {
+            reference: "bitfun-runtime://session/session-1/tool-results/bash_1.txt".to_string(),
+            original_chars: 12_345,
+            line_count: 7,
+            preview: "first lines".to_string(),
+            has_more: true,
+            metadata: vec![
+                ("exit_code".to_string(), "1".to_string()),
+                ("working_directory".to_string(), "/repo".to_string()),
+            ],
+        },
+        TOOL_RESULT_PREVIEW_CHARS,
+    );
+
+    assert!(rendered.starts_with(PERSISTED_OUTPUT_TAG));
+    assert!(rendered.contains("Output too large (12345 chars). Full output saved to:"));
+    assert!(rendered.contains("Line count: 7"));
+    assert!(rendered.contains("Preview (first 2000 chars):\nfirst lines"));
+    assert!(rendered.contains("- exit_code: 1"));
+    assert!(rendered.contains("- working_directory: /repo"));
+    assert!(tool_result_is_persisted_output(&rendered));
+}
+
+#[test]
+fn tool_result_preview_prefers_line_boundary_when_possible() {
+    let content = "first line\nsecond line\nthird line";
+
+    let (preview, has_more) = generate_tool_result_preview(content, 23);
+
+    assert!(has_more);
+    assert_eq!(preview, "first line\nsecond line");
+}
+
+#[test]
+fn round_budget_candidate_selection_persists_largest_until_under_limit() {
+    let candidates = vec![
+        ToolResultPersistenceCandidate {
+            index: 0,
+            visible_chars: 170_000,
+        },
+        ToolResultPersistenceCandidate {
+            index: 1,
+            visible_chars: 60_000,
+        },
+        ToolResultPersistenceCandidate {
+            index: 2,
+            visible_chars: 30_000,
+        },
+    ];
+
+    let selected = select_tool_result_indices_for_persistence(&candidates, 260_000, 200_000);
+
+    assert_eq!(selected, vec![0]);
+}
+
+#[test]
+fn tool_result_storage_helpers_keep_stable_file_and_line_contracts() {
+    assert_eq!(
+        sanitize_tool_result_file_component("tool/one", "fallback"),
+        "tool_one"
+    );
+    assert_eq!(
+        sanitize_tool_result_file_component("", "fallback"),
+        "fallback"
+    );
+    assert_eq!(count_tool_result_lines(""), 0);
+    assert_eq!(count_tool_result_lines("a\nb\n"), 2);
+    assert!(!tool_result_is_persisted_output("plain output"));
 }
 
 #[test]
@@ -287,6 +524,179 @@ fn path_resolution_contract_keeps_backend_and_runtime_helpers() {
 }
 
 #[test]
+fn tool_path_policy_owner_matches_resolved_roots_by_backend() {
+    let target = ToolPathResolution {
+        requested_path: "src/lib.rs".to_string(),
+        logical_path: "/workspace/src/lib.rs".to_string(),
+        resolved_path: "/workspace/src/lib.rs".to_string(),
+        backend: ToolPathBackend::RemoteWorkspace,
+        runtime_scope: None,
+        runtime_root: None,
+    };
+    let local_root = ToolPathResolution {
+        requested_path: "src".to_string(),
+        logical_path: "/workspace/src".to_string(),
+        resolved_path: "/workspace/src".to_string(),
+        backend: ToolPathBackend::Local,
+        runtime_scope: None,
+        runtime_root: None,
+    };
+    let remote_root = ToolPathResolution {
+        requested_path: "src".to_string(),
+        logical_path: "/workspace/src".to_string(),
+        resolved_path: "/workspace/src".to_string(),
+        backend: ToolPathBackend::RemoteWorkspace,
+        runtime_scope: None,
+        runtime_root: None,
+    };
+
+    let allowed = is_tool_path_allowed_by_resolved_roots(
+        &target,
+        &[local_root, remote_root],
+        |resolution, root| -> Result<bool, ()> {
+            Ok(is_remote_posix_path_within_root(
+                &resolution.resolved_path,
+                &root.resolved_path,
+            ))
+        },
+    )
+    .expect("containment callback should succeed");
+
+    assert!(allowed);
+}
+
+#[test]
+fn tool_path_policy_owner_ignores_mismatched_backend_roots() {
+    let target = ToolPathResolution {
+        requested_path: "src/lib.rs".to_string(),
+        logical_path: "/workspace/src/lib.rs".to_string(),
+        resolved_path: "/workspace/src/lib.rs".to_string(),
+        backend: ToolPathBackend::RemoteWorkspace,
+        runtime_scope: None,
+        runtime_root: None,
+    };
+    let local_root = ToolPathResolution {
+        requested_path: "src".to_string(),
+        logical_path: "/workspace/src".to_string(),
+        resolved_path: "/workspace/src".to_string(),
+        backend: ToolPathBackend::Local,
+        runtime_scope: None,
+        runtime_root: None,
+    };
+
+    let allowed = is_tool_path_allowed_by_resolved_roots(
+        &target,
+        &[local_root],
+        |_, _| -> Result<bool, ()> {
+            panic!("mismatched backend roots must not call the containment callback");
+        },
+    )
+    .expect("backend mismatch should not invoke containment");
+
+    assert!(!allowed);
+}
+
+#[test]
+fn tool_path_policy_owner_preserves_denial_message() {
+    let message = build_tool_path_policy_denial_message(
+        "/workspace/blocked/file.txt",
+        ToolPathOperation::Write,
+        &["/workspace/allowed".to_string()],
+    );
+
+    assert_eq!(
+        message,
+        "Path '/workspace/blocked/file.txt' is not allowed for write. Allowed roots: /workspace/allowed"
+    );
+}
+
+#[test]
+fn tool_path_resolution_owner_preserves_runtime_uri_scope_and_backend() {
+    let runtime_root = PathBuf::from("/runtime/workspace");
+
+    let resolution = resolve_tool_path_with_context(
+        "bitfun://runtime/workspace-123/plans/demo.plan.md",
+        Some("/home/project"),
+        true,
+        Some("workspace-123"),
+        Some(runtime_root.clone()),
+    )
+    .expect("runtime URI should resolve through the provider-neutral owner");
+
+    assert_eq!(
+        resolution.requested_path,
+        "bitfun://runtime/workspace-123/plans/demo.plan.md"
+    );
+    assert_eq!(
+        resolution.logical_path,
+        "bitfun://runtime/workspace-123/plans/demo.plan.md"
+    );
+    assert_eq!(
+        PathBuf::from(&resolution.resolved_path),
+        runtime_root.join("plans").join("demo.plan.md")
+    );
+    assert_eq!(resolution.backend, ToolPathBackend::Local);
+    assert_eq!(resolution.runtime_scope.as_deref(), Some("workspace-123"));
+    assert_eq!(
+        resolution.runtime_root.as_deref(),
+        Some(runtime_root.as_path())
+    );
+}
+
+#[test]
+fn tool_path_resolution_owner_rejects_mismatched_runtime_scope() {
+    let err = resolve_tool_path_with_context(
+        "bitfun://runtime/workspace-456/plans/demo.plan.md",
+        Some("/home/project"),
+        true,
+        Some("workspace-123"),
+        Some(PathBuf::from("/runtime/workspace")),
+    )
+    .expect_err("runtime artifact scopes must match the active workspace");
+
+    assert_eq!(
+        err.to_string(),
+        "Runtime URI scope 'workspace-456' does not match the current workspace"
+    );
+}
+
+#[test]
+fn tool_path_resolution_owner_selects_workspace_backend_semantics() {
+    let local =
+        resolve_tool_path_with_context("src/lib.rs", Some("/repo/project"), false, None, None)
+            .expect("local path should resolve through host semantics");
+    assert_eq!(local.backend, ToolPathBackend::Local);
+    assert_eq!(
+        PathBuf::from(local.resolved_path),
+        PathBuf::from("/repo/project").join("src").join("lib.rs")
+    );
+
+    let remote =
+        resolve_tool_path_with_context(r"src\lib.rs", Some("/home/project"), true, None, None)
+            .expect("remote path should resolve through POSIX workspace semantics");
+    assert_eq!(remote.backend, ToolPathBackend::RemoteWorkspace);
+    assert_eq!(remote.resolved_path, "/home/project/src/lib.rs");
+    assert_eq!(remote.logical_path, "/home/project/src/lib.rs");
+}
+
+#[test]
+fn tool_path_absolute_contract_keeps_remote_posix_and_runtime_uri_semantics() {
+    assert!(tool_path_is_effectively_absolute(
+        "bitfun://runtime/current/logs/tool.txt",
+        false
+    ));
+    assert!(tool_path_is_effectively_absolute(
+        r"\home\workspace\src\lib.rs",
+        true
+    ));
+    assert!(!tool_path_is_effectively_absolute("src/lib.rs", true));
+    assert_eq!(
+        tool_path_is_effectively_absolute("src/lib.rs", false),
+        PathBuf::from("src/lib.rs").is_absolute()
+    );
+}
+
+#[test]
 fn runtime_uri_contract_is_provider_neutral_and_normalized() {
     let uri = build_bitfun_runtime_uri("workspace-123", r"plans\demo.plan.md")
         .expect("runtime URI should build");
@@ -325,6 +735,75 @@ fn runtime_uri_contract_rejects_escape_and_invalid_scope() {
     assert_eq!(
         unsupported.to_string(),
         "Unsupported runtime URI: /tmp/result.txt"
+    );
+}
+
+#[test]
+fn runtime_artifact_reference_owner_preserves_remote_uri_shape() {
+    let reference = build_tool_runtime_artifact_reference(
+        r"plans\demo.plan.md",
+        None,
+        Some("workspace-123"),
+        true,
+    )
+    .expect("remote artifact reference should build as runtime URI");
+
+    assert_eq!(
+        reference,
+        "bitfun://runtime/workspace-123/plans/demo.plan.md"
+    );
+}
+
+#[test]
+fn runtime_artifact_reference_owner_preserves_local_path_shape() {
+    let runtime_root = PathBuf::from("/runtime/workspace");
+
+    let reference = build_tool_runtime_artifact_reference(
+        r"sessions\session-1\tool-results\result.json",
+        Some(runtime_root.as_path()),
+        None,
+        false,
+    )
+    .expect("local artifact reference should build as host path");
+
+    assert_eq!(
+        PathBuf::from(reference),
+        runtime_root
+            .join("sessions")
+            .join("session-1")
+            .join("tool-results")
+            .join("result.json")
+    );
+}
+
+#[test]
+fn runtime_artifact_reference_owner_preserves_session_prefix_and_rejects_escape() {
+    let session_reference = build_tool_session_runtime_artifact_reference(
+        "session-1",
+        "tool-results/result.json",
+        None,
+        Some("workspace-123"),
+        true,
+    )
+    .expect("session artifact reference should build");
+
+    assert_eq!(
+        session_reference,
+        "bitfun://runtime/workspace-123/sessions/session-1/tool-results/result.json"
+    );
+
+    let runtime_root = PathBuf::from("/runtime/workspace");
+    let escape = build_tool_runtime_artifact_reference(
+        "../secret.txt",
+        Some(runtime_root.as_path()),
+        None,
+        false,
+    )
+    .expect_err("artifact references must not escape the runtime root");
+
+    assert_eq!(
+        escape.to_string(),
+        "Runtime artifact path cannot escape its root"
     );
 }
 
@@ -634,10 +1113,9 @@ fn collapsed_tool_stub_definition_preserves_prompt_visible_guardrail() {
 
     assert_eq!(stub.name, "WebFetch");
     assert!(stub.description.contains("Fetch a URL"));
-    assert!(
-        stub.description
-            .contains("First call `GetToolSpec` with {\"tool_name\":\"WebFetch\"}")
-    );
+    assert!(stub
+        .description
+        .contains("First call `GetToolSpec` with {\"tool_name\":\"WebFetch\"}"));
     assert_eq!(
         stub.parameters,
         json!({
@@ -705,11 +1183,9 @@ fn prompt_visible_manifest_builder_preserves_expanded_and_collapsed_contract() {
         definitions[0].parameters["properties"]["command"]["type"],
         json!("string")
     );
-    assert!(
-        definitions[2]
-            .description
-            .contains("First call `GetToolSpec` with {\"tool_name\":\"WebFetch\"}")
-    );
+    assert!(definitions[2]
+        .description
+        .contains("First call `GetToolSpec` with {\"tool_name\":\"WebFetch\"}"));
 }
 
 #[test]
@@ -720,12 +1196,10 @@ fn get_tool_spec_contract_preserves_input_schema_and_validation() {
     assert_eq!(schema["additionalProperties"], false);
     assert_eq!(schema["required"], json!(["tool_name"]));
     assert_eq!(schema["properties"]["tool_name"]["type"], "string");
-    assert!(
-        schema["properties"]["tool_name"]["description"]
-            .as_str()
-            .unwrap_or_default()
-            .contains("canonical casing")
-    );
+    assert!(schema["properties"]["tool_name"]["description"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("canonical casing"));
 
     let missing = validate_get_tool_spec_input(&json!({}));
     assert!(!missing.result);
@@ -915,12 +1389,10 @@ fn get_tool_spec_contract_plans_duplicate_load_without_core_context() {
 
     assert_eq!(data["tool_name"], "WebFetch");
     assert_eq!(data["already_loaded"], true);
-    assert!(
-        result_for_assistant
-            .as_deref()
-            .unwrap_or_default()
-            .contains("already loaded in the current conversation")
-    );
+    assert!(result_for_assistant
+        .as_deref()
+        .unwrap_or_default()
+        .contains("already loaded in the current conversation"));
     assert_eq!(image_attachments, None);
 }
 
@@ -1487,11 +1959,9 @@ async fn contextual_manifest_resolver_preserves_runtime_visible_manifest_contrac
         .iter()
         .find(|tool| tool.name == "WebFetch")
         .expect("collapsed WebFetch stub");
-    assert!(
-        web_fetch
-            .description
-            .contains("First call `GetToolSpec` with {\"tool_name\":\"WebFetch\"}")
-    );
+    assert!(web_fetch
+        .description
+        .contains("First call `GetToolSpec` with {\"tool_name\":\"WebFetch\"}"));
     assert_eq!(web_fetch.parameters["additionalProperties"], false);
 }
 
@@ -1781,12 +2251,10 @@ async fn get_tool_spec_provider_execution_returns_duplicate_result_without_detai
 
     assert_eq!(data["tool_name"], "WebFetch");
     assert_eq!(data["already_loaded"], true);
-    assert!(
-        result_for_assistant
-            .as_deref()
-            .unwrap_or_default()
-            .contains("already loaded in the current conversation")
-    );
+    assert!(result_for_assistant
+        .as_deref()
+        .unwrap_or_default()
+        .contains("already loaded in the current conversation"));
     assert_eq!(image_attachments, None);
 }
 
@@ -1899,11 +2367,9 @@ async fn get_tool_spec_runtime_facade_owns_tool_result_vector_adapter_shape() {
         panic!("expected normal detail result");
     };
     assert_eq!(data["tool_name"], "WebFetch");
-    assert!(
-        result_for_assistant
-            .expect("assistant detail")
-            .contains("<description>\nWebFetch description for agentic")
-    );
+    assert!(result_for_assistant
+        .expect("assistant detail")
+        .contains("<description>\nWebFetch description for agentic"));
     assert_eq!(image_attachments, None);
 
     let duplicate_runtime =

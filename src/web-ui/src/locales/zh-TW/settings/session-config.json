@@ -75,7 +75,10 @@
     "createLauncherSuccess": "啟動器已創建：{{path}}",
     "createLauncherFailed": "創建啟動器失敗",
     "createLauncherDesc": "創建帶調試端口的瀏覽器快捷方式。",
-    "tabs": "個標籤頁"
+    "tabs": "個標籤頁",
+    "preferredBrowser": "瀏覽器",
+    "preferredBrowserDesc": "選擇要由 BitFun 透過 CDP 控制的瀏覽器；預設表示跟隨系統預設瀏覽器。",
+    "notInstalled": "未安裝"
   },
   "model": {
     "label": "模型",

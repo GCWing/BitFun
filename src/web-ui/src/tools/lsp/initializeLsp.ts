@@ -9,18 +9,39 @@ import { createLogger } from '@/shared/utils/logger';
 
 import './services/LspDiagnostics';
 import { lspExtensionRegistry } from './services/LspExtensionRegistry';
-import { workspaceLspInitializer } from './services/WorkspaceLspInitializer';
 
 const log = createLogger('LSP');
+let lspInitializationPromise: Promise<void> | null = null;
 
 export async function initializeLsp(): Promise<void> {
+  if (lspInitializationPromise) {
+    return lspInitializationPromise;
+  }
+
+  lspInitializationPromise = initializeLspOnce();
+  return lspInitializationPromise;
+}
+
+async function initializeLspOnce(): Promise<void> {
   try {
     await lspExtensionRegistry.initialize();
-    workspaceLspInitializer.start();
     installLspDiagnosticTools();
   } catch (error) {
+    lspInitializationPromise = null;
     log.error('Failed to initialize LSP module', { error });
   }
+}
+
+export async function ensureWorkspaceLspInitialized(workspacePath?: string): Promise<void> {
+  await initializeLsp();
+  if (!workspacePath) {
+    return;
+  }
+
+  const { workspaceLspInitializer } = await import('./services/WorkspaceLspInitializer');
+  await workspaceLspInitializer.initializeWorkspace(workspacePath, {
+    prestartServers: false,
+  });
 }
 
 /**
@@ -187,7 +208,9 @@ function installLspDiagnosticTools() {
     },
   };
 
-  (window as any).LspDiag = lspDiag;
+  if (typeof window !== 'undefined') {
+    (window as any).LspDiag = lspDiag;
+  }
 }
 
 function loadMonacoLspDiagnostics() {

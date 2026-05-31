@@ -1,19 +1,25 @@
 {
-    "$schema": "https://schema.tauri.app/config/2",
-    "productName": "BitFun",
-    "identifier": "com.bitfun.desktop",
-    "build": {
-        "beforeDevCommand": "npm run dev:web",
-        "devUrl": "http://localhost:1422",
-        "frontendDist": "../../../dist"
-    },
-    "bundle": {
-        "active": true,
-        "targets": "all",
-        "icon": [
-            "icons/icon.icns",
-            "icons/icon.ico"
-        ]
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "BitFun",
+  "identifier": "com.bitfun.desktop",
+  "build": {
+    "beforeDevCommand": "pnpm run dev:web",
+    "devUrl": "http://localhost:1422",
+    "beforeBuildCommand": "pnpm run build:web && pnpm run prepare:mobile-web",
+    "frontendDist": "../../../dist"
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "publisher": "BitFun Team",
+    "icon": [
+      "icons/icon.icns",
+      "icons/icon.ico",
+      "icons/icon.png"
+    ],
+    "resources": {
+      "../../mobile-web/dist": "mobile-web/dist",
+      "resources/worker_host.js": "resources/worker_host.js"
     },
     "app": {
         "windows": [{
@@ -25,4 +31,5 @@
             "csp": null
         }
     }
+  }
 }

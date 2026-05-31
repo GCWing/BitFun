@@ -14,6 +14,11 @@ const LOGGING_INCLUDE_SENSITIVE_PATH = 'app.logging.include_sensitive_diagnostic
 let initialSettingsLoaded = false;
 let configWatcherInstalled = false;
 
+interface InitialLoggingSettings {
+  level?: string;
+  includeSensitiveDiagnostics: boolean;
+}
+
 function toFrontendLogLevel(level: string | null | undefined): LogLevel | null {
   switch (level?.trim().toLowerCase()) {
     case 'trace':
@@ -72,29 +77,50 @@ function applyFrontendLogLevel(level: string | null | undefined, source: string)
   });
 }
 
-async function resolveInitialLogLevel(): Promise<string | undefined> {
-  const [savedLevelResult, runtimeInfoResult] = await Promise.allSettled([
-    configAPI.getConfig(LOGGING_LEVEL_PATH) as Promise<BackendLogLevel>,
+async function resolveInitialLoggingSettings(): Promise<InitialLoggingSettings> {
+  const [configResult, runtimeInfoResult] = await Promise.allSettled([
+    configAPI.getConfigs([
+      LOGGING_LEVEL_PATH,
+      LOGGING_INCLUDE_SENSITIVE_PATH,
+    ]),
     configAPI.getRuntimeLoggingInfo(),
   ]);
 
-  if (savedLevelResult.status === 'fulfilled' && toFrontendLogLevel(savedLevelResult.value) !== null) {
-    return savedLevelResult.value;
+  const configs = configResult.status === 'fulfilled' ? configResult.value : {};
+  if (configResult.status === 'rejected') {
+    log.warn('Failed to load frontend logging configs in batch', configResult.reason);
+  }
+
+  const savedLevel = configs[LOGGING_LEVEL_PATH];
+  if (typeof savedLevel === 'string' && toFrontendLogLevel(savedLevel) !== null) {
+    return {
+      level: savedLevel,
+      includeSensitiveDiagnostics:
+        typeof configs[LOGGING_INCLUDE_SENSITIVE_PATH] === 'boolean'
+          ? configs[LOGGING_INCLUDE_SENSITIVE_PATH]
+          : true,
+    };
   }
 
   if (runtimeInfoResult.status === 'fulfilled') {
     const runtimeLevel = runtimeInfoResult.value?.effectiveLevel;
     if (toFrontendLogLevel(runtimeLevel) !== null) {
-      return runtimeLevel;
+      return {
+        level: runtimeLevel,
+        includeSensitiveDiagnostics:
+          typeof configs[LOGGING_INCLUDE_SENSITIVE_PATH] === 'boolean'
+            ? configs[LOGGING_INCLUDE_SENSITIVE_PATH]
+            : true,
+      };
     }
   }
 
-  return undefined;
-}
-
-async function resolveInitialSensitiveDiagnosticsPreference(): Promise<boolean> {
-  const value = await configAPI.getConfig(LOGGING_INCLUDE_SENSITIVE_PATH) as boolean | undefined;
-  return value ?? true;
+  return {
+    includeSensitiveDiagnostics:
+      typeof configs[LOGGING_INCLUDE_SENSITIVE_PATH] === 'boolean'
+        ? configs[LOGGING_INCLUDE_SENSITIVE_PATH]
+        : true,
+  };
 }
 
 export async function initializeFrontendLogLevelSync(): Promise<void> {
@@ -105,12 +131,9 @@ export async function initializeFrontendLogLevelSync(): Promise<void> {
   initialSettingsLoaded = true;
 
   try {
-    const [initialLevel, includeSensitiveDiagnostics] = await Promise.all([
-      resolveInitialLogLevel(),
-      resolveInitialSensitiveDiagnosticsPreference(),
-    ]);
-    applyFrontendLogLevel(initialLevel, 'startup');
-    setIncludeSensitiveDiagnostics(includeSensitiveDiagnostics);
+    const initialSettings = await resolveInitialLoggingSettings();
+    applyFrontendLogLevel(initialSettings.level, 'startup');
+    setIncludeSensitiveDiagnostics(initialSettings.includeSensitiveDiagnostics);
   } catch (error) {
     log.error('Failed to initialize frontend log level sync', error);
   }

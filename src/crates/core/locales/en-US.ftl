@@ -2,7 +2,6 @@
 # English (US) (en-US) Fluent Translation File
 
 # ==================== General ====================
-app-name = BitFun
 app-version = Version { $version }
 loading = Loading...
 welcome = Welcome to BitFun

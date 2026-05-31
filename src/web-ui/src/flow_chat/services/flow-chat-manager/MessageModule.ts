@@ -29,8 +29,6 @@ import { pendingQueueManager } from './PendingQueueModule';
 
 const log = createLogger('MessageModule');
 
-const ONE_SHOT_AGENT_TYPES_FOR_SESSION = new Set(['Init']);
-
 function acpClientIdFromMode(mode: string | undefined): string | null {
   const value = mode?.trim();
   if (!value?.startsWith('acp:')) return null;
@@ -193,7 +191,6 @@ export async function sendMessage(
     if (
       !acpClientId &&
       agentType?.trim() &&
-      !ONE_SHOT_AGENT_TYPES_FOR_SESSION.has(currentAgentType) &&
       refreshedSession.mode !== currentAgentType
     ) {
       context.flowChatStore.updateSessionMode(sessionId, currentAgentType);
@@ -239,6 +236,7 @@ export async function sendMessage(
     const dialogTurn: DialogTurn = {
       id: dialogTurnId,
       sessionId: sessionId,
+      agentType: currentAgentType,
       userMessage: {
         id: `user_${Date.now()}`,
         content: displayMessage || message,
@@ -320,6 +318,7 @@ export async function sendMessage(
         remoteConnectionId: updatedSession.remoteConnectionId,
         remoteSshHost: updatedSession.remoteSshHost,
       });
+      context.flowChatStore.updateSessionLastSubmittedMode(sessionId, currentAgentType);
     } else {
       try {
         await agentAPI.startDialogTurn({
@@ -332,6 +331,7 @@ export async function sendMessage(
           imageContexts: options?.imageContexts,
           userMessageMetadata: options?.userMessageMetadata,
         });
+        context.flowChatStore.updateSessionLastSubmittedMode(sessionId, currentAgentType);
       } catch (error: any) {
         if (error?.message?.includes('Session does not exist') || error?.message?.includes('Not found')) {
           log.warn('Backend session still not found, retrying creation', {
@@ -349,7 +349,9 @@ export async function sendMessage(
             agentType: currentAgentType,
             workspacePath,
             imageContexts: options?.imageContexts,
+            userMessageMetadata: options?.userMessageMetadata,
           });
+          context.flowChatStore.updateSessionLastSubmittedMode(sessionId, currentAgentType);
         } else {
           throw error;
         }

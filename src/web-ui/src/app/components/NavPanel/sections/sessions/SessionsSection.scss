@@ -57,6 +57,29 @@
     font-style: italic;
   }
 
+  &__inline-loading {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    height: 24px;
+    padding: 0 $size-gap-1;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-2xs);
+
+    svg {
+      flex: 0 0 auto;
+      animation: bitfun-nav-session-spin 1s linear infinite;
+    }
+
+    span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
   &__inline-item {
     display: flex;
     align-items: center;
@@ -505,6 +528,20 @@
       color: var(--color-text-primary);
       background: var(--element-bg-soft);
     }
+
+    &:disabled {
+      cursor: default;
+      opacity: 0.72;
+    }
+
+    &.is-loading {
+      color: var(--color-text-secondary);
+    }
+  }
+
+  &__inline-toggle-spinner {
+    flex: 0 0 auto;
+    animation: bitfun-nav-session-spin 1s linear infinite;
   }
 
   &__inline-toggle-dots {

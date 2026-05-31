@@ -3,7 +3,9 @@
 Scope: this guide applies to `src/crates/services-core`.
 
 `bitfun-services-core` owns platform-neutral service DTOs and helpers that can
-compile without the full product runtime.
+compile without the full product runtime. It also owns generic local filesystem
+operations/tree/search/listing primitives; product crates may layer remote
+workspace routing or legacy error mapping outside this crate.
 
 ## Guardrails
 
@@ -17,6 +19,9 @@ compile without the full product runtime.
 - Runtime call sites that touch agent execution, scheduler state, workspace
   managers, filesystem orchestration, or product behavior stay in core until a
   reviewed port/provider design and equivalence tests exist.
+- Do not add remote SSH, MiniApp storage, tool-result persistence, `PathManager`
+  globals, or product runtime bindings to `filesystem`; keep those in core or a
+  reviewed adapter/provider.
 - Preserve legacy core imports with facade/re-export code when ownership moves.
 
 ## Verification

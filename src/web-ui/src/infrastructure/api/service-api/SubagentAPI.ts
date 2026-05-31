@@ -43,6 +43,9 @@ export interface SubagentInfo {
    
   model?: string;
   visibility?: SubagentVisibilitySummary;
+  configProfileId?: string;
+  configProfileLabel?: string;
+  configProfileMemberModeIds?: string[];
 }
 
 export interface ListSubagentsOptions {

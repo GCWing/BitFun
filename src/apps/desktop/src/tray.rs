@@ -194,6 +194,7 @@ pub fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                 show_main_window(app);
             } else if id == "quit" {
                 log::info!("Quit requested from tray menu");
+                crate::crash_diagnostics::mark_clean_shutdown("tray_quit");
                 crate::perform_process_exit_cleanup();
                 app.exit(0);
             } else if id == "toggle_desktop_pet" {

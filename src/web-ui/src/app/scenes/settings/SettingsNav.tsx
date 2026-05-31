@@ -28,6 +28,7 @@ import { SETTINGS_TAB_SEARCH_CONTENT } from './settingsTabSearchContent';
 import './SettingsNav.scss';
 
 const SEARCH_DEBOUNCE_MS = 150;
+type SettingsT = (key: string, options?: Record<string, unknown>) => unknown;
 
 export interface SettingsSearchRow {
   tabId: ConfigTab;
@@ -53,21 +54,37 @@ function resolveTabPageContentHaystack(i18n: I18nApi, tabId: ConfigTab): string 
   return parts.join(' ');
 }
 
+function translateString(t: SettingsT, key: string, defaultValue: string): string {
+  const value = t(key, { defaultValue });
+  return typeof value === 'string' ? value : defaultValue;
+}
+
+function readSearchAliases(t: SettingsT, tabId: ConfigTab): string[] {
+  const aliases = t(`configCenter.searchAliases.${tabId}`, {
+    defaultValue: [],
+    returnObjects: true,
+  });
+  return Array.isArray(aliases)
+    ? aliases.filter((alias): alias is string => typeof alias === 'string')
+    : [];
+}
+
 function buildSettingsSearchIndex(
-  t: (key: string, options?: Record<string, unknown>) => string,
+  t: SettingsT,
   i18n: I18nApi
 ): SettingsSearchRow[] {
   const rows: SettingsSearchRow[] = [];
   for (const cat of SETTINGS_CATEGORIES) {
-    const categoryLabel = t(cat.nameKey, { defaultValue: cat.id });
+    const categoryLabel = translateString(t, cat.nameKey, cat.id);
     for (const tabDef of cat.tabs) {
-      const tabLabel = t(tabDef.labelKey, { defaultValue: tabDef.id });
+      const tabLabel = translateString(t, tabDef.labelKey, tabDef.id);
       const description = tabDef.descriptionKey
-        ? t(tabDef.descriptionKey, { defaultValue: '' })
+        ? translateString(t, tabDef.descriptionKey, '')
         : '';
       const kw = (tabDef.keywords ?? []).join(' ');
+      const aliases = readSearchAliases(t, tabDef.id).join(' ');
       const pageContent = resolveTabPageContentHaystack(i18n, tabDef.id);
-      const haystack = [categoryLabel, tabLabel, description, kw, tabDef.id, pageContent]
+      const haystack = [categoryLabel, tabLabel, description, kw, aliases, tabDef.id, pageContent]
         .join(' ')
         .toLowerCase();
       rows.push({
@@ -276,7 +293,7 @@ const SettingsNav: React.FC = () => {
     <div className="bitfun-settings-nav">
       <div className="bitfun-settings-nav__header">
         <span className="bitfun-settings-nav__title">
-          {t('configCenter.title', { defaultValue: t('title', { defaultValue: 'Settings' }) })}
+          {t('shared:features.settings')}
         </span>
       </div>
 

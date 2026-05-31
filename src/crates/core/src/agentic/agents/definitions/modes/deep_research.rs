@@ -1,4 +1,4 @@
-use crate::agentic::agents::{Agent, AgentToolPolicyOverrides, RequestContextPolicy};
+use crate::agentic::agents::{Agent, AgentToolPolicyOverrides, UserContextPolicy};
 use crate::agentic::tools::framework::ToolExposure;
 use async_trait::async_trait;
 
@@ -70,8 +70,8 @@ impl Agent for DeepResearchMode {
         &self.tool_exposure_overrides
     }
 
-    fn request_context_policy(&self) -> RequestContextPolicy {
-        RequestContextPolicy::empty()
+    fn user_context_policy(&self) -> UserContextPolicy {
+        UserContextPolicy::empty()
             .with_workspace_context()
             .with_workspace_instructions()
             .with_project_layout()

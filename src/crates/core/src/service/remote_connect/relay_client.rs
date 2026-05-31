@@ -165,7 +165,7 @@ impl RelayClient {
         tokio::spawn(async move {
             while let Some(msg) = cmd_rx.recv().await {
                 if let Ok(json) = serde_json::to_string(&msg) {
-                    if ws_write.send(Message::Text(json)).await.is_err() {
+                    if ws_write.send(Message::Text(json.into())).await.is_err() {
                         break;
                     }
                 }
@@ -237,7 +237,8 @@ impl RelayClient {
                             tokio::spawn(async move {
                                 while let Some(msg) = new_cmd_rx.recv().await {
                                     if let Ok(json) = serde_json::to_string(&msg) {
-                                        if new_write.send(Message::Text(json)).await.is_err() {
+                                        if new_write.send(Message::Text(json.into())).await.is_err()
+                                        {
                                             break;
                                         }
                                     }
@@ -398,12 +399,10 @@ impl RelayClient {
 }
 
 async fn dial(ws_url: &str) -> Result<WsStream> {
-    let config = tokio_tungstenite::tungstenite::protocol::WebSocketConfig {
-        max_message_size: Some(64 * 1024 * 1024),
-        max_frame_size: Some(64 * 1024 * 1024),
-        max_write_buffer_size: 64 * 1024 * 1024,
-        ..Default::default()
-    };
+    let config = tokio_tungstenite::tungstenite::protocol::WebSocketConfig::default()
+        .max_message_size(Some(64 * 1024 * 1024))
+        .max_frame_size(Some(64 * 1024 * 1024))
+        .max_write_buffer_size(64 * 1024 * 1024);
 
     #[cfg(windows)]
     {

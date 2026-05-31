@@ -220,11 +220,20 @@
   "streamIdleTimeout": {
     "title": "Streaming Timeout",
     "label": "Idle Timeout (seconds)",
-    "hint": "Global idle timeout between streamed chunks. Leave empty to wait indefinitely.",
+    "hint": "Global idle timeout between streamed chunks after the stream starts. Leave empty to wait indefinitely.",
     "placeholder": "Leave empty for no timeout",
     "invalid": "Enter a positive integer in seconds, or leave this field empty.",
     "save": "Save Streaming Timeout",
     "saveSuccess": "Streaming timeout saved"
+  },
+  "streamTtftTimeout": {
+    "title": "First Token Timeout",
+    "label": "TTFT Timeout (seconds)",
+    "hint": "Maximum wait time for the model to start streaming after a request is sent. Leave empty to wait indefinitely.",
+    "placeholder": "Leave empty for no timeout",
+    "invalid": "Enter a positive integer in seconds, or leave this field empty.",
+    "save": "Save First Token Timeout",
+    "saveSuccess": "First token timeout saved"
   },
   "capabilities": {
     "text_chat": "Chat",

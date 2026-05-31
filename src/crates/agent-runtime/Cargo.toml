@@ -1,0 +1,13 @@
+[package]
+name = "bitfun-agent-runtime"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "Agent runtime contracts and owner decisions for BitFun"
+
+[lib]
+name = "bitfun_agent_runtime"
+crate-type = ["rlib"]
+
+[dependencies]
+bitfun-runtime-ports = { path = "../runtime-ports" }

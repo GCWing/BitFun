@@ -1,7 +1,7 @@
 {
   "name": "BitFun",
   "private": true,
-  "version": "0.2.7",
+  "version": "0.2.8",
   "type": "module",
   "engines": {
     "node": ">=18.0.0"
@@ -17,7 +17,12 @@
     "dev:web": "pnpm --dir src/web-ui dev",
     "lint:web": "pnpm --dir src/web-ui run lint",
     "lint:web:fix": "pnpm --dir src/web-ui run lint:fix",
+    "i18n:generate": "node scripts/generate-i18n-contract.mjs",
+    "i18n:contract:test": "node --test scripts/i18n-contract.test.mjs",
     "i18n:audit": "node scripts/i18n-audit.mjs",
+    "check:repo-hygiene": "node scripts/check-repo-hygiene.mjs",
+    "check:github-config": "pnpm --dir src/web-ui exec node ../../scripts/check-github-config.mjs",
+    "fmt:rs": "node scripts/format-changed-rust.mjs",
     "prebuild": "pnpm run prebuild:web",
     "prebuild:web": "pnpm run copy-assets --silent && pnpm run generate-all --silent",
     "type-check:web": "pnpm --dir src/web-ui run type-check",
@@ -65,7 +70,9 @@
     "e2e:test:l0:all": "cross-env BITFUN_E2E_APP_MODE=debug pnpm --dir tests/e2e run test:l0:all",
     "e2e:test:l1": "cross-env BITFUN_E2E_APP_MODE=debug pnpm --dir tests/e2e run test:l1",
     "e2e:test:smoke": "cross-env BITFUN_E2E_APP_MODE=debug pnpm --dir tests/e2e run test:smoke",
-    "e2e:test:chat": "cross-env BITFUN_E2E_APP_MODE=debug pnpm --dir tests/e2e run test:chat"
+    "e2e:test:chat": "cross-env BITFUN_E2E_APP_MODE=debug pnpm --dir tests/e2e run test:chat",
+    "e2e:test:perf:debug": "cross-env BITFUN_E2E_APP_MODE=debug pnpm --dir tests/e2e run test:perf",
+    "e2e:test:perf:release-fast": "cross-env BITFUN_E2E_APP_MODE=release-fast pnpm --dir tests/e2e run test:perf"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.10.0",

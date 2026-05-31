@@ -3151,7 +3151,10 @@ fn capabilities_for_remote(_remote: &ReviewPlatformRemote) -> ReviewPlatformCapa
             platform,
             ReviewPlatformKind::Github | ReviewPlatformKind::Gitlab | ReviewPlatformKind::Gitcode
         ),
-        can_reply_to_thread: matches!(platform, ReviewPlatformKind::Github | ReviewPlatformKind::Gitlab),
+        can_reply_to_thread: matches!(
+            platform,
+            ReviewPlatformKind::Github | ReviewPlatformKind::Gitlab
+        ),
         can_resolve_thread: matches!(platform, ReviewPlatformKind::Gitlab),
         can_approve: matches!(
             platform,

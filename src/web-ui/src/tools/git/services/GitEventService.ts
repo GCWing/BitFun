@@ -2,7 +2,7 @@
  * Git event service - manages Git event pub/sub
  */
 
-import { globalEventBus } from '../../../infrastructure';
+import { globalEventBus } from '../../../infrastructure/event-bus';
 import { 
   GitEvent, 
   GitEventType, 

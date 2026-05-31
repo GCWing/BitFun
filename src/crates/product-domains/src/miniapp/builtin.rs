@@ -3,6 +3,7 @@
 use crate::miniapp::storage::{
     build_package_json, ESM_DEPS_JSON, INDEX_HTML, STYLE_CSS, UI_JS, WORKER_JS,
 };
+use crate::miniapp::types::MiniAppMeta;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -86,6 +87,24 @@ pub fn build_builtin_seed_artifacts(app: &BuiltinMiniAppBundle) -> BuiltinSeedAr
         legacy_version: legacy_builtin_version_marker_content(app),
         content_hash,
     }
+}
+
+pub fn preserved_builtin_created_at(existing_meta_json: Option<&str>) -> Option<i64> {
+    existing_meta_json
+        .and_then(|existing| serde_json::from_str::<MiniAppMeta>(existing).ok())
+        .map(|meta| meta.created_at)
+}
+
+pub fn build_builtin_seed_meta(
+    app: &BuiltinMiniAppBundle,
+    preserved_created_at: Option<i64>,
+    now: i64,
+) -> serde_json::Result<MiniAppMeta> {
+    let mut meta: MiniAppMeta = serde_json::from_str(app.meta_json)?;
+    meta.id = app.id.to_string();
+    meta.created_at = preserved_created_at.unwrap_or(now);
+    meta.updated_at = now;
+    Ok(meta)
 }
 
 pub fn resolve_builtin_seed_check(

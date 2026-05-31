@@ -43,6 +43,7 @@
       "delete": "Delete"
     },
     "codeEditor": {
+      "preparingEditor": "Preparing editor...",
       "loadingFile": "Loading file...",
       "saving": "Saving...",
       "initFailedWithMessage": "Failed to initialize editor: {{message}}",

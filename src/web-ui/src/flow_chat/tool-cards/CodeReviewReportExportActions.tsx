@@ -56,81 +56,59 @@ export const CodeReviewReportExportActions: React.FC<CodeReviewReportExportActio
   const visibleActions = useMemo(() => new Set(actions), [actions]);
 
   const markdownLabels = useMemo<Partial<CodeReviewReportMarkdownLabels>>(() => ({
-    titleStandard: t('toolCards.codeReview.report.titleStandard', { defaultValue: 'Code Review Report' }),
-    titleDeep: t('toolCards.codeReview.report.titleDeep', { defaultValue: 'Deep Review Report' }),
-    executiveSummary: t('toolCards.codeReview.sections.summary', { defaultValue: 'Executive Summary' }),
-    reviewDecision: t('toolCards.codeReview.report.reviewDecision', { defaultValue: 'Review Decision' }),
-    runManifest: t('toolCards.codeReview.sections.runManifest', { defaultValue: 'Run manifest' }),
-    riskLevel: t('toolCards.codeReview.riskLevel', { defaultValue: 'Risk Level' }),
-    recommendedAction: t('toolCards.codeReview.recommendedAction', { defaultValue: 'Recommended Action' }),
-    scope: t('toolCards.codeReview.reviewScope', { defaultValue: 'Scope' }),
-    target: t('toolCards.codeReview.runManifest.target', { defaultValue: 'Target' }),
-    budget: t('toolCards.codeReview.runManifest.budget', { defaultValue: 'Budget' }),
-    estimatedCalls: t('toolCards.codeReview.runManifest.estimatedCalls', { defaultValue: 'Estimated calls' }),
-    activeReviewers: t('toolCards.codeReview.runManifest.activeGroupTitle', { defaultValue: 'Will run' }),
-    skippedReviewers: t('toolCards.codeReview.runManifest.skippedGroupTitle', { defaultValue: 'Skipped reviewers' }),
-    issues: t('toolCards.codeReview.sections.issues', { defaultValue: 'Issues' }),
-    noIssues: t('toolCards.codeReview.report.noIssues', { defaultValue: 'No validated issues.' }),
-    remediationPlan: t('toolCards.codeReview.sections.remediation', { defaultValue: 'Remediation Plan' }),
-    strengths: t('toolCards.codeReview.sections.strengths', { defaultValue: 'Strengths' }),
-    reviewTeam: t('toolCards.codeReview.sections.team', { defaultValue: 'Code Review Team' }),
-    reliabilitySignals: t('toolCards.codeReview.report.reliabilitySignals', { defaultValue: 'Review Reliability' }),
-    coverageNotes: t('toolCards.codeReview.sections.coverage', { defaultValue: 'Coverage Notes' }),
-    status: t('toolCards.codeReview.report.status', { defaultValue: 'Status' }),
-    packet: t('toolCards.codeReview.report.packet', { defaultValue: 'Packet' }),
-    partialOutput: t('toolCards.codeReview.report.partialOutput', { defaultValue: 'Partial output' }),
-    findings: t('toolCards.codeReview.report.findings', { defaultValue: 'Findings' }),
-    validation: t('toolCards.codeReview.report.validation', { defaultValue: 'Validation' }),
-    suggestion: t('toolCards.codeReview.suggestion', { defaultValue: 'Suggestion' }),
-    source: t('toolCards.codeReview.report.source', { defaultValue: 'Source' }),
-    noItems: t('toolCards.codeReview.report.noItems', { defaultValue: 'None.' }),
+    titleStandard: t('toolCards.codeReview.report.titleStandard'),
+    titleDeep: t('toolCards.codeReview.report.titleDeep'),
+    executiveSummary: t('toolCards.codeReview.sections.summary'),
+    reviewDecision: t('toolCards.codeReview.report.reviewDecision'),
+    runManifest: t('toolCards.codeReview.sections.runManifest'),
+    riskLevel: t('toolCards.codeReview.riskLevel'),
+    recommendedAction: t('toolCards.codeReview.recommendedAction'),
+    scope: t('toolCards.codeReview.reviewScope'),
+    target: t('toolCards.codeReview.runManifest.target'),
+    budget: t('toolCards.codeReview.runManifest.budget'),
+    estimatedCalls: t('toolCards.codeReview.runManifest.estimatedCalls'),
+    activeReviewers: t('toolCards.codeReview.runManifest.activeGroupTitle'),
+    skippedReviewers: t('toolCards.codeReview.runManifest.skippedGroupTitle'),
+    issues: t('toolCards.codeReview.sections.issues'),
+    noIssues: t('toolCards.codeReview.report.noIssues'),
+    remediationPlan: t('toolCards.codeReview.sections.remediation'),
+    strengths: t('toolCards.codeReview.sections.strengths'),
+    reviewTeam: t('toolCards.codeReview.sections.team'),
+    reliabilitySignals: t('toolCards.codeReview.report.reliabilitySignals'),
+    coverageNotes: t('toolCards.codeReview.sections.coverage'),
+    status: t('toolCards.codeReview.report.status'),
+    packet: t('toolCards.codeReview.report.packet'),
+    partialOutput: t('toolCards.codeReview.report.partialOutput'),
+    findings: t('toolCards.codeReview.report.findings'),
+    validation: t('toolCards.codeReview.report.validation'),
+    suggestion: t('toolCards.codeReview.suggestion'),
+    source: t('toolCards.codeReview.report.source'),
+    noItems: t('toolCards.codeReview.report.noItems'),
     groupTitles: {
-      must_fix: t('toolCards.codeReview.groups.must_fix', { defaultValue: 'Must fix' }),
-      should_improve: t('toolCards.codeReview.groups.should_improve', { defaultValue: 'Should improve' }),
-      needs_decision: t('toolCards.codeReview.groups.needs_decision', { defaultValue: 'Needs decision' }),
-      verification: t('toolCards.codeReview.groups.verification', { defaultValue: 'Verification' }),
-      architecture: t('toolCards.codeReview.groups.architecture', { defaultValue: 'Architecture' }),
-      maintainability: t('toolCards.codeReview.groups.maintainability', { defaultValue: 'Maintainability' }),
-      tests: t('toolCards.codeReview.groups.tests', { defaultValue: 'Tests' }),
-      security: t('toolCards.codeReview.groups.security', { defaultValue: 'Security' }),
-      performance: t('toolCards.codeReview.groups.performance', { defaultValue: 'Performance' }),
-      user_experience: t('toolCards.codeReview.groups.user_experience', { defaultValue: 'User experience' }),
-      other: t('toolCards.codeReview.groups.other', { defaultValue: 'Other' }),
+      must_fix: t('toolCards.codeReview.groups.must_fix'),
+      should_improve: t('toolCards.codeReview.groups.should_improve'),
+      needs_decision: t('toolCards.codeReview.groups.needs_decision'),
+      verification: t('toolCards.codeReview.groups.verification'),
+      architecture: t('toolCards.codeReview.groups.architecture'),
+      maintainability: t('toolCards.codeReview.groups.maintainability'),
+      tests: t('toolCards.codeReview.groups.tests'),
+      security: t('toolCards.codeReview.groups.security'),
+      performance: t('toolCards.codeReview.groups.performance'),
+      user_experience: t('toolCards.codeReview.groups.user_experience'),
+      other: t('toolCards.codeReview.groups.other'),
     },
     reliabilityNoticeLabels: {
-      context_pressure: t('toolCards.codeReview.reliabilityStatus.context_pressure.label', {
-        defaultValue: 'Context pressure rising',
-      }),
-      compression_preserved: t('toolCards.codeReview.reliabilityStatus.compression_preserved.label', {
-        defaultValue: 'Compression preserved key facts',
-      }),
-      cache_hit: t('toolCards.codeReview.reliabilityStatus.cache_hit.label', {
-        defaultValue: 'Incremental cache reused reviewer output',
-      }),
-      cache_miss: t('toolCards.codeReview.reliabilityStatus.cache_miss.label', {
-        defaultValue: 'Incremental cache missed or refreshed',
-      }),
-      concurrency_limited: t('toolCards.codeReview.reliabilityStatus.concurrency_limited.label', {
-        defaultValue: 'Reviewer launch was concurrency-limited',
-      }),
-      partial_reviewer: t('toolCards.codeReview.reliabilityStatus.partial_reviewer.label', {
-        defaultValue: 'Reviewer returned partial result',
-      }),
-      reduced_scope: t('toolCards.codeReview.reliabilityStatus.reduced_scope.label', {
-        defaultValue: 'Reduced-depth coverage',
-      }),
-      retry_guidance: t('toolCards.codeReview.reliabilityStatus.retry_guidance.label', {
-        defaultValue: 'Retry guidance emitted',
-      }),
-      skipped_reviewers: t('toolCards.codeReview.reliabilityStatus.skipped_reviewers.label', {
-        defaultValue: 'Skipped reviewers',
-      }),
-      token_budget_limited: t('toolCards.codeReview.reliabilityStatus.token_budget_limited.label', {
-        defaultValue: 'Token budget limited reviewer coverage',
-      }),
-      user_decision: t('toolCards.codeReview.reliabilityStatus.user_decision.label', {
-        defaultValue: 'User decision needed',
-      }),
+      context_pressure: t('toolCards.codeReview.reliabilityStatus.context_pressure.label'),
+      compression_preserved: t('toolCards.codeReview.reliabilityStatus.compression_preserved.label'),
+      cache_hit: t('toolCards.codeReview.reliabilityStatus.cache_hit.label'),
+      cache_miss: t('toolCards.codeReview.reliabilityStatus.cache_miss.label'),
+      concurrency_limited: t('toolCards.codeReview.reliabilityStatus.concurrency_limited.label'),
+      partial_reviewer: t('toolCards.codeReview.reliabilityStatus.partial_reviewer.label'),
+      reduced_scope: t('toolCards.codeReview.reliabilityStatus.reduced_scope.label'),
+      retry_guidance: t('toolCards.codeReview.reliabilityStatus.retry_guidance.label'),
+      skipped_reviewers: t('toolCards.codeReview.reliabilityStatus.skipped_reviewers.label'),
+      token_budget_limited: t('toolCards.codeReview.reliabilityStatus.token_budget_limited.label'),
+      user_decision: t('toolCards.codeReview.reliabilityStatus.user_decision.label'),
     },
   }), [t]);
 
@@ -144,9 +122,7 @@ export const CodeReviewReportExportActions: React.FC<CodeReviewReportExportActio
   );
 
   const fileName = useMemo(() => {
-    const prefix = t('toolCards.codeReview.export.fileNamePrefix', {
-      defaultValue: 'BitFun-Code-Review',
-    });
+    const prefix = t('toolCards.codeReview.export.fileNamePrefix');
     return `${prefix}_${timestampForFileName()}.md`;
   }, [t]);
 
@@ -156,13 +132,9 @@ export const CodeReviewReportExportActions: React.FC<CodeReviewReportExportActio
       await navigator.clipboard.writeText(markdown);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1600);
-      notificationService.success(t('toolCards.codeReview.export.copySuccess', {
-        defaultValue: 'Review report copied as Markdown.',
-      }));
+      notificationService.success(t('toolCards.codeReview.export.copySuccess'));
     } catch {
-      notificationService.error(t('toolCards.codeReview.export.copyFailed', {
-        defaultValue: 'Failed to copy review report.',
-      }));
+      notificationService.error(t('toolCards.codeReview.export.copyFailed'));
     }
   }, [markdown, t]);
 
@@ -170,16 +142,14 @@ export const CodeReviewReportExportActions: React.FC<CodeReviewReportExportActio
     event.stopPropagation();
     try {
       createMarkdownEditorTab(
-        t('toolCards.codeReview.export.editorTitle', { defaultValue: 'Review Report' }),
+        t('toolCards.codeReview.export.editorTitle'),
         markdown,
         undefined,
         undefined,
         'agent',
       );
     } catch {
-      notificationService.error(t('toolCards.codeReview.export.openFailed', {
-        defaultValue: 'Failed to open review report in editor.',
-      }));
+      notificationService.error(t('toolCards.codeReview.export.openFailed'));
     }
   }, [markdown, t]);
 
@@ -193,9 +163,7 @@ export const CodeReviewReportExportActions: React.FC<CodeReviewReportExportActio
           import('@tauri-apps/plugin-fs'),
         ]);
         const filePath = await save({
-          title: t('toolCards.codeReview.export.saveDialogTitle', {
-            defaultValue: 'Export review report',
-          }),
+          title: t('toolCards.codeReview.export.saveDialogTitle'),
           defaultPath: fileName,
           filters: [{
             name: 'Markdown',
@@ -209,13 +177,9 @@ export const CodeReviewReportExportActions: React.FC<CodeReviewReportExportActio
       } else {
         downloadMarkdownInBrowser(fileName, markdown);
       }
-      notificationService.success(t('toolCards.codeReview.export.saveSuccess', {
-        defaultValue: 'Review report exported.',
-      }));
+      notificationService.success(t('toolCards.codeReview.export.saveSuccess'));
     } catch {
-      notificationService.error(t('toolCards.codeReview.export.saveFailed', {
-        defaultValue: 'Failed to export review report.',
-      }));
+      notificationService.error(t('toolCards.codeReview.export.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -236,7 +200,7 @@ export const CodeReviewReportExportActions: React.FC<CodeReviewReportExportActio
             onClick={handleOpenInEditor}
           >
             <FilePenLine size={14} />
-            {t('toolCards.codeReview.export.openMarkdown', { defaultValue: 'Open as Markdown' })}
+            {t('toolCards.codeReview.export.openMarkdown')}
           </Button>
         )}
       </div>
@@ -246,37 +210,37 @@ export const CodeReviewReportExportActions: React.FC<CodeReviewReportExportActio
   return (
     <div className="code-review-report-actions" onClick={(event) => event.stopPropagation()}>
       {visibleActions.has('copy') && (
-        <Tooltip content={t('toolCards.codeReview.export.copyMarkdown', { defaultValue: 'Copy Markdown' })} placement="top">
+        <Tooltip content={t('toolCards.codeReview.export.copyMarkdown')} placement="top">
           <button
             type="button"
             className="code-review-report-actions__button"
             onClick={handleCopy}
-            aria-label={t('toolCards.codeReview.export.copyMarkdown', { defaultValue: 'Copy Markdown' })}
+            aria-label={t('toolCards.codeReview.export.copyMarkdown')}
           >
             {copied ? <Check size={14} /> : <Copy size={14} />}
           </button>
         </Tooltip>
       )}
       {visibleActions.has('open') && (
-        <Tooltip content={t('toolCards.codeReview.export.openMarkdown', { defaultValue: 'Open as Markdown' })} placement="top">
+        <Tooltip content={t('toolCards.codeReview.export.openMarkdown')} placement="top">
           <button
             type="button"
             className="code-review-report-actions__button"
             onClick={handleOpenInEditor}
-            aria-label={t('toolCards.codeReview.export.openMarkdown', { defaultValue: 'Open as Markdown' })}
+            aria-label={t('toolCards.codeReview.export.openMarkdown')}
           >
             <FilePenLine size={14} />
           </button>
         </Tooltip>
       )}
       {visibleActions.has('save') && (
-        <Tooltip content={t('toolCards.codeReview.export.saveMarkdown', { defaultValue: 'Save Markdown' })} placement="top">
+        <Tooltip content={t('toolCards.codeReview.export.saveMarkdown')} placement="top">
           <button
             type="button"
             className="code-review-report-actions__button"
             onClick={handleSave}
             disabled={saving}
-            aria-label={t('toolCards.codeReview.export.saveMarkdown', { defaultValue: 'Save Markdown' })}
+            aria-label={t('toolCards.codeReview.export.saveMarkdown')}
           >
             {saving ? <Loader2 className="animate-spin" size={14} /> : <Download size={14} />}
           </button>

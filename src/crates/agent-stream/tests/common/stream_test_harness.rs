@@ -8,6 +8,7 @@ use bitfun_ai_adapters::stream::{
 use bitfun_events::{AgenticEvent, AgenticEventPriority as EventPriority};
 use futures::StreamExt;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::{mpsc, Mutex};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_util::sync::CancellationToken;
@@ -39,6 +40,7 @@ pub enum StreamFixtureProvider {
     Responses,
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct StreamFixtureRunOutput {
     pub result: Result<StreamResult, StreamProcessError>,
@@ -48,6 +50,8 @@ pub struct StreamFixtureRunOutput {
 #[derive(Debug, Clone, Copy)]
 pub struct StreamFixtureRunOptions {
     pub server_options: FixtureSseServerOptions,
+    pub request_timeout: Duration,
+    pub process_timeout: Duration,
     pub openai_inline_think_in_text: bool,
     pub anthropic_inline_think_in_text: bool,
     pub log_raw_sse: bool,
@@ -57,6 +61,8 @@ impl Default for StreamFixtureRunOptions {
     fn default() -> Self {
         Self {
             server_options: FixtureSseServerOptions::default(),
+            request_timeout: Duration::from_secs(5),
+            process_timeout: Duration::from_secs(5),
             openai_inline_think_in_text: false,
             anthropic_inline_think_in_text: false,
             log_raw_sse: false,
@@ -89,13 +95,20 @@ pub async fn run_stream_fixture_with_options(
     let fixture_bytes = load_fixture_bytes(fixture_relative_path);
     let fixture_server = FixtureSseServer::spawn(fixture_bytes, options.server_options).await;
 
-    let response = reqwest::Client::new()
-        .get(fixture_server.url())
-        .send()
-        .await
-        .expect("fixture SSE request should succeed")
-        .error_for_status()
-        .expect("fixture SSE response should be 2xx");
+    let response = tokio::time::timeout(
+        options.request_timeout,
+        reqwest::Client::new().get(fixture_server.url()).send(),
+    )
+    .await
+    .unwrap_or_else(|_| {
+        panic!(
+            "fixture SSE request timed out after {:?} for provider {:?} fixture {}",
+            options.request_timeout, provider, fixture_relative_path
+        )
+    })
+    .expect("fixture SSE request should succeed")
+    .error_for_status()
+    .expect("fixture SSE response should be 2xx");
 
     let (tx_event, rx_event) = mpsc::unbounded_channel::<Result<UnifiedResponse, anyhow::Error>>();
     let (tx_raw_sse, rx_raw_sse) = mpsc::unbounded_channel::<String>();
@@ -159,8 +172,9 @@ pub async fn run_stream_fixture_with_options(
     let unified_stream = UnboundedReceiverStream::new(rx_event).boxed();
     let cancellation_token = CancellationToken::new();
 
-    let result = processor
-        .process_stream(
+    let result = tokio::time::timeout(
+        options.process_timeout,
+        processor.process_stream(
             unified_stream,
             None,
             raw_sse_rx_for_processor,
@@ -168,8 +182,15 @@ pub async fn run_stream_fixture_with_options(
             "turn_fixture".to_string(),
             "round_fixture".to_string(),
             &cancellation_token,
+        ),
+    )
+    .await
+    .unwrap_or_else(|_| {
+        panic!(
+            "stream fixture processing timed out after {:?} for provider {:?} fixture {}",
+            options.process_timeout, provider, fixture_relative_path
         )
-        .await;
+    });
 
     let events = event_sink.drain_all().await;
 

@@ -3,11 +3,12 @@
 use crate::api::app_state::AppState;
 use crate::api::session_storage_path::desktop_effective_session_storage_path;
 use bitfun_core::agentic::persistence::{
-    PersistenceManager, SessionBranchRequest, SessionBranchResult,
+    PersistenceManager, SessionBranchRequest, SessionBranchResult, SessionMetadataPage,
 };
 use bitfun_core::infrastructure::PathManager;
 use bitfun_core::service::session::{
-    DialogTurnData, SessionMetadata, SessionTranscriptExport, SessionTranscriptExportOptions,
+    DialogTurnData, SessionKind, SessionMetadata, SessionStatus, SessionTranscriptExport,
+    SessionTranscriptExportOptions,
 };
 use bitfun_core::service::session_usage::{
     generate_session_usage_report, SessionUsageReport, SessionUsageReportRequest,
@@ -19,6 +20,18 @@ use tauri::State;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListPersistedSessionsRequest {
     pub workspace_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ListPersistedSessionsPageRequest {
+    pub workspace_path: String,
+    pub limit: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote_connection_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -132,6 +145,44 @@ pub struct ForkSessionRequest {
 
 pub type ForkSessionResponse = SessionBranchResult;
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArchiveSessionRequest {
+    pub session_id: String,
+    pub workspace_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UnarchiveSessionRequest {
+    pub session_id: String,
+    pub workspace_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArchiveAllSessionsRequest {
+    pub workspace_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeleteAllArchivedSessionsRequest {
+    pub workspace_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
+}
+
 #[tauri::command]
 pub async fn list_persisted_sessions(
     request: ListPersistedSessionsRequest,
@@ -152,6 +203,28 @@ pub async fn list_persisted_sessions(
         .list_session_metadata(&workspace_path)
         .await
         .map_err(|e| format!("Failed to list persisted sessions: {}", e))
+}
+
+#[tauri::command]
+pub async fn list_persisted_sessions_page(
+    request: ListPersistedSessionsPageRequest,
+    app_state: State<'_, AppState>,
+    path_manager: State<'_, Arc<PathManager>>,
+) -> Result<SessionMetadataPage, String> {
+    let workspace_path = desktop_effective_session_storage_path(
+        &app_state,
+        &request.workspace_path,
+        request.remote_connection_id.as_deref(),
+        request.remote_ssh_host.as_deref(),
+    )
+    .await;
+    let manager = PersistenceManager::new(path_manager.inner().clone())
+        .map_err(|e| format!("Failed to create persistence manager: {}", e))?;
+
+    manager
+        .list_session_metadata_page(&workspace_path, request.cursor.as_deref(), request.limit)
+        .await
+        .map_err(|e| format!("Failed to list persisted session page: {}", e))
 }
 
 #[tauri::command]
@@ -389,4 +462,168 @@ pub async fn fork_session(
         )
         .await
         .map_err(|e| format!("Failed to fork session: {}", e))
+}
+
+#[tauri::command]
+pub async fn archive_session(
+    request: ArchiveSessionRequest,
+    app_state: State<'_, AppState>,
+    path_manager: State<'_, Arc<PathManager>>,
+) -> Result<(), String> {
+    let workspace_path = desktop_effective_session_storage_path(
+        &app_state,
+        &request.workspace_path,
+        request.remote_connection_id.as_deref(),
+        request.remote_ssh_host.as_deref(),
+    )
+    .await;
+    let manager = PersistenceManager::new(path_manager.inner().clone())
+        .map_err(|e| format!("Failed to create persistence manager: {}", e))?;
+
+    let mut metadata = manager
+        .load_session_metadata(&workspace_path, &request.session_id)
+        .await
+        .map_err(|e| format!("Failed to load session metadata: {}", e))?
+        .ok_or_else(|| "Session not found".to_string())?;
+
+    metadata.status = SessionStatus::Archived;
+
+    manager
+        .save_session_metadata(&workspace_path, &metadata)
+        .await
+        .map_err(|e| format!("Failed to save session metadata: {}", e))
+}
+
+#[tauri::command]
+pub async fn unarchive_session(
+    request: UnarchiveSessionRequest,
+    app_state: State<'_, AppState>,
+    path_manager: State<'_, Arc<PathManager>>,
+) -> Result<(), String> {
+    let workspace_path = desktop_effective_session_storage_path(
+        &app_state,
+        &request.workspace_path,
+        request.remote_connection_id.as_deref(),
+        request.remote_ssh_host.as_deref(),
+    )
+    .await;
+    let manager = PersistenceManager::new(path_manager.inner().clone())
+        .map_err(|e| format!("Failed to create persistence manager: {}", e))?;
+
+    let mut metadata = manager
+        .load_session_metadata(&workspace_path, &request.session_id)
+        .await
+        .map_err(|e| format!("Failed to load session metadata: {}", e))?
+        .ok_or_else(|| "Session not found".to_string())?;
+
+    metadata.status = SessionStatus::Active;
+
+    manager
+        .save_session_metadata(&workspace_path, &metadata)
+        .await
+        .map_err(|e| format!("Failed to save session metadata: {}", e))
+}
+
+#[tauri::command]
+pub async fn archive_all_sessions(
+    request: ArchiveAllSessionsRequest,
+    app_state: State<'_, AppState>,
+    path_manager: State<'_, Arc<PathManager>>,
+) -> Result<u32, String> {
+    let workspace_path = desktop_effective_session_storage_path(
+        &app_state,
+        &request.workspace_path,
+        request.remote_connection_id.as_deref(),
+        request.remote_ssh_host.as_deref(),
+    )
+    .await;
+    let manager = PersistenceManager::new(path_manager.inner().clone())
+        .map_err(|e| format!("Failed to create persistence manager: {}", e))?;
+
+    let sessions = manager
+        .list_session_metadata(&workspace_path)
+        .await
+        .map_err(|e| format!("Failed to list sessions: {}", e))?;
+
+    let mut archived_count: u32 = 0;
+
+    for mut metadata in sessions {
+        if metadata.status != SessionStatus::Archived
+            && metadata.session_kind == SessionKind::Standard
+        {
+            metadata.status = SessionStatus::Archived;
+            manager
+                .save_session_metadata(&workspace_path, &metadata)
+                .await
+                .map_err(|e| format!("Failed to save session metadata: {}", e))?;
+            archived_count += 1;
+        }
+    }
+
+    Ok(archived_count)
+}
+
+#[tauri::command]
+pub async fn list_archived_sessions(
+    request: ListPersistedSessionsRequest,
+    app_state: State<'_, AppState>,
+    path_manager: State<'_, Arc<PathManager>>,
+) -> Result<Vec<SessionMetadata>, String> {
+    let workspace_path = desktop_effective_session_storage_path(
+        &app_state,
+        &request.workspace_path,
+        request.remote_connection_id.as_deref(),
+        request.remote_ssh_host.as_deref(),
+    )
+    .await;
+    let manager = PersistenceManager::new(path_manager.inner().clone())
+        .map_err(|e| format!("Failed to create persistence manager: {}", e))?;
+
+    let sessions = manager
+        .list_session_metadata(&workspace_path)
+        .await
+        .map_err(|e| format!("Failed to list sessions: {}", e))?;
+
+    let archived: Vec<SessionMetadata> = sessions
+        .into_iter()
+        .filter(|s| s.status == SessionStatus::Archived)
+        .collect();
+
+    Ok(archived)
+}
+
+#[tauri::command]
+pub async fn delete_all_archived_sessions(
+    request: DeleteAllArchivedSessionsRequest,
+    app_state: State<'_, AppState>,
+    path_manager: State<'_, Arc<PathManager>>,
+) -> Result<u32, String> {
+    let workspace_path = desktop_effective_session_storage_path(
+        &app_state,
+        &request.workspace_path,
+        request.remote_connection_id.as_deref(),
+        request.remote_ssh_host.as_deref(),
+    )
+    .await;
+    let manager = PersistenceManager::new(path_manager.inner().clone())
+        .map_err(|e| format!("Failed to create persistence manager: {}", e))?;
+
+    let sessions = manager
+        .list_session_metadata(&workspace_path)
+        .await
+        .map_err(|e| format!("Failed to list sessions: {}", e))?;
+
+    let mut deleted_count: u32 = 0;
+
+    for metadata in sessions {
+        if metadata.status == SessionStatus::Archived {
+            manager
+                .delete_session(&workspace_path, &metadata.session_id)
+                .await
+                .map_err(|e| format!("Failed to delete session: {}", e))?;
+            deleted_count += 1;
+        }
+    }
+
+    Ok(deleted_count)
 }

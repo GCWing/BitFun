@@ -90,5 +90,13 @@
     "marketDownloadFailed": "Failed to download: {{error}}",
     "enabled": "enabled",
     "disabled": "disabled"
+  },
+  "section": {
+    "user": {
+      "description": "Skills installed for current user."
+    },
+    "project": {
+      "description": "Project-level Skills in current workspace."
+    }
   }
 }

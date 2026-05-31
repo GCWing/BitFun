@@ -71,6 +71,11 @@ export interface StartDialogTurnRequest {
   userMessageMetadata?: Record<string, unknown>;
 }
 
+export interface StartDialogTurnResponse {
+  success: boolean;
+  message: string;
+}
+
 export interface CompactSessionRequest {
   sessionId: string;
   workspacePath?: string;
@@ -81,8 +86,13 @@ export interface CompactSessionRequest {
  
 export interface SessionInfo {
   sessionId: string;
+  /** Current/default mode selection for the next dialog turn. */
   sessionName: string;
   agentType: string;
+  /** Mode of the last surviving user dialog turn in session history. */
+  lastUserDialogAgentType?: string;
+  /** Mode of the most recent user submission accepted by the runtime. */
+  lastSubmittedAgentType?: string;
   state: string;
   turnCount: number;
   createdAt: number;
@@ -97,11 +107,21 @@ export interface RestoreSessionViewResponse {
   session: SessionInfo;
   turns: DialogTurnData[];
   contextRestoreState: 'ready' | 'pending';
+  isPartial?: boolean;
+  loadedTurnCount?: number;
+  totalTurnCount?: number;
 }
 
 export interface EnsureAssistantBootstrapRequest {
   sessionId: string;
   workspacePath: string;
+}
+
+export interface RunInitAgentsMdRequest {
+  sessionId: string;
+  workspacePath?: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
 }
 
 export type EnsureAssistantBootstrapStatus = 'started' | 'skipped' | 'blocked';
@@ -142,6 +162,14 @@ export interface ModeInfo {
   isReadonly: boolean;
   toolCount: number;
   defaultTools?: string[];
+  /**
+   * Combined prompt-cache compatibility key for mode-switch guards. Modes that
+   * share the same key can reuse the same session-level prompt cache.
+   */
+  promptCacheScopeKey: string;
+  configProfileId: string;
+  configProfileLabel?: string;
+  configProfileMemberModeIds: string[];
 }
 
 
@@ -351,6 +379,18 @@ export class AgentAPI {
     }
   }
 
+  async runInitAgentsMd(
+    request: RunInitAgentsMdRequest
+  ): Promise<StartDialogTurnResponse> {
+    try {
+      return await api.invoke<StartDialogTurnResponse>('run_init_agents_md', {
+        request,
+      });
+    } catch (error) {
+      throw createTauriCommandError('run_init_agents_md', error, request);
+    }
+  }
+
    
   async cancelDialogTurn(sessionId: string, dialogTurnId: string): Promise<void> {
     try {
@@ -462,6 +502,7 @@ export class AgentAPI {
     remoteSshHost?: string,
     traceId?: string,
     includeInternal?: boolean,
+    tailTurnCount?: number,
   ): Promise<RestoreSessionViewResponse> {
     try {
       return await api.invoke<RestoreSessionViewResponse>('restore_session_view', {
@@ -472,6 +513,7 @@ export class AgentAPI {
           remoteSshHost,
           traceId,
           includeInternal,
+          ...(tailTurnCount !== undefined ? { tailTurnCount } : {}),
         },
       });
     } catch (error) {
@@ -749,9 +791,9 @@ export class AgentAPI {
     action: { type: 'disable' } | { type: 'restore' } | { type: 'extend'; seconds: number },
   ): Promise<void> {
     const actionPayload = action.type === 'disable'
-      ? { type: 'Disable' }
+      ? { type: 'Disable', payload: null }
       : action.type === 'restore'
-        ? { type: 'Restore' }
+        ? { type: 'Restore', payload: null }
         : { type: 'Extend', payload: { seconds: action.seconds } };
     try {
       await api.invoke<void>('set_subagent_timeout', {
@@ -769,6 +811,9 @@ export class AgentAPI {
       description: `${agentType} agent`,
       isReadonly: false,
       toolCount: 0,
+      promptCacheScopeKey: agentType,
+      configProfileId: agentType,
+      configProfileMemberModeIds: [agentType],
       agent_type: agentType,
       when_to_use: `Use ${agentType} for related tasks`,
       tools: 'all',

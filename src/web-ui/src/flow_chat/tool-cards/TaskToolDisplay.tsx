@@ -25,6 +25,7 @@ import { hasAcpPermissionOptions } from './AcpPermissionActions.utils';
 import { AcpPermissionActions } from './AcpPermissionActions';
 import { openBtwSessionInAuxPane } from '../services/openBtwSession';
 import { flowChatStore } from '../store/FlowChatStore';
+import { useSessionGoalModeActive } from '../hooks/useSessionGoalModeActive';
 import './TaskToolDisplay.scss';
 import './ModelThinkingDisplay.scss';
 
@@ -100,6 +101,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
   sessionId
 }) => {
   const { t } = useTranslation('flow-chat');
+  const defaultTimeoutDisabled = useSessionGoalModeActive(sessionId);
   const { t: tAgents } = useTranslation('scenes/agents');
   const { toolCall, toolResult, status, requiresConfirmation, userConfirmed } = toolItem;
   const toolId = toolItem.id ?? toolCall?.id;
@@ -401,6 +403,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
                   }
                   showControls={true}
                   subagentSessionId={toolItem.subagentSessionId}
+                  defaultTimeoutDisabled={defaultTimeoutDisabled}
                   completedDurationMs={taskDurationMs}
                   completedStatus={completedDurationStatus}
                   completedFailureReason={isFailed ? taskErrorMessage ?? undefined : undefined}

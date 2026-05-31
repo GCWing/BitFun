@@ -1,28 +1,32 @@
-//! Mode tool configuration migration and resolution.
+//! Mode/profile tool configuration migration and resolution.
 //!
 //! Stored configuration keeps only user overrides. Effective tool lists are
 //! derived from the current mode defaults at runtime.
 
-use crate::agentic::agents::get_agent_registry;
+use crate::agentic::agents::{
+    get_agent_registry, mode_config_profile_member_mode_ids, resolve_mode_config_profile_id,
+};
 use crate::agentic::tools::registry::get_all_registered_tools;
 use crate::service::config::global::GlobalConfigManager;
-use crate::service::config::types::{ModeConfig, ModeConfigView};
+use crate::service::config::types::{
+    AgentProfileConfig, AgentProfileView, ParentSubagentOverrideConfig,
+};
 use crate::util::errors::*;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::{HashMap, HashSet};
 
-/// Mode config canonicalization report.
+/// Agent-profile config canonicalization report.
 #[derive(Debug, Serialize, Deserialize, Default)]
-pub struct ModeConfigCanonicalizationReport {
-    pub removed_mode_configs: Vec<String>,
-    pub updated_modes: Vec<ModeConfigUpdateInfo>,
+pub struct AgentProfileConfigCanonicalizationReport {
+    pub removed_profile_configs: Vec<String>,
+    pub updated_profiles: Vec<AgentProfileConfigUpdateInfo>,
 }
 
-/// Mode config update information.
+/// Agent-profile config update information.
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ModeConfigUpdateInfo {
-    pub mode_id: String,
+pub struct AgentProfileConfigUpdateInfo {
+    pub profile_id: String,
     pub added_tools: Vec<String>,
     pub removed_tools: Vec<String>,
 }
@@ -68,9 +72,25 @@ fn normalize_skill_override_lists(
     (disabled_user_skills, enabled_user_skills)
 }
 
+fn normalize_subagent_overrides(
+    overrides: ParentSubagentOverrideConfig,
+) -> ParentSubagentOverrideConfig {
+    overrides
+        .into_iter()
+        .filter_map(|(subagent_key, state)| {
+            let trimmed = subagent_key.trim();
+            (!trimmed.is_empty()).then(|| (trimmed.to_string(), state))
+        })
+        .collect()
+}
+
+fn resolve_profile_id(mode_id: &str) -> String {
+    resolve_mode_config_profile_id(mode_id).into_owned()
+}
+
 pub fn resolve_effective_tools(
     default_tools: &[String],
-    mode_config: Option<&ModeConfig>,
+    mode_config: Option<&AgentProfileConfig>,
     valid_tools: &HashSet<String>,
 ) -> Vec<String> {
     let Some(config) = mode_config else {
@@ -102,14 +122,15 @@ pub fn resolve_effective_tools(
     effective
 }
 
-fn stored_mode_from_tool_selection(
-    mode_id: &str,
+fn stored_agent_profile_from_tool_selection(
+    agent_id: &str,
     enabled_tools: Vec<String>,
     disabled_user_skills: Vec<String>,
     enabled_user_skills: Vec<String>,
+    subagent_overrides: ParentSubagentOverrideConfig,
     default_tools: &[String],
     valid_tools: &HashSet<String>,
-) -> Option<ModeConfig> {
+) -> Option<AgentProfileConfig> {
     let default_tools = normalize_tools(default_tools.to_vec(), valid_tools);
     let enabled_tools = normalize_tools(enabled_tools, valid_tools);
     let enabled_set: HashSet<String> = enabled_tools.iter().cloned().collect();
@@ -129,31 +150,35 @@ fn stored_mode_from_tool_selection(
         }
     }
 
-    stored_mode_from_overrides(
-        mode_id,
+    stored_agent_profile_from_overrides(
+        agent_id,
         added_tools,
         removed_tools,
         disabled_user_skills,
         enabled_user_skills,
+        subagent_overrides,
         &default_tools,
         valid_tools,
     )
 }
 
-fn stored_mode_from_overrides(
-    mode_id: &str,
+fn stored_agent_profile_from_overrides(
+    agent_id: &str,
     added_tools: Vec<String>,
     removed_tools: Vec<String>,
     disabled_user_skills: Vec<String>,
     enabled_user_skills: Vec<String>,
+    subagent_overrides: ParentSubagentOverrideConfig,
     default_tools: &[String],
     valid_tools: &HashSet<String>,
-) -> Option<ModeConfig> {
+) -> Option<AgentProfileConfig> {
+    let profile_id = resolve_profile_id(agent_id);
     let default_set: HashSet<String> = default_tools.iter().cloned().collect();
     let mut added_tools = normalize_tools(added_tools, valid_tools);
     let mut removed_tools = normalize_tools(removed_tools, valid_tools);
     let (disabled_user_skills, enabled_user_skills) =
         normalize_skill_override_lists(disabled_user_skills, enabled_user_skills);
+    let subagent_overrides = normalize_subagent_overrides(subagent_overrides);
 
     added_tools.retain(|tool| !default_set.contains(tool));
     removed_tools.retain(|tool| default_set.contains(tool));
@@ -165,25 +190,27 @@ fn stored_mode_from_overrides(
         && removed_tools.is_empty()
         && disabled_user_skills.is_empty()
         && enabled_user_skills.is_empty()
+        && subagent_overrides.is_empty()
     {
         return None;
     }
 
-    Some(ModeConfig {
-        mode_id: mode_id.to_string(),
+    Some(AgentProfileConfig {
+        profile_id,
         added_tools,
         removed_tools,
         disabled_user_skills,
         enabled_user_skills,
+        subagent_overrides,
     })
 }
 
-fn build_mode_view(
-    mode_id: &str,
+fn build_agent_profile_view(
+    agent_id: &str,
     default_tools: Vec<String>,
-    mode_config: Option<&ModeConfig>,
+    mode_config: Option<&AgentProfileConfig>,
     valid_tools: &HashSet<String>,
-) -> ModeConfigView {
+) -> AgentProfileView {
     let default_tools = normalize_tools(default_tools, valid_tools);
     let enabled_tools = resolve_effective_tools(&default_tools, mode_config, valid_tools);
     let (disabled_user_skills, enabled_user_skills) = mode_config
@@ -195,8 +222,8 @@ fn build_mode_view(
         })
         .unwrap_or_else(|| (Vec::new(), Vec::new()));
 
-    ModeConfigView {
-        mode_id: mode_id.to_string(),
+    AgentProfileView {
+        profile_id: resolve_profile_id(agent_id),
         enabled_tools,
         default_tools,
         disabled_user_skills,
@@ -204,12 +231,12 @@ fn build_mode_view(
     }
 }
 
-fn canonicalize_mode_config(
-    mode_id: &str,
+fn canonicalize_agent_profile(
+    profile_id: &str,
     raw_mode: Option<&Value>,
     default_tools: &[String],
     valid_tools: &HashSet<String>,
-) -> BitFunResult<Option<ModeConfig>> {
+) -> BitFunResult<Option<AgentProfileConfig>> {
     let Some(raw_mode) = raw_mode else {
         return Ok(None);
     };
@@ -217,22 +244,24 @@ fn canonicalize_mode_config(
         return Ok(None);
     }
 
-    let mut stored: ModeConfig = serde_json::from_value(raw_mode.clone()).map_err(|error| {
-        BitFunError::config(format!(
-            "Failed to deserialize mode config '{}': {}",
-            mode_id, error
-        ))
-    })?;
-    if stored.mode_id.trim().is_empty() {
-        stored.mode_id = mode_id.to_string();
+    let mut stored: AgentProfileConfig =
+        serde_json::from_value(raw_mode.clone()).map_err(|error| {
+            BitFunError::config(format!(
+                "Failed to deserialize agent profile '{}': {}",
+                profile_id, error
+            ))
+        })?;
+    if stored.profile_id.trim().is_empty() {
+        stored.profile_id = profile_id.to_string();
     }
 
-    Ok(stored_mode_from_overrides(
-        mode_id,
+    Ok(stored_agent_profile_from_overrides(
+        profile_id,
         stored.added_tools,
         stored.removed_tools,
         stored.disabled_user_skills,
         stored.enabled_user_skills,
+        stored.subagent_overrides,
         default_tools,
         valid_tools,
     ))
@@ -255,21 +284,36 @@ async fn get_mode_defaults() -> HashMap<String, Vec<String>> {
         .collect()
 }
 
-pub async fn get_mode_config_views() -> BitFunResult<HashMap<String, ModeConfigView>> {
+async fn get_profile_defaults() -> HashMap<String, Vec<String>> {
+    let mut defaults = HashMap::new();
+    for (mode_id, default_tools) in get_mode_defaults().await {
+        defaults
+            .entry(resolve_profile_id(&mode_id))
+            .or_insert(default_tools);
+    }
+    defaults
+}
+
+pub async fn get_agent_profile_configs() -> BitFunResult<HashMap<String, AgentProfileConfig>> {
     let config_service = GlobalConfigManager::get_service().await?;
-    let stored_configs: HashMap<String, ModeConfig> = config_service
-        .get_config(Some("ai.mode_configs"))
+    Ok(config_service
+        .get_config(Some("ai.agent_profiles"))
         .await
-        .unwrap_or_default();
+        .unwrap_or_default())
+}
+
+pub async fn get_agent_profile_views() -> BitFunResult<HashMap<String, AgentProfileView>> {
+    let stored_configs = get_agent_profile_configs().await?;
     let mode_defaults = get_mode_defaults().await;
     let valid_tools = get_valid_tool_names().await;
 
     let mut views = HashMap::new();
     for (mode_id, default_tools) in mode_defaults {
-        let view = build_mode_view(
+        let profile_id = resolve_profile_id(&mode_id);
+        let view = build_agent_profile_view(
             &mode_id,
             default_tools,
-            stored_configs.get(&mode_id),
+            stored_configs.get(&profile_id),
             &valid_tools,
         );
         views.insert(mode_id, view);
@@ -278,32 +322,30 @@ pub async fn get_mode_config_views() -> BitFunResult<HashMap<String, ModeConfigV
     Ok(views)
 }
 
-pub async fn get_mode_config_view(mode_id: &str) -> BitFunResult<ModeConfigView> {
-    let views = get_mode_config_views().await?;
+pub async fn get_agent_profile_view(agent_id: &str) -> BitFunResult<AgentProfileView> {
+    let views = get_agent_profile_views().await?;
     views
-        .get(mode_id)
+        .get(agent_id)
         .cloned()
-        .ok_or_else(|| BitFunError::config(format!("Mode does not exist: {}", mode_id)))
+        .ok_or_else(|| BitFunError::config(format!("Agent does not exist: {}", agent_id)))
 }
 
-pub async fn persist_mode_config_from_value(mode_id: &str, config: Value) -> BitFunResult<()> {
+pub async fn persist_agent_profile_from_value(agent_id: &str, config: Value) -> BitFunResult<()> {
     let config_service = GlobalConfigManager::get_service().await?;
-    let mut stored_configs: HashMap<String, ModeConfig> = config_service
-        .get_config(Some("ai.mode_configs"))
-        .await
-        .unwrap_or_default();
+    let mut stored_configs = get_agent_profile_configs().await?;
     let mode_defaults = get_mode_defaults().await;
     let default_tools = mode_defaults
-        .get(mode_id)
-        .ok_or_else(|| BitFunError::config(format!("Mode does not exist: {}", mode_id)))?;
+        .get(agent_id)
+        .ok_or_else(|| BitFunError::config(format!("Agent does not exist: {}", agent_id)))?;
     let valid_tools = get_valid_tool_names().await;
-    let current = stored_configs.get(mode_id);
+    let profile_id = resolve_profile_id(agent_id);
+    let current = stored_configs.get(&profile_id);
 
     let enabled_tools = if let Some(tools) = config.get("enabled_tools") {
         serde_json::from_value::<Vec<String>>(tools.clone()).map_err(|error| {
             BitFunError::config(format!(
                 "Invalid enabled_tools for mode '{}': {}",
-                mode_id, error
+                agent_id, error
             ))
         })?
     } else {
@@ -321,7 +363,7 @@ pub async fn persist_mode_config_from_value(mode_id: &str, config: Value) -> Bit
                 serde_json::from_value::<Vec<String>>(value.clone()).map_err(|error| {
                     BitFunError::config(format!(
                         "Invalid disabled_user_skills for mode '{}': {}",
-                        mode_id, error
+                        agent_id, error
                     ))
                 })?
             }
@@ -331,6 +373,7 @@ pub async fn persist_mode_config_from_value(mode_id: &str, config: Value) -> Bit
             .map(|item| item.disabled_user_skills.clone())
             .unwrap_or_default()
     };
+
     let enabled_user_skills = if config
         .as_object()
         .map(|obj| obj.contains_key("enabled_user_skills"))
@@ -342,7 +385,7 @@ pub async fn persist_mode_config_from_value(mode_id: &str, config: Value) -> Bit
                 serde_json::from_value::<Vec<String>>(value.clone()).map_err(|error| {
                     BitFunError::config(format!(
                         "Invalid enabled_user_skills for mode '{}': {}",
-                        mode_id, error
+                        agent_id, error
                     ))
                 })?
             }
@@ -353,100 +396,149 @@ pub async fn persist_mode_config_from_value(mode_id: &str, config: Value) -> Bit
             .unwrap_or_default()
     };
 
-    if let Some(canonical) = stored_mode_from_tool_selection(
-        mode_id,
+    let subagent_overrides = if config
+        .as_object()
+        .map(|obj| obj.contains_key("subagent_overrides"))
+        .unwrap_or(false)
+    {
+        match config.get("subagent_overrides") {
+            Some(Value::Null) | None => ParentSubagentOverrideConfig::new(),
+            Some(value) => serde_json::from_value::<ParentSubagentOverrideConfig>(value.clone())
+                .map_err(|error| {
+                    BitFunError::config(format!(
+                        "Invalid subagent_overrides for mode '{}': {}",
+                        agent_id, error
+                    ))
+                })?,
+        }
+    } else {
+        current
+            .map(|item| item.subagent_overrides.clone())
+            .unwrap_or_default()
+    };
+
+    if let Some(canonical) = stored_agent_profile_from_tool_selection(
+        agent_id,
         enabled_tools,
         disabled_user_skills,
         enabled_user_skills,
+        subagent_overrides,
         default_tools,
         &valid_tools,
     ) {
-        stored_configs.insert(mode_id.to_string(), canonical);
+        stored_configs.insert(profile_id, canonical);
     } else {
-        stored_configs.remove(mode_id);
+        stored_configs.remove(&profile_id);
     }
 
     config_service
-        .set_config("ai.mode_configs", stored_configs)
+        .set_config("ai.agent_profiles", stored_configs)
         .await
 }
 
-pub async fn reset_mode_config_to_default(mode_id: &str) -> BitFunResult<()> {
+pub async fn reset_agent_profile_to_default(agent_id: &str) -> BitFunResult<()> {
     let config_service = GlobalConfigManager::get_service().await?;
-    let mut stored_configs: HashMap<String, ModeConfig> = config_service
-        .get_config(Some("ai.mode_configs"))
-        .await
-        .unwrap_or_default();
-    stored_configs.remove(mode_id);
+    let mut stored_configs = get_agent_profile_configs().await?;
+    let profile_id = resolve_profile_id(agent_id);
+
+    if let Some(current) = stored_configs.get_mut(&profile_id) {
+        current.added_tools.clear();
+        current.removed_tools.clear();
+
+        if current.disabled_user_skills.is_empty()
+            && current.enabled_user_skills.is_empty()
+            && current.subagent_overrides.is_empty()
+        {
+            stored_configs.remove(&profile_id);
+        }
+    }
+
     config_service
-        .set_config("ai.mode_configs", stored_configs)
+        .set_config("ai.agent_profiles", stored_configs)
         .await
 }
 
-/// Canonicalizes stored mode config overrides.
-pub async fn canonicalize_mode_configs() -> BitFunResult<ModeConfigCanonicalizationReport> {
+/// Canonicalizes stored mode profile overrides.
+pub async fn canonicalize_agent_profile_configs(
+) -> BitFunResult<AgentProfileConfigCanonicalizationReport> {
     let config_service = GlobalConfigManager::get_service().await?;
     let valid_tools = get_valid_tool_names().await;
-    let mode_defaults = get_mode_defaults().await;
+    let profile_defaults = get_profile_defaults().await;
     let mut ai_value: Value = config_service.get_config(Some("ai")).await?;
     let original_ai_value = ai_value.clone();
     let ai_object = ai_value
         .as_object_mut()
         .ok_or_else(|| BitFunError::config("AI config must be a JSON object".to_string()))?;
 
-    let raw_mode_configs = ai_object
-        .get("mode_configs")
+    let raw_agent_profiles = ai_object
+        .get("agent_profiles")
         .and_then(Value::as_object)
         .cloned()
         .unwrap_or_default();
 
-    let mut rewritten_mode_configs = Map::new();
-    let mut updated_modes = Vec::new();
-    let mut removed_mode_configs = Vec::new();
+    let mut rewritten_agent_profiles = Map::new();
+    let mut updated_profiles = Vec::new();
+    let mut removed_profile_configs = Vec::new();
 
-    for (mode_id, default_tools) in &mode_defaults {
-        let raw_mode = raw_mode_configs.get(mode_id);
-        let canonical = canonicalize_mode_config(mode_id, raw_mode, default_tools, &valid_tools)?;
+    for (profile_id, default_tools) in &profile_defaults {
+        let raw_profile = raw_agent_profiles.get(profile_id);
+        let canonical =
+            canonicalize_agent_profile(profile_id, raw_profile, default_tools, &valid_tools)?;
         if let Some(config) = canonical {
-            if raw_mode.is_some() {
-                updated_modes.push(ModeConfigUpdateInfo {
-                    mode_id: mode_id.clone(),
+            if raw_profile.is_some() {
+                updated_profiles.push(AgentProfileConfigUpdateInfo {
+                    profile_id: profile_id.clone(),
                     added_tools: config.added_tools.clone(),
                     removed_tools: config.removed_tools.clone(),
                 });
             }
-            rewritten_mode_configs.insert(mode_id.clone(), serde_json::to_value(config)?);
-        } else if raw_mode.is_some() {
-            removed_mode_configs.push(mode_id.clone());
+            rewritten_agent_profiles.insert(profile_id.clone(), serde_json::to_value(config)?);
+        } else if raw_profile.is_some() {
+            removed_profile_configs.push(profile_id.clone());
         }
     }
 
-    for mode_id in raw_mode_configs.keys() {
-        if !mode_defaults.contains_key(mode_id) {
-            removed_mode_configs.push(mode_id.clone());
+    for profile_id in raw_agent_profiles.keys() {
+        if !profile_defaults.contains_key(profile_id) {
+            removed_profile_configs.push(profile_id.clone());
         }
     }
 
     ai_object.insert(
-        "mode_configs".to_string(),
-        Value::Object(rewritten_mode_configs),
+        "agent_profiles".to_string(),
+        Value::Object(rewritten_agent_profiles),
     );
 
     if ai_value != original_ai_value {
         config_service.set_config("ai", ai_value).await?;
     }
 
-    Ok(ModeConfigCanonicalizationReport {
-        removed_mode_configs,
-        updated_modes,
+    Ok(AgentProfileConfigCanonicalizationReport {
+        removed_profile_configs,
+        updated_profiles,
     })
+}
+
+pub fn agent_profile_member_mode_ids_for(agent_id: &str) -> Vec<String> {
+    let profile_id = resolve_profile_id(agent_id);
+    let members = mode_config_profile_member_mode_ids(&profile_id);
+    if members.is_empty() {
+        vec![agent_id.to_string()]
+    } else {
+        members
+            .iter()
+            .map(|mode_id| (*mode_id).to_string())
+            .collect()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        canonicalize_mode_config, normalize_skill_override_lists, stored_mode_from_overrides,
+        agent_profile_member_mode_ids_for, canonicalize_agent_profile,
+        normalize_skill_override_lists, stored_agent_profile_from_overrides,
     };
+    use crate::service::config::types::AgentSubagentOverrideState;
     use serde_json::Value;
     use std::collections::HashSet;
 
@@ -469,19 +561,21 @@ mod tests {
     }
 
     #[test]
-    fn stored_mode_from_overrides_keeps_enabled_user_skills() {
+    fn stored_agent_profile_from_overrides_keeps_enabled_user_skills() {
         let valid_tools = HashSet::new();
-        let stored = stored_mode_from_overrides(
+        let stored = stored_agent_profile_from_overrides(
             "agentic",
             Vec::new(),
             Vec::new(),
             Vec::new(),
             vec!["user::bitfun-system::pdf".to_string()],
+            Default::default(),
             &[],
             &valid_tools,
         )
         .expect("mode config should be retained when skill overrides exist");
 
+        assert_eq!(stored.profile_id, "coding_shared");
         assert_eq!(
             stored.enabled_user_skills,
             vec!["user::bitfun-system::pdf".to_string()]
@@ -490,10 +584,52 @@ mod tests {
     }
 
     #[test]
-    fn canonicalize_mode_config_treats_null_as_missing() {
-        let canonical = canonicalize_mode_config("Claw", Some(&Value::Null), &[], &HashSet::new())
-            .expect("null mode config should be ignored");
+    fn stored_agent_profile_from_overrides_keeps_subagent_overrides() {
+        let valid_tools = HashSet::new();
+        let mut subagent_overrides = std::collections::HashMap::new();
+        subagent_overrides.insert(
+            "builtin::builtin::Explore".to_string(),
+            AgentSubagentOverrideState::Disabled,
+        );
+        let stored = stored_agent_profile_from_overrides(
+            "debug",
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            subagent_overrides.clone(),
+            &[],
+            &valid_tools,
+        )
+        .expect("mode config should be retained when subagent overrides exist");
+
+        assert_eq!(stored.profile_id, "coding_shared");
+        assert_eq!(stored.subagent_overrides, subagent_overrides);
+    }
+
+    #[test]
+    fn canonicalize_agent_profile_treats_null_as_missing() {
+        let canonical =
+            canonicalize_agent_profile("Claw", Some(&Value::Null), &[], &HashSet::new())
+                .expect("null mode config should be ignored");
 
         assert!(canonical.is_none());
+    }
+
+    #[test]
+    fn shared_modes_report_shared_profile_members() {
+        assert_eq!(
+            agent_profile_member_mode_ids_for("agentic"),
+            vec![
+                "agentic".to_string(),
+                "Plan".to_string(),
+                "debug".to_string(),
+                "Multitask".to_string()
+            ]
+        );
+        assert_eq!(
+            agent_profile_member_mode_ids_for("Cowork"),
+            vec!["Cowork".to_string()]
+        );
     }
 }

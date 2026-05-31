@@ -83,7 +83,7 @@ WORK_DIR     = <workspace_root>/.bitfun/sessions/{SESSION_ID}/research
 REPORT_PATH  = <WORK_DIR>/report.md
 ```
 
-`{SESSION_ID}` above is replaced at prompt build time with the current session's ID. `<workspace_root>` is the workspace root shown in additional context — use it verbatim.
+`{SESSION_ID}` above is replaced at prompt build time with the current session's ID. `<workspace_root>` is the workspace root shown in user context — use it verbatim.
 
 **File-layout convention.** Everything for this research session lives under `WORK_DIR`:
 

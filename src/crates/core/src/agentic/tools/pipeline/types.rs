@@ -6,6 +6,7 @@ use crate::agentic::round_preempt::DialogRoundInjectionInterrupt;
 use crate::agentic::tools::ToolRuntimeRestrictions;
 use crate::agentic::workspace::WorkspaceServices;
 use crate::agentic::WorkspaceBinding;
+use bitfun_runtime_ports::DelegationPolicy;
 use std::collections::HashMap;
 use std::time::SystemTime;
 
@@ -60,6 +61,7 @@ pub struct ToolExecutionContext {
     pub workspace: Option<WorkspaceBinding>,
     pub context_vars: HashMap<String, String>,
     pub subagent_parent_info: Option<SubagentParentInfo>,
+    pub(crate) delegation_policy: DelegationPolicy,
     pub collapsed_tools: Vec<String>,
     pub unlocked_collapsed_tools: Vec<String>,
     /// Allowed tools list (whitelist)

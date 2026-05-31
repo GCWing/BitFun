@@ -138,4 +138,49 @@ describe('ReadFileDisplay', () => {
     });
     expect(onReject).toHaveBeenCalledWith('reject');
   });
+
+  it('does not report a file size for session preview truncation markers', () => {
+    const toolItem: FlowToolItem = {
+      id: 'tool-read-2',
+      type: 'tool',
+      toolName: 'Read',
+      status: 'completed',
+      timestamp: Date.now(),
+      toolCall: {
+        id: 'call-read-2',
+        input: {
+          file_path: 'src/main.rs',
+        },
+      },
+      toolResult: {
+        id: 'result-read-2',
+        result: {
+          content: '[truncated for session view]',
+        },
+        timestamp: Date.now(),
+      },
+    };
+
+    const config: ToolCardConfig = {
+      toolName: 'Read',
+      displayName: 'Read File',
+      icon: 'R',
+      requiresConfirmation: false,
+      resultDisplayType: 'summary',
+      description: 'Read file contents',
+      displayMode: 'compact',
+    };
+
+    act(() => {
+      root.render(
+        <ReadFileDisplay
+          toolItem={toolItem}
+          config={config}
+        />
+      );
+    });
+
+    expect(container.textContent).toContain('main.rs');
+    expect(container.textContent).not.toMatch(/\(\d+B\)/);
+  });
 });

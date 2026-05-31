@@ -17,7 +17,7 @@ const DEFAULT_WEBDRIVER_LABEL: &str = "main";
 static SERVER_STARTED: AtomicBool = AtomicBool::new(false);
 
 pub fn maybe_start(app: AppHandle) {
-    if !cfg!(debug_assertions) {
+    if !(cfg!(debug_assertions) || cfg!(feature = "embedded")) {
         return;
     }
 

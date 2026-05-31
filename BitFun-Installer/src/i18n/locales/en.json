@@ -1,32 +1,23 @@
 {
-  "lang": {
-    "title": "Language",
-    "subtitle": "Select your preferred language",
-    "continue": "Continue"
-  },
   "errors": {
     "install": {
       "failed": "Installation failed"
     },
     "installPath": {
-      "notAbsolute": "The installation path must be an absolute path (for example C:\\…).",
+      "notAbsolute": "The installation path must be an absolute path (for example a folder on a local drive).",
       "filesystemRoot": "Cannot install to a drive root. Choose a folder inside the drive.",
       "pathNotDirectory": "The selected path exists but is not a folder.",
       "directoryMustBeEmptyOrBitfun": "The installation folder must be empty, or already contain a BitFun installation.",
       "inspectDirectoryFailed": "Could not read the installation folder. Check permissions and try again.",
       "directoryNotWritable": "The installation folder is not writable. Choose another location or run the installer as administrator (see below).",
       "parentNotWritable": "The parent folder is not writable. System folders such as Program Files often require administrator rights (see below).",
-      "adminHint": "To install under protected locations (for example C:\\Program Files), close this installer, right‑click the installer executable, choose \"Run as administrator\", then try again. Alternatively install under your user profile, for example %LOCALAPPDATA%\\Programs, which does not require elevation."
+      "adminHint": "To install under protected locations (for example Program Files), close this installer, right-click the installer executable, choose \"Run as administrator\", then try again. Alternatively install under your user profile, for example %LOCALAPPDATA%\\Programs, which does not require elevation."
     }
   },
   "options": {
     "title": "Options",
     "subtitle": "Review install location and preferences",
-    "quickSetup": "Quick setup",
-    "appLanguage": "App language",
     "theme": "Theme",
-    "themeDark": "Dark",
-    "themeSlate": "Slate",
     "changeLanguage": "Change language",
     "pathLabel": "Installation Path",
     "pathPlaceholder": "Select directory...",
@@ -37,13 +28,10 @@
     "optionsLabel": "Options",
     "desktopShortcut": "Create desktop shortcut",
     "startMenu": "Add to Start Menu",
-    "contextMenu": "Add right-click context menu",
-    "addToPath": "Add to system PATH",
     "launchAfterInstall": "Launch BitFun after setup",
     "back": "Back",
     "install": "Install",
     "installing": "Preparing…",
-    "nextModel": "Next: Configure model",
     "existingInstallTitle": "Existing BitFun installation detected",
     "existingInstallVersion": "Installed version: {{version}}",
     "existingInstallLocation": "Install location: {{path}}",
@@ -54,32 +42,17 @@
   "model": {
     "title": "Model",
     "subtitle": "Installation complete. Continue with model and theme setup",
-    "installDone": "Installation complete",
     "provider": "Provider",
     "config": "Connection",
     "modelName": "Model name (e.g. deepseek-v4-flash)",
-    "apiKey": "API key",
-    "back": "Back",
     "skip": "Skip for now",
     "nextTheme": "Next: Theme",
     "description": "Configure and manage AI model providers",
     "providerLabel": "Select Model Provider",
     "selectProvider": "or select a preset provider",
     "customProvider": "Custom Configuration",
-    "getApiKey": "Get API Key",
     "modelNamePlaceholder": "Enter model name...",
     "baseUrlPlaceholder": "e.g., https://open.bigmodel.cn/api/paas/v4/chat/completions",
-    "customRequestBodyPlaceholder": "Example:\n{\n  \"temperature\": 0.8,\n  \"top_p\": 0.9\n}",
-    "jsonValid": "JSON format is valid",
-    "jsonInvalid": "Invalid JSON format, please check syntax",
-    "skipSslVerify": "Skip SSL Certificate Verification",
-    "customHeadersModeMerge": "Merge",
-    "customHeadersModeReplace": "Replace",
-    "addHeader": "Add Field",
-    "headerKey": "key",
-    "headerValue": "value",
-    "advancedShow": "Show advanced settings",
-    "advancedHide": "Hide advanced settings",
     "providers": {
       "openbitfun": {
         "name": "OpenBitFun",
@@ -149,13 +122,10 @@
       }
     },
     "modelNameSelectPlaceholder": "Select model",
-    "customModel": "Press Enter to use",
     "testConnection": "Test Connection",
     "testing": "Testing...",
     "testSuccess": "Test successful",
     "testFailed": "Test failed",
-    "modelSearchPlaceholder": "Search or enter model name...",
-    "modelNoResults": "No matching models",
     "fillApiKeyBeforeFetch": "Enter the API key before fetching models",
     "fetchingModels": "Fetching model list...",
     "fetchFailedFallback": "Failed to fetch model list, fell back to common preset models",
@@ -169,7 +139,6 @@
       "provider": "Request Format",
       "providerPlaceholder": "Select request format",
       "modelSelection": "Select Models",
-      "modelName": "Model Name",
       "resolvedUrlLabel": "Request URL: "
     },
     "formats": {
@@ -183,12 +152,10 @@
   },
   "progress": {
     "title": "Installing",
-    "installing": "Installing...",
     "prepare": "Preparing",
     "extract": "Extracting Files",
     "registry": "Registering Application",
     "shortcuts": "Creating Shortcuts",
-    "contextMenu": "Context Menu",
     "path": "Updating PATH",
     "config": "Applying startup preferences",
     "complete": "Finishing Up",
@@ -200,7 +167,6 @@
     "title": "Theme & Launch",
     "subtitle": "Choose your startup theme, then launch",
     "followSystem": "Match system",
-    "skip": "Skip theme and launch",
     "themeNames": {
       "bitfun-dark": "Dark",
       "bitfun-light": "Light",
@@ -213,26 +179,17 @@
     }
   },
   "complete": {
-    "title": "Complete",
-    "heading": "Installation Complete",
-    "ready": "BitFun is ready to use.",
-    "autoLaunch": " It will launch automatically.",
-    "launchFinish": "Launch BitFun",
     "finish": "Finish"
   },
   "uninstall": {
     "title": "Uninstall BitFun",
     "subtitle": "This removes BitFun and related integrations (shortcuts, context menu, PATH).",
     "installPath": "Install path",
-    "inlineHint": "Will remove integration and install directory",
     "pathUnknown": "Install path not detected",
     "confirm": "Start uninstall",
     "uninstalling": "Uninstalling...",
     "completed": "Uninstall completed. You can close this window.",
     "cancel": "Cancel",
     "close": "Close"
-  },
-  "titlebar": {
-    "default": "BitFun"
   }
 }

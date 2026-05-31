@@ -28,7 +28,9 @@ type BrowserLogEntry = {
   timestamp: number;
 };
 
-function executableCandidates(buildType: 'debug' | 'release'): string[] {
+type E2eBuildType = 'debug' | 'release' | 'release-fast';
+
+function executableCandidates(buildType: E2eBuildType): string[] {
   const root = projectRoot();
   const suffix = process.platform === 'win32' ? '.exe' : '';
   const binaryName = `bitfun-desktop${suffix}`;
@@ -55,8 +57,12 @@ export function getApplicationPath(): string {
     return executableCandidates('debug')[0];
   }
 
+  if (forcedMode === 'release-fast') {
+    return executableCandidates('release-fast')[0];
+  }
+
   if (forcedMode === 'release') {
-    throw new Error('Release mode is disabled for E2E. Use the debug desktop build instead.');
+    return executableCandidates('release')[0];
   }
 
   const debugMatch = executableCandidates('debug').find(candidate => fs.existsSync(candidate));
@@ -363,8 +369,9 @@ async function startBitFunApp(): Promise<void> {
 
   if (!fs.existsSync(appPath)) {
     console.error(`Application not found at: ${appPath}`);
-    console.error('Please build the debug application first with:');
+    console.error('Please build the selected application first. Common commands:');
     console.error('cargo build -p bitfun-desktop');
+    console.error('pnpm run desktop:build:release-fast');
     throw new Error('Application not built');
   }
 
@@ -475,8 +482,9 @@ export function createEmbeddedConfig(specs: string[], label: string): Options.Te
 
       if (!fs.existsSync(appPath)) {
         console.error(`Application not found at: ${appPath}`);
-        console.error('Please build the debug application first with:');
+        console.error('Please build the selected application first. Common commands:');
         console.error('cargo build -p bitfun-desktop');
+        console.error('pnpm run desktop:build:release-fast');
         throw new Error('Application not built');
       }
 

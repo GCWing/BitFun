@@ -968,9 +968,12 @@ pub async fn initialize_ai(state: State<'_, AppState>) -> Result<String, String>
         .get_config(None)
         .await
         .map_err(|e| format!("Failed to get configuration: {}", e))?;
-    let stream_options = bitfun_core::infrastructure::ai::build_stream_options(&global_config.ai);
-
-    let primary_model_id = global_config.ai.default_models.primary.ok_or_else(|| {
+    let primary_model_id = global_config
+        .ai
+        .default_models
+        .primary
+        .clone()
+        .ok_or_else(|| {
         "Primary model not configured, please configure it in settings".to_string()
     })?;
     let model_config = global_config
@@ -979,6 +982,11 @@ pub async fn initialize_ai(state: State<'_, AppState>) -> Result<String, String>
         .iter()
         .find(|m| m.id == primary_model_id)
         .ok_or_else(|| format!("Primary model '{}' does not exist", primary_model_id))?;
+    let stream_options =
+        bitfun_core::infrastructure::ai::build_stream_options_for_model(
+            &global_config.ai,
+            Some(model_config),
+        );
 
     let ai_config = bitfun_core::util::types::AIConfig::try_from(model_config.clone())
         .map_err(|e| format!("Failed to convert AI configuration: {}", e))?;
@@ -1005,6 +1013,18 @@ async fn create_transient_ai_client_for_config(
     model_config: bitfun_core::service::config::types::AIModelConfig,
 ) -> Result<bitfun_core::infrastructure::ai::AIClient, String> {
     let auth = model_config.auth.clone();
+
+    let global_config: bitfun_core::service::config::GlobalConfig = state
+        .config_service
+        .get_config(None)
+        .await
+        .map_err(|e| format!("Failed to get configuration: {}", e))?;
+    let stream_options =
+        bitfun_core::infrastructure::ai::build_stream_options_for_model(
+            &global_config.ai,
+            Some(&model_config),
+        );
+
     let mut ai_config: bitfun_core::util::types::AIConfig = model_config
         .try_into()
         .map_err(|e| format!("Failed to convert configuration: {}", e))?;
@@ -1013,17 +1033,11 @@ async fn create_transient_ai_client_for_config(
         .await
         .map_err(|e| format!("Failed to resolve CLI credential: {}", e))?;
 
-    let global_config: bitfun_core::service::config::GlobalConfig = state
-        .config_service
-        .get_config(None)
-        .await
-        .map_err(|e| format!("Failed to get configuration: {}", e))?;
     let proxy_config = if global_config.ai.proxy.enabled {
         Some(global_config.ai.proxy.clone())
     } else {
         None
     };
-    let stream_options = bitfun_core::infrastructure::ai::build_stream_options(&global_config.ai);
 
     Ok(
         bitfun_core::infrastructure::ai::AIClient::new_with_runtime_options(

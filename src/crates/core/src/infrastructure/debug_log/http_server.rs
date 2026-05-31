@@ -100,7 +100,7 @@ impl IngestServerManager {
 
         let app = Router::new()
             .route("/health", get(health_handler))
-            .route("/ingest/:session_id", post(ingest_handler))
+            .route("/ingest/{session_id}", post(ingest_handler))
             .layer(cors)
             .with_state(state.clone());
 
@@ -225,5 +225,26 @@ async fn ingest_handler(
                 }),
             ))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn starts_with_session_id_ingest_route() {
+        let manager = IngestServerManager::new();
+        let config = IngestServerConfig {
+            port: 0,
+            ..IngestServerConfig::default()
+        };
+
+        manager
+            .start(Some(config))
+            .await
+            .expect("ingest server should start with session id route");
+
+        manager.stop().await;
     }
 }

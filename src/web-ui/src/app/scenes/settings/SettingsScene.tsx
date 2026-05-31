@@ -21,6 +21,7 @@ import BasicsConfig from '../../../infrastructure/config/components/BasicsConfig
 import AppearanceConfig from '../../../infrastructure/config/components/AppearanceConfig';
 import ReviewConfig from '../../../infrastructure/config/components/ReviewConfig';
 import QuickActionsConfig from '../../../infrastructure/config/components/QuickActionsConfig';
+import ArchivedSessionsConfig from './components/ArchivedSessionsConfig';
 
 const KeyboardShortcutsTab = lazy(() => import('./components/KeyboardShortcutsTab'));
 
@@ -56,6 +57,7 @@ const SettingsScene: React.FC = () => {
     case 'basics':           Content = BasicsConfig;         break;
     case 'appearance':       Content = AppearanceConfig;     break;
     case 'models':           Content = AIModelConfig;        break;
+    case 'archived-sessions': Content = ArchivedSessionsConfig; break;
     case 'session-personalization': Content = SessionPersonalizationConfig; break;
     case 'session-permissions':     Content = SessionPermissionsConfig;     break;
     case 'quick-actions':    Content = QuickActionsConfig;   break;

@@ -12,7 +12,7 @@ import { useI18n } from '@/infrastructure/i18n';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import type { TerminalConfig } from '@/infrastructure/config/types';
 import TerminalEditModal from '@/app/components/panels/TerminalEditModal';
-import { useContextMenuStore } from '@/shared/context-menu-system';
+import { useContextMenuStore } from '@/shared/context-menu-system/store/ContextMenuStore';
 import { ContextType } from '@/shared/context-menu-system/types/context.types';
 import type { MenuItem } from '@/shared/context-menu-system/types/menu.types';
 import { useSceneStore } from '@/app/stores/sceneStore';

@@ -6,6 +6,7 @@ use std::path::Path;
 use crate::{
     config::CliConfig,
     modes::exec::{ExecMode, ExecOutputFormat, ExecSessionOptions},
+    ui::string_utils::truncate_str,
     ConfigAction, SessionAction,
 };
 
@@ -202,7 +203,7 @@ pub async fn handle_session_action(action: SessionAction) -> Result<Option<Strin
                         } => format!("[Tool result: {}]", tool_name),
                     };
                     let preview = if content_preview.len() > 80 {
-                        format!("{}...", &content_preview[..77])
+                        truncate_str(&content_preview, 77)
                     } else {
                         content_preview
                     };
@@ -237,10 +238,9 @@ pub async fn handle_session_action(action: SessionAction) -> Result<Option<Strin
                 .ok_or_else(|| anyhow::anyhow!("Session has no persisted turns to fork"))?;
             let path_manager = bitfun_core::infrastructure::try_get_path_manager_arc()
                 .map_err(|error| anyhow::anyhow!(error.to_string()))?;
-            let persistence_manager = bitfun_core::agentic::persistence::PersistenceManager::new(
-                path_manager,
-            )
-            .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+            let persistence_manager =
+                bitfun_core::agentic::persistence::PersistenceManager::new(path_manager)
+                    .map_err(|error| anyhow::anyhow!(error.to_string()))?;
             let result = persistence_manager
                 .branch_session(
                     &workspace_path,

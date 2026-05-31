@@ -64,6 +64,8 @@ const PERMISSION_TIMEOUT: Duration = Duration::from_secs(600);
 const SESSION_CLOSE_TIMEOUT: Duration = Duration::from_secs(5);
 const LOAD_REPLAY_DRAIN_QUIET_WINDOW: Duration = Duration::from_millis(250);
 const LOAD_REPLAY_DRAIN_MAX_DURATION: Duration = Duration::from_secs(2);
+const TURN_COMPLETION_DRAIN_QUIET_WINDOW: Duration = Duration::from_millis(250);
+const TURN_COMPLETION_DRAIN_MAX_DURATION: Duration = Duration::from_secs(2);
 
 type AcpOutgoingStream = Pin<Box<dyn FuturesAsyncWrite + Send>>;
 type AcpIncomingStream = Pin<Box<dyn FuturesAsyncRead + Send>>;
@@ -1002,7 +1004,7 @@ impl AcpClientService {
                 .as_mut()
                 .ok_or_else(|| BitFunError::service("ACP session was not initialized"))?;
             active.send_prompt(prompt).map_err(protocol_error)?;
-            active.read_to_string().await.map_err(protocol_error)
+            read_turn_to_string(&mut session).await
         };
 
         if let Some(seconds) = timeout_seconds.filter(|seconds| *seconds > 0) {
@@ -1086,6 +1088,13 @@ impl AcpClientService {
                         }
                     }
                     SessionMessage::StopReason(stop_reason) => {
+                        drain_pending_turn_updates(
+                            &mut session,
+                            &mut tool_call_tracker,
+                            &mut round_tracker,
+                            &mut on_event,
+                        )
+                        .await?;
                         let event = if matches!(stop_reason, StopReason::Cancelled) {
                             AcpClientStreamEvent::Cancelled
                         } else {
@@ -2001,6 +2010,140 @@ fn new_session_response_from_resume(
         .models(response.models)
         .config_options(response.config_options)
         .meta(response.meta)
+}
+
+async fn drain_pending_turn_updates<F>(
+    session: &mut AcpRemoteSession,
+    tool_call_tracker: &mut AcpToolCallTracker,
+    round_tracker: &mut AcpStreamRoundTracker,
+    on_event: &mut F,
+) -> BitFunResult<()>
+where
+    F: FnMut(AcpClientStreamEvent) -> BitFunResult<()> + Send,
+{
+    let started_at = Instant::now();
+    let mut drained_count = 0usize;
+    while started_at.elapsed() < TURN_COMPLETION_DRAIN_MAX_DURATION {
+        let update = {
+            let Some(active) = session.active.as_mut() else {
+                return Ok(());
+            };
+            tokio::time::timeout(TURN_COMPLETION_DRAIN_QUIET_WINDOW, active.read_update()).await
+        };
+
+        match update {
+            Ok(Ok(SessionMessage::SessionMessage(dispatch))) => {
+                let events =
+                    acp_dispatch_to_stream_events_with_tracker(dispatch, tool_call_tracker).await?;
+                update_session_context_usage(session, &events);
+                for event in events {
+                    for event in round_tracker.apply(event) {
+                        on_event(event)?;
+                    }
+                }
+                drained_count += 1;
+            }
+            Ok(Ok(SessionMessage::StopReason(_))) => {
+                drained_count += 1;
+            }
+            Ok(Ok(_)) => {
+                drained_count += 1;
+            }
+            Ok(Err(error)) => return Err(protocol_error(error)),
+            Err(_) => break,
+        }
+    }
+
+    if drained_count > 0 {
+        debug!(
+            "Drained ACP turn updates after stop reason: count={}",
+            drained_count
+        );
+    }
+
+    Ok(())
+}
+
+async fn read_turn_to_string(session: &mut AcpRemoteSession) -> BitFunResult<String> {
+    let mut output = String::new();
+    let mut tool_call_tracker = AcpToolCallTracker::new();
+    loop {
+        let message = {
+            let active = session
+                .active
+                .as_mut()
+                .ok_or_else(|| BitFunError::service("ACP session was not initialized"))?;
+            active.read_update().await.map_err(protocol_error)?
+        };
+
+        match message {
+            SessionMessage::SessionMessage(dispatch) => {
+                let events =
+                    acp_dispatch_to_stream_events_with_tracker(dispatch, &mut tool_call_tracker)
+                        .await?;
+                update_session_context_usage(session, &events);
+                append_agent_text(&mut output, events);
+            }
+            SessionMessage::StopReason(_) => {
+                drain_pending_turn_text(session, &mut tool_call_tracker, &mut output).await?;
+                break;
+            }
+            _ => {}
+        }
+    }
+    Ok(output)
+}
+
+async fn drain_pending_turn_text(
+    session: &mut AcpRemoteSession,
+    tool_call_tracker: &mut AcpToolCallTracker,
+    output: &mut String,
+) -> BitFunResult<()> {
+    let started_at = Instant::now();
+    let mut drained_count = 0usize;
+    while started_at.elapsed() < TURN_COMPLETION_DRAIN_MAX_DURATION {
+        let update = {
+            let Some(active) = session.active.as_mut() else {
+                return Ok(());
+            };
+            tokio::time::timeout(TURN_COMPLETION_DRAIN_QUIET_WINDOW, active.read_update()).await
+        };
+
+        match update {
+            Ok(Ok(SessionMessage::SessionMessage(dispatch))) => {
+                let events =
+                    acp_dispatch_to_stream_events_with_tracker(dispatch, tool_call_tracker).await?;
+                update_session_context_usage(session, &events);
+                append_agent_text(output, events);
+                drained_count += 1;
+            }
+            Ok(Ok(SessionMessage::StopReason(_))) => {
+                drained_count += 1;
+            }
+            Ok(Ok(_)) => {
+                drained_count += 1;
+            }
+            Ok(Err(error)) => return Err(protocol_error(error)),
+            Err(_) => break,
+        }
+    }
+
+    if drained_count > 0 {
+        debug!(
+            "Drained ACP text updates after stop reason: count={}",
+            drained_count
+        );
+    }
+
+    Ok(())
+}
+
+fn append_agent_text(output: &mut String, events: Vec<AcpClientStreamEvent>) {
+    for event in events {
+        if let AcpClientStreamEvent::AgentText(text) = event {
+            output.push_str(&text);
+        }
+    }
 }
 
 async fn discard_pending_session_updates_if_needed(session: &mut AcpRemoteSession) {

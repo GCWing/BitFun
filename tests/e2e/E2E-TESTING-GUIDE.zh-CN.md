@@ -165,7 +165,33 @@ application: <PROJECT_ROOT>\target\debug\bitfun-desktop.exe
 Debug build detected, checking dev server...
 ```
 
-**核心原理**: E2E 只使用 `target/debug/bitfun-desktop.exe`。如果 debug 二进制不存在，应直接失败，而不是回退到 `release`。
+**核心原理**: 功能 E2E 默认使用 `target/debug/bitfun-desktop.exe`。性能 E2E 需要显式设置 `BITFUN_E2E_APP_MODE=release-fast`，并先执行 `pnpm run desktop:build:release-fast`。
+
+### 5. 启动和长 Session 性能 E2E
+
+性能测试优先使用 `release-fast`，这样可以使用生产 Web bundle 和类 release Rust profile，同时通过 `devtools` feature 保留嵌入式 WebDriver。
+
+先为目标工作区生成长 session 和长列表 fixture：
+
+```bash
+pnpm --dir tests/e2e run fixture:long-session -- --workspace <workspace-path> --session-count 80 --long-turns 80
+```
+
+运行类 release 性能测试：
+
+```bash
+pnpm run desktop:build:release-fast
+cross-env E2E_TEST_WORKSPACE=<workspace-path> BITFUN_E2E_PERF_SESSION_ID=perf-long-session-000 pnpm run e2e:test:perf:release-fast
+```
+
+运行 debug 对照测试：
+
+```bash
+cargo build -p bitfun-desktop
+cross-env E2E_TEST_WORKSPACE=<workspace-path> BITFUN_E2E_PERF_SESSION_ID=perf-long-session-000 pnpm run e2e:test:perf:debug
+```
+
+测试报告会写入 `tests/e2e/reports/performance/`，包含启动阶段、Tauri API 聚合、首次打开长 session、后台 full hydrate 等时间片。可选阈值环境变量：`BITFUN_E2E_PERF_MAX_INTERACTIVE_MS`、`BITFUN_E2E_PERF_MAX_SESSION_FRAME_MS`。
 
 ## 测试结构
 

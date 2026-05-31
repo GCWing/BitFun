@@ -1120,7 +1120,7 @@ impl FeishuBot {
         let _ = write
             .write()
             .await
-            .send(WsMessage::Binary(pb::encode_frame(&resp_frame)))
+            .send(WsMessage::Binary(pb::encode_frame(&resp_frame).into()))
             .await;
 
         if let Some(parsed) = Self::parse_message_event_full(&event) {
@@ -1235,7 +1235,11 @@ impl FeishuBot {
                 }
                 _ = ping_timer.tick() => {
                     let ping = pb::Frame::new_ping(service_id);
-                    let _ = write.write().await.send(WsMessage::Binary(pb::encode_frame(&ping))).await;
+                    let _ = write
+                        .write()
+                        .await
+                        .send(WsMessage::Binary(pb::encode_frame(&ping).into()))
+                        .await;
                 }
             }
         }
@@ -1324,7 +1328,11 @@ impl FeishuBot {
                                             if let Ok(event) = serde_json::from_slice::<serde_json::Value>(&frame.payload) {
                                                 // Send ack
                                                 let resp = pb::Frame::new_response(&frame, 200);
-                                                let _ = write.write().await.send(WsMessage::Binary(pb::encode_frame(&resp))).await;
+                                                let _ = write
+                                                    .write()
+                                                    .await
+                                                    .send(WsMessage::Binary(pb::encode_frame(&resp).into()))
+                                                    .await;
 
                                                 if let Some(parsed) = Self::parse_message_event_full(&event) {
                                                     let bot = self.clone();
@@ -1426,7 +1434,11 @@ impl FeishuBot {
                     }
                     _ = ping_timer.tick() => {
                         let ping = pb::Frame::new_ping(service_id);
-                        let _ = write.write().await.send(WsMessage::Binary(pb::encode_frame(&ping))).await;
+                        let _ = write
+                            .write()
+                            .await
+                            .send(WsMessage::Binary(pb::encode_frame(&ping).into()))
+                            .await;
                     }
                 }
             }

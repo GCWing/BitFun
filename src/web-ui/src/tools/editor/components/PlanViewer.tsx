@@ -69,7 +69,7 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
   const [isBuildStarted, setIsBuildStarted] = useState(() => {
     return filePath ? planBuildStateService.isBuildActive(filePath) : false;
   });
-  const [originalContent, setOriginalContent] = useState('');
+  const [isContentDirty, setIsContentDirty] = useState(false);
   // Edit mode: display raw yaml frontmatter
   const [yamlEditorPlacement, setYamlEditorPlacement] = useState<YamlEditorPlacement>('none');
   const [yamlContent, setYamlContent] = useState<string>('');
@@ -148,7 +148,7 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
             todos: parsed.todos || [],
           });
           setPlanContent(markdownContent);
-          setOriginalContent(markdownContent);
+          setIsContentDirty(false);
           setYamlContent(rawYaml);
           setOriginalYamlContent(rawYaml);
         }
@@ -156,7 +156,7 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
         if (!isUnmountedRef.current) {
           setPlanData(null);
           setPlanContent(content);
-          setOriginalContent(content);
+          setIsContentDirty(false);
         }
       }
     } catch (err) {
@@ -267,9 +267,8 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
 
   const hasUnsavedChanges = useMemo(() => {
     const yamlChanged = yamlContent !== originalYamlContent;
-    const contentChanged = planContent !== originalContent;
-    return yamlChanged || contentChanged;
-  }, [yamlContent, originalYamlContent, planContent, originalContent]);
+    return yamlChanged || isContentDirty;
+  }, [yamlContent, originalYamlContent, isContentDirty]);
 
   const saveFileContent = useCallback(async () => {
     if (!hasUnsavedChanges || !filePath) return;
@@ -284,7 +283,9 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
       }
 
       await workspaceAPI.writeFileContent(workspacePath || '', filePath, fullContent);
-      setOriginalContent(planContent);
+      editorRef.current?.markSaved?.();
+      yamlEditorRef.current?.markSaved?.();
+      setIsContentDirty(false);
       setOriginalYamlContent(yamlContent);
       globalEventBus.emit('file-tree:refresh');
       
@@ -312,6 +313,10 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
 
   const handleYamlChange = useCallback((newContent: string) => {
     setYamlContent(newContent);
+  }, []);
+
+  const handleContentDirtyChange = useCallback((isDirty: boolean) => {
+    setIsContentDirty(isDirty);
   }, []);
 
   const handleSave = useCallback((_value: string) => {
@@ -417,7 +422,7 @@ const PlanViewer: React.FC<PlanViewerProps> = ({
       setPlanData(prev => (prev ? { ...prev, todos: nextTodos } : prev));
       setYamlContent(nextYamlContent);
       setOriginalYamlContent(nextYamlContent);
-      setOriginalContent(planContent);
+      setIsContentDirty(false);
       globalEventBus.emit('file-tree:refresh');
     } catch (err) {
       log.error('Failed to save todo edit', err);
@@ -815,6 +820,7 @@ ${JSON.stringify(simpleTodos, null, 2)}
             ref={editorRef}
             value={planContent}
             onChange={handleContentChange}
+            onDirtyChange={handleContentDirtyChange}
             onSave={handleSave}
             mode="ir"
             theme={mEditorTheme}

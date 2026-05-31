@@ -117,7 +117,8 @@
       "result": "任務結果",
       "processing": "AI正在處理任務...",
       "defaultType": "AI任務",
-      "unspecifiedTask": "未指定任務"
+      "unspecifiedTask": "未指定任務",
+      "taskResult": "任務結果"
     },
     "searchCard": {
       "grepTitle": "文本搜索",
@@ -632,5 +633,10 @@
     "fallback": {
       "noCodeContent": "無代碼內容"
     }
-  }
+  },
+  "header": {
+    "selectProjectDirectory": "選擇要開啟的專案目錄"
+  },
+  "hide": "隱藏",
+  "show": "顯示"
 }

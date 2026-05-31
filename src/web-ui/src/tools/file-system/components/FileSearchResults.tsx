@@ -7,7 +7,7 @@ import type {
 import { useI18n } from '@/infrastructure/i18n';
 import { i18nService } from '@/infrastructure/i18n';
 import { notificationService } from '@/shared/notification-system';
-import { useContextMenuStore } from '@/shared/context-menu-system';
+import { useContextMenuStore } from '@/shared/context-menu-system/store/ContextMenuStore';
 import { ContextType } from '@/shared/context-menu-system/types/context.types';
 import type { MenuItem } from '@/shared/context-menu-system/types/menu.types';
 import { addFileMentionToChat, type FileMentionTarget } from '@/shared/utils/chatContext';

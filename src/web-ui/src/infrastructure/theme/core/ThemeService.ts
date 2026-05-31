@@ -752,6 +752,7 @@ export class ThemeService {
     root.setAttribute('data-theme-type', theme.type);
 
     const bgPrimary = colors.background.primary;
+    root.style.setProperty('--bitfun-startup-bg', bgPrimary);
     root.style.backgroundColor = bgPrimary;
     if (document.body) {
       document.body.style.backgroundColor = bgPrimary;

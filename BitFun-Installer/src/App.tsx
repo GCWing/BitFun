@@ -112,7 +112,8 @@ function App() {
 
   const isFullscreen = installer.step === 'lang' || installer.step === 'uninstall';
   const stepNum = STEP_NUMBERS[installer.step];
-  const title = STEP_TITLES[installer.step] || t('titlebar.default');
+  const defaultTitle = t('shared.product.name');
+  const title = STEP_TITLES[installer.step] || defaultTitle;
   const useSuccessStepColor = installer.installationCompleted;
 
   return (
@@ -120,7 +121,7 @@ function App() {
       <div className="titlebar" data-tauri-drag-region>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span className="titlebar-title">
-            {isFullscreen ? t('titlebar.default') : (
+            {isFullscreen ? defaultTitle : (
               <>
                 <span style={{ opacity: 0.4 }}>{stepNum} / 4</span>
                 <span style={{ margin: '0 6px', opacity: 0.2 }}>·</span>

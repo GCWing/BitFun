@@ -310,7 +310,8 @@ const AIModelConfig: React.FC = () => {
     password: ''
   });
   const [streamIdleTimeoutInput, setStreamIdleTimeoutInput] = useState('');
-  const [isStreamIdleTimeoutSaving, setIsStreamIdleTimeoutSaving] = useState(false);
+  const [streamTtftTimeoutInput, setStreamTtftTimeoutInput] = useState('');
+  const [isStreamTimeoutSaving, setIsStreamTimeoutSaving] = useState(false);
   const [isProxySaving, setIsProxySaving] = useState(false);
   const [remoteModelOptions, setRemoteModelOptions] = useState<RemoteModelOption[]>([]);
   const [isFetchingRemoteModels, setIsFetchingRemoteModels] = useState(false);
@@ -417,7 +418,13 @@ const AIModelConfig: React.FC = () => {
     () => parseOptionalPositiveIntegerInput(streamIdleTimeoutInput),
     [streamIdleTimeoutInput]
   );
+  const parsedStreamTtftTimeout = useMemo(
+    () => parseOptionalPositiveIntegerInput(streamTtftTimeoutInput),
+    [streamTtftTimeoutInput]
+  );
   const isStreamIdleTimeoutInvalid = parsedStreamIdleTimeout === undefined;
+  const isStreamTtftTimeoutInvalid = parsedStreamTtftTimeout === undefined;
+  const isStreamTimeoutInvalid = isStreamIdleTimeoutInvalid || isStreamTtftTimeoutInvalid;
 
   const getCustomRequestBodyTrimHint = useCallback((provider?: string): string => {
     switch (provider) {
@@ -442,10 +449,11 @@ const AIModelConfig: React.FC = () => {
   
   const loadConfig = useCallback(async () => {
     try {
-      const [models, proxy, streamIdleTimeoutSecs] = await Promise.all([
+      const [models, proxy, streamIdleTimeoutSecs, streamTtftTimeoutSecs] = await Promise.all([
         configManager.getConfig<AIModelConfigType[]>('ai.models'),
         configManager.getConfig<ProxyConfig>('ai.proxy'),
         configManager.getConfig<number | null>('ai.stream_idle_timeout_secs'),
+        configManager.getConfig<number | null>('ai.stream_ttft_timeout_secs'),
       ]);
       setAiModels(models);
       if (proxy) {
@@ -453,6 +461,9 @@ const AIModelConfig: React.FC = () => {
       }
       setStreamIdleTimeoutInput(
         streamIdleTimeoutSecs != null ? String(streamIdleTimeoutSecs) : ''
+      );
+      setStreamTtftTimeoutInput(
+        streamTtftTimeoutSecs != null ? String(streamTtftTimeoutSecs) : ''
       );
     } catch (error) {
       log.error('Failed to load AI config', error);
@@ -1272,27 +1283,36 @@ const AIModelConfig: React.FC = () => {
     }
   };
 
-  const handleSaveStreamIdleTimeout = async () => {
-    if (isStreamIdleTimeoutInvalid) {
+  const handleSaveStreamTimeouts = async () => {
+    if (isStreamTimeoutInvalid) {
       notification.warning(t('streamIdleTimeout.invalid'));
       return;
     }
 
-    setIsStreamIdleTimeoutSaving(true);
+    setIsStreamTimeoutSaving(true);
     try {
-      await configManager.setConfig(
-        'ai.stream_idle_timeout_secs',
-        parsedStreamIdleTimeout ?? null
-      );
+      await Promise.all([
+        configManager.setConfig(
+          'ai.stream_idle_timeout_secs',
+          parsedStreamIdleTimeout ?? null
+        ),
+        configManager.setConfig(
+          'ai.stream_ttft_timeout_secs',
+          parsedStreamTtftTimeout ?? null
+        ),
+      ]);
       setStreamIdleTimeoutInput(
         parsedStreamIdleTimeout != null ? String(parsedStreamIdleTimeout) : ''
       );
+      setStreamTtftTimeoutInput(
+        parsedStreamTtftTimeout != null ? String(parsedStreamTtftTimeout) : ''
+      );
       notification.success(t('streamIdleTimeout.saveSuccess'));
     } catch (error) {
-      log.error('Failed to save stream idle timeout', error);
+      log.error('Failed to save stream timeouts', error);
       notification.error(t('messages.saveFailed'));
     } finally {
-      setIsStreamIdleTimeoutSaving(false);
+      setIsStreamTimeoutSaving(false);
     }
   };
 
@@ -2504,15 +2524,15 @@ const AIModelConfig: React.FC = () => {
 
         <ConfigPageSection
           title={t('streamIdleTimeout.title')}
-          description={t('streamIdleTimeout.hint')}
+          description={`${t('streamTtftTimeout.hint')} ${t('streamIdleTimeout.hint')}`}
           extra={(
             <Button
               variant="primary"
               size="small"
-              onClick={handleSaveStreamIdleTimeout}
-              disabled={isStreamIdleTimeoutSaving || isStreamIdleTimeoutInvalid}
+              onClick={handleSaveStreamTimeouts}
+              disabled={isStreamTimeoutSaving || isStreamTimeoutInvalid}
             >
-              {isStreamIdleTimeoutSaving ? (
+              {isStreamTimeoutSaving ? (
                 <Loader size={16} className="spinning" />
               ) : (
                 t('streamIdleTimeout.save')
@@ -2520,6 +2540,17 @@ const AIModelConfig: React.FC = () => {
             </Button>
           )}
         >
+          <ConfigPageRow
+            label={t('streamTtftTimeout.label')}
+            align="center"
+          >
+            <Input
+              value={streamTtftTimeoutInput}
+              onChange={(e) => setStreamTtftTimeoutInput(e.target.value)}
+              placeholder={t('streamTtftTimeout.placeholder')}
+              inputSize="small"
+            />
+          </ConfigPageRow>
           <ConfigPageRow
             label={t('streamIdleTimeout.label')}
             align="center"

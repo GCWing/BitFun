@@ -1,5 +1,8 @@
 import { useState, useCallback, useRef } from 'react';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
+import { createLogger } from '@/shared/utils/logger';
+
+const log = createLogger('useSubagentTimeoutControl');
 
 export interface UseSubagentTimeoutControlResult {
   /** Whether timeout is currently disabled by user. */
@@ -25,18 +28,20 @@ export interface UseSubagentTimeoutControlResult {
  * @param isRunning - Whether the subagent is currently running.
  * @param timeoutMs - Original timeout in ms.
  * @param remainingMs - Current remaining time in ms (null if no timeout or disabled).
+ * @param defaultTimeoutDisabled - Whether timeout starts disabled (e.g. `/goal` mode).
  */
 export function useSubagentTimeoutControl(
   subagentSessionId: string | undefined,
   isRunning: boolean,
   timeoutMs: number | undefined,
   remainingMs: number | null,
+  defaultTimeoutDisabled = false,
 ): UseSubagentTimeoutControlResult {
   // timeoutMs is part of the API surface but not directly used here;
   // remainingMs (derived from timeoutMs + elapsed time) drives the UI logic.
   void timeoutMs;
 
-  const [isTimeoutDisabled, setIsTimeoutDisabled] = useState(false);
+  const [isTimeoutDisabled, setIsTimeoutDisabled] = useState(defaultTimeoutDisabled);
   const [isToggling, setIsToggling] = useState(false);
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
   const [remainingAtDisable, setRemainingAtDisable] = useState(0);
@@ -54,7 +59,12 @@ export function useSubagentTimeoutControl(
     setIsToggling(true);
     try {
       await agentAPI.setSubagentTimeout(subagentSessionId, action);
-    } catch (_error) {
+    } catch (error) {
+      log.warn('Failed to adjust subagent timeout', {
+        subagentSessionId,
+        action: action.type,
+        error,
+      });
       // Rollback on failure.
       if (action.type === 'disable') {
         setIsTimeoutDisabled(false);

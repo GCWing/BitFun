@@ -16,12 +16,12 @@ pub use bitfun_product_domains::miniapp::customization::{
 pub use bitfun_product_domains::miniapp::draft::{MiniAppDraft, MiniAppDraftManifest};
 pub use bitfun_product_domains::miniapp::{bridge_builder, permission_policy, types};
 
-pub use builtin::{BUILTIN_APPS, BuiltinApp, seed_builtin_miniapps};
+pub use builtin::{seed_builtin_miniapps, BuiltinApp, BUILTIN_APPS};
 pub use exporter::{ExportCheckResult, ExportOptions, ExportResult, ExportTarget, MiniAppExporter};
 pub use host_dispatch::{dispatch_host, is_host_primitive};
 pub use js_worker_pool::{InstallResult, JsWorkerPool};
 pub use manager::{
-    MiniAppManager, initialize_global_miniapp_manager, try_get_global_miniapp_manager,
+    initialize_global_miniapp_manager, try_get_global_miniapp_manager, MiniAppManager,
 };
 pub use permission_policy::resolve_policy;
 pub use runtime_detect::{DetectedRuntime, RuntimeKind};

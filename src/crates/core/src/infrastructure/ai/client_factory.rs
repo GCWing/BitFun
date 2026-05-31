@@ -6,7 +6,7 @@
 //! 3. Invalidate cache when configuration changes
 //! 4. Provide global singleton access
 
-use crate::infrastructure::ai::{build_stream_options, AIClient};
+use crate::infrastructure::ai::{build_stream_options_for_model, AIClient};
 use crate::infrastructure::cli_credentials::{
     self, codex::CodexResolver, gemini::GeminiResolver, CredentialResolver,
 };
@@ -25,6 +25,15 @@ pub struct AIClientFactory {
 }
 
 impl AIClientFactory {
+    fn normalize_model_selector(model_id: &str) -> &str {
+        let trimmed = model_id.trim();
+        if trimmed.is_empty() || trimmed == "auto" || trimmed == "default" {
+            "primary"
+        } else {
+            trimmed
+        }
+    }
+
     fn resolve_model_reference_in_config(
         global_config: &crate::service::config::GlobalConfig,
         model_ref: &str,
@@ -83,6 +92,7 @@ impl AIClientFactory {
     pub async fn get_client_resolved(&self, model_id: &str) -> Result<Arc<AIClient>> {
         let global_config: crate::service::config::GlobalConfig =
             self.config_service.get_config(None).await?;
+        let model_id = Self::normalize_model_selector(model_id);
 
         let resolved_model_id = match model_id {
             "primary" => Self::resolve_model_selection_in_config(&global_config, "primary")
@@ -137,6 +147,7 @@ impl AIClientFactory {
     async fn get_or_create_client(&self, model_id: &str) -> Result<Arc<AIClient>> {
         let global_config: crate::service::config::GlobalConfig =
             self.config_service.get_config(None).await?;
+        let model_id = Self::normalize_model_selector(model_id);
         let normalized_model_id = match model_id {
             "primary" | "fast" => Self::resolve_model_selection_in_config(&global_config, model_id)
                 .unwrap_or_else(|| model_id.to_string()),
@@ -189,7 +200,7 @@ impl AIClientFactory {
             None
         };
 
-        let stream_options = build_stream_options(&global_config.ai);
+        let stream_options = build_stream_options_for_model(&global_config.ai, Some(model_config));
         let client = Arc::new(AIClient::new_with_runtime_options(
             ai_config,
             proxy_config,
@@ -369,6 +380,20 @@ mod tests {
         assert_eq!(
             AIClientFactory::resolve_model_reference_in_config(&config, "claude-sonnet-4.5"),
             Some("model-123".to_string())
+        );
+    }
+
+    #[test]
+    fn auto_model_selectors_normalize_to_primary_for_client_lookup() {
+        assert_eq!(AIClientFactory::normalize_model_selector("auto"), "primary");
+        assert_eq!(
+            AIClientFactory::normalize_model_selector(" default "),
+            "primary"
+        );
+        assert_eq!(AIClientFactory::normalize_model_selector(""), "primary");
+        assert_eq!(
+            AIClientFactory::normalize_model_selector("model-primary"),
+            "model-primary"
         );
     }
 

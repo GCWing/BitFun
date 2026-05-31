@@ -323,8 +323,8 @@ Usage:
         }
 
         // Local: original implementation
-        let entries =
-            list_directory_entries(&resolved.resolved_path, limit).map_err(BitFunError::tool)?;
+        let entries = list_directory_entries(&resolved.resolved_path, limit)
+            .map_err(|error| BitFunError::tool(error.to_string()))?;
 
         let entries_json = entries
             .iter()

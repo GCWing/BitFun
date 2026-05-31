@@ -9,6 +9,7 @@ import { getElementText, copyTextToClipboard } from '@/shared/utils/textSelectio
 import { createLogger } from '@/shared/utils/logger';
 import { FlowChatStore } from '../../store/FlowChatStore';
 import { i18nService } from '@/infrastructure/i18n';
+import { formatSessionViewPreviewText } from '../../utils/sessionViewPreview';
 
 const log = createLogger('useFlowChatCopyDialog');
 
@@ -61,7 +62,7 @@ function extractDialogTurnContent(turnId: string): string {
             const resultStr = typeof item.toolResult.result === 'string'
               ? item.toolResult.result
               : JSON.stringify(item.toolResult.result, null, 2);
-            toolContent += `\n[Result]\n\`\`\`\n${resultStr}\n\`\`\`\n`;
+            toolContent += `\n[Result]\n\`\`\`\n${formatSessionViewPreviewText(resultStr)}\n\`\`\`\n`;
           }
         }
         

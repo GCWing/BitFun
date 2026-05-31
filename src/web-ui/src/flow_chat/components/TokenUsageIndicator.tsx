@@ -4,6 +4,7 @@
  */
 
 import React, { useMemo } from 'react';
+import { useI18n } from '@/infrastructure/i18n';
 import './TokenUsageIndicator.scss';
 
 export interface TokenUsageIndicatorProps {
@@ -17,14 +18,11 @@ export const TokenUsageIndicator: React.FC<TokenUsageIndicatorProps> = ({
   maxTokens,
   className = ''
 }) => {
+  const { formatNumber } = useI18n();
   const percentage = useMemo(() => {
     if (!maxTokens || maxTokens <= 0) return 0;
     return Math.min(Math.round((currentTokens / maxTokens) * 100), 100);
   }, [currentTokens, maxTokens]);
-
-  const formatNumber = (num: number): string => {
-    return num.toLocaleString('en-US');
-  };
 
   const getStatusClass = (percent: number): string => {
     if (percent >= 90) return 'critical';

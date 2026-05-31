@@ -8,11 +8,12 @@
   gap: 8px;
   overflow-y: auto;
   overscroll-behavior: contain;
+  box-sizing: border-box;
 }
 
 .subagent-projection-container--expanded {
   max-height: min(48vh, 640px);
-  padding: 2px 0 4px;
+  padding: 8px 0 10px;
 }
 
 .subagent-projection-container--collapsed {
@@ -23,6 +24,15 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.subagent-projection-content {
+  min-width: 0;
+
+  .flow-thinking-item .thinking-content {
+    padding-left: 0;
+    padding-right: 0;
+  }
 }
 
 .subagent-projection-text__hint {

@@ -5,13 +5,13 @@
 
 import React, { useRef, useCallback, useEffect, useReducer, useState, useMemo } from 'react';
 import path from 'path-browserify';
-import { Trans, useTranslation } from 'react-i18next';
-import { ArrowUp, Image, Maximize2, Minimize2, RotateCcw, Plus, X, Sparkles, Loader2, ChevronRight, Files, MessageSquarePlus } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { ArrowUp, Image, RotateCcw, Plus, X, Sparkles, Loader2, ChevronRight, Files, MessageSquarePlus } from 'lucide-react';
 import { ContextDropZone, useContextStore } from '../../shared/context-system';
 import { useActiveSessionState } from '@/flow_chat/hooks';
 import { RichTextInput, type MentionState } from './RichTextInput';
 import { FileMentionPicker } from './FileMentionPicker';
-import { globalEventBus } from '@/infrastructure';
+import { globalEventBus } from '@/infrastructure/event-bus';
 import {
   useSessionDerivedState,
   useSessionStateMachine,
@@ -46,7 +46,7 @@ import {
   launchDeepReviewSession,
 } from '../services/DeepReviewService';
 import { createLogger } from '@/shared/utils/logger';
-import { Tooltip, IconButton } from '@/component-library';
+import { Tooltip, IconButton, confirmWarning } from '@/component-library';
 import { PendingQueuePanel } from './PendingQueuePanel';
 import { useAgentCanvasStore } from '@/app/components/panels/content-canvas/stores';
 import { openBtwSessionInAuxPane, selectActiveBtwSessionTab } from '../services/openBtwSession';
@@ -56,17 +56,14 @@ import { useSceneStore } from '@/app/stores/sceneStore';
 import type { SceneTabId } from '@/app/components/SceneBar/types';
 import { configAPI } from '@/infrastructure/api';
 import type { ModeSkillInfo } from '@/infrastructure/config/types';
-import { aiExperienceConfigService } from '@/infrastructure/config/services/AIExperienceConfigService';
 import MCPAPI, { type MCPPrompt, type MCPPromptMessage, type MCPServerInfo } from '@/infrastructure/api/service-api/MCPAPI';
-import { deriveChatInputPetMood } from '../utils/chatInputPetMood';
-import { ChatInputPixelPet } from './ChatInputPixelPet';
 import { ChatInputWorkspaceStrip } from './ChatInputWorkspaceStrip';
 import { expandWidgetPromptReferenceTokens } from '@/tools/generative-widget/widgetPromptReference';
 import { useDeepReviewConsent } from './DeepReviewConsentDialog';
-import { useAgentCompanionActivity } from '../hooks/useAgentCompanionActivity';
 import { useSessionReviewActivity } from '../hooks/useSessionReviewActivity';
 import { shouldBlockDeepReviewCommand } from '../utils/deepReviewCommandGuard';
 import { deriveDeepReviewSessionConcurrencyGuard } from '../utils/deepReviewCapacityGuard';
+import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import './ChatInput.scss';
 import { sessionStorageAdapter } from '@/shared/utils/sessionStorageAdapter';
 
@@ -230,6 +227,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [modeState, dispatchMode] = useReducer(modeReducer, initialModeState);
   
   const richTextInputRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const agentBoostRef = useRef<HTMLDivElement>(null);
   const isImeComposingRef = useRef(false);
   // Ref so the queuedInput sync effect can read the latest value without it being a dep
@@ -301,39 +299,90 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     inputState.value.trim()
   );
   const currentReviewActivity = useSessionReviewActivity(currentSessionId);
-  const sessionMachineSnapshot = useSessionStateMachine(effectiveTargetSessionId);
-  const companionActivity = useAgentCompanionActivity();
+  useSessionStateMachine(effectiveTargetSessionId);
   const { confirmDeepReviewLaunch, deepReviewConsentDialog } = useDeepReviewConsent();
-  const targetPetMood = useMemo(
-    () => deriveChatInputPetMood(sessionMachineSnapshot),
-    [sessionMachineSnapshot],
-  );
-  const petMood = targetPetMood === 'rest' ? companionActivity.mood : targetPetMood;
-  const [agentCompanionEnabled, setAgentCompanionEnabled] = useState(
-    () => aiExperienceConfigService.getSettings().enable_agent_companion,
-  );
-  const [agentCompanionDisplayMode, setAgentCompanionDisplayMode] = useState(
-    () => aiExperienceConfigService.getSettings().agent_companion_display_mode,
-  );
-  const [agentCompanionPet, setAgentCompanionPet] = useState(
-    () => aiExperienceConfigService.getSettings().agent_companion_pet ?? null,
-  );
-  useEffect(() => {
-    void aiExperienceConfigService.getSettingsAsync().then(initialSettings => {
-      setAgentCompanionEnabled(initialSettings.enable_agent_companion);
-      setAgentCompanionDisplayMode(initialSettings.agent_companion_display_mode);
-      setAgentCompanionPet(initialSettings.agent_companion_pet ?? null);
-    });
-    return aiExperienceConfigService.addChangeListener(settings => {
-      setAgentCompanionEnabled(settings.enable_agent_companion);
-      setAgentCompanionDisplayMode(settings.agent_companion_display_mode);
-      setAgentCompanionPet(settings.agent_companion_pet ?? null);
-    });
+  // isMultiLine: true when content overflows a single line (scrollHeight > threshold or has newlines)
+  const [isMultiLine, setIsMultiLine] = useState(false);
+  // showPlaceholder is true when the editor DOM is truly empty (value empty AND no residual <br>)
+  const [showPlaceholder, setShowPlaceholder] = useState(true);
+
+  const checkDomEmpty = useCallback(() => {
+    const el = richTextInputRef.current;
+    if (!el) { setShowPlaceholder(true); return; }
+    const hasOnlyBr =
+      el.childNodes.length === 1 &&
+      (el.childNodes[0] as Element).nodeName === 'BR';
+    const isEmpty = (el.textContent ?? '').trim() === '' &&
+      (el.childNodes.length === 0 || hasOnlyBr);
+    setShowPlaceholder(isEmpty);
   }, []);
-  const agentCompanionInInput =
-    agentCompanionEnabled && agentCompanionDisplayMode === 'input';
-  const showCollapsedPet =
-    agentCompanionInInput && !inputState.isActive && !inputState.value.trim();
+
+  // Shared measurement: temporarily unconstrain the editor and use the capsule input
+  // width so the result is consistent between capsule ↔ multi-line transitions.
+  const measureIsMultiLine = useCallback(() => {
+    const hasNewline = inputState.value.includes('\n');
+    const hasImages = imageContexts.length > 0;
+    if (hasNewline || hasImages) {
+      setIsMultiLine(true);
+      return;
+    }
+    const el = richTextInputRef.current;
+    if (!el) {
+      setIsMultiLine(false);
+      return;
+    }
+    // Capsule input width ≈ box width minus Plus-area (~36px) and right-actions (~140px)
+    const boxEl = el.closest('.bitfun-chat-input__box') as HTMLElement | null;
+    const boxWidth = boxEl?.offsetWidth ?? containerRef.current?.offsetWidth ?? 400;
+    const capsuleInputWidth = Math.max(80, boxWidth - 176);
+
+    // Temporarily remove flex stretching + set capsule width to get the true content height.
+    const prevFlex = el.style.flex;
+    const prevMinH = el.style.minHeight;
+    const prevWidth = el.style.width;
+    el.style.flex = 'none';
+    el.style.minHeight = '0';
+    el.style.width = `${capsuleInputWidth}px`;
+    const naturalHeight = el.scrollHeight;
+    el.style.flex = prevFlex;
+    el.style.minHeight = prevMinH;
+    el.style.width = prevWidth;
+    // ~1.45 × 14px ≈ 20px per line; threshold of 32px means "needs > 1 line"
+    setIsMultiLine(naturalHeight > 32);
+  }, [inputState.value, imageContexts.length]);
+
+  // Re-measure when value or image count changes (handles typing / deleting)
+  useEffect(() => {
+    // Defer one frame so RichTextInput has synced the new value to the contenteditable DOM.
+    const rafId = requestAnimationFrame(() => {
+      measureIsMultiLine();
+      checkDomEmpty();
+    });
+    return () => cancelAnimationFrame(rafId);
+  }, [measureIsMultiLine, checkDomEmpty]);
+
+  // Also watch DOM mutations on the editor so that Shift+Enter in an empty input
+  // (which adds a <br> without changing the React value) triggers expansion,
+  // and so that residual <br> after deletion is detected for placeholder visibility.
+  useEffect(() => {
+    const el = richTextInputRef.current;
+    if (!el) return;
+    let rafId: number;
+    const observer = new MutationObserver(() => {
+      rafId = requestAnimationFrame(() => {
+        measureIsMultiLine();
+        checkDomEmpty();
+      });
+    });
+    observer.observe(el, { childList: true, subtree: true });
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(rafId);
+    };
+  // measureIsMultiLine / checkDomEmpty capture latest closure values
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const { transition, setQueuedInput } = useSessionStateMachineActions(effectiveTargetSessionId);
 
   const { workspace, workspacePath, workspaceName } = useCurrentWorkspace();
@@ -465,6 +514,57 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     // agentic when the user selected Team or another mode.
     currentAgentType: modeState.current,
   });
+
+  const modeInfoById = useMemo(
+    () => new Map(modeState.available.map(mode => [mode.id, mode])),
+    [modeState.available],
+  );
+
+  const getModeDisplayName = useCallback((modeId?: string) => {
+    if (!modeId) {
+      return '';
+    }
+
+    return (
+      t(`chatInput.modeNames.${modeId}`, { defaultValue: '' }) ||
+      modeInfoById.get(modeId)?.name ||
+      modeId
+    );
+  }, [modeInfoById, t]);
+
+  const confirmPromptCacheGuardIfNeeded = useCallback(async () => {
+    const nextMode = currentMode.trim();
+    const lastSubmittedMode = effectiveTargetSession?.lastSubmittedMode?.trim();
+    if (!nextMode || !lastSubmittedMode || nextMode === lastSubmittedMode) {
+      return true;
+    }
+
+    const nextScopeKey = modeInfoById.get(nextMode)?.promptCacheScopeKey;
+    const previousScopeKey = modeInfoById.get(lastSubmittedMode)?.promptCacheScopeKey;
+    if (!nextScopeKey || !previousScopeKey || nextScopeKey === previousScopeKey) {
+      return true;
+    }
+
+    return confirmWarning(
+      t('chatInput.promptCacheGuardTitle', {
+        defaultValue: 'Switching this mode will reset prompt cache reuse',
+      }),
+      t('chatInput.promptCacheGuardBody', {
+        defaultValue:
+          'The next request will switch from {{fromMode}} to {{toMode}}, so this session will stop reusing its current prompt cache. Continue?',
+        fromMode: getModeDisplayName(lastSubmittedMode),
+        toMode: getModeDisplayName(nextMode),
+      }),
+      {
+        confirmText: t('chatInput.promptCacheGuardConfirm', {
+          defaultValue: 'Send anyway',
+        }),
+        cancelText: t('chatInput.promptCacheGuardCancel', {
+          defaultValue: 'Stay here',
+        }),
+      },
+    );
+  }, [currentMode, effectiveTargetSession?.lastSubmittedMode, getModeDisplayName, modeInfoById, t]);
 
   const [mcpPromptCommands, setMcpPromptCommands] = useState<SlashMcpPromptItem[]>([]);
   const [mcpPromptCommandsLoading, setMcpPromptCommandsLoading] = useState(false);
@@ -1507,23 +1607,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       return;
     }
 
-    const initInstruction = t('chatInput.initPrompt', {
-      defaultValue: 'Please generate or update AGENTS.md so it matches the current project. Write it in English and keep the English version complete.',
-    });
-
     dispatchInput({ type: 'CLEAR_VALUE' });
     setQueuedInput(null);
     setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
 
     try {
-      const flowChatManager = FlowChatManager.getInstance();
-      await flowChatManager.sendMessage(
-        initInstruction,
-        effectiveTargetSessionId,
-        initInstruction,
-        'Init'
-      );
-      onSendMessage?.(initInstruction);
+      await agentAPI.runInitAgentsMd({
+        sessionId: effectiveTargetSessionId,
+        workspacePath: effectiveTargetSession.workspacePath,
+        remoteConnectionId: effectiveTargetSession.remoteConnectionId,
+        remoteSshHost: effectiveTargetSession.remoteSshHost,
+      });
       dispatchInput({ type: 'DEACTIVATE' });
     } catch (error) {
       log.error('Failed to trigger /init', {
@@ -1545,7 +1639,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     effectiveTargetSession,
     effectiveTargetSessionId,
     inputState.value,
-    onSendMessage,
     setQueuedInput,
     t,
   ]);
@@ -1748,10 +1841,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       const requiredNames = requiredArgs.map(argument => argument.name).join(', ');
       notificationService.warning(
         t('chatInput.mcpPromptMissingArgs', {
-          defaultValue: 'This MCP prompt requires arguments: {{args}}',
           args: requiredNames,
         })
       );
+      return;
+    }
+
+    const confirmed = await confirmPromptCacheGuardIfNeeded();
+    if (!confirmed) {
       return;
     }
 
@@ -1801,7 +1898,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       notificationService.error(
         error instanceof Error ? error.message : t('error.unknown'),
         {
-          title: t('chatInput.mcpPromptFailed', { defaultValue: 'MCP prompt failed' }),
+          title: t('chatInput.mcpPromptFailed'),
           duration: 5000,
         }
       );
@@ -1809,6 +1906,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [
     clearPendingLargePastes,
     addToHistory,
+    confirmPromptCacheGuardIfNeeded,
     effectiveTargetSessionId,
     inputState.value,
     loadMcpPromptCommands,
@@ -1912,18 +2010,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       return;
     }
     
-    // Add to history before clearing (session-scoped)
-    if (effectiveTargetSessionId) {
-      addToHistory(effectiveTargetSessionId, message);
-    }
-    setHistoryIndex(-1);
-    setSavedDraft('');
-    
-    dispatchInput({ type: 'CLEAR_VALUE' });
-    clearPendingLargePastes();
-    // Clear machine queue too; otherwise the queuedInput→input sync effect puts the text back after send.
-    setQueuedInput(null);
-
     if (messageCharCount > CHAT_INPUT_CONFIG.largePaste.maxMessageChars) {
       notificationService.error(
         t('input.messageTooLarge', {
@@ -1938,6 +2024,23 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       dispatchInput({ type: 'SET_VALUE', payload: originalMessage });
       return;
     }
+
+    const confirmed = await confirmPromptCacheGuardIfNeeded();
+    if (!confirmed) {
+      return;
+    }
+
+    // Add to history before clearing (session-scoped)
+    if (effectiveTargetSessionId) {
+      addToHistory(effectiveTargetSessionId, message);
+    }
+    setHistoryIndex(-1);
+    setSavedDraft('');
+
+    dispatchInput({ type: 'CLEAR_VALUE' });
+    clearPendingLargePastes();
+    // Clear machine queue too; otherwise the queuedInput→input sync effect puts the text back after send.
+    setQueuedInput(null);
 
     try {
       await sendMessage(message, {
@@ -1973,6 +2076,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     submitInitFromInput,
     submitDeepreviewFromInput,
     submitMcpPromptFromInput,
+    confirmPromptCacheGuardIfNeeded,
     t,
     resolveTypedMcpPromptCommand,
   ]);
@@ -2437,15 +2541,30 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     input.click();
   }, [addContext, currentImageCount, t]);
   
-  const toggleExpand = useCallback(() => {
-    dispatchInput({ type: 'TOGGLE_EXPAND' });
-  }, []);
 
   const focusRichTextInputSoon = useCallback(() => {
     window.requestAnimationFrame(() => {
       richTextInputRef.current?.focus();
     });
   }, []);
+
+  // Space-to-focus: when no editable element is focused, Space key focuses the input.
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== ' ') return;
+      const target = e.target as HTMLElement;
+      const isEditable =
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable ||
+        target.closest('[contenteditable="true"]') !== null;
+      if (isEditable) return;
+      e.preventDefault();
+      focusRichTextInputSoon();
+    };
+    document.addEventListener('keydown', handleGlobalKeyDown, true);
+    return () => document.removeEventListener('keydown', handleGlobalKeyDown, true);
+  }, [focusRichTextInputSoon]);
 
   const insertSkillIntoInput = useCallback(
     (skillName: string) => {
@@ -2495,83 +2614,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     },
     [clearSkillsTimer, openScene]
   );
-  
-  const handleActivate = useCallback((e?: React.MouseEvent) => {
-    if (e?.target instanceof HTMLButtonElement || 
-        (e?.target instanceof Element && e.target.closest('button'))) {
-      if (!inputState.isActive) {
-        dispatchInput({ type: 'ACTIVATE' });
-      }
-      return;
-    }
-    
-    if (!inputState.isActive) {
-      dispatchInput({ type: 'ACTIVATE' });
-      focusRichTextInputSoon();
-    }
-  }, [focusRichTextInputSoon, inputState.isActive]);
-
-  // Global space-to-activate: when collapsed and no editable element is focused
-  useEffect(() => {
-    if (inputState.isActive) return;
-
-    const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      const isEditable =
-        target.tagName === 'INPUT' ||
-        target.tagName === 'TEXTAREA' ||
-        target.isContentEditable ||
-        target.closest('[contenteditable="true"]') !== null;
-
-      const isImeOwnedKey = e.key === 'Escape' && (e.isComposing || e.keyCode === 229);
-      if (isImeOwnedKey) return;
-
-      if (e.key === 'Escape' && derivedState?.canCancel) {
-        if (isEditable) return;
-        e.preventDefault();
-        void handleCancelCurrentTask();
-        return;
-      }
-
-      if (e.key !== ' ') return;
-      if (isEditable) return;
-
-      e.preventDefault();
-      dispatchInput({ type: 'ACTIVATE' });
-      focusRichTextInputSoon();
-    };
-
-    // Capture phase so activation runs before nested handlers; Space must dispatch ACTIVATE, not only focus().
-    document.addEventListener('keydown', handleGlobalKeyDown, true);
-    return () => document.removeEventListener('keydown', handleGlobalKeyDown, true);
-  }, [derivedState?.canCancel, focusRichTextInputSoon, handleCancelCurrentTask, inputState.isActive]);
-  
-  const containerRef = useRef<HTMLDivElement>(null);
-  
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Node;
-      // Do not collapse when clicking the scroll-to-latest bar.
-      if ((target as Element)?.closest?.('.scroll-to-latest-bar')) return;
-      if (
-        inputState.isActive &&
-        containerRef.current &&
-        !containerRef.current.contains(target)
-      ) {
-        // While IME is composing, React value can still be empty (RichTextInput skips onChange),
-        // but the editor DOM holds preedit text — collapsing would show space-hint on top of it.
-        if (inputState.value.trim() === '' && !isImeComposingRef.current) {
-          dispatchInput({ type: 'DEACTIVATE' });
-        }
-      }
-    };
-    
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [inputState.isActive, inputState.value]);
-
   useEffect(() => {
     const dropZone = containerRef.current?.closest('.bitfun-chat-input-drop-zone') as HTMLElement | null;
     const el = dropZone ?? containerRef.current;
@@ -2585,35 +2627,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const isCollapsedProcessing = !inputState.isActive && !!derivedState?.isProcessing;
-  const petReplacesStopChrome = agentCompanionInInput && isCollapsedProcessing;
-  const petStopClickable = petReplacesStopChrome && derivedState?.canCancel;
-  const collapsedPetSplitSend =
-    petReplacesStopChrome && derivedState?.sendButtonMode === 'split';
 
   const renderActionButton = () => {
     if (!derivedState) return <IconButton className="bitfun-chat-input__send-button" disabled size="small"><ArrowUp size={11} /></IconButton>;
-
-    if (petReplacesStopChrome) {
-      const { sendButtonMode } = derivedState;
-      if (sendButtonMode === 'cancel') {
-        return null;
-      }
-      if (sendButtonMode === 'split') {
-        return (
-          <IconButton
-            className="bitfun-chat-input__send-button"
-            onClick={handleSendOrCancel}
-            disabled={!inputState.value.trim()}
-            data-testid="chat-input-send-btn"
-            tooltip={t('input.sendShortcut')}
-            size="small"
-          >
-            <ArrowUp size={11} />
-          </IconButton>
-        );
-      }
-    }
 
     const { sendButtonMode, hasQueuedInput } = derivedState;
     
@@ -2714,8 +2730,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       >
         <div 
           ref={containerRef}
-          className={`bitfun-chat-input ${inputState.isActive ? 'bitfun-chat-input--active' : 'bitfun-chat-input--collapsed'} ${inputState.isExpanded ? 'bitfun-chat-input--expanded' : ''} ${derivedState?.isProcessing ? 'bitfun-chat-input--processing' : ''} ${showCollapsedPet ? 'bitfun-chat-input--pet-visible' : ''} ${petReplacesStopChrome ? 'bitfun-chat-input--pet-replaces-stop' : ''} ${collapsedPetSplitSend ? 'bitfun-chat-input--pet-split-send' : ''} ${className}`}
-          onClick={!inputState.isActive ? handleActivate : undefined}
+          className={`bitfun-chat-input ${isMultiLine ? 'bitfun-chat-input--multi-line' : 'bitfun-chat-input--capsule'} ${derivedState?.isProcessing ? 'bitfun-chat-input--processing' : ''} ${className}`}
           data-testid="chat-input-container"
         >
         {recommendationContext && (
@@ -2728,44 +2743,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         <PendingQueuePanel sessionId={effectiveTargetSessionId || undefined} />
 
         <div className="bitfun-chat-input__container">
-          <div className={`bitfun-chat-input__box ${inputState.isExpanded ? 'bitfun-chat-input__box--expanded' : ''}`}>
-            {showCollapsedPet && (
-              <div
-                className={[
-                  'bitfun-chat-input__pet-wrap',
-                  petReplacesStopChrome ? 'bitfun-chat-input__pet-wrap--shift' : '',
-                  collapsedPetSplitSend ? 'bitfun-chat-input__pet-wrap--split' : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-              >
-                <div className="bitfun-chat-input__pet-inner">
-                  {petStopClickable ? (
-                    <button
-                      type="button"
-                      className="bitfun-chat-input__pet-stop-btn"
-                      onClick={e => {
-                        e.stopPropagation();
-                        void handleCancelCurrentTask();
-                      }}
-                      aria-label={t('input.stopGeneration')}
-                    >
-                      <ChatInputPixelPet
-                        mood={petMood}
-                        layout={petReplacesStopChrome ? 'stopRight' : 'center'}
-                        pet={agentCompanionPet}
-                      />
-                    </button>
-                  ) : (
-                    <ChatInputPixelPet
-                      mood={petMood}
-                      layout={petReplacesStopChrome ? 'stopRight' : 'center'}
-                      pet={agentCompanionPet}
-                    />
-                  )}
-                </div>
-              </div>
-            )}
+          <div className={`bitfun-chat-input__box ${isMultiLine ? 'bitfun-chat-input__box--multi-line' : 'bitfun-chat-input__box--capsule'}`}>
             {showTargetSwitcher && (
               <div className="bitfun-chat-input__target-switcher" data-testid="chat-input-target-switcher">
                 <span className="bitfun-chat-input__target-switcher-label">{t('chatInput.conversationTarget')}</span>
@@ -2834,6 +2812,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                   })}
                 </div>
               )}
+              {showPlaceholder && (
+                <span className="bitfun-chat-input__placeholder" aria-hidden>
+                  {t('input.placeholder')}
+                </span>
+              )}
               <RichTextInput
                 ref={richTextInputRef}
                 value={inputState.value}
@@ -2842,7 +2825,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 onKeyDown={handleKeyDown}
                 onCompositionStart={handleImeCompositionStart}
                 onCompositionEnd={handleImeCompositionEnd}
-                placeholder={inputState.isActive ? t('input.placeholder') : ''}
+                placeholder=""
                 disabled={false}
                 contexts={contexts}
                 onRemoveContext={removeContext}
@@ -2850,19 +2833,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 data-testid="chat-input-textarea"
               />
 
-              {!inputState.isActive &&
-                !inputState.value.trim() &&
-                !agentCompanionInInput && (
-                <span className="bitfun-chat-input__space-hint">
-                  <Trans
-                    i18nKey="input.spaceToActivate"
-                    t={t}
-                    components={{
-                      space: <span className="bitfun-chat-input__space-key" />,
-                    }}
-                  />
-                </span>
-              )}
               
               <FileMentionPicker
                 isOpen={mentionState.isActive}
@@ -2926,7 +2896,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                       <div className="bitfun-chat-input__slash-command-list">
                         {mcpPromptCommandsLoading && items.length === 0 ? (
                           <div className="bitfun-chat-input__slash-command-empty">
-                            {t('chatInput.loadingMcpPrompts', { defaultValue: 'Loading MCP prompts…' })}
+                            {t('chatInput.loadingMcpPrompts')}
                           </div>
                         ) : items.length > 0 ? (
                           items.map((item, index) => (
@@ -3001,16 +2971,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               })()}
             </div>
             
-            <IconButton
-              className="bitfun-chat-input__expand-button"
-              variant="ghost"
-              size="xs"
-              shape="circle"
-              onClick={toggleExpand}
-              tooltip={inputState.isExpanded ? t('input.collapseInput') : t('input.expandInput')}
-            >
-              {inputState.isExpanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-            </IconButton>
             <div className="bitfun-chat-input__actions">
               <div className="bitfun-chat-input__actions-left">
                 <div className="bitfun-chat-input__agent-boost" ref={agentBoostRef}>
@@ -3209,7 +3169,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                     </div>
                   )}
                 </div>
-
+              </div>
+              <div className="bitfun-chat-input__actions-right">
                 <div className="bitfun-chat-input__model-usage-group">
                   <ModelSelector
                     currentMode={modeState.current}
@@ -3218,17 +3179,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                     maxTokens={tokenUsage.max}
                   />
                 </div>
-              </div>
-              <div className="bitfun-chat-input__actions-right">
-                {isCollapsedProcessing && !petReplacesStopChrome && (
-                  <>
-                    <span className="bitfun-chat-input__capsule-divider" />
-                    <span className="bitfun-chat-input__cancel-shortcut">
-                      <span className="bitfun-chat-input__space-key">Esc</span>
-                      <span>{t('input.cancelShortcut')}</span>
-                    </span>
-                  </>
-                )}
 
                 {renderActionButton()}
               </div>

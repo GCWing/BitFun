@@ -195,10 +195,17 @@ const McpToolsConfig: React.FC = () => {
   };
 
   // ─── MCP effects & handlers ─────────────────────────────────────────────────
+  const LOAD_SERVERS_TIMEOUT_MS = 15_000;
+
   const loadServers = async () => {
     try {
       setMcpLoading(true);
-      const serverList = await MCPAPI.getServers();
+      const serverList = await Promise.race([
+        MCPAPI.getServers(),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('MCP servers load timed out')), LOAD_SERVERS_TIMEOUT_MS)
+        ),
+      ]);
       setServers(serverList);
     } catch (error) {
       log.error('Failed to load MCP servers', error);

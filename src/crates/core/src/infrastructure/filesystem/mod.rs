@@ -1,16 +1,9 @@
-//! Filesystem infrastructure
-//!
-//! File operations and file tree building.
+//! Filesystem infrastructure compatibility facade.
 
-pub mod file_operations;
-pub mod file_tree;
-
-pub use file_operations::{
-    normalize_text_for_editor_disk_sync, FileInfo, FileOperationOptions, FileOperationService,
-    FileReadResult, FileWriteResult,
-};
-pub use file_tree::{
-    BatchedFileSearchProgressSink, FileContentSearchOptions, FileNameSearchOptions,
+pub use bitfun_services_core::filesystem::{
+    normalize_text_for_editor_disk_sync, BatchedFileSearchProgressSink, FileContentSearchOptions,
+    FileInfo, FileNameSearchOptions, FileOperationOptions, FileOperationService, FileReadResult,
     FileSearchOutcome, FileSearchProgressSink, FileSearchResult, FileSearchResultGroup,
-    FileTreeNode, FileTreeOptions, FileTreeService, FileTreeStatistics, SearchMatchType,
+    FileTreeNode, FileTreeOptions, FileTreeService, FileTreeStatistics, FileWriteResult,
+    SearchMatchType,
 };

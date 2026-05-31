@@ -141,7 +141,7 @@ pub fn build_git_graph_for_branch(
     let mut nodes: Vec<GraphNode> = Vec::new();
     for (oid, commit) in commits {
         let hash = oid.to_string();
-        let message = commit.summary().unwrap_or("").to_string();
+        let message = commit.summary().ok().flatten().unwrap_or("").to_string();
         let full_message = commit.message().unwrap_or("").to_string();
         let author = commit.author();
 
@@ -215,7 +215,7 @@ fn collect_refs(repo: &Repository) -> Result<HashMap<String, Vec<GraphRef>>, git
 fn get_current_branch(repo: &Repository) -> Option<String> {
     repo.head()
         .ok()
-        .and_then(|head| head.shorthand().map(|s| s.to_string()))
+        .and_then(|head| head.shorthand().ok().map(str::to_string))
 }
 
 /// Allocates lanes (simplified algorithm).

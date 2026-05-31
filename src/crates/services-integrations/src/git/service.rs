@@ -37,7 +37,7 @@ impl GitService {
             .remotes()
             .map_err(|e| GitError::CommandFailed(e.to_string()))?
             .iter()
-            .filter_map(|name| name.map(|s| s.to_string()))
+            .filter_map(|name| name.ok().flatten().map(str::to_string))
             .collect();
 
         let path_str = path.as_ref().to_string_lossy().to_string();

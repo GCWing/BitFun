@@ -6,21 +6,23 @@ use crate::agentic::core::{
     strip_prompt_markup, CompressionState, Message, MessageContent, Session, SessionConfig,
     SessionKind, SessionState, SessionSummary,
 };
+use crate::agentic::session::{SessionPromptCache, PROMPT_CACHE_SCHEMA_VERSION};
 use crate::infrastructure::PathManager;
 use crate::service::remote_ssh::workspace_state::{
     resolve_workspace_session_identity, LOCAL_WORKSPACE_SSH_HOST,
 };
 use crate::service::session::{
-    DialogTurnData, SessionMetadata, SessionRelationship, SessionRelationshipKind, SessionStatus, SessionTranscriptExport,
-    SessionTranscriptExportOptions, SessionTranscriptIndexEntry, StoredSessionIndexFile,
-    StoredSessionMetadataFile, ToolItemData, TranscriptLineRange, SESSION_STORAGE_SCHEMA_VERSION,
+    DialogTurnData, SessionMetadata, SessionRelationship, SessionRelationshipKind, SessionStatus,
+    SessionTranscriptExport, SessionTranscriptExportOptions, SessionTranscriptIndexEntry,
+    StoredSessionIndexFile, StoredSessionMetadataFile, ToolItemData, TranscriptLineRange,
+    SESSION_STORAGE_SCHEMA_VERSION,
 };
 use crate::service::workspace_runtime::WorkspaceRuntimeService;
 use crate::util::errors::{BitFunError, BitFunResult};
 use log::{debug, info, warn};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
@@ -54,8 +56,20 @@ struct StoredSessionStateFile {
     // on persisted dialog turns via `DialogTurnData.agent_type`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     last_user_dialog_agent_type: Option<String>,
+    // Session-level prompt-cache guard state. This records the most recent user
+    // submission accepted by the scheduler and intentionally does not rewind on
+    // history rollback.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    last_submitted_agent_type: Option<String>,
     compression_state: CompressionState,
     runtime_state: SessionState,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct StoredSessionPromptCacheFile {
+    schema_version: u32,
+    #[serde(flatten)]
+    cache: SessionPromptCache,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -64,6 +78,23 @@ struct StoredTurnContextSnapshotFile {
     session_id: String,
     turn_index: usize,
     messages: Vec<Message>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionMetadataPage {
+    pub sessions: Vec<SessionMetadata>,
+    pub total_top_level_count: usize,
+    pub loaded_top_level_count: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_cursor: Option<String>,
+    pub has_more: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SessionMetadataPageCursor {
+    last_active_at: u64,
+    session_id: String,
 }
 
 #[derive(Debug, Default)]
@@ -383,6 +414,11 @@ impl PersistenceManager {
     fn state_path(&self, workspace_path: &Path, session_id: &str) -> PathBuf {
         self.session_dir(workspace_path, session_id)
             .join("state.json")
+    }
+
+    fn prompt_cache_path(&self, workspace_path: &Path, session_id: &str) -> PathBuf {
+        self.session_dir(workspace_path, session_id)
+            .join("prompt_cache.json")
     }
 
     fn turns_dir(&self, workspace_path: &Path, session_id: &str) -> PathBuf {
@@ -853,6 +889,8 @@ impl PersistenceManager {
             session_id: session.session_id.clone(),
             session_name: session.session_name.clone(),
             agent_type: session.agent_type.clone(),
+            last_user_dialog_agent_type: session.last_user_dialog_agent_type.clone(),
+            last_submitted_agent_type: session.last_submitted_agent_type.clone(),
             created_by: session
                 .created_by
                 .clone()
@@ -1481,14 +1519,16 @@ impl PersistenceManager {
         workspace_path: &Path,
     ) -> BitFunResult<Vec<SessionMetadata>> {
         let metadata_list = self.scan_session_metadata_dirs(workspace_path).await?;
+        let metadata_file_count = metadata_list.len();
         let visible_sessions = metadata_list
             .into_iter()
             .filter(|metadata| !metadata.should_hide_from_user_lists())
             .collect::<Vec<_>>();
 
-        let index = StoredSessionIndexFile::new(
+        let index = StoredSessionIndexFile::with_metadata_file_count(
             Self::system_time_to_unix_ms(SystemTime::now()),
             visible_sessions.clone(),
+            metadata_file_count,
         );
         self.write_json_atomic(&self.index_path(workspace_path), &index)
             .await?;
@@ -1500,16 +1540,22 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
         metadata: &SessionMetadata,
+        metadata_file_created: bool,
     ) -> BitFunResult<()> {
         let index_path = self.index_path(workspace_path);
-        let mut index = self
+        let existing_index = self
             .read_json_optional::<StoredSessionIndexFile>(&index_path)
-            .await?
-            .unwrap_or(StoredSessionIndexFile {
+            .await?;
+        let had_index = existing_index.is_some();
+        let mut index = match existing_index {
+            Some(index) => index,
+            None => StoredSessionIndexFile {
                 schema_version: SESSION_STORAGE_SCHEMA_VERSION,
                 updated_at: 0,
+                metadata_file_count: self.count_session_metadata_dirs(workspace_path).await?,
                 sessions: Vec::new(),
-            });
+            },
+        };
 
         if let Some(existing) = index
             .sessions
@@ -1524,6 +1570,9 @@ impl PersistenceManager {
         index
             .sessions
             .sort_by(|a, b| b.last_active_at.cmp(&a.last_active_at));
+        if had_index && metadata_file_created {
+            index.metadata_file_count = index.metadata_file_count.saturating_add(1);
+        }
         index.updated_at = Self::system_time_to_unix_ms(SystemTime::now());
         index.schema_version = SESSION_STORAGE_SCHEMA_VERSION;
         self.write_json_atomic(&index_path, &index).await
@@ -1533,6 +1582,7 @@ impl PersistenceManager {
         &self,
         workspace_path: &Path,
         session_id: &str,
+        metadata_file_count_delta: isize,
     ) -> BitFunResult<()> {
         let index_path = self.index_path(workspace_path);
         let Some(mut index) = self
@@ -1545,30 +1595,17 @@ impl PersistenceManager {
         index
             .sessions
             .retain(|value| value.session_id != session_id);
+        if metadata_file_count_delta > 0 {
+            index.metadata_file_count = index
+                .metadata_file_count
+                .saturating_add(metadata_file_count_delta as usize);
+        } else if metadata_file_count_delta < 0 {
+            index.metadata_file_count = index
+                .metadata_file_count
+                .saturating_sub(metadata_file_count_delta.unsigned_abs());
+        }
         index.updated_at = Self::system_time_to_unix_ms(SystemTime::now());
         self.write_json_atomic(&index_path, &index).await
-    }
-
-    async fn upsert_index_entry(
-        &self,
-        workspace_path: &Path,
-        metadata: &SessionMetadata,
-    ) -> BitFunResult<()> {
-        let lock = self.get_session_index_lock(workspace_path).await;
-        let _guard = lock.lock().await;
-        self.upsert_index_entry_locked(workspace_path, metadata)
-            .await
-    }
-
-    async fn remove_index_entry(
-        &self,
-        workspace_path: &Path,
-        session_id: &str,
-    ) -> BitFunResult<()> {
-        let lock = self.get_session_index_lock(workspace_path).await;
-        let _guard = lock.lock().await;
-        self.remove_index_entry_locked(workspace_path, session_id)
-            .await
     }
 
     pub async fn list_session_metadata(
@@ -1604,10 +1641,10 @@ impl PersistenceManager {
             }
 
             let disk_count = self.count_session_metadata_dirs(workspace_path).await?;
-            if index.sessions.len() != disk_count {
+            if index.metadata_file_count != disk_count {
                 warn!(
                     "Session index incomplete (index: {}, disk: {}), rebuilding: {}",
-                    index.sessions.len(),
+                    index.metadata_file_count,
                     disk_count,
                     index_path.display()
                 );
@@ -1618,6 +1655,211 @@ impl PersistenceManager {
         }
 
         self.rebuild_index_locked(workspace_path).await
+    }
+
+    fn session_parent_id(metadata: &SessionMetadata) -> Option<String> {
+        if let Some(parent_id) = metadata
+            .relationship
+            .as_ref()
+            .and_then(|relationship| relationship.parent_session_id.as_deref())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            return Some(parent_id.to_string());
+        }
+
+        metadata
+            .custom_metadata
+            .as_ref()
+            .and_then(|custom| {
+                custom
+                    .get("parentSessionId")
+                    .or_else(|| custom.get("parent_session_id"))
+            })
+            .and_then(|value| value.as_str())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToOwned::to_owned)
+    }
+
+    fn session_metadata_page_offset(
+        cursor: Option<&str>,
+        top_level_sessions: &[SessionMetadata],
+    ) -> usize {
+        let Some(cursor) = cursor else {
+            return 0;
+        };
+
+        if let Ok(parsed) = serde_json::from_str::<SessionMetadataPageCursor>(cursor) {
+            if let Some(index) = top_level_sessions.iter().position(|metadata| {
+                metadata.session_id == parsed.session_id
+                    && metadata.last_active_at == parsed.last_active_at
+            }) {
+                return index + 1;
+            }
+
+            if let Some(index) = top_level_sessions
+                .iter()
+                .position(|metadata| metadata.session_id == parsed.session_id)
+            {
+                return index + 1;
+            }
+        }
+
+        cursor.parse::<usize>().unwrap_or(0)
+    }
+
+    fn session_metadata_page_cursor(metadata: &SessionMetadata) -> String {
+        serde_json::to_string(&SessionMetadataPageCursor {
+            last_active_at: metadata.last_active_at,
+            session_id: metadata.session_id.clone(),
+        })
+        .unwrap_or_else(|_| metadata.session_id.clone())
+    }
+
+    fn build_session_metadata_page(
+        indexed_sessions: Vec<SessionMetadata>,
+        cursor: Option<&str>,
+        limit: usize,
+    ) -> SessionMetadataPage {
+        let visible_sessions = indexed_sessions
+            .into_iter()
+            .filter(|metadata| {
+                !metadata.should_hide_from_user_lists()
+                    && metadata.status != SessionStatus::Archived
+            })
+            .collect::<Vec<_>>();
+        let visible_ids = visible_sessions
+            .iter()
+            .map(|metadata| metadata.session_id.clone())
+            .collect::<HashSet<_>>();
+
+        let mut top_level_sessions = Vec::new();
+        let mut children_by_parent: HashMap<String, Vec<SessionMetadata>> = HashMap::new();
+        for metadata in visible_sessions {
+            if let Some(parent_id) = Self::session_parent_id(&metadata) {
+                if visible_ids.contains(&parent_id) {
+                    children_by_parent
+                        .entry(parent_id)
+                        .or_default()
+                        .push(metadata);
+                    continue;
+                }
+            }
+
+            top_level_sessions.push(metadata);
+        }
+
+        let total_top_level_count = top_level_sessions.len();
+        let offset = Self::session_metadata_page_offset(cursor, &top_level_sessions);
+        let offset = offset.min(total_top_level_count);
+        let next_offset = offset.saturating_add(limit).min(total_top_level_count);
+        let selected_top_level = top_level_sessions
+            .iter()
+            .skip(offset)
+            .take(limit)
+            .cloned()
+            .collect::<Vec<_>>();
+        let loaded_top_level_count = selected_top_level.len();
+        let has_more = next_offset < total_top_level_count;
+        let next_cursor = has_more
+            .then(|| {
+                selected_top_level
+                    .last()
+                    .map(Self::session_metadata_page_cursor)
+            })
+            .flatten();
+
+        let mut sessions = Vec::new();
+        for metadata in selected_top_level {
+            let session_id = metadata.session_id.clone();
+            sessions.push(metadata);
+
+            if let Some(mut children) = children_by_parent.remove(&session_id) {
+                children.sort_by(|a, b| b.last_active_at.cmp(&a.last_active_at));
+                sessions.extend(children);
+            }
+        }
+
+        SessionMetadataPage {
+            sessions,
+            total_top_level_count,
+            loaded_top_level_count,
+            next_cursor,
+            has_more,
+        }
+    }
+
+    pub async fn list_session_metadata_page(
+        &self,
+        workspace_path: &Path,
+        cursor: Option<&str>,
+        limit: usize,
+    ) -> BitFunResult<SessionMetadataPage> {
+        if !workspace_path.exists() {
+            return Ok(SessionMetadataPage {
+                sessions: Vec::new(),
+                total_top_level_count: 0,
+                loaded_top_level_count: 0,
+                next_cursor: None,
+                has_more: false,
+            });
+        }
+
+        if self.existing_project_sessions_dir(workspace_path).is_none() {
+            return Ok(SessionMetadataPage {
+                sessions: Vec::new(),
+                total_top_level_count: 0,
+                loaded_top_level_count: 0,
+                next_cursor: None,
+                has_more: false,
+            });
+        }
+
+        let limit = limit.max(1);
+
+        let lock = self.get_session_index_lock(workspace_path).await;
+        let _guard = lock.lock().await;
+        let index_path = self.index_path(workspace_path);
+        let indexed_sessions = if let Some(index) = self
+            .read_json_optional::<StoredSessionIndexFile>(&index_path)
+            .await?
+        {
+            if index.metadata_file_count < index.sessions.len() {
+                warn!(
+                    "Session index has invalid metadata count before page read (index: {}, sessions: {}), rebuilding: {}",
+                    index.metadata_file_count,
+                    index.sessions.len(),
+                    index_path.display()
+                );
+                self.rebuild_index_locked(workspace_path).await?
+            } else {
+                index.sessions
+            }
+        } else {
+            self.rebuild_index_locked(workspace_path).await?
+        };
+
+        let page = Self::build_session_metadata_page(indexed_sessions, cursor, limit);
+        let has_stale_page_entry = page.sessions.iter().any(|metadata| {
+            !self
+                .metadata_path(workspace_path, &metadata.session_id)
+                .exists()
+        });
+        if !has_stale_page_entry {
+            return Ok(page);
+        }
+
+        warn!(
+            "Session index page contains stale entries, rebuilding before page read: {}",
+            index_path.display()
+        );
+        let rebuilt_sessions = self.rebuild_index_locked(workspace_path).await?;
+        Ok(Self::build_session_metadata_page(
+            rebuilt_sessions,
+            cursor,
+            limit,
+        ))
     }
 
     pub async fn list_session_metadata_including_internal(
@@ -1643,19 +1885,23 @@ impl PersistenceManager {
         self.ensure_runtime_for_write(workspace_path).await?;
         self.ensure_session_dir(workspace_path, &metadata.session_id)
             .await?;
-
+        let metadata_path = self.metadata_path(workspace_path, &metadata.session_id);
         let file = StoredSessionMetadataFile::new(metadata.clone());
 
-        self.write_json_atomic(
-            &self.metadata_path(workspace_path, &metadata.session_id),
-            &file,
-        )
-        .await?;
+        let lock = self.get_session_index_lock(workspace_path).await;
+        let _guard = lock.lock().await;
+        let metadata_file_created = !metadata_path.exists();
+        self.write_json_atomic(&metadata_path, &file).await?;
         if !metadata.should_hide_from_user_lists() {
-            self.upsert_index_entry(workspace_path, metadata).await
-        } else {
-            self.remove_index_entry(workspace_path, &metadata.session_id)
+            self.upsert_index_entry_locked(workspace_path, metadata, metadata_file_created)
                 .await
+        } else {
+            self.remove_index_entry_locked(
+                workspace_path,
+                &metadata.session_id,
+                if metadata_file_created { 1 } else { 0 },
+            )
+            .await
         }
     }
 
@@ -1690,6 +1936,53 @@ impl PersistenceManager {
     ) -> BitFunResult<()> {
         self.write_json_atomic(&self.state_path(workspace_path, session_id), state)
             .await
+    }
+
+    pub async fn load_prompt_cache(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<Option<SessionPromptCache>> {
+        Ok(self
+            .read_json_optional::<StoredSessionPromptCacheFile>(
+                &self.prompt_cache_path(workspace_path, session_id),
+            )
+            .await?
+            .map(|file| file.cache))
+    }
+
+    pub async fn save_prompt_cache(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        cache: &SessionPromptCache,
+    ) -> BitFunResult<()> {
+        self.ensure_runtime_for_write(workspace_path).await?;
+        self.ensure_session_dir(workspace_path, session_id).await?;
+
+        self.write_json_atomic(
+            &self.prompt_cache_path(workspace_path, session_id),
+            &StoredSessionPromptCacheFile {
+                schema_version: PROMPT_CACHE_SCHEMA_VERSION,
+                cache: cache.clone(),
+            },
+        )
+        .await
+    }
+
+    pub async fn delete_prompt_cache(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<()> {
+        match fs::remove_file(self.prompt_cache_path(workspace_path, session_id)).await {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(BitFunError::io(format!(
+                "Failed to delete prompt cache for session {}: {}",
+                session_id, error
+            ))),
+        }
     }
 
     // ============ Turn context snapshot (sent to model)============
@@ -1873,6 +2166,7 @@ impl PersistenceManager {
             config: session.config.clone(),
             snapshot_session_id: session.snapshot_session_id.clone(),
             last_user_dialog_agent_type: session.last_user_dialog_agent_type.clone(),
+            last_submitted_agent_type: session.last_submitted_agent_type.clone(),
             compression_state: session.compression_state.clone(),
             runtime_state: Self::sanitize_runtime_state(&session.state),
         };
@@ -1892,23 +2186,11 @@ impl PersistenceManager {
         Ok(session)
     }
 
-    /// Load session and return the persisted turns read while rebuilding the session header.
-    pub async fn load_session_with_turns(
-        &self,
-        workspace_path: &Path,
-        session_id: &str,
-    ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
-        let metadata = self
-            .load_session_metadata(workspace_path, session_id)
-            .await?
-            .ok_or_else(|| {
-                BitFunError::NotFound(format!("Session metadata not found: {}", session_id))
-            })?;
-        let stored_state = self
-            .load_stored_session_state(workspace_path, session_id)
-            .await?;
-        let turns = self.load_session_turns(workspace_path, session_id).await?;
-
+    fn build_session_from_persisted_parts(
+        metadata: SessionMetadata,
+        stored_state: Option<StoredSessionStateFile>,
+        turns: &[DialogTurnData],
+    ) -> Session {
         let mut config = stored_state
             .as_ref()
             .map(|value| value.config.clone())
@@ -1936,19 +2218,25 @@ impl PersistenceManager {
             .unwrap_or(SessionState::Idle);
         let created_at = Self::unix_ms_to_system_time(metadata.created_at);
         let last_activity_at = Self::unix_ms_to_system_time(metadata.last_active_at);
-
         let dialog_turn_ids = turns.iter().map(|turn| turn.turn_id.clone()).collect();
-        let session = Session {
+
+        Session {
             session_id: metadata.session_id.clone(),
             session_name: metadata.session_name.clone(),
             agent_type: metadata.agent_type.clone(),
             last_user_dialog_agent_type: stored_state
                 .as_ref()
-                .and_then(|value| value.last_user_dialog_agent_type.clone()),
+                .and_then(|value| value.last_user_dialog_agent_type.clone())
+                .or_else(|| metadata.last_user_dialog_agent_type.clone()),
+            last_submitted_agent_type: stored_state
+                .as_ref()
+                .and_then(|value| value.last_submitted_agent_type.clone())
+                .or_else(|| metadata.last_submitted_agent_type.clone()),
             created_by: metadata.created_by.clone(),
             kind: metadata.session_kind,
             snapshot_session_id: stored_state
-                .and_then(|value| value.snapshot_session_id)
+                .as_ref()
+                .and_then(|value| value.snapshot_session_id.clone())
                 .or(metadata.snapshot_session_id.clone()),
             dialog_turn_ids,
             state: runtime_state,
@@ -1957,9 +2245,55 @@ impl PersistenceManager {
             created_at,
             updated_at: last_activity_at,
             last_activity_at,
-        };
+        }
+    }
+
+    /// Load session and return the persisted turns read while rebuilding the session header.
+    pub async fn load_session_with_turns(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
+        let metadata = self
+            .load_session_metadata(workspace_path, session_id)
+            .await?
+            .ok_or_else(|| {
+                BitFunError::NotFound(format!("Session metadata not found: {}", session_id))
+            })?;
+        let stored_state = self
+            .load_stored_session_state(workspace_path, session_id)
+            .await?;
+        let turns = self.load_session_turns(workspace_path, session_id).await?;
+        let session = Self::build_session_from_persisted_parts(metadata, stored_state, &turns);
 
         Ok((session, turns))
+    }
+
+    pub async fn load_session_with_tail_turns(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        tail_turn_count: usize,
+    ) -> BitFunResult<(Session, Vec<DialogTurnData>, usize)> {
+        let metadata = self
+            .load_session_metadata(workspace_path, session_id)
+            .await?
+            .ok_or_else(|| {
+                BitFunError::NotFound(format!("Session metadata not found: {}", session_id))
+            })?;
+        let stored_state = self
+            .load_stored_session_state(workspace_path, session_id)
+            .await?;
+        let indexed_paths = self
+            .list_indexed_turn_paths(workspace_path, session_id)
+            .await?;
+        let total_turn_count = indexed_paths.len();
+        let start = indexed_paths.len().saturating_sub(tail_turn_count);
+        let selected_paths = indexed_paths.into_iter().skip(start).collect::<Vec<_>>();
+        let turns = self.read_turn_paths(selected_paths).await?;
+        let session = Self::build_session_from_persisted_parts(metadata, stored_state, &turns);
+
+        Ok((session, turns, total_turn_count))
     }
 
     /// Save session state
@@ -1981,6 +2315,7 @@ impl PersistenceManager {
                 },
                 snapshot_session_id: None,
                 last_user_dialog_agent_type: None,
+                last_submitted_agent_type: None,
                 compression_state: CompressionState::default(),
                 runtime_state: SessionState::Idle,
             });
@@ -1996,14 +2331,22 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<()> {
+        let lock = self.get_session_index_lock(workspace_path).await;
+        let _guard = lock.lock().await;
         let dir = self.session_dir(workspace_path, session_id);
+        let metadata_file_removed = self.metadata_path(workspace_path, session_id).exists();
         if dir.exists() {
             fs::remove_dir_all(&dir).await.map_err(|e| {
                 BitFunError::io(format!("Failed to delete session directory: {}", e))
             })?;
         }
 
-        self.remove_index_entry(workspace_path, session_id).await?;
+        self.remove_index_entry_locked(
+            workspace_path,
+            session_id,
+            if metadata_file_removed { -1 } else { 0 },
+        )
+        .await?;
         info!("Session deleted: session_id={}", session_id);
         Ok(())
     }
@@ -2024,6 +2367,8 @@ impl PersistenceManager {
                 session_id: metadata.session_id,
                 session_name: metadata.session_name,
                 agent_type: metadata.agent_type,
+                last_user_dialog_agent_type: metadata.last_user_dialog_agent_type,
+                last_submitted_agent_type: metadata.last_submitted_agent_type,
                 created_by: metadata.created_by,
                 kind: metadata.session_kind,
                 turn_count: metadata.turn_count,
@@ -2217,18 +2562,16 @@ impl PersistenceManager {
             .map(|file| file.turn))
     }
 
-    pub async fn load_session_turns(
+    async fn list_indexed_turn_paths(
         &self,
         workspace_path: &Path,
         session_id: &str,
-    ) -> BitFunResult<Vec<DialogTurnData>> {
-        let started_at = Instant::now();
+    ) -> BitFunResult<Vec<(usize, PathBuf)>> {
         let turns_dir = self.turns_dir(workspace_path, session_id);
         if !turns_dir.exists() {
             return Ok(Vec::new());
         }
 
-        let scan_started_at = Instant::now();
         let mut indexed_paths = Vec::new();
         let mut entries = fs::read_dir(&turns_dir)
             .await
@@ -2256,11 +2599,14 @@ impl PersistenceManager {
         }
 
         indexed_paths.sort_by_key(|(index, _)| *index);
-        let scan_duration = scan_started_at.elapsed();
+        Ok(indexed_paths)
+    }
 
-        let read_started_at = Instant::now();
+    async fn read_turn_paths(
+        &self,
+        indexed_paths: Vec<(usize, PathBuf)>,
+    ) -> BitFunResult<Vec<DialogTurnData>> {
         let mut turns = Vec::with_capacity(indexed_paths.len());
-        let turn_file_count = indexed_paths.len();
         for (_, path) in indexed_paths {
             if let Some(file) = self
                 .read_json_optional::<StoredDialogTurnFile>(&path)
@@ -2269,6 +2615,24 @@ impl PersistenceManager {
                 turns.push(file.turn);
             }
         }
+        Ok(turns)
+    }
+
+    pub async fn load_session_turns(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<Vec<DialogTurnData>> {
+        let started_at = Instant::now();
+        let scan_started_at = Instant::now();
+        let indexed_paths = self
+            .list_indexed_turn_paths(workspace_path, session_id)
+            .await?;
+        let scan_duration = scan_started_at.elapsed();
+
+        let read_started_at = Instant::now();
+        let turn_file_count = indexed_paths.len();
+        let turns = self.read_turn_paths(indexed_paths).await?;
         let read_duration = read_started_at.elapsed();
         let total_duration = started_at.elapsed();
         if total_duration >= Duration::from_millis(80) || turn_file_count >= 50 {
@@ -2276,6 +2640,46 @@ impl PersistenceManager {
                 "Loaded session turns: session_id={} turn_count={} turn_file_count={} scan_duration_ms={} read_duration_ms={} total_duration_ms={}",
                 session_id,
                 turns.len(),
+                turn_file_count,
+                scan_duration.as_millis(),
+                read_duration.as_millis(),
+                total_duration.as_millis()
+            );
+        }
+
+        Ok(turns)
+    }
+
+    pub async fn load_session_tail_turns(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        count: usize,
+    ) -> BitFunResult<Vec<DialogTurnData>> {
+        if count == 0 {
+            return Ok(Vec::new());
+        }
+
+        let started_at = Instant::now();
+        let scan_started_at = Instant::now();
+        let indexed_paths = self
+            .list_indexed_turn_paths(workspace_path, session_id)
+            .await?;
+        let scan_duration = scan_started_at.elapsed();
+        let turn_file_count = indexed_paths.len();
+        let start = indexed_paths.len().saturating_sub(count);
+        let selected_paths = indexed_paths.into_iter().skip(start).collect::<Vec<_>>();
+
+        let read_started_at = Instant::now();
+        let turns = self.read_turn_paths(selected_paths).await?;
+        let read_duration = read_started_at.elapsed();
+        let total_duration = started_at.elapsed();
+        if total_duration >= Duration::from_millis(40) || turn_file_count >= 50 {
+            debug!(
+                "Loaded session tail turns: session_id={} turn_count={} requested_count={} turn_file_count={} scan_duration_ms={} read_duration_ms={} total_duration_ms={}",
+                session_id,
+                turns.len(),
+                count,
                 turn_file_count,
                 scan_duration.as_millis(),
                 read_duration.as_millis(),
@@ -2651,11 +3055,13 @@ mod tests {
     use crate::agentic::core::{Message, Session, SessionConfig, SessionKind, ToolResult};
     use crate::infrastructure::PathManager;
     use crate::service::session::{
-        DialogTurnData, ModelRoundData, SessionMetadata, SessionTranscriptExportOptions,
+        DialogTurnData, ModelRoundData, SessionMetadata, SessionRelationship,
+        SessionRelationshipKind, SessionTranscriptExportOptions, StoredSessionIndexFile,
         TextItemData, UserMessageData,
     };
     use std::path::{Path, PathBuf};
     use std::sync::Arc;
+    use std::time::Instant;
     use uuid::Uuid;
 
     struct TestWorkspace {
@@ -2774,6 +3180,58 @@ mod tests {
             .expect("transcript file should be readable");
         assert!(transcript.contains("## Turn 0"));
         assert!(transcript.contains("hello transcript"));
+    }
+
+    #[tokio::test]
+    async fn load_session_tail_turns_returns_latest_turns_in_chronological_order() {
+        let workspace = TestWorkspace::new();
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
+        let session_id = Uuid::new_v4().to_string();
+        let metadata = SessionMetadata::new(
+            session_id.clone(),
+            "Tail turns test".to_string(),
+            "agent".to_string(),
+            "model".to_string(),
+        );
+        manager
+            .save_session_metadata(workspace.path(), &metadata)
+            .await
+            .expect("metadata should save");
+
+        for index in 0..5 {
+            let user_message = UserMessageData {
+                id: format!("user-{index}"),
+                content: format!("prompt {index}"),
+                timestamp: index as u64,
+                metadata: None,
+            };
+            let mut turn = DialogTurnData::new(
+                format!("turn-{index}"),
+                index,
+                session_id.clone(),
+                user_message,
+            );
+            turn.mark_completed();
+            manager
+                .save_dialog_turn(workspace.path(), &turn)
+                .await
+                .expect("turn should save");
+        }
+
+        let tail = manager
+            .load_session_tail_turns(workspace.path(), &session_id, 2)
+            .await
+            .expect("tail turns should load");
+
+        let turn_indices = tail.iter().map(|turn| turn.turn_index).collect::<Vec<_>>();
+        let prompts = tail
+            .iter()
+            .map(|turn| turn.user_message.content.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(turn_indices, vec![3, 4]);
+        assert_eq!(prompts, vec!["prompt 3", "prompt 4"]);
     }
 
     #[tokio::test]
@@ -3139,6 +3597,211 @@ mod tests {
         assert!(
             !manager.project_sessions_dir(workspace.path()).exists(),
             "listing sessions should not create the runtime sessions directory"
+        );
+    }
+
+    #[tokio::test]
+    async fn list_session_metadata_page_returns_visible_top_level_page_with_children() {
+        let workspace = TestWorkspace::new();
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
+
+        for index in 0..12 {
+            let mut metadata = SessionMetadata::new(
+                format!("parent-{index}"),
+                format!("Parent {index}"),
+                "agent".to_string(),
+                "model".to_string(),
+            );
+            metadata.last_active_at = 1_000 + index;
+            manager
+                .save_session_metadata(workspace.path(), &metadata)
+                .await
+                .expect("parent metadata should save");
+        }
+
+        let mut child = SessionMetadata::new(
+            "child-latest".to_string(),
+            "Child latest".to_string(),
+            "agent".to_string(),
+            "model".to_string(),
+        );
+        child.last_active_at = 2_000;
+        child.relationship = Some(SessionRelationship {
+            kind: Some(SessionRelationshipKind::Btw),
+            parent_session_id: Some("parent-11".to_string()),
+            ..Default::default()
+        });
+        manager
+            .save_session_metadata(workspace.path(), &child)
+            .await
+            .expect("child metadata should save");
+
+        let page = manager
+            .list_session_metadata_page(workspace.path(), None, 5)
+            .await
+            .expect("session metadata page should load");
+        let session_ids = page
+            .sessions
+            .iter()
+            .map(|metadata| metadata.session_id.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(page.total_top_level_count, 12);
+        assert_eq!(page.loaded_top_level_count, 5);
+        assert!(page.next_cursor.is_some());
+        assert!(page.has_more);
+        assert_eq!(
+            session_ids,
+            vec![
+                "parent-11",
+                "child-latest",
+                "parent-10",
+                "parent-9",
+                "parent-8",
+                "parent-7",
+            ]
+        );
+
+        let second_page = manager
+            .list_session_metadata_page(workspace.path(), page.next_cursor.as_deref(), 5)
+            .await
+            .expect("second session metadata page should load");
+        let second_page_session_ids = second_page
+            .sessions
+            .iter()
+            .map(|metadata| metadata.session_id.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(second_page.loaded_top_level_count, 5);
+        assert_eq!(
+            second_page_session_ids,
+            vec!["parent-6", "parent-5", "parent-4", "parent-3", "parent-2"]
+        );
+    }
+
+    #[tokio::test]
+    async fn list_session_metadata_page_rebuilds_stale_visible_page_entry() {
+        let workspace = TestWorkspace::new();
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
+
+        let mut older = SessionMetadata::new(
+            "older-session".to_string(),
+            "Older session".to_string(),
+            "agent".to_string(),
+            "model".to_string(),
+        );
+        older.last_active_at = 1_000;
+        let mut newer = SessionMetadata::new(
+            "newer-session".to_string(),
+            "Newer session".to_string(),
+            "agent".to_string(),
+            "model".to_string(),
+        );
+        newer.last_active_at = 2_000;
+
+        manager
+            .save_session_metadata(workspace.path(), &older)
+            .await
+            .expect("older metadata should save");
+        manager
+            .save_session_metadata(workspace.path(), &newer)
+            .await
+            .expect("newer metadata should save");
+
+        let mut missing = SessionMetadata::new(
+            "missing-session".to_string(),
+            "Missing session".to_string(),
+            "agent".to_string(),
+            "model".to_string(),
+        );
+        missing.last_active_at = 3_000;
+
+        let stale_index = StoredSessionIndexFile::new(0, vec![missing, older]);
+        manager
+            .write_json_atomic(&manager.index_path(workspace.path()), &stale_index)
+            .await
+            .expect("stale index should be written");
+
+        let page = manager
+            .list_session_metadata_page(workspace.path(), None, 5)
+            .await
+            .expect("session metadata page should rebuild stale index");
+        let session_ids = page
+            .sessions
+            .iter()
+            .map(|metadata| metadata.session_id.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(page.total_top_level_count, 2);
+        assert_eq!(session_ids, vec!["newer-session", "older-session"]);
+    }
+
+    #[tokio::test]
+    #[ignore = "local performance benchmark; prints timing data only"]
+    async fn bench_session_metadata_page_vs_full_list() {
+        const SESSION_COUNT: usize = 1_000;
+        const ITERATIONS: usize = 10;
+
+        let workspace = TestWorkspace::new();
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
+
+        for index in 0..SESSION_COUNT {
+            let mut metadata = SessionMetadata::new(
+                format!("bench-parent-{index}"),
+                format!("Bench parent {index}"),
+                "agent".to_string(),
+                "model".to_string(),
+            );
+            metadata.last_active_at = 1_000_000 + index as u64;
+            manager
+                .save_session_metadata(workspace.path(), &metadata)
+                .await
+                .expect("benchmark metadata should save");
+        }
+
+        manager
+            .list_session_metadata(workspace.path())
+            .await
+            .expect("warm full list should load");
+        manager
+            .list_session_metadata_page(workspace.path(), None, 5)
+            .await
+            .expect("warm page should load");
+
+        let mut full_list_total_ms = 0.0;
+        for _ in 0..ITERATIONS {
+            let started = Instant::now();
+            let full = manager
+                .list_session_metadata(workspace.path())
+                .await
+                .expect("full list should load");
+            assert_eq!(full.len(), SESSION_COUNT);
+            full_list_total_ms += started.elapsed().as_secs_f64() * 1000.0;
+        }
+
+        let mut page_total_ms = 0.0;
+        for _ in 0..ITERATIONS {
+            let started = Instant::now();
+            let page = manager
+                .list_session_metadata_page(workspace.path(), None, 5)
+                .await
+                .expect("page should load");
+            assert_eq!(page.loaded_top_level_count, 5);
+            assert_eq!(page.total_top_level_count, SESSION_COUNT);
+            page_total_ms += started.elapsed().as_secs_f64() * 1000.0;
+        }
+
+        let full_avg_ms = full_list_total_ms / ITERATIONS as f64;
+        let page_avg_ms = page_total_ms / ITERATIONS as f64;
+        println!(
+            "session_metadata_bench sessions={} iterations={} full_list_avg_ms={:.3} page5_avg_ms={:.3} speedup={:.1}x",
+            SESSION_COUNT,
+            ITERATIONS,
+            full_avg_ms,
+            page_avg_ms,
+            full_avg_ms / page_avg_ms.max(0.001)
         );
     }
 

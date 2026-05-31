@@ -171,11 +171,13 @@ pub(crate) async fn send_stream(
     );
 
     let idle_timeout = client.stream_options.idle_timeout;
+    let ttft_timeout = client.stream_options.ttft_timeout;
     execute_sse_request(
         "Gemini Code Assist Streaming API",
         &url,
         &request_body,
         max_tries,
+        ttft_timeout,
         || apply_headers(client, client.client.post(&url)),
         move |response, tx, tx_raw| {
             tokio::spawn(handle_gemini_stream(response, tx, tx_raw, idle_timeout));

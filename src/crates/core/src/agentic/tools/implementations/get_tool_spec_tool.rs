@@ -19,7 +19,7 @@ const GET_TOOL_SPEC_DESCRIPTION: &str = r#"Read usage instructions for additiona
 
 Some tools are collapsed: their names may appear in the tool list, but you must not call them directly until you have loaded their definition with GetToolSpec.
 
-When the current request context includes a <collapsed_tools> section, use the exact tool names from that section. Before using one of those tools, first call GetToolSpec with its exact tool name to read its full description and input schema. After reading the returned definition, call the real tool directly using its own name.
+When the current collapsed tool listing includes a <collapsed_tools> section, use the exact tool names from that section. Before using one of those tools, first call GetToolSpec with its exact tool name to read its full description and input schema. After reading the returned definition, call the real tool directly using its own name.
 
 Do not call GetToolSpec again for a tool whose definition is already loaded in the current conversation."#;
 

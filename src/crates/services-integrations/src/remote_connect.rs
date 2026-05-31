@@ -1,12 +1,21 @@
 //! Remote-connect integration contracts.
 //!
-//! This module owns stable remote-facing DTOs, runtime-port request
-//! construction, and remote session tracker state. Network lifecycle and
-//! product assembly stay in `bitfun-core` until their ports are explicit.
+//! This module owns remote-connect wire assembly, runtime-port request
+//! construction, compatibility re-exports, and remote session tracker state.
+//! Network lifecycle and product assembly stay in `bitfun-core` until their
+//! ports are explicit.
 
 use bitfun_events::AgenticEvent;
 use bitfun_runtime_ports::{
     AgentInputAttachment, AgentSessionCreateRequest, AgentSubmissionRequest, AgentSubmissionSource,
+    RemoteControlStateSnapshot,
+};
+pub use bitfun_runtime_ports::{
+    RemoteAssistantWorkspaceFacts, RemoteFileChunkRange, RemoteInitialSyncRuntimeHost,
+    RemoteProjectionPort, RemoteRecentWorkspaceFacts, RemoteSessionMetadata, RemoteWorkspaceFacts,
+    RemoteWorkspaceFileChunk, RemoteWorkspaceFileContent, RemoteWorkspaceFileInfo,
+    RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind, RemoteWorkspacePort,
+    RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -195,6 +204,67 @@ pub fn resolve_remote_cancel_decision(
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteCancelTaskRequest {
+    pub session_id: String,
+    pub requested_turn_id: Option<String>,
+}
+
+#[async_trait::async_trait]
+pub trait RemoteCancelRuntimeHost: Send + Sync {
+    async fn resolve_restore_workspace(&self, session_id: &str) -> Option<String>;
+
+    async fn remote_control_state(
+        &self,
+        session_id: &str,
+    ) -> Result<Option<RemoteControlStateSnapshot>, String>;
+
+    async fn restore_remote_session(
+        &self,
+        session_id: &str,
+        workspace_path: &str,
+    ) -> Result<(), String>;
+
+    async fn cancel_remote_turn(&self, session_id: &str, turn_id: &str) -> Result<(), String>;
+}
+
+pub async fn cancel_remote_task<H>(host: &H, request: RemoteCancelTaskRequest) -> Result<(), String>
+where
+    H: RemoteCancelRuntimeHost + ?Sized,
+{
+    let RemoteCancelTaskRequest {
+        session_id,
+        requested_turn_id,
+    } = request;
+
+    let mut state = host.remote_control_state(&session_id).await?;
+    if state.is_none() {
+        let workspace_path = host
+            .resolve_restore_workspace(&session_id)
+            .await
+            .ok_or_else(|| format!("Workspace path not available for session: {}", session_id))?;
+        host.restore_remote_session(&session_id, &workspace_path)
+            .await
+            .map_err(|error| format!("Session not found: {error}"))?;
+        state = host.remote_control_state(&session_id).await?;
+    }
+
+    let running_turn_id = state.and_then(|state| state.active_turn_id);
+    match resolve_remote_cancel_decision(running_turn_id.as_deref(), requested_turn_id.as_deref()) {
+        RemoteCancelDecision::StaleRequestedTurn => {
+            Err("This task is no longer running.".to_string())
+        }
+        RemoteCancelDecision::CancelCurrent(current_turn_id) => {
+            host.cancel_remote_turn(&session_id, &current_turn_id).await
+        }
+        RemoteCancelDecision::AlreadyFinished => Err("This task is already finished.".to_string()),
+        RemoteCancelDecision::NoRunningTask => Err(format!(
+            "No running task to cancel for session: {}",
+            session_id
+        )),
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RemoteDialogQueuePriority {
     Low,
@@ -250,6 +320,33 @@ pub struct RemoteDialogResolvedSubmission<ImageContext> {
 pub enum RemoteDialogSubmitOutcome {
     Started { session_id: String, turn_id: String },
     Queued { session_id: String, turn_id: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RemoteDialogSchedulerOutcomeFact {
+    Started { session_id: String, turn_id: String },
+    Queued { session_id: String, turn_id: String },
+}
+
+pub fn remote_dialog_submit_outcome_from_scheduler(
+    fact: RemoteDialogSchedulerOutcomeFact,
+) -> RemoteDialogSubmitOutcome {
+    match fact {
+        RemoteDialogSchedulerOutcomeFact::Started {
+            session_id,
+            turn_id,
+        } => RemoteDialogSubmitOutcome::Started {
+            session_id,
+            turn_id,
+        },
+        RemoteDialogSchedulerOutcomeFact::Queued {
+            session_id,
+            turn_id,
+        } => RemoteDialogSubmitOutcome::Queued {
+            session_id,
+            turn_id,
+        },
+    }
 }
 
 /// Host callbacks required by remote-connect dialog execution.
@@ -334,38 +431,6 @@ where
 
 pub const REMOTE_FILE_MAX_READ_BYTES: u64 = 30 * 1024 * 1024;
 pub const REMOTE_FILE_MAX_CHUNK_BYTES: u64 = 3 * 1024 * 1024;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RemoteWorkspaceFileContent {
-    pub name: String,
-    pub bytes: Vec<u8>,
-    pub mime_type: &'static str,
-    pub size: u64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RemoteWorkspaceFileChunk {
-    pub name: String,
-    pub bytes: Vec<u8>,
-    pub offset: u64,
-    pub chunk_size: u64,
-    pub total_size: u64,
-    pub mime_type: &'static str,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RemoteWorkspaceFileInfo {
-    pub name: String,
-    pub size: u64,
-    pub mime_type: &'static str,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct RemoteFileChunkRange {
-    pub start: usize,
-    pub end: usize,
-    pub chunk_size: u64,
-}
 
 pub fn resolve_remote_file_chunk_range(
     file_len: usize,
@@ -561,6 +626,746 @@ pub async fn read_remote_workspace_file_info(
     })
 }
 
+pub fn remote_file_content_response(
+    result: Result<RemoteWorkspaceFileContent, String>,
+) -> RemoteResponse {
+    match result {
+        Ok(content) => {
+            use base64::Engine as _;
+            RemoteResponse::FileContent {
+                name: content.name,
+                content_base64: base64::engine::general_purpose::STANDARD.encode(&content.bytes),
+                mime_type: content.mime_type.to_string(),
+                size: content.size,
+            }
+        }
+        Err(message) => RemoteResponse::Error { message },
+    }
+}
+
+pub fn remote_file_chunk_response(
+    result: Result<RemoteWorkspaceFileChunk, String>,
+) -> RemoteResponse {
+    match result {
+        Ok(chunk) => {
+            use base64::Engine as _;
+            RemoteResponse::FileChunk {
+                name: chunk.name,
+                chunk_base64: base64::engine::general_purpose::STANDARD.encode(&chunk.bytes),
+                offset: chunk.offset,
+                chunk_size: chunk.chunk_size,
+                total_size: chunk.total_size,
+                mime_type: chunk.mime_type.to_string(),
+            }
+        }
+        Err(message) => RemoteResponse::Error { message },
+    }
+}
+
+pub fn remote_file_info_response(
+    result: Result<RemoteWorkspaceFileInfo, String>,
+) -> RemoteResponse {
+    match result {
+        Ok(info) => RemoteResponse::FileInfo {
+            name: info.name,
+            size: info.size,
+            mime_type: info.mime_type.to_string(),
+        },
+        Err(message) => RemoteResponse::Error { message },
+    }
+}
+
+pub async fn handle_remote_workspace_file_command<H>(
+    host: &H,
+    command: &RemoteCommand,
+) -> RemoteResponse
+where
+    H: RemoteWorkspaceFileRuntimeHost + ?Sized,
+{
+    match command {
+        RemoteCommand::ReadFile { path, session_id } => {
+            let workspace_root = host
+                .resolve_remote_file_workspace_root(session_id.as_deref())
+                .await;
+            remote_file_content_response(
+                read_remote_workspace_file(
+                    path,
+                    REMOTE_FILE_MAX_READ_BYTES,
+                    workspace_root.as_deref(),
+                )
+                .await,
+            )
+        }
+        RemoteCommand::ReadFileChunk {
+            path,
+            session_id,
+            offset,
+            limit,
+        } => {
+            let workspace_root = host
+                .resolve_remote_file_workspace_root(session_id.as_deref())
+                .await;
+            remote_file_chunk_response(
+                read_remote_workspace_file_chunk(path, workspace_root.as_deref(), *offset, *limit)
+                    .await,
+            )
+        }
+        RemoteCommand::GetFileInfo { path, session_id } => {
+            let workspace_root = host
+                .resolve_remote_file_workspace_root(session_id.as_deref())
+                .await;
+            remote_file_info_response(
+                read_remote_workspace_file_info(path, workspace_root.as_deref()).await,
+            )
+        }
+        _ => RemoteResponse::Error {
+            message: "Unsupported remote workspace file command".to_string(),
+        },
+    }
+}
+
+pub fn remote_dialog_submit_response(
+    result: Result<RemoteDialogSubmitOutcome, String>,
+) -> RemoteResponse {
+    match result {
+        Ok(RemoteDialogSubmitOutcome::Started {
+            session_id,
+            turn_id,
+        })
+        | Ok(RemoteDialogSubmitOutcome::Queued {
+            session_id,
+            turn_id,
+        }) => RemoteResponse::MessageSent {
+            session_id,
+            turn_id,
+        },
+        Err(message) => RemoteResponse::Error { message },
+    }
+}
+
+pub fn remote_task_cancel_response(
+    session_id: impl Into<String>,
+    result: Result<(), String>,
+) -> RemoteResponse {
+    match result {
+        Ok(()) => RemoteResponse::TaskCancelled {
+            session_id: session_id.into(),
+        },
+        Err(message) => RemoteResponse::Error { message },
+    }
+}
+
+pub fn remote_interaction_accepted_response(
+    action: impl Into<String>,
+    target_id: impl Into<String>,
+    result: Result<(), String>,
+) -> RemoteResponse {
+    match result {
+        Ok(()) => RemoteResponse::InteractionAccepted {
+            action: action.into(),
+            target_id: target_id.into(),
+        },
+        Err(message) => RemoteResponse::Error { message },
+    }
+}
+
+pub fn remote_answer_question_response(result: Result<(), String>) -> RemoteResponse {
+    match result {
+        Ok(()) => RemoteResponse::AnswerAccepted,
+        Err(message) => RemoteResponse::Error { message },
+    }
+}
+
+pub fn remote_workspace_info_response(workspace: Option<RemoteWorkspaceFacts>) -> RemoteResponse {
+    match workspace {
+        Some(workspace) => RemoteResponse::WorkspaceInfo {
+            has_workspace: true,
+            path: Some(workspace.path),
+            project_name: Some(workspace.name),
+            git_branch: workspace.git_branch,
+            workspace_kind: Some(workspace.kind.as_wire_str().to_string()),
+            assistant_id: workspace.assistant_id,
+        },
+        None => RemoteResponse::WorkspaceInfo {
+            has_workspace: false,
+            path: None,
+            project_name: None,
+            git_branch: None,
+            workspace_kind: None,
+            assistant_id: None,
+        },
+    }
+}
+
+pub fn remote_recent_workspaces_response(
+    workspaces: Vec<RemoteRecentWorkspaceFacts>,
+) -> RemoteResponse {
+    RemoteResponse::RecentWorkspaces {
+        workspaces: workspaces
+            .into_iter()
+            .map(|workspace| RecentWorkspaceEntry {
+                path: workspace.path,
+                name: workspace.name,
+                last_opened: workspace.last_opened,
+                workspace_kind: Some(workspace.kind.as_wire_str().to_string()),
+            })
+            .collect(),
+    }
+}
+
+pub fn remote_assistant_list_response(
+    assistants: Vec<RemoteAssistantWorkspaceFacts>,
+) -> RemoteResponse {
+    RemoteResponse::AssistantList {
+        assistants: assistants
+            .into_iter()
+            .map(|assistant| AssistantEntry {
+                path: assistant.path,
+                name: assistant.name,
+                assistant_id: assistant.assistant_id,
+            })
+            .collect(),
+    }
+}
+
+pub fn remote_workspace_updated_response(
+    result: Result<RemoteWorkspaceUpdate, String>,
+) -> RemoteResponse {
+    match result {
+        Ok(update) => RemoteResponse::WorkspaceUpdated {
+            success: true,
+            path: Some(update.path),
+            project_name: Some(update.name),
+            error: None,
+        },
+        Err(message) => RemoteResponse::WorkspaceUpdated {
+            success: false,
+            path: None,
+            project_name: None,
+            error: Some(message),
+        },
+    }
+}
+
+pub fn remote_assistant_updated_response(
+    result: Result<RemoteWorkspaceUpdate, String>,
+) -> RemoteResponse {
+    match result {
+        Ok(update) => RemoteResponse::AssistantUpdated {
+            success: true,
+            path: Some(update.path),
+            name: Some(update.name),
+            error: None,
+        },
+        Err(message) => RemoteResponse::AssistantUpdated {
+            success: false,
+            path: None,
+            name: None,
+            error: Some(message),
+        },
+    }
+}
+
+pub fn remote_session_info(
+    metadata: &RemoteSessionMetadata,
+    workspace_path: Option<&str>,
+    workspace_name: Option<&str>,
+) -> SessionInfo {
+    SessionInfo {
+        session_id: metadata.session_id.clone(),
+        name: metadata.name.clone(),
+        agent_type: metadata.agent_type.clone(),
+        created_at: (metadata.created_at_ms / 1000).to_string(),
+        updated_at: (metadata.last_active_at_ms / 1000).to_string(),
+        message_count: metadata.turn_count,
+        workspace_path: workspace_path.map(ToOwned::to_owned),
+        workspace_name: workspace_name.map(ToOwned::to_owned),
+    }
+}
+
+pub fn remote_session_list_response(
+    metadata: Vec<RemoteSessionMetadata>,
+    workspace_path: Option<&str>,
+    workspace_name: Option<&str>,
+    limit: usize,
+    offset: usize,
+) -> RemoteResponse {
+    let page_size = limit.min(100);
+    let total = metadata.len();
+    let has_more = offset.saturating_add(page_size) < total;
+    let sessions = metadata
+        .iter()
+        .skip(offset)
+        .take(page_size)
+        .map(|session| remote_session_info(session, workspace_path, workspace_name))
+        .collect();
+
+    RemoteResponse::SessionList { sessions, has_more }
+}
+
+pub fn remote_initial_sync_response(
+    workspace: Option<RemoteWorkspaceFacts>,
+    metadata: Vec<RemoteSessionMetadata>,
+    session_workspace_name: Option<&str>,
+    has_more_sessions: bool,
+    authenticated_user_id: Option<String>,
+) -> RemoteResponse {
+    let (has_workspace, path, project_name, git_branch, workspace_kind, assistant_id) =
+        match workspace {
+            Some(workspace) => (
+                true,
+                Some(workspace.path.clone()),
+                Some(workspace.name.clone()),
+                workspace.git_branch.clone(),
+                Some(workspace.kind.as_wire_str().to_string()),
+                workspace.assistant_id.clone(),
+            ),
+            None => (false, None, None, None, None, None),
+        };
+    let workspace_path = path.as_deref();
+    let sessions = metadata
+        .iter()
+        .map(|session| remote_session_info(session, workspace_path, session_workspace_name))
+        .collect();
+
+    RemoteResponse::InitialSync {
+        has_workspace,
+        path,
+        project_name,
+        git_branch,
+        workspace_kind,
+        assistant_id,
+        sessions,
+        has_more_sessions,
+        authenticated_user_id,
+    }
+}
+
+pub async fn handle_remote_workspace_command<H>(host: &H, command: &RemoteCommand) -> RemoteResponse
+where
+    H: RemoteWorkspaceRuntimeHost + ?Sized,
+{
+    match command {
+        RemoteCommand::GetWorkspaceInfo => {
+            remote_workspace_info_response(host.current_workspace().await)
+        }
+        RemoteCommand::ListRecentWorkspaces => {
+            remote_recent_workspaces_response(host.recent_workspaces().await)
+        }
+        RemoteCommand::SetWorkspace { path } => {
+            remote_workspace_updated_response(host.open_workspace(path).await)
+        }
+        RemoteCommand::ListAssistants => {
+            remote_assistant_list_response(host.assistant_workspaces().await)
+        }
+        RemoteCommand::SetAssistant { path } => {
+            remote_assistant_updated_response(host.open_assistant_workspace(path).await)
+        }
+        _ => RemoteResponse::Error {
+            message: "Unknown workspace command".into(),
+        },
+    }
+}
+
+pub async fn generate_remote_initial_sync<H>(
+    host: &H,
+    authenticated_user_id: Option<String>,
+) -> RemoteResponse
+where
+    H: RemoteInitialSyncRuntimeHost + ?Sized,
+{
+    let workspace = host.current_workspace().await;
+    let workspace_path = workspace
+        .as_ref()
+        .map(|workspace| PathBuf::from(&workspace.path));
+    let workspace_name = workspace_path
+        .as_ref()
+        .and_then(|path| path.file_name())
+        .map(|name| name.to_string_lossy().to_string());
+
+    let (sessions, has_more) = if let Some(path) = workspace_path.as_deref() {
+        match host.list_session_metadata(path).await {
+            Ok(metadata) => {
+                let total = metadata.len();
+                let page_size = 100usize;
+                (
+                    metadata.into_iter().take(page_size).collect(),
+                    total > page_size,
+                )
+            }
+            Err(_) => (Vec::new(), false),
+        }
+    } else {
+        (Vec::new(), false)
+    };
+
+    remote_initial_sync_response(
+        workspace,
+        sessions,
+        workspace_name.as_deref(),
+        has_more,
+        authenticated_user_id,
+    )
+}
+
+pub fn remote_session_created_response(session_id: impl Into<String>) -> RemoteResponse {
+    RemoteResponse::SessionCreated {
+        session_id: session_id.into(),
+    }
+}
+
+pub fn remote_session_model_updated_response(
+    session_id: impl Into<String>,
+    model_id: impl Into<String>,
+) -> RemoteResponse {
+    RemoteResponse::SessionModelUpdated {
+        session_id: session_id.into(),
+        model_id: model_id.into(),
+    }
+}
+
+pub fn remote_messages_response(
+    session_id: impl Into<String>,
+    messages: Vec<ChatMessage>,
+    has_more: bool,
+) -> RemoteResponse {
+    RemoteResponse::Messages {
+        session_id: session_id.into(),
+        messages,
+        has_more,
+    }
+}
+
+pub fn remote_session_deleted_response(session_id: impl Into<String>) -> RemoteResponse {
+    RemoteResponse::SessionDeleted {
+        session_id: session_id.into(),
+    }
+}
+
+#[async_trait::async_trait]
+pub trait RemoteSessionRuntimeHost: Send + Sync {
+    async fn list_session_metadata(
+        &self,
+        workspace_path: &Path,
+    ) -> Result<Vec<RemoteSessionMetadata>, String>;
+    async fn resolve_default_assistant_workspace_path(&self) -> Result<String, String>;
+    async fn create_session(&self, request: AgentSessionCreateRequest) -> Result<String, String>;
+    async fn load_model_catalog(
+        &self,
+        session_id: Option<&str>,
+    ) -> Result<RemoteModelCatalog, String>;
+    async fn update_session_model(
+        &self,
+        session_id: &str,
+        model_id: &str,
+    ) -> Result<String, String>;
+    async fn ensure_session_loaded(&self, session_id: &str) -> Result<(), String>;
+    async fn update_session_title(&self, session_id: &str, title: &str) -> Result<String, String>;
+    async fn resolve_session_workspace_path(&self, session_id: &str) -> Option<PathBuf>;
+    async fn load_remote_chat_messages(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> (Vec<ChatMessage>, bool);
+    async fn delete_session(&self, workspace_path: &Path, session_id: &str) -> Result<(), String>;
+    fn remove_tracker(&self, session_id: &str);
+}
+
+pub async fn handle_remote_session_command<H>(host: &H, command: &RemoteCommand) -> RemoteResponse
+where
+    H: RemoteSessionRuntimeHost + ?Sized,
+{
+    match command {
+        RemoteCommand::ListSessions {
+            workspace_path,
+            limit,
+            offset,
+            query,
+        } => {
+            let page_size = limit.unwrap_or(30).min(100);
+            let page_offset = offset.unwrap_or(0);
+
+            let Some(workspace_path) = workspace_path
+                .as_deref()
+                .filter(|path| !path.is_empty())
+                .map(PathBuf::from)
+            else {
+                return RemoteResponse::Error {
+                    message: "workspace_path is required for ListSessions".to_string(),
+                };
+            };
+
+            let workspace_path_str = workspace_path.to_string_lossy().to_string();
+            let workspace_name = workspace_path
+                .file_name()
+                .map(|name| name.to_string_lossy().to_string());
+
+            match host.list_session_metadata(&workspace_path).await {
+                Ok(metadata) => {
+                    let query = query
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|value| !value.is_empty())
+                        .map(str::to_lowercase);
+                    let sessions = metadata
+                        .into_iter()
+                        .filter(|session| {
+                            query
+                                .as_ref()
+                                .is_none_or(|query| session.name.to_lowercase().contains(query))
+                        })
+                        .collect();
+                    remote_session_list_response(
+                        sessions,
+                        Some(workspace_path_str.as_str()),
+                        workspace_name.as_deref(),
+                        page_size,
+                        page_offset,
+                    )
+                }
+                Err(message) => RemoteResponse::Error { message },
+            }
+        }
+        RemoteCommand::CreateSession {
+            agent_type,
+            session_name,
+            workspace_path,
+        } => {
+            let agent = resolve_remote_agent_type(agent_type.as_deref());
+            let is_claw = agent == "Claw";
+            let session_name = session_name
+                .as_deref()
+                .filter(|name| !name.is_empty())
+                .unwrap_or(match agent {
+                    "Cowork" => "Remote Cowork Session",
+                    "Claw" => "Remote Claw Session",
+                    _ => "Remote Code Session",
+                });
+
+            let binding_workspace = if is_claw {
+                match host.resolve_default_assistant_workspace_path().await {
+                    Ok(path) => Some(path),
+                    Err(message) => return RemoteResponse::Error { message },
+                }
+            } else {
+                workspace_path
+                    .as_deref()
+                    .filter(|path| !path.is_empty())
+                    .map(ToOwned::to_owned)
+            };
+
+            let Some(binding_workspace) = binding_workspace else {
+                return RemoteResponse::Error {
+                    message: if is_claw {
+                        "Failed to get or create assistant workspace".to_string()
+                    } else {
+                        "workspace_path is required for CreateSession".to_string()
+                    },
+                };
+            };
+
+            let request = build_remote_session_create_request(
+                session_name,
+                agent,
+                Some(binding_workspace),
+                RemoteConnectSubmissionSource::Relay,
+            );
+            match host.create_session(request).await {
+                Ok(session_id) => remote_session_created_response(session_id),
+                Err(message) => RemoteResponse::Error { message },
+            }
+        }
+        RemoteCommand::GetModelCatalog { session_id } => {
+            match host.load_model_catalog(session_id.as_deref()).await {
+                Ok(catalog) => RemoteResponse::ModelCatalog { catalog },
+                Err(message) => RemoteResponse::Error { message },
+            }
+        }
+        RemoteCommand::SetSessionModel {
+            session_id,
+            model_id,
+        } => match host.update_session_model(session_id, model_id).await {
+            Ok(normalized_model_id) => {
+                remote_session_model_updated_response(session_id.clone(), normalized_model_id)
+            }
+            Err(message) => RemoteResponse::Error { message },
+        },
+        RemoteCommand::UpdateSessionTitle { session_id, title } => {
+            if let Err(message) = host.ensure_session_loaded(session_id).await {
+                return RemoteResponse::Error { message };
+            }
+
+            match host.update_session_title(session_id, title).await {
+                Ok(normalized_title) => RemoteResponse::SessionTitleUpdated {
+                    session_id: session_id.clone(),
+                    title: normalized_title,
+                },
+                Err(message) => RemoteResponse::Error { message },
+            }
+        }
+        RemoteCommand::GetSessionMessages {
+            session_id,
+            limit: _,
+            before_message_id: _,
+        } => {
+            let Some(workspace_path) = host.resolve_session_workspace_path(session_id).await else {
+                return RemoteResponse::Error {
+                    message: format!("Workspace path not available for session: {}", session_id),
+                };
+            };
+            let (chat_messages, has_more) = host
+                .load_remote_chat_messages(&workspace_path, session_id)
+                .await;
+            remote_messages_response(session_id.clone(), chat_messages, has_more)
+        }
+        RemoteCommand::DeleteSession { session_id } => {
+            let Some(workspace_path) = host.resolve_session_workspace_path(session_id).await else {
+                return RemoteResponse::Error {
+                    message: format!("Workspace path not available for session: {}", session_id),
+                };
+            };
+
+            match host.delete_session(&workspace_path, session_id).await {
+                Ok(()) => {
+                    host.remove_tracker(session_id);
+                    remote_session_deleted_response(session_id.clone())
+                }
+                Err(message) => RemoteResponse::Error { message },
+            }
+        }
+        _ => RemoteResponse::Error {
+            message: "Unknown session command".into(),
+        },
+    }
+}
+
+#[async_trait::async_trait]
+pub trait RemotePollRuntimeHost: Send + Sync {
+    fn ensure_tracker(&self, session_id: &str) -> Arc<RemoteSessionStateTracker>;
+    async fn load_model_catalog(&self, session_id: &str) -> Option<RemoteModelCatalog>;
+    async fn resolve_session_workspace_path(&self, session_id: &str) -> Option<PathBuf>;
+    async fn load_remote_chat_messages(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> (Vec<ChatMessage>, bool);
+}
+
+pub async fn handle_remote_poll_command<H>(host: &H, command: &RemoteCommand) -> RemoteResponse
+where
+    H: RemotePollRuntimeHost + ?Sized,
+{
+    let RemoteCommand::PollSession {
+        session_id,
+        since_version,
+        known_msg_count,
+        known_model_catalog_version,
+    } = command
+    else {
+        return RemoteResponse::Error {
+            message: "expected poll_session".into(),
+        };
+    };
+
+    let tracker = host.ensure_tracker(session_id);
+    let current_version = tracker.version();
+    let current_model_catalog = host.load_model_catalog(session_id).await;
+    let model_catalog_delta =
+        remote_model_catalog_poll_delta(current_model_catalog, *known_model_catalog_version);
+
+    if *since_version == current_version && *since_version > 0 && !model_catalog_delta.changed {
+        return remote_no_change_poll_response(current_version);
+    }
+
+    let needs_persistence = *since_version == 0 || tracker.is_persistence_dirty();
+    if !needs_persistence {
+        return remote_snapshot_poll_response(
+            &tracker,
+            current_version,
+            model_catalog_delta.catalog,
+        );
+    }
+
+    let Some(workspace_path) = host.resolve_session_workspace_path(session_id).await else {
+        return RemoteResponse::Error {
+            message: format!("Workspace path not available for session: {}", session_id),
+        };
+    };
+    let (all_chat_messages, _) = host
+        .load_remote_chat_messages(&workspace_path, session_id)
+        .await;
+    let total_msg_count = all_chat_messages.len();
+    let new_messages = all_chat_messages
+        .into_iter()
+        .skip(*known_msg_count)
+        .collect();
+
+    remote_persisted_poll_response(
+        &tracker,
+        current_version,
+        new_messages,
+        total_msg_count,
+        model_catalog_delta.catalog,
+    )
+}
+
+#[async_trait::async_trait]
+pub trait RemoteInteractionRuntimeHost: Send + Sync {
+    async fn confirm_tool(
+        &self,
+        tool_id: &str,
+        updated_input: Option<serde_json::Value>,
+    ) -> Result<(), String>;
+    async fn reject_tool(&self, tool_id: &str, reason: String) -> Result<(), String>;
+    async fn cancel_tool(&self, tool_id: &str, reason: String) -> Result<(), String>;
+    fn answer_question(&self, tool_id: &str, answers: serde_json::Value) -> Result<(), String>;
+}
+
+pub async fn handle_remote_interaction_command<H>(
+    host: &H,
+    command: &RemoteCommand,
+) -> RemoteResponse
+where
+    H: RemoteInteractionRuntimeHost + ?Sized,
+{
+    match command {
+        RemoteCommand::ConfirmTool {
+            tool_id,
+            updated_input,
+        } => remote_interaction_accepted_response(
+            "confirm_tool",
+            tool_id.clone(),
+            host.confirm_tool(tool_id, updated_input.clone()).await,
+        ),
+        RemoteCommand::RejectTool { tool_id, reason } => {
+            let reject_reason = reason
+                .clone()
+                .unwrap_or_else(|| "User rejected".to_string());
+            remote_interaction_accepted_response(
+                "reject_tool",
+                tool_id.clone(),
+                host.reject_tool(tool_id, reject_reason).await,
+            )
+        }
+        RemoteCommand::CancelTool { tool_id, reason } => {
+            let cancel_reason = reason
+                .clone()
+                .unwrap_or_else(|| "User cancelled".to_string());
+            remote_interaction_accepted_response(
+                "cancel_tool",
+                tool_id.clone(),
+                host.cancel_tool(tool_id, cancel_reason).await,
+            )
+        }
+        RemoteCommand::AnswerQuestion { tool_id, answers } => {
+            remote_answer_question_response(host.answer_question(tool_id, answers.clone()))
+        }
+        _ => RemoteResponse::Error {
+            message: "Unknown execution command".into(),
+        },
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct RemoteDefaultModelsConfig {
     pub primary: Option<String>,
@@ -598,6 +1403,149 @@ pub struct RemoteModelCatalog {
     pub default_models: RemoteDefaultModelsConfig,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub session_model_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteModelCapabilityFact {
+    TextChat,
+    ImageUnderstanding,
+    ImageGeneration,
+    Embedding,
+    Search,
+    CodeSpecialized,
+    FunctionCalling,
+    SpeechRecognition,
+}
+
+impl RemoteModelCapabilityFact {
+    const fn wire_value(self) -> &'static str {
+        match self {
+            RemoteModelCapabilityFact::TextChat => "text_chat",
+            RemoteModelCapabilityFact::ImageUnderstanding => "image_understanding",
+            RemoteModelCapabilityFact::ImageGeneration => "image_generation",
+            RemoteModelCapabilityFact::Embedding => "embedding",
+            RemoteModelCapabilityFact::Search => "search",
+            RemoteModelCapabilityFact::CodeSpecialized => "code_specialized",
+            RemoteModelCapabilityFact::FunctionCalling => "function_calling",
+            RemoteModelCapabilityFact::SpeechRecognition => "speech_recognition",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteReasoningModeFact {
+    Default,
+    Enabled,
+    Disabled,
+    Adaptive,
+}
+
+impl RemoteReasoningModeFact {
+    const fn wire_value(self) -> &'static str {
+        match self {
+            RemoteReasoningModeFact::Default => "default",
+            RemoteReasoningModeFact::Enabled => "enabled",
+            RemoteReasoningModeFact::Disabled => "disabled",
+            RemoteReasoningModeFact::Adaptive => "adaptive",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteModelFacts {
+    pub id: String,
+    pub name: String,
+    pub provider: String,
+    pub base_url: String,
+    pub model_name: String,
+    pub context_window: Option<u32>,
+    pub enabled: bool,
+    pub capabilities: Vec<RemoteModelCapabilityFact>,
+    pub enable_thinking_process: bool,
+    pub reasoning_mode: Option<RemoteReasoningModeFact>,
+    pub reasoning_effort: Option<String>,
+    pub thinking_budget_tokens: Option<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteModelCatalogFacts {
+    pub last_modified_ms: i64,
+    pub models: Vec<RemoteModelFacts>,
+    pub default_models: RemoteDefaultModelsConfig,
+    pub session_model_id: Option<String>,
+}
+
+pub fn build_remote_model_catalog(facts: RemoteModelCatalogFacts) -> RemoteModelCatalog {
+    RemoteModelCatalog {
+        version: facts.last_modified_ms.max(0) as u64,
+        models: facts
+            .models
+            .into_iter()
+            .map(|model| RemoteModelConfig {
+                id: model.id,
+                name: model.name,
+                provider: model.provider,
+                base_url: model.base_url,
+                model_name: model.model_name,
+                context_window: model.context_window,
+                enabled: model.enabled,
+                capabilities: model
+                    .capabilities
+                    .into_iter()
+                    .map(|capability| capability.wire_value().to_string())
+                    .collect(),
+                enable_thinking_process: model.enable_thinking_process,
+                reasoning_mode: model
+                    .reasoning_mode
+                    .map(|reasoning_mode| reasoning_mode.wire_value().to_string()),
+                reasoning_effort: model.reasoning_effort,
+                thinking_budget_tokens: model.thinking_budget_tokens,
+            })
+            .collect(),
+        default_models: facts.default_models,
+        session_model_id: facts.session_model_id,
+    }
+}
+
+pub fn normalize_remote_session_model_id(model_id: Option<&str>) -> Option<String> {
+    match model_id {
+        Some(value) => {
+            let trimmed = value.trim();
+            if trimmed.is_empty() || trimmed == "default" {
+                Some("auto".to_string())
+            } else {
+                Some(trimmed.to_string())
+            }
+        }
+        None => Some("auto".to_string()),
+    }
+}
+
+pub fn remote_model_selection_needs_config(requested_model_id: &str) -> bool {
+    let requested_model_id = requested_model_id.trim();
+    !requested_model_id.is_empty()
+        && !matches!(requested_model_id, "auto" | "default" | "primary" | "fast")
+}
+
+pub fn normalize_remote_model_selection(
+    requested_model_id: &str,
+    resolve_model_reference: impl FnOnce(&str) -> Option<String>,
+) -> Result<String, String> {
+    let requested_model_id = requested_model_id.trim();
+    if requested_model_id.is_empty() {
+        return Err("model_id is required".to_string());
+    }
+
+    if matches!(requested_model_id, "auto" | "default" | "primary" | "fast") {
+        return Ok(if requested_model_id == "default" {
+            "auto".to_string()
+        } else {
+            requested_model_id.to_string()
+        });
+    }
+
+    resolve_model_reference(requested_model_id)
+        .ok_or_else(|| format!("Unknown model selection: {requested_model_id}"))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -673,6 +1621,221 @@ pub struct ChatMessageItem {
     pub is_subagent: Option<bool>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct RemoteChatHistoryTurn {
+    pub turn_id: String,
+    pub user_message_id: String,
+    pub user_display_content: String,
+    pub user_timestamp_ms: u64,
+    pub user_images: Vec<ChatImageAttachment>,
+    pub is_in_progress: bool,
+    pub start_time_ms: u64,
+    pub rounds: Vec<RemoteChatHistoryRound>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RemoteChatHistoryRound {
+    pub start_time_ms: u64,
+    pub end_time_ms: Option<u64>,
+    pub text_items: Vec<RemoteChatHistoryTextItem>,
+    pub thinking_items: Vec<RemoteChatHistoryThinkingItem>,
+    pub tool_items: Vec<RemoteChatHistoryToolItem>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteChatHistoryTextItem {
+    pub content: String,
+    pub order_index: Option<usize>,
+    pub is_subagent: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteChatHistoryThinkingItem {
+    pub content: String,
+    pub order_index: Option<usize>,
+    pub is_subagent: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RemoteChatHistoryToolItem {
+    pub id: String,
+    pub name: String,
+    pub call: RemoteChatHistoryToolCall,
+    pub has_result: bool,
+    pub status: Option<String>,
+    pub duration_ms: Option<u64>,
+    pub start_ms: u64,
+    pub order_index: Option<usize>,
+    pub is_subagent: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RemoteChatHistoryToolCall {
+    pub id: String,
+    pub input: serde_json::Value,
+}
+
+pub fn build_remote_chat_messages(turns: Vec<RemoteChatHistoryTurn>) -> Vec<ChatMessage> {
+    let mut result = Vec::new();
+
+    for turn in turns {
+        result.push(ChatMessage {
+            id: turn.user_message_id,
+            role: "user".to_string(),
+            content: turn.user_display_content,
+            timestamp: (turn.user_timestamp_ms / 1000).to_string(),
+            metadata: None,
+            tools: None,
+            thinking: None,
+            items: None,
+            images: if turn.user_images.is_empty() {
+                None
+            } else {
+                Some(turn.user_images)
+            },
+        });
+
+        if turn.is_in_progress {
+            continue;
+        }
+
+        struct OrderedEntry {
+            order_index: Option<usize>,
+            sequence: usize,
+            round_idx: usize,
+            item: ChatMessageItem,
+        }
+
+        let mut ordered = Vec::new();
+        let mut tools_flat = Vec::new();
+        let mut thinking_parts = Vec::new();
+        let mut text_parts = Vec::new();
+        let mut sequence = 0usize;
+        let assistant_ts = turn
+            .rounds
+            .last()
+            .map(|round| round.end_time_ms.unwrap_or(round.start_time_ms))
+            .unwrap_or(turn.start_time_ms);
+
+        for (round_idx, round) in turn.rounds.into_iter().enumerate() {
+            for item in round.thinking_items {
+                if item.is_subagent || item.content.is_empty() {
+                    continue;
+                }
+                thinking_parts.push(item.content.clone());
+                ordered.push(OrderedEntry {
+                    order_index: item.order_index,
+                    sequence,
+                    round_idx,
+                    item: ChatMessageItem {
+                        item_type: "thinking".to_string(),
+                        content: Some(item.content.clone()),
+                        tool: None,
+                        is_subagent: None,
+                    },
+                });
+                sequence += 1;
+            }
+
+            for item in round.text_items {
+                if item.is_subagent || item.content.is_empty() {
+                    continue;
+                }
+                text_parts.push(item.content.clone());
+                ordered.push(OrderedEntry {
+                    order_index: item.order_index,
+                    sequence,
+                    round_idx,
+                    item: ChatMessageItem {
+                        item_type: "text".to_string(),
+                        content: Some(item.content.clone()),
+                        tool: None,
+                        is_subagent: None,
+                    },
+                });
+                sequence += 1;
+            }
+
+            for item in round.tool_items {
+                if item.is_subagent {
+                    continue;
+                }
+                let status = item.status.as_deref().unwrap_or(if item.has_result {
+                    "completed"
+                } else {
+                    "running"
+                });
+                let tool_status = RemoteToolStatus {
+                    id: item.id,
+                    name: item.name.clone(),
+                    status: status.to_string(),
+                    duration_ms: item.duration_ms,
+                    start_ms: Some(item.start_ms),
+                    input_preview: make_slim_tool_params(&item.call.input),
+                    tool_input: if item.name == "AskUserQuestion"
+                        || item.name == "Task"
+                        || item.name == "TodoWrite"
+                    {
+                        Some(item.call.input.clone())
+                    } else {
+                        None
+                    },
+                };
+                tools_flat.push(tool_status.clone());
+                ordered.push(OrderedEntry {
+                    order_index: item.order_index,
+                    sequence,
+                    round_idx,
+                    item: ChatMessageItem {
+                        item_type: "tool".to_string(),
+                        content: None,
+                        tool: Some(tool_status),
+                        is_subagent: None,
+                    },
+                });
+                sequence += 1;
+            }
+        }
+
+        ordered.sort_by(|a, b| {
+            let round_cmp = a.round_idx.cmp(&b.round_idx);
+            if round_cmp != std::cmp::Ordering::Equal {
+                return round_cmp;
+            }
+            match (a.order_index, b.order_index) {
+                (Some(a_idx), Some(b_idx)) => a_idx.cmp(&b_idx),
+                (Some(_), None) => std::cmp::Ordering::Less,
+                (None, Some(_)) => std::cmp::Ordering::Greater,
+                (None, None) => a.sequence.cmp(&b.sequence),
+            }
+        });
+
+        let items: Vec<ChatMessageItem> = ordered.into_iter().map(|entry| entry.item).collect();
+
+        result.push(ChatMessage {
+            id: format!("{}_assistant", turn.turn_id),
+            role: "assistant".to_string(),
+            content: text_parts.join("\n\n"),
+            timestamp: (assistant_ts / 1000).to_string(),
+            metadata: None,
+            tools: if tools_flat.is_empty() {
+                None
+            } else {
+                Some(tools_flat)
+            },
+            thinking: if thinking_parts.is_empty() {
+                None
+            } else {
+                Some(thinking_parts.join("\n\n"))
+            },
+            items: if items.is_empty() { None } else { Some(items) },
+            images: None,
+        });
+    }
+
+    result
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RecentWorkspaceEntry {
     pub path: String,
@@ -733,6 +1896,7 @@ pub enum RemoteCommand {
         workspace_path: Option<String>,
         limit: Option<usize>,
         offset: Option<usize>,
+        query: Option<String>,
     },
     CreateSession {
         agent_type: Option<String>,
@@ -745,6 +1909,10 @@ pub enum RemoteCommand {
     SetSessionModel {
         session_id: String,
         model_id: String,
+    },
+    UpdateSessionTitle {
+        session_id: String,
+        title: String,
     },
     GetSessionMessages {
         session_id: String,
@@ -849,6 +2017,10 @@ pub enum RemoteResponse {
     SessionModelUpdated {
         session_id: String,
         model_id: String,
+    },
+    SessionTitleUpdated {
+        session_id: String,
+        title: String,
     },
     Messages {
         session_id: String,
@@ -1754,5 +2926,397 @@ fn non_empty_title(title: String) -> Option<String> {
         None
     } else {
         Some(title)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    struct FakeWorkspaceHost;
+
+    #[async_trait::async_trait]
+    impl RemoteWorkspaceRuntimeHost for FakeWorkspaceHost {
+        async fn current_workspace(&self) -> Option<RemoteWorkspaceFacts> {
+            Some(RemoteWorkspaceFacts {
+                path: "/workspace/project".to_string(),
+                name: "project".to_string(),
+                git_branch: Some("main".to_string()),
+                kind: RemoteWorkspaceKind::Normal,
+                assistant_id: None,
+            })
+        }
+
+        async fn recent_workspaces(&self) -> Vec<RemoteRecentWorkspaceFacts> {
+            vec![RemoteRecentWorkspaceFacts {
+                path: "/workspace/project".to_string(),
+                name: "project".to_string(),
+                last_opened: "2026-05-29T00:00:00Z".to_string(),
+                kind: RemoteWorkspaceKind::Normal,
+            }]
+        }
+
+        async fn open_workspace(&self, path: &str) -> Result<RemoteWorkspaceUpdate, String> {
+            Ok(RemoteWorkspaceUpdate {
+                path: path.to_string(),
+                name: "opened".to_string(),
+            })
+        }
+
+        async fn assistant_workspaces(&self) -> Vec<RemoteAssistantWorkspaceFacts> {
+            vec![RemoteAssistantWorkspaceFacts {
+                path: "/workspace/assistant".to_string(),
+                name: "assistant".to_string(),
+                assistant_id: None,
+            }]
+        }
+
+        async fn open_assistant_workspace(
+            &self,
+            path: &str,
+        ) -> Result<RemoteWorkspaceUpdate, String> {
+            Ok(RemoteWorkspaceUpdate {
+                path: path.to_string(),
+                name: "assistant".to_string(),
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn remote_workspace_handler_preserves_response_shapes() {
+        let host = FakeWorkspaceHost;
+
+        assert_eq!(
+            handle_remote_workspace_command(&host, &RemoteCommand::GetWorkspaceInfo).await,
+            RemoteResponse::WorkspaceInfo {
+                has_workspace: true,
+                path: Some("/workspace/project".to_string()),
+                project_name: Some("project".to_string()),
+                git_branch: Some("main".to_string()),
+                workspace_kind: Some("normal".to_string()),
+                assistant_id: None,
+            }
+        );
+
+        assert_eq!(
+            handle_remote_workspace_command(
+                &host,
+                &RemoteCommand::SetWorkspace {
+                    path: "/workspace/next".to_string(),
+                },
+            )
+            .await,
+            RemoteResponse::WorkspaceUpdated {
+                success: true,
+                path: Some("/workspace/next".to_string()),
+                project_name: Some("opened".to_string()),
+                error: None,
+            }
+        );
+    }
+
+    #[derive(Default)]
+    struct FakeSessionHost {
+        created_requests: Mutex<Vec<AgentSessionCreateRequest>>,
+        removed_trackers: Mutex<Vec<String>>,
+    }
+
+    #[async_trait::async_trait]
+    impl RemoteSessionRuntimeHost for FakeSessionHost {
+        async fn list_session_metadata(
+            &self,
+            _workspace_path: &Path,
+        ) -> Result<Vec<RemoteSessionMetadata>, String> {
+            Ok(vec![
+                RemoteSessionMetadata {
+                    session_id: "session-a".to_string(),
+                    name: "keep me".to_string(),
+                    agent_type: "agentic".to_string(),
+                    created_at_ms: 1_000,
+                    last_active_at_ms: 2_000,
+                    turn_count: 3,
+                },
+                RemoteSessionMetadata {
+                    session_id: "session-b".to_string(),
+                    name: "other".to_string(),
+                    agent_type: "agentic".to_string(),
+                    created_at_ms: 1_000,
+                    last_active_at_ms: 2_000,
+                    turn_count: 1,
+                },
+            ])
+        }
+
+        async fn resolve_default_assistant_workspace_path(&self) -> Result<String, String> {
+            Ok("/workspace/assistant".to_string())
+        }
+
+        async fn create_session(
+            &self,
+            request: AgentSessionCreateRequest,
+        ) -> Result<String, String> {
+            self.created_requests.lock().unwrap().push(request);
+            Ok("created-session".to_string())
+        }
+
+        async fn load_model_catalog(
+            &self,
+            _session_id: Option<&str>,
+        ) -> Result<RemoteModelCatalog, String> {
+            Ok(RemoteModelCatalog {
+                version: 1,
+                models: Vec::new(),
+                default_models: RemoteDefaultModelsConfig::default(),
+                session_model_id: None,
+            })
+        }
+
+        async fn update_session_model(
+            &self,
+            _session_id: &str,
+            model_id: &str,
+        ) -> Result<String, String> {
+            Ok(model_id.to_string())
+        }
+
+        async fn ensure_session_loaded(&self, _session_id: &str) -> Result<(), String> {
+            Ok(())
+        }
+
+        async fn update_session_title(
+            &self,
+            _session_id: &str,
+            title: &str,
+        ) -> Result<String, String> {
+            Ok(title.trim().to_string())
+        }
+
+        async fn resolve_session_workspace_path(&self, _session_id: &str) -> Option<PathBuf> {
+            Some(PathBuf::from("/workspace/project"))
+        }
+
+        async fn load_remote_chat_messages(
+            &self,
+            _workspace_path: &Path,
+            _session_id: &str,
+        ) -> (Vec<ChatMessage>, bool) {
+            (
+                vec![ChatMessage {
+                    id: "message-1".to_string(),
+                    role: "user".to_string(),
+                    content: "hello".to_string(),
+                    timestamp: "1".to_string(),
+                    metadata: None,
+                    images: None,
+                    thinking: None,
+                    tools: None,
+                    items: None,
+                }],
+                false,
+            )
+        }
+
+        async fn delete_session(
+            &self,
+            _workspace_path: &Path,
+            _session_id: &str,
+        ) -> Result<(), String> {
+            Ok(())
+        }
+
+        fn remove_tracker(&self, session_id: &str) {
+            self.removed_trackers
+                .lock()
+                .unwrap()
+                .push(session_id.to_string());
+        }
+    }
+
+    #[tokio::test]
+    async fn remote_session_handler_preserves_list_and_create_policy() {
+        let host = FakeSessionHost::default();
+
+        let list = handle_remote_session_command(
+            &host,
+            &RemoteCommand::ListSessions {
+                workspace_path: Some("/workspace/project".to_string()),
+                limit: Some(20),
+                offset: Some(0),
+                query: Some("keep".to_string()),
+            },
+        )
+        .await;
+        let RemoteResponse::SessionList { sessions, has_more } = list else {
+            panic!("expected session list");
+        };
+        assert!(!has_more);
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].session_id, "session-a");
+        assert_eq!(
+            sessions[0].workspace_path.as_deref(),
+            Some("/workspace/project")
+        );
+
+        let created = handle_remote_session_command(
+            &host,
+            &RemoteCommand::CreateSession {
+                agent_type: Some("Cowork".to_string()),
+                session_name: None,
+                workspace_path: Some("/workspace/project".to_string()),
+            },
+        )
+        .await;
+        assert_eq!(
+            created,
+            RemoteResponse::SessionCreated {
+                session_id: "created-session".to_string(),
+            }
+        );
+        let created_requests = host.created_requests.lock().unwrap();
+        assert_eq!(created_requests[0].session_name, "Remote Cowork Session");
+        assert_eq!(created_requests[0].agent_type, "Cowork");
+        assert_eq!(
+            created_requests[0].workspace_path.as_deref(),
+            Some("/workspace/project")
+        );
+    }
+
+    #[tokio::test]
+    async fn remote_session_handler_removes_tracker_after_delete_success() {
+        let host = FakeSessionHost::default();
+
+        let deleted = handle_remote_session_command(
+            &host,
+            &RemoteCommand::DeleteSession {
+                session_id: "session-a".to_string(),
+            },
+        )
+        .await;
+
+        assert_eq!(
+            deleted,
+            RemoteResponse::SessionDeleted {
+                session_id: "session-a".to_string(),
+            }
+        );
+        assert_eq!(
+            host.removed_trackers.lock().unwrap().as_slice(),
+            ["session-a"]
+        );
+    }
+
+    struct FakePollHost {
+        tracker: Arc<RemoteSessionStateTracker>,
+    }
+
+    #[async_trait::async_trait]
+    impl RemotePollRuntimeHost for FakePollHost {
+        fn ensure_tracker(&self, _session_id: &str) -> Arc<RemoteSessionStateTracker> {
+            self.tracker.clone()
+        }
+
+        async fn load_model_catalog(&self, _session_id: &str) -> Option<RemoteModelCatalog> {
+            None
+        }
+
+        async fn resolve_session_workspace_path(&self, _session_id: &str) -> Option<PathBuf> {
+            None
+        }
+
+        async fn load_remote_chat_messages(
+            &self,
+            _workspace_path: &Path,
+            _session_id: &str,
+        ) -> (Vec<ChatMessage>, bool) {
+            (Vec::new(), false)
+        }
+    }
+
+    #[tokio::test]
+    async fn remote_poll_handler_preserves_missing_workspace_error() {
+        let host = FakePollHost {
+            tracker: Arc::new(RemoteSessionStateTracker::new("session-a".to_string())),
+        };
+
+        let response = handle_remote_poll_command(
+            &host,
+            &RemoteCommand::PollSession {
+                session_id: "session-a".to_string(),
+                since_version: 0,
+                known_msg_count: 0,
+                known_model_catalog_version: None,
+            },
+        )
+        .await;
+
+        assert_eq!(
+            response,
+            RemoteResponse::Error {
+                message: "Workspace path not available for session: session-a".to_string(),
+            }
+        );
+    }
+
+    #[derive(Default)]
+    struct FakeInteractionHost {
+        rejected: Mutex<Vec<(String, String)>>,
+    }
+
+    #[async_trait::async_trait]
+    impl RemoteInteractionRuntimeHost for FakeInteractionHost {
+        async fn confirm_tool(
+            &self,
+            _tool_id: &str,
+            _updated_input: Option<serde_json::Value>,
+        ) -> Result<(), String> {
+            Ok(())
+        }
+
+        async fn reject_tool(&self, tool_id: &str, reason: String) -> Result<(), String> {
+            self.rejected
+                .lock()
+                .unwrap()
+                .push((tool_id.to_string(), reason));
+            Ok(())
+        }
+
+        async fn cancel_tool(&self, _tool_id: &str, _reason: String) -> Result<(), String> {
+            Ok(())
+        }
+
+        fn answer_question(
+            &self,
+            _tool_id: &str,
+            _answers: serde_json::Value,
+        ) -> Result<(), String> {
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn remote_interaction_handler_preserves_default_reject_reason() {
+        let host = FakeInteractionHost::default();
+
+        let response = handle_remote_interaction_command(
+            &host,
+            &RemoteCommand::RejectTool {
+                tool_id: "tool-1".to_string(),
+                reason: None,
+            },
+        )
+        .await;
+
+        assert_eq!(
+            response,
+            RemoteResponse::InteractionAccepted {
+                action: "reject_tool".to_string(),
+                target_id: "tool-1".to_string(),
+            }
+        );
+        assert_eq!(
+            host.rejected.lock().unwrap().as_slice(),
+            [("tool-1".to_string(), "User rejected".to_string())]
+        );
     }
 }

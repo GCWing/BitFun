@@ -16,7 +16,6 @@
     "releaseToAdd": "釋放以添加到此欄"
   },
   "layout": {
-    "noPanels": "BitFun",
     "noPanelsHint": "使用底部欄切換面板或按 <kbd>Ctrl+\\</kbd> <kbd>Ctrl+]</kbd> 展開面板",
     "chatHiddenTitle": "聊天已隱藏",
     "chatHiddenDesc": "你可以在右上角點擊“聊天”重新打開。",
@@ -44,6 +43,7 @@
     "loadingDescription": "正在準備該會話的歷史內容。",
     "failedTitle": "歷史會話載入失敗",
     "failedDescription": "可以重新載入已儲存的會話內容。",
+    "remoteSessionMissing": "在後端找不到該會話資料。若剛重新連接過 SSH 遠端工作區，請關閉並重新打開該遠端項目，或新建會話後再試。",
     "retry": "重試"
   },
   "usage": {
@@ -402,7 +402,9 @@
     "messageTooLarge": "消息超過最大長度 {{max}} 個字符（當前 {{count}} 個字符）。",
     "openWorkspaceFolder": "打開工作區文件夾",
     "openWorkspaceFolderFailed": "打開工作區文件夾失敗：{{error}}",
-    "spaceToActivate": "按<space>空格鍵</space>快速鍵入"
+    "spaceToActivate": "按<space>空格鍵</space>快速鍵入",
+    "assistantPlaceholder": "傳訊息給 {{name}}...",
+    "sendHint": "Enter 傳送 / Shift+Enter 換行"
   },
   "workspaceStrip": {
     "branchTooltipUnavailable": "非 Git 存放庫或目前無分支"
@@ -440,7 +442,6 @@
   "toolbar": {
     "newSession": "新建會話",
     "history": "歷史記錄",
-    "settings": "設置",
     "export": "導出對話",
     "clear": "清空對話",
     "fullscreen": "全屏",
@@ -462,7 +463,8 @@
     "modelError": "模型錯誤",
     "contextTooLong": "上下文過長",
     "rateLimited": "請求過於頻繁",
-    "unknown": "未知錯誤"
+    "unknown": "未知錯誤",
+    "processingFailed": "處理失敗"
   },
   "chatInput": {
     "addBoostTooltip": "智能體模式、圖片或 Skill",
@@ -480,6 +482,10 @@
     "resetToAgentic": "恢復默認模式",
     "noIncrementalModes": "暫無可附加模式",
     "switchMode": "切換模式",
+    "promptCacheGuardTitle": "切換該模式會重置提示詞快取復用",
+    "promptCacheGuardBody": "下一次請求將從 {{fromMode}} 切換到 {{toMode}}，目前工作階段將無法繼續復用現有的提示詞快取。要繼續發送嗎？",
+    "promptCacheGuardConfirm": "仍然發送",
+    "promptCacheGuardCancel": "先不發送",
     "quickAction": "快捷操作",
     "compactAction": "壓縮會話",
     "compactNoSession": "當前沒有可用於 /compact 的會話",
@@ -502,7 +508,6 @@
     "initBusy": "請等待當前會話空閒後再使用 /init。",
     "initUsage": "請直接使用 /init，不要附加額外參數。",
     "initFailed": "初始化 AGENTS.md 失敗",
-    "initPrompt": "請根據當前項目內容生成或更新 AGENTS.md",
     "deepreviewAction": "深度審核",
     "deepreviewNoSession": "當前沒有可用於深度審核的會話",
     "deepreviewUsage": "請使用 /DeepReview，可附加聚焦說明，例如 /DeepReview 審核提交 abc123 的安全風險。",
@@ -527,7 +532,7 @@
     "sendingToBtw": "側問會話：{{title}}",
     "modeDescriptions": {
       "agentic": "AI 主導執行，自動規劃和完成編碼任務，擁有完整的工具訪問能力",
-      "Multitask": "多工模式：將工作拆成正交分支或 DAG，並在合適時主動並行調度子 Agent 推進",
+      "Multitask": "多工模式：將工作拆成正交分支，並在合適時主動並行調度子 Agent 推進",
       "Claw": "個人助理模式：面向個人工作區和日常事務，使用獨立的助理上下文",
       "Plan": "先規劃後執行，先明確需求並制定實施計劃，再進行編碼",
       "debug": "證據驅動的系統化調試：提出假設、收集運行時證據、精準定位並修復問題",
@@ -555,7 +560,10 @@
     "usageCommandUsage": "請單獨輸入 /usage，不要附加其他內容。",
     "usageBusy": "請等待目前工作階段閒置後再使用 /usage。",
     "usageNoWorkspace": "產生用量報告需要先開啟一個專案。",
-    "usageFailed": "用量報告產生失敗"
+    "usageFailed": "用量報告產生失敗",
+    "mcpPromptMissingArgs": "此 MCP 提示詞需要參數：{{args}}",
+    "mcpPromptFailed": "MCP 提示詞執行失敗",
+    "loadingMcpPrompts": "正在載入 MCP 提示詞..."
   },
   "planner": {
     "title": "任務規劃",
@@ -881,24 +889,6 @@
     "optionalReviewers_one": "{{count}} 個額外專家",
     "optionalReviewers_other": "{{count}} 個額外專家",
     "summaryFirstReview": "先摘要再覆蓋",
-    "targetTagLabels": {
-      "frontendUi": "前端 UI",
-      "frontendStyle": "前端樣式",
-      "frontendI18n": "前端國際化",
-      "frontendContract": "前端契約",
-      "desktopContract": "桌面契約",
-      "webServerContract": "Web 服務契約",
-      "backendCore": "後端核心",
-      "transport": "傳輸層",
-      "apiLayer": "API 層",
-      "aiAdapter": "AI 介接器",
-      "installerUi": "安裝器 UI",
-      "test": "測試",
-      "docs": "文件",
-      "config": "設定",
-      "generatedOrLock": "生成檔或鎖定檔",
-      "unknown": "未知區域"
-    },
     "estimatedCalls": "{{count}} 次審核調用",
     "estimatedCalls_one": "{{count}} 次審核調用",
     "estimatedCalls_other": "{{count}} 次審核調用",
@@ -949,7 +939,8 @@
     "backgroundSubagents": "背景子 Agent（{{count}}）",
     "backgroundSubagentUntitled": "背景子 Agent",
     "subagentStatusProcessing": "運行中",
-    "subagentStatusFinishing": "收尾中"
+    "subagentStatusFinishing": "收尾中",
+    "pullRequests": "拉取請求"
   },
   "stickyTaskIndicator": {
     "tooltip": "跳轉到當前任務"
@@ -1035,7 +1026,8 @@
     "feedbackThanks": "感謝您的反饋！",
     "feedbackDevVersion": "開發版本暫不提供反饋功能",
     "userLabel": "👤 用戶:",
-    "toolCallLabel": "🔧 工具調用: {{name}}"
+    "toolCallLabel": "🔧 工具調用: {{name}}",
+    "loadingMoreHistory": "正在載入更多歷史..."
   },
   "exploreRegion": {
     "readFiles_one": "讀取了 {{count}} 個文件",
@@ -1321,7 +1313,9 @@
         "running": "執行中",
         "completed": "已完成",
         "failed": "執行失敗"
-      }
+      },
+      "loadingMore": "正在載入更多輸出...",
+      "loading": "正在載入任務詳情..."
     },
     "timeout": {
       "disableTooltip": "關閉超時限制",
@@ -1334,29 +1328,6 @@
       "failedDurationTooltip": "執行失敗，耗時 {{duration}}",
       "failedDurationTooltipWithReason": "執行失敗，耗時 {{duration}}：{{reason}}",
       "cancelledDurationTooltip": "已取消，耗時 {{duration}}"
-    },
-    "template": {
-      "get": "獲取模板:",
-      "getTemplate": "獲取模板",
-      "loading": "加載中",
-      "loaded": "已加載",
-      "templateDetails": "模板詳情",
-      "templateId": "模板 ID:",
-      "templateName": "模板名稱:",
-      "contentSize": "內容大小:",
-      "characters": "{{count}} 字符",
-      "templateReady": "模板已就緒",
-      "templateReadyDesc": "模板結構已成功加載，可用於需求文檔創建",
-      "templateLoadFailed": "模板加載失敗",
-      "requirementFramework": "需求框架總覽",
-      "productVision": "產品願景",
-      "businessGoals": "業務目標",
-      "userPersonas": "用戶畫像",
-      "userStories": "用戶故事",
-      "featureList": "功能清單",
-      "functionalSpecTemplate": "功能規格模板",
-      "nonFunctionalRequirements": "非功能需求",
-      "acceptanceCriteria": "驗收標準"
     },
     "mcp": {
       "confirmExecute": "確認執行",
@@ -1428,7 +1399,6 @@
       "listingSessions": "正在列出會話",
       "listedSessions": "共找到 {{count}} 個會話",
       "actionFailed": "會話操作失敗",
-      "workspace": "工作區",
       "sessionId": "會話ID",
       "sessionName": "會話名稱",
       "agentType": "Agent 類型",
@@ -1450,22 +1420,8 @@
       "messageAccepted": "消息已提交給 {{session}}",
       "sendFailed": "向 {{session}} 發送消息失敗",
       "targetSession": "目標會話",
-      "workspace": "工作區",
       "agentType": "Agent 類型",
       "message": "消息內容"
-    },
-    "imageAnalysis": {
-      "parsingAnalysisInfo": "解析分析信息中...",
-      "unknownImage": "未知圖片",
-      "clipboardImage": "剪貼板圖片",
-      "analyzeImageContent": "分析圖片內容",
-      "imageAnalysis": "圖片分析",
-      "completed": "已完成",
-      "analyzing": "正在分析",
-      "preparing": "準備分析",
-      "analysisPrompt": "分析提示",
-      "focusAreas": "關注點",
-      "analysisResult": "分析結果"
     },
     "contextCompression": {
       "beforeUserMessage": "用戶消息前",
@@ -1508,26 +1464,6 @@
       "labelPattern": "模式",
       "labelPath": "路徑",
       "labelStats": "統計"
-    },
-    "ideControl": {
-      "parsingOperation": "解析操作中...",
-      "configCenter": "配置中心",
-      "planner": "任務規劃",
-      "terminal": "終端",
-      "fileViewer": "文件瀏覽器",
-      "codeEditor": "代碼編輯器",
-      "navigateToPosition": "導航到指定位置",
-      "adjustIdeLayout": "調整IDE佈局",
-      "manageTab": "管理標籤頁",
-      "focusView": "聚焦視圖",
-      "executeIdeOperation": "執行IDE操作",
-      "operationType": "操作類型",
-      "panelType": "面板類型",
-      "configSection": "配置區域",
-      "sessionId": "會話ID",
-      "filePath": "文件路徑",
-      "workspacePath": "工作區",
-      "panelPosition": "面板位置"
     },
     "linter": {
       "parsingParams": "解析參數中...",
@@ -1651,7 +1587,12 @@
           "high_risk_only": "僅高風險",
           "risk_expanded": "風險擴展",
           "full_depth": "完整深度"
-        }
+        },
+        "target": "目標",
+        "budget": "預算",
+        "estimatedCalls": "預計呼叫次數",
+        "activeGroupTitle": "將執行",
+        "skippedGroupTitle": "已跳過審查者"
       },
       "sectionItemCount": "{{count}} 項",
       "remediationPlan": "修復計劃",
@@ -1708,7 +1649,8 @@
         "remediation": "修復計劃",
         "strengths": "代碼優點",
         "team": "程式碼審核團隊",
-        "coverage": "覆蓋與信心"
+        "coverage": "覆蓋與信心",
+        "runManifest": "執行清單"
       },
       "groups": {
         "must_fix": "必須修復",
@@ -1836,7 +1778,6 @@
     "defaultAction2Command": "繼續之前的工作",
     "defaultAction3": "開始新功能",
     "defaultAction3Command": "開始新功能",
-    "workspace": "工作區",
     "noWorkspace": "未打開工作區",
     "openOtherProject": "打開其他項目...",
     "noWorkspaceHint": "還沒有選擇項目",
@@ -1977,5 +1918,11 @@
     "injectedAt": "已在第 {{round}} 輪前插入",
     "statusPending": "等待觸發",
     "statusInjected": "已觸發"
+  },
+  "errors": {
+    "sendFailed": "傳送訊息失敗"
+  },
+  "actions": {
+    "send": "傳送"
   }
 }

@@ -90,5 +90,13 @@
     "marketDownloadFailed": "下载失败: {{error}}",
     "enabled": "启用",
     "disabled": "禁用"
+  },
+  "section": {
+    "user": {
+      "description": "当前用户安装的 Skills。"
+    },
+    "project": {
+      "description": "当前工作区中的项目级 Skills。"
+    }
   }
 }

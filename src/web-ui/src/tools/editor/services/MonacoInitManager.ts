@@ -12,10 +12,25 @@ import { loader } from '@monaco-editor/react';
 import type * as Monaco from 'monaco-editor';
 import { registerMermaidLanguage } from '../languages/mermaid.language';
 import { registerTomlLanguage } from '../languages/toml.language';
+import { getMonacoPath, getMonacoWorkerPath, logMonacoResourceCheck } from '../utils/monacoPathHelper';
 import { themeManager } from './ThemeManager';
 import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('MonacoInitManager');
+
+const MONACO_WORKER_MAP: Record<string, string> = {
+  json: 'language/json/jsonWorker.js',
+  css: 'language/css/cssWorker.js',
+  scss: 'language/css/cssWorker.js',
+  less: 'language/css/cssWorker.js',
+  html: 'language/html/htmlWorker.js',
+  handlebars: 'language/html/htmlWorker.js',
+  razor: 'language/html/htmlWorker.js',
+  typescript: 'language/typescript/tsWorker.js',
+  javascript: 'language/typescript/tsWorker.js',
+};
+
+const DEFAULT_WORKER = 'base/worker/workerMain.js';
 
 class MonacoInitManager {
   private static instance: MonacoInitManager;
@@ -23,6 +38,8 @@ class MonacoInitManager {
   private initPromise: Promise<typeof Monaco> | null = null;
   private monaco: typeof Monaco | null = null;
   private editorOpenerRegistered = false;
+  private loaderConfigured = false;
+  private resourceCheckScheduled = false;
   
   private constructor() {}
   
@@ -51,7 +68,9 @@ class MonacoInitManager {
   private async doInitialize(): Promise<typeof Monaco> {
     try {
       log.info('Initializing Monaco Editor');
-      
+
+      this.configureLoader();
+      await import('monaco-editor/min/vs/editor/editor.main.css');
       const monaco = await loader.init();
       
       this.configureTypeScriptLanguage(monaco);
@@ -70,6 +89,51 @@ class MonacoInitManager {
       this.initPromise = null; // Allow retry
       throw error;
     }
+  }
+
+  private configureLoader(): void {
+    if (this.loaderConfigured) {
+      return;
+    }
+
+    const monacoPath = getMonacoPath();
+    loader.config({
+      paths: {
+        vs: monacoPath,
+      },
+    });
+
+    (window as any).MonacoEnvironment = {
+      getWorker(_workerId: string, label: string) {
+        const workerFile = MONACO_WORKER_MAP[label] || DEFAULT_WORKER;
+        const workerPath = getMonacoWorkerPath(workerFile);
+
+        return new Worker(workerPath, {
+          type: 'classic',
+          name: `monaco-${label}-worker`,
+        });
+      },
+    };
+
+    this.loaderConfigured = true;
+    log.debug('Monaco loader configured', {
+      vs: monacoPath,
+      isDev: import.meta.env.DEV,
+    });
+    this.scheduleResourceCheck();
+  }
+
+  private scheduleResourceCheck(): void {
+    if (import.meta.env.DEV || this.resourceCheckScheduled) {
+      return;
+    }
+
+    this.resourceCheckScheduled = true;
+    window.setTimeout(() => {
+      logMonacoResourceCheck().catch(err => {
+        log.error('Monaco resource check failed', err);
+      });
+    }, 2000);
   }
   
   private configureTypeScriptLanguage(monaco: typeof Monaco): void {
@@ -302,6 +366,8 @@ class MonacoInitManager {
     this.initPromise = null;
     this.monaco = null;
     this.editorOpenerRegistered = false;
+    this.loaderConfigured = false;
+    this.resourceCheckScheduled = false;
   }
 }
 

@@ -118,7 +118,6 @@
     "modes": {
       "agentic": "agentic",
       "cowork": "Cowork",
-      "claw": "Claw",
       "team": "Team"
     },
     "modeDescriptions": {

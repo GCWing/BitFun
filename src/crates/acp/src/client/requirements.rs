@@ -34,7 +34,7 @@ pub(crate) fn acp_requirement_spec<'a>(
     if let Some(preset) = builtin_acp_client_preset(client_id) {
         return AcpRequirementSpec {
             tool_command: preset.tool_command,
-            install_package: Some(preset.install_package),
+            install_package: preset.install_package,
             adapter: match (preset.adapter_package, preset.adapter_bin) {
                 (Some(package), Some(bin)) => Some(AcpAdapterSpec { package, bin }),
                 _ => None,

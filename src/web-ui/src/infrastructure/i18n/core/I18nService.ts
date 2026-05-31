@@ -1,6 +1,11 @@
  
 
-import i18next, { i18n as I18nInstance, Resource, TFunction } from 'i18next';
+import i18next, {
+  i18n as I18nInstance,
+  Resource,
+  TFunction,
+  type BackendModule,
+} from 'i18next';
 import { initReactI18next } from 'react-i18next';
 
 import type {
@@ -17,8 +22,10 @@ import {
   DEFAULT_LOCALE,
   DEFAULT_FALLBACK_LOCALE,
   DEFAULT_NAMESPACE,
-  ALL_NAMESPACES,
+  WEB_UI_BOOTSTRAP_NAMESPACES,
+  getLocaleFallbackChain,
   isLocaleSupported,
+  SHARED_TERMS_BY_LOCALE,
 } from '../presets';
 import { useI18nStore } from '../store/i18nStore';
 import { i18nAPI } from '@/infrastructure/api/service-api/I18nAPI';
@@ -28,34 +35,95 @@ import { logDuration, measureSync, nowMs, elapsedMs } from '@/shared/utils/timin
 
 const log = createLogger('I18nService');
 
-// Eager glob preserves the previous startup behavior while removing the
-// per-locale manual import list. Adding locales now only needs registry and
-// JSON files; the build discovers matching resources automatically.
-const localeModules = import.meta.glob('../../../locales/**/*.json', {
+const lazyLocaleModules = import.meta.glob('../../../locales/**/*.json', {
+  import: 'default',
+}) as Record<string, () => Promise<Record<string, unknown>>>;
+
+// Keep the bootstrap set explicit because these namespaces are used by
+// synchronous i18nService.t(...) call sites during module initialization.
+const bootstrapLocaleModules = import.meta.glob([
+  '../../../locales/*/common.json',
+  '../../../locales/*/components.json',
+  '../../../locales/*/errors.json',
+  '../../../locales/*/flow-chat.json',
+  '../../../locales/*/panels/files.json',
+  '../../../locales/*/panels/git.json',
+  '../../../locales/*/settings/ai-model.json',
+  '../../../locales/*/settings/lsp.json',
+  '../../../locales/*/tools.json',
+], {
   eager: true,
   import: 'default',
 }) as Record<string, Record<string, unknown>>;
 
-function buildResources(): Resource {
-  return Object.entries(localeModules).reduce<Resource>((acc, [modulePath, messages]) => {
-    const match = modulePath.match(/locales\/([^/]+)\/(.+)\.json$/);
-    if (!match) return acc;
+function parseLocaleModulePath(modulePath: string): { locale: string; namespace: string } | null {
+  const match = modulePath.match(/locales\/([^/]+)\/(.+)\.json$/);
+  if (!match) return null;
 
-    const [, locale, namespace] = match;
-    acc[locale] = {
-      ...(acc[locale] ?? {}),
-      [namespace]: messages,
-    };
+  const [, locale, namespace] = match;
+  return { locale, namespace };
+}
+
+function addNamespaceResource(
+  resources: Resource,
+  locale: string,
+  namespace: string,
+  messages: Record<string, unknown>,
+): void {
+  resources[locale] = {
+    ...(resources[locale] ?? {}),
+    [namespace]: messages,
+  };
+}
+
+function buildResources(): Resource {
+  const resources = Object.entries(bootstrapLocaleModules).reduce<Resource>((acc, [modulePath, messages]) => {
+    const parsed = parseLocaleModulePath(modulePath);
+    if (!parsed) return acc;
+
+    addNamespaceResource(acc, parsed.locale, parsed.namespace, messages);
     return acc;
   }, {});
+
+  for (const [locale, sharedTerms] of Object.entries(SHARED_TERMS_BY_LOCALE)) {
+    addNamespaceResource(resources, locale, 'shared', sharedTerms);
+  }
+
+  return resources;
 }
+
+async function loadLocaleNamespace(locale: string, namespace: string): Promise<Record<string, unknown>> {
+  if (namespace === 'shared') {
+    return SHARED_TERMS_BY_LOCALE[locale as LocaleId] ?? {};
+  }
+
+  const resourceModule = lazyLocaleModules[`../../../locales/${locale}/${namespace}.json`];
+  if (!resourceModule) {
+    return {};
+  }
+
+  return resourceModule();
+}
+
+const lazyNamespaceBackend: BackendModule = {
+  type: 'backend',
+  init() {
+    // Required by the i18next backend interface; this backend has no setup state.
+  },
+  read(language, namespace, callback) {
+    loadLocaleNamespace(language, namespace)
+      .then((messages) => callback(null, messages))
+      .catch((error) => callback(error, false));
+  },
+};
 
 const resourcesResult = measureSync(() => buildResources());
 const resources = resourcesResult.value;
 logDuration(log, 'I18n resources prepared', resourcesResult.durationMs, {
   data: {
-  localeCount: Object.keys(resources).length,
-  moduleCount: Object.keys(localeModules).length,
+    localeCount: Object.keys(resources).length,
+    bootstrapModuleCount: Object.keys(bootstrapLocaleModules).length,
+    lazyModuleCount: Object.keys(lazyLocaleModules).length,
   },
 });
 
@@ -71,16 +139,23 @@ export class I18nService {
 
   constructor() {
     this.i18nInstance = i18next.createInstance();
-    
-    
+
     this.i18nInstance
+      .use(lazyNamespaceBackend)
       .use(initReactI18next)
       .init({
         resources,
+        partialBundledLanguages: true,
         lng: DEFAULT_LOCALE,
-        fallbackLng: DEFAULT_FALLBACK_LOCALE,
+        fallbackLng: (code) => getLocaleFallbackChain(code ?? DEFAULT_FALLBACK_LOCALE),
         defaultNS: DEFAULT_NAMESPACE,
-        ns: [...ALL_NAMESPACES],
+        // Shared terms are an explicit namespace, not a global fallback. Product
+        // surfaces should opt in with local-first fallback keys when needed.
+        fallbackNS: false,
+        ns: [...WEB_UI_BOOTSTRAP_NAMESPACES],
+        // Bootstrap namespaces must remain available to module-level
+        // i18nService.t(...) calls immediately after service construction.
+        initImmediate: false,
         interpolation: {
           escapeValue: false,
         },
@@ -109,12 +184,14 @@ export class I18nService {
       }
 
       if (localeToUse !== this.currentLocaleId) {
+        await this.loadNamespacesForLocale(WEB_UI_BOOTSTRAP_NAMESPACES, localeToUse);
         await this.i18nInstance.changeLanguage(localeToUse);
         this.currentLocaleId = localeToUse;
       }
       
       
       const store = useI18nStore.getState();
+      WEB_UI_BOOTSTRAP_NAMESPACES.forEach((namespace) => store.addLoadedNamespace(namespace));
       store.setCurrentLanguage(this.currentLocaleId);
       store.setInitialized(true);
       
@@ -260,7 +337,12 @@ export class I18nService {
       }
       this.emitEvent('i18n:before-change', locale, oldLocale);
 
-      
+      const loadedNamespaces = new Set<I18nNamespace>([
+        ...WEB_UI_BOOTSTRAP_NAMESPACES,
+        ...store.loadedNamespaces,
+      ]);
+      await this.loadNamespacesForLocale([...loadedNamespaces], locale);
+
       await this.i18nInstance.changeLanguage(locale);
       this.currentLocaleId = locale;
 
@@ -307,13 +389,14 @@ export class I18nService {
    
   async loadNamespace(namespace: I18nNamespace): Promise<void> {
     const store = useI18nStore.getState();
-    
-    if (store.loadedNamespaces.includes(namespace)) {
+
+    if (this.hasNamespaceResources(namespace, this.currentLocaleId)) {
+      store.addLoadedNamespace(namespace);
       return;
     }
 
     try {
-      await this.i18nInstance.loadNamespaces(namespace);
+      await this.loadNamespacesForLocale([namespace], this.currentLocaleId);
       store.addLoadedNamespace(namespace);
       this.emitEvent('i18n:namespace-loaded', this.currentLocaleId, undefined, namespace);
     } catch (error) {
@@ -325,7 +408,33 @@ export class I18nService {
    
   isNamespaceLoaded(namespace: I18nNamespace): boolean {
     const store = useI18nStore.getState();
-    return store.loadedNamespaces.includes(namespace);
+    return store.loadedNamespaces.includes(namespace) && this.hasNamespaceResources(namespace, this.currentLocaleId);
+  }
+
+  private hasNamespaceResources(namespace: I18nNamespace, locale: LocaleId): boolean {
+    return getLocaleFallbackChain(locale, true)
+      .every((localeId) => this.i18nInstance.hasResourceBundle(localeId, namespace));
+  }
+
+  private async loadNamespacesForLocale(
+    namespaces: readonly I18nNamespace[],
+    locale: LocaleId,
+  ): Promise<void> {
+    const localeChain = getLocaleFallbackChain(locale, true);
+    await Promise.all(
+      localeChain.flatMap((localeId) =>
+        namespaces.map(async (namespace) => {
+          if (this.i18nInstance.hasResourceBundle(localeId, namespace)) {
+            return;
+          }
+
+          const messages = await loadLocaleNamespace(localeId, namespace);
+          if (Object.keys(messages).length > 0) {
+            this.i18nInstance.addResourceBundle(localeId, namespace, messages, true, true);
+          }
+        }),
+      ),
+    );
   }
 
   

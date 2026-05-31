@@ -8,10 +8,52 @@ use reqwest::{
     header::{HeaderMap, RETRY_AFTER},
     StatusCode,
 };
+use std::time::Duration;
 use tokio::sync::mpsc;
 
 const BASE_RETRY_DELAY_MS: u64 = 500;
-const MAX_RETRY_AFTER_DELAY_MS: u64 = 30_000;
+const MAX_RETRY_AFTER_DELAY_MS: u64 = 10_000;
+
+enum StreamSendOutcome {
+    Response(reqwest::Response),
+    Transport(reqwest::Error),
+    TtftTimeout,
+}
+
+async fn send_stream_request<BuildRequest>(
+    build_request: BuildRequest,
+    request_body: &serde_json::Value,
+    ttft_timeout: Option<Duration>,
+) -> StreamSendOutcome
+where
+    BuildRequest: Fn() -> reqwest::RequestBuilder,
+{
+    match ttft_timeout {
+        Some(timeout) => match tokio::time::timeout(timeout, build_request().json(request_body).send())
+            .await
+        {
+            Ok(Ok(response)) => StreamSendOutcome::Response(response),
+            Ok(Err(error)) => StreamSendOutcome::Transport(error),
+            Err(_) => StreamSendOutcome::TtftTimeout,
+        },
+        None => match build_request().json(request_body).send().await {
+            Ok(response) => StreamSendOutcome::Response(response),
+            Err(error) => StreamSendOutcome::Transport(error),
+        },
+    }
+}
+
+fn format_ttft_timeout_error(label: &str, ttft_timeout: Option<Duration>) -> String {
+    let timeout_secs = ttft_timeout.map(|timeout| timeout.as_secs()).unwrap_or(0);
+    format!(
+        "{} TTFT timeout after {}s waiting for response headers",
+        label, timeout_secs
+    )
+}
+
+fn format_transport_error(label: &str, error: &reqwest::Error) -> String {
+    format!("{} connection failed: {}", label, error)
+}
 
 fn is_retryable_http_status(status: StatusCode) -> bool {
     status.is_server_error() || matches!(status.as_u16(), 408 | 409 | 425 | 429)
@@ -54,6 +96,7 @@ pub(crate) async fn execute_sse_request<BuildRequest, SpawnHandler>(
     _url: &str,
     request_body: &serde_json::Value,
     max_tries: usize,
+    ttft_timeout: Option<Duration>,
     build_request: BuildRequest,
     spawn_handler: SpawnHandler,
 ) -> Result<StreamResponse>
@@ -68,10 +111,10 @@ where
     let mut last_error = None;
     for attempt in 0..max_tries {
         let request_start_time = std::time::Instant::now();
-        let response_result = build_request().json(request_body).send().await;
+        let send_outcome = send_stream_request(&build_request, request_body, ttft_timeout).await;
 
-        let response = match response_result {
-            Ok(resp) => {
+        let response = match send_outcome {
+            StreamSendOutcome::Response(resp) => {
                 let connect_time = elapsed_ms_u64(request_start_time);
                 let status = resp.status();
                 let headers = resp.headers().clone();
@@ -125,16 +168,43 @@ where
                     continue;
                 }
             }
-            Err(e) => {
+            StreamSendOutcome::Transport(e) => {
                 let connect_time = request_start_time.elapsed().as_millis();
-                let error = anyhow!("{} connection failed: {}", label, e);
+                let error_msg = format_transport_error(label, &e);
+                let error = anyhow!("{}", error_msg);
                 warn!(
-                    "{} connection failed: {}ms, attempt {}/{}, error: {}",
+                    "{} request failed: {}ms, attempt {}/{}, error: {}",
                     label,
                     connect_time,
                     attempt + 1,
                     max_tries,
-                    e
+                    error_msg
+                );
+                last_error = Some(error);
+
+                if attempt < max_tries - 1 {
+                    let delay_ms = exponential_retry_delay_ms(attempt);
+                    debug!(
+                        "Retrying {} after {}ms (attempt {})",
+                        label,
+                        delay_ms,
+                        attempt + 2
+                    );
+                    tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+                }
+                continue;
+            }
+            StreamSendOutcome::TtftTimeout => {
+                let connect_time = request_start_time.elapsed().as_millis();
+                let error_msg = format_ttft_timeout_error(label, ttft_timeout);
+                let error = anyhow!("{}", error_msg);
+                warn!(
+                    "{} request failed: {}ms, attempt {}/{}, error: {}",
+                    label,
+                    connect_time,
+                    attempt + 1,
+                    max_tries,
+                    error_msg
                 );
                 last_error = Some(error);
 
@@ -176,6 +246,16 @@ where
 mod tests {
     use super::*;
     use reqwest::header::HeaderValue;
+
+    #[test]
+    fn format_ttft_timeout_error_includes_timeout_seconds() {
+        let message = format_ttft_timeout_error(
+            "Codex ChatGPT Responses API",
+            Some(std::time::Duration::from_secs(30)),
+        );
+
+        assert!(message.contains("TTFT timeout after 30s"));
+    }
 
     #[test]
     fn retryable_http_statuses_include_rate_limit_and_server_errors() {

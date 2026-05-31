@@ -56,6 +56,12 @@ export const WorkspaceRelatedPathsDialog: React.FC<WorkspaceRelatedPathsDialogPr
 
   const remoteWorkspace = isRemoteWorkspace(workspace);
   const connectionId = workspace.connectionId?.trim() || undefined;
+  const relatedPathCount = drafts.length;
+  const scopeDescription = remoteWorkspace
+    ? t('nav.workspaces.relatedPaths.dialog.remoteScope', {
+        connectionName: workspace.connectionName || workspace.name,
+      })
+    : t('nav.workspaces.relatedPaths.dialog.localScope');
 
   useEffect(() => {
     if (!isOpen) {
@@ -186,12 +192,13 @@ export const WorkspaceRelatedPathsDialog: React.FC<WorkspaceRelatedPathsDialogPr
                 {t('nav.workspaces.relatedPaths.dialog.description')}
               </div>
               <div className="workspace-related-paths-dialog__scope">
-                {remoteWorkspace
-                  ? t('nav.workspaces.relatedPaths.dialog.remoteScope', {
-                      connectionName: workspace.connectionName || workspace.name,
-                    })
-                  : t('nav.workspaces.relatedPaths.dialog.localScope')}
+                {scopeDescription}
               </div>
+            </div>
+            <div className="workspace-related-paths-dialog__intro-badge">
+              <span className="workspace-related-paths-dialog__intro-badge-label">
+                {t('nav.workspaces.relatedPaths.badge', { count: relatedPathCount })}
+              </span>
             </div>
           </div>
 
@@ -219,13 +226,17 @@ export const WorkspaceRelatedPathsDialog: React.FC<WorkspaceRelatedPathsDialogPr
 
                   <div className="workspace-related-paths-dialog__path-row">
                     <Input
+                      className="workspace-related-paths-dialog__path-input"
                       value={draft.path}
                       onChange={event => setDraftValue(draft.id, 'path', event.target.value)}
                       placeholder={t('nav.workspaces.relatedPaths.dialog.pathPlaceholder')}
                       disabled={saving}
+                      variant="filled"
+                      size="small"
                     />
                     <Button
                       type="button"
+                      className="workspace-related-paths-dialog__select"
                       variant="secondary"
                       size="small"
                       onClick={() =>
@@ -241,12 +252,14 @@ export const WorkspaceRelatedPathsDialog: React.FC<WorkspaceRelatedPathsDialogPr
                   </div>
 
                   <Textarea
+                    className="workspace-related-paths-dialog__description"
                     value={draft.description}
                     onChange={event => setDraftValue(draft.id, 'description', event.target.value)}
                     placeholder={t('nav.workspaces.relatedPaths.dialog.descriptionPlaceholder')}
                     disabled={saving}
                     autoResize
                     rows={2}
+                    variant="outlined"
                   />
                 </div>
               ))}
@@ -262,7 +275,8 @@ export const WorkspaceRelatedPathsDialog: React.FC<WorkspaceRelatedPathsDialogPr
           <div className="workspace-related-paths-dialog__footer">
             <Button
               type="button"
-              variant="secondary"
+              className="workspace-related-paths-dialog__add"
+              variant="dashed"
               size="small"
               onClick={handleAddDraft}
               disabled={saving}

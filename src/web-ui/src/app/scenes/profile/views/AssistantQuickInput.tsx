@@ -73,7 +73,7 @@ const AssistantQuickInput: React.FC<AssistantQuickInputProps> = ({
       setValue('');
     } catch (err) {
       log.error('send quick message', err);
-      notificationService.error(t('errors.sendFailed', { defaultValue: 'Failed to send message' }));
+      notificationService.error(t('errors.sendFailed'));
     } finally {
       setSending(false);
     }
@@ -88,8 +88,8 @@ const AssistantQuickInput: React.FC<AssistantQuickInputProps> = ({
   }, [handleSend, isImeEnter]);
 
   const placeholder = assistantName
-    ? t('input.assistantPlaceholder', { name: assistantName, defaultValue: `Message ${assistantName}…` })
-    : t('input.placeholder', { defaultValue: 'Send a message…' });
+    ? t('input.assistantPlaceholder', { name: assistantName })
+    : t('input.placeholder');
 
   return (
     <div className="aqi">
@@ -111,7 +111,7 @@ const AssistantQuickInput: React.FC<AssistantQuickInputProps> = ({
           <div className="aqi__footer-left">
             <ModelSelector currentMode="Claw" className="aqi__model" />
             <span className="aqi__hint">
-              {t('input.sendHint', { defaultValue: 'Enter to send · Shift+Enter for new line' })}
+              {t('input.sendHint')}
             </span>
           </div>
           <IconButton
@@ -121,7 +121,7 @@ const AssistantQuickInput: React.FC<AssistantQuickInputProps> = ({
             isLoading={sending}
             disabled={!value.trim() || sending}
             onClick={() => { void handleSend(); }}
-            aria-label={t('actions.send', { defaultValue: 'Send' })}
+            aria-label={t('actions.send')}
             className="aqi__send"
           >
             {sending

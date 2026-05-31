@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FolderOpen } from 'lucide-react';
+import { Archive, FolderOpen } from 'lucide-react';
 import {
   Alert,
+  Button,
   Select,
   Switch,
   Tooltip,
@@ -230,6 +231,7 @@ function BasicsLoggingSection() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [openingFolder, setOpeningFolder] = useState(false);
+  const [exportingDiagnostics, setExportingDiagnostics] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
   const getFormattedLogPath = useCallback(() => {
@@ -346,6 +348,20 @@ function BasicsLoggingSection() {
     }
   }, [getFormattedLogPath, showMessage, t]);
 
+  const handleExportDiagnostics = useCallback(async () => {
+    try {
+      setExportingDiagnostics(true);
+      const result = await configAPI.exportDiagnosticsBundle();
+      showMessage('success', t('logging.messages.diagnosticsExported'));
+      await workspaceAPI.revealInExplorer(result.bundlePath);
+    } catch (error) {
+      log.error('Failed to export diagnostics bundle', { error });
+      showMessage('error', t('logging.messages.diagnosticsExportFailed'));
+    } finally {
+      setExportingDiagnostics(false);
+    }
+  }, [showMessage, t]);
+
   if (loading) {
     return <ConfigPageLoading text={t('logging.messages.loading')} />;
   }
@@ -359,6 +375,15 @@ function BasicsLoggingSection() {
           title={t('logging.sections.logging')}
           description={t('logging.sections.loggingHint')}
         >
+          {runtimeInfo?.previousUnexpectedExit?.detected && (
+            <Alert
+              type="warning"
+              message={t('logging.previousCrash.title')}
+              description={t('logging.previousCrash.description', {
+                path: runtimeInfo.previousUnexpectedExit.sessionLogDir || '-',
+              })}
+            />
+          )}
           <ConfigPageRow
             label={t('logging.sections.level')}
             description={t('logging.level.description')}
@@ -406,6 +431,25 @@ function BasicsLoggingSection() {
                 </button>
               </Tooltip>
             </div>
+          </ConfigPageRow>
+          <ConfigPageRow
+            label={t('logging.diagnostics.label')}
+            description={t('logging.diagnostics.description')}
+            align="center"
+          >
+            <Button
+              type="button"
+              variant="secondary"
+              size="small"
+              onClick={() => {
+                void handleExportDiagnostics();
+              }}
+              isLoading={exportingDiagnostics}
+              disabled={exportingDiagnostics}
+            >
+              <Archive size={14} />
+              {t('logging.actions.exportDiagnostics')}
+            </Button>
           </ConfigPageRow>
         </ConfigPageSection>
       </div>

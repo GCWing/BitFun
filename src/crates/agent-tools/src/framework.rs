@@ -6,7 +6,7 @@ use bitfun_core_types::ToolImageAttachment;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fmt;
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
@@ -682,10 +682,34 @@ where
         true
     }
 
+    /// Return the tool description that will be sent to the AI provider.
+    ///
+    /// # Prefix-cache stability contract
+    ///
+    /// The byte output of this method must be identical across every round of
+    /// the same session for the same logical tool configuration. Any variation
+    /// in the returned string invalidates the provider-side prefix cache for
+    /// all bytes that follow the tool-spec block, which can significantly
+    /// increase per-round cost.
+    ///
+    /// Acceptable variation:
+    /// - Remote vs local workspace, which changes at session start and then stays stable.
+    /// - Model capability flags such as vision support, which are stable per session.
+    /// - User-initiated config changes such as theme or write-tool mode.
+    ///
+    /// Forbidden variation:
+    /// - Timestamps, request IDs, UUIDs, or any non-deterministic data.
+    /// - Session-specific paths that change mid-session.
+    /// - Anything that varies between API calls within the same session.
     async fn description_with_context(&self, _context: &Context) -> Result<String, String> {
         self.description().await
     }
 
+    /// Return the JSON schema sent to the AI provider.
+    ///
+    /// Subject to the same prefix-cache stability contract as
+    /// [`Self::description_with_context`]: output must be byte-stable across
+    /// rounds of the same session for the same tool configuration.
     async fn input_schema_for_model_with_context(&self, _context: &Context) -> Value {
         self.input_schema_for_model().await
     }
@@ -1442,6 +1466,8 @@ pub enum ToolPathContractError {
     MissingRuntimeUriWorkspaceScope,
     MissingRuntimeUriArtifactPath,
     EmptyRuntimeWorkspaceScope,
+    RuntimeUriScopeMismatch { workspace_scope: String },
+    MissingRuntimeRoot,
     EmptyPath,
     MissingWorkspaceRoot { path: String },
 }
@@ -1466,6 +1492,18 @@ impl fmt::Display for ToolPathContractError {
             }
             Self::EmptyRuntimeWorkspaceScope => {
                 write!(formatter, "Runtime URI workspace scope cannot be empty")
+            }
+            Self::RuntimeUriScopeMismatch { workspace_scope } => {
+                write!(
+                    formatter,
+                    "Runtime URI scope '{workspace_scope}' does not match the current workspace"
+                )
+            }
+            Self::MissingRuntimeRoot => {
+                write!(
+                    formatter,
+                    "A workspace is required to resolve runtime artifacts"
+                )
             }
             Self::EmptyPath => write!(formatter, "path cannot be empty"),
             Self::MissingWorkspaceRoot { path } => {
@@ -1539,6 +1577,71 @@ pub fn resolve_workspace_tool_path(
     }
 }
 
+pub fn resolve_tool_path_with_context(
+    path: &str,
+    workspace_root: Option<&str>,
+    workspace_is_remote: bool,
+    workspace_scope: Option<&str>,
+    runtime_root: Option<PathBuf>,
+) -> Result<ToolPathResolution, ToolPathContractError> {
+    if is_bitfun_runtime_uri(path) {
+        let parsed = parse_bitfun_runtime_uri(path)?;
+        let scope_matches = parsed.workspace_scope == "current"
+            || workspace_scope == Some(parsed.workspace_scope.as_str());
+        if !scope_matches {
+            return Err(ToolPathContractError::RuntimeUriScopeMismatch {
+                workspace_scope: parsed.workspace_scope,
+            });
+        }
+
+        let runtime_root = runtime_root.ok_or(ToolPathContractError::MissingRuntimeRoot)?;
+        let mut resolved_path = runtime_root.clone();
+        for segment in parsed.relative_path.split('/') {
+            resolved_path.push(segment);
+        }
+
+        let effective_scope = workspace_scope
+            .map(str::to_string)
+            .unwrap_or_else(|| parsed.workspace_scope.clone());
+        let logical_path = build_bitfun_runtime_uri(&effective_scope, &parsed.relative_path)?;
+
+        return Ok(ToolPathResolution {
+            requested_path: path.to_string(),
+            logical_path,
+            resolved_path: resolved_path.to_string_lossy().to_string(),
+            backend: ToolPathBackend::Local,
+            runtime_scope: Some(effective_scope),
+            runtime_root: Some(runtime_root),
+        });
+    }
+
+    let resolved_path = resolve_workspace_tool_path(path, workspace_root, workspace_is_remote)?;
+    Ok(ToolPathResolution {
+        requested_path: path.to_string(),
+        logical_path: resolved_path.clone(),
+        resolved_path,
+        backend: if workspace_is_remote {
+            ToolPathBackend::RemoteWorkspace
+        } else {
+            ToolPathBackend::Local
+        },
+        runtime_scope: None,
+        runtime_root: None,
+    })
+}
+
+pub fn tool_path_is_effectively_absolute(path: &str, workspace_is_remote: bool) -> bool {
+    if is_bitfun_runtime_uri(path) {
+        return true;
+    }
+
+    if workspace_is_remote {
+        posix_style_path_is_absolute(path)
+    } else {
+        Path::new(path).is_absolute()
+    }
+}
+
 pub fn normalize_runtime_relative_path(path: &str) -> Result<String, ToolPathContractError> {
     let normalized = path.trim().replace('\\', "/");
     let trimmed = normalized.trim_matches('/');
@@ -1604,6 +1707,45 @@ pub fn build_bitfun_runtime_uri(
         scope,
         normalize_runtime_relative_path(relative_path)?
     ))
+}
+
+pub fn build_tool_runtime_artifact_reference(
+    relative_path: &str,
+    runtime_root: Option<&Path>,
+    workspace_scope: Option<&str>,
+    emit_runtime_uri: bool,
+) -> Result<String, ToolPathContractError> {
+    let normalized_relative_path = normalize_runtime_relative_path(relative_path)?;
+    if emit_runtime_uri {
+        return build_bitfun_runtime_uri(
+            workspace_scope.unwrap_or("current"),
+            &normalized_relative_path,
+        );
+    }
+
+    let runtime_root = runtime_root.ok_or(ToolPathContractError::MissingRuntimeRoot)?;
+    let mut resolved_path = runtime_root.to_path_buf();
+    for segment in normalized_relative_path.split('/') {
+        resolved_path.push(segment);
+    }
+
+    Ok(resolved_path.to_string_lossy().to_string())
+}
+
+pub fn build_tool_session_runtime_artifact_reference(
+    session_id: &str,
+    relative_path: &str,
+    runtime_root: Option<&Path>,
+    workspace_scope: Option<&str>,
+    emit_runtime_uri: bool,
+) -> Result<String, ToolPathContractError> {
+    let normalized_relative_path = normalize_runtime_relative_path(relative_path)?;
+    build_tool_runtime_artifact_reference(
+        &format!("sessions/{}/{}", session_id, normalized_relative_path),
+        runtime_root,
+        workspace_scope,
+        emit_runtime_uri,
+    )
 }
 
 pub fn posix_style_path_is_absolute(path: &str) -> bool {
@@ -1726,12 +1868,45 @@ impl ToolPathPolicy {
     }
 }
 
+pub fn is_tool_path_allowed_by_resolved_roots<E>(
+    resolution: &ToolPathResolution,
+    resolved_roots: &[ToolPathResolution],
+    mut root_contains_path: impl FnMut(&ToolPathResolution, &ToolPathResolution) -> Result<bool, E>,
+) -> Result<bool, E> {
+    for root in resolved_roots {
+        if root.backend != resolution.backend {
+            continue;
+        }
+
+        if root_contains_path(resolution, root)? {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
+}
+
+pub fn build_tool_path_policy_denial_message(
+    logical_path: &str,
+    operation: ToolPathOperation,
+    allowed_roots: &[String],
+) -> String {
+    format!(
+        "Path '{}' is not allowed for {}. Allowed roots: {}",
+        logical_path,
+        operation.verb(),
+        allowed_roots.join(", ")
+    )
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolRuntimeRestrictions {
     #[serde(default)]
     pub allowed_tool_names: BTreeSet<String>,
     #[serde(default)]
     pub denied_tool_names: BTreeSet<String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub denied_tool_messages: BTreeMap<String, String>,
     #[serde(default)]
     pub path_policy: ToolPathPolicy,
 }
@@ -1746,6 +1921,7 @@ impl ToolRuntimeRestrictions {
         if self.denied_tool_names.contains(tool_name) {
             return Err(ToolRestrictionError::Denied {
                 tool_name: tool_name.to_string(),
+                message: self.denied_tool_messages.get(tool_name).cloned(),
             });
         }
 
@@ -1761,18 +1937,27 @@ impl ToolRuntimeRestrictions {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ToolRestrictionError {
-    Denied { tool_name: String },
+    Denied {
+        tool_name: String,
+        message: Option<String>,
+    },
     NotAllowed { tool_name: String },
 }
 
 impl fmt::Display for ToolRestrictionError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Denied { tool_name } => write!(
-                formatter,
-                "Tool '{}' is denied by runtime restrictions",
-                tool_name
-            ),
+            Self::Denied { tool_name, message } => {
+                if let Some(message) = message.as_deref() {
+                    write!(formatter, "{message}")
+                } else {
+                    write!(
+                        formatter,
+                        "Tool '{}' is denied by runtime restrictions",
+                        tool_name
+                    )
+                }
+            }
             Self::NotAllowed { tool_name } => write!(
                 formatter,
                 "Tool '{}' is not allowed by runtime restrictions",
@@ -1860,5 +2045,73 @@ impl ToolResult {
             result_for_assistant,
             image_attachments: Some(image_attachments),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    struct TestTool {
+        name: &'static str,
+        available: bool,
+    }
+
+    #[async_trait]
+    impl ToolRegistryItem for TestTool {
+        fn name(&self) -> &str {
+            self.name
+        }
+
+        async fn description(&self) -> Result<String, String> {
+            Ok(format!("{} description", self.name))
+        }
+
+        fn input_schema(&self) -> Value {
+            json!({
+                "type": "object",
+                "properties": {},
+            })
+        }
+    }
+
+    #[async_trait]
+    impl ContextualToolManifestItem<()> for TestTool {
+        async fn is_available_in_context(&self, _context: &()) -> bool {
+            self.available
+        }
+    }
+
+    #[tokio::test]
+    async fn contextual_manifest_omits_unavailable_tools_from_model_definitions() {
+        let task = Arc::new(TestTool {
+            name: "Task",
+            available: false,
+        });
+        let read = Arc::new(TestTool {
+            name: "Read",
+            available: true,
+        });
+        let tools: Vec<Arc<TestTool>> = vec![task, read];
+        let allowed_tools = vec!["Task".to_string(), "Read".to_string()];
+
+        let manifest = resolve_contextual_tool_manifest(
+            &tools,
+            &allowed_tools,
+            &IndexMap::new(),
+            &(),
+            GET_TOOL_SPEC_TOOL_NAME,
+        )
+        .await;
+
+        assert!(!manifest
+            .tool_definitions
+            .iter()
+            .any(|definition| definition.name == "Task"));
+        assert!(manifest
+            .tool_definitions
+            .iter()
+            .any(|definition| definition.name == "Read"));
     }
 }

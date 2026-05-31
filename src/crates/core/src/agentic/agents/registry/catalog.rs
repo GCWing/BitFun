@@ -2,8 +2,8 @@ use super::types::AgentCategory;
 use super::visibility::SubagentVisibilityPolicy;
 use crate::agentic::agents::{
     Agent, AgenticMode, ArchitectureReviewerAgent, BusinessLogicReviewerAgent, ClawMode,
-    CodeReviewAgent, CoworkMode, DebugMode, DeepResearchMode, DeepReviewAgent, ExploreAgent,
-    FileFinderAgent, FrontendReviewerAgent, GeneralPurposeAgent, GenerateDocAgent, InitAgent,
+    CodeReviewAgent, ComputerUseMode, CoworkMode, DebugMode, DeepResearchMode, DeepReviewAgent,
+    ExploreAgent, FileFinderAgent, FrontendReviewerAgent, GeneralPurposeAgent, GenerateDocAgent,
     MultitaskMode, PerformanceReviewerAgent, PlanMode, ResearchSpecialistAgent, ReviewFixerAgent,
     ReviewJudgeAgent, SecurityReviewerAgent, TeamMode,
 };
@@ -58,11 +58,11 @@ pub fn builtin_agent_specs() -> Vec<BuiltinAgentSpec> {
             category: AgentCategory::Mode,
             visibility_policy: SubagentVisibilityPolicy::default(),
         },
-        // BuiltinAgentSpec {
-        //     factory: || Arc::new(ComputerUseMode::new()),
-        //     category: AgentCategory::SubAgent,
-        //     visibility_policy: SubagentVisibilityPolicy::restricted(["Claw", "Team"]),
-        // },
+        BuiltinAgentSpec {
+            factory: || Arc::new(ComputerUseMode::new()),
+            category: AgentCategory::SubAgent,
+            visibility_policy: SubagentVisibilityPolicy::restricted(["Claw", "Team"]),
+        },
         BuiltinAgentSpec {
             factory: || Arc::new(ExploreAgent::new()),
             category: AgentCategory::SubAgent,
@@ -130,11 +130,6 @@ pub fn builtin_agent_specs() -> Vec<BuiltinAgentSpec> {
         },
         BuiltinAgentSpec {
             factory: || Arc::new(GenerateDocAgent::new()),
-            category: AgentCategory::Hidden,
-            visibility_policy: SubagentVisibilityPolicy::default(),
-        },
-        BuiltinAgentSpec {
-            factory: || Arc::new(InitAgent::new()),
             category: AgentCategory::Hidden,
             visibility_policy: SubagentVisibilityPolicy::default(),
         },

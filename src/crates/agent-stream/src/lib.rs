@@ -203,6 +203,10 @@ impl StreamProcessError {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct StreamProcessOptions {
     pub recover_partial_on_cancel: bool,
+    /// When true, Write tool-call JSON is sanitized to `file_path` only during
+    /// streaming and finalization. Inline `content` must never reach the UI or
+    /// downstream execution in PlaintextFollowup mode.
+    pub strip_write_inline_content: bool,
 }
 
 /// Stream processing context, encapsulates state during stream processing
@@ -241,6 +245,7 @@ impl StreamContext {
         session_id: String,
         dialog_turn_id: String,
         round_id: String,
+        options: StreamProcessOptions,
     ) -> Self {
         Self {
             session_id,
@@ -253,7 +258,7 @@ impl StreamContext {
             tool_calls: Vec::new(),
             usage: None,
             provider_metadata: None,
-            pending_tool_calls: PendingToolCalls::default(),
+            pending_tool_calls: PendingToolCalls::new(options.strip_write_inline_content),
             finalized_tool_call_ids: HashSet::new(),
             stream_started_at: Instant::now(),
             first_chunk_ms: None,
@@ -384,7 +389,7 @@ pub struct StreamProcessor {
 }
 
 impl StreamProcessor {
-    const WATCHDOG_GRACE_SECS: u64 = 5;
+    const WATCHDOG_GRACE_SECS: u64 = 2;
 
     pub fn new<E>(event_sink: Arc<E>) -> Self
     where
@@ -795,7 +800,7 @@ impl StreamProcessor {
         cancellation_token: &tokio_util::sync::CancellationToken,
         options: StreamProcessOptions,
     ) -> Result<StreamResult, StreamProcessError> {
-        let mut ctx = StreamContext::new(session_id, dialog_turn_id, round_id);
+        let mut ctx = StreamContext::new(session_id, dialog_turn_id, round_id, options);
         // Start SSE log collector (if raw_sse_rx is provided)
         let sse_collector = if let Some(mut rx) = raw_sse_rx {
             let collector = Arc::new(tokio::sync::Mutex::new(SseLogCollector::new(
@@ -1020,7 +1025,7 @@ mod tests {
         assert_eq!(StreamProcessor::derive_watchdog_timeout(None), None);
         assert_eq!(
             StreamProcessor::derive_watchdog_timeout(Some(Duration::from_secs(10))),
-            Some(Duration::from_secs(15))
+            Some(Duration::from_secs(12))
         );
     }
 
@@ -1063,6 +1068,7 @@ mod tests {
                 &cancellation_token,
                 StreamProcessOptions {
                     recover_partial_on_cancel: true,
+                    ..Default::default()
                 },
             )
             .await

@@ -5,20 +5,13 @@ import AppErrorBoundary from "./app/components/AppErrorBoundary";
 import { WorkspaceProvider } from "./infrastructure/contexts/WorkspaceProvider";
 import "./app/styles/index.scss";
 
-// Manually import Monaco Editor CSS.
-// This ensures the CSS loads correctly in Tauri production.
-import 'monaco-editor/min/vs/editor/editor.main.css';
-
 // Font: Noto Sans SC is loaded via a <link> tag in index.html.
 // File path: public/fonts/fonts.css, served as /fonts/fonts.css.
 
-import { initializeAllTools } from "./tools/initializeTools";
-import { initContextMenuSystem } from "./shared/context-menu-system";
-import { loader } from '@monaco-editor/react';
-import { getMonacoPath, getMonacoWorkerPath, logMonacoResourceCheck } from './tools/editor/utils/monacoPathHelper';
 import { bootstrapLogger, createLogger, initLogger } from './shared/utils/logger';
 import { elapsedMs, logElapsed, measureAsyncAndLog, nowMs } from './shared/utils/timing';
 import { startupTrace } from './shared/utils/startupTrace';
+import { scheduleAfterStartupSignal } from './shared/utils/startupTaskScheduling';
 import {
   buildReactCrashLogPayload,
   isMinifiedReactErrorMessage,
@@ -28,7 +21,10 @@ import {
 bootstrapLogger();
 
 const log = createLogger('App');
-startupTrace.markPhase('first_script_eval');
+startupTrace.markPhase('first_script_eval', {
+  viteMode: import.meta.env.MODE,
+  isDev: import.meta.env.DEV,
+});
 
 /** Dedupe only for white-screen heuristic (empty #root), not for Error Boundary logs. */
 const WHITE_SCREEN_LOGGED_FLAG = '__bitfun_white_screen_crash_logged__';
@@ -177,53 +173,6 @@ document.addEventListener(
   true
 );
 
-// Configure Monaco Editor loader - use local files (offline-ready).
-const isDev = import.meta.env.DEV;
-const monacoPath = getMonacoPath();
-
-loader.config({
-  paths: {
-    vs: monacoPath
-  }
-});
-
-// Debug: check resource availability in production.
-if (!isDev) {
-  // Delay checks to avoid blocking startup.
-  setTimeout(() => {
-    logMonacoResourceCheck().catch(err => {
-      log.error('Monaco resource check failed', err);
-    });
-  }, 2000);
-}
-
-// Optimization: Monaco Editor worker mapping.
-const MONACO_WORKER_MAP: Record<string, string> = {
-  json: 'language/json/jsonWorker.js',
-  css: 'language/css/cssWorker.js',
-  scss: 'language/css/cssWorker.js',
-  less: 'language/css/cssWorker.js',
-  html: 'language/html/htmlWorker.js',
-  handlebars: 'language/html/htmlWorker.js',
-  razor: 'language/html/htmlWorker.js',
-  typescript: 'language/typescript/tsWorker.js',
-  javascript: 'language/typescript/tsWorker.js',
-};
-
-const DEFAULT_WORKER = 'base/worker/workerMain.js';
-
-(window as any).MonacoEnvironment = {
-  getWorker(_workerId: string, label: string) {
-    const workerFile = MONACO_WORKER_MAP[label] || DEFAULT_WORKER;
-    const workerPath = getMonacoWorkerPath(workerFile);
-    
-    return new Worker(workerPath, {
-      type: 'classic',
-      name: `monaco-${label}-worker`
-    });
-  }
-};
-
 /** Logger, theme, and minimal deps — must finish before first React paint (F5 / webview reload does not re-run Tauri init script). */
 async function initializeBeforeRender(): Promise<void> {
   const phaseStartedAt = nowMs();
@@ -239,7 +188,6 @@ async function initializeBeforeRender(): Promise<void> {
     data: { step: 'initializeFrontendLogLevelSync' },
   });
 
-  log.debug('Monaco loader configured', { vs: monacoPath, isDev });
   log.info('Initializing BitFun');
 
   await measureAsyncAndLog(log, 'Startup step completed', async () => {
@@ -257,7 +205,7 @@ async function initializeBeforeRender(): Promise<void> {
   });
 }
 
-/** Rest of startup runs after the shell is visible so refresh latency stays reasonable. */
+/** Rest of startup runs after the shell is interactive so first-screen latency stays reasonable. */
 async function initializeAfterRender(): Promise<void> {
   const phaseStartedAt = nowMs();
   startupTrace.markPhase('after_render_start');
@@ -290,8 +238,12 @@ async function initializeAfterRender(): Promise<void> {
       const { initRecommendationProviders } = await import('./flow_chat/components/smart-recommendations');
       initRecommendationProviders();
     })(),
-    initializeAllTools(),
     (async () => {
+      const { initializeAllTools } = await import('./tools/initializeTools');
+      await initializeAllTools();
+    })(),
+    (async () => {
+      const { initContextMenuSystem } = await import('./shared/context-menu-system');
       initContextMenuSystem({
         registerBuiltinCommands: true,
         registerBuiltinProviders: true,
@@ -300,10 +252,6 @@ async function initializeAfterRender(): Promise<void> {
 
       const { registerNotificationContextMenu } = await import('./shared/notification-system');
       registerNotificationContextMenu();
-    })(),
-    (async () => {
-      const { scheduleMonacoStartupWarmup } = await import('./tools/editor/services/MonacoStartupWarmup');
-      scheduleMonacoStartupWarmup();
     })(),
   ]);
 
@@ -315,7 +263,6 @@ async function initializeAfterRender(): Promise<void> {
       'RecommendationProviders',
       'Tools',
       'ContextMenu',
-      'EditorWarmup',
     ];
     if (result.status === 'rejected') {
       log.warn('Initialization failed', { module: names[index], error: result.reason });
@@ -392,11 +339,33 @@ async function startApplication(): Promise<void> {
     sinceStartupMs: elapsedMs(appStartedAt),
   });
 
-  try {
-    await initializeAfterRender();
-  } catch (error) {
-    log.error('Failed to complete post-render initialization', error);
-  }
+  startupTrace.markPhase('non_critical_init_scheduled', {
+    signalName: 'bitfun:interactive-shell-ready',
+    fallbackTimeoutMs: 10000,
+    frameCount: 1,
+  });
+  scheduleAfterStartupSignal(async () => {
+    const nonCriticalStartedAt = nowMs();
+    try {
+      await initializeAfterRender();
+      startupTrace.markPhase('non_critical_init_done', {
+        durationMs: elapsedMs(nonCriticalStartedAt),
+      });
+      startupTrace.flushSummary('non_critical_init_completed');
+    } catch (error) {
+      log.error('Failed to complete post-render initialization', error);
+      startupTrace.markPhase('non_critical_init_failed', {
+        durationMs: elapsedMs(nonCriticalStartedAt),
+      });
+    }
+  }, {
+    signalName: 'bitfun:interactive-shell-ready',
+    fallbackTimeoutMs: 10000,
+    frameCount: 1,
+    onError: error => {
+      log.error('Failed to schedule post-render initialization', error);
+    },
+  });
 
   logElapsed(log, 'Startup phase completed', appStartedAt, {
     data: { phase: 'startApplication' },

@@ -80,7 +80,7 @@ mod tests {
         ArchitectureReviewerAgent, BusinessLogicReviewerAgent, FrontendReviewerAgent,
         PerformanceReviewerAgent, ReviewJudgeAgent, SecurityReviewerAgent,
     };
-    use crate::agentic::agents::{Agent, RequestContextPolicy};
+    use crate::agentic::agents::{Agent, UserContextPolicy};
 
     #[test]
     fn specialist_reviewers_use_isolated_instruction_context() {
@@ -95,8 +95,8 @@ mod tests {
 
         for agent in agents {
             assert_eq!(
-                agent.request_context_policy(),
-                RequestContextPolicy::empty().with_workspace_instructions()
+                agent.user_context_policy(),
+                UserContextPolicy::empty().with_workspace_instructions()
             );
             assert!(agent.is_readonly());
             assert!(agent.default_tools().contains(&"GetFileDiff".to_string()));

@@ -49,272 +49,144 @@
   flex-direction: column;
   transform: translateY(0);
   transition:
-    max-width 0.32s cubic-bezier(0.4, 0, 0.2, 1),
-    transform 0.32s cubic-bezier(0.4, 0, 0.2, 1);
-  
-  &--collapsed {
-    cursor: text;
-    max-width: min(380px, 80%);
-    margin: 0 auto;
-    transform: translateY(3px);
+    max-width 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
 
-    .bitfun-chat-input__box {
-      position: relative;
-      overflow: hidden;
-      min-height: 48px;
-      max-height: 48px;
-      padding: 0 18px;
-      border-radius: 24px;
-      cursor: text;
-      background: rgba(18, 18, 28, 0.22);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      box-shadow: 
-        0 8px 24px rgba(0, 0, 0, 0.18),
-        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  // ─── Single-line capsule mode ─────────────────────────────────────────────
+  &--capsule {
+    .bitfun-chat-input__box--capsule {
       flex-direction: row;
       align-items: center;
-      gap: var(--flowchat-control-gap, 0.5rem);
-      
-      &:hover {
-        background: rgba(25, 25, 40, 0.38);
-        border: 1px solid rgba(255, 255, 255, 0.16);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        box-shadow: 
-          0 12px 30px rgba(0, 0, 0, 0.24),
-          inset 0 1px 0 rgba(255, 255, 255, 0.08);
-      }
-    }
-    
-    // Light theme overrides for the collapsed capsule
-    :root[data-theme="light"] &,
-    :root[data-theme-type="light"] &,
-    .light & {
-      .bitfun-chat-input__box {
-        background: rgba(255, 255, 255, 0.28);
-        border: 1px solid rgba(0, 0, 0, 0.08);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
-        box-shadow:
-          0 2px 8px rgba(0, 0, 0, 0.06),
-          inset 0 1px 0 rgba(255, 255, 255, 0.8);
-        
-        &:hover {
-          background: rgba(255, 255, 255, 0.45);
-          border: 1px solid rgba(0, 0, 0, 0.14);
-          backdrop-filter: blur(12px);
-          -webkit-backdrop-filter: blur(12px);
-          box-shadow:
-            0 12px 24px rgba(0, 0, 0, 0.1),
-            inset 0 1px 0 rgba(255, 255, 255, 0.9);
-        }
-      }
-    }
-    
-    .bitfun-chat-input__expand-button,
-    .bitfun-chat-input__cowork-examples,
-    .bitfun-chat-input__recommendations,
-    .bitfun-chat-input__target-switcher,
-    .bitfun-chat-input__actions-left,
-    .bitfun-chat-input__agent-boost,
-    .bitfun-chat-input__actions-right {
-      display: none !important;
-    }
-    
-    .bitfun-chat-input__input-area {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      width: calc(100% - 36px);
-      min-height: 28px;
-      max-height: 28px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transform: translate(-50%, -50%);
-      pointer-events: none;
+      min-height: 44px;
+      max-height: 44px;
+      padding: 0 6px 0 2px;
+      border-radius: 22px;
+      overflow: visible;
 
-      .rich-text-input {
-        min-height: 28px !important;
-        max-height: 28px !important;
-        max-width: 100%;
-        font-size: var(--flowchat-font-size-base);
-        line-height: var(--flowchat-support-line-height, 1.45);
-        overflow: hidden;
-        padding: 0 !important;
-        margin: 0 auto;
-        text-align: center;
-        width: 100%;
-
-        &:empty::before {
-          display: block;
-          color: color-mix(in srgb, var(--color-text-muted) 52%, transparent);
-          font-size: var(--flowchat-font-size-base);
-          line-height: var(--flowchat-support-line-height, 1.45);
-          text-align: center;
-          width: 100%;
-        }
-      }
-
-      .bitfun-chat-input__space-hint {
-        display: inline-flex;
-        position: absolute;
-        inset: 0;
-        align-items: center;
-        justify-content: center;
-        gap: var(--flowchat-inline-gap, 0.35rem);
-        width: 100%;
-        font-size: var(--flowchat-font-size-sm);
-        line-height: var(--flowchat-support-line-height, 1.45);
-        color: color-mix(in srgb, var(--color-text-muted) 48%, transparent);
-        white-space: nowrap;
-        pointer-events: none;
-        letter-spacing: 0.01em;
-        animation: bitfun-space-hint-pop 0.28s cubic-bezier(0.4, 0, 0.2, 1) 0.22s both;
-      }
-    }
-    
-    .bitfun-chat-input__actions {
-      flex-shrink: 0;
-      height: auto;
-      padding: 0;
-      margin: 0;
-    }
-
-    &.bitfun-chat-input--processing {
-      .bitfun-chat-input__input-area {
-        left: 18px;
-        right: 118px;
-        width: auto;
-        transform: translateY(-50%);
-        justify-content: flex-start;
-      }
-
-      .rich-text-input {
-        display: none;
-      }
-
+      // Dissolve the actions wrapper so its children become direct flex items
       .bitfun-chat-input__actions {
-        position: absolute;
-        top: 0;
-        right: 14px;
-        bottom: 0;
+        display: contents;
+      }
+
+      .bitfun-chat-input__actions-left {
+        order: 1;
+        flex-shrink: 0;
         display: flex;
         align-items: center;
-        z-index: 2;
+        padding: 0 2px 0 4px;
+        animation: none;
+
+        // Enlarge the Plus button to match the capsule height
+        .bitfun-chat-input__agent-boost-add {
+          width: 28px !important;
+          height: 28px !important;
+          min-width: 28px !important;
+          border-radius: 50% !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+        }
+      }
+
+      .bitfun-chat-input__input-area {
+        order: 2;
+        flex: 1;
+        min-width: 0;
+        min-height: 0;
+        padding-bottom: 0;
+        display: flex;
+        align-items: center;
+
+        .rich-text-input {
+          min-height: 22px !important;
+          max-height: 22px !important;
+          overflow: hidden;
+          line-height: var(--flowchat-support-line-height, 1.45);
+          font-size: var(--flowchat-font-size-base);
+          padding: 0 !important;
+          width: 100%;
+          // Allow clicks to reach the contenteditable in capsule mode
+          pointer-events: auto;
+
+        }
       }
 
       .bitfun-chat-input__actions-right {
-        display: flex !important;
+        order: 3;
+        flex-shrink: 0;
+        display: flex;
         align-items: center;
-        gap: var(--flowchat-control-gap, 0.5rem);
+        gap: $size-gap-1;
+        padding: 0 4px 0 2px;
+        animation: none;
+
+        // Enlarge send/stop button to match the capsule height
+        .bitfun-chat-input__send-button {
+          width: 28px !important;
+          height: 28px !important;
+          border-radius: 50% !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+
+          &--breathing {
+            width: auto !important;
+            height: auto !important;
+          }
+        }
+
+        .bitfun-chat-input__breathing-circle {
+          width: 28px !important;
+          height: 28px !important;
+        }
+
+        .bitfun-chat-input__model-usage-group {
+          display: flex;
+          align-items: center;
+        }
       }
 
-      .bitfun-chat-input__space-hint {
-        justify-content: flex-start;
-        width: 100%;
-      }
-
-      .bitfun-chat-input__action-button {
+      // Hide things that belong to multi-line only
+      .bitfun-chat-input__cowork-examples,
+      .bitfun-chat-input__recommendations,
+      .bitfun-chat-input__target-switcher,
+      .bitfun-chat-input__image-strip {
         display: none !important;
       }
     }
+  }
 
-    &:hover .bitfun-chat-input__space-hint {
-      color: color-mix(in srgb, var(--color-text-muted) 62%, transparent);
-    }
+  &__placeholder {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    pointer-events: none;
+    color: color-mix(in srgb, var(--color-text-muted) 52%, transparent);
+    font-size: var(--flowchat-font-size-base);
+    line-height: var(--flowchat-support-line-height, 1.45);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    user-select: none;
+  }
 
-    &.bitfun-chat-input--pet-visible {
-      .bitfun-chat-input__input-area {
-        z-index: 1;
-      }
+  // In multi-line card mode: align to top of text area
+  &__box--multi-line &__placeholder {
+    padding-top: 1px;
+  }
 
-      .bitfun-chat-input__actions {
-        z-index: 2;
-      }
+  // In capsule: vertically centre inside the 22px line height
+  &__box--capsule &__placeholder {
+    top: 50%;
+    transform: translateY(-50%);
+  }
 
-      .bitfun-chat-input__space-hint {
-        opacity: 0;
-        transition: opacity 0.36s cubic-bezier(0.4, 0, 0.2, 1);
-      }
-
-      &:hover .bitfun-chat-input__space-hint {
-        opacity: 1;
-        color: color-mix(in srgb, var(--color-text-muted) 58%, transparent);
-      }
-
-      &.bitfun-chat-input--pet-split-send.bitfun-chat-input--processing {
-        .bitfun-chat-input__actions {
-          z-index: 5;
-        }
-      }
-    }
-
-    &.bitfun-chat-input--pet-replaces-stop.bitfun-chat-input--processing {
-      .bitfun-chat-input__input-area {
-        right: 52px;
-      }
-
-      &.bitfun-chat-input--pet-split-send .bitfun-chat-input__input-area {
-        right: 112px;
-      }
-    }
-
-    .bitfun-chat-input__pet-wrap {
-      position: absolute;
-      inset: 0;
-      z-index: 3;
-      pointer-events: none;
-    }
-
-    /* Full width so flex alignment is relative to the capsule (not the ~40px pet). */
-    .bitfun-chat-input__pet-inner {
-      box-sizing: border-box;
-      width: 100%;
-      height: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding-left: 0;
-      padding-right: 0;
-      transition:
-        justify-content 0.45s cubic-bezier(0.34, 1.15, 0.64, 1),
-        padding 0.45s cubic-bezier(0.34, 1.15, 0.64, 1);
-    }
-
-    /* Align with former stop control (~same inset as .bitfun-chat-input__actions { right: 14px }). */
-    .bitfun-chat-input__pet-wrap--shift .bitfun-chat-input__pet-inner {
-      justify-content: flex-end;
-      padding-right: 8px;
-    }
-
-    .bitfun-chat-input__pet-wrap--shift.bitfun-chat-input__pet-wrap--split .bitfun-chat-input__pet-inner {
-      padding-right: 42px;
-    }
-
-    .bitfun-chat-input__pet-stop-btn {
-      pointer-events: auto;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0;
-      margin: 0;
-      border: none;
-      background: transparent;
-      cursor: pointer;
-      border-radius: 10px;
-      line-height: 0;
-
-      &:hover {
-        filter: brightness(1.08);
-      }
-
-      &:focus-visible {
-        outline: 2px solid var(--color-accent-primary);
-        outline-offset: 2px;
-      }
+  :root[data-theme="light"] &,
+  :root[data-theme-type="light"] &,
+  .light & {
+    &__placeholder {
+      color: color-mix(in srgb, var(--color-text-secondary) 48%, transparent);
     }
   }
 
@@ -475,17 +347,67 @@
     &::before {
       content: none;
     }
+
+    // Capsule (single-line) mode appearance
+    &--capsule {
+      border-radius: 22px;
+      min-height: 44px;
+      max-height: 44px;
+      padding: 0 6px 0 2px;
+      background: rgba(18, 18, 28, 0.22);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      box-shadow:
+        0 8px 24px rgba(0, 0, 0, 0.18),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+
+      &:hover {
+        background: rgba(25, 25, 40, 0.38);
+        border-color: rgba(255, 255, 255, 0.16);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        box-shadow:
+          0 12px 30px rgba(0, 0, 0, 0.24),
+          inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      }
+
+      &:focus-within {
+        background: rgba(25, 25, 40, 0.42);
+        border-color: rgba(255, 255, 255, 0.2);
+        box-shadow:
+          0 12px 30px rgba(0, 0, 0, 0.28),
+          inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      }
+    }
+
+    :root[data-theme="light"] &--capsule,
+    :root[data-theme-type="light"] &--capsule,
+    .light &--capsule {
+      background: rgba(255, 255, 255, 0.28);
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      box-shadow:
+        0 2px 8px rgba(0, 0, 0, 0.06),
+        inset 0 1px 0 rgba(255, 255, 255, 0.8);
+
+      &:hover {
+        background: rgba(255, 255, 255, 0.45);
+        border-color: rgba(0, 0, 0, 0.14);
+        box-shadow:
+          0 12px 24px rgba(0, 0, 0, 0.1),
+          inset 0 1px 0 rgba(255, 255, 255, 0.9);
+      }
+    }
     
-    &--expanded {
-      max-height: calc(100vh - 178px);
-      
+    &--multi-line {
+      // Max ~5 lines: 5 × (14px × 1.45) ≈ 101px + padding + action bar ≈ 160px
       .bitfun-chat-input__input-area {
-        min-height: calc(100vh - 240px);
-        max-height: calc(100vh - 240px);
-        
+        min-height: 56px;
+
         .rich-text-input {
-          min-height: calc(100vh - 280px);
-          max-height: calc(100vh - 280px);
+          max-height: 102px; // ~5 lines of text
         }
       }
     }
@@ -567,61 +489,6 @@
     }
   }
   
-  &__expand-button.icon-btn {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    width: 22px;
-    height: 22px;
-    border: none;
-    border-radius: 50%;
-    background: transparent;
-    color: var(--color-text-secondary);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    opacity: 1;
-    transform: scale(1);
-    transform-origin: center;
-    transition:
-      transform 0.22s cubic-bezier(0.34, 1.2, 0.64, 1),
-      background 0.2s ease,
-      color 0.2s ease,
-      box-shadow 0.2s ease;
-    animation: bitfun-stacked-reveal 0.22s cubic-bezier(0.4, 0, 0.2, 1) 0.24s both;
-    box-shadow: none;
-
-    svg {
-      opacity: 0.5;
-      transition:
-        opacity 0.2s ease,
-        transform 0.22s cubic-bezier(0.34, 1.2, 0.64, 1);
-    }
-
-    &:hover:not(:disabled) {
-      transform: scale(1.14);
-      color: var(--color-accent-400);
-      background: var(--color-accent-100);
-      box-shadow:
-        inset 0 0 0 1px color-mix(in srgb, var(--color-accent-400) 22%, transparent),
-        0 2px 10px color-mix(in srgb, var(--color-accent-400) 12%, transparent);
-
-      svg {
-        opacity: 1;
-        transform: scale(1.12);
-      }
-    }
-
-    &:active:not(:disabled) {
-      transform: scale(1.02);
-      transition-duration: 0.1s;
-
-      svg {
-        transform: scale(1);
-      }
-    }
-  }
   
   &__input-area {
     position: relative;

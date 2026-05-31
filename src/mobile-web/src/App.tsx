@@ -3,10 +3,13 @@ import PairingPage from './pages/PairingPage';
 import WorkspacePage from './pages/WorkspacePage';
 import SessionListPage from './pages/SessionListPage';
 import ChatPage from './pages/ChatPage';
-import { I18nProvider } from './i18n';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { I18nProvider, useI18n } from './i18n';
 import { RelayHttpClient } from './services/RelayHttpClient';
 import { RemoteSessionManager } from './services/RemoteSessionManager';
 import { ThemeProvider } from './theme';
+import { useConnectionHealth } from './hooks/useConnectionHealth';
+import { useMobileStore } from './services/store';
 import './styles/index.scss';
 
 type Page = 'pairing' | 'workspace' | 'sessions' | 'chat';
@@ -29,12 +32,17 @@ function getNavClass(
 }
 
 const AppContent: React.FC = () => {
+  const { t } = useI18n();
   const [page, setPage] = useState<Page>('pairing');
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [activeSessionName, setActiveSessionName] = useState<string>('Session');
   const [chatAutoFocus, setChatAutoFocus] = useState(false);
+  const [isReconnecting, setIsReconnecting] = useState(false);
   const clientRef = useRef<RelayHttpClient | null>(null);
   const sessionMgrRef = useRef<RemoteSessionManager | null>(null);
+  const [sessionMgr, setSessionMgr] = useState<RemoteSessionManager | null>(null);
+
+  useConnectionHealth(sessionMgr);
 
   const [navDir, setNavDir] = useState<NavDirection>(null);
   const [prevPage, setPrevPage] = useState<Page | null>(null);
@@ -73,7 +81,7 @@ const AppContent: React.FC = () => {
 
   useEffect(() => () => clearTimeout(timerRef.current), []);
 
-  // 全局链接点击处理 - 确保所有外部链接在新标签页打开
+  // Open external links in a new tab from anywhere in the app.
   useEffect(() => {
     const handleLinkClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
@@ -81,7 +89,7 @@ const AppContent: React.FC = () => {
       
       if (link && link.href) {
         const href = link.href;
-        // 检查是否是外部链接 (http/https 且不是当前域名)
+        // Treat all http(s) links as external for the mobile web shell.
         if (href.startsWith('http://') || href.startsWith('https://')) {
           e.preventDefault();
           e.stopPropagation();
@@ -90,7 +98,7 @@ const AppContent: React.FC = () => {
       }
     };
     
-    // 添加全局点击监听
+    // Capture link clicks before nested content handles them.
     document.addEventListener('click', handleLinkClick, true);
     
     return () => {
@@ -102,12 +110,57 @@ const AppContent: React.FC = () => {
     (client: RelayHttpClient, sessionMgr: RemoteSessionManager) => {
       clientRef.current = client;
       sessionMgrRef.current = sessionMgr;
+      setSessionMgr(sessionMgr);
       pageStackRef.current = ['pairing', 'sessions'];
       history.pushState({ page: 'sessions' }, '');
       setPage('sessions');
     },
     [],
   );
+
+  // Periodic connection health check
+  useEffect(() => {
+    const shouldMonitor = page === 'sessions' || page === 'chat';
+    if (!shouldMonitor || !sessionMgr) {
+      setIsReconnecting(false);
+      return;
+    }
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+
+    const pingWithTimeout = (ms: number): Promise<void> => {
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+      return Promise.race([
+        sessionMgr.ping(),
+        new Promise<void>((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error('ping timeout')), ms);
+        }),
+      ]).finally(() => {
+        if (timeoutId) clearTimeout(timeoutId);
+      });
+    };
+
+    const loop = async () => {
+      try {
+        await pingWithTimeout(10000);
+        if (!cancelled) setIsReconnecting(false);
+      } catch {
+        if (!cancelled) setIsReconnecting(true);
+      }
+
+      if (!cancelled) {
+        timer = setTimeout(loop, 15000);
+      }
+    };
+
+    loop();
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [sessionMgr, page]);
 
   // Pop navigation handlers that can be called from both UI buttons and popstate
   const doPopFromChat = useCallback(() => {
@@ -167,6 +220,23 @@ const AppContent: React.FC = () => {
     setTimeout(() => setActiveSessionId(null), NAV_DURATION);
   }, [navigateTo]);
 
+  const handleDisconnect = useCallback(() => {
+    clientRef.current = null;
+    sessionMgrRef.current = null;
+    setSessionMgr(null);
+    setIsReconnecting(false);
+    setActiveSessionId(null);
+    setActiveSessionName('Session');
+    setChatAutoFocus(false);
+    setPrevPage(null);
+    setNavDir(null);
+    clearTimeout(timerRef.current);
+    localStorage.removeItem('bitfun.mobile.user_id');
+    useMobileStore.getState().resetConnectionState();
+    pageStackRef.current = ['pairing'];
+    setPage('pairing');
+  }, []);
+
   const isAnimating = navDir !== null;
   const currentPage: Page = page;
 
@@ -174,6 +244,12 @@ const AppContent: React.FC = () => {
 
   return (
     <div className="mobile-app">
+      {isReconnecting && (
+        <div className="mobile-reconnect-banner">
+          <span className="mobile-reconnect-spinner" />
+          {t('sessions.reconnecting')}
+        </div>
+      )}
       {page === 'pairing' && <PairingPage onPaired={handlePaired} />}
       {shouldShow('workspace') && sessionMgrRef.current && (
         <div className={`nav-page ${getNavClass('workspace', currentPage, navDir, isAnimating)}`}>
@@ -189,6 +265,7 @@ const AppContent: React.FC = () => {
             sessionMgr={sessionMgrRef.current}
             onSelectSession={handleSelectSession}
             onOpenWorkspace={handleOpenWorkspace}
+            onDisconnect={handleDisconnect}
           />
         </div>
       )}
@@ -209,9 +286,11 @@ const AppContent: React.FC = () => {
 
 const App: React.FC = () => (
   <ThemeProvider>
-    <I18nProvider>
-      <AppContent />
-    </I18nProvider>
+    <ErrorBoundary>
+      <I18nProvider>
+        <AppContent />
+      </I18nProvider>
+    </ErrorBoundary>
   </ThemeProvider>
 );
 

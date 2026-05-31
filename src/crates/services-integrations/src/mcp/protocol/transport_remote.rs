@@ -19,8 +19,8 @@ use reqwest::header::{
     HeaderMap, HeaderName, HeaderValue, ACCEPT, CONTENT_TYPE, USER_AGENT, WWW_AUTHENTICATE,
 };
 use rmcp::model::{
-    CallToolRequestParam, ClientInfo, GetPromptRequestParam, JsonObject, LoggingLevel,
-    LoggingMessageNotificationParam, PaginatedRequestParam, ReadResourceRequestParam,
+    CallToolRequestParams, ClientInfo, GetPromptRequestParams, JsonObject, LoggingLevel,
+    LoggingMessageNotificationParam, PaginatedRequestParams, ReadResourceRequestParams,
     RequestNoParam,
 };
 use rmcp::service::RunningService;
@@ -138,6 +138,16 @@ impl BitFunStreamableHttpClient {
     }
 }
 
+fn apply_custom_headers(
+    mut request_builder: reqwest::RequestBuilder,
+    custom_headers: HashMap<HeaderName, HeaderValue>,
+) -> reqwest::RequestBuilder {
+    for (name, value) in custom_headers {
+        request_builder = request_builder.header(name, value);
+    }
+    request_builder
+}
+
 impl StreamableHttpClient for BitFunStreamableHttpClient {
     type Error = reqwest::Error;
 
@@ -147,6 +157,7 @@ impl StreamableHttpClient for BitFunStreamableHttpClient {
         session_id: StdArc<str>,
         last_event_id: Option<String>,
         auth_token: Option<String>,
+        custom_headers: HashMap<HeaderName, HeaderValue>,
     ) -> Result<
         futures::stream::BoxStream<'static, Result<Sse, SseError>>,
         StreamableHttpError<Self::Error>,
@@ -163,12 +174,18 @@ impl StreamableHttpClient for BitFunStreamableHttpClient {
         if let Some(auth_header) = auth_token {
             request_builder = request_builder.bearer_auth(auth_header);
         }
+        request_builder = apply_custom_headers(request_builder, custom_headers);
 
-        let response = request_builder.send().await?;
+        let response = request_builder
+            .send()
+            .await
+            .map_err(StreamableHttpError::Client)?;
         if response.status() == reqwest::StatusCode::METHOD_NOT_ALLOWED {
             return Err(StreamableHttpError::ServerDoesNotSupportSse);
         }
-        let response = response.error_for_status()?;
+        let response = response
+            .error_for_status()
+            .map_err(StreamableHttpError::Client)?;
 
         match response.headers().get(CONTENT_TYPE) {
             Some(ct) => {
@@ -194,21 +211,26 @@ impl StreamableHttpClient for BitFunStreamableHttpClient {
         uri: StdArc<str>,
         session: StdArc<str>,
         auth_token: Option<String>,
+        custom_headers: HashMap<HeaderName, HeaderValue>,
     ) -> Result<(), StreamableHttpError<Self::Error>> {
         let auth_token = self.resolve_auth_token(auth_token).await?;
         let mut request_builder = self.client.delete(uri.as_ref());
         if let Some(auth_header) = auth_token {
             request_builder = request_builder.bearer_auth(auth_header);
         }
+        request_builder = apply_custom_headers(request_builder, custom_headers);
         let response = request_builder
             .header(HEADER_SESSION_ID, session.as_ref())
             .send()
-            .await?;
+            .await
+            .map_err(StreamableHttpError::Client)?;
 
         if response.status() == reqwest::StatusCode::METHOD_NOT_ALLOWED {
             return Ok(());
         }
-        let _ = response.error_for_status()?;
+        let _ = response
+            .error_for_status()
+            .map_err(StreamableHttpError::Client)?;
         Ok(())
     }
 
@@ -218,6 +240,7 @@ impl StreamableHttpClient for BitFunStreamableHttpClient {
         message: rmcp::model::ClientJsonRpcMessage,
         session_id: Option<StdArc<str>>,
         auth_token: Option<String>,
+        custom_headers: HashMap<HeaderName, HeaderValue>,
     ) -> Result<StreamableHttpPostResponse, StreamableHttpError<Self::Error>> {
         let auth_token = self.resolve_auth_token(auth_token).await?;
         let mut request = self
@@ -230,8 +253,13 @@ impl StreamableHttpClient for BitFunStreamableHttpClient {
         if let Some(session_id) = session_id {
             request = request.header(HEADER_SESSION_ID, session_id.as_ref());
         }
+        request = apply_custom_headers(request, custom_headers);
 
-        let response = request.json(&message).send().await?;
+        let response = request
+            .json(&message)
+            .send()
+            .await
+            .map_err(StreamableHttpError::Client)?;
 
         if response.status() == reqwest::StatusCode::UNAUTHORIZED {
             if let Some(header) = response.headers().get(WWW_AUTHENTICATE) {
@@ -243,14 +271,16 @@ impl StreamableHttpClient for BitFunStreamableHttpClient {
                         ))
                     })?
                     .to_string();
-                return Err(StreamableHttpError::AuthRequired(AuthRequiredError {
-                    www_authenticate_header: header,
-                }));
+                return Err(StreamableHttpError::AuthRequired(AuthRequiredError::new(
+                    header,
+                )));
             }
         }
 
         let status = response.status();
-        let response = response.error_for_status()?;
+        let response = response
+            .error_for_status()
+            .map_err(StreamableHttpError::Client)?;
 
         if matches!(
             status,
@@ -277,13 +307,17 @@ impl StreamableHttpClient for BitFunStreamableHttpClient {
                 Ok(StreamableHttpPostResponse::Sse(event_stream, session_id))
             }
             Some(ct) if ct.as_bytes().starts_with(JSON_MIME_TYPE.as_bytes()) => {
-                let message: rmcp::model::ServerJsonRpcMessage = response.json().await?;
+                let message: rmcp::model::ServerJsonRpcMessage =
+                    response.json().await.map_err(StreamableHttpError::Client)?;
                 Ok(StreamableHttpPostResponse::Json(message, session_id))
             }
             _ => {
                 // Compatibility: some servers return 200 with an empty body but omit Content-Type.
                 // Treat this as Accepted for notifications (e.g. notifications/initialized).
-                let bytes = response.bytes().await?;
+                let bytes = response
+                    .bytes()
+                    .await
+                    .map_err(StreamableHttpError::Client)?;
                 let trimmed = bytes
                     .iter()
                     .copied()
@@ -547,7 +581,7 @@ impl RemoteMCPTransport {
         let service = self.service().await?;
         let fut = service
             .peer()
-            .list_resources(Some(PaginatedRequestParam { cursor }));
+            .list_resources(Some(PaginatedRequestParams::default().with_cursor(cursor)));
         let result = Self::await_with_optional_timeout(
             self.request_timeout,
             fut,
@@ -567,9 +601,9 @@ impl RemoteMCPTransport {
 
     pub async fn read_resource(&self, uri: &str) -> MCPRuntimeResult<ResourcesReadResult> {
         let service = self.service().await?;
-        let fut = service.peer().read_resource(ReadResourceRequestParam {
-            uri: uri.to_string(),
-        });
+        let fut = service
+            .peer()
+            .read_resource(ReadResourceRequestParams::new(uri.to_string()));
         let result = Self::await_with_optional_timeout(
             self.request_timeout,
             fut,
@@ -593,7 +627,7 @@ impl RemoteMCPTransport {
         let service = self.service().await?;
         let fut = service
             .peer()
-            .list_prompts(Some(PaginatedRequestParam { cursor }));
+            .list_prompts(Some(PaginatedRequestParams::default().with_cursor(cursor)));
         let result = Self::await_with_optional_timeout(
             self.request_timeout,
             fut,
@@ -622,10 +656,11 @@ impl RemoteMCPTransport {
             obj
         });
 
-        let fut = service.peer().get_prompt(GetPromptRequestParam {
-            name: name.to_string(),
-            arguments,
-        });
+        let mut params = GetPromptRequestParams::new(name.to_string());
+        if let Some(arguments) = arguments {
+            params = params.with_arguments(arguments);
+        }
+        let fut = service.peer().get_prompt(params);
         let result = Self::await_with_optional_timeout(
             self.request_timeout,
             fut,
@@ -648,7 +683,7 @@ impl RemoteMCPTransport {
         let service = self.service().await?;
         let fut = service
             .peer()
-            .list_tools(Some(PaginatedRequestParam { cursor }));
+            .list_tools(Some(PaginatedRequestParams::default().with_cursor(cursor)));
         let result = Self::await_with_optional_timeout(
             self.request_timeout,
             fut,
@@ -681,10 +716,11 @@ impl RemoteMCPTransport {
             }
         };
 
-        let fut = service.peer().call_tool(CallToolRequestParam {
-            name: name.to_string().into(),
-            arguments,
-        });
+        let mut params = CallToolRequestParams::new(name.to_string());
+        if let Some(arguments) = arguments {
+            params = params.with_arguments(arguments);
+        }
+        let fut = service.peer().call_tool(params);
         let result = Self::await_with_optional_timeout(
             self.request_timeout,
             fut,

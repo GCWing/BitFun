@@ -88,12 +88,14 @@ pub(crate) async fn send_stream(
     let request_body = build_request_body(client, &url, openai_messages, openai_tools, extra_body);
     let inline_think_in_text = client.config.inline_think_in_text;
     let idle_timeout = client.stream_options.idle_timeout;
+    let ttft_timeout = client.stream_options.ttft_timeout;
 
     execute_sse_request(
         "OpenAI Streaming API",
         &url,
         &request_body,
         max_tries,
+        ttft_timeout,
         || common::apply_headers(client, client.client.post(&url)),
         move |response, tx, tx_raw| {
             tokio::spawn(handle_openai_stream(

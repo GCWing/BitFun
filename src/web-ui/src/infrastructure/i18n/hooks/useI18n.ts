@@ -1,10 +1,10 @@
  
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useTranslation, UseTranslationOptions } from 'react-i18next';
 import { useI18nStore } from '../store/i18nStore';
 import { i18nService } from '../core/I18nService';
-import { builtinLocales, resolveLocaleId } from '../presets';
+import { builtinLocales, DEFAULT_NAMESPACE, resolveLocaleId } from '../presets';
 import type { LocaleId, I18nNamespace, LocaleMetadata } from '../types';
 
  
@@ -43,12 +43,25 @@ export function useI18n(
   options?: UseTranslationOptions<I18nNamespace>
 ): UseI18nReturn {
   const { t: rawT, i18n, ready } = useTranslation(ns, options);
+  const namespaceKey = Array.isArray(ns) ? ns.join('|') : ns ?? DEFAULT_NAMESPACE;
+  const requestedNamespaces = useMemo(
+    () => namespaceKey.split('|') as I18nNamespace[],
+    [namespaceKey],
+  );
   
   const {
     currentLanguage,
     isInitialized,
     isChanging,
   } = useI18nStore();
+
+  useEffect(() => {
+    requestedNamespaces.forEach((namespace) => {
+      void i18nService.loadNamespace(namespace).catch(() => {
+        // loadNamespace logs failures; keep React render paths non-throwing.
+      });
+    });
+  }, [requestedNamespaces]);
 
   const changeLanguage = useCallback(async (locale: LocaleId) => {
     await i18nService.changeLanguage(locale);

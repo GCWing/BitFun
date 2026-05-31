@@ -70,6 +70,8 @@ export async function runGoalCommand(params: GoalCommandParams): Promise<GoalCom
       duration: 6000,
     });
 
+    flowChatStore.setGoalModeActive(params.session.sessionId, true);
+
     return {
       goalText: activation.goalText,
       successCriteria: activation.successCriteria,

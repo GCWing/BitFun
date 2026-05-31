@@ -148,12 +148,19 @@ pnpm test -- --spec ./specs/l0-smoke.spec.ts
 
 ### 4. Test Running Mode (Release vs Dev)
 
-The test framework runs in debug/dev mode:
+The default test framework runs in debug/dev mode. Performance runs can use
+`release-fast` so startup/session timings are closer to a production bundle
+while still enabling the embedded WebDriver through the `devtools` feature.
 
 #### Debug Mode (Default)
 - **Application Path**: `target/debug/bitfun-desktop.exe`
 - **Characteristics**: Includes debug symbols, requires dev server (port 1422)
 - **Use Case**: Local development, rapid iteration
+
+#### Release-Fast Performance Mode
+- **Application Path**: `target/release-fast/bitfun-desktop.exe`
+- **Characteristics**: Production web bundle, release-like Rust profile, embedded WebDriver enabled by `--features devtools`
+- **Use Case**: Startup and historical-session performance measurements
 
 **How to Identify Current Mode**:
 
@@ -165,7 +172,37 @@ application: <PROJECT_ROOT>\target\debug\bitfun-desktop.exe
 Debug build detected, checking dev server...
 ```
 
-**Core Principle**: E2E uses `target/debug/bitfun-desktop.exe` only. If the debug binary is missing, the run should fail instead of falling back to `release`.
+**Core Principle**: Functional E2E still defaults to `target/debug/bitfun-desktop.exe`.
+Performance E2E should explicitly set `BITFUN_E2E_APP_MODE=release-fast` after
+building `pnpm run desktop:build:release-fast`.
+
+### 5. Startup and Long-Session Performance E2E
+
+Generate a long-session fixture in the workspace you want to measure:
+
+```bash
+pnpm --dir tests/e2e run fixture:long-session -- --workspace <workspace-path> --session-count 80 --long-turns 80
+```
+
+Build and run the release-like performance spec:
+
+```bash
+pnpm run desktop:build:release-fast
+cross-env E2E_TEST_WORKSPACE=<workspace-path> BITFUN_E2E_PERF_SESSION_ID=perf-long-session-000 pnpm run e2e:test:perf:release-fast
+```
+
+For debug-only comparison, build the debug binary and run:
+
+```bash
+cargo build -p bitfun-desktop
+cross-env E2E_TEST_WORKSPACE=<workspace-path> BITFUN_E2E_PERF_SESSION_ID=perf-long-session-000 pnpm run e2e:test:perf:debug
+```
+
+The spec writes JSON reports under `tests/e2e/reports/performance/`. It records
+startup milestones, Tauri API aggregates, first-open session hydration timings,
+and background full-hydrate timings when they occur. Optional threshold gates can
+be enabled with `BITFUN_E2E_PERF_MAX_INTERACTIVE_MS` and
+`BITFUN_E2E_PERF_MAX_SESSION_FRAME_MS`.
 
 ## Test Structure
 

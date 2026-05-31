@@ -1,102 +1,80 @@
 [中文](README.zh-CN.md) | **English**
 
-# Frontend i18n
+# Web UI I18n
 
-## Quick Start
+This README is the Web UI runtime entry point. The cross-surface contract,
+resource ownership, key policy, and verification rules live in:
+
+- `docs/architecture/i18n.md`
+- `docs/development/i18n.md`
+
+Keep this file small so local runtime examples do not drift from the shared
+project rules.
+
+## Runtime Usage
+
+Use `useI18n(namespace)` or `useTranslation(namespace)` for route, scene, and
+feature UI. This lets Web UI load non-bootstrap namespaces lazily.
 
 ```typescript
 import { useI18n } from '@/infrastructure/i18n';
 
-const { t } = useI18n('components');
-<span>{t('section.key')}</span>
-```
-
-## Core API
-
-### `useI18n(namespace)`
-
-```typescript
 const { t } = useI18n('components');
 
 t('dialog.confirm.ok');
 t('session.title', { id: 123 });
 ```
 
-Multiple namespaces:
+Multiple namespaces are allowed when a component owns copy from more than one
+namespace. Relative keys resolve through the first namespace, so prefer explicit
+`namespace:key` strings when the key belongs to a later namespace.
 
 ```typescript
-const { t } = useI18n('components');
-const { t: tSettings } = useI18n('settings');
+const { t } = useI18n(['components', 'common']);
+
+t('components:dialog.confirm.ok');
+t('common:actions.cancel');
 ```
 
-Common returns:
-
-```typescript
-const {
-  t,
-  currentLanguage,
-  changeLanguage,
-  isReady,
-  formatDate,
-  formatNumber,
-} = useI18n('components');
-```
-
-Non-React usage:
+Direct `i18nService.t('namespace:key')` calls are for non-React or
+module-initialization paths only. The namespace must be in
+`WEB_UI_BOOTSTRAP_NAMESPACES`.
 
 ```typescript
 import { i18nService } from '@/infrastructure/i18n';
 
-i18nService.t('namespace:section.key');
+i18nService.t('common:actions.cancel');
 ```
 
-## Locale Files
+## Resource Ownership
 
-Path: `src/web-ui/src/locales/{zh-CN,en-US}/`
+Web UI locale resources live under:
 
-| Namespace | File | Purpose |
-|----------|------|------|
-| `common` | `common.json` | Shared text |
-| `components` | `components.json` | UI components |
-| `flow-chat` | `flow-chat.json` | Chat features |
-| `settings` | `settings.json` | Settings |
-| `errors` | `errors.json` | Error messages |
-| `panels/*` | `panels/*.json` | Panels |
-| `settings/*` | `settings/*.json` | Settings subpages |
+- `src/web-ui/src/locales/<locale>/**/*.json`
 
-## Add Translations
+Supported locale directories are defined by the shared i18n contract and must
+stay aligned with `ALL_NAMESPACES` in `presets/namespaceRegistry.ts`.
 
-1. Add keys to both `locales/zh-CN/` and `locales/en-US/`:
-
-```json
-// locales/zh-CN/components.json
-{
-  "myFeature": {
-    "title": "我的功能",
-    "desc": "共 {{count}} 项"
-  }
-}
-
-// locales/en-US/components.json
-{
-  "myFeature": {
-    "title": "My Feature",
-    "desc": "{{count}} items"
-  }
-}
-```
-
-2. Use in components:
+Stable product, feature, mode, tool, connection-method, and status labels should
+come from the explicit `shared` namespace when the meaning is the same across
+surfaces:
 
 ```typescript
-const { t } = useI18n('components');
-t('myFeature.title');
-t('myFeature.desc', { count: 5 });
+t('shared:features.deepReview');
 ```
 
-## Conventions
+Feature workflow copy belongs in the nearest feature namespace. Do not import
+Web UI locale files from mobile-web, installer, backend, or static pages.
 
-- Namespace equals filename without `.json`; nested folders use `/`
-- Keys use dot notation: `section.subsection.key`
-- Interpolation uses `{{variable}}`
-- Keep both languages in sync
+## Checks
+
+Run the smallest matching checks:
+
+```bash
+pnpm run i18n:audit          # Web UI locale JSON/resource-only changes
+pnpm run i18n:contract:test  # generated contract, shared terms, or namespace-loading rules
+pnpm run type-check:web      # Web UI i18n runtime, hooks, or TypeScript call sites
+```
+
+For runtime behavior changes, also run the nearest focused Web UI test. CI
+covers broad builds and full suites.

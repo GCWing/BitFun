@@ -529,7 +529,8 @@
 
     // Strip the subagent container's own border/background/shadow so it
     // merges into the wrapper; the wrapper provides the unified card chrome.
-    .subagent-items-container {
+    .subagent-items-container,
+    .subagent-projection-container {
       border: none;
       background: transparent;
       backdrop-filter: none;
@@ -539,8 +540,21 @@
       animation: none;
     }
 
-    &.task-with-subagent-wrapper--has-prompt .subagent-items-container {
+    &.task-with-subagent-wrapper--has-prompt .subagent-items-container,
+    &.task-with-subagent-wrapper--has-prompt .subagent-projection-container--expanded {
       border-top: 1px solid var(--border-base);
+    }
+
+    // Match `.task-expanded-content .task-prompt-content` horizontal inset.
+    .subagent-projection-container--expanded {
+      --task-prompt-inline-pad: calc(
+        var(--flowchat-card-expanded-pad-x, 0.625rem) + var(--flowchat-card-pad-x, 0.75rem)
+      );
+      padding:
+        8px
+        var(--task-prompt-inline-pad)
+        10px
+        var(--task-prompt-inline-pad);
     }
 
     // Hide the header top accent line — the wrapper border already frames

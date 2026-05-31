@@ -135,25 +135,32 @@ class ThemeManager {
   private async syncWithThemeService(): Promise<void> {
     try {
       const { themeService } = await import('@/infrastructure/theme');
+      const { monacoThemeSync } = await import('@/infrastructure/theme/integrations/MonacoThemeSync');
       const currentTheme = themeService.getCurrentTheme();
       
       if (currentTheme) {
-        const themeId = currentTheme.monaco 
-          ? currentTheme.id 
-          : (currentTheme.type === 'dark' ? this.getDefaultThemeId() : 'vs');
-        
-        this.currentThemeId = themeId;
-        const { monacoThemeSync } = await import('@/infrastructure/theme/integrations/MonacoThemeSync');
-        monacoThemeSync.syncTheme(currentTheme);
+        this.currentThemeId = monacoThemeSync.attachMonaco(monaco, currentTheme);
+        this.registeredThemes.add('bitfun-dark');
+        this.registeredThemes.add('bitfun-light');
+        if (currentTheme.monaco) {
+          this.registeredThemes.add(currentTheme.id);
+        }
       }
       
       themeService.on('theme:after-change', (event) => {
         if (event.theme) {
-          const newThemeId = event.theme.monaco 
-            ? event.theme.id 
-            : (event.theme.type === 'dark' ? this.getDefaultThemeId() : 'vs');
-          
-          this.setTheme(newThemeId);
+          const previousThemeId = this.currentThemeId;
+          const newThemeId = monacoThemeSync.syncTheme(event.theme);
+          if (event.theme.monaco) {
+            this.registeredThemes.add(event.theme.id);
+          }
+          if (newThemeId !== previousThemeId) {
+            this.currentThemeId = newThemeId;
+            this.notifyListeners({
+              previousThemeId,
+              currentThemeId: newThemeId,
+            });
+          }
         }
       });
       

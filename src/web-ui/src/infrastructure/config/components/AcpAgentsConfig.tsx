@@ -60,12 +60,28 @@ interface AcpClientPreset {
   args: string[];
 }
 
+// Presets that speak ACP natively and therefore need no separate adapter
+// package (their CLI binary is launched directly).
+const NATIVE_ACP_PRESET_IDS = new Set(['opencode', 'omp']);
+
+// Presets BitFun cannot install on the user's behalf — the agent must be
+// installed manually (e.g. omp targets bun and ships via its own installer).
+// The UI hides the one-click "Install CLI" action for these.
+const SELF_MANAGED_INSTALL_PRESET_IDS = new Set(['omp']);
+
 const PRESETS: AcpClientPreset[] = [
   {
     id: 'opencode',
     name: 'opencode',
     description: 'Native ACP coding agent.',
     command: 'opencode',
+    args: ['acp'],
+  },
+  {
+    id: 'omp',
+    name: 'Oh My Pi',
+    description: 'Native ACP coding agent (omp acp).',
+    command: 'omp',
     args: ['acp'],
   },
   {
@@ -388,7 +404,7 @@ const AcpAgentsConfig: React.FC = () => {
         enabled,
         toolInstalled: probe?.tool.installed,
         adapterInstalled: probe?.adapter?.installed,
-        requiresAdapter: Boolean(probe?.adapter || preset.id !== 'opencode'),
+        requiresAdapter: Boolean(probe?.adapter || !NATIVE_ACP_PRESET_IDS.has(preset.id)),
         probePending,
         probe,
       });
@@ -1031,7 +1047,9 @@ const AcpAgentsConfig: React.FC = () => {
                 const installing = installingClientIds.has(preset.id);
                 const configuring = installingClientIds.has(preset.id);
                 const showSelect = hasConfigEntry && (status === 'enabled' || status === 'ready');
-                const canInstallCli = status === 'not_installed' && issueKind !== 'connection_failed';
+                const canInstallCli = status === 'not_installed'
+                  && issueKind !== 'connection_failed'
+                  && !SELF_MANAGED_INSTALL_PRESET_IDS.has(preset.id);
                 const canConfigureAcp = !requiresAdapter
                   ? false
                   : issueKind === 'adapter_missing' || (status === 'partial' && issueKind === 'config_invalid');
@@ -1351,7 +1369,8 @@ const AcpAgentsConfig: React.FC = () => {
                             probe: row.requirementProbe,
                             requiresAdapter: row.requiresAdapter,
                           });
-                          const canInstallCli = row.preset && row.status === 'not_installed' && row.issueKind === 'cli_missing';
+                          const canInstallCli = row.preset && row.status === 'not_installed' && row.issueKind === 'cli_missing'
+                            && !SELF_MANAGED_INSTALL_PRESET_IDS.has(row.preset.id);
                           const canViewError = row.status === 'invalid' || row.status === 'partial'
                             || row.issueKind === 'connection_failed'
                             || row.issueKind === 'permission_denied'

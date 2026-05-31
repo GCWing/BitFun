@@ -1,12 +1,18 @@
 {
-  "title": "设置",
   "configCenter": {
-    "title": "设置",
     "selectConfig": "选择配置项",
     "searchPlaceholder": "搜索配置…",
     "searchNoResults": "没有匹配的配置",
     "searchClear": "清除搜索",
     "beta": "Beta",
+    "searchAliases": {
+      "archivedSessions": ["归档", "会话"],
+      "keyboard": ["快捷键", "键位"],
+      "sessionPersonalization": ["伙伴", "个性化"],
+      "sessionPermissions": ["权限"],
+      "quickActions": ["快捷动作", "提交"],
+      "review": ["审核", "代码审核"]
+    },
     "tabDescriptions": {
       "basics": "日志、终端 Shell、通知与开机启动。",
       "appearance": "语言、主题与界面字体大小。",
@@ -19,7 +25,8 @@
       "acpAgents": "opencode、Claude Code、Codex 等外部 ACP Agent。",
       "editor": "编辑器字体、显示与格式化。",
       "lsp": "语言服务与代码智能。",
-      "keyboard": "快捷键与键位。"
+      "keyboard": "快捷键与键位。",
+      "archivedSessions": "查看、恢复或永久删除已归档的会话。"
     },
     "categories": {
       "general": "通用",
@@ -40,7 +47,8 @@
       "agents": "智能体",
       "editor": "编辑器",
       "lsp": "语言服务",
-      "keyboard": "快捷键"
+      "keyboard": "快捷键",
+      "archivedSessions": "已归档会话"
     }
   },
   "general": {
@@ -135,7 +143,6 @@
     }
   },
   "workspace": {
-    "title": "工作区",
     "files": {
       "title": "文件",
       "exclude": "排除文件",
