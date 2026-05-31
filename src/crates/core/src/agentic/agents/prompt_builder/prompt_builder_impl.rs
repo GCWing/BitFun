@@ -695,7 +695,7 @@ mod tests {
                     .to_string(),
             ),
         };
-        let context = PromptBuilderContext::new("E:/workspace", None, None)
+        let context = PromptBuilderContext::new(r"workspace\root", None, None)
             .with_tool_listing_sections(tool_sections);
         let reminders = PromptBuilder::new(context)
             .build_prepended_reminders(
@@ -728,7 +728,7 @@ mod tests {
         assert!(collapsed_tool_listing.contains("<collapsed_tools>"));
         assert!(user_context.contains("# User Context"));
         assert!(user_context.contains(USER_CONTEXT_PROMPT));
-        assert!(user_context.contains("Current Working Directory: E:/workspace"));
+        assert!(user_context.contains("Current Working Directory: workspace/root"));
         assert_eq!(
             ordered_reminders,
             vec![
@@ -742,7 +742,7 @@ mod tests {
 
     #[tokio::test]
     async fn omits_prepended_reminders_when_policy_and_sections_are_empty() {
-        let context = PromptBuilderContext::new("E:/workspace", None, None);
+        let context = PromptBuilderContext::new(r"workspace\root", None, None);
         let reminders = PromptBuilder::new(context)
             .build_prepended_reminders(&UserContextPolicy::empty())
             .await;
@@ -753,13 +753,13 @@ mod tests {
     #[test]
     fn workspace_context_renders_related_directories() {
         let context =
-            PromptBuilderContext::new("E:/workspace", None, None).with_related_paths(vec![
+            PromptBuilderContext::new(r"workspace\root", None, None).with_related_paths(vec![
                 RelatedPath {
-                    path: r"E:\legacy-ts".to_string(),
+                    path: r"legacy-ts\client".to_string(),
                     description: Some("Legacy TypeScript implementation".to_string()),
                 },
                 RelatedPath {
-                    path: r"E:\monorepo\billing".to_string(),
+                    path: r"monorepo\billing".to_string(),
                     description: Some("Billing package".to_string()),
                 },
             ]);
@@ -767,17 +767,17 @@ mod tests {
         let workspace_context = PromptBuilder::new(context).get_workspace_context();
 
         assert!(workspace_context.contains("Related directories"));
-        assert!(workspace_context.contains("E:/legacy-ts"));
+        assert!(workspace_context.contains("legacy-ts/client"));
         assert!(workspace_context.contains("Legacy TypeScript implementation"));
-        assert!(workspace_context.contains("E:/monorepo/billing"));
+        assert!(workspace_context.contains("monorepo/billing"));
     }
 
     #[test]
     fn workspace_context_renders_related_directories_without_description() {
         let context =
-            PromptBuilderContext::new("E:/workspace", None, None).with_related_paths(vec![
+            PromptBuilderContext::new(r"workspace\root", None, None).with_related_paths(vec![
                 RelatedPath {
-                    path: r"E:\monorepo\packages\payments".to_string(),
+                    path: r"monorepo\packages\payments".to_string(),
                     description: None,
                 },
             ]);
@@ -785,7 +785,7 @@ mod tests {
         let workspace_context = PromptBuilder::new(context).get_workspace_context();
 
         assert!(workspace_context.contains("Related directories"));
-        assert!(workspace_context.contains("  - E:/monorepo/packages/payments"));
+        assert!(workspace_context.contains("  - monorepo/packages/payments"));
         assert!(!workspace_context.contains("payments —"));
     }
 }
