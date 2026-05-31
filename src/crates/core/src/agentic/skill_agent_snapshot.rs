@@ -389,7 +389,9 @@ pub fn diff_skill_agent_snapshot(
     for (id, entry) in &current_subagents {
         match previous_subagents.get(id) {
             None => diff.added_subagents.push(entry.clone()),
-            Some(previous) if previous != entry => diff.changed_subagents.push(entry.clone()),
+            Some(previous) if !agent_snapshot_entries_match_for_diff(previous, entry) => {
+                diff.changed_subagents.push(entry.clone())
+            }
             Some(_) => {}
         }
     }
@@ -400,6 +402,21 @@ pub fn diff_skill_agent_snapshot(
     }
 
     diff
+}
+
+fn agent_snapshot_entries_match_for_diff(
+    previous: &AgentSnapshotEntry,
+    current: &AgentSnapshotEntry,
+) -> bool {
+    previous.id == current.id
+        && previous.description == current.description
+        && sorted_tool_names(&previous.default_tools) == sorted_tool_names(&current.default_tools)
+}
+
+fn sorted_tool_names(tool_names: &[String]) -> Vec<&str> {
+    let mut normalized = tool_names.iter().map(String::as_str).collect::<Vec<_>>();
+    normalized.sort_unstable();
+    normalized
 }
 
 pub async fn build_embedded_user_context_reminder(
@@ -561,5 +578,30 @@ mod tests {
         assert!(skill_update.contains("- skill-b"));
         assert!(agent_update.contains("## Changed Agents"));
         assert!(agent_update.contains("Grep"));
+    }
+
+    #[test]
+    fn skill_agent_diff_ignores_default_tool_reordering_for_agents() {
+        let previous = TurnSkillAgentSnapshot {
+            subagents: vec![AgentSnapshotEntry {
+                id: "agent-a".to_string(),
+                description: "desc-a".to_string(),
+                default_tools: vec!["Read".to_string(), "Grep".to_string()],
+            }],
+            ..Default::default()
+        };
+        let current = TurnSkillAgentSnapshot {
+            subagents: vec![AgentSnapshotEntry {
+                id: "agent-a".to_string(),
+                description: "desc-a".to_string(),
+                default_tools: vec!["Grep".to_string(), "Read".to_string()],
+            }],
+            ..Default::default()
+        };
+
+        let diff = diff_skill_agent_snapshot(&previous, &current);
+
+        assert!(diff.changed_subagents.is_empty());
+        assert!(diff.is_empty());
     }
 }
