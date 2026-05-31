@@ -416,6 +416,15 @@ mod tests {
     use crate::types::ReasoningMode;
     use crate::types::{AIConfig, ToolDefinition};
     use serde_json::{json, Value};
+    use std::sync::Once;
+
+    static DISABLE_AUDIT: Once = Once::new();
+
+    fn ensure_audit_disabled_for_tests() {
+        DISABLE_AUDIT.call_once(|| {
+            std::env::set_var("BITFUN_AI_REQUEST_AUDIT", "0");
+        });
+    }
 
     fn make_test_client(format: &str, custom_request_body: Option<Value>) -> AIClient {
         AIClient::new(AIConfig {
@@ -509,6 +518,7 @@ mod tests {
 
     #[test]
     fn build_gemini_request_body_translates_response_format_and_merges_generation_config() {
+        ensure_audit_disabled_for_tests();
         let client = AIClient::new(AIConfig {
             name: "gemini".to_string(),
             base_url: "https://example.com".to_string(),
@@ -590,6 +600,7 @@ mod tests {
 
     #[test]
     fn build_gemini_request_body_omits_function_calling_config_for_native_only_tools() {
+        ensure_audit_disabled_for_tests();
         let client = AIClient::new(AIConfig {
             name: "gemini".to_string(),
             base_url: "https://example.com".to_string(),
@@ -641,6 +652,7 @@ mod tests {
 
     #[test]
     fn build_openai_request_body_uses_generic_thinking_object_when_enabled() {
+        ensure_audit_disabled_for_tests();
         let client = AIClient::new(AIConfig {
             name: "openai-compatible".to_string(),
             base_url: "https://example.com/v1".to_string(),
@@ -679,6 +691,7 @@ mod tests {
 
     #[test]
     fn build_openai_request_body_adds_deepseek_reasoning_effort() {
+        ensure_audit_disabled_for_tests();
         let client = AIClient::new(AIConfig {
             name: "deepseek".to_string(),
             base_url: "https://api.deepseek.com/v1".to_string(),
@@ -715,6 +728,7 @@ mod tests {
 
     #[test]
     fn build_openai_request_body_maps_qwen_max_effort_to_xhigh() {
+        ensure_audit_disabled_for_tests();
         let client = AIClient::new(AIConfig {
             name: "qwen".to_string(),
             base_url: "https://api.openbitfun.com/v1".to_string(),
@@ -751,6 +765,7 @@ mod tests {
 
     #[test]
     fn build_openai_request_body_preserves_qwen_xhigh_effort() {
+        ensure_audit_disabled_for_tests();
         let client = AIClient::new(AIConfig {
             name: "qwen".to_string(),
             base_url: "https://api.openbitfun.com/v1".to_string(),
@@ -787,6 +802,7 @@ mod tests {
 
     #[test]
     fn build_openai_request_body_omits_deepseek_reasoning_effort_when_disabled() {
+        ensure_audit_disabled_for_tests();
         let client = AIClient::new(AIConfig {
             name: "deepseek".to_string(),
             base_url: "https://api.deepseek.com/v1".to_string(),
@@ -823,6 +839,7 @@ mod tests {
 
     #[test]
     fn build_openai_request_body_uses_enable_thinking_for_siliconflow() {
+        ensure_audit_disabled_for_tests();
         let client = AIClient::new(AIConfig {
             name: "siliconflow".to_string(),
             base_url: "https://api.siliconflow.cn/v1".to_string(),
@@ -859,6 +876,7 @@ mod tests {
 
     #[test]
     fn build_responses_request_body_maps_disabled_mode_to_none_effort() {
+        ensure_audit_disabled_for_tests();
         let client = AIClient::new(AIConfig {
             name: "responses".to_string(),
             base_url: "https://api.openai.com/v1".to_string(),
@@ -897,6 +915,7 @@ mod tests {
 
     #[test]
     fn build_anthropic_request_body_uses_adaptive_reasoning_and_effort() {
+        ensure_audit_disabled_for_tests();
         let client = AIClient::new(AIConfig {
             name: "anthropic".to_string(),
             base_url: "https://api.anthropic.com".to_string(),
@@ -934,6 +953,7 @@ mod tests {
 
     #[test]
     fn build_anthropic_request_body_maps_enabled_to_adaptive_for_adaptive_models() {
+        ensure_audit_disabled_for_tests();
         let client = AIClient::new(AIConfig {
             name: "anthropic".to_string(),
             base_url: "https://api.anthropic.com".to_string(),
@@ -972,6 +992,7 @@ mod tests {
 
     #[test]
     fn build_anthropic_request_body_keeps_manual_thinking_for_pre_adaptive_models() {
+        ensure_audit_disabled_for_tests();
         let client = AIClient::new(AIConfig {
             name: "anthropic".to_string(),
             base_url: "https://api.anthropic.com".to_string(),
@@ -1010,6 +1031,7 @@ mod tests {
 
     #[test]
     fn build_anthropic_request_body_uses_adaptive_for_opus_4_7_and_newer() {
+        ensure_audit_disabled_for_tests();
         let client = AIClient::new(AIConfig {
             name: "anthropic".to_string(),
             base_url: "https://api.anthropic.com".to_string(),
@@ -1048,6 +1070,7 @@ mod tests {
 
     #[test]
     fn build_anthropic_request_body_omits_disabled_for_mythos() {
+        ensure_audit_disabled_for_tests();
         let client = AIClient::new(AIConfig {
             name: "anthropic".to_string(),
             base_url: "https://api.anthropic.com".to_string(),
@@ -1085,6 +1108,7 @@ mod tests {
 
     #[test]
     fn build_anthropic_request_body_adds_deepseek_reasoning_effort() {
+        ensure_audit_disabled_for_tests();
         let client = AIClient::new(AIConfig {
             name: "deepseek".to_string(),
             base_url: "https://api.deepseek.com/anthropic".to_string(),
@@ -1123,6 +1147,7 @@ mod tests {
 
     #[test]
     fn build_anthropic_request_body_enabled_reasoning_always_has_budget_tokens() {
+        ensure_audit_disabled_for_tests();
         let client = AIClient::new(AIConfig {
             name: "anthropic-proxy".to_string(),
             base_url: "https://proxy.example.com/anthropic".to_string(),
@@ -1272,6 +1297,7 @@ mod tests {
 
     #[test]
     fn build_openai_request_body_trim_mode_preserves_essential_fields() {
+        ensure_audit_disabled_for_tests();
         let mut client = make_trim_test_client("openai");
         client.config.base_url = "https://api.deepseek.com/v1".to_string();
         client.config.request_url = "https://api.deepseek.com/v1/chat/completions".to_string();
@@ -1308,6 +1334,7 @@ mod tests {
 
     #[test]
     fn build_responses_request_body_trim_mode_preserves_essential_fields() {
+        ensure_audit_disabled_for_tests();
         let mut client = make_trim_test_client("responses");
         client.config.max_tokens = Some(4096);
         let input = vec![json!({
@@ -1340,6 +1367,7 @@ mod tests {
 
     #[test]
     fn build_anthropic_request_body_trim_mode_preserves_essential_fields() {
+        ensure_audit_disabled_for_tests();
         let mut client = make_trim_test_client("anthropic");
         client.config.max_tokens = Some(8192);
         let messages = vec![json!({
@@ -1373,6 +1401,7 @@ mod tests {
 
     #[test]
     fn build_gemini_request_body_trim_mode_preserves_essential_fields() {
+        ensure_audit_disabled_for_tests();
         let mut client = make_trim_test_client("gemini");
         client.config.model = "gemini-2.5-pro".to_string();
         client.config.max_tokens = Some(4096);

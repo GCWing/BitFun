@@ -60,6 +60,14 @@ pub(crate) fn build_request_body(
         }
     }
 
+    shared::audit_ai_request_effective_options(
+        "ai::openai_stream_request",
+        "openai",
+        client,
+        url,
+        &request_body,
+    );
+
     shared::log_request_body(
         "ai::openai_stream_request",
         "OpenAI stream request body (excluding tools):",
