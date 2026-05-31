@@ -20,16 +20,13 @@
     "resources": {
       "../../mobile-web/dist": "mobile-web/dist",
       "resources/worker_host.js": "resources/worker_host.js"
-    },
-    "app": {
-        "windows": [{
-            "title": "tauri-demo",
-            "width": 800,
-            "height": 600
-        }],
-        "security": {
-            "csp": null
-        }
     }
+  },
+  "app": {
+    "windows": [],
+    "security": {
+      "csp": null
+    },
+    "withGlobalTauri": true
   }
 }
