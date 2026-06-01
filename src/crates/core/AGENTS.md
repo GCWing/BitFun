@@ -39,6 +39,11 @@ SessionManager → Session → DialogTurn → ModelRound
   DeepResearch, and MiniApp legacy-facade providers during migration, but
   concrete workflow execution stays on existing core/product paths until a
   reviewed migration proves equivalence.
+- Persisted thread goal DTOs, statuses, continuation plans, and tool response
+  contracts belong in `bitfun-runtime-ports`. Core still owns
+  `ThreadGoalRuntime`, storage/session wiring, token subscriber, continuation
+  scheduling, and `get_goal` / `create_goal` / `update_goal` handlers until an
+  Agent Runtime SDK migration proves equivalence.
 - For tools, keep lightweight contracts, pure manifest/exposure contracts,
   generic contextual prompt-manifest resolver contracts, generic catalog
   snapshot provider contracts, generic GetToolSpec catalog provider/detail/
@@ -52,7 +57,7 @@ SessionManager → Session → DialogTurn → ModelRound
   provider-neutral contracts through `tool_adapter.rs`, and keep product
   registry snapshot access, product manifest / GetToolSpec facade wiring,
   product snapshot wrapper adapter injection, on-demand spec discovery Tool
-  impl, and unlock-state source in `product_runtime.rs` / `product_runtime/`
+  impl, and collapsed unlock observation source in `product_runtime.rs` / `product_runtime/`
   for now. Keep manifest/catalog ownership in `product_runtime/catalog.rs`
   and snapshot decoration in `product_runtime/snapshot.rs`; `manifest_resolver.rs`
   should stay a compatibility facade. Do not move `GetToolSpecTool` ownership back into generic
@@ -79,8 +84,8 @@ SessionManager → Session → DialogTurn → ModelRound
   keeps compatibility wrappers for `BitFunError`, workspace runtime-root
   lookup, and `ToolUseContext` integration.
 - Tool allowed-list and collapsed-tool direct execution gating delegate to
-  `bitfun-agent-tools`; core still owns the unlock-state source and maps gate
-  results into pipeline failure state.
+  `bitfun-agent-tools`; product runtime owns the collapsed unlock observation
+  source and core maps gate results into pipeline failure state.
 - Any tool migration must preserve expanded/collapsed exposure, prompt-visible
   manifests, `ToolUseContext.unlocked_collapsed_tools`, and desktop/MCP/ACP
   tool catalog behavior.
@@ -113,6 +118,10 @@ SessionManager → Session → DialogTurn → ModelRound
   selection adapters, remote chat history persistence/message conversion
   adapters, and service/agent runtime bindings are centralized in
   `src/crates/core/src/service_agent_runtime.rs`.
+- Workspace file/shell service contracts belong in `bitfun-runtime-ports`.
+  `src/agentic/workspace.rs` may keep old-path re-exports and local / remote
+  concrete adapters, but must not re-own `WorkspaceFileSystem`,
+  `WorkspaceShell`, `WorkspaceServices`, or workspace command DTOs.
 - Keep concrete remote SSH runtime code behind `ssh-remote`. No-default builds
   may keep workspace identity helpers and explicit unsupported stubs, but must
   not compile russh-backed SSH/SFTP/terminal/search runtime modules.

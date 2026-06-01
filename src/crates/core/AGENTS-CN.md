@@ -33,7 +33,12 @@ SessionManager → Session → DialogTurn → ModelRound
   registry 归属 `bitfun-harness`。迁移期 core 可以注册 Deep Review、
   DeepResearch、MiniApp 的 legacy-facade provider，但具体 workflow 执行继续
   留在既有 core / product 路径，直到有评审过的迁移和等价测试。
-- Tool 相关轻量 contract、portable tool context facts/provider、纯 manifest/exposure contract、generic registry / static-provider / dynamic-provider container、file guidance marker、file-read freshness 比较策略和 oversized tool-result preview/rendering 纯策略归属 `bitfun-agent-tools`；core tool runtime 通过 `product_runtime.rs` 统一负责产品工具组装、`dyn Tool` 适配、snapshot decoration、runtime manifest assembly / context filtering，以及按需工具说明发现（`GetToolSpec`）执行。
+- Persisted thread goal 的 DTO、status、continuation plan 和 tool response
+  contract 归属 `bitfun-runtime-ports`。`ThreadGoalRuntime`、storage/session
+  wiring、token subscriber、continuation scheduling，以及 `get_goal` /
+  `create_goal` / `update_goal` handler 仍由 core 拥有，直到 Agent Runtime
+  SDK 迁移证明行为等价。
+- Tool 相关轻量 contract、portable tool context facts/provider、纯 manifest/exposure contract、generic registry / static-provider / dynamic-provider container、file guidance marker、file-read freshness 比较策略和 oversized tool-result preview/rendering 纯策略归属 `bitfun-agent-tools`；core tool runtime 通过 `product_runtime.rs` 统一负责产品工具组装、`dyn Tool` 适配、snapshot decoration、runtime manifest assembly / context filtering、按需工具说明发现（`GetToolSpec`）执行，以及 collapsed unlock observation source。
 - `ToolUseContext`、session file-read state storage、tool-result filesystem writes 与具体工具实现继续留在 core，除非已有评审过的 port/provider 方案和等价测试。
 - Tool 迁移必须保持 expanded/collapsed exposure、prompt 可见 manifest、`ToolUseContext.unlocked_collapsed_tools`，以及 desktop/MCP/ACP tool catalog 行为等价。
 - 不要把 OpenAI Responses / Codex ChatGPT flat tool schema 等 provider-specific 序列化行为写进 core tool contract；AI adapter 负责 provider 序列化，core 保持 provider-neutral manifest。
@@ -53,6 +58,9 @@ SessionManager → Session → DialogTurn → ModelRound
   `bitfun-runtime-ports`，`remote_connect` 只保留旧路径 re-export。workspace-root
   source selection、concrete scheduler/session restore、terminal pre-warm adapter
   和 product execution 仍由 core 拥有，直到有评审过的迁移和等价测试。
+- Workspace file/shell service contract 属于 `bitfun-runtime-ports`。`src/agentic/workspace.rs`
+  可以保留旧路径 re-export 和 local / remote concrete adapter，但不能重新拥有
+  `WorkspaceFileSystem`、`WorkspaceShell`、`WorkspaceServices` 或 workspace command DTO。
 - 不要在没有小型 port/interface 边界的情况下新增 `service` 到 `agentic` 的跨层引用。
 - 不要在 core 拆解中把平台专属逻辑、构建脚本行为或产品能力选择下沉到 shared core。
 

@@ -23,7 +23,9 @@ use crate::agentic::round_preempt::RoundInjectionKind;
 use crate::agentic::session::{CompressionMode, ContextCompressor, SessionManager};
 use crate::agentic::skill_agent_snapshot::build_skill_agent_tool_listing_sections_from_snapshot;
 use crate::agentic::tools::implementations::{SkillTool, TaskTool};
-use crate::agentic::tools::product_runtime::GetToolSpecTool;
+use crate::agentic::tools::product_runtime::{
+    collect_product_unlocked_collapsed_tools, GetToolSpecTool,
+};
 use crate::agentic::tools::{resolve_tool_manifest, tool_context_runtime, ResolvedToolManifest};
 use crate::agentic::WorkspaceBinding;
 use crate::infrastructure::ai::get_global_ai_client_factory;
@@ -34,7 +36,6 @@ use crate::util::token_counter::TokenCounter;
 use crate::util::types::Message as AIMessage;
 use crate::util::types::ToolDefinition;
 use crate::util::{elapsed_ms_u64, truncate_at_char_boundary};
-use bitfun_agent_tools::{collect_loaded_collapsed_tool_names, GetToolSpecLoadObservation};
 use log::{debug, error, info, trace, warn};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
@@ -536,38 +537,6 @@ impl ExecutionEngine {
         ai_config
             .resolve_model_selection(trimmed)
             .unwrap_or_else(|| "auto".to_string())
-    }
-
-    fn collect_unlocked_collapsed_tools(
-        messages: &[Message],
-        collapsed_tools: &[String],
-    ) -> Vec<String> {
-        let observations = messages
-            .iter()
-            .filter_map(|message| {
-                let MessageContent::ToolResult {
-                    tool_name,
-                    result,
-                    is_error,
-                    ..
-                } = &message.content
-                else {
-                    return None;
-                };
-
-                Some(GetToolSpecLoadObservation {
-                    tool_name,
-                    loaded_tool_name: result.get("tool_name").and_then(|v| v.as_str()),
-                    is_error: *is_error,
-                })
-            })
-            .collect::<Vec<_>>();
-
-        collect_loaded_collapsed_tool_names(
-            &observations,
-            collapsed_tools,
-            crate::agentic::tools::registry::GET_TOOL_SPEC_TOOL_NAME,
-        )
     }
 
     async fn build_tool_listing_sections(
@@ -2404,7 +2373,7 @@ impl ExecutionEngine {
                 round_context_vars.insert("skip_tool_confirmation".to_string(), "true".to_string());
             }
             let unlocked_collapsed_tools =
-                Self::collect_unlocked_collapsed_tools(&messages, &collapsed_tools);
+                collect_product_unlocked_collapsed_tools(&messages, &collapsed_tools);
             let round_context = RoundContext {
                 session_id: context.session_id.clone(),
                 subagent_parent_info: context.subagent_parent_info.clone(),
@@ -3393,146 +3362,6 @@ mod tests {
         assert!(!ExecutionEngine::assistant_has_tool_calls(
             &Message::assistant("done".to_string())
         ));
-    }
-
-    #[test]
-    fn collects_unlocked_collapsed_tools_from_visible_get_tool_spec_results() {
-        let visible_get_tool_spec_result = Message::tool_result(ToolResult {
-            tool_id: "tool-1".to_string(),
-            tool_name: "GetToolSpec".to_string(),
-            result: json!({
-                "tool_name": "WebFetch",
-            }),
-            result_for_assistant: None,
-            is_error: false,
-            duration_ms: Some(1),
-            image_attachments: None,
-        });
-        let hidden_get_tool_spec_result = Message::tool_result(ToolResult {
-            tool_id: "tool-2".to_string(),
-            tool_name: "GetToolSpec".to_string(),
-            result: json!({
-                "tool_name": "Read",
-            }),
-            result_for_assistant: None,
-            is_error: false,
-            duration_ms: Some(1),
-            image_attachments: None,
-        });
-        let failed_get_tool_spec_result = Message::tool_result(ToolResult {
-            tool_id: "tool-3".to_string(),
-            tool_name: "GetToolSpec".to_string(),
-            result: json!({
-                "tool_name": "GetFileDiff",
-            }),
-            result_for_assistant: None,
-            is_error: true,
-            duration_ms: Some(1),
-            image_attachments: None,
-        });
-
-        let unlocked = ExecutionEngine::collect_unlocked_collapsed_tools(
-            &[
-                visible_get_tool_spec_result,
-                hidden_get_tool_spec_result,
-                failed_get_tool_spec_result,
-            ],
-            &["WebFetch".to_string(), "GetFileDiff".to_string()],
-        );
-
-        assert_eq!(unlocked, vec!["WebFetch".to_string()]);
-    }
-
-    #[test]
-    fn collect_unlocked_collapsed_tools_dedupes_and_filters_runtime_unlocks() {
-        let unlocked = ExecutionEngine::collect_unlocked_collapsed_tools(
-            &[
-                Message::tool_result(ToolResult {
-                    tool_id: "tool-1".to_string(),
-                    tool_name: "GetToolSpec".to_string(),
-                    result: json!({
-                        "tool_name": "WebFetch",
-                    }),
-                    result_for_assistant: None,
-                    is_error: false,
-                    duration_ms: Some(1),
-                    image_attachments: None,
-                }),
-                Message::tool_result(ToolResult {
-                    tool_id: "tool-2".to_string(),
-                    tool_name: "GetToolSpec".to_string(),
-                    result: json!({
-                        "tool_name": "WebFetch",
-                    }),
-                    result_for_assistant: None,
-                    is_error: false,
-                    duration_ms: Some(1),
-                    image_attachments: None,
-                }),
-                Message::tool_result(ToolResult {
-                    tool_id: "tool-3".to_string(),
-                    tool_name: "GetToolSpec".to_string(),
-                    result: json!({
-                        "tool_name": "Git",
-                    }),
-                    result_for_assistant: None,
-                    is_error: false,
-                    duration_ms: Some(1),
-                    image_attachments: None,
-                }),
-                Message::tool_result(ToolResult {
-                    tool_id: "tool-4".to_string(),
-                    tool_name: "GetToolSpec".to_string(),
-                    result: json!({
-                        "tool_name": "Read",
-                    }),
-                    result_for_assistant: None,
-                    is_error: false,
-                    duration_ms: Some(1),
-                    image_attachments: None,
-                }),
-                Message::tool_result(ToolResult {
-                    tool_id: "tool-5".to_string(),
-                    tool_name: "GetToolSpec".to_string(),
-                    result: json!({
-                        "tool_name": "GetFileDiff",
-                    }),
-                    result_for_assistant: None,
-                    is_error: true,
-                    duration_ms: Some(1),
-                    image_attachments: None,
-                }),
-                Message::tool_result(ToolResult {
-                    tool_id: "tool-6".to_string(),
-                    tool_name: "GetToolSpec".to_string(),
-                    result: json!({
-                        "tool_name": 42,
-                    }),
-                    result_for_assistant: None,
-                    is_error: false,
-                    duration_ms: Some(1),
-                    image_attachments: None,
-                }),
-                Message::tool_result(ToolResult {
-                    tool_id: "tool-7".to_string(),
-                    tool_name: "Read".to_string(),
-                    result: json!({
-                        "tool_name": "GetFileDiff",
-                    }),
-                    result_for_assistant: None,
-                    is_error: false,
-                    duration_ms: Some(1),
-                    image_attachments: None,
-                }),
-            ],
-            &[
-                "WebFetch".to_string(),
-                "GetFileDiff".to_string(),
-                "Git".to_string(),
-            ],
-        );
-
-        assert_eq!(unlocked, vec!["Git".to_string(), "WebFetch".to_string()]);
     }
 
     #[test]

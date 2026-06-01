@@ -917,7 +917,7 @@ const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/core/src/agentic/goal_mode/types.rs',
+    path: 'src/crates/core/src/agentic/goal_mode/mod.rs',
     patterns: [
       {
         regex: /\bconst\s+GOAL_MODE_METADATA_KEY\b/,
@@ -1080,6 +1080,61 @@ const forbiddenContentRules = [
         regex: /\bfn\s+to_core_tool_definition\b/,
         message:
           'manifest resolver must not own ToolDefinition conversion; use product_runtime/catalog',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/workspace.rs',
+    patterns: [
+      {
+        regex: /\bpub\s+trait\s+WorkspaceFileSystem\b/,
+        message:
+          'workspace file-system contract must be owned by bitfun-runtime-ports; keep only concrete adapters or re-exports in core',
+      },
+      {
+        regex: /\bpub\s+trait\s+WorkspaceShell\b/,
+        message:
+          'workspace shell contract must be owned by bitfun-runtime-ports; keep only concrete adapters or re-exports in core',
+      },
+      {
+        regex: /\bpub\s+struct\s+WorkspaceServices\b/,
+        message:
+          'workspace service bundle contract must be owned by bitfun-runtime-ports; keep only concrete adapters or re-exports in core',
+      },
+      {
+        regex: /\bpub\s+struct\s+WorkspaceCommandOptions\b/,
+        message:
+          'workspace command contract must be owned by bitfun-runtime-ports; keep only concrete adapters or re-exports in core',
+      },
+      {
+        regex: /\bpub\s+struct\s+WorkspaceCommandResult\b/,
+        message:
+          'workspace command result contract must be owned by bitfun-runtime-ports; keep only concrete adapters or re-exports in core',
+      },
+      {
+        regex: /\bpub\s+struct\s+WorkspaceDirEntry\b/,
+        message:
+          'workspace directory entry contract must be owned by bitfun-runtime-ports; keep only concrete adapters or re-exports in core',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/execution/execution_engine.rs',
+    patterns: [
+      {
+        regex: /\bGetToolSpecLoadObservation\b/,
+        message:
+          'execution engine must not own collapsed-tool unlock observation details; use product_runtime unlock state owner',
+      },
+      {
+        regex: /\bcollect_loaded_collapsed_tool_names\b/,
+        message:
+          'execution engine must not call generic collapsed-tool collector directly; use product_runtime unlock state owner',
+      },
+      {
+        regex: /\bfn\s+collect_unlocked_collapsed_tools\b/,
+        message:
+          'execution engine must not own collapsed-tool unlock collection; use product_runtime unlock state owner',
       },
     ],
   },
@@ -3199,7 +3254,7 @@ const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/core/src/agentic/goal_mode/types.rs',
+    path: 'src/crates/core/src/agentic/goal_mode/mod.rs',
     reason:
       'core goal mode types must preserve legacy import path while runtime-ports owns portable goal contracts',
     patterns: [
@@ -4129,7 +4184,7 @@ const requiredContentRules = [
       },
       {
         regex: /\bunlocked_collapsed_tools\b/,
-        message: 'missing core-owned collapsed-tool unlock state source',
+        message: 'missing product runtime collapsed-tool unlock state source',
       },
       {
         regex: /\bproduct_catalog_provider_default_get_tool_spec_catalog_matches_registry\b/,
@@ -4523,15 +4578,15 @@ const requiredContentRules = [
   {
     path: 'src/crates/core/src/agentic/execution/execution_engine.rs',
     reason:
-      'core execution must continue carrying collapsed-tool unlock state and DeepResearch post-turn hooks until approved runtime migrations exist',
+      'core execution must pass collapsed-tool unlock state through product runtime owner and keep DeepResearch post-turn hooks',
     patterns: [
       {
-        regex: /\bfn collect_unlocked_collapsed_tools\b/,
-        message: 'missing GetToolSpec result unlock collector',
+        regex: /\bcollect_product_unlocked_collapsed_tools\b/,
+        message: 'missing product runtime collapsed-tool unlock state handoff',
       },
       {
-        regex: /\bcollect_unlocked_collapsed_tools_dedupes_and_filters_runtime_unlocks\b/,
-        message: 'missing GetToolSpec unlock filtering regression',
+        regex: /\bunlocked_collapsed_tools\b/,
+        message: 'missing collapsed-tool unlock propagation into round context',
       },
       {
         regex: /\bcollapsed_tool_names\b/,
@@ -4544,6 +4599,29 @@ const requiredContentRules = [
       {
         regex: /\bcitation_renumber\b/,
         message: 'missing DeepResearch citation renumber hook',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/product_runtime/unlock_state.rs',
+    reason:
+      'product runtime owns collapsed-tool unlock observation adaptation while preserving generic agent-tools policy',
+    patterns: [
+      {
+        regex: /\bcollect_product_unlocked_collapsed_tools\b/,
+        message: 'missing product runtime collapsed-tool unlock collector',
+      },
+      {
+        regex: /\bGetToolSpecLoadObservation\b/,
+        message: 'missing GetToolSpec load observation adapter',
+      },
+      {
+        regex: /\bcollect_loaded_collapsed_tool_names\b/,
+        message: 'missing generic collapsed-tool load collector delegation',
+      },
+      {
+        regex: /\bproduct_unlock_state_dedupes_and_filters_runtime_unlocks\b/,
+        message: 'missing collapsed-tool unlock filtering regression',
       },
     ],
   },
@@ -6800,7 +6878,7 @@ function runManifestParserSelfTest() {
     }
   }
   const coreGoalModeTypesRule = forbiddenContentRules.find(
-    (rule) => rule.path === 'src/crates/core/src/agentic/goal_mode/types.rs',
+    (rule) => rule.path === 'src/crates/core/src/agentic/goal_mode/mod.rs',
   );
   if (!coreGoalModeTypesRule) {
     throw new Error('missing core goal mode types boundary rule');
@@ -7091,6 +7169,13 @@ function runManifestParserSelfTest() {
         'compression_contract_renders_model_visible_fields',
         'RelatedPath',
         'related_path_serializes_as_request_context_fact',
+        'WorkspaceFileSystem',
+        'WorkspaceShell',
+        'WorkspaceServices',
+        'WorkspaceCommandOptions',
+        'WorkspaceCommandResult',
+        'WorkspaceDirEntry',
+        'workspace_services_contract_is_runtime_port_owned',
         'DelegationPolicy',
         'SubagentContextMode',
         'delegation_policy_child_blocks_recursive_spawn_without_losing_depth',
@@ -7333,7 +7418,7 @@ function runManifestParserSelfTest() {
       ],
     },
     {
-      path: 'src/crates/core/src/agentic/goal_mode/types.rs',
+      path: 'src/crates/core/src/agentic/goal_mode/mod.rs',
       contracts: [
         'bitfun_runtime_ports',
         'SetThreadGoalResult',
@@ -7685,11 +7770,20 @@ function runManifestParserSelfTest() {
     {
       path: 'src/crates/core/src/agentic/execution/execution_engine.rs',
       contracts: [
-        'collect_unlocked_collapsed_tools',
-        'collect_unlocked_collapsed_tools_dedupes_and_filters_runtime_unlocks',
+        'collect_product_unlocked_collapsed_tools',
+        'unlocked_collapsed_tools',
         'collapsed_tool_names',
         'GetToolSpec',
         'citation_renumber',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/agentic/tools/product_runtime/unlock_state.rs',
+      contracts: [
+        'collect_product_unlocked_collapsed_tools',
+        'GetToolSpecLoadObservation',
+        'collect_loaded_collapsed_tool_names',
+        'product_unlock_state_dedupes_and_filters_runtime_unlocks',
       ],
     },
     {

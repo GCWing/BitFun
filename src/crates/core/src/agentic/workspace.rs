@@ -1,8 +1,11 @@
 use crate::service::remote_ssh::workspace_state::WorkspaceSessionIdentity;
 use async_trait::async_trait;
+pub use bitfun_runtime_ports::{
+    WorkspaceCommandOptions, WorkspaceCommandResult, WorkspaceDirEntry, WorkspaceFileSystem,
+    WorkspaceServices, WorkspaceShell,
+};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tokio_util::sync::CancellationToken;
 
 /// Describes whether the workspace is local or remote via SSH.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -126,124 +129,9 @@ mod tests {
 }
 
 // ============================================================
-// Workspace-level I/O abstractions — tools program against these
-// traits instead of checking is_remote themselves.
+// Workspace-level I/O contracts are owned by bitfun-runtime-ports and re-exported above.
+// Tools still program against these traits instead of checking is_remote themselves.
 // ============================================================
-
-/// One row from [`WorkspaceFileSystem::read_dir`] (POSIX paths when backend is remote SSH).
-#[derive(Debug, Clone)]
-pub struct WorkspaceDirEntry {
-    pub name: String,
-    pub path: String,
-    pub is_dir: bool,
-    pub is_symlink: bool,
-}
-
-/// Unified file system operations that work for both local and remote workspaces.
-#[async_trait]
-pub trait WorkspaceFileSystem: Send + Sync {
-    async fn read_file(&self, path: &str) -> anyhow::Result<Vec<u8>>;
-    async fn read_file_text(&self, path: &str) -> anyhow::Result<String>;
-    async fn write_file(&self, path: &str, contents: &[u8]) -> anyhow::Result<()>;
-    async fn exists(&self, path: &str) -> anyhow::Result<bool>;
-    async fn is_file(&self, path: &str) -> anyhow::Result<bool>;
-    async fn is_dir(&self, path: &str) -> anyhow::Result<bool>;
-    /// List immediate children (non-recursive). Symlinks may be included; callers often skip them.
-    async fn read_dir(&self, path: &str) -> anyhow::Result<Vec<WorkspaceDirEntry>>;
-}
-
-/// Unified shell execution for both local and remote workspaces.
-#[derive(Debug, Clone, Default)]
-pub struct WorkspaceCommandOptions {
-    pub timeout_ms: Option<u64>,
-    pub cancellation_token: Option<CancellationToken>,
-}
-
-#[derive(Debug, Clone)]
-pub struct WorkspaceCommandResult {
-    pub stdout: String,
-    pub stderr: String,
-    pub exit_code: i32,
-    pub interrupted: bool,
-    pub timed_out: bool,
-}
-
-impl WorkspaceCommandResult {
-    pub fn combined_output(&self) -> String {
-        if self.stderr.is_empty() {
-            self.stdout.clone()
-        } else if self.stdout.is_empty() {
-            self.stderr.clone()
-        } else {
-            format!("{}\n{}", self.stdout, self.stderr)
-        }
-    }
-}
-
-#[async_trait]
-pub trait WorkspaceShell: Send + Sync {
-    /// Execute a command and return a structured result.
-    async fn exec_with_options(
-        &self,
-        command: &str,
-        options: WorkspaceCommandOptions,
-    ) -> anyhow::Result<WorkspaceCommandResult>;
-
-    /// Execute a command and return (stdout, stderr, exit_code).
-    async fn exec(
-        &self,
-        command: &str,
-        timeout_ms: Option<u64>,
-    ) -> anyhow::Result<(String, String, i32)> {
-        let result = self
-            .exec_with_options(
-                command,
-                WorkspaceCommandOptions {
-                    timeout_ms,
-                    ..Default::default()
-                },
-            )
-            .await?;
-
-        if result.timed_out {
-            anyhow::bail!(
-                "Command timed out after {}ms",
-                timeout_ms.unwrap_or_default()
-            );
-        }
-        if result.interrupted {
-            anyhow::bail!("Command was cancelled");
-        }
-
-        Ok((result.stdout, result.stderr, result.exit_code))
-    }
-}
-
-/// Bundle of workspace I/O services injected into ToolUseContext.
-/// Tools call `context.workspace_services()` and use these trait objects
-/// instead of directly checking `get_remote_workspace_manager()`.
-pub struct WorkspaceServices {
-    pub fs: Arc<dyn WorkspaceFileSystem>,
-    pub shell: Arc<dyn WorkspaceShell>,
-}
-
-impl Clone for WorkspaceServices {
-    fn clone(&self) -> Self {
-        Self {
-            fs: Arc::clone(&self.fs),
-            shell: Arc::clone(&self.shell),
-        }
-    }
-}
-
-impl std::fmt::Debug for WorkspaceServices {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("WorkspaceServices")
-            .field("fs", &"<dyn WorkspaceFileSystem>")
-            .field("shell", &"<dyn WorkspaceShell>")
-            .finish()
-    }
-}
 
 // ============================================================
 // Local implementations

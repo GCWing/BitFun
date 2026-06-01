@@ -243,10 +243,13 @@ Remote ports 的边界：
 当前已承接范围：
 
 - background delivery 状态决策：Processing 注入当前运行 turn；Missing / Idle / Error 提交 agent-session follow-up turn。
+- persisted thread goal 的 portable DTO、status、continuation plan 和 tool response contract 已在
+  `bitfun-runtime-ports`；concrete goal runtime 仍在 core。
 
 仍留在 `bitfun-core` 的范围：
 
-- concrete scheduler 生命周期、session manager、turn id 生成、injection buffer、submit 执行、prompt loop、subagent registry 和 post-turn hook。
+- concrete scheduler 生命周期、session manager、turn id 生成、injection buffer、submit 执行、prompt loop、
+  subagent registry、thread goal runtime/store/tool handler 和 post-turn hook。
 
 职责：
 
@@ -366,6 +369,7 @@ impl AgentRuntime {
 
 - `SessionManager -> Session -> DialogTurn -> ModelRound` 语义不变。
 - `/goal` custom metadata、post-turn verification、continuation event 不漂移。
+- `get_goal` / `create_goal` / `update_goal` 的 tool response wire shape、blocked/complete 语义和 token budget report 不漂移。
 - `Task.run_in_background` delivery 不漂移。
 - `Task.fork_context` 禁止字段、prompt cache clone、context seeding 不漂移。
 - DeepResearch citation renumber post-turn hook 保持 deterministic。
@@ -427,6 +431,13 @@ pub struct ToolExecutionContext {
 }
 ```
 
+当前已收敛范围：
+
+- deterministic execution admission gate、manifest / catalog / snapshot facade 和 `GetToolSpecTool` product adapter 已有独立 owner。
+- workspace file/shell service contract 已归入 `bitfun-runtime-ports`；core 保留旧路径 re-export 和 local / remote concrete adapter。
+  迁移期该 contract 保留既有 `anyhow::Result` 和 `CancellationToken`，不把错误分类或取消语义变更混入 owner 迁移。
+- collapsed unlock 的 `GetToolSpec` observation adapter 已归入 product runtime owner，execution engine 只消费已归一化的 unlock list。
+
 设计约束：
 
 - `ToolExecutionContext` 不暴露具体 manager。
@@ -442,7 +453,7 @@ pub struct ToolExecutionContext {
 - prompt-visible manifest。
 - expanded / collapsed exposure。
 - `GetToolSpec` schema / assistant detail / detail JSON。
-- collapsed unlock state。
+- collapsed unlock state 与 persistence 生命周期。
 - readonly / enabled snapshot filter。
 - MCP / ACP / desktop tool catalog 等价。
 - oversized tool result persistence、flush、preview、artifact ref。

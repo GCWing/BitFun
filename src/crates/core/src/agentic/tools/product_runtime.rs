@@ -8,6 +8,7 @@
 mod catalog;
 mod get_tool_spec_tool;
 mod snapshot;
+mod unlock_state;
 
 use crate::agentic::tools::framework::Tool;
 use crate::agentic::tools::implementations::*;
@@ -26,6 +27,7 @@ pub(crate) use catalog::{
 };
 pub use catalog::{ResolvedToolManifest, ResolvedVisibleTools};
 pub use get_tool_spec_tool::GetToolSpecTool;
+pub(crate) use unlock_state::collect_product_unlocked_collapsed_tools;
 
 #[derive(Clone)]
 pub(crate) struct ProductToolRuntime {

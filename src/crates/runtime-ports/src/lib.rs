@@ -6,6 +6,8 @@
 
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use tokio_util::sync::CancellationToken;
 
 pub type PortResult<T> = Result<T, PortError>;
 
@@ -100,6 +102,135 @@ pub trait FileSystemPort: RuntimeServicePort {}
 pub trait WorkspacePort: RuntimeServicePort {}
 
 pub trait SessionStorePort: RuntimeServicePort {}
+
+/// One row from [`WorkspaceFileSystem::read_dir`] (POSIX paths when the backend is remote SSH).
+#[derive(Debug, Clone)]
+pub struct WorkspaceDirEntry {
+    pub name: String,
+    pub path: String,
+    pub is_dir: bool,
+    pub is_symlink: bool,
+}
+
+/// Unified file system operations that work for both local and remote workspaces.
+#[async_trait::async_trait]
+pub trait WorkspaceFileSystem: Send + Sync {
+    async fn read_file(&self, path: &str) -> anyhow::Result<Vec<u8>>;
+    async fn read_file_text(&self, path: &str) -> anyhow::Result<String>;
+    async fn write_file(&self, path: &str, contents: &[u8]) -> anyhow::Result<()>;
+    async fn exists(&self, path: &str) -> anyhow::Result<bool>;
+    async fn is_file(&self, path: &str) -> anyhow::Result<bool>;
+    async fn is_dir(&self, path: &str) -> anyhow::Result<bool>;
+    /// List immediate children (non-recursive). Symlinks may be included; callers often skip them.
+    async fn read_dir(&self, path: &str) -> anyhow::Result<Vec<WorkspaceDirEntry>>;
+}
+
+/// Unified shell execution options for local and remote workspaces.
+#[derive(Clone, Default)]
+pub struct WorkspaceCommandOptions {
+    pub timeout_ms: Option<u64>,
+    pub cancellation_token: Option<CancellationToken>,
+}
+
+impl std::fmt::Debug for WorkspaceCommandOptions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WorkspaceCommandOptions")
+            .field("timeout_ms", &self.timeout_ms)
+            .field(
+                "cancellation_token",
+                &self
+                    .cancellation_token
+                    .as_ref()
+                    .map(|_| "<CancellationToken>"),
+            )
+            .finish()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct WorkspaceCommandResult {
+    pub stdout: String,
+    pub stderr: String,
+    pub exit_code: i32,
+    pub interrupted: bool,
+    pub timed_out: bool,
+}
+
+impl WorkspaceCommandResult {
+    pub fn combined_output(&self) -> String {
+        if self.stderr.is_empty() {
+            self.stdout.clone()
+        } else if self.stdout.is_empty() {
+            self.stderr.clone()
+        } else {
+            format!("{}\n{}", self.stdout, self.stderr)
+        }
+    }
+}
+
+/// Unified shell execution for both local and remote workspaces.
+#[async_trait::async_trait]
+pub trait WorkspaceShell: Send + Sync {
+    /// Execute a command and return a structured result.
+    async fn exec_with_options(
+        &self,
+        command: &str,
+        options: WorkspaceCommandOptions,
+    ) -> anyhow::Result<WorkspaceCommandResult>;
+
+    /// Execute a command and return (stdout, stderr, exit_code).
+    async fn exec(
+        &self,
+        command: &str,
+        timeout_ms: Option<u64>,
+    ) -> anyhow::Result<(String, String, i32)> {
+        let result = self
+            .exec_with_options(
+                command,
+                WorkspaceCommandOptions {
+                    timeout_ms,
+                    ..Default::default()
+                },
+            )
+            .await?;
+
+        if result.timed_out {
+            anyhow::bail!(
+                "Command timed out after {}ms",
+                timeout_ms.unwrap_or_default()
+            );
+        }
+        if result.interrupted {
+            anyhow::bail!("Command was cancelled");
+        }
+
+        Ok((result.stdout, result.stderr, result.exit_code))
+    }
+}
+
+/// Bundle of workspace I/O services injected into tool runtime context.
+pub struct WorkspaceServices {
+    pub fs: Arc<dyn WorkspaceFileSystem>,
+    pub shell: Arc<dyn WorkspaceShell>,
+}
+
+impl Clone for WorkspaceServices {
+    fn clone(&self) -> Self {
+        Self {
+            fs: Arc::clone(&self.fs),
+            shell: Arc::clone(&self.shell),
+        }
+    }
+}
+
+impl std::fmt::Debug for WorkspaceServices {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WorkspaceServices")
+            .field("fs", &"<dyn WorkspaceFileSystem>")
+            .field("shell", &"<dyn WorkspaceShell>")
+            .finish()
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -630,6 +761,7 @@ pub struct ThreadGoalContinuationPlan {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ThreadGoalToolResponse {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub goal: Option<ThreadGoal>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remaining_tokens: Option<i64>,
@@ -1542,5 +1674,82 @@ mod tests {
         let json = serde_json::to_value(descriptor).expect("serialize descriptor");
 
         assert!(json.get("providerId").is_none());
+    }
+
+    #[derive(Debug)]
+    struct FakeWorkspaceFileSystem;
+
+    #[async_trait::async_trait]
+    impl WorkspaceFileSystem for FakeWorkspaceFileSystem {
+        async fn read_file(&self, _path: &str) -> anyhow::Result<Vec<u8>> {
+            Ok(b"hello".to_vec())
+        }
+
+        async fn read_file_text(&self, _path: &str) -> anyhow::Result<String> {
+            Ok("hello".to_string())
+        }
+
+        async fn write_file(&self, _path: &str, _contents: &[u8]) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        async fn exists(&self, _path: &str) -> anyhow::Result<bool> {
+            Ok(true)
+        }
+
+        async fn is_file(&self, _path: &str) -> anyhow::Result<bool> {
+            Ok(true)
+        }
+
+        async fn is_dir(&self, _path: &str) -> anyhow::Result<bool> {
+            Ok(false)
+        }
+
+        async fn read_dir(&self, _path: &str) -> anyhow::Result<Vec<WorkspaceDirEntry>> {
+            Ok(vec![WorkspaceDirEntry {
+                name: "file.txt".to_string(),
+                path: "/workspace/file.txt".to_string(),
+                is_dir: false,
+                is_symlink: false,
+            }])
+        }
+    }
+
+    #[derive(Debug)]
+    struct FakeWorkspaceShell;
+
+    #[async_trait::async_trait]
+    impl WorkspaceShell for FakeWorkspaceShell {
+        async fn exec_with_options(
+            &self,
+            _command: &str,
+            options: WorkspaceCommandOptions,
+        ) -> anyhow::Result<WorkspaceCommandResult> {
+            assert_eq!(options.timeout_ms, Some(100));
+            assert!(options.cancellation_token.is_none());
+            Ok(WorkspaceCommandResult {
+                stdout: "ok".to_string(),
+                stderr: String::new(),
+                exit_code: 0,
+                interrupted: false,
+                timed_out: false,
+            })
+        }
+    }
+
+    #[test]
+    fn workspace_services_contract_is_runtime_port_owned() {
+        let services = WorkspaceServices {
+            fs: std::sync::Arc::new(FakeWorkspaceFileSystem),
+            shell: std::sync::Arc::new(FakeWorkspaceShell),
+        };
+
+        let cloned = services.clone();
+        assert!(std::sync::Arc::ptr_eq(&services.fs, &cloned.fs));
+        assert!(std::sync::Arc::ptr_eq(&services.shell, &cloned.shell));
+        assert_eq!(
+            format!("{:?}", services),
+            "WorkspaceServices { fs: \"<dyn WorkspaceFileSystem>\", shell: \"<dyn WorkspaceShell>\" }"
+        );
     }
 }

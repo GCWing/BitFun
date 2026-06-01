@@ -31,7 +31,7 @@
 明确未完成：
 
 - remote-SSH runtime、remote FS / terminal、workspace-root source、persistence / workspace service reads、`ImageContextData` concrete impl 仍未迁移。
-- `ToolUseContext`、runtime manifest、collapsed unlock state、concrete tools 仍未迁移。
+- `ToolUseContext` runtime handles、product registry materialization、collapsed unlock persistence、concrete tools 仍未迁移。
 - MiniApp filesystem IO / worker / host dispatch / builtin asset runtime、function-agent Git / AI concrete service 仍未迁移。
 - agent registry / scheduler 仍未迁移。
 
@@ -56,6 +56,8 @@
   已归入 `bitfun-runtime-ports`，并由 `bitfun-services-integrations::remote_connect` 保留旧路径 re-export。
 - `bitfun-agent-runtime` 已建立为可独立构建的 Agent Runtime SDK owner crate，当前只承接 scheduler/background
   delivery 纯决策。
+- persisted thread goal 的 portable DTO、status、continuation plan 和 tool response contract 已归入
+  `bitfun-runtime-ports`；`get_goal` / `create_goal` / `update_goal` 已进入产品 tool registry。
 - `bitfun-harness` 已建立为可独立构建的 Harness contract crate，当前承接 workflow descriptor、legacy route
   plan 和 provider registry；`bitfun-core::agentic::harness` 注册 Deep Review、DeepResearch、MiniApp 三个
   legacy-facade provider。
@@ -64,6 +66,8 @@
 
 - `bitfun-agent-runtime` 不代表 session manager、prompt loop、subagent registry、scheduler 生命周期或 post-turn hook
   已迁移。
+- thread goal 的 concrete runtime、store、token subscriber、scheduler continuation 和 goal tool handler 仍在
+  `bitfun-core`，后续应作为 Agent Runtime SDK owner 主题处理，而不是普通 concrete tool IO。
 - `bitfun-harness` 不代表 Deep Review、DeepResearch、MiniApp 的 concrete workflow execution 已迁移；PR4 provider
   只生成旧路径 route plan，实际执行仍在既有 core/product 路径。
 - Product command registry、capability pack、Harness 对 Tool Runtime / Runtime Services 的实际 orchestration
@@ -82,6 +86,11 @@
   `manifest_resolver.rs` 仅保留旧路径兼容 facade 和 parity regression。
 - snapshot wrapper 已收敛到 `product_runtime/snapshot.rs`，避免 registry assembly、catalog 和 snapshot adapter
   继续堆在同一 owner 文件。
+- `WorkspaceFileSystem`、`WorkspaceShell`、`WorkspaceServices`、workspace command / dir-entry contract 已归入
+  `bitfun-runtime-ports`；`bitfun-core::agentic::workspace` 只保留旧路径 re-export 和 local / remote concrete adapter。
+  为避免功能偏移，该 contract 暂时保留既有 `anyhow::Result` 和 `CancellationToken` 语义。
+- collapsed unlock 的 `GetToolSpec` observation adapter 已迁入 `product_runtime/unlock_state.rs`；
+  `ExecutionEngine` 不再直接解析 `GetToolSpec` tool result 或调用 generic collector。
 
 明确未完成：
 
