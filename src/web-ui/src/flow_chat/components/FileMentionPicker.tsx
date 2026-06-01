@@ -344,20 +344,6 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
           setSelectedIndex(prev => (prev < displayItems.length - 1 ? prev + 1 : 0));
         }
         break;
-      case 'ArrowRight':
-        e.preventDefault();
-        e.stopPropagation();
-        if (!isSearchMode && displayItems[selectedIndex]?.isDirectory) {
-          enterDirectory(displayItems[selectedIndex]);
-        }
-        break;
-      case 'ArrowLeft':
-        e.preventDefault();
-        e.stopPropagation();
-        if (!isSearchMode && pathHistory.length > 0) {
-          goBack();
-        }
-        break;
       case 'Enter':
         e.preventDefault();
         e.stopPropagation();
@@ -378,7 +364,7 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
         }
         break;
     }
-  }, [isOpen, displayItems, selectedIndex, handleSelect, onClose, isSearchMode, enterDirectory, goBack, pathHistory.length]);
+  }, [displayItems, handleSelect, isOpen, onClose, selectedIndex]);
 
   useEffect(() => {
     if (isOpen) {
@@ -509,8 +495,6 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
       
       <div className="file-mention-picker__footer">
         <span><kbd>↑</kbd><kbd>↓</kbd> {t('fileMention.navHint')}</span>
-        {!isSearchMode && <span><kbd>→</kbd> {t('fileMention.enterHint')}</span>}
-        {!isSearchMode && <span><kbd>←</kbd> {t('fileMention.backHint')}</span>}
         <span><kbd>Enter</kbd> {t('fileMention.selectHint')}</span>
       </div>
     </div>

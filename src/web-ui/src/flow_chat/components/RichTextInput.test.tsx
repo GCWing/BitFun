@@ -77,6 +77,32 @@ describeWithJsdom('RichTextInput external sync', () => {
     vi.stubGlobal('cancelAnimationFrame', () => {});
     window.requestAnimationFrame = globalThis.requestAnimationFrame;
     window.cancelAnimationFrame = globalThis.cancelAnimationFrame;
+    (window.document as Document & { execCommand?: typeof document.execCommand }).execCommand = (
+      command,
+      _showUi,
+      value,
+    ) => {
+      if (command !== 'insertText') {
+        return false;
+      }
+
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0) {
+        return false;
+      }
+
+      const range = selection.getRangeAt(0);
+      range.deleteContents();
+      const textNode = document.createTextNode(String(value ?? ''));
+      range.insertNode(textNode);
+
+      const nextRange = document.createRange();
+      nextRange.setStart(textNode, textNode.textContent?.length ?? 0);
+      nextRange.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(nextRange);
+      return true;
+    };
 
     container = document.createElement('div');
     document.body.appendChild(container);
@@ -100,6 +126,29 @@ describeWithJsdom('RichTextInput external sync', () => {
     const editor = container.querySelector('.rich-text-input');
     expect(editor).toBeInstanceOf(HTMLDivElement);
     return editor as HTMLDivElement;
+  }
+
+  function setCaret(editor: HTMLDivElement, offset: number) {
+    const selection = window.getSelection();
+    const range = document.createRange();
+    const textNode = (editor.firstChild as Text | null) ?? document.createTextNode('');
+
+    if (!editor.firstChild) {
+      editor.appendChild(textNode);
+    }
+
+    range.setStart(textNode, offset);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  }
+
+  async function updateEditorText(editor: HTMLDivElement, text: string, offset = text.length) {
+    await act(async () => {
+      editor.textContent = text;
+      setCaret(editor, offset);
+      editor.dispatchEvent(new window.Event('input', { bubbles: true }));
+    });
   }
 
   it('keeps the existing DOM node when parent echoes local input', async () => {
@@ -161,5 +210,73 @@ describeWithJsdom('RichTextInput external sync', () => {
     });
 
     expect(onKeyDown).not.toHaveBeenCalled();
+  });
+
+  it('opens file mention only at the start or after whitespace', async () => {
+    const onMentionStateChange = vi.fn();
+
+    await act(async () => {
+      root.render(
+        <RichTextInput
+          value=""
+          onChange={() => {}}
+          onMentionStateChange={onMentionStateChange}
+          contexts={emptyContexts}
+          onRemoveContext={() => {}}
+        />
+      );
+    });
+
+    const editor = container.querySelector('.rich-text-input');
+    expect(editor).toBeInstanceOf(HTMLDivElement);
+
+    await updateEditorText(editor as HTMLDivElement, 'email@test');
+    expect(onMentionStateChange).not.toHaveBeenCalled();
+
+    await updateEditorText(editor as HTMLDivElement, 'ask @test');
+    expect(onMentionStateChange).toHaveBeenLastCalledWith({
+      isActive: true,
+      query: 'test',
+      startOffset: 4,
+    });
+
+    await updateEditorText(editor as HTMLDivElement, '@root');
+    expect(onMentionStateChange).toHaveBeenLastCalledWith({
+      isActive: true,
+      query: 'root',
+      startOffset: 0,
+    });
+  });
+
+  it('inserts a separating space when opening mention from a mid-word caret', async () => {
+    const onMentionStateChange = vi.fn();
+
+    await act(async () => {
+      root.render(
+        <RichTextInput
+          value="hello"
+          onChange={() => {}}
+          onMentionStateChange={onMentionStateChange}
+          contexts={emptyContexts}
+          onRemoveContext={() => {}}
+        />
+      );
+    });
+
+    const editor = container.querySelector('.rich-text-input');
+    expect(editor).toBeInstanceOf(HTMLDivElement);
+
+    setCaret(editor as HTMLDivElement, 'hello'.length);
+
+    await act(async () => {
+      ((editor as HTMLDivElement) as HTMLDivElement & { openMention?: () => void }).openMention?.();
+    });
+
+    expect(editor?.textContent).toBe('hello @');
+    expect(onMentionStateChange).toHaveBeenLastCalledWith({
+      isActive: true,
+      query: '',
+      startOffset: 6,
+    });
   });
 });
