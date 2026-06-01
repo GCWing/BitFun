@@ -238,7 +238,7 @@ function BasicsLoggingSection() {
     if (!runtimeInfo?.sessionLogDir) return '';
     return runtimeInfo.sessionLogDir.replace(
       '/data/storage/el2/base/files/bitfun',
-      '/storage/Users/currentUser/appdata/el2/base/com.huawei.BitFun/files/bitfun'
+      '/storage/Users/currentUser/appdata/el2/base/com.develop.opensource.ohpcd.bitfun/files/bitfun'
     );
   }, [runtimeInfo?.sessionLogDir]);
 

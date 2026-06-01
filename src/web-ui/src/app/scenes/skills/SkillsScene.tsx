@@ -42,7 +42,7 @@ const log = createLogger('SkillsScene');
 function formatDisplayPath(path: string): string {
   return path.replace(
     '/data/storage/el2/base/files/bitfun',
-    '/storage/Users/currentUser/appdata/el2/base/com.huawei.BitFun/files/bitfun'
+    '/storage/Users/currentUser/appdata/el2/base/com.develop.opensource.ohpcd.bitfun/files/bitfun'
   );
 }
 type SkillTab = 'installed' | 'discover';
