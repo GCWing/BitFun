@@ -1,11 +1,11 @@
-//! GetToolSpec tool implementation
+//! Product Tool Runtime owned GetToolSpec concrete adapter.
 
-use crate::agentic::tools::framework::{
-    Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
-};
-use crate::agentic::tools::product_runtime::{
+use super::{
     product_get_tool_spec_runtime, resolve_product_get_tool_spec_results,
     ProductGetToolSpecRuntime, ProductToolCatalogProvider,
+};
+use crate::agentic::tools::framework::{
+    Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;

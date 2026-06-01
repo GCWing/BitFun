@@ -2,9 +2,9 @@ use crate::agentic::agents::{
     get_agent_registry, PromptBuilder, SubagentListScope, SubagentQueryContext,
     ToolListingSections, UserContextPolicy,
 };
-use crate::agentic::tools::implementations::get_tool_spec_tool::GetToolSpecTool;
 use crate::agentic::tools::implementations::skills::{get_skill_registry, SkillInfo};
 use crate::agentic::tools::manifest_resolver::{resolve_tool_manifest, ResolvedToolManifest};
+use crate::agentic::tools::product_runtime::GetToolSpecTool;
 use crate::agentic::tools::tool_context_runtime;
 use crate::agentic::workspace::WorkspaceServices;
 use crate::agentic::WorkspaceBinding;

@@ -5,6 +5,8 @@
 //! decoration. Concrete tools and `ToolUseContext` stay in core so this owner
 //! remains an equivalent structural boundary rather than a behavior migration.
 
+mod get_tool_spec_tool;
+
 use crate::agentic::agents::{get_agent_registry, AgentToolPolicyOverrides};
 use crate::agentic::tools::framework::{Tool, ToolExposure, ToolResult};
 use crate::agentic::tools::implementations::*;
@@ -24,6 +26,8 @@ use bitfun_agent_tools::{
 use bitfun_tool_packs::product_tool_provider_group_plan;
 use serde_json::Value;
 use std::sync::Arc;
+
+pub use get_tool_spec_tool::GetToolSpecTool;
 
 #[derive(Clone)]
 pub(crate) struct ProductToolRuntime {

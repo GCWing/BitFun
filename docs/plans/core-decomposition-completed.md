@@ -31,7 +31,7 @@
 明确未完成：
 
 - remote-SSH runtime、remote FS / terminal、workspace-root source、persistence / workspace service reads、`ImageContextData` concrete impl 仍未迁移。
-- `ToolUseContext`、runtime manifest / `GetToolSpecTool` execution、collapsed unlock state、concrete tools 仍未迁移。
+- `ToolUseContext`、runtime manifest、collapsed unlock state、concrete tools 仍未迁移。
 - MiniApp filesystem IO / worker / host dispatch / builtin asset runtime、function-agent Git / AI concrete service 仍未迁移。
 - agent registry / scheduler 仍未迁移。
 
@@ -75,11 +75,14 @@
   message、allowed-list gate、runtime restriction gate 和 collapsed-tool unlock gate。
 - `bitfun-core` 的 tool pipeline 已删除对应常量、历史结构、循环检测算法和三段准入分支，只保留状态更新、日志、错误映射、
   registry lookup、input validation、confirmation、实际执行和 hook。
+- `GetToolSpecTool` concrete adapter 已从 generic concrete-tool implementations 目录迁入 `product_runtime`
+  owner；generic implementations 只保留兼容 re-export，on-demand spec discovery 的 product runtime 边界、
+  错误映射和 context section renderer 由同一 owner 管理。
 
 明确未完成：
 
-- `ToolUseContext` concrete service handles、product registry materialization、manifest / `GetToolSpecTool`
-  concrete adapter、snapshot wrapper、collapsed unlock persistence、具体 IO tools 仍未迁移。
+- `ToolUseContext` concrete service handles、product registry materialization、manifest resolver、snapshot wrapper、
+  collapsed unlock persistence、具体 IO tools 仍未迁移。
 
 ## 2. 已建立保护
 

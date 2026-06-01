@@ -21,7 +21,6 @@ pub mod file_read_tool;
 pub mod file_write_tool;
 pub mod generative_ui_tool;
 pub mod get_file_diff_tool;
-pub mod get_tool_spec_tool;
 pub mod git_tool;
 pub mod glob_tool;
 pub mod grep_tool;
@@ -42,6 +41,8 @@ pub mod todo_write_tool;
 pub mod util;
 pub mod web_tools;
 
+#[deprecated(note = "GetToolSpecTool is owned by the product tool runtime boundary")]
+pub use crate::agentic::tools::product_runtime::GetToolSpecTool;
 pub use ask_user_question_tool::AskUserQuestionTool;
 pub use bash_tool::BashTool;
 pub use code_review_tool::CodeReviewTool;
@@ -58,7 +59,6 @@ pub use file_read_tool::FileReadTool;
 pub use file_write_tool::FileWriteTool;
 pub use generative_ui_tool::GenerativeUITool;
 pub use get_file_diff_tool::GetFileDiffTool;
-pub use get_tool_spec_tool::GetToolSpecTool;
 pub use git_tool::GitTool;
 pub use glob_tool::GlobTool;
 pub use grep_tool::GrepTool;

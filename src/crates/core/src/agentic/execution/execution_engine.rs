@@ -22,7 +22,8 @@ use crate::agentic::image_analysis::{
 use crate::agentic::round_preempt::RoundInjectionKind;
 use crate::agentic::session::{CompressionMode, ContextCompressor, SessionManager};
 use crate::agentic::skill_agent_snapshot::build_skill_agent_tool_listing_sections_from_snapshot;
-use crate::agentic::tools::implementations::{GetToolSpecTool, SkillTool, TaskTool};
+use crate::agentic::tools::implementations::{SkillTool, TaskTool};
+use crate::agentic::tools::product_runtime::GetToolSpecTool;
 use crate::agentic::tools::{resolve_tool_manifest, tool_context_runtime, ResolvedToolManifest};
 use crate::agentic::WorkspaceBinding;
 use crate::infrastructure::ai::get_global_ai_client_factory;

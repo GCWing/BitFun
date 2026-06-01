@@ -52,7 +52,10 @@ SessionManager → Session → DialogTurn → ModelRound
   provider-neutral contracts through `tool_adapter.rs`, and keep product
   registry snapshot access, product manifest / GetToolSpec facade wiring,
   product snapshot wrapper adapter injection, on-demand spec discovery Tool
-  impl, and unlock-state source in that product runtime owner for now.
+  impl, and unlock-state source in `product_runtime.rs` / `product_runtime/`
+  for now. Do not move `GetToolSpecTool` ownership back into generic
+  concrete-tool implementations; a legacy re-export is only a compatibility
+  alias.
   `bitfun-tool-packs` may expose planned
   feature-group scaffold metadata, but it must not own concrete tools yet.
 - Keep `ToolUseContext` and concrete tool implementations in core unless a

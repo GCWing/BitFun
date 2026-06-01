@@ -2096,6 +2096,36 @@ const forbiddenContentUnderRules = [
       },
     ],
   },
+  {
+    path: 'src/crates/core/src/agentic/tools/implementations',
+    reason:
+      'GetToolSpec concrete adapter belongs in the product tool runtime owner, not the generic concrete-tool implementations module',
+    patterns: [
+      {
+        regex: /\bpub(?:\(crate\))? struct GetToolSpecTool\b/,
+        message: 'move GetToolSpecTool into core product_runtime owner',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/pipeline',
+    reason:
+      'core pipeline must delegate deterministic tool execution admission policy to bitfun-agent-tools',
+    patterns: [
+      {
+        regex: /\bvalidate_tool_allowed_by_list\s*\(/,
+        message: 'allowed-list admission must stay behind validate_tool_execution_admission',
+      },
+      {
+        regex: /\bruntime_tool_restrictions\s*\.\s*ensure_tool_allowed\s*\(/,
+        message: 'runtime-restriction admission must stay behind validate_tool_execution_admission',
+      },
+      {
+        regex: /\bvalidate_collapsed_tool_usage\s*\(/,
+        message: 'collapsed-tool admission must stay behind validate_tool_execution_admission',
+      },
+    ],
+  },
 ];
 
 const requiredContentRules = [
@@ -4213,12 +4243,12 @@ const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/core/src/agentic/tools/implementations/get_tool_spec_tool.rs',
+    path: 'src/crates/core/src/agentic/tools/product_runtime/get_tool_spec_tool.rs',
     reason:
-      'core must continue owning the GetToolSpec Tool adapter and product boundary while delegating generic runtime surface to agent-tools',
+      'product runtime must own the GetToolSpec Tool adapter while delegating generic runtime surface to agent-tools',
     patterns: [
       {
-        regex: /\bpub struct GetToolSpecTool\b/,
+        regex: /\bpub(?:\(crate\))? struct GetToolSpecTool\b/,
         message: 'missing GetToolSpec owner type',
       },
       {
@@ -7533,7 +7563,7 @@ function runManifestParserSelfTest() {
       ],
     },
     {
-      path: 'src/crates/core/src/agentic/tools/implementations/get_tool_spec_tool.rs',
+      path: 'src/crates/core/src/agentic/tools/product_runtime/get_tool_spec_tool.rs',
       contracts: [
         'GetToolSpecTool',
         'build_collapsed_tools_context_section',

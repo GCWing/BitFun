@@ -1371,6 +1371,7 @@ impl ToolPipeline {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agentic::core::ToolExecutionState;
     use crate::agentic::events::{EventQueue, EventQueueConfig};
     use crate::agentic::tools::framework::Tool;
     use crate::agentic::tools::implementations::task_tool::TaskTool;
@@ -1385,34 +1386,56 @@ mod tests {
         ToolPipeline::new(registry, state_manager, None)
     }
 
+    fn test_tool_call(tool_id: &str, tool_name: &str) -> ToolCall {
+        ToolCall {
+            tool_id: tool_id.to_string(),
+            tool_name: tool_name.to_string(),
+            arguments: json!({ "path": "src/main.rs" }),
+            raw_arguments: None,
+            is_error: false,
+            recovered_from_truncation: false,
+        }
+    }
+
+    fn test_tool_execution_context() -> ToolExecutionContext {
+        ToolExecutionContext {
+            session_id: "session_1".to_string(),
+            dialog_turn_id: "turn_1".to_string(),
+            round_id: "round_1".to_string(),
+            agent_type: "agent".to_string(),
+            workspace: None,
+            context_vars: HashMap::new(),
+            subagent_parent_info: None,
+            delegation_policy: bitfun_runtime_ports::DelegationPolicy::top_level(),
+            collapsed_tools: Vec::new(),
+            unlocked_collapsed_tools: Vec::new(),
+            allowed_tools: Vec::new(),
+            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+            steering_interrupt: None,
+            workspace_services: None,
+        }
+    }
+
     fn test_tool_task(tool_id: &str, tool_name: &str) -> ToolTask {
         ToolTask::new(
-            ToolCall {
-                tool_id: tool_id.to_string(),
-                tool_name: tool_name.to_string(),
-                arguments: json!({ "path": "src/main.rs" }),
-                raw_arguments: None,
-                is_error: false,
-                recovered_from_truncation: false,
-            },
-            ToolExecutionContext {
-                session_id: "session_1".to_string(),
-                dialog_turn_id: "turn_1".to_string(),
-                round_id: "round_1".to_string(),
-                agent_type: "agent".to_string(),
-                workspace: None,
-                context_vars: HashMap::new(),
-                subagent_parent_info: None,
-                delegation_policy: bitfun_runtime_ports::DelegationPolicy::top_level(),
-                collapsed_tools: Vec::new(),
-                unlocked_collapsed_tools: Vec::new(),
-                allowed_tools: Vec::new(),
-                runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
-                steering_interrupt: None,
-                workspace_services: None,
-            },
+            test_tool_call(tool_id, tool_name),
+            test_tool_execution_context(),
             ToolExecutionOptions::default(),
         )
+    }
+
+    fn assert_failed_task_contains(pipeline: &ToolPipeline, tool_id: &str, expected: &str) {
+        let task = pipeline
+            .state_manager
+            .get_task(tool_id)
+            .unwrap_or_else(|| panic!("{tool_id} task should be retained"));
+        match task.state {
+            ToolExecutionState::Failed { error, .. } => assert!(
+                error.contains(expected),
+                "failed task error should contain '{expected}', got '{error}'"
+            ),
+            state => panic!("expected failed task state, got {state:?}"),
+        }
     }
 
     #[test]
@@ -1455,6 +1478,91 @@ mod tests {
             .as_deref()
             .unwrap_or_default()
             .contains("Provided arguments: {\"operation\":\"log\""));
+    }
+
+    #[tokio::test]
+    async fn pipeline_admission_allowed_list_rejection_updates_failed_state_before_registry_lookup()
+    {
+        let pipeline = test_tool_pipeline();
+        let mut context = test_tool_execution_context();
+        context.allowed_tools = vec!["Read".to_string()];
+
+        let results = pipeline
+            .execute_tools(
+                vec![test_tool_call("tool_1", "UnregisteredBlockedTool")],
+                context,
+                ToolExecutionOptions::default(),
+            )
+            .await
+            .expect("admission rejection should be returned as an error result");
+
+        assert_eq!(results.len(), 1);
+        assert!(results[0].result.is_error);
+        assert_failed_task_contains(
+            &pipeline,
+            "tool_1",
+            "Tool 'UnregisteredBlockedTool' is not in the allowed list",
+        );
+        assert!(
+            results[0]
+                .result
+                .result_for_assistant
+                .as_deref()
+                .unwrap_or_default()
+                .contains("UnregisteredBlockedTool"),
+            "error result should preserve rejected tool identity"
+        );
+    }
+
+    #[tokio::test]
+    async fn pipeline_admission_runtime_restriction_rejection_updates_failed_state() {
+        let pipeline = test_tool_pipeline();
+        let mut context = test_tool_execution_context();
+        context
+            .runtime_tool_restrictions
+            .denied_tool_names
+            .insert("Read".to_string());
+
+        let results = pipeline
+            .execute_tools(
+                vec![test_tool_call("tool_1", "Read")],
+                context,
+                ToolExecutionOptions::default(),
+            )
+            .await
+            .expect("admission rejection should be returned as an error result");
+
+        assert_eq!(results.len(), 1);
+        assert!(results[0].result.is_error);
+        assert_failed_task_contains(
+            &pipeline,
+            "tool_1",
+            "Tool 'Read' is denied by runtime restrictions",
+        );
+    }
+
+    #[tokio::test]
+    async fn pipeline_admission_collapsed_tool_rejection_updates_failed_state_before_validation() {
+        let pipeline = test_tool_pipeline();
+        let mut context = test_tool_execution_context();
+        context.collapsed_tools = vec!["WebFetch".to_string()];
+
+        let results = pipeline
+            .execute_tools(
+                vec![test_tool_call("tool_1", "WebFetch")],
+                context,
+                ToolExecutionOptions::default(),
+            )
+            .await
+            .expect("admission rejection should be returned as an error result");
+
+        assert_eq!(results.len(), 1);
+        assert!(results[0].result.is_error);
+        assert_failed_task_contains(
+            &pipeline,
+            "tool_1",
+            "Call GetToolSpec first with {\"tool_name\":\"WebFetch\"}",
+        );
     }
 
     #[test]

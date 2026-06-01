@@ -13,7 +13,8 @@ pub mod implementations;
 pub mod manifest_resolver;
 pub mod pipeline;
 pub(crate) mod post_call_hooks;
-pub(crate) mod product_runtime;
+#[doc(hidden)]
+pub mod product_runtime;
 pub mod registry;
 pub mod restrictions;
 pub(crate) mod tool_adapter;
