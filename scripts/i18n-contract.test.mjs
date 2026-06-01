@@ -5,6 +5,9 @@ import path from 'node:path';
 import test from 'node:test';
 
 const root = process.cwd();
+const contractTestProfile = process.env.BITFUN_I18N_CONTRACT_TEST_PROFILE ?? 'full';
+const runAuditIntegrationTests = process.env.BITFUN_I18N_CONTRACT_TEST_AUDIT_INTEGRATION === '1';
+const skipAuditIntegrationTests = contractTestProfile === 'ci' && !runAuditIntegrationTests;
 const contractPath = path.join(root, 'src', 'shared', 'i18n', 'contract', 'locales.json');
 const sharedTermsDir = path.join(root, 'src', 'shared', 'i18n', 'resources', 'shared');
 const expectedGeneratedFiles = [
@@ -36,6 +39,17 @@ function runI18nAudit(args = []) {
     cwd: root,
     encoding: 'utf8',
   });
+}
+
+// CI runs one full i18n:audit immediately after this file; keep mutation-heavy
+// audit integration cases in the default profile without paying that cost twice.
+function auditIntegrationTest(name, optionsOrFn, maybeFn) {
+  const runner = skipAuditIntegrationTests ? test.skip : test;
+  if (typeof optionsOrFn === 'function') {
+    return runner(name, optionsOrFn);
+  }
+
+  return runner(name, optionsOrFn, maybeFn);
 }
 
 function withTemporaryTextFile(relativePath, content, callback) {
@@ -328,13 +342,14 @@ test('i18n audit treats locale key parity as an error', () => {
 
 test('CI runs i18n contract and audit guards before frontend builds', () => {
   const ciSource = readText('.github/workflows/ci.yml');
-  const contractIndex = ciSource.indexOf('pnpm run i18n:contract:test');
+  const contractIndex = ciSource.indexOf('pnpm run i18n:contract:test:ci');
   const auditIndex = ciSource.indexOf('pnpm run i18n:audit');
   const buildIndex = ciSource.indexOf('pnpm run build:web');
 
-  assert.notEqual(contractIndex, -1, 'CI should run pnpm run i18n:contract:test');
+  assert.notEqual(contractIndex, -1, 'CI should run pnpm run i18n:contract:test:ci');
   assert.notEqual(auditIndex, -1, 'CI should run pnpm run i18n:audit');
   assert.ok(contractIndex < buildIndex, 'i18n contract checks should run before web build');
+  assert.ok(contractIndex < auditIndex, 'CI should run the fast contract check before the full i18n audit');
   assert.ok(auditIndex < buildIndex, 'i18n audit should run before web build');
 });
 
@@ -403,7 +418,7 @@ test('i18n audit gates object-form literal fallbacks with an explicit budget', (
   assert.match(auditSource, /defaultValue/, 'audit should inspect i18next defaultValue options');
 });
 
-test('i18n audit reports literal fallback and locale formatting candidate baselines', { concurrency: false }, () => {
+auditIntegrationTest('i18n audit reports literal fallback and locale formatting candidate baselines', { concurrency: false }, () => {
   const auditSource = readText('scripts/i18n-audit.mjs');
   const localeFormatBaselineSource = readText('scripts/i18n-locale-format-baseline.json');
   const localeFormatBaseline = JSON.parse(localeFormatBaselineSource);
@@ -566,7 +581,7 @@ test('i18n audit can emit a machine-readable governance report', { concurrency: 
   }
 });
 
-test('mobile-web uses shared terms for stable shared concept labels', { concurrency: false }, () => {
+auditIntegrationTest('mobile-web uses shared terms for stable shared concept labels', { concurrency: false }, () => {
   const reportPath = 'scripts/.tmp-i18n-mobile-shared-terms-report.json';
   const absoluteReportPath = path.join(root, reportPath);
   fs.rmSync(absoluteReportPath, { force: true });
@@ -628,7 +643,7 @@ test('mobile-web uses shared terms for stable shared concept labels', { concurre
   }
 });
 
-test('web-ui uses shared terms for stable navigation and feature labels', { concurrency: false }, () => {
+auditIntegrationTest('web-ui uses shared terms for stable navigation and feature labels', { concurrency: false }, () => {
   const reportPath = 'scripts/.tmp-i18n-web-ui-shared-terms-report.json';
   const absoluteReportPath = path.join(root, reportPath);
   fs.rmSync(absoluteReportPath, { force: true });
@@ -729,7 +744,7 @@ test('installer uses the shared product name for titlebar defaults', { concurren
   }
 });
 
-test('core and relay static homepage reuse shared product and feature terms', { concurrency: false }, () => {
+auditIntegrationTest('core and relay static homepage reuse shared product and feature terms', { concurrency: false }, () => {
   const reportPath = 'scripts/.tmp-i18n-core-relay-shared-terms-report.json';
   const absoluteReportPath = path.join(root, reportPath);
   fs.rmSync(absoluteReportPath, { force: true });
@@ -782,7 +797,7 @@ test('core and relay static homepage reuse shared product and feature terms', { 
   }
 });
 
-test('i18n audit fails stale relay static shared-term references', { concurrency: false }, () => {
+auditIntegrationTest('i18n audit fails stale relay static shared-term references', { concurrency: false }, () => {
   const relayPath = 'src/apps/relay-server/static/homepage/i18n.json';
   const relayMessages = readJson(relayPath);
   relayMessages['en-US'].flowMobileSub = { $shared: 'features.__missingForTest' };
@@ -798,7 +813,7 @@ test('i18n audit fails stale relay static shared-term references', { concurrency
   });
 });
 
-test('i18n audit enforces governance candidate baselines', { concurrency: false }, () => {
+auditIntegrationTest('i18n audit enforces governance candidate baselines', { concurrency: false }, () => {
   const baselinePath = 'scripts/i18n-governance-baseline.json';
   const baseline = readJson(baselinePath);
 
@@ -815,7 +830,7 @@ test('i18n audit enforces governance candidate baselines', { concurrency: false 
   });
 });
 
-test('i18n audit enforces governance baseline dimensions', { concurrency: false }, () => {
+auditIntegrationTest('i18n audit enforces governance baseline dimensions', { concurrency: false }, () => {
   const baselinePath = 'scripts/i18n-governance-baseline.json';
   const baseline = readJson(baselinePath);
   const sharedKeyUnderTest = Object.entries(baseline.budgets.sharedTermDuplicates.bySharedKey)
@@ -835,7 +850,7 @@ test('i18n audit enforces governance baseline dimensions', { concurrency: false 
   });
 });
 
-test('i18n audit fails stale l10n identical allowlist entries', { concurrency: false }, () => {
+auditIntegrationTest('i18n audit fails stale l10n identical allowlist entries', { concurrency: false }, () => {
   const allowlistPath = 'scripts/i18n-l10n-identical-allowlist.json';
   const allowlist = readJson(allowlistPath);
 
@@ -861,7 +876,7 @@ test('i18n audit fails stale l10n identical allowlist entries', { concurrency: f
   });
 });
 
-test('i18n audit validates l10n identical allowlist array fields', { concurrency: false }, () => {
+auditIntegrationTest('i18n audit validates l10n identical allowlist array fields', { concurrency: false }, () => {
   const allowlistPath = 'scripts/i18n-l10n-identical-allowlist.json';
   const allowlist = readJson(allowlistPath);
 
@@ -878,7 +893,7 @@ test('i18n audit validates l10n identical allowlist array fields', { concurrency
   });
 });
 
-test('i18n audit fails stale dynamic key allowlist entries', { concurrency: false }, () => {
+auditIntegrationTest('i18n audit fails stale dynamic key allowlist entries', { concurrency: false }, () => {
   const allowlistPath = 'scripts/i18n-dynamic-key-allowlist.json';
   const reportPath = 'scripts/.tmp-i18n-stale-dynamic-key-report.json';
   const absoluteReportPath = path.join(root, reportPath);
@@ -908,7 +923,7 @@ test('i18n audit fails stale dynamic key allowlist entries', { concurrency: fals
   });
 });
 
-test('i18n audit fails stale dynamic key source references', { concurrency: false }, () => {
+auditIntegrationTest('i18n audit fails stale dynamic key source references', { concurrency: false }, () => {
   const allowlistPath = 'scripts/i18n-dynamic-key-allowlist.json';
   const allowlist = readJson(allowlistPath);
 
@@ -938,7 +953,7 @@ test('i18n audit validates static hook translation keys with namespace context',
   assert.match(auditSource, /relative static Web UI i18n key/, 'audit should report missing relative hook keys clearly');
 });
 
-test('i18n audit catches array-namespace keys and stale literal fallback budgets', { concurrency: false }, () => {
+auditIntegrationTest('i18n audit catches array-namespace keys and stale literal fallback budgets', { concurrency: false }, () => {
   const arrayNamespaceFixture = 'src/web-ui/src/__i18n_array_namespace_audit_fixture__.tsx';
   const missingFullKey = 'components:__arrayNamespaceAuditMissingKey__';
   const missingRelativeKey = 'components:__arrayNamespaceAuditMissingRelativeKey__';

@@ -123,8 +123,16 @@ jobs:
       - name: Validate GitHub config
         run: pnpm run check:github-config
 
+      - name: Select i18n contract profile
+        shell: bash
+        run: |
+          if git rev-parse HEAD^1 >/dev/null 2>&1 &&
+            git diff --name-only HEAD^1 HEAD -- scripts/i18n-audit.mjs scripts/i18n-contract.test.mjs | grep -q .; then
+            echo "BITFUN_I18N_CONTRACT_TEST_AUDIT_INTEGRATION=1" >> "$GITHUB_ENV"
+          fi
+
       - name: Validate i18n contract
-        run: pnpm run i18n:contract:test
+        run: pnpm run i18n:contract:test:ci
 
       - name: Audit i18n resources
         run: pnpm run i18n:audit
