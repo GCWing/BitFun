@@ -422,7 +422,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     
     // No valid mention, close it
     closeMention();
-  }, [closeMention, internalRef]);
+  }, [closeMention, internalRef, onMentionStateChange]);
 
   /** Compute the cursor's character offset within the editor. */
   const getCursorOffset = useCallback((editor: HTMLElement): number => {

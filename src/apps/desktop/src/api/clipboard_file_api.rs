@@ -93,6 +93,7 @@ fn parse_uri_list(content: &str) -> Vec<String> {
         .collect()
 }
 
+#[cfg(any(target_os = "macos", test))]
 fn parse_clipboard_path_segments(content: &str) -> Vec<String> {
     content
         .split(|c| c == '\n' || c == '\r')
