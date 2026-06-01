@@ -258,8 +258,9 @@ scheduler lifecycle、session manager、prompt loop 和 subagent registry 仍未
 它只消费 `ToolExecutionServices` 这类窄 service 视图，不直接创建 filesystem、Git、terminal、MCP 等具体实现。
 当前相关 crate 包括 `tool-runtime`、`bitfun-agent-tools`、`bitfun-tool-packs` 以及 `bitfun-core`
 中的 tool materialization 代码。deterministic execution admission gate 已由 `bitfun-agent-tools` 承接；
-`GetToolSpecTool` concrete adapter 已收敛到 `bitfun-core` 的 product runtime owner。`bitfun-core`
-的 pipeline 仍负责状态更新、registry lookup、input validation、confirmation、实际执行和 hook。
+`GetToolSpecTool` concrete adapter、manifest/catalog facade 和 snapshot wrapper 已收敛到 `bitfun-core` 的
+product runtime owner。`bitfun-core` 的 pipeline 仍负责状态更新、registry lookup、input validation、
+confirmation、实际执行和 hook。
 
 ### 7.7 运行时服务层（Runtime Services）
 

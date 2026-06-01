@@ -1034,12 +1034,52 @@ const forbiddenContentRules = [
     ],
   },
   {
+    path: 'src/crates/core/src/agentic/tools/product_runtime/catalog.rs',
+    patterns: [
+      {
+        regex: /framework::(?:\{[^}]*\bToolUseContext\b[^}]*\}|\bToolUseContext\b)/,
+        message:
+          'product tool runtime catalog must import ToolUseContext from tool_context_runtime, not the framework re-export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/product_runtime/get_tool_spec_tool.rs',
+    patterns: [
+      {
+        regex: /framework::(?:\{[^}]*\bToolUseContext\b[^}]*\}|\bToolUseContext\b)/,
+        message:
+          'GetToolSpec adapter must import ToolUseContext from tool_context_runtime, not the framework re-export',
+      },
+    ],
+  },
+  {
     path: 'src/crates/core/src/agentic/tools/manifest_resolver.rs',
     patterns: [
       {
         regex: /framework::(?:\{[^}]*\bToolUseContext\b[^}]*\}|\bToolUseContext\b)/,
         message:
           'manifest resolver must import ToolUseContext from tool_context_runtime, not the framework re-export',
+      },
+      {
+        regex: /\bContextualToolManifest\b/,
+        message:
+          'manifest resolver must stay a compatibility facade; contextual manifest conversion belongs in product_runtime/catalog',
+      },
+      {
+        regex: /\bContextualVisibleTools\b/,
+        message:
+          'manifest resolver must stay a compatibility facade; contextual visible-tool conversion belongs in product_runtime/catalog',
+      },
+      {
+        regex: /\bToolManifestDefinition\b/,
+        message:
+          'manifest resolver must not own manifest DTO conversion; use product_runtime/catalog',
+      },
+      {
+        regex: /\bfn\s+to_core_tool_definition\b/,
+        message:
+          'manifest resolver must not own ToolDefinition conversion; use product_runtime/catalog',
       },
     ],
   },
@@ -3971,7 +4011,7 @@ const requiredContentRules = [
   {
     path: 'src/crates/core/src/agentic/tools/product_runtime.rs',
     reason:
-      'core product tool runtime owner keeps registry assembly, static tool materialization, catalog manifests, and GetToolSpec facades explicit until concrete tools migrate',
+      'core product tool runtime owner keeps registry assembly and static tool materialization explicit until concrete tools migrate',
     patterns: [
       {
         regex: /\bProductToolRuntime\b/,
@@ -3980,10 +4020,6 @@ const requiredContentRules = [
       {
         regex: /\bSnapshotToolDecorator\b/,
         message: 'missing generic snapshot decorator injection',
-      },
-      {
-        regex: /\bProductSnapshotToolWrapper\b/,
-        message: 'missing core product snapshot wrapper adapter',
       },
       {
         regex: /\bbuiltin_static_tool_providers\b/,
@@ -4014,9 +4050,35 @@ const requiredContentRules = [
         message: 'missing generic static provider assembly delegation',
       },
       {
+        regex: /\bproduct_tool_runtime_owner_preserves_registry_contract\b/,
+        message: 'missing product runtime owner registry equivalence regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/product_runtime/snapshot.rs',
+    reason:
+      'product runtime snapshot wrapper must stay isolated from registry and catalog ownership',
+    patterns: [
+      {
+        regex: /\bProductSnapshotToolWrapper\b/,
+        message: 'missing core product snapshot wrapper adapter',
+      },
+      {
+        regex: /\bimpl SnapshotToolWrapper<dyn Tool> for ProductSnapshotToolWrapper\b/,
+        message: 'missing generic snapshot wrapper implementation',
+      },
+      {
         regex: /\bwrap_tool_for_snapshot_tracking\b/,
         message: 'missing snapshot wrapper boundary',
       },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/product_runtime/catalog.rs',
+    reason:
+      'product runtime catalog owner keeps manifest, snapshot, readonly, and GetToolSpec product facades explicit',
+    patterns: [
       {
         regex: /\bProductToolCatalogProvider\b/,
         message: 'missing core product tool catalog provider owner',
@@ -4058,6 +4120,14 @@ const requiredContentRules = [
         message: 'missing product manifest facade',
       },
       {
+        regex: /\bresolve_product_resolved_tool_manifest\b/,
+        message: 'missing product resolved manifest compatibility facade',
+      },
+      {
+        regex: /\bresolve_product_resolved_visible_tools\b/,
+        message: 'missing product resolved visible-tools compatibility facade',
+      },
+      {
         regex: /\bresolve_product_readonly_enabled_tools\b/,
         message: 'missing product readonly enabled tools facade',
       },
@@ -4074,8 +4144,8 @@ const requiredContentRules = [
         message: 'missing product catalog provider collapsed catalog regression',
       },
       {
-        regex: /\bproduct_tool_runtime_owner_preserves_registry_contract\b/,
-        message: 'missing product runtime owner registry equivalence regression',
+        regex: /\bproduct_resolved_manifest_owner_matches_legacy_shape\b/,
+        message: 'missing product resolved manifest compatibility regression',
       },
       {
         regex: /\bGetToolSpec requires agent type context\b/,
@@ -4225,11 +4295,11 @@ const requiredContentRules = [
         message: 'missing GetToolSpec manifest insertion anchor',
       },
       {
-        regex: /\bresolve_product_visible_tools\b/,
+        regex: /\bresolve_product_resolved_visible_tools\b/,
         message: 'missing core product visible-tools facade delegation',
       },
       {
-        regex: /\bresolve_product_tool_manifest\b/,
+        regex: /\bresolve_product_resolved_tool_manifest\b/,
         message: 'missing core product manifest facade delegation',
       },
       {
@@ -4237,8 +4307,8 @@ const requiredContentRules = [
         message: 'missing collapsed-tool name tracking',
       },
       {
-        regex: /\bmanifest_preserves_explicit_get_tool_spec_runtime_contract\b/,
-        message: 'missing core GetToolSpec manifest insertion regression',
+        regex: /\bmanifest_resolver_facade_preserves_product_owner_output\b/,
+        message: 'missing manifest resolver facade parity regression',
       },
     ],
   },

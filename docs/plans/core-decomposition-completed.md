@@ -78,11 +78,15 @@
 - `GetToolSpecTool` concrete adapter 已从 generic concrete-tool implementations 目录迁入 `product_runtime`
   owner；generic implementations 只保留兼容 re-export，on-demand spec discovery 的 product runtime 边界、
   错误映射和 context section renderer 由同一 owner 管理。
+- manifest / visible tools / readonly catalog / GetToolSpec catalog path 已收敛到 `product_runtime/catalog.rs`；
+  `manifest_resolver.rs` 仅保留旧路径兼容 facade 和 parity regression。
+- snapshot wrapper 已收敛到 `product_runtime/snapshot.rs`，避免 registry assembly、catalog 和 snapshot adapter
+  继续堆在同一 owner 文件。
 
 明确未完成：
 
-- `ToolUseContext` concrete service handles、product registry materialization、manifest resolver、snapshot wrapper、
-  collapsed unlock persistence、具体 IO tools 仍未迁移。
+- `ToolUseContext` concrete service handles、product registry materialization、collapsed unlock persistence、
+  具体 IO tools 仍未迁移。
 
 ## 2. 已建立保护
 

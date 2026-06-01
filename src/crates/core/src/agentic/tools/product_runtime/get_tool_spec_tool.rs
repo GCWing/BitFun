@@ -4,9 +4,8 @@ use super::{
     product_get_tool_spec_runtime, resolve_product_get_tool_spec_results,
     ProductGetToolSpecRuntime, ProductToolCatalogProvider,
 };
-use crate::agentic::tools::framework::{
-    Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
-};
+use crate::agentic::tools::framework::{Tool, ToolRenderOptions, ToolResult, ValidationResult};
+use crate::agentic::tools::tool_context_runtime::ToolUseContext;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use bitfun_agent_tools::{
@@ -133,7 +132,8 @@ fn map_get_tool_spec_execution_error(error: GetToolSpecExecutionError) -> BitFun
 #[cfg(test)]
 mod tests {
     use super::GetToolSpecTool;
-    use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
+    use crate::agentic::tools::framework::{Tool, ToolResult};
+    use crate::agentic::tools::tool_context_runtime::ToolUseContext;
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use serde_json::json;
     use std::collections::HashMap;

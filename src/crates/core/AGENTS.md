@@ -53,7 +53,9 @@ SessionManager → Session → DialogTurn → ModelRound
   registry snapshot access, product manifest / GetToolSpec facade wiring,
   product snapshot wrapper adapter injection, on-demand spec discovery Tool
   impl, and unlock-state source in `product_runtime.rs` / `product_runtime/`
-  for now. Do not move `GetToolSpecTool` ownership back into generic
+  for now. Keep manifest/catalog ownership in `product_runtime/catalog.rs`
+  and snapshot decoration in `product_runtime/snapshot.rs`; `manifest_resolver.rs`
+  should stay a compatibility facade. Do not move `GetToolSpecTool` ownership back into generic
   concrete-tool implementations; a legacy re-export is only a compatibility
   alias.
   `bitfun-tool-packs` may expose planned

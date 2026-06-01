@@ -69,7 +69,7 @@
 | PR3 | Agent Runtime SDK Owner | 拆分 mode-scoped subagent visibility、agent registry facts、queue policy decision、scheduler submit/cancel facts 和 background delivery 边界；concrete scheduler 生命周期按保护程度逐步外移 | remote provider、tool IO、product-domain IO、默认 feature 调整 | subagent 可见性、queue/preempt/cancel、background reply、DeepResearch hook 等价 |
 | PR4 | Harness / Product Capability Boundary | 建立 Harness provider contract，让 Deep Review、DeepResearch、MiniApp 等 workflow 通过 provider 注册，不侵入 Agent Runtime SDK | concrete service IO、tool IO、surface 命令语义变更 | 至少两个 workflow 可通过 provider contract 表达，旧路径兼容 |
 | PR5 | Product-Domain Runtime Owner | MiniApp filesystem IO / worker / host / builtin seed 或 function-agent Git/AI 中完成一个完整 owner 主题，建立最小 port/provider 和 core adapter | tool runtime、service/agent runtime、surface 行为变更 | MiniApp/function-agent focused regression，PathManager/process/Git/AI 边界清晰 |
-| PR6 | Tool Runtime Owner | 已完成 deterministic execution admission gate 和 `GetToolSpecTool` product runtime owner closure：core pipeline 删除旧准入算法和分支，generic implementations 不再拥有 GetToolSpec concrete adapter | service/agent runtime、product-domain runtime、feature matrix、产品行为变更 | tool pipeline focused tests、product runtime focused tests、`bitfun-agent-tools` contract tests、boundary check |
+| PR6 | Tool Runtime Owner | 已完成 deterministic execution admission gate、`GetToolSpecTool` product runtime owner closure、manifest/catalog/snapshot owner closure：core pipeline 删除旧准入算法和分支，generic implementations 不再拥有 GetToolSpec concrete adapter，`manifest_resolver` 仅保留兼容 facade | service/agent runtime、product-domain runtime、feature matrix、产品行为变更 | tool pipeline focused tests、product runtime focused tests、manifest facade parity tests、`bitfun-agent-tools` contract tests、boundary check |
 | PR7 | Feature / Build-Benefit Evaluation | 评估 feature matrix、dependency profile、no-default 编译面和构建收益数据，确认是否具备收敛默认 feature 的条件 | runtime owner 迁移、default feature 副作用、构建脚本变更 | cargo metadata / cargo tree 证据，产品入口完整能力不变 |
 
 ### 4.1 PR1 具体实施计划
@@ -176,7 +176,10 @@ PR4 不迁移 concrete service IO、tool IO、surface command 语义、session m
 - 已完成 deterministic execution admission gate 迁移；core 仅保留状态更新、registry lookup、input validation、confirmation、实际执行和 hook。
 - 已完成 `GetToolSpecTool` concrete adapter 的 product runtime owner closure；generic concrete-tool implementations
   只保留兼容 re-export，不再拥有 on-demand spec discovery Tool impl。
-- 后续不直接搬全部 concrete tools。只在 manifest/catalog snapshot、snapshot wrapper、collapsed unlock persistence
+- 已完成 manifest/catalog/snapshot owner closure；`manifest_resolver.rs` 只保留旧路径兼容 facade，product runtime
+  的 `catalog.rs` / `snapshot.rs` 管理 resolved manifest DTO、visible tools、readonly catalog、GetToolSpec catalog
+  path 和 snapshot wrapper。
+- 后续不直接搬全部 concrete tools。只在 collapsed unlock persistence、`ToolUseContext` concrete service handles
   或具体工具 IO 中选择能减少旧路径的完整 owner。
 - 保留 tool name、schema、prompt stub、readonly/enabled/filtering、unlock state 生命周期。
 - 验证 builtin tool list、provider order、expanded/collapsed exposure、dynamic provider metadata、Deep Review 修改类工具 checkpoint hook。
