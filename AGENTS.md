@@ -103,8 +103,9 @@ For the full script list, see [`package.json`](package.json).
 - Use shared i18n formatting helpers for user-visible dates, times, and
   numbers instead of direct `Intl.*` or `toLocale*` calls.
 - `pnpm run i18n:audit` enforces key/placeholder parity, direct static key
-  existence, dynamic key governance, no-growth i18n governance baselines,
-  locale-format no-growth baselines, and the no-hardcoded-CJK source budget.
+  existence, dynamic key source proofs, literal fallback and locale-format
+  no-growth baselines, actionable shared-term/l10n governance baselines, and
+  the no-hardcoded-CJK source budget.
 
 ### Logging
 

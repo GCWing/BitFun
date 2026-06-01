@@ -245,6 +245,97 @@ function hasHanText(value) {
   return /\p{Script=Han}/u.test(String(value));
 }
 
+const zhTwSameTextTerminologySignals = ['了解'];
+// Keep this as a review signal, not a converter. The goal is to catch obvious
+// Simplified-copy residue without flagging every valid same-writing Han term.
+const zhTwSameTextScriptSignals = new Set([
+  '这',
+  '个',
+  '们',
+  '为',
+  '与',
+  '开',
+  '关',
+  '发',
+  '复',
+  '后',
+  '过',
+  '还',
+  '进',
+  '选',
+  '连',
+  '远',
+  '时',
+  '设',
+  '数',
+  '据',
+  '页',
+  '项',
+  '态',
+  '错',
+  '误',
+  '删',
+  '编',
+  '导',
+  '启',
+  '闭',
+  '间',
+  '类',
+  '显',
+  '隐',
+  '径',
+  '档',
+  '检',
+  '测',
+  '权',
+  '务',
+  '动',
+  '应',
+  '统',
+  '议',
+  '读',
+  '写',
+  '话',
+  '请',
+  '询',
+  '详',
+  '语',
+  '认',
+  '让',
+  '讲',
+  '试',
+  '论',
+  '证',
+  '评',
+  '识',
+  '访',
+  '调',
+  '变',
+  '图',
+  '标',
+  '链',
+  '节',
+  '览',
+  '获',
+]);
+
+function getZhTwSameTextSignal(value) {
+  const text = String(value);
+  for (const phrase of zhTwSameTextTerminologySignals) {
+    if (text.includes(phrase)) {
+      return { type: 'terminology', match: phrase };
+    }
+  }
+
+  for (const character of text) {
+    if (zhTwSameTextScriptSignals.has(character)) {
+      return { type: 'script-variant', match: character };
+    }
+  }
+
+  return null;
+}
+
 function sortByReportIdentity(left, right) {
   return JSON.stringify(left).localeCompare(JSON.stringify(right));
 }
@@ -1439,6 +1530,10 @@ function collectL10nQualityCandidates(resourceGroups, allowedIdenticalMatches) {
     if (!simplified || !traditional || simplified !== traditional || !hasHanText(traditional)) {
       continue;
     }
+    const signal = getZhTwSameTextSignal(traditional);
+    if (!signal) {
+      continue;
+    }
     if (allowedIdenticalMatches.has(l10nIdenticalMatchId(group, 'zh-TW', 'zh-CN'))) {
       continue;
     }
@@ -1453,6 +1548,7 @@ function collectL10nQualityCandidates(resourceGroups, allowedIdenticalMatches) {
       value: traditional,
       files: group.files,
       reason: 'matches-comparison-locale',
+      signal,
     });
   }
 }

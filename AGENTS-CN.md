@@ -95,8 +95,11 @@ pnpm run desktop:build:nsis:fast      # Windows 安装器，release-fast profile
 - 不要把 Web UI locale 资源导入 `src/mobile-web`、`BitFun-Installer` 等较小形态。
 - Web UI 只急切加载 bootstrap namespace；路由或功能文案使用
   `useI18n(namespace)`，直接 `i18nService.t(...)` 只用于 bootstrap namespace。
-- `pnpm run i18n:audit` 会检查 key / 占位符一致性、直接静态 key 是否存在，以及
-  source 中不再新增硬编码 CJK 文案。
+- 用户可见的日期、时间和数字应通过共享 i18n 格式化 helper 处理，避免在产品代码中直接
+  使用 `Intl.*` 或 `toLocale*`。
+- `pnpm run i18n:audit` 会检查 key / 占位符一致性、直接静态 key、dynamic key
+  source proof、literal fallback / locale-format 零增长基线、shared-term / l10n
+  治理基线，以及 source 中不再新增硬编码 CJK 文案。
 
 ### 日志
 

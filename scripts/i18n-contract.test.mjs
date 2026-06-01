@@ -525,12 +525,12 @@ test('i18n audit can emit a machine-readable governance report', { concurrency: 
       );
     }
     assert.equal(
-      report.summary.byCategory.l10nQualityCandidates.bySurface['web-ui'],
+      report.summary.byCategory.l10nQualityCandidates.bySurface['web-ui'] ?? 0,
       report.l10nQualityCandidates.filter((entry) => entry.surface === 'web-ui').length,
       'report should summarize l10n candidates by surface',
     );
     assert.equal(
-      report.summary.byCategory.l10nQualityCandidates.byNamespace['flow-chat'],
+      report.summary.byCategory.l10nQualityCandidates.byNamespace['flow-chat'] ?? 0,
       report.l10nQualityCandidates.filter((entry) => entry.namespace === 'flow-chat').length,
       'report should summarize l10n candidates by namespace',
     );
@@ -555,13 +555,10 @@ test('i18n audit can emit a machine-readable governance report', { concurrency: 
       report.sharedTermDuplicates.every((entry) => entry.resourceKey !== entry.sharedResourceKey),
       'shared-term duplicate findings should only report surface copies, not the shared source entry itself',
     );
-    assert.ok(
-      report.l10nQualityCandidates.some((entry) => (
-        entry.locale === 'zh-TW' &&
-        entry.comparisonLocale === 'zh-CN' &&
-        entry.reason === 'matches-comparison-locale'
-      )),
-      'unchanged zh-TW copy should be reported as a localization quality candidate',
+    assert.equal(
+      report.l10nQualityCandidates.length,
+      0,
+      'reviewed same-writing zh-CN/zh-TW copy without a script or terminology signal should not create l10n noise',
     );
     assert.ok(
       report.literalDefaultValueFallbacks.every((entry) => entry.file && entry.key && entry.location),
@@ -571,11 +568,40 @@ test('i18n audit can emit a machine-readable governance report', { concurrency: 
       report.localeFormatCandidates.every((entry) => entry.surface && entry.file && entry.location),
       'locale format candidates should include surface, file, and location for cleanup reviews',
     );
-    assert.equal(
-      report.l10nQualityCandidates.some((entry) => entry.resourceKey === 'shared:modes.agentic'),
-      false,
-      'intentional zh-CN/zh-TW identical shared terms should be excluded from l10n quality candidates',
-    );
+  } finally {
+    fs.rmSync(absoluteReportPath, { force: true });
+  }
+});
+
+auditIntegrationTest('i18n audit reports same-text zh-TW copy with a l10n signal', { concurrency: false }, () => {
+  const localePath = 'src/web-ui/src/locales/zh-TW/settings/acp-agents.json';
+  const reportPath = 'scripts/.tmp-i18n-l10n-signal-report.json';
+  const absoluteReportPath = path.join(root, reportPath);
+  const source = readText(localePath);
+  const fixture = source.replace('"learnMore": "瞭解更多"', '"learnMore": "了解更多"');
+
+  assert.notEqual(fixture, source, 'test fixture should introduce same-text zh-TW terminology debt');
+  fs.rmSync(absoluteReportPath, { force: true });
+
+  try {
+    withTemporaryTextFile(localePath, fixture, () => {
+      const result = runI18nAudit(['--report-json', reportPath]);
+      assert.notEqual(result.status, 0, 'same-text zh-TW terminology debt should exceed the zero l10n baseline');
+
+      const report = readJson(reportPath);
+      assert.ok(
+        report.l10nQualityCandidates.some((entry) => (
+          entry.surface === 'web-ui' &&
+          entry.namespace === 'settings/acp-agents' &&
+          entry.key === 'actions.learnMore' &&
+          entry.locale === 'zh-TW' &&
+          entry.comparisonLocale === 'zh-CN' &&
+          entry.signal?.type === 'terminology' &&
+          entry.signal?.match === '了解'
+        )),
+        'audit report should include the concrete same-text terminology signal',
+      );
+    });
   } finally {
     fs.rmSync(absoluteReportPath, { force: true });
   }
@@ -880,14 +906,23 @@ auditIntegrationTest('i18n audit validates l10n identical allowlist array fields
   const allowlistPath = 'scripts/i18n-l10n-identical-allowlist.json';
   const allowlist = readJson(allowlistPath);
 
-  allowlist.entries[0].keys = 'shared:modes.';
+  allowlist.entries.push({
+    id: 'invalid-test-l10n-identical-key-array',
+    surface: 'shared',
+    namespace: 'shared',
+    locale: 'zh-TW',
+    comparisonLocale: 'zh-CN',
+    owner: 'scripts/i18n-contract.test.mjs',
+    reason: 'Test fixture for invalid l10n identical governance.',
+    keys: 'shared:modes.',
+  });
 
   withTemporaryTextFile(allowlistPath, `${JSON.stringify(allowlist, null, 2)}\n`, () => {
     const result = runI18nAudit();
     assert.notEqual(result.status, 0, 'l10n identical allowlist keys must be an array');
     assert.match(
       `${result.stdout}\n${result.stderr}`,
-      /L10n identical allowlist "shared-zh-tw-same-han-terms" keys must be an array/,
+      /L10n identical allowlist "invalid-test-l10n-identical-key-array" keys must be an array/,
       'audit output should identify the invalid l10n allowlist field',
     );
   });
