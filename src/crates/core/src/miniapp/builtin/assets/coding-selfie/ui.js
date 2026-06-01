@@ -373,6 +373,10 @@ function fmtDay(d) {
   const dt = new Date(d);
   return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
 }
+function fmtClock(d) {
+  const dt = new Date(d);
+  return `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}:${String(dt.getSeconds()).padStart(2, '0')}`;
+}
 function relativeTime(iso) {
   const diff = Math.max(0, Date.now() - new Date(iso).getTime());
   const m = Math.floor(diff / 60000);
@@ -755,7 +759,7 @@ function renderHero(data, range, current) {
   const timeEl = $('meta-time');
   if (timeEl) {
     timeEl.textContent = `${String(snap.getHours()).padStart(2, '0')}:${String(snap.getMinutes()).padStart(2, '0')}`;
-    timeEl.parentElement.title = t('snapTimeTitle')(snap.toLocaleTimeString());
+    timeEl.parentElement.title = t('snapTimeTitle')(fmtClock(snap));
   }
 
   const isToday = range.kind === '1d';

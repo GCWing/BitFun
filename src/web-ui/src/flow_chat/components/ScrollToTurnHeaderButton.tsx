@@ -31,11 +31,11 @@ export const ScrollToTurnHeaderButton: React.FC<ScrollToTurnHeaderButtonProps> =
     >
       <div className="scroll-to-turn-header-trigger__gradient" />
       <div className="scroll-to-turn-header-trigger__content">
-        <Tooltip content={turnLabel || t('scroll.toCurrentTurn', { defaultValue: 'Jump to current turn' })}>
+        <Tooltip content={turnLabel || t('scroll.toCurrentTurn')}>
           <button
             className="scroll-to-turn-header-trigger__btn"
             onClick={onClick}
-            aria-label={turnLabel || t('scroll.toCurrentTurn', { defaultValue: 'Jump to current turn' })}
+            aria-label={turnLabel || t('scroll.toCurrentTurn')}
             tabIndex={visible ? 0 : -1}
           >
             <svg

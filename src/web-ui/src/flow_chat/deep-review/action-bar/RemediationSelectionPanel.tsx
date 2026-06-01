@@ -108,7 +108,6 @@ export const RemediationSelectionPanel: React.FC<RemediationSelectionPanelProps>
           {t('toolCards.codeReview.remediationActions.selectionCount', {
             selected: selectedCount,
             total: totalCount,
-            defaultValue: '{{selected}}/{{total}} selected',
           })}
         </span>
         {showRemediationList ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -128,7 +127,7 @@ export const RemediationSelectionPanel: React.FC<RemediationSelectionPanelProps>
             const groupAllSelected = groupTotalCount > 0 && groupSelectedCount === groupTotalCount;
             const groupPartial = groupSelectedCount > 0 && !groupAllSelected;
             const groupTitle = groupId === 'ungrouped'
-              ? t('toolCards.codeReview.remediationActions.ungrouped', { defaultValue: 'Other' })
+              ? t('toolCards.codeReview.remediationActions.ungrouped')
               : t(`toolCards.codeReview.groups.${groupId}`, { defaultValue: groupId });
             const groupMeta = groupId !== 'ungrouped' ? GROUP_PRIORITY_META[groupId as RemediationGroupId] : undefined;
 
@@ -195,13 +194,13 @@ export const RemediationSelectionPanel: React.FC<RemediationSelectionPanelProps>
                           {(isCompleted || isFixing) && (
                             <span className="deep-review-action-bar__remediation-status">
                               {isCompleted
-                                ? t('deepReviewActionBar.remediationStatus.fixed', { defaultValue: 'Fixed' })
-                                : t('deepReviewActionBar.remediationStatus.fixing', { defaultValue: 'Fixing' })}
+                                ? t('deepReviewActionBar.remediationStatus.fixed')
+                                : t('deepReviewActionBar.remediationStatus.fixing')}
                             </span>
                           )}
                           {item.requiresDecision && (
                             <span className="deep-review-action-bar__remediation-tag">
-                              {t('reviewActionBar.needsDecisionTag', { defaultValue: 'Decision' })}
+                              {t('reviewActionBar.needsDecisionTag')}
                             </span>
                           )}
                           {item.groupId === 'verification' ? (
@@ -243,8 +242,8 @@ export const RemediationSelectionPanel: React.FC<RemediationSelectionPanelProps>
                               }}
                             >
                               {expandedDecisionIds.has(item.id)
-                                ? t('toolCards.codeReview.remediationActions.collapseOptions', { defaultValue: 'Hide options' })
-                                : t('toolCards.codeReview.remediationActions.expandOptions', { defaultValue: 'Show options' })}
+                                ? t('toolCards.codeReview.remediationActions.collapseOptions')
+                                : t('toolCards.codeReview.remediationActions.expandOptions')}
                             </button>
                           )}
                           {expandedDecisionIds.has(item.id) && item.decisionContext?.options && (
@@ -267,7 +266,7 @@ export const RemediationSelectionPanel: React.FC<RemediationSelectionPanelProps>
                                       </span>
                                       <span className="deep-review-action-bar__decision-option-text">
                                         {opt}
-                                        {isRecommended ? ` (${t('toolCards.codeReview.remediationActions.recommended', { defaultValue: 'recommended' })})` : ''}
+                                        {isRecommended ? ` (${t('toolCards.codeReview.remediationActions.recommended')})` : ''}
                                       </span>
                                     </button>
                                   </li>
@@ -290,9 +289,7 @@ export const RemediationSelectionPanel: React.FC<RemediationSelectionPanelProps>
         <div className="deep-review-action-bar__empty-selection" role="note">
           <Info size={14} className="deep-review-action-bar__empty-selection-icon" />
           <span>
-            {t('toolCards.codeReview.remediationActions.noSelectionHint', {
-              defaultValue: 'Select at least one remediation item to start fixing.',
-            })}
+            {t('toolCards.codeReview.remediationActions.noSelectionHint')}
           </span>
         </div>
       )}

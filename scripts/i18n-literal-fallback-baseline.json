@@ -83,33 +83,6 @@
       }
     },
     {
-      "path": "src/web-ui/src/flow_chat/components/modern/ForkSessionButton.tsx",
-      "literalDefaultValues": {
-        "flow-chat:modelRound.forkDialog": 1,
-        "flow-chat:modelRound.forkFailed": 1
-      }
-    },
-    {
-      "path": "src/web-ui/src/flow_chat/components/modern/SessionFileModificationsBar.tsx",
-      "literalDefaultValues": {
-        "flow-chat:sessionFileModificationsBar.deepReviewSource": 1,
-        "flow-chat:sessionFileModificationsBar.reviewSource": 1
-      }
-    },
-    {
-      "path": "src/web-ui/src/flow_chat/components/ScrollToTurnHeaderButton.tsx",
-      "literalDefaultValues": {
-        "flow-chat:scroll.toCurrentTurn": 2
-      }
-    },
-    {
-      "path": "src/web-ui/src/flow_chat/components/StickyTaskIndicator.tsx",
-      "literalDefaultValues": {
-        "flow-chat:stickyTaskIndicator.tooltip": 1,
-        "flow-chat:toolCards.taskTool.defaultAgentKind": 1
-      }
-    },
-    {
       "path": "src/web-ui/src/flow_chat/components/TaskDetailPanel/TaskDetailPanel.tsx",
       "literalDefaultValues": {
         "flow-chat:toolCards.taskDetailPanel.stoppingSubagent": 1,
@@ -119,122 +92,10 @@
       }
     },
     {
-      "path": "src/web-ui/src/flow_chat/deep-review/action-bar/DecisionExecutionGate.tsx",
-      "literalDefaultValues": {
-        "flow-chat:deepReviewActionBar.decisionGate.cancel": 1,
-        "flow-chat:deepReviewActionBar.decisionGate.description": 1,
-        "flow-chat:deepReviewActionBar.decisionGate.missingSelection": 1,
-        "flow-chat:deepReviewActionBar.decisionGate.noOptionsHint": 1,
-        "flow-chat:deepReviewActionBar.decisionGate.supplementLabel": 1,
-        "flow-chat:deepReviewActionBar.decisionGate.supplementPlaceholder": 1,
-        "flow-chat:deepReviewActionBar.decisionGate.title": 1,
-        "flow-chat:toolCards.codeReview.remediationActions.recommended": 1
-      }
-    },
-    {
-      "path": "src/web-ui/src/flow_chat/deep-review/action-bar/PartialResultsPanel.tsx",
-      "literalDefaultValues": {
-        "flow-chat:deepReviewActionBar.hidePartialResults": 1,
-        "flow-chat:deepReviewActionBar.partialIssues": 1,
-        "flow-chat:deepReviewActionBar.partialRemediationItems": 1,
-        "flow-chat:deepReviewActionBar.partialResultsDescription": 1,
-        "flow-chat:deepReviewActionBar.partialReviewerSummaries": 1,
-        "flow-chat:deepReviewActionBar.viewPartialResults": 1
-      }
-    },
-    {
-      "path": "src/web-ui/src/flow_chat/deep-review/action-bar/RecoveryPlanPreview.tsx",
-      "literalDefaultValues": {
-        "flow-chat:deepReviewActionBar.recoveryPreserve": 1,
-        "flow-chat:deepReviewActionBar.recoveryRerun": 1,
-        "flow-chat:deepReviewActionBar.recoverySkip": 1
-      }
-    },
-    {
-      "path": "src/web-ui/src/flow_chat/deep-review/action-bar/RemediationSelectionPanel.tsx",
-      "literalDefaultValues": {
-        "flow-chat:deepReviewActionBar.remediationStatus.fixed": 1,
-        "flow-chat:deepReviewActionBar.remediationStatus.fixing": 1,
-        "flow-chat:reviewActionBar.needsDecisionTag": 1,
-        "flow-chat:toolCards.codeReview.remediationActions.collapseOptions": 1,
-        "flow-chat:toolCards.codeReview.remediationActions.expandOptions": 1,
-        "flow-chat:toolCards.codeReview.remediationActions.noSelectionHint": 1,
-        "flow-chat:toolCards.codeReview.remediationActions.recommended": 1,
-        "flow-chat:toolCards.codeReview.remediationActions.selectionCount": 1,
-        "flow-chat:toolCards.codeReview.remediationActions.ungrouped": 1
-      }
-    },
-    {
-      "path": "src/web-ui/src/flow_chat/services/flow-chat-manager/EventHandlerModule.ts",
-      "literalDefaultValues": {
-        "flow-chat:chatInput.goalAchieved": 1,
-        "flow-chat:chatInput.goalVerifyFailed": 1,
-        "flow-chat:chatInput.goalVerifying": 1
-      }
-    },
-    {
-      "path": "src/web-ui/src/flow_chat/services/openBtwSession.ts",
-      "literalDefaultValues": {
-        "flow-chat:btw.threadLabel": 1
-      }
-    },
-    {
-      "path": "src/web-ui/src/flow_chat/tool-cards/ContextCompressionDisplay.tsx",
-      "literalDefaultValues": {
-        "flow-chat:toolCards.contextCompression.noSummaryNotice": 1
-      }
-    },
-    {
-      "path": "src/web-ui/src/flow_chat/tool-cards/GetFileDiffDisplay.tsx",
-      "literalDefaultValues": {
-        "flow-chat:toolCards.getFileDiff.diffFile": 1,
-        "flow-chat:toolCards.getFileDiff.failed": 2,
-        "flow-chat:toolCards.getFileDiff.gettingDiff": 1,
-        "flow-chat:toolCards.getFileDiff.preparing": 1
-      }
-    },
-    {
-      "path": "src/web-ui/src/flow_chat/tool-cards/ReadFileDisplay.tsx",
-      "literalDefaultValues": {
-        "flow-chat:toolCards.readFile.permissionRequest": 1
-      }
-    },
-    {
-      "path": "src/web-ui/src/flow_chat/tool-cards/ToolTimeoutIndicator.tsx",
-      "literalDefaultValues": {
-        "flow-chat:toolCards.timeout.cancelledDurationTooltip": 1,
-        "flow-chat:toolCards.timeout.completedDurationTooltip": 1,
-        "flow-chat:toolCards.timeout.durationTooltip": 1,
-        "flow-chat:toolCards.timeout.failedDurationTooltip": 1,
-        "flow-chat:toolCards.timeout.failedDurationTooltipWithReason": 1
-      }
-    },
-    {
-      "path": "src/web-ui/src/infrastructure/config/components/AppearanceConfig.tsx",
-      "literalDefaultValues": {
-        "settings/basics:appearance.languageRowHint": 1,
-        "settings/basics:appearance.themeRowHint": 1
-      }
-    },
-    {
       "path": "src/web-ui/src/infrastructure/config/components/ReviewConfig.tsx",
       "literalDefaultValues": {
         "settings/default-model:selection.fast": 2,
         "settings/default-model:selection.primary": 2
-      }
-    },
-    {
-      "path": "src/web-ui/src/infrastructure/config/components/SkillsConfig.tsx",
-      "literalDefaultValues": {
-        "settings/skills:filters.project": 1,
-        "settings/skills:filters.user": 1
-      }
-    },
-    {
-      "path": "src/web-ui/src/tools/editor/components/MarkdownEditor.tsx",
-      "literalDefaultValues": {
-        "tools:editor.markdownEditor.copiedMarkdown": 4,
-        "tools:editor.markdownEditor.copyMarkdown": 4
       }
     }
   ]

@@ -1980,9 +1980,7 @@ function handleGoalVerificationStartedEvent(event: any): void {
 
   handleGoalVerificationStarted(
     { sessionId: payload.sessionId, sourceTurnId: payload.sourceTurnId },
-    i18nService.t('flow-chat:chatInput.goalVerifying', {
-      defaultValue: 'Checking if the session goal is met...',
-    }),
+    i18nService.t('flow-chat:chatInput.goalVerifying'),
   );
 }
 
@@ -2000,12 +1998,8 @@ function handleGoalVerificationFinishedEvent(event: any): void {
       outcome: payload.outcome,
     },
     {
-      achievedTitle: i18nService.t('flow-chat:chatInput.goalAchieved', {
-        defaultValue: 'Session goal achieved',
-      }),
-      failedMessage: i18nService.t('flow-chat:chatInput.goalVerifyFailed', {
-        defaultValue: 'Goal verification failed. Check model configuration and try again.',
-      }),
+      achievedTitle: i18nService.t('flow-chat:chatInput.goalAchieved'),
+      failedMessage: i18nService.t('flow-chat:chatInput.goalVerifyFailed'),
     },
   );
 }

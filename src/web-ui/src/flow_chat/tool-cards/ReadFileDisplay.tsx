@@ -138,7 +138,7 @@ export const ReadFileDisplay: React.FC<ToolCardProps> = React.memo(({
     if (showConfirmationActions || status === 'pending_confirmation') {
       return (
         <>
-          {t('toolCards.readFile.permissionRequest', { defaultValue: 'Requesting read permission:' })} {permissionTargetPath}
+          {t('toolCards.readFile.permissionRequest')} {permissionTargetPath}
           {lineRange && <span className="read-file-meta"> {lineRange}</span>}
         </>
       );

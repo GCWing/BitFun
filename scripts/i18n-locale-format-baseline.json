@@ -1,14 +1,5 @@
 {
   "version": 1,
   "description": "Temporary no-growth baseline for direct locale formatting calls outside the shared i18n formatting APIs. Lower this file when callers move to i18n-owned format helpers.",
-  "budgets": [
-    {
-      "path": "src/crates/core/src/miniapp/builtin/assets/coding-selfie/ui.js",
-      "maxLocaleFormatCalls": 1
-    },
-    {
-      "path": "src/crates/core/src/miniapp/builtin/assets/pr-review/ui.js",
-      "maxLocaleFormatCalls": 1
-    }
-  ]
+  "budgets": []
 }

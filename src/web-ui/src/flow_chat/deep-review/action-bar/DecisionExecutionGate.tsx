@@ -35,14 +35,10 @@ export const DecisionExecutionGate: React.FC<DecisionExecutionGateProps> = ({
         <AlertTriangle size={16} className="deep-review-action-bar__decision-gate-icon" />
         <div>
           <div className="deep-review-action-bar__decision-gate-title">
-            {t('deepReviewActionBar.decisionGate.title', {
-              defaultValue: 'Confirm decision items before fixing',
-            })}
+            {t('deepReviewActionBar.decisionGate.title')}
           </div>
           <div className="deep-review-action-bar__decision-gate-desc">
-            {t('deepReviewActionBar.decisionGate.description', {
-              defaultValue: 'Choose how each selected decision should be handled before BitFun starts editing.',
-            })}
+            {t('deepReviewActionBar.decisionGate.description')}
           </div>
         </div>
       </div>
@@ -87,7 +83,7 @@ export const DecisionExecutionGate: React.FC<DecisionExecutionGateProps> = ({
                         </span>
                         <span className="deep-review-action-bar__decision-gate-option-text">
                           {option}
-                          {isRecommended ? ` (${t('toolCards.codeReview.remediationActions.recommended', { defaultValue: 'recommended' })})` : ''}
+                          {isRecommended ? ` (${t('toolCards.codeReview.remediationActions.recommended')})` : ''}
                         </span>
                       </button>
                     );
@@ -95,9 +91,7 @@ export const DecisionExecutionGate: React.FC<DecisionExecutionGateProps> = ({
                 </div>
               ) : (
                 <div className="deep-review-action-bar__decision-gate-note">
-                  {t('deepReviewActionBar.decisionGate.noOptionsHint', {
-                    defaultValue: 'This item has no structured options. Confirm only if you want the selected plan to be executed as written.',
-                  })}
+                  {t('deepReviewActionBar.decisionGate.noOptionsHint')}
                 </div>
               )}
             </section>
@@ -107,25 +101,19 @@ export const DecisionExecutionGate: React.FC<DecisionExecutionGateProps> = ({
 
       <label className="deep-review-action-bar__decision-gate-supplement">
         <span>
-          {t('deepReviewActionBar.decisionGate.supplementLabel', {
-            defaultValue: 'Additional requirements',
-          })}
+          {t('deepReviewActionBar.decisionGate.supplementLabel')}
         </span>
         <textarea
           value={customInstructions}
           onChange={(event) => onCustomInstructionsChange(event.target.value)}
-          placeholder={t('deepReviewActionBar.decisionGate.supplementPlaceholder', {
-            defaultValue: 'Optional: add constraints, scope limits, or implementation preferences before starting.',
-          })}
+          placeholder={t('deepReviewActionBar.decisionGate.supplementPlaceholder')}
           rows={2}
         />
       </label>
 
       {confirmDisabled && (
         <div className="deep-review-action-bar__decision-gate-warning" role="note">
-          {t('deepReviewActionBar.decisionGate.missingSelection', {
-            defaultValue: 'Choose an option for each selected decision item before starting.',
-          })}
+          {t('deepReviewActionBar.decisionGate.missingSelection')}
         </div>
       )}
 
@@ -138,18 +126,14 @@ export const DecisionExecutionGate: React.FC<DecisionExecutionGateProps> = ({
         >
           {t(rerunReview
             ? 'deepReviewActionBar.decisionGate.confirmFixAndReview'
-            : 'deepReviewActionBar.decisionGate.confirmFix', {
-            defaultValue: rerunReview ? 'Confirm and re-review' : 'Confirm and start',
-          })}
+            : 'deepReviewActionBar.decisionGate.confirmFix')}
         </Button>
         <Button
           variant="secondary"
           size="small"
           onClick={onCancel}
         >
-          {t('deepReviewActionBar.decisionGate.cancel', {
-            defaultValue: 'Back to selection',
-          })}
+          {t('deepReviewActionBar.decisionGate.cancel')}
         </Button>
       </div>
     </div>

@@ -31,7 +31,6 @@ export const PartialResultsPanel: React.FC<PartialResultsPanelProps> = ({
             {t('deepReviewActionBar.partialResultsDescription', {
               completed: progressSummary.completed,
               total: progressSummary.total,
-              defaultValue: '{{completed}}/{{total}} reviewers completed',
             })}
           </span>
           <button
@@ -41,8 +40,8 @@ export const PartialResultsPanel: React.FC<PartialResultsPanelProps> = ({
           >
             <Eye size={12} />
             {showPartialResults
-              ? t('deepReviewActionBar.hidePartialResults', { defaultValue: 'Hide partial results' })
-              : t('deepReviewActionBar.viewPartialResults', { defaultValue: 'View partial results' })}
+              ? t('deepReviewActionBar.hidePartialResults')
+              : t('deepReviewActionBar.viewPartialResults')}
           </button>
         </div>
       )}
@@ -54,7 +53,6 @@ export const PartialResultsPanel: React.FC<PartialResultsPanelProps> = ({
               <span className="deep-review-action-bar__partial-section-title">
                 {t('deepReviewActionBar.partialIssues', {
                   count: partialResults.completedIssues.length,
-                  defaultValue: '{{count}} issues found',
                 })}
               </span>
             </div>
@@ -64,7 +62,6 @@ export const PartialResultsPanel: React.FC<PartialResultsPanelProps> = ({
               <span className="deep-review-action-bar__partial-section-title">
                 {t('deepReviewActionBar.partialRemediationItems', {
                   count: partialResults.completedRemediationItems.length,
-                  defaultValue: '{{count}} remediation items',
                 })}
               </span>
             </div>
@@ -74,7 +71,6 @@ export const PartialResultsPanel: React.FC<PartialResultsPanelProps> = ({
               <span className="deep-review-action-bar__partial-section-title">
                 {t('deepReviewActionBar.partialReviewerSummaries', {
                   count: partialResults.completedReviewerSummaries.length,
-                  defaultValue: '{{count}} reviewer summaries',
                 })}
               </span>
               <ul className="deep-review-action-bar__partial-list">

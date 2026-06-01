@@ -129,15 +129,15 @@ export const GetFileDiffDisplay: React.FC<ToolCardProps> = React.memo(({
 
   const getActionText = () => {
     if (isFailed) {
-      return t('toolCards.getFileDiff.failed', { defaultValue: 'Diff failed' });
+      return t('toolCards.getFileDiff.failed');
     }
     if (status === 'running' || status === 'streaming') {
-      return t('toolCards.getFileDiff.gettingDiff', { defaultValue: 'Getting diff' });
+      return t('toolCards.getFileDiff.gettingDiff');
     }
     if (status === 'pending' || status === 'preparing') {
-      return t('toolCards.getFileDiff.preparing', { defaultValue: 'Preparing diff' });
+      return t('toolCards.getFileDiff.preparing');
     }
-    return t('toolCards.getFileDiff.diffFile', { defaultValue: 'Diff' });
+    return t('toolCards.getFileDiff.diffFile');
   };
 
   const renderHeader = () => (
@@ -222,7 +222,7 @@ export const GetFileDiffDisplay: React.FC<ToolCardProps> = React.memo(({
   const renderErrorContent = () => (
     <div className="error-content">
       <div className="error-message">
-        {t('toolCards.getFileDiff.failed', { defaultValue: 'Failed to get file diff' })}
+        {t('toolCards.getFileDiff.failed')}
       </div>
     </div>
   );

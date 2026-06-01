@@ -35,7 +35,7 @@ const resolveBtwSessionTitle = (childSessionId: string): string => {
     ? resolveSessionTitle(session, (key, options) => i18nService.t(key, options))
     : undefined;
   if (title) return title;
-  return i18nService.t('flow-chat:btw.threadLabel', { defaultValue: 'Side thread' });
+  return i18nService.t('flow-chat:btw.threadLabel');
 };
 
 const scheduleFrame = (callback: FrameRequestCallback): void => {
