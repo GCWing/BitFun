@@ -119,6 +119,10 @@ enum Commands {
         #[arg(long, num_args = 0..=1, default_missing_value = "-")]
         output_patch: Option<String>,
 
+        /// External agent deadline in seconds, used by eval guidance
+        #[arg(long)]
+        deadline_sec: Option<u64>,
+
         /// Tool execution requires confirmation (default: no confirmation to avoid blocking non-interactive mode)
         #[arg(long)]
         confirm: bool,
@@ -597,6 +601,7 @@ async fn run_cli() -> Result<()> {
             fork_session,
             output_format,
             output_patch,
+            deadline_sec,
             confirm,
         }) => {
             root_handlers::handle_exec_command(
@@ -611,6 +616,7 @@ async fn run_cli() -> Result<()> {
                     fork_session,
                     output_format,
                     output_patch,
+                    deadline_sec,
                     confirm,
                 },
             )
