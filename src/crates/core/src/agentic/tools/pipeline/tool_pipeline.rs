@@ -19,13 +19,13 @@ use bitfun_agent_tools::{
     build_invalid_tool_call_error_message, build_tool_execution_error_presentation,
     build_user_steering_interrupted_presentation, render_tool_result_for_assistant,
     truncate_raw_tool_arguments_preview, truncate_tool_arguments_preview,
-    validate_collapsed_tool_usage, validate_tool_allowed_by_list, GET_TOOL_SPEC_TOOL_NAME,
+    validate_tool_execution_admission, ToolCallLoopDecision, ToolCallLoopHistory,
+    ToolExecutionAdmissionRejection, ToolExecutionAdmissionRequest, GET_TOOL_SPEC_TOOL_NAME,
     USER_STEERING_INTERRUPTED_MESSAGE,
 };
 use dashmap::DashMap;
 use futures::future::join_all;
 use log::{debug, error, info, warn};
-use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::{Instant, SystemTime};
 use tokio::sync::{oneshot, RwLock as TokioRwLock};
@@ -36,23 +36,6 @@ use tokio_util::sync::CancellationToken;
 struct ToolBatch {
     task_ids: Vec<String>,
     is_concurrent: bool,
-}
-
-/// Number of *consecutive* identical tool calls (same name + deep-equal
-/// arguments) tolerated before the pipeline blocks further attempts as a
-/// detected loop. The (N+1)-th identical call is the one that gets blocked.
-const TOOL_CALL_LOOP_THRESHOLD: usize = 3;
-
-/// Cap on per-session recent tool call history. Bounded so a long-lived
-/// session does not accumulate unbounded memory; only the tail of the window
-/// participates in loop detection anyway.
-const TOOL_CALL_HISTORY_WINDOW: usize = 10;
-
-/// Snapshot of a recently attempted tool call, used to detect agent loops.
-#[derive(Debug, Clone)]
-struct RecentToolCall {
-    tool_name: String,
-    arguments: serde_json::Value,
 }
 
 fn is_write_like_tool_name(tool_name: &str) -> bool {
@@ -252,6 +235,18 @@ fn should_retry_tool_error(error: &BitFunError) -> bool {
     )
 }
 
+fn map_tool_execution_admission_rejection(error: ToolExecutionAdmissionRejection) -> BitFunError {
+    match error {
+        ToolExecutionAdmissionRejection::RuntimeRestriction(error) => error.into(),
+        ToolExecutionAdmissionRejection::AllowedList(error) => {
+            BitFunError::Validation(error.to_string())
+        }
+        ToolExecutionAdmissionRejection::Collapsed(error) => {
+            BitFunError::Validation(error.to_string())
+        }
+    }
+}
+
 /// Confirmation response type
 #[derive(Debug, Clone)]
 pub enum ConfirmationResponse {
@@ -270,21 +265,11 @@ pub struct ToolPipeline {
     /// Per-session ring buffer of recent tool calls for loop detection.
     /// Keyed by session_id; entries store (tool_name, arguments) so that
     /// "same tool with deep-equal arguments" can be recognized across rounds.
-    recent_tool_calls: Arc<DashMap<String, VecDeque<RecentToolCall>>>,
+    recent_tool_calls: Arc<DashMap<String, ToolCallLoopHistory>>,
     computer_use_host: Option<ComputerUseHostRef>,
 }
 
 impl ToolPipeline {
-    fn validate_collapsed_tool_usage(task: &ToolTask) -> BitFunResult<()> {
-        validate_collapsed_tool_usage(
-            task.tool_call.tool_name.as_str(),
-            &task.context.collapsed_tools,
-            &task.context.unlocked_collapsed_tools,
-            GET_TOOL_SPEC_TOOL_NAME,
-        )
-        .map_err(|error| BitFunError::Validation(error.to_string()))
-    }
-
     pub fn new(
         tool_registry: Arc<TokioRwLock<ToolRegistry>>,
         state_manager: Arc<ToolStateManager>,
@@ -300,42 +285,17 @@ impl ToolPipeline {
         }
     }
 
-    /// Check whether this tool call forms a loop (the last
-    /// `TOOL_CALL_LOOP_THRESHOLD` consecutive calls in this session all had
-    /// the same name AND deep-equal arguments). Always records the call into
-    /// the per-session history so that persistent loops continue to register.
-    /// Returns `true` if this call should be blocked.
     fn check_and_record_tool_call(
         &self,
         session_id: &str,
         tool_name: &str,
         arguments: &serde_json::Value,
-    ) -> bool {
+    ) -> ToolCallLoopDecision {
         let mut entry = self
             .recent_tool_calls
             .entry(session_id.to_string())
             .or_default();
-        let history = entry.value_mut();
-
-        // Count *consecutive* matches from the tail. A non-matching call
-        // anywhere in the window resets the streak.
-        let identical_priors = history
-            .iter()
-            .rev()
-            .take(TOOL_CALL_LOOP_THRESHOLD)
-            .take_while(|past| past.tool_name == tool_name && &past.arguments == arguments)
-            .count();
-        let is_loop = identical_priors >= TOOL_CALL_LOOP_THRESHOLD;
-
-        history.push_back(RecentToolCall {
-            tool_name: tool_name.to_string(),
-            arguments: arguments.clone(),
-        });
-        while history.len() > TOOL_CALL_HISTORY_WINDOW {
-            history.pop_front();
-        }
-
-        is_loop
+        entry.value_mut().check_and_record(tool_name, arguments)
     }
 
     /// Drop the loop-detection history for a session that is ending. Bounded
@@ -656,16 +616,13 @@ impl ToolPipeline {
         // Loop detection: refuse to execute the same tool call repeatedly with
         // identical arguments. Triggered on the (THRESHOLD + 1)-th consecutive
         // identical call within the per-session sliding window.
-        if self.check_and_record_tool_call(&task.context.session_id, &tool_name, &tool_args) {
-            let error_msg = format!(
-                "Tool-call loop blocked: '{}' was already called {} times in a row in this session with identical arguments. Refusing to execute this {}th identical call. Issue a different tool call, or stop tool-calling and respond to the user. If you wrote a file recently and want to continue or modify it, do not call Write again for the same path; use the latest Read result for that file, or call Read once if no current Read result is available, then use Edit with `old_string` taken from the current file content.",
-                tool_name,
-                TOOL_CALL_LOOP_THRESHOLD,
-                TOOL_CALL_LOOP_THRESHOLD + 1
-            );
+        if let ToolCallLoopDecision::Blocked(block) =
+            self.check_and_record_tool_call(&task.context.session_id, &tool_name, &tool_args)
+        {
+            let error_msg = block.message;
             warn!(
                 "Tool-call loop blocked: tool_name={}, tool_id={}, session_id={}, threshold={}",
-                tool_name, tool_id, task.context.session_id, TOOL_CALL_LOOP_THRESHOLD
+                tool_name, tool_id, task.context.session_id, block.threshold
             );
 
             self.state_manager
@@ -686,36 +643,16 @@ impl ToolPipeline {
             return Err(BitFunError::Validation(error_msg));
         }
 
-        if let Err(err) = validate_tool_allowed_by_list(&tool_name, &task.context.allowed_tools) {
+        if let Err(err) = validate_tool_execution_admission(ToolExecutionAdmissionRequest {
+            tool_name: &tool_name,
+            allowed_tools: &task.context.allowed_tools,
+            runtime_tool_restrictions: &task.context.runtime_tool_restrictions,
+            collapsed_tools: &task.context.collapsed_tools,
+            loaded_collapsed_tools: &task.context.unlocked_collapsed_tools,
+            get_tool_spec_tool_name: GET_TOOL_SPEC_TOOL_NAME,
+        }) {
             let error_msg = err.to_string();
-            warn!("Tool not allowed: {}", error_msg);
-
-            // Update state to failed
-            self.state_manager
-                .update_state(
-                    &tool_id,
-                    ToolExecutionState::Failed {
-                        error: error_msg.clone(),
-                        is_retryable: false,
-                        duration_ms: None,
-                        queue_wait_ms: None,
-                        preflight_ms: None,
-                        confirmation_wait_ms: None,
-                        execution_ms: None,
-                    },
-                )
-                .await;
-
-            return Err(BitFunError::Validation(error_msg));
-        }
-
-        if let Err(err) = task
-            .context
-            .runtime_tool_restrictions
-            .ensure_tool_allowed(&tool_name)
-        {
-            let error_msg = err.to_string();
-            warn!("Tool rejected by runtime restrictions: {}", error_msg);
+            warn!("Tool execution admission rejected: {}", error_msg);
 
             self.state_manager
                 .update_state(
@@ -732,29 +669,7 @@ impl ToolPipeline {
                 )
                 .await;
 
-            return Err(err.into());
-        }
-
-        if let Err(err) = Self::validate_collapsed_tool_usage(&task) {
-            let error_msg = err.to_string();
-            warn!("Collapsed tool usage validation failed: {}", error_msg);
-
-            self.state_manager
-                .update_state(
-                    &tool_id,
-                    ToolExecutionState::Failed {
-                        error: error_msg,
-                        is_retryable: false,
-                        duration_ms: None,
-                        queue_wait_ms: None,
-                        preflight_ms: None,
-                        confirmation_wait_ms: None,
-                        execution_ms: None,
-                    },
-                )
-                .await;
-
-            return Err(err);
+            return Err(map_tool_execution_admission_rejection(err));
         }
 
         let tool = {
@@ -1656,8 +1571,15 @@ mod tests {
         let mut task = test_tool_task("tool_1", "WebFetch");
         task.context.collapsed_tools = vec!["WebFetch".to_string()];
 
-        let err = ToolPipeline::validate_collapsed_tool_usage(&task)
-            .expect_err("collapsed tool should require GetToolSpec unlock");
+        let err = validate_tool_execution_admission(ToolExecutionAdmissionRequest {
+            tool_name: &task.tool_call.tool_name,
+            allowed_tools: &task.context.allowed_tools,
+            runtime_tool_restrictions: &task.context.runtime_tool_restrictions,
+            collapsed_tools: &task.context.collapsed_tools,
+            loaded_collapsed_tools: &task.context.unlocked_collapsed_tools,
+            get_tool_spec_tool_name: GET_TOOL_SPEC_TOOL_NAME,
+        })
+        .expect_err("collapsed tool should require GetToolSpec unlock");
 
         assert!(err
             .to_string()
@@ -1670,7 +1592,14 @@ mod tests {
         task.tool_call.arguments = json!({ "tool_name": "WebFetch" });
         task.context.unlocked_collapsed_tools = vec!["WebFetch".to_string()];
 
-        let result = ToolPipeline::validate_collapsed_tool_usage(&task);
+        let result = validate_tool_execution_admission(ToolExecutionAdmissionRequest {
+            tool_name: &task.tool_call.tool_name,
+            allowed_tools: &task.context.allowed_tools,
+            runtime_tool_restrictions: &task.context.runtime_tool_restrictions,
+            collapsed_tools: &task.context.collapsed_tools,
+            loaded_collapsed_tools: &task.context.unlocked_collapsed_tools,
+            get_tool_spec_tool_name: GET_TOOL_SPEC_TOOL_NAME,
+        });
 
         assert!(
             result.is_ok(),

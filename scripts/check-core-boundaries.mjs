@@ -4395,8 +4395,8 @@ const requiredContentRules = [
       'core must continue carrying collapsed-tool unlock state while delegating provider-neutral execution gate policy to agent-tools',
     patterns: [
       {
-        regex: /\bfn validate_collapsed_tool_usage\b/,
-        message: 'missing collapsed-tool execution gate compatibility wrapper',
+        regex: /\bvalidate_tool_execution_admission\b/,
+        message: 'missing provider-neutral tool execution admission gate delegation',
       },
       {
         regex: /\bunlocked_collapsed_tools\b/,

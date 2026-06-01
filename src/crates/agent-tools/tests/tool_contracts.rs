@@ -19,12 +19,14 @@ use bitfun_agent_tools::{
     resolve_workspace_tool_path, sort_tool_manifest_definitions,
     summarize_get_tool_spec_collapsed_tools, tool_path_is_effectively_absolute,
     validate_collapsed_tool_usage, validate_get_tool_spec_input, validate_tool_allowed_by_list,
-    DynamicMcpToolInfo, DynamicToolInfo, GetToolSpecCollapsedToolSummary,
-    GetToolSpecExecutionError, GetToolSpecExecutionPlan, GetToolSpecLoadObservation,
-    GetToolSpecRuntime, InputValidator, PromptVisibleToolManifestItem, ToolContextFacts,
-    ToolExposure, ToolImageAttachment, ToolManifestDefinition, ToolManifestPolicyTool,
-    ToolPathBackend, ToolPathOperation, ToolPathResolution, ToolRenderOptions, ToolResult,
-    ToolRuntimeRestrictions, ToolWorkspaceKind, ValidationResult, GET_TOOL_SPEC_TOOL_NAME,
+    validate_tool_execution_admission, DynamicMcpToolInfo, DynamicToolInfo,
+    GetToolSpecCollapsedToolSummary, GetToolSpecExecutionError, GetToolSpecExecutionPlan,
+    GetToolSpecLoadObservation, GetToolSpecRuntime, InputValidator, PromptVisibleToolManifestItem,
+    ToolCallLoopHistory, ToolContextFacts, ToolExecutionAdmissionRejection,
+    ToolExecutionAdmissionRequest, ToolExposure, ToolImageAttachment, ToolManifestDefinition,
+    ToolManifestPolicyTool, ToolPathBackend, ToolPathOperation, ToolPathResolution,
+    ToolRenderOptions, ToolResult, ToolRuntimeRestrictions, ToolWorkspaceKind, ValidationResult,
+    GET_TOOL_SPEC_TOOL_NAME,
 };
 use bitfun_agent_tools::{
     build_invalid_tool_call_error_message, build_tool_execution_error_presentation,
@@ -856,6 +858,100 @@ fn tool_allowed_list_gate_preserves_pipeline_rejection_contract() {
         err.to_string(),
         "Tool 'Bash' is not in the allowed list: [\"Read\", \"GetToolSpec\"]"
     );
+}
+
+#[test]
+fn tool_call_loop_history_blocks_fourth_identical_call_and_keeps_recovery_message() {
+    let mut history = ToolCallLoopHistory::default();
+    let args = json!({ "file_path": "src/lib.rs" });
+
+    for _ in 0..3 {
+        assert!(history.check_and_record("Write", &args).is_allowed());
+    }
+
+    let blocked = history
+        .check_and_record("Write", &args)
+        .into_blocked()
+        .expect("fourth identical call should be blocked");
+
+    assert_eq!(blocked.threshold, 3);
+    assert_eq!(blocked.attempt, 4);
+    assert!(blocked.message.contains("Tool-call loop blocked: 'Write'"));
+    assert!(blocked.message.contains("use the latest Read result"));
+
+    assert!(
+        history
+            .check_and_record("Edit", &json!({ "file_path": "src/lib.rs" }))
+            .is_allowed(),
+        "different tool call should reset the consecutive loop window"
+    );
+}
+
+#[test]
+fn tool_execution_admission_gate_preserves_pipeline_rejection_order() {
+    let mut restrictions = ToolRuntimeRestrictions::default();
+    restrictions
+        .denied_tool_names
+        .insert("WebFetch".to_string());
+
+    let request = ToolExecutionAdmissionRequest {
+        tool_name: "WebFetch",
+        allowed_tools: &["Read".to_string()],
+        runtime_tool_restrictions: &restrictions,
+        collapsed_tools: &["WebFetch".to_string()],
+        loaded_collapsed_tools: &[],
+        get_tool_spec_tool_name: GET_TOOL_SPEC_TOOL_NAME,
+    };
+
+    let err = validate_tool_execution_admission(request)
+        .expect_err("allowed-list should be evaluated before runtime restrictions");
+
+    assert!(matches!(
+        err,
+        ToolExecutionAdmissionRejection::AllowedList(_)
+    ));
+    assert_eq!(
+        err.to_string(),
+        "Tool 'WebFetch' is not in the allowed list: [\"Read\"]"
+    );
+
+    let request = ToolExecutionAdmissionRequest {
+        tool_name: "WebFetch",
+        allowed_tools: &["WebFetch".to_string()],
+        runtime_tool_restrictions: &restrictions,
+        collapsed_tools: &["WebFetch".to_string()],
+        loaded_collapsed_tools: &[],
+        get_tool_spec_tool_name: GET_TOOL_SPEC_TOOL_NAME,
+    };
+
+    let err = validate_tool_execution_admission(request)
+        .expect_err("runtime restrictions should run before collapsed unlock");
+
+    assert!(matches!(
+        err,
+        ToolExecutionAdmissionRejection::RuntimeRestriction(_)
+    ));
+    assert_eq!(
+        err.to_string(),
+        "Tool 'WebFetch' is denied by runtime restrictions"
+    );
+
+    let request = ToolExecutionAdmissionRequest {
+        tool_name: "WebFetch",
+        allowed_tools: &["WebFetch".to_string()],
+        runtime_tool_restrictions: &ToolRuntimeRestrictions::default(),
+        collapsed_tools: &["WebFetch".to_string()],
+        loaded_collapsed_tools: &[],
+        get_tool_spec_tool_name: GET_TOOL_SPEC_TOOL_NAME,
+    };
+
+    let err = validate_tool_execution_admission(request)
+        .expect_err("collapsed tool should require GetToolSpec after access gates pass");
+
+    assert!(matches!(err, ToolExecutionAdmissionRejection::Collapsed(_)));
+    assert!(err
+        .to_string()
+        .contains("Call GetToolSpec first with {\"tool_name\":\"WebFetch\"}"));
 }
 
 #[test]

@@ -3,6 +3,7 @@
 //! Pure tool DTOs and helpers live here before the concrete tool framework and
 //! tool packs are moved out of the core facade.
 
+pub mod execution_gate;
 pub mod file_guidance;
 pub mod file_read_freshness;
 pub mod framework;
@@ -13,6 +14,11 @@ pub mod tool_result_storage;
 pub use bitfun_core_types::ToolImageAttachment;
 pub use bitfun_runtime_ports::{
     DynamicToolDescriptor, DynamicToolProvider, PortError, PortErrorKind, PortResult, ToolDecorator,
+};
+pub use execution_gate::{
+    build_tool_call_loop_block_message, validate_tool_execution_admission, ToolCallLoopBlock,
+    ToolCallLoopDecision, ToolCallLoopHistory, ToolExecutionAdmissionRejection,
+    ToolExecutionAdmissionRequest, TOOL_CALL_HISTORY_WINDOW, TOOL_CALL_LOOP_THRESHOLD,
 };
 pub use file_guidance::{
     file_tool_guidance_message, is_file_tool_guidance_message, FILE_TOOL_GUIDANCE_PREFIX,

@@ -14,8 +14,9 @@ the product tool runtime.
   remote POSIX path pure contracts, provider-neutral path resolution /
   absolute-path checks, runtime artifact reference assembly, file guidance
   markers, file-read freshness comparison policy, oversized tool-result
-  preview/rendering policy, tool execution result/error/invalid-call presentation policy, allowed-list /
-  collapsed-tool execution gate policy, generic/static/dynamic provider contracts, pure
+  preview/rendering policy, tool execution result/error/invalid-call presentation policy, deterministic
+  tool execution admission policy including loop detection, allowed-list,
+  runtime-restriction and collapsed-tool gates, generic/static/dynamic provider contracts, pure
   manifest/exposure helpers, generic contextual prompt-manifest resolver
   contracts, generic catalog snapshot provider contracts, generic GetToolSpec
   catalog provider/detail/summary helpers, provider-backed GetToolSpec runtime
@@ -25,7 +26,7 @@ the product tool runtime.
   registration stay outside this crate until H1 explicitly moves an owner.
 - Do not move `ToolUseContext`, concrete tools, workspace services, cancellation
   tokens, session file-read state storage, tool-result filesystem writes,
-  snapshot decoration, collapsed unlock state, product registry
+  state update side effects, snapshot decoration, collapsed unlock state, product registry
   snapshot access, or concrete `GetToolSpecTool` execution here without H1
   approval and equivalence tests.
 - Provider-specific wire serialization belongs in AI adapters, not in these

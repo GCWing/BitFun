@@ -88,8 +88,8 @@ flowchart TB
 |---|---|---|
 | `bitfun-core` | 兼容 facade、agent runtime、tool runtime 组装、service 接线和完整产品能力集合 | 仍是事实上的 runtime owner，迁移必须先保护行为等价 |
 | `bitfun-runtime-ports` | 面向 runtime/service 边界的 DTO 和 trait | 只定义 contract，不拥有 runtime 实现 |
-| `bitfun-agent-tools` | provider-neutral tool DTO、manifest、path/result policy 和 catalog contract | 已适合承接更多 tool contract，但不应拥有具体 IO tool |
-| `tool-runtime` | 既有工具执行相关 crate | 目标是收敛 provider registry、permission gate 和 execution pipeline |
+| `bitfun-agent-tools` | provider-neutral tool DTO、manifest、path/result policy、catalog contract 和 deterministic execution admission gate | 已适合承接纯 tool runtime 策略，但不应拥有具体 IO tool |
+| `tool-runtime` | 既有工具执行相关 crate | 目标是继续收敛 provider registry、permission gate 和 execution pipeline |
 | `bitfun-services-core` | 基础 service helper、本地 filesystem facade、部分通用 service 逻辑 | 适合作为本地基础 service owner，但不能吸收产品 runtime 语义 |
 | `bitfun-services-integrations` | MCP、Git、remote-connect、remote-SSH 等 integration helper | 适合拥有外部协议和重依赖 adapter，不应反向感知产品 surface |
 | `bitfun-product-domains` | MiniApp、function-agent 等纯状态、策略、port 和部分决策逻辑 | 适合承接 pure domain，不应直接执行 filesystem/Git/AI concrete call |
@@ -257,7 +257,8 @@ scheduler lifecycle、session manager、prompt loop 和 subagent registry 仍未
 工具运行时（Tool Runtime）负责工具 manifest、catalog、permission gate、execution pipeline、tool hook 和结果归一化。
 它只消费 `ToolExecutionServices` 这类窄 service 视图，不直接创建 filesystem、Git、terminal、MCP 等具体实现。
 当前相关 crate 包括 `tool-runtime`、`bitfun-agent-tools`、`bitfun-tool-packs` 以及 `bitfun-core`
-中的 tool materialization 代码。
+中的 tool materialization 代码。deterministic execution admission gate 已由 `bitfun-agent-tools` 承接；
+`bitfun-core` 的 pipeline 仍负责状态更新、registry lookup、input validation、confirmation、实际执行和 hook。
 
 ### 7.7 运行时服务层（Runtime Services）
 

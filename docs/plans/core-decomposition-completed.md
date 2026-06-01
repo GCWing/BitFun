@@ -69,16 +69,28 @@
 - Product command registry、capability pack、Harness 对 Tool Runtime / Runtime Services 的实际 orchestration
   仍是后续迁移项。
 
+### 1.5 Tool Runtime admission gate：执行准入 owner 迁移
+
+- `bitfun-agent-tools` 已承接 deterministic tool execution admission gate：tool-call loop history / block
+  message、allowed-list gate、runtime restriction gate 和 collapsed-tool unlock gate。
+- `bitfun-core` 的 tool pipeline 已删除对应常量、历史结构、循环检测算法和三段准入分支，只保留状态更新、日志、错误映射、
+  registry lookup、input validation、confirmation、实际执行和 hook。
+
+明确未完成：
+
+- `ToolUseContext` concrete service handles、product registry materialization、manifest / `GetToolSpecTool`
+  concrete adapter、snapshot wrapper、collapsed unlock persistence、具体 IO tools 仍未迁移。
+
 ## 2. 已建立保护
 
 - 新 owner crate 不得依赖回 `bitfun-core`。
 - `product-full` 是完整产品能力保护开关。
 - 构建脚本和 installer 相关脚本不作为 core 拆解的一部分修改。
 - boundary check 覆盖已外移 owner 的旧路径 facade-only / 禁止回流状态。
-- tool manifest、`GetToolSpec`、MiniApp storage layout adapter、product-domain pure helper、remote workspace search fallback、MCP config / catalog / dynamic manifest 等已有 focused baseline。
+- tool manifest、`GetToolSpec`、execution admission gate、MiniApp storage layout adapter、product-domain pure helper、remote workspace search fallback、MCP config / catalog / dynamic manifest 等已有 focused baseline。
 
 ## 3. 当前剩余结论
 
 - 低风险准备项已经完成，不再新增零散小 PR。
-- 后续只按高风险 owner 主题推进：Product-Domain Runtime、Tool Runtime、Feature / Build-Benefit Evaluation，以及经过单独保护的 Harness execution / Product Capability pack 迁移。
+- 后续只按高风险 owner 主题推进：Product-Domain Runtime、Tool Runtime 剩余主体、Feature / Build-Benefit Evaluation，以及经过单独保护的 Harness execution / Product Capability pack 迁移。
 - 缺陷修复、行为变更、冗余清理、三方库升级和构建脚本调整必须独立评估，不能伪装成 core decomposition 剩余里程碑。
