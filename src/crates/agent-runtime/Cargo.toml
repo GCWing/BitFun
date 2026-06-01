@@ -11,3 +11,4 @@ crate-type = ["rlib"]
 
 [dependencies]
 bitfun-runtime-ports = { path = "../runtime-ports" }
+serde_json = { workspace = true }

@@ -40,10 +40,11 @@ SessionManager → Session → DialogTurn → ModelRound
   concrete workflow execution stays on existing core/product paths until a
   reviewed migration proves equivalence.
 - Persisted thread goal DTOs, statuses, continuation plans, and tool response
-  contracts belong in `bitfun-runtime-ports`. Core still owns
-  `ThreadGoalRuntime`, storage/session wiring, token subscriber, continuation
-  scheduling, and `get_goal` / `create_goal` / `update_goal` handlers until an
-  Agent Runtime SDK migration proves equivalence.
+  contracts belong in `bitfun-runtime-ports`. `ThreadGoalRuntime`, turn
+  accounting, continuation planning, goal mutation decisions, and goal tool
+  response assembly belong in `bitfun-agent-runtime`. Core keeps only the
+  session metadata store, token subscriber, scheduler delivery adapter, event
+  emission, and `get_goal` / `create_goal` / `update_goal` `Tool` handlers.
 - For tools, keep lightweight contracts, pure manifest/exposure contracts,
   generic contextual prompt-manifest resolver contracts, generic catalog
   snapshot provider contracts, generic GetToolSpec catalog provider/detail/

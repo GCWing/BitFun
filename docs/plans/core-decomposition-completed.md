@@ -54,8 +54,8 @@
 - `bitfun-runtime-services` 已建立 typed service bundle、builder、capability availability 和 fake provider 基础。
 - remote workspace facts、remote session metadata、remote file projection DTO 和 remote workspace/projection host trait
   已归入 `bitfun-runtime-ports`，并由 `bitfun-services-integrations::remote_connect` 保留旧路径 re-export。
-- `bitfun-agent-runtime` 已建立为可独立构建的 Agent Runtime SDK owner crate，当前只承接 scheduler/background
-  delivery 纯决策。
+- `bitfun-agent-runtime` 已建立为可独立构建的 Agent Runtime SDK owner crate，当前承接 scheduler/background
+  delivery 纯决策，以及 thread goal runtime 的 turn accounting、goal mutation、continuation plan 和 tool response assembly。
 - persisted thread goal 的 portable DTO、status、continuation plan 和 tool response contract 已归入
   `bitfun-runtime-ports`；`get_goal` / `create_goal` / `update_goal` 已进入产品 tool registry。
 - `bitfun-harness` 已建立为可独立构建的 Harness contract crate，当前承接 workflow descriptor、legacy route
@@ -66,8 +66,8 @@
 
 - `bitfun-agent-runtime` 不代表 session manager、prompt loop、subagent registry、scheduler 生命周期或 post-turn hook
   已迁移。
-- thread goal 的 concrete runtime、store、token subscriber、scheduler continuation 和 goal tool handler 仍在
-  `bitfun-core`，后续应作为 Agent Runtime SDK owner 主题处理，而不是普通 concrete tool IO。
+- thread goal 的 metadata store、token subscriber、scheduler delivery adapter 和 goal `Tool` handler 仍在
+  `bitfun-core`；runtime 决策已经归属 `bitfun-agent-runtime`，后续不应再把它误归入普通 concrete tool IO。
 - `bitfun-harness` 不代表 Deep Review、DeepResearch、MiniApp 的 concrete workflow execution 已迁移；PR4 provider
   只生成旧路径 route plan，实际执行仍在既有 core/product 路径。
 - Product command registry、capability pack、Harness 对 Tool Runtime / Runtime Services 的实际 orchestration
@@ -108,5 +108,5 @@
 ## 3. 当前剩余结论
 
 - 低风险准备项已经完成，不再新增零散小 PR。
-- 后续只按高风险 owner 主题推进：Product-Domain Runtime、Tool Runtime 剩余主体、Feature / Build-Benefit Evaluation，以及经过单独保护的 Harness execution / Product Capability pack 迁移。
+- 后续只按高风险 owner 主题推进：Agent Runtime 剩余的 registry/scheduler lifecycle、Product-Domain Runtime、Tool Runtime 剩余主体、Feature / Build-Benefit Evaluation，以及经过单独保护的 Harness execution / Product Capability pack 迁移。
 - 缺陷修复、行为变更、冗余清理、三方库升级和构建脚本调整必须独立评估，不能伪装成 core decomposition 剩余里程碑。

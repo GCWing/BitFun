@@ -34,10 +34,11 @@ SessionManager → Session → DialogTurn → ModelRound
   DeepResearch、MiniApp 的 legacy-facade provider，但具体 workflow 执行继续
   留在既有 core / product 路径，直到有评审过的迁移和等价测试。
 - Persisted thread goal 的 DTO、status、continuation plan 和 tool response
-  contract 归属 `bitfun-runtime-ports`。`ThreadGoalRuntime`、storage/session
-  wiring、token subscriber、continuation scheduling，以及 `get_goal` /
-  `create_goal` / `update_goal` handler 仍由 core 拥有，直到 Agent Runtime
-  SDK 迁移证明行为等价。
+  contract 归属 `bitfun-runtime-ports`。`ThreadGoalRuntime`、turn accounting、
+  continuation planning、goal mutation decision 和 goal tool response assembly
+  归属 `bitfun-agent-runtime`。core 只保留 session metadata store、token
+  subscriber、scheduler delivery adapter、event emission，以及 `get_goal` /
+  `create_goal` / `update_goal` 的 `Tool` handler。
 - Tool 相关轻量 contract、portable tool context facts/provider、纯 manifest/exposure contract、generic registry / static-provider / dynamic-provider container、file guidance marker、file-read freshness 比较策略和 oversized tool-result preview/rendering 纯策略归属 `bitfun-agent-tools`；core tool runtime 通过 `product_runtime.rs` 统一负责产品工具组装、`dyn Tool` 适配、snapshot decoration、runtime manifest assembly / context filtering、按需工具说明发现（`GetToolSpec`）执行，以及 collapsed unlock observation source。
 - `ToolUseContext`、session file-read state storage、tool-result filesystem writes 与具体工具实现继续留在 core，除非已有评审过的 port/provider 方案和等价测试。
 - Tool 迁移必须保持 expanded/collapsed exposure、prompt 可见 manifest、`ToolUseContext.unlocked_collapsed_tools`，以及 desktop/MCP/ACP tool catalog 行为等价。

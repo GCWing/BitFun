@@ -3,7 +3,8 @@
 本文是 [`core-decomposition.md`](core-decomposition.md) 的开发设计文档，描述目标模块、
 接口、crate 内部结构和迁移保护。`bitfun-runtime-services` 已建立 typed service bundle、
 builder、provider registry、capability availability 和 fake provider 基础；`bitfun-agent-runtime`
-已创建并只承接可独立构建的 scheduler/background delivery 纯决策；`bitfun-harness`
+已创建并承接可独立构建的 scheduler/background delivery 与 thread goal runtime
+纯决策；`bitfun-harness`
 已创建并承接 workflow descriptor、legacy route plan 和 provider registry contract。
 未迁移的 session manager、prompt loop、subagent registry、concrete scheduler lifecycle 和
 concrete workflow execution 不得被描述为已完成。
@@ -26,7 +27,7 @@ bitfun-runtime-ports
 bitfun-runtime-services      # PR1 基础壳层
 bitfun-agent-tools
 tool-runtime
-bitfun-agent-runtime         # 已创建，当前仅承接 scheduler/background delivery 决策
+bitfun-agent-runtime         # 已创建，承接 scheduler/background delivery 与 thread goal runtime 决策
 bitfun-harness               # 已创建，当前承接 workflow descriptor / registry contract
 bitfun-services-core
 bitfun-services-integrations
@@ -93,7 +94,7 @@ bitfun-runtime-services
 
 - 只有当 owner 边界、旧路径兼容、focused tests、依赖收益和 boundary check 都能同时落地时，才创建新的目标 crate。
 - `bitfun-runtime-services` 已按该准入建立基础壳层；继续扩展时仍必须保持 typed builder、本地 service、remote service 和 fake provider 三类注入路径可测试。
-- `bitfun-agent-runtime` 已通过 scheduler/background delivery 纯决策满足创建准入；继续扩展时仍必须保持旧路径 facade、focused tests 和 boundary check。
+- `bitfun-agent-runtime` 已通过 scheduler/background delivery 和 thread goal runtime 纯决策满足创建准入；继续扩展时仍必须保持旧路径 facade、focused tests 和 boundary check。
 - `bitfun-harness` 已按 Deep Review、DeepResearch、MiniApp 三个 legacy-facade provider
   满足创建准入；继续扩展时仍必须保持 descriptor/registry、旧路径兼容、focused tests 和 boundary check。
 - 若目标 crate 只能承接单个 helper 或只能通过 `bitfun-core` 才能测试，继续留在迁移期 facade，不提前拆 crate。
@@ -244,12 +245,16 @@ Remote ports 的边界：
 
 - background delivery 状态决策：Processing 注入当前运行 turn；Missing / Idle / Error 提交 agent-session follow-up turn。
 - persisted thread goal 的 portable DTO、status、continuation plan 和 tool response contract 已在
-  `bitfun-runtime-ports`；concrete goal runtime 仍在 core。
+  `bitfun-runtime-ports`。
+- thread goal runtime 决策：turn token / wall-clock accounting、goal mutation、
+  continuation / budget-limit / objective-updated plan、tool response assembly
+  和 usage-limit / retry / skip-accounting policy。
 
 仍留在 `bitfun-core` 的范围：
 
 - concrete scheduler 生命周期、session manager、turn id 生成、injection buffer、submit 执行、prompt loop、
-  subagent registry、thread goal runtime/store/tool handler 和 post-turn hook。
+  subagent registry、thread goal metadata store、token subscriber、scheduler delivery adapter、
+  goal `Tool` handler 和 post-turn hook。
 
 职责：
 

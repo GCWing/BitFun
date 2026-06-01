@@ -41,8 +41,7 @@ impl EventSubscriber for ThreadGoalTokenSubscriber {
 
         coordinator
             .thread_goal_runtime()
-            .record_round_billable_tokens(turn_id, billable)
-            .await;
+            .record_round_billable_tokens(turn_id, billable);
 
         debug!(
             "Thread goal token accounting: session_id={}, turn_id={}, billable={}",

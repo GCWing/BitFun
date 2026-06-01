@@ -955,6 +955,26 @@ const forbiddenContentRules = [
         regex: /\bstruct\s+GoalContinuationPlan\b/,
         message: 'core goal mode types must not redefine GoalContinuationPlan; use bitfun-runtime-ports',
       },
+      {
+        regex: /\bpub\s+struct\s+ThreadGoalRuntime\b/,
+        message:
+          'core goal mode must not own thread goal runtime accounting; use bitfun-agent-runtime',
+      },
+      {
+        regex: /\bfn\s+build_thread_goal_continuation_plan\b/,
+        message:
+          'core goal mode must not own thread goal continuation planning; use bitfun-agent-runtime',
+      },
+      {
+        regex: /\bfn\s+goal_tool_response\b/,
+        message:
+          'core goal mode must not own thread goal tool response assembly; use bitfun-agent-runtime',
+      },
+      {
+        regex: /\bfn\s+billable_tokens_from_counts\b/,
+        message:
+          'core goal mode must not own thread goal token accounting policy; use bitfun-agent-runtime',
+      },
     ],
   },
   {
@@ -3256,12 +3276,17 @@ const requiredContentRules = [
   {
     path: 'src/crates/core/src/agentic/goal_mode/mod.rs',
     reason:
-      'core goal mode types must preserve legacy import path while runtime-ports owns portable goal contracts',
+      'core goal mode must preserve legacy import paths while runtime-ports owns portable contracts and agent-runtime owns runtime decisions',
     patterns: [
       {
         regex:
           /pub use bitfun_runtime_ports::\{[\s\S]*SetThreadGoalResult[\s\S]*ThreadGoal[\s\S]*ThreadGoalContinuationPlan[\s\S]*ThreadGoalStatus[\s\S]*ThreadGoalToolResponse[\s\S]*GOAL_MODE_METADATA_KEY[\s\S]*MAX_CONTEXT_SUMMARY_CHARS[\s\S]*MAX_THREAD_GOAL_OBJECTIVE_CHARS[\s\S]*THREAD_GOAL_METADATA_KEY[\s\S]*\};/,
         message: 'missing thread goal compatibility re-export',
+      },
+      {
+        regex:
+          /pub use bitfun_agent_runtime::thread_goal::\{[\s\S]*build_thread_goal_continuation_plan[\s\S]*goal_tool_response[\s\S]*should_skip_goal_for_turn[\s\S]*ThreadGoalRuntime[\s\S]*\};/,
+        message: 'missing thread goal runtime owner compatibility re-export',
       },
     ],
   },
@@ -7223,6 +7248,28 @@ function runManifestParserSelfTest() {
         'background_delivery_starts_agent_session_follow_up_when_session_is_not_processing',
         'background_delivery_follow_up_uses_agent_session_source_semantics',
         'background_delivery_injection_does_not_expose_follow_up_policy',
+      ],
+    },
+    {
+      path: 'src/crates/agent-runtime/src/thread_goal.rs',
+      contracts: [
+        'ThreadGoalRuntime',
+        'SetThreadGoalRequest',
+        'build_set_thread_goal_result',
+        'continuation_after_turn',
+        'ThreadGoalContinuationOutcome',
+        'goal_tool_response',
+        'should_skip_goal_for_turn',
+      ],
+    },
+    {
+      path: 'src/crates/agent-runtime/tests/thread_goal_contracts.rs',
+      contracts: [
+        'set_thread_goal_creates_new_active_goal_with_trimmed_objective',
+        'continuation_outcome_increments_active_goal_and_builds_plan',
+        'continuation_outcome_marks_active_goal_blocked_at_limit',
+        'continuation_outcome_reports_budget_limit_once_when_tokens_cross_budget',
+        'prompt_and_tool_response_contracts_match_thread_goal_wire_shape',
       ],
     },
     {
