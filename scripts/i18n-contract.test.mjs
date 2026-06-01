@@ -1011,6 +1011,31 @@ auditIntegrationTest('i18n audit catches array-namespace keys and stale literal 
   });
 });
 
+auditIntegrationTest('i18n audit catches composed literal defaultValue fallbacks', { concurrency: false }, () => {
+  const composedFallbackFixture = 'src/web-ui/src/__i18n_composed_default_value_fixture__.tsx';
+
+  withTemporaryTextFile(
+    composedFallbackFixture,
+    [
+      "import { useI18n } from '@/infrastructure/i18n';",
+      'export function I18nComposedDefaultValueFixture() {',
+      "  const { t } = useI18n('flow-chat');",
+      "  return <div>{t('flowChatHeader.turnBadge', { current: 1, defaultValue: `Turn ${1}` + ' fallback' })}</div>;",
+      '}',
+      '',
+    ].join('\n'),
+    () => {
+      const result = runI18nAudit();
+      assert.notEqual(result.status, 0, 'composed static defaultValue fallback should fail audit');
+      assert.match(
+        `${result.stdout}\n${result.stderr}`,
+        /literal i18next defaultValue fallback/,
+        'audit output should identify composed defaultValue fallback debt',
+      );
+    },
+  );
+});
+
 test('i18n generation checks are stable across line endings', () => {
   const generatorSource = readText('scripts/generate-i18n-contract.mjs');
 

@@ -574,7 +574,7 @@ const AgentsHomeView: React.FC = () => {
               className="gallery-anchor-btn"
               onClick={() => scrollToZone('teams-zone')}
             >
-              {t('nav.teams', { defaultValue: 'Teams' })}
+              {t('nav.teams')}
             </button>
             <button
               type="button"
@@ -648,13 +648,8 @@ const AgentsHomeView: React.FC = () => {
 
         <GalleryZone
           id="teams-zone"
-          title={t('teamsZone.title', {
-            defaultValue: 'Agent Teams',
-          })}
-          subtitle={t('teamsZone.subtitle', {
-            defaultValue:
-              'Organize multi-agent lineups for deeper tasks. A professional code review team is now available.',
-          })}
+          title={t('teamsZone.title')}
+          subtitle={t('teamsZone.subtitle')}
           tools={(
             <>
               <button
@@ -663,7 +658,7 @@ const AgentsHomeView: React.FC = () => {
                 onClick={openReviewTeam}
               >
                 <ShieldCheck size={15} />
-                <span>{t('reviewTeams.detail.open', { defaultValue: 'Configure team' })}</span>
+                <span>{t('reviewTeams.detail.open')}</span>
               </button>
               <span className="gallery-zone-count">{reviewTeam ? 1 : 0}</span>
             </>
@@ -675,19 +670,11 @@ const AgentsHomeView: React.FC = () => {
             <GalleryGrid minCardWidth={360}>
               <AgentTeamCard
                 index={0}
-                title={t('reviewTeams.default.name', {
-                  defaultValue: 'Code Review Team',
-                })}
-                subtitle={t('reviewTeams.default.summary', {
-                  defaultValue:
-                    'A deep-review code team with locked logic, performance, security, architecture, and quality-gate roles.',
-                })}
-                roleName={t('reviewTeams.detail.localOnly', {
-                  defaultValue: 'Code review',
-                })}
+                title={t('reviewTeams.default.name')}
+                subtitle={t('reviewTeams.default.summary')}
+                roleName={t('reviewTeams.detail.localOnly')}
                 tagNames={t('reviewTeams.default.tags', {
-                  returnObjects: true,
-                  defaultValue: ['Quality', 'Performance', 'Architecture'],
+                  returnObjects: true
                 }) as string[]}
                 onOpen={openReviewTeam}
               />
@@ -697,9 +684,7 @@ const AgentsHomeView: React.FC = () => {
           {!loading && !reviewTeam ? (
             <GalleryEmpty
               icon={<ShieldCheck size={32} strokeWidth={1.5} />}
-              message={t('teamsZone.empty', {
-                defaultValue: 'No agent teams are available right now.',
-              })}
+              message={t('teamsZone.empty')}
             />
           ) : null}
         </GalleryZone>

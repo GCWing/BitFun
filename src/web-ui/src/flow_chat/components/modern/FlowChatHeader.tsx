@@ -104,15 +104,10 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   const truncatedMessage = currentUserMessage.length > 50
     ? currentUserMessage.slice(0, 50) + '...'
     : currentUserMessage;
-  const turnListTooltip = t('flowChatHeader.turnList', {
-    defaultValue: 'Turn list',
-  });
-  const untitledTurnLabel = t('flowChatHeader.untitledTurn', {
-    defaultValue: 'Untitled turn',
-  });
+  const turnListTooltip = t('flowChatHeader.turnList');
+  const untitledTurnLabel = t('flowChatHeader.untitledTurn');
   const turnBadgeLabel = t('flowChatHeader.turnBadge', {
-    current: currentTurn,
-    defaultValue: `Turn ${currentTurn}`,
+    current: currentTurn
   });
   const previousTurnDisabled = currentTurn <= 1;
   const nextTurnDisabled = currentTurn <= 0 || currentTurn >= totalTurns;
@@ -127,9 +122,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   const displayBackgroundSubagents = useMemo(() => (
     backgroundSubagents.map((subagent) => ({
       ...subagent,
-      title: subagent.title.trim() || t('flowChatHeader.backgroundSubagentUntitled', {
-        defaultValue: 'Background subagent',
-      }),
+      title: subagent.title.trim() || t('flowChatHeader.backgroundSubagentUntitled'),
     }))
   ), [backgroundSubagents, t]);
   const hasNoResults = searchQuery.trim().length > 0 && searchMatchCount === 0;
@@ -289,8 +282,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
             }
           }}
           aria-label={t('flowChatHeader.jumpToCurrentTurn', {
-            turn: currentTurn,
-            defaultValue: `Jump to Turn ${currentTurn}`,
+            turn: currentTurn
           })}
         >
           <span className="flowchat-header__turn-badge" aria-label={turnBadgeLabel}>
@@ -310,13 +302,11 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
             size="xs"
             onClick={handleToggleSubagentList}
             tooltip={t('flowChatHeader.backgroundSubagents', {
-              count: backgroundSubagents.length,
-              defaultValue: 'Running background subagents',
+              count: backgroundSubagents.length
             })}
             disabled={!hasBackgroundSubagents}
             aria-label={t('flowChatHeader.backgroundSubagents', {
-              count: backgroundSubagents.length,
-              defaultValue: 'Running background subagents',
+              count: backgroundSubagents.length
             })}
             aria-expanded={isSubagentListOpen}
             aria-haspopup="dialog"
@@ -338,15 +328,13 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
               className="flowchat-header__subagent-list-panel"
               role="dialog"
               aria-label={t('flowChatHeader.backgroundSubagents', {
-                count: backgroundSubagents.length,
-                defaultValue: 'Running background subagents',
+                count: backgroundSubagents.length
               })}
             >
               <div className="flowchat-header__subagent-list-header">
                 <span>
                   {t('flowChatHeader.backgroundSubagents', {
-                    count: backgroundSubagents.length,
-                    defaultValue: 'Running background subagents',
+                    count: backgroundSubagents.length
                   })}
                 </span>
                 <span>{backgroundSubagents.length}</span>
@@ -366,12 +354,8 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                       {[
                         subagent.agentType,
                         subagent.status === 'finishing'
-                          ? t('flowChatHeader.subagentStatusFinishing', {
-                              defaultValue: 'Finishing',
-                            })
-                          : t('flowChatHeader.subagentStatusProcessing', {
-                              defaultValue: 'Running',
-                            }),
+                          ? t('flowChatHeader.subagentStatusFinishing')
+                          : t('flowChatHeader.subagentStatusProcessing'),
                       ].filter(Boolean).join(' · ')}
                     </span>
                   </button>
@@ -405,11 +389,10 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                   <span className="flowchat-header__search-count" aria-live="polite">
                     {searchQuery.trim()
                       ? hasNoResults
-                        ? t('flowChatHeader.searchNoResults', { defaultValue: 'No results' })
+                        ? t('flowChatHeader.searchNoResults')
                         : t('flowChatHeader.searchResult', {
                           current: searchCurrentMatch,
-                          total: searchMatchCount,
-                          defaultValue: `${searchCurrentMatch} / ${searchMatchCount}`,
+                          total: searchMatchCount
                         })
                       : null}
                   </span>
@@ -418,8 +401,8 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                       className="flowchat-header__search-nav-btn"
                       onClick={onSearchPrev}
                       disabled={searchMatchCount === 0}
-                      title={t('flowChatHeader.searchPrevious', { defaultValue: 'Previous match' })}
-                      aria-label={t('flowChatHeader.searchPrevious', { defaultValue: 'Previous match' })}
+                      title={t('flowChatHeader.searchPrevious')}
+                      aria-label={t('flowChatHeader.searchPrevious')}
                       type="button"
                     >
                       <ChevronUp size={10} />
@@ -428,8 +411,8 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                       className="flowchat-header__search-nav-btn"
                       onClick={onSearchNext}
                       disabled={searchMatchCount === 0}
-                      title={t('flowChatHeader.searchNext', { defaultValue: 'Next match' })}
-                      aria-label={t('flowChatHeader.searchNext', { defaultValue: 'Next match' })}
+                      title={t('flowChatHeader.searchNext')}
+                      aria-label={t('flowChatHeader.searchNext')}
                       type="button"
                     >
                       <ChevronDown size={10} />
@@ -441,8 +424,8 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
               value={searchQuery}
               onChange={e => onSearchChange?.(e.target.value)}
               onKeyDown={handleSearchKeyDown}
-              placeholder={t('flowChatHeader.searchPlaceholder', { defaultValue: 'Search messages' })}
-              aria-label={t('flowChatHeader.searchPlaceholder', { defaultValue: 'Search messages' })}
+              placeholder={t('flowChatHeader.searchPlaceholder')}
+              aria-label={t('flowChatHeader.searchPlaceholder')}
               error={hasNoResults}
             />
             <IconButton
@@ -450,8 +433,8 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
               variant="ghost"
               size="xs"
               onClick={handleCloseSearch}
-              tooltip={t('flowChatHeader.searchClose', { defaultValue: 'Close search' })}
-              aria-label={t('flowChatHeader.searchClose', { defaultValue: 'Close search' })}
+              tooltip={t('flowChatHeader.searchClose')}
+              aria-label={t('flowChatHeader.searchClose')}
             >
               <X size={14} />
             </IconButton>
@@ -462,8 +445,8 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
             variant="ghost"
             size="xs"
             onClick={handleOpenSearch}
-            tooltip={t('flowChatHeader.searchOpen', { defaultValue: 'Search messages' })}
-            aria-label={t('flowChatHeader.searchOpen', { defaultValue: 'Search messages' })}
+            tooltip={t('flowChatHeader.searchOpen')}
+            aria-label={t('flowChatHeader.searchOpen')}
             data-testid="flowchat-header-search"
           >
             <Search size={14} />
@@ -489,9 +472,9 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
             variant="ghost"
             size="xs"
             onClick={onJumpToPreviousTurn}
-            tooltip={t('flowChatHeader.previousTurn', { defaultValue: 'Previous turn' })}
+            tooltip={t('flowChatHeader.previousTurn')}
             disabled={previousTurnDisabled || !onJumpToPreviousTurn}
-            aria-label={t('flowChatHeader.previousTurn', { defaultValue: 'Previous turn' })}
+            aria-label={t('flowChatHeader.previousTurn')}
             data-testid="flowchat-header-turn-prev"
           >
             <ChevronUp size={14} />
@@ -501,9 +484,9 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
             variant="ghost"
             size="xs"
             onClick={onJumpToNextTurn}
-            tooltip={t('flowChatHeader.nextTurn', { defaultValue: 'Next turn' })}
+            tooltip={t('flowChatHeader.nextTurn')}
             disabled={nextTurnDisabled || !onJumpToNextTurn}
-            aria-label={t('flowChatHeader.nextTurn', { defaultValue: 'Next turn' })}
+            aria-label={t('flowChatHeader.nextTurn')}
             data-testid="flowchat-header-turn-next"
           >
             <ChevronDown size={14} />
@@ -526,8 +509,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                   >
                     <span className="flowchat-header__turn-list-badge">
                       {t('flowChatHeader.turnBadge', {
-                        current: turn.turnIndex,
-                        defaultValue: `Turn ${turn.turnIndex}`,
+                        current: turn.turnIndex
                       })}
                     </span>
                     <span className="flowchat-header__turn-list-title">{turn.title}</span>

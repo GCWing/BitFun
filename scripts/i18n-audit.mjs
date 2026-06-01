@@ -1847,6 +1847,12 @@ function isLiteralFallbackInitializer(ts, initializer) {
       ts.isTemplateExpression(element)
     ));
   }
+  if (ts.isBinaryExpression(value)) {
+    return (
+      isLiteralFallbackInitializer(ts, value.left) ||
+      isLiteralFallbackInitializer(ts, value.right)
+    );
+  }
   return false;
 }
 

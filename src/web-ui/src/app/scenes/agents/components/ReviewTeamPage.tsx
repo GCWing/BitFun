@@ -36,7 +36,6 @@ import {
   DEFAULT_REVIEW_TEAM_MODEL,
   FALLBACK_REVIEW_TEAM_DEFINITION,
   loadDefaultReviewTeam,
-  REVIEW_STRATEGY_DEFINITIONS,
   type ReviewStrategyLevel,
   type ReviewTeam,
   type ReviewTeamMember,
@@ -162,9 +161,7 @@ const ReviewTeamPage: React.FC = () => {
         id: 'default-review-team',
         name: 'Code Review Team',
         description: '',
-        warning: t('reviewTeams.detail.warning', {
-          defaultValue: 'Deep review may take longer and usually consumes more tokens than a standard review.',
-        }),
+        warning: t('reviewTeams.detail.warning'),
         strategyLevel: 'normal',
         memberStrategyOverrides: {},
         executionPolicy: { ...DEFAULT_REVIEW_TEAM_EXECUTION_POLICY },
@@ -217,37 +214,33 @@ const ReviewTeamPage: React.FC = () => {
   }, [t]);
 
   const getStrategyLabel = useCallback((level: ReviewStrategyLevel): string => {
-    return t(`reviewTeams.strategy.${level}.label`, {
-      defaultValue: REVIEW_STRATEGY_DEFINITIONS[level].label,
-    });
+    return t(`reviewTeams.strategy.${level}.label`);
   }, [t]);
 
   const formatPolicySeconds = useCallback((seconds: number): string => {
     if (seconds <= 0) {
-      return t('reviewTeams.detail.noTimeout', { defaultValue: 'No cap' });
+      return t('reviewTeams.detail.noTimeout');
     }
     return t('reviewTeams.detail.secondsValue', {
-      seconds,
-      defaultValue: `${seconds}s`,
+      seconds
     });
   }, [t]);
 
   const formatSplitThreshold = useCallback((count: number): string => {
     if (count <= 0) {
-      return t('reviewTeams.detail.splitDisabled', { defaultValue: 'No split' });
+      return t('reviewTeams.detail.splitDisabled');
     }
     return t('reviewTeams.detail.fileCountValue', {
-      count,
-      defaultValue: `${count} files`,
+      count
     });
   }, [t]);
 
   const formatModelLabel = useCallback((modelId: string): string => {
     if (!modelId || modelId === DEFAULT_REVIEW_TEAM_MODEL) {
-      return tModel('selection.fast', { defaultValue: 'Fast' });
+      return tModel('selection.fast');
     }
     if (modelId === 'primary') {
-      return tModel('selection.primary', { defaultValue: 'Primary' });
+      return tModel('selection.primary');
     }
 
     const match = models.find((model) => model.id === modelId);
@@ -269,8 +262,7 @@ const ReviewTeamPage: React.FC = () => {
     () =>
       team
         ? t('reviewTeams.default.members', {
-          count: team.members.length,
-          defaultValue: `${team.members.length} members`,
+          count: team.members.length
         })
         : '',
     [team, t],
@@ -284,7 +276,7 @@ const ReviewTeamPage: React.FC = () => {
   if (loading || !team) {
     return (
       <ConfigPageLayout className="review-team-page">
-        <ConfigPageLoading text={t('reviewTeams.detail.loading', { defaultValue: 'Loading code review team...' })} />
+        <ConfigPageLoading text={t('reviewTeams.detail.loading')} />
       </ConfigPageLayout>
     );
   }
@@ -296,8 +288,7 @@ const ReviewTeamPage: React.FC = () => {
   const judgeTimeoutLabel = formatPolicySeconds(policy.judgeTimeoutSeconds);
   const splitThresholdLabel = formatSplitThreshold(policy.reviewerFileSplitThreshold);
   const sameRoleInstancesLabel = t('reviewTeams.detail.instancesValue', {
-    count: policy.maxSameRoleInstances,
-    defaultValue: `${policy.maxSameRoleInstances} max`,
+    count: policy.maxSameRoleInstances
   });
   const policySummaryDescription = t('reviewTeams.detail.policySummaryDescription', {
     strategy: strategyLabel,
@@ -305,29 +296,22 @@ const ReviewTeamPage: React.FC = () => {
     judgeTimeout: judgeTimeoutLabel,
     splitThreshold: splitThresholdLabel,
     maxSameRoleInstances: sameRoleInstancesLabel,
-    defaultValue:
-      `${strategyLabel} review uses ${reviewerTimeoutLabel} reviewer timeouts, ` +
-      `${judgeTimeoutLabel} judge timeouts, splits at ${splitThresholdLabel}, ` +
-      `and allows ${sameRoleInstancesLabel} per reviewer role.`,
   });
 
   return (
     <ConfigPageLayout className="review-team-page">
       <ConfigPageHeader
-        title={t('reviewTeams.detail.title', { defaultValue: 'Code Review Team' })}
-        subtitle={t('reviewTeams.detail.subtitle', {
-          defaultValue:
-            'Inspect the Code Review Team used by Deep Review and /DeepReview. Strategy and reviewer settings live in Settings.',
-        })}
+        title={t('reviewTeams.detail.title')}
+        subtitle={t('reviewTeams.detail.subtitle')}
         extra={(
           <div className="review-team-page__header-actions">
             <Button variant="secondary" size="small" onClick={openReviewSettings}>
               <Settings size={14} style={{ marginRight: 6 }} />
-              {t('reviewTeams.detail.openSettings', { defaultValue: 'Review settings' })}
+              {t('reviewTeams.detail.openSettings')}
             </Button>
             <Button variant="secondary" size="small" onClick={openHome}>
               <ArrowLeft size={14} style={{ marginRight: 6 }} />
-              {t('reviewTeams.detail.back', { defaultValue: 'Back to Agents' })}
+              {t('reviewTeams.detail.back')}
             </Button>
           </div>
         )}
@@ -336,10 +320,8 @@ const ReviewTeamPage: React.FC = () => {
       <ConfigPageContent>
         <ConfigPageSection
           className="review-team-page__section--no-body-frame"
-          title={t('reviewTeams.detail.summaryTitle', { defaultValue: 'Team Overview' })}
-          description={t('reviewTeams.detail.summaryDescription', {
-            defaultValue: 'The code review team launches reviewers in parallel and finishes with a quality-gate pass.',
-          })}
+          title={t('reviewTeams.detail.summaryTitle')}
+          description={t('reviewTeams.detail.summaryDescription')}
         >
           <div className="review-team-page__agent-team-metrics-wrap">
             <div
@@ -352,11 +334,11 @@ const ReviewTeamPage: React.FC = () => {
               </Badge>
               <Badge variant="accent">
                 <GitBranch size={10} />
-                {t('reviewTeams.detail.localOnly', { defaultValue: 'Code review' })}
+                {t('reviewTeams.detail.localOnly')}
               </Badge>
               <Badge variant="purple">
                 <BadgeCheck size={10} />
-                {t('reviewTeams.detail.qualityGate', { defaultValue: 'Quality gate' })}
+                {t('reviewTeams.detail.qualityGate')}
               </Badge>
             </div>
           </div>
@@ -367,13 +349,11 @@ const ReviewTeamPage: React.FC = () => {
                   <GitBranch size={14} strokeWidth={1.8} />
                 </span>
                 <span className="review-team-page__summary-kicker">
-                  {t('reviewTeams.detail.localOnly', { defaultValue: 'Code review' })}
+                  {t('reviewTeams.detail.localOnly')}
                 </span>
               </div>
               <p className="review-team-page__summary-value">
-                {t('reviewTeams.detail.localOnlyDescription', {
-                  defaultValue: 'Reviewers run as BitFun subagents and report through the same review workflow.',
-                })}
+                {t('reviewTeams.detail.localOnlyDescription')}
               </p>
             </div>
             <div className="review-team-page__summary-card">
@@ -382,13 +362,11 @@ const ReviewTeamPage: React.FC = () => {
                   <Users size={14} strokeWidth={1.8} />
                 </span>
                 <span className="review-team-page__summary-kicker">
-                  {t('reviewTeams.detail.parallelLabel', { defaultValue: 'Parallel reviewers' })}
+                  {t('reviewTeams.detail.parallelLabel')}
                 </span>
               </div>
               <p className="review-team-page__summary-value">
-                {t('reviewTeams.detail.parallelDescription', {
-                  defaultValue: 'Business logic, performance, security, and extra reviewers run concurrently before the judge verifies them.',
-                })}
+                {t('reviewTeams.detail.parallelDescription')}
               </p>
             </div>
             <div className="review-team-page__summary-card">
@@ -397,7 +375,7 @@ const ReviewTeamPage: React.FC = () => {
                   <BadgeCheck size={14} strokeWidth={1.8} />
                 </span>
                 <span className="review-team-page__summary-kicker">
-                  {t('reviewTeams.detail.qualityGate', { defaultValue: 'Quality gate' })}
+                  {t('reviewTeams.detail.qualityGate')}
                 </span>
               </div>
               <p className="review-team-page__summary-value">
@@ -408,14 +386,12 @@ const ReviewTeamPage: React.FC = () => {
         </ConfigPageSection>
 
         <ConfigPageSection
-          title={t('reviewTeams.detail.policySummaryTitle', { defaultValue: 'Current Policy' })}
-          description={t('reviewTeams.detail.policySummaryIntro', {
-            defaultValue: 'This live snapshot comes from Review settings and updates when the team policy changes.',
-          })}
+          title={t('reviewTeams.detail.policySummaryTitle')}
+          description={t('reviewTeams.detail.policySummaryIntro')}
           extra={(
             <Button variant="secondary" size="small" onClick={openReviewSettings}>
               <Settings size={14} style={{ marginRight: 6 }} />
-              {t('reviewTeams.detail.openSettings', { defaultValue: 'Review settings' })}
+              {t('reviewTeams.detail.openSettings')}
             </Button>
           )}
         >
@@ -423,41 +399,37 @@ const ReviewTeamPage: React.FC = () => {
             type="button"
             className="review-team-page__policy-panel"
             onClick={openReviewSettings}
-            aria-label={t('reviewTeams.detail.policySummaryAction', {
-              defaultValue: 'Open Review settings to edit the current policy',
-            })}
+            aria-label={t('reviewTeams.detail.policySummaryAction')}
           >
             <div className="review-team-page__policy-copy">
               <span className="review-team-page__policy-eyebrow">
-                {t('reviewTeams.detail.policySummaryEyebrow', { defaultValue: 'Configured behavior' })}
+                {t('reviewTeams.detail.policySummaryEyebrow')}
               </span>
               <p className="review-team-page__policy-description">{policySummaryDescription}</p>
             </div>
 
             <div
               className="review-team-page__policy-metrics"
-              aria-label={t('reviewTeams.detail.policyMetricsLabel', {
-                defaultValue: 'Current policy values',
-              })}
+              aria-label={t('reviewTeams.detail.policyMetricsLabel')}
             >
               <span className="review-team-page__policy-metric">
-                <span>{t('reviewTeams.detail.policyStrategyLabel', { defaultValue: 'Strategy' })}</span>
+                <span>{t('reviewTeams.detail.policyStrategyLabel')}</span>
                 <strong>{strategyLabel}</strong>
               </span>
               <span className="review-team-page__policy-metric">
-                <span>{t('reviewTeams.detail.reviewerTimeout', { defaultValue: 'Reviewer timeout' })}</span>
+                <span>{t('reviewTeams.detail.reviewerTimeout')}</span>
                 <strong>{reviewerTimeoutLabel}</strong>
               </span>
               <span className="review-team-page__policy-metric">
-                <span>{t('reviewTeams.detail.judgeTimeout', { defaultValue: 'Judge timeout' })}</span>
+                <span>{t('reviewTeams.detail.judgeTimeout')}</span>
                 <strong>{judgeTimeoutLabel}</strong>
               </span>
               <span className="review-team-page__policy-metric">
-                <span>{t('reviewTeams.detail.fileSplitThreshold', { defaultValue: 'File split threshold' })}</span>
+                <span>{t('reviewTeams.detail.fileSplitThreshold')}</span>
                 <strong>{splitThresholdLabel}</strong>
               </span>
               <span className="review-team-page__policy-metric">
-                <span>{t('reviewTeams.detail.maxSameRoleInstances', { defaultValue: 'Max same-role instances' })}</span>
+                <span>{t('reviewTeams.detail.maxSameRoleInstances')}</span>
                 <strong>{sameRoleInstancesLabel}</strong>
               </span>
             </div>
@@ -468,22 +440,18 @@ const ReviewTeamPage: React.FC = () => {
 
         <ConfigPageSection
           className="review-team-page__section--no-body-frame"
-          title={t('reviewTeams.detail.membersTitle', { defaultValue: 'Team Members' })}
-          description={t('reviewTeams.detail.membersDescription', {
-            defaultValue: 'Click a member to inspect its role and responsibilities. Core roles always stay in the team.',
-          })}
+          title={t('reviewTeams.detail.membersTitle')}
+          description={t('reviewTeams.detail.membersDescription')}
           extra={(
             <div className="review-team-page__section-badges">
               <Badge variant="info">
                 {t('reviewTeams.detail.lockedCount', {
-                  count: team.coreMembers.length,
-                  defaultValue: `${team.coreMembers.length} locked roles`,
+                  count: team.coreMembers.length
                 })}
               </Badge>
               <Badge variant="neutral">
                 {t('reviewTeams.detail.extraCount', {
-                  count: team.extraMembers.length,
-                  defaultValue: `${team.extraMembers.length} extra Sub-Agents`,
+                  count: team.extraMembers.length
                 })}
               </Badge>
             </div>
@@ -518,11 +486,11 @@ const ReviewTeamPage: React.FC = () => {
                       {member.locked ? (
                         <Badge variant="neutral">
                           <Lock size={10} />
-                          {t('reviewTeams.detail.memberTypes.locked', { defaultValue: 'Locked' })}
+                          {t('reviewTeams.detail.memberTypes.locked')}
                         </Badge>
                       ) : (
                         <Badge variant="info">
-                          {t('reviewTeams.detail.memberTypes.extra', { defaultValue: 'Extra' })}
+                          {t('reviewTeams.detail.memberTypes.extra')}
                         </Badge>
                       )}
                     </div>
@@ -560,7 +528,7 @@ const ReviewTeamPage: React.FC = () => {
                         </Badge>
                         {selectedMember.locked ? (
                           <Badge variant="neutral">
-                            {t('reviewTeams.detail.memberTypes.core', { defaultValue: 'Core role' })}
+                            {t('reviewTeams.detail.memberTypes.core')}
                           </Badge>
                         ) : null}
                       </div>
@@ -573,7 +541,7 @@ const ReviewTeamPage: React.FC = () => {
 
                 <div className="review-team-page__responsibilities">
                   <span className="review-team-page__block-label">
-                    {t('reviewTeams.detail.responsibilities', { defaultValue: 'Responsibilities' })}
+                    {t('reviewTeams.detail.responsibilities')}
                   </span>
                   <ul className="review-team-page__responsibility-list">
                     {getLocalizedResponsibilities(selectedMember).map((item, index) => (

@@ -424,9 +424,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
     } catch (error) {
       const message = error instanceof Error
         ? error.message
-        : t('toolCards.taskDetailPanel.stopSubagentFailed', {
-          defaultValue: 'Failed to stop this subagent.',
-        });
+        : t('toolCards.taskDetailPanel.stopSubagentFailed');
       setStopError(message);
       log.error('Failed to stop subagent session', {
         subagentSessionId,
@@ -544,18 +542,11 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
             >
               <Square size={12} style={{ marginRight: 6 }} />
               {stoppingSubagent
-                ? t('toolCards.taskDetailPanel.stoppingSubagent', {
-                  defaultValue: 'Stopping subagent...',
-                })
-                : t('toolCards.taskDetailPanel.stopSubagent', {
-                  defaultValue: 'Stop subagent',
-                })}
+                ? t('toolCards.taskDetailPanel.stoppingSubagent')
+                : t('toolCards.taskDetailPanel.stopSubagent')}
             </Button>
             <span className="task-detail-panel__actions-hint">
-              {t('toolCards.taskDetailPanel.stopSubagentHint', {
-                defaultValue:
-                  'Cancels only this reviewer/subagent. The parent review can keep going and still produce a summary.',
-              })}
+              {t('toolCards.taskDetailPanel.stopSubagentHint')}
             </span>
           </div>
         )}
