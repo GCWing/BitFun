@@ -81,6 +81,8 @@ const TaskWithSubagentWrapper: React.FC<TaskWithSubagentWrapperProps> = React.me
   turnId,
 }) => {
   const isCollapsed = useTaskCollapsed(parentTaskToolId);
+  const isTaskRunning =
+    taskItem.status === 'preparing' || taskItem.status === 'streaming' || taskItem.status === 'running';
   const hasPrompt = Boolean(
     taskItem.type === 'tool' &&
     (taskItem as FlowToolItem).toolCall?.input?.prompt
@@ -103,8 +105,7 @@ const TaskWithSubagentWrapper: React.FC<TaskWithSubagentWrapperProps> = React.me
         parentSessionId={parentSessionId}
         directSubagentSessionId={directSubagentSessionId}
         parentToolIds={new Set<string>([parentTaskToolId, (taskItem as FlowToolItem).toolCall?.id].filter(Boolean) as string[])}
-        isRunning
-        ={taskItem.status === 'preparing' || taskItem.status === 'streaming' || taskItem.status === 'running'}
+        liveItemsMode={isTaskRunning ? 'full-turn' : 'last-round'}
         turnId={turnId}
       />
     </div>

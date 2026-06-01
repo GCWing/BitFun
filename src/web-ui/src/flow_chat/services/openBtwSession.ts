@@ -25,6 +25,20 @@ export interface BtwSessionPanelMetadata {
   contentRole: 'btw-session';
 }
 
+export interface EnsureBtwSessionAvailableParams {
+  childSessionId: string;
+  parentSessionId: string;
+  workspacePath?: string;
+  sessionKind?: 'btw' | 'review' | 'deep_review' | 'miniapp' | 'subagent';
+  sessionTitle?: string;
+  agentType?: string;
+  parentToolCallId?: string;
+  subagentType?: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
+  includeInternal?: boolean;
+}
+
 type AgentCanvasState = ReturnType<typeof useAgentCanvasStore.getState>;
 
 export const getBtwSessionDuplicateKey = (childSessionId: string) => `btw-session-${childSessionId}`;
@@ -122,6 +136,67 @@ export const selectActiveBtwSessionTab = (state: AgentCanvasState): CanvasTab | 
   return activeTab;
 };
 
+export function ensureBtwSessionAvailable(params: EnsureBtwSessionAvailableParams): void {
+  const existingSession = flowChatStore.getState().sessions.get(params.childSessionId);
+  const parentSession = flowChatStore.getState().sessions.get(params.parentSessionId);
+  const resolvedWorkspacePath = params.workspacePath || parentSession?.workspacePath;
+  const resolvedRemoteConnectionId =
+    params.remoteConnectionId || existingSession?.remoteConnectionId || parentSession?.remoteConnectionId;
+  const resolvedRemoteSshHost =
+    params.remoteSshHost || existingSession?.remoteSshHost || parentSession?.remoteSshHost;
+
+  if (
+    existingSession &&
+    (params.sessionKind === 'subagent' || existingSession.sessionKind === 'subagent')
+  ) {
+    flowChatStore.updateSessionRelationship(params.childSessionId, {
+      parentSessionId: params.parentSessionId,
+      sessionKind: params.sessionKind || existingSession.sessionKind,
+      parentToolCallId: params.parentToolCallId,
+      subagentType: params.subagentType,
+    });
+  }
+
+  if (!existingSession) {
+    flowChatStore.addExternalSession(
+      params.childSessionId,
+      params.sessionTitle || resolveBtwSessionTitle(params.childSessionId),
+      params.agentType || parentSession?.mode || 'agentic',
+      resolvedWorkspacePath,
+      {
+        parentSessionId: params.parentSessionId,
+        sessionKind: params.sessionKind || 'btw',
+        parentToolCallId: params.parentToolCallId,
+        subagentType: params.subagentType,
+      },
+      resolvedRemoteConnectionId,
+      resolvedRemoteSshHost,
+    );
+  }
+
+  const sessionToHydrate = flowChatStore.getState().sessions.get(params.childSessionId);
+  const shouldHydrate =
+    !existingSession ||
+    Boolean(
+      sessionToHydrate?.isHistorical &&
+      (sessionToHydrate.historyState === 'metadata-only' || sessionToHydrate.historyState === 'failed')
+    );
+
+  const workspacePath = resolvedWorkspacePath || sessionToHydrate?.workspacePath;
+  if (!shouldHydrate || !workspacePath) {
+    return;
+  }
+
+  void flowChatStore.loadSessionHistory(
+    params.childSessionId,
+    workspacePath,
+    undefined,
+    resolvedRemoteConnectionId,
+    resolvedRemoteSshHost,
+    { includeInternal: params.includeInternal },
+  );
+}
+
 export async function openMainSession(
   sessionId: string,
   options?: {
@@ -162,49 +237,7 @@ export function openBtwSessionInAuxPane(params: {
   remoteSshHost?: string;
   includeInternal?: boolean;
 }): void {
-  const existingSession = flowChatStore.getState().sessions.get(params.childSessionId);
-  const parentSession = flowChatStore.getState().sessions.get(params.parentSessionId);
-  const resolvedWorkspacePath = params.workspacePath || parentSession?.workspacePath;
-
-  if (
-    existingSession &&
-    (params.sessionKind === 'subagent' || existingSession.sessionKind === 'subagent')
-  ) {
-    flowChatStore.updateSessionRelationship(params.childSessionId, {
-      parentSessionId: params.parentSessionId,
-      sessionKind: params.sessionKind || existingSession.sessionKind,
-      parentToolCallId: params.parentToolCallId,
-      subagentType: params.subagentType,
-    });
-  }
-
-  if (!existingSession) {
-    const workspacePath = resolvedWorkspacePath;
-    flowChatStore.addExternalSession(
-      params.childSessionId,
-      params.sessionTitle || resolveBtwSessionTitle(params.childSessionId),
-      params.agentType || parentSession?.mode || 'agentic',
-      workspacePath,
-      {
-        parentSessionId: params.parentSessionId,
-        sessionKind: params.sessionKind || 'btw',
-        parentToolCallId: params.parentToolCallId,
-        subagentType: params.subagentType,
-      },
-      params.remoteConnectionId || parentSession?.remoteConnectionId,
-      params.remoteSshHost || parentSession?.remoteSshHost,
-    );
-    if (workspacePath) {
-      void flowChatStore.loadSessionHistory(
-        params.childSessionId,
-        workspacePath,
-        undefined,
-        params.remoteConnectionId || parentSession?.remoteConnectionId,
-        params.remoteSshHost || parentSession?.remoteSshHost,
-        { includeInternal: params.includeInternal },
-      );
-    }
-  }
+  ensureBtwSessionAvailable(params);
 
   const content = buildBtwSessionPanelContent(
     params.childSessionId,

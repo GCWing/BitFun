@@ -565,7 +565,6 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
                 parentTaskToolId={toolItem.id}
                 subagentSessionId={subagentSessionId}
                 items={visibleSubagentItems}
-                isRunning={isRunning}
                 sessionId={subagentSessionId}
                 compactText={false}
               />

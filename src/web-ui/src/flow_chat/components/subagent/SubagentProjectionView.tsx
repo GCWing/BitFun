@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { FlowChatState, FlowItem, FlowTextItem, FlowThinkingItem, FlowToolItem } from '../../types/flow-chat';
 import { FlowTextBlock } from '../FlowTextBlock';
@@ -8,6 +8,7 @@ import { taskCollapseStateManager } from '../../store/TaskCollapseStateManager';
 import { SmoothHeightCollapse } from '../modern/SmoothHeightCollapse';
 import { FlowChatStore } from '../../store/FlowChatStore';
 import { getSubagentProjectionState } from '../../utils/subagentProjection';
+import { ensureBtwSessionAvailable } from '../../services/openBtwSession';
 import './SubagentProjectionView.scss';
 
 interface SubagentProjectionViewProps {
@@ -17,11 +18,11 @@ interface SubagentProjectionViewProps {
   directSubagentSessionId?: string;
   subagentSessionId?: string;
   items?: FlowItem[];
-  isRunning?: boolean;
   turnId?: string;
   sessionId?: string;
   className?: string;
   compactText?: boolean;
+  liveItemsMode?: 'full-turn' | 'last-round';
 }
 
 const SUBAGENT_TEXT_TRUNCATE_LINES = 50;
@@ -127,24 +128,18 @@ export const SubagentProjectionView: React.FC<SubagentProjectionViewProps> = ({
   directSubagentSessionId,
   subagentSessionId,
   items: itemsProp,
-  isRunning: isRunningProp,
   turnId,
   sessionId,
   className = '',
   compactText = true,
+  liveItemsMode = 'last-round',
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
   const userScrolledUpRef = useRef(false);
   const lastScrollTopRef = useRef(0);
-  const previousRoundIdRef = useRef<string | null>(null);
-  const measuredHeightRef = useRef(0);
-  const retainedItemsRef = useRef<FlowItem[]>([]);
-  const floorOwnerRoundIdRef = useRef<string | null>(null);
   const [isCollapsed, setIsCollapsed] = useState(() =>
     taskCollapseStateManager.isCollapsed(parentTaskToolId)
   );
-  const [heightFloorPx, setHeightFloorPx] = useState(0);
   const [projectionState, setProjectionState] = useState(() => {
     if (!parentToolIds || parentToolIds.size === 0) {
       return null;
@@ -157,7 +152,7 @@ export const SubagentProjectionView: React.FC<SubagentProjectionViewProps> = ({
         parentToolIds,
         directSubagentSessionId,
       },
-      { itemsMode: 'last-round' },
+      { itemsMode: liveItemsMode },
     );
   });
 
@@ -189,7 +184,7 @@ export const SubagentProjectionView: React.FC<SubagentProjectionViewProps> = ({
           parentToolIds,
           directSubagentSessionId,
         },
-        { itemsMode: 'last-round' },
+        { itemsMode: liveItemsMode },
       );
     };
 
@@ -212,76 +207,54 @@ export const SubagentProjectionView: React.FC<SubagentProjectionViewProps> = ({
     });
 
     return unsubscribe;
-  }, [directSubagentSessionId, parentSessionId, parentToolIds]);
+  }, [directSubagentSessionId, liveItemsMode, parentSessionId, parentToolIds]);
 
   const liveItems = useMemo(
     () => itemsProp ?? projectionState?.items ?? [],
     [itemsProp, projectionState]
   );
-  const projectedRoundId = projectionState?.round?.id ?? null;
-  const isRunning = isRunningProp ?? projectionState?.isRunning ?? false;
   const resolvedSubagentSessionId = subagentSessionId
     ?? projectionState?.session?.sessionId
     ?? directSubagentSessionId;
-  const pendingRoundSwitchBridgePx = (() => {
-    const previousRoundId = previousRoundIdRef.current;
-    const measuredHeight = Math.ceil(measuredHeightRef.current);
+  const items = liveItems;
 
-    if (
-      !isRunning ||
-      liveItems.length > 0 ||
-      retainedItemsRef.current.length === 0 ||
-      !previousRoundId ||
-      !projectedRoundId ||
-      previousRoundId === projectedRoundId ||
-      measuredHeight <= 0
-    ) {
-      return 0;
+  useEffect(() => {
+    if (!resolvedSubagentSessionId || itemsProp !== undefined) {
+      return;
     }
 
-    return Math.max(heightFloorPx, measuredHeight);
-  })();
-  const effectiveHeightFloorPx = Math.max(heightFloorPx, pendingRoundSwitchBridgePx);
+    const flowChatStore = FlowChatStore.getInstance();
+    const state = flowChatStore.getState();
+    const session = state.sessions.get(resolvedSubagentSessionId);
+    const ownerSessionId = parentSessionId ?? sessionId;
 
-  useLayoutEffect(() => {
-    const currentRoundId = projectedRoundId;
-    const previousRoundId = previousRoundIdRef.current;
+    const shouldEnsureSession =
+      !session ||
+      (
+        session.isHistorical &&
+        (session.historyState === 'metadata-only' || session.historyState === 'failed')
+      );
 
-    if (
-      isRunning &&
-      previousRoundId &&
-      currentRoundId &&
-      previousRoundId !== currentRoundId &&
-      measuredHeightRef.current > 0
-    ) {
-      floorOwnerRoundIdRef.current = currentRoundId;
-      setHeightFloorPx(previous => Math.max(previous, Math.ceil(measuredHeightRef.current)));
+    if (!shouldEnsureSession) {
+      return;
     }
 
-    if (!isRunning) {
-      floorOwnerRoundIdRef.current = null;
-      setHeightFloorPx(0);
+    if (!ownerSessionId) {
+      return;
     }
 
-    previousRoundIdRef.current = currentRoundId;
-  }, [heightFloorPx, isRunning, liveItems.length, parentTaskToolId, projectedRoundId]);
+    ensureBtwSessionAvailable({
+      childSessionId: resolvedSubagentSessionId,
+      parentSessionId: ownerSessionId,
+      workspacePath: state.sessions.get(ownerSessionId)?.workspacePath,
+      sessionKind: 'subagent',
+      parentToolCallId: parentToolIds?.values().next().value,
+      remoteConnectionId: state.sessions.get(ownerSessionId)?.remoteConnectionId,
+      remoteSshHost: state.sessions.get(ownerSessionId)?.remoteSshHost,
+      includeInternal: true,
+    });
+  }, [items.length, itemsProp, parentSessionId, parentToolIds, resolvedSubagentSessionId, sessionId]);
 
-  const items = useMemo(() => {
-    if (liveItems.length > 0) {
-      retainedItemsRef.current = liveItems;
-      return liveItems;
-    }
-
-    if (isRunning && effectiveHeightFloorPx > 0 && retainedItemsRef.current.length > 0) {
-      return retainedItemsRef.current;
-    }
-
-    if (!isRunning) {
-      retainedItemsRef.current = [];
-    }
-
-    return liveItems;
-  }, [effectiveHeightFloorPx, isRunning, liveItems]);
   const lastActiveItemId = useMemo(() => {
     for (let index = items.length - 1; index >= 0; index -= 1) {
       const item = items[index];
@@ -298,45 +271,6 @@ export const SubagentProjectionView: React.FC<SubagentProjectionViewProps> = ({
 
     return items.length > 0 ? items[items.length - 1]?.id ?? null : null;
   }, [items]);
-
-  useEffect(() => {
-    const content = contentRef.current;
-    if (!content) {
-      return;
-    }
-
-    const updateMeasuredHeight = () => {
-      const nextHeight = Math.ceil(content.getBoundingClientRect().height);
-      measuredHeightRef.current = nextHeight;
-      const currentFloorOwnerRoundId = floorOwnerRoundIdRef.current;
-      const isShowingLiveItems = liveItems.length > 0;
-      const canReleaseHeightFloor =
-        heightFloorPx > 0 &&
-        isShowingLiveItems &&
-        currentFloorOwnerRoundId != null &&
-        projectedRoundId === currentFloorOwnerRoundId &&
-        nextHeight >= heightFloorPx - 12;
-
-      if (canReleaseHeightFloor) {
-        floorOwnerRoundIdRef.current = null;
-        setHeightFloorPx(0);
-      }
-    };
-
-    updateMeasuredHeight();
-
-    if (typeof ResizeObserver === 'undefined') {
-      const rafId = requestAnimationFrame(updateMeasuredHeight);
-      return () => cancelAnimationFrame(rafId);
-    }
-
-    const observer = new ResizeObserver(() => {
-      updateMeasuredHeight();
-    });
-    observer.observe(content);
-
-    return () => observer.disconnect();
-  }, [heightFloorPx, isRunning, items, liveItems.length, parentTaskToolId, projectedRoundId]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -390,7 +324,7 @@ export const SubagentProjectionView: React.FC<SubagentProjectionViewProps> = ({
 
   const shouldRenderProjection =
     Boolean(resolvedSubagentSessionId) &&
-    (items.length > 0 || (isRunning && effectiveHeightFloorPx > 0));
+    items.length > 0;
 
   if (!shouldRenderProjection) {
     return null;
@@ -406,9 +340,8 @@ export const SubagentProjectionView: React.FC<SubagentProjectionViewProps> = ({
           ref={containerRef}
           className={`subagent-projection-container ${isCollapsed ? 'subagent-projection-container--collapsed' : 'subagent-projection-container--expanded'}`}
           data-parent-tool-id={parentTaskToolId}
-          style={effectiveHeightFloorPx > 0 ? { minHeight: `${effectiveHeightFloorPx}px` } : undefined}
         >
-          <div ref={contentRef} className="subagent-projection-content">
+          <div className="subagent-projection-content">
             {items.map(item => renderProjectedItem(
               item,
               sessionId ?? resolvedSubagentSessionId,

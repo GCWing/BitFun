@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { openBtwSessionInAuxPane } from './openBtwSession';
+import { ensureBtwSessionAvailable, openBtwSessionInAuxPane } from './openBtwSession';
 
 const mocks = vi.hoisted(() => ({
   createTab: vi.fn(),
@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 let animationFrameCallbacks: FrameRequestCallback[] = [];
+let sessions = new Map();
 
 const stubWindowForPanelExpansion = (rightPanelCollapsed: boolean) => {
   const dispatchEvent = vi.fn();
@@ -76,7 +77,7 @@ vi.mock('@/app/components/panels/content-canvas/stores', () => ({
 vi.mock('../store/FlowChatStore', () => ({
   flowChatStore: {
     getState: () => ({
-      sessions: new Map(),
+      sessions,
     }),
     addExternalSession: (...args: unknown[]) =>
       mocks.addExternalSession(...args),
@@ -112,6 +113,7 @@ describe('openBtwSessionInAuxPane', () => {
     mocks.addExternalSession.mockClear();
     mocks.loadSessionHistory.mockClear();
     mocks.updateSessionRelationship.mockClear();
+    sessions = new Map();
     vi.stubGlobal('requestAnimationFrame', vi.fn((callback: FrameRequestCallback) => {
       animationFrameCallbacks.push(callback);
       return animationFrameCallbacks.length;
@@ -191,6 +193,91 @@ describe('openBtwSessionInAuxPane', () => {
     expect(mocks.createTab).not.toHaveBeenCalled();
     expect(dispatchEvent).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'expand-right-panel' }),
+    );
+  });
+
+  it('creates an on-demand subagent shell and hydrates it when the child session is missing', () => {
+    sessions.set('parent-session', {
+      sessionId: 'parent-session',
+      workspacePath: 'D:\\workspace\\repo',
+      mode: 'agentic',
+      remoteConnectionId: 'remote-1',
+      remoteSshHost: 'host-1',
+    });
+
+    ensureBtwSessionAvailable({
+      childSessionId: 'subagent-child',
+      parentSessionId: 'parent-session',
+      sessionKind: 'subagent',
+      parentToolCallId: 'call-1',
+      includeInternal: true,
+    });
+
+    expect(mocks.addExternalSession).toHaveBeenCalledWith(
+      'subagent-child',
+      expect.any(String),
+      'agentic',
+      'D:\\workspace\\repo',
+      expect.objectContaining({
+        parentSessionId: 'parent-session',
+        sessionKind: 'subagent',
+        parentToolCallId: 'call-1',
+      }),
+      'remote-1',
+      'host-1',
+    );
+    expect(mocks.loadSessionHistory).toHaveBeenCalledWith(
+      'subagent-child',
+      'D:\\workspace\\repo',
+      undefined,
+      'remote-1',
+      'host-1',
+      { includeInternal: true },
+    );
+  });
+
+  it('hydrates an existing metadata-only hidden child session without creating a duplicate shell', () => {
+    sessions.set('parent-session', {
+      sessionId: 'parent-session',
+      workspacePath: 'D:\\workspace\\repo',
+      mode: 'agentic',
+      remoteConnectionId: 'remote-1',
+      remoteSshHost: 'host-1',
+    });
+    sessions.set('subagent-child', {
+      sessionId: 'subagent-child',
+      sessionKind: 'subagent',
+      isHistorical: true,
+      historyState: 'metadata-only',
+      workspacePath: 'D:\\workspace\\repo',
+      remoteConnectionId: 'remote-1',
+      remoteSshHost: 'host-1',
+    });
+
+    ensureBtwSessionAvailable({
+      childSessionId: 'subagent-child',
+      parentSessionId: 'parent-session',
+      sessionKind: 'subagent',
+      parentToolCallId: 'call-1',
+      includeInternal: true,
+    });
+
+    expect(mocks.addExternalSession).not.toHaveBeenCalled();
+    expect(mocks.updateSessionRelationship).toHaveBeenCalledWith(
+      'subagent-child',
+      expect.objectContaining({
+        parentSessionId: 'parent-session',
+        sessionKind: 'subagent',
+        parentToolCallId: 'call-1',
+      }),
+    );
+    expect(mocks.loadSessionHistory).toHaveBeenCalledWith(
+      'subagent-child',
+      'D:\\workspace\\repo',
+      undefined,
+      'remote-1',
+      'host-1',
+      { includeInternal: true },
     );
   });
 });
