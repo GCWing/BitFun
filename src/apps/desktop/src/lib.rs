@@ -995,6 +995,7 @@ pub async fn run() {
             send_system_notification,
             api::system_api::quit_app,
             api::system_api::minimize_to_tray,
+            api::system_api::startup_window_control,
             api::system_api::toggle_main_window_fullscreen,
             check_command_exists,
             check_commands_exist,

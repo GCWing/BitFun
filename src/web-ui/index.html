@@ -13,6 +13,45 @@
         var light = '#f3f3f5';
         var m = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
         var root = document.documentElement;
+        var fallbackMessages = {
+          'en-US': {
+            loadingApp: 'Starting BitFun...',
+            minimize: 'Minimize',
+            maximize: 'Maximize',
+            close: 'Close',
+            petLoading: 'Loading companion...'
+          },
+          'zh-CN': {
+            loadingApp: '正在启动 BitFun...',
+            minimize: '最小化',
+            maximize: '最大化',
+            close: '关闭',
+            petLoading: '正在加载助手...'
+          },
+          'zh-TW': {
+            loadingApp: '正在啟動 BitFun...',
+            minimize: '最小化',
+            maximize: '最大化',
+            close: '關閉',
+            petLoading: '正在載入助手...'
+          }
+        };
+        function resolveLocale() {
+          var injected = window.__BITFUN_BOOTSTRAP_LOCALE__;
+          var lang = typeof injected === 'string' && injected ? injected : navigator.language;
+          if (/^zh-(tw|hk|mo|hant)/i.test(lang)) return 'zh-TW';
+          if (/^en/i.test(lang)) return 'en-US';
+          return 'zh-CN';
+        }
+        function resolveMessages() {
+          var locale = resolveLocale();
+          var injected = window.__BITFUN_BOOTSTRAP_MESSAGES__;
+          return Object.assign({}, fallbackMessages[locale], injected || {});
+        }
+        window.__BITFUN_RESOLVE_BOOTSTRAP_MESSAGES__ = resolveMessages;
+        window.__BITFUN_RESOLVE_BOOTSTRAP_LOCALE__ = resolveLocale;
+        window.__BITFUN_STARTUP_OVERLAY_STARTED_AT__ = performance.now();
+        root.setAttribute('lang', resolveLocale());
         var bg = root.style.backgroundColor || (m && m.matches ? dark : light);
         root.style.setProperty('--bitfun-startup-bg', bg);
         root.style.backgroundColor = bg;
@@ -54,44 +93,342 @@
         background-color: inherit;
       }
 
-      #root {
+      #root,
+      #bitfun-startup-overlay {
         width: 100%;
         height: 100%;
       }
 
-      .bitfun-preload {
+      #bitfun-startup-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+      }
+
+      .bitfun-sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+
+      .splash-screen {
         width: 100%;
         height: 100%;
         display: flex;
         align-items: center;
         justify-content: center;
         background: var(--bitfun-startup-bg, inherit);
+        color: rgba(143, 143, 153, 0.56);
+        font-family: "Noto Sans SC", "Inter", "Segoe UI", system-ui, sans-serif;
+        font-size: 13px;
+        pointer-events: none;
       }
 
+      #bitfun-startup-overlay.bitfun-startup-overlay--exiting {
+        animation: bitfun-startup-overlay-exit 0.5s ease-in-out both;
+      }
+
+      .bitfun-startup-window-controls {
+        position: fixed;
+        top: 8px;
+        right: 10px;
+        z-index: 2;
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        opacity: 0.72;
+        pointer-events: auto;
+      }
+
+      .bitfun-startup-window-controls[hidden] {
+        display: none;
+      }
+
+      .bitfun-startup-window-controls__btn {
+        width: 28px;
+        height: 28px;
+        display: grid;
+        place-items: center;
+        padding: 0;
+        border: 1px solid transparent;
+        border-radius: 6px;
+        background: transparent;
+        color: rgba(143, 143, 153, 0.9);
+        cursor: pointer;
+        transition: background 0.15s ease, color 0.15s ease;
+      }
+
+      .bitfun-startup-window-controls__btn:hover {
+        background: rgba(143, 143, 153, 0.12);
+        color: rgba(143, 143, 153, 1);
+      }
+
+      .bitfun-startup-window-controls__btn--close:hover {
+        color: #ef4444;
+      }
+
+      .bitfun-startup-window-controls__glyph {
+        position: relative;
+        width: 12px;
+        height: 12px;
+        display: block;
+      }
+
+      .bitfun-startup-window-controls__glyph--minimize::before {
+        content: "";
+        position: absolute;
+        left: 2px;
+        right: 2px;
+        top: 6px;
+        height: 1.5px;
+        border-radius: 999px;
+        background: currentColor;
+      }
+
+      .bitfun-startup-window-controls__glyph--maximize::before {
+        content: "";
+        position: absolute;
+        inset: 2px;
+        border: 1.5px solid currentColor;
+        border-radius: 2px;
+      }
+
+      .bitfun-startup-window-controls__glyph--close::before,
+      .bitfun-startup-window-controls__glyph--close::after {
+        content: "";
+        position: absolute;
+        left: 2px;
+        right: 2px;
+        top: 5px;
+        height: 1.5px;
+        border-radius: 999px;
+        background: currentColor;
+      }
+
+      .bitfun-startup-window-controls__glyph--close::before {
+        transform: rotate(45deg);
+      }
+
+      .bitfun-startup-window-controls__glyph--close::after {
+        transform: rotate(-45deg);
+      }
+
+      .splash-screen__center {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .splash-screen__logo-wrap {
+        animation: splash-logo-idle 3.2s ease-in-out infinite;
+        -webkit-animation: splash-logo-idle 3.2s ease-in-out infinite;
+        will-change: filter, opacity, transform;
+      }
+
+      .splash-screen__logo,
       .bitfun-preload__logo {
         display: block;
         width: 96px;
         height: 96px;
-        border-radius: 12px;
+        border-radius: 16px;
         user-select: none;
         -webkit-user-select: none;
+      }
+
+      .splash-screen__message {
+        position: absolute;
+        top: calc(100% + 16px);
+        left: 50%;
+        min-width: 220px;
+        max-width: min(360px, calc(100vw - 48px));
+        color: rgba(143, 143, 153, 0.72);
+        font-size: 12px;
+        line-height: 1.4;
+        text-align: center;
+        opacity: 0;
+        transform: translate(-50%, -2px);
+        transition: opacity 0.2s ease-out, transform 0.2s ease-out;
+        pointer-events: none;
+      }
+
+      .splash-screen__message--visible {
+        opacity: 0.62;
+        transform: translate(-50%, 0);
+      }
+
+      @keyframes splash-logo-idle {
+        0%, 100% {
+          opacity: 0.42;
+          transform: scale(0.985);
+        }
+        50% {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+
+      @keyframes bitfun-startup-overlay-exit {
+        from {
+          opacity: 1;
+        }
+        to {
+          opacity: 0;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .splash-screen__logo-wrap {
+          animation: none;
+        }
+
+        .splash-screen__logo {
+          filter: none;
+        }
+
+        .splash-screen__message {
+          transition: none;
+        }
+      }
+
+      .bitfun-pet-preload-body {
+        background: transparent !important;
+      }
+
+      .bitfun-pet-preload-body #root {
+        background: transparent;
+      }
+
+      .bitfun-pet-preload {
+        width: 100%;
+        height: 100%;
+        display: grid;
+        place-items: center;
+        background: transparent;
+        pointer-events: none;
+      }
+
+      .bitfun-pet-preload__sprite {
+        position: relative;
+        width: 48px;
+        height: 48px;
+        transform-origin: center bottom;
+        animation: bitfun-pet-preload-breathe 1.8s ease-in-out infinite;
+      }
+
+      @keyframes bitfun-pet-preload-breathe {
+        0%, 100% {
+          opacity: 0.58;
+          transform: scale(0.96);
+        }
+        50% {
+          opacity: 0.92;
+          transform: scale(1);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .bitfun-pet-preload__sprite {
+          animation: none;
+        }
       }
     </style>
   </head>
 
   <body>
     <script type="module" src="/src/main.tsx"></script>
-    <div id="root">
-      <div class="bitfun-preload" aria-hidden="true">
-        <img
-          src="/Logo-ICON-128.png"
-          alt=""
-          class="bitfun-preload__logo"
-          draggable="false"
-          decoding="async"
-          fetchpriority="low"
-        />
+    <div id="root"></div>
+    <div id="bitfun-startup-overlay">
+      <div class="splash-screen" aria-hidden="true">
+        <div class="bitfun-startup-window-controls" data-startup-window-controls hidden>
+          <button class="bitfun-startup-window-controls__btn" type="button" data-startup-window-action="minimize">
+            <span class="bitfun-startup-window-controls__glyph bitfun-startup-window-controls__glyph--minimize" aria-hidden="true"></span>
+          </button>
+          <button class="bitfun-startup-window-controls__btn" type="button" data-startup-window-action="toggle_maximize">
+            <span class="bitfun-startup-window-controls__glyph bitfun-startup-window-controls__glyph--maximize" aria-hidden="true"></span>
+          </button>
+          <button class="bitfun-startup-window-controls__btn bitfun-startup-window-controls__btn--close" type="button" data-startup-window-action="close">
+            <span class="bitfun-startup-window-controls__glyph bitfun-startup-window-controls__glyph--close" aria-hidden="true"></span>
+          </button>
+        </div>
+        <div class="splash-screen__center">
+          <div class="splash-screen__logo-wrap">
+            <img
+              class="bitfun-preload__logo"
+              src="/Logo-ICON-128.png"
+              alt=""
+              draggable="false"
+              decoding="async"
+              fetchpriority="low"
+            />
+          </div>
+          <div class="splash-screen__message">Starting BitFun...</div>
+        </div>
       </div>
     </div>
+    <script>
+      (function () {
+        var params = new URLSearchParams(window.location.search);
+        var isPetWindow = params.get('bitfunWindow') === 'agent-companion';
+        var messages = window.__BITFUN_RESOLVE_BOOTSTRAP_MESSAGES__
+          ? window.__BITFUN_RESOLVE_BOOTSTRAP_MESSAGES__()
+          : { loadingApp: 'Starting BitFun...', minimize: 'Minimize', maximize: 'Maximize', close: 'Close', petLoading: 'Loading companion...' };
+        var locale = window.__BITFUN_RESOLVE_BOOTSTRAP_LOCALE__
+          ? window.__BITFUN_RESOLVE_BOOTSTRAP_LOCALE__()
+          : 'en-US';
+        document.documentElement.setAttribute('lang', locale);
+
+        if (isPetWindow) {
+          document.body.classList.add('bitfun-pet-preload-body');
+          var startupOverlay = document.getElementById('bitfun-startup-overlay');
+          if (startupOverlay) startupOverlay.remove();
+          var root = document.getElementById('root');
+          if (root) {
+            root.innerHTML = '<div class="bitfun-pet-preload"><div class="bitfun-pet-preload__sprite" aria-hidden="true"></div><span class="bitfun-sr-only"></span></div>';
+            var petStatus = root.querySelector('.bitfun-sr-only');
+            if (petStatus) petStatus.textContent = messages.petLoading;
+          }
+          return;
+        }
+
+        var hint = document.querySelector('.splash-screen__message');
+        if (hint) {
+          hint.textContent = messages.loadingApp;
+          window.setTimeout(function () {
+            hint.classList.add('splash-screen__message--visible');
+          }, 1200);
+        }
+
+        var controls = document.querySelector('[data-startup-window-controls]');
+        if (controls && window.__BITFUN_SHOW_STARTUP_WINDOW_CONTROLS__) {
+          controls.hidden = false;
+          var labels = {
+            minimize: messages.minimize,
+            toggle_maximize: messages.maximize,
+            close: messages.close
+          };
+          controls.querySelectorAll('[data-startup-window-action]').forEach(function (button) {
+            var action = button.getAttribute('data-startup-window-action');
+            var label = labels[action] || action;
+            button.setAttribute('aria-label', label);
+            button.setAttribute('title', label);
+            button.addEventListener('click', function (event) {
+              event.preventDefault();
+              event.stopPropagation();
+              var tauri = window.__TAURI_INTERNALS__;
+              if (!tauri || typeof tauri.invoke !== 'function') return;
+              tauri.invoke('startup_window_control', { request: { action: action } }).catch(function () {});
+            });
+          });
+        }
+      })();
+    </script>
   </body>
 </html>

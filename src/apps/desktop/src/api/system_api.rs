@@ -320,6 +320,20 @@ pub struct ToggleMainWindowFullscreenResponse {
     pub is_maximized: bool,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StartupWindowControlAction {
+    Minimize,
+    ToggleMaximize,
+    Close,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StartupWindowControlRequest {
+    pub action: StartupWindowControlAction,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct MainWindowFullscreenTransition {
     next_fullscreen: bool,
@@ -391,6 +405,59 @@ pub async fn minimize_to_tray(app: tauri::AppHandle) -> Result<(), String> {
         window.hide().map_err(|e| e.to_string())?;
         log::info!("Main window minimized to tray via command");
     }
+    Ok(())
+}
+
+/// Minimal startup-window controls used by the static pre-React splash.
+#[tauri::command]
+pub async fn startup_window_control(
+    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+    request: StartupWindowControlRequest,
+) -> Result<(), String> {
+    let Some(window) = app.get_webview_window("main") else {
+        return Err("Main window not found".to_string());
+    };
+
+    match request.action {
+        StartupWindowControlAction::Minimize => {
+            window.minimize().map_err(|error| {
+                format!("Failed to minimize main window during startup: {}", error)
+            })?;
+        }
+        StartupWindowControlAction::ToggleMaximize => {
+            let is_maximized = window.is_maximized().unwrap_or(false);
+            if is_maximized {
+                window.unmaximize().map_err(|error| {
+                    format!("Failed to restore main window during startup: {}", error)
+                })?;
+            } else {
+                window.maximize().map_err(|error| {
+                    format!("Failed to maximize main window during startup: {}", error)
+                })?;
+            }
+        }
+        StartupWindowControlAction::Close => {
+            let behavior = state
+                .config_service
+                .get_config::<String>(Some("app.close_button_behavior"))
+                .await
+                .unwrap_or_else(|_| "minimize_to_tray".to_string());
+
+            if behavior == "quit" {
+                log::info!("Quit requested from startup window control");
+                crate::crash_diagnostics::mark_clean_shutdown("startup_window_control");
+                crate::perform_process_exit_cleanup();
+                app.exit(0);
+            } else {
+                window.hide().map_err(|error| {
+                    format!("Failed to hide main window during startup close: {}", error)
+                })?;
+                log::info!("Main window hidden from startup window control");
+            }
+        }
+    }
+
     Ok(())
 }
 

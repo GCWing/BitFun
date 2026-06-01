@@ -904,6 +904,7 @@
     "panelView": "Panel View"
   },
   "loading": {
+    "app": "Starting BitFun...",
     "scenes": "Loading scene",
     "workspace": "Loading workspace..."
   },

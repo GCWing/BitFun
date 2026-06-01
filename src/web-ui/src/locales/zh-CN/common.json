@@ -904,6 +904,7 @@
     "panelView": "面板视图"
   },
   "loading": {
+    "app": "正在启动 BitFun...",
     "scenes": "正在加载场景",
     "workspace": "正在加载工作区..."
   },

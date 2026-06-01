@@ -272,8 +272,64 @@ impl ThemeConfig {
         theme_id
     }
 
+    fn load_startup_locale_from_config() -> String {
+        let path_manager = match try_get_path_manager_arc() {
+            Ok(pm) => pm,
+            Err(_) => return "zh-CN".to_string(),
+        };
+        let config_file = path_manager.app_config_file();
+        let Ok(config_content) = std::fs::read_to_string(config_file) else {
+            return "zh-CN".to_string();
+        };
+        let Ok(config_value) = serde_json::from_str::<serde_json::Value>(&config_content) else {
+            return "zh-CN".to_string();
+        };
+        config_value
+            .pointer("/app/language")
+            .and_then(|value| value.as_str())
+            .or_else(|| {
+                config_value
+                    .pointer("/i18n/currentLanguage")
+                    .and_then(|value| value.as_str())
+            })
+            .unwrap_or("zh-CN")
+            .to_string()
+    }
+
+    fn startup_messages_json(locale: &str) -> String {
+        let messages = match locale {
+            "en-US" | "en" => serde_json::json!({
+                "loadingApp": "Starting BitFun...",
+                "minimize": "Minimize",
+                "maximize": "Maximize",
+                "close": "Close",
+                "petLoading": "Loading companion..."
+            }),
+            "zh-TW" | "zh-Hant-TW" => serde_json::json!({
+                "loadingApp": "正在啟動 BitFun...",
+                "minimize": "最小化",
+                "maximize": "最大化",
+                "close": "關閉",
+                "petLoading": "正在載入助手..."
+            }),
+            _ => serde_json::json!({
+                "loadingApp": "正在启动 BitFun...",
+                "minimize": "最小化",
+                "maximize": "最大化",
+                "close": "关闭",
+                "petLoading": "正在加载助手..."
+            }),
+        };
+        messages.to_string()
+    }
+
     pub fn generate_init_script(&self, startup_trace_id: &str) -> String {
         let theme_type = if self.is_light { "light" } else { "dark" };
+        let startup_locale = Self::load_startup_locale_from_config();
+        let startup_locale_json =
+            serde_json::to_string(&startup_locale).unwrap_or_else(|_| "\"zh-CN\"".to_string());
+        let startup_messages_json = Self::startup_messages_json(&startup_locale);
+        let show_startup_window_controls = !cfg!(target_os = "macos");
         let startup_trace_id_json = serde_json::to_string(startup_trace_id)
             .unwrap_or_else(|_| "\"desktop-unknown\"".to_string());
         let perf_trace_enabled = cfg!(debug_assertions)
@@ -285,6 +341,9 @@ impl ThemeConfig {
             (function() {{
                 window.__BITFUN_STARTUP_TRACE_ID__ = {startup_trace_id_json};
                 window.__BITFUN_PERF_TRACE_ENABLED__ = {perf_trace_enabled};
+                window.__BITFUN_BOOTSTRAP_LOCALE__ = {startup_locale_json};
+                window.__BITFUN_BOOTSTRAP_MESSAGES__ = {startup_messages_json};
+                window.__BITFUN_SHOW_STARTUP_WINDOW_CONTROLS__ = {show_startup_window_controls};
                 function applyTheme() {{
                     var root = document.documentElement;
                     if (!root) return false;
@@ -329,6 +388,9 @@ impl ThemeConfig {
             text_primary = self.text_primary,
             startup_trace_id_json = startup_trace_id_json,
             perf_trace_enabled = perf_trace_enabled,
+            startup_locale_json = startup_locale_json,
+            startup_messages_json = startup_messages_json,
+            show_startup_window_controls = show_startup_window_controls,
         )
     }
 

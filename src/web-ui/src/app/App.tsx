@@ -19,12 +19,16 @@ import { buildAgentCompanionActivity, subscribeAgentCompanionActivity } from '@/
 import { emitAgentCompanionActivity } from '@/flow_chat/services/AgentCompanionActivityBridge';
 import { BackgroundTaskCancelledError } from '@/shared/utils/backgroundTaskScheduler';
 import { useWorkspaceContext } from '../infrastructure/contexts/WorkspaceContext';
-import SplashScreen from './components/SplashScreen/SplashScreen';
 import { useGlobalSceneShortcuts } from './hooks/useGlobalSceneShortcuts';
 import { useDebugInspector } from '@/infrastructure/debug/useDebugInspector';
 import { openAgentCompanionSession } from './services/openAgentCompanionSession';
 import { useI18n } from '@/infrastructure/i18n';
 import { scheduleDeferredStartupSystems } from './startup/deferredStartupSystems';
+import {
+  getStartupOverlayElapsedMs,
+  hideStartupOverlay,
+  isStartupOverlayPresent,
+} from './startup/startupOverlay';
 
 // Toolbar Mode
 import { ToolbarModeProvider } from '../flow_chat';
@@ -45,16 +49,12 @@ const MIN_SPLASH_MS = 900;
 
 function App() {
   const { t } = useI18n('settings/basics');
-  const { t: tCommon } = useI18n('common');
 
   // Workspace loading state — drives splash exit timing
   const { loading: workspaceLoading } = useWorkspaceContext();
 
-  // Splash screen state
-  const [splashVisible, setSplashVisible] = useState(true);
-  const [splashExiting, setSplashExiting] = useState(false);
+  const [startupOverlayVisible, setStartupOverlayVisible] = useState(isStartupOverlayPresent);
   const hasAppDismissibleLayer = useHasDismissibleLayer('app');
-  const mountTimeRef = useRef(Date.now());
   const mainWindowShownRef = useRef(false);
   const interactiveShellReadyRef = useRef(false);
   const [interactiveShellReady, setInteractiveShellReady] = useState(false);
@@ -63,15 +63,21 @@ function App() {
   // time and then begin the exit animation.
   useEffect(() => {
     if (workspaceLoading) return;
-    const elapsed = Date.now() - mountTimeRef.current;
+    const elapsed = getStartupOverlayElapsedMs();
     const remaining = Math.max(0, MIN_SPLASH_MS - elapsed);
-    const timer = window.setTimeout(() => setSplashExiting(true), remaining);
-    return () => window.clearTimeout(timer);
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void hideStartupOverlay().then(() => {
+        if (!cancelled) {
+          setStartupOverlayVisible(false);
+        }
+      });
+    }, remaining);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, [workspaceLoading]);
-
-  const handleSplashExited = useCallback(() => {
-    setSplashVisible(false);
-  }, []);
 
   const showMainWindow = useCallback(async (reason: string) => {
     if (mainWindowShownRef.current) {
@@ -153,7 +159,7 @@ function App() {
 
   // If the early reveal path fails, keep the old post-splash show as a retry.
   useEffect(() => {
-    if (splashVisible) {
+    if (startupOverlayVisible) {
       return;
     }
 
@@ -162,7 +168,7 @@ function App() {
     }, 50);
 
     return () => window.clearTimeout(timer);
-  }, [splashVisible, verifyMainWindowVisible]);
+  }, [startupOverlayVisible, verifyMainWindowVisible]);
 
   // Safety net: if startup gets stuck, reveal the window so the user can see errors.
   useEffect(() => {
@@ -191,7 +197,7 @@ function App() {
   }, [interactiveShellReady]);
 
   useEffect(() => {
-    if (!interactiveShellReady || splashVisible) {
+    if (!interactiveShellReady || startupOverlayVisible) {
       return;
     }
 
@@ -220,7 +226,7 @@ function App() {
       disposed = true;
       editorWarmupHandle?.cancel();
     };
-  }, [interactiveShellReady, splashVisible]);
+  }, [interactiveShellReady, startupOverlayVisible]);
 
   useEffect(() => {
     if (!isTauriRuntime() || !interactiveShellReady) return;
@@ -449,14 +455,6 @@ function App() {
             {/* Announcement / feature-demo / tips system */}
             <AnnouncementProvider />
 
-            {/* Startup splash — sits above everything, exits once workspace is ready */}
-            {splashVisible && (
-              <SplashScreen
-                isExiting={splashExiting}
-                onExited={handleSplashExited}
-                delayedMessage={workspaceLoading ? tCommon('loading.workspace') : undefined}
-              />
-            )}
           </ToolbarModeProvider>
         </SSHRemoteProvider>
       </ViewModeProvider>

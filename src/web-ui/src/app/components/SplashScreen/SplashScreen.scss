@@ -65,8 +65,8 @@
   left: 50%;
   min-width: 220px;
   max-width: min(360px, calc(100vw - 48px));
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary, rgba(143, 143, 153, 0.72));
+  font-size: var(--font-size-xs);
   line-height: 1.4;
   text-align: center;
   opacity: 0;
@@ -78,7 +78,7 @@
 }
 
 .splash-screen__message--visible {
-  opacity: 1;
+  opacity: 0.62;
   transform: translate(-50%, 0);
 }
 
@@ -86,10 +86,12 @@
 
 // Idle logo: soft opacity pulse with a slight breathing scale
 @keyframes splash-logo-idle {
-  0%, 100% {
-    opacity: 0.85;
-    transform: scale(0.98);
+  0%,
+  100% {
+    opacity: 0.42;
+    transform: scale(0.985);
   }
+
   50% {
     opacity: 1;
     transform: scale(1);
@@ -107,6 +109,10 @@
 @media (prefers-reduced-motion: reduce) {
   .splash-screen__logo-wrap {
     animation: none;
+  }
+
+  .splash-screen__logo {
+    filter: none;
   }
 
   .splash-screen__message {
