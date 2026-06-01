@@ -314,6 +314,31 @@ impl ExecutionEngine {
         }
     }
 
+    fn effective_write_tool_mode(
+        context: &ExecutionContext,
+        configured_mode: WriteToolMode,
+    ) -> WriteToolMode {
+        if context
+            .context
+            .get("acp_transport")
+            .is_some_and(|value| value == "true")
+        {
+            return WriteToolMode::InlineContent;
+        }
+
+        match std::env::var("BITFUN_WRITE_TOOL_MODE")
+            .ok()
+            .map(|value| value.trim().to_ascii_lowercase())
+            .as_deref()
+        {
+            Some("inline_content" | "inline" | "content") => WriteToolMode::InlineContent,
+            Some("plaintext_followup" | "followup" | "plaintext") => {
+                WriteToolMode::PlaintextFollowup
+            }
+            _ => configured_mode,
+        }
+    }
+
     fn estimate_request_tokens_internal(
         messages: &[Message],
         tools: Option<&[ToolDefinition]>,
@@ -1464,15 +1489,7 @@ impl ExecutionEngine {
             .get("enable_tools")
             .and_then(|value| value.parse::<bool>().ok())
             .unwrap_or(true);
-        let write_tool_mode = if context
-            .context
-            .get("acp_transport")
-            .is_some_and(|value| value == "true")
-        {
-            WriteToolMode::InlineContent
-        } else {
-            write_tool_mode
-        };
+        let write_tool_mode = Self::effective_write_tool_mode(&context, write_tool_mode);
 
         let mut tool_manifest_context_vars = context.context.clone();
         tool_manifest_context_vars.insert(
@@ -2131,15 +2148,7 @@ impl ExecutionEngine {
             .get("enable_tools")
             .and_then(|v| v.parse::<bool>().ok())
             .unwrap_or(true);
-        let write_tool_mode = if context
-            .context
-            .get("acp_transport")
-            .is_some_and(|value| value == "true")
-        {
-            WriteToolMode::InlineContent
-        } else {
-            configured_write_tool_mode
-        };
+        let write_tool_mode = Self::effective_write_tool_mode(&context, configured_write_tool_mode);
 
         let mut tool_manifest_context_vars = context.context.clone();
         tool_manifest_context_vars.insert(

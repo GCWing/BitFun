@@ -21,6 +21,7 @@ pub struct ExecCommandArgs {
     pub fork_session: bool,
     pub output_format: ExecOutputFormat,
     pub output_patch: Option<String>,
+    pub deadline_sec: Option<u64>,
     pub confirm: bool,
 }
 
@@ -77,6 +78,7 @@ pub async fn handle_exec_command(config: CliConfig, args: ExecCommandArgs) -> Re
             session_id: args.session_id,
             fork_session: args.fork_session,
         },
+        args.deadline_sec,
     );
     let run_result = exec_mode.run().await;
 

@@ -9,7 +9,7 @@ pub(crate) fn create_http_client(
     skip_ssl_verify: bool,
 ) -> Client {
     let mut builder = Client::builder()
-        .use_rustls_tls()
+        .tls_backend_preconfigured(webpki_rustls_config())
         .connect_timeout(std::time::Duration::from_secs(
             AIClient::STREAM_CONNECT_TIMEOUT_SECS,
         ))
@@ -61,6 +61,15 @@ pub(crate) fn create_http_client(
             Client::new()
         }
     }
+}
+
+fn webpki_rustls_config() -> rustls::ClientConfig {
+    let root_store = rustls::RootCertStore {
+        roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
+    };
+    rustls::ClientConfig::builder()
+        .with_root_certificates(root_store)
+        .with_no_client_auth()
 }
 
 fn build_proxy(config: &ProxyConfig) -> Result<Proxy> {
