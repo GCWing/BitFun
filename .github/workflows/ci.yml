@@ -88,6 +88,8 @@ jobs:
         with:
           shared-key: "ci-check-v2-${{ runner.os }}-no-cargo-bin-v1"
           cache-bin: false
+          # PR caches are scoped to merge refs; main pushes own shared cache refreshes.
+          save-if: ${{ github.event_name != 'pull_request' }}
 
       - name: Check compilation
         run: cargo check --workspace --exclude bitfun-cli
