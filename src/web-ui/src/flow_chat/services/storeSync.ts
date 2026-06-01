@@ -6,18 +6,35 @@
 
 import { flowChatStore } from '../store/FlowChatStore';
 import { useModernFlowChatStore } from '../store/modernFlowChatStore';
+import type { Session } from '../types/flow-chat';
 import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('StoreSync');
 
 function isSessionAlreadySynced(
   sessionId: string,
-  session: object,
+  session: Session,
   modernStore: ReturnType<typeof useModernFlowChatStore.getState>
 ): boolean {
-  return (
-    modernStore.activeSession?.sessionId === sessionId &&
-    modernStore.activeSession === session
+  if (
+    modernStore.activeSession?.sessionId !== sessionId ||
+    modernStore.activeSession !== session
+  ) {
+    return false;
+  }
+
+  if (session.historyState === 'ready' && hasRenderableContent(session) && modernStore.virtualItems.length === 0) {
+    return false;
+  }
+
+  return true;
+}
+
+function hasRenderableContent(session: Session): boolean {
+  return session.dialogTurns.some(turn =>
+    Boolean(turn.userMessage) ||
+    (turn.status === 'image_analyzing' && turn.modelRounds.length === 0) ||
+    turn.modelRounds.some(round => round.items.length > 0)
   );
 }
 
@@ -56,7 +73,14 @@ export function startAutoSync(): () => void {
 
     if (state.activeSessionId) {
       const session = state.sessions.get(state.activeSessionId);
-      if (session && (session !== lastSyncedSession || state.activeSessionId !== lastSyncedSessionId)) {
+      if (
+        session &&
+        (
+          session !== lastSyncedSession ||
+          state.activeSessionId !== lastSyncedSessionId ||
+          !isSessionAlreadySynced(state.activeSessionId, session, modernStore)
+        )
+      ) {
         lastSyncedSessionId = state.activeSessionId;
         lastSyncedSession = session;
         modernStore.setActiveSession(session);

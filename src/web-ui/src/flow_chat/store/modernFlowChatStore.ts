@@ -7,13 +7,10 @@
 import { create } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 import { immer } from 'zustand/middleware/immer';
-import type { Session, DialogTurn, ModelRound, FlowItem, FlowToolItem, FlowUserSteeringItem } from '../types/flow-chat';
+import type { Session, DialogTurn, ModelRound, FlowItem, FlowToolItem, FlowUserSteeringItem, AnyFlowItem } from '../types/flow-chat';
 import { isCollapsibleTool, READ_TOOL_NAMES, SEARCH_TOOL_NAMES, COMMAND_TOOL_NAMES } from '../tool-cards';
 import { COMPLETED_TOOL_TRANSIENT_MS } from '../components/modern/modelRoundItemGrouping';
 import { flowChatStore } from './FlowChatStore';
-import { createLogger } from '@/shared/utils/logger';
-
-const log = createLogger('ModernFlowChatStore');
 
 /**
  * Explore group statistics (merged computed stats)
@@ -180,9 +177,55 @@ function steeringItemToUserMessage(item: FlowUserSteeringItem): NonNullable<Dial
   };
 }
 
+function isTerminalTurnStatus(status: DialogTurn['status']): boolean {
+  return status === 'completed' || status === 'cancelled' || status === 'error';
+}
+
+function isTerminalRoundStatus(status: ModelRound['status']): boolean {
+  return status === 'completed' || status === 'cancelled' || status === 'error';
+}
+
+function isActiveFlowItem(item: AnyFlowItem): boolean {
+  if (
+    item.status === 'pending' ||
+    item.status === 'preparing' ||
+    item.status === 'running' ||
+    item.status === 'streaming' ||
+    item.status === 'receiving' ||
+    item.status === 'analyzing' ||
+    item.status === 'pending_confirmation'
+  ) {
+    return true;
+  }
+
+  if (item.type === 'text' || item.type === 'thinking') {
+    return item.isStreaming;
+  }
+
+  if (item.type === 'tool') {
+    return item.isParamsStreaming === true;
+  }
+
+  return false;
+}
+
+function isStableTurnProjection(turn: DialogTurn): boolean {
+  if (!isTerminalTurnStatus(turn.status)) {
+    return false;
+  }
+
+  return turn.modelRounds.every(round =>
+    isTerminalRoundStatus(round.status) &&
+    !round.isStreaming &&
+    round.isComplete !== false &&
+    round.items.every(item => !isActiveFlowItem(item))
+  );
+}
+
 let cachedSession: Session | null = null;
 let cachedDialogTurnsRef: DialogTurn[] | null = null;
 let cachedVirtualItems: VirtualItem[] = [];
+let cachedTurnItems = new WeakMap<DialogTurn, VirtualItem[]>();
 
 /**
  * Convert Session to virtualized render items
@@ -199,6 +242,7 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
       cachedSession = null;
       cachedDialogTurnsRef = null;
       cachedVirtualItems = [];
+      cachedTurnItems = new WeakMap();
     }
     return cachedVirtualItems;
   }
@@ -217,6 +261,13 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
   const nowMs = Date.now();
 
   session.dialogTurns.forEach(turn => {
+    const cachedItems = cachedTurnItems.get(turn);
+    if (cachedItems && isStableTurnProjection(turn)) {
+      items.push(...cachedItems);
+      return;
+    }
+    const turnItemStart = items.length;
+
     if (turn.userMessage) {
       items.push({
         type: 'user-message',
@@ -338,16 +389,6 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
 
           const groupId = group.rounds[0]?.id ?? `explore-group-${turn.id}-${group.startIndex}`;
 
-          if (wasCutByCritical) {
-            log.debug('explore-group marked wasCutByCritical', {
-              groupId,
-              endIndex: group.endIndex,
-              totalRounds: rounds.length,
-              isTurnComplete,
-              isGroupStreaming,
-            });
-          }
-
           items.push({
             type: 'explore-group',
             turnId: turn.id,
@@ -404,6 +445,9 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
 
     flushRoundEntries(pendingRounds, { collapseTrailingExploreGroup: true });
 
+    if (isStableTurnProjection(turn)) {
+      cachedTurnItems.set(turn, items.slice(turnItemStart));
+    }
   });
 
   cachedVirtualItems = items;
@@ -457,6 +501,7 @@ export const useModernFlowChatStore = create<ModernFlowChatState>()(
       cachedSession = null;
       cachedDialogTurnsRef = null;
       cachedVirtualItems = [];
+      cachedTurnItems = new WeakMap();
 
       set((state) => {
         state.activeSession = null;

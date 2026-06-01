@@ -6,8 +6,10 @@ const syncMocks = vi.hoisted(() => {
     sessions: new Map<string, Session>(),
     activeSessionId: null as string | null,
   };
+  const listeners = new Set<(state: typeof flowState) => void>();
   const modernState = {
     activeSession: null as Session | null,
+    virtualItems: [] as unknown[],
     setActiveSession: vi.fn((session: Session | null) => {
       modernState.activeSession = session;
     }),
@@ -18,6 +20,7 @@ const syncMocks = vi.hoisted(() => {
 
   return {
     flowState,
+    listeners,
     modernState,
   };
 });
@@ -25,6 +28,12 @@ const syncMocks = vi.hoisted(() => {
 vi.mock('../store/FlowChatStore', () => ({
   flowChatStore: {
     getState: () => syncMocks.flowState,
+    subscribe: vi.fn((listener: (state: typeof syncMocks.flowState) => void) => {
+      syncMocks.listeners.add(listener);
+      return () => {
+        syncMocks.listeners.delete(listener);
+      };
+    }),
   },
 }));
 
@@ -34,7 +43,7 @@ vi.mock('../store/modernFlowChatStore', () => ({
   },
 }));
 
-import { syncSessionToModernStore } from './storeSync';
+import { startAutoSync, syncSessionToModernStore } from './storeSync';
 
 function createSession(overrides: Partial<Session> = {}): Session {
   return {
@@ -60,7 +69,9 @@ describe('storeSync history session state', () => {
   afterEach(() => {
     syncMocks.flowState.sessions = new Map();
     syncMocks.flowState.activeSessionId = null;
+    syncMocks.listeners.clear();
     syncMocks.modernState.activeSession = null;
+    syncMocks.modernState.virtualItems = [];
     syncMocks.modernState.setActiveSession.mockClear();
     syncMocks.modernState.clear.mockClear();
   });
@@ -75,5 +86,60 @@ describe('storeSync history session state', () => {
     expect(syncMocks.modernState.setActiveSession).toHaveBeenCalledWith(session);
     expect(syncMocks.modernState.activeSession).toBe(session);
     expect(syncMocks.modernState.activeSession?.historyState).toBe('metadata-only');
+  });
+
+  it('repairs a ready active session when the modern item projection is empty', () => {
+    const session = createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: 'history-1',
+        userMessage: {
+          id: 'user-1',
+          content: 'Loaded history',
+          timestamp: 1,
+        },
+        modelRounds: [],
+        status: 'completed',
+        startTime: 1,
+      }],
+    });
+    syncMocks.flowState.sessions = new Map([[session.sessionId, session]]);
+    syncMocks.flowState.activeSessionId = session.sessionId;
+    syncMocks.modernState.activeSession = session;
+    syncMocks.modernState.virtualItems = [];
+
+    syncSessionToModernStore(session.sessionId);
+
+    expect(syncMocks.modernState.setActiveSession).toHaveBeenCalledWith(session);
+  });
+
+  it('repairs an empty projection when auto sync starts on a ready active session', () => {
+    const session = createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: 'history-1',
+        userMessage: {
+          id: 'user-1',
+          content: 'Loaded history',
+          timestamp: 1,
+        },
+        modelRounds: [],
+        status: 'completed',
+        startTime: 1,
+      }],
+    });
+    syncMocks.flowState.sessions = new Map([[session.sessionId, session]]);
+    syncMocks.flowState.activeSessionId = session.sessionId;
+    syncMocks.modernState.activeSession = session;
+    syncMocks.modernState.virtualItems = [];
+
+    const unsubscribe = startAutoSync();
+    unsubscribe();
+
+    expect(syncMocks.modernState.setActiveSession).toHaveBeenCalledWith(session);
   });
 });

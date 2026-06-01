@@ -19,6 +19,8 @@ import {
 import './DefaultToolCard.scss';
 
 const MAX_PREVIEW_CHARS = 4000;
+const INLINE_PREVIEW_CHARS = 72;
+const INLINE_PREVIEW_SCAN_CHARS = 512;
 
 function sanitizeToolInput(input: any): any {
   if (input === null || input === undefined) return input;
@@ -62,10 +64,15 @@ function getInlinePreview(value: any): string | null {
   if (value === null || value === undefined) return null;
 
   if (typeof value === 'string') {
-    const normalized = value.replace(/\s+/g, ' ').trim();
+    const scanned = value.length > INLINE_PREVIEW_SCAN_CHARS
+      ? value.slice(0, INLINE_PREVIEW_SCAN_CHARS)
+      : value;
+    const normalized = scanned.replace(/\s+/g, ' ').trim();
     if (!normalized) return null;
     if (isOnlySessionViewPreviewText(normalized)) return null;
-    return normalized.length > 72 ? `${normalized.slice(0, 72)}...` : normalized;
+    return normalized.length > INLINE_PREVIEW_CHARS || scanned.length < value.length
+      ? `${normalized.slice(0, INLINE_PREVIEW_CHARS)}...`
+      : normalized;
   }
 
   if (typeof value === 'number' || typeof value === 'boolean') {
@@ -116,14 +123,14 @@ export const DefaultToolCard: React.FC<ToolCardProps> = ({
   const canExpand = hasInput || hasResult || hasError || showConfirmationActions;
 
   const inputPreview = useMemo(() => {
-    if (!hasInput) return null;
+    if (!isExpanded || !hasInput) return null;
     return truncatePreview(stringifyValue(filteredInput));
-  }, [filteredInput, hasInput]);
+  }, [filteredInput, hasInput, isExpanded]);
 
   const resultPreview = useMemo(() => {
-    if (!hasResult) return null;
+    if (!isExpanded || !hasResult) return null;
     return truncatePreview(stringifyValue(toolResult?.result));
-  }, [hasResult, toolResult?.result]);
+  }, [hasResult, isExpanded, toolResult?.result]);
 
   const handleConfirm = () => {
     onConfirm?.(toolCall?.input);
@@ -221,7 +228,7 @@ export const DefaultToolCard: React.FC<ToolCardProps> = ({
         onClick={handleToggleExpand}
         className={`default-tool-card ${showConfirmationHighlight ? 'requires-confirmation' : ''}`}
         clickable={canExpand}
-          header={
+        header={
           <CompactToolCardHeader
             icon={<ToolCardStatusSlot status={status} toolIcon={config.icon ?? undefined} />}
             action={config.displayName}
@@ -238,57 +245,57 @@ export const DefaultToolCard: React.FC<ToolCardProps> = ({
               )}
             </div>
 
-          {hasInput && (
-            <div className="default-tool-card__section">
-              <div className="default-tool-card__section-label">{t('toolCards.common.inputParams')}</div>
-              <pre className="default-tool-card__code-block">{inputPreview}</pre>
-            </div>
-          )}
+            {hasInput && (
+              <div className="default-tool-card__section">
+                <div className="default-tool-card__section-label">{t('toolCards.common.inputParams')}</div>
+                <pre className="default-tool-card__code-block">{inputPreview}</pre>
+              </div>
+            )}
 
-          {showConfirmationActions && (
-            <div className="default-tool-card__actions">
-              {hasAcpPermissionOptions(toolItem) ? (
-                <AcpPermissionActions
-                  toolItem={toolItem}
-                  input={toolCall?.input}
-                  presentation="text"
-                  disabled={status === 'streaming'}
-                  onConfirm={onConfirm}
-                  onReject={onReject}
-                />
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    className="default-tool-card__button default-tool-card__button--confirm"
-                    onClick={handleConfirm}
+            {showConfirmationActions && (
+              <div className="default-tool-card__actions">
+                {hasAcpPermissionOptions(toolItem) ? (
+                  <AcpPermissionActions
+                    toolItem={toolItem}
+                    input={toolCall?.input}
+                    presentation="text"
                     disabled={status === 'streaming'}
-                  >
-                    {t('toolCards.mcp.confirmExecute')}
-                  </button>
-                  <button
-                    type="button"
-                    className="default-tool-card__button default-tool-card__button--reject"
-                    onClick={handleReject}
-                    disabled={status === 'streaming'}
-                  >
-                    {t('toolCards.mcp.cancel')}
-                  </button>
-                </>
-              )}
-            </div>
-          )}
+                    onConfirm={onConfirm}
+                    onReject={onReject}
+                  />
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className="default-tool-card__button default-tool-card__button--confirm"
+                      onClick={handleConfirm}
+                      disabled={status === 'streaming'}
+                    >
+                      {t('toolCards.mcp.confirmExecute')}
+                    </button>
+                    <button
+                      type="button"
+                      className="default-tool-card__button default-tool-card__button--reject"
+                      onClick={handleReject}
+                      disabled={status === 'streaming'}
+                    >
+                      {t('toolCards.mcp.cancel')}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
 
-          {hasResult && (
-            <div className="default-tool-card__section">
-              <div className="default-tool-card__section-label">{t('toolCards.common.executionResult')}</div>
-              {toolResult?.success === false ? (
-                <div className="default-tool-card__error-message">{errorMessage}</div>
-              ) : (
-                <pre className="default-tool-card__code-block">{resultPreview}</pre>
-              )}
-            </div>
-          )}
+            {hasResult && (
+              <div className="default-tool-card__section">
+                <div className="default-tool-card__section-label">{t('toolCards.common.executionResult')}</div>
+                {toolResult?.success === false ? (
+                  <div className="default-tool-card__error-message">{errorMessage}</div>
+                ) : (
+                  <pre className="default-tool-card__code-block">{resultPreview}</pre>
+                )}
+              </div>
+            )}
           </div>
         ) : undefined}
       />

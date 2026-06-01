@@ -509,4 +509,73 @@ describe('sessionToVirtualItems explore grouping', () => {
       steeringStatus: 'pending',
     });
   });
+
+  it('reuses the projection for completed turns when a later active turn changes', () => {
+    const completedTurn = {
+      id: 'completed-turn',
+      sessionId: 'stable-turn-session',
+      userMessage: {
+        id: 'user-completed',
+        content: 'Loaded prompt',
+        timestamp: 900,
+      },
+      modelRounds: [makeRound({ id: 'completed-round' })],
+      status: 'completed' as const,
+      startTime: 900,
+    };
+    const activeTurnBase = {
+      id: 'active-turn',
+      sessionId: 'stable-turn-session',
+      userMessage: {
+        id: 'user-active',
+        content: 'Continue',
+        timestamp: 1000,
+      },
+      status: 'processing' as const,
+      startTime: 1000,
+    };
+    const firstSession = makeSession({
+      sessionId: 'stable-turn-session',
+      dialogTurns: [
+        completedTurn,
+        {
+          ...activeTurnBase,
+          modelRounds: [
+            makeRound({
+              id: 'active-round-1',
+              isStreaming: true,
+              isComplete: false,
+              status: 'streaming',
+              items: [makeTool('active-tool-1', 'TodoWrite', 'running')],
+            }),
+          ],
+        },
+      ],
+    });
+    const secondSession = makeSession({
+      sessionId: 'stable-turn-session',
+      dialogTurns: [
+        completedTurn,
+        {
+          ...activeTurnBase,
+          modelRounds: [
+            makeRound({
+              id: 'active-round-2',
+              isStreaming: true,
+              isComplete: false,
+              status: 'streaming',
+              items: [makeTool('active-tool-2', 'TodoWrite', 'running')],
+            }),
+          ],
+        },
+      ],
+    });
+
+    const firstItems = sessionToVirtualItems(firstSession);
+    const secondItems = sessionToVirtualItems(secondSession);
+
+    expect(secondItems[0]).toBe(firstItems[0]);
+    expect(secondItems[1]).toBe(firstItems[1]);
+    expect(secondItems[2]).not.toBe(firstItems[2]);
+  });
 });
