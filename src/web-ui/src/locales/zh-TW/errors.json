@@ -3,7 +3,7 @@
     "unknown": "發生未知錯誤",
     "network": "網絡錯誤",
     "timeout": "請求超時",
-    "serverError": "服務器錯誤",
+    "serverError": "伺服器錯誤",
     "notFound": "未找到資源",
     "unauthorized": "未授權",
     "forbidden": "禁止訪問",
@@ -13,15 +13,15 @@
     "copyFailed": "Copy failed. Please try again."
   },
   "file": {
-    "notFound": "文件未找到：{{path}}",
-    "readError": "讀取文件失敗：{{path}}",
-    "writeError": "寫入文件失敗：{{path}}",
-    "deleteError": "刪除文件失敗：{{path}}",
+    "notFound": "檔案未找到：{{path}}",
+    "readError": "讀取檔案失敗：{{path}}",
+    "writeError": "寫入檔案失敗：{{path}}",
+    "deleteError": "刪除檔案失敗：{{path}}",
     "permissionDenied": "權限不足：{{path}}",
-    "alreadyExists": "文件已存在：{{path}}",
-    "invalidPath": "無效的文件路徑：{{path}}",
-    "tooLarge": "文件過大：{{path}}",
-    "encodingError": "文件編碼錯誤：{{path}}",
+    "alreadyExists": "檔案已存在：{{path}}",
+    "invalidPath": "無效的檔案路徑：{{path}}",
+    "tooLarge": "檔案過大：{{path}}",
+    "encodingError": "檔案編碼錯誤：{{path}}",
     "createFileFailed": "Failed to create file",
     "createFolderFailed": "Failed to create folder",
     "renameFailed": "Rename failed",
@@ -29,12 +29,12 @@
   },
   "workspace": {
     "notFound": "工作區未找到",
-    "openError": "打開工作區失敗",
+    "openError": "開啟工作區失敗",
     "invalidPath": "無效的工作區路徑",
-    "alreadyOpen": "工作區已打開"
+    "alreadyOpen": "工作區已開啟"
   },
   "git": {
-    "notRepository": "當前目錄不是 Git 倉庫",
+    "notRepository": "目前目錄不是 Git 倉庫",
     "cloneError": "克隆倉庫失敗",
     "commitError": "提交失敗",
     "pushError": "推送失敗",
@@ -55,8 +55,8 @@
     "streamError": "流式響應錯誤",
     "timeout": "AI 響應超時",
     "initializeFailedTitle": "AI 客戶端初始化失敗",
-    "configRequired": "需要模型配置",
-    "primaryModelNotConfigured": "請先在設定中配置主模型",
+    "configRequired": "需要模型設定",
+    "primaryModelNotConfigured": "請先在設定中設定主模型",
     "executionFailed": "對話執行失敗",
     "genericSuggestion": "請稍後重試，或檢查網絡連接與模型服務狀態",
     "networkError": "AI 響應中斷",
@@ -64,9 +64,9 @@
     "rateLimit": "模型請求頻率超限",
     "rateLimitSuggestion": "請稍後重試，或在模型設置中切換到其他模型",
     "authError": "API 認證失敗",
-    "authErrorSuggestion": "API 密鑰無效或已過期，請檢查模型配置中的密鑰設置",
+    "authErrorSuggestion": "API 密鑰無效或已過期，請檢查模型設定中的密鑰設置",
     "contextOverflow": "對話內容超出限制",
-    "contextOverflowSuggestion": "當前對話長度超出模型上下文限制，可開啟新對話或壓縮歷史消息",
+    "contextOverflowSuggestion": "目前對話長度超出模型上下文限制，可開啟新對話或壓縮歷史消息",
     "timeoutError": "AI 響應超時",
     "timeoutSuggestion": "模型響應時間過長，請檢查網絡連接或嘗試切換模型",
     "providerQuota": {
@@ -105,42 +105,42 @@
     }
   },
   "terminal": {
-    "createError": "創建終端失敗",
+    "createError": "建立終端失敗",
     "executeError": "執行命令失敗",
     "killError": "終止進程失敗",
     "shellNotFound": "Shell 未找到"
   },
   "window": {
-    "maximizeFailed": "最大化窗口失敗：{{error}}",
+    "maximizeFailed": "最大化視窗失敗：{{error}}",
     "fullscreenFailed": "切換全屏失敗：{{error}}",
-    "closeFailed": "關閉窗口失敗：{{error}}"
+    "closeFailed": "關閉視窗失敗：{{error}}"
   },
   "editor": {
-    "openError": "打開編輯器失敗",
-    "saveError": "保存文件失敗",
+    "openError": "開啟編輯器失敗",
+    "saveError": "儲存檔案失敗",
     "formatError": "格式化失敗",
-    "parseError": "解析文件失敗",
-    "lspError": "語言服務器錯誤"
+    "parseError": "解析檔案失敗",
+    "lspError": "語言伺服器錯誤"
   },
   "config": {
-    "loadError": "加載配置失敗",
-    "saveError": "保存配置失敗",
-    "invalidFormat": "配置格式無效",
+    "loadError": "載入設定失敗",
+    "saveError": "儲存設定失敗",
+    "invalidFormat": "設定格式無效",
     "validationError": "Configuration validation failed"
   },
   "snapshot": {
-    "createError": "創建快照失敗",
+    "createError": "建立快照失敗",
     "restoreError": "恢復快照失敗",
     "notFound": "快照未找到",
     "corrupted": "快照已損壞",
-    "loadStatsFailed": "加載快照統計失敗",
-    "loadSessionsFailed": "加載快照會話失敗",
-    "loadOperationsFailed": "加載會話操作失敗",
-    "getDiffFailed": "獲取文件差異失敗",
+    "loadStatsFailed": "載入快照統計失敗",
+    "loadSessionsFailed": "載入快照會話失敗",
+    "loadOperationsFailed": "載入會話操作失敗",
+    "getDiffFailed": "獲取檔案差異失敗",
     "acceptOperationFailed": "接受操作失敗",
     "rejectOperationFailed": "拒絕操作失敗",
     "rollbackSessionFailed": "回滾會話失敗",
-    "cleanupFailed": "清理過期數據失敗"
+    "cleanupFailed": "清理過期資料失敗"
   },
   "contextMenu": {
     "noSelection": "No text selected",

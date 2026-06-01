@@ -1,6 +1,6 @@
 {
   "title": "審核",
-  "subtitle": "配置深度審核及 /DeepReview 命令如何組織審核員、套用審核深度，並透過品質檢查彙總結果。",
+  "subtitle": "設定深度審核及 /DeepReview 命令如何組織審核員、套用審核深度，並透過品質檢查彙總結果。",
   "loading": "正在載入審核設定...",
   "overview": {
     "title": "審核工作流",
@@ -43,8 +43,8 @@
     "reviewerTimeoutDesc": "每個審核員的逾時時間，單位秒。設為 0 表示不限制。",
     "judgeTimeout": "品質檢查逾時",
     "judgeTimeoutDesc": "品質檢查員的逾時時間，單位秒。設為 0 表示不限制。",
-    "fileSplitThreshold": "文件拆分閾值",
-    "fileSplitThresholdDesc": "目標文件數超過該值時，同一審核角色會拆分為多個實例。",
+    "fileSplitThreshold": "檔案拆分閾值",
+    "fileSplitThresholdDesc": "目標檔案數超過該值時，同一審核角色會拆分為多個實例。",
     "maxSameRoleInstances": "同角色最大實例數",
     "maxSameRoleInstancesDesc": "單個審核角色允許並行啟動的最大實例數。"
   },

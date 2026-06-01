@@ -4,7 +4,6 @@
  */
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Copy, Check, RotateCcw, Loader2, ArrowDownToLine, X, CircleUser, Pencil } from 'lucide-react';
 import type { DialogTurn, FlowUserSteeringItem } from '../../types/flow-chat';
 import { flowChatManager } from '../../services/FlowChatManager';
@@ -13,6 +12,7 @@ import { useActiveSession } from '../../store/modernFlowChatStore';
 import { flowChatStore } from '../../store/FlowChatStore';
 import { useMessageEditStore } from '../../store/messageEditStore';
 import { snapshotAPI } from '@/infrastructure/api';
+import { useI18n } from '@/infrastructure/i18n';
 import { notificationService } from '@/shared/notification-system';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { shouldIgnoreCardToggleClick } from '@/shared/utils/textSelection';
@@ -40,7 +40,7 @@ interface UserMessageItemProps {
 
 export const UserMessageItem = React.memo<UserMessageItemProps>(
   ({ message, turnId, steeringStatus }) => {
-    const { t } = useTranslation('flow-chat');
+    const { t, formatDate } = useI18n('flow-chat');
     const {
       config,
       sessionId,
@@ -380,7 +380,10 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
       >
         {config?.showTimestamps && (
           <div className="user-message-item__timestamp">
-            {new Date(message.timestamp).toLocaleTimeString()}
+            {formatDate(new Date(message.timestamp), {
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
           </div>
         )}
         {isEditing ? (

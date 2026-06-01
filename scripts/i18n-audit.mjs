@@ -44,6 +44,7 @@ let errorCount = 0;
 let warningCount = 0;
 let auditTypeScript = null;
 let cliOptions = { reportJsonPath: null };
+let governanceBaselineCache;
 const reportCategories = [
   'confirmedUnusedKeys',
   'dynamicKeyCandidates',
@@ -250,13 +251,16 @@ function sortByReportIdentity(left, right) {
 
 function countEntriesBy(entries, field, options = {}) {
   const emptyLabel = options.emptyLabel ?? '';
+  const includeKeys = options.includeKeys ?? [];
+  const counts = entries.reduce((acc, entry) => {
+    const value = entry[field] ?? emptyLabel;
+    const key = value === '' ? emptyLabel : value;
+    acc.set(key, (acc.get(key) ?? 0) + 1);
+    return acc;
+  }, new Map(includeKeys.map((key) => [key, 0])));
+
   return Object.fromEntries(
-    Array.from(entries.reduce((counts, entry) => {
-      const value = entry[field] ?? emptyLabel;
-      const key = value === '' ? emptyLabel : value;
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-      return counts;
-    }, new Map()).entries())
+    Array.from(counts.entries())
       .sort(([left], [right]) => String(left).localeCompare(String(right))),
   );
 }
@@ -266,6 +270,9 @@ function finalizeGovernanceReport() {
     governanceReport[category].sort(sortByReportIdentity);
     governanceReport.summary.counts[category] = governanceReport[category].length;
   }
+
+  const governanceSurfaceIds = collectGovernanceBudgetSurfaceIds();
+  const localeFormatSurfaceIds = collectLocaleFormatSurfaceIds();
 
   governanceReport.summary.byCategory = {
     confirmedUnusedKeys: {
@@ -279,12 +286,12 @@ function finalizeGovernanceReport() {
     sharedTermDuplicates: {
       byNamespace: countEntriesBy(governanceReport.sharedTermDuplicates, 'namespace', { emptyLabel: '<none>' }),
       bySharedKey: countEntriesBy(governanceReport.sharedTermDuplicates, 'sharedKey'),
-      bySurface: countEntriesBy(governanceReport.sharedTermDuplicates, 'surface'),
+      bySurface: countEntriesBy(governanceReport.sharedTermDuplicates, 'surface', { includeKeys: governanceSurfaceIds }),
     },
     l10nQualityCandidates: {
       byComparisonLocale: countEntriesBy(governanceReport.l10nQualityCandidates, 'comparisonLocale'),
       byNamespace: countEntriesBy(governanceReport.l10nQualityCandidates, 'namespace', { emptyLabel: '<none>' }),
-      bySurface: countEntriesBy(governanceReport.l10nQualityCandidates, 'surface'),
+      bySurface: countEntriesBy(governanceReport.l10nQualityCandidates, 'surface', { includeKeys: governanceSurfaceIds }),
     },
     literalDefaultValueFallbacks: {
       byFile: countEntriesBy(governanceReport.literalDefaultValueFallbacks, 'file'),
@@ -292,7 +299,7 @@ function finalizeGovernanceReport() {
     },
     localeFormatCandidates: {
       byFile: countEntriesBy(governanceReport.localeFormatCandidates, 'file'),
-      bySurface: countEntriesBy(governanceReport.localeFormatCandidates, 'surface'),
+      bySurface: countEntriesBy(governanceReport.localeFormatCandidates, 'surface', { includeKeys: localeFormatSurfaceIds }),
     },
   };
 }
@@ -1242,8 +1249,13 @@ function readL10nIdenticalAllowlist() {
 }
 
 function readGovernanceBaseline() {
+  if (governanceBaselineCache !== undefined) {
+    return governanceBaselineCache;
+  }
+
   if (!fs.existsSync(governanceBaselinePath)) {
     reportError('Missing scripts/i18n-governance-baseline.json');
+    governanceBaselineCache = null;
     return null;
   }
 
@@ -1252,6 +1264,7 @@ function readGovernanceBaseline() {
     baseline = readJsonFile(governanceBaselinePath);
   } catch (error) {
     reportError(`Failed to parse scripts/i18n-governance-baseline.json: ${error.message}`);
+    governanceBaselineCache = null;
     return null;
   }
 
@@ -1260,10 +1273,27 @@ function readGovernanceBaseline() {
   }
   if (!isPlainObject(baseline.budgets)) {
     reportError('scripts/i18n-governance-baseline.json must define a budgets object');
+    governanceBaselineCache = null;
     return null;
   }
 
+  governanceBaselineCache = baseline;
   return baseline;
+}
+
+function collectGovernanceBudgetSurfaceIds() {
+  const baseline = readGovernanceBaseline();
+  if (!baseline) return [];
+
+  const surfaces = new Set();
+  for (const budget of Object.values(baseline.budgets)) {
+    if (!isPlainObject(budget?.bySurface)) continue;
+    for (const surface of Object.keys(budget.bySurface)) {
+      surfaces.add(surface);
+    }
+  }
+
+  return Array.from(surfaces).sort();
 }
 
 function allowlistTargetForGroup(entry, group) {
@@ -1959,7 +1989,10 @@ function countCjkSourceLines(scanRoot, predicate) {
 function shouldSkipLocaleFormatSourceScan(file) {
   const normalized = toPosixPath(path.relative(root, file));
   return (
+    // Surface i18n owners are the only approved locations for direct Intl usage;
+    // product code must call their exported formatting helpers instead.
     normalized === 'src/web-ui/src/infrastructure/i18n/core/I18nService.ts' ||
+    normalized === 'src/mobile-web/src/i18n/I18nProvider.tsx' ||
     normalized.endsWith('/generatedLocaleContract.ts') ||
     normalized.endsWith('.test.ts') ||
     normalized.endsWith('.test.tsx') ||
@@ -1968,9 +2001,8 @@ function shouldSkipLocaleFormatSourceScan(file) {
   );
 }
 
-function collectLocaleFormatUsageFindings() {
-  const formatPattern = /\b(?:new\s+)?Intl\.(?:DateTimeFormat|NumberFormat|RelativeTimeFormat)\s*\(|\.\s*toLocale(?:String|DateString|TimeString)\s*\(/g;
-  const specs = [
+function createLocaleFormatScanSpecs() {
+  return [
     {
       surface: 'web-ui',
       root: webSourceDir,
@@ -2004,6 +2036,15 @@ function collectLocaleFormatUsageFindings() {
       predicate: (file) => file.endsWith('.js'),
     },
   ];
+}
+
+function collectLocaleFormatSurfaceIds() {
+  return sortedUnique(createLocaleFormatScanSpecs().map((spec) => spec.surface));
+}
+
+function collectLocaleFormatUsageFindings() {
+  const formatPattern = /\b(?:new\s+)?Intl\.(?:DateTimeFormat|NumberFormat|RelativeTimeFormat)\s*\(|\.\s*toLocale(?:String|DateString|TimeString)\s*\(/g;
+  const specs = createLocaleFormatScanSpecs();
   const findings = [];
 
   for (const spec of specs) {

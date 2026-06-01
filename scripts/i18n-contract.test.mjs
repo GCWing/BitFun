@@ -65,6 +65,12 @@ function flattenKeys(value, prefix = '') {
     .sort();
 }
 
+function getValueByPath(value, dottedPath) {
+  return dottedPath.split('.').reduce((current, segment) => (
+    current && typeof current === 'object' ? current[segment] : undefined
+  ), value);
+}
+
 function listFiles(dir, predicate) {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
   return entries.flatMap((entry) => {
@@ -247,6 +253,60 @@ test('web-ui synchronous i18nService.t namespaces stay in the bootstrap set', ()
   );
 });
 
+test('web-ui slash command picker distinguishes all commands from quick actions', () => {
+  const source = readText('src/web-ui/src/flow_chat/components/ChatInput.tsx');
+  const allCommandsStart = source.indexOf("if (slashCommandState.kind === 'all')");
+  const allCommandsEnd = source.indexOf('if (!canSwitchModes)', allCommandsStart);
+  assert.notEqual(allCommandsStart, -1, 'ChatInput should render an all-command slash picker state');
+  assert.notEqual(allCommandsEnd, -1, 'ChatInput all-command branch should stay before the mode-only branch');
+
+  const allCommandsBlock = source.slice(allCommandsStart, allCommandsEnd);
+  assert.match(
+    allCommandsBlock,
+    /t\('chatInput\.commands'\)/,
+    'all-command slash picker should use a Commands label, not the quick-action label',
+  );
+  assert.doesNotMatch(
+    allCommandsBlock,
+    /t\('chatInput\.quickAction'\)/,
+    'all-command slash picker must not reuse the quick-action label',
+  );
+
+  const contract = readJson('src/shared/i18n/contract/locales.json');
+  for (const locale of contract.locales.map((entry) => entry.id)) {
+    const resource = readJson(`src/web-ui/src/locales/${locale}/flow-chat.json`);
+    const commands = getValueByPath(resource, 'chatInput.commands');
+    const quickAction = getValueByPath(resource, 'chatInput.quickAction');
+    assert.equal(typeof commands, 'string', `${locale} flow-chat chatInput.commands should exist`);
+    assert.notEqual(commands, quickAction, `${locale} chatInput.commands should not duplicate chatInput.quickAction`);
+  }
+});
+
+test('review platform relative time labels are locale resources', () => {
+  const source = readText('src/web-ui/src/app/components/panels/review-platform/ReviewPlatformPanel.tsx');
+
+  assert.match(source, /common:reviewPlatform\.relativeTime\.minutesAgo/, 'minute relative time label should be localized');
+  assert.match(source, /common:reviewPlatform\.relativeTime\.hoursAgo/, 'hour relative time label should be localized');
+  assert.match(source, /common:reviewPlatform\.relativeTime\.daysAgo/, 'day relative time label should be localized');
+  assert.doesNotMatch(source, /`[^`]*\bm ago`/, 'relative minute text must not be hard-coded in ReviewPlatformPanel');
+  assert.doesNotMatch(source, /`[^`]*\bh ago`/, 'relative hour text must not be hard-coded in ReviewPlatformPanel');
+  assert.doesNotMatch(source, /`[^`]*\bd ago`/, 'relative day text must not be hard-coded in ReviewPlatformPanel');
+
+  const contract = readJson('src/shared/i18n/contract/locales.json');
+  for (const locale of contract.locales.map((entry) => entry.id)) {
+    const resource = readJson(`src/web-ui/src/locales/${locale}/common.json`);
+    for (const key of [
+      'reviewPlatform.relativeTime.minutesAgo',
+      'reviewPlatform.relativeTime.hoursAgo',
+      'reviewPlatform.relativeTime.daysAgo',
+    ]) {
+      const value = getValueByPath(resource, key);
+      assert.equal(typeof value, 'string', `${locale} common ${key} should exist`);
+      assert.match(value, /\{\{\s*count\s*\}\}/, `${locale} common ${key} should interpolate count`);
+    }
+  }
+});
+
 test('i18n audit enforces the checked-in hardcoded source candidate budget', () => {
   const baselineSource = readText('scripts/i18n-hardcoded-baseline.json');
   const auditSource = readText('scripts/i18n-audit.mjs');
@@ -289,6 +349,31 @@ test('i18n audit enforces interpolation parameter parity across resource formats
   assert.match(auditSource, /extractI18nextPlaceholders/, 'i18next placeholder extraction should be explicit');
   assert.match(auditSource, /extractMobilePlaceholders/, 'mobile placeholder extraction should be explicit');
   assert.match(auditSource, /extractFluentPlaceholders/, 'Fluent placeholder extraction should be explicit');
+});
+
+test('i18n audit report surface summaries derive from owned scan and budget sources', () => {
+  const auditSource = readText('scripts/i18n-audit.mjs');
+
+  assert.doesNotMatch(
+    auditSource,
+    /const governanceSurfaceIds\s*=\s*\[/,
+    'governance report surface summaries should derive from the governance baseline dimensions',
+  );
+  assert.doesNotMatch(
+    auditSource,
+    /const localeFormatSurfaceIds\s*=\s*\[/,
+    'locale format report surface summaries should derive from the locale-format scan specs',
+  );
+  assert.match(
+    auditSource,
+    /collectGovernanceBudgetSurfaceIds/,
+    'governance report should collect zero-count surfaces from the baseline bySurface budgets',
+  );
+  assert.match(
+    auditSource,
+    /createLocaleFormatScanSpecs/,
+    'locale format report should reuse the same scan specs for scanning and zero-count summaries',
+  );
 });
 
 test('i18n audit fails literal fallbacks and unknown static keys', () => {

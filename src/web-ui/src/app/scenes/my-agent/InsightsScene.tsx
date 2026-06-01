@@ -140,10 +140,10 @@ const ReportMetaCard: React.FC<{
   meta: InsightsReportMeta;
   onSelect: (meta: InsightsReportMeta) => void;
 }> = ({ meta, onSelect }) => {
-  const { t } = useI18n('common');
+  const { t, formatDate } = useI18n('common');
   const date = new Date(meta.generated_at * 1000);
-  const dateStr = date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-  const timeStr = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  const dateStr = formatDate(date, { year: 'numeric', month: 'short', day: 'numeric' });
+  const timeStr = formatDate(date, { hour: '2-digit', minute: '2-digit' });
   const rangeStart = meta.date_range.start.slice(0, 10);
   const rangeEnd = meta.date_range.end.slice(0, 10);
   const formatGoal = (g: string) => g.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -498,10 +498,8 @@ const formatDurationShort = (secs: number): string => {
   return `${(secs / 3600).toFixed(1)}h`;
 };
 
-const formatNumber = (n: number): string => n.toLocaleString();
-
 const StatsRow: React.FC<{ report: InsightsReport }> = ({ report }) => {
-  const { t } = useI18n('common');
+  const { t, formatNumber } = useI18n('common');
   const { stats } = report;
   const hasCodeChanges = (stats.total_lines_added ?? 0) > 0 || (stats.total_lines_removed ?? 0) > 0;
 

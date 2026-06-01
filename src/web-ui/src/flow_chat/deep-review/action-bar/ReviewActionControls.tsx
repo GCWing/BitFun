@@ -74,7 +74,6 @@ export const ReviewActionControls: React.FC<ReviewActionControlsProps> = ({
           <RotateCcw size={14} />
           {t('deepReviewActionBar.retryIncompleteSlices', {
             count: retryableSliceCount,
-            defaultValue: `Retry incomplete slices (${retryableSliceCount})`,
           })}
         </Button>
       )}
@@ -87,7 +86,7 @@ export const ReviewActionControls: React.FC<ReviewActionControlsProps> = ({
             disabled={isFixDisabled}
             onClick={() => void onStartFixing(false)}
           >
-            {t('toolCards.codeReview.remediationActions.startFix', { defaultValue: 'Start fixing' })}
+            {t('toolCards.codeReview.remediationActions.startFix')}
           </Button>
           <Button
             variant="secondary"
@@ -96,18 +95,16 @@ export const ReviewActionControls: React.FC<ReviewActionControlsProps> = ({
             disabled={isFixDisabled}
             onClick={() => void onStartFixing(true)}
           >
-            {t('toolCards.codeReview.remediationActions.fixAndReview', { defaultValue: 'Fix and re-review' })}
+            {t('toolCards.codeReview.remediationActions.fixAndReview')}
           </Button>
-          <Tooltip content={t('deepReviewActionBar.fillBackInputHint', {
-            defaultValue: 'Copy selected fix plan to the input box for manual editing',
-          })}>
+          <Tooltip content={t('deepReviewActionBar.fillBackInputHint')}>
             <Button
               variant="ghost"
               size="small"
               disabled={isFixDisabled}
               onClick={() => void onFillBackInput()}
             >
-              {t('deepReviewActionBar.fillBackInput', { defaultValue: 'Fill to input' })}
+              {t('deepReviewActionBar.fillBackInput')}
             </Button>
           </Tooltip>
         </>
@@ -132,7 +129,7 @@ export const ReviewActionControls: React.FC<ReviewActionControlsProps> = ({
             onClick={() => void onContinueReview()}
           >
             <Play size={14} />
-            {t('deepReviewActionBar.resumeReview', { defaultValue: 'Continue review' })}
+            {t('deepReviewActionBar.resumeReview')}
           </Button>
           {modelRecoveryAction && (
             <Button
@@ -142,8 +139,8 @@ export const ReviewActionControls: React.FC<ReviewActionControlsProps> = ({
               onClick={() => void onOpenModelSettings()}
             >
               {modelRecoveryAction === 'switch_model'
-                ? t('deepReviewActionBar.switchModel', { defaultValue: 'Switch model' })
-                : t('deepReviewActionBar.openModelSettings', { defaultValue: 'Open model settings' })}
+                ? t('deepReviewActionBar.switchModel')
+                : t('deepReviewActionBar.openModelSettings')}
             </Button>
           )}
           <Button
@@ -152,7 +149,7 @@ export const ReviewActionControls: React.FC<ReviewActionControlsProps> = ({
             onClick={() => void onCopyDiagnostics()}
           >
             <Copy size={14} />
-            {t('deepReviewActionBar.copyDiagnostics', { defaultValue: 'Copy diagnostics' })}
+            {t('deepReviewActionBar.copyDiagnostics')}
           </Button>
           {partialResultsAvailable && (
             <Button
@@ -161,7 +158,7 @@ export const ReviewActionControls: React.FC<ReviewActionControlsProps> = ({
               onClick={onViewPartialResults}
             >
               <Eye size={14} />
-              {t('deepReviewActionBar.viewPartialResults', { defaultValue: 'View partial results' })}
+              {t('deepReviewActionBar.viewPartialResults')}
             </Button>
           )}
         </>
@@ -173,7 +170,6 @@ export const ReviewActionControls: React.FC<ReviewActionControlsProps> = ({
             <AlertTriangle size={16} className="deep-review-action-bar__interruption-icon" />
             <span>
               {t('deepReviewActionBar.fixInterrupted', {
-                defaultValue: 'Fix was interrupted. {{count}} items remain.',
                 count: remainingFixIds.length,
               })}
             </span>
@@ -185,7 +181,6 @@ export const ReviewActionControls: React.FC<ReviewActionControlsProps> = ({
           >
             <Play size={14} />
             {t('deepReviewActionBar.continueFix', {
-              defaultValue: 'Continue fixing {{count}} items',
               count: remainingFixIds.length,
             })}
           </Button>
@@ -194,7 +189,7 @@ export const ReviewActionControls: React.FC<ReviewActionControlsProps> = ({
             size="small"
             onClick={onSkipRemainingFixes}
           >
-            {t('deepReviewActionBar.skipRemaining', { defaultValue: 'Skip remaining' })}
+            {t('deepReviewActionBar.skipRemaining')}
           </Button>
         </>
       )}
@@ -205,7 +200,7 @@ export const ReviewActionControls: React.FC<ReviewActionControlsProps> = ({
           size="small"
           onClick={onMinimize}
         >
-          {t('deepReviewActionBar.minimize', { defaultValue: 'Minimize' })}
+          {t('deepReviewActionBar.minimize')}
         </Button>
       )}
     </div>

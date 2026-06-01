@@ -9,58 +9,6 @@
     {
       "path": "src/crates/core/src/miniapp/builtin/assets/pr-review/ui.js",
       "maxLocaleFormatCalls": 1
-    },
-    {
-      "path": "src/mobile-web/src/pages/SessionListPage.tsx",
-      "maxLocaleFormatCalls": 1
-    },
-    {
-      "path": "src/web-ui/src/app/components/panels/base/FlexiblePanel.tsx",
-      "maxLocaleFormatCalls": 1
-    },
-    {
-      "path": "src/web-ui/src/app/components/panels/review-platform/ReviewPlatformPanel.tsx",
-      "maxLocaleFormatCalls": 1
-    },
-    {
-      "path": "src/web-ui/src/app/scenes/my-agent/AssistantScheduleView.tsx",
-      "maxLocaleFormatCalls": 1
-    },
-    {
-      "path": "src/web-ui/src/app/scenes/my-agent/InsightsScene.tsx",
-      "maxLocaleFormatCalls": 3
-    },
-    {
-      "path": "src/web-ui/src/app/scenes/settings/components/ArchivedSessionsConfig.tsx",
-      "maxLocaleFormatCalls": 1
-    },
-    {
-      "path": "src/web-ui/src/app/scenes/welcome/WelcomeScene.tsx",
-      "maxLocaleFormatCalls": 1
-    },
-    {
-      "path": "src/web-ui/src/component-library/components/FlowChatCards/ContextCompressionCard/ContextCompressionCard.tsx",
-      "maxLocaleFormatCalls": 6
-    },
-    {
-      "path": "src/web-ui/src/flow_chat/components/modern/UserMessageItem.tsx",
-      "maxLocaleFormatCalls": 1
-    },
-    {
-      "path": "src/web-ui/src/flow_chat/components/TurnHistoryPanel.tsx",
-      "maxLocaleFormatCalls": 1
-    },
-    {
-      "path": "src/web-ui/src/flow_chat/components/UserMessage.tsx",
-      "maxLocaleFormatCalls": 1
-    },
-    {
-      "path": "src/web-ui/src/infrastructure/config/components/AIModelConfig.tsx",
-      "maxLocaleFormatCalls": 3
-    },
-    {
-      "path": "src/web-ui/src/shared/utils/format.ts",
-      "maxLocaleFormatCalls": 1
     }
   ]
 }

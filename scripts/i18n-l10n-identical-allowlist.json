@@ -16,6 +16,35 @@
         "statuses.done",
         "tools.explore"
       ]
+    },
+    {
+      "id": "mobile-web-zh-tw-same-han-ui-atoms",
+      "surface": "mobile-web",
+      "locale": "zh-TW",
+      "comparisonLocale": "zh-CN",
+      "owner": "src/mobile-web/src/i18n/messages.ts",
+      "reason": "Reviewed mobile UI atoms whose Traditional Chinese spelling intentionally matches Simplified Chinese.",
+      "keys": [
+        "chat.done",
+        "chat.modelFast",
+        "chat.modelPrimary",
+        "chat.readToolsRunning",
+        "chat.thinking",
+        "chat.waiting",
+        "common.back",
+        "common.cancel",
+        "common.daysAgo",
+        "common.other",
+        "common.stop",
+        "common.submit",
+        "common.submitted",
+        "common.submitting",
+        "sessions.assistant",
+        "sessions.assistantMode",
+        "sessions.cancel",
+        "sessions.recent",
+        "tools.ls"
+      ]
     }
   ]
 }

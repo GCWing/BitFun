@@ -362,11 +362,9 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
     ? t('flowChatHeader.btwBackTooltipWithTurn', {
         title: parentLabel,
         turn: btwOrigin.parentTurnIndex,
-        defaultValue: `Go back to the source session: ${parentLabel} (Turn ${btwOrigin.parentTurnIndex})`,
       })
     : t('flowChatHeader.btwBackTooltipWithoutTurn', {
         title: parentLabel,
-        defaultValue: `Go back to the source session: ${parentLabel}`,
       });
 
   const remainingCount = actionBarRemediationItems.length - actionBarCompletedIds.size;
@@ -383,48 +381,28 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
     switch (actionBarPhase) {
       case 'review_running':
         return isDeepReview
-          ? t('deepReviewActionBar.minimizedReviewRunningDeep', {
-              defaultValue: 'Deep Review running',
-            })
-          : t('deepReviewActionBar.minimizedReviewRunningStandard', {
-              defaultValue: 'Code Review running',
-            });
+          ? t('deepReviewActionBar.minimizedReviewRunningDeep')
+          : t('deepReviewActionBar.minimizedReviewRunningStandard');
       case 'fix_running':
         return actionBarLastSubmittedAction === 'fix-review'
-          ? t('deepReviewActionBar.minimizedFixReview', {
-              defaultValue: 'Fixing and re-reviewing',
-            })
-          : t('deepReviewActionBar.minimizedFix', {
-              defaultValue: 'Fixing',
-            });
+          ? t('deepReviewActionBar.minimizedFixReview')
+          : t('deepReviewActionBar.minimizedFix');
       case 'fix_completed':
-        return t('deepReviewActionBar.minimizedFixCompleted', {
-          defaultValue: 'Fix completed',
-        });
+        return t('deepReviewActionBar.minimizedFixCompleted');
       case 'fix_failed':
       case 'fix_timeout':
       case 'review_error':
-        return t('deepReviewActionBar.minimizedFixFailed', {
-          defaultValue: 'Needs attention',
-        });
+        return t('deepReviewActionBar.minimizedFixFailed');
       case 'review_interrupted':
       case 'resume_blocked':
       case 'resume_failed':
-        return t('deepReviewActionBar.minimizedReviewInterrupted', {
-          defaultValue: 'Review interrupted',
-        });
+        return t('deepReviewActionBar.minimizedReviewInterrupted');
       case 'resume_running':
-        return t('deepReviewActionBar.minimizedResume', {
-          defaultValue: 'Continuing review',
-        });
+        return t('deepReviewActionBar.minimizedResume');
       default:
         return isDeepReview
-          ? t('deepReviewActionBar.minimizedDeep', {
-              defaultValue: 'Deep Review',
-            })
-          : t('deepReviewActionBar.minimizedStandard', {
-              defaultValue: 'Code Review',
-            });
+          ? t('deepReviewActionBar.minimizedDeep')
+          : t('deepReviewActionBar.minimizedStandard');
     }
   }, [actionBarPhase, actionBarLastSubmittedAction, isDeepReview, t]);
 
@@ -764,9 +742,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
     } catch (error) {
       log.error('Failed to stop review session', { childSessionId, error });
       notificationService.error(
-        t('childSession.stopReviewFailed', {
-          defaultValue: 'Failed to stop the review session.',
-        }),
+        t('childSession.stopReviewFailed'),
       );
     } finally {
       setStoppingReview(false);
@@ -830,11 +806,11 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
                 onClick={() => void handleStopReviewSession()}
                 disabled={!canStopReviewSession}
                 tooltip={stoppingReview
-                  ? t('childSession.stoppingReview', { defaultValue: 'Stopping review...' })
-                  : t('childSession.stopReview', { defaultValue: 'Stop review' })}
+                  ? t('childSession.stoppingReview')
+                  : t('childSession.stopReview')}
                 aria-label={stoppingReview
-                  ? t('childSession.stoppingReview', { defaultValue: 'Stopping review...' })
-                  : t('childSession.stopReview', { defaultValue: 'Stop review' })}
+                  ? t('childSession.stoppingReview')
+                  : t('childSession.stopReview')}
                 data-testid="btw-session-panel-stop-review"
               >
                 <Square size={11} />
@@ -892,7 +868,6 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
               className="btw-session-panel__minimized-button"
               aria-label={t('deepReviewActionBar.restore', {
                 label: minimizedActionLabel,
-                defaultValue: `Open ${minimizedActionLabel}`,
               })}
             >
               <Sparkles size={14} />

@@ -7,19 +7,19 @@
     "capabilities2": "重構老舊項目，或是解決那些讓人頭疼的 Bug。",
     "readyToHelp": "說出你的想法，我隨時待命",
     "noWorkspace": "這裡還空空如也",
-    "openProject": "打開一個項目，讓我們一起開始編碼之旅"
+    "openProject": "開啟一個項目，讓我們一起開始編碼之旅"
   },
   "panel": {
-    "noTabs": "暫無打開的標籤",
-    "selectFromLeft": "從左側選擇文件或內容來創建新標籤",
+    "noTabs": "暫無開啟的標籤",
+    "selectFromLeft": "從左側選擇檔案或內容來建立新標籤",
     "dragTabHere": "拖拽標籤到此處",
-    "releaseToAdd": "釋放以添加到此欄"
+    "releaseToAdd": "釋放以新增到此欄"
   },
   "layout": {
     "noPanelsHint": "使用底部欄切換面板或按 <kbd>Ctrl+\\</kbd> <kbd>Ctrl+]</kbd> 展開面板",
     "chatHiddenTitle": "聊天已隱藏",
-    "chatHiddenDesc": "你可以在右上角點擊“聊天”重新打開。",
-    "chatHiddenAction": "重新打開聊天",
+    "chatHiddenDesc": "你可以在右上角點擊“聊天”重新開啟。",
+    "chatHiddenAction": "重新開啟聊天",
     "panelCollapseHintLeft": "<- 鬆開收起",
     "panelCollapseHintRight": "鬆開收起 ->",
     "panelMode": {
@@ -32,7 +32,7 @@
       "leftAriaLabel": "調整左側面板大小",
       "centerAriaLabel": "調整面板大小",
       "rightAriaLabel": "調整右側面板大小",
-      "title": "拖拽調整面板大小 | 雙擊切換模式 | 當前: {{mode}}"
+      "title": "拖拽調整面板大小 | 雙擊切換模式 | 目前: {{mode}}"
     }
   },
   "runtimeStatus": {
@@ -43,7 +43,7 @@
     "loadingDescription": "正在準備該會話的歷史內容。",
     "failedTitle": "歷史會話載入失敗",
     "failedDescription": "可以重新載入已儲存的會話內容。",
-    "remoteSessionMissing": "在後端找不到該會話資料。若剛重新連接過 SSH 遠端工作區，請關閉並重新打開該遠端項目，或新建會話後再試。",
+    "remoteSessionMissing": "在後端找不到該會話資料。若剛重新連接過 SSH 遠端工作區，請關閉並重新開啟該遠端項目，或新增會話後再試。",
     "retry": "重試"
   },
   "usage": {
@@ -235,7 +235,7 @@
       "wall": "從第一回合開始到最後一回合結束的記錄跨度，可能包含回合之間的閒置間隔。",
       "active": "產生可統計活動的回合記錄時間段聯集，可能包含回合內的編排或等待時間。",
       "timeShare": "占已記錄回合耗時的比例。模型與工具耗時可能重疊，因此僅作為近似參考。",
-      "modelRoundTime": "基於工作階段中保存的模型回合執行期中繼資料或起止時間計算，不等同於純服務商串流輸出或吞吐耗時；占比按已記錄回合耗時近似計算。",
+      "modelRoundTime": "基於工作階段中儲存的模型回合執行期中繼資料或起止時間計算，不等同於純服務商串流輸出或吞吐耗時；占比按已記錄回合耗時近似計算。",
       "toolTime": "基於已記錄工具呼叫耗時計算；占比按已記錄回合耗時近似計算。",
       "cachedTokens": "目前服務商沒有為這個工作階段回報快取讀取 Token 中繼資料；可用時仍會顯示總 Token。",
       "cachedTokensPartial": "只有部分呼叫回報了快取讀取 Token 中繼資料，因此快取 Token 合計只涵蓋這些呼叫。",
@@ -284,38 +284,38 @@
     }
   },
   "session": {
-    "new": "新建會話",
-    "newCode": "新建 Code 會話",
-    "newCowork": "新建 Cowork 會話",
-    "newClaw": "新建 Claw 會話",
-    "newWithIndex": "新建會話 {{count}}",
-    "newCodeWithIndex": "新建 Code 會話 {{count}}",
-    "newCoworkWithIndex": "新建 Cowork 會話 {{count}}",
-    "newClawWithIndex": "新建 Claw 會話 {{count}}",
+    "new": "新增會話",
+    "newCode": "新增 Code 會話",
+    "newCowork": "新增 Cowork 會話",
+    "newClaw": "新增 Claw 會話",
+    "newWithIndex": "新增會話 {{count}}",
+    "newCodeWithIndex": "新增 Code 會話 {{count}}",
+    "newCoworkWithIndex": "新增 Cowork 會話 {{count}}",
+    "newClawWithIndex": "新增 Claw 會話 {{count}}",
     "title": "會話",
     "chatWithAgent": "與{{name}}的對話",
-    "rename": "重命名會話",
+    "rename": "重新命名會話",
     "delete": "刪除會話",
     "deleteConfirm": "確定要刪除此會話嗎？",
     "empty": "暫無會話",
     "untitled": "未命名會話",
     "history": "歷史會話",
-    "current": "當前會話",
+    "current": "目前會話",
     "management": "會話管理",
     "close": "關閉",
     "dialogTurns": "{{count}} 輪對話",
     "noSession": "暫無會話",
     "switchSession": "切換會話",
-    "create": "創建新會話",
+    "create": "建立新會話",
     "more": "更多會話",
-    "restoreMain": "恢復主窗口"
+    "restoreMain": "恢復主視窗"
   },
   "scroll": {
     "toBottom": "回到底部",
     "toBottomWithCount": "回到底部 ({{count}} 條新消息)",
     "toLatest": "跳轉到最新消息",
     "clickToLatest": "點擊跳轉到最新",
-    "toCurrentTurn": "跳轉到當前輪次"
+    "toCurrentTurn": "跳轉到目前輪次"
   },
   "message": {
     "user": "用戶",
@@ -337,12 +337,12 @@
     "rollbackTo": "回滾到第 {{index}} 輪之前（刪除該輪及之後）",
     "rollbackDialogTitle": "確定回滾到第 {{index}} 輪之前？",
     "rollbackDialogIntro": "將執行：",
-    "rollbackDialogBulletFiles": "撤銷從該輪開始的所有文件修改",
+    "rollbackDialogBulletFiles": "撤銷從該輪開始的所有檔案修改",
     "rollbackDialogBulletHistory": "刪除該輪及之後的對話記錄（不可恢復）",
     "rollbackPanelDialogTitle": "回滾到第 {{index}} 輪之前？",
     "rollbackPanelDialogIntro": "將執行：",
-    "rollbackPanelBulletRestore": "將文件恢復到第 {{index}} 輪之前的狀態",
-    "rollbackPanelBulletUndo": "撤銷從該輪開始的所有文件變更",
+    "rollbackPanelBulletRestore": "將檔案恢復到第 {{index}} 輪之前的狀態",
+    "rollbackPanelBulletUndo": "撤銷從該輪開始的所有檔案變更",
     "rollbackPanelBulletHistory": "保留會話歷史（之後仍可繼續對話）",
     "rollbackSuccess": "已回滾並刪除後續對話記錄",
     "rollbackFailed": "回滾失敗",
@@ -357,7 +357,7 @@
     "editDialogTitle": "從第 {{index}} 輪編輯並重跑？",
     "editDialogIntro": "將執行：",
     "editDialogBulletStopRunning": "停止目前正在執行的任務",
-    "editDialogBulletFiles": "將文件恢復到該輪開始前的狀態",
+    "editDialogBulletFiles": "將檔案恢復到該輪開始前的狀態",
     "editDialogBulletHistory": "刪除該輪及之後的對話記錄",
     "editDialogBulletRerun": "使用編輯後的消息啟動新一輪對話",
     "editSuccess": "已編輯消息並重新執行",
@@ -378,11 +378,11 @@
     "displayText": "UI：{{summary}}",
     "promptSelected": "選中的生成式 UI 元素：{{summary}}。",
     "promptSection": "所屬區域：{{section}}。",
-    "promptFile": "關聯文件：{{file}}{{line}}。"
+    "promptFile": "關聯檔案：{{file}}{{line}}。"
   },
   "input": {
     "placeholder": "有什麼可以幫您...",
-    "placeholderWithContext": "輸入消息，或拖放文件添加上下文...",
+    "placeholderWithContext": "輸入消息，或拖放檔案新增上下文...",
     "send": "發送",
     "sendShortcut": "發送 (⏎)",
     "stop": "停止",
@@ -390,18 +390,18 @@
     "processingCapsule": "正在處理",
     "cancelShortcut": "取消",
     "clear": "清空",
-    "attach": "附加文件",
+    "attach": "附加檔案",
     "collapseInput": "收起輸入框",
     "expandInput": "展開輸入框",
     "retry": "重試",
-    "addImage": "添加圖片",
+    "addImage": "新增圖片",
     "maxImagesWarning": "最多隻能選擇{{count}}張圖片",
     "imagePasteFailed": "圖片粘貼失敗",
     "removeImage": "移除圖片",
     "largePastePlaceholder": "[已粘貼內容 {{count}} 字符]",
-    "messageTooLarge": "消息超過最大長度 {{max}} 個字符（當前 {{count}} 個字符）。",
-    "openWorkspaceFolder": "打開工作區文件夾",
-    "openWorkspaceFolderFailed": "打開工作區文件夾失敗：{{error}}",
+    "messageTooLarge": "消息超過最大長度 {{max}} 個字符（目前 {{count}} 個字符）。",
+    "openWorkspaceFolder": "開啟工作區資料夾",
+    "openWorkspaceFolderFailed": "開啟工作區資料夾失敗：{{error}}",
     "spaceToActivate": "按<space>空格鍵</space>快速鍵入",
     "assistantPlaceholder": "傳訊息給 {{name}}...",
     "sendHint": "Enter 傳送 / Shift+Enter 換行"
@@ -411,16 +411,16 @@
   },
   "context": {
     "title": "上下文",
-    "add": "添加上下文",
+    "add": "新增上下文",
     "remove": "移除上下文",
     "clear": "清空上下文",
-    "file": "文件",
-    "folder": "文件夾",
+    "file": "檔案",
+    "folder": "資料夾",
     "selection": "選中內容",
     "codeBlock": "代碼塊",
     "image": "圖片",
     "url": "URL",
-    "dragHint": "拖放文件到此處添加上下文"
+    "dragHint": "拖放檔案到此處新增上下文"
   },
   "agent": {
     "title": "智能體",
@@ -440,7 +440,7 @@
     "streaming": "流式輸出"
   },
   "toolbar": {
-    "newSession": "新建會話",
+    "newSession": "新增會話",
     "history": "歷史記錄",
     "export": "導出對話",
     "clear": "清空對話",
@@ -472,9 +472,9 @@
     "boostSectionAgent": "智能體",
     "boostSectionContext": "上下文",
     "boostStartBtw": "發起側問",
-    "boostAddContext": "引用文件或文件夾",
+    "boostAddContext": "引用檔案或資料夾",
     "boostSkills": "Skills",
-    "boostSkillsLoading": "正在加載 Skills…",
+    "boostSkillsLoading": "正在載入 Skills…",
     "boostSkillsEmpty": "暫無已啟用的 Skill",
     "openSkillsLibrary": "管理 Skills…",
     "insertSkillLine": "Please use the Skill tool with command \"{{name}}\".",
@@ -482,52 +482,53 @@
     "resetToAgentic": "恢復默認模式",
     "noIncrementalModes": "暫無可附加模式",
     "switchMode": "切換模式",
-    "promptCacheGuardTitle": "切換該模式會重置提示詞快取復用",
+    "promptCacheGuardTitle": "切換該模式會重設提示詞快取復用",
     "promptCacheGuardBody": "下一次請求將從 {{fromMode}} 切換到 {{toMode}}，目前工作階段將無法繼續復用現有的提示詞快取。要繼續發送嗎？",
     "promptCacheGuardConfirm": "仍然發送",
     "promptCacheGuardCancel": "先不發送",
     "quickAction": "快捷操作",
+    "commands": "指令",
     "compactAction": "壓縮會話",
-    "compactNoSession": "當前沒有可用於 /compact 的會話",
-    "compactBusy": "請等待當前會話空閒後再使用 /compact。",
+    "compactNoSession": "目前沒有可用於 /compact 的會話",
+    "compactBusy": "請等待目前會話空閒後再使用 /compact。",
     "compactUsage": "請直接使用 /compact，不要附加額外參數。",
     "compactFailed": "會話壓縮失敗",
     "goalAction": "會話目標",
     "goalGenerating": "正在生成目標…",
     "goalVerifying": "正在驗證目標是否達成…",
     "goalAchieved": "會話目標已達成",
-    "goalVerifyFailed": "目標驗證失敗，請檢查模型配置後重試。",
-    "goalNoSession": "當前沒有可用於 /goal 的會話",
+    "goalVerifyFailed": "目標驗證失敗，請檢查模型設定後重試。",
+    "goalNoSession": "目前沒有可用於 /goal 的會話",
     "goalUsage": "使用 /goal 並可選擇附加目標描述，例如 /goal 修復登入問題。",
     "goalFailed": "目標模式啟用失敗",
-    "goalAiFailed": "目標模式 AI 請求失敗，請檢查模型配置後重試。",
+    "goalAiFailed": "目標模式 AI 請求失敗，請檢查模型設定後重試。",
     "goalActivated": "會話目標已啟用",
     "goalNestedDisabled": "目標模式只能從主會話啟動。",
     "initAction": "生成 AGENTS.md",
-    "initNoSession": "當前沒有可用於 /init 的會話",
-    "initBusy": "請等待當前會話空閒後再使用 /init。",
+    "initNoSession": "目前沒有可用於 /init 的會話",
+    "initBusy": "請等待目前會話空閒後再使用 /init。",
     "initUsage": "請直接使用 /init，不要附加額外參數。",
     "initFailed": "初始化 AGENTS.md 失敗",
     "deepreviewAction": "深度審核",
-    "deepreviewNoSession": "當前沒有可用於深度審核的會話",
+    "deepreviewNoSession": "目前沒有可用於深度審核的會話",
     "deepreviewUsage": "請使用 /DeepReview，可附加聚焦說明，例如 /DeepReview 審核提交 abc123 的安全風險。",
     "deepreviewFailed": "深度審核失敗",
     "deepreviewInfo": "深度審核會拉起並行程式碼審核團隊，可能會比普通審核耗時更長且 Token 消耗更高。",
     "deepreviewBusy": "目前會話已有審核正在進行，請停止或等待完成後再開始新的深度審核。",
     "deepreviewNestedDisabled": "深度審核只能從主會話啟動。",
     "deepreviewThreadTitle": "深度審核",
-    "currentMode": "當前模式: {{mode}}",
+    "currentMode": "目前模式: {{mode}}",
     "noMatchingMode": "沒有匹配的模式",
     "noMatchingCommand": "沒有匹配的命令",
     "selectHint": "↑↓ 選擇 · Enter 確認 · Esc 取消",
-    "current": "當前",
+    "current": "目前",
     "professionalMode": "專業模式",
     "designMode": "設計模式",
     "wip": "開發中",
     "sendTarget": "發送到",
     "conversationTarget": "對話目標",
     "targetMain": "主會話",
-    "targetBtw": "當前側問",
+    "targetBtw": "目前側問",
     "sendingToMain": "主會話：{{title}}",
     "sendingToBtw": "側問會話：{{title}}",
     "modeDescriptions": {
@@ -552,7 +553,7 @@
       "DeepResearch": "Deep Research",
       "Team": "Team"
     },
-    "openFolder": "打開文件夾…",
+    "openFolder": "開啟資料夾…",
     "selectWorkspaceTitle": "選擇工作區目錄",
     "switchWorkspaceFailed": "切換工作區失敗：{{error}}",
     "usageAction": "工作階段用量",
@@ -574,18 +575,18 @@
     "pending": "待處理",
     "pendingCount": "{{count}} 待處理",
     "todoItems": "待辦事項 ({{count}})",
-    "save": "保存",
+    "save": "儲存",
     "cancel": "取消",
     "sendToModel": "將修改發送給模型",
     "sending": "發送中...",
     "doubleClickToEdit": "雙擊編輯",
     "percentComplete": "{{percent}}% 完成",
-    "currentStatus": "當前狀態: {{status}}"
+    "currentStatus": "目前狀態: {{status}}"
   },
   "fileMention": {
-    "searchResults": "搜索結果",
-    "loading": "加載中...",
-    "noMatchingFiles": "沒有找到匹配的文件",
+    "searchResults": "搜尋結果",
+    "loading": "載入中...",
+    "noMatchingFiles": "沒有找到匹配的檔案",
     "emptyDirectory": "空目錄",
     "rootDirectory": "根目錄",
     "goBack": "返回上級目錄",
@@ -600,7 +601,7 @@
     "copyOutputContent": "複製輸出內容",
     "copiedOutputContent": "已複製輸出內容",
     "edit": "編輯",
-    "openInEditor": "在編輯器中打開",
+    "openInEditor": "在編輯器中開啟",
     "aiReply": "AI回覆 {{timestamp}}",
     "toolCall": "🔧 工具調用: {{name}}",
     "unknownTool": "未知工具"
@@ -612,24 +613,24 @@
   "btw": {
     "title": "側問",
     "shortLabel": "側問",
-    "hint": "不保存 · 使用當前對話上下文 · 無工具",
+    "hint": "不儲存 · 使用目前對話上下文 · 無工具",
     "placeholder": "問個小問題…",
     "ask": "提問",
     "asking": "思考中…",
     "cancel": "停止",
-    "openThread": "打開子會話",
+    "openThread": "開啟子會話",
     "threadLabel": "子會話",
-    "emptyThreadLabel": "暫未打開{{label}}",
+    "emptyThreadLabel": "暫未開啟{{label}}",
     "origin": "來自",
     "parent": "父會話",
     "turnLabel": "第 {{index}} 輪",
     "back": "返回",
     "backToParent": "返回父會話",
     "empty": "請在 /btw 後面寫上問題",
-    "nestedDisabled": "側問會話中不能繼續新建側問",
+    "nestedDisabled": "側問會話中不能繼續新增側問",
     "error": "失敗",
     "close": "關閉",
-    "noSession": "當前沒有可用於 /btw 的會話"
+    "noSession": "目前沒有可用於 /btw 的會話"
   },
   "childSession": {
     "stopReview": "中止審核",
@@ -674,7 +675,7 @@
     "dismiss": "關閉",
     "close": "關閉",
     "minimize": "收起",
-    "restore": "打開 {{label}}",
+    "restore": "開啟 {{label}}",
     "fixAndReviewRunning": "正在修復&準備重審...",
     "minimizedDeep": "深度審核",
     "minimizedStandard": "程式碼審核",
@@ -688,7 +689,7 @@
     "minimizedResume": "正在繼續審核",
     "showCustomInput": "補充說明",
     "hideCustomInput": "收起說明",
-    "customInstructionsPlaceholder": "描述修復的額外要求或上下文信息...",
+    "customInstructionsPlaceholder": "描述修復的額外要求或上下文資訊...",
     "remediationStatus": {
       "fixing": "修復中",
       "fixed": "已修復"
@@ -710,26 +711,26 @@
     "retryIncompleteRequestDisplay": "重試 {{count}} 個未完成的 Deep Review 切片",
     "retryIncompleteFailed": "無法重試未完成的 Deep Review 切片。",
     "fixCompletedMessage": "所有修復已成功應用。",
-    "replaceInputConfirmTitle": "替換當前輸入？",
-    "replaceInputConfirmMessage": "輸入框中已有文本，填入計劃將替換當前草稿內容。",
+    "replaceInputConfirmTitle": "替換目前輸入？",
+    "replaceInputConfirmMessage": "輸入框中已有文字，填入計劃將替換目前草稿內容。",
     "replaceInputConfirmAction": "替換輸入",
     "reviewInterrupted": "深度審核已中斷",
     "resumeBlocked": "繼續前需要處理問題",
     "resumeRunning": "正在繼續審核...",
     "resumeFailed": "繼續失敗",
-    "resumeBlockedHint": "請先處理模型配置或額度問題，再繼續審核。",
+    "resumeBlockedHint": "請先處理模型設定或額度問題，再繼續審核。",
     "resumeBlockedConfirmTitle": "繼續審核？",
     "resumeBlockedConfirmMessage": "導致審核中斷的錯誤尚未解決，繼續審核可能會再次失敗。是否仍要繼續？",
     "resumeBlockedConfirmAction": "仍然繼續",
     "resumeReview": "繼續審核",
     "resumeRequestDisplay": "繼續中斷的深度審核",
     "resumeFailedMessage": "無法繼續深度審核。請檢查模型設置，或稍後重試。",
-    "openModelSettings": "打開模型設置",
+    "openModelSettings": "開啟模型設置",
     "switchModel": "切換模型",
-    "copyDiagnostics": "複製診斷信息",
-    "diagnosticsCopied": "診斷信息已複製",
-    "diagnosticsCopyFailed": "複製診斷信息失敗",
-    "diagnosticsTitle": "=== 深度審核中斷診斷信息 ===",
+    "copyDiagnostics": "複製診斷資訊",
+    "diagnosticsCopied": "診斷資訊已複製",
+    "diagnosticsCopyFailed": "複製診斷資訊失敗",
+    "diagnosticsTitle": "=== 深度審核中斷診斷資訊 ===",
     "diagnosticsErrorType": "錯誤類型",
     "diagnosticsDescription": "錯誤描述",
     "diagnosticsSuggestedActions": "建議操作",
@@ -769,7 +770,7 @@
       "providerTitle": "等待模型容量",
       "detail": "排隊等待時間不會計入審核員執行時長。",
       "activeReviewerDetail": "排隊審核員會在執行中的審核員釋放容量後繼續啟動。排隊等待時間不會計入審核員執行時長。",
-      "longLaunchBatchWaitDetail": "該審核員等待時間已超過設定的佇列窗口，因為前一批審核員仍在執行。你可以繼續等待、暫停佇列、取消排隊審核員，或開啟審核設定。",
+      "longLaunchBatchWaitDetail": "該審核員等待時間已超過設定的佇列視窗，因為前一批審核員仍在執行。你可以繼續等待、暫停佇列、取消排隊審核員，或開啟審核設定。",
       "providerDetail": "BitFun 正在等待暫時模型容量恢復。這裡的等待不會計入審核員執行時長。",
       "reason": "原因：{{reason}}",
       "elapsed": "已等待 {{elapsed}}",
@@ -817,7 +818,7 @@
       "viewPartialDesc": "查看已完成的 reviewer 結果"
     },
     "launchError": {
-      "modelConfig": "無法創建審核會話，請檢查模型配置",
+      "modelConfig": "無法建立審核會話，請檢查模型設定",
       "network": "網絡連接中斷，審核未能啟動",
       "unknown": "審核啟動失敗，請重試"
     }
@@ -928,13 +929,13 @@
     "btwBackTooltipWithTurn": "返回到來源會話：{{title}}（第 {{turn}} 輪）",
     "btwBackTooltipWithoutTurn": "返回到來源會話：{{title}}",
     "btwCreateTooltip": "快速發起一個側問",
-    "searchPlaceholder": "搜索對話消息",
+    "searchPlaceholder": "搜尋對話消息",
     "searchResult": "{{current}} / {{total}}",
     "searchNoResults": "沒有匹配結果",
     "searchPrevious": "上一個匹配結果",
     "searchNext": "下一個匹配結果",
-    "searchClose": "關閉搜索",
-    "searchOpen": "搜索消息",
+    "searchClose": "關閉搜尋",
+    "searchOpen": "搜尋消息",
     "jumpToCurrentTurn": "跳轉到第 {{turn}} 輪",
     "backgroundSubagents": "背景子 Agent（{{count}}）",
     "backgroundSubagentUntitled": "背景子 Agent",
@@ -943,14 +944,14 @@
     "pullRequests": "拉取請求"
   },
   "stickyTaskIndicator": {
-    "tooltip": "跳轉到當前任務"
+    "tooltip": "跳轉到目前任務"
   },
   "sessionFilesBadge": {
-    "files": "文件",
-    "filesSummaryCount": "{{count}} 個文件",
+    "files": "檔案",
+    "filesSummaryCount": "{{count}} 個檔案",
     "expandChangeListCue": "展開列表",
-    "expandChangeListAriaCue": "展開查看文件列表",
-    "collapseFileDiffList": "收起文件變更列表",
+    "expandChangeListAriaCue": "展開查看檔案列表",
+    "collapseFileDiffList": "收起檔案變更列表",
     "reviewLabel": "審核",
     "reviewAll": "全部審核",
     "reviewMenuLabel": "審核",
@@ -962,29 +963,29 @@
     "reviewModeDeep": "深度審核",
     "reviewRunningStandard": "審核中",
     "reviewRunningDeep": "審核中",
-    "reviewRunningHint": "請等待當前審核完成，或在審核頁面中止它。",
+    "reviewRunningHint": "請等待目前審核完成，或在審核頁面中止它。",
     "deepReviewLabel": "深審",
     "deepReviewAll": "深度審核",
-    "loadFailed": "加載失敗",
+    "loadFailed": "載入失敗",
     "clickToViewDiff": "點擊查看 Diff",
     "review": {
-      "displayMessage": "審核修改的文件：\n{{files}}",
-      "displayMessageFiltered": "審核過濾後的文件：\n{{files}}\n\n已跳過 {{skipped}} 個命中排除規則的文件。",
-      "filteredNotice": "本次將分析 {{included}} 個文件，並跳過 {{skipped}} 個命中排除規則的文件，例如鎖文件、生成物或二進制資源。",
-      "noEligibleFiles": "排除命中規則的文件後，本次會話裡沒有可審核文件。",
-      "prompt": "請審核本次會話中修改的以下文件：\n\n{{files}}",
-      "promptFiltered": "請審核本次會話中修改的以下文件：\n\n{{files}}\n\n請不要審核另外 {{skipped}} 個已跳過的文件，因為它們命中了鎖文件、生成物或二進制文件的排除規則。",
+      "displayMessage": "審核修改的檔案：\n{{files}}",
+      "displayMessageFiltered": "審核過濾後的檔案：\n{{files}}\n\n已跳過 {{skipped}} 個命中排除規則的檔案。",
+      "filteredNotice": "本次將分析 {{included}} 個檔案，並跳過 {{skipped}} 個命中排除規則的檔案，例如鎖檔案、生成物或二進制資源。",
+      "noEligibleFiles": "排除命中規則的檔案後，本次會話裡沒有可審核檔案。",
+      "prompt": "請審核本次會話中修改的以下檔案：\n\n{{files}}",
+      "promptFiltered": "請審核本次會話中修改的以下檔案：\n\n{{files}}\n\n請不要審核另外 {{skipped}} 個已跳過的檔案，因為它們命中了鎖檔案、生成物或二進制檔案的排除規則。",
       "threadTitle": "代碼審核"
     },
     "deepReview": {
       "info": "深度審核會啟動並行程式碼審核團隊，可能更耗時並消耗更多 Token。",
-      "displayMessage": "深度審核修改的文件：\n{{files}}",
-      "displayMessageFiltered": "深度審核過濾後的文件：\n{{files}}\n\n已跳過 {{skipped}} 個命中排除規則的文件。",
+      "displayMessage": "深度審核修改的檔案：\n{{files}}",
+      "displayMessageFiltered": "深度審核過濾後的檔案：\n{{files}}\n\n已跳過 {{skipped}} 個命中排除規則的檔案。",
       "threadTitle": "深度審核"
     }
   },
   "sessionFileModificationsBar": {
-    "filesCount": "{{count}} 個文件",
+    "filesCount": "{{count}} 個檔案",
     "expandList": "展開列表",
     "collapseList": "收起列表",
     "reviewSource": "審核",
@@ -992,9 +993,9 @@
   },
   "snapshotSystem": {
     "errors": {
-      "refreshSessionFailed": "刷新會話狀態失敗",
-      "acceptFileFailed": "接受文件失敗",
-      "rejectFileFailed": "拒絕文件失敗",
+      "refreshSessionFailed": "重新整理會話狀態失敗",
+      "acceptFileFailed": "接受檔案失敗",
+      "rejectFileFailed": "拒絕檔案失敗",
       "acceptSessionFailed": "接受會話失敗",
       "rejectSessionFailed": "拒絕會話失敗",
       "acceptBlockFailed": "接受塊失敗",
@@ -1005,7 +1006,7 @@
     "subtitle": "AI 編程助手 · 對話記錄",
     "poweredBy": "Powered by",
     "aiAssistant": "AI 編程助手",
-    "dialogNotFound": "未找到對話數據",
+    "dialogNotFound": "未找到對話資料",
     "containerNotFound": "導出容器未找到",
     "generateFailed": "生成圖片失敗",
     "fileNamePrefix": "BitFun對話",
@@ -1030,12 +1031,12 @@
     "loadingMoreHistory": "正在載入更多歷史..."
   },
   "exploreRegion": {
-    "readFiles_one": "讀取了 {{count}} 個文件",
-    "readFiles_other": "讀取了 {{count}} 個文件",
-    "readFiles": "讀取了 {{count}} 個文件",
-    "searchCount_one": "進行了 {{count}} 次搜索",
-    "searchCount_other": "進行了 {{count}} 次搜索",
-    "searchCount": "進行了 {{count}} 次搜索",
+    "readFiles_one": "讀取了 {{count}} 個檔案",
+    "readFiles_other": "讀取了 {{count}} 個檔案",
+    "readFiles": "讀取了 {{count}} 個檔案",
+    "searchCount_one": "進行了 {{count}} 次搜尋",
+    "searchCount_other": "進行了 {{count}} 次搜尋",
+    "searchCount": "進行了 {{count}} 次搜尋",
     "commandCount_one": "執行了 {{count}} 個命令",
     "commandCount_other": "執行了 {{count}} 個命令",
     "commandCount": "執行了 {{count}} 個命令",
@@ -1059,25 +1060,25 @@
   },
   "toolCards": {
     "file": {
-      "write": "寫入文件",
-      "edit": "編輯文件",
-      "delete": "刪除文件",
+      "write": "寫入檔案",
+      "edit": "編輯檔案",
+      "delete": "刪除檔案",
       "deletedLabel": "刪除",
       "failed": "失敗",
       "guidanceHint": "提示",
       "guidanceTitle": "提示",
-      "parsingPath": "解析文件路徑中...",
-      "unknownFile": "未知文件",
+      "parsingPath": "解析檔案路徑中...",
+      "unknownFile": "未知檔案",
       "receivingParams": "接收參數中...",
       "analyzing": "分析中...",
       "expandPreview": "展開預覽",
       "collapsePreview": "收起預覽",
-      "openFullCodeHint": "打開全量代碼",
+      "openFullCodeHint": "開啟全量代碼",
       "viewGitDiff": "查看 Diff",
       "viewBaselineDiff": "查看基線 Diff"
     },
     "getFileDiff": {
-      "diffFile": "文件差異",
+      "diffFile": "檔案差異",
       "gettingDiff": "獲取差異",
       "preparing": "準備獲取差異",
       "failed": "獲取差異失敗"
@@ -1085,20 +1086,20 @@
     "generativeUI": {
       "action": "生成式 UI",
       "streamingPreview": "預覽流式生成中",
-      "openSource": "打開源碼",
+      "openSource": "開啟源碼",
       "renderFailed": "組件渲染失敗。",
       "waitingForContent": "等待組件內容中...",
-      "saving": "保存中",
-      "unsaved": "有未保存改動",
-      "saveFailed": "保存失敗",
-      "savedToSession": "已保存到會話",
-      "saveError": "保存組件源碼失敗",
-      "saveNow": "立即保存",
-      "reset": "重置",
+      "saving": "儲存中",
+      "unsaved": "有未儲存改動",
+      "saveFailed": "儲存失敗",
+      "savedToSession": "已儲存到會話",
+      "saveError": "儲存組件源碼失敗",
+      "saveNow": "立即儲存",
+      "reset": "重設",
       "source": "源碼",
       "empty": "暫無組件內容。",
-      "workspaceUnavailable": "當前會話沒有可用工作區，無法保存生成式 UI 源碼",
-      "openSourceFailed": "打開生成式 UI 源碼編輯器失敗"
+      "workspaceUnavailable": "目前會話沒有可用工作區，無法儲存生成式 UI 源碼",
+      "openSourceFailed": "開啟生成式 UI 源碼編輯器失敗"
     },
     "generativeWidget": {
       "exportFileNamePrefix": "BitFun組件"
@@ -1138,7 +1139,7 @@
       "merge": "合併",
       "rebase": "變基",
       "stash": "暫存",
-      "reset": "重置",
+      "reset": "重設",
       "restore": "恢復",
       "show": "顯示",
       "tag": "標籤",
@@ -1155,9 +1156,9 @@
       "creatingShort": "…",
       "untitled": "（未命名）",
       "failed": "失敗",
-      "createFailed": "無法創建小應用",
-      "openInMiniApp": "在小應用中打開",
-      "openInMiniAppTitle": "在小應用場景中打開",
+      "createFailed": "無法建立小應用",
+      "openInMiniApp": "在小應用中開啟",
+      "openInMiniAppTitle": "在小應用場景中開啟",
       "labelAppId": "app_id",
       "labelPath": "path",
       "nameLabel": "應用：{{name}}"
@@ -1175,7 +1176,7 @@
       "copyCommandFailed": "複製命令失敗",
       "cancel": "取消",
       "interrupt": "中斷命令執行",
-      "openInPanel": "在右側面板打開Terminal",
+      "openInPanel": "在右側面板開啟Terminal",
       "expandOutput": "展開輸出",
       "collapseOutput": "收起輸出",
       "rejected": "已拒絕",
@@ -1190,9 +1191,9 @@
       "executionFailed": "命令執行失敗"
     },
     "plan": {
-      "loadingPlan": "正在加載計劃...",
+      "loadingPlan": "正在載入計劃...",
       "generating": "生成中...",
-      "clickToOpenPlan": "點擊打開計劃文件",
+      "clickToOpenPlan": "點擊開啟計劃檔案",
       "remainingTodos": "剩餘 {{count}} 個待辦",
       "viewPlan": "查看計劃",
       "build": "構建",
@@ -1202,7 +1203,7 @@
     "common": {
       "confirm": "確認",
       "cancel": "取消",
-      "loading": "加載中...",
+      "loading": "載入中...",
       "success": "成功",
       "failed": "失敗",
       "error": "錯誤",
@@ -1226,10 +1227,10 @@
       "questionsAnswered": "{{count}} 個問題已回答",
       "notAnswered": "未回答",
       "timeout": "等待超時（10分鐘）",
-      "parseError": "無法解析問題數據",
+      "parseError": "無法解析問題資料",
       "loadingQuestions": "正在接收問題…",
       "other": "其他",
-      "customInputHint": "提供自定義文本",
+      "customInputHint": "提供自定義文字",
       "pleaseSpecify": "請輸入..."
     },
     "think": {
@@ -1241,14 +1242,14 @@
       "thinkingCharacters": "思考了 {{count}} 字符"
     },
     "webSearch": {
-      "parsingSearchTerm": "解析搜索詞中...",
-      "searchTitle": "網絡搜索: \"{{term}}\"",
+      "parsingSearchTerm": "解析搜尋詞中...",
+      "searchTitle": "網絡搜尋: \"{{term}}\"",
       "resultsCount": "{{count}} 個結果",
-      "searching": "正在搜索 \"{{term}}\"...",
-      "preparingSearch": "準備搜索 \"{{term}}\"",
-      "clickToOpenLink": "點擊打開鏈接",
+      "searching": "正在搜尋 \"{{term}}\"...",
+      "preparingSearch": "準備搜尋 \"{{term}}\"",
+      "clickToOpenLink": "點擊開啟鏈接",
       "noTitle": "無標題",
-      "summaryAvailable": "有搜索摘要"
+      "summaryAvailable": "有搜尋摘要"
     },
     "todoWrite": {
       "tasksCount": "{{count}} 項任務",
@@ -1259,19 +1260,19 @@
       "expandList": "展開列表"
     },
     "snapshot": {
-      "fileDiff": "快照文件差異",
-      "filesCount": "{{count}} 個文件",
-      "acceptAllTooltip": "接受所有文件的修改",
+      "fileDiff": "快照檔案差異",
+      "filesCount": "{{count}} 個檔案",
+      "acceptAllTooltip": "接受所有檔案的修改",
       "acceptAll": "接受全部",
-      "rejectAllTooltip": "拒絕所有文件的修改",
+      "rejectAllTooltip": "拒絕所有檔案的修改",
       "rejectAll": "拒絕全部",
       "close": "關閉",
-      "prevFile": "上一個文件 (←)",
-      "nextFile": "下一個文件 (→)",
-      "acceptFileTooltip": "接受當前文件的修改",
-      "acceptFile": "接受文件",
-      "rejectFileTooltip": "拒絕當前文件的修改",
-      "rejectFile": "拒絕文件",
+      "prevFile": "上一個檔案 (←)",
+      "nextFile": "下一個檔案 (→)",
+      "acceptFileTooltip": "接受目前檔案的修改",
+      "acceptFile": "接受檔案",
+      "rejectFileTooltip": "拒絕目前檔案的修改",
+      "rejectFile": "拒絕檔案",
       "processing": "處理中..."
     },
     "taskTool": {
@@ -1291,7 +1292,7 @@
       "agent": "代理",
       "collapseDetails": "收起詳情",
       "expandDetails": "展開詳情",
-      "openInPanel": "在面板中打開詳情"
+      "openInPanel": "在面板中開啟詳情"
     },
     "taskDetailPanel": {
       "untitled": "未命名任務",
@@ -1302,9 +1303,9 @@
       "stoppingSubagent": "正在中止 subagent...",
       "stopSubagentFailed": "中止此 subagent 失敗。",
       "stopSubagentHint": "只會取消目前審核員/subagent，父級深度審核可繼續執行並生成彙總。",
-      "errorLabel": "錯誤信息",
+      "errorLabel": "錯誤資訊",
       "resultLabel": "執行結果",
-      "noData": "無法加載任務數據",
+      "noData": "無法載入任務資料",
       "executionContent": "執行內容",
       "duration": "耗時",
       "waitingForModelResponse": "等待模型回應...",
@@ -1332,8 +1333,8 @@
     "mcp": {
       "confirmExecute": "確認執行",
       "cancel": "取消",
-      "loadingApp": "加載交互應用中...",
-      "appLoadError": "加載應用失敗",
+      "loadingApp": "載入交互應用中...",
+      "appLoadError": "載入應用失敗",
       "interactiveApp": "交互應用",
       "actionLabel": "MCP：",
       "failedLabel": "MCP 失敗",
@@ -1357,15 +1358,15 @@
     "skill": {
       "unknownSkill": "未知技能",
       "unknown": "未知",
-      "loadSkillFailed": "加載技能失敗",
+      "loadSkillFailed": "載入技能失敗",
       "skillAction": "技能:",
-      "loadingSkill": "正在加載",
-      "preparingSkill": "準備加載"
+      "loadingSkill": "正在載入",
+      "preparingSkill": "準備載入"
     },
     "readFile": {
       "parsingParams": "解析參數中...",
-      "noFileSpecified": "未指定文件",
-      "readFile": "讀取文件",
+      "noFileSpecified": "未指定檔案",
+      "readFile": "讀取檔案",
       "permissionRequest": "請求讀取權限：",
       "readingFile": "正在讀取",
       "preparingRead": "準備讀取"
@@ -1382,16 +1383,16 @@
     },
     "sessionControl": {
       "title": "會話",
-      "currentWorkspace": "當前工作區",
+      "currentWorkspace": "目前工作區",
       "defaultSessionName": "新會話",
       "unknownSession": "未知會話",
-      "preparingCreate": "準備創建會話 {{session}}",
-      "creatingSession": "正在創建會話 {{session}}",
-      "createdSession": "已創建會話 {{session}}",
+      "preparingCreate": "準備建立會話 {{session}}",
+      "creatingSession": "正在建立會話 {{session}}",
+      "createdSession": "已建立會話 {{session}}",
       "preparingCancel": "準備取消會話 {{session}}",
       "cancellingSession": "正在取消會話 {{session}}",
       "cancelledSession": "已請求取消 {{session}}",
-      "noActiveTurn": "{{session}} 當前沒有可取消的活躍輪次",
+      "noActiveTurn": "{{session}} 目前沒有可取消的活躍輪次",
       "preparingDelete": "準備刪除會話 {{session}}",
       "deletingSession": "正在刪除會話 {{session}}",
       "deletedSession": "已刪除會話 {{session}}",
@@ -1440,27 +1441,27 @@
       "compressionCount": "第 {{count}} 次壓縮"
     },
     "globSearch": {
-      "parsingPattern": "解析搜索模式中...",
-      "currentDirectory": "當前目錄",
-      "searchFile": "搜索文件",
-      "searchingFile": "正在搜索",
-      "preparingSearch": "準備搜索",
-      "filesCount": "{{count}} 個文件",
+      "parsingPattern": "解析搜尋模式中...",
+      "currentDirectory": "目前目錄",
+      "searchFile": "搜尋檔案",
+      "searchingFile": "正在搜尋",
+      "preparingSearch": "準備搜尋",
+      "filesCount": "{{count}} 個檔案",
       "directoriesCount": "{{count}} 個目錄",
-      "filesAndDirs": "{{files}} 個文件，{{directories}} 個目錄",
-      "moreFiles": "...還有 {{count}} 個文件",
+      "filesAndDirs": "{{files}} 個檔案，{{directories}} 個目錄",
+      "moreFiles": "...還有 {{count}} 個檔案",
       "labelPattern": "模式",
       "labelPath": "路徑",
       "labelStats": "統計"
     },
     "grepSearch": {
-      "parsingPattern": "解析搜索模式中...",
-      "currentDirectory": "當前目錄",
-      "searchText": "搜索文本",
-      "searchingText": "正在搜索",
-      "preparingSearch": "準備搜索",
+      "parsingPattern": "解析搜尋模式中...",
+      "currentDirectory": "目前目錄",
+      "searchText": "搜尋文字",
+      "searchingText": "正在搜尋",
+      "preparingSearch": "準備搜尋",
       "matchesCount": "{{count}} 個匹配",
-      "matchesAndFiles": "{{matches}} 個匹配項，{{files}} 個文件",
+      "matchesAndFiles": "{{matches}} 個匹配項，{{files}} 個檔案",
       "labelPattern": "模式",
       "labelPath": "路徑",
       "labelStats": "統計"
@@ -1475,9 +1476,9 @@
       "listDirectory": "列出目錄",
       "listingDirectory": "正在列出",
       "preparingList": "準備列出",
-      "filesCount": "{{count}} 個文件",
+      "filesCount": "{{count}} 個檔案",
       "directoriesCount": "{{count}} 個目錄",
-      "filesAndDirs": "{{files}} 個文件，{{directories}} 個目錄",
+      "filesAndDirs": "{{files}} 個檔案，{{directories}} 個目錄",
       "moreEntries": "...還有 {{count}} 個條目",
       "labelPath": "路徑",
       "labelStats": "統計",
@@ -1485,7 +1486,7 @@
       "sortByModifiedTime": "按修改時間（最新在前）"
     },
     "userMessage": {
-      "file": "文件",
+      "file": "檔案",
       "dir": "目錄",
       "code": "代碼",
       "img": "圖片",
@@ -1510,7 +1511,7 @@
       "inputMessage": "輸入消息...",
       "processing": "處理中...",
       "startNewChat": "開始新對話...",
-      "openSessionMenu": "會話與新建",
+      "openSessionMenu": "會話與新增",
       "moreMenu": "更多",
       "newCodeSessionItem": "編程會話",
       "newCoworkSessionItem": "辦公會話"
@@ -1532,11 +1533,11 @@
       "failed": "失敗",
       "issueCount": "{{count}} 個問題",
       "noIssues": "無阻塞問題",
-      "filesChanged": "{{count}} 個文件",
+      "filesChanged": "{{count}} 個檔案",
       "waitingSummary": "審核仍在運行，程式碼審核團隊完成後會在這裡顯示結果。",
       "emptySummary": "暫時沒有結構化審核總結。",
-      "changedFilesTitle": "本次審核涉及的文件",
-      "openReview": "打開審核頁面"
+      "changedFilesTitle": "本次審核涉及的檔案",
+      "openReview": "開啟審核頁面"
     },
     "codeReview": {
       "reviewResult": "審核結果",
@@ -1566,7 +1567,7 @@
         "high": "高",
         "medium": "中",
         "low": "低",
-        "info": "信息"
+        "info": "資訊"
       },
       "reviewerStatuses": {
         "completed": "已完成",
@@ -1611,8 +1612,8 @@
           "detail": "{{count}} 個審核包重用了相符的快取輸出。"
         },
         "cache_miss": {
-          "label": "增量快取未命中或已刷新",
-          "detail": "{{count}} 個審核包重新執行或刷新了過期快取。"
+          "label": "增量快取未命中或已重新整理",
+          "detail": "{{count}} 個審核包重新執行或重新整理了過期快取。"
         },
         "concurrency_limited": {
           "label": "審核員啟動受到並行限制",
@@ -1704,7 +1705,7 @@
         "expandPlan": "詳情",
         "collapsePlan": "收起",
         "relatedIssue": "關聯問題",
-        "noRelatedIssue": "該修復項沒有直接關聯的問題，請以計劃文本本身作為實現範圍。",
+        "noRelatedIssue": "該修復項沒有直接關聯的問題，請以計劃文字本身作為實現範圍。",
         "severity": "嚴重程度",
         "certainty": "確定性",
         "location": "位置",
@@ -1759,15 +1760,15 @@
     "subtitleAfternoonClaw": "有什麼需要幫忙的？",
     "subtitleEveningClaw": "有什麼需要幫忙的？",
     "subtitleNightClaw": "夜深了，有什麼還放不下的？",
-    "narrativeClaw": "整理思路、起草文字、蒐集信息，或者只是隨便聊聊——有什麼需要，直接告訴我。",
+    "narrativeClaw": "整理思路、起草文字、蒐集資訊，或者只是隨便聊聊——有什麼需要，直接告訴我。",
     "featureIntro": "",
     "featureIntroCowork": "",
     "lastTimeYouWere": "上次您正在處理：",
     "branch": "分支：",
     "aheadCommits": "領先 {{count}} 個提交",
     "behindCommits": "落後 {{count}} 個提交",
-    "unstagedFiles": "{{count}} 個未暫存文件",
-    "stagedFiles": "{{count}} 個已暫存文件",
+    "unstagedFiles": "{{count}} 個未暫存檔案",
+    "stagedFiles": "{{count}} 個已暫存檔案",
     "unpushedCommits": "{{count}} 個未推送提交",
     "timeSinceLastCommit": "上次提交：",
     "timeIcon": "時間",
@@ -1778,17 +1779,17 @@
     "defaultAction2Command": "繼續之前的工作",
     "defaultAction3": "開始新功能",
     "defaultAction3Command": "開始新功能",
-    "noWorkspace": "未打開工作區",
-    "openOtherProject": "打開其他項目...",
+    "noWorkspace": "未開啟工作區",
+    "openOtherProject": "開啟其他項目...",
     "noWorkspaceHint": "還沒有選擇項目",
-    "openOne": "打開一個",
+    "openOne": "開啟一個",
     "toStart": "開始吧。",
     "workingIn": "我們正在",
     "project": "工作。",
     "workingInCowork": "在",
     "gitClean": "一切乾淨，可以放手大幹了 ✦",
-    "gitUnstaged": "{{count}} 個文件",
-    "gitStaged": "{{count}} 個文件",
+    "gitUnstaged": "{{count}} 個檔案",
+    "gitStaged": "{{count}} 個檔案",
     "gitUnpushed": "{{count}} 個提交",
     "waitingToStage": "等待暫存",
     "stagedReady": "已暫存待提交",
@@ -1802,12 +1803,12 @@
     "model": "模型",
     "modelExplanation": "模型說明",
     "modelSelection": "選擇模型",
-    "currentMode": "當前模式",
+    "currentMode": "目前模式",
     "autoModel": "Auto",
     "autoModelDesc": "自動路由最優模型",
     "primaryModel": "Primary 模型",
     "fastModel": "Fast 模型",
-    "modelNotConfigured": "未配置"
+    "modelNotConfigured": "未設定"
   },
   "reasoningEffort": {
     "title": "推理深度",
@@ -1824,27 +1825,27 @@
   },
   "coworkScope": {
     "title": "選擇 Cowork 工作區",
-    "description": "Cowork 模式需要一個工作區目錄用於讀寫文件。你可以使用當前項目，或選擇另一個目錄。",
+    "description": "Cowork 模式需要一個工作區目錄用於讀寫檔案。你可以使用目前項目，或選擇另一個目錄。",
     "recommended": "推薦",
     "current": {
-      "title": "當前工作區",
-      "subtitle": "已打開：{{name}}",
-      "description": "產物保存在當前項目中。適合需要讀取或修改項目文件的任務。"
+      "title": "目前工作區",
+      "subtitle": "已開啟：{{name}}",
+      "description": "產物儲存在目前項目中。適合需要讀取或修改項目檔案的任務。"
     },
     "global": {
       "title": "其他目錄",
       "subtitle": "選擇目錄",
-      "description": "用於在另一個目錄中進行 Cowork 任務。輸出會保存在該目錄下。"
+      "description": "用於在另一個目錄中進行 Cowork 任務。輸出會儲存在該目錄下。"
     },
     "errors": {
-      "noWorkspace": "當前沒有打開的工作區",
-      "openFailed": "打開 Cowork 工作區失敗"
+      "noWorkspace": "目前沒有開啟的工作區",
+      "openFailed": "開啟 Cowork 工作區失敗"
     }
   },
   "coworkExamples": {
     "title": "示例",
-    "addPlugin": "添加插件",
-    "addPluginDialogTitle": "選擇插件文件夾",
+    "addPlugin": "新增插件",
+    "addPluginDialogTitle": "選擇插件資料夾",
     "addPluginSuccess": "插件安裝成功：{{name}}",
     "addPluginFailed": "插件安裝失敗：{{error}}",
     "refresh": "換一換",
@@ -1852,33 +1853,33 @@
     "items": {
       "desktop_cleanup": {
         "title": "整理桌面截圖",
-        "description": "對最近的截圖分組、重命名並歸檔。",
-        "prompt": "請幫我整理桌面上最近的截圖。\n\n第一步：先掃描我的桌面，統計有多少張截圖/圖片，並告訴我：\n\n- 總數量\n\n- 時間範圍（最早到最新）\n\n第二步：只關注最近 14 天的截圖。對每一張：\n\n- 識別它展示了什麼\n\n- 建議一個更描述性的文件名\n\n- 建議它應該放到哪個文件夾（或是否可以刪除）\n\n把相似的截圖分組。開始任何改動之前，先把你的整理方案給我確認。\n\n我確認後：先只整理 10 個文件作為預覽。如果總數超過 10 個，繼續之前先跟我確認是否要處理剩下的。"
+        "description": "對最近的截圖分組、重新命名並歸檔。",
+        "prompt": "請幫我整理桌面上最近的截圖。\n\n第一步：先掃描我的桌面，統計有多少張截圖/圖片，並告訴我：\n\n- 總數量\n\n- 時間範圍（最早到最新）\n\n第二步：只關注最近 14 天的截圖。對每一張：\n\n- 識別它展示了什麼\n\n- 建議一個更描述性的檔案名\n\n- 建議它應該放到哪個資料夾（或是否可以刪除）\n\n把相似的截圖分組。開始任何改動之前，先把你的整理方案給我確認。\n\n我確認後：先只整理 10 個檔案作為預覽。如果總數超過 10 個，繼續之前先跟我確認是否要處理剩下的。"
       },
       "vacation_plan": {
         "title": "計劃一下我的假期",
         "description": "把行程拆到每天，並考慮預算、交通與備選方案。",
-        "prompt": "請幫我規劃一次假期行程。\n\n基本信息：\n- 出發地：\n- 目的地（可多個備選）：\n- 時間：起止日期、總天數\n- 人數與偏好（親子/情侶/朋友/獨行）：\n- 預算範圍：\n- 重點偏好（美食/自然/博物館/購物/放鬆）：\n- 不能接受的點（早起/轉機/長途自駕等）：\n\n請輸出：\n1) 2-3 個目的地建議（含優缺點）\n2) 最優方案的按天行程（上午/下午/晚上）\n3) 交通與住宿建議\n4) 預算拆分\n5) 雨天/突發情況備選方案"
+        "prompt": "請幫我規劃一次假期行程。\n\n基本資訊：\n- 出發地：\n- 目的地（可多個備選）：\n- 時間：起止日期、總天數\n- 人數與偏好（親子/情侶/朋友/獨行）：\n- 預算範圍：\n- 重點偏好（美食/自然/博物館/購物/放鬆）：\n- 不能接受的點（早起/轉機/長途自駕等）：\n\n請輸出：\n1) 2-3 個目的地建議（含優缺點）\n2) 最優方案的按天行程（上午/下午/晚上）\n3) 交通與住宿建議\n4) 預算拆分\n5) 雨天/突發情況備選方案"
       },
       "make_ppt": {
         "title": "做一個 PPT",
         "description": "先給大綱與每頁要點，再給講稿與視覺風格建議。",
-        "prompt": "請幫我做一個 PPT。\n\n主題：\n受眾：\n時長：\n場景（彙報/路演/培訓/分享）：\n希望的風格（簡潔/商務/活潑/極簡）：\n\n最終交付：\n1) 目錄結構\n2) 每一頁的標題 + 3-5 個要點\n3) 關鍵頁的講稿（逐頁，簡短即可）\n4) 圖表/配圖建議（用什麼圖表達什麼結論）\n5) 導出為 PPTX 文件（保存到 artifacts/）"
+        "prompt": "請幫我做一個 PPT。\n\n主題：\n受眾：\n時長：\n場景（彙報/路演/培訓/分享）：\n希望的風格（簡潔/商務/活潑/極簡）：\n\n最終交付：\n1) 目錄結構\n2) 每一頁的標題 + 3-5 個要點\n3) 關鍵頁的講稿（逐頁，簡短即可）\n4) 圖表/配圖建議（用什麼圖表達什麼結論）\n5) 導出為 PPTX 檔案（儲存到 artifacts/）"
       },
       "todo_breakdown": {
         "title": "把事情拆成待辦",
         "description": "把目標拆到可執行任務，並給優先級與時間預估。",
-        "prompt": "請把下面這件事拆成可執行的待辦清單，並給出優先級與時間預估。\n\n目標：\n截止時間：\n當前進度：\n可用資源（人/預算/工具）：\n風險/不確定因素：\n\n請輸出：\n1) 分階段目標\n2) 具體任務列表（每項包含：負責人/預計耗時/前置條件/驗收標準）\n3) 關鍵路徑與風險點\n4) 明天就能開始的 3 件小事"
+        "prompt": "請把下面這件事拆成可執行的待辦清單，並給出優先級與時間預估。\n\n目標：\n截止時間：\n目前進度：\n可用資源（人/預算/工具）：\n風險/不確定因素：\n\n請輸出：\n1) 分階段目標\n2) 具體任務列表（每項包含：負責人/預計耗時/前置條件/驗收標準）\n3) 關鍵路徑與風險點\n4) 明天就能開始的 3 件小事"
       },
       "optimize_week": {
         "title": "優化一下我的一週",
         "description": "從雜亂記錄中找出規律、主題與行動點。",
-        "prompt": "請幫我從 [語音備忘錄 / 會議紀要 / 文檔 / 日記 / 指定文件夾] 中找出模式與洞察。我有一堆雜亂、非結構化的文件，想知道最近出現了哪些主題。\n\n第一步：先掃描文件夾並給我一個摘要：\n- 文件總數\n- 時間範圍（最早到最新）\n- 內容類型分佈\n\n在深入分析前，請先問我：\n- 我希望發現什麼（重複主題 / 矛盾點 / 思考的演化 / 行動項 / 其它）\n- 是否需要優先某些文件或時間段\n- 我希望最終以什麼形式呈現（摘要 / 報告 / 行動清單 / 時間線 / 其它）\n\n如果文件超過 20 個，請先只分析最近的 10 個。\n\n請給出你發現的 3-5 個主要模式，每個模式提供 2-3 個具體例子。等我確認方向正確後，再繼續分析剩餘文件。"
+        "prompt": "請幫我從 [語音備忘錄 / 會議紀要 / 文檔 / 日記 / 指定資料夾] 中找出模式與洞察。我有一堆雜亂、非結構化的檔案，想知道最近出現了哪些主題。\n\n第一步：先掃描資料夾並給我一個摘要：\n- 檔案總數\n- 時間範圍（最早到最新）\n- 內容類型分佈\n\n在深入分析前，請先問我：\n- 我希望發現什麼（重複主題 / 矛盾點 / 思考的演化 / 行動項 / 其它）\n- 是否需要優先某些檔案或時間段\n- 我希望最終以什麼形式呈現（摘要 / 報告 / 行動清單 / 時間線 / 其它）\n\n如果檔案超過 20 個，請先只分析最近的 10 個。\n\n請給出你發現的 3-5 個主要模式，每個模式提供 2-3 個具體例子。等我確認方向正確後，再繼續分析剩餘檔案。"
       },
       "weekly_plan": {
         "title": "做一份本週計劃",
         "description": "結合優先級、會議與深度工作時間，排出可落地的周計劃。",
-        "prompt": "請幫我做一份本週工作計劃。\n\n輸入信息：\n- 本週關鍵目標（最多 3 個）：\n- 已確定會議/固定安排：\n- 預計深度工作可用時段：\n- 本週必須完成的事項：\n- 可推遲的事項：\n\n請輸出：\n1) 本週優先級排序\n2) 按天安排（每天 2-3 個核心任務）\n3) 風險與緩衝時間建議\n4) 每天收尾覆盤清單（5 分鐘）"
+        "prompt": "請幫我做一份本週工作計劃。\n\n輸入資訊：\n- 本週關鍵目標（最多 3 個）：\n- 已確定會議/固定安排：\n- 預計深度工作可用時段：\n- 本週必須完成的事項：\n- 可推遲的事項：\n\n請輸出：\n1) 本週優先級排序\n2) 按天安排（每天 2-3 個核心任務）\n3) 風險與緩衝時間建議\n4) 每天收尾覆盤清單（5 分鐘）"
       },
       "meeting_minutes": {
         "title": "整理會議紀要",
@@ -1888,17 +1889,17 @@
       "reply_email": {
         "title": "寫一封郵件回覆",
         "description": "給出禮貌、清晰、可複製的郵件模板（含不同語氣版本）。",
-        "prompt": "請幫我寫一封郵件回覆。\n\n對方郵件內容（可粘貼）：\n我的目標（確認/拒絕/推進/澄清）：\n語氣（正式/友好/強硬但禮貌）：\n需要包含的信息點：\n\n請輸出：\n1) 主題（Subject）建議\n2) 郵件正文（2 個版本：更正式/更簡潔）\n3) 需要對方確認的問題列表（如有）"
+        "prompt": "請幫我寫一封郵件回覆。\n\n對方郵件內容（可粘貼）：\n我的目標（確認/拒絕/推進/澄清）：\n語氣（正式/友好/強硬但禮貌）：\n需要包含的資訊點：\n\n請輸出：\n1) 主題（Subject）建議\n2) 郵件正文（2 個版本：更正式/更簡潔）\n3) 需要對方確認的問題列表（如有）"
       },
       "make_docx": {
         "title": "寫一份 Word 文檔",
         "description": "把內容結構化成文檔，並導出為 DOCX。",
-        "prompt": "請幫我寫一份文檔，並導出為 .docx 文件。\n\n文檔類型（PRD/方案/覆盤/報告/SOP）：\n受眾：\n語氣（正式/友好/簡潔）：\n必須包含的信息點：\n期望長度：\n\n最終交付：\n1) 建議目錄結構\n2) 完整正文內容\n3) 導出為 DOCX 文件（保存到 artifacts/）"
+        "prompt": "請幫我寫一份文檔，並導出為 .docx 檔案。\n\n文檔類型（PRD/方案/覆盤/報告/SOP）：\n受眾：\n語氣（正式/友好/簡潔）：\n必須包含的資訊點：\n期望長度：\n\n最終交付：\n1) 建議目錄結構\n2) 完整正文內容\n3) 導出為 DOCX 檔案（儲存到 artifacts/）"
       },
       "make_spreadsheet": {
         "title": "做一張表格",
         "description": "設計字段與公式，讓表格能自動彙總與複用。",
-        "prompt": "請幫我設計一張表格結構（字段 + 示例行），用於下面的用途：\n\n用途：\n數據來源：\n需要的統計口徑/彙總方式：\n輸出格式偏好（週報/儀表盤/清單）：\n\n請輸出：\n1) 推薦字段列表（含字段類型與說明）\n2) 示例數據（3-5 行）\n3) 常用公式/透視表建議\n4) 數據校驗與填表規範"
+        "prompt": "請幫我設計一張表格結構（字段 + 示例行），用於下面的用途：\n\n用途：\n資料來源：\n需要的統計口徑/彙總方式：\n輸出格式偏好（週報/儀表盤/清單）：\n\n請輸出：\n1) 推薦字段列表（含字段類型與說明）\n2) 示例資料（3-5 行）\n3) 常用公式/透視表建議\n4) 資料校驗與填表規範"
       },
       "budget_plan": {
         "title": "做個預算規劃",
@@ -1908,12 +1909,12 @@
     }
   },
   "subagent": {
-    "showingLines": "當前僅顯示 {{shown}} / {{total}} 行",
+    "showingLines": "目前僅顯示 {{shown}} / {{total}} 行",
     "showAll": "顯示全部"
   },
   "pendingQueue": {
     "title": "待發送 ({{count}})",
-    "hint": "當前對話結束後會按順序自動發送",
+    "hint": "目前對話結束後會按順序自動發送",
     "editorHint": "⌘/Ctrl+Enter 儲存 · Esc 取消",
     "emptyPlaceholder": "（空訊息）",
     "statusSending": "正在引導…",
@@ -1926,7 +1927,7 @@
       "cancelEdit": "取消（Esc）"
     },
     "tooltip": {
-      "sendNow": "立即作為引導訊息插入當前對話"
+      "sendNow": "立即作為引導訊息插入目前對話"
     },
     "errors": {
       "emptyContent": "訊息內容不能為空",

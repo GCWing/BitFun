@@ -6,12 +6,12 @@
   "custom": "自定義",
   "empty": "暫無子智能體",
   "goManage": "前往管理",
-  "loading": "加載中…",
+  "loading": "載入中…",
   "page": {
     "title": "專業智能體",
-    "subtitle": "查看與管理核心模式、Agent 與 Sub-Agent，配置工具與 Skills。",
-    "searchPlaceholder": "搜索 Agent 名稱或描述…",
-    "newAgent": "新建 Agent"
+    "subtitle": "查看與管理核心模式、Agent 與 Sub-Agent，設定工具與 Skills。",
+    "searchPlaceholder": "搜尋 Agent 名稱或描述…",
+    "newAgent": "新增 Agent"
   },
   "nav": {
     "coreAgents": "核心智能體",
@@ -48,7 +48,7 @@
     "title": "Agent 總覽",
     "subtitle": "查看所有 Agent / Sub-Agent，並直接管理工具與 Skills。",
     "empty": {
-      "noAgents": "當前沒有可用的 Agent",
+      "noAgents": "目前沒有可用的 Agent",
       "noMatch": "沒有匹配的 Agent"
     }
   },
@@ -58,7 +58,7 @@
       "subagent": "Sub-Agent",
       "userSubagent": "用戶 Sub-Agent",
       "projectSubagent": "項目 Sub-Agent",
-      "disabled": "已禁用"
+      "disabled": "已停用"
     },
     "actions": {
       "expand": "展開詳情"
@@ -81,33 +81,33 @@
     "filterUser": "用戶級",
     "filterProject": "項目級",
     "backToOverview": "返回總覽",
-    "capabilities": "能力配置",
+    "capabilities": "能力設定",
     "tools": "工具",
-    "toolsReset": "重置默認",
+    "toolsReset": "重設默認",
     "toolsCancel": "取消編輯",
-    "toolsSave": "保存",
+    "toolsSave": "儲存",
     "toolsEdit": "管理工具",
-    "toolsResetSuccess": "已重置為默認工具",
-    "toolsResetFailed": "重置工具失敗",
+    "toolsResetSuccess": "已重設為默認工具",
+    "toolsResetFailed": "重設工具失敗",
     "toolToggleFailed": "工具切換失敗",
     "skills": "Skills",
     "subagents": "Sub-Agents",
     "skillsCancel": "取消編輯",
-    "skillsSave": "保存",
+    "skillsSave": "儲存",
     "skillsEdit": "管理 Skills",
     "subagentsEdit": "管理 Sub-Agents",
     "subagentsDone": "完成",
     "noSubagents": "目前沒有可管理的 Sub-Agent",
     "enableGroup": "啟用分組",
-    "disableGroup": "禁用分組",
+    "disableGroup": "停用分組",
     "clearGroup": "清空",
-    "reset": "重置",
+    "reset": "重設",
     "cancel": "取消",
-    "save": "保存",
+    "save": "儲存",
     "skillToggleFailed": "Skill 切換失敗",
     "subagentToggleFailed": "Sub-Agent 切換失敗",
-    "sharedProfileLabel": "共享配置",
-    "sharedProfileDefaultLabel": "共享編碼配置",
+    "sharedProfileLabel": "共享設定",
+    "sharedProfileDefaultLabel": "共享編碼設定",
     "sharedProfileDescription": "這裡的改動也會同時套用到：{{modes}}。",
     "skillShadowed": "該 Skill 被同名且優先級更高的 Skill 遮蔽，運行時不會生效",
     "noSkills": "未啟用任何 Skill",
@@ -125,14 +125,14 @@
     "deleteSuccess": "已刪除「{{name}}」",
     "deleteFailed": "刪除失敗：",
     "form": {
-      "title": "新建 Sub-Agent",
-      "subtitle": "創建一個自定義的用戶級或項目級 Sub-Agent",
+      "title": "新增 Sub-Agent",
+      "subtitle": "建立一個自定義的用戶級或項目級 Sub-Agent",
       "titleEdit": "編輯 Sub-Agent",
       "subtitleEdit": "可修改描述、系統提示詞、工具與只讀模式。名稱與級別不可更改。",
-      "loadingDetail": "加載中…",
-      "save": "保存",
-      "updateSuccess": "已保存「{{name}}」",
-      "updateFailed": "保存失敗：",
+      "loadingDetail": "載入中…",
+      "save": "儲存",
+      "updateSuccess": "已儲存「{{name}}」",
+      "updateFailed": "儲存失敗：",
       "name": "名稱",
       "namePlaceholder": "字母開頭，可含字母/數字/下劃線",
       "nameRequired": "名稱不能為空",
@@ -147,18 +147,18 @@
       "tools": "工具",
       "toolsOptional": "可選",
       "toolsHint": "（{{optionalLabel}}，不選則使用預設）",
-      "noWorkspace": "需要先打開項目",
+      "noWorkspace": "需要先開啟項目",
       "cancel": "取消",
-      "submit": "創建",
-      "createSuccess": "已創建 Agent「{{name}}」",
-      "createFailed": "創建失敗：",
+      "submit": "建立",
+      "createSuccess": "已建立 Agent「{{name}}」",
+      "createFailed": "建立失敗：",
       "review": "審查",
       "reviewToolsHint": "審查子代理只能使用唯讀工具。"
     }
   },
   "teamsZone": {
     "title": "智能體團隊",
-    "subtitle": "為更深入的任務組織多智能體陣容，當前已提供專業的程式碼審核團隊。",
+    "subtitle": "為更深入的任務組織多智能體陣容，目前已提供專業的程式碼審核團隊。",
     "empty": "暫無可用的智能體團隊"
   },
   "reviewTeams": {
@@ -169,12 +169,12 @@
       "tags": ["質量", "性能", "架構"]
     },
     "detail": {
-      "open": "打開團隊",
+      "open": "開啟團隊",
       "back": "返回專業智能體",
       "openSettings": "審核設定",
       "loading": "正在載入程式碼審核團隊...",
       "title": "程式碼審核團隊",
-      "subtitle": "配置深度審核及 /DeepReview 使用的程式碼審核團隊。每個審核員預設使用快速模型，也可以單獨修改。",
+      "subtitle": "設定深度審核及 /DeepReview 使用的程式碼審核團隊。每個審核員預設使用快速模型，也可以單獨修改。",
       "summaryTitle": "團隊概覽",
       "summaryDescription": "多個審核員會並行覆蓋目標範圍，最後由質檢員彙總為最終結論。",
       "membersTitle": "團隊成員",
@@ -183,7 +183,7 @@
       "lockedCount": "{{count}} 個固定角色",
       "extraCount": "{{count}} 個額外 Sub-Agent",
       "localOnly": "程式碼審核",
-      "localOnlyDescription": "在 BitFun 內以唯讀 Sub-Agent 運行，並把結果回傳到當前審核線程。",
+      "localOnlyDescription": "在 BitFun 內以唯讀 Sub-Agent 運行，並把結果回傳到目前審核線程。",
       "parallelLabel": "並行審核",
       "parallelDescription": "邏輯、性能、安全、架構和額外審核員會並行工作，再由質檢員驗證結果。",
       "warningLabel": "審核更重",
@@ -193,39 +193,39 @@
       "executionPolicyDescription": "控制審核深度、超時，以及大範圍目標如何拆分給並行唯讀審核員。",
       "policySummaryTitle": "目前策略",
       "policySummaryIntro": "這裡展示的即時策略來自審核設定，團隊策略變更後會同步更新。",
-      "policySummaryEyebrow": "已配置行為",
+      "policySummaryEyebrow": "已設定行為",
       "policySummaryDescription": "{{strategy}}審核會為每位審核員使用 {{reviewerTimeout}} 超時，為質檢員使用 {{judgeTimeout}} 超時；每類角色在 {{splitThreshold}} 後拆分，並將同角色並發限制為 {{maxSameRoleInstances}}。",
-      "policySummaryAction": "打開審核設定以編輯目前策略",
+      "policySummaryAction": "開啟審核設定以編輯目前策略",
       "policyMetricsLabel": "目前策略值",
       "policyStrategyLabel": "策略",
       "reviewerTimeout": "審核員超時",
       "reviewerTimeoutDescription": "單個審核員的超時時間，單位為秒。設為 0 表示不設置硬性截止時間。",
       "judgeTimeout": "質檢員超時",
       "judgeTimeoutDescription": "質檢覆核的超時時間，單位為秒。設為 0 表示一直等待質檢員完成。",
-      "fileSplitThreshold": "文件拆分閾值",
-      "fileSplitThresholdDescription": "目標文件數超過該值時，每類審核員可拆分為多個實例。設為 0 表示關閉拆分。",
+      "fileSplitThreshold": "檔案拆分閾值",
+      "fileSplitThresholdDescription": "目標檔案數超過該值時，每類審核員可拆分為多個實例。設為 0 表示關閉拆分。",
       "maxSameRoleInstances": "同角色最大實例數",
-      "maxSameRoleInstancesDescription": "啟用文件拆分時，每個審核角色最多可並行運行的實例數。",
+      "maxSameRoleInstancesDescription": "啟用檔案拆分時，每個審核角色最多可並行運行的實例數。",
       "seconds": "秒",
       "secondsValue": "{{seconds}} 秒",
       "noTimeout": "不限制",
-      "fileCountValue": "{{count}} 個文件",
+      "fileCountValue": "{{count}} 個檔案",
       "splitDisabled": "不拆分",
       "instancesValue": "最多 {{count}} 個",
       "memberDetailTitle": "成員詳情",
       "memberDetailDescription": "團隊運行時，每個審核員都會保留自己的獨立上下文。",
       "responsibilities": "職責範圍",
       "model": "使用模型",
-      "modelDescription": "只修改當前審核員使用的模型。Primary/Fast 別名會跟隨目前策略，具體自定義模型在可用時會保持不變。",
+      "modelDescription": "只修改目前審核員使用的模型。Primary/Fast 別名會跟隨目前策略，具體自定義模型在可用時會保持不變。",
       "remove": "移除成員",
       "removeDescription": "將這個額外 Sub-Agent 從程式碼審核團隊中移除。固定角色不可刪除。",
-      "addTitle": "添加額外 Sub-Agent",
+      "addTitle": "新增額外 Sub-Agent",
       "addDescription": "把其他唯讀 Sub-Agent 加入深度程式碼審核團隊，固定角色會始終保留。",
       "addLabel": "候選成員",
       "addHint": "只有唯讀 Sub-Agent 可以加入初始審核流程；每個額外審核員的結果仍會由質檢員統一覆核。",
       "addPlaceholder": "選擇一個 Sub-Agent",
       "addButton": "加入團隊",
-      "emptyCandidates": "當前沒有可添加的額外唯讀 Sub-Agent。",
+      "emptyCandidates": "目前沒有可新增的額外唯讀 Sub-Agent。",
       "memberTypes": {
         "locked": "固定",
         "core": "核心角色",
@@ -235,10 +235,10 @@
         "project": "項目級"
       },
       "messages": {
-        "modelUpdated": "已更新 {{name}} 的模型配置。",
+        "modelUpdated": "已更新 {{name}} 的模型設定。",
         "memberAdded": "已將額外審核員加入團隊。",
         "memberRemoved": "已將額外審核員移出團隊。",
-        "saveFailed": "保存程式碼審核團隊配置失敗。"
+        "saveFailed": "儲存程式碼審核團隊設定失敗。"
       }
     },
     "strategy": {
@@ -250,7 +250,7 @@
       "inheritLabel": "繼承團隊（{{level}}）",
       "inheritSummary": "該審核員使用團隊級審核策略。",
       "modelFallbackShort": "已回退",
-      "modelFallbackDescription": "已配置的模型 {{configuredModel}} 目前不可用，因此該審核員會使用 {{model}}。",
+      "modelFallbackDescription": "已設定的模型 {{configuredModel}} 目前不可用，因此該審核員會使用 {{model}}。",
       "quick": {
         "label": "快速",
         "summary": "面向指定 diff 或範圍的快速篩查，只保留高置信問題。"
@@ -271,7 +271,7 @@
         "description": "專門追蹤業務規則、狀態流轉、回滾路徑和真實用戶正確性的流程偵探。",
         "responsibilities": [
           "驗證業務流程、狀態切換和領域規則是否仍然正確。",
-          "檢查邊界條件、回滾路徑以及數據一致性假設。",
+          "檢查邊界條件、回滾路徑以及資料一致性假設。",
           "優先指出會直接影響用戶結果或產品意圖的問題。"
         ]
       },
@@ -281,17 +281,17 @@
         "description": "專盯熱點路徑、無效工作、阻塞調用和規模化回退問題的速度分析員。",
         "responsibilities": [
           "檢查熱點路徑、大循環以及不必要的分配或重複計算。",
-          "識別阻塞調用、N+1 模式和低效的數據搬運。",
+          "識別阻塞調用、N+1 模式和低效的資料搬運。",
           "給出貼合現有架構、可落地的性能優化建議。"
         ]
       },
       "security": {
         "funName": "安全審核員",
         "role": "安全審核員",
-        "description": "專門盯住注入風險、信任邊界、權限錯誤以及危險文件或命令處理的邊界守衛。",
+        "description": "專門盯住注入風險、信任邊界、權限錯誤以及危險檔案或命令處理的邊界守衛。",
         "responsibilities": [
-          "審核信任邊界、鑑權假設和敏感數據處理方式。",
-          "尋找注入、危險命令執行與數據暴露風險。",
+          "審核信任邊界、鑑權假設和敏感資料處理方式。",
+          "尋找注入、危險命令執行與資料暴露風險。",
           "優先給出不依賴大改造的具體修復方案。"
         ]
       },
@@ -346,8 +346,8 @@
     "FileFinder": "檔案查找智慧體：根據需求定位相關檔案和程式碼片段",
     "CodeReview": "程式碼審查智慧體：對程式碼進行品質檢查和改進建議",
     "DeepReview": "深度審查智慧體：執行全面的程式碼審查，發現潛在問題",
-    "GenerateDoc": "文件生成智慧體：自動生成程式碼文件和說明",
-    "Init": "初始化智慧體：幫助設定專案結構和初始配置",
+    "GenerateDoc": "檔案生成智慧體：自動生成程式碼檔案和說明",
+    "Init": "初始化智慧體：幫助設定專案結構和初始設定",
     "ReviewFixer": "審查修復智慧體：根據審查結果自動修復程式碼問題",
     "Multitask": "多工模式：將工作拆為正交分支，並在合適時並行使用子智慧體推進",
     "Plan": "規劃模式：制定詳細的任務計劃和執行步驟",

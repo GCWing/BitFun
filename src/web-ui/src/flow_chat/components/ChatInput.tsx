@@ -545,22 +545,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
 
     return confirmWarning(
-      t('chatInput.promptCacheGuardTitle', {
-        defaultValue: 'Switching this mode will reset prompt cache reuse',
-      }),
+      t('chatInput.promptCacheGuardTitle'),
       t('chatInput.promptCacheGuardBody', {
-        defaultValue:
-          'The next request will switch from {{fromMode}} to {{toMode}}, so this session will stop reusing its current prompt cache. Continue?',
         fromMode: getModeDisplayName(lastSubmittedMode),
         toMode: getModeDisplayName(nextMode),
       }),
       {
-        confirmText: t('chatInput.promptCacheGuardConfirm', {
-          defaultValue: 'Send anyway',
-        }),
-        cancelText: t('chatInput.promptCacheGuardCancel', {
-          defaultValue: 'Stay here',
-        }),
+        confirmText: t('chatInput.promptCacheGuardConfirm'),
+        cancelText: t('chatInput.promptCacheGuardCancel'),
       },
     );
   }, [currentMode, effectiveTargetSession?.lastSubmittedMode, getModeDisplayName, modeInfoById, t]);
@@ -662,7 +654,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
     const base = t('input.largePastePlaceholder', {
       count: charCount,
-      defaultValue: '[Pasted Content {{count}} chars]',
     });
     const placeholder = nextSuffix === 1 ? base : `${base} #${nextSuffix}`;
 
@@ -1195,25 +1186,25 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             kind: 'action' as const,
             id: 'btw',
             command: '/btw',
-            label: t('btw.title', { defaultValue: 'Side question' }),
+            label: t('btw.title'),
           }]),
       {
         kind: 'action',
         id: 'goal',
         command: '/goal',
-        label: t('chatInput.goalAction', { defaultValue: 'Session goal' }),
+        label: t('chatInput.goalAction'),
       },
       {
         kind: 'action',
         id: 'usage',
         command: '/usage',
-        label: t('chatInput.usageAction', { defaultValue: 'Usage report' }),
+        label: t('chatInput.usageAction'),
       },
       {
         kind: 'action',
         id: 'deepreview',
         command: DEEP_REVIEW_SLASH_COMMAND,
-        label: t('chatInput.deepreviewAction', { defaultValue: 'Deep review' }),
+        label: t('chatInput.deepreviewAction'),
       },
       ...(!derivedState?.isProcessing
         ? [
@@ -1221,13 +1212,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               kind: 'action' as const,
               id: 'compact',
               command: '/compact',
-              label: t('chatInput.compactAction', { defaultValue: 'Compact session' }),
+              label: t('chatInput.compactAction'),
             },
             {
               kind: 'action' as const,
               id: 'init',
               command: '/init',
-              label: t('chatInput.initAction', { defaultValue: 'Generate AGENTS.md' }),
+              label: t('chatInput.initAction'),
             },
           ]
         : []),
@@ -1376,11 +1367,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const submitBtwFromInput = useCallback(async () => {
     if (!derivedState) return;
     if (!currentSessionId) {
-      notificationService.error(t('btw.noSession', { defaultValue: 'No active session for /btw' }));
+      notificationService.error(t('btw.noSession'));
       return;
     }
     if (isBtwSession) {
-      notificationService.warning(t('btw.nestedDisabled', { defaultValue: 'Side questions cannot create another side question' }));
+      notificationService.warning(t('btw.nestedDisabled'));
       return;
     }
 
@@ -1397,7 +1388,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
 
     if (!question) {
-      notificationService.warning(t('btw.empty', { defaultValue: 'Please provide a question after /btw' }));
+      notificationService.warning(t('btw.empty'));
       return;
     }
 
@@ -1406,7 +1397,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         t('input.messageTooLarge', {
           max: CHAT_INPUT_CONFIG.largePaste.maxMessageChars,
           count: messageCharCount,
-          defaultValue: 'Message exceeds the maximum length of {{max}} characters ({{count}} provided).',
         }),
         { duration: 4000 }
       );
@@ -1442,16 +1432,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const submitCompactFromInput = useCallback(async () => {
     if (!effectiveTargetSessionId || !effectiveTargetSession) {
       notificationService.error(
-        t('chatInput.compactNoSession', { defaultValue: 'No active session for /compact' })
+        t('chatInput.compactNoSession')
       );
       return;
     }
 
     if (derivedState?.isProcessing) {
       notificationService.warning(
-        t('chatInput.compactBusy', {
-          defaultValue: 'Wait until the session is idle before using /compact.',
-        })
+        t('chatInput.compactBusy')
       );
       return;
     }
@@ -1459,7 +1447,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const message = inputState.value.trim();
     if (!/^\/compact\s*$/i.test(message)) {
       notificationService.warning(
-        t('chatInput.compactUsage', { defaultValue: 'Use /compact without extra arguments.' })
+        t('chatInput.compactUsage')
       );
       return;
     }
@@ -1486,7 +1474,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       notificationService.error(
         error instanceof Error ? error.message : t('error.unknown'),
         {
-          title: t('chatInput.compactFailed', { defaultValue: 'Session compaction failed' }),
+          title: t('chatInput.compactFailed'),
           duration: 5000,
         }
       );
@@ -1503,7 +1491,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const runEffectiveSessionUsageReport = useCallback(async () => {
     if (!effectiveTargetSessionId || !effectiveTargetSession) {
       notificationService.error(
-        t('chatInput.usageNoSession', { defaultValue: 'No active session for /usage' })
+        t('chatInput.usageNoSession')
       );
       return;
     }
@@ -1512,15 +1500,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       const result = await runUsageReportCommand({
         session: effectiveTargetSession,
         isProcessing: !!derivedState?.isProcessing,
-        busyMessage: t('chatInput.usageBusy', {
-          defaultValue: 'Wait until the session is idle before using /usage.',
-        }),
-        noWorkspaceMessage: t('chatInput.usageNoWorkspace', {
-          defaultValue: 'A workspace is required to build a usage report.',
-        }),
-        failedTitle: t('chatInput.usageFailed', { defaultValue: 'Usage report failed' }),
+        busyMessage: t('chatInput.usageBusy'),
+        noWorkspaceMessage: t('chatInput.usageNoWorkspace'),
+        failedTitle: t('chatInput.usageFailed'),
         unknownErrorMessage: t('error.unknown'),
-        loadingMarkdown: t('usage.loading.markdown', { defaultValue: 'Generating usage report...' }),
+        loadingMarkdown: t('usage.loading.markdown'),
       });
 
       if (result.inserted) {
@@ -1543,7 +1527,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const submitUsageFromInput = useCallback(async () => {
     if (!effectiveTargetSessionId || !effectiveTargetSession) {
       notificationService.error(
-        t('chatInput.usageNoSession', { defaultValue: 'No active session for /usage' })
+        t('chatInput.usageNoSession')
       );
       return;
     }
@@ -1551,7 +1535,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const message = inputState.value.trim();
     if (!/^\/usage\s*$/i.test(message)) {
       notificationService.warning(
-        t('chatInput.usageCommandUsage', { defaultValue: 'Use /usage without extra arguments.' })
+        t('chatInput.usageCommandUsage')
       );
       return;
     }
@@ -1584,16 +1568,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const submitInitFromInput = useCallback(async () => {
     if (!effectiveTargetSessionId || !effectiveTargetSession) {
       notificationService.error(
-        t('chatInput.initNoSession', { defaultValue: 'No active session for /init' })
+        t('chatInput.initNoSession')
       );
       return;
     }
 
     if (derivedState?.isProcessing) {
       notificationService.warning(
-        t('chatInput.initBusy', {
-          defaultValue: 'Wait until the session is idle before using /init.',
-        })
+        t('chatInput.initBusy')
       );
       return;
     }
@@ -1601,7 +1583,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const message = inputState.value.trim();
     if (!/^\/init\s*$/i.test(message)) {
       notificationService.warning(
-        t('chatInput.initUsage', { defaultValue: 'Use /init without extra arguments.' })
+        t('chatInput.initUsage')
       );
       return;
     }
@@ -1628,7 +1610,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       notificationService.error(
         error instanceof Error ? error.message : t('error.unknown'),
         {
-          title: t('chatInput.initFailed', { defaultValue: 'Session init failed' }),
+          title: t('chatInput.initFailed'),
           duration: 5000,
         }
       );
@@ -1645,16 +1627,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const submitGoalFromInput = useCallback(async () => {
     if (!effectiveTargetSessionId || !effectiveTargetSession) {
       notificationService.error(
-        t('chatInput.goalNoSession', { defaultValue: 'No active session for /goal' })
+        t('chatInput.goalNoSession')
       );
       return;
     }
 
     if (isBtwSession) {
       notificationService.warning(
-        t('chatInput.goalNestedDisabled', {
-          defaultValue: 'Goal mode can only be started from the main session.',
-        })
+        t('chatInput.goalNestedDisabled')
       );
       return;
     }
@@ -1663,9 +1643,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const parsed = parseGoalCommand(message);
     if (!parsed) {
       notificationService.warning(
-        t('chatInput.goalUsage', {
-          defaultValue: 'Use /goal with optional focus text, for example /goal fix the login bug.',
-        })
+        t('chatInput.goalUsage')
       );
       return;
     }
@@ -1678,13 +1656,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const result = await runGoalCommandSafely({
       session: effectiveTargetSession,
       userHint: parsed.userHint,
-      loadingMessage: t('chatInput.goalGenerating', { defaultValue: 'Generating session goal...' }),
-      failedTitle: t('chatInput.goalFailed', { defaultValue: 'Goal mode activation failed' }),
+      loadingMessage: t('chatInput.goalGenerating'),
+      failedTitle: t('chatInput.goalFailed'),
       unknownErrorMessage: t('error.unknown'),
-      aiFailedMessage: t('chatInput.goalAiFailed', {
-        defaultValue: 'Goal mode AI request failed. Check model configuration and try again.',
-      }),
-      activatedTitle: t('chatInput.goalActivated', { defaultValue: 'Session goal activated' }),
+      aiFailedMessage: t('chatInput.goalAiFailed'),
+      activatedTitle: t('chatInput.goalActivated'),
     });
 
     if (!result) {
@@ -1708,7 +1684,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const submitDeepreviewFromInput = useCallback(async () => {
     if (!effectiveTargetSessionId || !effectiveTargetSession) {
       notificationService.error(
-        t('chatInput.deepreviewNoSession', { defaultValue: 'No active session for /DeepReview' })
+        t('chatInput.deepreviewNoSession')
       );
       return;
     }
@@ -1716,27 +1692,21 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const message = inputState.value.trim();
     if (!isDeepReviewSlashCommand(message)) {
       notificationService.warning(
-        t('chatInput.deepreviewUsage', {
-          defaultValue: 'Use /DeepReview with optional focus text, for example /DeepReview review commit abc123 for security.',
-        })
+        t('chatInput.deepreviewUsage')
       );
       return;
     }
 
     if (isBtwSession) {
       notificationService.warning(
-        t('chatInput.deepreviewNestedDisabled', {
-          defaultValue: 'Deep Review can only be started from the main session.',
-        }),
+        t('chatInput.deepreviewNestedDisabled'),
       );
       return;
     }
 
     if (shouldBlockDeepReviewCommand(message, currentReviewActivity)) {
       notificationService.warning(
-        t('chatInput.deepreviewBusy', {
-          defaultValue: 'A review is already running for this session. Stop or finish it before starting another Deep Review.',
-        }),
+        t('chatInput.deepreviewBusy'),
       );
       return;
     }
@@ -1779,9 +1749,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         prompt,
         displayMessage: message,
         runManifest,
-        childSessionName: t('chatInput.deepreviewThreadTitle', {
-          defaultValue: 'Deep review',
-        }),
+        childSessionName: t('chatInput.deepreviewThreadTitle'),
       });
       dispatchInput({ type: 'DEACTIVATE' });
     } catch (error) {
@@ -1795,7 +1763,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       notificationService.error(
         getDeepReviewLaunchErrorMessage(error, t, t('error.unknown')),
         {
-          title: t('chatInput.deepreviewFailed', { defaultValue: 'Deep review failed' }),
+          title: t('chatInput.deepreviewFailed'),
           duration: 5000,
         }
       );
@@ -1825,7 +1793,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
     if (!command) {
       notificationService.warning(
-        t('chatInput.noMatchingCommand', { defaultValue: 'No matching command' })
+        t('chatInput.noMatchingCommand')
       );
       return;
     }
@@ -1981,30 +1949,28 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
     if (message.toLowerCase().startsWith('/compact')) {
       notificationService.warning(
-        t('chatInput.compactUsage', { defaultValue: 'Use /compact without extra arguments.' })
+        t('chatInput.compactUsage')
       );
       return;
     }
 
     if (message.toLowerCase().startsWith('/usage')) {
       notificationService.warning(
-        t('chatInput.usageCommandUsage', { defaultValue: 'Use /usage without extra arguments.' })
+        t('chatInput.usageCommandUsage')
       );
       return;
     }
 
     if (message.toLowerCase().startsWith('/init')) {
       notificationService.warning(
-        t('chatInput.initUsage', { defaultValue: 'Use /init without extra arguments.' })
+        t('chatInput.initUsage')
       );
       return;
     }
 
     if (message.toLowerCase().startsWith('/goal') && !isGoalSlashCommand(message)) {
       notificationService.warning(
-        t('chatInput.goalUsage', {
-          defaultValue: 'Use /goal with optional focus text, for example /goal fix the login bug.',
-        })
+        t('chatInput.goalUsage')
       );
       return;
     }
@@ -2014,7 +1980,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         t('input.messageTooLarge', {
           max: CHAT_INPUT_CONFIG.largePaste.maxMessageChars,
           count: messageCharCount,
-          defaultValue: 'Message exceeds the maximum length of {{max}} characters ({{count}} provided).',
         }),
         { duration: 4000 }
       );
@@ -2212,12 +2177,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     (e: React.SyntheticEvent) => {
       e.stopPropagation();
       if (!currentSessionId) {
-        notificationService.error(t('btw.noSession', { defaultValue: 'No active session for /btw' }));
+        notificationService.error(t('btw.noSession'));
         return;
       }
       if (isBtwSession) {
         notificationService.warning(
-          t('btw.nestedDisabled', { defaultValue: 'Side questions cannot create another side question' })
+          t('btw.nestedDisabled')
         );
         return;
       }
@@ -2234,11 +2199,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       e.stopPropagation();
 
       if (!currentSessionId) {
-        notificationService.error(t('btw.noSession', { defaultValue: 'No active session for /btw' }));
+        notificationService.error(t('btw.noSession'));
         return;
       }
       if (isBtwSession) {
-        notificationService.warning(t('btw.nestedDisabled', { defaultValue: 'Side questions cannot create another side question' }));
+        notificationService.warning(t('btw.nestedDisabled'));
         return;
       }
 
@@ -2798,7 +2763,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                         <button
                           type="button"
                           className="bitfun-chat-input__image-chip-remove"
-                          aria-label={t('input.removeImage', { defaultValue: 'Remove image' })}
+                          aria-label={t('input.removeImage')}
                           onClick={(e) => {
                             e.stopPropagation();
                             removeContext(image.id);
@@ -2858,7 +2823,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                   return (
                     <div className="bitfun-chat-input__slash-command-picker">
                       <div className="bitfun-chat-input__slash-command-header">
-                        <span>{t('chatInput.quickAction', { defaultValue: 'Quick action' })}</span>
+                        <span>{t('chatInput.quickAction')}</span>
                         <span className="bitfun-chat-input__slash-command-hint">{t('chatInput.selectHint')}</span>
                       </div>
                       <div className="bitfun-chat-input__slash-command-list">
@@ -2876,7 +2841,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                           ))
                         ) : (
                           <div className="bitfun-chat-input__slash-command-empty">
-                            {t('chatInput.noMatchingCommand', { defaultValue: 'No matching command' })}
+                            {t('chatInput.noMatchingCommand')}
                           </div>
                         )}
                       </div>
@@ -2889,7 +2854,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                   return (
                     <div className="bitfun-chat-input__slash-command-picker">
                       <div className="bitfun-chat-input__slash-command-header">
-                        <span>{t('chatInput.quickAction', { defaultValue: 'Commands' })}</span>
+                        <span>{t('chatInput.commands')}</span>
                         <span className="bitfun-chat-input__slash-command-hint">{t('chatInput.selectHint')}</span>
                       </div>
                       <div className="bitfun-chat-input__slash-command-list">
@@ -2928,7 +2893,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                           ))
                         ) : (
                           <div className="bitfun-chat-input__slash-command-empty">
-                            {t('chatInput.noMatchingCommand', { defaultValue: 'No matching command' })}
+                            {t('chatInput.noMatchingCommand')}
                           </div>
                         )}
                       </div>

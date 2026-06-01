@@ -4,7 +4,7 @@
   "sections": {
     "appearance": {
       "title": "外觀設置",
-      "description": "編輯器的視覺外觀配置"
+      "description": "編輯器的視覺外觀設定"
     },
     "behavior": {
       "title": "編輯行為",
@@ -50,7 +50,7 @@
     "insertSpacesDesc": "Tab 鍵插入空格而非製表符",
     "wordWrap": "自動換行",
     "wordWrapOptions": {
-      "off": "禁用",
+      "off": "停用",
       "on": "啟用",
       "wordWrapColumn": "在列數處換行",
       "bounded": "在視口和列數處換行"
@@ -65,7 +65,7 @@
     "smoothScrolling": "平滑滾動",
     "smoothScrollingDesc": "啟用平滑滾動動畫",
     "scrollBeyondLastLine": "允許滾動超過最後一行",
-    "scrollBeyondLastLineDesc": "可以將文件末尾滾動到屏幕中央"
+    "scrollBeyondLastLineDesc": "可以將檔案末尾滾動到屏幕中央"
   },
   "display": {
     "minimap": "顯示縮略圖",
@@ -85,7 +85,7 @@
       "trailing": "行尾",
       "all": "全部"
     },
-    "lineHighlight": "當前行高亮",
+    "lineHighlight": "目前行高亮",
     "lineHighlightOptions": {
       "none": "不高亮",
       "gutter": "僅行號",
@@ -98,25 +98,25 @@
     "semanticHighlightingDesc": "基於語義分析的代碼高亮（需要 LSP 支持）",
     "bracketPairColorization": "括號對著色",
     "bracketPairColorizationDesc": "用不同顏色區分嵌套的括號對",
-    "formatOnSave": "保存時格式化",
-    "formatOnSaveDesc": "保存文件時自動格式化代碼",
+    "formatOnSave": "儲存時格式化",
+    "formatOnSaveDesc": "儲存檔案時自動格式化代碼",
     "formatOnPaste": "粘貼時格式化",
     "formatOnPasteDesc": "粘貼代碼時自動格式化",
     "trimAutoWhitespace": "自動刪除行尾空格",
-    "trimAutoWhitespaceDesc": "保存時移除行尾多餘的空格"
+    "trimAutoWhitespaceDesc": "儲存時移除行尾多餘的空格"
   },
   "actions": {
-    "reset": "重置為默認",
-    "save": "保存設置",
-    "saveDesc": "重置編輯器配置為默認值"
+    "reset": "重設為默認",
+    "save": "儲存設置",
+    "saveDesc": "重設編輯器設定為默認值"
   },
   "messages": {
-    "loading": "加載中...",
-    "loadFailed": "加載配置失敗，使用默認配置",
-    "saving": "保存中...",
-    "saveSuccess": "配置已保存，已打開的編輯器會自動更新",
-    "saveFailed": "保存配置失敗",
-    "confirmReset": "確定要重置編輯器配置為默認值嗎？",
-    "resetDone": "已重置為默認值"
+    "loading": "載入中...",
+    "loadFailed": "載入設定失敗，使用默認設定",
+    "saving": "儲存中...",
+    "saveSuccess": "設定已儲存，已開啟的編輯器會自動更新",
+    "saveFailed": "儲存設定失敗",
+    "confirmReset": "確定要重設編輯器設定為默認值嗎？",
+    "resetDone": "已重設為默認值"
   }
 }

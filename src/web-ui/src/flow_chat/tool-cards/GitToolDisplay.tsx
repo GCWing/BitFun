@@ -185,11 +185,11 @@ export const GitToolDisplay: React.FC<ToolCardProps> = ({
         <ToolCardCopyAction
           className="terminal-action-btn copy-command-btn git-copy-btn"
           getText={getCopyCommandText}
-          tooltip={t('toolCards.git.copyCommand', { defaultValue: 'Copy git command' })}
-          copiedTooltip={t('toolCards.git.commandCopied', { defaultValue: 'Git command copied' })}
-          successMessage={t('toolCards.git.commandCopied', { defaultValue: 'Git command copied' })}
-          failureMessage={t('toolCards.git.copyCommandFailed', { defaultValue: 'Failed to copy git command' })}
-          ariaLabel={t('toolCards.git.copyCommand', { defaultValue: 'Copy git command' })}
+          tooltip={t('toolCards.git.copyCommand')}
+          copiedTooltip={t('toolCards.git.commandCopied')}
+          successMessage={t('toolCards.git.commandCopied')}
+          failureMessage={t('toolCards.git.copyCommandFailed')}
+          ariaLabel={t('toolCards.git.copyCommand')}
         />
         {requiresConfirmation && !userConfirmed && status !== 'completed' && (
           hasAcpPermissionOptions(toolItem) ? (
@@ -260,11 +260,11 @@ export const GitToolDisplay: React.FC<ToolCardProps> = ({
               <ToolCardCopyAction
                 className="git-copy-btn"
                 getText={getCopyCommandText}
-                tooltip={t('toolCards.git.copyCommand', { defaultValue: 'Copy git command' })}
-                copiedTooltip={t('toolCards.git.commandCopied', { defaultValue: 'Git command copied' })}
-                successMessage={t('toolCards.git.commandCopied', { defaultValue: 'Git command copied' })}
-                failureMessage={t('toolCards.git.copyCommandFailed', { defaultValue: 'Failed to copy git command' })}
-                ariaLabel={t('toolCards.git.copyCommand', { defaultValue: 'Copy git command' })}
+                tooltip={t('toolCards.git.copyCommand')}
+                copiedTooltip={t('toolCards.git.commandCopied')}
+                successMessage={t('toolCards.git.commandCopied')}
+                failureMessage={t('toolCards.git.copyCommandFailed')}
+                ariaLabel={t('toolCards.git.copyCommand')}
               />
             </ToolCardHeaderActions>
           </span>

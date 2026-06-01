@@ -7,14 +7,14 @@ import type { ReviewTeamRunManifest } from '@/shared/services/reviewTeamService'
 
 const mockSaveReviewTeamProjectStrategyOverride = vi.hoisted(() => vi.fn());
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (_key: string, options?: Record<string, unknown>) => {
-      const value = typeof options?.defaultValue === 'string' ? options.defaultValue : _key;
-      return value.replace(/\{\{(\w+)\}\}/g, (_match, key) => String(options?.[key] ?? ''));
-    },
-  }),
-}));
+vi.mock('react-i18next', async () => {
+  const { createTestI18nT } = await import('@/test/i18nTestUtils');
+  return {
+    useTranslation: () => ({
+      t: createTestI18nT('flow-chat'),
+    }),
+  };
+});
 
 vi.mock('@/component-library', () => ({
   Button: ({

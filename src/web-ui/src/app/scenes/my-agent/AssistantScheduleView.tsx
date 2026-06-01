@@ -148,11 +148,12 @@ function getNextExecutionAtMs(job: CronJob): number | null {
 
 function formatScheduleSummary(
   schedule: CronSchedule,
+  formatDate: (date: Date | number, options?: Intl.DateTimeFormatOptions) => string,
   t: (key: string, params?: Record<string, unknown>) => string,
 ): string {
   switch (schedule.kind) {
     case 'at':
-      return `${t('nav.scheduledJobs.scheduleKinds.at')}: ${formatTimestamp(new Date(schedule.at).getTime(), t)}`;
+      return `${t('nav.scheduledJobs.scheduleKinds.at')}: ${formatTimestamp(new Date(schedule.at).getTime(), formatDate, t)}`;
     case 'every':
       return t('nav.scheduledJobs.scheduleSummary.every', { everyMinutes: formatEveryMinutes(schedule.everyMs) });
     case 'cron':
@@ -166,12 +167,13 @@ function formatScheduleSummary(
 
 function formatTimestamp(
   timestampMs: number | null | undefined,
+  formatDate: (date: Date | number, options?: Intl.DateTimeFormatOptions) => string,
   t: (key: string, params?: Record<string, unknown>) => string,
 ): string {
   if (!timestampMs || !Number.isFinite(timestampMs)) return t('nav.scheduledJobs.never');
-  return new Intl.DateTimeFormat(undefined, {
+  return formatDate(timestampMs, {
     month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
-  }).format(timestampMs);
+  });
 }
 
 function resolveSessionLabel(session: Session): string {
@@ -182,7 +184,7 @@ const AssistantScheduleView: React.FC<AssistantScheduleViewProps> = ({
   workspacePath,
   sessionId,
 }) => {
-  const { t } = useI18n('common');
+  const { t, formatDate } = useI18n('common');
   const [flowChatState, setFlowChatState] = useState<FlowChatState>(() => flowChatStore.getState());
   const [jobs, setJobs] = useState<CronJob[]>([]);
   const [loading, setLoading] = useState(false);
@@ -415,10 +417,10 @@ const AssistantScheduleView: React.FC<AssistantScheduleViewProps> = ({
                   <span className="asv__item-name">{job.name}</span>
                 </div>
                 <div className="asv__item-meta">
-                  {formatScheduleSummary(job.schedule, t)}
+                  {formatScheduleSummary(job.schedule, formatDate, t)}
                 </div>
                 <div className="asv__item-meta asv__item-meta--dim">
-                  {t('nav.scheduledJobs.nextRunLabel')}: {formatTimestamp(getNextExecutionAtMs(job), t)}
+                  {t('nav.scheduledJobs.nextRunLabel')}: {formatTimestamp(getNextExecutionAtMs(job), formatDate, t)}
                 </div>
                 {job.state.lastError ? (
                   <div className="asv__item-error">{job.state.lastError}</div>

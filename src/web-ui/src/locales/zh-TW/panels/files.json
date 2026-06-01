@@ -1,25 +1,25 @@
 {
-  "title": "文件瀏覽器",
+  "title": "檔案瀏覽器",
   "search": {
-    "placeholder": "搜索工作區...",
+    "placeholder": "搜尋工作區...",
     "noResults": "未找到匹配的結果",
-    "enterKeyword": "輸入關鍵詞開始搜索",
-    "modeFiles": "文件",
+    "enterKeyword": "輸入關鍵詞開始搜尋",
+    "modeFiles": "檔案",
     "modeContent": "內容",
-    "limitReachedFiles": "當前僅顯示前 {{count}} 個文件匹配結果，請繼續縮小查詢範圍。",
-    "limitReachedContent": "當前僅顯示前 {{count}} 個內容匹配結果，請繼續縮小查詢範圍。",
+    "limitReachedFiles": "目前僅顯示前 {{count}} 個檔案匹配結果，請繼續縮小查詢範圍。",
+    "limitReachedContent": "目前僅顯示前 {{count}} 個內容匹配結果，請繼續縮小查詢範圍。",
     "backendSummary": "候選文檔 {{candidateDocs}} 個，命中行 {{matchedLines}} 行，命中片段 {{matchedOccurrences}} 個。",
     "backend": {
       "indexed": "索引命中",
       "indexed_workspace": "工作區索引",
-      "text_fallback": "文本回退",
+      "text_fallback": "文字回退",
       "scan_fallback": "掃描回退"
     },
     "index": {
       "actions": {
         "build": "建立索引",
         "rebuild": "重建索引",
-        "refresh": "刷新索引狀態",
+        "refresh": "重新整理索引狀態",
         "running": "索引中..."
       },
       "badges": {
@@ -31,19 +31,19 @@
         "building": "建立中",
         "ready": "索引可用",
         "tracking_changes": "跟蹤變更中",
-        "refreshing": "刷新中",
+        "refreshing": "重新整理中",
         "limited": "受限",
         "unknown": "未知"
       },
       "summary": {
-        "preparing": "正在準備托管搜索工作區。",
-        "needs_index": "當前搜索仍可透過 fallback 使用，建立索引後內容搜索會更快。",
-        "building": "正在為當前工作區建立索引。",
-        "ready": "索引已就緒，內容搜索可優先走索引後端。",
-        "tracking_changes": "索引當前可用，工作區變更正在被跟蹤。只有出現建議重建時，才需要關注重建。",
-        "refreshing": "正在根據最新文件變更刷新索引。",
-        "limited": "索引能力受限。搜索仍可 fallback，但建議重建。",
-        "unavailable": "當前無法獲取索引狀態。"
+        "preparing": "正在準備托管搜尋工作區。",
+        "needs_index": "目前搜尋仍可透過 fallback 使用，建立索引後內容搜尋會更快。",
+        "building": "正在為目前工作區建立索引。",
+        "ready": "索引已就緒，內容搜尋可優先走索引後端。",
+        "tracking_changes": "索引目前可用，工作區變更正在被跟蹤。只有出現建議重建時，才需要關注重建。",
+        "refreshing": "正在根據最新檔案變更重新整理索引。",
+        "limited": "索引能力受限。搜尋仍可 fallback，但建議重建。",
+        "unavailable": "目前無法獲取索引狀態。"
       },
       "indicator": {
         "label": "工作區索引狀態",
@@ -57,7 +57,7 @@
         "progressKnown": "{{processed}} / {{total}}",
         "progressUnknown": "已處理 {{processed}} 項",
         "dirtyFiles": "待同步變更：修改 {{modified}}，刪除 {{deleted}}，新增 {{new}}",
-        "rebuildRecommended": "當前建議執行重建。",
+        "rebuildRecommended": "目前建議執行重建。",
         "probeDegraded": "工作區探測狀態異常，工作區索引視圖可能不再持續跟進變更。",
         "hoverTooltip": "Flashgrep 索引：{{status}}"
       },
@@ -76,57 +76,57 @@
     "useRegex": "使用正則表達式 (.*)"
   },
   "actions": {
-    "switchToSearch": "切換到搜索",
-    "switchToTree": "切換到文件樹",
+    "switchToSearch": "切換到搜尋",
+    "switchToTree": "切換到檔案樹",
     "retry": "重試"
   },
   "status": {
-    "searchingFilename": "搜索文件名...",
-    "searchingContent": "搜索內容...",
-    "loadingFileTree": "正在加載文件樹..."
+    "searchingFilename": "搜尋檔案名稱...",
+    "searchingContent": "搜尋內容...",
+    "loadingFileTree": "正在載入檔案樹..."
   },
   "empty": {
-    "selectWorkspace": "選擇工作區後將顯示文件樹"
+    "selectWorkspace": "選擇工作區後將顯示檔案樹"
   },
   "dialog": {
     "newFile": {
-      "title": "新建文件",
-      "placeholder": "請輸入文件名",
-      "confirm": "創建",
+      "title": "新增檔案",
+      "placeholder": "請輸入檔案名",
+      "confirm": "建立",
       "cancel": "取消"
     },
     "newFolder": {
-      "title": "新建文件夾",
-      "placeholder": "請輸入文件夾名",
-      "confirm": "創建",
+      "title": "新增資料夾",
+      "placeholder": "請輸入資料夾名",
+      "confirm": "建立",
       "cancel": "取消"
     }
   },
   "validation": {
-    "invalidFilename": "文件名包含非法字符"
+    "invalidFilename": "檔案名包含非法字符"
   },
   "transfer": {
     "downloading": "正在下載",
     "uploading": "正在上傳",
-    "missingConnection": "遠程工作區缺少 SSH 連接信息。",
-    "failed": "文件傳輸失敗：{{error}}",
-    "dropHint": "將文件拖放到此處以上傳"
+    "missingConnection": "遠程工作區缺少 SSH 連接資訊。",
+    "failed": "檔案傳輸失敗：{{error}}",
+    "dropHint": "將檔案拖放到此處以上傳"
   },
   "notifications": {
-    "createFileSuccess": "文件創建成功",
-    "createFileFailed": "創建文件失敗: {{error}}",
-    "createFolderSuccess": "文件夾創建成功",
-    "createFolderFailed": "創建文件夾失敗: {{error}}",
-    "renameSuccess": "重命名成功",
-    "renameFailed": "重命名失敗: {{error}}",
+    "createFileSuccess": "檔案建立成功",
+    "createFileFailed": "建立檔案失敗: {{error}}",
+    "createFolderSuccess": "資料夾建立成功",
+    "createFolderFailed": "建立資料夾失敗: {{error}}",
+    "renameSuccess": "重新命名成功",
+    "renameFailed": "重新命名失敗: {{error}}",
     "deleteSuccess": "刪除成功",
     "deleteFailed": "刪除失敗: {{error}}",
-    "pasteSuccess": "成功粘貼 {{count}} 個文件",
-    "pasteFailed": "{{count}} 個文件粘貼失敗",
-    "pasteNoFiles": "剪貼板中沒有文件",
-    "pastingFiles": "正在粘貼 {{count}} 個文件到 {{target}}...",
-    "openExplorerFailed": "打開文件管理器失敗: {{error}}",
-    "selectWorkspaceFirst": "請先打開工作區",
+    "pasteSuccess": "成功粘貼 {{count}} 個檔案",
+    "pasteFailed": "{{count}} 個檔案粘貼失敗",
+    "pasteNoFiles": "剪貼板中沒有檔案",
+    "pastingFiles": "正在粘貼 {{count}} 個檔案到 {{target}}...",
+    "openExplorerFailed": "開啟檔案管理器失敗: {{error}}",
+    "selectWorkspaceFirst": "請先開啟工作區",
     "searchIndexBuildStarted": "已開始建立工作區索引。",
     "searchIndexRebuildStarted": "已開始重建工作區索引。"
   }

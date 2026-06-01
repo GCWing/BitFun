@@ -38,7 +38,7 @@ export const ContextCompressionCard: React.FC<ContextCompressionCardProps> = ({
   displayMode = 'standard',
   ...baseProps
 }) => {
-  const { t } = useI18n('components');
+  const { t, formatNumber } = useI18n('components');
 
   const resolvedCompressionCount = compressionCount || result?.compression_count || 1;
   const resolvedTokensBefore = tokensBefore || result?.tokens_before || input?.tokens_before;
@@ -91,13 +91,13 @@ export const ContextCompressionCard: React.FC<ContextCompressionCardProps> = ({
         
         {resolvedTokensBefore !== undefined && resolvedTokensAfter !== undefined && (
           <span className="context-compression-card__tokens">
-            {resolvedTokensBefore.toLocaleString()} → {resolvedTokensAfter.toLocaleString()} tokens
+            {formatNumber(resolvedTokensBefore)} → {formatNumber(resolvedTokensAfter)} tokens
           </span>
         )}
         
         {status === 'completed' && savedTokens !== undefined && resolvedCompressionRatio !== undefined && (
           <span className="context-compression-card__result">
-            {t('flowChatCards.contextCompressionCard.savedTokens', { count: savedTokens.toLocaleString(), ratio: (resolvedCompressionRatio * 100).toFixed(0) })}
+            {t('flowChatCards.contextCompressionCard.savedTokens', { count: formatNumber(savedTokens), ratio: (resolvedCompressionRatio * 100).toFixed(0) })}
           </span>
         )}
       </div>
@@ -141,11 +141,11 @@ export const ContextCompressionCard: React.FC<ContextCompressionCardProps> = ({
           {resolvedTokensBefore !== undefined && resolvedTokensAfter !== undefined && (
             <div className="context-compression-card__simple-row context-compression-card__simple-row--stats">
               <span className="context-compression-card__simple-tokens">
-                {resolvedTokensBefore?.toLocaleString()} → {resolvedTokensAfter?.toLocaleString()} tokens
+                {formatNumber(resolvedTokensBefore)} → {formatNumber(resolvedTokensAfter)} tokens
               </span>
               {savedTokens !== undefined && resolvedCompressionRatio !== undefined && (
                 <span className="context-compression-card__simple-savings">
-                  {t('flowChatCards.contextCompressionCard.savedTokens', { count: savedTokens.toLocaleString(), ratio: (resolvedCompressionRatio * 100).toFixed(1) })}
+                  {t('flowChatCards.contextCompressionCard.savedTokens', { count: formatNumber(savedTokens), ratio: (resolvedCompressionRatio * 100).toFixed(1) })}
                 </span>
               )}
             </div>

@@ -11,7 +11,7 @@
     "export": "導出",
     "delete": "刪除",
     "confirmDelete": "確定刪除主題 \"{{name}}\" 嗎？",
-    "languageRowHint": "選擇一個語言包作為當前界面語言。",
+    "languageRowHint": "選擇一個語言包作為目前界面語言。",
     "themeRowHint": "選擇界面配色主題。",
     "systemTheme": "跟隨系統",
     "systemThemeDescription": "根據系統淺色/深色外觀自動在亮暗主題間切換，並隨系統切換而更新。",
@@ -51,7 +51,7 @@
     },
     "fontSize": {
       "title": "字體大小",
-      "hint": "調整界面與對話區域的字體大小（編輯器字號在編輯器設置中配置）。",
+      "hint": "調整界面與對話區域的字體大小（編輯器字號在編輯器設置中設定）。",
       "uiSizeLabel": "界面字體",
       "uiSizeHint": "調整導航、面板、設置等所有界面元素的字體大小。",
       "levels": {
@@ -81,7 +81,7 @@
     "toggleLabel": "開機自動啟動",
     "toggleDescription": "登錄系統後自動啟動 BitFun；具體表現因操作系統而異。",
     "messages": {
-      "loading": "加載中…",
+      "loading": "載入中…",
       "loadFailed": "無法讀取開機啟動設置",
       "saveFailed": "無法更新開機啟動設置"
     }
@@ -101,11 +101,11 @@
       "description": "開啟後，本機日誌可能包含使用者 Prompt、模型請求與回應 payload、工具參數、檔案路徑以及 Webview 事件 payload，用於問題排查。BitFun 不會自動上傳這些日誌檔案。"
     },
     "path": {
-      "description": "本次啟動寫入日誌文件所在的目錄。"
+      "description": "本次啟動寫入日誌檔案所在的目錄。"
     },
     "diagnostics": {
       "label": "診斷包",
-      "description": "將最近的本機日誌、崩潰報告與運行時元資料匯出為 zip 文件。BitFun 不會自動上傳。"
+      "description": "將最近的本機日誌、崩潰報告與運行時元資料匯出為 zip 檔案。BitFun 不會自動上傳。"
     },
     "previousCrash": {
       "title": "上次會話異常結束",
@@ -113,7 +113,7 @@
     },
     "startupRecovery": {
       "title": "上次沒有正常關閉",
-      "message": "BitFun 已從一次異常退出後重新打開。如需回報問題，可以匯出診斷包。"
+      "message": "BitFun 已從一次異常退出後重新開啟。如需回報問題，可以匯出診斷包。"
     },
     "levels": {
       "trace": "Trace",
@@ -124,22 +124,22 @@
       "off": "Off"
     },
     "actions": {
-      "refreshTooltip": "刷新運行時狀態",
-      "openFolder": "打開文件夾",
-      "openFolderTooltip": "在文件管理器中打開日誌文件夾",
+      "refreshTooltip": "重新整理運行時狀態",
+      "openFolder": "開啟資料夾",
+      "openFolderTooltip": "在檔案管理器中開啟日誌資料夾",
       "exportDiagnostics": "匯出診斷包",
-      "openLoggingSettings": "打開日誌設置"
+      "openLoggingSettings": "開啟日誌設置"
     },
     "messages": {
-      "loading": "加載中...",
-      "loadFailed": "加載日誌配置失敗",
-      "saveFailed": "保存日誌級別失敗",
+      "loading": "載入中...",
+      "loadFailed": "載入日誌設定失敗",
+      "saveFailed": "儲存日誌級別失敗",
       "levelUpdated": "日誌級別已更新",
       "sensitiveDiagnosticsUpdated": "敏感除錯資訊日誌偏好已更新",
-      "refreshed": "運行時狀態已刷新",
-      "openedFolder": "日誌文件夾已打開",
-      "openFailed": "打開日誌文件夾失敗",
-      "pathUnavailable": "日誌文件夾路徑不可用",
+      "refreshed": "運行時狀態已重新整理",
+      "openedFolder": "日誌資料夾已開啟",
+      "openFailed": "開啟日誌資料夾失敗",
+      "pathUnavailable": "日誌資料夾路徑不可用",
       "diagnosticsExported": "診斷包已匯出",
       "diagnosticsExportFailed": "匯出診斷包失敗"
     }
@@ -147,13 +147,13 @@
   "terminal": {
     "sections": {
       "terminal": "終端",
-      "terminalHint": "默認 Shell 與新建終端行為",
+      "terminalHint": "默認 Shell 與新增終端行為",
       "defaultTerminal": "默認終端"
     },
     "controls": {
-      "refreshTooltip": "刷新可用終端列表",
+      "refreshTooltip": "重新整理可用終端列表",
       "autoDetect": "自動檢測 (推薦)",
-      "description": "新建終端時使用的默認 Shell 類型",
+      "description": "新增終端時使用的默認 Shell 類型",
       "placeholder": "選擇默認終端",
       "noShells": "未檢測到可用的終端"
     },
@@ -170,11 +170,11 @@
       }
     },
     "messages": {
-      "loading": "加載中...",
-      "loadFailed": "加載配置失敗",
+      "loading": "載入中...",
+      "loadFailed": "載入設定失敗",
       "updated": "默認終端已更新",
-      "saveFailed": "保存配置失敗",
-      "refreshed": "已刷新可用終端列表"
+      "saveFailed": "儲存設定失敗",
+      "refreshed": "已重新整理可用終端列表"
     }
   },
   "windowBehavior": {
@@ -201,15 +201,15 @@
     "hint": "Toast 彈窗通知偏好設置",
     "dialogCompletion": {
       "label": "任務完成通知",
-      "description": "當 AI 任務完成且窗口不在焦點時，彈出 Toast 通知"
+      "description": "當 AI 任務完成且視窗不在焦點時，彈出 Toast 通知"
     },
     "startupTips": {
       "label": "啟動時顯示使用技巧",
       "description": "每次啟動時隨機展示一條使用技巧卡片，幫助發現更多功能"
     },
     "messages": {
-      "saveSuccess": "通知設置已保存",
-      "saveFailed": "保存通知設置失敗"
+      "saveSuccess": "通知設置已儲存",
+      "saveFailed": "儲存通知設置失敗"
     }
   },
   "autoUpdate": {

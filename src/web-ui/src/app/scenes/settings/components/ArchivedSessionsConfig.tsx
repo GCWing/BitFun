@@ -25,6 +25,7 @@ import { createLogger } from '@/shared/utils/logger';
 import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
 import type { SessionMetadata } from '@/shared/types/session-history';
+import { i18nService } from '@/infrastructure/i18n';
 import './ArchivedSessionsConfig.scss';
 
 const log = createLogger('ArchivedSessionsConfig');
@@ -45,7 +46,7 @@ function formatDateTime(timestampMs: number): string {
   if (!timestampMs) return '';
   try {
     const d = new Date(timestampMs);
-    return d.toLocaleDateString(undefined, {
+    return i18nService.formatDate(d, {
       year: 'numeric',
       month: 'short',
       day: 'numeric',

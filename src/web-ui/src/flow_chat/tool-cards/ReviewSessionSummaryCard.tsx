@@ -80,18 +80,17 @@ export const ReviewSessionSummaryCard: React.FC<ToolCardProps> = React.memo(({
   }, [childSessionId, childSession?.lastActiveAt, childSession?.lastFinishedAt]);
 
   const reviewLabel = kind === 'deep_review'
-    ? t('toolCards.reviewSessionSummary.deepTitle', { defaultValue: 'Deep review' })
-    : t('toolCards.reviewSessionSummary.standardTitle', { defaultValue: 'Review' });
+    ? t('toolCards.reviewSessionSummary.deepTitle')
+    : t('toolCards.reviewSessionSummary.standardTitle');
   const statusText = failed
-    ? t('toolCards.reviewSessionSummary.failed', { defaultValue: 'failed' })
+    ? t('toolCards.reviewSessionSummary.failed')
     : running
-      ? t('toolCards.reviewSessionSummary.running', { defaultValue: 'in progress' })
+      ? t('toolCards.reviewSessionSummary.running')
       : summary.issueCount > 0
         ? t('toolCards.reviewSessionSummary.issueCount', {
             count: summary.issueCount,
-            defaultValue: '{{count}} issues',
           })
-        : t('toolCards.reviewSessionSummary.noIssues', { defaultValue: 'no blocking issues' });
+        : t('toolCards.reviewSessionSummary.noIssues');
 
   const status = failed ? 'error' : running ? 'running' : 'completed';
   const Icon = kind === 'deep_review' ? Sparkles : SearchCheck;
@@ -116,7 +115,6 @@ export const ReviewSessionSummaryCard: React.FC<ToolCardProps> = React.memo(({
               <FileText size={14} />
               {t('toolCards.reviewSessionSummary.filesChanged', {
                 count: changedFiles.length,
-                defaultValue: '{{count}} files',
               })}
             </span>
           ) : null}
@@ -130,20 +128,14 @@ export const ReviewSessionSummaryCard: React.FC<ToolCardProps> = React.memo(({
           ) : (
             <p className="review-session-summary-card__summary">
               {running
-                ? t('toolCards.reviewSessionSummary.waitingSummary', {
-                    defaultValue: 'The review is still running. Results will appear here when the code review team finishes.',
-                  })
-                : t('toolCards.reviewSessionSummary.emptySummary', {
-                    defaultValue: 'No structured review summary is available yet.',
-                  })}
+                ? t('toolCards.reviewSessionSummary.waitingSummary')
+                : t('toolCards.reviewSessionSummary.emptySummary')}
             </p>
           )}
           {changedFiles.length > 0 ? (
             <div className="review-session-summary-card__files">
               <span className="review-session-summary-card__section-label">
-                {t('toolCards.reviewSessionSummary.changedFilesTitle', {
-                  defaultValue: 'Files from this review',
-                })}
+                {t('toolCards.reviewSessionSummary.changedFilesTitle')}
               </span>
               <ul>
                 {changedFiles.map((filePath) => (
@@ -164,9 +156,7 @@ export const ReviewSessionSummaryCard: React.FC<ToolCardProps> = React.memo(({
               });
             }}
           >
-            {t('toolCards.reviewSessionSummary.openReview', {
-              defaultValue: 'Open review page',
-            })}
+            {t('toolCards.reviewSessionSummary.openReview')}
           </button>
         </div>
       )}

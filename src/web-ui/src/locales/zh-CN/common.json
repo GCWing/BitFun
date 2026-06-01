@@ -1100,6 +1100,13 @@
     "quit": "退出程序",
     "minimizeToTray": "最小化到托盘"
   },
+  "reviewPlatform": {
+    "relativeTime": {
+      "minutesAgo": "{{count}} 分钟前",
+      "hoursAgo": "{{count}} 小时前",
+      "daysAgo": "{{count}} 天前"
+    }
+  },
   "collapse": "折叠",
   "expand": "展开",
   "retry": "重试"

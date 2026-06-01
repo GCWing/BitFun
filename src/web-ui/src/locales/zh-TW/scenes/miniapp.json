@@ -1,8 +1,8 @@
 {
   "title": "小應用",
-  "subtitle": "即時生成的小應用，打開就能用，也能繼續迭代。",
-  "searchPlaceholder": "搜索小應用...",
-  "importFromFolder": "從文件夾導入",
+  "subtitle": "即時生成的小應用，開啟就能用，也能繼續迭代。",
+  "searchPlaceholder": "搜尋小應用...",
+  "importFromFolder": "從資料夾匯入",
   "running": "已啟動",
   "allApps": "全部應用",
   "noRunningApps": "暫無運行中的應用",
@@ -21,26 +21,26 @@
   "detail": {
     "stop": "停止",
     "delete": "刪除",
-    "open": "打開"
+    "open": "開啟"
   },
   "confirmDelete": {
     "title": "刪除 \"{{name}}\"？",
-    "message": "此操作不可撤銷，應用及其所有數據將被永久刪除。",
+    "message": "此操作不可撤銷，應用及其所有資料將被永久刪除。",
     "confirm": "刪除",
     "cancel": "取消"
   },
   "scene": {
-    "loading": "加載中…",
-    "loadFailed": "加載失敗：{{error}}",
+    "loading": "載入中…",
+    "loadFailed": "載入失敗：{{error}}",
     "retry": "重試",
-    "reload": "重新加載"
+    "reload": "重新載入"
   },
   "customize": {
     "trigger": "自訂小應用",
     "title": "自訂小應用",
     "close": "關閉自訂",
     "riskTitle": "變更會先預覽，確認後才替換應用",
-    "riskBody": "點擊套用前，目前小應用不會變更。替換前會保存目前版本；新增權限需要另行確認。",
+    "riskBody": "點擊套用前，目前小應用不會變更。替換前會儲存目前版本；新增權限需要另行確認。",
     "requestLabel": "想修改什麼？",
     "requestPlaceholder": "例如：把介面顏色調淡一點，或最佳化操作回饋和版面細節",
     "start": "開始修改",
@@ -65,7 +65,7 @@
     "discard": "取消變更",
     "apply": "套用變更",
     "applying": "正在套用變更...",
-    "applySaved": "已套用。舊版本已保存，可透過小應用版本回復。",
+    "applySaved": "已套用。舊版本已儲存，可透過小應用版本回復。",
     "permissionDialog": {
       "title": "新權限需要確認",
       "body": "這次變更新增或擴大了權限。套用到目前小應用前，請先確認這些變更。",

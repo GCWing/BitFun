@@ -521,7 +521,7 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
     if (status === 'completed' && reviewData) {
       const riskLevel = reviewData.summary?.risk_level ?? 'low';
       const reviewLabel = reviewData.review_mode === 'deep'
-        ? t('toolCards.codeReview.deepReviewResult', { defaultValue: 'Deep Review Result' })
+        ? t('toolCards.codeReview.deepReviewResult')
         : t('toolCards.codeReview.reviewResult');
 
       if (hasIssues) {
@@ -657,14 +657,10 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
         {reliabilityNotices.length > 0 && (
           <div
             className="review-reliability-status"
-            aria-label={t('toolCards.codeReview.reliabilityStatus.title', {
-              defaultValue: 'Review status',
-            })}
+            aria-label={t('toolCards.codeReview.reliabilityStatus.title')}
           >
             <div className="review-reliability-status__title">
-              {t('toolCards.codeReview.reliabilityStatus.title', {
-                defaultValue: 'Review status',
-              })}
+              {t('toolCards.codeReview.reliabilityStatus.title')}
             </div>
             <div className="review-reliability-status__items">
               {reliabilityNotices.map((notice) => (
@@ -708,20 +704,20 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
             </div>
             {review_mode && (
               <div className="summary-row">
-                <span className="summary-label">{t('toolCards.codeReview.reviewMode', { defaultValue: 'Review Mode' })}</span>
+                <span className="summary-label">{t('toolCards.codeReview.reviewMode')}</span>
                 <span className="summary-value">{t(`toolCards.codeReview.reviewModes.${review_mode}`, { defaultValue: review_mode })}</span>
               </div>
             )}
             {review_scope && (
               <div className="summary-row summary-row--full">
-                <span className="summary-label">{t('toolCards.codeReview.reviewScope', { defaultValue: 'Scope' })}</span>
+                <span className="summary-label">{t('toolCards.codeReview.reviewScope')}</span>
                 <span className="summary-value">{review_scope}</span>
               </div>
             )}
             {reportSections.executiveSummary.length > 0 && (
               <div className="summary-row summary-row--full">
                 <span className="summary-label">
-                  {t('toolCards.codeReview.sections.summary', { defaultValue: 'Executive Summary' })}
+                  {t('toolCards.codeReview.sections.summary')}
                 </span>
                 <span className="summary-value">
                   {reportSections.executiveSummary.join(' ')}
@@ -761,9 +757,7 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
                 {runManifest.strategyRecommendation && (
                   <div className="run-manifest__fact">
                     <span>
-                      {t('toolCards.codeReview.runManifest.recommendedStrategy', {
-                        defaultValue: 'Recommended strategy',
-                      })}
+                      {t('toolCards.codeReview.runManifest.recommendedStrategy')}
                     </span>
                     <strong>{runManifest.strategyRecommendation.strategyLevel}</strong>
                   </div>
@@ -771,9 +765,7 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
                 {runManifest.scopeProfile && (
                   <div className="run-manifest__fact">
                     <span>
-                      {t('toolCards.codeReview.runManifest.reviewDepth', {
-                        defaultValue: 'Review depth',
-                      })}
+                      {t('toolCards.codeReview.runManifest.reviewDepth')}
                     </span>
                     <strong>{formatReviewDepthLabel(runManifest.scopeProfile.reviewDepth, t)}</strong>
                   </div>
@@ -783,9 +775,7 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
               {runManifest.strategyRecommendation && (
                 <div className="run-manifest__group">
                   <div className="run-manifest__group-title">
-                    {t('toolCards.codeReview.runManifest.riskRecommendationTitle', {
-                      defaultValue: 'Risk recommendation',
-                    })}
+                    {t('toolCards.codeReview.runManifest.riskRecommendationTitle')}
                   </div>
                   <p>{runManifest.strategyRecommendation.rationale}</p>
                 </div>
@@ -880,10 +870,9 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
 
         {remediationItemCount > 0 && (
           <ReviewReportSection
-            title={t('toolCards.codeReview.sections.remediation', { defaultValue: 'Remediation Plan' })}
+            title={t('toolCards.codeReview.sections.remediation')}
             summary={t('toolCards.codeReview.sectionItemCount', {
               count: remediationItemCount,
-              defaultValue: '{{count}} items',
             })}
             expanded={remediationExpanded}
             onToggle={handleToggleReportSection('remediation')}
@@ -892,7 +881,7 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
             <div className="remediation-header-row">
               <div>
                 <div className="remediation-header">
-                  {t('toolCards.codeReview.remediationPlan', { defaultValue: 'Remediation Plan' })}
+                  {t('toolCards.codeReview.remediationPlan')}
                 </div>
               </div>
             </div>
@@ -920,7 +909,7 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
                                       <ul className="review-decision-item__options">
                                         {ctx.options.map((opt, oi) => (
                                           <li key={oi} className={oi === ctx.recommendation ? 'is-recommended' : ''}>
-                                            {opt}{oi === ctx.recommendation ? ` (${t('toolCards.codeReview.remediationActions.recommended', { defaultValue: 'recommended' })})` : ''}
+                                            {opt}{oi === ctx.recommendation ? ` (${t('toolCards.codeReview.remediationActions.recommended')})` : ''}
                                           </li>
                                         ))}
                                       </ul>
@@ -984,12 +973,8 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
                         {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
                         <span>
                           {expanded
-                            ? t('toolCards.codeReview.remediationActions.collapsePlan', {
-                                defaultValue: 'Collapse',
-                              })
-                            : t('toolCards.codeReview.remediationActions.expandPlan', {
-                                defaultValue: 'Details',
-                              })}
+                            ? t('toolCards.codeReview.remediationActions.collapsePlan')
+                            : t('toolCards.codeReview.remediationActions.expandPlan')}
                         </span>
                       </button>
                     </div>
@@ -998,25 +983,25 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
                         {issue ? (
                           <>
                             <div className="remediation-detail-row">
-                              <span>{t('toolCards.codeReview.remediationActions.relatedIssue', { defaultValue: 'Related issue' })}</span>
+                              <span>{t('toolCards.codeReview.remediationActions.relatedIssue')}</span>
                               <strong>{issue.title}</strong>
                             </div>
                             <div className="remediation-detail-grid">
                               {issue.severity && (
                                 <div>
-                                  <span>{t('toolCards.codeReview.remediationActions.severity', { defaultValue: 'Severity' })}</span>
+                                  <span>{t('toolCards.codeReview.remediationActions.severity')}</span>
                                   <strong>{t(`toolCards.codeReview.severities.${issue.severity}`, { defaultValue: issue.severity })}</strong>
                                 </div>
                               )}
                               {issue.certainty && (
                                 <div>
-                                  <span>{t('toolCards.codeReview.remediationActions.certainty', { defaultValue: 'Certainty' })}</span>
+                                  <span>{t('toolCards.codeReview.remediationActions.certainty')}</span>
                                   <strong>{t(`toolCards.codeReview.certainties.${issue.certainty}`, { defaultValue: issue.certainty })}</strong>
                                 </div>
                               )}
                               {location && (
                                 <div>
-                                  <span>{t('toolCards.codeReview.remediationActions.location', { defaultValue: 'Location' })}</span>
+                                  <span>{t('toolCards.codeReview.remediationActions.location')}</span>
                                   <strong>{location}</strong>
                                 </div>
                               )}
@@ -1036,9 +1021,7 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
                           </>
                         ) : (
                           <p>
-                            {t('toolCards.codeReview.remediationActions.noRelatedIssue', {
-                              defaultValue: 'No directly-linked issue was provided for this remediation item. Use the plan text itself as the implementation scope.',
-                            })}
+                            {t('toolCards.codeReview.remediationActions.noRelatedIssue')}
                           </p>
                         )}
                       </div>
@@ -1056,10 +1039,9 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
 
         {strengthItemCount > 0 && (
           <ReviewReportSection
-            title={t('toolCards.codeReview.sections.strengths', { defaultValue: 'Code Strengths' })}
+            title={t('toolCards.codeReview.sections.strengths')}
             summary={t('toolCards.codeReview.sectionItemCount', {
               count: strengthItemCount,
-              defaultValue: '{{count}} items',
             })}
             expanded={strengthsExpanded}
             onToggle={handleToggleReportSection('strengths')}
@@ -1075,7 +1057,7 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
 
         {reviewers.length > 0 && (
           <ReviewReportSection
-            title={t('toolCards.codeReview.reviewerTeam', { defaultValue: 'Code Review Team' })}
+            title={t('toolCards.codeReview.reviewerTeam')}
             summary={formatReviewerStats(reportSections.reviewerStats, t)}
             expanded={teamExpanded}
             onToggle={handleToggleReportSection('team')}
@@ -1094,11 +1076,8 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
                         {typeof reviewer.issue_count === 'number'
                           ? t('toolCards.codeReview.reviewerIssues', {
                               count: reviewer.issue_count,
-                              defaultValue: '{{count}} issues',
                             })
-                          : t('toolCards.codeReview.reviewerIssuesUnknown', {
-                              defaultValue: 'Issue count unavailable',
-                            })}
+                          : t('toolCards.codeReview.reviewerIssuesUnknown')}
                       </span>
                     </div>
                   </div>
@@ -1111,10 +1090,9 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
 
         {reportSections.coverageNotes.length > 0 && (
           <ReviewReportSection
-            title={t('toolCards.codeReview.sections.coverage', { defaultValue: 'Coverage Notes' })}
+            title={t('toolCards.codeReview.sections.coverage')}
             summary={t('toolCards.codeReview.sectionItemCount', {
               count: reportSections.coverageNotes.length,
-              defaultValue: '{{count}} items',
             })}
             expanded={coverageExpanded}
             onToggle={handleToggleReportSection('coverage')}

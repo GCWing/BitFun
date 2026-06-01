@@ -1100,6 +1100,13 @@
     "quit": "Quit",
     "minimizeToTray": "Minimize to Tray"
   },
+  "reviewPlatform": {
+    "relativeTime": {
+      "minutesAgo": "{{count}}m ago",
+      "hoursAgo": "{{count}}h ago",
+      "daysAgo": "{{count}}d ago"
+    }
+  },
   "collapse": "Collapse",
   "expand": "Expand",
   "retry": "Retry"

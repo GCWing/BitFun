@@ -20,18 +20,18 @@ const buildRecoveryPlanMock = vi.hoisted(() => vi.fn(() => ({
 const controlDeepReviewQueueMock = vi.hoisted(() => vi.fn());
 const flowChatSessionsMock = vi.hoisted(() => new Map<string, unknown>());
 
-vi.mock('react-i18next', () => ({
-  initReactI18next: {
-    type: '3rdParty',
-    init: vi.fn(),
-  },
-  useTranslation: () => ({
-    t: (_key: string, options?: Record<string, unknown> & { defaultValue?: string }) => {
-      const template = options?.defaultValue ?? _key;
-      return template.replace(/{{(\w+)}}/g, (_match, token: string) => String(options?.[token] ?? _match));
+vi.mock('react-i18next', async () => {
+  const { createTestI18nT } = await import('@/test/i18nTestUtils');
+  return {
+    initReactI18next: {
+      type: '3rdParty',
+      init: vi.fn(),
     },
-  }),
-}));
+    useTranslation: () => ({
+      t: createTestI18nT('flow-chat'),
+    }),
+  };
+});
 
 vi.mock('@/component-library', () => ({
   Button: ({
@@ -287,7 +287,7 @@ describeWithJsdom('DeepReviewActionBar', () => {
     });
 
     const fixAndReviewButton = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Fix and re-review'));
+      .find((button) => button.textContent?.includes('Fix & re-review'));
 
     expect(fixAndReviewButton).toBeTruthy();
 
@@ -746,7 +746,7 @@ describeWithJsdom('DeepReviewActionBar', () => {
     });
 
     const fixAndReviewButton = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Fix and re-review'));
+      .find((button) => button.textContent?.includes('Fix & re-review'));
     expect(fixAndReviewButton).toBeTruthy();
 
     await act(async () => {
@@ -754,7 +754,7 @@ describeWithJsdom('DeepReviewActionBar', () => {
       await Promise.resolve();
     });
 
-    expect(container.textContent).toContain('Fixing and preparing re-review...');
+    expect(container.textContent).toContain('Fixing & preparing re-review...');
   });
 
   it('requires explicit decision confirmation before executing selected decision remediation', async () => {

@@ -23,7 +23,7 @@ import './WelcomeScene.scss';
 const log = createLogger('WelcomeScene');
 
 const WelcomeScene: React.FC = () => {
-  const { t } = useI18n('common');
+  const { t, formatDate: formatLocaleDate } = useI18n('common');
   const {
     hasWorkspace, currentWorkspace, recentWorkspaces,
     openWorkspace, switchWorkspace, removeWorkspaceFromRecent,
@@ -102,11 +102,11 @@ const WelcomeScene: React.FC = () => {
       if (diffDays <= 1) return t('time.yesterday');
       if (diffDays < 7) return t('startup.daysAgo', { count: diffDays });
       if (diffDays < 30) return t('startup.weeksAgo', { count: Math.ceil(diffDays / 7) });
-      return date.toLocaleDateString();
+      return formatLocaleDate(date);
     } catch {
       return '';
     }
-  }, [t]);
+  }, [formatLocaleDate, t]);
 
   return (
     <div className="welcome-scene">

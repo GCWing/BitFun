@@ -61,104 +61,6 @@
       }
     },
     {
-      "path": "src/web-ui/src/flow_chat/components/btw/BtwSessionPanel.tsx",
-      "literalDefaultValues": {
-        "flow-chat:childSession.stoppingReview": 2,
-        "flow-chat:childSession.stopReview": 2,
-        "flow-chat:childSession.stopReviewFailed": 1,
-        "flow-chat:deepReviewActionBar.minimizedDeep": 1,
-        "flow-chat:deepReviewActionBar.minimizedFix": 1,
-        "flow-chat:deepReviewActionBar.minimizedFixCompleted": 1,
-        "flow-chat:deepReviewActionBar.minimizedFixFailed": 1,
-        "flow-chat:deepReviewActionBar.minimizedFixReview": 1,
-        "flow-chat:deepReviewActionBar.minimizedResume": 1,
-        "flow-chat:deepReviewActionBar.minimizedReviewInterrupted": 1,
-        "flow-chat:deepReviewActionBar.minimizedReviewRunningDeep": 1,
-        "flow-chat:deepReviewActionBar.minimizedReviewRunningStandard": 1,
-        "flow-chat:deepReviewActionBar.minimizedStandard": 1,
-        "flow-chat:deepReviewActionBar.restore": 1,
-        "flow-chat:flowChatHeader.btwBackTooltipWithoutTurn": 1,
-        "flow-chat:flowChatHeader.btwBackTooltipWithTurn": 1
-      }
-    },
-    {
-      "path": "src/web-ui/src/flow_chat/components/ChatInput.tsx",
-      "literalDefaultValues": {
-        "flow-chat:btw.empty": 1,
-        "flow-chat:btw.nestedDisabled": 3,
-        "flow-chat:btw.noSession": 3,
-        "flow-chat:btw.title": 1,
-        "flow-chat:chatInput.compactAction": 1,
-        "flow-chat:chatInput.compactBusy": 1,
-        "flow-chat:chatInput.compactFailed": 1,
-        "flow-chat:chatInput.compactNoSession": 1,
-        "flow-chat:chatInput.compactUsage": 2,
-        "flow-chat:chatInput.deepreviewAction": 1,
-        "flow-chat:chatInput.deepreviewBusy": 1,
-        "flow-chat:chatInput.deepreviewFailed": 1,
-        "flow-chat:chatInput.deepreviewNestedDisabled": 1,
-        "flow-chat:chatInput.deepreviewNoSession": 1,
-        "flow-chat:chatInput.deepreviewThreadTitle": 1,
-        "flow-chat:chatInput.deepreviewUsage": 1,
-        "flow-chat:chatInput.goalAction": 1,
-        "flow-chat:chatInput.goalActivated": 1,
-        "flow-chat:chatInput.goalAiFailed": 1,
-        "flow-chat:chatInput.goalFailed": 1,
-        "flow-chat:chatInput.goalGenerating": 1,
-        "flow-chat:chatInput.goalNestedDisabled": 1,
-        "flow-chat:chatInput.goalNoSession": 1,
-        "flow-chat:chatInput.goalUsage": 2,
-        "flow-chat:chatInput.initAction": 1,
-        "flow-chat:chatInput.initBusy": 1,
-        "flow-chat:chatInput.initFailed": 1,
-        "flow-chat:chatInput.initNoSession": 1,
-        "flow-chat:chatInput.initUsage": 2,
-        "flow-chat:chatInput.noMatchingCommand": 3,
-        "flow-chat:chatInput.promptCacheGuardBody": 1,
-        "flow-chat:chatInput.promptCacheGuardCancel": 1,
-        "flow-chat:chatInput.promptCacheGuardConfirm": 1,
-        "flow-chat:chatInput.promptCacheGuardTitle": 1,
-        "flow-chat:chatInput.quickAction": 2,
-        "flow-chat:chatInput.usageAction": 1,
-        "flow-chat:chatInput.usageBusy": 1,
-        "flow-chat:chatInput.usageCommandUsage": 2,
-        "flow-chat:chatInput.usageFailed": 1,
-        "flow-chat:chatInput.usageNoSession": 2,
-        "flow-chat:chatInput.usageNoWorkspace": 1,
-        "flow-chat:input.largePastePlaceholder": 1,
-        "flow-chat:input.messageTooLarge": 2,
-        "flow-chat:input.removeImage": 1,
-        "flow-chat:usage.loading.markdown": 1
-      }
-    },
-    {
-      "path": "src/web-ui/src/flow_chat/components/DeepReviewConsentDialog.tsx",
-      "literalDefaultValues": {
-        "flow-chat:deepReviewConsent.cancel": 2,
-        "flow-chat:deepReviewConsent.confirm": 1,
-        "flow-chat:deepReviewConsent.dontShowAgain": 1,
-        "flow-chat:deepReviewConsent.eyebrow": 1,
-        "flow-chat:deepReviewConsent.runStrategy": 1,
-        "flow-chat:deepReviewConsent.selectedStrategy": 1,
-        "flow-chat:deepReviewConsent.sessionConcurrencyBody": 1,
-        "flow-chat:deepReviewConsent.sessionConcurrencyTitle": 1,
-        "flow-chat:deepReviewConsent.skippedGroupTitle": 1,
-        "flow-chat:deepReviewConsent.skippedMore": 1,
-        "flow-chat:deepReviewConsent.skippedReasons.budgetLimited": 1,
-        "flow-chat:deepReviewConsent.skippedReasons.disabled": 1,
-        "flow-chat:deepReviewConsent.skippedReasons.invalidTooling": 1,
-        "flow-chat:deepReviewConsent.skippedReasons.notApplicable": 1,
-        "flow-chat:deepReviewConsent.skippedReasons.skipped": 1,
-        "flow-chat:deepReviewConsent.skippedReasons.unavailable": 1,
-        "flow-chat:deepReviewConsent.skippedReviewers": 1,
-        "flow-chat:deepReviewConsent.strategyOverrideTitle": 1,
-        "flow-chat:deepReviewConsent.strategyRuntimeImpact": 1,
-        "flow-chat:deepReviewConsent.strategyTokenImpact": 1,
-        "flow-chat:deepReviewConsent.summaryTitle": 1,
-        "flow-chat:deepReviewConsent.title": 1
-      }
-    },
-    {
       "path": "src/web-ui/src/flow_chat/components/modern/FlowChatHeader.tsx",
       "literalDefaultValues": {
         "flow-chat:flowChatHeader.backgroundSubagents": 4,
@@ -195,27 +97,6 @@
       }
     },
     {
-      "path": "src/web-ui/src/flow_chat/components/modern/SessionFilesBadge.tsx",
-      "literalDefaultValues": {
-        "flow-chat:sessionFilesBadge.actionsButton": 1,
-        "flow-chat:sessionFilesBadge.actionsButtonRunning": 1,
-        "flow-chat:sessionFilesBadge.actionsMenuHint": 1,
-        "flow-chat:sessionFilesBadge.collapseFileDiffList": 1,
-        "flow-chat:sessionFilesBadge.deepReview.displayMessage": 1,
-        "flow-chat:sessionFilesBadge.deepReview.displayMessageFiltered": 1,
-        "flow-chat:sessionFilesBadge.deepReview.threadTitle": 1,
-        "flow-chat:sessionFilesBadge.expandChangeListAriaCue": 1,
-        "flow-chat:sessionFilesBadge.expandChangeListCue": 1,
-        "flow-chat:sessionFilesBadge.filesSummaryCount": 3,
-        "flow-chat:sessionFilesBadge.review.displayMessageFiltered": 1,
-        "flow-chat:sessionFilesBadge.review.filteredNotice": 2,
-        "flow-chat:sessionFilesBadge.review.noEligibleFiles": 2,
-        "flow-chat:sessionFilesBadge.review.promptFiltered": 1,
-        "flow-chat:sessionFilesBadge.review.threadTitle": 1,
-        "flow-chat:sessionFilesBadge.reviewRunningHint": 1
-      }
-    },
-    {
       "path": "src/web-ui/src/flow_chat/components/ScrollToTurnHeaderButton.tsx",
       "literalDefaultValues": {
         "flow-chat:scroll.toCurrentTurn": 2
@@ -238,34 +119,6 @@
       }
     },
     {
-      "path": "src/web-ui/src/flow_chat/deep-review/action-bar/CapacityQueueNotice.tsx",
-      "literalDefaultValues": {
-        "flow-chat:deepReviewActionBar.capacityQueue.activeReviewerCount": 1,
-        "flow-chat:deepReviewActionBar.capacityQueue.activeReviewerDetail": 1,
-        "flow-chat:deepReviewActionBar.capacityQueue.activeReviewerTitle": 1,
-        "flow-chat:deepReviewActionBar.capacityQueue.cancelQueued": 1,
-        "flow-chat:deepReviewActionBar.capacityQueue.continueQueue": 1,
-        "flow-chat:deepReviewActionBar.capacityQueue.detail": 1,
-        "flow-chat:deepReviewActionBar.capacityQueue.elapsed": 2,
-        "flow-chat:deepReviewActionBar.capacityQueue.elapsedWithMax": 1,
-        "flow-chat:deepReviewActionBar.capacityQueue.longLaunchBatchWaitDetail": 1,
-        "flow-chat:deepReviewActionBar.capacityQueue.openReviewSettings": 1,
-        "flow-chat:deepReviewActionBar.capacityQueue.optionalReviewer": 1,
-        "flow-chat:deepReviewActionBar.capacityQueue.pausedTitle": 1,
-        "flow-chat:deepReviewActionBar.capacityQueue.pauseQueue": 1,
-        "flow-chat:deepReviewActionBar.capacityQueue.providerDetail": 1,
-        "flow-chat:deepReviewActionBar.capacityQueue.providerTitle": 1,
-        "flow-chat:deepReviewActionBar.capacityQueue.reason": 1,
-        "flow-chat:deepReviewActionBar.capacityQueue.reviewerStatusPaused": 1,
-        "flow-chat:deepReviewActionBar.capacityQueue.reviewerStatusQueued": 1,
-        "flow-chat:deepReviewActionBar.capacityQueue.sessionBusy": 1,
-        "flow-chat:deepReviewActionBar.capacityQueue.skipOptionalQueued": 1,
-        "flow-chat:deepReviewActionBar.capacityQueue.stopHint": 1,
-        "flow-chat:deepReviewActionBar.capacityQueue.title": 1,
-        "flow-chat:deepReviewActionBar.capacityQueue.waitingReviewersTitle": 1
-      }
-    },
-    {
       "path": "src/web-ui/src/flow_chat/deep-review/action-bar/DecisionExecutionGate.tsx",
       "literalDefaultValues": {
         "flow-chat:deepReviewActionBar.decisionGate.cancel": 1,
@@ -276,53 +129,6 @@
         "flow-chat:deepReviewActionBar.decisionGate.supplementPlaceholder": 1,
         "flow-chat:deepReviewActionBar.decisionGate.title": 1,
         "flow-chat:toolCards.codeReview.remediationActions.recommended": 1
-      }
-    },
-    {
-      "path": "src/web-ui/src/flow_chat/deep-review/action-bar/DeepReviewActionBar.tsx",
-      "literalDefaultValues": {
-        "flow-chat:deepReviewActionBar.capacityQueue.controlFailed": 1,
-        "flow-chat:deepReviewActionBar.capacityQueue.controlFailedWithReason": 1,
-        "flow-chat:deepReviewActionBar.capacityQueue.controlPartiallyFailedWithReason": 1,
-        "flow-chat:deepReviewActionBar.contextOverflowTitle": 1,
-        "flow-chat:deepReviewActionBar.customInstructionsPlaceholder": 1,
-        "flow-chat:deepReviewActionBar.degradation.compressContextPending": 1,
-        "flow-chat:deepReviewActionBar.degradation.reduceReviewersPending": 1,
-        "flow-chat:deepReviewActionBar.diagnosticsCopied": 1,
-        "flow-chat:deepReviewActionBar.diagnosticsCopyFailed": 1,
-        "flow-chat:deepReviewActionBar.elapsedTime": 1,
-        "flow-chat:deepReviewActionBar.fixAndReviewRunning": 1,
-        "flow-chat:deepReviewActionBar.fixCompleted": 1,
-        "flow-chat:deepReviewActionBar.fixCompletedMessage": 1,
-        "flow-chat:deepReviewActionBar.fixFailed": 1,
-        "flow-chat:deepReviewActionBar.fixRunning": 1,
-        "flow-chat:deepReviewActionBar.fixTimeout": 1,
-        "flow-chat:deepReviewActionBar.hideCustomInput": 1,
-        "flow-chat:deepReviewActionBar.longRunningHint": 1,
-        "flow-chat:deepReviewActionBar.minimize": 1,
-        "flow-chat:deepReviewActionBar.progressResumePreserved": 1,
-        "flow-chat:deepReviewActionBar.replaceInputConfirmAction": 1,
-        "flow-chat:deepReviewActionBar.replaceInputConfirmMessage": 1,
-        "flow-chat:deepReviewActionBar.replaceInputConfirmTitle": 1,
-        "flow-chat:deepReviewActionBar.resumeBlocked": 1,
-        "flow-chat:deepReviewActionBar.resumeBlockedConfirmAction": 1,
-        "flow-chat:deepReviewActionBar.resumeBlockedConfirmMessage": 1,
-        "flow-chat:deepReviewActionBar.resumeBlockedConfirmTitle": 1,
-        "flow-chat:deepReviewActionBar.resumeBlockedWithReason": 1,
-        "flow-chat:deepReviewActionBar.resumeFailed": 1,
-        "flow-chat:deepReviewActionBar.resumeFailedMessage": 1,
-        "flow-chat:deepReviewActionBar.resumeFailedWithReason": 1,
-        "flow-chat:deepReviewActionBar.resumeRequestDisplay": 1,
-        "flow-chat:deepReviewActionBar.resumeRunning": 1,
-        "flow-chat:deepReviewActionBar.retryIncompleteFailed": 1,
-        "flow-chat:deepReviewActionBar.retryIncompleteRequestDisplay": 1,
-        "flow-chat:deepReviewActionBar.reviewError": 1,
-        "flow-chat:deepReviewActionBar.reviewErrorWithReason": 1,
-        "flow-chat:deepReviewActionBar.reviewInterrupted": 1,
-        "flow-chat:deepReviewActionBar.reviewInterruptedWithReason": 1,
-        "flow-chat:deepReviewActionBar.reviewWaitingCapacity": 1,
-        "flow-chat:deepReviewActionBar.showCustomInput": 1,
-        "flow-chat:reviewActionBar.noIssuesFound": 1
       }
     },
     {
@@ -359,25 +165,6 @@
       }
     },
     {
-      "path": "src/web-ui/src/flow_chat/deep-review/action-bar/ReviewActionControls.tsx",
-      "literalDefaultValues": {
-        "flow-chat:deepReviewActionBar.continueFix": 1,
-        "flow-chat:deepReviewActionBar.copyDiagnostics": 1,
-        "flow-chat:deepReviewActionBar.fillBackInput": 1,
-        "flow-chat:deepReviewActionBar.fillBackInputHint": 1,
-        "flow-chat:deepReviewActionBar.fixInterrupted": 1,
-        "flow-chat:deepReviewActionBar.minimize": 1,
-        "flow-chat:deepReviewActionBar.openModelSettings": 1,
-        "flow-chat:deepReviewActionBar.resumeReview": 1,
-        "flow-chat:deepReviewActionBar.retryIncompleteSlices": 1,
-        "flow-chat:deepReviewActionBar.skipRemaining": 1,
-        "flow-chat:deepReviewActionBar.switchModel": 1,
-        "flow-chat:deepReviewActionBar.viewPartialResults": 1,
-        "flow-chat:toolCards.codeReview.remediationActions.fixAndReview": 1,
-        "flow-chat:toolCards.codeReview.remediationActions.startFix": 1
-      }
-    },
-    {
       "path": "src/web-ui/src/flow_chat/services/flow-chat-manager/EventHandlerModule.ts",
       "literalDefaultValues": {
         "flow-chat:chatInput.goalAchieved": 1,
@@ -389,35 +176,6 @@
       "path": "src/web-ui/src/flow_chat/services/openBtwSession.ts",
       "literalDefaultValues": {
         "flow-chat:btw.threadLabel": 1
-      }
-    },
-    {
-      "path": "src/web-ui/src/flow_chat/tool-cards/CodeReviewToolCard.tsx",
-      "literalDefaultValues": {
-        "flow-chat:toolCards.codeReview.deepReviewResult": 1,
-        "flow-chat:toolCards.codeReview.reliabilityStatus.title": 2,
-        "flow-chat:toolCards.codeReview.remediationActions.certainty": 1,
-        "flow-chat:toolCards.codeReview.remediationActions.collapsePlan": 1,
-        "flow-chat:toolCards.codeReview.remediationActions.expandPlan": 1,
-        "flow-chat:toolCards.codeReview.remediationActions.location": 1,
-        "flow-chat:toolCards.codeReview.remediationActions.noRelatedIssue": 1,
-        "flow-chat:toolCards.codeReview.remediationActions.recommended": 1,
-        "flow-chat:toolCards.codeReview.remediationActions.relatedIssue": 1,
-        "flow-chat:toolCards.codeReview.remediationActions.severity": 1,
-        "flow-chat:toolCards.codeReview.remediationPlan": 1,
-        "flow-chat:toolCards.codeReview.reviewerIssues": 1,
-        "flow-chat:toolCards.codeReview.reviewerIssuesUnknown": 1,
-        "flow-chat:toolCards.codeReview.reviewerTeam": 1,
-        "flow-chat:toolCards.codeReview.reviewMode": 1,
-        "flow-chat:toolCards.codeReview.reviewScope": 1,
-        "flow-chat:toolCards.codeReview.runManifest.recommendedStrategy": 1,
-        "flow-chat:toolCards.codeReview.runManifest.reviewDepth": 1,
-        "flow-chat:toolCards.codeReview.runManifest.riskRecommendationTitle": 1,
-        "flow-chat:toolCards.codeReview.sectionItemCount": 3,
-        "flow-chat:toolCards.codeReview.sections.coverage": 1,
-        "flow-chat:toolCards.codeReview.sections.remediation": 1,
-        "flow-chat:toolCards.codeReview.sections.strengths": 1,
-        "flow-chat:toolCards.codeReview.sections.summary": 1
       }
     },
     {
@@ -436,33 +194,9 @@
       }
     },
     {
-      "path": "src/web-ui/src/flow_chat/tool-cards/GitToolDisplay.tsx",
-      "literalDefaultValues": {
-        "flow-chat:toolCards.git.commandCopied": 4,
-        "flow-chat:toolCards.git.copyCommand": 4,
-        "flow-chat:toolCards.git.copyCommandFailed": 2
-      }
-    },
-    {
       "path": "src/web-ui/src/flow_chat/tool-cards/ReadFileDisplay.tsx",
       "literalDefaultValues": {
         "flow-chat:toolCards.readFile.permissionRequest": 1
-      }
-    },
-    {
-      "path": "src/web-ui/src/flow_chat/tool-cards/ReviewSessionSummaryCard.tsx",
-      "literalDefaultValues": {
-        "flow-chat:toolCards.reviewSessionSummary.changedFilesTitle": 1,
-        "flow-chat:toolCards.reviewSessionSummary.deepTitle": 1,
-        "flow-chat:toolCards.reviewSessionSummary.emptySummary": 1,
-        "flow-chat:toolCards.reviewSessionSummary.failed": 1,
-        "flow-chat:toolCards.reviewSessionSummary.filesChanged": 1,
-        "flow-chat:toolCards.reviewSessionSummary.issueCount": 1,
-        "flow-chat:toolCards.reviewSessionSummary.noIssues": 1,
-        "flow-chat:toolCards.reviewSessionSummary.openReview": 1,
-        "flow-chat:toolCards.reviewSessionSummary.running": 1,
-        "flow-chat:toolCards.reviewSessionSummary.standardTitle": 1,
-        "flow-chat:toolCards.reviewSessionSummary.waitingSummary": 1
       }
     },
     {

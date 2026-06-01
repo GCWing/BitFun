@@ -487,6 +487,7 @@
     "promptCacheGuardConfirm": "仍然发送",
     "promptCacheGuardCancel": "先不发送",
     "quickAction": "快捷操作",
+    "commands": "命令",
     "compactAction": "压缩会话",
     "compactNoSession": "当前没有可用于 /compact 的会话",
     "compactBusy": "请等待当前会话空闲后再使用 /compact。",
