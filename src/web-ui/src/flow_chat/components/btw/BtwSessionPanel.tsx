@@ -401,7 +401,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
         return t('deepReviewActionBar.minimizedResume');
       default:
         return isDeepReview
-          ? t('deepReviewActionBar.minimizedDeep')
+          ? t('shared:features.deepReview')
           : t('deepReviewActionBar.minimizedStandard');
     }
   }, [actionBarPhase, actionBarLastSubmittedAction, isDeepReview, t]);

@@ -1083,11 +1083,11 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
               >
                 <button type="button" className="bitfun-nav-panel__workspace-item-menu-item" onClick={handleCreateCodeSession}>
                   <Plus size={13} />
-                  <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.sessions.newCodeSessionShort')}</span>
+                  <span className="bitfun-nav-panel__workspace-item-menu-label">{t('shared:agents.code')}</span>
                 </button>
                 <button type="button" className="bitfun-nav-panel__workspace-item-menu-item" onClick={handleCreateCoworkSession}>
                   <Plus size={13} />
-                  <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.sessions.newCoworkSessionShort')}</span>
+                  <span className="bitfun-nav-panel__workspace-item-menu-label">{t('shared:agents.cowork')}</span>
                 </button>
                 {acpClients.map(client => {
                   const label = client.name || client.id;

@@ -5,7 +5,6 @@
   "overview": {
     "title": "审核工作流",
     "description": "深度审核会并行启动只读审核团队，再由质量检查员合并并校验最终报告。",
-    "badge": "深度审核",
     "command": {
       "title": "/DeepReview 入口",
       "description": "聊天会话启动完整代码审核团队时，会使用这里的策略、模型与执行设置。"

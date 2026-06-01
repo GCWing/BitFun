@@ -49,6 +49,7 @@ const reportCategories = [
   'confirmedUnusedKeys',
   'dynamicKeyCandidates',
   'sharedTermDuplicates',
+  'sameTextLocaleInventory',
   'l10nQualityCandidates',
   'literalDefaultValueFallbacks',
   'localeFormatCandidates',
@@ -67,6 +68,7 @@ const governanceReport = {
   confirmedUnusedKeys: [],
   dynamicKeyCandidates: [],
   sharedTermDuplicates: [],
+  sameTextLocaleInventory: [],
   l10nQualityCandidates: [],
   literalDefaultValueFallbacks: [],
   localeFormatCandidates: [],
@@ -378,6 +380,12 @@ function finalizeGovernanceReport() {
       byNamespace: countEntriesBy(governanceReport.sharedTermDuplicates, 'namespace', { emptyLabel: '<none>' }),
       bySharedKey: countEntriesBy(governanceReport.sharedTermDuplicates, 'sharedKey'),
       bySurface: countEntriesBy(governanceReport.sharedTermDuplicates, 'surface', { includeKeys: governanceSurfaceIds }),
+    },
+    sameTextLocaleInventory: {
+      byAllowlistState: countEntriesBy(governanceReport.sameTextLocaleInventory, 'allowlistState'),
+      byNamespace: countEntriesBy(governanceReport.sameTextLocaleInventory, 'namespace', { emptyLabel: '<none>' }),
+      bySignalType: countEntriesBy(governanceReport.sameTextLocaleInventory, 'signalType'),
+      bySurface: countEntriesBy(governanceReport.sameTextLocaleInventory, 'surface', { includeKeys: governanceSurfaceIds }),
     },
     l10nQualityCandidates: {
       byComparisonLocale: countEntriesBy(governanceReport.l10nQualityCandidates, 'comparisonLocale'),
@@ -1523,6 +1531,35 @@ function collectSharedTermDuplicates(resourceEntries) {
   }
 }
 
+function collectSameTextLocaleInventory(resourceGroups, allowedIdenticalMatches) {
+  for (const group of resourceGroups) {
+    const simplified = group.valueByLocale.get('zh-CN');
+    const traditional = group.valueByLocale.get('zh-TW');
+    if (!simplified || !traditional || simplified !== traditional || !hasHanText(traditional)) {
+      continue;
+    }
+
+    const signal = getZhTwSameTextSignal(traditional);
+    const allowlisted = allowedIdenticalMatches.has(l10nIdenticalMatchId(group, 'zh-TW', 'zh-CN'));
+
+    governanceReport.sameTextLocaleInventory.push({
+      surface: group.surface,
+      namespace: group.namespace,
+      key: group.key,
+      resourceKey: group.resourceKey,
+      locale: 'zh-TW',
+      comparisonLocale: 'zh-CN',
+      value: traditional,
+      files: group.files,
+      reason: 'same-text-locale-pair',
+      signal,
+      signalType: signal?.type ?? 'none',
+      allowlisted,
+      allowlistState: allowlisted ? 'allowlisted' : 'unreviewed',
+    });
+  }
+}
+
 function collectL10nQualityCandidates(resourceGroups, allowedIdenticalMatches) {
   for (const group of resourceGroups) {
     const simplified = group.valueByLocale.get('zh-CN');
@@ -1662,6 +1699,7 @@ function auditI18nGovernanceReport(namespaces) {
   collectConfirmedUnusedKeys();
   collectDynamicKeyCandidates(resourceGroups);
   collectSharedTermDuplicates(resourceEntries);
+  collectSameTextLocaleInventory(resourceGroups, allowedIdenticalMatches);
   collectL10nQualityCandidates(resourceGroups, allowedIdenticalMatches);
   auditGovernanceBaseline();
 }

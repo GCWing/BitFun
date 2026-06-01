@@ -499,6 +499,7 @@ test('i18n audit can emit a machine-readable governance report', { concurrency: 
     assert.ok(Array.isArray(report.confirmedUnusedKeys), 'report should include confirmed unused keys');
     assert.ok(Array.isArray(report.dynamicKeyCandidates), 'report should include dynamic key candidates');
     assert.ok(Array.isArray(report.sharedTermDuplicates), 'report should include shared-term duplicate candidates');
+    assert.ok(Array.isArray(report.sameTextLocaleInventory), 'report should include same-text locale inventory');
     assert.ok(Array.isArray(report.l10nQualityCandidates), 'report should include l10n quality candidates');
     assert.ok(Array.isArray(report.literalDefaultValueFallbacks), 'report should include literal defaultValue fallback candidates');
     assert.ok(Array.isArray(report.localeFormatCandidates), 'report should include direct locale formatting candidates');
@@ -508,6 +509,7 @@ test('i18n audit can emit a machine-readable governance report', { concurrency: 
         confirmedUnusedKeys: report.confirmedUnusedKeys.length,
         dynamicKeyCandidates: report.dynamicKeyCandidates.length,
         sharedTermDuplicates: report.sharedTermDuplicates.length,
+        sameTextLocaleInventory: report.sameTextLocaleInventory.length,
         l10nQualityCandidates: report.l10nQualityCandidates.length,
         literalDefaultValueFallbacks: report.literalDefaultValueFallbacks.length,
         localeFormatCandidates: report.localeFormatCandidates.length,
@@ -528,6 +530,15 @@ test('i18n audit can emit a machine-readable governance report', { concurrency: 
       report.summary.byCategory.l10nQualityCandidates.bySurface['web-ui'] ?? 0,
       report.l10nQualityCandidates.filter((entry) => entry.surface === 'web-ui').length,
       'report should summarize l10n candidates by surface',
+    );
+    assert.equal(
+      report.summary.byCategory.sameTextLocaleInventory.bySurface['web-ui'] ?? 0,
+      report.sameTextLocaleInventory.filter((entry) => entry.surface === 'web-ui').length,
+      'report should summarize same-text locale inventory by surface',
+    );
+    assert.ok(
+      report.sameTextLocaleInventory.length > report.l10nQualityCandidates.length,
+      'same-text locale inventory should retain broad non-blocking review data beyond actionable l10n signals',
     );
     assert.equal(
       report.summary.byCategory.l10nQualityCandidates.byNamespace['flow-chat'] ?? 0,
@@ -601,6 +612,18 @@ auditIntegrationTest('i18n audit reports same-text zh-TW copy with a l10n signal
         )),
         'audit report should include the concrete same-text terminology signal',
       );
+      assert.ok(
+        report.sameTextLocaleInventory.some((entry) => (
+          entry.surface === 'web-ui' &&
+          entry.namespace === 'settings/acp-agents' &&
+          entry.key === 'actions.learnMore' &&
+          entry.locale === 'zh-TW' &&
+          entry.comparisonLocale === 'zh-CN' &&
+          entry.signalType === 'terminology' &&
+          entry.allowlistState === 'unreviewed'
+        )),
+        'audit inventory should retain the same-text pair even though only signal-bearing entries are governance candidates',
+      );
     });
   } finally {
     fs.rmSync(absoluteReportPath, { force: true });
@@ -620,11 +643,16 @@ auditIntegrationTest('mobile-web uses shared terms for stable shared concept lab
     const migratedSharedKeys = new Set([
       'product.remote',
       'features.workspace',
+      'modes.assistant',
+      'modes.expert',
       'agents.claw',
+      'agents.code',
       'agents.cowork',
+      'agents.default',
       'tools.edit',
       'tools.explore',
       'tools.read',
+      'tools.shell',
       'tools.todo',
       'tools.write',
     ]);
@@ -635,12 +663,17 @@ auditIntegrationTest('mobile-web uses shared terms for stable shared concept lab
     const legacyMobileKeys = [
       'common.appName',
       'sessions.workspace',
+      'sessions.assistantMode',
       'sessions.coworkSession',
+      'sessions.codeSession',
+      'sessions.defaultAssistant',
       'sessions.agentClaw',
+      'sessions.proMode',
       'workspace.title',
       'tools.edit',
       'tools.explore',
       'tools.read',
+      'tools.shell',
       'tools.todo',
       'tools.write',
     ];
@@ -683,10 +716,16 @@ auditIntegrationTest('web-ui uses shared terms for stable navigation and feature
       'common:app.name',
       'common:header.remoteConnect',
       'common:nav.sections.workspace',
+      'common:nav.sessions.newCodeSessionShort',
+      'common:nav.sessions.newCoworkSessionShort',
       'common:scenes.settings',
       'common:tabs.settings',
       'common:remoteConnect.title',
+      'common:remoteConnect.tabBitfunServer',
+      'common:remoteConnect.tabLan',
       'flow-chat:layout.noPanels',
+      'flow-chat:deepReviewActionBar.minimizedDeep',
+      'flow-chat:toolCards.codeReview.reviewMode',
       'flow-chat:toolbar.settings',
       'flow-chat:toolCards.sessionControl.workspace',
       'flow-chat:toolCards.sessionMessage.workspace',
@@ -694,6 +733,7 @@ auditIntegrationTest('web-ui uses shared terms for stable navigation and feature
       'scenes/skills:suite.modes.claw',
       'settings:title',
       'settings:configCenter.title',
+      'settings/review:overview.badge',
       'settings:workspace.title',
       'settings/lsp:tabs.settings',
     ]);
@@ -704,16 +744,23 @@ auditIntegrationTest('web-ui uses shared terms for stable navigation and feature
     const legacyWebUiKeys = [
       'header.remoteConnect',
       'remoteConnect.title',
+      'remoteConnect.tabBitfunServer',
+      'remoteConnect.tabLan',
       'nav.sections.workspace',
+      'nav.sessions.newCodeSessionShort',
+      'nav.sessions.newCoworkSessionShort',
       'scenes.settings',
       'tabs.settings',
       'layout.noPanels',
+      'deepReviewActionBar.minimizedDeep',
       'toolbar.settings',
+      'toolCards.codeReview.reviewMode',
       'toolCards.sessionControl.workspace',
       'toolCards.sessionMessage.workspace',
       'welcome.workspace',
       'suite.modes.claw',
       'configCenter.title',
+      'overview.badge',
       'workspace.title',
     ];
     const webUiSourceFiles = listFiles(path.join(root, 'src', 'web-ui', 'src'), (file) => (
