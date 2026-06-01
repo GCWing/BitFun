@@ -107,6 +107,48 @@ fn apply_anthropic_adaptive_reasoning(
     });
 }
 
+fn apply_deepseek_anthropic_reasoning(
+    request_body: &mut serde_json::Value,
+    mode: ReasoningMode,
+    model_name: &str,
+    reasoning_effort: Option<&str>,
+) {
+    match mode {
+        ReasoningMode::Default => {}
+        ReasoningMode::Disabled => {
+            request_body["thinking"] = serde_json::json!({ "type": "disabled" });
+            if reasoning_effort.is_some_and(|value| !value.trim().is_empty()) {
+                warn!(
+                    target: "ai::anthropic_stream_request",
+                    "Omitting output_config.effort for DeepSeek Anthropic model {} because thinking is disabled",
+                    model_name
+                );
+            }
+        }
+        ReasoningMode::Enabled => {
+            request_body["thinking"] = serde_json::json!({ "type": "enabled" });
+            if let Some(effort) = reasoning_effort.and_then(normalize_deepseek_reasoning_effort) {
+                request_body["output_config"] = serde_json::json!({
+                    "effort": effort
+                });
+            }
+        }
+        ReasoningMode::Adaptive => {
+            warn!(
+                target: "ai::anthropic_stream_request",
+                "DeepSeek Anthropic model {} does not support adaptive reasoning; falling back to thinking.type=enabled",
+                model_name
+            );
+            apply_deepseek_anthropic_reasoning(
+                request_body,
+                ReasoningMode::Enabled,
+                model_name,
+                reasoning_effort,
+            );
+        }
+    }
+}
+
 fn apply_reasoning_fields(
     request_body: &mut serde_json::Value,
     mode: ReasoningMode,
@@ -118,19 +160,16 @@ fn apply_reasoning_fields(
 ) {
     let is_deepseek_reasoning_target =
         is_deepseek_url(url) || is_deepseek_reasoning_effort_model(model_name);
+
+    if is_deepseek_reasoning_target {
+        apply_deepseek_anthropic_reasoning(request_body, mode, model_name, reasoning_effort);
+        return;
+    }
+
     let capability = anthropic_thinking_capability(model_name);
 
     match mode {
-        ReasoningMode::Default => {
-            if is_deepseek_reasoning_target {
-                if let Some(effort) = reasoning_effort.and_then(normalize_deepseek_reasoning_effort)
-                {
-                    request_body["output_config"] = serde_json::json!({
-                        "effort": effort
-                    });
-                }
-            }
-        }
+        ReasoningMode::Default => {}
         ReasoningMode::Disabled => {
             if capability == AnthropicThinkingCapability::AdaptiveDefaultNoDisabled {
                 warn!(
@@ -155,14 +194,6 @@ fn apply_reasoning_fields(
                 thinking["budget_tokens"] = serde_json::json!(budget_tokens);
             }
             request_body["thinking"] = thinking;
-            if is_deepseek_reasoning_target {
-                if let Some(effort) = reasoning_effort.and_then(normalize_deepseek_reasoning_effort)
-                {
-                    request_body["output_config"] = serde_json::json!({
-                        "effort": effort
-                    });
-                }
-            }
         }
         ReasoningMode::Adaptive => {
             if anthropic_supports_adaptive_reasoning(capability) {
