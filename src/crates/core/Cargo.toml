@@ -84,6 +84,9 @@ bitfun-agent-stream = { path = "../agent-stream" }
 # Agent runtime owner contracts
 bitfun-agent-runtime = { path = "../agent-runtime" }
 
+# Harness workflow contracts
+bitfun-harness = { path = "../harness" }
+
 # Agent tool contracts
 bitfun-agent-tools = { path = "../agent-tools" }
 

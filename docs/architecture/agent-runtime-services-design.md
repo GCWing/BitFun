@@ -3,8 +3,10 @@
 本文是 [`core-decomposition.md`](core-decomposition.md) 的开发设计文档，描述目标模块、
 接口、crate 内部结构和迁移保护。`bitfun-runtime-services` 已建立 typed service bundle、
 builder、provider registry、capability availability 和 fake provider 基础；`bitfun-agent-runtime`
-已创建并只承接可独立构建的 scheduler/background delivery 纯决策。`bitfun-harness` 仍是目标 crate；
-未迁移的 session manager、prompt loop、subagent registry 和 concrete scheduler lifecycle 不得被描述为已完成。
+已创建并只承接可独立构建的 scheduler/background delivery 纯决策；`bitfun-harness`
+已创建并承接 workflow descriptor、legacy route plan 和 provider registry contract。
+未迁移的 session manager、prompt loop、subagent registry、concrete scheduler lifecycle 和
+concrete workflow execution 不得被描述为已完成。
 
 ## 1. 设计目标与边界
 
@@ -25,7 +27,7 @@ bitfun-runtime-services      # PR1 基础壳层
 bitfun-agent-tools
 tool-runtime
 bitfun-agent-runtime         # 已创建，当前仅承接 scheduler/background delivery 决策
-bitfun-harness               # 目标
+bitfun-harness               # 已创建，当前承接 workflow descriptor / registry contract
 bitfun-services-core
 bitfun-services-integrations
 bitfun-product-domains
@@ -92,7 +94,8 @@ bitfun-runtime-services
 - 只有当 owner 边界、旧路径兼容、focused tests、依赖收益和 boundary check 都能同时落地时，才创建新的目标 crate。
 - `bitfun-runtime-services` 已按该准入建立基础壳层；继续扩展时仍必须保持 typed builder、本地 service、remote service 和 fake provider 三类注入路径可测试。
 - `bitfun-agent-runtime` 已通过 scheduler/background delivery 纯决策满足创建准入；继续扩展时仍必须保持旧路径 facade、focused tests 和 boundary check。
-- `bitfun-harness` 的创建前提是至少两个 workflow 可以通过 provider contract 注册，例如 Deep Review 与 MiniApp / DeepResearch。
+- `bitfun-harness` 已按 Deep Review、DeepResearch、MiniApp 三个 legacy-facade provider
+  满足创建准入；继续扩展时仍必须保持 descriptor/registry、旧路径兼容、focused tests 和 boundary check。
 - 若目标 crate 只能承接单个 helper 或只能通过 `bitfun-core` 才能测试，继续留在迁移期 facade，不提前拆 crate。
 
 ## 2. 稳定接口与运行时服务
@@ -447,13 +450,13 @@ pub struct ToolExecutionContext {
 
 ### 3.3 Harness Layer
 
-目标 crate：`bitfun-harness`。
+当前 crate：`bitfun-harness`。
 
 职责：
 
 - 把 SDD、DeepReview、DeepResearch、MiniApp、function-agent 等工作流从 runtime kernel
-  中分离。
-- 定义 workflow plan、step、policy、artifact、review gate、post-processor。
+  中分离。当前只承接 workflow descriptor、route plan 和 provider registry。
+- 定义 workflow plan、step、policy、artifact、review gate、post-processor。具体执行在迁移前继续留在旧路径。
 - 通过 Agent Runtime SDK、Tool Runtime 和 service ports 编排。
 
 建议内部模块：
@@ -508,6 +511,7 @@ pub struct HarnessExecutionContext {
 - harness 不直接访问 concrete filesystem / Git / terminal。
 - 产品命令只映射到 harness capability，不把命令展示逻辑下沉。
 - 新 harness 通过 provider 注册，不改 Agent Runtime SDK 内核。
+- PR4 阶段的 legacy-facade provider 只生成 route plan，不执行 workflow；执行迁移必须在后续 PR 单独证明行为等价。
 
 ## 4. 产品组装与扩展
 

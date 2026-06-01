@@ -49,6 +49,26 @@
 - `bitfun-core default = []` 仍是独立评估项，不能混入 runtime owner 迁移。
 - 具体 IO、scheduler 生命周期、workspace-root、persistence、MiniApp worker / host / builtin、function-agent Git / AI 仍需后续完整 owner PR。
 
+### 1.4 Runtime owner PR1-PR4：组装、remote、agent runtime 与 harness 边界
+
+- `bitfun-runtime-services` 已建立 typed service bundle、builder、capability availability 和 fake provider 基础。
+- remote workspace facts、remote session metadata、remote file projection DTO 和 remote workspace/projection host trait
+  已归入 `bitfun-runtime-ports`，并由 `bitfun-services-integrations::remote_connect` 保留旧路径 re-export。
+- `bitfun-agent-runtime` 已建立为可独立构建的 Agent Runtime SDK owner crate，当前只承接 scheduler/background
+  delivery 纯决策。
+- `bitfun-harness` 已建立为可独立构建的 Harness contract crate，当前承接 workflow descriptor、legacy route
+  plan 和 provider registry；`bitfun-core::agentic::harness` 注册 Deep Review、DeepResearch、MiniApp 三个
+  legacy-facade provider。
+
+明确未完成：
+
+- `bitfun-agent-runtime` 不代表 session manager、prompt loop、subagent registry、scheduler 生命周期或 post-turn hook
+  已迁移。
+- `bitfun-harness` 不代表 Deep Review、DeepResearch、MiniApp 的 concrete workflow execution 已迁移；PR4 provider
+  只生成旧路径 route plan，实际执行仍在既有 core/product 路径。
+- Product command registry、capability pack、Harness 对 Tool Runtime / Runtime Services 的实际 orchestration
+  仍是后续迁移项。
+
 ## 2. 已建立保护
 
 - 新 owner crate 不得依赖回 `bitfun-core`。
@@ -60,5 +80,5 @@
 ## 3. 当前剩余结论
 
 - 低风险准备项已经完成，不再新增零散小 PR。
-- 后续只按高风险 owner 主题推进：Remote / Service-Agent、Agent Registry / Scheduler、Product-Domain Runtime、Tool Runtime、Feature / Build-Benefit Evaluation。
+- 后续只按高风险 owner 主题推进：Product-Domain Runtime、Tool Runtime、Feature / Build-Benefit Evaluation，以及经过单独保护的 Harness execution / Product Capability pack 迁移。
 - 缺陷修复、行为变更、冗余清理、三方库升级和构建脚本调整必须独立评估，不能伪装成 core decomposition 剩余里程碑。

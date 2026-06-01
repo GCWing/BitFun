@@ -29,6 +29,10 @@ SessionManager → Session → DialogTurn → ModelRound
 - 使用 `bitfun_events::EventEmitter` 等共享抽象
 - 桌面端专属集成应放在 `src/apps/desktop`，再通过 transport / API layer 连接回来
 - core 拆解期间，`bitfun-core` 是兼容 facade 与完整产品 runtime assembly 点；新模块优先放到 `docs/architecture/core-decomposition.md` 指定的 owner crate。
+- Harness workflow contract、descriptor provider、route plan 和 provider
+  registry 归属 `bitfun-harness`。迁移期 core 可以注册 Deep Review、
+  DeepResearch、MiniApp 的 legacy-facade provider，但具体 workflow 执行继续
+  留在既有 core / product 路径，直到有评审过的迁移和等价测试。
 - Tool 相关轻量 contract、portable tool context facts/provider、纯 manifest/exposure contract、generic registry / static-provider / dynamic-provider container、file guidance marker、file-read freshness 比较策略和 oversized tool-result preview/rendering 纯策略归属 `bitfun-agent-tools`；core tool runtime 通过 `product_runtime.rs` 统一负责产品工具组装、`dyn Tool` 适配、snapshot decoration、runtime manifest assembly / context filtering，以及按需工具说明发现（`GetToolSpec`）执行。
 - `ToolUseContext`、session file-read state storage、tool-result filesystem writes 与具体工具实现继续留在 core，除非已有评审过的 port/provider 方案和等价测试。
 - Tool 迁移必须保持 expanded/collapsed exposure、prompt 可见 manifest、`ToolUseContext.unlocked_collapsed_tools`，以及 desktop/MCP/ACP tool catalog 行为等价。

@@ -34,6 +34,11 @@ SessionManager → Session → DialogTurn → ModelRound
 - During core decomposition, `bitfun-core` is a compatibility facade and full
   product runtime assembly point. New modules should prefer the extracted owner
   crate listed in `docs/architecture/core-decomposition.md`.
+- Harness workflow contracts, descriptor providers, route plans, and provider
+  registry logic belong in `bitfun-harness`. Core may register Deep Review,
+  DeepResearch, and MiniApp legacy-facade providers during migration, but
+  concrete workflow execution stays on existing core/product paths until a
+  reviewed migration proves equivalence.
 - For tools, keep lightweight contracts, pure manifest/exposure contracts,
   generic contextual prompt-manifest resolver contracts, generic catalog
   snapshot provider contracts, generic GetToolSpec catalog provider/detail/
