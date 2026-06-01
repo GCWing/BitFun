@@ -564,7 +564,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
   }, [sessionMgr, setCurrentAssistant, setError, loadFirstPage, searchQuery]);
 
   const workspaceDisplayName = currentWorkspace?.project_name || t('sessions.noWorkspaceSelected');
-  const assistantDisplayName = currentAssistant?.name || t('sessions.defaultAssistant');
+  const assistantDisplayName = currentAssistant?.name || t('shared.agents.default');
   const isProMode = displayMode === 'pro';
 
   return (
@@ -627,14 +627,14 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
             onClick={() => handleSelectMode('pro')}
           >
             <ProModeIcon />
-            <span>{t('sessions.proMode')}</span>
+            <span>{t('shared.modes.expert')}</span>
           </button>
           <button
             className={`session-list__mode-toggle-btn ${!isProMode ? 'is-active' : ''}`}
             onClick={() => handleSelectMode('assistant')}
           >
             <AssistantModeIcon />
-            <span>{t('sessions.assistantMode')}</span>
+            <span>{t('shared.modes.assistant')}</span>
           </button>
         </div>
 
@@ -780,7 +780,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
                         <SessionTypeIcon agentType="code" />
                       </div>
                       <div className="session-list__create-copy">
-                        <span className="session-list__create-title">{t('sessions.codeSession')}</span>
+                        <span className="session-list__create-title">{t('shared.agents.code')}</span>
                         <span className="session-list__create-desc">{t('sessions.codeSessionDesc')}</span>
                       </div>
                       <span className="session-list__create-arrow">

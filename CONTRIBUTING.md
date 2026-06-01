@@ -92,8 +92,8 @@ Captured data is logged as structured JSON under the `bitfun::devtools` target.
   helpers instead of direct `Intl.*` or `toLocale*` calls.
 - `pnpm run i18n:audit` enforces key/placeholder parity, direct static key
   existence, dynamic key source proofs, literal fallback and locale-format
-  no-growth baselines, actionable shared-term/l10n governance baselines, and
-  the no-hardcoded-CJK source budget.
+  no-growth baselines, shared-term/l10n governance baselines, non-blocking
+  same-text locale inventory, and the no-hardcoded-CJK source budget.
 
 ### Platform-agnostic core
 

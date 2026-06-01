@@ -704,7 +704,7 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
             </div>
             {review_mode && (
               <div className="summary-row">
-                <span className="summary-label">{t('toolCards.codeReview.reviewMode')}</span>
+                <span className="summary-label">{t('shared:modes.review')}</span>
                 <span className="summary-value">{t(`toolCards.codeReview.reviewModes.${review_mode}`, { defaultValue: review_mode })}</span>
               </div>
             )}

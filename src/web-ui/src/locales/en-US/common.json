@@ -158,14 +158,10 @@
       "newSession": "New session",
       "newCodeSession": "New Code session",
       "newCoworkSession": "New Cowork session",
-      "newCodeSessionShort": "Code Session",
-      "newCoworkSessionShort": "Cowork Session",
       "newExternalAgentSessionShort": "{{agentName}} Session",
       "newClawSession": "New Claw session",
       "modeCode": "Code",
       "modeCowork": "Cowork",
-      "codeSessionMode": "Code Session",
-      "coworkSessionMode": "Cowork Session",
       "noSessions": "No sessions",
       "rename": "Rename",
       "delete": "Delete",
@@ -438,8 +434,6 @@
     "errorCreateFailed": "Failed to create project"
   },
   "remoteConnect": {
-    "tabLan": "LAN",
-    "tabBitfunServer": "BitFun Server",
     "tabNgrok": "NAT Traversal",
     "tabCustomServer": "Self-Hosted",
     "tabBot": "IM Bot",

@@ -5,7 +5,6 @@
   "overview": {
     "title": "審核工作流",
     "description": "深度審核會並行啟動唯讀審核團隊，再由品質檢查員合併並校驗最終報告。",
-    "badge": "深度審核",
     "command": {
       "title": "/DeepReview 入口",
       "description": "聊天工作階段啟動完整程式碼審核團隊時，會使用這裡的策略、模型與執行設定。"

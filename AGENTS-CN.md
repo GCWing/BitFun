@@ -99,7 +99,7 @@ pnpm run desktop:build:nsis:fast      # Windows 安装器，release-fast profile
   使用 `Intl.*` 或 `toLocale*`。
 - `pnpm run i18n:audit` 会检查 key / 占位符一致性、直接静态 key、dynamic key
   source proof、literal fallback / locale-format 零增长基线、shared-term / l10n
-  治理基线，以及 source 中不再新增硬编码 CJK 文案。
+  治理基线、非阻断 same-text locale 盘点，以及 source 中不再新增硬编码 CJK 文案。
 
 ### 日志
 

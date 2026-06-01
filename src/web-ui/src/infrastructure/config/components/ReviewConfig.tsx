@@ -353,7 +353,7 @@ const ReviewConfig: React.FC = () => {
         <ConfigPageSection
           title={t('overview.title')}
           description={t('overview.description')}
-          titleSuffix={<Badge variant="info">{t('overview.badge')}</Badge>}
+          titleSuffix={<Badge variant="info">{t('shared:features.deepReview')}</Badge>}
         >
           <div className="review-config__overview-grid">
             <div className="review-config__overview-item">

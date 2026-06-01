@@ -158,14 +158,10 @@
       "newSession": "新增會話",
       "newCodeSession": "新增 Code 會話",
       "newCoworkSession": "新增 Cowork 會話",
-      "newCodeSessionShort": "編碼會話",
-      "newCoworkSessionShort": "辦公會話",
       "newExternalAgentSessionShort": "{{agentName}} 會話",
       "newClawSession": "新增 Claw 會話",
       "modeCode": "Code",
       "modeCowork": "Cowork",
-      "codeSessionMode": "Code 會話",
-      "coworkSessionMode": "Cowork 會話",
       "noSessions": "暫無會話",
       "rename": "重新命名",
       "delete": "刪除",
@@ -438,8 +434,6 @@
     "errorCreateFailed": "建立工作區失敗"
   },
   "remoteConnect": {
-    "tabLan": "局域網",
-    "tabBitfunServer": "BitFun伺服器",
     "tabNgrok": "內網穿透",
     "tabCustomServer": "自建伺服器",
     "tabBot": "IM機器人",

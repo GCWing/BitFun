@@ -623,7 +623,7 @@ const TOOL_TYPE_MAP: Record<string, string> = {
   read_file: 'shared.tools.read',
   write_file: 'shared.tools.write',
   list_directory: 'tools.ls',
-  bash: 'tools.shell',
+  bash: 'shared.tools.shell',
   glob: 'tools.glob',
   grep: 'tools.grep',
   create_file: 'shared.tools.write',
