@@ -4,7 +4,7 @@
  */
 
 import { FlowChatStore } from '../../store/FlowChatStore';
-import { parsePartialJson } from '../../../shared/utils/partialJsonParser';
+import { extractFilePathFromJsonBuffer, parsePartialJson } from '../../../shared/utils/partialJsonParser';
 import { createLogger } from '@/shared/utils/logger';
 import type { FlowChatContext, FlowToolItem, ToolEventOptions, DialogTurn } from './types';
 import { immediateSaveDialogTurn } from './PersistenceModule';
@@ -194,6 +194,15 @@ function applyParamsPartial(
     try {
       parsedParams = parsePartialJson(newBuffer);
     } catch {
+    }
+
+    if (isWriteTool) {
+      const extractedPath = extractFilePathFromJsonBuffer(newBuffer);
+      const hasPath = ['file_path', 'filePath', 'filepath', 'target_file', 'targetFile', 'path', 'filename']
+        .some((key) => typeof parsedParams[key] === 'string' && parsedParams[key].length > 0);
+      if (extractedPath && !hasPath) {
+        parsedParams = { ...parsedParams, file_path: extractedPath };
+      }
     }
     
     const isEditTool = ['edit', 'search_replace', 'Edit'].includes(toolEvent.tool_name);

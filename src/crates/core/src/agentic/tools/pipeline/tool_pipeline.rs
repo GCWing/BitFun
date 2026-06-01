@@ -1624,9 +1624,6 @@ mod tests {
         );
         task.context
             .context_vars
-            .insert("write_tool_mode".to_string(), "inline_content".to_string());
-        task.context
-            .context_vars
             .insert("acp_transport".to_string(), "true".to_string());
         task.context.collapsed_tools = vec!["WebFetch".to_string()];
         task.context.unlocked_collapsed_tools = vec!["WebFetch".to_string()];
@@ -1657,10 +1654,6 @@ mod tests {
         assert_eq!(
             context.custom_data["primary_model_supports_image_understanding"],
             json!(true)
-        );
-        assert_eq!(
-            context.custom_data["write_tool_mode"],
-            json!("inline_content")
         );
         assert_eq!(context.custom_data["acp_transport"], json!(true));
 

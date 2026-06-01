@@ -4467,10 +4467,6 @@ const requiredContentRules = [
         message: 'missing tool manifest description context materialization binding',
       },
       {
-        regex: /\bbuild_write_preflight_context\b/,
-        message: 'missing write preflight context materialization binding',
-      },
-      {
         regex: /\bensure_current_workspace_runtime\b/,
         message: 'missing workspace runtime ensure binding',
       },
@@ -4529,10 +4525,6 @@ const requiredContentRules = [
       {
         regex: /\btool_description_context_preserves_manifest_custom_data_shape\b/,
         message: 'missing tool description context regression',
-      },
-      {
-        regex: /\bwrite_preflight_context_preserves_minimal_runtime_fields\b/,
-        message: 'missing write preflight context regression',
       },
     ],
   },
@@ -7742,7 +7734,6 @@ function runManifestParserSelfTest() {
         'call_records_deep_review_read_file_measurement_without_touching_result',
         'build_tool_use_context_for_task',
         'build_tool_description_context',
-        'build_write_preflight_context',
         'ensure_current_workspace_runtime',
         'resolve_tool_path',
         'enforce_path_operation',
@@ -7752,7 +7743,6 @@ function runManifestParserSelfTest() {
         'tool_call_runtime_hook_returns_cancelled_before_impl_completes',
         'tool_task_context_materialization_preserves_runtime_fields',
         'tool_description_context_preserves_manifest_custom_data_shape',
-        'write_preflight_context_preserves_minimal_runtime_fields',
       ],
     },
     {

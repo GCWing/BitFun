@@ -174,8 +174,6 @@ export interface DefaultModelsConfig {
   fast?: string | null;
 }
 
-export type WriteToolMode = 'inline_content' | 'plaintext_followup';
-
 export interface AIConfig {
   models: AIModelConfig[];
   default_models: DefaultModelsConfig;
@@ -196,7 +194,6 @@ export interface AIConfig {
   tool_execution_timeout_secs?: number | null;
   tool_confirmation_timeout_secs?: number | null;
   skip_tool_confirmation?: boolean;
-  write_tool_mode?: WriteToolMode;
   computer_use_enabled?: boolean;
   browser_control_preferred_browser?: string;
 }

@@ -123,6 +123,42 @@ describe('processToolParamsPartialInternal', () => {
     expect(updatedTool.partialParams).toEqual(existingParams);
     expect(updatedTool.toolCall.input).toEqual(existingParams);
   });
+
+  it('injects file_path from write params buffer when content streams first', () => {
+    const tool: FlowToolItem = {
+      id: 'tool-1',
+      type: 'tool',
+      toolName: 'Write',
+      timestamp: 1001,
+      status: 'preparing',
+      toolCall: {
+        id: 'tool-1',
+        input: {},
+      },
+      isParamsStreaming: true,
+      partialParams: {},
+      _paramsBuffer: '',
+    };
+
+    FlowChatStore.getInstance().setState(() => ({
+      sessions: new Map([['session-1', createSessionWithTool(tool)]]),
+      activeSessionId: 'session-1',
+    }));
+
+    processToolParamsPartialInternal('session-1', 'turn-1', {
+      event_type: 'ParamsPartial',
+      tool_id: 'tool-1',
+      tool_name: 'Write',
+      params: '{"file_path":"src/app.ts","content":"const value = 1;',
+    });
+
+    const updatedTool = FlowChatStore.getInstance()
+      .findToolItem('session-1', 'turn-1', 'tool-1') as FlowToolItem;
+
+    expect(updatedTool.partialParams?.file_path).toBe('src/app.ts');
+    expect(updatedTool.partialParams?.content).toBe('const value = 1;');
+    expect(updatedTool.status).toBe('receiving');
+  });
 });
 
 describe('processToolEvent late Started event behavior', () => {

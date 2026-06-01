@@ -2961,8 +2961,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .unwrap_or(false)
         {
             skill_agent_context_vars.insert("acp_transport".to_string(), "true".to_string());
-            skill_agent_context_vars
-                .insert("write_tool_mode".to_string(), "inline_content".to_string());
         }
 
         let wrapped_user_input_payload = self

@@ -203,10 +203,6 @@ impl StreamProcessError {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct StreamProcessOptions {
     pub recover_partial_on_cancel: bool,
-    /// When true, Write tool-call JSON is sanitized to `file_path` only during
-    /// streaming and finalization. Inline `content` must never reach the UI or
-    /// downstream execution in PlaintextFollowup mode.
-    pub strip_write_inline_content: bool,
 }
 
 /// Stream processing context, encapsulates state during stream processing
@@ -245,7 +241,7 @@ impl StreamContext {
         session_id: String,
         dialog_turn_id: String,
         round_id: String,
-        options: StreamProcessOptions,
+        _options: StreamProcessOptions,
     ) -> Self {
         Self {
             session_id,
@@ -258,7 +254,7 @@ impl StreamContext {
             tool_calls: Vec::new(),
             usage: None,
             provider_metadata: None,
-            pending_tool_calls: PendingToolCalls::new(options.strip_write_inline_content),
+            pending_tool_calls: PendingToolCalls::new(),
             finalized_tool_call_ids: HashSet::new(),
             stream_started_at: Instant::now(),
             first_chunk_ms: None,

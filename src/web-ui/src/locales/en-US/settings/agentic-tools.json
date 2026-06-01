@@ -18,14 +18,6 @@
     "confirmTimeoutDesc": "Maximum time (seconds) to wait for user confirmation of tool calls.",
     "executionTimeout": "Execution Timeout",
     "executionTimeoutDesc": "Maximum time (seconds) for tool execution, including Task subagent runs.",
-    "writeToolMode": "Write Tool Mode",
-    "writeToolModeDesc": "Choose whether the Write tool sends file content inline or generates it in a separate follow-up step. ACP sessions always use inline content.",
-    "writeToolModeOptions": {
-      "plaintextFollowup": "Plaintext follow-up",
-      "plaintextFollowupDesc": "Expose only file_path to the model, then generate the full file body in a second step.",
-      "inlineContent": "Inline content",
-      "inlineContentDesc": "Expose both file_path and content so the model sends the full file body in one tool call."
-    },
     "seconds": "sec"
   },
   "filters": {

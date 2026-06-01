@@ -234,30 +234,6 @@ pub(crate) fn build_tool_description_context(
     }
 }
 
-pub(crate) fn build_write_preflight_context(
-    agent_type: &str,
-    session_id: &str,
-    dialog_turn_id: &str,
-    workspace: Option<WorkspaceBinding>,
-    unlocked_collapsed_tools: Vec<String>,
-    runtime_tool_restrictions: ToolRuntimeRestrictions,
-    workspace_services: Option<WorkspaceServices>,
-) -> ToolUseContext {
-    ToolUseContext {
-        tool_call_id: None,
-        agent_type: Some(agent_type.to_string()),
-        session_id: Some(session_id.to_string()),
-        dialog_turn_id: Some(dialog_turn_id.to_string()),
-        workspace,
-        unlocked_collapsed_tools,
-        custom_data: HashMap::new(),
-        computer_use_host: None,
-        cancellation_token: None,
-        runtime_tool_restrictions,
-        workspace_services,
-    }
-}
-
 fn build_tool_context_custom_data(context: &ToolExecutionContext) -> HashMap<String, Value> {
     let mut map = HashMap::new();
 
@@ -292,14 +268,6 @@ fn build_tool_context_custom_data(context: &ToolExecutionContext) -> HashMap<Str
             map.insert(
                 "primary_model_supports_image_understanding".to_string(),
                 serde_json::json!(flag),
-            );
-        }
-    }
-    if let Some(write_tool_mode) = context.context_vars.get("write_tool_mode") {
-        if !write_tool_mode.is_empty() {
-            map.insert(
-                "write_tool_mode".to_string(),
-                serde_json::json!(write_tool_mode),
             );
         }
     }
@@ -1242,15 +1210,13 @@ mod call_runtime_tests {
 
 #[cfg(test)]
 mod context_builder_tests {
-    use super::{build_tool_description_context, build_write_preflight_context};
-    use crate::agentic::tools::ToolRuntimeRestrictions;
+    use super::build_tool_description_context;
     use serde_json::json;
-    use std::collections::{BTreeSet, HashMap};
+    use std::collections::HashMap;
 
     #[test]
     fn tool_description_context_preserves_manifest_custom_data_shape() {
         let mut context_vars = HashMap::new();
-        context_vars.insert("write_tool_mode".to_string(), "inline_content".to_string());
         context_vars.insert(
             "primary_model_supports_image_understanding".to_string(),
             "false".to_string(),
@@ -1271,42 +1237,8 @@ mod context_builder_tests {
             context.custom_data["primary_model_supports_image_understanding"],
             json!("false")
         );
-        assert_eq!(
-            context.custom_data["write_tool_mode"],
-            json!("inline_content")
-        );
     }
 
-    #[test]
-    fn write_preflight_context_preserves_minimal_runtime_fields() {
-        let restrictions = ToolRuntimeRestrictions {
-            allowed_tool_names: BTreeSet::from(["Write".to_string()]),
-            denied_tool_names: BTreeSet::from(["Delete".to_string()]),
-            denied_tool_messages: Default::default(),
-            path_policy: Default::default(),
-        };
-
-        let context = build_write_preflight_context(
-            "coding",
-            "session-1",
-            "turn-1",
-            None,
-            vec!["Write".to_string()],
-            restrictions,
-            None,
-        );
-
-        assert_eq!(context.agent_type.as_deref(), Some("coding"));
-        assert_eq!(context.session_id.as_deref(), Some("session-1"));
-        assert_eq!(context.dialog_turn_id.as_deref(), Some("turn-1"));
-        assert_eq!(context.unlocked_collapsed_tools, vec!["Write"]);
-        assert!(context.tool_call_id.is_none());
-        assert!(context.custom_data.is_empty());
-        assert!(context.cancellation_token.is_none());
-        assert!(context.workspace_services.is_none());
-        assert!(context.runtime_tool_restrictions.is_tool_allowed("Write"));
-        assert!(!context.runtime_tool_restrictions.is_tool_allowed("Delete"));
-    }
 }
 
 #[cfg(test)]
@@ -1330,7 +1262,6 @@ mod task_context_tests {
             "primary_model_supports_image_understanding".to_string(),
             "true".to_string(),
         );
-        context_vars.insert("write_tool_mode".to_string(), "inline_content".to_string());
         context_vars.insert("acp_transport".to_string(), "true".to_string());
         context_vars.insert(
             "deep_review_run_manifest".to_string(),
@@ -1407,10 +1338,6 @@ mod task_context_tests {
         assert_eq!(
             context.custom_data["primary_model_supports_image_understanding"],
             json!(true)
-        );
-        assert_eq!(
-            context.custom_data["write_tool_mode"],
-            json!("inline_content")
         );
         assert_eq!(context.custom_data["acp_transport"], json!(true));
         assert_eq!(

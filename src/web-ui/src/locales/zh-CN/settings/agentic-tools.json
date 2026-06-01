@@ -18,14 +18,6 @@
     "confirmTimeoutDesc": "等待用户确认工具调用的最长时间（秒）。",
     "executionTimeout": "执行超时",
     "executionTimeoutDesc": "工具执行的最长时间（秒），包含 Task 子智能体运行时长。",
-    "writeToolMode": "Write 工具模式",
-    "writeToolModeDesc": "选择 Write 工具以内联方式直接携带文件内容，还是通过单独的后续步骤生成完整文件内容。ACP 会话始终使用内联内容。",
-    "writeToolModeOptions": {
-      "plaintextFollowup": "纯文本后续生成",
-      "plaintextFollowupDesc": "只向模型暴露 file_path，再通过第二步生成完整文件内容。",
-      "inlineContent": "内联内容",
-      "inlineContentDesc": "向模型同时暴露 file_path 和 content，在一次工具调用中直接提交完整文件内容。"
-    },
     "seconds": "秒"
   },
   "filters": {

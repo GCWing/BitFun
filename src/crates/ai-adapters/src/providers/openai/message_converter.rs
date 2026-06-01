@@ -580,20 +580,20 @@ mod tests {
     #[test]
     fn trims_trailing_whitespace_from_final_assistant_prefill_for_chat_completions() {
         let openai = OpenAIMessageConverter::convert_messages(vec![
-            Message::user("Generate the file content.".to_string()),
-            Message::assistant("<bitfun_contents>\n".to_string()),
+            Message::user("Continue the assistant response.".to_string()),
+            Message::assistant("<assistant_prefill>\n".to_string()),
         ]);
 
-        assert_eq!(openai[1]["content"], json!("<bitfun_contents>"));
+        assert_eq!(openai[1]["content"], json!("<assistant_prefill>"));
     }
 
     #[test]
     fn trims_trailing_whitespace_from_final_assistant_prefill_for_responses() {
         let (_, input) = OpenAIMessageConverter::convert_messages_to_responses_input(vec![
-            Message::user("Generate the file content.".to_string()),
-            Message::assistant("<bitfun_contents>\n".to_string()),
+            Message::user("Continue the assistant response.".to_string()),
+            Message::assistant("<assistant_prefill>\n".to_string()),
         ]);
 
-        assert_eq!(input[1]["content"][0]["text"], json!("<bitfun_contents>"));
+        assert_eq!(input[1]["content"][0]["text"], json!("<assistant_prefill>"));
     }
 }

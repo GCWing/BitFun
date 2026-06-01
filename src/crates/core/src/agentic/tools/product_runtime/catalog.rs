@@ -423,11 +423,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn product_manifest_write_schema_omits_content_in_plaintext_followup_mode() {
-        let mut context = tool_context(Some("test-agent"));
-        context
-            .custom_data
-            .insert("write_tool_mode".to_string(), json!("plaintext_followup"));
+    async fn product_manifest_write_schema_requires_content() {
+        let context = tool_context(Some("test-agent"));
 
         let manifest = resolve_product_resolved_tool_manifest(
             &["Write".to_string()],
@@ -442,11 +439,9 @@ mod tests {
             .find(|tool| tool.name == "Write")
             .expect("Write definition should exist");
 
-        assert_eq!(write.parameters["required"], json!(["file_path"]));
-        assert!(write.parameters["properties"].get("content").is_none());
-        assert!(!write
-            .description
-            .contains("Include the complete file content"));
+        assert_eq!(write.parameters["required"], json!(["file_path", "content"]));
+        assert!(write.parameters["properties"].get("content").is_some());
+        assert!(write.description.contains("Read tool first"));
     }
 
     #[tokio::test]

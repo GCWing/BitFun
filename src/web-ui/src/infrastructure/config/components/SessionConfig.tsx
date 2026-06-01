@@ -28,7 +28,7 @@ import {
 import { configManager } from '../services/ConfigManager';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { useNotification, notificationService } from '@/shared/notification-system';
-import type { AIModelConfig, DebugModeConfig, LanguageDebugTemplate, WriteToolMode } from '../types';
+import type { AIModelConfig, DebugModeConfig, LanguageDebugTemplate } from '../types';
 import {
   LANGUAGE_TEMPLATE_LABELS,
   DEFAULT_DEBUG_MODE_CONFIG,
@@ -94,7 +94,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
   const [models, setModels] = useState<AIModelConfig[]>([]);
   const [funcAgentModels, setFuncAgentModels] = useState<Record<string, string>>({});
   const [skipToolConfirmation, setSkipToolConfirmation] = useState(true);
-  const [writeToolMode, setWriteToolMode] = useState<WriteToolMode>('plaintext_followup');
   const [executionTimeout, setExecutionTimeout] = useState('');
   const [confirmationTimeout, setConfirmationTimeout] = useState('');
   const [toolExecConfigLoading, setToolExecConfigLoading] = useState(false);
@@ -194,7 +193,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         allModels,
         funcAgentModelsData,
         skipConfirm,
-        writeToolModeConfig,
         execTimeout,
         confirmTimeout,
         debugConfigData,
@@ -206,7 +204,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         configManager.getConfig<AIModelConfig[]>('ai.models') || [],
         configManager.getConfig<Record<string, string>>('ai.func_agent_models') || {},
         configManager.getConfig<boolean>('ai.skip_tool_confirmation'),
-        configManager.getConfig<WriteToolMode>('ai.write_tool_mode'),
         configManager.getConfig<number | null>('ai.tool_execution_timeout_secs'),
         configManager.getConfig<number | null>('ai.tool_confirmation_timeout_secs'),
         configManager.getConfig<DebugModeConfig>('ai.debug_mode_config'),
@@ -220,7 +217,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
       setModels(allModels as AIModelConfig[]);
       setFuncAgentModels(funcAgentModelsData as Record<string, string>);
       setSkipToolConfirmation(skipConfirm ?? true);
-      setWriteToolMode(writeToolModeConfig === 'inline_content' ? 'inline_content' : 'plaintext_followup');
       setExecutionTimeout(execTimeout != null ? String(execTimeout) : '');
       setConfirmationTimeout(confirmTimeout != null ? String(confirmTimeout) : '');
       if (debugConfigData) setDebugConfig(debugConfigData);
@@ -444,30 +440,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
       setComputerUseEnabled(!checked);
     } finally {
       setComputerUseBusy(false);
-    }
-  };
-
-  const handleWriteToolModeChange = async (value: string | number | (string | number)[]) => {
-    const nextValue = String(Array.isArray(value) ? value[0] : value);
-    const normalizedValue: WriteToolMode =
-      nextValue === 'inline_content' ? 'inline_content' : 'plaintext_followup';
-    const previousValue = writeToolMode;
-
-    setWriteToolMode(normalizedValue);
-    setToolExecConfigLoading(true);
-    try {
-      await configManager.setConfig('ai.write_tool_mode', normalizedValue);
-      const { globalEventBus } = await import('@/infrastructure/event-bus');
-      globalEventBus.emit('mode:config:updated');
-      notificationService.success(t('messages.saveSuccess'), { duration: 2000 });
-    } catch (error) {
-      log.error('Failed to save write_tool_mode', error);
-      notificationService.error(
-        `${tTools('messages.saveFailed')}: ` + (error instanceof Error ? error.message : String(error))
-      );
-      setWriteToolMode(previousValue);
-    } finally {
-      setToolExecConfigLoading(false);
     }
   };
 
@@ -734,18 +706,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
     label: option.installed ? option.label : `${option.label} (${t('browserControl.notInstalled')})`,
     disabled: !option.installed,
   }));
-  const writeToolModeOptions: SelectOption[] = [
-    {
-      value: 'plaintext_followup',
-      label: tTools('config.writeToolModeOptions.plaintextFollowup'),
-      description: tTools('config.writeToolModeOptions.plaintextFollowupDesc'),
-    },
-    {
-      value: 'inline_content',
-      label: tTools('config.writeToolModeOptions.inlineContent'),
-      description: tTools('config.writeToolModeOptions.inlineContentDesc'),
-    },
-  ];
 
   const pageTitle = variant === 'personalization'
     ? t('personalizationPage.title')
@@ -1055,19 +1015,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
                 unit={tTools('config.seconds')}
                 size="small"
                 variant="compact"
-              />
-            </div>
-          </ConfigPageRow>
-          <ConfigPageRow label={tTools('config.writeToolMode')} description={tTools('config.writeToolModeDesc')} align="center">
-            <div className="bitfun-func-agent-config__row-control">
-              <Select
-                size="small"
-                options={writeToolModeOptions}
-                value={writeToolMode}
-                disabled={toolExecConfigLoading}
-                onChange={(value) => {
-                  void handleWriteToolModeChange(value);
-                }}
               />
             </div>
           </ConfigPageRow>

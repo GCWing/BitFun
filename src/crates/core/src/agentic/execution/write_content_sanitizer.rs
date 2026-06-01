@@ -1,4 +1,4 @@
-//! Sanitization and validation for Write tool file-body generation.
+//! Sanitization and validation for inline Write tool `content` arguments.
 
 /// Returns true when the model output looks like a tool invocation instead of
 /// raw file content (DSML blocks, nested tool_call XML, function_call JSON, etc.).
@@ -35,7 +35,7 @@ pub fn contains_tool_invocation_artifacts(content: &str) -> bool {
 
 /// Best-effort removal of tool-invocation wrappers that sometimes appear before
 /// the real file body. When the entire payload is tool syntax, this returns an
-/// empty string and callers should treat that as a generation failure.
+/// empty string and callers should treat that as invalid file content.
 pub fn strip_tool_invocation_artifacts(content: &str) -> String {
     let mut result = content.to_string();
 

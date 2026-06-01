@@ -1136,6 +1136,7 @@
       "guidanceHint": " hint",
       "guidanceTitle": "Hint",
       "parsingPath": "Parsing file path...",
+      "receivingContent": "Receiving file content...",
       "unknownFile": "Unknown file",
       "receivingParams": "Receiving parameters...",
       "analyzing": "Analyzing...",

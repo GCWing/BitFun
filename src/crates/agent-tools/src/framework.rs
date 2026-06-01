@@ -695,7 +695,7 @@ where
     /// Acceptable variation:
     /// - Remote vs local workspace, which changes at session start and then stays stable.
     /// - Model capability flags such as vision support, which are stable per session.
-    /// - User-initiated config changes such as theme or write-tool mode.
+    /// - User-initiated config changes such as theme or locale.
     ///
     /// Forbidden variation:
     /// - Timestamps, request IDs, UUIDs, or any non-deterministic data.

@@ -105,7 +105,7 @@ fn tool_call_update(tool_event: &ToolEventData) -> Option<ToolCallUpdate> {
                         .raw_input(sanitize_tool_input(tool_name, value.clone()))
                         .content(vec![text_content(write_input_status_text(&value))]),
                     Err(_) => fields.content(vec![text_content(format!(
-                        "Receiving Write input ({} bytes).",
+                        "Writing file ({} bytes received so far).",
                         params.len()
                     ))]),
                 }
@@ -333,13 +333,14 @@ fn write_input_status_text(input: &serde_json::Value) -> String {
         .unwrap_or("file");
     let content_len = input
         .get("content")
+        // Legacy alias kept for replaying older Write tool-call transcripts.
         .or_else(|| input.get("contents"))
         .and_then(|value| value.as_str())
         .map(str::len)
         .unwrap_or(0);
 
     format!(
-        "Receiving Write content for {} ({} bytes).",
+        "Writing {} ({} bytes).",
         path, content_len
     )
 }

@@ -112,20 +112,6 @@ impl AIClient {
         }
     }
 
-    /// Provider-specific request overrides for PlaintextFollowup Write content generation.
-    ///
-    /// OpenAI-compatible APIs accept `tool_choice: "none"` to suppress tool calls when
-    /// history still contains prior tool turns. Anthropic/Gemini reject that field.
-    pub fn write_content_generation_extra_body(&self) -> Option<serde_json::Value> {
-        match ApiFormat::parse(&self.config.format) {
-            Ok(ApiFormat::OpenAIChat | ApiFormat::OpenAIResponses) => {
-                Some(serde_json::json!({ "tool_choice": "none" }))
-            }
-            Ok(ApiFormat::Anthropic | ApiFormat::Gemini | ApiFormat::GeminiCodeAssist) => None,
-            Err(_) => None,
-        }
-    }
-
     pub async fn send_message_stream(
         &self,
         messages: Vec<Message>,
@@ -1314,18 +1300,4 @@ mod tests {
         }
     }
 
-    #[test]
-    fn write_content_generation_extra_body_is_openai_only() {
-        let openai = make_test_client("openai", None);
-        assert_eq!(
-            openai.write_content_generation_extra_body(),
-            Some(json!({ "tool_choice": "none" }))
-        );
-
-        let anthropic = make_test_client("anthropic", None);
-        assert_eq!(anthropic.write_content_generation_extra_body(), None);
-
-        let gemini = make_test_client("gemini", None);
-        assert_eq!(gemini.write_content_generation_extra_body(), None);
-    }
 }

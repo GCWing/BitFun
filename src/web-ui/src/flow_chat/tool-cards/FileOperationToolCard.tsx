@@ -54,6 +54,7 @@ import {
   displayFileToolGuidanceMessage,
   isFileToolGuidanceMessage,
 } from './fileToolGuidance';
+import { extractFilePathFromJsonBuffer } from '@/shared/utils/partialJsonParser';
 import { i18nService } from '@/infrastructure/i18n';
 import './FileOperationToolCard.scss';
 
@@ -177,8 +178,8 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
       'targetFile',
       'path',
       'filename',
-    ]);
-  }, [toolCall, partialParams, toolResult]);
+    ]) || extractFilePathFromJsonBuffer(toolItem._paramsBuffer || '');
+  }, [toolCall, partialParams, toolResult, toolItem._paramsBuffer]);
 
   const currentFilePath = getFilePath();
   const openFilePath = useMemo(
@@ -239,9 +240,18 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     status !== 'error'
   );
   
-  const fileName = currentFilePath ? 
-    (currentFilePath.split(/[/\\]/).pop() || t('context.file')) : 
-    (isFailed ? t('toolCards.file.unknownFile') : t('toolCards.file.parsingPath'));
+  const isWriteStreamingWithoutPath =
+    toolItem.toolName === 'Write'
+    && !currentFilePath
+    && Boolean(isParamsStreaming)
+    && (writeContentCharCount > 0 || status === 'receiving');
+
+  const fileName = currentFilePath ?
+    (currentFilePath.split(/[/\\]/).pop() || t('context.file')) :
+    (isFailed ? t('toolCards.file.unknownFile') :
+      (isWriteStreamingWithoutPath
+        ? t('toolCards.file.receivingContent')
+        : t('toolCards.file.parsingPath')));
   
   const currentFile = files.find(f => f.filePath === currentFilePath);
 

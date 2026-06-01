@@ -1136,6 +1136,7 @@
       "guidanceHint": "提示",
       "guidanceTitle": "提示",
       "parsingPath": "解析文件路径中...",
+      "receivingContent": "接收文件内容中...",
       "unknownFile": "未知文件",
       "receivingParams": "接收参数中...",
       "analyzing": "分析中...",

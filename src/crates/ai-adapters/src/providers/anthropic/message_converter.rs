@@ -292,8 +292,8 @@ mod tests {
     #[test]
     fn trims_trailing_whitespace_from_final_assistant_prefill() {
         let (_, messages) = AnthropicMessageConverter::convert_messages(vec![
-            Message::user("Generate the file content.".to_string()),
-            Message::assistant("<bitfun_contents>\n".to_string()),
+            Message::user("Continue the assistant response.".to_string()),
+            Message::assistant("<assistant_prefill>\n".to_string()),
         ]);
 
         let content = messages
@@ -304,6 +304,6 @@ mod tests {
             .expect("assistant content");
 
         assert_eq!(content[0]["type"], json!("text"));
-        assert_eq!(content[0]["text"], json!("<bitfun_contents>"));
+        assert_eq!(content[0]["text"], json!("<assistant_prefill>"));
     }
 }

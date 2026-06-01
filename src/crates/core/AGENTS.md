@@ -73,7 +73,7 @@ SessionManager → Session → DialogTurn → ModelRound
   runtime/service bindings centralized in
   `src/agentic/tools/tool_context_runtime.rs`. `framework.rs` should only keep
   the tool trait and compatibility re-export, not own context shape, workspace
-  runtime lookup, path enforcement, pipeline/description/preflight context
+  runtime lookup, path enforcement, pipeline/description context
   materialization, cancellation wrapping, post-call hooks, or checkpoint
   collection.
 - Core runtime/adapter modules that need `ToolUseContext` should import it from

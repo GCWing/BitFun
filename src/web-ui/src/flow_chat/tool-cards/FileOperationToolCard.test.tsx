@@ -478,6 +478,49 @@ describe('FileOperationToolCard', () => {
     expect(container.querySelector('.file-operation-card--guidance')).not.toBeNull();
   });
 
+  it('shows receiving content label while write content streams before file_path', async () => {
+    const toolItem: FlowToolItem = {
+      id: 'tool-1',
+      type: 'tool',
+      toolName: 'Write',
+      status: 'receiving',
+      isParamsStreaming: true,
+      toolCall: {
+        id: 'call-1',
+        name: 'Write',
+        input: {
+          content: 'const value = 1;',
+        },
+      },
+      partialParams: {
+        content: 'const value = 1;',
+      },
+    } as FlowToolItem;
+
+    const config: ToolCardConfig = {
+      toolName: 'Write',
+      displayName: 'Write',
+      icon: 'WRITE',
+      requiresConfirmation: false,
+      resultDisplayType: 'detailed',
+      description: 'Write a file',
+      displayMode: 'standard',
+    };
+
+    await act(async () => {
+      root.render(
+        <FileOperationToolCard
+          toolItem={toolItem}
+          config={config}
+          sessionId="session-1"
+        />
+      );
+    });
+
+    expect(container.textContent).toContain('toolCards.file.receivingContent');
+    expect(container.textContent).not.toContain('toolCards.file.parsingPath');
+  });
+
   it('disables nested code-preview autoscroll while write content is streaming', async () => {
     const toolItem: FlowToolItem = {
       id: 'tool-1',
