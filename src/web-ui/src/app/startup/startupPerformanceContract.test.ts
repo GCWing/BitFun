@@ -7,6 +7,37 @@ function readSource(relativePath: string): string {
 }
 
 describe('startup performance contract', () => {
+  it('keeps the pre-React startup fallback logo-only', () => {
+    const source = readSource('../../../index.html');
+
+    expect(source).toContain('<link rel="icon" type="image/png" href="/Logo-ICON-128.png" />');
+    expect(source).not.toContain('rel="preload" as="image"');
+    expect(source).toContain('class="bitfun-preload__logo"');
+    expect(source).toContain('src="/Logo-ICON-128.png"');
+    expect(source).toContain('fetchpriority="low"');
+    expect(source).not.toContain('Loading workspace...');
+    expect(source).not.toContain('bitfun-preload__spinner');
+    expect(source).not.toContain('aria-live="polite"');
+
+    expect(source.indexOf('<script type="module" src="/src/main.tsx"></script>')).toBeLessThan(
+      source.indexOf('class="bitfun-preload__logo"'),
+    );
+  });
+
+  it('keeps the startup logo asset transparent without the desktop icon backing plate', async () => {
+    const { default: sharp } = await import('sharp');
+    const assetPath = fileURLToPath(new URL('../../../public/Logo-ICON-128.png', import.meta.url));
+    const { data, info } = await sharp(assetPath).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const alphaAt = (x: number, y: number): number => data[(y * info.width + x) * info.channels + 3] ?? 0;
+
+    expect(info.width).toBe(128);
+    expect(info.height).toBe(128);
+    expect(alphaAt(8, 8)).toBe(0);
+    expect(alphaAt(12, 12)).toBe(0);
+    expect(alphaAt(20, 20)).toBe(0);
+    expect(alphaAt(64, 64)).toBeGreaterThan(240);
+  });
+
   it('keeps editor and tool infrastructure out of the first startup module', () => {
     const source = readSource('../../main.tsx');
 

@@ -41,18 +41,18 @@ describe('SplashScreen', () => {
       );
     });
 
-    const message = container.querySelector('.splash-screen__message');
-    expect(message?.textContent).toBe('Loading workspace...');
-    expect(message?.classList.contains('splash-screen__message--visible')).toBe(false);
+    expect(container.querySelector('.splash-screen__message')).toBeNull();
 
     act(() => {
       vi.advanceTimersByTime(999);
     });
-    expect(message?.classList.contains('splash-screen__message--visible')).toBe(false);
+    expect(container.querySelector('.splash-screen__message')).toBeNull();
 
     act(() => {
       vi.advanceTimersByTime(1);
     });
+    const message = container.querySelector('.splash-screen__message');
+    expect(message?.textContent).toBe('Loading workspace...');
     expect(message?.classList.contains('splash-screen__message--visible')).toBe(true);
   });
 
@@ -67,17 +67,17 @@ describe('SplashScreen', () => {
       );
     });
 
-    const message = container.querySelector('.splash-screen__message');
-    expect(message?.classList.contains('splash-screen__message--visible')).toBe(false);
+    expect(container.querySelector('.splash-screen__message')).toBeNull();
 
     act(() => {
       vi.advanceTimersByTime(1799);
     });
-    expect(message?.classList.contains('splash-screen__message--visible')).toBe(false);
+    expect(container.querySelector('.splash-screen__message')).toBeNull();
 
     act(() => {
       vi.advanceTimersByTime(1);
     });
+    const message = container.querySelector('.splash-screen__message');
     expect(message?.classList.contains('splash-screen__message--visible')).toBe(true);
   });
 
@@ -97,7 +97,6 @@ describe('SplashScreen', () => {
       vi.advanceTimersByTime(1000);
     });
 
-    const message = container.querySelector('.splash-screen__message');
-    expect(message?.classList.contains('splash-screen__message--visible')).toBe(false);
+    expect(container.querySelector('.splash-screen__message')).toBeNull();
   });
 });

@@ -2,7 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/Logo-ICON.png" />
+    <link rel="icon" type="image/png" href="/Logo-ICON-128.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" href="/fonts/fonts.css" />
     <title>BitFun - AI Code Assistant</title>
@@ -66,43 +66,32 @@
         align-items: center;
         justify-content: center;
         background: var(--bitfun-startup-bg, inherit);
-        color: rgba(143, 143, 153, 0.92);
-        font-family: "Noto Sans SC", "Inter", "Segoe UI", system-ui, sans-serif;
-        font-size: 13px;
       }
 
-      .bitfun-preload__content {
-        display: inline-flex;
-        align-items: center;
-        gap: 10px;
-      }
-
-      .bitfun-preload__spinner {
-        width: 14px;
-        height: 14px;
-        border: 2px solid rgba(143, 143, 153, 0.24);
-        border-top-color: rgba(143, 143, 153, 0.9);
-        border-radius: 50%;
-        animation: bitfun-preload-spin 0.8s linear infinite;
-      }
-
-      @keyframes bitfun-preload-spin {
-        to {
-          transform: rotate(360deg);
-        }
+      .bitfun-preload__logo {
+        display: block;
+        width: 96px;
+        height: 96px;
+        border-radius: 12px;
+        user-select: none;
+        -webkit-user-select: none;
       }
     </style>
   </head>
 
   <body>
+    <script type="module" src="/src/main.tsx"></script>
     <div id="root">
-      <div class="bitfun-preload" aria-live="polite">
-        <div class="bitfun-preload__content">
-          <span class="bitfun-preload__spinner" aria-hidden="true"></span>
-          <span>Loading workspace...</span>
-        </div>
+      <div class="bitfun-preload" aria-hidden="true">
+        <img
+          src="/Logo-ICON-128.png"
+          alt=""
+          class="bitfun-preload__logo"
+          draggable="false"
+          decoding="async"
+          fetchpriority="low"
+        />
       </div>
     </div>
-    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

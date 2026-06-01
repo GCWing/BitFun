@@ -56,15 +56,16 @@ const SplashScreen: React.FC<SplashScreenProps> = ({
       <div className="splash-screen__center">
         <div className="splash-screen__logo-wrap">
           <img
-            src="/Logo-ICON.png"
+            src="/Logo-ICON-128.png"
             alt="BitFun"
             className="splash-screen__logo"
             draggable={false}
+            decoding="async"
           />
         </div>
-        {delayedMessage && (
+        {showDelayedMessage && delayedMessage && !isExiting && (
           <div
-            className={`splash-screen__message${showDelayedMessage ? ' splash-screen__message--visible' : ''}`}
+            className="splash-screen__message splash-screen__message--visible"
             role="status"
             aria-live="polite"
           >
