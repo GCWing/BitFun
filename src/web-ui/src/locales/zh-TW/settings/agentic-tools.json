@@ -18,7 +18,7 @@
     "confirmTimeoutDesc": "等待用戶確認工具調用的最長時間（秒）。",
     "executionTimeout": "執行超時",
     "executionTimeoutDesc": "工具執行的最長時間（秒），包含 Task 子智能體執行時長。",
-    "writeToolMode": "Write 工具模式",
+    "writeToolMode": "Write 工具運作模式",
     "writeToolModeDesc": "選擇 Write 工具以內聯方式直接攜帶檔案內容，還是透過單獨的後續步驟生成完整檔案內容。ACP 會話始終使用內聯內容。",
     "writeToolModeOptions": {
       "plaintextFollowup": "純文字後續生成",
