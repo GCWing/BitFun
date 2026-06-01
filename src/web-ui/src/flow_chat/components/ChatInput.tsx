@@ -304,6 +304,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [isMultiLine, setIsMultiLine] = useState(false);
   // showPlaceholder is true when the editor DOM is truly empty (value empty AND no residual <br>)
   const [showPlaceholder, setShowPlaceholder] = useState(true);
+  const liveCapsuleInputWidthRef = useRef<number | null>(null);
+  const lockedCapsuleInputWidthRef = useRef<number | null>(null);
+  const collapseVerificationRafRef = useRef<number | null>(null);
+  const layoutMeasurementRafRef = useRef<number | null>(null);
+  const measureIsMultiLineRef = useRef<
+    ((source?: 'value-effect' | 'mutation-observer' | 'collapse-confirmation' | 'layout-change') => void) | null
+  >(null);
 
   const checkDomEmpty = useCallback(() => {
     const el = richTextInputRef.current;
@@ -316,9 +323,68 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     setShowPlaceholder(isEmpty);
   }, []);
 
+  const measureCapsuleInputWidth = useCallback((): number | null => {
+    const containerEl = containerRef.current;
+    const editorEl = richTextInputRef.current;
+    const boxEl = editorEl?.closest('.bitfun-chat-input__box') as HTMLElement | null;
+
+    if (!containerEl || !boxEl) {
+      return null;
+    }
+
+    const clone = containerEl.cloneNode(true) as HTMLElement;
+    clone.style.position = 'fixed';
+    clone.style.left = '-100000px';
+    clone.style.top = '0';
+    clone.style.visibility = 'hidden';
+    clone.style.pointerEvents = 'none';
+    clone.style.width = `${containerEl.getBoundingClientRect().width}px`;
+    clone.classList.add('bitfun-chat-input--capsule');
+    clone.classList.remove('bitfun-chat-input--multi-line');
+
+    const cloneBoxEl = clone.querySelector('.bitfun-chat-input__box') as HTMLElement | null;
+    const cloneInputAreaEl = clone.querySelector('.bitfun-chat-input__input-area') as HTMLElement | null;
+
+    if (cloneBoxEl) {
+      cloneBoxEl.classList.add('bitfun-chat-input__box--capsule');
+      cloneBoxEl.classList.remove('bitfun-chat-input__box--multi-line');
+    }
+
+    document.body.appendChild(clone);
+    const measuredWidth = cloneInputAreaEl
+      ? Math.max(80, Math.floor(cloneInputAreaEl.getBoundingClientRect().width))
+      : null;
+    clone.remove();
+
+    return measuredWidth;
+  }, []);
+
+  const refreshCapsuleInputWidth = useCallback((remeasureText: boolean) => {
+    const measuredWidth = measureCapsuleInputWidth();
+    if (measuredWidth == null) {
+      return;
+    }
+
+    const previousWidth = liveCapsuleInputWidthRef.current;
+    liveCapsuleInputWidthRef.current = measuredWidth;
+
+    if (!remeasureText || previousWidth === measuredWidth) {
+      return;
+    }
+
+    if (layoutMeasurementRafRef.current !== null) {
+      cancelAnimationFrame(layoutMeasurementRafRef.current);
+    }
+    layoutMeasurementRafRef.current = requestAnimationFrame(() => {
+      layoutMeasurementRafRef.current = null;
+      measureIsMultiLineRef.current?.('layout-change');
+      checkDomEmpty();
+    });
+  }, [checkDomEmpty, measureCapsuleInputWidth]);
+
   // Shared measurement: temporarily unconstrain the editor and use the capsule input
   // width so the result is consistent between capsule ↔ multi-line transitions.
-  const measureIsMultiLine = useCallback(() => {
+  const measureIsMultiLine = useCallback((source: 'value-effect' | 'mutation-observer' | 'collapse-confirmation' | 'layout-change' = 'value-effect') => {
     const hasNewline = inputState.value.includes('\n');
     const hasImages = imageContexts.length > 0;
     if (hasNewline || hasImages) {
@@ -330,31 +396,89 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       setIsMultiLine(false);
       return;
     }
-    // Capsule input width ≈ box width minus Plus-area (~36px) and right-actions (~140px)
+    // Measure against the live constrained input width in capsule mode.
+    // A fixed boxWidth-minus-constant estimate drifts when the right-side
+    // controls grow (for example with longer model labels), causing false
+    // "single-line" results for text that already wraps in the real editor.
     const boxEl = el.closest('.bitfun-chat-input__box') as HTMLElement | null;
+    const actionsLeftEl = boxEl?.querySelector('.bitfun-chat-input__actions-left') as HTMLElement | null;
+    const actionsRightEl = boxEl?.querySelector('.bitfun-chat-input__actions-right') as HTMLElement | null;
     const boxWidth = boxEl?.offsetWidth ?? containerRef.current?.offsetWidth ?? 400;
-    const capsuleInputWidth = Math.max(80, boxWidth - 176);
-
+    const boxComputedStyle = boxEl ? window.getComputedStyle(boxEl) : null;
+    const boxPaddingLeft = boxComputedStyle ? parseFloat(boxComputedStyle.paddingLeft || '0') : 0;
+    const boxPaddingRight = boxComputedStyle ? parseFloat(boxComputedStyle.paddingRight || '0') : 0;
+    const boxBorderLeft = boxComputedStyle ? parseFloat(boxComputedStyle.borderLeftWidth || '0') : 0;
+    const boxBorderRight = boxComputedStyle ? parseFloat(boxComputedStyle.borderRightWidth || '0') : 0;
+    const boxContentWidth = Math.max(
+      80,
+      Math.floor((boxEl?.getBoundingClientRect().width ?? boxWidth) - boxPaddingLeft - boxPaddingRight - boxBorderLeft - boxBorderRight),
+    );
+    const actionsLeftWidth = actionsLeftEl?.getBoundingClientRect().width ?? 0;
+    const actionsRightWidth = actionsRightEl?.getBoundingClientRect().width ?? 0;
+    const derivedCapsuleCandidateWidth = Math.max(
+      80,
+      Math.floor(boxContentWidth - actionsLeftWidth - actionsRightWidth),
+    );
+    const stableCapsuleCandidateWidth = liveCapsuleInputWidthRef.current ?? measureCapsuleInputWidth() ?? derivedCapsuleCandidateWidth;
+    const previousLockedWidth = lockedCapsuleInputWidthRef.current;
+    const measurementWidth = Math.max(
+      80,
+      Math.floor(
+        isMultiLine
+          ? Math.min(previousLockedWidth ?? stableCapsuleCandidateWidth, stableCapsuleCandidateWidth)
+          : stableCapsuleCandidateWidth,
+      ),
+    );
     // Temporarily remove flex stretching + set capsule width to get the true content height.
     const prevFlex = el.style.flex;
     const prevMinH = el.style.minHeight;
     const prevWidth = el.style.width;
     el.style.flex = 'none';
     el.style.minHeight = '0';
-    el.style.width = `${capsuleInputWidth}px`;
-    const naturalHeight = el.scrollHeight;
+    el.style.width = `${measurementWidth}px`;
+    const naturalHeightMeasured = el.scrollHeight;
     el.style.flex = prevFlex;
     el.style.minHeight = prevMinH;
     el.style.width = prevWidth;
     // ~1.45 × 14px ≈ 20px per line; threshold of 32px means "needs > 1 line"
-    setIsMultiLine(naturalHeight > 32);
-  }, [inputState.value, imageContexts.length]);
+    const nextIsMultiLine = naturalHeightMeasured > 32;
+    const shouldVerifyCollapse =
+      isMultiLine &&
+      !nextIsMultiLine &&
+      source !== 'collapse-confirmation';
+    let nextLockedWidth: number | null;
+    if (nextIsMultiLine) {
+      nextLockedWidth =
+        previousLockedWidth == null
+          ? stableCapsuleCandidateWidth
+          : Math.min(previousLockedWidth, stableCapsuleCandidateWidth);
+      if (collapseVerificationRafRef.current !== null) {
+        cancelAnimationFrame(collapseVerificationRafRef.current);
+        collapseVerificationRafRef.current = null;
+      }
+    } else {
+      nextLockedWidth = null;
+    }
+    if (shouldVerifyCollapse) {
+      if (collapseVerificationRafRef.current !== null) {
+        cancelAnimationFrame(collapseVerificationRafRef.current);
+      }
+      collapseVerificationRafRef.current = requestAnimationFrame(() => {
+        collapseVerificationRafRef.current = null;
+        measureIsMultiLine('collapse-confirmation');
+      });
+      return;
+    }
+    lockedCapsuleInputWidthRef.current = nextLockedWidth;
+    setIsMultiLine(nextIsMultiLine);
+  }, [inputState.value, imageContexts.length, isMultiLine, measureCapsuleInputWidth]);
+  measureIsMultiLineRef.current = measureIsMultiLine;
 
   // Re-measure when value or image count changes (handles typing / deleting)
   useEffect(() => {
     // Defer one frame so RichTextInput has synced the new value to the contenteditable DOM.
     const rafId = requestAnimationFrame(() => {
-      measureIsMultiLine();
+      measureIsMultiLine('value-effect');
       checkDomEmpty();
     });
     return () => cancelAnimationFrame(rafId);
@@ -369,7 +493,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     let rafId: number;
     const observer = new MutationObserver(() => {
       rafId = requestAnimationFrame(() => {
-        measureIsMultiLine();
+        measureIsMultiLine('mutation-observer');
         checkDomEmpty();
       });
     });
@@ -380,6 +504,58 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     };
   // measureIsMultiLine / checkDomEmpty capture latest closure values
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const containerEl = containerRef.current;
+    const boxEl = containerEl?.querySelector('.bitfun-chat-input__box') as HTMLElement | null;
+    const actionsLeftEl = containerEl?.querySelector('.bitfun-chat-input__actions-left') as HTMLElement | null;
+    const actionsRightEl = containerEl?.querySelector('.bitfun-chat-input__actions-right') as HTMLElement | null;
+    const observedElements = [containerEl, boxEl, actionsLeftEl, actionsRightEl].filter(
+      (element): element is HTMLElement => !!element,
+    );
+
+    if (observedElements.length === 0) {
+      return;
+    }
+
+    let rafId: number | null = null;
+    const observer = new ResizeObserver(() => {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+      }
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        refreshCapsuleInputWidth(true);
+      });
+    });
+
+    observedElements.forEach(element => observer.observe(element));
+    refreshCapsuleInputWidth(false);
+
+    return () => {
+      observer.disconnect();
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+      }
+    };
+  }, [
+    currentImageCount,
+    derivedState?.sendButtonMode,
+    isMultiLine,
+    refreshCapsuleInputWidth,
+    showTargetSwitcher,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      if (collapseVerificationRafRef.current !== null) {
+        cancelAnimationFrame(collapseVerificationRafRef.current);
+      }
+      if (layoutMeasurementRafRef.current !== null) {
+        cancelAnimationFrame(layoutMeasurementRafRef.current);
+      }
+    };
   }, []);
 
   const { transition, setQueuedInput } = useSessionStateMachineActions(effectiveTargetSessionId);
