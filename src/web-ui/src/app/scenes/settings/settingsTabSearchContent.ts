@@ -83,6 +83,8 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
     { ns: 'settings/agentic-tools', key: 'config.confirmTimeoutDesc' },
     { ns: 'settings/agentic-tools', key: 'config.executionTimeout' },
     { ns: 'settings/agentic-tools', key: 'config.executionTimeoutDesc' },
+    { ns: 'settings/agentic-tools', key: 'config.writeToolMode' },
+    { ns: 'settings/agentic-tools', key: 'config.writeToolModeDesc' },
     { ns: 'settings/debug', key: 'sections.combined' },
     { ns: 'settings/debug', key: 'sections.combinedDescription' },
     { ns: 'settings/debug', key: 'settings.logPath.label' },
