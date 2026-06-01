@@ -85,9 +85,7 @@ export interface StartupTraceDiagnostics {
 declare global {
   // E2E and manual performance collection read this sanitized diagnostic surface.
   // It intentionally exposes no raw request payloads or workspace paths.
-  // eslint-disable-next-line no-var
   var __BITFUN_STARTUP_TRACE__: StartupTraceDiagnostics | undefined;
-  // eslint-disable-next-line no-var
   var __BITFUN_PERF_TRACE_ENABLED__: boolean | undefined;
 }
 
