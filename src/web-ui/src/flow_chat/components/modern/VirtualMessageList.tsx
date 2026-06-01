@@ -1700,7 +1700,7 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
   }, [clearAllBottomReservationsForUserNavigation, getTotalBottomCompensationPx]);
 
   const requestTurnPinToTop = useCallback((turnId: string, options?: { behavior?: ScrollBehavior; pinMode?: FlowChatPinTurnToTopMode }) => {
-    let requestedPinMode = options?.pinMode ?? 'transient';
+    const requestedPinMode = options?.pinMode ?? 'transient';
     const requestedBehavior = options?.behavior ?? 'auto';
     const targetTurn = findDialogTurn(activeSession?.dialogTurns, turnId);
     if (requestedPinMode === 'sticky-latest' && !shouldUseStickyLatestPin(targetTurn)) {

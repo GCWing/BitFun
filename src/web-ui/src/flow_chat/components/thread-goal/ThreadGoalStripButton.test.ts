@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveThreadGoalStripIconTone } from './ThreadGoalStripButton';
+import { resolveThreadGoalStripIconTone } from './threadGoalStripIconTone';
 
 describe('resolveThreadGoalStripIconTone', () => {
   it('returns none when there is no goal', () => {
