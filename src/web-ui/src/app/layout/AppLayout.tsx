@@ -18,12 +18,12 @@ import { useAssistantBootstrap } from '../hooks/useAssistantBootstrap';
 import { useApp } from '../hooks/useApp';
 import { useSceneStore } from '../stores/sceneStore';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
-import { configManager } from '@/infrastructure/config';
+import { configManager } from '@/infrastructure/config/services/ConfigManager';
 
 type TransitionDirection = 'entering' | 'returning' | null;
 import { FlowChatManager } from '../../flow_chat/services/FlowChatManager';
 import WorkspaceBody from './WorkspaceBody';
-import { ToolbarMode, useToolbarModeContext } from '../../flow_chat';
+import { ToolbarMode, useToolbarModeContext } from '../../flow_chat/components/toolbar-mode';
 import { FloatingMiniChat } from './FloatingMiniChat';
 import { NewProjectDialog } from '../components/NewProjectDialog';
 import { AboutDialog } from '../components/AboutDialog';

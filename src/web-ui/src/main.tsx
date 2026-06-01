@@ -26,6 +26,29 @@ startupTrace.markPhase('first_script_eval', {
   isDev: import.meta.env.DEV,
 });
 
+async function traceStartupStep<T>(
+  phase: string,
+  step: string,
+  run: () => Promise<T>
+): Promise<T> {
+  const startedAt = nowMs();
+  startupTrace.markPhase(`${phase}_start`, { step });
+  try {
+    const value = await run();
+    startupTrace.markPhase(`${phase}_end`, {
+      step,
+      durationMs: elapsedMs(startedAt),
+    });
+    return value;
+  } catch (error) {
+    startupTrace.markPhase(`${phase}_failed`, {
+      step,
+      durationMs: elapsedMs(startedAt),
+    });
+    throw error;
+  }
+}
+
 /** Dedupe only for white-screen heuristic (empty #root), not for Error Boundary logs. */
 const WHITE_SCREEN_LOGGED_FLAG = '__bitfun_white_screen_crash_logged__';
 function hasLoggedWhiteScreenCrash(): boolean {
@@ -177,24 +200,30 @@ document.addEventListener(
 async function initializeBeforeRender(): Promise<void> {
   const phaseStartedAt = nowMs();
   startupTrace.markPhase('before_render_start');
-  await measureAsyncAndLog(log, 'Startup step completed', () => initLogger(), {
-    data: { step: 'initLogger' },
+  await traceStartupStep('before_render_step', 'init_logger', async () => {
+    await measureAsyncAndLog(log, 'Startup step completed', () => initLogger(), {
+      data: { step: 'initLogger' },
+    });
   });
 
-  await measureAsyncAndLog(log, 'Startup step completed', async () => {
-    const { initializeFrontendLogLevelSync } = await import('./infrastructure/config/services/FrontendLogLevelSync');
-    await initializeFrontendLogLevelSync();
-  }, {
-    data: { step: 'initializeFrontendLogLevelSync' },
+  await traceStartupStep('before_render_step', 'initialize_frontend_log_level_sync', async () => {
+    await measureAsyncAndLog(log, 'Startup step completed', async () => {
+      const { initializeFrontendLogLevelSync } = await import('./infrastructure/config/services/FrontendLogLevelSync');
+      await initializeFrontendLogLevelSync();
+    }, {
+      data: { step: 'initializeFrontendLogLevelSync' },
+    });
   });
 
   log.info('Initializing BitFun');
 
-  await measureAsyncAndLog(log, 'Startup step completed', async () => {
-    const { themeService } = await import('./infrastructure/theme');
-    await themeService.initialize();
-  }, {
-    data: { step: 'themeService.initialize' },
+  await traceStartupStep('before_render_step', 'theme_service_initialize', async () => {
+    await measureAsyncAndLog(log, 'Startup step completed', async () => {
+      const { themeService } = await import('./infrastructure/theme');
+      await themeService.initialize();
+    }, {
+      data: { step: 'themeService.initialize' },
+    });
   });
   log.info('Theme system initialized');
   logElapsed(log, 'Startup phase completed', phaseStartedAt, {
@@ -288,11 +317,15 @@ async function startApplication(): Promise<void> {
   }
 
   // I18n Provider.
-  const i18nProviderImportResult = await measureAsyncAndLog(
-    log,
-    'Startup step completed',
-    () => import('./infrastructure/i18n'),
-    { data: { step: 'loadI18nProvider' } }
+  const i18nProviderImportResult = await traceStartupStep(
+    'startup_step',
+    'load_i18n_provider',
+    () => measureAsyncAndLog(
+      log,
+      'Startup step completed',
+      () => import('./infrastructure/i18n'),
+      { data: { step: 'loadI18nProvider' } }
+    )
   );
   const { I18nProvider } = i18nProviderImportResult.value;
   const isAgentCompanionWindow = new URLSearchParams(window.location.search)

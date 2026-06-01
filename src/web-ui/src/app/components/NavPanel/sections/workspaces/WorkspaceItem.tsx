@@ -36,6 +36,7 @@ import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport
 import WorkspaceRelatedPathsDialog from './WorkspaceRelatedPathsDialog';
 import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
 import { confirmWarning } from '@/component-library/components/ConfirmDialog/confirmService';
+import { scheduleAfterStartupSignal } from '@/shared/utils/startupTaskScheduling';
 
 
 interface WorkspaceItemProps {
@@ -122,10 +123,27 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   });
 
   useEffect(() => {
-    setWorkspaceSearchEnabled(aiExperienceConfigService.getSettings().enable_workspace_search);
-    return aiExperienceConfigService.addChangeListener(settings => {
+    let cancelled = false;
+    let unsubscribeSettings: (() => void) | null = null;
+    const cancelStartupSchedule = scheduleAfterStartupSignal(async () => {
+      const settings = await aiExperienceConfigService.getSettingsAsync();
+      if (cancelled) {
+        return;
+      }
       setWorkspaceSearchEnabled(settings.enable_workspace_search);
+      unsubscribeSettings = aiExperienceConfigService.addChangeListener(nextSettings => {
+        setWorkspaceSearchEnabled(nextSettings.enable_workspace_search);
+      });
+    }, {
+      signalName: 'bitfun:interactive-shell-ready',
+      fallbackTimeoutMs: 10000,
+      frameCount: 1,
     });
+    return () => {
+      cancelled = true;
+      cancelStartupSchedule();
+      unsubscribeSettings?.();
+    };
   }, []);
 
   // Remote connection status — optional: safe if not inside SSHRemoteProvider

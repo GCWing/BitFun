@@ -57,6 +57,29 @@ function isOptionalConfigNotFound(request: ApiRequest, error: unknown): boolean 
   return isOptionalConfigNotFoundCommand(request.config as TauriCommandConfig, error);
 }
 
+function traceTargetForCommand(command: string, payload: unknown): string | undefined {
+  if (!payload || typeof payload !== 'object') {
+    return undefined;
+  }
+
+  const request = (payload as { request?: unknown }).request;
+  if (!request || typeof request !== 'object') {
+    return undefined;
+  }
+
+  const record = request as Record<string, unknown>;
+  if ((command === 'get_config' || command === 'set_config') && typeof record.path === 'string') {
+    return record.path;
+  }
+
+  if (command === 'get_configs' && Array.isArray(record.paths)) {
+    const paths = record.paths.filter((item): item is string => typeof item === 'string');
+    return paths.length > 0 ? paths.join(',') : undefined;
+  }
+
+  return undefined;
+}
+
 export class ApiClient implements IApiClient {
   private config: ApiConfig;
   private activeRequests = new Map<string, AbortController>();
@@ -178,6 +201,7 @@ export class ApiClient implements IApiClient {
       : `${(request.config as HttpRequestConfig).method} ${(request.config as HttpRequestConfig).url}`;
     const requestBytes = estimateJsonBytes(tracePayload);
     const remote = isRemoteTraceRequest(tracePayload);
+    const traceTarget = traceTargetForCommand(traceCommand, tracePayload);
     const requestPayloadEstimateDurationMs = elapsedMs(tracePayloadStartedAt);
     
     this.updateStats({ totalRequests: this.stats.totalRequests + 1 });
@@ -216,7 +240,10 @@ export class ApiClient implements IApiClient {
         startupTrace.recordApiCall({
           type: request.type,
           command: traceCommand,
+          target: traceTarget,
           durationMs,
+          startedAtMs: startedAt,
+          endedAtMs: startedAt + durationMs,
           outcome: 'success',
           requestBytes,
           responseBytes,
@@ -248,7 +275,10 @@ export class ApiClient implements IApiClient {
       startupTrace.recordApiCall({
         type: request.type,
         command: traceCommand,
+        target: traceTarget,
         durationMs: elapsedMs(startedAt),
+        startedAtMs: startedAt,
+        endedAtMs: nowMs(),
         outcome: optionalConfigNotFound ? 'success' : 'failure',
         requestBytes,
         payloadEstimateDurationMs: requestPayloadEstimateDurationMs,

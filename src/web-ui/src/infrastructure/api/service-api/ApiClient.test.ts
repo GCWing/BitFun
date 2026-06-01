@@ -54,6 +54,7 @@ describe('ApiClient startup trace classification', () => {
 
     expect(traceMocks.recordApiCall).toHaveBeenCalledWith(expect.objectContaining({
       command: 'get_config',
+      target: 'font',
       outcome: 'success',
     }));
     expect(client.getStats()).toMatchObject({

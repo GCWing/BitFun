@@ -23,7 +23,7 @@ function createTestLogger(): LoggerLike & {
 }
 
 describe('startupTrace', () => {
-  it('records startup phases without exposing sensitive fields', () => {
+  it('records startup phases without exposing sensitive fields or writing event logs by default', () => {
     const logger = createTestLogger();
     const trace = createStartupTrace({
       logger,
@@ -40,8 +40,8 @@ describe('startupTrace', () => {
       remote: true,
     });
 
-    expect(logger.debug).toHaveBeenCalledTimes(1);
-    const [, payload] = logger.debug.mock.calls[0];
+    expect(logger.debug).not.toHaveBeenCalled();
+    const payload = trace.getSnapshot().phases.events[0];
     expect(payload).toMatchObject({
       traceId: 'trace-test',
       phase: 'before_render_start',
@@ -52,6 +52,32 @@ describe('startupTrace', () => {
     expect(payload).not.toHaveProperty('request');
     expect(payload).not.toHaveProperty('remoteConnectionId');
     expect(payload).not.toHaveProperty('sshHost');
+  });
+
+  it('logs sanitized phase events only when explicitly enabled', () => {
+    const logger = createTestLogger();
+    const trace = createStartupTrace({
+      logger,
+      traceId: 'trace-test',
+      now: () => 100,
+      logEvents: true,
+    });
+
+    trace.markPhase('before_render_start', {
+      command: 'get_config',
+      request: { nested: 'payload' },
+      remote: true,
+    });
+
+    expect(logger.debug).toHaveBeenCalledTimes(1);
+    const [, payload] = logger.debug.mock.calls[0];
+    expect(payload).toMatchObject({
+      traceId: 'trace-test',
+      phase: 'before_render_start',
+      command: 'get_config',
+      remote: true,
+    });
+    expect(payload).not.toHaveProperty('request');
   });
 
   it('aggregates API calls by command and remote status', () => {
@@ -66,6 +92,8 @@ describe('startupTrace', () => {
       type: 'tauri',
       command: 'list_persisted_sessions',
       durationMs: 12.4,
+      startedAtMs: 100,
+      endedAtMs: 112.4,
       requestBytes: 100,
       responseBytes: 500,
       remote: true,
@@ -83,6 +111,7 @@ describe('startupTrace', () => {
     trace.recordApiCall({
       type: 'tauri',
       command: 'get_config',
+      target: 'font',
       durationMs: 5,
       requestBytes: 40,
       responseBytes: 60,
@@ -99,11 +128,10 @@ describe('startupTrace', () => {
 
     trace.flushSummary('test');
 
-    expect(logger.info).toHaveBeenCalledTimes(1);
-    const [, payload] = logger.info.mock.calls[0];
+    expect(logger.info).not.toHaveBeenCalled();
+    const payload = trace.getSnapshot();
     expect(payload).toMatchObject({
       traceId: 'trace-test',
-      reason: 'test',
       phases: {
         events: [],
       },
@@ -163,6 +191,23 @@ describe('startupTrace', () => {
         responseBytes: 60,
       },
     ]);
+    expect(payload.api.calls[0]).toMatchObject({
+      traceId: 'trace-test',
+      type: 'tauri',
+      command: 'list_persisted_sessions',
+      startedAtMs: 100,
+      endedAtMs: 112.4,
+      durationMs: 12.4,
+      outcome: 'success',
+      cacheOutcome: 'miss',
+      requestBytes: 100,
+      responseBytes: 500,
+      remote: true,
+    });
+    expect(payload.api.calls[2]).toMatchObject({
+      command: 'get_config',
+      target: 'font',
+    });
   });
 
   it('flushes bounded phase records so early events survive logger startup timing', () => {
@@ -182,7 +227,10 @@ describe('startupTrace', () => {
     trace.markPhase('ignored_after_limit');
     trace.flushSummary('test');
 
-    const [, payload] = logger.info.mock.calls[0];
+    trace.flushSummary('test');
+
+    expect(logger.info).not.toHaveBeenCalled();
+    const payload = trace.getSnapshot();
     expect(payload.phases).toMatchObject({
       count: 2,
       events: [
@@ -242,6 +290,13 @@ describe('startupTrace', () => {
       api: {
         totalCount: 1,
         successCount: 1,
+        calls: [
+          {
+            command: 'restore_session_view',
+            durationMs: 42.4,
+            outcome: 'success',
+          },
+        ],
         byCommand: [
           {
             command: 'restore_session_view',
@@ -317,8 +372,8 @@ describe('startupTrace', () => {
     now = 132;
     callbacks.shift()?.(now);
 
-    expect(logger.debug).toHaveBeenCalledTimes(1);
-    const [, payload] = logger.debug.mock.calls[0];
+    expect(logger.debug).not.toHaveBeenCalled();
+    const payload = trace.getSnapshot().phases.events[0];
     expect(payload).toMatchObject({
       traceId: 'trace-test',
       phase: 'historical_session_first_paint',

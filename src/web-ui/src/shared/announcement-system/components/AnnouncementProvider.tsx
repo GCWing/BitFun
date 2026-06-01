@@ -5,6 +5,7 @@ import AnnouncementToastStack from './AnnouncementToastStack';
 import FeatureModal from './FeatureModal';
 import { configAPI } from '@/infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
+import { scheduleAfterStartupSignal } from '@/shared/utils/startupTaskScheduling';
 
 const log = createLogger('AnnouncementProvider');
 
@@ -43,25 +44,52 @@ const AnnouncementProvider: React.FC = () => {
   // ── Normal load path ─────────────────────────────────────────────────────
   useEffect(() => {
     if (initialised) return;
+    let cancelled = false;
 
     const load = async () => {
       try {
         const cards = await announcementService.getPendingAnnouncements();
+        if (cancelled) {
+          return;
+        }
         const tipsEnabled = await configAPI.getConfig('app.notifications.enable_startup_tips') !== false;
+        if (cancelled) {
+          return;
+        }
         const visibleCards = tipsEnabled ? cards : cards.filter((card) => card.card_type !== 'tip');
         if (visibleCards.length > 0) {
           log.debug('Announcement cards loaded', { count: visibleCards.length });
           const maxDelay = Math.max(...visibleCards.map((c) => c.trigger.delay_ms ?? 0));
-          setTimeout(() => loadQueue(visibleCards), maxDelay);
+          setTimeout(() => {
+            if (!cancelled) {
+              loadQueue(visibleCards);
+            }
+          }, maxDelay);
         }
       } catch (e) {
         log.error('Failed to load announcement cards', e);
       } finally {
-        markInitialised();
+        if (!cancelled) {
+          markInitialised();
+        }
       }
     };
 
-    load();
+    const cancelStartupSchedule = scheduleAfterStartupSignal(() => {
+      void load();
+    }, {
+      signalName: 'bitfun:interactive-shell-ready',
+      fallbackTimeoutMs: 10000,
+      frameCount: 1,
+      onError: error => {
+        log.error('Failed to schedule announcement load after startup', error);
+      },
+    });
+
+    return () => {
+      cancelled = true;
+      cancelStartupSchedule();
+    };
   }, [initialised, loadQueue, markInitialised]);
 
   // ── Debug trigger ─────────────────────────────────────────────────────────

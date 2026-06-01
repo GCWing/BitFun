@@ -14,6 +14,7 @@ use crate::api::search_api::{
     should_use_workspace_search, SearchMetadataResponse,
 };
 use crate::api::workspace_activation::spawn_workspace_background_warmup;
+use crate::startup_trace::DesktopStartupTrace;
 use bitfun_core::infrastructure::{
     BatchedFileSearchProgressSink, FileSearchOutcome, FileSearchProgressSink, FileSearchResult,
     FileSearchResultGroup, FileTreeNode, SearchMatchType,
@@ -31,7 +32,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, State};
 
 fn remote_workspace_from_info(info: &WorkspaceInfo) -> Option<crate::api::RemoteWorkspace> {
@@ -827,30 +828,67 @@ pub struct RevealInExplorerRequest {
     pub path: String,
 }
 
-async fn clear_active_workspace_context(state: &State<'_, AppState>, app: &AppHandle) {
+async fn clear_active_workspace_context(
+    state: &State<'_, AppState>,
+    app: &AppHandle,
+    startup_trace: Option<&DesktopStartupTrace>,
+) {
     #[cfg(not(target_os = "macos"))]
     let _ = app;
 
+    let step_started = Instant::now();
     let previous_workspace_path = state.workspace_path.read().await.clone();
     *state.workspace_path.write().await = None;
+    if let Some(trace) = startup_trace {
+        trace.record_elapsed_step(
+            "tauri_command",
+            "initialize_global_state.clear_active_workspace_path",
+            step_started,
+        );
+    }
 
     if let Some(previous_workspace_path) = previous_workspace_path {
+        let step_started = Instant::now();
         let root_str = previous_workspace_path.to_string_lossy().to_string();
         if !is_remote_path(root_str.trim()).await {
             state
                 .workspace_search_service
                 .schedule_repo_release(previous_workspace_path);
         }
+        if let Some(trace) = startup_trace {
+            trace.record_elapsed_step(
+                "tauri_command",
+                "initialize_global_state.release_previous_workspace_search",
+                step_started,
+            );
+        }
     }
 
     if let Some(ref pool) = state.js_worker_pool {
+        let step_started = Instant::now();
         pool.stop_all().await;
+        if let Some(trace) = startup_trace {
+            trace.record_elapsed_step(
+                "tauri_command",
+                "initialize_global_state.stop_js_worker_pool",
+                step_started,
+            );
+        }
     }
 
+    let step_started = Instant::now();
     state.agent_registry.clear_custom_subagents();
+    if let Some(trace) = startup_trace {
+        trace.record_elapsed_step(
+            "tauri_command",
+            "initialize_global_state.clear_custom_subagents",
+            step_started,
+        );
+    }
 
     #[cfg(target_os = "macos")]
     {
+        let step_started = Instant::now();
         let language = state
             .config_service
             .get_config::<String>(Some("app.language"))
@@ -863,6 +901,13 @@ async fn clear_active_workspace_context(state: &State<'_, AppState>, app: &AppHa
             crate::macos_menubar::MenubarMode::Startup,
             edit_mode,
         );
+        if let Some(trace) = startup_trace {
+            trace.record_elapsed_step(
+                "tauri_command",
+                "initialize_global_state.set_macos_startup_menubar",
+                step_started,
+            );
+        }
     }
 }
 
@@ -870,18 +915,44 @@ async fn apply_active_workspace_context(
     state: &State<'_, AppState>,
     app: &AppHandle,
     workspace_info: &bitfun_core::service::workspace::manager::WorkspaceInfo,
+    startup_trace: Option<&DesktopStartupTrace>,
 ) {
     #[cfg(not(target_os = "macos"))]
     let _ = app;
 
-    clear_active_workspace_context(state, app).await;
+    let step_started = Instant::now();
+    clear_active_workspace_context(state, app, startup_trace).await;
+    if let Some(trace) = startup_trace {
+        trace.record_elapsed_step(
+            "tauri_command",
+            "initialize_global_state.clear_active_workspace_context",
+            step_started,
+        );
+    }
 
+    let step_started = Instant::now();
     *state.workspace_path.write().await = Some(workspace_info.root_path.clone());
+    if let Some(trace) = startup_trace {
+        trace.record_elapsed_step(
+            "tauri_command",
+            "initialize_global_state.set_active_workspace_path",
+            step_started,
+        );
+    }
 
+    let step_started = Instant::now();
     spawn_workspace_background_warmup(&*state, workspace_info.clone());
+    if let Some(trace) = startup_trace {
+        trace.record_elapsed_step(
+            "tauri_command",
+            "initialize_global_state.spawn_workspace_background_warmup",
+            step_started,
+        );
+    }
 
     #[cfg(target_os = "macos")]
     {
+        let step_started = Instant::now();
         let language = state
             .config_service
             .get_config::<String>(Some("app.language"))
@@ -894,10 +965,18 @@ async fn apply_active_workspace_context(
             crate::macos_menubar::MenubarMode::Workspace,
             edit_mode,
         );
+        if let Some(trace) = startup_trace {
+            trace.record_elapsed_step(
+                "tauri_command",
+                "initialize_global_state.set_macos_workspace_menubar",
+                step_started,
+            );
+        }
     }
 
     // Keep global SSH registry + active connection hint aligned with the **foreground** workspace
     // so two servers opened at the same remote path (e.g. `/`) stay distinct.
+    let step_started = Instant::now();
     if workspace_info.workspace_kind == WorkspaceKind::Remote {
         if let Some(rw) = remote_workspace_from_info(workspace_info) {
             if let Err(e) = state.set_remote_workspace(rw).await {
@@ -913,15 +992,39 @@ async fn apply_active_workspace_context(
             m.set_active_connection_hint(None).await;
         }
     }
+    if let Some(trace) = startup_trace {
+        trace.record_elapsed_step(
+            "tauri_command",
+            "initialize_global_state.sync_remote_workspace_context",
+            step_started,
+        );
+    }
 }
 
 #[tauri::command]
 pub async fn initialize_global_state(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
+    startup_trace: State<'_, DesktopStartupTrace>,
 ) -> Result<String, String> {
-    if let Some(workspace_info) = state.workspace_service.get_current_workspace().await {
-        apply_active_workspace_context(&state, &app, &workspace_info).await;
+    let command_started = Instant::now();
+    let trace = startup_trace.inner();
+    let step_started = Instant::now();
+    let current_workspace = state.workspace_service.get_current_workspace().await;
+    trace.record_elapsed_step(
+        "tauri_command",
+        "initialize_global_state.get_current_workspace",
+        step_started,
+    );
+
+    if let Some(workspace_info) = current_workspace {
+        let step_started = Instant::now();
+        apply_active_workspace_context(&state, &app, &workspace_info, Some(trace)).await;
+        trace.record_elapsed_step(
+            "tauri_command",
+            "initialize_global_state.apply_active_workspace_context",
+            step_started,
+        );
 
         info!(
             "Global state initialized with active workspace: workspace_id={}, path={}",
@@ -929,9 +1032,22 @@ pub async fn initialize_global_state(
             workspace_info.root_path.display()
         );
     } else {
-        clear_active_workspace_context(&state, &app).await;
+        let step_started = Instant::now();
+        clear_active_workspace_context(&state, &app, Some(trace)).await;
+        trace.record_elapsed_step(
+            "tauri_command",
+            "initialize_global_state.clear_active_workspace_context",
+            step_started,
+        );
         info!("Global state initialized without active workspace");
     }
+
+    trace.record_elapsed_step(
+        "tauri_command",
+        "initialize_global_state.total",
+        command_started,
+    );
+    trace.record_tauri_command_elapsed("initialize_global_state", None, command_started);
 
     Ok("Global state initialized successfully".to_string())
 }
@@ -974,19 +1090,18 @@ pub async fn initialize_ai(state: State<'_, AppState>) -> Result<String, String>
         .primary
         .clone()
         .ok_or_else(|| {
-        "Primary model not configured, please configure it in settings".to_string()
-    })?;
+            "Primary model not configured, please configure it in settings".to_string()
+        })?;
     let model_config = global_config
         .ai
         .models
         .iter()
         .find(|m| m.id == primary_model_id)
         .ok_or_else(|| format!("Primary model '{}' does not exist", primary_model_id))?;
-    let stream_options =
-        bitfun_core::infrastructure::ai::build_stream_options_for_model(
-            &global_config.ai,
-            Some(model_config),
-        );
+    let stream_options = bitfun_core::infrastructure::ai::build_stream_options_for_model(
+        &global_config.ai,
+        Some(model_config),
+    );
 
     let ai_config = bitfun_core::util::types::AIConfig::try_from(model_config.clone())
         .map_err(|e| format!("Failed to convert AI configuration: {}", e))?;
@@ -1019,11 +1134,10 @@ async fn create_transient_ai_client_for_config(
         .get_config(None)
         .await
         .map_err(|e| format!("Failed to get configuration: {}", e))?;
-    let stream_options =
-        bitfun_core::infrastructure::ai::build_stream_options_for_model(
-            &global_config.ai,
-            Some(&model_config),
-        );
+    let stream_options = bitfun_core::infrastructure::ai::build_stream_options_for_model(
+        &global_config.ai,
+        Some(&model_config),
+    );
 
     let mut ai_config: bitfun_core::util::types::AIConfig = model_config
         .try_into()
@@ -1253,7 +1367,7 @@ pub async fn open_workspace(
         .await
     {
         Ok(workspace_info) => {
-            apply_active_workspace_context(&state, &app, &workspace_info).await;
+            apply_active_workspace_context(&state, &app, &workspace_info, None).await;
 
             if let Err(e) = state
                 .workspace_identity_watch_service
@@ -1394,7 +1508,7 @@ pub async fn open_remote_workspace(
                 warn!("Failed to set remote workspace state: {}", e);
             }
 
-            apply_active_workspace_context(&state, &app, &workspace_info).await;
+            apply_active_workspace_context(&state, &app, &workspace_info, None).await;
 
             info!(
                 "Remote workspace opened: name={}, remote_path={}, connection_id={}",
@@ -1423,7 +1537,7 @@ pub async fn create_assistant_workspace(
         .await
     {
         Ok(workspace_info) => {
-            apply_active_workspace_context(&state, &app, &workspace_info).await;
+            apply_active_workspace_context(&state, &app, &workspace_info, None).await;
 
             if let Err(e) = state
                 .workspace_identity_watch_service
@@ -1514,9 +1628,9 @@ pub async fn delete_assistant_workspace(
         .map_err(|e| format!("Failed to remove assistant workspace state: {}", e))?;
 
     if let Some(current_workspace) = state.workspace_service.get_current_workspace().await {
-        apply_active_workspace_context(&state, &app, &current_workspace).await;
+        apply_active_workspace_context(&state, &app, &current_workspace, None).await;
     } else {
-        clear_active_workspace_context(&state, &app).await;
+        clear_active_workspace_context(&state, &app, None).await;
     }
 
     if let Err(e) = state
@@ -1643,7 +1757,7 @@ pub async fn reset_assistant_workspace(
         .map(|workspace| workspace.id == request.workspace_id)
         .unwrap_or(false)
     {
-        apply_active_workspace_context(&state, &app, &updated_workspace).await;
+        apply_active_workspace_context(&state, &app, &updated_workspace, None).await;
     }
 
     info!(
@@ -1684,9 +1798,9 @@ pub async fn close_workspace(
             }
 
             if let Some(workspace_info) = state.workspace_service.get_current_workspace().await {
-                apply_active_workspace_context(&state, &app, &workspace_info).await;
+                apply_active_workspace_context(&state, &app, &workspace_info, None).await;
             } else {
-                clear_active_workspace_context(&state, &app).await;
+                clear_active_workspace_context(&state, &app, None).await;
             }
 
             info!("Workspace closed: workspace_id={}", request.workspace_id);
@@ -1717,7 +1831,7 @@ pub async fn set_active_workspace(
                 .await
                 .ok_or_else(|| "Active workspace not found after switching".to_string())?;
 
-            apply_active_workspace_context(&state, &app, &workspace_info).await;
+            apply_active_workspace_context(&state, &app, &workspace_info, None).await;
 
             info!(
                 "Active workspace changed: workspace_id={}, path={}",
@@ -1785,7 +1899,7 @@ pub async fn update_workspace_info(
                 .unwrap_or(false);
 
             if is_active_workspace {
-                apply_active_workspace_context(&state, &app, &workspace_info).await;
+                apply_active_workspace_context(&state, &app, &workspace_info, None).await;
             }
 
             info!(
@@ -1806,25 +1920,33 @@ pub async fn update_workspace_info(
 #[tauri::command]
 pub async fn get_current_workspace(
     state: State<'_, AppState>,
+    startup_trace: State<'_, DesktopStartupTrace>,
 ) -> Result<Option<WorkspaceInfoDto>, String> {
+    let trace_started = Instant::now();
     let workspace_service = &state.workspace_service;
-    Ok(workspace_service
+    let result = Ok(workspace_service
         .get_current_workspace()
         .await
-        .map(|info| WorkspaceInfoDto::from_workspace_info(&info)))
+        .map(|info| WorkspaceInfoDto::from_workspace_info(&info)));
+    startup_trace.record_tauri_command_elapsed("get_current_workspace", None, trace_started);
+    result
 }
 
 #[tauri::command]
 pub async fn get_recent_workspaces(
     state: State<'_, AppState>,
+    startup_trace: State<'_, DesktopStartupTrace>,
 ) -> Result<Vec<WorkspaceInfoDto>, String> {
+    let trace_started = Instant::now();
     let workspace_service = &state.workspace_service;
-    Ok(workspace_service
+    let result = Ok(workspace_service
         .get_recent_workspaces()
         .await
         .into_iter()
         .map(|info| WorkspaceInfoDto::from_workspace_info(&info))
-        .collect())
+        .collect());
+    startup_trace.record_tauri_command_elapsed("get_recent_workspaces", None, trace_started);
+    result
 }
 
 #[tauri::command]
@@ -1843,18 +1965,39 @@ pub async fn remove_recent_workspace(
 pub async fn cleanup_invalid_workspaces(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
+    startup_trace: State<'_, DesktopStartupTrace>,
 ) -> Result<usize, String> {
+    let trace_started = Instant::now();
+    let cleanup_started = Instant::now();
     match state.workspace_service.cleanup_invalid_workspaces().await {
         Ok(local_removed_count) => {
+            startup_trace.record_elapsed_step(
+                "tauri_command",
+                "cleanup_invalid_workspaces.local_workspace_cleanup",
+                cleanup_started,
+            );
+            let prune_remote_started = Instant::now();
             let remote_removed_count = prune_unrecoverable_remote_workspaces(&state).await;
+            startup_trace.record_elapsed_step(
+                "tauri_command",
+                "cleanup_invalid_workspaces.remote_workspace_prune",
+                prune_remote_started,
+            );
             let removed_count = local_removed_count + remote_removed_count;
 
+            let apply_context_started = Instant::now();
             if let Some(workspace_info) = state.workspace_service.get_current_workspace().await {
-                apply_active_workspace_context(&state, &app, &workspace_info).await;
+                apply_active_workspace_context(&state, &app, &workspace_info, None).await;
             } else {
-                clear_active_workspace_context(&state, &app).await;
+                clear_active_workspace_context(&state, &app, None).await;
             }
+            startup_trace.record_elapsed_step(
+                "tauri_command",
+                "cleanup_invalid_workspaces.apply_active_workspace_context",
+                apply_context_started,
+            );
 
+            let sync_watchers_started = Instant::now();
             if let Err(e) = state
                 .workspace_identity_watch_service
                 .sync_watched_workspaces()
@@ -1865,15 +2008,30 @@ pub async fn cleanup_invalid_workspaces(
                     e
                 );
             }
+            startup_trace.record_elapsed_step(
+                "tauri_command",
+                "cleanup_invalid_workspaces.sync_identity_watchers",
+                sync_watchers_started,
+            );
 
             info!(
                 "Invalid workspaces cleaned up: removed_count={}",
                 removed_count
             );
+            startup_trace.record_tauri_command_elapsed(
+                "cleanup_invalid_workspaces",
+                None,
+                trace_started,
+            );
             Ok(removed_count)
         }
         Err(e) => {
             error!("Failed to cleanup invalid workspaces: {}", e);
+            startup_trace.record_tauri_command_elapsed(
+                "cleanup_invalid_workspaces",
+                None,
+                trace_started,
+            );
             Err(format!("Failed to cleanup invalid workspaces: {}", e))
         }
     }
@@ -1957,14 +2115,18 @@ async fn prune_unrecoverable_remote_workspaces(state: &State<'_, AppState>) -> u
 #[tauri::command]
 pub async fn get_opened_workspaces(
     state: State<'_, AppState>,
+    startup_trace: State<'_, DesktopStartupTrace>,
 ) -> Result<Vec<WorkspaceInfoDto>, String> {
+    let trace_started = Instant::now();
     let workspace_service = &state.workspace_service;
-    Ok(workspace_service
+    let result = Ok(workspace_service
         .get_opened_workspaces()
         .await
         .into_iter()
         .map(|info| WorkspaceInfoDto::from_workspace_info(&info))
-        .collect())
+        .collect());
+    startup_trace.record_tauri_command_elapsed("get_opened_workspaces", None, trace_started);
+    result
 }
 
 #[tauri::command]

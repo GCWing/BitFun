@@ -9,7 +9,10 @@ export type StartupTraceRequestType = 'tauri' | 'http';
 export interface StartupTraceApiCall {
   type: StartupTraceRequestType;
   command: string;
+  target?: string;
   durationMs: number;
+  startedAtMs?: number;
+  endedAtMs?: number;
   outcome?: 'success' | 'failure';
   cacheOutcome?: 'hit' | 'miss' | 'unknown';
   requestBytes?: number;
@@ -24,6 +27,9 @@ export interface StartupTraceOptions {
   traceId?: string;
   now?: NowFn;
   maxPhaseEvents?: number;
+  maxApiCallRecords?: number;
+  logEvents?: boolean;
+  logSummary?: boolean;
 }
 
 export interface DeferredAnimationFrameTraceOptions {
@@ -66,6 +72,22 @@ export interface StartupTraceApiSummary {
   responseBytes: number;
   payloadEstimateDurationMs: number;
   byCommand: CommandAggregate[];
+  calls: StartupTraceApiCallRecord[];
+}
+
+export interface StartupTraceApiCallRecord {
+  traceId: string;
+  type: StartupTraceRequestType;
+  command: string;
+  target?: string;
+  startedAtMs?: number;
+  endedAtMs?: number;
+  durationMs: number;
+  outcome: 'success' | 'failure';
+  cacheOutcome: 'hit' | 'miss' | 'unknown';
+  requestBytes: number;
+  responseBytes: number;
+  remote: boolean;
 }
 
 export interface StartupTraceSnapshot {
@@ -279,9 +301,14 @@ export class StartupTrace {
   private readonly logger: LoggerLike;
   private readonly now: NowFn;
   private readonly maxPhaseEvents: number;
+  private readonly maxApiCallRecords: number;
+  private readonly logEvents: boolean;
+  private readonly logSummary: boolean;
   readonly traceId: string;
   private phaseEvents = 0;
   private readonly phaseRecords: PhaseRecord[] = [];
+  private apiCallEvents = 0;
+  private readonly apiCallRecords: StartupTraceApiCallRecord[] = [];
   private readonly commandAggregates = new Map<string, CommandAggregate>();
   private totalApiCount = 0;
   private successfulApiCount = 0;
@@ -299,7 +326,10 @@ export class StartupTrace {
     this.logger = options.logger ?? createLogger('StartupTrace');
     this.traceId = options.traceId ?? createTraceId();
     this.now = options.now ?? (() => globalThis.performance?.now?.() ?? Date.now());
-    this.maxPhaseEvents = options.maxPhaseEvents ?? 160;
+    this.maxPhaseEvents = options.maxPhaseEvents ?? 260;
+    this.maxApiCallRecords = options.maxApiCallRecords ?? 240;
+    this.logEvents = options.logEvents ?? false;
+    this.logSummary = options.logSummary ?? false;
   }
 
   markPhase(phase: string, data?: TraceData): void {
@@ -314,7 +344,9 @@ export class StartupTrace {
       ...(sanitizeTraceData(data) ?? {}),
     };
     this.phaseRecords.push(phaseRecord);
-    this.logger.debug('Startup trace event', phaseRecord);
+    if (this.logEvents) {
+      this.logger.debug('Startup trace event', phaseRecord);
+    }
   }
 
   recordApiCall(call: StartupTraceApiCall): void {
@@ -323,6 +355,12 @@ export class StartupTrace {
     }
 
     const durationMs = roundDurationMs(call.durationMs);
+    const startedAtMs = typeof call.startedAtMs === 'number'
+      ? roundDurationMs(call.startedAtMs)
+      : undefined;
+    const endedAtMs = typeof call.endedAtMs === 'number'
+      ? roundDurationMs(call.endedAtMs)
+      : (startedAtMs !== undefined ? roundDurationMs(startedAtMs + durationMs) : undefined);
     const requestBytes = call.requestBytes ?? 0;
     const responseBytes = call.responseBytes ?? 0;
     const succeeded = call.outcome !== 'failure';
@@ -337,6 +375,24 @@ export class StartupTrace {
     this.requestBytes += requestBytes;
     this.responseBytes += responseBytes;
     this.payloadEstimateDurationMs += call.payloadEstimateDurationMs ?? 0;
+
+    if (this.apiCallEvents < this.maxApiCallRecords) {
+      this.apiCallEvents += 1;
+      this.apiCallRecords.push({
+        traceId: this.traceId,
+        type: call.type,
+        command: call.command,
+        target: call.target,
+        startedAtMs,
+        endedAtMs,
+        durationMs,
+        outcome: succeeded ? 'success' : 'failure',
+        cacheOutcome,
+        requestBytes,
+        responseBytes,
+        remote: call.remote,
+      });
+    }
 
     const existing = this.commandAggregates.get(call.command) ?? {
       command: call.command,
@@ -388,6 +444,7 @@ export class StartupTrace {
       responseBytes: this.responseBytes,
       payloadEstimateDurationMs: roundDurationMs(this.payloadEstimateDurationMs),
       byCommand,
+      calls: this.apiCallRecords.map(record => ({ ...record })),
     };
   }
 
@@ -407,15 +464,17 @@ export class StartupTrace {
       return;
     }
 
-    const snapshot = this.getSnapshot();
-    this.logger.info('Startup trace summary', {
-      traceId: snapshot.traceId,
-      reason,
-      phases: snapshot.phases,
-      api: {
-        ...snapshot.api,
-      },
-    });
+    if (this.logSummary) {
+      const snapshot = this.getSnapshot();
+      this.logger.info('Startup trace summary', {
+        traceId: snapshot.traceId,
+        reason,
+        phases: snapshot.phases,
+        api: {
+          ...snapshot.api,
+        },
+      });
+    }
   }
 }
 

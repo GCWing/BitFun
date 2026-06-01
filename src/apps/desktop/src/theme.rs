@@ -10,6 +10,8 @@ use log::{debug, error, warn};
 use tauri::webview::PageLoadEvent;
 use tauri::{Manager, WebviewUrl};
 
+use crate::startup_trace::DesktopStartupTrace;
+
 const AGENT_COMPANION_WINDOW_LABEL: &str = "agent-companion-pet";
 const AGENT_COMPANION_WINDOW_MIN_SIZE: f64 = 96.0;
 const AGENT_COMPANION_WINDOW_MAX_WIDTH: f64 = 360.0;
@@ -403,11 +405,21 @@ impl ThemeConfig {
     }
 }
 
-pub fn create_main_window(app_handle: &tauri::AppHandle, startup_trace_id: &str) {
+pub fn create_main_window(
+    app_handle: &tauri::AppHandle,
+    startup_trace_id: &str,
+    startup_trace: &DesktopStartupTrace,
+) {
     let total_started_at = Instant::now();
     let theme = ThemeConfig::load_from_config();
     let bg_color = theme.to_tauri_color();
     let init_script = theme.generate_init_script(startup_trace_id);
+    startup_trace.record_step(
+        "native_step_end",
+        "native_window",
+        "prepare_theme",
+        total_started_at.elapsed().as_millis(),
+    );
     debug!(
         "Main window creation step completed: step=prepare_theme duration_ms={}",
         total_started_at.elapsed().as_millis()
@@ -478,6 +490,7 @@ pub fn create_main_window(app_handle: &tauri::AppHandle, startup_trace_id: &str)
     let build_started_at = Instant::now();
     match builder.build() {
         Ok(window) => {
+            startup_trace.record_elapsed_step("native_window", "webview_build", build_started_at);
             debug!(
                 "Main window creation step completed: step=build url_kind={} duration_ms={} total_duration_ms={}",
                 main_url_kind,
@@ -494,7 +507,7 @@ pub fn create_main_window(app_handle: &tauri::AppHandle, startup_trace_id: &str)
                 }
             }
 
-            show_main_window_for_startup(&window, total_started_at);
+            show_main_window_for_startup(&window, total_started_at, startup_trace);
         }
         Err(e) => {
             error!(
@@ -506,20 +519,31 @@ pub fn create_main_window(app_handle: &tauri::AppHandle, startup_trace_id: &str)
     }
 }
 
-fn show_main_window_for_startup(window: &tauri::WebviewWindow, total_started_at: Instant) {
+fn show_main_window_for_startup(
+    window: &tauri::WebviewWindow,
+    total_started_at: Instant,
+    startup_trace: &DesktopStartupTrace,
+) {
     #[cfg(target_os = "windows")]
     {
         let step_started_at = Instant::now();
         if let Err(error) = window.maximize() {
             warn!("Failed to maximize main window during startup: {}", error);
         } else {
+            startup_trace.record_elapsed_step("native_window", "windows_maximize", step_started_at);
             debug!(
                 "Main window startup show step completed: step=maximize duration_ms={} since_create_start_ms={}",
                 step_started_at.elapsed().as_millis(),
                 total_started_at.elapsed().as_millis()
             );
         }
+        let show_delay_started_at = Instant::now();
         std::thread::sleep(std::time::Duration::from_millis(150));
+        startup_trace.record_elapsed_step(
+            "native_window",
+            "windows_show_after_maximize_wait",
+            show_delay_started_at,
+        );
     }
 
     let show_started_at = Instant::now();
@@ -527,6 +551,7 @@ fn show_main_window_for_startup(window: &tauri::WebviewWindow, total_started_at:
         warn!("Failed to show main window during startup: {}", error);
         return;
     }
+    startup_trace.record_elapsed_step("native_window", "show_window", show_started_at);
     debug!(
         "Main window startup show step completed: step=show duration_ms={} since_create_start_ms={}",
         show_started_at.elapsed().as_millis(),
@@ -538,6 +563,7 @@ fn show_main_window_for_startup(window: &tauri::WebviewWindow, total_started_at:
         warn!("Failed to focus main window during startup: {}", error);
         return;
     }
+    startup_trace.record_elapsed_step("native_window", "focus_window", focus_started_at);
     debug!(
         "Main window startup show step completed: step=focus duration_ms={} since_create_start_ms={}",
         focus_started_at.elapsed().as_millis(),

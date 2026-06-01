@@ -6,6 +6,7 @@ import {
   readStartupTraceSnapshot,
   summarizeSessionOpen,
   summarizeStartup,
+  summarizeStartupBreakdown,
   waitForTracePhaseCount,
   type StartupTraceSnapshot,
 } from '../../helpers/performance-trace';
@@ -139,19 +140,24 @@ describe('Performance telemetry', () => {
   it('collects startup timing from the current build', async () => {
     const snapshot = await readStartupTraceSnapshot();
     const startup = summarizeStartup(snapshot);
+    const breakdown = summarizeStartupBreakdown(snapshot);
     const maxInteractiveMs = numericEnv('BITFUN_E2E_PERF_MAX_INTERACTIVE_MS');
 
     console.log('[Perf] startup', JSON.stringify({
       appMode: process.env.BITFUN_E2E_APP_MODE ?? 'auto',
       traceId: snapshot.traceId,
       startup,
+      breakdown,
       api: snapshot.api,
+      native: snapshot.native,
     }));
     await writeReport('startup', {
       appMode: process.env.BITFUN_E2E_APP_MODE ?? 'auto',
       traceId: snapshot.traceId,
       startup,
+      breakdown,
       api: snapshot.api,
+      native: snapshot.native,
       phases: snapshot.phases.events,
     });
 
@@ -182,6 +188,10 @@ describe('Performance telemetry', () => {
       beforeClickSnapshot,
       'historical_session_full_hydrate_end',
     );
+    const fullHydrateFrameCountBefore = countPhase(
+      beforeClickSnapshot,
+      'historical_session_full_hydrate_after_state_commit_frame',
+    );
     const clickedAtMs = await readPerformanceNow();
 
     await item.click();
@@ -196,15 +206,23 @@ describe('Performance telemetry', () => {
       fullHydrateCountBefore + 1,
       10000,
     );
-    const finalSnapshot =
-      afterFullSnapshot.phases.events.length >= afterFrameSnapshot.phases.events.length
-        ? afterFullSnapshot
-        : afterFrameSnapshot;
+    const afterFullFrameSnapshot = await waitForOptionalPhaseCount(
+      'historical_session_full_hydrate_after_state_commit_frame',
+      fullHydrateFrameCountBefore + 1,
+      10000,
+    );
+    const finalSnapshot = [
+      afterFrameSnapshot,
+      afterFullSnapshot,
+      afterFullFrameSnapshot,
+    ].reduce((latest, snapshot) =>
+      snapshot.phases.events.length >= latest.phases.events.length ? snapshot : latest
+    );
     const sessionEvents = finalSnapshot.phases.events.filter(event =>
-      event.atMs >= clickedAtMs - 50 &&
+      event.atMs >= clickedAtMs &&
       event.phase.startsWith('historical_session')
     );
-    const sessionOpen = summarizeSessionOpen(sessionEvents);
+    const sessionOpen = summarizeSessionOpen(sessionEvents, clickedAtMs);
     const maxLatestFrameMs = numericEnv('BITFUN_E2E_PERF_MAX_SESSION_FRAME_MS');
 
     console.log('[Perf] long-session-first-open', JSON.stringify({
@@ -223,6 +241,7 @@ describe('Performance telemetry', () => {
 
     expect(sessionOpen.hydrateDurationMs).toBeGreaterThan(0);
     expect(sessionOpen.latestFrameSinceHydrateMs).toBeGreaterThan(0);
+    expect(sessionOpen.clickToLatestFrameMs).toBeGreaterThan(0);
     if (maxLatestFrameMs !== undefined) {
       expect(sessionOpen.latestFrameSinceHydrateMs).toBeLessThanOrEqual(maxLatestFrameMs);
     }

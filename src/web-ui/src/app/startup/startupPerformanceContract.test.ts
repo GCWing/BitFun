@@ -64,7 +64,17 @@ describe('startup performance contract', () => {
     expect(source).not.toMatch(/from\s+['"]\.\.\/infrastructure['"]/);
     expect(source).not.toMatch(/useAIInitialization/);
     expect(source).not.toMatch(/useCurrentModelConfig/);
+    expect(source).not.toMatch(/from\s+['"]@\/infrastructure\/config\/services\/AIExperienceConfigService['"]/);
     expect(source).toContain('bitfun:interactive-shell-ready');
+  });
+
+  it('keeps the heavy app layout out of the root startup module', () => {
+    const source = readSource('../App.tsx');
+
+    expect(source).not.toMatch(/import\s+AppLayout\s+from\s+['"]\.\/layout\/AppLayout['"]/);
+    expect(source).toContain("import('./layout/AppLayout')");
+    expect(source).toContain('app_layout_ready');
+    expect(source).toContain('!appLayoutReady');
   });
 
   it('loads Monaco styling and loader config only through editor initialization', () => {
@@ -135,6 +145,7 @@ describe('startup performance contract', () => {
 
   it('avoids the infrastructure barrel from startup-visible modules', () => {
     const sources = [
+      '../../app/layout/AppLayout.tsx',
       '../../flow_chat/components/ChatInput.tsx',
       '../../tools/git/services/GitEventService.ts',
     ].map(readSource);
@@ -143,5 +154,33 @@ describe('startup performance contract', () => {
       expect(source).not.toMatch(/from\s+['"]@\/infrastructure['"]/);
       expect(source).not.toMatch(/from\s+['"]\.\.\/\.\.\/\.\.\/infrastructure['"]/);
     }
+
+    expect(sources[0]).not.toMatch(/from\s+['"]@\/infrastructure\/config['"]/);
+    expect(sources[0]).toContain("from '@/infrastructure/config/services/ConfigManager'");
+  });
+
+  it('avoids the broad flow-chat barrel from startup-visible shell modules', () => {
+    const sources = [
+      '../App.tsx',
+      '../../app/layout/AppLayout.tsx',
+    ].map(readSource);
+
+    for (const source of sources) {
+      expect(source).not.toMatch(/from\s+['"]\.\.\/flow_chat['"]/);
+      expect(source).not.toMatch(/from\s+['"]\.\.\/\.\.\/flow_chat['"]/);
+      expect(source).not.toMatch(/from\s+['"]@\/flow_chat['"]/);
+    }
+  });
+
+  it('keeps Agent companion implementation modules out of the root startup bundle', () => {
+    const source = readSource('../App.tsx');
+
+    expect(source).not.toMatch(/from\s+['"]@\/flow_chat\/utils\/agentCompanionActivity['"]/);
+    expect(source).not.toMatch(/from\s+['"]@\/flow_chat\/services\/AgentCompanionActivityBridge['"]/);
+    expect(source).not.toMatch(/from\s+['"]\.\/services\/openAgentCompanionSession['"]/);
+    expect(source).not.toMatch(/from\s+['"]@\/infrastructure\/config\/services\/AgentCompanionWindowService['"]/);
+    expect(source).toContain("import('@/flow_chat/utils/agentCompanionActivity')");
+    expect(source).toContain("import('@/flow_chat/services/AgentCompanionActivityBridge')");
+    expect(source).toContain("import('./services/openAgentCompanionSession')");
   });
 });

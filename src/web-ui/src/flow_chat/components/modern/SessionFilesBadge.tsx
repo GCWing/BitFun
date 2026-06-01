@@ -50,6 +50,7 @@ import {
 } from '@/infrastructure/config/services/AIExperienceConfigService';
 import { resolveQuickActionText } from '@/infrastructure/config/services/quickActionLocalization';
 import { deriveDeepReviewSessionConcurrencyGuard } from '../../utils/deepReviewCapacityGuard';
+import { scheduleAfterStartupSignal } from '@/shared/utils/startupTaskScheduling';
 import './SessionFilesBadge.scss';
 
 const log = createLogger('SessionFilesBadge');
@@ -217,10 +218,29 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
 
   // Sync quick actions when settings change.
   useEffect(() => {
-    return aiExperienceConfigService.addChangeListener((settings) => {
+    let cancelled = false;
+    let unsubscribeSettings: (() => void) | null = null;
+    const cancelStartupSchedule = scheduleAfterStartupSignal(async () => {
+      const settings = await aiExperienceConfigService.getSettingsAsync();
+      if (cancelled) {
+        return;
+      }
       const actions = settings.quick_actions;
       setQuickActions((actions && actions.length > 0) ? actions : DEFAULT_QUICK_ACTIONS);
+      unsubscribeSettings = aiExperienceConfigService.addChangeListener((nextSettings) => {
+        const nextActions = nextSettings.quick_actions;
+        setQuickActions((nextActions && nextActions.length > 0) ? nextActions : DEFAULT_QUICK_ACTIONS);
+      });
+    }, {
+      signalName: 'bitfun:interactive-shell-ready',
+      fallbackTimeoutMs: 10000,
+      frameCount: 1,
     });
+    return () => {
+      cancelled = true;
+      cancelStartupSchedule();
+      unsubscribeSettings?.();
+    };
   }, []);
 
   // Reset cached state when the session changes.

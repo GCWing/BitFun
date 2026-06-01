@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactElement } from 'rea
 import { systemAPI } from '@/infrastructure/api';
 import { configManager } from '@/infrastructure/config';
 import { createLogger } from '@/shared/utils/logger';
+import { scheduleAfterStartupSignal } from '@/shared/utils/startupTaskScheduling';
 import type { CheckForUpdatesResponse } from '@/infrastructure/api/service-api/SystemAPI';
 import { isTauriRuntime } from './tauriEnv';
 import {
@@ -35,7 +36,7 @@ export function DailyAppUpdateGate(): ReactElement | null {
       return;
     }
     let cancelled = false;
-    void (async () => {
+    const runDailyCheck = async () => {
       let autoUpdate = true;
       try {
         const v = await configManager.getConfig<boolean>('app.auto_update');
@@ -72,9 +73,20 @@ export function DailyAppUpdateGate(): ReactElement | null {
           }
         })();
       }, 900);
-    })();
+    };
+    const cancelStartupSchedule = scheduleAfterStartupSignal(() => {
+      void runDailyCheck();
+    }, {
+      signalName: 'bitfun:interactive-shell-ready',
+      fallbackTimeoutMs: 10000,
+      frameCount: 1,
+      onError: error => {
+        log.warn('Failed to schedule daily update check after startup', error);
+      },
+    });
     return () => {
       cancelled = true;
+      cancelStartupSchedule();
       if (dailyCheckTimerRef.current != null) {
         window.clearTimeout(dailyCheckTimerRef.current);
         dailyCheckTimerRef.current = null;

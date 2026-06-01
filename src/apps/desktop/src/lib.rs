@@ -6,6 +6,7 @@ pub mod computer_use;
 pub mod crash_diagnostics;
 pub mod logging;
 pub mod macos_menubar;
+pub mod startup_trace;
 pub mod theme;
 pub mod tray;
 
@@ -53,6 +54,7 @@ use api::storage_commands::*;
 use api::subagent_api::*;
 use api::system_api::*;
 use api::tool_api::*;
+use startup_trace::{DesktopStartupTrace, DesktopStartupTraceSnapshot};
 
 /// Agentic Coordinator state
 #[derive(Clone)]
@@ -192,6 +194,13 @@ async fn webdriver_bridge_result(request: WebdriverBridgeResultRequest) -> Resul
     bitfun_webdriver::handle_bridge_result(request.payload)
 }
 
+#[tauri::command]
+fn get_startup_native_trace(
+    state: tauri::State<'_, DesktopStartupTrace>,
+) -> DesktopStartupTraceSnapshot {
+    state.snapshot()
+}
+
 /// Tauri application entry point
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub async fn run() {
@@ -200,6 +209,8 @@ pub async fn run() {
         .duration_since(UNIX_EPOCH)
         .map(|duration| format!("desktop-{}", duration.as_millis()))
         .unwrap_or_else(|_| "desktop-unknown".to_string());
+    let startup_trace = DesktopStartupTrace::new(startup_trace_id.clone(), startup_started);
+    startup_trace.record_phase("native_process_start", "native");
     let mut startup_timings = TimingCollector::default();
     let in_debug = cfg!(debug_assertions) || std::env::var("DEBUG").unwrap_or_default() == "1";
     let log_config = logging::LogConfig::new(in_debug);
@@ -216,6 +227,7 @@ pub async fn run() {
         return;
     }
     startup_timings.record_elapsed("initialize_global_config", step_started);
+    startup_trace.record_elapsed_step("native_pre_tauri", "initialize_global_config", step_started);
 
     // Initialize global I18nService so bot/remote-connect language is always in sync.
     {
@@ -233,9 +245,20 @@ pub async fn run() {
             }
         }
         startup_timings.record_elapsed("initialize_global_i18n_service", step_started);
+        startup_trace.record_elapsed_step(
+            "native_pre_tauri",
+            "initialize_global_i18n_service",
+            step_started,
+        );
     }
 
+    let step_started = Instant::now();
     let startup_log_level = resolve_runtime_log_level(log_config.level).await;
+    startup_trace.record_elapsed_step(
+        "native_pre_tauri",
+        "resolve_runtime_log_level",
+        step_started,
+    );
 
     let step_started = Instant::now();
     if let Err(e) = AIClientFactory::initialize_global().await {
@@ -243,6 +266,11 @@ pub async fn run() {
         return;
     }
     startup_timings.record_elapsed("initialize_global_ai_client_factory", step_started);
+    startup_trace.record_elapsed_step(
+        "native_pre_tauri",
+        "initialize_global_ai_client_factory",
+        step_started,
+    );
 
     let step_started = Instant::now();
     let (coordinator, scheduler, event_queue, event_router, ai_client_factory, token_usage_service) =
@@ -254,6 +282,7 @@ pub async fn run() {
             }
         };
     startup_timings.record_elapsed("init_agentic_system", step_started);
+    startup_trace.record_elapsed_step("native_pre_tauri", "init_agentic_system", step_started);
 
     let step_started = Instant::now();
     if let Err(e) = init_function_agents(ai_client_factory.clone()).await {
@@ -261,10 +290,23 @@ pub async fn run() {
         return;
     }
     startup_timings.record_elapsed("init_function_agents", step_started);
+    startup_trace.record_elapsed_step("native_pre_tauri", "init_function_agents", step_started);
 
+    let step_started = Instant::now();
     let workspace_search_enabled =
         bitfun_core::service::search::workspace_search_feature_enabled().await;
+    startup_trace.record_elapsed_step(
+        "native_pre_tauri",
+        "workspace_search_feature_enabled",
+        step_started,
+    );
+    let step_started = Instant::now();
     let startup_flashgrep_path = configure_workspace_search_daemon_env();
+    startup_trace.record_elapsed_step(
+        "native_pre_tauri",
+        "configure_workspace_search_daemon_env",
+        step_started,
+    );
 
     let step_started = Instant::now();
     let app_state = match AppState::new_async(token_usage_service).await {
@@ -275,6 +317,7 @@ pub async fn run() {
         }
     };
     startup_timings.record_elapsed("initialize_app_state", step_started);
+    startup_trace.record_elapsed_step("native_pre_tauri", "initialize_app_state", step_started);
 
     let coordinator_state = CoordinatorState {
         coordinator: coordinator.clone(),
@@ -307,13 +350,10 @@ pub async fn run() {
         .manage(coordinator)
         .manage(scheduler)
         .manage(terminal_state)
+        .manage(startup_trace.clone())
         .setup(move |app| {
             let setup_started = Instant::now();
-            log::debug!(
-                "Desktop startup trace event: trace_id={}, phase=tauri_setup_start, since_process_start_ms={}",
-                startup_trace_id,
-                elapsed_ms(startup_started)
-            );
+            startup_trace.record_phase("tauri_setup_start", "native_setup");
             #[cfg(target_os = "macos")]
             {
                 app.on_menu_event(|app, event| {
@@ -326,8 +366,14 @@ pub async fn run() {
                 });
             }
 
+            let step_started = Instant::now();
             logging::register_runtime_log_state(startup_log_level, session_log_dir.clone());
             crash_diagnostics::log_previous_unexpected_exit_if_any();
+            startup_trace.record_elapsed_step(
+                "native_setup",
+                "register_runtime_log_state_and_crash_diagnostics",
+                step_started,
+            );
 
             // Ensure the Tauri NSIS registry install-location key points to the
             // actual install directory, so that auto-updates respect the custom
@@ -336,6 +382,7 @@ pub async fn run() {
             {
                 use std::os::windows::process::CommandExt;
                 const CREATE_NO_WINDOW: u32 = 0x08000000;
+                let step_started = Instant::now();
 
                 if let Ok(exe) = std::env::current_exe() {
                     if let Some(install_dir) = exe.parent() {
@@ -375,6 +422,11 @@ pub async fn run() {
                         }
                     }
                 }
+                startup_trace.record_elapsed_step(
+                    "native_setup",
+                    "sync_install_location_registry",
+                    step_started,
+                );
             }
             for step in startup_timings.steps() {
                 log::debug!(
@@ -385,6 +437,7 @@ pub async fn run() {
             }
 
             if workspace_search_enabled {
+                let step_started = Instant::now();
                 let flashgrep_path = startup_flashgrep_path.clone().or_else(|| {
                     let binary_names =
                         bitfun_core::service::search::workspace_search_daemon_binary_names();
@@ -428,6 +481,11 @@ pub async fn run() {
                         bitfun_core::service::search::workspace_search_daemon_missing_hint()
                     );
                 }
+                startup_trace.record_elapsed_step(
+                    "native_setup",
+                    "resolve_workspace_search_daemon",
+                    step_started,
+                );
             }
 
             // Register bundled mobile-web resource path for remote connect.
@@ -435,6 +493,7 @@ pub async fn run() {
             // so the primary candidate is "mobile-web/dist". Additional fallbacks
             // handle legacy or non-standard bundle layouts.
             {
+                let step_started = Instant::now();
                 let candidates = ["mobile-web/dist", "mobile-web", "dist"];
                 let mut found = false;
                 for candidate in &candidates {
@@ -470,37 +529,47 @@ pub async fn run() {
                         }
                     }
                 }
+                startup_trace.record_elapsed_step(
+                    "native_setup",
+                    "resolve_mobile_web_resource",
+                    step_started,
+                );
             }
 
             let app_handle = app.handle().clone();
             let window_started = Instant::now();
-            log::debug!(
-                "Desktop startup trace event: trace_id={}, phase=main_window_create_start",
-                startup_trace_id
-            );
-            theme::create_main_window(&app_handle, &startup_trace_id);
+            startup_trace.record_phase("main_window_create_start", "native_window");
+            theme::create_main_window(&app_handle, &startup_trace_id, &startup_trace);
             let window_duration_ms = elapsed_ms(window_started);
+            startup_trace.record_step(
+                "native_step_end",
+                "native_window",
+                "create_main_window",
+                window_duration_ms,
+            );
             log::debug!(
                 "Desktop startup step completed: step=create_main_window, duration_ms={}",
                 window_duration_ms
             );
-            log::debug!(
-                "Desktop startup trace event: trace_id={}, phase=main_window_create_end, duration_ms={}",
-                startup_trace_id,
-                window_duration_ms
-            );
+            let webdriver_started = Instant::now();
             bitfun_webdriver::maybe_start(app_handle.clone());
-            let setup_duration_ms = elapsed_ms(setup_started);
-            let since_process_start_ms = elapsed_ms(startup_started);
-            log::debug!(
-                "Desktop startup timing: phase=tauri_setup, duration_ms={}, since_process_start_ms={}",
-                setup_duration_ms,
-                since_process_start_ms
+            startup_trace.record_elapsed_step(
+                "native_setup",
+                "maybe_start_webdriver",
+                webdriver_started,
             );
+            let window_phase_duration_ms = elapsed_ms(setup_started);
+            let since_process_start_ms = elapsed_ms(startup_started);
+            startup_trace.record_step(
+                "native_step_end",
+                "native_setup",
+                "tauri_setup_until_main_window_created",
+                window_phase_duration_ms,
+            );
+            startup_trace.record_phase("tauri_setup_window_phase_end", "native_setup");
             log::debug!(
-                "Desktop startup trace event: trace_id={}, phase=tauri_setup_end, duration_ms={}, since_process_start_ms={}",
-                startup_trace_id,
-                setup_duration_ms,
+                "Desktop startup timing: phase=tauri_setup_until_main_window_created, duration_ms={}, since_process_start_ms={}",
+                window_phase_duration_ms,
                 since_process_start_ms
             );
 
@@ -537,13 +606,26 @@ pub async fn run() {
 
             let transport = Arc::new(TauriTransportAdapter::new(app_handle.clone()));
 
+            let step_started = Instant::now();
             start_event_loop_with_transport(event_queue, event_router, transport);
+            startup_trace.record_elapsed_step(
+                "native_setup",
+                "start_event_loop_with_transport",
+                step_started,
+            );
 
             // Eagerly initialize the remote connect service so previously
             // paired bots start listening immediately on app startup.
+            let step_started = Instant::now();
             api::remote_connect_api::init_on_startup();
+            startup_trace.record_elapsed_step(
+                "native_setup",
+                "remote_connect_init_on_startup",
+                step_started,
+            );
 
             {
+                let step_started = Instant::now();
                 let _terminal_state: tauri::State<'_, api::terminal_api::TerminalState> =
                     app.state();
                 let terminal_state_inner = api::terminal_api::TerminalState::new();
@@ -554,20 +636,49 @@ pub async fn run() {
                         app_handle_clone,
                     );
                 });
+                startup_trace.record_elapsed_step(
+                    "native_setup",
+                    "spawn_terminal_event_loop",
+                    step_started,
+                );
             }
 
+            let step_started = Instant::now();
             init_mcp_servers(app_handle.clone());
+            startup_trace.record_elapsed_step("native_setup", "init_mcp_servers", step_started);
+            let step_started = Instant::now();
             init_acp_clients(app_handle.clone());
+            startup_trace.record_elapsed_step("native_setup", "init_acp_clients", step_started);
 
+            let step_started = Instant::now();
             init_services(app_handle.clone(), startup_log_level);
+            startup_trace.record_elapsed_step("native_setup", "init_services", step_started);
 
+            let step_started = Instant::now();
             logging::spawn_log_cleanup_task();
+            startup_trace.record_elapsed_step("native_setup", "spawn_log_cleanup_task", step_started);
 
             // Set up system tray icon.
+            let step_started = Instant::now();
             if let Err(error) = crate::tray::setup_tray(app) {
                 log::warn!("Failed to set up system tray: {}", error);
             }
+            startup_trace.record_elapsed_step("native_setup", "setup_tray", step_started);
 
+            let setup_duration_ms = elapsed_ms(setup_started);
+            let since_process_start_ms = elapsed_ms(startup_started);
+            startup_trace.record_step(
+                "native_step_end",
+                "native_setup",
+                "tauri_setup",
+                setup_duration_ms,
+            );
+            startup_trace.record_phase("tauri_setup_end", "native_setup");
+            log::debug!(
+                "Desktop startup timing: phase=tauri_setup, duration_ms={}, since_process_start_ms={}",
+                setup_duration_ms,
+                since_process_start_ms
+            );
             log::info!("BitFun Desktop started successfully");
             Ok(())
         })
@@ -653,6 +764,7 @@ pub async fn run() {
             api::agentic_api::restore_session_view,
             api::agentic_api::restore_session_with_turns,
             webdriver_bridge_result,
+            get_startup_native_trace,
             api::agentic_api::list_sessions,
             api::agentic_api::confirm_tool_execution,
             api::agentic_api::reject_tool_execution,

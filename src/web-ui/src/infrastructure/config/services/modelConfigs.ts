@@ -217,14 +217,13 @@ type ConfigChangeListener = (configs: ModelConfig[]) => void;
 class ModelConfigManager {
   private configs: ModelConfig[] = [];
   private listeners: Set<ConfigChangeListener> = new Set();
-
-  constructor() {
-    this.loadConfigs();
-  }
+  private loadPromise: Promise<void> | null = null;
+  private hasRequestedLoad = false;
 
   // Listener management
   addListener(listener: ConfigChangeListener): () => void {
     this.listeners.add(listener);
+    this.loadConfigs();
     return () => {
       this.listeners.delete(listener);
     };
@@ -245,15 +244,23 @@ class ModelConfigManager {
 
   // New architecture: load via the unified config manager.
   private loadConfigs(): void {
+    if (this.loadPromise || this.hasRequestedLoad) {
+      return;
+    }
+    this.hasRequestedLoad = true;
     // Start with an empty set, then sync async.
     this.configs = [];
-    
+
     // Async load the real config.
-    this.syncFromConfigManager().catch(error => {
-      log.error('Failed to load configs', error);
-      this.configs = [];
-      this.notifyListeners();
-    });
+    this.loadPromise = this.syncFromConfigManager()
+      .catch(error => {
+        log.error('Failed to load configs', error);
+        this.configs = [];
+        this.notifyListeners();
+      })
+      .finally(() => {
+        this.loadPromise = null;
+      });
   }
 
   // New architecture: sync from the unified config manager.
@@ -318,11 +325,13 @@ class ModelConfigManager {
 
   // Reload configuration (public).
   async reload(): Promise<void> {
+    this.hasRequestedLoad = true;
     await this.syncFromConfigManager();
   }
 
   // Read operations
   getAllConfigs(): ModelConfig[] {
+    this.loadConfigs();
     return [...this.configs];
   }
 
