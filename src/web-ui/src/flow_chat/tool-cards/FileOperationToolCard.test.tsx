@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   currentWorkspace: undefined as undefined | { rootPath: string },
   createDiffEditorTab: vi.fn(),
   openFile: vi.fn(),
+  codePreviewProps: [] as Array<Record<string, unknown>>,
   getOperationDiff: vi.fn(async () => ({
     originalContent: '',
     modifiedContent: '',
@@ -34,6 +35,11 @@ vi.mock('../../component-library', () => ({
 }));
 
 vi.mock('@/component-library', () => ({
+  CubeLoading: () => <span data-testid="cube-loading" />,
+  IconButton: ({ children, onClick }: { children: React.ReactNode; onClick?: React.MouseEventHandler }) => (
+    <button type="button" onClick={onClick}>{children}</button>
+  ),
+  ToolProcessingDots: () => <span data-testid="tool-processing-dots" />,
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
@@ -57,7 +63,10 @@ vi.mock('../../tools/snapshot_system/core/SnapshotEventBus', () => ({
 }));
 
 vi.mock('../components/CodePreview', () => ({
-  CodePreview: ({ content }: { content: string }) => <pre>{content}</pre>,
+  CodePreview: (props: Record<string, unknown>) => {
+    mocks.codePreviewProps.push(props);
+    return <pre>{String(props.content ?? '')}</pre>;
+  },
 }));
 
 vi.mock('../components/InlineDiffPreview', () => ({
@@ -111,6 +120,11 @@ describe('FileOperationToolCard', () => {
     vi.stubGlobal('document', dom.window.document);
     vi.stubGlobal('HTMLElement', dom.window.HTMLElement);
     vi.stubGlobal('CustomEvent', dom.window.CustomEvent);
+    vi.stubGlobal('ResizeObserver', class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
 
     container = dom.window.document.getElementById('root') as HTMLDivElement;
     root = createRoot(container);
@@ -118,6 +132,7 @@ describe('FileOperationToolCard', () => {
     mocks.currentWorkspace = undefined;
     mocks.createDiffEditorTab.mockReset();
     mocks.openFile.mockReset();
+    mocks.codePreviewProps = [];
     mocks.getOperationDiff.mockReset();
     mocks.getOperationDiff.mockResolvedValue({
       originalContent: '',
@@ -461,5 +476,53 @@ describe('FileOperationToolCard', () => {
       'Use Read to load the current contents of src/main.rs before calling Edit on it.',
     );
     expect(container.querySelector('.file-operation-card--guidance')).not.toBeNull();
+  });
+
+  it('disables nested code-preview autoscroll while write content is streaming', async () => {
+    const toolItem: FlowToolItem = {
+      id: 'tool-1',
+      type: 'tool',
+      toolName: 'Write',
+      status: 'streaming',
+      isParamsStreaming: true,
+      toolCall: {
+        id: 'call-1',
+        name: 'Write',
+        input: {
+          file_path: 'src/generated.ts',
+          content: 'const value = 1;\nconst value2 = 2;',
+        },
+      },
+      partialParams: {
+        file_path: 'src/generated.ts',
+        content: 'const value = 1;\nconst value2 = 2;',
+      },
+    } as FlowToolItem;
+
+    const config: ToolCardConfig = {
+      toolName: 'Write',
+      displayName: 'Write',
+      icon: 'WRITE',
+      requiresConfirmation: false,
+      resultDisplayType: 'detailed',
+      description: 'Write a file',
+      displayMode: 'standard',
+    };
+
+    await act(async () => {
+      root.render(
+        <FileOperationToolCard
+          toolItem={toolItem}
+          config={config}
+          sessionId="session-1"
+        />
+      );
+    });
+
+    expect(mocks.codePreviewProps).toHaveLength(1);
+    expect(mocks.codePreviewProps[0]).toMatchObject({
+      isStreaming: true,
+      autoScrollToBottom: false,
+    });
   });
 });

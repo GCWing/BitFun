@@ -816,7 +816,7 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
                 isStreaming={isParamsStreaming}
                 showLineNumbers={isContentExpanded}
                 maxHeight={previewMaxHeight}
-                autoScrollToBottom={isParamsStreaming}
+                autoScrollToBottom={false}
                 onLineClick={handleCodeLineClick}
               />
             </div>
@@ -855,7 +855,7 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
                 isStreaming={isParamsStreaming}
                 showLineNumbers={isContentExpanded}
                 maxHeight={previewMaxHeight}
-                autoScrollToBottom={isParamsStreaming}
+                autoScrollToBottom={false}
                 onLineClick={handleCodeLineClick}
               />
             </div>
