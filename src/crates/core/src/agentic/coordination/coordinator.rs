@@ -2,7 +2,13 @@
 //!
 //! Top-level component that integrates all subsystems and provides a unified interface
 
-use super::{scheduler::DialogSubmissionPolicy, turn_outcome::TurnOutcome};
+use super::{
+    scheduler::{
+        abort_thread_goal_continuation_for_session, clear_thread_goal_continuation_abort,
+        DialogSubmissionPolicy,
+    },
+    turn_outcome::TurnOutcome,
+};
 use crate::agentic::agents::get_agent_registry;
 use crate::agentic::context_profile::ContextProfilePolicy;
 use crate::agentic::core::{
@@ -19,7 +25,8 @@ use crate::agentic::fork_agent::ForkAgentContextSnapshot;
 use crate::agentic::goal_mode::{
     effective_subagent_timeout_seconds, is_usage_limit_error, maybe_build_continuation_after_turn,
     should_skip_goal_continuation_after_turn, should_skip_goal_for_turn,
-    user_facing_thread_goal_error, ThreadGoalRuntime, ThreadGoalStore,
+    thread_goal_status_is_resumable, user_facing_thread_goal_error, ThreadGoalRuntime,
+    ThreadGoalStore,
 };
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::round_preempt::{DialogRoundInjectionSource, DialogRoundPreemptSource};
@@ -2259,16 +2266,111 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         status: ThreadGoalStatus,
     ) -> BitFunResult<ThreadGoal> {
         self.require_main_session_workspace(session_id)?;
+        let previous = self.get_thread_goal(session_id, workspace_path).await?;
+        let resuming = status == ThreadGoalStatus::Active
+            && previous
+                .as_ref()
+                .is_some_and(|goal| thread_goal_status_is_resumable(goal.status));
         let result = self
             .thread_goal_store()
             .set_thread_goal(session_id, workspace_path, None, Some(status), None, false)
             .await?;
         if !result.goal.is_active() {
             self.thread_goal_runtime.clear_active_goal(None).await;
+        } else if resuming {
+            self.thread_goal_runtime
+                .mark_turn_started("", Some(&result.goal))
+                .await;
         }
         self.emit_thread_goal_updated(session_id, Some(result.goal.clone()))
             .await;
+        if resuming && result.goal.is_active() {
+            clear_thread_goal_continuation_abort(session_id);
+            self.schedule_thread_goal_resumed_steering(session_id, &result.goal);
+        }
         Ok(result.goal)
+    }
+
+    /// Pause an active thread goal after the user manually stops a turn so the UI can offer resume.
+    pub async fn pause_thread_goal_after_user_cancel(&self, session_id: &str) {
+        let workspace_path = match self.require_main_session_workspace(session_id) {
+            Ok(path) => path,
+            Err(error) => {
+                debug!(
+                    "Skipping thread goal pause after cancel (no workspace): session_id={}, error={}",
+                    session_id, error
+                );
+                return;
+            }
+        };
+        let Ok(Some(goal)) = self
+            .get_thread_goal(session_id, workspace_path.as_path())
+            .await
+        else {
+            return;
+        };
+        if !goal.is_active() {
+            return;
+        }
+        if let Err(error) = self
+            .set_thread_goal_status(
+                session_id,
+                workspace_path.as_path(),
+                ThreadGoalStatus::Paused,
+            )
+            .await
+        {
+            warn!(
+                "Failed to pause thread goal after user cancel: session_id={}, error={}",
+                session_id, error
+            );
+        } else {
+            info!(
+                "Thread goal paused after user cancel: session_id={}, objective={}",
+                session_id, goal.objective
+            );
+        }
+    }
+
+    fn schedule_thread_goal_resumed_steering(&self, session_id: &str, goal: &ThreadGoal) {
+        if !goal.is_active() {
+            return;
+        }
+        let Some(scheduler) = super::scheduler::get_global_scheduler() else {
+            warn!(
+                "Scheduler not initialized; thread goal resume steering skipped: session_id={}",
+                session_id
+            );
+            return;
+        };
+        let agent_type = match self.session_manager.get_session(session_id) {
+            Some(session) => {
+                let agent_type = session.agent_type.trim();
+                if agent_type.is_empty() {
+                    "agentic".to_string()
+                } else {
+                    agent_type.to_string()
+                }
+            }
+            None => "agentic".to_string(),
+        };
+        let workspace_path = self
+            .require_main_session_workspace(session_id)
+            .ok()
+            .map(|path| path.to_string_lossy().to_string());
+        let session_id = session_id.to_string();
+        let goal = goal.clone();
+        tokio::spawn(async move {
+            if let Err(error) = scheduler
+                .deliver_thread_goal_resumed(session_id.clone(), agent_type, workspace_path, goal)
+                .await
+            {
+                warn!(
+                    "Failed to deliver thread goal resume steering: session_id={}, error={}",
+                    session_id, error
+                );
+            }
+        });
     }
 
     pub async fn update_thread_goal_status(
@@ -3387,6 +3489,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             dialog_turn_id, session_id
         );
 
+        abort_thread_goal_continuation_for_session(session_id);
+
         let old_state = self
             .session_manager
             .get_session(session_id)
@@ -3423,6 +3527,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             })
             .await;
             debug!("Session state change event sent");
+            self.pause_thread_goal_after_user_cancel(session_id).await;
         } else {
             debug!(
                 "Skipped idle event for stale cancellation: session_id={}, dialog_turn_id={}",
@@ -3480,6 +3585,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         session_id: &str,
         wait_timeout: Duration,
     ) -> BitFunResult<Option<String>> {
+        abort_thread_goal_continuation_for_session(session_id);
+
         let Some(session) = self.session_manager.get_session(session_id) else {
             return Ok(None);
         };

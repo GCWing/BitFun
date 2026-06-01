@@ -652,6 +652,14 @@ impl<'a> ThreadGoalStore<'a> {
     }
 }
 
+/// Statuses where the user may explicitly resume auto-continuation toward the goal.
+pub fn thread_goal_status_is_resumable(status: ThreadGoalStatus) -> bool {
+    matches!(
+        status,
+        ThreadGoalStatus::Paused | ThreadGoalStatus::Blocked | ThreadGoalStatus::UsageLimited
+    )
+}
+
 pub fn build_thread_goal_continuation_plan(goal: &ThreadGoal) -> ThreadGoalContinuationPlan {
     let prompt = match goal.status {
         ThreadGoalStatus::BudgetLimited => budget_limit_prompt(goal),
@@ -705,22 +713,24 @@ pub async fn maybe_build_continuation_after_turn(
         return Ok(None);
     }
 
-    if turn_completed {
-        let became_budget_limited = runtime
-            .account_turn_tokens(turn_id, turn_tokens, &mut goal)
-            .await;
-        store
-            .persist_thread_goal(session_id, workspace_path, Some(goal.clone()))
-            .await?;
-        if became_budget_limited {
-            let reported = runtime.budget_limit_reported_goal_id.lock().await;
-            if reported.as_deref() == Some(goal.goal_id.as_str()) {
-                return Ok(None);
-            }
-            drop(reported);
-            *runtime.budget_limit_reported_goal_id.lock().await = Some(goal.goal_id.clone());
-            return Ok(Some(build_thread_goal_continuation_plan(&goal)));
+    if !turn_completed {
+        return Ok(None);
+    }
+
+    let became_budget_limited = runtime
+        .account_turn_tokens(turn_id, turn_tokens, &mut goal)
+        .await;
+    store
+        .persist_thread_goal(session_id, workspace_path, Some(goal.clone()))
+        .await?;
+    if became_budget_limited {
+        let reported = runtime.budget_limit_reported_goal_id.lock().await;
+        if reported.as_deref() == Some(goal.goal_id.as_str()) {
+            return Ok(None);
         }
+        drop(reported);
+        *runtime.budget_limit_reported_goal_id.lock().await = Some(goal.goal_id.clone());
+        return Ok(Some(build_thread_goal_continuation_plan(&goal)));
     }
 
     if !goal.is_active() {
@@ -758,6 +768,20 @@ pub fn user_facing_thread_goal_error(error: BitFunError) -> BitFunError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn resumable_statuses_match_ui_actions() {
+        assert!(thread_goal_status_is_resumable(ThreadGoalStatus::Paused));
+        assert!(thread_goal_status_is_resumable(ThreadGoalStatus::Blocked));
+        assert!(thread_goal_status_is_resumable(
+            ThreadGoalStatus::UsageLimited
+        ));
+        assert!(!thread_goal_status_is_resumable(ThreadGoalStatus::Active));
+        assert!(!thread_goal_status_is_resumable(
+            ThreadGoalStatus::BudgetLimited
+        ));
+        assert!(!thread_goal_status_is_resumable(ThreadGoalStatus::Complete));
+    }
 
     #[test]
     fn continuation_plan_metadata_marks_completion_check() {
