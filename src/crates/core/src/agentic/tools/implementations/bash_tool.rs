@@ -497,6 +497,22 @@ impl BashTool {
         )
     }
 
+    fn format_background_command_display_text(
+        exit_code: Option<i32>,
+        timed_out: bool,
+        interrupted: bool,
+    ) -> String {
+        if timed_out {
+            "Background Bash command timed out.".to_string()
+        } else if interrupted {
+            "Background Bash command was interrupted.".to_string()
+        } else if exit_code == Some(0) {
+            "Background Bash command completed successfully.".to_string()
+        } else {
+            "Background Bash command completed with a non-zero exit code.".to_string()
+        }
+    }
+
     fn format_background_command_error_text(
         command: &str,
         terminal_session_id: &str,
@@ -523,6 +539,10 @@ impl BashTool {
         format!(
             "Background Bash command failed before producing a final completion result.\n<background_command status=\"error\" terminal_session_id=\"{terminal_session_id}\">\nCommand: {command}\nWorking directory: {working_directory}\n{persistence_line}\nError: {error}\n</background_command>"
         )
+    }
+
+    fn format_background_command_error_display_text() -> String {
+        "Background Bash command failed before producing a final completion result.".to_string()
     }
 }
 
@@ -1510,6 +1530,11 @@ impl BashTool {
                             &output_file_reference_for_task,
                             output_persist_error.as_deref(),
                         );
+                        let display_text = Self::format_background_command_display_text(
+                            exit_code,
+                            timed_out,
+                            interrupted,
+                        );
                         let metadata = json!({
                             "kind": "background_result",
                             "sourceKind": "bash_command",
@@ -1528,7 +1553,7 @@ impl BashTool {
                                     parent_agent_type.clone(),
                                     parent_workspace_path.clone(),
                                     delivery_text,
-                                    None,
+                                    Some(display_text),
                                     Some(metadata),
                                 )
                                 .await
@@ -1556,6 +1581,7 @@ impl BashTool {
                             &message,
                             output_persist_error.as_deref(),
                         );
+                        let display_text = Self::format_background_command_error_display_text();
                         let metadata = json!({
                             "kind": "background_result",
                             "sourceKind": "bash_command",
@@ -1575,7 +1601,7 @@ impl BashTool {
                                     parent_agent_type.clone(),
                                     parent_workspace_path.clone(),
                                     delivery_text,
-                                    None,
+                                    Some(display_text),
                                     Some(metadata),
                                 )
                                 .await
@@ -1606,6 +1632,7 @@ impl BashTool {
                     "Background Bash command stream ended without a completion event.",
                     output_persist_error.as_deref(),
                 );
+                let display_text = Self::format_background_command_error_display_text();
                 let metadata = json!({
                     "kind": "background_result",
                     "sourceKind": "bash_command",
@@ -1625,7 +1652,7 @@ impl BashTool {
                             parent_agent_type.clone(),
                             parent_workspace_path.clone(),
                             delivery_text,
-                            None,
+                            Some(display_text),
                             Some(metadata),
                         )
                         .await
@@ -1866,5 +1893,29 @@ mod tests {
         assert!(rendered.contains(
             "Full output was saved to: /runtime/sessions/session/tool-results/bash_123.txt"
         ));
+    }
+
+    #[test]
+    fn background_display_text_is_concise() {
+        assert_eq!(
+            BashTool::format_background_command_display_text(Some(0), false, false),
+            "Background Bash command completed successfully."
+        );
+        assert_eq!(
+            BashTool::format_background_command_display_text(Some(1), false, false),
+            "Background Bash command completed with a non-zero exit code."
+        );
+        assert_eq!(
+            BashTool::format_background_command_display_text(None, true, false),
+            "Background Bash command timed out."
+        );
+        assert_eq!(
+            BashTool::format_background_command_display_text(Some(130), false, true),
+            "Background Bash command was interrupted."
+        );
+        assert_eq!(
+            BashTool::format_background_command_error_display_text(),
+            "Background Bash command failed before producing a final completion result."
+        );
     }
 }

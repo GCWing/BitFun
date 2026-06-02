@@ -179,6 +179,21 @@ fn format_background_subagent_delivery_text(
     }
 }
 
+fn format_background_subagent_display_text(
+    outcome: Result<&SubagentResult, &BitFunError>,
+) -> String {
+    match outcome {
+        Ok(result) => {
+            if result.is_partial_timeout() {
+                "Background subagent completed with a partial timeout result.".to_string()
+            } else {
+                "Background subagent completed successfully.".to_string()
+            }
+        }
+        Err(_) => "Background subagent failed before producing a final result.".to_string(),
+    }
+}
+
 fn build_subagent_session_relationship(
     parent_info: Option<&SubagentParentInfo>,
     agent_type: &str,
@@ -5187,7 +5202,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .map(|token| token.child_token());
 
         tokio::spawn(async move {
-            let delivery_text = match coordinator
+            let (delivery_text, display_text) = match coordinator
                 .execute_hidden_subagent_internal(
                     request,
                     parent_cancel_token.as_ref(),
@@ -5195,15 +5210,21 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 )
                 .await
             {
-                Ok(result) => format_background_subagent_delivery_text(
-                    &background_task_id_for_delivery,
-                    &agent_type,
-                    Ok(&result),
+                Ok(result) => (
+                    format_background_subagent_delivery_text(
+                        &background_task_id_for_delivery,
+                        &agent_type,
+                        Ok(&result),
+                    ),
+                    format_background_subagent_display_text(Ok(&result)),
                 ),
-                Err(error) => format_background_subagent_delivery_text(
-                    &background_task_id_for_delivery,
-                    &agent_type,
-                    Err(&error),
+                Err(error) => (
+                    format_background_subagent_delivery_text(
+                        &background_task_id_for_delivery,
+                        &agent_type,
+                        Err(&error),
+                    ),
+                    format_background_subagent_display_text(Err(&error)),
                 ),
             };
 
@@ -5222,7 +5243,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         parent_agent_type,
                         parent_workspace_path,
                         delivery_text,
-                        None,
+                        Some(display_text),
                         Some(metadata),
                     )
                     .await
@@ -5840,6 +5861,29 @@ mod tests {
             "Background subagent 'GeneralPurpose' (background_task_id='bg-subagent-789') failed before producing a final result."
         ));
         assert!(failed_text.contains("Error:"));
+    }
+
+    #[test]
+    fn background_subagent_display_text_is_concise() {
+        let completed = super::SubagentResult::completed("done".to_string());
+        assert_eq!(
+            super::format_background_subagent_display_text(Ok(&completed)),
+            "Background subagent completed successfully."
+        );
+
+        let partial =
+            super::SubagentResult::partial_timeout("partial".to_string(), "timeout".to_string());
+        assert_eq!(
+            super::format_background_subagent_display_text(Ok(&partial)),
+            "Background subagent completed with a partial timeout result."
+        );
+
+        assert_eq!(
+            super::format_background_subagent_display_text(Err(
+                &crate::util::errors::BitFunError::tool("boom".to_string())
+            )),
+            "Background subagent failed before producing a final result."
+        );
     }
 
     #[test]
