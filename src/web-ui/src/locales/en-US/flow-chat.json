@@ -1263,6 +1263,8 @@
       "loadingPlan": "Loading plan...",
       "generating": "Generating...",
       "clickToOpenPlan": "Click to open plan file",
+      "revealPlanInExplorer": "Reveal plan file in file manager",
+      "revealPlanUnavailable": "Plan files can only be revealed for local workspaces",
       "remainingTodos": "{{count}} Remaining To-dos",
       "viewPlan": "View Plan",
       "build": "Build",

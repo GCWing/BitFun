@@ -1263,6 +1263,8 @@
       "loadingPlan": "正在加载计划...",
       "generating": "生成中...",
       "clickToOpenPlan": "点击打开计划文件",
+      "revealPlanInExplorer": "在文件管理器中定位计划文件",
+      "revealPlanUnavailable": "仅本地工作区支持在文件管理器中定位计划文件",
       "remainingTodos": "剩余 {{count}} 个待办",
       "viewPlan": "查看计划",
       "build": "构建",

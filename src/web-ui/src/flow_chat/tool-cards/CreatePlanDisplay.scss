@@ -49,6 +49,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: var(--flowchat-inline-gap, 0.35rem);
     padding: var(--flowchat-card-pad-y, 0.625rem) var(--flowchat-card-pad-x, 0.75rem);
     background: linear-gradient(
       90deg,
@@ -57,19 +58,32 @@
       rgba(255, 255, 255, 0.02) 100%
     );
     border-bottom: 1px solid var(--border-base);
-    
-    &--clickable {
+
+    .create-plan-header-main {
+      display: flex;
+      align-items: center;
+      flex: 1;
+      min-width: 0;
+      padding: 0;
+      background: transparent;
+      border: none;
+      color: inherit;
+      text-align: left;
+
+      &--clickable {
+        cursor: pointer;
+        transition: background 0.15s ease;
+      }
+
+      &:disabled {
+        cursor: default;
+      }
+    }
+
+    .create-plan-header-main--clickable {
       cursor: pointer;
-      transition: background 0.15s ease;
-      
+
       &:hover {
-        background: linear-gradient(
-          90deg,
-          rgba(245, 158, 11, 0.13) 0%,
-          rgba(245, 158, 11, 0.08) 50%,
-          rgba(255, 255, 255, 0.05) 100%
-        );
-        
         .file-name {
           color: var(--tool-card-text-primary);
         }
@@ -79,6 +93,7 @@
     .header-left {
       display: flex;
       align-items: center;
+      min-width: 0;
       gap: var(--flowchat-inline-gap, 0.35rem);
     }
 
@@ -102,6 +117,42 @@
       font-size: var(--flowchat-font-size-xs);
       font-family: var(--tool-card-font-mono);
       color: var(--tool-card-text-secondary);
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .create-plan-header-folder-btn-wrapper {
+      display: inline-flex;
+      flex-shrink: 0;
+    }
+
+    .create-plan-header-folder-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--tool-card-text-muted);
+      cursor: pointer;
+      transition: all 0.15s ease;
+
+      &:hover:not(:disabled) {
+        border-color: rgba(245, 158, 11, 0.35);
+        background: rgba(245, 158, 11, 0.07);
+        color: #f59e0b;
+      }
+
+      &:disabled {
+        opacity: 0.45;
+        cursor: default;
+      }
     }
 
     &--loading-shimmer {
