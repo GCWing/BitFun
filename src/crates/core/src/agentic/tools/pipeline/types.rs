@@ -2,6 +2,7 @@
 
 use crate::agentic::core::{ToolCall, ToolExecutionState};
 use crate::agentic::events::SubagentParentInfo as EventSubagentParentInfo;
+use crate::agentic::execution::types::EvalDeadline;
 use crate::agentic::round_preempt::DialogRoundInjectionInterrupt;
 use crate::agentic::tools::ToolRuntimeRestrictions;
 use crate::agentic::workspace::WorkspaceServices;
@@ -73,6 +74,7 @@ pub struct ToolExecutionContext {
     /// round injection is waiting for this turn.
     pub steering_interrupt: Option<DialogRoundInjectionInterrupt>,
     pub workspace_services: Option<WorkspaceServices>,
+    pub eval_deadline: Option<EvalDeadline>,
 }
 
 /// Tool execution task

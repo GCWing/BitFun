@@ -20,6 +20,17 @@ pub trait Agent: Send + Sync {
     /// Returns the turn_id. Events are consumed externally via EventQueue.
     async fn send_message(&self, message: String, agent_type: &str) -> Result<String>;
 
+    /// Send a message with additional user-message metadata.
+    async fn send_message_with_metadata(
+        &self,
+        message: String,
+        agent_type: &str,
+        metadata: Option<serde_json::Value>,
+    ) -> Result<String> {
+        let _ = metadata;
+        self.send_message(message, agent_type).await
+    }
+
     /// Cancel the current dialog turn (if any)
     async fn cancel_current_turn(&self) -> Result<()>;
 

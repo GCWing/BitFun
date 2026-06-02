@@ -322,6 +322,7 @@ mod tests {
                 runtime_tool_restrictions: Default::default(),
                 steering_interrupt: None,
                 workspace_services: None,
+                eval_deadline: None,
             },
             ToolExecutionOptions::default(),
         )
