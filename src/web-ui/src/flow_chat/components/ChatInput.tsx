@@ -26,6 +26,7 @@ import { SmartRecommendations } from './smart-recommendations';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { WorkspaceKind } from '@/shared/types';
 import { createImageContextFromFile, createImageContextFromClipboard } from '../utils/imageUtils';
+import { isSlashCommand } from '../utils/slashCommand';
 import { notificationService } from '@/shared/notification-system';
 import { inputReducer, initialInputState } from '../reducers/inputReducer';
 import { modeReducer, initialModeState } from '../reducers/modeReducer';
@@ -1315,10 +1316,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     inputValueRef.current = text;
 
     const trimmedLower = text.trim().toLowerCase();
-    const isBtwCommand = trimmedLower.startsWith('/btw');
-    const isCompactCommand = trimmedLower.startsWith('/compact');
+    const isBtwCommand = isSlashCommand(trimmedLower, '/btw');
+    const isCompactCommand = isSlashCommand(trimmedLower, '/compact');
     const isGoalCommand = isGoalSlashCommand(text);
-    const isUsageCommand = trimmedLower.startsWith('/usage');
+    const isUsageCommand = isSlashCommand(trimmedLower, '/usage');
     const isDeepReviewCommand = isDeepReviewSlashCommand(text);
     const isProcessing = !!derivedState?.isProcessing;
 
@@ -1944,7 +1945,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const message = expandComposerSpecialTokens(originalMessage);
     const messageCharCount = getCharacterCount(message);
 
-    if (message.toLowerCase().startsWith('/btw')) {
+    if (isSlashCommand(message, '/btw')) {
       // When idle, /btw can be sent via the normal send button.
       await submitBtwFromInput();
       return;
@@ -1980,21 +1981,21 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       return;
     }
 
-    if (message.toLowerCase().startsWith('/compact')) {
+    if (isSlashCommand(message, '/compact')) {
       notificationService.warning(
         t('chatInput.compactUsage', { defaultValue: 'Use /compact without extra arguments.' })
       );
       return;
     }
 
-    if (message.toLowerCase().startsWith('/usage')) {
+    if (isSlashCommand(message, '/usage')) {
       notificationService.warning(
         t('chatInput.usageCommandUsage', { defaultValue: 'Use /usage without extra arguments.' })
       );
       return;
     }
 
-    if (message.toLowerCase().startsWith('/init')) {
+    if (isSlashCommand(message, '/init')) {
       notificationService.warning(
         t('chatInput.initUsage', { defaultValue: 'Use /init without extra arguments.' })
       );
@@ -2152,7 +2153,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       if (isBtwSession) {
         return;
       }
-      if (!lower.startsWith('/btw')) {
+      // Use precise slash-command matcher (enforces word boundary and
+      // treats tab/newline as valid trailing whitespace — Claude Code 2.1.147)
+      // instead of the loose `lower.startsWith('/btw')` that used to also
+      // accept /btwextra.
+      if (!isSlashCommand(lower, '/btw')) {
         next = '/btw ';
       } else {
         // Normalize to "/btw " + rest, preserving any already typed question.
@@ -2168,7 +2173,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     } else if (actionId === 'compact') {
       next = '/compact';
     } else if (actionId === 'goal') {
-      if (!lower.startsWith('/goal')) {
+      if (!isSlashCommand(lower, '/goal')) {
         next = '/goal ';
       } else {
         const m = raw.match(/^(\s*)\/goal\b/i);
@@ -2468,7 +2473,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       
       e.preventDefault();
 
-      const isBtwCommand = inputState.value.trim().toLowerCase().startsWith('/btw');
+      const isBtwCommand = isSlashCommand(inputState.value.trim(), '/btw');
       if (isBtwCommand) {
         // Allow /btw submission even while the main session is generating.
         void submitBtwFromInput();
