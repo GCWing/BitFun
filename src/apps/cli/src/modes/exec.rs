@@ -6,17 +6,20 @@ use anyhow::Result;
 use clap::ValueEnum;
 use serde_json::json;
 use std::collections::HashMap;
+use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
 use bitfun_core::agentic::core::SessionState;
 use bitfun_events::AgenticEvent;
-use tokio::time::{Instant, sleep};
+use tokio::time::{sleep, Instant};
 
-use crate::agent::{Agent, agentic_system::AgenticSystem, core_adapter::CoreAgentAdapter};
+use crate::agent::{agentic_system::AgenticSystem, core_adapter::CoreAgentAdapter, Agent};
 use crate::config::CliConfig;
-use crate::diagnostics::{ExitContext, ExitKind, emit_exit_diagnostic};
+use crate::diagnostics::{emit_exit_diagnostic, ExitContext, ExitKind};
+
+const TOOL_START_INPUT_PREVIEW_CHARS: usize = 4_000;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
 pub enum ExecOutputFormat {
@@ -88,6 +91,64 @@ impl ExecMode {
         }
     }
 
+    fn workspace_display(&self) -> String {
+        self.workspace_path
+            .as_deref()
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|| {
+                std::env::current_dir()
+                    .map(|path| path.display().to_string())
+                    .unwrap_or_else(|_| ".".to_string())
+            })
+    }
+
+    fn redact_large_inline_data(value: &mut serde_json::Value) {
+        match value {
+            serde_json::Value::Object(map) => {
+                if map.remove("data_url").is_some() {
+                    map.insert("has_data_url".to_string(), serde_json::json!(true));
+                }
+                for child in map.values_mut() {
+                    Self::redact_large_inline_data(child);
+                }
+            }
+            serde_json::Value::Array(items) => {
+                for child in items {
+                    Self::redact_large_inline_data(child);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn tool_input_preview(params: &serde_json::Value) -> String {
+        let mut redacted = params.clone();
+        Self::redact_large_inline_data(&mut redacted);
+        let raw =
+            serde_json::to_string(&redacted).unwrap_or_else(|_| "<unserializable>".to_string());
+        if raw.chars().count() <= TOOL_START_INPUT_PREVIEW_CHARS {
+            return raw;
+        }
+
+        let preview: String = raw.chars().take(TOOL_START_INPUT_PREVIEW_CHARS).collect();
+        format!("{preview}... [truncated]")
+    }
+
+    fn print_tool_start_details(&self, tool_name: &str, tool_id: &str, params: &serde_json::Value) {
+        let started_at = chrono::Utc::now().to_rfc3339();
+        let cwd = self.workspace_display();
+        let input_preview = Self::tool_input_preview(params);
+
+        self.print_text(|| {
+            println!("\nTool call: {}", tool_name);
+            println!("   Started at: {}", started_at);
+            println!("   Tool ID: {}", tool_id);
+            println!("   CWD: {}", cwd);
+            println!("   Input: {}", input_preview);
+            std::io::stdout().flush().ok();
+        });
+    }
+
     fn get_git_diff(&self) -> Option<String> {
         let workspace = self.workspace_path.as_ref()?;
 
@@ -119,17 +180,14 @@ impl ExecMode {
             "Executing command"
         );
 
-        let session_id = self
-            .prepare_session()
-            .await
-            .map_err(|e| {
-                emit_exit_diagnostic(
-                    ExitKind::SessionCreateFailed,
-                    &e.to_string(),
-                    &self.exit_context(None, None),
-                );
-                e
-            })?;
+        let session_id = self.prepare_session().await.map_err(|e| {
+            emit_exit_diagnostic(
+                ExitKind::SessionCreateFailed,
+                &e.to_string(),
+                &self.exit_context(None, None),
+            );
+            e
+        })?;
         tracing::info!(session_id = %session_id, "Session ready");
         let event_queue = self.agent.event_queue().clone();
 
@@ -200,14 +258,29 @@ impl ExecMode {
                         if parent_session_id.map(String::as_str) == Some(session_id.as_str()) {
                             use bitfun_events::ToolEventData;
                             match tool_event {
-                                ToolEventData::Started { tool_name, tool_id, .. } => {
+                                ToolEventData::Started {
+                                    tool_name,
+                                    tool_id,
+                                    params,
+                                    ..
+                                } => {
                                     self.emit(json!({
                                         "type": "subagent_tool_start",
                                         "session_id": session_id,
                                         "tool_id": tool_id,
                                         "tool_name": tool_name,
+                                        "input": params,
                                     }))?;
-                                    self.print_text(|| println!("   [subagent] {}", tool_name));
+                                    self.print_text(|| {
+                                        let started_at = chrono::Utc::now().to_rfc3339();
+                                        let input_preview = Self::tool_input_preview(params);
+                                        println!("   [subagent] {}", tool_name);
+                                        println!("      Started at: {}", started_at);
+                                        println!("      Tool ID: {}", tool_id);
+                                        println!("      CWD: {}", self.workspace_display());
+                                        println!("      Input: {}", input_preview);
+                                        std::io::stdout().flush().ok();
+                                    });
                                 }
                                 ToolEventData::Completed {
                                     tool_name,
@@ -230,11 +303,17 @@ impl ExecMode {
                                         "summary": summary,
                                     }))?;
                                     self.print_text(|| {
-                                        println!("   [subagent] {} completed: {}", tool_name, summary)
+                                        println!(
+                                            "   [subagent] {} completed: {}",
+                                            tool_name, summary
+                                        )
                                     });
                                 }
                                 ToolEventData::Failed {
-                                    tool_name, tool_id, error, ..
+                                    tool_name,
+                                    tool_id,
+                                    error,
+                                    ..
                                 } => {
                                     self.emit(json!({
                                         "type": "subagent_tool_error",
@@ -243,7 +322,9 @@ impl ExecMode {
                                         "tool_name": tool_name,
                                         "error": error,
                                     }))?;
-                                    self.print_text(|| println!("   [subagent] {} failed: {}", tool_name, error));
+                                    self.print_text(|| {
+                                        println!("   [subagent] {} failed: {}", tool_name, error)
+                                    });
                                 }
                                 _ => {}
                             }
@@ -309,7 +390,7 @@ impl ExecMode {
                                     "tool_name": tool_name,
                                     "input": params,
                                 }))?;
-                                self.print_text(|| println!("\nTool call: {}", tool_name));
+                                self.print_tool_start_details(tool_name, tool_id, params);
                                 total_tool_calls += 1;
                             }
                             ToolEventData::Progress {
@@ -349,7 +430,10 @@ impl ExecMode {
                                     "summary": summary,
                                 }))?;
                                 self.print_text(|| {
-                                    println!("   [+] {} ({}ms): {}", tool_name, duration_ms, summary)
+                                    println!(
+                                        "   [+] {} ({}ms): {}",
+                                        tool_name, duration_ms, summary
+                                    )
                                 });
                             }
                             ToolEventData::Failed {
@@ -382,7 +466,10 @@ impl ExecMode {
                             println!("\n");
                             println!("Execution complete");
                             if total_tool_calls > 0 {
-                                println!("\nTool call statistics: {} tools invoked", total_tool_calls);
+                                println!(
+                                    "\nTool call statistics: {} tools invoked",
+                                    total_tool_calls
+                                );
                             }
                         });
                         terminal_outcome = Some(Ok(()));
@@ -547,10 +634,9 @@ impl ExecMode {
                 .ok_or_else(|| anyhow::anyhow!("Session has no persisted turns to fork"))?;
             let path_manager = bitfun_core::infrastructure::try_get_path_manager_arc()
                 .map_err(|error| anyhow::anyhow!(error.to_string()))?;
-            let persistence_manager = bitfun_core::agentic::persistence::PersistenceManager::new(
-                path_manager,
-            )
-            .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+            let persistence_manager =
+                bitfun_core::agentic::persistence::PersistenceManager::new(path_manager)
+                    .map_err(|error| anyhow::anyhow!(error.to_string()))?;
             let result = persistence_manager
                 .branch_session(
                     &workspace,
@@ -718,7 +804,8 @@ pub(crate) fn write_patch_to_path(output_target: &str, patch: &str) -> std::io::
 
 #[cfg(test)]
 mod patch_tests {
-    use super::write_patch_to_path;
+    use super::{write_patch_to_path, ExecMode, TOOL_START_INPUT_PREVIEW_CHARS};
+    use serde_json::json;
 
     #[test]
     fn write_patch_to_path_creates_nested_parent_directories() {
@@ -729,5 +816,29 @@ mod patch_tests {
 
         let written = std::fs::read_to_string(&patch_path).expect("read patch");
         assert_eq!(written, "diff content");
+    }
+
+    #[test]
+    fn tool_input_preview_redacts_data_urls() {
+        let preview = ExecMode::tool_input_preview(&json!({
+            "image": {
+                "data_url": "data:image/png;base64,abc",
+                "name": "sample"
+            }
+        }));
+
+        assert!(!preview.contains("data:image/png"));
+        assert!(preview.contains("\"has_data_url\":true"));
+        assert!(preview.contains("\"name\":\"sample\""));
+    }
+
+    #[test]
+    fn tool_input_preview_truncates_large_inputs() {
+        let preview = ExecMode::tool_input_preview(&json!({
+            "content": "x".repeat(TOOL_START_INPUT_PREVIEW_CHARS + 100)
+        }));
+
+        assert!(preview.ends_with("... [truncated]"));
+        assert!(preview.len() < TOOL_START_INPUT_PREVIEW_CHARS + 100);
     }
 }
