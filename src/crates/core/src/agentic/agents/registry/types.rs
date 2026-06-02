@@ -12,28 +12,12 @@ use crate::agentic::deep_review_policy::{
     REVIEW_JUDGE_AGENT_TYPE,
 };
 pub use bitfun_agent_runtime::agents::{
-    SubagentListScope, SubagentOverrideState, SubagentQueryContext, SubagentStateReason,
+    SubAgentSource, SubagentListScope, SubagentOverrideState, SubagentQueryContext,
+    SubagentStateReason,
 };
+use bitfun_agent_runtime::prompt_cache::prompt_cache_scope_key;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-
-/// subagent source (builtin / project / user), used for frontend display
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum SubAgentSource {
-    Builtin,
-    Project,
-    User,
-}
-
-impl SubAgentSource {
-    pub fn from_custom_kind(kind: CustomSubagentKind) -> Self {
-        match kind {
-            CustomSubagentKind::Project => SubAgentSource::Project,
-            CustomSubagentKind::User => SubAgentSource::User,
-        }
-    }
-}
 
 /// mutable configuration for custom subagent (model will change, path/kind can be obtained by downcast)
 #[derive(Clone, Debug)]
@@ -117,6 +101,13 @@ fn default_true() -> bool {
     true
 }
 
+pub fn subagent_source_from_custom_kind(kind: CustomSubagentKind) -> SubAgentSource {
+    match kind {
+        CustomSubagentKind::Project => SubAgentSource::Project,
+        CustomSubagentKind::User => SubAgentSource::User,
+    }
+}
+
 pub fn subagent_key_for(source: Option<SubAgentSource>, agent: &dyn Agent) -> Option<String> {
     let source = source?;
     let slot = match source {
@@ -191,10 +182,9 @@ impl AgentInfo {
             is_review: is_review_agent_entry(entry),
             tool_count: default_tools.len(),
             default_tools,
-            prompt_cache_scope_key: format!(
-                "{}||{}",
-                agent.system_prompt_cache_identity(None).scope_key,
-                agent.user_context_cache_identity().scope_key
+            prompt_cache_scope_key: prompt_cache_scope_key(
+                &agent.system_prompt_cache_identity(None),
+                &agent.user_context_cache_identity(),
             ),
             config_profile_id,
             config_profile_label,

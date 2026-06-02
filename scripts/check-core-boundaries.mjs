@@ -734,6 +734,106 @@ const forbiddenContentRules = [
     ],
   },
   {
+    path: 'src/crates/core/src/agentic/agents/mod.rs',
+    patterns: [
+      {
+        regex: /\bpub const SHARED_CODING_MODE_PROMPT_TEMPLATE\b/,
+        message:
+          'core agent mode module must not own shared coding-mode prompt facts; use bitfun-agent-runtime agents',
+      },
+      {
+        regex: /\bpub const SHARED_CODING_MODE_CONFIG_PROFILE_ID\b/,
+        message:
+          'core agent mode module must not own shared coding-mode config profile facts; use bitfun-agent-runtime agents',
+      },
+      {
+        regex: /\bpub const SHARED_CODING_MODE_IDS\b/,
+        message:
+          'core agent mode module must not own shared coding-mode membership facts; use bitfun-agent-runtime agents',
+      },
+      {
+        regex: /\bpub fn resolve_mode_config_profile_id\b/,
+        message:
+          'core agent mode module must not own mode config profile resolution; use bitfun-agent-runtime agents',
+      },
+      {
+        regex: /\bpub fn mode_config_profile_member_mode_ids\b/,
+        message:
+          'core agent mode module must not own mode config profile membership; use bitfun-agent-runtime agents',
+      },
+      {
+        regex: /\bpub fn mode_config_profile_label\b/,
+        message:
+          'core agent mode module must not own mode config profile labels; use bitfun-agent-runtime agents',
+      },
+      {
+        regex: /\bpub fn shared_coding_mode_user_context_policy\b/,
+        message:
+          'core agent mode module must not own shared coding-mode context policy; use bitfun-agent-runtime agents',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/agents/registry/query.rs',
+    patterns: [
+      {
+        regex: /"agentic"\s*=>\s*0[\s\S]*"Cowork"\s*=>\s*1/,
+        message:
+          'core agent registry query must not own mode presentation order; use bitfun-agent-runtime agents',
+      },
+      {
+        regex: /\bfn subagent_source_rank\b/,
+        message:
+          'core agent registry query must not own subagent source presentation rank; use bitfun-agent-runtime agents',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/agents/registry/types.rs',
+    patterns: [
+      {
+        regex: /\bpub enum SubAgentSource\b/,
+        message:
+          'core agent registry must not own subagent source DTOs; use bitfun-agent-runtime agents',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/session/prompt_cache.rs',
+    patterns: [
+      {
+        regex: /\bpub const PROMPT_CACHE_SCHEMA_VERSION\b/,
+        message:
+          'core prompt cache must not own prompt-cache schema facts; use bitfun-agent-runtime prompt_cache',
+      },
+      {
+        regex: /\bpub struct PromptCachePolicy\b/,
+        message:
+          'core prompt cache must not own prompt-cache policy; use bitfun-agent-runtime prompt_cache',
+      },
+      {
+        regex: /\bpub struct SessionPromptCache\b/,
+        message:
+          'core prompt cache must not own prompt-cache DTOs; use bitfun-agent-runtime prompt_cache',
+      },
+      {
+        regex: /\bpub enum PromptCacheScope\b/,
+        message:
+          'core prompt cache must not own prompt-cache invalidation scope; use bitfun-agent-runtime prompt_cache',
+      },
+      {
+        regex: /\bpub struct SessionPromptCacheStore\b/,
+        message:
+          'core prompt cache must not own in-memory prompt-cache store; use bitfun-agent-runtime prompt_cache',
+      },
+      {
+        regex: /\bpub enum PromptCacheLookup\b/,
+        message:
+          'core prompt cache must not own prompt-cache lookup outcomes; use bitfun-agent-runtime prompt_cache',
+      },
+    ],
+  },
+  {
     path: 'src/crates/core/src/agentic/agents/prompt_builder/prompt_builder_impl.rs',
     patterns: [
       {
@@ -2348,6 +2448,95 @@ const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/agent-runtime/src/prompt_cache.rs',
+    reason:
+      'agent-runtime must own prompt-cache policy, identities, DTOs, scope keys, and in-memory runtime store',
+    patterns: [
+      {
+        regex: /\bpub const PROMPT_CACHE_SCHEMA_VERSION\b/,
+        message: 'missing agent-runtime prompt-cache schema fact',
+      },
+      {
+        regex: /\bpub struct PromptCachePolicy\b/,
+        message: 'missing agent-runtime prompt-cache policy',
+      },
+      {
+        regex: /\bpub fn prompt_cache_scope_key\b/,
+        message: 'missing agent-runtime prompt-cache scope-key helper',
+      },
+      {
+        regex: /\bpub struct SessionPromptCacheStore\b/,
+        message: 'missing agent-runtime in-memory prompt-cache store',
+      },
+      {
+        regex: /\bpub enum PromptCacheLookup\b/,
+        message: 'missing agent-runtime prompt-cache lookup contract',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/agent-runtime/tests/prompt_cache_contracts.rs',
+    reason:
+      'agent-runtime prompt-cache owner must keep behavior-equivalence contracts for cache identity, expiry, invalidation, and scope-key shape',
+    patterns: [
+      {
+        regex: /\bprompt_cache_policy_keeps_existing_default_persistence_ttl\b/,
+        message: 'missing prompt-cache default TTL regression',
+      },
+      {
+        regex: /\bprompt_cache_lookup_preserves_identity_and_expiry_semantics\b/,
+        message: 'missing prompt-cache identity/expiry regression',
+      },
+      {
+        regex: /\bprompt_cache_scope_key_preserves_legacy_mode_switch_shape\b/,
+        message: 'missing prompt-cache scope-key shape regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/agent-runtime/src/agents.rs',
+    reason:
+      'agent-runtime must own shared mode config profile facts that are runtime-visible and product-neutral',
+    patterns: [
+      {
+        regex: /\bpub const SHARED_CODING_MODE_PROMPT_TEMPLATE\b/,
+        message: 'missing shared coding-mode prompt template fact',
+      },
+      {
+        regex: /\bpub const SHARED_CODING_MODE_CONFIG_PROFILE_ID\b/,
+        message: 'missing shared coding-mode config profile id',
+      },
+      {
+        regex: /\bpub fn resolve_mode_config_profile_id\b/,
+        message: 'missing mode config profile resolver',
+      },
+      {
+        regex: /\bpub fn mode_config_profile_member_mode_ids\b/,
+        message: 'missing mode config profile member lookup',
+      },
+      {
+        regex: /\bpub fn mode_presentation_rank\b/,
+        message: 'missing mode presentation rank',
+      },
+      {
+        regex: /\bpub fn shared_coding_mode_user_context_policy\b/,
+        message: 'missing shared coding-mode user-context policy',
+      },
+      {
+        regex: /\bpub enum SubAgentSource\b/,
+        message: 'missing subagent source DTO',
+      },
+      {
+        regex: /\bpub const fn subagent_source_kind\b/,
+        message: 'missing subagent source runtime-kind mapping',
+      },
+      {
+        regex: /\bpub const fn subagent_source_presentation_rank\b/,
+        message: 'missing subagent source presentation rank',
+      },
+    ],
+  },
+  {
     path: 'src/crates/agent-runtime/tests/prompt_contracts.rs',
     reason:
       'agent-runtime prompt owner must keep behavior-equivalence contracts for user context and reminder ordering',
@@ -2412,6 +2601,28 @@ const requiredContentRules = [
       {
         regex: /pub use bitfun_agent_runtime::prompt::\{UserContextPolicy, UserContextSection\};/,
         message: 'missing agent-runtime user-context compatibility re-export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/session/prompt_cache.rs',
+    reason:
+      'core prompt_cache path must stay a compatibility facade over agent-runtime',
+    patterns: [
+      {
+        regex: /pub use bitfun_agent_runtime::prompt_cache::\*;/,
+        message: 'missing agent-runtime prompt-cache compatibility re-export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/agents/mod.rs',
+    reason:
+      'core agent mode module must keep old import paths while agent-runtime owns shared mode profile facts',
+    patterns: [
+      {
+        regex: /pub use bitfun_agent_runtime::agents::\{[\s\S]*mode_presentation_rank[\s\S]*resolve_mode_config_profile_id[\s\S]*shared_coding_mode_user_context_policy[\s\S]*SHARED_CODING_MODE_PROMPT_TEMPLATE[\s\S]*\};/,
+        message: 'missing agent-runtime shared mode profile compatibility re-export',
       },
     ],
   },
@@ -4847,7 +5058,7 @@ const requiredContentRules = [
       'core agent registry must preserve legacy DTO fields while bitfun-agent-runtime owns query scope and availability reason contracts',
     patterns: [
       {
-        regex: /pub use bitfun_agent_runtime::agents::\{[\s\S]*SubagentListScope[\s\S]*SubagentOverrideState[\s\S]*SubagentQueryContext[\s\S]*SubagentStateReason[\s\S]*\};/,
+        regex: /pub use bitfun_agent_runtime::agents::\{[\s\S]*SubAgentSource[\s\S]*SubagentListScope[\s\S]*SubagentOverrideState[\s\S]*SubagentQueryContext[\s\S]*SubagentStateReason[\s\S]*\};/,
         message: 'missing agent-runtime subagent registry contract re-export',
       },
       {
@@ -7404,6 +7615,14 @@ function runManifestParserSelfTest() {
         'resolve_subagent_availability',
         'SubagentOverrideLayers',
         'SubagentStateReason',
+        'SHARED_CODING_MODE_CONFIG_PROFILE_ID',
+        'resolve_mode_config_profile_id',
+        'mode_config_profile_member_mode_ids',
+        'mode_presentation_rank',
+        'shared_coding_mode_user_context_policy',
+        'SubAgentSource',
+        'subagent_source_kind',
+        'subagent_source_presentation_rank',
       ],
     },
     {
@@ -7412,6 +7631,9 @@ function runManifestParserSelfTest() {
         'visibility_policy_supports_public_restricted_hidden_and_denied_parents',
         'availability_preserves_builtin_project_and_user_override_layering',
         'default_enabled_uses_visibility_only_for_builtin_subagents',
+        'shared_coding_modes_resolve_to_the_same_config_profile',
+        'subagent_source_contract_preserves_runtime_kind_and_presentation_order',
+        'mode_presentation_and_shared_context_policy_match_existing_mode_contract',
       ],
     },
     {
@@ -7470,6 +7692,24 @@ function runManifestParserSelfTest() {
         'UserContextPolicy',
         'ToolListingSections',
         'PrependedPromptReminders',
+      ],
+    },
+    {
+      path: 'src/crates/agent-runtime/src/prompt_cache.rs',
+      contracts: [
+        'PROMPT_CACHE_SCHEMA_VERSION',
+        'PromptCachePolicy',
+        'prompt_cache_scope_key',
+        'SessionPromptCacheStore',
+        'PromptCacheLookup',
+      ],
+    },
+    {
+      path: 'src/crates/agent-runtime/tests/prompt_cache_contracts.rs',
+      contracts: [
+        'prompt_cache_policy_keeps_existing_default_persistence_ttl',
+        'prompt_cache_lookup_preserves_identity_and_expiry_semantics',
+        'prompt_cache_scope_key_preserves_legacy_mode_switch_shape',
       ],
     },
     {

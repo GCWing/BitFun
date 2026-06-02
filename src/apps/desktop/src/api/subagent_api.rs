@@ -2,8 +2,9 @@
 
 use crate::api::app_state::AppState;
 use bitfun_core::agentic::agents::{
-    AgentCategory, AgentInfo, CustomSubagent, CustomSubagentConfig, CustomSubagentDetail,
-    CustomSubagentKind, SubAgentSource, SubagentListScope, SubagentQueryContext,
+    subagent_source_from_custom_kind, AgentCategory, AgentInfo, CustomSubagent,
+    CustomSubagentConfig, CustomSubagentDetail, CustomSubagentKind, SubAgentSource,
+    SubagentListScope, SubagentQueryContext,
 };
 use log::warn;
 use serde::{Deserialize, Serialize};
@@ -366,7 +367,7 @@ pub async fn create_subagent(
     state.agent_registry.register_agent(
         Arc::new(subagent),
         AgentCategory::SubAgent,
-        Some(SubAgentSource::from_custom_kind(kind)),
+        Some(subagent_source_from_custom_kind(kind)),
         Some(custom_config),
     );
 

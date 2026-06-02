@@ -6,5 +6,6 @@
 pub mod agents;
 pub mod events;
 pub mod prompt;
+pub mod prompt_cache;
 pub mod scheduler;
 pub mod thread_goal;

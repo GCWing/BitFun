@@ -57,9 +57,10 @@
 - `bitfun-agent-runtime` 已建立为可独立构建的 Agent Runtime SDK owner crate，当前承接 scheduler/background
   delivery 纯决策，thread goal runtime 的 turn accounting、goal mutation、continuation plan 和 tool response assembly，
   subagent query scope / visibility / availability 决策，以及 round-boundary yield / injection state 和
-  turn-outcome queue policy；prompt-loop 的 user-context policy 和 tool / skill / subagent listing reminder
-  ordering 已归入该 crate；finish-reason label、session-state event label 和 turn-outcome event fact 也已由
-  `bitfun-agent-runtime` 承接，core 只保留旧路径 re-export 或 concrete adapter。
+  turn-outcome queue policy；prompt-loop 的 user-context policy、tool / skill / subagent listing reminder
+  ordering、prompt cache policy / identity / DTO / scope key / in-memory store、shared mode profile / context policy、
+  mode / subagent source presentation facts 已归入该 crate；finish-reason label、session-state event label 和
+  turn-outcome event fact 也已由 `bitfun-agent-runtime` 承接，core 只保留旧路径 re-export 或 concrete adapter。
 - persisted thread goal 的 portable DTO、status、continuation plan 和 tool response contract 已归入
   `bitfun-runtime-ports`；`get_goal` / `create_goal` / `update_goal` 已进入产品 tool registry。
 - `bitfun-harness` 已建立为可独立构建的 Harness contract crate，当前承接 workflow descriptor、legacy route
@@ -68,8 +69,9 @@
 
 明确未完成：
 
-- `bitfun-agent-runtime` 不代表 session manager、concrete prompt assembly、concrete agent definition loading、scheduler 生命周期、
-  event delivery 或 post-turn hook 已迁移；当前 event 迁移只覆盖无副作用的 wire label / fact 映射。
+- `bitfun-agent-runtime` 不代表 session manager、session persistence / prompt-cache cold restore、concrete prompt assembly、
+  concrete agent definition loading、custom subagent file IO、scheduler 生命周期、event delivery、permission `Tool` handler
+  或 post-turn hook 已迁移；当前 event 迁移只覆盖无副作用的 wire label / fact 映射。
 - thread goal 的 metadata store、token subscriber、scheduler delivery adapter 和 goal `Tool` handler 仍在
   `bitfun-core`；runtime 决策已经归属 `bitfun-agent-runtime`，后续不应再把它误归入普通 concrete tool IO。
 - `bitfun-harness` 不代表 Deep Review、DeepResearch、MiniApp 的 concrete workflow execution 已迁移；PR4 provider
@@ -107,10 +109,10 @@
 - `product-full` 是完整产品能力保护开关。
 - 构建脚本和 installer 相关脚本不作为 core 拆解的一部分修改。
 - boundary check 覆盖已外移 owner 的旧路径 facade-only / 禁止回流状态。
-- tool manifest、`GetToolSpec`、execution admission gate、MiniApp storage layout adapter、product-domain pure helper、remote workspace search fallback、MCP config / catalog / dynamic manifest 等已有 focused baseline。
+- tool manifest、`GetToolSpec`、execution admission gate、MiniApp storage layout adapter、product-domain pure helper、remote workspace search fallback、MCP config / catalog / dynamic manifest、agent-runtime prompt cache 与 agent registry source/profile facts 等已有 focused baseline。
 
 ## 3. 当前剩余结论
 
 - 低风险准备项已经完成，不再新增零散小 PR。
-- 后续只按高风险 owner 主题推进：Agent Runtime 剩余的 registry/scheduler lifecycle、Product-Domain Runtime、Tool Runtime 剩余主体、Feature / Build-Benefit Evaluation，以及经过单独保护的 Harness execution / Product Capability pack 迁移。
+- 后续只按三段大 PR 推进：PR-B 的 Product-Domain + Tool Runtime owner closure，以及 PR-C 的 Harness / Capability / Build-Benefit closure；如要继续移动 Agent Runtime concrete scheduler、event delivery、permission handler 或 post-turn hook，必须先补等价保护并明确纳入后续大 PR，不能拆成零散 helper PR。
 - 缺陷修复、行为变更、冗余清理、三方库升级和构建脚本调整必须独立评估，不能伪装成 core decomposition 剩余里程碑。

@@ -39,15 +39,16 @@ SessionManager → Session → DialogTurn → ModelRound
   归属 `bitfun-agent-runtime`。core 只保留 session metadata store、token
   subscriber、scheduler delivery adapter、event emission，以及 `get_goal` /
   `create_goal` / `update_goal` 的 `Tool` handler。
-- Subagent query scope、visibility/availability decision、round-boundary
-  yield/injection state 和 turn-outcome queue decision 归属
-  `bitfun-agent-runtime`。core 保留 concrete agent definition loading、
-  custom subagent file IO/config adapter、desktop API wiring、concrete
-  scheduler lifecycle、submit execution 和 event delivery。
+- Subagent query scope、visibility/availability decision、registry source/profile
+  fact、mode/subagent presentation fact、round-boundary yield/injection state 和
+  turn-outcome queue decision 归属 `bitfun-agent-runtime`。core 保留 concrete
+  agent definition loading、custom subagent file IO/config adapter、desktop API
+  wiring、concrete scheduler lifecycle、submit execution 和 event delivery。
 - Prompt-loop 的 user-context policy 和 tool / skill / subagent listing
-  reminder ordering 归属 `bitfun-agent-runtime`。core 保留具体 prompt
-  assembly、workspace / remote / project-layout context IO、language/config
-  lookup、prompt cache 协调和旧路径兼容 re-export。
+  reminder ordering，以及 prompt-cache policy、identity、DTO、scope-key fact 和
+  in-memory store 归属 `bitfun-agent-runtime`。core 保留具体 prompt assembly、
+  workspace / remote / project-layout context IO、language/config lookup、
+  prompt-cache persistence/restore 协调和旧路径兼容 re-export。
 - Finish-reason label、session-state event label 和 turn-outcome event fact
   归属 `bitfun-agent-runtime`。core 保留具体 event routing、event emission、
   session state storage 和旧路径兼容 re-export。

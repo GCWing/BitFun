@@ -15,6 +15,12 @@ use crate::agentic::tools::framework::ToolExposure;
 use crate::agentic::WorkspaceBinding;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
+pub use bitfun_agent_runtime::agents::{
+    mode_config_profile_label, mode_config_profile_member_mode_ids, mode_presentation_rank,
+    resolve_mode_config_profile_id, shared_coding_mode_user_context_policy,
+    SHARED_CODING_MODE_CONFIG_PROFILE_ID, SHARED_CODING_MODE_CONFIG_PROFILE_LABEL,
+    SHARED_CODING_MODE_IDS, SHARED_CODING_MODE_PROMPT_TEMPLATE,
+};
 pub use definitions::custom::{CustomSubagent, CustomSubagentKind};
 pub use definitions::hidden::{CodeReviewAgent, DeepReviewAgent, GenerateDocAgent};
 pub use definitions::modes::{
@@ -37,15 +43,15 @@ pub use prompt_builder::{
 };
 pub use registry::catalog::{builtin_agent_specs, BuiltinAgentSpec};
 pub use registry::types::{
-    AgentCategory, AgentInfo, AgentToolPolicy, CustomSubagentConfig, SubAgentSource,
-    SubagentListScope, SubagentQueryContext, SubagentStateReason,
+    subagent_source_from_custom_kind, AgentCategory, AgentInfo, AgentToolPolicy,
+    CustomSubagentConfig, SubAgentSource, SubagentListScope, SubagentQueryContext,
+    SubagentStateReason,
 };
 pub use registry::visibility::{
     BuiltinSubagentExposure, SubagentVisibilityPolicy, SubagentVisibilitySummary,
 };
 pub use registry::{get_agent_registry, AgentRegistry, CustomSubagentDetail};
 use std::any::Any;
-use std::borrow::Cow;
 
 // Include embedded prompts generated at compile time
 include!(concat!(env!("OUT_DIR"), "/embedded_agents_prompt.rs"));
@@ -54,34 +60,6 @@ pub type AgentToolPolicyOverrides = IndexMap<String, ToolExposure>;
 
 static EMPTY_AGENT_TOOL_POLICY_OVERRIDES: std::sync::LazyLock<AgentToolPolicyOverrides> =
     std::sync::LazyLock::new(AgentToolPolicyOverrides::default);
-
-pub const SHARED_CODING_MODE_PROMPT_TEMPLATE: &str = "agentic_mode";
-pub const SHARED_CODING_MODE_CONFIG_PROFILE_ID: &str = "coding_shared";
-pub const SHARED_CODING_MODE_CONFIG_PROFILE_LABEL: &str = "Coding Shared";
-pub const SHARED_CODING_MODE_IDS: &[&str] = &["agentic", "Plan", "debug", "Multitask"];
-
-pub fn resolve_mode_config_profile_id<'a>(mode_id: &'a str) -> Cow<'a, str> {
-    match mode_id.trim() {
-        "agentic" | "Plan" | "debug" | "Multitask" => {
-            Cow::Borrowed(SHARED_CODING_MODE_CONFIG_PROFILE_ID)
-        }
-        _ => Cow::Borrowed(mode_id),
-    }
-}
-
-pub fn mode_config_profile_member_mode_ids(profile_id: &str) -> &'static [&'static str] {
-    match profile_id.trim() {
-        SHARED_CODING_MODE_CONFIG_PROFILE_ID => SHARED_CODING_MODE_IDS,
-        _ => &[],
-    }
-}
-
-pub fn mode_config_profile_label(profile_id: &str) -> Option<&'static str> {
-    match profile_id.trim() {
-        SHARED_CODING_MODE_CONFIG_PROFILE_ID => Some(SHARED_CODING_MODE_CONFIG_PROFILE_LABEL),
-        _ => None,
-    }
-}
 
 pub fn shared_coding_mode_tools() -> Vec<String> {
     vec![
@@ -109,14 +87,6 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
         "ControlHub".to_string(),
         "InitMiniApp".to_string(),
     ]
-}
-
-pub fn shared_coding_mode_user_context_policy() -> UserContextPolicy {
-    UserContextPolicy::empty()
-        .with_workspace_context()
-        .with_workspace_instructions()
-        .with_workspace_memory_files()
-        .with_project_layout()
 }
 
 /// Agent trait defining the interface for all agents

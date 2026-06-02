@@ -68,98 +68,25 @@ workspace build 证明没有行为或 feature 影响。
 
 ## 4. 后续迁移队列
 
-后续迁移固定收敛为 7 个大块 PR。每个 PR 都必须先补保护，再迁移 owner，最后回看文档和边界；如果发现必须改变功能语义，需要在 PR 中单独说明原因、影响范围和回滚边界。
+后续迁移收敛为 PR-A / PR-B / PR-C 三个大型 PR。每个 PR 必须迁移真实 owner 逻辑，并同时包含旧路径兼容、focused tests、boundary check 和提交前对抗性审核。只新增抽象、只补 facade 或只增加 guard 不满足准出要求。
 
 | PR | 主题 | 完整范围 | 不允许混入 | 合入门禁 |
 |---|---|---|---|---|
-| PR1 | Product Assembly / Runtime Services Foundation | 创建 `bitfun-runtime-services`，补 `RuntimeServicesBuilder`、typed provider registration、capability availability、Remote ports、fake provider 和 boundary check 入口 | 具体 remote runtime、tool IO、product-domain IO、default feature 调整 | provider 注册路径可测试，Remote ports 不暴露 SSH / relay concrete handle，新增 crate 不依赖 `bitfun-core` |
-| PR2 | Service / Agent Remote Runtime Owner | 在 remote connection、remote workspace、remote FS / terminal projection、workspace-root / persistence、`ImageContextData`、remote-SSH / relay provider 中完成一个完整 owner 主题的 port、provider、旧路径兼容和行为等价验证 | tool runtime、product-domain runtime、feature matrix、产品命令或 UI 行为变更 | remote/session/file/image/terminal/scheduler 行为等价，产品 surface 不变 |
-| PR3 | Agent Runtime SDK Owner | 拆分 mode-scoped subagent visibility、agent registry facts、queue policy decision、scheduler submit/cancel facts 和 background delivery 边界；concrete scheduler 生命周期按保护程度逐步外移 | remote provider、tool IO、product-domain IO、默认 feature 调整 | subagent 可见性、queue/preempt/cancel、background reply、DeepResearch hook 等价 |
-| PR4 | Harness / Product Capability Boundary | 建立 Harness provider contract，让 Deep Review、DeepResearch、MiniApp 等 workflow 通过 provider 注册，不侵入 Agent Runtime SDK | concrete service IO、tool IO、surface 命令语义变更 | 至少两个 workflow 可通过 provider contract 表达，旧路径兼容 |
-| PR5 | Product-Domain Runtime Owner | MiniApp filesystem IO / worker / host / builtin seed 或 function-agent Git/AI 中完成一个完整 owner 主题，建立最小 port/provider 和 core adapter | tool runtime、service/agent runtime、surface 行为变更 | MiniApp/function-agent focused regression，PathManager/process/Git/AI 边界清晰 |
-| PR6 | Tool Runtime Owner | 继续收敛 tool runtime owner：已完成 deterministic execution admission gate、`GetToolSpecTool` product runtime owner closure、manifest/catalog/snapshot owner closure；本阶段迁移 workspace service contract 与 collapsed unlock observation owner，core pipeline 只保留执行编排和旧路径兼容 | service/agent runtime、product-domain runtime、feature matrix、产品行为变更、全量 concrete tool IO 搬迁 | tool pipeline focused tests、product runtime focused tests、manifest facade parity tests、`bitfun-agent-tools` / `bitfun-runtime-ports` contract tests、boundary check |
-| PR7 | Feature / Build-Benefit Evaluation | 评估 feature matrix、dependency profile、no-default 编译面和构建收益数据，确认是否具备收敛默认 feature 的条件 | runtime owner 迁移、default feature 副作用、构建脚本变更 | cargo metadata / cargo tree 证据，产品入口完整能力不变 |
+| PR-A | Agent Runtime SDK Owner Closure | 承接 prompt cache policy / identity / DTO / in-memory store、shared mode profile / context policy、mode / subagent source presentation facts，并保持 core agent registry 与 session manager 旧路径兼容 | concrete scheduler 生命周期、event emitter、post-turn hook、permission `Tool` handler、custom subagent file IO、产品命令或默认 feature 变更 | `bitfun-agent-runtime` 独立测试、core agents / prompt-cache focused tests、boundary check、repo hygiene、`cargo check -p bitfun-core --features product-full` |
+| PR-B | Product-Domain + Tool Runtime Owner Closure | 在 MiniApp worker / host / builtin asset、function-agent Git / AI、ToolUseContext concrete handles、product registry materialization、collapsed unlock persistence 与具体 IO tools 中迁移完整 owner 主题 | Agent Runtime scheduler / event 行为、Harness execution、feature matrix、UI 或产品语义变更 | MiniApp/function-agent/tool pipeline focused regressions，runtime/service port 边界清晰，产品 surface 不变 |
+| PR-C | Harness / Capability / Build-Benefit Closure | 推进 Harness execution / Product Capability pack / service-tool orchestration，并评估 feature matrix、dependency profile、no-default 编译面、构建收益和可选 crate 目录分组 | runtime owner 主体迁移、默认 feature 副作用、未验证的构建脚本调整 | Harness workflow 等价、capability pack 注册可测、cargo metadata / cargo tree 证据，产品入口完整能力不变 |
 
-### 4.1 PR1 具体实施计划
+### 4.1 PR-A 实施状态
 
-PR1 是后续高风险迁移的前置门禁，目标是提供可测试的 typed assembly 基础，而不是移动任何既有业务行为。
+PR-A 只迁移无 IO、无副作用、可由 contract test 证明等价的 Agent Runtime SDK owner 事实。当前分支已经覆盖：
 
-1. 新建 `bitfun-runtime-services` crate，并加入 workspace。
-2. 在 `bitfun-runtime-ports` 中补齐 Runtime Services 所需的轻量 port trait 和 Remote port trait；这些 trait 只能描述能力和请求边界，不携带 SSH、relay、Tauri、process、filesystem manager 等 concrete handle。
-3. 在 `bitfun-runtime-services` 中实现 `RuntimeServices`、`RuntimeServicesBuilder`、capability availability、typed unsupported error 和 provider registry。
-4. 提供 `test_support` fake provider，覆盖本地 mandatory service、optional remote service 和 unsupported capability 三类注入路径。
-5. 更新 `scripts/check-core-boundaries.mjs`，把 `bitfun-runtime-services` 纳入 no-core dependency 和轻量依赖边界检查。
-6. 更新仓库入口文档中的模块索引，说明 `bitfun-runtime-services` 仍使用 core decomposition guardrails。
-7. 运行 focused tests、边界检查和最小 Rust 验证；提交前从第三方视角检查是否出现 service locator、全局 mutable registry、反向依赖或功能语义漂移。
+1. `bitfun-agent-runtime::prompt_cache` 承接 prompt cache schema、policy、identity、DTO、scope key 和 in-memory store。
+2. `bitfun-agent-runtime::agents` 承接 shared coding mode profile、mode presentation rank、shared user-context policy、`SubAgentSource` DTO、source kind 与 presentation rank。
+3. `bitfun-core` 保留 `agentic::session::prompt_cache`、agent mode module 和 registry DTO 旧路径 re-export；session persistence、clone/cold restore、agent definition loading、custom subagent file IO、scheduler lifecycle 和 event delivery 仍在 core。
+4. `scripts/check-core-boundaries.mjs` 已增加 prompt cache、shared mode profile/context、mode/source presentation 和 `SubAgentSource` 的防回流规则。
+5. focused tests 覆盖 runtime contracts、core agent registry、prompt cache restore/clone/invalidation 和 boundary check。
 
-PR1 不迁移任何 concrete service owner，因此预期不会修改产品行为、默认能力集合、权限语义、工具曝光、事件语义、session 生命周期或构建脚本。
-
-### 4.2 PR2 + PR3 合并实施计划
-
-本次 PR 合并推进 PR2 和 PR3，但仍按两个 owner 主题顺序实施，避免把 remote provider、agent scheduler
-和产品 surface 行为混在同一个迁移步骤中。若实现过程中发现必须改变用户可见行为、默认 feature、权限语义或构建形态，
-应暂停并在 PR 描述中单独说明设计偏移原因、影响范围和回滚边界。
-
-#### 4.2.1 PR2：Service / Agent Remote Runtime Owner
-
-目标是在不搬动 concrete SSH / relay / terminal / session restore 实现的前提下，把 remote workspace 与 projection
-的稳定接口归入 `bitfun-runtime-ports`，并保留 `bitfun-services-integrations::remote_connect` 旧路径 re-export。
-
-1. 在 `bitfun-runtime-ports` 中承接 remote workspace facts、remote session metadata、remote workspace file projection DTO
-   和 `RemoteWorkspacePort` / `RemoteProjectionPort` owner trait。
-2. 在 `bitfun-services-integrations::remote_connect` 中删除重复 owner 定义，改为 re-export 新 owner crate 的类型和 trait，
-   保持现有调用方 import 路径兼容。
-3. 让 core 侧 remote workspace / file adapter 继续作为具体 provider，实现新的 stable port；workspace-root、
-   persistence、session restore、terminal pre-warm 和 scheduler submit 仍保留在 `bitfun-core`。
-4. 补充 focused tests，覆盖 remote workspace / file projection 类型通过旧路径与新 owner 路径保持等价，以及
-   `RuntimeServicesBuilder` 能注册带方法的 remote workspace / projection provider。
-5. 更新 boundary check，防止 remote owner contract 回流到 `bitfun-core` 或 concrete service crate。
-
-#### 4.2.2 PR3：Agent Runtime SDK Owner
-
-本阶段把 `bitfun-agent-runtime` 从单一 scheduler helper 扩展为有真实 owner 的 Agent Runtime SDK 基线。
-已承接范围包括 scheduler/background delivery 纯决策，thread goal 的 turn accounting、goal mutation、
-continuation / budget-limit / objective-updated plan、tool response assembly 和 skip/retry/usage-limit policy，
-以及 subagent query scope、visibility / availability、round-boundary yield / injection state、turn-outcome
-queue policy、finish-reason label、session-state event label 和 turn-outcome event fact，并已承接
-user-context policy 与 listing reminder ordering 这类 prompt-loop 纯事实。
-
-仍不外移 concrete scheduler 生命周期：core 继续负责 running-turn injection delivery、submit、turn id、metadata、session
-manager、metadata store、token subscriber、scheduler delivery adapter、goal `Tool` handler、concrete prompt assembly、
-concrete agent definition loading、custom subagent file IO / config adapter、event delivery 和 post-turn hook。
-
-后续 Agent Runtime SDK 工作不得再把 thread goal runtime 当作普通 concrete tool IO；继续推进时应聚焦
-agent definition registry loading、permission coordination、event delivery / post-turn hook、prompt module /
-prompt cache contract 和 concrete scheduler lifecycle 的受保护迁移。prompt-loop 纯事实与 runtime event
-facts 已归入 `bitfun-agent-runtime`，不得再回流到 core。
-
-#### 4.2.3 本次 PR 验收
-
-- 不修改产品命令、UI、默认 feature、release / fast build 脚本或产品能力集合。
-- 不新增反向依赖、无类型 service locator、全局 mutable registry 或重复 runtime materialization。
-- 必须通过 remote / runtime owner focused tests、boundary check、repo hygiene 和最小 Rust 编译验证。
-- 提交前从第三方视角审查功能偏移、性能劣化、跨产品形态遗漏、文档与代码不一致，并修复发现的问题。
-
-### 4.3 PR4：Harness / Product Capability Boundary 实施计划
-
-PR4 的目标是建立 Harness contract 和迁移期 provider 注册边界，而不是外移 Deep Review、DeepResearch
-或 MiniApp 的具体执行逻辑。
-
-1. 新建 `bitfun-harness` crate，并加入 workspace；该 crate 只承接 provider-neutral workflow、capability、
-   plan、step、outcome、error 和 registry contract。
-2. 提供 descriptor-only `HarnessProvider`，支持 legacy-facade route plan；`execute` 在 PR4 阶段必须返回
-   typed unsupported，避免形成“执行已迁移”的错觉。
-3. 在 `bitfun-core::agentic::harness` 注册 Deep Review、DeepResearch、MiniApp 三个 legacy-facade provider，
-   只表达现有 workflow 的归属和 route，不改变产品命令、session、tool、service IO 或 UI 语义。
-4. 将 `bitfun-harness` 纳入 boundary check，禁止依赖 `bitfun-core`、具体 service crate、product-domain
-   implementation、AI adapter、transport、Tauri、Git/MCP/image/WebSocket 等 concrete runtime 依赖。
-5. 补充 `bitfun-harness` focused tests 和 core registry 兼容测试，证明至少两个以上 workflow 可以通过
-   provider contract 表达，且 concrete execution 仍停留在旧路径。
-6. 更新架构、计划和 AGENTS 文档，明确 PR4 只完成 contract / registry boundary；执行迁移、product
-   command registry、capability pack 和 service/tool orchestration 仍属于后续 PR。
-
-PR4 不迁移 concrete service IO、tool IO、surface command 语义、session manager、scheduler 生命周期或构建 feature。
-如后续要让 Harness 实际执行 workflow，必须在独立 PR 中补行为等价测试和回滚边界。
+不继续纳入 PR-A 的内容：concrete scheduler 生命周期、event delivery / post-turn hook、permission coordination 的 `Tool` handler 和 custom subagent file IO。这些路径直接连接事件发送、调度执行或文件/配置 IO，若迁移必须在 PR-B/PR-C 前单独补可观测行为等价保护，不能作为“纯 owner 事实迁移”处理。
 
 ## 5. 每类 PR 的保护重点
 

@@ -1,8 +1,59 @@
 //! Agent and subagent registry owner decisions.
 
+use crate::prompt::UserContextPolicy;
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use std::collections::HashSet;
 use std::path::Path;
+
+pub const SHARED_CODING_MODE_PROMPT_TEMPLATE: &str = "agentic_mode";
+pub const SHARED_CODING_MODE_CONFIG_PROFILE_ID: &str = "coding_shared";
+pub const SHARED_CODING_MODE_CONFIG_PROFILE_LABEL: &str = "Coding Shared";
+pub const SHARED_CODING_MODE_IDS: &[&str] = &["agentic", "Plan", "debug", "Multitask"];
+
+pub fn resolve_mode_config_profile_id<'a>(mode_id: &'a str) -> Cow<'a, str> {
+    match mode_id.trim() {
+        "agentic" | "Plan" | "debug" | "Multitask" => {
+            Cow::Borrowed(SHARED_CODING_MODE_CONFIG_PROFILE_ID)
+        }
+        _ => Cow::Borrowed(mode_id),
+    }
+}
+
+pub fn mode_config_profile_member_mode_ids(profile_id: &str) -> &'static [&'static str] {
+    match profile_id.trim() {
+        SHARED_CODING_MODE_CONFIG_PROFILE_ID => SHARED_CODING_MODE_IDS,
+        _ => &[],
+    }
+}
+
+pub fn mode_config_profile_label(profile_id: &str) -> Option<&'static str> {
+    match profile_id.trim() {
+        SHARED_CODING_MODE_CONFIG_PROFILE_ID => Some(SHARED_CODING_MODE_CONFIG_PROFILE_LABEL),
+        _ => None,
+    }
+}
+
+pub fn mode_presentation_rank(mode_id: &str) -> u8 {
+    match mode_id {
+        "agentic" => 0,
+        "Cowork" => 1,
+        "Plan" => 2,
+        "debug" => 3,
+        "Multitask" => 4,
+        "DeepResearch" => 5,
+        "Team" => 6,
+        _ => 99,
+    }
+}
+
+pub fn shared_coding_mode_user_context_policy() -> UserContextPolicy {
+    UserContextPolicy::empty()
+        .with_workspace_context()
+        .with_workspace_instructions()
+        .with_workspace_memory_files()
+        .with_project_layout()
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SubagentListScope {
@@ -145,6 +196,33 @@ pub enum SubagentSourceKind {
     Project,
     User,
     Unspecified,
+}
+
+/// Subagent source shown to product surfaces and registry-management APIs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SubAgentSource {
+    Builtin,
+    Project,
+    User,
+}
+
+pub const fn subagent_source_kind(source: Option<SubAgentSource>) -> SubagentSourceKind {
+    match source {
+        Some(SubAgentSource::Builtin) => SubagentSourceKind::Builtin,
+        Some(SubAgentSource::Project) => SubagentSourceKind::Project,
+        Some(SubAgentSource::User) => SubagentSourceKind::User,
+        None => SubagentSourceKind::Unspecified,
+    }
+}
+
+pub const fn subagent_source_presentation_rank(source: Option<SubAgentSource>) -> u8 {
+    match source {
+        Some(SubAgentSource::Builtin) => 0,
+        Some(SubAgentSource::Project) => 1,
+        Some(SubAgentSource::User) => 2,
+        None => 3,
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

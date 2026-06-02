@@ -1,7 +1,11 @@
 use bitfun_agent_runtime::agents::{
-    resolve_subagent_availability, resolve_subagent_default_enabled, BuiltinSubagentExposure,
+    mode_config_profile_label, mode_config_profile_member_mode_ids, mode_presentation_rank,
+    resolve_mode_config_profile_id, resolve_subagent_availability,
+    resolve_subagent_default_enabled, shared_coding_mode_user_context_policy, subagent_source_kind,
+    subagent_source_presentation_rank, BuiltinSubagentExposure, SubAgentSource,
     SubagentOverrideLayers, SubagentOverrideState, SubagentSourceKind, SubagentStateReason,
-    SubagentVisibilityPolicy,
+    SubagentVisibilityPolicy, SHARED_CODING_MODE_CONFIG_PROFILE_ID,
+    SHARED_CODING_MODE_CONFIG_PROFILE_LABEL, SHARED_CODING_MODE_IDS,
 };
 
 #[test]
@@ -95,4 +99,68 @@ fn default_enabled_uses_visibility_only_for_builtin_subagents() {
         &hidden,
         Some("agentic")
     ));
+}
+
+#[test]
+fn shared_coding_modes_resolve_to_the_same_config_profile() {
+    for mode_id in SHARED_CODING_MODE_IDS {
+        assert_eq!(
+            resolve_mode_config_profile_id(mode_id).as_ref(),
+            SHARED_CODING_MODE_CONFIG_PROFILE_ID
+        );
+    }
+
+    assert_eq!(resolve_mode_config_profile_id("Cowork").as_ref(), "Cowork");
+    assert_eq!(
+        mode_config_profile_member_mode_ids(SHARED_CODING_MODE_CONFIG_PROFILE_ID),
+        SHARED_CODING_MODE_IDS
+    );
+    assert_eq!(
+        mode_config_profile_label(SHARED_CODING_MODE_CONFIG_PROFILE_ID),
+        Some(SHARED_CODING_MODE_CONFIG_PROFILE_LABEL)
+    );
+}
+
+#[test]
+fn subagent_source_contract_preserves_runtime_kind_and_presentation_order() {
+    assert_eq!(
+        subagent_source_kind(Some(SubAgentSource::Builtin)),
+        SubagentSourceKind::Builtin
+    );
+    assert_eq!(
+        subagent_source_kind(Some(SubAgentSource::Project)),
+        SubagentSourceKind::Project
+    );
+    assert_eq!(
+        subagent_source_kind(Some(SubAgentSource::User)),
+        SubagentSourceKind::User
+    );
+    assert_eq!(subagent_source_kind(None), SubagentSourceKind::Unspecified);
+
+    assert_eq!(
+        subagent_source_presentation_rank(Some(SubAgentSource::Builtin)),
+        0
+    );
+    assert_eq!(
+        subagent_source_presentation_rank(Some(SubAgentSource::Project)),
+        1
+    );
+    assert_eq!(
+        subagent_source_presentation_rank(Some(SubAgentSource::User)),
+        2
+    );
+    assert_eq!(subagent_source_presentation_rank(None), 3);
+}
+
+#[test]
+fn mode_presentation_and_shared_context_policy_match_existing_mode_contract() {
+    assert_eq!(mode_presentation_rank("agentic"), 0);
+    assert_eq!(mode_presentation_rank("Cowork"), 1);
+    assert_eq!(mode_presentation_rank("Team"), 6);
+    assert_eq!(mode_presentation_rank("unknown"), 99);
+
+    assert_eq!(
+        shared_coding_mode_user_context_policy().cache_scope_key(),
+        "workspace_context|workspace_instructions|workspace_memory_files|project_layout"
+    );
 }

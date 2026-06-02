@@ -3,8 +3,8 @@ use super::AgentRegistry;
 use crate::agentic::agents::definitions::custom::{CustomSubagent, CustomSubagentKind};
 use crate::agentic::agents::registry::builtin::default_model_id_for_builtin_agent;
 use crate::agentic::agents::registry::types::{
-    AgentCategory, AgentEntry, CustomSubagentConfig, SubAgentSource, SubagentListScope,
-    SubagentOverrideState, SubagentQueryContext,
+    subagent_source_from_custom_kind, AgentCategory, AgentEntry, CustomSubagentConfig,
+    SubAgentSource, SubagentListScope, SubagentOverrideState, SubagentQueryContext,
 };
 use crate::agentic::agents::registry::visibility::{
     BuiltinSubagentExposure, SubagentVisibilityPolicy,
@@ -85,6 +85,18 @@ fn top_level_modes_default_to_auto() {
     ] {
         assert_eq!(default_model_id_for_builtin_agent(agent_type), "auto");
     }
+}
+
+#[test]
+fn custom_subagent_kind_maps_to_registry_source() {
+    assert_eq!(
+        subagent_source_from_custom_kind(CustomSubagentKind::Project),
+        SubAgentSource::Project
+    );
+    assert_eq!(
+        subagent_source_from_custom_kind(CustomSubagentKind::User),
+        SubAgentSource::User
+    );
 }
 
 #[tokio::test]

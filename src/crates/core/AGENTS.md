@@ -45,15 +45,18 @@ SessionManager → Session → DialogTurn → ModelRound
   response assembly belong in `bitfun-agent-runtime`. Core keeps only the
   session metadata store, token subscriber, scheduler delivery adapter, event
   emission, and `get_goal` / `create_goal` / `update_goal` `Tool` handlers.
-- Subagent query scope, visibility/availability decisions, round-boundary
-  yield/injection state, and turn-outcome queue decisions belong in
+- Subagent query scope, visibility/availability decisions, registry source/profile
+  facts, mode/subagent presentation facts, round-boundary yield/injection state,
+  and turn-outcome queue decisions belong in
   `bitfun-agent-runtime`. Core keeps concrete agent definition loading, custom
   subagent file IO/config adapters, desktop API wiring, concrete scheduler
   lifecycle, submit execution, and event delivery.
 - Prompt-loop user-context policy and tool/skill/subagent listing reminder
-  ordering belong in `bitfun-agent-runtime`. Core keeps concrete prompt
+  ordering, plus prompt-cache policy, identity, DTOs, scope-key facts, and
+  in-memory store belong in `bitfun-agent-runtime`. Core keeps concrete prompt
   assembly, workspace / remote / project-layout context IO, language/config
-  lookup, prompt cache coordination, and old-path compatibility re-exports.
+  lookup, prompt-cache persistence/restore coordination, and old-path
+  compatibility re-exports.
 - Finish-reason labels, session-state event labels, and turn-outcome event
   facts belong in
   `bitfun-agent-runtime`. Core keeps concrete event routing, event emission,

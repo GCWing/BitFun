@@ -4,8 +4,9 @@ use crate::service::config::types::{
     AgentSubagentOverrideConfig, AgentSubagentOverrideState, ParentSubagentOverrideConfig,
 };
 use bitfun_agent_runtime::agents::{
-    resolve_subagent_availability, resolve_subagent_default_enabled, ResolvedSubagentAvailability,
-    SubagentOverrideLayers as ResolvedOverrideLayers, SubagentOverrideState, SubagentSourceKind,
+    resolve_subagent_availability, resolve_subagent_default_enabled, subagent_source_kind,
+    ResolvedSubagentAvailability, SubagentOverrideLayers as ResolvedOverrideLayers,
+    SubagentOverrideState,
 };
 use std::collections::HashMap;
 
@@ -13,15 +14,6 @@ fn to_runtime_override_state(state: AgentSubagentOverrideState) -> SubagentOverr
     match state {
         AgentSubagentOverrideState::Enabled => SubagentOverrideState::Enabled,
         AgentSubagentOverrideState::Disabled => SubagentOverrideState::Disabled,
-    }
-}
-
-fn source_kind(source: Option<SubAgentSource>) -> SubagentSourceKind {
-    match source {
-        Some(SubAgentSource::Builtin) => SubagentSourceKind::Builtin,
-        Some(SubAgentSource::Project) => SubagentSourceKind::Project,
-        Some(SubAgentSource::User) => SubagentSourceKind::User,
-        None => SubagentSourceKind::Unspecified,
     }
 }
 
@@ -51,7 +43,7 @@ pub fn subagent_override_for_parent(
 
 pub fn resolve_default_enabled(entry: &AgentEntry, parent_agent_type: Option<&str>) -> bool {
     resolve_subagent_default_enabled(
-        source_kind(entry.subagent_source),
+        subagent_source_kind(entry.subagent_source),
         &entry.visibility_policy,
         parent_agent_type,
     )
@@ -98,7 +90,11 @@ pub fn resolve_availability(
     let default_enabled = resolve_default_enabled(entry, parent_agent_type);
     let layers =
         resolve_override_layers(entry, parent_agent_type, project_overrides, user_overrides);
-    resolve_subagent_availability(source_kind(entry.subagent_source), default_enabled, layers)
+    resolve_subagent_availability(
+        subagent_source_kind(entry.subagent_source),
+        default_enabled,
+        layers,
+    )
 }
 
 pub fn prune_override_config(

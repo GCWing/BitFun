@@ -15,12 +15,13 @@ and tested without `bitfun-core`.
 - Prefer pure facts and decisions first: queue policy, background delivery,
   thread-goal accounting/mutation/continuation decisions, cancellation routing,
   runtime event facts, registry visibility/availability, round-boundary
-  yield/injection state, turn-outcome queue decisions, prompt-loop user-context
-  policy, prompt listing reminder ordering, finish-reason labels,
-  session-state event labels, and turn-outcome event facts.
-- Keep concrete prompt assembly, workspace context IO, prompt cache
-  coordination, and dynamic environment collection outside this crate until a
-  reviewed migration proves behavior equivalence.
+  yield/injection state, turn-outcome queue decisions, registry source/profile
+  facts, prompt-loop user-context policy, prompt listing reminder ordering,
+  prompt-cache policy/identity/store, finish-reason labels, session-state event
+  labels, and turn-outcome event facts.
+- Keep concrete prompt assembly, workspace context IO, prompt-cache persistence
+  wiring, dynamic environment collection, and concrete agent definition loading
+  outside this crate until a reviewed migration proves behavior equivalence.
 - Add focused tests before moving any runtime decision into this crate.
 
 ## Verification
