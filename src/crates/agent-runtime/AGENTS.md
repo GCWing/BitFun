@@ -16,7 +16,8 @@ and tested without `bitfun-core`.
   thread-goal accounting/mutation/continuation decisions, cancellation routing,
   runtime event facts, registry visibility/availability, round-boundary
   yield/injection state, turn-outcome queue decisions, prompt-loop user-context
-  policy, and prompt listing reminder ordering.
+  policy, prompt listing reminder ordering, finish-reason labels,
+  session-state event labels, and turn-outcome event facts.
 - Keep concrete prompt assembly, workspace context IO, prompt cache
   coordination, and dynamic environment collection outside this crate until a
   reviewed migration proves behavior equivalence.

@@ -8,6 +8,7 @@ use crate::agentic::tools::pipeline::SubagentParentInfo;
 use crate::agentic::tools::ToolRuntimeRestrictions;
 use crate::agentic::workspace::WorkspaceServices;
 use crate::agentic::WorkspaceBinding;
+pub use bitfun_agent_runtime::events::FinishReason;
 use bitfun_runtime_ports::DelegationPolicy;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -88,30 +89,6 @@ pub struct RoundResult {
     /// True when the model emitted any non-empty thinking / reasoning content
     /// in this round.
     pub had_thinking_content: bool,
-}
-
-/// Finish reason
-#[derive(Debug, Clone, PartialEq)]
-pub enum FinishReason {
-    /// Normal completion
-    Complete,
-    /// Need to execute tools
-    ToolCalls,
-    /// User cancelled
-    Cancelled,
-    /// Error
-    Error,
-}
-
-impl std::fmt::Display for FinishReason {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            FinishReason::Complete => write!(f, "complete"),
-            FinishReason::ToolCalls => write!(f, "tool_calls"),
-            FinishReason::Cancelled => write!(f, "cancelled"),
-            FinishReason::Error => write!(f, "error"),
-        }
-    }
 }
 
 /// Execution result

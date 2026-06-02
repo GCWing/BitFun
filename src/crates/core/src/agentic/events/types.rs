@@ -3,6 +3,8 @@
 //! Uses bitfun-events layer event definitions, extending core-specific functionality here
 
 use crate::agentic::core::SessionState;
+use bitfun_agent_runtime::events::session_state_label;
+use bitfun_runtime_ports::DialogSessionStateFact;
 
 // ============ Re-export events layer types ============
 pub use bitfun_events::agentic::ErrorCategory;
@@ -24,9 +26,10 @@ pub type AgenticEvent = BaseAgenticEvent;
 
 /// Convert SessionState to String (for transmission)
 pub fn session_state_to_string(state: &SessionState) -> String {
-    match state {
-        SessionState::Idle => "idle".to_string(),
-        SessionState::Processing { .. } => "processing".to_string(),
-        SessionState::Error { .. } => "error".to_string(),
-    }
+    let fact = match state {
+        SessionState::Idle => DialogSessionStateFact::Idle,
+        SessionState::Processing { .. } => DialogSessionStateFact::Processing,
+        SessionState::Error { .. } => DialogSessionStateFact::Error,
+    };
+    session_state_label(fact).to_string()
 }

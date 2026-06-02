@@ -58,7 +58,8 @@
   delivery 纯决策，thread goal runtime 的 turn accounting、goal mutation、continuation plan 和 tool response assembly，
   subagent query scope / visibility / availability 决策，以及 round-boundary yield / injection state 和
   turn-outcome queue policy；prompt-loop 的 user-context policy 和 tool / skill / subagent listing reminder
-  ordering 也已归入该 crate，core 只保留旧路径 re-export。
+  ordering 已归入该 crate；finish-reason label、session-state event label 和 turn-outcome event fact 也已由
+  `bitfun-agent-runtime` 承接，core 只保留旧路径 re-export 或 concrete adapter。
 - persisted thread goal 的 portable DTO、status、continuation plan 和 tool response contract 已归入
   `bitfun-runtime-ports`；`get_goal` / `create_goal` / `update_goal` 已进入产品 tool registry。
 - `bitfun-harness` 已建立为可独立构建的 Harness contract crate，当前承接 workflow descriptor、legacy route
@@ -68,7 +69,7 @@
 明确未完成：
 
 - `bitfun-agent-runtime` 不代表 session manager、concrete prompt assembly、concrete agent definition loading、scheduler 生命周期、
-  event delivery 或 post-turn hook 已迁移。
+  event delivery 或 post-turn hook 已迁移；当前 event 迁移只覆盖无副作用的 wire label / fact 映射。
 - thread goal 的 metadata store、token subscriber、scheduler delivery adapter 和 goal `Tool` handler 仍在
   `bitfun-core`；runtime 决策已经归属 `bitfun-agent-runtime`，后续不应再把它误归入普通 concrete tool IO。
 - `bitfun-harness` 不代表 Deep Review、DeepResearch、MiniApp 的 concrete workflow execution 已迁移；PR4 provider

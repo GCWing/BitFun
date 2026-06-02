@@ -54,6 +54,10 @@ SessionManager → Session → DialogTurn → ModelRound
   ordering belong in `bitfun-agent-runtime`. Core keeps concrete prompt
   assembly, workspace / remote / project-layout context IO, language/config
   lookup, prompt cache coordination, and old-path compatibility re-exports.
+- Finish-reason labels, session-state event labels, and turn-outcome event
+  facts belong in
+  `bitfun-agent-runtime`. Core keeps concrete event routing, event emission,
+  session state storage, and old-path compatibility re-exports.
 - For tools, keep lightweight contracts, pure manifest/exposure contracts,
   generic contextual prompt-manifest resolver contracts, generic catalog
   snapshot provider contracts, generic GetToolSpec catalog provider/detail/

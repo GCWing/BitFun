@@ -39,6 +39,7 @@ use uuid::Uuid;
 
 const MAX_QUEUE_DEPTH: usize = 20;
 
+use bitfun_agent_runtime::events::turn_outcome_kind;
 use bitfun_agent_runtime::scheduler::{
     resolve_background_delivery_action, BackgroundDeliveryAction, BackgroundDeliveryFacts,
 };
@@ -46,7 +47,7 @@ use bitfun_runtime_ports::{
     resolve_dialog_submit_queue_action,
     should_skip_agent_session_reply as should_skip_agent_session_reply_contract,
     should_suppress_agent_session_cancelled_reply as should_suppress_agent_session_cancelled_reply_contract,
-    DialogSessionStateFact, DialogSubmitQueueAction, DialogSubmitQueueFacts, DialogTurnOutcomeKind,
+    DialogSessionStateFact, DialogSubmitQueueAction, DialogSubmitQueueFacts,
 };
 pub use bitfun_runtime_ports::{
     AgentSessionReplyRoute, DialogQueuePriority, DialogSteerOutcome, DialogSubmissionPolicy,
@@ -481,14 +482,6 @@ impl DialogScheduler {
             Some(SessionState::Idle) => DialogSessionStateFact::Idle,
             Some(SessionState::Processing { .. }) => DialogSessionStateFact::Processing,
             Some(SessionState::Error { .. }) => DialogSessionStateFact::Error,
-        }
-    }
-
-    fn turn_outcome_kind(outcome: &TurnOutcome) -> DialogTurnOutcomeKind {
-        match outcome {
-            TurnOutcome::Completed { .. } => DialogTurnOutcomeKind::Completed,
-            TurnOutcome::Cancelled { .. } => DialogTurnOutcomeKind::Cancelled,
-            TurnOutcome::Failed { .. } => DialogTurnOutcomeKind::Failed,
         }
     }
 
@@ -995,7 +988,7 @@ impl DialogScheduler {
         suppressed_cancelled_reply: bool,
     ) -> bool {
         should_skip_agent_session_reply_contract(
-            Self::turn_outcome_kind(outcome),
+            turn_outcome_kind(outcome),
             suppressed_cancelled_reply,
         )
     }

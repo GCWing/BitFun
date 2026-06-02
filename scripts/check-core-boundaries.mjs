@@ -749,6 +749,46 @@ const forbiddenContentRules = [
     ],
   },
   {
+    path: 'src/crates/core/src/agentic/execution/types.rs',
+    patterns: [
+      {
+        regex: /\bpub\s+enum\s+FinishReason\b/,
+        message:
+          'core execution types must not own finish-reason event facts; use bitfun-agent-runtime events',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/events/types.rs',
+    patterns: [
+      {
+        regex: /SessionState::Idle\s*=>\s*"idle"/,
+        message:
+          'core event types must not own session-state wire labels; use bitfun-agent-runtime events',
+      },
+      {
+        regex: /SessionState::Processing\s*\{[^}]*\}\s*=>\s*"processing"/,
+        message:
+          'core event types must not own session-state wire labels; use bitfun-agent-runtime events',
+      },
+      {
+        regex: /SessionState::Error\s*\{[^}]*\}\s*=>\s*"error"/,
+        message:
+          'core event types must not own session-state wire labels; use bitfun-agent-runtime events',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/coordination/scheduler.rs',
+    patterns: [
+      {
+        regex: /\bfn\s+turn_outcome_kind\s*\(/,
+        message:
+          'core scheduler must not own turn-outcome event facts; use bitfun-agent-runtime events',
+      },
+    ],
+  },
+  {
     path: 'src/crates/core/src/agentic/tools/framework.rs',
     patterns: [
       {
@@ -2327,6 +2367,44 @@ const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/agent-runtime/src/events.rs',
+    reason:
+      'agent-runtime must own runtime event facts that do not require concrete scheduler or session IO',
+    patterns: [
+      {
+        regex: /\bpub enum FinishReason\b/,
+        message: 'missing agent-runtime finish-reason event fact',
+      },
+      {
+        regex: /\bpub const fn session_state_label\b/,
+        message: 'missing agent-runtime session-state label fact',
+      },
+      {
+        regex: /\bpub fn turn_outcome_kind\b/,
+        message: 'missing agent-runtime turn-outcome event fact',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/agent-runtime/tests/events_contracts.rs',
+    reason:
+      'agent-runtime event owner must keep behavior-equivalence contracts for event wire labels',
+    patterns: [
+      {
+        regex: /\bfinish_reason_display_preserves_wire_labels\b/,
+        message: 'missing finish-reason wire-label regression',
+      },
+      {
+        regex: /\bsession_state_labels_match_existing_event_wire_values\b/,
+        message: 'missing session-state label regression',
+      },
+      {
+        regex: /\bturn_outcome_kind_matches_existing_reply_policy_contract\b/,
+        message: 'missing turn-outcome event fact regression',
+      },
+    ],
+  },
+  {
     path: 'src/crates/core/src/agentic/agents/prompt_builder/user_context.rs',
     reason:
       'core prompt_builder user_context path must stay a compatibility facade over agent-runtime',
@@ -3340,8 +3418,12 @@ const requiredContentRules = [
       },
       {
         regex:
-          /use bitfun_runtime_ports::\{(?=[\s\S]*DialogSessionStateFact)(?=[\s\S]*DialogSubmitQueueAction)(?=[\s\S]*DialogSubmitQueueFacts)(?=[\s\S]*DialogTurnOutcomeKind)(?=[\s\S]*resolve_dialog_submit_queue_action)(?=[\s\S]*should_skip_agent_session_reply_contract)(?=[\s\S]*should_suppress_agent_session_cancelled_reply_contract)[\s\S]*\};/,
+          /use bitfun_runtime_ports::\{(?=[\s\S]*DialogSessionStateFact)(?=[\s\S]*DialogSubmitQueueAction)(?=[\s\S]*DialogSubmitQueueFacts)(?=[\s\S]*resolve_dialog_submit_queue_action)(?=[\s\S]*should_skip_agent_session_reply_contract)(?=[\s\S]*should_suppress_agent_session_cancelled_reply_contract)[\s\S]*\};/,
         message: 'missing dialog scheduler decision contract import',
+      },
+      {
+        regex: /use bitfun_agent_runtime::events::turn_outcome_kind;/,
+        message: 'missing agent-runtime turn-outcome event fact import',
       },
       {
         regex:
@@ -7399,6 +7481,26 @@ function runManifestParserSelfTest() {
       ],
     },
     {
+      path: 'src/crates/agent-runtime/src/events.rs',
+      contracts: ['FinishReason', 'session_state_label', 'turn_outcome_kind'],
+    },
+    {
+      path: 'src/crates/agent-runtime/tests/events_contracts.rs',
+      contracts: [
+        'finish_reason_display_preserves_wire_labels',
+        'session_state_labels_match_existing_event_wire_values',
+        'turn_outcome_kind_matches_existing_reply_policy_contract',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/agentic/execution/types.rs',
+      contracts: ['bitfun_agent_runtime::events::FinishReason'],
+    },
+    {
+      path: 'src/crates/core/src/agentic/events/types.rs',
+      contracts: ['bitfun_agent_runtime::events::session_state_label'],
+    },
+    {
       path: 'src/crates/core/src/agentic/agents/prompt_builder/user_context.rs',
       contracts: ['bitfun_agent_runtime::prompt'],
     },
@@ -7575,7 +7677,7 @@ function runManifestParserSelfTest() {
         'DialogSubmitOutcome',
         'DialogSubmitQueueAction',
         'DialogSubmitQueueFacts',
-        'DialogTurnOutcomeKind',
+        'bitfun_agent_runtime::events::turn_outcome_kind',
         'dialog_policy_may_preempt',
         'resolve_dialog_submit_queue_action',
         'should_skip_agent_session_reply_contract',
