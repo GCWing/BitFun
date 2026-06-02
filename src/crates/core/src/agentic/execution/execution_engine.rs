@@ -326,17 +326,11 @@ impl ExecutionEngine {
             return WriteToolMode::InlineContent;
         }
 
-        match std::env::var("BITFUN_WRITE_TOOL_MODE")
-            .ok()
-            .map(|value| value.trim().to_ascii_lowercase())
-            .as_deref()
-        {
-            Some("inline_content" | "inline" | "content") => WriteToolMode::InlineContent,
-            Some("plaintext_followup" | "followup" | "plaintext") => {
-                WriteToolMode::PlaintextFollowup
-            }
-            _ => configured_mode,
+        if context.eval_deadline.is_some() {
+            return WriteToolMode::InlineContent;
         }
+
+        configured_mode
     }
 
     fn estimate_request_tokens_internal(
@@ -397,6 +391,12 @@ impl ExecutionEngine {
     fn should_continue_after_partial_response(reason: &str) -> bool {
         let lower = reason.to_ascii_lowercase();
         !lower.contains("cancelled")
+    }
+
+    fn is_eval_budget_stream_guard(reason: &str) -> bool {
+        reason
+            .to_ascii_lowercase()
+            .contains("eval budget stream guard")
     }
 
     /// Detect periodic tool-signature loops in the trailing window.
@@ -1024,6 +1024,7 @@ impl ExecutionEngine {
             cancellation_token: CancellationToken::new(),
             workspace_services: context.workspace_services.clone(),
             recover_partial_on_cancel: context.recover_partial_on_cancel,
+            eval_deadline: context.eval_deadline.clone(),
         };
 
         // Tools are disabled here (None) — model must respond in plain text.
@@ -2537,6 +2538,7 @@ impl ExecutionEngine {
                 cancellation_token: CancellationToken::new(),
                 workspace_services: context.workspace_services.clone(),
                 recover_partial_on_cancel: context.recover_partial_on_cancel,
+                eval_deadline: context.eval_deadline.clone(),
             };
 
             // Execute single model round
@@ -2838,9 +2840,13 @@ impl ExecutionEngine {
                         if Self::should_continue_after_partial_response(reason) {
                             partial_continuation_attempts += 1;
                             if partial_continuation_attempts <= MAX_PARTIAL_CONTINUATION_ATTEMPTS {
-                                let reminder = format!(
-                                    "<system_reminder>Your previous assistant response was interrupted mid-stream ({reason}). Continue writing from exactly where you stopped. Do not repeat content that was already delivered; pick up seamlessly and complete the answer.</system_reminder>"
-                                );
+                                let reminder = if Self::is_eval_budget_stream_guard(reason) {
+                                    "<system_reminder>Your previous model round spent too long in internal reasoning without a tool call or deliverable. This is an evaluation run with a hard deadline. Stop hidden analysis now: use one short tool call to create or update the required artifact/service, then run a bounded deliverable audit. Do not start broad exploration or another long reasoning-only response.</system_reminder>".to_string()
+                                } else {
+                                    format!(
+                                        "<system_reminder>Your previous assistant response was interrupted mid-stream ({reason}). Continue writing from exactly where you stopped. Do not repeat content that was already delivered; pick up seamlessly and complete the answer.</system_reminder>"
+                                    )
+                                };
                                 let user_msg = Message::user(reminder.clone());
                                 messages.push(user_msg.clone());
                                 if let Err(e) = self
@@ -2883,7 +2889,15 @@ impl ExecutionEngine {
                     }
                 } else if round_result.had_thinking_content {
                     thinking_only_rescue_attempts += 1;
-                    let reminder = "<system_reminder>The previous round produced internal reasoning only — no tool call and no user-visible response. You MUST now either: (1) call the single tool that best advances the user's task, or (2) write your final answer to the user. Do not produce another round of reasoning without taking action.</system_reminder>".to_string();
+                    let reminder = if round_result
+                        .partial_recovery_reason
+                        .as_deref()
+                        .is_some_and(Self::is_eval_budget_stream_guard)
+                    {
+                        "<system_reminder>The previous round was interrupted because it spent too long in internal reasoning without a tool call or deliverable. This is an evaluation run with a hard deadline. You MUST now call one tool to create or update the required artifact/service, then run a bounded deliverable audit. Do not produce another reasoning-only round.</system_reminder>".to_string()
+                    } else {
+                        "<system_reminder>The previous round produced internal reasoning only — no tool call and no user-visible response. You MUST now either: (1) call the single tool that best advances the user's task, or (2) write your final answer to the user. Do not produce another round of reasoning without taking action.</system_reminder>".to_string()
+                    };
                     let user_msg = Message::user(reminder.clone());
                     messages.push(user_msg.clone());
                     if let Err(e) = self

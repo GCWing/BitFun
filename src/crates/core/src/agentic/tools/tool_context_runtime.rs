@@ -303,6 +303,24 @@ fn build_tool_context_custom_data(context: &ToolExecutionContext) -> HashMap<Str
             );
         }
     }
+    if let Some(deadline) = &context.eval_deadline {
+        map.insert(
+            "eval_deadline_sec".to_string(),
+            serde_json::json!(deadline.deadline_sec),
+        );
+        map.insert(
+            "eval_elapsed_sec".to_string(),
+            serde_json::json!(deadline.elapsed_sec()),
+        );
+        map.insert(
+            "eval_remaining_sec".to_string(),
+            serde_json::json!(deadline.remaining_sec()),
+        );
+        map.insert(
+            "eval_percent_used".to_string(),
+            serde_json::json!(deadline.percent_used()),
+        );
+    }
     if let Some(acp_transport) = context.context_vars.get("acp_transport") {
         if let Ok(flag) = acp_transport.parse::<bool>() {
             map.insert("acp_transport".to_string(), serde_json::json!(flag));
@@ -1378,6 +1396,7 @@ mod task_context_tests {
                 },
                 steering_interrupt: None,
                 workspace_services: None,
+                eval_deadline: None,
             },
             ToolExecutionOptions::default(),
         )

@@ -12,7 +12,40 @@ use bitfun_runtime_ports::DelegationPolicy;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 use tokio_util::sync::CancellationToken;
+
+#[derive(Debug, Clone)]
+pub struct EvalDeadline {
+    pub deadline_sec: u64,
+    pub started_at: Instant,
+}
+
+impl EvalDeadline {
+    pub fn new(deadline_sec: u64) -> Option<Self> {
+        if deadline_sec == 0 {
+            return None;
+        }
+        Some(Self {
+            deadline_sec,
+            started_at: Instant::now(),
+        })
+    }
+
+    pub fn elapsed_sec(&self) -> u64 {
+        self.started_at.elapsed().as_secs()
+    }
+
+    pub fn remaining_sec(&self) -> u64 {
+        self.deadline_sec.saturating_sub(self.elapsed_sec())
+    }
+
+    pub fn percent_used(&self) -> u64 {
+        self.elapsed_sec()
+            .saturating_mul(100)
+            .saturating_div(self.deadline_sec.max(1))
+    }
+}
 
 /// Execution context
 #[derive(Clone)]
@@ -29,6 +62,7 @@ pub struct ExecutionContext {
     pub runtime_tool_restrictions: ToolRuntimeRestrictions,
     /// Workspace I/O services (filesystem + shell) injected into tools
     pub workspace_services: Option<WorkspaceServices>,
+    pub eval_deadline: Option<EvalDeadline>,
     /// When set, engine may end the turn after a full model round if a user message was queued.
     pub round_preempt: Option<Arc<dyn DialogRoundPreemptSource>>,
     /// When set, engine drains pending round injections at each round boundary
@@ -63,6 +97,7 @@ pub struct RoundContext {
     pub cancellation_token: CancellationToken,
     pub workspace_services: Option<WorkspaceServices>,
     pub recover_partial_on_cancel: bool,
+    pub eval_deadline: Option<EvalDeadline>,
 }
 
 /// Round result

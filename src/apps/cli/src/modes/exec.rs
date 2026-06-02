@@ -77,11 +77,7 @@ impl ExecMode {
         session_options: ExecSessionOptions,
         deadline_sec: Option<u64>,
     ) -> Self {
-        let deadline_sec = deadline_sec.or_else(Self::deadline_sec_from_env);
-        // Evaluation runs are scored by concrete artifacts. Inline Write avoids
-        // the extra content-generation request that is more prone to leaving
-        // required small files unwritten under tight deadlines.
-        std::env::set_var("BITFUN_WRITE_TOOL_MODE", "inline_content");
+        let deadline_sec = deadline_sec.filter(|seconds| *seconds > 0);
         let agent = Arc::new(CoreAgentAdapter::new(
             agentic_system.coordinator.clone(),
             agentic_system.event_queue.clone(),
@@ -172,25 +168,13 @@ impl ExecMode {
         });
     }
 
-    fn deadline_sec_from_env() -> Option<u64> {
-        std::env::var("BITFUN_DEADLINE_SEC")
-            .ok()
-            .and_then(|value| value.trim().parse::<u64>().ok())
-    }
-
     fn effective_message(&self) -> String {
         self.eval_guided_message()
     }
 
     fn eval_guided_message(&self) -> String {
-        let deadline = self
-            .deadline_sec
-            .map(|seconds| {
-                format!(
-                    "\n- External agent deadline: {seconds} seconds. Treat this as a hard budget."
-                )
-            })
-            .unwrap_or_default();
+        let deadline = self.deadline_guidance();
+        let experience = Self::eval_experience_playbook();
 
         format!(
             "\
@@ -199,11 +183,10 @@ scores concrete filesystem artifacts, process state, command behavior, and test 
 your turn; final prose is not a substitute for deliverables.
 
 Evaluation rules:
-- Identify the exact required deliverables from the task text and any visible public test or
-  verifier files. Before finishing, verify every required path exists, is non-empty when
-  appropriate, and matches the expected format.
-- If tests or verifier scripts are available in the workspace, run the closest public verifier
-  command before final. Prefer real tests over toy self-checks.
+- Identify the exact required deliverables from the task text. Before finishing, verify every
+  required path exists, is non-empty when appropriate, and matches the expected format.
+- Use only task-authorized checks and your own sanity checks. Do not depend on hidden grader
+  files or private test directories as an implementation guide.
 - For service tasks, leave the service running after your shell exits. Use a durable background
   launch method, save logs/PIDs when useful, and verify with the real protocol/client, not only a
   listening port.
@@ -218,9 +201,78 @@ Evaluation rules:
   command that writes the file. If a file-write attempt fails once, immediately switch strategy.
 - End only after an explicit audit of deliverables, services, and verification commands.{deadline}
 
+Evaluation experience memory:
+{experience}
+
 Original task:
 {}",
             self.message
+        )
+    }
+
+    fn eval_experience_playbook() -> &'static str {
+        "\
+- Budget discipline: if the task has a 900-1200s budget, a single 300s command is already risky.
+  Prefer quick probes, bounded scripts, and incremental artifacts over long exploratory scans.
+- Artifact-first strategy: once you identify required paths such as answer files, CSVs, model files,
+  service scripts, or images, create a minimal syntactically valid version early, then improve it.
+  Many zero scores come from missing files, not from imperfect files.
+- Early checkpoint: before spending the first quarter of the budget, ensure there is already a
+  concrete placeholder or first-pass implementation at each required output path, or a running
+  service for service tasks. Improve it in place instead of waiting until the end to create it.
+- Verification strategy: when the prompt explicitly provides a checker, example command, schema, or
+  benchmark, use it. Otherwise build small task-faithful sanity checks from the stated requirements
+  and audit file count, schema, formatting, thresholds, and leftover temporary artifacts.
+- Passing means the verifier can read the exact interface it expects. Preserve conventional calling
+  forms and plain formats: function inputs should match natural examples, numeric sample files should
+  be headerless numeric text, coordinate files should use flat lists when requested, and scripts should
+  run from /app without extra arguments unless the task says otherwise.
+- Service tasks: start the service with nohup/setsid/background shell, write logs and a PID when
+  useful, then verify the real endpoint/protocol from a separate command. Do not stop the service
+  before final.
+- Once all required deliverables exist and one bounded task-faithful check passes, stop. Do not keep
+  exploring, rerunning expensive checks, or waiting on logs after a likely-passing artifact exists.
+- Avoid open-ended waiting. Replace sleeps, tail loops, brute-force searches, large builds, and model
+  training with bounded probes plus a fallback artifact. If a background process is needed, launch it
+  durably and leave it running instead of blocking the final answer.
+- Cleanup-sensitive tasks: remove build products and scratch files when the verifier expects only
+  named deliverables. Extra files can fail otherwise correct solutions.
+- Secret/sanitizer tasks: search recursively for every exposed token pattern and compare against
+  expected clean references when provided; one missed variant is a failure.
+- Sanitizer tasks must block dangerous variants, not just examples. For HTML/JS, remove event handlers,
+  scriptable URLs, script/style/object/embed/iframe payloads, malformed casing, and encoded variants.
+- Numeric, image, video, and biology tasks: validate against the actual tolerance or schema, not a
+  rough plausibility check. Off-by-one frames, tuple-vs-list CSV cells, or small Tm gaps can be fatal.
+- Video/OCR/transcription tasks need high similarity, not a plausible summary. Extract the exact text
+  or command sequence, normalize line endings, and compare against visible/caption/audio evidence.
+- Biosequence assembly tasks are order-sensitive. Verify translated protein/domain order and exact
+  primer/sequence constraints, not only approximate lengths or GC content.
+- Heavy training/build tasks: look for deterministic shortcuts, preexisting assets, smaller public
+  checks, or direct artifact generation before committing most of the budget to full training. If a
+  build or training probe does not produce the required artifact quickly, write the best fallback
+  artifact instead of starting another long run.
+- Password/cracking/search tasks need a staged strategy: inspect metadata and hints first, try small
+  dictionaries/rules, save the best candidate artifact early, and avoid unbounded brute force.
+- Image/board/geometry tasks need a decisive representation early. Create the expected answer file or
+  move once confidence is good enough; repeated visual probing often runs out the clock.
+- When stuck or near the deadline, stop asking new broad questions. Write the best current
+  deliverable, run one verification/audit pass, and leave concrete files behind."
+    }
+
+    fn deadline_guidance(&self) -> String {
+        let Some(seconds) = self.deadline_sec else {
+            return String::new();
+        };
+
+        let stage_70 = seconds.saturating_mul(70) / 100;
+        let stage_85 = seconds.saturating_mul(85) / 100;
+        let stage_95 = seconds.saturating_mul(95) / 100;
+
+        format!(
+            "\n- External agent deadline: {seconds} seconds. Treat this as a hard budget.\n\
+- Budget checkpoints: after about {stage_70}s stop broad exploration; after about {stage_85}s ensure\n\
+  a minimal verifiable artifact/service exists; after about {stage_95}s stop new experiments and run\n\
+  a deliverable audit."
         )
     }
 
@@ -432,9 +484,16 @@ Original task:
         });
 
         let effective_message = self.effective_message();
+        let metadata = self.deadline_sec.map(|deadline_sec| {
+            json!({
+                "bitfun_eval": {
+                    "deadline_sec": deadline_sec,
+                }
+            })
+        });
         let turn_id = self
             .agent
-            .send_message(effective_message, &self.agent_type)
+            .send_message_with_metadata(effective_message, &self.agent_type, metadata)
             .await
             .map_err(|e| {
                 emit_exit_diagnostic(

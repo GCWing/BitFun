@@ -8,13 +8,13 @@ use bitfun_ai_adapters::tool_call_accumulator::{
 use bitfun_ai_adapters::{GeminiUsage, UnifiedResponse, UnifiedTokenUsage, UnifiedToolCall};
 use bitfun_events::{AgenticEvent, AgenticEventPriority as EventPriority, ToolEventData};
 use futures::{Stream, StreamExt};
-use log::{debug, error, trace};
+use log::{debug, error, trace, warn};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 
 /// Minimal tool-call value emitted by the stream processor.
@@ -203,6 +203,9 @@ impl StreamProcessError {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct StreamProcessOptions {
     pub recover_partial_on_cancel: bool,
+    /// Maximum time an eval stream may spend producing only non-actionable
+    /// output, such as reasoning, without text or tool calls.
+    pub max_ineffective_stream_duration: Option<Duration>,
     /// When true, Write tool-call JSON is sanitized to `file_path` only during
     /// streaming and finalization. Inline `content` must never reach the UI or
     /// downstream execution in PlaintextFollowup mode.
@@ -836,6 +839,29 @@ impl StreamProcessor {
 
         loop {
             tokio::select! {
+                _ = Self::sleep_until_ineffective_output_deadline(
+                    ctx.stream_started_at,
+                    options.max_ineffective_stream_duration,
+                ),
+                    if options.max_ineffective_stream_duration.is_some()
+                        && !ctx.has_effective_output
+                        && ctx.thinking_chunks_count > 0 => {
+                    let timeout_secs = options
+                        .max_ineffective_stream_duration
+                        .map(|timeout| timeout.as_secs())
+                        .unwrap_or(0);
+                    let error_msg = format!(
+                        "Eval budget stream guard interrupted reasoning-only output after {} seconds without text or tool call",
+                        timeout_secs
+                    );
+                    warn!("{}", error_msg);
+                    self.send_thinking_end_if_needed(&mut ctx).await;
+                    ctx.force_finish_pending_tool_calls();
+                    ctx.partial_recovery_reason = Some(error_msg);
+                    self.log_stream_result(&ctx);
+                    break;
+                }
+
                 // Check cancellation token
                 _ = cancellation_token.cancelled() => {
                     debug!("Cancel token detected, stopping stream processing: session_id={}", ctx.session_id);
@@ -995,6 +1021,21 @@ impl StreamProcessor {
 
         Ok(ctx.into_result())
     }
+
+    async fn sleep_until_ineffective_output_deadline(
+        stream_started_at: Instant,
+        timeout: Option<Duration>,
+    ) {
+        let Some(timeout) = timeout else {
+            std::future::pending::<()>().await;
+            return;
+        };
+
+        let elapsed = stream_started_at.elapsed();
+        if elapsed < timeout {
+            tokio::time::sleep(timeout - elapsed).await;
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1066,19 +1107,56 @@ mod tests {
                 "turn_1".to_string(),
                 "round_1".to_string(),
                 &cancellation_token,
-                StreamProcessOptions {
-                    recover_partial_on_cancel: true,
-                    ..Default::default()
-                },
-            )
-            .await
-            .expect("partial stream result");
+            StreamProcessOptions {
+                recover_partial_on_cancel: true,
+                max_ineffective_stream_duration: None,
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("partial stream result");
 
         assert_eq!(result.full_text, "Partial reviewer evidence.");
         assert!(result
             .partial_recovery_reason
             .as_deref()
             .is_some_and(|reason| reason.contains("cancelled")));
+    }
+
+    #[tokio::test]
+    async fn interrupts_reasoning_only_stream_after_ineffective_budget() {
+        let processor = build_processor();
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        tx.send(Ok(UnifiedResponse {
+            reasoning_content: Some("Still reasoning.".to_string()),
+            ..Default::default()
+        }))
+        .expect("send reasoning chunk");
+        let _keep_stream_open = tx;
+
+        let result = processor
+            .process_stream_with_options(
+                tokio_stream::wrappers::UnboundedReceiverStream::new(rx).boxed(),
+                None,
+                None,
+                "session_1".to_string(),
+                "turn_1".to_string(),
+                "round_1".to_string(),
+                &CancellationToken::new(),
+                StreamProcessOptions {
+                    max_ineffective_stream_duration: Some(Duration::from_millis(10)),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("reasoning-only stream result");
+
+        assert_eq!(result.full_thinking, "Still reasoning.");
+        assert!(!result.has_effective_output);
+        assert!(result
+            .partial_recovery_reason
+            .as_deref()
+            .is_some_and(|reason| reason.contains("reasoning-only")));
     }
 
     #[tokio::test]

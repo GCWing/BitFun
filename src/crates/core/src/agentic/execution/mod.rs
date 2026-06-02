@@ -11,4 +11,6 @@ pub mod write_content_sanitizer;
 pub use execution_engine::*;
 pub use round_executor::*;
 pub use stream_processor::*;
-pub use types::{ExecutionContext, ExecutionResult, FinishReason, RoundContext, RoundResult};
+pub use types::{
+    EvalDeadline, ExecutionContext, ExecutionResult, FinishReason, RoundContext, RoundResult,
+};
