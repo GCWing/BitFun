@@ -51,9 +51,8 @@ impl From<Usage> for UnifiedTokenUsage {
         // prompt_token_count = total context tokens occupied (industry-standard
         // "input tokens" metric). For Anthropic this is the three disjoint
         // components summed; for other providers the API reports this directly.
-        let prompt_token_count = value.input_tokens.unwrap_or(0)
-            + cache_read.unwrap_or(0)
-            + cache_creation.unwrap_or(0);
+        let prompt_token_count =
+            value.input_tokens.unwrap_or(0) + cache_read.unwrap_or(0) + cache_creation.unwrap_or(0);
         let candidates_token_count = value.output_tokens.unwrap_or(0);
 
         Self {

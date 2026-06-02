@@ -301,6 +301,14 @@ pub(crate) fn build_request_body(
 
     shared::restore_protected_body(&mut request_body, protected_body);
 
+    shared::audit_ai_request_effective_options(
+        "ai::gemini_stream_request",
+        "gemini",
+        client,
+        &client.config.request_url,
+        &request_body,
+    );
+
     shared::log_request_body(
         "ai::gemini_stream_request",
         "Gemini stream request body:",

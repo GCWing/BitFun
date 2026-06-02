@@ -258,6 +258,14 @@ pub(crate) fn build_request_body(
 
     shared::restore_protected_body(&mut request_body, protected_body);
 
+    shared::audit_ai_request_effective_options(
+        "ai::anthropic_stream_request",
+        "anthropic",
+        client,
+        url,
+        &request_body,
+    );
+
     shared::log_request_body(
         "ai::anthropic_stream_request",
         "Anthropic stream request body (excluding tools):",

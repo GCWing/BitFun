@@ -96,11 +96,7 @@ pub fn is_write_like_tool_name(tool_name: &str) -> bool {
 }
 
 fn is_truncation_safe_to_recover(tool_name: &str) -> bool {
-    is_write_like_tool_name(tool_name)
-        || matches!(
-            tool_name,
-            "AskUserQuestion" | "TodoWrite"
-        )
+    is_write_like_tool_name(tool_name) || matches!(tool_name, "AskUserQuestion" | "TodoWrite")
 }
 
 /// Remove inline body fields that PlaintextFollowup Write must not carry in
@@ -269,7 +265,11 @@ impl PendingToolCall {
         &self.raw_arguments
     }
 
-    pub fn finalize(&mut self, boundary: ToolCallBoundary, strip_write_inline_content: bool) -> Option<FinalizedToolCall> {
+    pub fn finalize(
+        &mut self,
+        boundary: ToolCallBoundary,
+        strip_write_inline_content: bool,
+    ) -> Option<FinalizedToolCall> {
         if !self.has_pending() {
             return None;
         }
@@ -416,14 +416,13 @@ impl PendingToolCalls {
                     pending.append_arguments(&arguments);
                 }
                 let tool_name = pending.tool_name().to_string();
-                let params_chunk = if self.strip_write_inline_content
-                    && is_write_like_tool_name(&tool_name)
-                {
-                    write_plaintext_followup_params_snapshot(pending.raw_arguments())
-                        .unwrap_or_default()
-                } else {
-                    arguments
-                };
+                let params_chunk =
+                    if self.strip_write_inline_content && is_write_like_tool_name(&tool_name) {
+                        write_plaintext_followup_params_snapshot(pending.raw_arguments())
+                            .unwrap_or_default()
+                    } else {
+                        arguments
+                    };
                 if !params_chunk.is_empty() {
                     outcome.params_partial = Some(ToolCallParamsChunk {
                         tool_id: pending.tool_id().to_string(),
@@ -955,8 +954,7 @@ mod tests {
     }
 
     #[test]
-    fn write_truncated_mid_content_string_is_recovered_without_inline_content_when_strip_enabled(
-    ) {
+    fn write_truncated_mid_content_string_is_recovered_without_inline_content_when_strip_enabled() {
         let raw = "{\"file_path\": \"/tmp/report.md\", \"content\": \"# Report\\n\\nA long body that was cut";
         let mut pending = PendingToolCall::default();
         pending.start_new("call_1".to_string(), Some("Write".to_string()));
@@ -1084,7 +1082,8 @@ mod tests {
     fn ask_user_question_truncated_mid_chinese_string_is_recovered() {
         let raw = r#"{"questions": [{"header": "重试场景", "multiSelect": true, "options": [{"description": "当消息发送后后端返回失败（消息气泡显示为红色失败状态，有 model rounds 但 status='error'），在失败气泡旁增加重试按钮，点击后重新发送该消息", "label": "失败消息气泡上加重试按钮"}]}]}"#;
         // Truncate mid-Chinese-string, after a colon that opened the value
-        let truncated = &raw[..raw.find("消息气泡显示为红色失败状态").unwrap() + "消息气泡显示为红色失败状态".len()];
+        let truncated = &raw[..raw.find("消息气泡显示为红色失败状态").unwrap()
+            + "消息气泡显示为红色失败状态".len()];
         let mut pending = PendingToolCall::default();
         pending.start_new("call_1".to_string(), Some("AskUserQuestion".to_string()));
         pending.append_arguments(truncated);

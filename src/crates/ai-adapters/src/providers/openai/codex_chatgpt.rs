@@ -128,6 +128,14 @@ pub(crate) fn build_request_body(
 
     shared::restore_protected_body(&mut body, protected);
 
+    shared::audit_ai_request_effective_options(
+        TARGET,
+        "responses",
+        client,
+        &client.config.request_url,
+        &body,
+    );
+
     shared::log_request_body(
         TARGET,
         "Codex ChatGPT request body (excluding tools):",

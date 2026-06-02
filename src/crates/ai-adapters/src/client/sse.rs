@@ -29,13 +29,13 @@ where
     BuildRequest: Fn() -> reqwest::RequestBuilder,
 {
     match ttft_timeout {
-        Some(timeout) => match tokio::time::timeout(timeout, build_request().json(request_body).send())
-            .await
-        {
-            Ok(Ok(response)) => StreamSendOutcome::Response(response),
-            Ok(Err(error)) => StreamSendOutcome::Transport(error),
-            Err(_) => StreamSendOutcome::TtftTimeout,
-        },
+        Some(timeout) => {
+            match tokio::time::timeout(timeout, build_request().json(request_body).send()).await {
+                Ok(Ok(response)) => StreamSendOutcome::Response(response),
+                Ok(Err(error)) => StreamSendOutcome::Transport(error),
+                Err(_) => StreamSendOutcome::TtftTimeout,
+            }
+        }
         None => match build_request().json(request_body).send().await {
             Ok(response) => StreamSendOutcome::Response(response),
             Err(error) => StreamSendOutcome::Transport(error),
