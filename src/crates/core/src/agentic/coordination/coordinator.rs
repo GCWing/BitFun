@@ -14,7 +14,7 @@ use crate::agentic::events::{
     EventSubscriber,
 };
 use crate::agentic::execution::{
-    ContextCompactionOutcome, EvalDeadline, ExecutionContext, ExecutionEngine, ExecutionResult,
+    ContextCompactionOutcome, ExecutionContext, ExecutionEngine, ExecutionResult,
 };
 use crate::agentic::fork_agent::ForkAgentContextSnapshot;
 use crate::agentic::goal_mode::{
@@ -2670,12 +2670,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         {
             context_vars.insert("acp_transport".to_string(), "true".to_string());
         }
-        let eval_deadline = user_message_metadata
-            .as_ref()
-            .and_then(|metadata| metadata.get("bitfun_eval"))
-            .and_then(|metadata| metadata.get("deadline_sec"))
-            .and_then(|value| value.as_u64())
-            .and_then(EvalDeadline::new);
         let session_workspace_path = session_workspace
             .as_ref()
             .map(|workspace| workspace.root_path_string());
@@ -2698,7 +2692,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             skip_tool_confirmation: submission_policy.skip_tool_confirmation,
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
             workspace_services,
-            eval_deadline,
+            eval_deadline: None,
             round_preempt: self.round_preempt_source.get().cloned(),
             round_injection: self.round_injection_source.get().cloned(),
             recover_partial_on_cancel: false,

@@ -227,8 +227,7 @@ impl RoundExecutor {
                     &cancel_token,
                     StreamProcessOptions {
                         recover_partial_on_cancel: context.recover_partial_on_cancel,
-                        max_ineffective_stream_duration:
-                            Self::eval_ineffective_stream_guard(&context),
+                        max_ineffective_stream_duration: None,
                         strip_write_inline_content: matches!(
                             Self::write_tool_mode(&context),
                             WriteToolMode::PlaintextFollowup
@@ -1471,48 +1470,6 @@ impl RoundExecutor {
                 .tool_calls
                 .iter()
                 .all(|tool_call| !tool_call.is_valid())
-    }
-
-    fn eval_ineffective_stream_guard(context: &RoundContext) -> Option<Duration> {
-        let deadline = context.eval_deadline.as_ref()?;
-        let deadline_sec = deadline.deadline_sec;
-        if deadline_sec == 0 {
-            return None;
-        }
-
-        let elapsed_sec = deadline.elapsed_sec();
-        let remaining_sec = deadline.remaining_sec();
-
-        let elapsed_pct = elapsed_sec.saturating_mul(100);
-        let stage_70_sec = deadline_sec.saturating_mul(70) / 100;
-        let cap_sec = if remaining_sec <= 60
-            || elapsed_pct >= deadline_sec.saturating_mul(95)
-        {
-            20
-        } else if elapsed_pct >= deadline_sec.saturating_mul(85) {
-            30
-        } else if elapsed_pct >= deadline_sec.saturating_mul(70) {
-            45
-        } else {
-            stage_70_sec.saturating_sub(elapsed_sec).max(60)
-        };
-
-        let cap_sec = cap_sec.min(remaining_sec.saturating_sub(15));
-        if cap_sec < 10 {
-            return None;
-        }
-
-        debug!(
-            "Eval ineffective stream guard enabled: session_id={}, round={}, deadline_sec={}, elapsed_sec={}, remaining_sec={}, guard_sec={}",
-            context.session_id,
-            context.round_number,
-            deadline_sec,
-            elapsed_sec,
-            remaining_sec,
-            cap_sec
-        );
-
-        Some(Duration::from_secs(cap_sec))
     }
 
     fn retry_delay_ms(attempt_index: usize) -> u64 {
