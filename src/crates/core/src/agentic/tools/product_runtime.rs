@@ -11,13 +11,9 @@ mod materialization;
 mod snapshot;
 mod unlock_state;
 
-use crate::agentic::tools::framework::Tool;
 use crate::agentic::tools::registry::{ProductToolDecoratorRef, ToolRegistry};
-#[cfg(test)]
-use bitfun_agent_tools::StaticToolProvider;
-use bitfun_agent_tools::{SnapshotToolDecorator, StaticToolProviderGroup, ToolRuntimeAssembly};
-use bitfun_tool_packs::product_tool_provider_group_plan;
-use materialization::ProductToolMaterializer;
+use bitfun_agent_tools::SnapshotToolDecorator;
+use materialization::create_product_tool_registry_from_plan;
 use snapshot::ProductSnapshotToolWrapper;
 use std::sync::Arc;
 
@@ -52,41 +48,21 @@ impl ProductToolRuntime {
         Self { tool_decorator }
     }
 
-    #[cfg(test)]
-    pub(in crate::agentic::tools) fn provider_group_ids(&self) -> Vec<&'static str> {
-        builtin_static_tool_providers()
-            .iter()
-            .map(|provider| provider.provider_id())
-            .collect()
-    }
-
-    #[cfg(test)]
-    pub(in crate::agentic::tools) fn provider_tool_names(&self) -> Vec<String> {
-        builtin_static_tool_providers()
-            .into_iter()
-            .flat_map(|provider| provider.tools())
-            .map(|tool| tool.name().to_string())
-            .collect()
-    }
-
     pub(crate) fn create_registry(&self) -> ToolRegistry {
-        let providers = builtin_static_tool_providers();
-        let inner = ToolRuntimeAssembly::with_tool_decorator(self.tool_decorator.clone())
-            .create_registry_from_static_providers(&providers);
+        let assembly = bitfun_product_capabilities::default_product_capability_assembly();
+        let inner = create_product_tool_registry_from_plan(
+            assembly.tool_provider_group_plan(),
+            self.tool_decorator.clone(),
+        );
         ToolRegistry::from_inner(inner)
     }
 }
 
-fn builtin_static_tool_providers() -> Vec<StaticToolProviderGroup<dyn Tool>> {
-    ProductToolMaterializer.materialize_provider_groups(product_tool_provider_group_plan())
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{materialization::ProductToolMaterializer, ProductToolRuntime};
+    use super::ProductToolRuntime;
     use crate::agentic::tools::registry::create_tool_registry;
-    use bitfun_agent_tools::StaticToolProvider;
-    use bitfun_tool_packs::product_tool_provider_group_plan;
+    use bitfun_product_capabilities::default_product_capability_assembly;
 
     #[test]
     fn product_tool_runtime_owner_preserves_registry_contract() {
@@ -107,28 +83,15 @@ mod tests {
     }
 
     #[test]
-    fn product_tool_materializer_preserves_provider_plan_order() {
-        let materializer = ProductToolMaterializer::default();
-        let providers =
-            materializer.materialize_provider_groups(product_tool_provider_group_plan());
-        let provider_ids = providers
+    fn product_tool_runtime_registry_preserves_provider_plan_order() {
+        let assembly = default_product_capability_assembly();
+        let planned_names = assembly
+            .tool_provider_group_plan()
             .iter()
-            .map(|provider| provider.provider_id())
-            .collect::<Vec<_>>();
-        let planned_ids = product_tool_provider_group_plan()
-            .iter()
-            .map(|group| group.provider_id())
+            .flat_map(|group| group.tool_names())
+            .map(|tool_name| tool_name.to_string())
             .collect::<Vec<_>>();
 
-        assert_eq!(provider_ids, planned_ids);
-
-        let materialized_names = providers
-            .into_iter()
-            .flat_map(|provider| provider.tools())
-            .map(|tool| tool.name().to_string())
-            .collect::<Vec<_>>();
-        let registry_names = create_tool_registry().get_tool_names();
-
-        assert_eq!(materialized_names, registry_names);
+        assert_eq!(planned_names, create_tool_registry().get_tool_names());
     }
 }

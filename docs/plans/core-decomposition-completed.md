@@ -118,18 +118,40 @@
 - MiniApp worker process、host dispatch、permission execution、PathManager integration、builtin marker IO /
   seed 写盘仍在 core；后续迁移必须单独证明权限与进程行为等价。
 
+### 1.7 Product Capability pack：Harness / Tool / Service 组装闭环
+
+- 新增 `bitfun-product-capabilities`，承接产品能力包 assembly facts：capability id、required runtime service
+  capability、tool provider group id selection 和 harness provider selection。
+- `bitfun-harness` 承接 provider-neutral harness descriptor 与 descriptor registry builder；`bitfun-core::agentic::harness`
+  改为消费 product capability owner 提供的默认 harness registry，core 不再硬编码 Deep Review / DeepResearch / MiniApp provider descriptor。
+- `ProductToolRuntime` 改为通过 product capability owner 解析默认 tool provider group plan，默认产品 tool provider
+  order 保持不变。
+- `bitfun-tool-packs` 承接 tool provider group plan、按 id 选择 plan 和未知 provider group 校验；
+  product capability owner 不再拥有 provider plan 扫描和缺失 group 校验算法。
+- `bitfun-agent-tools` 承接 provider-neutral static provider materialization 和 plan-to-registry
+  assembly；core 只保留 concrete tool factory adapter、product plan adapter 和旧路径兼容入口，不再拥有 provider plan 遍历、provider group 构建、未知工具项错误处理或 registry 安装主体算法。
+- Product Capability assembly 同时收敛 service requirement、tool provider group plan 和 harness provider selection；
+  上层组装器可传入 service availability 来定位 capability 缺口，不需要让 capability owner 依赖 concrete service bundle。
+- tool-pack selector 对未知 tool provider group 显式报错，static provider materializer 对未知 concrete tool 显式报错，避免配置错误被静默过滤成工具能力缺失。
+- boundary check 覆盖 product-capabilities：禁止依赖 core、product-domain implementation、tool-runtime、concrete
+  service crate、Tauri 和重 IO / protocol dependency。
+- cargo tree / metadata 证据显示 product-capabilities 只依赖 harness、runtime-ports、tool-packs；core
+  no-default 不选入 product owner deps，相关 owner 依赖保持 optional。
+- PR-C 只证明 capability / harness / tool provider 组装边界和 no-default / dependency profile 未扩大；不迁移缺少等价保护的
+  concrete IO、MiniApp worker/host、function-agent Git/AI 或 scheduler/event/permission lifecycle。
+
 ## 2. 已建立保护
 
 - 新 owner crate 不得依赖回 `bitfun-core`。
 - `product-full` 是完整产品能力保护开关。
 - 构建脚本和 installer 相关脚本不作为 core 拆解的一部分修改。
 - boundary check 覆盖已外移 owner 的旧路径 facade-only / 禁止回流状态。
-- tool manifest、`GetToolSpec`、execution admission gate、MiniApp storage layout adapter、product-domain pure helper、remote workspace search fallback、MCP config / catalog / dynamic manifest、agent-runtime prompt cache 与 agent registry source/profile facts 等已有 focused baseline。
+- tool manifest、`GetToolSpec`、execution admission gate、MiniApp storage layout adapter、product-domain pure helper、remote workspace search fallback、MCP config / catalog / dynamic manifest、agent-runtime prompt cache、agent registry source/profile facts、product capability pack 和 harness/tool provider assembly 等已有 focused baseline。
 
 ## 3. 当前剩余结论
 
 - 低风险准备项已经完成，不再新增零散小 PR。
-- PR-B 已收敛 Product-Domain builtin asset owner 与 Tool Runtime owner closure。后续只剩 PR-C 的 Harness /
-  Capability / Build-Benefit closure，以及经等价保护后再评估的 MiniApp worker/host、function-agent Git/AI、
-  具体 IO tools、Agent Runtime concrete scheduler/event/permission/post-turn hook；不能拆成零散 helper PR。
+- PR-C 已收敛 Harness / Product Capability / Build-Benefit closure。后续不应继续拆零散 helper PR；若继续迁移
+  MiniApp worker/host、function-agent Git/AI、具体 IO tools、Agent Runtime concrete scheduler/event/permission/post-turn
+  hook，必须先补端到端等价保护并作为新的完整 owner PR 评估。
 - 缺陷修复、行为变更、冗余清理、三方库升级和构建脚本调整必须独立评估，不能伪装成 core decomposition 剩余里程碑。

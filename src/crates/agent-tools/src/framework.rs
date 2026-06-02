@@ -1199,9 +1199,52 @@ pub trait StaticToolProvider<Tool: ?Sized>: Send + Sync {
     fn tools(&self) -> Vec<ToolRef<Tool>>;
 }
 
+pub trait StaticToolProviderPlan {
+    fn provider_id(&self) -> &'static str;
+
+    fn tool_names(&self) -> &'static [&'static str];
+}
+
+pub trait StaticToolProviderFactory<Tool: ?Sized> {
+    fn materialize_tool(&self, tool_name: &str) -> Option<ToolRef<Tool>>;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StaticToolMaterializationError {
+    UnknownTool {
+        provider_id: &'static str,
+        tool_name: &'static str,
+    },
+}
+
+impl std::fmt::Display for StaticToolMaterializationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnknownTool {
+                provider_id,
+                tool_name,
+            } => write!(
+                f,
+                "unknown static tool {tool_name} in provider group {provider_id}"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for StaticToolMaterializationError {}
+
 pub struct StaticToolProviderGroup<Tool: ?Sized> {
     provider_id: &'static str,
     tools: Vec<ToolRef<Tool>>,
+}
+
+impl<Tool: ?Sized> std::fmt::Debug for StaticToolProviderGroup<Tool> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StaticToolProviderGroup")
+            .field("provider_id", &self.provider_id)
+            .field("tool_count", &self.tools.len())
+            .finish()
+    }
 }
 
 impl<Tool: ?Sized> StaticToolProviderGroup<Tool> {
@@ -1218,6 +1261,33 @@ impl<Tool: ?Sized + Send + Sync> StaticToolProvider<Tool> for StaticToolProvider
     fn tools(&self) -> Vec<ToolRef<Tool>> {
         self.tools.clone()
     }
+}
+
+pub fn materialize_static_tool_provider_groups<Tool, Plan, Factory>(
+    plans: &[Plan],
+    factory: &Factory,
+) -> Result<Vec<StaticToolProviderGroup<Tool>>, StaticToolMaterializationError>
+where
+    Tool: ?Sized,
+    Plan: StaticToolProviderPlan,
+    Factory: StaticToolProviderFactory<Tool> + ?Sized,
+{
+    let mut providers = Vec::new();
+    for plan in plans {
+        let provider_id = plan.provider_id();
+        let mut tools = Vec::new();
+        for tool_name in plan.tool_names() {
+            let tool = factory.materialize_tool(tool_name).ok_or(
+                StaticToolMaterializationError::UnknownTool {
+                    provider_id,
+                    tool_name,
+                },
+            )?;
+            tools.push(tool);
+        }
+        providers.push(StaticToolProviderGroup::new(provider_id, tools));
+    }
+    Ok(providers)
 }
 
 pub struct ToolRuntimeAssembly<Tool: ToolRegistryItem + ?Sized> {
@@ -1251,6 +1321,19 @@ impl<Tool: ToolRegistryItem + ?Sized> ToolRuntimeAssembly<Tool> {
             registry.install_static_provider(provider);
         }
         registry
+    }
+
+    pub fn create_registry_from_static_provider_plans<Plan, Factory>(
+        &self,
+        plans: &[Plan],
+        factory: &Factory,
+    ) -> Result<ToolRegistry<Tool>, StaticToolMaterializationError>
+    where
+        Plan: StaticToolProviderPlan,
+        Factory: StaticToolProviderFactory<Tool> + ?Sized,
+    {
+        let providers = materialize_static_tool_provider_groups(plans, factory)?;
+        Ok(self.create_registry_from_static_providers(&providers))
     }
 }
 
@@ -1941,7 +2024,9 @@ pub enum ToolRestrictionError {
         tool_name: String,
         message: Option<String>,
     },
-    NotAllowed { tool_name: String },
+    NotAllowed {
+        tool_name: String,
+    },
 }
 
 impl fmt::Display for ToolRestrictionError {

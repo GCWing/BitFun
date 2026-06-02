@@ -13,9 +13,10 @@ the product tool runtime.
   path and artifact contracts, pure manifest/catalog/exposure helpers, result
   presentation policy, deterministic admission policy, and portable tool context
   facts.
-- This crate may own generic provider contracts and containers, but concrete
-  tool construction and product runtime registration stay outside this crate
-  until a reviewed owner move proves behavior equivalence.
+- This crate may own generic provider contracts, containers, materialization,
+  and registry assembly. Concrete tool construction and product runtime
+  registration stay outside this crate until a reviewed owner move proves
+  behavior equivalence.
 - Do not move `ToolUseContext`, concrete tools, workspace services, cancellation
   tokens, session file-read state storage, tool-result filesystem writes,
   state update side effects, snapshot decoration, collapsed unlock state,

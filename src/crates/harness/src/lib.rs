@@ -262,6 +262,68 @@ impl DescriptorHarnessProvider {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HarnessProviderDescriptor {
+    provider_id: &'static str,
+    workflow: HarnessWorkflow,
+    capabilities: &'static [HarnessCapability],
+    legacy_target: &'static str,
+}
+
+impl HarnessProviderDescriptor {
+    pub const fn legacy_facade(
+        provider_id: &'static str,
+        workflow: HarnessWorkflow,
+        capabilities: &'static [HarnessCapability],
+        legacy_target: &'static str,
+    ) -> Self {
+        Self {
+            provider_id,
+            workflow,
+            capabilities,
+            legacy_target,
+        }
+    }
+
+    pub const fn provider_id(self) -> &'static str {
+        self.provider_id
+    }
+
+    pub const fn workflow(self) -> HarnessWorkflow {
+        self.workflow
+    }
+
+    pub const fn capabilities(self) -> &'static [HarnessCapability] {
+        self.capabilities
+    }
+
+    pub const fn legacy_target(self) -> &'static str {
+        self.legacy_target
+    }
+
+    pub fn into_provider(self) -> DescriptorHarnessProvider {
+        DescriptorHarnessProvider::legacy_facade(
+            self.provider_id,
+            self.workflow,
+            self.capabilities,
+            self.legacy_target,
+        )
+    }
+}
+
+pub fn build_descriptor_harness_registry<I>(
+    descriptors: I,
+) -> Result<HarnessRegistry, HarnessRegistryBuildError>
+where
+    I: IntoIterator<Item = HarnessProviderDescriptor>,
+{
+    let mut builder = HarnessRegistryBuilder::new();
+    for descriptor in descriptors {
+        builder = builder.install_provider(descriptor.into_provider());
+    }
+    builder.build()
+}
+
 #[async_trait]
 impl HarnessProvider for DescriptorHarnessProvider {
     fn id(&self) -> &HarnessId {

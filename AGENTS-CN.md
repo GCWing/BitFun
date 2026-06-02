@@ -32,6 +32,7 @@ BitFun 是一个由 Rust workspace 与 React 前端组成的项目。
 | Agent tool contracts | `src/crates/agent-tools` | [AGENTS.md](src/crates/agent-tools/AGENTS.md) |
 | Tool pack provider plan | `src/crates/tool-packs` | [AGENTS.md](src/crates/tool-packs/AGENTS.md) |
 | 产品领域 crate | `src/crates/product-domains` | [AGENTS.md](src/crates/product-domains/AGENTS.md) |
+| 产品能力包 | `src/crates/product-capabilities` | [AGENTS.md](src/crates/product-capabilities/AGENTS.md) |
 | Transport 适配层 | `src/crates/transport` | [AGENTS.md](src/crates/transport/AGENTS.md) |
 | API layer | `src/crates/api-layer` | [AGENTS.md](src/crates/api-layer/AGENTS.md) |
 | ACP 集成 | `src/crates/acp` | [AGENTS.md](src/crates/acp/AGENTS.md) |

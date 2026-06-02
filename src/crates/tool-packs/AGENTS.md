@@ -2,8 +2,9 @@
 
 Scope: this guide applies to `src/crates/tool-packs`.
 
-`bitfun-tool-packs` owns tool feature-group scaffold metadata and the product
-tool provider group plan. It does not own concrete tool implementations yet.
+`bitfun-tool-packs` owns tool feature-group scaffold metadata, the product tool
+provider group plan, and provider-group plan selection by id. It does not own
+concrete tool implementations yet.
 
 ## Guardrails
 
@@ -16,6 +17,8 @@ tool provider group plan. It does not own concrete tool implementations yet.
 - Do not own manifest/exposure contracts, concrete runtime manifest assembly,
   `GetToolSpec` execution, collapsed unlock state, snapshot decoration, or
   `ToolUseContext`. Provider group plans may list group ids and tool names only.
+- Product capability packs may select provider group ids; this crate owns the
+  provider group plan and unknown provider-group validation.
 - Future concrete tool migration must preserve product registry order,
   expanded/collapsed exposure, prompt stubs, unlock state, cancellation, runtime
   restrictions, and Deep Review tool flow.

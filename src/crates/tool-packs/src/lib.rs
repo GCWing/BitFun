@@ -3,6 +3,9 @@
 //! The feature scaffold is intentionally behavior-neutral until the core
 //! `ToolUseContext` and registry boundaries are split into portable ports.
 
+use std::collections::HashSet;
+use std::fmt;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ToolPackFeatureGroup {
     Basic,
@@ -169,11 +172,54 @@ pub fn product_tool_provider_group_plan() -> &'static [ToolProviderGroupPlan] {
     PRODUCT_TOOL_PROVIDER_GROUP_PLAN
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ToolProviderGroupPlanSelectionError {
+    UnknownToolProviderGroup { provider_id: &'static str },
+}
+
+impl fmt::Display for ToolProviderGroupPlanSelectionError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnknownToolProviderGroup { provider_id } => {
+                write!(formatter, "unknown tool provider group {provider_id}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for ToolProviderGroupPlanSelectionError {}
+
+pub fn try_product_tool_provider_group_plan_for_ids(
+    provider_ids: &[&'static str],
+) -> Result<Vec<ToolProviderGroupPlan>, ToolProviderGroupPlanSelectionError> {
+    let requested_provider_ids = provider_ids.iter().copied().collect::<HashSet<_>>();
+    let mut found_provider_ids = HashSet::new();
+    let mut plan = Vec::new();
+
+    for group_plan in product_tool_provider_group_plan() {
+        if requested_provider_ids.contains(group_plan.provider_id()) {
+            found_provider_ids.insert(group_plan.provider_id());
+            plan.push(*group_plan);
+        }
+    }
+
+    for provider_id in provider_ids {
+        if !found_provider_ids.contains(provider_id) {
+            return Err(
+                ToolProviderGroupPlanSelectionError::UnknownToolProviderGroup { provider_id },
+            );
+        }
+    }
+
+    Ok(plan)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         all_feature_groups, enabled_feature_groups, product_tool_provider_group_plan,
-        ToolPackFeatureGroup,
+        try_product_tool_provider_group_plan_for_ids, ToolPackFeatureGroup,
+        ToolProviderGroupPlanSelectionError,
     };
 
     #[test]
@@ -353,6 +399,33 @@ mod tests {
                     ]
                 ),
             ]
+        );
+    }
+
+    #[test]
+    fn product_provider_group_plan_selector_preserves_product_plan_order_for_requested_ids() {
+        let plan =
+            try_product_tool_provider_group_plan_for_ids(&["core.integration", "core.basic"])
+                .expect("known provider groups should select");
+
+        let provider_ids = plan
+            .iter()
+            .map(|group| group.provider_id())
+            .collect::<Vec<_>>();
+
+        assert_eq!(provider_ids, vec!["core.basic", "core.integration"]);
+    }
+
+    #[test]
+    fn product_provider_group_plan_selector_rejects_unknown_provider_ids() {
+        let error = try_product_tool_provider_group_plan_for_ids(&["core.basic", "core.missing"])
+            .expect_err("unknown provider ids must not be silently ignored");
+
+        assert_eq!(
+            error,
+            ToolProviderGroupPlanSelectionError::UnknownToolProviderGroup {
+                provider_id: "core.missing"
+            }
         );
     }
 }

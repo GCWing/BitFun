@@ -46,14 +46,31 @@ use bitfun_agent_tools::{
     FileReadFreshnessFacts,
 };
 use bitfun_agent_tools::{
-    ContextualToolManifestItem, DynamicToolDescriptor, DynamicToolProvider,
-    GetToolSpecCatalogProvider, PortResult, PortableToolContextProvider, StaticToolProvider,
-    StaticToolProviderGroup, ToolCatalogRuntime, ToolCatalogSnapshotProvider, ToolDecorator,
-    ToolDecoratorRef, ToolRegistry, ToolRegistryItem, ToolRuntimeAssembly,
+    materialize_static_tool_provider_groups, ContextualToolManifestItem, DynamicToolDescriptor,
+    DynamicToolProvider, GetToolSpecCatalogProvider, PortResult, PortableToolContextProvider,
+    StaticToolMaterializationError, StaticToolProvider, StaticToolProviderFactory,
+    StaticToolProviderGroup, StaticToolProviderPlan, ToolCatalogRuntime,
+    ToolCatalogSnapshotProvider, ToolDecorator, ToolDecoratorRef, ToolRegistry, ToolRegistryItem,
+    ToolRuntimeAssembly,
 };
 use serde_json::json;
 use std::path::PathBuf;
 use std::sync::Arc;
+
+struct TestProviderPlan {
+    provider_id: &'static str,
+    tool_names: &'static [&'static str],
+}
+
+impl StaticToolProviderPlan for TestProviderPlan {
+    fn provider_id(&self) -> &'static str {
+        self.provider_id
+    }
+
+    fn tool_names(&self) -> &'static [&'static str] {
+        self.tool_names
+    }
+}
 
 #[test]
 fn validation_result_default_preserves_success_contract() {
@@ -1773,6 +1790,72 @@ fn static_tool_provider_group_preserves_provider_id_and_tool_order() {
     );
 }
 
+struct RegistryMarkerToolFactory;
+
+impl StaticToolProviderFactory<RegistryMarkerTool> for RegistryMarkerToolFactory {
+    fn materialize_tool(&self, tool_name: &str) -> Option<Arc<RegistryMarkerTool>> {
+        match tool_name {
+            "Read" | "Write" | "WebFetch" => Some(registry_marker_tool(tool_name, None)),
+            _ => None,
+        }
+    }
+}
+
+#[test]
+fn static_tool_materializer_preserves_provider_and_tool_order() {
+    let plans = [
+        TestProviderPlan {
+            provider_id: "core.basic",
+            tool_names: &["Read", "Write"],
+        },
+        TestProviderPlan {
+            provider_id: "core.integration",
+            tool_names: &["WebFetch"],
+        },
+    ];
+
+    let providers = materialize_static_tool_provider_groups(&plans, &RegistryMarkerToolFactory)
+        .expect("static tools should materialize");
+
+    assert_eq!(providers[0].provider_id(), "core.basic");
+    assert_eq!(
+        providers[0]
+            .tools()
+            .iter()
+            .map(|tool| tool.name())
+            .collect::<Vec<_>>(),
+        vec!["Read", "Write"]
+    );
+    assert_eq!(providers[1].provider_id(), "core.integration");
+    assert_eq!(
+        providers[1]
+            .tools()
+            .iter()
+            .map(|tool| tool.name())
+            .collect::<Vec<_>>(),
+        vec!["WebFetch"]
+    );
+}
+
+#[test]
+fn static_tool_materializer_rejects_unknown_tools() {
+    let plans = [TestProviderPlan {
+        provider_id: "core.basic",
+        tool_names: &["Read", "Missing"],
+    }];
+
+    let error = materialize_static_tool_provider_groups(&plans, &RegistryMarkerToolFactory)
+        .expect_err("unknown tool names must not be silently skipped");
+
+    assert_eq!(
+        error,
+        StaticToolMaterializationError::UnknownTool {
+            provider_id: "core.basic",
+            tool_name: "Missing",
+        }
+    );
+}
+
 struct RegistryMarkerDecorator;
 
 impl ToolDecorator<Arc<RegistryMarkerTool>> for RegistryMarkerDecorator {
@@ -1887,6 +1970,40 @@ fn generic_tool_runtime_assembly_installs_static_providers_with_decorator() {
         registry.get_collapsed_tool_names(),
         vec!["decorated_WebFetch".to_string()],
         "runtime assembly must preserve collapsed exposure after decoration"
+    );
+}
+
+#[test]
+fn generic_tool_runtime_assembly_materializes_plans_before_registry_install() {
+    let decorator: ToolDecoratorRef<RegistryMarkerTool> = Arc::new(RegistryMarkerDecorator);
+    let plans = [
+        TestProviderPlan {
+            provider_id: "core.basic",
+            tool_names: &["Read", "Write"],
+        },
+        TestProviderPlan {
+            provider_id: "core.integration",
+            tool_names: &["WebFetch"],
+        },
+    ];
+
+    let registry = ToolRuntimeAssembly::with_tool_decorator(decorator)
+        .create_registry_from_static_provider_plans(&plans, &RegistryMarkerToolFactory)
+        .expect("plans should materialize into a registry");
+
+    assert_eq!(
+        registry.get_tool_names(),
+        vec![
+            "decorated_Read".to_string(),
+            "decorated_Write".to_string(),
+            "decorated_WebFetch".to_string()
+        ],
+        "assembly must own generic plan materialization plus registry installation"
+    );
+    assert_eq!(
+        registry.get_collapsed_tool_names(),
+        Vec::<String>::new(),
+        "decorator-based plan materialization must not change exposure"
     );
 }
 

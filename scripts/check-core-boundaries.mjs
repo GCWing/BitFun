@@ -15,6 +15,7 @@ const noCoreDependencyCrates = [
   'agent-stream',
   'agent-runtime',
   'harness',
+  'product-capabilities',
   'runtime-ports',
   'runtime-services',
   'services-core',
@@ -167,6 +168,33 @@ const lightweightBoundaryRules = [
     ],
   },
   {
+    crateName: 'product-capabilities',
+    reason:
+      'product-capabilities must own product capability assembly facts without concrete runtime implementations',
+    forbiddenDeps: [
+      'bitfun-core',
+      'bitfun-ai-adapters',
+      'bitfun-agent-tools',
+      'bitfun-services-core',
+      'bitfun-services-integrations',
+      'bitfun-product-domains',
+      'bitfun-transport',
+      'terminal-core',
+      'tool-runtime',
+      'tauri',
+      'reqwest',
+      'git2',
+      'rmcp',
+      'image',
+      'tokio-tungstenite',
+      'bitfun-cli',
+      'ratatui',
+      'crossterm',
+      'arboard',
+      'syntect-tui',
+    ],
+  },
+  {
     crateName: 'agent-tools',
     reason: 'agent-tools must not depend on concrete service or product runtime implementations',
     forbiddenDeps: [
@@ -202,6 +230,7 @@ const dependencyProfileRules = [
     forbiddenNonOptionalDeps: [
       'aes',
       'aes-gcm',
+      'bitfun-product-capabilities',
       'bitfun-product-domains',
       'bitfun-relay-server',
       'bitfun-tool-packs',
@@ -358,12 +387,40 @@ const dependencyProfileRules = [
     reason: 'agent-tools must stay a lightweight tool contract crate',
     forbiddenNonOptionalDeps: [
       'bitfun-ai-adapters',
+      'bitfun-product-capabilities',
       'reqwest',
       'git2',
       'rmcp',
       'image',
       'tokio-tungstenite',
       'tauri',
+      'bitfun-cli',
+      'ratatui',
+      'crossterm',
+      'arboard',
+      'syntect-tui',
+    ],
+  },
+  {
+    crateName: 'product-capabilities',
+    profileName: 'default product capability profile',
+    reason: 'product-capabilities default profile must stay assembly-fact only',
+    forbiddenNonOptionalDeps: [
+      'bitfun-core',
+      'bitfun-ai-adapters',
+      'bitfun-agent-tools',
+      'bitfun-services-core',
+      'bitfun-services-integrations',
+      'bitfun-product-domains',
+      'bitfun-transport',
+      'terminal-core',
+      'tool-runtime',
+      'tauri',
+      'reqwest',
+      'git2',
+      'rmcp',
+      'image',
+      'tokio-tungstenite',
       'bitfun-cli',
       'ratatui',
       'crossterm',
@@ -431,6 +488,7 @@ const optionalDependencyFeatureOwnerRules = [
     dependencies: [
       { depName: 'aes', ownerFeatures: ['service-integrations'] },
       { depName: 'aes-gcm', ownerFeatures: ['service-integrations', 'ssh-remote'] },
+      { depName: 'bitfun-product-capabilities', ownerFeatures: ['product-capabilities'] },
       { depName: 'bitfun-product-domains', ownerFeatures: ['product-domains'] },
       { depName: 'bitfun-relay-server', ownerFeatures: ['service-integrations'] },
       { depName: 'bitfun-tool-packs', ownerFeatures: ['tool-packs'] },
@@ -531,7 +589,13 @@ const productCoreFeatureAssemblyScanRoots = ['src/apps', 'src/crates/acp'];
 const coreProductFullFeatureAssemblyRule = {
   manifestPath: 'src/crates/core/Cargo.toml',
   featureName: 'product-full',
-  requiredFeatureRefs: ['ssh-remote', 'product-domains', 'service-integrations', 'tool-packs'],
+  requiredFeatureRefs: [
+    'ssh-remote',
+    'product-capabilities',
+    'product-domains',
+    'service-integrations',
+    'tool-packs',
+  ],
   reason: 'bitfun-core product-full must explicitly assemble current owner feature groups',
 };
 
@@ -663,6 +727,36 @@ const facadeOnlyFiles = [
 ];
 
 const forbiddenContentRules = [
+  {
+    path: 'src/crates/product-capabilities/src/lib.rs',
+    patterns: [
+      {
+        regex: /\bpub struct HarnessProviderDescriptor\b/,
+        message:
+          'product-capabilities must not redefine provider-neutral harness descriptors; use bitfun-harness',
+      },
+      {
+        regex: /\bfn build_harness_registry_from_descriptors\b/,
+        message:
+          'product-capabilities must not own descriptor registry construction; use bitfun-harness',
+      },
+      {
+        regex: /\bpub enum ProductCapabilityBuildError\b/,
+        message:
+          'product-capabilities must not redefine tool provider group selection errors; use bitfun-tool-packs',
+      },
+      {
+        regex: /\bproduct_tool_provider_group_plan\(\)\b/,
+        message:
+          'product-capabilities must not scan product tool provider plans locally; use bitfun-tool-packs selector',
+      },
+      {
+        regex: /\bdefault_product_tool_provider_group_plan\b/,
+        message:
+          'product-capabilities must expose product assembly, not a separate default tool-provider plan shortcut',
+      },
+    ],
+  },
   {
     path: 'src/crates/core/src/service/filesystem/service.rs',
     patterns: [
@@ -2494,6 +2588,44 @@ const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/harness/src/lib.rs',
+    reason:
+      'harness must own provider-neutral harness descriptors and descriptor registry wiring without concrete execution',
+    patterns: [
+      {
+        regex: /\bpub struct HarnessProviderDescriptor\b/,
+        message: 'missing provider-neutral harness provider descriptor',
+      },
+      {
+        regex: /\bpub fn build_descriptor_harness_registry\b/,
+        message: 'missing descriptor harness registry builder',
+      },
+      {
+        regex: /\bDescriptorHarnessProvider::legacy_facade\b/,
+        message: 'missing legacy-facade descriptor adapter',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/product-capabilities/src/lib.rs',
+    reason:
+      'product-capabilities must select harness descriptors from the harness owner instead of owning descriptor construction',
+    patterns: [
+      {
+        regex: /\bHarnessProviderDescriptor\b/,
+        message: 'missing harness descriptor selection in product capability packs',
+      },
+      {
+        regex: /\bbuild_descriptor_harness_registry\b/,
+        message: 'missing harness-owned descriptor registry assembly delegation',
+      },
+      {
+        regex: /\bProductCapabilityAssembly\b/,
+        message: 'missing product capability assembly owner',
+      },
+    ],
+  },
+  {
     path: 'src/crates/agent-runtime/src/agents.rs',
     reason:
       'agent-runtime must own shared mode config profile facts that are runtime-visible and product-neutral',
@@ -3423,6 +3555,22 @@ const requiredContentRules = [
         message: 'missing generic static provider group container',
       },
       {
+        regex: /\bpub trait StaticToolProviderPlan\b/,
+        message: 'missing provider-neutral static tool provider plan contract',
+      },
+      {
+        regex: /\bpub trait StaticToolProviderFactory\b/,
+        message: 'missing provider-neutral static tool factory contract',
+      },
+      {
+        regex: /\bpub enum StaticToolMaterializationError\b/,
+        message: 'missing provider-neutral static tool materialization error',
+      },
+      {
+        regex: /\bpub fn materialize_static_tool_provider_groups\b/,
+        message: 'missing provider-neutral static tool materializer',
+      },
+      {
         regex: /\bpub struct ToolRuntimeAssembly\b/,
         message: 'missing generic tool runtime assembly owner',
       },
@@ -3441,6 +3589,10 @@ const requiredContentRules = [
       {
         regex: /\bcreate_registry_from_static_providers\b/,
         message: 'missing generic static-provider runtime assembly helper',
+      },
+      {
+        regex: /\bcreate_registry_from_static_provider_plans\b/,
+        message: 'missing generic static-provider plan-to-registry assembly helper',
       },
       {
         regex: /\bpub fn is_tool_collapsed\b/,
@@ -4470,7 +4622,7 @@ const requiredContentRules = [
   {
     path: 'src/crates/core/src/agentic/tools/product_runtime.rs',
     reason:
-      'core product tool runtime owner keeps registry assembly and static tool materialization explicit until concrete tools migrate',
+      'core product tool runtime owner delegates generic registry assembly and only wires product plan, decorator, and compatibility facade',
     patterns: [
       {
         regex: /\bProductToolRuntime\b/,
@@ -4481,47 +4633,47 @@ const requiredContentRules = [
         message: 'missing generic snapshot decorator injection',
       },
       {
-        regex: /\bbuiltin_static_tool_providers\b/,
-        message: 'missing builtin provider assembly input',
+        regex: /\bcreate_product_tool_registry_from_plan\b/,
+        message: 'missing product registry assembly adapter delegation',
       },
       {
-        regex: /\bStaticToolProviderGroup\b/,
-        message: 'missing generic static provider group contract use',
-      },
-      {
-        regex: /\bproduct_tool_provider_group_plan\b/,
-        message: 'missing tool-pack provider group plan delegation',
-      },
-      {
-        regex: /\bProductToolMaterializer\b/,
-        message: 'missing product tool materializer delegation',
-      },
-      {
-        regex: /\bToolRuntimeAssembly\b/,
-        message: 'missing generic agent-tools runtime assembly delegation',
-      },
-      {
-        regex: /\bcreate_registry_from_static_providers\b/,
-        message: 'missing generic static provider assembly delegation',
+        regex: /\bdefault_product_capability_assembly\b/,
+        message: 'missing product capability assembly provider group plan delegation',
       },
       {
         regex: /\bproduct_tool_runtime_owner_preserves_registry_contract\b/,
         message: 'missing product runtime owner registry equivalence regression',
       },
       {
-        regex: /\bproduct_tool_materializer_preserves_provider_plan_order\b/,
-        message: 'missing product tool materializer order regression',
+        regex: /\bproduct_tool_runtime_registry_preserves_provider_plan_order\b/,
+        message: 'missing product tool provider plan-to-registry order regression',
       },
     ],
   },
   {
     path: 'src/crates/core/src/agentic/tools/product_runtime/materialization.rs',
     reason:
-      'product runtime materialization owns concrete tool construction from provider plans until concrete tools migrate',
+      'product runtime materialization must keep only concrete tool construction and product plan adapter while delegating generic registry assembly to agent-tools',
     patterns: [
       {
-        regex: /\bProductToolMaterializer\b/,
-        message: 'missing product tool materializer owner',
+        regex: /\bProductConcreteToolFactory\b/,
+        message: 'missing product concrete tool factory adapter',
+      },
+      {
+        regex: /\bimpl StaticToolProviderFactory<dyn Tool> for ProductConcreteToolFactory\b/,
+        message: 'missing concrete tool factory implementation',
+      },
+      {
+        regex: /\bProductToolProviderPlanAdapter\b/,
+        message: 'missing product provider plan adapter',
+      },
+      {
+        regex: /\bimpl StaticToolProviderPlan for ProductToolProviderPlanAdapter\b/,
+        message: 'missing product provider plan adapter contract',
+      },
+      {
+        regex: /\bcreate_registry_from_static_provider_plans\b/,
+        message: 'missing generic agent-tools plan-to-registry delegation',
       },
       {
         regex: /\bmaterialize_tool\b/,
@@ -4707,6 +4859,10 @@ const requiredContentRules = [
         message: 'missing generic static-provider assembly helper',
       },
       {
+        regex: /\bcreate_registry_from_static_provider_plans\b/,
+        message: 'missing generic static-provider plan-to-registry helper',
+      },
+      {
         regex: /\bpub fn install_static_provider\b/,
         message: 'missing static provider registry installer',
       },
@@ -4756,6 +4912,18 @@ const requiredContentRules = [
       {
         regex: /\bpub fn product_tool_provider_group_plan\b/,
         message: 'missing product tool provider group plan',
+      },
+      {
+        regex: /\bpub enum ToolProviderGroupPlanSelectionError\b/,
+        message: 'missing tool provider group plan selection error',
+      },
+      {
+        regex: /\bpub fn try_product_tool_provider_group_plan_for_ids\b/,
+        message: 'missing product tool provider group plan selector',
+      },
+      {
+        regex: /\bproduct_provider_group_plan_selector_rejects_unknown_provider_ids\b/,
+        message: 'missing provider group selector unknown-id regression',
       },
     ],
   },
@@ -7007,7 +7175,13 @@ function runManifestParserSelfTest() {
       throw new Error(`${rule.manifestPath} must require bitfun-core product-full`);
     }
   }
-  for (const featureName of ['ssh-remote', 'product-domains', 'service-integrations', 'tool-packs']) {
+  for (const featureName of [
+    'ssh-remote',
+    'product-capabilities',
+    'product-domains',
+    'service-integrations',
+    'tool-packs',
+  ]) {
     if (!coreProductFullFeatureAssemblyRule.requiredFeatureRefs.includes(featureName)) {
       throw new Error(`core product-full assembly rule must require ${featureName}`);
     }
@@ -7493,6 +7667,26 @@ function runManifestParserSelfTest() {
   );
   if (!agentRuntimeProfile?.forbiddenNonOptionalDeps.includes('tauri')) {
     throw new Error('agent-runtime dependency profile must forbid product surface dependencies');
+  }
+  const productCapabilitiesRule = lightweightBoundaryRules.find(
+    (rule) => rule.crateName === 'product-capabilities',
+  );
+  if (!productCapabilitiesRule?.forbiddenDeps.includes('bitfun-core')) {
+    throw new Error('product-capabilities lightweight boundary must forbid bitfun-core');
+  }
+  if (!productCapabilitiesRule?.forbiddenDeps.includes('bitfun-product-domains')) {
+    throw new Error(
+      'product-capabilities lightweight boundary must forbid product-domain implementations',
+    );
+  }
+  if (!productCapabilitiesRule?.forbiddenDeps.includes('tool-runtime')) {
+    throw new Error('product-capabilities lightweight boundary must forbid tool-runtime');
+  }
+  const productCapabilitiesProfile = dependencyProfileRules.find(
+    (rule) => rule.crateName === 'product-capabilities',
+  );
+  if (!productCapabilitiesProfile?.forbiddenNonOptionalDeps.includes('bitfun-core')) {
+    throw new Error('product-capabilities dependency profile must forbid bitfun-core');
   }
   const agentToolsManifestRule = forbiddenContentUnderRules.find(
     (rule) => rule.path === 'src/crates/agent-tools/src',
@@ -8168,12 +8362,8 @@ function runManifestParserSelfTest() {
         'ProductToolRuntime',
         'SnapshotToolDecorator',
         'ProductSnapshotToolWrapper',
-        'builtin_static_tool_providers',
-        'StaticToolProviderGroup',
-        'product_tool_provider_group_plan',
-        'ProductToolMaterializer',
-        'ToolRuntimeAssembly',
-        'create_registry_from_static_providers',
+        'create_product_tool_registry_from_plan',
+        'default_product_capability_assembly',
         'wrap_tool_for_snapshot_tracking',
         'ProductToolCatalogProvider',
         'ToolCatalogSnapshotProvider',
@@ -8191,13 +8381,18 @@ function runManifestParserSelfTest() {
         'product_catalog_provider_default_get_tool_spec_catalog_matches_registry',
         'product_tool_runtime_owner_preserves_registry_contract',
         'GetToolSpec requires agent type context',
-        'product_tool_materializer_preserves_provider_plan_order',
+        'product_tool_runtime_registry_preserves_provider_plan_order',
       ],
     },
     {
       path: 'src/crates/core/src/agentic/tools/product_runtime/materialization.rs',
       contracts: [
-        'ProductToolMaterializer',
+        'ProductConcreteToolFactory',
+        'StaticToolProviderFactory',
+        'ProductToolProviderPlanAdapter',
+        'StaticToolProviderPlan',
+        'create_registry_from_static_provider_plans',
+        'create_product_tool_registry_from_plan',
         'materialize_tool',
         'GetToolSpecTool',
       ],
@@ -8210,7 +8405,12 @@ function runManifestParserSelfTest() {
         'ToolWorkspaceKind',
         'StaticToolProvider',
         'StaticToolProviderGroup',
+        'StaticToolProviderPlan',
+        'StaticToolProviderFactory',
+        'StaticToolMaterializationError',
+        'materialize_static_tool_provider_groups',
         'ToolRuntimeAssembly',
+        'create_registry_from_static_provider_plans',
         'ToolCatalogRuntime',
         'ToolDecoratorRef',
         'SnapshotToolWrapper',
@@ -8234,6 +8434,9 @@ function runManifestParserSelfTest() {
         'all_feature_groups',
         'enabled_feature_groups',
         'product_tool_provider_group_plan',
+        'ToolProviderGroupPlanSelectionError',
+        'try_product_tool_provider_group_plan_for_ids',
+        'product_provider_group_plan_selector_rejects_unknown_provider_ids',
       ],
     },
     {
@@ -8426,9 +8629,11 @@ function runManifestParserSelfTest() {
     {
       path: 'src/crates/core/Cargo.toml',
       contracts: [
+        'bitfun-product-capabilities = \\{ path = "\\.\\.\\/product-capabilities", default-features = false, optional = true \\}',
         'bitfun-tool-packs = \\{ path = "\\.\\.\\/tool-packs", default-features = false, optional = true \\}',
         'bitfun-services-integrations = \\{ path = "\\.\\.\\/services-integrations", default-features = false, features = \\["remote-ssh"\\] \\}',
         'bitfun-product-domains = \\{ path = "\\.\\.\\/product-domains", default-features = false, optional = true \\}',
+        'dep:bitfun-product-capabilities',
         'dep:bitfun-tool-packs',
         'bitfun-tool-packs\\/product-full',
         'bitfun-services-integrations\\/product-full',

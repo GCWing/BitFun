@@ -394,8 +394,14 @@ mod tests {
     }
 
     #[test]
-    fn builtin_static_tool_providers_cover_registry_manifest_in_order() {
-        let provider_tools = ProductToolRuntime::default().provider_tool_names();
+    fn product_capability_provider_plan_covers_registry_manifest_in_order() {
+        let assembly = bitfun_product_capabilities::default_product_capability_assembly();
+        let provider_tools = assembly
+            .tool_provider_group_plan()
+            .iter()
+            .flat_map(|group| group.tool_names())
+            .map(|tool_name| tool_name.to_string())
+            .collect::<Vec<_>>();
 
         assert_eq!(
             provider_tools,
@@ -405,8 +411,13 @@ mod tests {
     }
 
     #[test]
-    fn builtin_static_tool_providers_keep_owner_group_order() {
-        let provider_ids = ProductToolRuntime::default().provider_group_ids();
+    fn product_capability_provider_plan_keeps_owner_group_order() {
+        let assembly = bitfun_product_capabilities::default_product_capability_assembly();
+        let provider_ids = assembly
+            .tool_provider_group_plan()
+            .iter()
+            .map(|group| group.provider_id())
+            .collect::<Vec<_>>();
 
         assert_eq!(
             provider_ids,
@@ -421,34 +432,8 @@ mod tests {
     }
 
     #[test]
-    fn builtin_static_tool_providers_follow_tool_pack_group_plan() {
-        let provider_ids = ProductToolRuntime::default().provider_group_ids();
-        let planned_provider_ids = bitfun_tool_packs::product_tool_provider_group_plan()
-            .iter()
-            .map(|group| group.provider_id())
-            .collect::<Vec<_>>();
-
-        assert_eq!(
-            provider_ids, planned_provider_ids,
-            "core must materialize provider groups from the tool-pack plan"
-        );
-    }
-
-    #[test]
     fn product_tool_runtime_preserves_core_owned_registry_contract() {
         let runtime = ProductToolRuntime::default();
-
-        assert_eq!(
-            runtime.provider_group_ids(),
-            vec![
-                "core.basic",
-                "core.agent",
-                "core.session",
-                "core.integration"
-            ],
-            "runtime assembly must keep core-owned provider group order explicit"
-        );
-
         let assembled_registry = runtime.create_registry();
         let compatibility_registry = create_tool_registry();
 

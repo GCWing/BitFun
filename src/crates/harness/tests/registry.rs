@@ -1,6 +1,7 @@
 use bitfun_harness::{
-    DescriptorHarnessProvider, HarnessCapability, HarnessError, HarnessInput, HarnessProvider,
-    HarnessRegistryBuildError, HarnessRegistryBuilder, HarnessStepKind, HarnessWorkflow,
+    build_descriptor_harness_registry, DescriptorHarnessProvider, HarnessCapability, HarnessError,
+    HarnessInput, HarnessProvider, HarnessProviderDescriptor, HarnessRegistryBuildError,
+    HarnessRegistryBuilder, HarnessStepKind, HarnessWorkflow,
 };
 
 #[tokio::test]
@@ -79,6 +80,34 @@ fn registry_rejects_duplicate_provider_ids() {
         err,
         HarnessRegistryBuildError::DuplicateProviderId { .. }
     ));
+}
+
+#[test]
+fn descriptor_registry_builder_installs_legacy_facade_descriptors() {
+    let registry = build_descriptor_harness_registry([
+        HarnessProviderDescriptor::legacy_facade(
+            "core.deep_review",
+            HarnessWorkflow::DeepReview,
+            &[HarnessCapability::Plan, HarnessCapability::ReviewGate],
+            "bitfun-core::agentic::deep_review",
+        ),
+        HarnessProviderDescriptor::legacy_facade(
+            "core.deep_research",
+            HarnessWorkflow::DeepResearch,
+            &[HarnessCapability::Plan],
+            "bitfun-core::agentic::agents::definitions::modes::deep_research",
+        ),
+    ])
+    .expect("descriptor registry should build");
+
+    assert_eq!(
+        registry.provider_ids(),
+        vec!["core.deep_review", "core.deep_research"]
+    );
+    assert_eq!(
+        registry.workflows(),
+        vec![HarnessWorkflow::DeepReview, HarnessWorkflow::DeepResearch]
+    );
 }
 
 #[test]
