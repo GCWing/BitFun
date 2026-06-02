@@ -52,6 +52,14 @@
   margin-top: var(--flowchat-inline-gap, 0.35rem);
 }
 
+.model-round-item__ai-disclaimer {
+  flex: 1;
+  font-size: var(--flowchat-font-size-xs);
+  color: var(--color-text-muted);
+  opacity: 0.55;
+  text-align: left;
+}
+
 .model-round-item__action-btn {
   display: flex;
   align-items: center;

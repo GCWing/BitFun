@@ -1035,7 +1035,8 @@
     "feedbackThanks": "感谢您的反馈！",
     "feedbackDevVersion": "开发版本暂不提供反馈功能",
     "userLabel": "👤 用户:",
-    "toolCallLabel": "🔧 工具调用: {{name}}"
+    "toolCallLabel": "🔧 工具调用: {{name}}",
+    "aiDisclaimer": "以上内容均由 AI 生成，仅供参考"
   },
   "exploreRegion": {
     "readFiles_one": "读取了 {{count}} 个文件",
