@@ -1,49 +1,27 @@
-use super::types::{subagent_key_for, AgentEntry, SubagentStateReason};
+use super::types::{subagent_key_for, AgentEntry};
 use crate::agentic::agents::{resolve_mode_config_profile_id, SubAgentSource};
 use crate::service::config::types::{
     AgentSubagentOverrideConfig, AgentSubagentOverrideState, ParentSubagentOverrideConfig,
 };
+use bitfun_agent_runtime::agents::{
+    resolve_subagent_availability, resolve_subagent_default_enabled, ResolvedSubagentAvailability,
+    SubagentOverrideLayers as ResolvedOverrideLayers, SubagentOverrideState, SubagentSourceKind,
+};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ResolvedSubagentAvailability {
-    pub default_enabled: bool,
-    pub effective_enabled: bool,
-    pub override_state: Option<AgentSubagentOverrideState>,
-    pub state_reason: Option<SubagentStateReason>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ResolvedOverrideLayers {
-    pub project_override: Option<AgentSubagentOverrideState>,
-    pub user_override: Option<AgentSubagentOverrideState>,
-}
-
-fn default_reason(entry: &AgentEntry, default_enabled: bool) -> Option<SubagentStateReason> {
-    match entry.subagent_source {
-        Some(SubAgentSource::Builtin) => Some(if default_enabled {
-            SubagentStateReason::BuiltinDefaultVisible
-        } else {
-            SubagentStateReason::BuiltinDefaultHidden
-        }),
-        Some(SubAgentSource::Project) | Some(SubAgentSource::User) => {
-            Some(SubagentStateReason::CustomDefaultEnabled)
-        }
-        None => None,
+fn to_runtime_override_state(state: AgentSubagentOverrideState) -> SubagentOverrideState {
+    match state {
+        AgentSubagentOverrideState::Enabled => SubagentOverrideState::Enabled,
+        AgentSubagentOverrideState::Disabled => SubagentOverrideState::Disabled,
     }
 }
 
-fn project_reason(state: AgentSubagentOverrideState) -> SubagentStateReason {
-    match state {
-        AgentSubagentOverrideState::Enabled => SubagentStateReason::EnabledByProjectOverride,
-        AgentSubagentOverrideState::Disabled => SubagentStateReason::DisabledByProjectOverride,
-    }
-}
-
-fn user_reason(state: AgentSubagentOverrideState) -> SubagentStateReason {
-    match state {
-        AgentSubagentOverrideState::Enabled => SubagentStateReason::EnabledByUserOverride,
-        AgentSubagentOverrideState::Disabled => SubagentStateReason::DisabledByUserOverride,
+fn source_kind(source: Option<SubAgentSource>) -> SubagentSourceKind {
+    match source {
+        Some(SubAgentSource::Builtin) => SubagentSourceKind::Builtin,
+        Some(SubAgentSource::Project) => SubagentSourceKind::Project,
+        Some(SubAgentSource::User) => SubagentSourceKind::User,
+        None => SubagentSourceKind::Unspecified,
     }
 }
 
@@ -72,13 +50,11 @@ pub fn subagent_override_for_parent(
 }
 
 pub fn resolve_default_enabled(entry: &AgentEntry, parent_agent_type: Option<&str>) -> bool {
-    match entry.subagent_source {
-        Some(SubAgentSource::Builtin) => entry
-            .visibility_policy
-            .can_access_from_parent(parent_agent_type),
-        Some(SubAgentSource::Project) | Some(SubAgentSource::User) => true,
-        None => true,
-    }
+    resolve_subagent_default_enabled(
+        source_kind(entry.subagent_source),
+        &entry.visibility_policy,
+        parent_agent_type,
+    )
 }
 
 pub fn resolve_override_layers(
@@ -93,9 +69,11 @@ pub fn resolve_override_layers(
 
     match entry.subagent_source {
         Some(SubAgentSource::Project) => ResolvedOverrideLayers {
-            project_override: project_overrides.and_then(|overrides| {
-                subagent_override_for_parent(overrides, parent_agent_type, &subagent_key)
-            }),
+            project_override: project_overrides
+                .and_then(|overrides| {
+                    subagent_override_for_parent(overrides, parent_agent_type, &subagent_key)
+                })
+                .map(to_runtime_override_state),
             user_override: None,
         },
         Some(SubAgentSource::Builtin) | Some(SubAgentSource::User) => ResolvedOverrideLayers {
@@ -104,7 +82,8 @@ pub fn resolve_override_layers(
                 user_overrides,
                 parent_agent_type,
                 &subagent_key,
-            ),
+            )
+            .map(to_runtime_override_state),
         },
         None => ResolvedOverrideLayers::default(),
     }
@@ -119,31 +98,7 @@ pub fn resolve_availability(
     let default_enabled = resolve_default_enabled(entry, parent_agent_type);
     let layers =
         resolve_override_layers(entry, parent_agent_type, project_overrides, user_overrides);
-
-    if let Some(project_override) = layers.project_override {
-        return ResolvedSubagentAvailability {
-            default_enabled,
-            effective_enabled: matches!(project_override, AgentSubagentOverrideState::Enabled),
-            override_state: Some(project_override),
-            state_reason: Some(project_reason(project_override)),
-        };
-    }
-
-    if let Some(user_override) = layers.user_override {
-        return ResolvedSubagentAvailability {
-            default_enabled,
-            effective_enabled: matches!(user_override, AgentSubagentOverrideState::Enabled),
-            override_state: Some(user_override),
-            state_reason: Some(user_reason(user_override)),
-        };
-    }
-
-    ResolvedSubagentAvailability {
-        default_enabled,
-        effective_enabled: default_enabled,
-        override_state: None,
-        state_reason: default_reason(entry, default_enabled),
-    }
+    resolve_subagent_availability(source_kind(entry.subagent_source), default_enabled, layers)
 }
 
 pub fn prune_override_config(
@@ -243,7 +198,7 @@ mod tests {
         assert_eq!(builtin_layers.project_override, None);
         assert_eq!(
             builtin_layers.user_override,
-            Some(AgentSubagentOverrideState::Enabled)
+            Some(SubagentOverrideState::Enabled)
         );
 
         let user_entry = make_entry(SubAgentSource::User, "UserScout");
@@ -262,7 +217,7 @@ mod tests {
         assert_eq!(user_layers.project_override, None);
         assert_eq!(
             user_layers.user_override,
-            Some(AgentSubagentOverrideState::Enabled)
+            Some(SubagentOverrideState::Enabled)
         );
     }
 
@@ -284,7 +239,7 @@ mod tests {
 
         assert_eq!(
             layers.project_override,
-            Some(AgentSubagentOverrideState::Disabled)
+            Some(SubagentOverrideState::Disabled)
         );
         assert_eq!(layers.user_override, None);
     }

@@ -45,6 +45,11 @@ SessionManager → Session → DialogTurn → ModelRound
   response assembly belong in `bitfun-agent-runtime`. Core keeps only the
   session metadata store, token subscriber, scheduler delivery adapter, event
   emission, and `get_goal` / `create_goal` / `update_goal` `Tool` handlers.
+- Subagent query scope, visibility/availability decisions, round-boundary
+  yield/injection state, and turn-outcome queue decisions belong in
+  `bitfun-agent-runtime`. Core keeps concrete agent definition loading, custom
+  subagent file IO/config adapters, desktop API wiring, concrete scheduler
+  lifecycle, submit execution, and event delivery.
 - For tools, keep lightweight contracts, pure manifest/exposure contracts,
   generic contextual prompt-manifest resolver contracts, generic catalog
   snapshot provider contracts, generic GetToolSpec catalog provider/detail/

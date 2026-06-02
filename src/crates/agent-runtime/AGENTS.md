@@ -14,7 +14,8 @@ and tested without `bitfun-core`.
   proves behavior equivalence.
 - Prefer pure facts and decisions first: queue policy, background delivery,
   thread-goal accounting/mutation/continuation decisions, cancellation routing,
-  runtime event facts, and registry visibility.
+  runtime event facts, registry visibility/availability, round-boundary
+  yield/injection state, and turn-outcome queue decisions.
 - Add focused tests before moving any runtime decision into this crate.
 
 ## Verification

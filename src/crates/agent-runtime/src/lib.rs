@@ -3,5 +3,6 @@
 //! This crate owns runtime decisions that can be built and tested without
 //! depending on `bitfun-core` concrete session or scheduler lifecycle.
 
+pub mod agents;
 pub mod scheduler;
 pub mod thread_goal;

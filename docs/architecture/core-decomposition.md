@@ -251,9 +251,11 @@ Agent 运行时 SDK（Agent Runtime SDK）是可嵌入的 agent kernel，负责 
 background task、permission coordination 和 runtime events。它只依赖稳定契约、tool runtime 和注入的
 service ports，不感知 Desktop、CLI、Remote、ACP、Tauri 或 Web UI。当前主体仍在 `bitfun-core`，
 但 `bitfun-agent-runtime` 已承接可独立构建的 scheduler/background delivery 和 thread goal
-runtime 纯决策。concrete scheduler lifecycle、session manager、prompt loop、subagent registry、
-thread goal metadata store、token subscriber、scheduler delivery adapter、goal `Tool` handler
-和 post-turn hook 仍由 core 执行。
+runtime 纯决策，并承接 subagent visibility / availability、round-boundary yield / injection state
+和 turn-outcome queue policy。concrete scheduler lifecycle、session manager、prompt loop、
+concrete agent definition loading、custom subagent file IO / config adapter、thread goal metadata store、
+token subscriber、scheduler delivery adapter、goal `Tool` handler、event delivery 和 post-turn hook
+仍由 core 执行。
 
 ### 7.6 工具运行时（Tool Runtime）
 
@@ -348,6 +350,9 @@ flowchart TB
 - 产品入口（Product Surfaces）只选择 `DeliveryProfile` 和产品配置，不直接把 concrete manager 传入 runtime。
 - 产品组装层（Product Assembly）根据产品形态创建或接收具体 provider，并调用 typed builder 完成注册。
 - Tool、OS、Remote、Protocol provider 分别留在对应 app 或 integration owner 中，通过同一组 port 暴露。
+- Tauri 只能出现在 Desktop provider、transport/API adapter 或产品入口命令外观中；Agent Runtime SDK、
+  Tool Runtime、Harness、Runtime Services contract 和 Product Capabilities 不得依赖 Tauri handle、
+  window、command macro 或 desktop app state。
 - Remote provider 必须拆分稳定连接接口和具体远端 OS / transport 实现，避免把 SSH、relay 或远端平台差异泄漏到 runtime。
 - 不支持的能力在 assembly 的 capability availability 中显式返回 unsupported / unavailable，不在 runtime 内写产品分支。
 - 禁止使用无类型 `Any` service locator、全局 mutable registry 或下层 crate 反向读取产品配置。
@@ -359,6 +364,7 @@ flowchart TB
 | 产品组装层（Product Assembly）膨胀为新的全局状态中心 | assembly 只做构建期注册，输出不可变 runtime parts；产品状态仍归 surface 或 runtime owner |
 | 接口拆得过细，导致复杂度和动态分发成本上升 | 以 capability 和稳定用例定义 port 粒度，热路径避免运行时 map lookup，优先 builder-time 注入 |
 | 平台实现泄漏到 Agent Runtime SDK、Tool Runtime 或 Harness | 依赖检查禁止 runtime owner 依赖 app crate、Tauri、CLI TUI、ACP protocol 和 concrete service crate |
+| core 拆分后仍隐式绑定 Tauri | Tauri 只允许在 Desktop provider / adapter；向下层传递 typed port、DTO、event fact 和 capability availability |
 | 不同产品形态能力矩阵漂移 | Product Assembly 维护 capability matrix；减少或替换能力时补产品入口验证和 unsupported 行为测试 |
 | Tool、MCP、ACP 的 manifest、permission 或事件语义迁移后不等价 | 保留旧路径兼容 facade，增加 manifest snapshot、permission 决策和事件映射等价测试 |
 | Harness provider 只做注册但被误认为已经迁移执行语义 | PR4 阶段 provider 只生成 legacy route plan，execute 明确返回 unsupported；后续执行迁移必须单独证明行为等价 |
@@ -371,6 +377,8 @@ flowchart TB
   Tool Runtime、Runtime Services、Harness 和 Product Capabilities 分别成为可审查的 owner。
 - 接口与实现边界：稳定契约和各 runtime owner 定义接口，具体 Tool、OS、Remote、Protocol provider 留在具体实现层，
   由产品组装层（Product Assembly）通过 typed builder / registry 注册。
+- Tauri 脱离方向：Tauri 是 Desktop concrete provider / adapter 的实现细节，不是 core、runtime owner
+  或 contract crate 的依赖来源；跨形态复用依赖 typed port 和 product assembly。
 - Remote 拆分方向：runtime 只依赖 remote connection、remote workspace、remote projection 和 capability facts 等
   port；SSH、relay、本地隧道、远端 OS 差异和认证方式属于具体 Remote provider。
 - 后续工作范围：抽出可独立构建的 runtime kernel；把 service、tool、harness 和 product capability 改为 typed

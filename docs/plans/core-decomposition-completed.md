@@ -33,7 +33,7 @@
 - remote-SSH runtime、remote FS / terminal、workspace-root source、persistence / workspace service reads、`ImageContextData` concrete impl 仍未迁移。
 - `ToolUseContext` runtime handles、product registry materialization、collapsed unlock persistence、concrete tools 仍未迁移。
 - MiniApp filesystem IO / worker / host dispatch / builtin asset runtime、function-agent Git / AI concrete service 仍未迁移。
-- agent registry / scheduler 仍未迁移。
+- agent definition loading / concrete scheduler lifecycle 仍未迁移。
 
 ### 1.3 H1-H5 基线收口
 
@@ -55,7 +55,9 @@
 - remote workspace facts、remote session metadata、remote file projection DTO 和 remote workspace/projection host trait
   已归入 `bitfun-runtime-ports`，并由 `bitfun-services-integrations::remote_connect` 保留旧路径 re-export。
 - `bitfun-agent-runtime` 已建立为可独立构建的 Agent Runtime SDK owner crate，当前承接 scheduler/background
-  delivery 纯决策，以及 thread goal runtime 的 turn accounting、goal mutation、continuation plan 和 tool response assembly。
+  delivery 纯决策，thread goal runtime 的 turn accounting、goal mutation、continuation plan 和 tool response assembly，
+  subagent query scope / visibility / availability 决策，以及 round-boundary yield / injection state 和
+  turn-outcome queue policy。
 - persisted thread goal 的 portable DTO、status、continuation plan 和 tool response contract 已归入
   `bitfun-runtime-ports`；`get_goal` / `create_goal` / `update_goal` 已进入产品 tool registry。
 - `bitfun-harness` 已建立为可独立构建的 Harness contract crate，当前承接 workflow descriptor、legacy route
@@ -64,8 +66,8 @@
 
 明确未完成：
 
-- `bitfun-agent-runtime` 不代表 session manager、prompt loop、subagent registry、scheduler 生命周期或 post-turn hook
-  已迁移。
+- `bitfun-agent-runtime` 不代表 session manager、prompt loop、concrete agent definition loading、scheduler 生命周期、
+  event delivery 或 post-turn hook 已迁移。
 - thread goal 的 metadata store、token subscriber、scheduler delivery adapter 和 goal `Tool` handler 仍在
   `bitfun-core`；runtime 决策已经归属 `bitfun-agent-runtime`，后续不应再把它误归入普通 concrete tool IO。
 - `bitfun-harness` 不代表 Deep Review、DeepResearch、MiniApp 的 concrete workflow execution 已迁移；PR4 provider

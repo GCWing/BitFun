@@ -4,7 +4,7 @@ use crate::agentic::agents::definitions::custom::{CustomSubagent, CustomSubagent
 use crate::agentic::agents::registry::builtin::default_model_id_for_builtin_agent;
 use crate::agentic::agents::registry::types::{
     AgentCategory, AgentEntry, CustomSubagentConfig, SubAgentSource, SubagentListScope,
-    SubagentQueryContext,
+    SubagentOverrideState, SubagentQueryContext,
 };
 use crate::agentic::agents::registry::visibility::{
     BuiltinSubagentExposure, SubagentVisibilityPolicy,
@@ -498,14 +498,14 @@ async fn parent_subagent_overrides_follow_source_scopes() {
 
     assert_eq!(
         visible.0.override_state,
-        Some(AgentSubagentOverrideState::Disabled)
+        Some(SubagentOverrideState::Disabled)
     );
     assert_eq!(
         visible.1.override_state,
-        Some(AgentSubagentOverrideState::Disabled)
+        Some(SubagentOverrideState::Disabled)
     );
     assert_eq!(
         visible.2.override_state,
-        Some(AgentSubagentOverrideState::Disabled)
+        Some(SubagentOverrideState::Disabled)
     );
 }

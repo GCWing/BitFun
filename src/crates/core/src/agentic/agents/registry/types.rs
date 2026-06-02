@@ -11,24 +11,11 @@ use crate::agentic::deep_review_policy::{
     REVIEWER_FRONTEND_AGENT_TYPE, REVIEWER_PERFORMANCE_AGENT_TYPE, REVIEWER_SECURITY_AGENT_TYPE,
     REVIEW_JUDGE_AGENT_TYPE,
 };
-use crate::service::config::types::AgentSubagentOverrideState;
+pub use bitfun_agent_runtime::agents::{
+    SubagentListScope, SubagentOverrideState, SubagentQueryContext, SubagentStateReason,
+};
 use serde::{Deserialize, Serialize};
-use std::path::Path;
 use std::sync::Arc;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SubagentListScope {
-    TaskVisible,
-    RegistryManagement,
-}
-
-#[derive(Debug, Clone)]
-pub struct SubagentQueryContext<'a> {
-    pub parent_agent_type: Option<&'a str>,
-    pub workspace_root: Option<&'a Path>,
-    pub list_scope: SubagentListScope,
-    pub include_disabled: bool,
-}
 
 /// subagent source (builtin / project / user), used for frontend display
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -112,7 +99,7 @@ pub struct AgentInfo {
     #[serde(default = "default_true")]
     pub effective_enabled: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub override_state: Option<AgentSubagentOverrideState>,
+    pub override_state: Option<SubagentOverrideState>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub state_reason: Option<SubagentStateReason>,
     /// subagent source, only subagent has value, used for frontend display
@@ -124,18 +111,6 @@ pub struct AgentInfo {
     pub model: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub visibility: Option<SubagentVisibilitySummary>,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum SubagentStateReason {
-    BuiltinDefaultVisible,
-    BuiltinDefaultHidden,
-    CustomDefaultEnabled,
-    EnabledByProjectOverride,
-    DisabledByProjectOverride,
-    EnabledByUserOverride,
-    DisabledByUserOverride,
 }
 
 fn default_true() -> bool {

@@ -914,6 +914,16 @@ const forbiddenContentRules = [
         message:
           'core round preempt runtime must not redefine RoundInjectionTarget; use bitfun-runtime-ports',
       },
+      {
+        regex: /\bpub\s+struct\s+SessionRoundInjectionBuffer\b/,
+        message:
+          'core round preempt runtime must not own round injection buffer; use bitfun-agent-runtime',
+      },
+      {
+        regex: /\bpub\s+struct\s+SessionRoundYieldFlags\b/,
+        message:
+          'core round preempt runtime must not own round yield flags; use bitfun-agent-runtime',
+      },
     ],
   },
   {
@@ -3260,16 +3270,17 @@ const requiredContentRules = [
   {
     path: 'src/crates/core/src/agentic/round_preempt.rs',
     reason:
-      'core round preempt runtime must preserve legacy injection import path while runtime-ports owns portable injection contracts',
+      'core round preempt runtime must preserve legacy import paths while runtime-ports owns portable contracts and agent-runtime owns round-boundary state',
     patterns: [
+      {
+        regex:
+          /pub use bitfun_agent_runtime::scheduler::\{[\s\S]*DialogRoundInjectionInterrupt[\s\S]*SessionRoundInjectionBuffer[\s\S]*SessionRoundYieldFlags[\s\S]*\};/,
+        message: 'missing agent-runtime round-boundary state compatibility re-export',
+      },
       {
         regex:
           /pub use bitfun_runtime_ports::\{[\s\S]*DialogRoundInjectionSource[\s\S]*DialogRoundPreemptSource[\s\S]*RoundInjection[\s\S]*RoundInjectionKind[\s\S]*RoundInjectionTarget[\s\S]*\};/,
         message: 'missing round injection compatibility re-export',
-      },
-      {
-        regex: /\bpub struct SessionRoundInjectionBuffer\b/,
-        message: 'round injection buffer must remain core-owned until concrete runtime migration',
       },
     ],
   },
@@ -4645,38 +4656,38 @@ const requiredContentRules = [
   {
     path: 'src/crates/core/src/agentic/agents/registry/availability.rs',
     reason:
-      'core agent registry must continue owning mode-scoped subagent availability until an approved agent-runtime migration exists',
+      'core agent registry must adapt config and AgentEntry facts while bitfun-agent-runtime owns mode-scoped subagent availability decisions',
     patterns: [
       {
         regex: /\bpub fn resolve_availability\b/,
-        message: 'missing mode-scoped subagent availability resolver',
+        message: 'missing core compatibility availability adapter',
       },
       {
         regex: /\bpub fn resolve_override_layers\b/,
-        message: 'missing project/user override layering contract',
+        message: 'missing project/user override layering adapter',
       },
       {
-        regex: /\bAgentSubagentOverrideState\b/,
-        message: 'missing subagent override state contract',
+        regex: /\bresolve_subagent_availability\b/,
+        message: 'missing agent-runtime availability decision delegation',
       },
       {
-        regex: /\bSubagentStateReason\b/,
-        message: 'missing frontend-visible availability reason contract',
+        regex: /\bto_runtime_override_state\b/,
+        message: 'missing config override to runtime override adapter',
       },
     ],
   },
   {
     path: 'src/crates/core/src/agentic/agents/registry/types.rs',
     reason:
-      'core agent registry must continue exposing subagent query and availability DTOs until registry ownership migrates with API equivalence tests',
+      'core agent registry must preserve legacy DTO fields while bitfun-agent-runtime owns query scope and availability reason contracts',
     patterns: [
       {
-        regex: /\bpub struct SubagentQueryContext\b/,
-        message: 'missing subagent query context',
+        regex: /pub use bitfun_agent_runtime::agents::\{[\s\S]*SubagentListScope[\s\S]*SubagentOverrideState[\s\S]*SubagentQueryContext[\s\S]*SubagentStateReason[\s\S]*\};/,
+        message: 'missing agent-runtime subagent registry contract re-export',
       },
       {
-        regex: /\bpub enum SubagentListScope\b/,
-        message: 'missing subagent list scope contract',
+        regex: /\bpub struct AgentInfo\b/,
+        message: 'missing core AgentInfo facade DTO',
       },
       {
         regex: /\bdefault_enabled\b/,
@@ -4685,10 +4696,6 @@ const requiredContentRules = [
       {
         regex: /\beffective_enabled\b/,
         message: 'missing effective availability field',
-      },
-      {
-        regex: /\bpub enum SubagentStateReason\b/,
-        message: 'missing availability reason wire contract',
       },
     ],
   },
@@ -7223,6 +7230,26 @@ function runManifestParserSelfTest() {
       ],
     },
     {
+      path: 'src/crates/agent-runtime/src/agents.rs',
+      contracts: [
+        'SubagentQueryContext',
+        'SubagentListScope',
+        'SubagentVisibilityPolicy',
+        'resolve_subagent_default_enabled',
+        'resolve_subagent_availability',
+        'SubagentOverrideLayers',
+        'SubagentStateReason',
+      ],
+    },
+    {
+      path: 'src/crates/agent-runtime/tests/agent_registry_contracts.rs',
+      contracts: [
+        'visibility_policy_supports_public_restricted_hidden_and_denied_parents',
+        'availability_preserves_builtin_project_and_user_override_layering',
+        'default_enabled_uses_visibility_only_for_builtin_subagents',
+      ],
+    },
+    {
       path: 'src/crates/agent-runtime/src/scheduler.rs',
       contracts: [
         'BackgroundDeliveryFacts',
@@ -7231,6 +7258,10 @@ function runManifestParserSelfTest() {
         'follow_up_submission_policy',
         'SubmitAgentSessionFollowUp',
         'InjectIntoRunningTurn',
+        'SessionRoundYieldFlags',
+        'SessionRoundInjectionBuffer',
+        'TurnOutcome',
+        'TurnOutcomeQueueAction',
       ],
     },
     {
@@ -7240,6 +7271,9 @@ function runManifestParserSelfTest() {
         'background_delivery_starts_agent_session_follow_up_when_session_is_not_processing',
         'background_delivery_follow_up_uses_agent_session_source_semantics',
         'background_delivery_injection_does_not_expose_follow_up_policy',
+        'round_yield_flags_are_session_scoped_and_clearable',
+        'round_injection_buffer_drains_only_messages_for_the_active_turn',
+        'turn_outcome_status_reply_and_queue_policy_are_portable',
       ],
     },
     {
@@ -7447,6 +7481,7 @@ function runManifestParserSelfTest() {
     {
       path: 'src/crates/core/src/agentic/round_preempt.rs',
       contracts: [
+        'bitfun_agent_runtime',
         'bitfun_runtime_ports',
         'DialogRoundInjectionSource',
         'DialogRoundPreemptSource',
@@ -7454,6 +7489,7 @@ function runManifestParserSelfTest() {
         'RoundInjectionKind',
         'RoundInjectionTarget',
         'SessionRoundInjectionBuffer',
+        'SessionRoundYieldFlags',
       ],
     },
     {

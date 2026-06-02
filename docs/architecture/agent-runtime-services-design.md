@@ -3,10 +3,11 @@
 本文是 [`core-decomposition.md`](core-decomposition.md) 的开发设计文档，描述目标模块、
 接口、crate 内部结构和迁移保护。`bitfun-runtime-services` 已建立 typed service bundle、
 builder、provider registry、capability availability 和 fake provider 基础；`bitfun-agent-runtime`
-已创建并承接可独立构建的 scheduler/background delivery 与 thread goal runtime
-纯决策；`bitfun-harness`
+已创建并承接可独立构建的 scheduler/background delivery、thread goal runtime、
+subagent visibility / availability、round-boundary yield / injection state
+和 turn-outcome queue policy 纯决策；`bitfun-harness`
 已创建并承接 workflow descriptor、legacy route plan 和 provider registry contract。
-未迁移的 session manager、prompt loop、subagent registry、concrete scheduler lifecycle 和
+未迁移的 session manager、prompt loop、concrete agent registry loading、concrete scheduler lifecycle 和
 concrete workflow execution 不得被描述为已完成。
 
 ## 1. 设计目标与边界
@@ -27,7 +28,7 @@ bitfun-runtime-ports
 bitfun-runtime-services      # PR1 基础壳层
 bitfun-agent-tools
 tool-runtime
-bitfun-agent-runtime         # 已创建，承接 scheduler/background delivery 与 thread goal runtime 决策
+bitfun-agent-runtime         # 已创建，承接 scheduler/background、thread goal、registry visibility 与 round-boundary 决策
 bitfun-harness               # 已创建，当前承接 workflow descriptor / registry contract
 bitfun-services-core
 bitfun-services-integrations
@@ -94,7 +95,8 @@ bitfun-runtime-services
 
 - 只有当 owner 边界、旧路径兼容、focused tests、依赖收益和 boundary check 都能同时落地时，才创建新的目标 crate。
 - `bitfun-runtime-services` 已按该准入建立基础壳层；继续扩展时仍必须保持 typed builder、本地 service、remote service 和 fake provider 三类注入路径可测试。
-- `bitfun-agent-runtime` 已通过 scheduler/background delivery 和 thread goal runtime 纯决策满足创建准入；继续扩展时仍必须保持旧路径 facade、focused tests 和 boundary check。
+- `bitfun-agent-runtime` 已通过 scheduler/background delivery、thread goal runtime、subagent visibility / availability
+  和 round-boundary 纯决策满足创建准入；继续扩展时仍必须保持旧路径 facade、focused tests 和 boundary check。
 - `bitfun-harness` 已按 Deep Review、DeepResearch、MiniApp 三个 legacy-facade provider
   满足创建准入；继续扩展时仍必须保持 descriptor/registry、旧路径兼容、focused tests 和 boundary check。
 - 若目标 crate 只能承接单个 helper 或只能通过 `bitfun-core` 才能测试，继续留在迁移期 facade，不提前拆 crate。
@@ -249,12 +251,17 @@ Remote ports 的边界：
 - thread goal runtime 决策：turn token / wall-clock accounting、goal mutation、
   continuation / budget-limit / objective-updated plan、tool response assembly
   和 usage-limit / retry / skip-accounting policy。
+- subagent registry 决策：query scope、visibility policy、availability reason、
+  builtin / project / user override layering 和 frontend-facing availability facts。
+- scheduler round-boundary 决策：yield flag、round injection buffer、turn outcome status /
+  reply text / queue action。
 
 仍留在 `bitfun-core` 的范围：
 
-- concrete scheduler 生命周期、session manager、turn id 生成、injection buffer、submit 执行、prompt loop、
-  subagent registry、thread goal metadata store、token subscriber、scheduler delivery adapter、
-  goal `Tool` handler 和 post-turn hook。
+- concrete scheduler 生命周期、session manager、turn id 生成、submit 执行、prompt loop、
+  concrete agent definition loading、custom subagent file IO / config adapter、
+  thread goal metadata store、token subscriber、scheduler delivery adapter、
+  goal `Tool` handler、event delivery 和 post-turn hook。
 
 职责：
 
@@ -664,6 +671,8 @@ pub fn build_desktop_runtime(input: DesktopAssemblyInput) -> Result<ProductRunti
 - assembly 不得改变底层 runtime 语义来适配某个 surface。
 - `DeliveryProfile` 只能影响 capability/provider 选择，不得让下层出现 `if desktop`
   或 `if cli` 这样的 product 分支。
+- Tauri handle、window、command macro 和 desktop app state 只能存在于 Desktop provider 或
+  transport/API adapter；runtime parts 只接收 typed service port、DTO、event fact 和 capability availability。
 - feature group 是构建时能力边界，`CapabilitySet` 是产品运行时能力边界；两者必须在
   assembly 中显式对应。
 - 任何交付形态减少能力前，必须先更新 product matrix 并补产品入口验证。
