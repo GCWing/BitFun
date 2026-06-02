@@ -16,7 +16,6 @@ use crate::agentic::tools::registry::{ProductToolDecoratorRef, ToolRegistry};
 #[cfg(test)]
 use bitfun_agent_tools::StaticToolProvider;
 use bitfun_agent_tools::{SnapshotToolDecorator, StaticToolProviderGroup, ToolRuntimeAssembly};
-use bitfun_tool_packs::product_tool_provider_group_plan;
 use materialization::ProductToolMaterializer;
 use snapshot::ProductSnapshotToolWrapper;
 use std::sync::Arc;
@@ -78,7 +77,8 @@ impl ProductToolRuntime {
 }
 
 fn builtin_static_tool_providers() -> Vec<StaticToolProviderGroup<dyn Tool>> {
-    ProductToolMaterializer.materialize_provider_groups(product_tool_provider_group_plan())
+    let plan = bitfun_product_capabilities::default_product_tool_provider_group_plan();
+    ProductToolMaterializer.materialize_provider_groups(&plan)
 }
 
 #[cfg(test)]
@@ -86,7 +86,7 @@ mod tests {
     use super::{materialization::ProductToolMaterializer, ProductToolRuntime};
     use crate::agentic::tools::registry::create_tool_registry;
     use bitfun_agent_tools::StaticToolProvider;
-    use bitfun_tool_packs::product_tool_provider_group_plan;
+    use bitfun_product_capabilities::default_product_tool_provider_group_plan;
 
     #[test]
     fn product_tool_runtime_owner_preserves_registry_contract() {
@@ -109,13 +109,13 @@ mod tests {
     #[test]
     fn product_tool_materializer_preserves_provider_plan_order() {
         let materializer = ProductToolMaterializer::default();
-        let providers =
-            materializer.materialize_provider_groups(product_tool_provider_group_plan());
+        let plan = default_product_tool_provider_group_plan();
+        let providers = materializer.materialize_provider_groups(&plan);
         let provider_ids = providers
             .iter()
             .map(|provider| provider.provider_id())
             .collect::<Vec<_>>();
-        let planned_ids = product_tool_provider_group_plan()
+        let planned_ids = plan
             .iter()
             .map(|group| group.provider_id())
             .collect::<Vec<_>>();

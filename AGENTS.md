@@ -32,6 +32,7 @@ Repository rule: **keep product logic platform-agnostic, then expose it through 
 | Agent tool contracts | `src/crates/agent-tools` | [AGENTS.md](src/crates/agent-tools/AGENTS.md) |
 | Tool pack provider plan | `src/crates/tool-packs` | [AGENTS.md](src/crates/tool-packs/AGENTS.md) |
 | Product domains | `src/crates/product-domains` | [AGENTS.md](src/crates/product-domains/AGENTS.md) |
+| Product capabilities | `src/crates/product-capabilities` | [AGENTS.md](src/crates/product-capabilities/AGENTS.md) |
 | Transport adapters | `src/crates/transport` | [AGENTS.md](src/crates/transport/AGENTS.md) |
 | API layer | `src/crates/api-layer` | [AGENTS.md](src/crates/api-layer/AGENTS.md) |
 | ACP integration | `src/crates/acp` | [AGENTS.md](src/crates/acp/AGENTS.md) |

@@ -15,6 +15,7 @@ const noCoreDependencyCrates = [
   'agent-stream',
   'agent-runtime',
   'harness',
+  'product-capabilities',
   'runtime-ports',
   'runtime-services',
   'services-core',
@@ -167,6 +168,33 @@ const lightweightBoundaryRules = [
     ],
   },
   {
+    crateName: 'product-capabilities',
+    reason:
+      'product-capabilities must own product capability assembly facts without concrete runtime implementations',
+    forbiddenDeps: [
+      'bitfun-core',
+      'bitfun-ai-adapters',
+      'bitfun-agent-tools',
+      'bitfun-services-core',
+      'bitfun-services-integrations',
+      'bitfun-product-domains',
+      'bitfun-transport',
+      'terminal-core',
+      'tool-runtime',
+      'tauri',
+      'reqwest',
+      'git2',
+      'rmcp',
+      'image',
+      'tokio-tungstenite',
+      'bitfun-cli',
+      'ratatui',
+      'crossterm',
+      'arboard',
+      'syntect-tui',
+    ],
+  },
+  {
     crateName: 'agent-tools',
     reason: 'agent-tools must not depend on concrete service or product runtime implementations',
     forbiddenDeps: [
@@ -202,6 +230,7 @@ const dependencyProfileRules = [
     forbiddenNonOptionalDeps: [
       'aes',
       'aes-gcm',
+      'bitfun-product-capabilities',
       'bitfun-product-domains',
       'bitfun-relay-server',
       'bitfun-tool-packs',
@@ -358,12 +387,40 @@ const dependencyProfileRules = [
     reason: 'agent-tools must stay a lightweight tool contract crate',
     forbiddenNonOptionalDeps: [
       'bitfun-ai-adapters',
+      'bitfun-product-capabilities',
       'reqwest',
       'git2',
       'rmcp',
       'image',
       'tokio-tungstenite',
       'tauri',
+      'bitfun-cli',
+      'ratatui',
+      'crossterm',
+      'arboard',
+      'syntect-tui',
+    ],
+  },
+  {
+    crateName: 'product-capabilities',
+    profileName: 'default product capability profile',
+    reason: 'product-capabilities default profile must stay assembly-fact only',
+    forbiddenNonOptionalDeps: [
+      'bitfun-core',
+      'bitfun-ai-adapters',
+      'bitfun-agent-tools',
+      'bitfun-services-core',
+      'bitfun-services-integrations',
+      'bitfun-product-domains',
+      'bitfun-transport',
+      'terminal-core',
+      'tool-runtime',
+      'tauri',
+      'reqwest',
+      'git2',
+      'rmcp',
+      'image',
+      'tokio-tungstenite',
       'bitfun-cli',
       'ratatui',
       'crossterm',
@@ -431,6 +488,7 @@ const optionalDependencyFeatureOwnerRules = [
     dependencies: [
       { depName: 'aes', ownerFeatures: ['service-integrations'] },
       { depName: 'aes-gcm', ownerFeatures: ['service-integrations', 'ssh-remote'] },
+      { depName: 'bitfun-product-capabilities', ownerFeatures: ['product-capabilities'] },
       { depName: 'bitfun-product-domains', ownerFeatures: ['product-domains'] },
       { depName: 'bitfun-relay-server', ownerFeatures: ['service-integrations'] },
       { depName: 'bitfun-tool-packs', ownerFeatures: ['tool-packs'] },
@@ -531,7 +589,13 @@ const productCoreFeatureAssemblyScanRoots = ['src/apps', 'src/crates/acp'];
 const coreProductFullFeatureAssemblyRule = {
   manifestPath: 'src/crates/core/Cargo.toml',
   featureName: 'product-full',
-  requiredFeatureRefs: ['ssh-remote', 'product-domains', 'service-integrations', 'tool-packs'],
+  requiredFeatureRefs: [
+    'ssh-remote',
+    'product-capabilities',
+    'product-domains',
+    'service-integrations',
+    'tool-packs',
+  ],
   reason: 'bitfun-core product-full must explicitly assemble current owner feature groups',
 };
 
@@ -4489,8 +4553,8 @@ const requiredContentRules = [
         message: 'missing generic static provider group contract use',
       },
       {
-        regex: /\bproduct_tool_provider_group_plan\b/,
-        message: 'missing tool-pack provider group plan delegation',
+        regex: /\bdefault_product_tool_provider_group_plan\b/,
+        message: 'missing product capability provider group plan delegation',
       },
       {
         regex: /\bProductToolMaterializer\b/,
@@ -7007,7 +7071,13 @@ function runManifestParserSelfTest() {
       throw new Error(`${rule.manifestPath} must require bitfun-core product-full`);
     }
   }
-  for (const featureName of ['ssh-remote', 'product-domains', 'service-integrations', 'tool-packs']) {
+  for (const featureName of [
+    'ssh-remote',
+    'product-capabilities',
+    'product-domains',
+    'service-integrations',
+    'tool-packs',
+  ]) {
     if (!coreProductFullFeatureAssemblyRule.requiredFeatureRefs.includes(featureName)) {
       throw new Error(`core product-full assembly rule must require ${featureName}`);
     }
@@ -7493,6 +7563,26 @@ function runManifestParserSelfTest() {
   );
   if (!agentRuntimeProfile?.forbiddenNonOptionalDeps.includes('tauri')) {
     throw new Error('agent-runtime dependency profile must forbid product surface dependencies');
+  }
+  const productCapabilitiesRule = lightweightBoundaryRules.find(
+    (rule) => rule.crateName === 'product-capabilities',
+  );
+  if (!productCapabilitiesRule?.forbiddenDeps.includes('bitfun-core')) {
+    throw new Error('product-capabilities lightweight boundary must forbid bitfun-core');
+  }
+  if (!productCapabilitiesRule?.forbiddenDeps.includes('bitfun-product-domains')) {
+    throw new Error(
+      'product-capabilities lightweight boundary must forbid product-domain implementations',
+    );
+  }
+  if (!productCapabilitiesRule?.forbiddenDeps.includes('tool-runtime')) {
+    throw new Error('product-capabilities lightweight boundary must forbid tool-runtime');
+  }
+  const productCapabilitiesProfile = dependencyProfileRules.find(
+    (rule) => rule.crateName === 'product-capabilities',
+  );
+  if (!productCapabilitiesProfile?.forbiddenNonOptionalDeps.includes('bitfun-core')) {
+    throw new Error('product-capabilities dependency profile must forbid bitfun-core');
   }
   const agentToolsManifestRule = forbiddenContentUnderRules.find(
     (rule) => rule.path === 'src/crates/agent-tools/src',
@@ -8170,7 +8260,7 @@ function runManifestParserSelfTest() {
         'ProductSnapshotToolWrapper',
         'builtin_static_tool_providers',
         'StaticToolProviderGroup',
-        'product_tool_provider_group_plan',
+        'default_product_tool_provider_group_plan',
         'ProductToolMaterializer',
         'ToolRuntimeAssembly',
         'create_registry_from_static_providers',
@@ -8426,9 +8516,11 @@ function runManifestParserSelfTest() {
     {
       path: 'src/crates/core/Cargo.toml',
       contracts: [
+        'bitfun-product-capabilities = \\{ path = "\\.\\.\\/product-capabilities", default-features = false, optional = true \\}',
         'bitfun-tool-packs = \\{ path = "\\.\\.\\/tool-packs", default-features = false, optional = true \\}',
         'bitfun-services-integrations = \\{ path = "\\.\\.\\/services-integrations", default-features = false, features = \\["remote-ssh"\\] \\}',
         'bitfun-product-domains = \\{ path = "\\.\\.\\/product-domains", default-features = false, optional = true \\}',
+        'dep:bitfun-product-capabilities',
         'dep:bitfun-tool-packs',
         'bitfun-tool-packs\\/product-full',
         'bitfun-services-integrations\\/product-full',

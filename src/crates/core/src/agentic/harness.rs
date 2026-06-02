@@ -1,43 +1,17 @@
-use bitfun_harness::{
-    DescriptorHarnessProvider, HarnessCapability, HarnessRegistry, HarnessRegistryBuildError,
-    HarnessRegistryBuilder, HarnessWorkflow,
+use bitfun_harness::{HarnessRegistry, HarnessRegistryBuildError};
+pub use bitfun_product_capabilities::{
+    CORE_DEEP_RESEARCH_HARNESS_PROVIDER_ID, CORE_DEEP_REVIEW_HARNESS_PROVIDER_ID,
+    CORE_MINIAPP_HARNESS_PROVIDER_ID,
 };
 
-pub const CORE_DEEP_REVIEW_HARNESS_PROVIDER_ID: &str = "core.deep_review";
-pub const CORE_DEEP_RESEARCH_HARNESS_PROVIDER_ID: &str = "core.deep_research";
-pub const CORE_MINIAPP_HARNESS_PROVIDER_ID: &str = "core.miniapp";
-
 pub fn product_harness_registry() -> Result<HarnessRegistry, HarnessRegistryBuildError> {
-    HarnessRegistryBuilder::new()
-        .install_provider(DescriptorHarnessProvider::legacy_facade(
-            CORE_DEEP_REVIEW_HARNESS_PROVIDER_ID,
-            HarnessWorkflow::DeepReview,
-            &[
-                HarnessCapability::Plan,
-                HarnessCapability::ReviewGate,
-                HarnessCapability::PostProcessor,
-            ],
-            "bitfun-core::agentic::deep_review",
-        ))
-        .install_provider(DescriptorHarnessProvider::legacy_facade(
-            CORE_DEEP_RESEARCH_HARNESS_PROVIDER_ID,
-            HarnessWorkflow::DeepResearch,
-            &[HarnessCapability::Plan, HarnessCapability::PostProcessor],
-            "bitfun-core::agentic::agents::definitions::modes::deep_research",
-        ))
-        .install_provider(DescriptorHarnessProvider::legacy_facade(
-            CORE_MINIAPP_HARNESS_PROVIDER_ID,
-            HarnessWorkflow::MiniApp,
-            &[HarnessCapability::Plan, HarnessCapability::Artifact],
-            "bitfun-core::miniapp",
-        ))
-        .build()
+    bitfun_product_capabilities::default_product_harness_registry()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitfun_harness::{HarnessInput, HarnessStepKind};
+    use bitfun_harness::{HarnessInput, HarnessStepKind, HarnessWorkflow};
 
     #[test]
     fn product_harness_registry_registers_existing_workflow_facades() {

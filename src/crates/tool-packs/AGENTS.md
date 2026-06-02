@@ -16,6 +16,8 @@ tool provider group plan. It does not own concrete tool implementations yet.
 - Do not own manifest/exposure contracts, concrete runtime manifest assembly,
   `GetToolSpec` execution, collapsed unlock state, snapshot decoration, or
   `ToolUseContext`. Provider group plans may list group ids and tool names only.
+- Product capability packs may select provider groups; this crate keeps only
+  tool-pack feature-group metadata and provider group plans.
 - Future concrete tool migration must preserve product registry order,
   expanded/collapsed exposure, prompt stubs, unlock state, cancellation, runtime
   restrictions, and Deep Review tool flow.

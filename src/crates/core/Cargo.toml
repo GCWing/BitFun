@@ -87,6 +87,9 @@ bitfun-agent-runtime = { path = "../agent-runtime" }
 # Harness workflow contracts
 bitfun-harness = { path = "../harness" }
 
+# Product capability pack contracts
+bitfun-product-capabilities = { path = "../product-capabilities", default-features = false, optional = true }
+
 # Agent tool contracts
 bitfun-agent-tools = { path = "../agent-tools" }
 
@@ -180,10 +183,12 @@ product-full = [
     "dep:similar",
     "dep:tool-runtime",
     "ssh-remote",
+    "product-capabilities",
     "product-domains",
     "service-integrations",
     "tool-packs",
 ]
+product-capabilities = ["dep:bitfun-product-capabilities"]
 product-domains = ["dep:bitfun-product-domains", "bitfun-product-domains/product-full"]
 service-integrations = [
     "dep:aes",

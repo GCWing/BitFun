@@ -18,6 +18,8 @@ DeepResearch, MiniApp, and future SDD flows.
   internals, filesystem/Git/terminal managers, or UI command behavior.
 - Product Assembly should register providers through typed registries; avoid
   global mutable registries or untyped service locators.
+- Product capability packs may own provider descriptors; `bitfun-harness` keeps
+  the provider-neutral contract and registry only.
 
 ## Verification
 
