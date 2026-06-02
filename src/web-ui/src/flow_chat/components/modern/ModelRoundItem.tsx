@@ -338,7 +338,8 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
     
     const hasContent = sortedItems.some(item => 
       (item.type === 'text' && (item as FlowTextItem).content.trim()) ||
-      (item.type === 'tool' && (item as FlowToolItem).toolCall)
+      (item.type === 'tool' && (item as FlowToolItem).toolCall) ||
+      (item.type === 'thinking' && (item as FlowThinkingItem).content.trim())
     );
     
     return (
@@ -402,7 +403,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
           </div>
         )}
 
-        {isTurnComplete && isLastRound && hasContent && !round.isStreaming && (
+        {isTurnComplete && isLastRound && hasContent && (
           <div className="model-round-item__footer">
             <span className="model-round-item__ai-disclaimer">
               {t('modelRound.aiDisclaimer', { defaultValue: '以上内容均由 AI 生成，仅供参考' })}
