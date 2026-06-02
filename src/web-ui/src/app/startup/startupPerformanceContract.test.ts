@@ -50,6 +50,37 @@ describe('startup performance contract', () => {
     expect(source).toContain("import('./shared/context-menu-system')");
   });
 
+  it('does not block first React render on frontend log-level config reads', () => {
+    const mainSource = readSource('../../main.tsx');
+    const loggerSource = readSource('../../shared/utils/logger.ts');
+    const themeSource = readSource('../../../../apps/desktop/src/theme.rs');
+
+    expect(mainSource).not.toContain("before_render_step', 'initialize_frontend_log_level_sync'");
+    expect(mainSource).not.toContain('before_render_step", "initialize_frontend_log_level_sync"');
+    expect(mainSource).toContain('initializeFrontendLogLevelSync');
+    expect(mainSource).toContain('installFrontendLogLevelConfigWatcher');
+    expect(loggerSource).toContain('__BITFUN_BOOTSTRAP_LOG_LEVEL__');
+    expect(themeSource).toContain('__BITFUN_BOOTSTRAP_LOG_LEVEL__');
+  });
+
+  it('keeps built-in theme startup on the bootstrap path without pre-render config writes', () => {
+    const mainSource = readSource('../../main.tsx');
+    const themeServiceSource = readSource('../../infrastructure/theme/core/ThemeService.ts');
+    const desktopThemeSource = readSource('../../../../apps/desktop/src/theme.rs');
+
+    expect(desktopThemeSource).toContain('__BITFUN_BOOTSTRAP_THEME_ID__');
+    expect(desktopThemeSource).toContain('__BITFUN_BOOTSTRAP_THEME_SELECTION__');
+    expect(mainSource).toContain("before_render_step', 'theme_service_initialize'");
+    expect(themeServiceSource).toContain('getBootstrapThemeSelection');
+    expect(themeServiceSource).toContain('applyThemeSelection(bootstrapSelection, { persist: false })');
+    expect(themeServiceSource).toContain('applyThemeSelection(saved, { persist: false })');
+    expect(themeServiceSource).toContain('ensureUserThemesLoaded');
+    expect(mainSource).toContain('themeService.ensureUserThemesLoaded()');
+    expect(mainSource.indexOf('themeService.ensureUserThemesLoaded()')).toBeGreaterThan(
+      mainSource.indexOf('async function initializeAfterRender()'),
+    );
+  });
+
   it('starts non-critical work after the shell is interactive', () => {
     const source = readSource('../../main.tsx');
 
@@ -119,6 +150,26 @@ describe('startup performance contract', () => {
     expect(source).toContain('interactiveShellReady');
     expect(source).toContain("import('@/tools/editor/services/MonacoStartupWarmup')");
     expect(source).toContain('scheduleMonacoStartupWarmup()');
+  });
+
+  it('does not remount the historical message list when full hydration prepends older turns', () => {
+    const source = readSource('../../flow_chat/components/modern/VirtualMessageList.tsx');
+
+    expect(source).not.toContain('firstVirtualItemTurnId');
+    expect(source).not.toMatch(/key=\{`\$\{activeSession\?\.sessionId[^`]+firstVirtualItemTurnId/);
+  });
+
+  it('keeps read-only thread goal access metadata-only for unloaded sessions', () => {
+    const source = readSource('../../../../apps/desktop/src/api/agentic_api.rs');
+    const getStart = source.indexOf('pub async fn get_session_thread_goal');
+    const clearStart = source.indexOf('pub async fn clear_session_thread_goal');
+    const getSource = source.slice(getStart, clearStart);
+
+    expect(getStart).toBeGreaterThan(-1);
+    expect(clearStart).toBeGreaterThan(getStart);
+    expect(getSource).toContain('resolve_session_workspace_path_for_thread_goal_read');
+    expect(getSource).not.toContain('ensure_session_for_thread_goal');
+    expect(getSource).not.toContain('restore_session');
   });
 
   it('keeps Git diff editor from importing the broad editor barrel', () => {

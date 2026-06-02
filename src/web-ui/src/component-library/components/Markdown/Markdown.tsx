@@ -3,7 +3,7 @@
  * Used to render Markdown-formatted text
  */
 
-import React, { useState, useMemo, useCallback, useEffect, Component, type ReactNode } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useLayoutEffect, Component, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -23,6 +23,11 @@ import { useTheme } from '@/infrastructure/theme';
 import { contextMenuController } from '@/shared/context-menu-system/core/ContextMenuController';
 import { ContextType, type CustomContext, type MenuItem } from '@/shared/context-menu-system/types';
 import { createLogger } from '@/shared/utils/logger';
+import {
+  isStartupRenderTraceEnabled,
+  recordReactRenderProfile,
+  startupTrace,
+} from '@/shared/utils/startupTrace';
 import path from 'path-browserify';
 import 'katex/dist/katex.min.css';
 import './Markdown.scss';
@@ -38,6 +43,47 @@ const COMPUTER_LINK_PREFIX = 'computer://';
 let _cachedWorkspacePathResult: string | undefined;
 let _cachedWorkspacePathAt = 0;
 const WORKSPACE_PATH_CACHE_MS = 5000;
+
+export interface MarkdownTraceContext {
+  turnId?: string;
+  roundId?: string;
+  itemId?: string;
+}
+
+interface MarkdownRenderTraceProps {
+  startedAtMs: number;
+  contentLength: number;
+  hasCodeBlock: boolean;
+  hasTable: boolean;
+  isStreaming: boolean;
+  traceContext?: MarkdownTraceContext;
+}
+
+const MarkdownRenderTrace: React.FC<MarkdownRenderTraceProps> = ({
+  startedAtMs,
+  contentLength,
+  hasCodeBlock,
+  hasTable,
+  isStreaming,
+  traceContext,
+}) => {
+  useLayoutEffect(() => {
+    recordReactRenderProfile(startupTrace, {
+      component: 'MarkdownRenderer',
+      phase: 'commit',
+      actualDurationMs: performance.now() - startedAtMs,
+      contentLength,
+      turnId: traceContext?.turnId,
+      roundId: traceContext?.roundId,
+      itemId: traceContext?.itemId,
+      hasCodeBlock,
+      hasTable,
+      isStreaming,
+    });
+  });
+
+  return null;
+};
 
 async function getWorkspacePathCached(): Promise<string | undefined> {
   const now = Date.now();
@@ -639,6 +685,7 @@ export interface MarkdownProps {
   onTabOpen?: (tabInfo: any) => void;
   onHttpLinkClick?: (url: string, event: React.MouseEvent<HTMLAnchorElement>) => boolean | void;
   onReproductionProceed?: () => void;
+  traceContext?: MarkdownTraceContext;
 }
 
 export const Markdown = React.memo<MarkdownProps>(({ 
@@ -651,7 +698,8 @@ export const Markdown = React.memo<MarkdownProps>(({
   onFileViewRequest,
   onTabOpen,
   onHttpLinkClick,
-  onReproductionProceed
+  onReproductionProceed,
+  traceContext,
 }) => {
   const { isLight } = useTheme();
   const { t } = useI18n('components');
@@ -660,6 +708,8 @@ export const Markdown = React.memo<MarkdownProps>(({
   const syntaxTheme = useMemo(() => buildMarkdownPrismStyle(isLight), [isLight]);
   
   const contentStr = typeof content === 'string' ? content : String(content || '');
+  const renderTraceEnabled = isStartupRenderTraceEnabled();
+  const renderTraceStartedAtMs = renderTraceEnabled ? performance.now() : null;
 
   useEffect(() => {
     let cancelled = false;
@@ -708,7 +758,7 @@ export const Markdown = React.memo<MarkdownProps>(({
 
     return { markdownContent: body, reproductionSteps: steps };
   }, [contentStr, isStreaming]);
-  
+
   const linkMap = useMemo(() => {
     const map = new Map<string, string>();
     const linkMatches = contentStr.match(/\[([^\]]+)\]\(([^)]+)\)/g) || [];
@@ -722,7 +772,13 @@ export const Markdown = React.memo<MarkdownProps>(({
     });
     return map;
   }, [contentStr]);
-  
+
+  const markdownFeatureProfile = useMemo(() => ({
+    contentLength: markdownContent.length,
+    hasCodeBlock: /^[ \t]{0,3}(`{3,}|~{3,})/m.test(markdownContent),
+    hasTable: /^[ \t]*\|.+\|[ \t]*$/m.test(markdownContent),
+  }), [markdownContent]);
+
   // Parse line ranges like #L42 / 1-20
   const parseLineRange = useCallback((hash: string): LineRange | undefined => {
     const cleanHash = hash.replace(/^#/, '');
@@ -985,6 +1041,7 @@ export const Markdown = React.memo<MarkdownProps>(({
                 codeTagStyle,
                 gutterColor: isLight ? '#999' : '#666',
               }}
+              traceContext={traceContext}
             >
               {code}
             </AsyncPrismSyntaxHighlighter>
@@ -1240,13 +1297,24 @@ export const Markdown = React.memo<MarkdownProps>(({
     parseLineRange,
     syntaxTheme,
     isLight,
-    currentWorkspacePath
+    currentWorkspacePath,
+    traceContext,
   ]);
   
   const wrapperClassName = `markdown-renderer ${className}`.trim();
 
   return (
     <div className={wrapperClassName}>
+      {renderTraceEnabled && renderTraceStartedAtMs !== null && (
+        <MarkdownRenderTrace
+          startedAtMs={renderTraceStartedAtMs}
+          contentLength={markdownFeatureProfile.contentLength}
+          hasCodeBlock={markdownFeatureProfile.hasCodeBlock}
+          hasTable={markdownFeatureProfile.hasTable}
+          isStreaming={isStreaming}
+          traceContext={traceContext}
+        />
+      )}
       <MarkdownErrorBoundary fallbackContent={markdownContent}>
         <ReactMarkdown
           remarkPlugins={[remarkGfm, remarkMath, remarkAutolinkComputerFileLinks]}

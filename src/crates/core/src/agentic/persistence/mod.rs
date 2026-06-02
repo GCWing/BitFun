@@ -5,5 +5,5 @@
 pub mod manager;
 pub mod session_branch;
 
-pub use manager::{PersistenceManager, SessionMetadataPage};
+pub use manager::{PersistenceManager, SessionMetadataPage, SessionTurnLoadTiming};
 pub use session_branch::{SessionBranchRequest, SessionBranchResult};

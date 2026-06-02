@@ -308,6 +308,15 @@ export interface Session {
    * lazily; message sending must ensure this becomes 'ready' first.
    */
   contextRestoreState?: SessionContextRestoreState;
+
+  /**
+   * True when the session currently contains only a tail preview of persisted
+   * history. Destructive history actions must wait for the full history hydrate
+   * so UI indexes cannot drift from persisted backend turn indexes.
+   */
+  isPartial?: boolean;
+  loadedTurnCount?: number;
+  totalTurnCount?: number;
   
   todos?: TodoItem[];
   

@@ -27,7 +27,10 @@ import {
 import { elapsedMs, nowMs } from '@/shared/utils/timing';
 import { i18nService } from '@/infrastructure/i18n/core/I18nService';
 import type { DialogTurnData, LocalCommandMetadata, SessionKind } from '@/shared/types/session-history';
-import type { SessionInfo as AgentSessionInfo } from '@/infrastructure/api/service-api/AgentAPI';
+import type {
+  SessionInfo as AgentSessionInfo,
+  SessionViewRestoreTiming,
+} from '@/infrastructure/api/service-api/AgentAPI';
 import type { SessionMetadataPage } from '@/infrastructure/api/service-api/SessionAPI';
 import {
   deriveLastFinishedAtFromMetadata,
@@ -67,8 +70,10 @@ const VALID_AGENT_TYPES = new Set([
   'DeepResearch',
 ]);
 const METADATA_LIST_RECENT_DEDUPE_TTL_MS = 1000;
-const HISTORICAL_SESSION_INITIAL_TAIL_TURN_COUNT = 3;
-const HISTORICAL_SESSION_FULL_HISTORY_DELAY_MS = 150;
+const HISTORICAL_SESSION_INITIAL_REMOTE_TAIL_TURN_COUNT = 3;
+const HISTORICAL_SESSION_INITIAL_LOCAL_TAIL_TURN_COUNT = 8;
+const HISTORICAL_SESSION_FULL_HISTORY_IDLE_TIMEOUT_MS = 1500;
+const HISTORICAL_SESSION_FULL_HISTORY_FIRST_PAINT_TIMEOUT_MS = 2500;
 
 interface MetadataListRequest {
   promise: Promise<void>;
@@ -83,8 +88,10 @@ interface MetadataPageRequest {
 }
 
 interface FullHistoryHydrationRequest {
+  sessionId: string;
   promise: Promise<void>;
-  timer?: ReturnType<typeof setTimeout>;
+  cancel?: () => void;
+  releaseAfterInitialPaint?: () => void;
 }
 
 interface CompleteSessionHistoryLoadRequest {
@@ -99,6 +106,112 @@ interface CompleteSessionHistoryLoadRequest {
 
 function areStringArraysEqual(left: string[], right: string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function startsWithStringArray(values: string[], prefix: string[]): boolean {
+  return values.length >= prefix.length && prefix.every((value, index) => values[index] === value);
+}
+
+function scheduleHistoricalSessionFullHydrate(callback: () => void): () => void {
+  let cancelled = false;
+  const run = () => {
+    if (cancelled) {
+      return;
+    }
+    callback();
+  };
+
+  const requestIdleCallback = (globalThis as {
+    requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number;
+  }).requestIdleCallback;
+  const cancelIdleCallback = (globalThis as {
+    cancelIdleCallback?: (handle: number) => void;
+  }).cancelIdleCallback;
+
+  if (typeof requestIdleCallback === 'function') {
+    const handle = requestIdleCallback(run, {
+      timeout: HISTORICAL_SESSION_FULL_HISTORY_IDLE_TIMEOUT_MS,
+    });
+    return () => {
+      cancelled = true;
+      cancelIdleCallback?.(handle);
+    };
+  }
+
+  const timer = globalThis.setTimeout(run, HISTORICAL_SESSION_FULL_HISTORY_IDLE_TIMEOUT_MS);
+  return () => {
+    cancelled = true;
+    globalThis.clearTimeout(timer);
+  };
+}
+
+function scheduleLocalHistoricalSessionFullHydrate(
+  callback: (reason: 'initial_paint' | 'timeout') => void,
+): {
+  cancel: () => void;
+  releaseAfterInitialPaint: () => void;
+} {
+  let cancelled = false;
+  let started = false;
+  let cancelIdle: (() => void) | undefined;
+  const timeout = globalThis.setTimeout(
+    () => start('timeout'),
+    HISTORICAL_SESSION_FULL_HISTORY_FIRST_PAINT_TIMEOUT_MS,
+  );
+
+  function start(reason: 'initial_paint' | 'timeout') {
+    if (cancelled || started) {
+      return;
+    }
+
+    started = true;
+    globalThis.clearTimeout(timeout);
+    cancelIdle = scheduleHistoricalSessionFullHydrate(() => callback(reason));
+  }
+
+  return {
+    cancel: () => {
+      cancelled = true;
+      globalThis.clearTimeout(timeout);
+      cancelIdle?.();
+    },
+    releaseAfterInitialPaint: () => start('initial_paint'),
+  };
+}
+
+function historicalSessionInitialTailTurnCount(remote: boolean): number {
+  return remote
+    ? HISTORICAL_SESSION_INITIAL_REMOTE_TAIL_TURN_COUNT
+    : HISTORICAL_SESSION_INITIAL_LOCAL_TAIL_TURN_COUNT;
+}
+
+function sessionViewRestoreTimingTraceFields(
+  timing: SessionViewRestoreTiming | undefined,
+): Record<string, unknown> {
+  if (!timing) {
+    return {};
+  }
+
+  return {
+    restoreResolveStorageDurationMs: timing.resolveStoragePathDurationMs,
+    restoreVisibilityMetadataDurationMs: timing.visibilityMetadataDurationMs,
+    restoreLoadSessionWithTurnsDurationMs: timing.loadSessionWithTurnsDurationMs,
+    restoreNormalizeTurnIdsDurationMs: timing.normalizeTurnIdsDurationMs,
+    restoreTotalDurationMs: timing.totalDurationMs,
+    restoreTurnTailCount: timing.turnLoad?.requestedTailTurnCount,
+    restoreTurnLoadedCount: timing.turnLoad?.loadedTurnCount,
+    restoreTurnTotalCount: timing.turnLoad?.totalTurnCount,
+    restoreTurnFileCount: timing.turnLoad?.turnFileCount,
+    restoreTurnMissingFileCount: timing.turnLoad?.missingTurnFileCount,
+    restoreTurnFastPath: timing.turnLoad?.fastPath,
+    restoreTurnMetadataDurationMs: timing.turnLoad?.metadataDurationMs,
+    restoreTurnStateDurationMs: timing.turnLoad?.stateDurationMs,
+    restoreTurnScanDurationMs: timing.turnLoad?.scanDurationMs,
+    restoreTurnReadDurationMs: timing.turnLoad?.readDurationMs,
+    restoreTurnMaxReadDurationMs: timing.turnLoad?.maxTurnReadDurationMs,
+    restoreTurnBuildSessionDurationMs: timing.turnLoad?.buildSessionDurationMs,
+    restoreTurnTotalDurationMs: timing.turnLoad?.totalDurationMs,
+  };
 }
 
 function isUnsupportedTauriCommandError(error: unknown, command: string): boolean {
@@ -261,11 +374,18 @@ export class FlowChatStore {
       remote,
       sessionTraceId: request.initialSessionTraceId,
       loadedTurnCount: request.expectedDialogTurnIds.length,
+      scheduler: remote ? 'idle' : 'after_initial_paint_idle',
     });
 
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    let cancelScheduled: (() => void) | undefined;
+    let releaseAfterInitialPaint: (() => void) | undefined;
     const promise = new Promise<void>(resolve => {
-      timer = setTimeout(() => {
+      const startFullHydrate = (trigger: 'idle' | 'initial_paint' | 'timeout') => {
+        startupTrace.markPhase('historical_session_full_hydrate_released', {
+          remote,
+          sessionTraceId: request.initialSessionTraceId,
+          trigger,
+        });
         void this.completeSessionHistoryLoad(request)
           .catch(error => {
             startupTrace.markPhase('historical_session_full_hydrate_failed', {
@@ -278,7 +398,16 @@ export class FlowChatStore {
             });
           })
           .finally(resolve);
-      }, HISTORICAL_SESSION_FULL_HISTORY_DELAY_MS);
+      };
+
+      if (remote) {
+        cancelScheduled = scheduleHistoricalSessionFullHydrate(() => startFullHydrate('idle'));
+        return;
+      }
+
+      const scheduled = scheduleLocalHistoricalSessionFullHydrate(startFullHydrate);
+      cancelScheduled = scheduled.cancel;
+      releaseAfterInitialPaint = scheduled.releaseAfterInitialPaint;
     }).finally(() => {
       const currentRequest = this.fullHistoryHydrationRequests.get(requestKey);
       if (currentRequest?.promise === promise) {
@@ -286,7 +415,33 @@ export class FlowChatStore {
       }
     });
 
-    this.fullHistoryHydrationRequests.set(requestKey, { promise, timer });
+    this.fullHistoryHydrationRequests.set(requestKey, {
+      sessionId: request.sessionId,
+      promise,
+      cancel: () => cancelScheduled?.(),
+      releaseAfterInitialPaint: () => releaseAfterInitialPaint?.(),
+    });
+  }
+
+  public hasPendingSessionHistoryCompletion(sessionId: string): boolean {
+    for (const request of this.fullHistoryHydrationRequests.values()) {
+      if (request.sessionId === sessionId) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  public releaseSessionHistoryCompletionAfterInitialPaint(sessionId: string): boolean {
+    let released = false;
+    for (const request of this.fullHistoryHydrationRequests.values()) {
+      if (request.sessionId !== sessionId) {
+        continue;
+      }
+      request.releaseAfterInitialPaint?.();
+      released = true;
+    }
+    return released;
   }
 
   private async completeSessionHistoryLoad(
@@ -326,21 +481,42 @@ export class FlowChatStore {
     });
 
     let applied = false;
+    let preservedTurnCount = 0;
     this.setState(prev => {
       const session = prev.sessions.get(request.sessionId);
       if (!session || session.historyState !== 'ready') {
         return prev;
       }
 
-      const currentDialogTurnIds = session.dialogTurns.map(turn => turn.id);
-      if (!areStringArraysEqual(currentDialogTurnIds, request.expectedDialogTurnIds)) {
+      const currentDialogTurns = session.dialogTurns;
+      const currentDialogTurnIds = currentDialogTurns.map(turn => turn.id);
+      const canMergeCurrentTurns =
+        areStringArraysEqual(currentDialogTurnIds, request.expectedDialogTurnIds) ||
+        startsWithStringArray(currentDialogTurnIds, request.expectedDialogTurnIds);
+      if (!canMergeCurrentTurns) {
         return prev;
       }
 
+      const currentDialogTurnsById = new Map(currentDialogTurns.map(turn => [turn.id, turn]));
+      const restoredDialogTurnIds = new Set(dialogTurns.map(turn => turn.id));
+      const appendedCurrentDialogTurns = currentDialogTurns
+        .slice(request.expectedDialogTurnIds.length)
+        .filter(turn => !restoredDialogTurnIds.has(turn.id));
+      const mergedDialogTurns = [
+        ...dialogTurns.map(turn => currentDialogTurnsById.get(turn.id) ?? turn),
+        ...appendedCurrentDialogTurns,
+      ];
+      preservedTurnCount = mergedDialogTurns.reduce(
+        (count, turn) => count + (currentDialogTurnsById.get(turn.id) === turn ? 1 : 0),
+        0,
+      );
       const newSessions = new Map(prev.sessions);
       newSessions.set(request.sessionId, {
         ...session,
-        dialogTurns,
+        dialogTurns: mergedDialogTurns,
+        isPartial: false,
+        loadedTurnCount: mergedDialogTurns.length,
+        totalTurnCount: mergedDialogTurns.length,
         contextRestoreState:
           session.contextRestoreState === 'ready' ? 'ready' : contextRestoreState,
         mode: restored.session.agentType || session.mode,
@@ -361,6 +537,8 @@ export class FlowChatStore {
       sessionTraceId: fullTraceId,
       turnCount: dialogTurns.length,
       applied,
+      preservedTurnCount,
+      ...sessionViewRestoreTimingTraceFields(restored.timings),
       durationMs: elapsedMs(startedAt),
     });
     if (applied) {
@@ -2446,9 +2624,28 @@ export class FlowChatStore {
     });
 
     try {
+      const importStartedAt = nowMs();
+      startupTrace.markPhase('session_metadata_api_import_start', {
+        remote,
+        source: traceSource,
+        metadataListTraceId,
+      });
       const { sessionAPI } = await import('@/infrastructure/api');
+      startupTrace.markPhase('session_metadata_api_import_end', {
+        remote,
+        source: traceSource,
+        metadataListTraceId,
+        durationMs: elapsedMs(importStartedAt),
+      });
       let page: SessionMetadataPage;
+      const pageRequestStartedAt = nowMs();
       try {
+        startupTrace.markPhase('session_metadata_page_request_start', {
+          remote,
+          source: traceSource,
+          metadataListTraceId,
+          command: 'list_persisted_sessions_page',
+        });
         page = await sessionAPI.listSessionsPage({
           workspacePath,
           limit,
@@ -2456,12 +2653,42 @@ export class FlowChatStore {
           remoteConnectionId,
           remoteSshHost,
         });
+        startupTrace.markPhase('session_metadata_page_request_end', {
+          remote,
+          source: traceSource,
+          metadataListTraceId,
+          command: 'list_persisted_sessions_page',
+          durationMs: elapsedMs(pageRequestStartedAt),
+        });
       } catch (error) {
         if (!isUnsupportedTauriCommandError(error, 'list_persisted_sessions_page')) {
+          startupTrace.markPhase('session_metadata_page_request_failed', {
+            remote,
+            source: traceSource,
+            metadataListTraceId,
+            command: 'list_persisted_sessions_page',
+            durationMs: elapsedMs(pageRequestStartedAt),
+          });
           throw error;
         }
 
+        const fallbackStartedAt = nowMs();
+        startupTrace.markPhase('session_metadata_page_request_start', {
+          remote,
+          source: traceSource,
+          metadataListTraceId,
+          command: 'list_persisted_sessions',
+          fallback: true,
+        });
         const sessions = await sessionAPI.listSessions(workspacePath, remoteConnectionId, remoteSshHost);
+        startupTrace.markPhase('session_metadata_page_request_end', {
+          remote,
+          source: traceSource,
+          metadataListTraceId,
+          command: 'list_persisted_sessions',
+          fallback: true,
+          durationMs: elapsedMs(fallbackStartedAt),
+        });
         page = {
           sessions,
           totalTopLevelCount: sessions.length,
@@ -2756,6 +2983,7 @@ export class FlowChatStore {
       let restoredHistoryPartial = false;
       let restoredLoadedTurnCount: number | undefined;
       let restoredTotalTurnCount: number | undefined;
+      let restoredTiming: SessionViewRestoreTiming | undefined;
       if (!isAcpSession) {
         const restoreStartedAt = nowMs();
         startupTrace.markPhase('historical_session_restore_start', { remote, sessionTraceId });
@@ -2827,7 +3055,7 @@ export class FlowChatStore {
                 remoteSshHost,
                 sessionTraceId,
                 options?.includeInternal,
-                HISTORICAL_SESSION_INITIAL_TAIL_TURN_COUNT,
+                historicalSessionInitialTailTurnCount(remote),
               );
               restoredSessionInfo = restored.session;
               turns = restored.turns;
@@ -2836,6 +3064,7 @@ export class FlowChatStore {
               restoredHistoryPartial = restored.isPartial === true;
               restoredLoadedTurnCount = restored.loadedTurnCount;
               restoredTotalTurnCount = restored.totalTurnCount;
+              restoredTiming = restored.timings;
             } catch (error) {
               if (!isUnsupportedTauriCommandError(error, 'restore_session_view')) {
                 throw error;
@@ -2861,6 +3090,7 @@ export class FlowChatStore {
             totalTurnCount: restoredTotalTurnCount,
             isPartial: restoredHistoryPartial,
             contextRestoreState,
+            ...sessionViewRestoreTimingTraceFields(restoredTiming),
             durationMs: elapsedMs(restoreStartedAt),
           });
         } catch (error) {
@@ -2920,6 +3150,9 @@ export class FlowChatStore {
           isHistorical: false,
           historyState: 'ready' as const,
           contextRestoreState,
+          isPartial: restoredHistoryPartial,
+          loadedTurnCount: restoredLoadedTurnCount ?? dialogTurns.length,
+          totalTurnCount: restoredTotalTurnCount ?? dialogTurns.length,
           error: null,
           mode: restoredSessionInfo?.agentType || session.mode,
           lastUserDialogMode: restoredLastUserDialogMode,

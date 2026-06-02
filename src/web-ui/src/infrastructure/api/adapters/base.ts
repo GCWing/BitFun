@@ -6,7 +6,7 @@ export interface ITransportAdapter {
   connect(): Promise<void>;
   
    
-  request<T>(action: string, params?: any): Promise<T>;
+  request<T>(action: string, params?: any, timing?: TransportRequestTiming): Promise<T>;
   
    
   listen<T>(event: string, callback: (data: T) => void): () => void;
@@ -16,6 +16,12 @@ export interface ITransportAdapter {
   
    
   isConnected(): boolean;
+}
+
+export interface TransportRequestTiming {
+  adapterInitDurationMs?: number;
+  invokeDurationMs?: number;
+  transportDurationMs?: number;
 }
 
  

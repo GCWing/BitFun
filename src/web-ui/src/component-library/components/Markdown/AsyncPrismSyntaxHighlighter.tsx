@@ -1,6 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useState } from 'react';
 import { getLoadedPrismSyntaxHighlighter, loadPrismSyntaxHighlighter } from '@/shared/utils/syntaxHighlighterLoader';
-import type { FlowCodeBlockFallbackProps } from './Markdown';
+import { scheduleAfterStartupPaint } from '@/shared/utils/startupTaskScheduling';
+import {
+  isStartupRenderTraceEnabled,
+  recordReactRenderProfile,
+  startupTrace,
+} from '@/shared/utils/startupTrace';
+import type { FlowCodeBlockFallbackProps, MarkdownTraceContext } from './Markdown';
 
 interface AsyncPrismSyntaxHighlighterProps {
   language: string;
@@ -11,8 +17,38 @@ interface AsyncPrismSyntaxHighlighterProps {
   lineNumberStyle?: React.CSSProperties;
   fallback?: React.ComponentType<FlowCodeBlockFallbackProps>;
   fallbackProps?: FlowCodeBlockFallbackProps;
+  traceContext?: MarkdownTraceContext;
   children: string;
 }
+
+interface PrismRenderTraceProps {
+  startedAtMs: number;
+  renderPhase: 'fallback_commit' | 'highlighted_commit';
+  contentLength: number;
+  traceContext?: MarkdownTraceContext;
+}
+
+const PrismRenderTrace: React.FC<PrismRenderTraceProps> = ({
+  startedAtMs,
+  renderPhase,
+  contentLength,
+  traceContext,
+}) => {
+  useLayoutEffect(() => {
+    recordReactRenderProfile(startupTrace, {
+      component: 'AsyncPrismSyntaxHighlighter',
+      phase: renderPhase,
+      actualDurationMs: performance.now() - startedAtMs,
+      contentLength,
+      turnId: traceContext?.turnId,
+      roundId: traceContext?.roundId,
+      itemId: traceContext?.itemId,
+      hasCodeBlock: true,
+    });
+  });
+
+  return null;
+};
 
 export const AsyncPrismSyntaxHighlighter: React.FC<AsyncPrismSyntaxHighlighterProps> = ({
   language,
@@ -23,54 +59,123 @@ export const AsyncPrismSyntaxHighlighter: React.FC<AsyncPrismSyntaxHighlighterPr
   lineNumberStyle,
   fallback: Fallback,
   fallbackProps,
+  traceContext,
   children,
 }) => {
   const [Highlighter, setHighlighter] = useState<React.ComponentType<any> | null>(() => getLoadedPrismSyntaxHighlighter());
+  const renderTraceEnabled = isStartupRenderTraceEnabled();
+  const renderTraceStartedAtMs = renderTraceEnabled ? performance.now() : null;
 
   useEffect(() => {
+    if (Highlighter) {
+      return;
+    }
+
     let cancelled = false;
-    void loadPrismSyntaxHighlighter()
-      .then((component) => {
-        if (!cancelled) {
-          setHighlighter(() => component);
+    let idleHandle: number | null = null;
+    let timeoutHandle: number | null = null;
+
+    const clearScheduledLoad = () => {
+      if (idleHandle !== null) {
+        const cancelIdle = (globalThis as {
+          cancelIdleCallback?: (handle: number) => void;
+        }).cancelIdleCallback;
+        if (typeof cancelIdle === 'function') {
+          cancelIdle(idleHandle);
+        } else {
+          globalThis.clearTimeout(idleHandle);
         }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setHighlighter(null);
-        }
-      });
+        idleHandle = null;
+      }
+
+      if (timeoutHandle !== null) {
+        globalThis.clearTimeout(timeoutHandle);
+        timeoutHandle = null;
+      }
+    };
+
+    const startLoad = () => {
+      clearScheduledLoad();
+      void loadPrismSyntaxHighlighter()
+        .then((component) => {
+          if (!cancelled) {
+            setHighlighter(() => component);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setHighlighter(null);
+          }
+        });
+    };
+
+    const scheduleIdleLoad = () => {
+      const requestIdle = (globalThis as {
+        requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number;
+      }).requestIdleCallback;
+
+      if (typeof requestIdle === 'function') {
+        idleHandle = requestIdle(startLoad, { timeout: 1500 });
+        return;
+      }
+
+      timeoutHandle = globalThis.setTimeout(startLoad, 200) as unknown as number;
+    };
+
+    const cancelAfterPaint = scheduleAfterStartupPaint(scheduleIdleLoad, { frameCount: 2 });
 
     return () => {
       cancelled = true;
+      cancelAfterPaint();
+      clearScheduledLoad();
     };
-  }, []);
+  }, [Highlighter]);
+
+  const traceMarker = renderTraceEnabled && renderTraceStartedAtMs !== null ? (
+    <PrismRenderTrace
+      startedAtMs={renderTraceStartedAtMs}
+      renderPhase={Highlighter ? 'highlighted_commit' : 'fallback_commit'}
+      contentLength={children.length}
+      traceContext={traceContext}
+    />
+  ) : null;
 
   if (!Highlighter) {
     if (Fallback && fallbackProps) {
-      return <Fallback {...fallbackProps} />;
+      return (
+        <>
+          {traceMarker}
+          <Fallback {...fallbackProps} />
+        </>
+      );
     }
 
     return (
-      <pre
-        className={`language-${language} code-block-fallback`}
-        style={customStyle}
-      >
-        <code style={codeTagProps?.style}>{children}</code>
-      </pre>
+      <>
+        {traceMarker}
+        <pre
+          className={`language-${language} code-block-fallback`}
+          style={customStyle}
+        >
+          <code style={codeTagProps?.style}>{children}</code>
+        </pre>
+      </>
     );
   }
 
   return (
-    <Highlighter
-      language={language}
-      style={style}
-      showLineNumbers={showLineNumbers}
-      customStyle={customStyle}
-      codeTagProps={codeTagProps}
-      lineNumberStyle={lineNumberStyle}
-    >
-      {children}
-    </Highlighter>
+    <>
+      {traceMarker}
+      <Highlighter
+        language={language}
+        style={style}
+        showLineNumbers={showLineNumbers}
+        customStyle={customStyle}
+        codeTagProps={codeTagProps}
+        lineNumberStyle={lineNumberStyle}
+      >
+        {children}
+      </Highlighter>
+    </>
   );
 };

@@ -38,6 +38,12 @@ import {
   RefreshOptions,
 } from '../state/types';
 import type { GitBranch, GitCommit } from '../types/repository';
+
+export type GitBasicInfoOptions = Pick<
+  UseGitStateOptions,
+  'isActive' | 'participateInWindowFocusRefresh' | 'refreshOnMount' | 'refreshOnActive'
+>;
+
 export function useGitState(options: UseGitStateOptions): UseGitStateReturn {
   const {
     repositoryPath,
@@ -194,14 +200,17 @@ export function useGitState(options: UseGitStateOptions): UseGitStateReturn {
  * Optimized hook for basic info only
  * Suitable for scenarios like BottomBar that only need branch name
  */
-export function useGitBasicInfo(repositoryPath: string) {
+export function useGitBasicInfo(
+  repositoryPath: string,
+  options: GitBasicInfoOptions = {}
+) {
   return useGitState({
     repositoryPath,
-    isActive: true,
-    participateInWindowFocusRefresh: false,
+    isActive: options.isActive ?? true,
+    participateInWindowFocusRefresh: options.participateInWindowFocusRefresh ?? false,
     layers: ['basic'],
-    refreshOnMount: true,
-    refreshOnActive: false,
+    refreshOnMount: options.refreshOnMount ?? true,
+    refreshOnActive: options.refreshOnActive ?? false,
   });
 }
 

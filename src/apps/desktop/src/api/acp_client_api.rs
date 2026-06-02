@@ -2,12 +2,14 @@
 
 use crate::api::app_state::AppState;
 use crate::api::session_storage_path::desktop_effective_session_storage_path;
+use crate::startup_trace::DesktopStartupTrace;
 use bitfun_acp::client::{
     AcpAvailableCommand, AcpClientInfo, AcpClientPermissionResponse, AcpClientRequirementProbe,
     AcpClientStreamEvent, AcpSessionOptions, CreateAcpFlowSessionRecordResponse,
     SetAcpSessionModelRequest, SubmitAcpPermissionResponseRequest,
 };
 use serde::{Deserialize, Serialize};
+use std::time::Instant;
 use tauri::{AppHandle, Emitter, State};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -88,12 +90,21 @@ pub struct ProbeAcpClientRequirementsRequest {
 }
 
 #[tauri::command]
-pub async fn initialize_acp_clients(state: State<'_, AppState>) -> Result<(), String> {
-    let service = state
-        .acp_client_service
-        .as_ref()
-        .ok_or_else(|| "ACP client service not initialized".to_string())?;
-    service.initialize_all().await.map_err(|e| e.to_string())
+pub async fn initialize_acp_clients(
+    state: State<'_, AppState>,
+    startup_trace: State<'_, DesktopStartupTrace>,
+) -> Result<(), String> {
+    let trace_started = Instant::now();
+    let result = async {
+        let service = state
+            .acp_client_service
+            .as_ref()
+            .ok_or_else(|| "ACP client service not initialized".to_string())?;
+        service.initialize_all().await.map_err(|e| e.to_string())
+    }
+    .await;
+    startup_trace.record_tauri_command_elapsed("initialize_acp_clients", None, trace_started);
+    result
 }
 
 #[tauri::command]
@@ -108,19 +119,30 @@ pub async fn get_acp_clients(state: State<'_, AppState>) -> Result<Vec<AcpClient
 #[tauri::command]
 pub async fn probe_acp_client_requirements(
     state: State<'_, AppState>,
+    startup_trace: State<'_, DesktopStartupTrace>,
     request: ProbeAcpClientRequirementsRequest,
 ) -> Result<Vec<AcpClientRequirementProbe>, String> {
-    let service = state
-        .acp_client_service
-        .as_ref()
-        .ok_or_else(|| "ACP client service not initialized".to_string())?;
-    service
-        .probe_client_requirements(
-            request.remote_connection_id.as_deref(),
-            request.force_refresh,
-        )
-        .await
-        .map_err(|e| e.to_string())
+    let trace_started = Instant::now();
+    let result = async {
+        let service = state
+            .acp_client_service
+            .as_ref()
+            .ok_or_else(|| "ACP client service not initialized".to_string())?;
+        service
+            .probe_client_requirements(
+                request.remote_connection_id.as_deref(),
+                request.force_refresh,
+            )
+            .await
+            .map_err(|e| e.to_string())
+    }
+    .await;
+    startup_trace.record_tauri_command_elapsed(
+        "probe_acp_client_requirements",
+        None,
+        trace_started,
+    );
+    result
 }
 
 #[tauri::command]

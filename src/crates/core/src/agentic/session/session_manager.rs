@@ -8,7 +8,7 @@ use crate::agentic::core::{
     SessionSummary, TurnStats,
 };
 use crate::agentic::image_analysis::ImageContextData;
-use crate::agentic::persistence::PersistenceManager;
+use crate::agentic::persistence::{PersistenceManager, SessionTurnLoadTiming};
 use crate::agentic::session::{
     CachedSystemPrompt, CachedUserContext, EvidenceLedgerCheckpoint, EvidenceLedgerEvent,
     EvidenceLedgerEventStatus, EvidenceLedgerSummary, EvidenceLedgerTargetKind, FileReadState,
@@ -33,6 +33,7 @@ use crate::util::sanitize_plain_model_output;
 use crate::util::timing::elapsed_ms_u64;
 use dashmap::DashMap;
 use log::{debug, error, info, warn};
+use serde::Serialize;
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -49,6 +50,17 @@ pub struct SessionManagerConfig {
     pub auto_save_interval: Duration,
     pub enable_persistence: bool,
     pub prompt_cache_policy: PromptCachePolicy,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionViewRestoreTiming {
+    pub resolve_storage_path_duration_ms: u64,
+    pub visibility_metadata_duration_ms: u64,
+    pub load_session_with_turns_duration_ms: u64,
+    pub normalize_turn_ids_duration_ms: u64,
+    pub total_duration_ms: u64,
+    pub turn_load: SessionTurnLoadTiming,
 }
 
 impl Default for SessionManagerConfig {
@@ -1499,11 +1511,7 @@ impl SessionManager {
 
         match self
             .persistence_manager
-            .save_skill_agent_baseline_override_snapshot(
-                &workspace_path,
-                session_id,
-                &snapshot,
-            )
+            .save_skill_agent_baseline_override_snapshot(&workspace_path, session_id, &snapshot)
             .await
         {
             Err(error) => {
@@ -1613,7 +1621,7 @@ impl SessionManager {
                 session_id,
                 latest_snapshot.clone(),
             )
-                .await;
+            .await;
         }
 
         self.recover_first_turn_skill_agent_snapshot(session_id, latest_snapshot)
@@ -2383,9 +2391,19 @@ impl SessionManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
-        self.restore_session_view_internal(workspace_path, session_id, false, None)
+        self.restore_session_view_timed(workspace_path, session_id)
             .await
             .map(|(session, turns, _)| (session, turns))
+    }
+
+    pub async fn restore_session_view_timed(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<(Session, Vec<DialogTurnData>, SessionViewRestoreTiming)> {
+        self.restore_session_view_internal(workspace_path, session_id, false, None)
+            .await
+            .map(|(session, turns, _, timing)| (session, turns, timing))
     }
 
     pub async fn restore_internal_session_view(
@@ -2393,9 +2411,19 @@ impl SessionManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
-        self.restore_session_view_internal(workspace_path, session_id, true, None)
+        self.restore_internal_session_view_timed(workspace_path, session_id)
             .await
             .map(|(session, turns, _)| (session, turns))
+    }
+
+    pub async fn restore_internal_session_view_timed(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<(Session, Vec<DialogTurnData>, SessionViewRestoreTiming)> {
+        self.restore_session_view_internal(workspace_path, session_id, true, None)
+            .await
+            .map(|(session, turns, _, timing)| (session, turns, timing))
     }
 
     pub async fn restore_session_view_tail(
@@ -2404,6 +2432,22 @@ impl SessionManager {
         session_id: &str,
         tail_turn_count: usize,
     ) -> BitFunResult<(Session, Vec<DialogTurnData>, usize)> {
+        self.restore_session_view_tail_timed(workspace_path, session_id, tail_turn_count)
+            .await
+            .map(|(session, turns, total_turn_count, _)| (session, turns, total_turn_count))
+    }
+
+    pub async fn restore_session_view_tail_timed(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        tail_turn_count: usize,
+    ) -> BitFunResult<(
+        Session,
+        Vec<DialogTurnData>,
+        usize,
+        SessionViewRestoreTiming,
+    )> {
         self.restore_session_view_internal(workspace_path, session_id, false, Some(tail_turn_count))
             .await
     }
@@ -2414,6 +2458,22 @@ impl SessionManager {
         session_id: &str,
         tail_turn_count: usize,
     ) -> BitFunResult<(Session, Vec<DialogTurnData>, usize)> {
+        self.restore_internal_session_view_tail_timed(workspace_path, session_id, tail_turn_count)
+            .await
+            .map(|(session, turns, total_turn_count, _)| (session, turns, total_turn_count))
+    }
+
+    pub async fn restore_internal_session_view_tail_timed(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        tail_turn_count: usize,
+    ) -> BitFunResult<(
+        Session,
+        Vec<DialogTurnData>,
+        usize,
+        SessionViewRestoreTiming,
+    )> {
         self.restore_session_view_internal(workspace_path, session_id, true, Some(tail_turn_count))
             .await
     }
@@ -2424,7 +2484,12 @@ impl SessionManager {
         session_id: &str,
         include_internal: bool,
         tail_turn_count: Option<usize>,
-    ) -> BitFunResult<(Session, Vec<DialogTurnData>, usize)> {
+    ) -> BitFunResult<(
+        Session,
+        Vec<DialogTurnData>,
+        usize,
+        SessionViewRestoreTiming,
+    )> {
         let restore_started_at = Instant::now();
         let storage_path_started_at = Instant::now();
         let session_storage_path = {
@@ -2437,10 +2502,11 @@ impl SessionManager {
                 .await
                 .unwrap_or_else(|| workspace_path.to_path_buf())
         };
+        let resolve_storage_path_duration_ms = elapsed_ms_u64(storage_path_started_at);
         debug!(
             "Session view restore phase completed: session_id={}, phase=resolve_storage_path, duration_ms={}",
             session_id,
-            elapsed_ms_u64(storage_path_started_at)
+            resolve_storage_path_duration_ms
         );
 
         let metadata_started_at = Instant::now();
@@ -2455,34 +2521,39 @@ impl SessionManager {
                 session_id
             )));
         }
+        let visibility_metadata_duration_ms = elapsed_ms_u64(metadata_started_at);
         debug!(
             "Session view restore phase completed: session_id={}, phase=load_metadata, duration_ms={}",
             session_id,
-            elapsed_ms_u64(metadata_started_at)
+            visibility_metadata_duration_ms
         );
 
         let session_started_at = Instant::now();
-        let (mut session, persisted_turns, total_turn_count) = if let Some(tail_turn_count) =
-            tail_turn_count
-        {
-            self.persistence_manager
-                .load_session_with_tail_turns(&session_storage_path, session_id, tail_turn_count)
-                .await?
-        } else {
-            let (session, turns) = self
-                .persistence_manager
-                .load_session_with_turns(&session_storage_path, session_id)
-                .await?;
-            let total_turn_count = turns.len();
-            (session, turns, total_turn_count)
-        };
+        let (mut session, persisted_turns, total_turn_count, turn_load) =
+            if let Some(tail_turn_count) = tail_turn_count {
+                self.persistence_manager
+                    .load_session_with_tail_turns_timed(
+                        &session_storage_path,
+                        session_id,
+                        tail_turn_count,
+                    )
+                    .await?
+            } else {
+                let (session, turns, timing) = self
+                    .persistence_manager
+                    .load_session_with_turns_timed(&session_storage_path, session_id)
+                    .await?;
+                let total_turn_count = turns.len();
+                (session, turns, total_turn_count, timing)
+            };
+        let load_session_with_turns_duration_ms = elapsed_ms_u64(session_started_at);
         debug!(
             "Session view restore phase completed: session_id={}, phase=load_session_with_turns, turn_count={}, total_turn_count={}, tail_turn_count={:?}, duration_ms={}",
             session_id,
             persisted_turns.len(),
             total_turn_count,
             tail_turn_count,
-            elapsed_ms_u64(session_started_at)
+            load_session_with_turns_duration_ms
         );
 
         if !matches!(session.state, SessionState::Idle) {
@@ -2494,6 +2565,7 @@ impl SessionManager {
             );
         }
 
+        let normalize_started_at = Instant::now();
         let persisted_turn_ids: Vec<String> = persisted_turns
             .iter()
             .map(|turn| turn.turn_id.clone())
@@ -2507,16 +2579,27 @@ impl SessionManager {
             );
             session.dialog_turn_ids = persisted_turn_ids;
         }
+        let normalize_turn_ids_duration_ms = elapsed_ms_u64(normalize_started_at);
 
+        let total_duration_ms = elapsed_ms_u64(restore_started_at);
         debug!(
             "Session view restored: session_id={}, session_name={}, turn_count={}, total_duration_ms={}",
             session_id,
             session.session_name,
             persisted_turns.len(),
-            elapsed_ms_u64(restore_started_at)
+            total_duration_ms
         );
 
-        Ok((session, persisted_turns, total_turn_count))
+        let timing = SessionViewRestoreTiming {
+            resolve_storage_path_duration_ms,
+            visibility_metadata_duration_ms,
+            load_session_with_turns_duration_ms,
+            normalize_turn_ids_duration_ms,
+            total_duration_ms,
+            turn_load,
+        };
+
+        Ok((session, persisted_turns, total_turn_count, timing))
     }
 
     /// Restore session and return the persisted turns read during restore.
@@ -3064,8 +3147,7 @@ impl SessionManager {
             (_, value) => value,
         });
 
-        self
-            .persistence_manager
+        self.persistence_manager
             .save_session_metadata(&workspace_path, &metadata)
             .await
     }
@@ -6362,10 +6444,7 @@ mod tests {
         assert_eq!(metadata.custom_metadata, None);
         assert_eq!(
             persistence_manager
-                .load_skill_agent_baseline_override_snapshot(
-                    workspace.path(),
-                    &session.session_id,
-                )
+                .load_skill_agent_baseline_override_snapshot(workspace.path(), &session.session_id,)
                 .await
                 .expect("override snapshot load should succeed"),
             Some(baseline.clone())

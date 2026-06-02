@@ -1383,7 +1383,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         setRecommendationContext({
           workspacePath,
           sessionId: effectiveTargetSessionId,
-          turnIndex: session.dialogTurns.length - 1,
+          turnIndex: lastTurn.backendTurnIndex ?? session.dialogTurns.length - 1,
           modifiedFiles: [...new Set(modifiedFiles)]
         });
       }

@@ -103,6 +103,31 @@ export interface RestoreSessionWithTurnsResponse {
   turns: DialogTurnData[];
 }
 
+export interface SessionTurnLoadTiming {
+  requestedTailTurnCount?: number;
+  loadedTurnCount: number;
+  totalTurnCount: number;
+  turnFileCount: number;
+  missingTurnFileCount: number;
+  fastPath: boolean;
+  metadataDurationMs: number;
+  stateDurationMs: number;
+  scanDurationMs: number;
+  readDurationMs: number;
+  maxTurnReadDurationMs: number;
+  buildSessionDurationMs: number;
+  totalDurationMs: number;
+}
+
+export interface SessionViewRestoreTiming {
+  resolveStoragePathDurationMs: number;
+  visibilityMetadataDurationMs: number;
+  loadSessionWithTurnsDurationMs: number;
+  normalizeTurnIdsDurationMs: number;
+  totalDurationMs: number;
+  turnLoad: SessionTurnLoadTiming;
+}
+
 export interface RestoreSessionViewResponse {
   session: SessionInfo;
   turns: DialogTurnData[];
@@ -110,6 +135,7 @@ export interface RestoreSessionViewResponse {
   isPartial?: boolean;
   loadedTurnCount?: number;
   totalTurnCount?: number;
+  timings?: SessionViewRestoreTiming;
 }
 
 export interface EnsureAssistantBootstrapRequest {

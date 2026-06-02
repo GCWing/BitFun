@@ -4,7 +4,9 @@ import {
   estimateJsonBytes,
   isRemoteTraceContext,
   isRemoteTraceRequest,
+  isStartupRenderTraceEnabled,
   markPhaseAfterAnimationFrames,
+  recordReactRenderProfile,
 } from './startupTrace';
 import type { LoggerLike } from './timing';
 
@@ -52,6 +54,108 @@ describe('startupTrace', () => {
     expect(payload).not.toHaveProperty('request');
     expect(payload).not.toHaveProperty('remoteConnectionId');
     expect(payload).not.toHaveProperty('sshHost');
+  });
+
+  it('records react render profiles only when perf trace is explicitly enabled', () => {
+    const previousRenderProfileEnabled = globalThis.__BITFUN_RENDER_PROFILE_ENABLED__;
+    const trace = createStartupTrace({
+      traceId: 'trace-test',
+      now: () => 100,
+    });
+
+    try {
+      globalThis.__BITFUN_RENDER_PROFILE_ENABLED__ = false;
+      expect(isStartupRenderTraceEnabled()).toBe(false);
+      recordReactRenderProfile(trace, {
+        component: 'MarkdownRenderer',
+        phase: 'mount',
+        actualDurationMs: 12.345,
+        baseDurationMs: 20.5,
+        startTimeMs: 10,
+        commitTimeMs: 25,
+        contentLength: 1024,
+        itemCount: 12,
+        groupCount: 7,
+        renderedCount: 5,
+        turnId: 'turn-1',
+        roundId: 'round-1',
+        itemId: 'item-1',
+        visibleGroupStartIndex: 2,
+        visibleGroupEndIndex: 7,
+        textItemCount: 4,
+        toolItemCount: 8,
+        visibleTextItemCount: 2,
+        visibleToolItemCount: 3,
+        criticalGroupCount: 5,
+        exploreGroupCount: 2,
+        hasCodeBlock: true,
+        request: { unsafe: 'payload' },
+      });
+      expect(trace.getSnapshot().phases.events).toHaveLength(0);
+
+      globalThis.__BITFUN_RENDER_PROFILE_ENABLED__ = true;
+      expect(isStartupRenderTraceEnabled()).toBe(true);
+      recordReactRenderProfile(trace, {
+        component: 'MarkdownRenderer',
+        phase: 'mount',
+        actualDurationMs: 12.345,
+        baseDurationMs: 20.5,
+        startTimeMs: 10,
+        commitTimeMs: 25,
+        contentLength: 1024,
+        itemCount: 12,
+        groupCount: 7,
+        renderedCount: 5,
+        turnId: 'turn-1',
+        roundId: 'round-1',
+        itemId: 'item-1',
+        visibleGroupStartIndex: 2,
+        visibleGroupEndIndex: 7,
+        textItemCount: 4,
+        toolItemCount: 8,
+        visibleTextItemCount: 2,
+        visibleToolItemCount: 3,
+        criticalGroupCount: 5,
+        exploreGroupCount: 2,
+        hasCodeBlock: true,
+        request: { unsafe: 'payload' },
+      });
+
+      expect(trace.getSnapshot().phases.events).toEqual([
+        expect.objectContaining({
+          phase: 'react_render_profile',
+          component: 'MarkdownRenderer',
+          renderPhase: 'mount',
+          actualDurationMs: 12.3,
+          baseDurationMs: 20.5,
+          startTimeMs: 10,
+          commitTimeMs: 25,
+          contentLength: 1024,
+          itemCount: 12,
+          groupCount: 7,
+          renderedCount: 5,
+          turnId: 'turn-1',
+          roundId: 'round-1',
+          itemId: 'item-1',
+          visibleGroupStartIndex: 2,
+          visibleGroupEndIndex: 7,
+          textItemCount: 4,
+          toolItemCount: 8,
+          visibleTextItemCount: 2,
+          visibleToolItemCount: 3,
+          criticalGroupCount: 5,
+          exploreGroupCount: 2,
+          hasCodeBlock: true,
+        }),
+      ]);
+      expect(trace.getSnapshot().phases.events[0]).not.toHaveProperty('request');
+    } finally {
+      if (previousRenderProfileEnabled === undefined) {
+        delete globalThis.__BITFUN_RENDER_PROFILE_ENABLED__;
+      } else {
+        globalThis.__BITFUN_RENDER_PROFILE_ENABLED__ = previousRenderProfileEnabled;
+      }
+    }
   });
 
   it('logs sanitized phase events only when explicitly enabled', () => {
@@ -207,6 +311,46 @@ describe('startupTrace', () => {
     expect(payload.api.calls[2]).toMatchObject({
       command: 'get_config',
       target: 'font',
+    });
+  });
+
+  it('records API boundary timing and concurrency fields for bottleneck attribution', () => {
+    const trace = createStartupTrace({
+      logger: createTestLogger(),
+      traceId: 'trace-test',
+      now: () => 100,
+    });
+
+    trace.recordApiCall({
+      type: 'tauri',
+      command: 'list_persisted_sessions_page',
+      durationMs: 120.4,
+      startedAtMs: 200,
+      endedAtMs: 320.4,
+      requestBytes: 50,
+      responseBytes: 500,
+      remote: false,
+      requestPayloadEstimateDurationMs: 1.2,
+      responsePayloadEstimateDurationMs: 2.3,
+      adapterInitDurationMs: 4.5,
+      transportDurationMs: 112.1,
+      activeRequestsAtStart: 3,
+      activeRequestsAtEnd: 2,
+      maxConcurrentRequests: 5,
+    });
+
+    const [call] = trace.getSnapshot().api.calls;
+    expect(call).toMatchObject({
+      command: 'list_persisted_sessions_page',
+      durationMs: 120.4,
+      requestPayloadEstimateDurationMs: 1.2,
+      responsePayloadEstimateDurationMs: 2.3,
+      payloadEstimateDurationMs: 3.5,
+      adapterInitDurationMs: 4.5,
+      transportDurationMs: 112.1,
+      activeRequestsAtStart: 3,
+      activeRequestsAtEnd: 2,
+      maxConcurrentRequests: 5,
     });
   });
 

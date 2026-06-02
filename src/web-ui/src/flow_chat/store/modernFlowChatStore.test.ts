@@ -17,7 +17,9 @@ vi.mock('../tool-cards', () => ({
   COMMAND_TOOL_NAMES: new Set(['Bash', 'Git']),
 }));
 
-import { sessionToVirtualItems } from './modernFlowChatStore';
+import { sessionToVirtualItems, type VirtualItem } from './modernFlowChatStore';
+
+type ModelRoundVirtualItem = Extract<VirtualItem, { type: 'model-round' }>;
 
 function makeTextItem(id: string, content: string): FlowTextItem {
   return {
@@ -29,6 +31,12 @@ function makeTextItem(id: string, content: string): FlowTextItem {
     timestamp: 1000,
     status: 'completed',
   };
+}
+
+function makeTextItems(count: number, prefix = 'text'): FlowTextItem[] {
+  return Array.from({ length: count }, (_, index) =>
+    makeTextItem(`${prefix}-${index + 1}`, `Assistant response block ${index + 1}`)
+  );
 }
 
 function makeReadTool(id: string): FlowToolItem {
@@ -126,6 +134,35 @@ describe('sessionToVirtualItems explore grouping', () => {
     const items = sessionToVirtualItems(session);
 
     expect(items.map(item => item.type)).toEqual(['user-message', 'explore-group']);
+  });
+
+  it('keeps trailing assistant text visible after collapsible tool history', () => {
+    const round = makeRound({
+      id: 'round-with-trailing-answer',
+      items: [
+        makeReadTool('tool-1'),
+        makeTextItem('text-final', 'Here is the answer after inspecting the files.'),
+      ],
+    });
+    const session = makeSession({
+      sessionId: 'trailing-answer-session',
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: 'trailing-answer-session',
+        userMessage: {
+          id: 'user-1',
+          content: 'Help',
+          timestamp: 900,
+        },
+        modelRounds: [round],
+        status: 'completed',
+        startTime: 900,
+      }],
+    });
+
+    const items = sessionToVirtualItems(session);
+
+    expect(items.map(item => item.type)).toEqual(['user-message', 'model-round']);
   });
 
   it('does not special-case ACP rounds without explicit render hints', () => {
@@ -507,6 +544,112 @@ describe('sessionToVirtualItems explore grouping', () => {
       turnId: 'turn-1',
       steeringId: 'steer-1',
       steeringStatus: 'pending',
+    });
+  });
+
+  it('splits completed large model rounds into stable virtual chunks', () => {
+    const largeRound = makeRound({
+      id: 'large-round',
+      items: makeTextItems(25, 'large-text'),
+      isStreaming: false,
+      isComplete: true,
+      status: 'completed',
+    });
+    const session = makeSession({
+      sessionId: 'large-round-session',
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: 'large-round-session',
+        userMessage: {
+          id: 'user-1',
+          content: 'Summarize a large trace',
+          timestamp: 900,
+        },
+        modelRounds: [largeRound],
+        status: 'completed',
+        startTime: 900,
+      }],
+    });
+
+    const items = sessionToVirtualItems(session);
+    const modelItems = items.filter((item): item is ModelRoundVirtualItem => item.type === 'model-round');
+
+    expect(items.map(item => item.type)).toEqual([
+      'user-message',
+      'model-round',
+      'model-round',
+      'model-round',
+      'model-round',
+      'model-round',
+      'model-round',
+      'model-round',
+    ]);
+    expect(modelItems.map(item => item.segmentIndex)).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    expect(modelItems.map(item => item.segmentCount)).toEqual([7, 7, 7, 7, 7, 7, 7]);
+    expect(modelItems.map(item => item.sourceRoundId)).toEqual([
+      'large-round',
+      'large-round',
+      'large-round',
+      'large-round',
+      'large-round',
+      'large-round',
+      'large-round',
+    ]);
+    expect(modelItems.map(item => item.data.id)).toEqual([
+      'large-round:segment:0',
+      'large-round:segment:1',
+      'large-round:segment:2',
+      'large-round:segment:3',
+      'large-round:segment:4',
+      'large-round:segment:5',
+      'large-round:segment:6',
+    ]);
+    expect(modelItems.map(item => item.data.items.length)).toEqual([4, 4, 4, 4, 4, 4, 1]);
+    expect(modelItems.map(item => item.isLastRound)).toEqual([false, false, false, false, false, false, true]);
+    expect(modelItems[0].data.items[0]?.id).toBe('large-text-1');
+    expect(modelItems[6].data.items[0]?.id).toBe('large-text-25');
+  });
+
+  it('does not split active or streaming large model rounds', () => {
+    const streamingRound = makeRound({
+      id: 'streaming-large-round',
+      items: makeTextItems(25, 'streaming-text'),
+      isStreaming: true,
+      isComplete: false,
+      status: 'streaming',
+    });
+    const session = makeSession({
+      sessionId: 'streaming-large-round-session',
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: 'streaming-large-round-session',
+        userMessage: {
+          id: 'user-1',
+          content: 'Continue writing',
+          timestamp: 900,
+        },
+        modelRounds: [streamingRound],
+        status: 'processing',
+        startTime: 900,
+      }],
+    });
+
+    const items = sessionToVirtualItems(session);
+    const modelItems = items.filter(item => item.type === 'model-round');
+
+    expect(items.map(item => item.type)).toEqual(['user-message', 'model-round']);
+    expect(modelItems).toHaveLength(1);
+    expect(modelItems[0]).toMatchObject({
+      type: 'model-round',
+      data: {
+        id: 'streaming-large-round',
+        items: expect.arrayContaining([
+          expect.objectContaining({ id: 'streaming-text-1' }),
+          expect.objectContaining({ id: 'streaming-text-25' }),
+        ]),
+      },
+      isLastRound: true,
+      isTurnComplete: false,
     });
   });
 

@@ -92,6 +92,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
     const isFailed = dialogTurn?.status === 'error';
     const isEditing = editingTurnId === turnId;
     const resolvedSessionId = sessionId ?? currentSession?.sessionId;
+    const historyActionsBlockedByPartialRestore = currentSession?.isPartial === true;
     const isSystemTriggered = Boolean(
       message?.metadata?.triggerSource && message.metadata.triggerSource !== 'desktop_ui',
     );
@@ -100,12 +101,14 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
       canShowRollbackAction &&
       !!resolvedSessionId &&
       turnIndex >= 0 &&
+      !historyActionsBlockedByPartialRestore &&
       !isRollingBack &&
       !isEditSubmitting;
     const canEditBase =
       allowUserMessageEdit &&
       !!resolvedSessionId &&
       turnIndex >= 0 &&
+      !historyActionsBlockedByPartialRestore &&
       !isThreadGoalSystemMessage &&
       !isSystemTriggered &&
       !steeringStatus;
@@ -115,6 +118,8 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
       ? t('message.cannotEdit')
       : steeringStatus
         ? t('message.cannotEdit')
+        : historyActionsBlockedByPartialRestore
+          ? t('message.editDisabledHistoryNotReady')
         : !resolvedSessionId || turnIndex < 0
           ? t('message.editDisabledHistoryNotReady')
           : t('message.cannotEdit');

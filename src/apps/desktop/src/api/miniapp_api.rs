@@ -1,6 +1,7 @@
 //! MiniApp API — Tauri commands for MiniApp CRUD, JS Worker, and dialog.
 
 use crate::api::app_state::AppState;
+use crate::startup_trace::DesktopStartupTrace;
 use bitfun_core::infrastructure::events::{emit_global_event, BackendEvent};
 use bitfun_core::miniapp::{
     dispatch_host, is_host_primitive, InstallResult as CoreInstallResult, MiniApp,
@@ -16,7 +17,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, State};
 
 // ============== Request/Response DTOs ==============
@@ -352,12 +353,18 @@ async fn ensure_worker_dependencies(
 // ============== App management commands ==============
 
 #[tauri::command]
-pub async fn list_miniapps(state: State<'_, AppState>) -> Result<Vec<MiniAppMeta>, String> {
-    state
+pub async fn list_miniapps(
+    state: State<'_, AppState>,
+    startup_trace: State<'_, DesktopStartupTrace>,
+) -> Result<Vec<MiniAppMeta>, String> {
+    let trace_started = Instant::now();
+    let result = state
         .miniapp_manager
         .list()
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string());
+    startup_trace.record_tauri_command_elapsed("list_miniapps", None, trace_started);
+    result
 }
 
 #[tauri::command]
@@ -680,11 +687,16 @@ pub async fn miniapp_worker_stop(state: State<'_, AppState>, app_id: String) -> 
 #[tauri::command]
 pub async fn miniapp_worker_list_running(
     state: State<'_, AppState>,
+    startup_trace: State<'_, DesktopStartupTrace>,
 ) -> Result<Vec<String>, String> {
-    let Some(ref pool) = state.js_worker_pool else {
-        return Ok(vec![]);
+    let trace_started = Instant::now();
+    let result = if let Some(ref pool) = state.js_worker_pool {
+        Ok(pool.list_running().await)
+    } else {
+        Ok(vec![])
     };
-    Ok(pool.list_running().await)
+    startup_trace.record_tauri_command_elapsed("miniapp_worker_list_running", None, trace_started);
+    result
 }
 
 #[tauri::command]

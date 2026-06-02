@@ -206,15 +206,6 @@ async function initializeBeforeRender(): Promise<void> {
     });
   });
 
-  await traceStartupStep('before_render_step', 'initialize_frontend_log_level_sync', async () => {
-    await measureAsyncAndLog(log, 'Startup step completed', async () => {
-      const { initializeFrontendLogLevelSync } = await import('./infrastructure/config/services/FrontendLogLevelSync');
-      await initializeFrontendLogLevelSync();
-    }, {
-      data: { step: 'initializeFrontendLogLevelSync' },
-    });
-  });
-
   log.info('Initializing BitFun');
 
   await traceStartupStep('before_render_step', 'theme_service_initialize', async () => {
@@ -256,8 +247,16 @@ async function initializeAfterRender(): Promise<void> {
       });
     })(),
     (async () => {
-      const { installFrontendLogLevelConfigWatcher } = await import('./infrastructure/config/services/FrontendLogLevelSync');
+      const {
+        initializeFrontendLogLevelSync,
+        installFrontendLogLevelConfigWatcher,
+      } = await import('./infrastructure/config/services/FrontendLogLevelSync');
+      await initializeFrontendLogLevelSync();
       await installFrontendLogLevelConfigWatcher();
+    })(),
+    (async () => {
+      const { themeService } = await import('./infrastructure/theme');
+      await themeService.ensureUserThemesLoaded();
     })(),
     (async () => {
       const { registerDefaultContextTypes } = await import('./shared/context-system/core/registerDefaultTypes');
@@ -288,6 +287,7 @@ async function initializeAfterRender(): Promise<void> {
     const names = [
       'EditorConfigPreload',
       'LogLevelConfigWatcher',
+      'UserThemes',
       'DefaultContextTypes',
       'RecommendationProviders',
       'Tools',

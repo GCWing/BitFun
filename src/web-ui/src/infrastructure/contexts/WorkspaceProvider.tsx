@@ -121,6 +121,14 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
   const isInitializedRef = useRef(false);
 
   useEffect(() => {
+    startupTrace.markPhase('workspace_context_state_committed', {
+      loading: state.loading,
+      openedCount: state.openedWorkspacesList.length,
+      hasActiveWorkspace: state.activeWorkspace !== null,
+    });
+  }, [state.activeWorkspace, state.loading, state.openedWorkspacesList.length]);
+
+  useEffect(() => {
     const removeListener = workspaceManager.addEventListener(() => {
       setState((prev) => {
         const nextState = workspaceManager.getState();

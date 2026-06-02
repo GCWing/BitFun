@@ -1,6 +1,7 @@
 //! Git API
 
 use crate::api::app_state::AppState;
+use crate::startup_trace::DesktopStartupTrace;
 use bitfun_core::infrastructure::storage::StorageOptions;
 use bitfun_core::service::git::{
     build_git_changed_files_args, build_git_diff_args, GitAddParams, GitChangedFile,
@@ -11,8 +12,9 @@ use bitfun_core::service::git::{
     GitBranch, GitCommit, GitOperationResult, GitRepository, GitStatus,
 };
 use bitfun_core::service::remote_ssh::{lookup_remote_connection, normalize_remote_workspace_path};
-use log::{debug, error, info};
+use log::{error, info};
 use serde::{Deserialize, Serialize};
+use std::time::Instant;
 use tauri::State;
 
 #[derive(Debug, Clone)]
@@ -503,27 +505,32 @@ pub struct GitRemoveWorktreeRequest {
 #[tauri::command]
 pub async fn git_is_repository(
     state: State<'_, AppState>,
+    startup_trace: State<'_, DesktopStartupTrace>,
     request: GitRepositoryRequest,
 ) -> Result<bool, String> {
-    if let Some(target) = resolve_remote_git_target(&request.repository_path).await {
-        let output = execute_remote_git_command(
+    let trace_started = Instant::now();
+    let result = if let Some(target) = resolve_remote_git_target(&request.repository_path).await {
+        execute_remote_git_command(
             &state,
             &target,
             &["rev-parse".to_string(), "--is-inside-work-tree".to_string()],
         )
-        .await?;
-        return Ok(output.exit_code == 0 && output.stdout.trim() == "true");
-    }
-
-    GitService::is_repository(&request.repository_path)
         .await
-        .map_err(|e| {
-            error!(
-                "Failed to check Git repository: path={}, error={}",
-                request.repository_path, e
-            );
-            format!("Failed to check Git repository: {}", e)
-        })
+        .map(|output| output.exit_code == 0 && output.stdout.trim() == "true")
+    } else {
+        GitService::is_repository(&request.repository_path)
+            .await
+            .map_err(|e| {
+                error!(
+                    "Failed to check Git repository: path={}, error={}",
+                    request.repository_path, e
+                );
+                format!("Failed to check Git repository: {}", e)
+            })
+    };
+
+    startup_trace.record_tauri_command_elapsed("git_is_repository", None, trace_started);
+    result
 }
 
 #[tauri::command]
@@ -591,60 +598,57 @@ pub async fn git_get_repository(
 #[tauri::command]
 pub async fn git_get_repository_basic(
     state: State<'_, AppState>,
+    startup_trace: State<'_, DesktopStartupTrace>,
     request: GitRepositoryRequest,
 ) -> Result<GitRepository, String> {
-    let started_at = std::time::Instant::now();
-    let result = if let Some(target) = resolve_remote_git_target(&request.repository_path).await {
-        let current_branch = execute_remote_git_success(
-            &state,
-            &target,
-            &["branch".to_string(), "--show-current".to_string()],
-        )
-        .await
-        .map(|s| {
-            let branch = s.trim();
-            if branch.is_empty() {
-                "HEAD".to_string()
-            } else {
-                branch.to_string()
-            }
-        })?;
-
-        let name = target
-            .repository_path
-            .rsplit('/')
-            .find(|part| !part.is_empty())
-            .unwrap_or("/")
-            .to_string();
-
-        Ok(GitRepository {
-            path: target.repository_path,
-            name,
-            current_branch,
-            is_bare: false,
-            has_changes: false,
-            remotes: Vec::new(),
-        })
-    } else {
-        GitService::get_repository_basic(&request.repository_path)
+    let trace_started = Instant::now();
+    let result = async {
+        if let Some(target) = resolve_remote_git_target(&request.repository_path).await {
+            let current_branch = execute_remote_git_success(
+                &state,
+                &target,
+                &["branch".to_string(), "--show-current".to_string()],
+            )
             .await
-            .map_err(|e| {
-                error!(
-                    "Failed to get basic Git repository info: path={}, error={}",
-                    request.repository_path, e
-                );
-                format!("Failed to get basic Git repository info: {}", e)
+            .map(|s| {
+                let branch = s.trim();
+                if branch.is_empty() {
+                    "HEAD".to_string()
+                } else {
+                    branch.to_string()
+                }
+            })?;
+
+            let name = target
+                .repository_path
+                .rsplit('/')
+                .find(|part| !part.is_empty())
+                .unwrap_or("/")
+                .to_string();
+
+            Ok(GitRepository {
+                path: target.repository_path,
+                name,
+                current_branch,
+                is_bare: false,
+                has_changes: false,
+                remotes: Vec::new(),
             })
-    };
-
-    let duration_ms = started_at.elapsed().as_millis();
-    if duration_ms >= 80 {
-        debug!(
-            "Git basic repository lookup completed: path={}, duration_ms={}",
-            request.repository_path, duration_ms
-        );
+        } else {
+            GitService::get_repository_basic(&request.repository_path)
+                .await
+                .map_err(|e| {
+                    error!(
+                        "Failed to get basic Git repository info: path={}, error={}",
+                        request.repository_path, e
+                    );
+                    format!("Failed to get basic Git repository info: {}", e)
+                })
+        }
     }
+    .await;
 
+    startup_trace.record_tauri_command_elapsed("git_get_repository_basic", None, trace_started);
     result
 }
 

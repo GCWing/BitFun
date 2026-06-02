@@ -3728,6 +3728,20 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .await
     }
 
+    pub async fn restore_session_view_timed(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<(
+        Session,
+        Vec<crate::service::session::DialogTurnData>,
+        crate::agentic::session::session_manager::SessionViewRestoreTiming,
+    )> {
+        self.session_manager
+            .restore_session_view_timed(workspace_path, session_id)
+            .await
+    }
+
     pub async fn restore_session_view_tail(
         &self,
         workspace_path: &Path,
@@ -3736,6 +3750,22 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     ) -> BitFunResult<(Session, Vec<crate::service::session::DialogTurnData>, usize)> {
         self.session_manager
             .restore_session_view_tail(workspace_path, session_id, tail_turn_count)
+            .await
+    }
+
+    pub async fn restore_session_view_tail_timed(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        tail_turn_count: usize,
+    ) -> BitFunResult<(
+        Session,
+        Vec<crate::service::session::DialogTurnData>,
+        usize,
+        crate::agentic::session::session_manager::SessionViewRestoreTiming,
+    )> {
+        self.session_manager
+            .restore_session_view_tail_timed(workspace_path, session_id, tail_turn_count)
             .await
     }
 
@@ -3749,6 +3779,20 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .await
     }
 
+    pub async fn restore_internal_session_view_timed(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<(
+        Session,
+        Vec<crate::service::session::DialogTurnData>,
+        crate::agentic::session::session_manager::SessionViewRestoreTiming,
+    )> {
+        self.session_manager
+            .restore_internal_session_view_timed(workspace_path, session_id)
+            .await
+    }
+
     pub async fn restore_internal_session_view_tail(
         &self,
         workspace_path: &Path,
@@ -3757,6 +3801,22 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     ) -> BitFunResult<(Session, Vec<crate::service::session::DialogTurnData>, usize)> {
         self.session_manager
             .restore_internal_session_view_tail(workspace_path, session_id, tail_turn_count)
+            .await
+    }
+
+    pub async fn restore_internal_session_view_tail_timed(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        tail_turn_count: usize,
+    ) -> BitFunResult<(
+        Session,
+        Vec<crate::service::session::DialogTurnData>,
+        usize,
+        crate::agentic::session::session_manager::SessionViewRestoreTiming,
+    )> {
+        self.session_manager
+            .restore_internal_session_view_tail_timed(workspace_path, session_id, tail_turn_count)
             .await
     }
 
@@ -4972,10 +5032,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             parent_session_id, child_session.session_id, copied
         );
         self.session_manager
-            .seed_forked_skill_agent_listing_baselines(
-                parent_session_id,
-                &child_session.session_id,
-            )
+            .seed_forked_skill_agent_listing_baselines(parent_session_id, &child_session.session_id)
             .await;
 
         self.session_manager
@@ -6034,10 +6091,8 @@ mod tests {
     #[tokio::test]
     async fn hidden_btw_session_seeds_forked_listing_baselines() {
         let (coordinator, session_manager) = test_coordinator();
-        let workspace_path = std::env::temp_dir().join(format!(
-            "bitfun-btw-baseline-test-{}",
-            uuid::Uuid::new_v4()
-        ));
+        let workspace_path =
+            std::env::temp_dir().join(format!("bitfun-btw-baseline-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&workspace_path).expect("workspace dir should exist");
         let parent_session = session_manager
             .create_session(
@@ -6053,7 +6108,9 @@ mod tests {
         session_manager
             .replace_context_messages(
                 &parent_session.session_id,
-                vec![crate::agentic::core::Message::user("parent context".to_string())],
+                vec![crate::agentic::core::Message::user(
+                    "parent context".to_string(),
+                )],
             )
             .await;
 
@@ -6095,7 +6152,10 @@ mod tests {
             .await
             .expect("btw child session should be created");
 
-        assert_eq!(child_session.kind, crate::agentic::core::SessionKind::EphemeralChild);
+        assert_eq!(
+            child_session.kind,
+            crate::agentic::core::SessionKind::EphemeralChild
+        );
         assert_eq!(
             session_manager
                 .cached_system_prompt(&child_session.session_id, &system_prompt_identity)

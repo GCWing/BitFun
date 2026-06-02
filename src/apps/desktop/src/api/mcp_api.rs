@@ -1,6 +1,7 @@
 //! MCP API
 
 use crate::api::app_state::AppState;
+use crate::startup_trace::DesktopStartupTrace;
 use bitfun_core::service::mcp::auth::{
     has_stored_oauth_credentials, MCPRemoteOAuthSessionSnapshot,
 };
@@ -12,6 +13,7 @@ use bitfun_core::service::mcp::MCPServerType;
 use bitfun_core::service::runtime::{RuntimeManager, RuntimeSource};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::time::Instant;
 use tauri::State;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -120,37 +122,57 @@ async fn load_mcp_prompts(
 }
 
 #[tauri::command]
-pub async fn initialize_mcp_servers(state: State<'_, AppState>) -> Result<(), String> {
-    let mcp_service = state
-        .mcp_service
-        .as_ref()
-        .ok_or_else(|| "MCP service not initialized".to_string())?;
+pub async fn initialize_mcp_servers(
+    state: State<'_, AppState>,
+    startup_trace: State<'_, DesktopStartupTrace>,
+) -> Result<(), String> {
+    let trace_started = Instant::now();
+    let result = async {
+        let mcp_service = state
+            .mcp_service
+            .as_ref()
+            .ok_or_else(|| "MCP service not initialized".to_string())?;
 
-    mcp_service
-        .server_manager()
-        .initialize_all()
-        .await
-        .map_err(|e| e.to_string())?;
+        mcp_service
+            .server_manager()
+            .initialize_all()
+            .await
+            .map_err(|e| e.to_string())?;
 
-    Ok(())
+        Ok(())
+    }
+    .await;
+    startup_trace.record_tauri_command_elapsed("initialize_mcp_servers", None, trace_started);
+    result
 }
 
 #[tauri::command]
 pub async fn initialize_mcp_servers_non_destructive(
     state: State<'_, AppState>,
+    startup_trace: State<'_, DesktopStartupTrace>,
 ) -> Result<(), String> {
-    let mcp_service = state
-        .mcp_service
-        .as_ref()
-        .ok_or_else(|| "MCP service not initialized".to_string())?;
+    let trace_started = Instant::now();
+    let result = async {
+        let mcp_service = state
+            .mcp_service
+            .as_ref()
+            .ok_or_else(|| "MCP service not initialized".to_string())?;
 
-    mcp_service
-        .server_manager()
-        .initialize_non_destructive()
-        .await
-        .map_err(|e| e.to_string())?;
+        mcp_service
+            .server_manager()
+            .initialize_non_destructive()
+            .await
+            .map_err(|e| e.to_string())?;
 
-    Ok(())
+        Ok(())
+    }
+    .await;
+    startup_trace.record_tauri_command_elapsed(
+        "initialize_mcp_servers_non_destructive",
+        None,
+        trace_started,
+    );
+    result
 }
 
 #[tauri::command]

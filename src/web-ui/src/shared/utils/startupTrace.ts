@@ -18,6 +18,14 @@ export interface StartupTraceApiCall {
   requestBytes?: number;
   responseBytes?: number;
   payloadEstimateDurationMs?: number;
+  requestPayloadEstimateDurationMs?: number;
+  responsePayloadEstimateDurationMs?: number;
+  adapterInitDurationMs?: number;
+  transportDurationMs?: number;
+  invokeDurationMs?: number;
+  activeRequestsAtStart?: number;
+  activeRequestsAtEnd?: number;
+  maxConcurrentRequests?: number;
   remote: boolean;
 }
 
@@ -36,6 +44,34 @@ export interface DeferredAnimationFrameTraceOptions {
   frameCount?: number;
   now?: NowFn;
   requestAnimationFrame?: (callback: (time: number) => void) => number;
+}
+
+export interface ReactRenderProfileTrace {
+  component: string;
+  phase: string;
+  actualDurationMs: number;
+  baseDurationMs?: number;
+  startTimeMs?: number;
+  commitTimeMs?: number;
+  contentLength?: number;
+  itemCount?: number;
+  groupCount?: number;
+  renderedCount?: number;
+  turnId?: string;
+  roundId?: string;
+  itemId?: string;
+  visibleGroupStartIndex?: number;
+  visibleGroupEndIndex?: number;
+  textItemCount?: number;
+  toolItemCount?: number;
+  visibleTextItemCount?: number;
+  visibleToolItemCount?: number;
+  criticalGroupCount?: number;
+  exploreGroupCount?: number;
+  hasCodeBlock?: boolean;
+  hasTable?: boolean;
+  isStreaming?: boolean;
+  [key: string]: unknown;
 }
 
 interface CommandAggregate {
@@ -88,6 +124,15 @@ export interface StartupTraceApiCallRecord {
   requestBytes: number;
   responseBytes: number;
   remote: boolean;
+  payloadEstimateDurationMs?: number;
+  requestPayloadEstimateDurationMs?: number;
+  responsePayloadEstimateDurationMs?: number;
+  adapterInitDurationMs?: number;
+  transportDurationMs?: number;
+  invokeDurationMs?: number;
+  activeRequestsAtStart?: number;
+  activeRequestsAtEnd?: number;
+  maxConcurrentRequests?: number;
 }
 
 export interface StartupTraceSnapshot {
@@ -109,6 +154,7 @@ declare global {
   // It intentionally exposes no raw request payloads or workspace paths.
   var __BITFUN_STARTUP_TRACE__: StartupTraceDiagnostics | undefined;
   var __BITFUN_PERF_TRACE_ENABLED__: boolean | undefined;
+  var __BITFUN_RENDER_PROFILE_ENABLED__: boolean | undefined;
 }
 
 const DEFAULT_MAX_ESTIMATED_BYTES = 64 * 1024;
@@ -127,6 +173,16 @@ function createTraceId(): string {
     return cryptoLike.randomUUID();
   }
   return `startup-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function optionalRounded(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? roundDurationMs(value)
+    : undefined;
+}
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
 function isSafeScalar(value: unknown): value is string | number | boolean | null {
@@ -363,6 +419,10 @@ export class StartupTrace {
       : (startedAtMs !== undefined ? roundDurationMs(startedAtMs + durationMs) : undefined);
     const requestBytes = call.requestBytes ?? 0;
     const responseBytes = call.responseBytes ?? 0;
+    const requestPayloadEstimateDurationMs = optionalRounded(call.requestPayloadEstimateDurationMs);
+    const responsePayloadEstimateDurationMs = optionalRounded(call.responsePayloadEstimateDurationMs);
+    const payloadEstimateDurationMs = optionalRounded(call.payloadEstimateDurationMs)
+      ?? roundDurationMs((requestPayloadEstimateDurationMs ?? 0) + (responsePayloadEstimateDurationMs ?? 0));
     const succeeded = call.outcome !== 'failure';
     const cacheOutcome = call.cacheOutcome ?? 'unknown';
     this.totalApiCount += 1;
@@ -374,7 +434,7 @@ export class StartupTrace {
     this.remoteApiCount += call.remote ? 1 : 0;
     this.requestBytes += requestBytes;
     this.responseBytes += responseBytes;
-    this.payloadEstimateDurationMs += call.payloadEstimateDurationMs ?? 0;
+    this.payloadEstimateDurationMs += payloadEstimateDurationMs;
 
     if (this.apiCallEvents < this.maxApiCallRecords) {
       this.apiCallEvents += 1;
@@ -391,6 +451,15 @@ export class StartupTrace {
         requestBytes,
         responseBytes,
         remote: call.remote,
+        payloadEstimateDurationMs,
+        requestPayloadEstimateDurationMs,
+        responsePayloadEstimateDurationMs,
+        adapterInitDurationMs: optionalRounded(call.adapterInitDurationMs),
+        transportDurationMs: optionalRounded(call.transportDurationMs),
+        invokeDurationMs: optionalRounded(call.invokeDurationMs),
+        activeRequestsAtStart: optionalRounded(call.activeRequestsAtStart),
+        activeRequestsAtEnd: optionalRounded(call.activeRequestsAtEnd),
+        maxConcurrentRequests: optionalRounded(call.maxConcurrentRequests),
       });
     }
 
@@ -483,6 +552,46 @@ export function createStartupTrace(options: StartupTraceOptions = {}): StartupTr
 }
 
 export const startupTrace = createStartupTrace();
+
+export function isStartupRenderTraceEnabled(): boolean {
+  return globalThis.__BITFUN_RENDER_PROFILE_ENABLED__ === true;
+}
+
+export function recordReactRenderProfile(
+  trace: StartupTrace,
+  profile: ReactRenderProfileTrace
+): void {
+  if (!isStartupRenderTraceEnabled()) {
+    return;
+  }
+
+  trace.markPhase('react_render_profile', {
+    component: profile.component,
+    renderPhase: profile.phase,
+    actualDurationMs: roundDurationMs(profile.actualDurationMs),
+    baseDurationMs: optionalRounded(profile.baseDurationMs),
+    startTimeMs: optionalRounded(profile.startTimeMs),
+    commitTimeMs: optionalRounded(profile.commitTimeMs),
+    contentLength: optionalRounded(profile.contentLength),
+    itemCount: optionalRounded(profile.itemCount),
+    groupCount: optionalRounded(profile.groupCount),
+    renderedCount: optionalRounded(profile.renderedCount),
+    turnId: optionalString(profile.turnId),
+    roundId: optionalString(profile.roundId),
+    itemId: optionalString(profile.itemId),
+    visibleGroupStartIndex: optionalRounded(profile.visibleGroupStartIndex),
+    visibleGroupEndIndex: optionalRounded(profile.visibleGroupEndIndex),
+    textItemCount: optionalRounded(profile.textItemCount),
+    toolItemCount: optionalRounded(profile.toolItemCount),
+    visibleTextItemCount: optionalRounded(profile.visibleTextItemCount),
+    visibleToolItemCount: optionalRounded(profile.visibleToolItemCount),
+    criticalGroupCount: optionalRounded(profile.criticalGroupCount),
+    exploreGroupCount: optionalRounded(profile.exploreGroupCount),
+    hasCodeBlock: profile.hasCodeBlock,
+    hasTable: profile.hasTable,
+    isStreaming: profile.isStreaming,
+  });
+}
 
 if (import.meta.env.DEV || globalThis.__BITFUN_PERF_TRACE_ENABLED__ === true) {
   globalThis.__BITFUN_STARTUP_TRACE__ = {

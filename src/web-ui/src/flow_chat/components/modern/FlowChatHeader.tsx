@@ -16,6 +16,7 @@ import './FlowChatHeader.scss';
 export interface FlowChatHeaderTurnSummary {
   turnId: string;
   turnIndex: number;
+  backendTurnIndex?: number;
   title: string;
 }
 
@@ -47,6 +48,10 @@ export interface FlowChatHeaderProps {
   onJumpToPreviousTurn?: () => void;
   /** Jump to the next turn. */
   onJumpToNextTurn?: () => void;
+  /** Whether the previous-turn action can navigate within the loaded turn range. */
+  canJumpToPreviousTurn?: boolean;
+  /** Whether the next-turn action can navigate within the loaded turn range. */
+  canJumpToNextTurn?: boolean;
   /** Current search query string. */
   searchQuery?: string;
   /** Called when the user types in the search box. */
@@ -79,6 +84,8 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   onJumpToCurrentTurn,
   onJumpToPreviousTurn,
   onJumpToNextTurn,
+  canJumpToPreviousTurn,
+  canJumpToNextTurn,
   searchQuery = '',
   onSearchChange,
   searchMatchCount = 0,
@@ -109,8 +116,8 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   const turnBadgeLabel = t('flowChatHeader.turnBadge', {
     current: currentTurn
   });
-  const previousTurnDisabled = currentTurn <= 1;
-  const nextTurnDisabled = currentTurn <= 0 || currentTurn >= totalTurns;
+  const previousTurnDisabled = !(canJumpToPreviousTurn ?? currentTurn > 1);
+  const nextTurnDisabled = !(canJumpToNextTurn ?? (currentTurn > 0 && currentTurn < totalTurns));
   const hasTurnNavigation = turns.length > 0 && !!onJumpToTurn;
   const hasBackgroundSubagents = backgroundSubagents.length > 0;
   const displayTurns = useMemo(() => (

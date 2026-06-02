@@ -102,6 +102,7 @@ fn clamp_agent_companion_window_position(
 #[derive(Debug, Clone)]
 pub struct ThemeConfig {
     pub id: String,
+    pub selection_id: Option<String>,
     pub bg_primary: String,
     pub bg_secondary: String,
     pub bg_scene: String,
@@ -113,8 +114,9 @@ pub struct ThemeConfig {
 
 impl Default for ThemeConfig {
     fn default() -> Self {
-        Self::get_builtin_theme("bitfun-light").unwrap_or_else(|| Self {
+        let mut theme = Self::get_builtin_theme("bitfun-light").unwrap_or_else(|| Self {
             id: "bitfun-light".to_string(),
+            selection_id: None,
             bg_primary: "#f3f3f5".to_string(),
             bg_secondary: "#ffffff".to_string(),
             bg_scene: "#ffffff".to_string(),
@@ -122,7 +124,9 @@ impl Default for ThemeConfig {
             text_primary: "#1e293b".to_string(),
             text_muted: "#64748b".to_string(),
             accent_color: "#64748b".to_string(),
-        })
+        });
+        theme.selection_id = None;
+        theme
     }
 }
 
@@ -131,6 +135,7 @@ impl ThemeConfig {
         match theme_id {
             "bitfun-slate" => Some(Self {
                 id: theme_id.to_string(),
+                selection_id: Some(theme_id.to_string()),
                 bg_primary: "#1a1c1e".to_string(),
                 bg_secondary: "#1a1c1e".to_string(),
                 bg_scene: "#1d2023".to_string(),
@@ -141,6 +146,7 @@ impl ThemeConfig {
             }),
             "bitfun-dark" => Some(Self {
                 id: theme_id.to_string(),
+                selection_id: Some(theme_id.to_string()),
                 bg_primary: "#121214".to_string(),
                 bg_secondary: "#18181a".to_string(),
                 bg_scene: "#16161a".to_string(),
@@ -151,6 +157,7 @@ impl ThemeConfig {
             }),
             "bitfun-midnight" => Some(Self {
                 id: theme_id.to_string(),
+                selection_id: Some(theme_id.to_string()),
                 bg_primary: "#2b2d30".to_string(),
                 bg_secondary: "#1e1f22".to_string(),
                 bg_scene: "#27292c".to_string(),
@@ -161,6 +168,7 @@ impl ThemeConfig {
             }),
             "bitfun-cyber" => Some(Self {
                 id: theme_id.to_string(),
+                selection_id: Some(theme_id.to_string()),
                 bg_primary: "#101010".to_string(),
                 bg_secondary: "#151515".to_string(),
                 bg_scene: "#141414".to_string(),
@@ -171,6 +179,7 @@ impl ThemeConfig {
             }),
             "bitfun-tokyo-night" => Some(Self {
                 id: theme_id.to_string(),
+                selection_id: Some(theme_id.to_string()),
                 bg_primary: "#1a1b26".to_string(),
                 bg_secondary: "#16161e".to_string(),
                 bg_scene: "#1a1b26".to_string(),
@@ -181,6 +190,7 @@ impl ThemeConfig {
             }),
             "bitfun-china-night" => Some(Self {
                 id: theme_id.to_string(),
+                selection_id: Some(theme_id.to_string()),
                 bg_primary: "#1a1814".to_string(),
                 bg_secondary: "#141210".to_string(),
                 bg_scene: "#1e1c17".to_string(),
@@ -191,6 +201,7 @@ impl ThemeConfig {
             }),
             "bitfun-light" => Some(Self {
                 id: theme_id.to_string(),
+                selection_id: Some(theme_id.to_string()),
                 bg_primary: "#f3f3f5".to_string(),
                 bg_secondary: "#ffffff".to_string(),
                 bg_scene: "#ffffff".to_string(),
@@ -201,6 +212,7 @@ impl ThemeConfig {
             }),
             "bitfun-china-style" => Some(Self {
                 id: theme_id.to_string(),
+                selection_id: Some(theme_id.to_string()),
                 bg_primary: "#faf8f0".to_string(),
                 bg_secondary: "#f5f3e8".to_string(),
                 bg_scene: "#fdfcf6".to_string(),
@@ -254,7 +266,10 @@ impl ThemeConfig {
         let resolved_id = Self::resolve_builtin_theme_id(theme_id);
 
         match Self::get_builtin_theme(resolved_id) {
-            Some(config) => config,
+            Some(mut config) => {
+                config.selection_id = Some(theme_id.to_string());
+                config
+            }
             None => {
                 warn!("Unknown theme ID: {}, using default theme", theme_id);
                 default
@@ -334,18 +349,32 @@ impl ThemeConfig {
         let show_startup_window_controls = !cfg!(target_os = "macos");
         let startup_trace_id_json = serde_json::to_string(startup_trace_id)
             .unwrap_or_else(|_| "\"desktop-unknown\"".to_string());
+        let bootstrap_log_level_json = serde_json::to_string(crate::logging::level_to_str(
+            crate::logging::current_runtime_log_level(),
+        ))
+        .unwrap_or_else(|_| "\"warn\"".to_string());
         let perf_trace_enabled = cfg!(debug_assertions)
             || ((cfg!(feature = "devtools") || std::env::var_os("BITFUN_PERF_TRACE").is_some())
                 && std::env::var_os("BITFUN_WEBDRIVER_PORT").is_some());
+        let bootstrap_theme_id_json =
+            serde_json::to_string(&self.id).unwrap_or_else(|_| "\"bitfun-light\"".to_string());
+        let bootstrap_theme_selection_json = self
+            .selection_id
+            .as_ref()
+            .and_then(|selection| serde_json::to_string(selection).ok())
+            .unwrap_or_else(|| "null".to_string());
 
         format!(
             r#"
             (function() {{
                 window.__BITFUN_STARTUP_TRACE_ID__ = {startup_trace_id_json};
                 window.__BITFUN_PERF_TRACE_ENABLED__ = {perf_trace_enabled};
+                window.__BITFUN_BOOTSTRAP_LOG_LEVEL__ = {bootstrap_log_level_json};
                 window.__BITFUN_BOOTSTRAP_LOCALE__ = {startup_locale_json};
                 window.__BITFUN_BOOTSTRAP_MESSAGES__ = {startup_messages_json};
                 window.__BITFUN_SHOW_STARTUP_WINDOW_CONTROLS__ = {show_startup_window_controls};
+                window.__BITFUN_BOOTSTRAP_THEME_ID__ = {bootstrap_theme_id_json};
+                window.__BITFUN_BOOTSTRAP_THEME_SELECTION__ = {bootstrap_theme_selection_json};
                 function applyTheme() {{
                     var root = document.documentElement;
                     if (!root) return false;
@@ -390,6 +419,7 @@ impl ThemeConfig {
             text_primary = self.text_primary,
             startup_trace_id_json = startup_trace_id_json,
             perf_trace_enabled = perf_trace_enabled,
+            bootstrap_log_level_json = bootstrap_log_level_json,
             startup_locale_json = startup_locale_json,
             startup_messages_json = startup_messages_json,
             show_startup_window_controls = show_startup_window_controls,

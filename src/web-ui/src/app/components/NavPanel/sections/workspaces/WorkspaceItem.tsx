@@ -37,6 +37,7 @@ import WorkspaceRelatedPathsDialog from './WorkspaceRelatedPathsDialog';
 import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
 import { confirmWarning } from '@/component-library/components/ConfirmDialog/confirmService';
 import { scheduleAfterStartupSignal } from '@/shared/utils/startupTaskScheduling';
+import { getWorkspaceGitBasicInfoOptions } from './workspaceGitRefreshOptions';
 
 
 interface WorkspaceItemProps {
@@ -76,7 +77,15 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   } = useWorkspaceContext();
   const { switchLeftPanelTab } = useApp();
   const openNavScene = useNavSceneStore(s => s.openNavScene);
-  const { isRepository } = useGitBasicInfo(workspace.rootPath);
+  const {
+    isRepository,
+    isLoading: isGitBasicInfoLoading,
+    state: gitBasicInfoState,
+    refreshBasic: refreshGitBasicInfo,
+  } = useGitBasicInfo(
+    workspace.rootPath,
+    getWorkspaceGitBasicInfoOptions(workspace, isActive)
+  );
   const [menuOpen, setMenuOpen] = useState(false);
   const [worktreeModalOpen, setWorktreeModalOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -117,6 +126,12 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
       workspace.workspaceKind === WorkspaceKind.Normal
       || workspace.workspaceKind === WorkspaceKind.Remote
     );
+  const shouldRefreshGitBasicInfoOnMenuOpen =
+    !isActive &&
+    !isRemoteWorkspace(workspace) &&
+    !gitBasicInfoState &&
+    !isGitBasicInfoLoading;
+  const isWorktreeActionDisabled = isGitBasicInfoLoading || !isRepository;
   const workspaceSearchIndex = useWorkspaceSearchIndex({
     workspacePath: canShowSearchIndex ? workspace.rootPath : undefined,
     enabled: canShowSearchIndex,
@@ -304,6 +319,14 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     apply();
     requestAnimationFrame(apply);
   }, []);
+
+  const handleMenuTriggerClick = useCallback(() => {
+    const nextOpen = !menuOpen;
+    setMenuOpen(nextOpen);
+    if (nextOpen && shouldRefreshGitBasicInfoOnMenuOpen) {
+      void refreshGitBasicInfo();
+    }
+  }, [menuOpen, refreshGitBasicInfo, shouldRefreshGitBasicInfoOnMenuOpen]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -779,7 +802,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
               <button
                 type="button"
                 className={`bitfun-nav-panel__assistant-item-menu-trigger${menuOpen ? ' is-open' : ''}`}
-                onClick={() => setMenuOpen(prev => !prev)}
+                onClick={handleMenuTriggerClick}
               >
                 <MoreHorizontal size="var(--bitfun-nav-row-action-icon-size)" />
               </button>
@@ -1086,7 +1109,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
               <button
                 type="button"
                 className={`bitfun-nav-panel__workspace-item-menu-trigger${menuOpen ? ' is-open' : ''}`}
-                onClick={() => setMenuOpen(prev => !prev)}
+                onClick={handleMenuTriggerClick}
               >
                 <MoreHorizontal size="var(--bitfun-nav-row-action-icon-size)" />
               </button>
@@ -1169,9 +1192,9 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                       setMenuOpen(false);
                       setWorktreeModalOpen(true);
                     }}
-                    disabled={!isRepository}
+                    disabled={isWorktreeActionDisabled}
                   >
-                    <GitBranch size={13} />
+                    {isGitBasicInfoLoading ? <Loader2 size={13} /> : <GitBranch size={13} />}
                     <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.newWorktree')}</span>
                   </button>
                 )}

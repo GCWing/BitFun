@@ -48,6 +48,15 @@ export interface StartupTraceApiCallRecord {
   requestBytes: number;
   responseBytes: number;
   remote: boolean;
+  payloadEstimateDurationMs?: number;
+  requestPayloadEstimateDurationMs?: number;
+  responsePayloadEstimateDurationMs?: number;
+  adapterInitDurationMs?: number;
+  transportDurationMs?: number;
+  invokeDurationMs?: number;
+  activeRequestsAtStart?: number;
+  activeRequestsAtEnd?: number;
+  maxConcurrentRequests?: number;
 }
 
 export interface StartupTraceNativeEvent {
@@ -150,9 +159,14 @@ export type StartupPerfBreakdown = {
       slowCalls: Array<{
         command: string;
         target?: string;
+        startedAtMs?: number;
         frontendDurationMs: number;
         backendDurationMs?: number;
         estimatedQueueOrBridgeMs?: number;
+        transportDurationMs?: number;
+        invokeDurationMs?: number;
+        activeRequestsAtStart?: number;
+        maxConcurrentRequests?: number;
       }>;
     };
   };
@@ -172,6 +186,23 @@ export type StartupPerfBreakdown = {
   };
 };
 
+export interface StartupApiCommandSegment {
+  command: string;
+  target?: string;
+  startedAtMs?: number;
+  frontendDurationMs: number;
+  backendDurationMs?: number;
+  estimatedQueueOrBridgeMs?: number;
+  transportDurationMs?: number;
+  invokeDurationMs?: number;
+  activeRequestsAtStart?: number;
+  activeRequestsAtEnd?: number;
+  maxConcurrentRequests?: number;
+  requestBytes: number;
+  responseBytes: number;
+  remote: boolean;
+}
+
 export type SessionOpenPerfMilestones = {
   clickToHydrateStartMs?: number;
   clickToLatestFrameMs?: number;
@@ -189,6 +220,8 @@ export type SessionOpenPerfMilestones = {
   loadedTurnCount?: number;
   totalTurnCount?: number;
   isPartial?: boolean;
+  restoreTiming?: unknown;
+  fullHydrateRestoreTiming?: unknown;
 };
 
 function numberField(value: unknown): number | undefined {
@@ -308,10 +341,17 @@ function aggregateApiCalls(calls: StartupTraceApiCallRecord[]): StartupTraceComm
     .sort((left, right) => right.totalDurationMs - left.totalDurationMs);
 }
 
-function summarizeBackendCommandOverlap(
+export function summarizeApiCommandSegments(
+  snapshot: StartupTraceSnapshot,
+  frontendCalls: StartupTraceApiCallRecord[] = snapshot.api.calls ?? [],
+): StartupApiCommandSegment[] {
+  return matchBackendCommandSegments(frontendCalls, snapshot.native?.events ?? []);
+}
+
+function matchBackendCommandSegments(
   frontendCalls: StartupTraceApiCallRecord[],
   nativeEvents: StartupTraceNativeEvent[],
-) {
+): StartupApiCommandSegment[] {
   const backendEvents = nativeEvents
     .filter(event =>
       event.category === 'tauri_command' &&
@@ -319,7 +359,7 @@ function summarizeBackendCommandOverlap(
       typeof event.durationMs === 'number'
     )
     .map(event => ({ ...event, consumed: false }));
-  const matched = frontendCalls.map(call => {
+  return frontendCalls.map(call => {
     const backend = backendEvents.find(event =>
       !event.consumed &&
       event.command === call.command &&
@@ -332,14 +372,29 @@ function summarizeBackendCommandOverlap(
     return {
       command: call.command,
       target: call.target,
+      startedAtMs: round(call.startedAtMs),
       frontendDurationMs: round(call.durationMs) ?? 0,
       backendDurationMs: round(backendDurationMs),
       estimatedQueueOrBridgeMs: round(
         backendDurationMs === undefined ? undefined : call.durationMs - backendDurationMs
       ),
+      transportDurationMs: round(call.transportDurationMs),
+      invokeDurationMs: round(call.invokeDurationMs),
+      activeRequestsAtStart: numberField(call.activeRequestsAtStart),
+      activeRequestsAtEnd: numberField(call.activeRequestsAtEnd),
+      maxConcurrentRequests: numberField(call.maxConcurrentRequests),
+      requestBytes: call.requestBytes,
+      responseBytes: call.responseBytes,
+      remote: call.remote,
     };
   });
+}
 
+function summarizeBackendCommandOverlap(
+  frontendCalls: StartupTraceApiCallRecord[],
+  nativeEvents: StartupTraceNativeEvent[],
+) {
+  const matched = matchBackendCommandSegments(frontendCalls, nativeEvents);
   const byCommand = new Map<string, {
     command: string;
     count: number;
@@ -565,5 +620,7 @@ export function summarizeSessionOpen(
     loadedTurnCount: numberField(restoreEnd?.loadedTurnCount),
     totalTurnCount: numberField(restoreEnd?.totalTurnCount ?? hydrateEnd?.totalTurnCount),
     isPartial: booleanField(restoreEnd?.isPartial ?? hydrateEnd?.isPartial),
+    restoreTiming: restoreEnd?.restoreTiming,
+    fullHydrateRestoreTiming: fullHydrateEnd?.restoreTiming,
   };
 }

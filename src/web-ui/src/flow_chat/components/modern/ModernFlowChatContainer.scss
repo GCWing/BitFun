@@ -36,6 +36,14 @@
     background: transparent;
   }
 
+  &__history-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    background: var(--color-bg-scene);
+    pointer-events: none;
+  }
+
   
   &__input {
     flex-shrink: 0;

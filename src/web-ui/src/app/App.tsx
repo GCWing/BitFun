@@ -81,6 +81,7 @@ function App() {
   const [interactiveShellReady, setInteractiveShellReady] = useState(false);
   const [appLayoutReady, setAppLayoutReady] = useState(false);
   const handleAppLayoutReady = useCallback(() => {
+    startupTrace.markPhase('app_layout_ready_state_update_requested');
     setAppLayoutReady(true);
   }, []);
 
@@ -171,6 +172,11 @@ function App() {
   }, [showMainWindow]);
 
   useEffect(() => {
+    startupTrace.markPhase('interactive_shell_ready_gate_check', {
+      workspaceLoading,
+      appLayoutReady,
+      alreadyReady: interactiveShellReadyRef.current,
+    });
     if (workspaceLoading || !appLayoutReady || interactiveShellReadyRef.current) {
       return;
     }

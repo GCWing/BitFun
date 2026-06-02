@@ -54,7 +54,17 @@ export type VirtualItem =
       steeringId: string;
       steeringStatus: FlowUserSteeringItem['status'];
     }
-  | { type: 'model-round'; data: ModelRound; turnId: string; isLastRound: boolean; isTurnComplete: boolean }
+  | {
+      type: 'model-round';
+      data: ModelRound;
+      turnId: string;
+      isLastRound: boolean;
+      isTurnComplete: boolean;
+      segmentId?: string;
+      segmentIndex?: number;
+      segmentCount?: number;
+      sourceRoundId?: string;
+    }
   | { type: 'explore-group'; data: ExploreGroupData; turnId: string }
   | { type: 'image-analyzing'; turnId: string };
 
@@ -115,6 +125,23 @@ function hasRecentlyCompletedTool(round: ModelRound, nowMs: number): boolean {
   });
 }
 
+function hasTrailingVisibleText(round: ModelRound): boolean {
+  for (let index = round.items.length - 1; index >= 0; index -= 1) {
+    const item = round.items[index];
+    if (!item || item.type === 'user-steering') {
+      continue;
+    }
+
+    if (item.type !== 'text') {
+      return false;
+    }
+
+    return typeof item.content === 'string' && item.content.trim().length > 0;
+  }
+
+  return false;
+}
+
 function isExploreOnlyRound(round: ModelRound, nowMs: number): boolean {
   if (!round.items || round.items.length === 0) return false;
 
@@ -127,6 +154,10 @@ function isExploreOnlyRound(round: ModelRound, nowMs: number): boolean {
   }
 
   if (hasActiveTool(round) || (round.isStreaming && hasRecentlyCompletedTool(round, nowMs))) {
+    return false;
+  }
+
+  if (hasTrailingVisibleText(round)) {
     return false;
   }
   
@@ -147,6 +178,67 @@ function isExploreOnlyRound(round: ModelRound, nowMs: number): boolean {
   });
   
   return allItemsCollapsible;
+}
+
+const MODEL_ROUND_VIRTUAL_CHUNK_ITEM_LIMIT = 4;
+const MODEL_ROUND_VIRTUAL_CHUNK_THRESHOLD = MODEL_ROUND_VIRTUAL_CHUNK_ITEM_LIMIT * 3;
+
+interface ModelRoundVirtualChunk {
+  round: ModelRound;
+  segmentId?: string;
+  segmentIndex?: number;
+  segmentCount?: number;
+  sourceRoundId?: string;
+}
+
+function shouldSplitModelRoundForVirtualItems(
+  round: ModelRound,
+  isTurnComplete: boolean,
+  nowMs: number,
+): boolean {
+  return (
+    isTurnComplete &&
+    isTerminalRoundStatus(round.status) &&
+    !round.isStreaming &&
+    round.isComplete !== false &&
+    round.items.length > MODEL_ROUND_VIRTUAL_CHUNK_THRESHOLD &&
+    !hasActiveTool(round) &&
+    !hasRecentlyCompletedTool(round, nowMs) &&
+    round.items.every(item => !isActiveFlowItem(item))
+  );
+}
+
+function splitModelRoundForVirtualItems(
+  round: ModelRound,
+  isTurnComplete: boolean,
+  nowMs: number,
+): ModelRoundVirtualChunk[] {
+  if (!shouldSplitModelRoundForVirtualItems(round, isTurnComplete, nowMs)) {
+    return [{ round }];
+  }
+
+  const segmentCount = Math.ceil(round.items.length / MODEL_ROUND_VIRTUAL_CHUNK_ITEM_LIMIT);
+  const chunks: ModelRoundVirtualChunk[] = [];
+
+  for (let segmentIndex = 0; segmentIndex < segmentCount; segmentIndex += 1) {
+    const start = segmentIndex * MODEL_ROUND_VIRTUAL_CHUNK_ITEM_LIMIT;
+    const end = start + MODEL_ROUND_VIRTUAL_CHUNK_ITEM_LIMIT;
+    const segmentId = `${round.id}:segment:${segmentIndex}`;
+
+    chunks.push({
+      round: {
+        ...round,
+        id: segmentId,
+        items: round.items.slice(start, end),
+      },
+      segmentId,
+      segmentIndex,
+      segmentCount,
+      sourceRoundId: round.id,
+    });
+  }
+
+  return chunks;
 }
 
 /**
@@ -411,12 +503,19 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
           groupIndex++;
         } else {
           const isLastRound = roundIndex === rounds.length - 1;
-          items.push({
-            type: 'model-round',
-            data: round,
-            turnId: turn.id,
-            isLastRound,
-            isTurnComplete,
+          const roundChunks = splitModelRoundForVirtualItems(round, isTurnComplete, nowMs);
+          roundChunks.forEach((chunk, chunkIndex) => {
+            items.push({
+              type: 'model-round',
+              data: chunk.round,
+              turnId: turn.id,
+              isLastRound: isLastRound && chunkIndex === roundChunks.length - 1,
+              isTurnComplete,
+              segmentId: chunk.segmentId,
+              segmentIndex: chunk.segmentIndex,
+              segmentCount: chunk.segmentCount,
+              sourceRoundId: chunk.sourceRoundId,
+            });
           });
           roundIndex++;
         }

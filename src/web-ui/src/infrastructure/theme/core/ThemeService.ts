@@ -31,6 +31,14 @@ const FLOW_CHAT_LINK_COLORS = {
   },
 } as const;
 
+declare global {
+  // Injected by the desktop webview initialization script. These values let the
+  // first renderer pass apply the persisted built-in theme without waiting on a
+  // Tauri config round trip. They are absent on plain web/F5 fallback paths.
+  var __BITFUN_BOOTSTRAP_THEME_ID__: string | undefined;
+  var __BITFUN_BOOTSTRAP_THEME_SELECTION__: string | undefined;
+}
+
 /** Space-separated R G B for `rgba(var(--color-primary-rgb) / α)` in component styles. */
 function accentColorToRgbChannels(accent: string): string | null {
   const trimmed = accent.trim();
@@ -59,6 +67,9 @@ export class ThemeService {
   private listeners: Map<ThemeEventType, Set<ThemeEventListener>> = new Map();
   private hooks: ThemeHooks = {};
   private initialized = false;
+  private userThemesLoaded = false;
+  private userThemesLoadPromise: Promise<void> | null = null;
+  private pendingUserThemeSelection: ThemeId | null = null;
 
   constructor() {
     this.initializeBuiltinThemes();
@@ -79,29 +90,90 @@ export class ThemeService {
     if (this.initialized) return;
     this.initialized = true;
     try {
+      const bootstrapSelection = this.getBootstrapThemeSelection();
+      if (bootstrapSelection) {
+        await this.applyThemeSelection(bootstrapSelection, { persist: false });
+        return;
+      }
+
       const saved = await this.loadThemeSelection();
 
       if (saved === SYSTEM_THEME_ID) {
-        await this.applyTheme(SYSTEM_THEME_ID);
+        await this.applyThemeSelection(SYSTEM_THEME_ID, { persist: false });
       } else if (saved && this.themes.has(saved)) {
-        await this.applyTheme(saved);
-      } else {
-        const preInjectedThemeId = document.documentElement.getAttribute('data-theme');
-        if (preInjectedThemeId && this.themes.has(preInjectedThemeId as ThemeId)) {
-          await this.applyTheme(preInjectedThemeId as ThemeId);
-        } else {
-          await this.applyTheme(SYSTEM_THEME_ID);
+        await this.applyThemeSelection(saved, { persist: false });
+      } else if (saved) {
+        this.pendingUserThemeSelection = saved;
+        await this.ensureUserThemesLoaded();
+        if (this.themeSelection === saved) {
+          return;
         }
+        await this.applyStartupFallbackTheme();
+      } else {
+        await this.applyStartupFallbackTheme();
       }
 
-      this.loadUserThemes().catch(() => {
-
-      });
     } catch (error) {
       log.error('Theme system initialization failed', error);
 
-      await this.applyTheme(SYSTEM_THEME_ID);
+      await this.applyThemeSelection(SYSTEM_THEME_ID, { persist: false });
     }
+  }
+
+
+  private async applyStartupFallbackTheme(): Promise<void> {
+    const preInjectedThemeId = document.documentElement.getAttribute('data-theme');
+    if (preInjectedThemeId && this.themes.has(preInjectedThemeId as ThemeId)) {
+      await this.applyThemeSelection(preInjectedThemeId as ThemeId, { persist: false });
+    } else {
+      await this.applyThemeSelection(SYSTEM_THEME_ID, { persist: false });
+    }
+  }
+
+
+  private getBootstrapThemeSelection(): ThemeSelectionId | null {
+    const selection = globalThis.__BITFUN_BOOTSTRAP_THEME_SELECTION__;
+    if (selection === SYSTEM_THEME_ID) {
+      return SYSTEM_THEME_ID;
+    }
+    if (typeof selection === 'string' && this.themes.has(selection as ThemeId)) {
+      return selection as ThemeId;
+    }
+
+    return null;
+  }
+
+
+  async ensureUserThemesLoaded(): Promise<void> {
+    if (this.userThemesLoaded) {
+      await this.applyPendingUserThemeSelection();
+      return;
+    }
+    if (!this.userThemesLoadPromise) {
+      this.userThemesLoadPromise = this.loadUserThemes()
+        .finally(() => {
+          this.userThemesLoaded = true;
+          this.userThemesLoadPromise = null;
+        });
+    }
+    await this.userThemesLoadPromise;
+    await this.applyPendingUserThemeSelection();
+  }
+
+
+  private async applyPendingUserThemeSelection(): Promise<void> {
+    const pending = this.pendingUserThemeSelection;
+    if (!pending) {
+      return;
+    }
+
+    this.pendingUserThemeSelection = null;
+    if (!this.themes.has(pending)) {
+      log.warn('Saved theme selection was not found after loading user themes', { id: pending });
+      return;
+    }
+
+    await this.applyThemeSelection(pending, { persist: false });
   }
 
 
@@ -292,7 +364,10 @@ export class ThemeService {
     }
   }
 
-  async applyTheme(themeId: ThemeId | typeof SYSTEM_THEME_ID): Promise<void> {
+  private async applyThemeSelection(
+    themeId: ThemeId | typeof SYSTEM_THEME_ID,
+    options: { persist: boolean },
+  ): Promise<void> {
     if (themeId !== SYSTEM_THEME_ID && !this.themes.has(themeId)) {
       log.error('Theme not found', { id: themeId });
       throw new Error(`Theme ${themeId} not found`);
@@ -302,15 +377,27 @@ export class ThemeService {
 
     if (themeId === SYSTEM_THEME_ID) {
       this.themeSelection = SYSTEM_THEME_ID;
-      await this.saveThemeSelection(SYSTEM_THEME_ID);
+      if (options.persist) {
+        await this.saveThemeSelection(SYSTEM_THEME_ID);
+      } else {
+        this.lastSavedSelection = SYSTEM_THEME_ID;
+      }
       this.attachSystemThemeListener();
       const resolved = getSystemPreferredDefaultThemeId();
       await this.applyResolvedTheme(resolved);
     } else {
       this.themeSelection = themeId;
-      await this.saveThemeSelection(themeId);
+      if (options.persist) {
+        await this.saveThemeSelection(themeId);
+      } else {
+        this.lastSavedSelection = themeId;
+      }
       await this.applyResolvedTheme(themeId);
     }
+  }
+
+  async applyTheme(themeId: ThemeId | typeof SYSTEM_THEME_ID): Promise<void> {
+    await this.applyThemeSelection(themeId, { persist: true });
   }
 
 
