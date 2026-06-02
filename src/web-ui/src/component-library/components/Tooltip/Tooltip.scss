@@ -44,8 +44,24 @@
     box-shadow: var(--shadow-sm);
 
     max-width: 280px;
+    max-height: min(320px, calc(100vh - 24px));
+    overflow-y: auto;
+    overscroll-behavior: contain;
     word-wrap: break-word;
     user-select: text;
+
+    &::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: var(--border-medium);
+      border-radius: 2px;
+    }
   }
 
   &--top.bitfun-tooltip--visible {
