@@ -1027,6 +1027,7 @@
     "feedbackDevVersion": "开发版本暂不提供反馈功能",
     "userLabel": "👤 用户:",
     "toolCallLabel": "🔧 工具调用: {{name}}",
+    "aiDisclaimer": "以上内容均由 AI 生成，仅供参考",
     "loadingMoreHistory": "正在加载更多历史..."
   },
   "exploreRegion": {

@@ -404,6 +404,9 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
 
         {isTurnComplete && isLastRound && hasContent && !round.isStreaming && (
           <div className="model-round-item__footer">
+            <span className="model-round-item__ai-disclaimer">
+              {t('modelRound.aiDisclaimer', { defaultValue: '以上内容均由 AI 生成，仅供参考' })}
+            </span>
             <ForkSessionButton sessionId={sessionId} turnId={turnId} />
 
             <Tooltip content={copied ? t('modelRound.copiedDialog') : t('modelRound.copyDialog')} placement="top">
