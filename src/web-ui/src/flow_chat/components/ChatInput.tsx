@@ -68,6 +68,28 @@ import { deriveDeepReviewSessionConcurrencyGuard } from '../utils/deepReviewCapa
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import './ChatInput.scss';
 
+// Module-level popup state – used by ModernFlowChatContainer to conditionally
+// disable the Escape shortcut so that slash-command and @-mention popups can be
+// closed with Escape.
+let _chatPopupActive = false;
+const _chatPopupListeners = new Set<() => void>();
+
+export function isChatPopupActive(): boolean {
+  return _chatPopupActive;
+}
+
+export function subscribeChatPopupChange(listener: () => void): () => void {
+  _chatPopupListeners.add(listener);
+  return () => { _chatPopupListeners.delete(listener); };
+}
+
+function setChatPopupActive(active: boolean) {
+  if (_chatPopupActive !== active) {
+    _chatPopupActive = active;
+    _chatPopupListeners.forEach(fn => fn());
+  }
+}
+
 const log = createLogger('ChatInput');
 
 export interface ChatInputProps {
@@ -818,6 +840,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     query: '',
     selectedIndex: 0,
   });
+
+  // Keep the module-level popup-active flag in sync so ModernFlowChatContainer
+  // can disable the global Escape shortcut while popups are open.
+  useEffect(() => {
+    setChatPopupActive(slashCommandState.isActive || mentionState.isActive);
+  }, [slashCommandState.isActive, mentionState.isActive]);
 
   const clearPendingLargePastes = useCallback(() => {
     pendingLargePastesRef.current = {};

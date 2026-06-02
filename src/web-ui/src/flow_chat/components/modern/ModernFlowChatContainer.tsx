@@ -23,6 +23,7 @@ import { useFlowChatSearch } from './useFlowChatSearch';
 import { useVirtualItems, useActiveSession, useVisibleTurnInfo, type VisibleTurnInfo } from '../../store/modernFlowChatStore';
 import type { FlowChatConfig, FlowToolItem, Session, DialogTurn } from '../../types/flow-chat';
 import type { LineRange } from '@/component-library';
+import { isChatPopupActive, subscribeChatPopupChange } from '../ChatInput';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { parsePullRequestUrl } from '@/shared/utils/pullRequestLinks';
 import { createReviewPlatformPullRequestDetailTab } from '@/shared/utils/tabUtils';
@@ -171,6 +172,16 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   const visibleTurnInfo = useVisibleTurnInfo();
   const [pendingHeaderTurnId, setPendingHeaderTurnId] = useState<string | null>(null);
   const [searchOpenRequest, setSearchOpenRequest] = useState(0);
+  // Track whether a slash-command or @-mention popup is open in ChatInput.
+  // When a popup is active, the global Escape shortcut is disabled so the
+  // popup can be closed with Escape instead of cancelling the current task.
+  const [chatPopupActive, setChatPopupActive] = useState(() => isChatPopupActive());
+
+  useEffect(() => {
+    return subscribeChatPopupChange(() => {
+      setChatPopupActive(isChatPopupActive());
+    });
+  }, []);
   const [backgroundSubagents, setBackgroundSubagents] = useState<BackgroundSubagentSummary[]>([]);
   const autoPinnedSessionIdRef = useRef<string | null>(null);
   const virtualListRef = useRef<VirtualMessageListRef>(null);
@@ -474,7 +485,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     () => {
       void FlowChatManager.getInstance().cancelCurrentTask();
     },
-    { priority: 20, description: 'keyboard.shortcuts.chat.stopGeneration' }
+    { priority: 20, enabled: !chatPopupActive, description: 'keyboard.shortcuts.chat.stopGeneration' }
   );
 
   useShortcut(
