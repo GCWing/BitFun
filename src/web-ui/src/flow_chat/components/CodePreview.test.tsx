@@ -107,4 +107,25 @@ describe('CodePreview', () => {
     expect(highlighter.textContent).not.toContain('line 090');
     expect(Number(highlighter.dataset.startingLineNumber)).toBeLessThanOrEqual(104);
   });
+
+  it('fits the streaming tail in the viewport when nested autoscroll is disabled', async () => {
+    await act(async () => {
+      root.render(
+        <CodePreview
+          content={makeLines(120)}
+          filePath="src/generated.ts"
+          isStreaming={true}
+          maxHeight={88}
+          autoScrollToBottom={false}
+        />
+      );
+    });
+
+    const highlighter = container.querySelector('[data-testid="syntax-highlighter"]') as HTMLElement;
+    expect(highlighter).not.toBeNull();
+    expect(highlighter.textContent).toContain('line 120');
+    expect(highlighter.textContent).toContain('line 117');
+    expect(highlighter.textContent).not.toContain('line 116');
+    expect(Number(highlighter.dataset.startingLineNumber)).toBe(117);
+  });
 });

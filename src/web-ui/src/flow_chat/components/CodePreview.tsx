@@ -64,19 +64,24 @@ function countNewlines(value: string, endExclusive = value.length): number {
   return count;
 }
 
-function getStreamingTailLineLimit(maxHeight: number): number {
-  const visibleLines = Math.ceil(maxHeight / CODE_PREVIEW_STREAMING_LINE_HEIGHT_PX);
+function getStreamingTailLineLimit(maxHeight: number, includeOverscan: boolean): number {
+  const visibleLines = Math.max(1, Math.ceil(maxHeight / CODE_PREVIEW_STREAMING_LINE_HEIGHT_PX));
+  const desiredLines = includeOverscan
+    ? visibleLines + STREAMING_TAIL_OVERSCAN_LINES
+    : visibleLines;
+  const minimumLines = includeOverscan ? STREAMING_TAIL_MIN_LINES : 1;
+
   return Math.min(
     STREAMING_TAIL_MAX_LINES,
-    Math.max(STREAMING_TAIL_MIN_LINES, visibleLines + STREAMING_TAIL_OVERSCAN_LINES),
+    Math.max(minimumLines, desiredLines),
   );
 }
 
-function getStreamingTailDisplayContent(content: string, maxHeight: number): {
+function getStreamingTailDisplayContent(content: string, maxHeight: number, includeOverscan: boolean): {
   content: string;
   startingLineNumber: number;
 } {
-  const tailLineLimit = getStreamingTailLineLimit(maxHeight);
+  const tailLineLimit = getStreamingTailLineLimit(maxHeight, includeOverscan);
   const totalLineCount = countNewlines(content) + 1;
 
   if (totalLineCount <= tailLineLimit && content.length <= STREAMING_TAIL_MAX_CHARS) {
@@ -142,8 +147,8 @@ export const CodePreview: React.FC<CodePreviewProps> = memo(({
       return { content: deferredContent, startingLineNumber: 1 };
     }
 
-    return getStreamingTailDisplayContent(deferredContent, maxHeight);
-  }, [isStreaming, deferredContent, maxHeight]);
+    return getStreamingTailDisplayContent(deferredContent, maxHeight, autoScrollToBottom);
+  }, [isStreaming, deferredContent, maxHeight, autoScrollToBottom]);
 
   const displayContent = displayContentInfo.content;
 
