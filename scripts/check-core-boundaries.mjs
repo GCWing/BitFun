@@ -719,6 +719,36 @@ const forbiddenContentRules = [
     ],
   },
   {
+    path: 'src/crates/core/src/agentic/agents/prompt_builder/user_context.rs',
+    patterns: [
+      {
+        regex: /\bpub\s+enum\s+UserContextSection\b/,
+        message:
+          'core prompt builder must not own user-context section facts; use bitfun-agent-runtime prompt contracts',
+      },
+      {
+        regex: /\bpub\s+struct\s+UserContextPolicy\b/,
+        message:
+          'core prompt builder must not own user-context policy facts; use bitfun-agent-runtime prompt contracts',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/agents/prompt_builder/prompt_builder_impl.rs',
+    patterns: [
+      {
+        regex: /\bpub\s+struct\s+ToolListingSections\b/,
+        message:
+          'core prompt builder must not own tool-listing reminder facts; use bitfun-agent-runtime prompt contracts',
+      },
+      {
+        regex: /\bpub\s+struct\s+PrependedPromptReminders\b/,
+        message:
+          'core prompt builder must not own prepended-reminder ordering facts; use bitfun-agent-runtime prompt contracts',
+      },
+    ],
+  },
+  {
     path: 'src/crates/core/src/agentic/tools/framework.rs',
     patterns: [
       {
@@ -2254,6 +2284,59 @@ const forbiddenContentUnderRules = [
 ];
 
 const requiredContentRules = [
+  {
+    path: 'src/crates/agent-runtime/src/prompt.rs',
+    reason:
+      'agent-runtime must own prompt-loop facts that do not require concrete workspace or product IO',
+    patterns: [
+      {
+        regex: /\bpub enum UserContextSection\b/,
+        message: 'missing agent-runtime user-context section contract',
+      },
+      {
+        regex: /\bpub struct UserContextPolicy\b/,
+        message: 'missing agent-runtime user-context policy contract',
+      },
+      {
+        regex: /\bpub struct ToolListingSections\b/,
+        message: 'missing agent-runtime tool-listing section contract',
+      },
+      {
+        regex: /\bpub struct PrependedPromptReminders\b/,
+        message: 'missing agent-runtime prepended-reminder contract',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/agent-runtime/tests/prompt_contracts.rs',
+    reason:
+      'agent-runtime prompt owner must keep behavior-equivalence contracts for user context and reminder ordering',
+    patterns: [
+      {
+        regex: /\buser_context_policy_preserves_order_and_deduplicates_sections\b/,
+        message: 'missing user-context policy order regression',
+      },
+      {
+        regex: /\btool_listing_sections_render_only_present_sections\b/,
+        message: 'missing tool-listing rendering regression',
+      },
+      {
+        regex: /\bprepended_prompt_reminders_keep_runtime_injection_order\b/,
+        message: 'missing prompt reminder ordering regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/agents/prompt_builder/user_context.rs',
+    reason:
+      'core prompt_builder user_context path must stay a compatibility facade over agent-runtime',
+    patterns: [
+      {
+        regex: /pub use bitfun_agent_runtime::prompt::\{UserContextPolicy, UserContextSection\};/,
+        message: 'missing agent-runtime user-context compatibility re-export',
+      },
+    ],
+  },
   {
     path: 'src/crates/services-core/src/filesystem/mod.rs',
     reason:
@@ -7297,6 +7380,27 @@ function runManifestParserSelfTest() {
         'continuation_outcome_reports_budget_limit_once_when_tokens_cross_budget',
         'prompt_and_tool_response_contracts_match_thread_goal_wire_shape',
       ],
+    },
+    {
+      path: 'src/crates/agent-runtime/src/prompt.rs',
+      contracts: [
+        'UserContextSection',
+        'UserContextPolicy',
+        'ToolListingSections',
+        'PrependedPromptReminders',
+      ],
+    },
+    {
+      path: 'src/crates/agent-runtime/tests/prompt_contracts.rs',
+      contracts: [
+        'user_context_policy_preserves_order_and_deduplicates_sections',
+        'tool_listing_sections_render_only_present_sections',
+        'prepended_prompt_reminders_keep_runtime_injection_order',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/agentic/agents/prompt_builder/user_context.rs',
+      contracts: ['bitfun_agent_runtime::prompt'],
     },
     {
       path: 'src/crates/core/src/agentic/subagent_runtime/mod.rs',

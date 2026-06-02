@@ -50,6 +50,10 @@ SessionManager → Session → DialogTurn → ModelRound
   `bitfun-agent-runtime`. Core keeps concrete agent definition loading, custom
   subagent file IO/config adapters, desktop API wiring, concrete scheduler
   lifecycle, submit execution, and event delivery.
+- Prompt-loop user-context policy and tool/skill/subagent listing reminder
+  ordering belong in `bitfun-agent-runtime`. Core keeps concrete prompt
+  assembly, workspace / remote / project-layout context IO, language/config
+  lookup, prompt cache coordination, and old-path compatibility re-exports.
 - For tools, keep lightweight contracts, pure manifest/exposure contracts,
   generic contextual prompt-manifest resolver contracts, generic catalog
   snapshot provider contracts, generic GetToolSpec catalog provider/detail/

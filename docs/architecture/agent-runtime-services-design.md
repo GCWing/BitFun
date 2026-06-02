@@ -1,14 +1,11 @@
 # Agent Runtime SDK 与 Runtime Services 设计
 
 本文是 [`core-decomposition.md`](core-decomposition.md) 的开发设计文档，描述目标模块、
-接口、crate 内部结构和迁移保护。`bitfun-runtime-services` 已建立 typed service bundle、
-builder、provider registry、capability availability 和 fake provider 基础；`bitfun-agent-runtime`
-已创建并承接可独立构建的 scheduler/background delivery、thread goal runtime、
-subagent visibility / availability、round-boundary yield / injection state
-和 turn-outcome queue policy 纯决策；`bitfun-harness`
-已创建并承接 workflow descriptor、legacy route plan 和 provider registry contract。
-未迁移的 session manager、prompt loop、concrete agent registry loading、concrete scheduler lifecycle 和
-concrete workflow execution 不得被描述为已完成。
+接口、crate 内部结构和迁移保护。本文不作为 PR 进度记录；已完成项、待执行项、PR 范围和
+issue 状态由 [`core-decomposition-plan.md`](../plans/core-decomposition-plan.md)、
+[`core-decomposition-completed.md`](../plans/core-decomposition-completed.md) 和跟踪 issue 维护。
+
+除非发现目标分层、接口归属、行为边界或关键风险判断需要修正，后续 PR 不应修改本文。
 
 ## 1. 设计目标与边界
 
@@ -25,11 +22,11 @@ concrete workflow execution 不得被描述为已完成。
 bitfun-core-types
 bitfun-events
 bitfun-runtime-ports
-bitfun-runtime-services      # PR1 基础壳层
+bitfun-runtime-services      # typed service bundle / capability availability
 bitfun-agent-tools
 tool-runtime
-bitfun-agent-runtime         # 已创建，承接 scheduler/background、thread goal、registry visibility 与 round-boundary 决策
-bitfun-harness               # 已创建，当前承接 workflow descriptor / registry contract
+bitfun-agent-runtime         # agent kernel contracts and portable runtime decisions
+bitfun-harness               # workflow descriptor / provider / registry contracts
 bitfun-services-core
 bitfun-services-integrations
 bitfun-product-domains
@@ -94,11 +91,9 @@ bitfun-runtime-services
 目标 crate 创建或继续扩展准入：
 
 - 只有当 owner 边界、旧路径兼容、focused tests、依赖收益和 boundary check 都能同时落地时，才创建新的目标 crate。
-- `bitfun-runtime-services` 已按该准入建立基础壳层；继续扩展时仍必须保持 typed builder、本地 service、remote service 和 fake provider 三类注入路径可测试。
-- `bitfun-agent-runtime` 已通过 scheduler/background delivery、thread goal runtime、subagent visibility / availability
-  和 round-boundary 纯决策满足创建准入；继续扩展时仍必须保持旧路径 facade、focused tests 和 boundary check。
-- `bitfun-harness` 已按 Deep Review、DeepResearch、MiniApp 三个 legacy-facade provider
-  满足创建准入；继续扩展时仍必须保持 descriptor/registry、旧路径兼容、focused tests 和 boundary check。
+- `bitfun-runtime-services` 的扩展必须保持 typed builder、本地 service、remote service 和 fake provider 三类注入路径可测试。
+- `bitfun-agent-runtime` 的扩展必须保持旧路径 facade、focused tests 和 boundary check，且不得吸收 concrete service、product surface 或平台实现。
+- `bitfun-harness` 的扩展必须保持 descriptor / registry、旧路径兼容、focused tests 和 boundary check，且不得把 provider 注册误写成 concrete workflow execution。
 - 若目标 crate 只能承接单个 helper 或只能通过 `bitfun-core` 才能测试，继续留在迁移期 facade，不提前拆 crate。
 
 ## 2. 稳定接口与运行时服务
@@ -163,7 +158,7 @@ pub trait WorkspacePort: Send + Sync {
 
 ### 2.2 Runtime Services
 
-当前 crate：`bitfun-runtime-services`。
+目标 owner crate：`bitfun-runtime-services`。
 
 职责：
 
@@ -241,41 +236,30 @@ Remote ports 的边界：
 
 ### 3.1 Agent Runtime SDK
 
-当前 crate：`bitfun-agent-runtime`。
+目标 owner crate：`bitfun-agent-runtime`。
 
-当前已承接范围：
-
-- background delivery 状态决策：Processing 注入当前运行 turn；Missing / Idle / Error 提交 agent-session follow-up turn。
-- persisted thread goal 的 portable DTO、status、continuation plan 和 tool response contract 已在
-  `bitfun-runtime-ports`。
-- thread goal runtime 决策：turn token / wall-clock accounting、goal mutation、
-  continuation / budget-limit / objective-updated plan、tool response assembly
-  和 usage-limit / retry / skip-accounting policy。
-- subagent registry 决策：query scope、visibility policy、availability reason、
-  builtin / project / user override layering 和 frontend-facing availability facts。
-- scheduler round-boundary 决策：yield flag、round injection buffer、turn outcome status /
-  reply text / queue action。
-
-仍留在 `bitfun-core` 的范围：
-
-- concrete scheduler 生命周期、session manager、turn id 生成、submit 执行、prompt loop、
-  concrete agent definition loading、custom subagent file IO / config adapter、
-  thread goal metadata store、token subscriber、scheduler delivery adapter、
-  goal `Tool` handler、event delivery 和 post-turn hook。
-
-职责：
+目标职责：
 
 - session 生命周期。
 - dialog turn / model round 生命周期。
 - scheduler / queue / cancellation。
 - prompt loop 和 context assembly。
 - prompt cache 协调。
-- subagent registry 查询和 delegation policy。
+- agent definition registry、subagent registry 查询和 delegation policy。
 - fork context seeding。
 - tool call 调度。
 - permission 协调。
 - runtime events。
 - post-turn processor。
+
+迁移期约束：
+
+- `bitfun-agent-runtime` 只能依赖稳定契约、Tool Runtime、Runtime Services 接口和注入的 provider。
+- concrete scheduler 生命周期、session metadata store、token subscriber、event delivery、product `Tool`
+  handler、concrete prompt assembly、workspace / remote / config IO、custom subagent file IO 和平台 adapter
+  在行为等价未证明前不得下沉到 runtime kernel。
+- prompt、event、thread goal、scheduler 或 subagent 的纯事实可以先迁移，但每次迁移必须删除旧 owner
+  实现主体，保留旧路径兼容，并补 focused contract test 与 boundary check。
 
 建议内部模块：
 
@@ -443,12 +427,20 @@ pub struct ToolExecutionContext {
 }
 ```
 
-当前已收敛范围：
+目标职责：
 
-- deterministic execution admission gate、manifest / catalog / snapshot facade 和 `GetToolSpecTool` product adapter 已有独立 owner。
-- workspace file/shell service contract 已归入 `bitfun-runtime-ports`；core 保留旧路径 re-export 和 local / remote concrete adapter。
-  迁移期该 contract 保留既有 `anyhow::Result` 和 `CancellationToken`，不把错误分类或取消语义变更混入 owner 迁移。
-- collapsed unlock 的 `GetToolSpec` observation adapter 已归入 product runtime owner，execution engine 只消费已归一化的 unlock list。
+- provider-neutral manifest、catalog、permission gate、execution admission、tool hook、execution result
+  presentation 和 result artifact policy。
+- `GetToolSpec` catalog、detail、assistant result 和 collapsed-tool unlock observation。
+- workspace service、path policy、runtime artifact reference、remote path containment 和 tool context facts 的
+  稳定 contract。
+
+迁移期约束：
+
+- core 可以保留旧路径 facade、concrete tool adapter、state update、registry lookup、confirmation、actual
+  execution 和 filesystem persistence，直到对应 owner 迁移有等价测试保护。
+- workspace file/shell contract 保留既有错误与取消语义；不得把错误分类、取消语义或产品 tool exposure
+  变更混入 owner 迁移。
 
 设计约束：
 
@@ -473,13 +465,13 @@ pub struct ToolExecutionContext {
 
 ### 3.3 Harness Layer
 
-当前 crate：`bitfun-harness`。
+目标 owner crate：`bitfun-harness`。
 
 职责：
 
-- 把 SDD、DeepReview、DeepResearch、MiniApp、function-agent 等工作流从 runtime kernel
-  中分离。当前只承接 workflow descriptor、route plan 和 provider registry。
-- 定义 workflow plan、step、policy、artifact、review gate、post-processor。具体执行在迁移前继续留在旧路径。
+- 把 SDD、DeepReview、DeepResearch、MiniApp、function-agent 等工作流从 runtime kernel 中分离。
+- 定义 workflow descriptor、route plan、provider registry、workflow plan、step、policy、artifact、
+  review gate 和 post-processor。
 - 通过 Agent Runtime SDK、Tool Runtime 和 service ports 编排。
 
 建议内部模块：
@@ -534,7 +526,8 @@ pub struct HarnessExecutionContext {
 - harness 不直接访问 concrete filesystem / Git / terminal。
 - 产品命令只映射到 harness capability，不把命令展示逻辑下沉。
 - 新 harness 通过 provider 注册，不改 Agent Runtime SDK 内核。
-- PR4 阶段的 legacy-facade provider 只生成 route plan，不执行 workflow；执行迁移必须在后续 PR 单独证明行为等价。
+- descriptor-only / legacy-facade provider 只能表达 route plan；不得被描述为 concrete workflow execution
+  已迁移。执行迁移必须单独证明行为等价。
 
 ## 4. 产品组装与扩展
 
@@ -829,7 +822,7 @@ pub trait BeforeToolExecution: Send + Sync {
 - hook 不得获取未声明的具体 service。
 - 修改 prompt / manifest / output 的 hook 必须有 snapshot 测试。
 
-## 5. 质量保护与完成定义
+## 5. 质量保护与目标态判定
 
 ### 5.1 鲁棒性设计
 
@@ -906,7 +899,7 @@ Product 测试：
 - MCP dynamic tool catalog。
 - MiniApp 与 review workflow。
 
-### 5.4 完成定义
+### 5.4 目标态判定口径
 
 - `bitfun-agent-runtime` 能在不依赖 `bitfun-core` 的情况下构建 runtime kernel。
 - `bitfun-runtime-services` 提供 typed service injection，并由 boundary check 保护。

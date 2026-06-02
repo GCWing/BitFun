@@ -1,5 +1,4 @@
 //! System prompts module providing main dialogue and agent dialogue prompts
-use super::user_context::{UserContextPolicy, UserContextSection};
 use crate::agentic::util::remote_workspace_layout::build_remote_workspace_layout_preview;
 use crate::agentic::workspace::WorkspaceBackend;
 use crate::agentic::WorkspaceBinding;
@@ -16,6 +15,9 @@ use crate::service::remote_ssh::workspace_state::get_remote_workspace_manager;
 use crate::service::workspace::get_global_workspace_service;
 use crate::service::workspace::RelatedPath;
 use crate::util::errors::{BitFunError, BitFunResult};
+use bitfun_agent_runtime::prompt::{
+    PrependedPromptReminders, ToolListingSections, UserContextPolicy, UserContextSection,
+};
 use log::{debug, warn};
 use std::path::Path;
 
@@ -29,98 +31,6 @@ const PLACEHOLDER_VISUAL_MODE: &str = "{VISUAL_MODE}";
 const PLACEHOLDER_SESSION_ID: &str = "{SESSION_ID}";
 const USER_CONTEXT_PROMPT: &str =
     "As you answer the user's questions, you can use the following context.\nNote: this is a snapshot captured at the start of the conversation and may not reflect real-time changes made afterward.";
-const SKILL_LISTING_TITLE: &str = "# Skill Listing";
-const SKILL_LISTING_GUIDANCE: &str =
-    "The following skills are available for use with the Skill tool:";
-const AGENT_LISTING_TITLE: &str = "# Agent Listing";
-const AGENT_LISTING_GUIDANCE: &str = "Available subagent types for the Task tool:";
-const COLLAPSED_TOOL_LISTING_TITLE: &str = "# Collapsed Tool Listing";
-const COLLAPSED_TOOL_LISTING_GUIDANCE: &str = r#"The folling tools are intentionally collapsed. Their listed descriptions are short summaries rather than full usage instructions.
-Before calling a collapsed tool, call `GetToolSpec` with its exact tool name to read its full definition and input schema.
-After reading the returned spec, call the real tool directly by its own name.
-If a tool spec is already available in the current conversation, do not call `GetToolSpec` for it again."#;
-
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ToolListingSections {
-    pub skill_listing: Option<String>,
-    pub agent_listing: Option<String>,
-    pub collapsed_tool_listing: Option<String>,
-}
-
-impl ToolListingSections {
-    pub fn is_empty(&self) -> bool {
-        self.skill_listing.is_none()
-            && self.agent_listing.is_none()
-            && self.collapsed_tool_listing.is_none()
-    }
-
-    pub fn render_skill_listing_reminder(&self) -> Option<String> {
-        self.skill_listing.as_deref().map(|skill_listing| {
-            Self::render_section(
-                SKILL_LISTING_TITLE,
-                skill_listing,
-                Some(SKILL_LISTING_GUIDANCE),
-            )
-        })
-    }
-
-    pub fn render_agent_listing_reminder(&self) -> Option<String> {
-        self.agent_listing.as_deref().map(|agent_listing| {
-            Self::render_section(
-                AGENT_LISTING_TITLE,
-                agent_listing,
-                Some(AGENT_LISTING_GUIDANCE),
-            )
-        })
-    }
-
-    pub fn render_collapsed_tool_listing_reminder(&self) -> Option<String> {
-        self.collapsed_tool_listing
-            .as_deref()
-            .map(|collapsed_tool_listing| {
-                Self::render_section(
-                    COLLAPSED_TOOL_LISTING_TITLE,
-                    collapsed_tool_listing,
-                    Some(COLLAPSED_TOOL_LISTING_GUIDANCE),
-                )
-            })
-    }
-
-    fn render_section(title: &str, body: &str, description: Option<&str>) -> String {
-        match description {
-            Some(description) => format!("{}\n{}\n\n{}", title, description, body.trim()),
-            None => format!("{}\n{}", title, body.trim()),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct PrependedPromptReminders {
-    pub skill_listing: Option<String>,
-    pub agent_listing: Option<String>,
-    pub collapsed_tool_listing: Option<String>,
-    pub user_context: Option<String>,
-}
-
-impl PrependedPromptReminders {
-    pub fn ordered_reminders(&self) -> Vec<&str> {
-        let mut reminders = Vec::new();
-        if let Some(collapsed_tool_listing) = self.collapsed_tool_listing.as_deref() {
-            reminders.push(collapsed_tool_listing);
-        }
-        if let Some(skill_listing) = self.skill_listing.as_deref() {
-            reminders.push(skill_listing);
-        }
-        if let Some(agent_listing) = self.agent_listing.as_deref() {
-            reminders.push(agent_listing);
-        }
-        if let Some(user_context) = self.user_context.as_deref() {
-            reminders.push(user_context);
-        }
-        reminders
-    }
-}
-
 /// SSH remote host facts for system prompt (workspace tools run here, not on the local client).
 #[derive(Debug, Clone)]
 pub struct RemoteExecutionHints {
@@ -679,9 +589,7 @@ mod tests {
     use super::PromptBuilder;
     use super::PromptBuilderContext;
     use super::ToolListingSections;
-    use super::{
-        AGENT_LISTING_TITLE, COLLAPSED_TOOL_LISTING_TITLE, SKILL_LISTING_TITLE, USER_CONTEXT_PROMPT,
-    };
+    use super::USER_CONTEXT_PROMPT;
     use crate::agentic::agents::UserContextPolicy;
     use crate::service::workspace::RelatedPath;
 
@@ -718,13 +626,13 @@ mod tests {
             .expect("collapsed tool listing reminder should build");
         let user_context = reminders.user_context.expect("user context should build");
 
-        assert!(skill_listing.contains(SKILL_LISTING_TITLE));
+        assert!(skill_listing.contains("# Skill Listing"));
         assert!(skill_listing.contains("<available_skills>"));
-        assert!(!skill_listing.contains(AGENT_LISTING_TITLE));
-        assert!(agent_listing.contains(AGENT_LISTING_TITLE));
+        assert!(!skill_listing.contains("# Agent Listing"));
+        assert!(agent_listing.contains("# Agent Listing"));
         assert!(agent_listing.contains("<available_agents>"));
-        assert!(!agent_listing.contains(COLLAPSED_TOOL_LISTING_TITLE));
-        assert!(collapsed_tool_listing.contains(COLLAPSED_TOOL_LISTING_TITLE));
+        assert!(!agent_listing.contains("# Collapsed Tool Listing"));
+        assert!(collapsed_tool_listing.contains("# Collapsed Tool Listing"));
         assert!(collapsed_tool_listing.contains("<collapsed_tools>"));
         assert!(user_context.contains("# User Context"));
         assert!(user_context.contains(USER_CONTEXT_PROMPT));

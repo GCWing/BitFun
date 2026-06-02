@@ -4,5 +4,6 @@
 //! depending on `bitfun-core` concrete session or scheduler lifecycle.
 
 pub mod agents;
+pub mod prompt;
 pub mod scheduler;
 pub mod thread_goal;
