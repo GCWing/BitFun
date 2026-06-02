@@ -11,69 +11,15 @@ use bitfun_product_domains::miniapp::builtin::{
     build_builtin_package_json, build_builtin_seed_meta, builtin_source_files,
     parse_builtin_install_marker, preserved_builtin_created_at, resolve_builtin_seed_action,
     resolve_builtin_seed_check, serialize_builtin_install_marker, BuiltinInstallMarker,
-    BuiltinMiniAppBundle, BuiltinSeedAction, BuiltinSeedCheck, BUILTIN_INSTALL_MARKER,
-    BUILTIN_PLACEHOLDER_COMPILED_HTML, LEGACY_BUILTIN_VERSION_MARKER,
+    BuiltinSeedAction, BuiltinSeedCheck, BUILTIN_INSTALL_MARKER, BUILTIN_PLACEHOLDER_COMPILED_HTML,
+    LEGACY_BUILTIN_VERSION_MARKER,
+};
+pub use bitfun_product_domains::miniapp::builtin::{
+    BuiltinMiniAppBundle as BuiltinApp, BUILTIN_APPS,
 };
 use chrono::Utc;
 use std::path::Path;
 use std::sync::Arc;
-
-/// A built-in MiniApp bundled with the application binary.
-pub type BuiltinApp = BuiltinMiniAppBundle;
-
-/// All built-in apps that ship with BitFun.
-pub const BUILTIN_APPS: &[BuiltinApp] = &[
-    BuiltinApp {
-        id: "builtin-gomoku",
-        version: 11,
-        meta_json: include_str!("assets/gomoku/meta.json"),
-        html: include_str!("assets/gomoku/index.html"),
-        css: include_str!("assets/gomoku/style.css"),
-        ui_js: include_str!("assets/gomoku/ui.js"),
-        worker_js: include_str!("assets/gomoku/worker.js"),
-        esm_dependencies_json: "[]",
-    },
-    BuiltinApp {
-        id: "builtin-daily-divination",
-        version: 21,
-        meta_json: include_str!("assets/divination/meta.json"),
-        html: include_str!("assets/divination/index.html"),
-        css: include_str!("assets/divination/style.css"),
-        ui_js: include_str!("assets/divination/ui.js"),
-        worker_js: include_str!("assets/divination/worker.js"),
-        esm_dependencies_json: "[]",
-    },
-    BuiltinApp {
-        id: "builtin-regex-playground",
-        version: 16,
-        meta_json: include_str!("assets/regex-playground/meta.json"),
-        html: include_str!("assets/regex-playground/index.html"),
-        css: include_str!("assets/regex-playground/style.css"),
-        ui_js: include_str!("assets/regex-playground/ui.js"),
-        worker_js: include_str!("assets/regex-playground/worker.js"),
-        esm_dependencies_json: "[]",
-    },
-    BuiltinApp {
-        id: "builtin-coding-selfie",
-        version: 28,
-        meta_json: include_str!("assets/coding-selfie/meta.json"),
-        html: include_str!("assets/coding-selfie/index.html"),
-        css: include_str!("assets/coding-selfie/style.css"),
-        ui_js: include_str!("assets/coding-selfie/ui.js"),
-        worker_js: include_str!("assets/coding-selfie/worker.js"),
-        esm_dependencies_json: "[]",
-    },
-    BuiltinApp {
-        id: "builtin-pr-review",
-        version: 3,
-        meta_json: include_str!("assets/pr-review/meta.json"),
-        html: include_str!("assets/pr-review/index.html"),
-        css: include_str!("assets/pr-review/style.css"),
-        ui_js: include_str!("assets/pr-review/ui.js"),
-        worker_js: include_str!("assets/pr-review/worker.js"),
-        esm_dependencies_json: "[]",
-    },
-];
 
 /// Seed all built-in MiniApps into the user data directory. Idempotent: skips apps
 /// whose on-disk marker hash matches the bundled content. User's `storage.json`

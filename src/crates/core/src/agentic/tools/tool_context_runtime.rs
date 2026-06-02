@@ -32,7 +32,7 @@ use crate::service::remote_ssh::workspace_state::remote_workspace_runtime_root;
 use crate::service::{get_workspace_runtime_service_arc, WorkspaceRuntimeContext};
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_agent_tools::{PortableToolContextProvider, ToolContextFacts, ToolWorkspaceKind};
-use bitfun_runtime_ports::DelegationPolicy;
+use bitfun_runtime_ports::{DelegationPolicy, ToolRuntimeHandles};
 use log::warn;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -54,12 +54,9 @@ pub struct ToolUseContext {
     pub custom_data: HashMap<String, Value>,
     /// Desktop automation (Computer use); only set in BitFun desktop.
     pub computer_use_host: Option<crate::agentic::tools::computer_use_host::ComputerUseHostRef>,
-    // Cancel tool execution more timely, especially for tools like TaskTool that need to run for a long time
-    pub cancellation_token: Option<CancellationToken>,
     pub runtime_tool_restrictions: ToolRuntimeRestrictions,
-    /// Workspace I/O services (filesystem + shell) - use these instead of
-    /// checking `get_remote_workspace_manager()` inside individual tools.
-    pub workspace_services: Option<WorkspaceServices>,
+    /// Runtime handles such as workspace I/O services and cancellation.
+    pub runtime_handles: ToolRuntimeHandles,
 }
 
 impl ToolUseContext {
@@ -126,6 +123,32 @@ impl ToolUseContext {
             .and_then(|v| v.as_bool())
             .unwrap_or(true)
     }
+
+    pub fn cancellation_token(&self) -> Option<&CancellationToken> {
+        self.runtime_handles.cancellation_token()
+    }
+
+    pub fn workspace_services(&self) -> Option<&WorkspaceServices> {
+        self.runtime_handles.workspace_services()
+    }
+
+    pub fn for_tool_listing(
+        workspace: Option<WorkspaceBinding>,
+        workspace_services: Option<WorkspaceServices>,
+    ) -> Self {
+        Self {
+            tool_call_id: None,
+            agent_type: None,
+            session_id: None,
+            dialog_turn_id: None,
+            workspace,
+            unlocked_collapsed_tools: Vec::new(),
+            custom_data: HashMap::new(),
+            computer_use_host: None,
+            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+            runtime_handles: ToolRuntimeHandles::new(workspace_services, None),
+        }
+    }
 }
 
 impl PortableToolContextProvider for ToolUseContext {
@@ -140,7 +163,7 @@ pub(crate) async fn call_with_tool_runtime_hooks(
     context: &ToolUseContext,
     call_impl: impl Future<Output = BitFunResult<Vec<ToolResult>>>,
 ) -> BitFunResult<Vec<ToolResult>> {
-    let result = if let Some(cancellation_token) = context.cancellation_token.as_ref() {
+    let result = if let Some(cancellation_token) = context.cancellation_token() {
         tokio::select! {
             result = call_impl => {
                 result
@@ -197,9 +220,11 @@ pub(crate) fn build_tool_use_context_for_execution_context(
         unlocked_collapsed_tools: context.unlocked_collapsed_tools.clone(),
         custom_data: build_tool_context_custom_data(context),
         computer_use_host,
-        cancellation_token: Some(cancellation_token),
+        runtime_handles: ToolRuntimeHandles::new(
+            context.workspace_services.clone(),
+            Some(cancellation_token),
+        ),
         runtime_tool_restrictions: context.runtime_tool_restrictions.clone(),
-        workspace_services: context.workspace_services.clone(),
     }
 }
 
@@ -228,9 +253,8 @@ pub(crate) fn build_tool_description_context(
         unlocked_collapsed_tools: Vec::new(),
         custom_data,
         computer_use_host: None,
-        cancellation_token: None,
         runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
-        workspace_services: workspace_services.cloned(),
+        runtime_handles: ToolRuntimeHandles::new(workspace_services.cloned(), None),
     }
 }
 
@@ -295,11 +319,11 @@ fn build_tool_context_custom_data(context: &ToolExecutionContext) -> HashMap<Str
 
 impl ToolUseContext {
     pub fn ws_fs(&self) -> Option<&dyn crate::agentic::workspace::WorkspaceFileSystem> {
-        self.workspace_services.as_ref().map(|s| s.fs.as_ref())
+        self.workspace_services().map(|s| s.fs.as_ref())
     }
 
     pub fn ws_shell(&self) -> Option<&dyn crate::agentic::workspace::WorkspaceShell> {
-        self.workspace_services.as_ref().map(|s| s.shell.as_ref())
+        self.workspace_services().map(|s| s.shell.as_ref())
     }
 
     pub async fn record_light_checkpoint(
@@ -678,9 +702,8 @@ mod context_facts_tests {
             unlocked_collapsed_tools: Vec::new(),
             custom_data: HashMap::new(),
             computer_use_host: None,
-            cancellation_token: None,
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
-            workspace_services: None,
+            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
         }
     }
 
@@ -695,14 +718,13 @@ mod context_facts_tests {
             unlocked_collapsed_tools: vec!["WebFetch".to_string()],
             custom_data: HashMap::new(),
             computer_use_host: None,
-            cancellation_token: None,
             runtime_tool_restrictions: ToolRuntimeRestrictions {
                 allowed_tool_names: BTreeSet::from(["Read".to_string()]),
                 denied_tool_names: BTreeSet::from(["Bash".to_string()]),
                 denied_tool_messages: Default::default(),
                 path_policy: Default::default(),
             },
-            workspace_services: None,
+            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
         };
 
         let facts = context.to_tool_context_facts();
@@ -740,14 +762,16 @@ mod context_facts_tests {
             unlocked_collapsed_tools: vec!["WebFetch".to_string(), "Git".to_string()],
             custom_data,
             computer_use_host: None,
-            cancellation_token: Some(tokio_util::sync::CancellationToken::new()),
             runtime_tool_restrictions: ToolRuntimeRestrictions {
                 allowed_tool_names: BTreeSet::from(["Read".to_string(), "GetToolSpec".to_string()]),
                 denied_tool_names: BTreeSet::from(["Bash".to_string()]),
                 denied_tool_messages: Default::default(),
                 path_policy: Default::default(),
             },
-            workspace_services: None,
+            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::new(
+                None,
+                Some(tokio_util::sync::CancellationToken::new()),
+            ),
         };
 
         let facts = PortableToolContextProvider::tool_context_facts(&context);
@@ -799,9 +823,8 @@ mod context_facts_tests {
             unlocked_collapsed_tools: Vec::new(),
             custom_data: HashMap::new(),
             computer_use_host: None,
-            cancellation_token: None,
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
-            workspace_services: None,
+            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
         };
 
         let facts = context.to_tool_context_facts();
@@ -851,9 +874,8 @@ mod path_resolution_tests {
             unlocked_collapsed_tools: Vec::new(),
             custom_data: HashMap::new(),
             computer_use_host: None,
-            cancellation_token: None,
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
-            workspace_services: None,
+            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
         }
     }
 
@@ -875,9 +897,8 @@ mod path_resolution_tests {
             unlocked_collapsed_tools: Vec::new(),
             custom_data: HashMap::new(),
             computer_use_host: None,
-            cancellation_token: None,
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
-            workspace_services: None,
+            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
         }
     }
 
@@ -901,9 +922,8 @@ mod path_resolution_tests {
             unlocked_collapsed_tools: Vec::new(),
             custom_data: HashMap::new(),
             computer_use_host: None,
-            cancellation_token: None,
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
-            workspace_services: None,
+            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
         }
     }
 
@@ -1107,9 +1127,11 @@ mod call_runtime_tests {
             unlocked_collapsed_tools: Vec::new(),
             custom_data: HashMap::new(),
             computer_use_host: None,
-            cancellation_token: Some(cancellation_token),
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
-            workspace_services: None,
+            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::new(
+                None,
+                Some(cancellation_token),
+            ),
         }
     }
 
@@ -1141,9 +1163,8 @@ mod call_runtime_tests {
             unlocked_collapsed_tools: Vec::new(),
             custom_data: HashMap::new(),
             computer_use_host: None,
-            cancellation_token: None,
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
-            workspace_services: None,
+            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
         };
 
         let result: BitFunResult<Vec<ToolResult>> =
@@ -1182,9 +1203,8 @@ mod call_runtime_tests {
             unlocked_collapsed_tools: Vec::new(),
             custom_data,
             computer_use_host: None,
-            cancellation_token: None,
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
-            workspace_services: None,
+            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
         };
         let tool = MeasurementReadTool;
 
@@ -1230,15 +1250,14 @@ mod context_builder_tests {
         assert!(context.dialog_turn_id.is_none());
         assert!(context.workspace.is_none());
         assert!(context.unlocked_collapsed_tools.is_empty());
-        assert!(context.cancellation_token.is_none());
-        assert!(context.workspace_services.is_none());
+        assert!(context.cancellation_token().is_none());
+        assert!(context.workspace_services().is_none());
         assert!(context.runtime_tool_restrictions.is_tool_allowed("Write"));
         assert_eq!(
             context.custom_data["primary_model_supports_image_understanding"],
             json!("false")
         );
     }
-
 }
 
 #[cfg(test)]
@@ -1325,7 +1344,7 @@ mod task_context_tests {
         assert_eq!(context.session_id.as_deref(), Some("session_1"));
         assert_eq!(context.dialog_turn_id.as_deref(), Some("turn_1"));
         assert_eq!(context.unlocked_collapsed_tools, vec!["WebFetch"]);
-        assert!(context.cancellation_token.is_some());
+        assert!(context.cancellation_token().is_some());
         assert!(context
             .runtime_tool_restrictions
             .is_tool_allowed("WebFetch"));

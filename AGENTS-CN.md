@@ -18,7 +18,13 @@ BitFun 是一个由 Rust workspace 与 React 前端组成的项目。
 | 模块 | 路径 | Agent 文档 |
 |---|---|---|
 | Core（产品逻辑） | `src/crates/core` | [AGENTS.md](src/crates/core/AGENTS.md) |
-| 已拆出的 core 支撑 crate | `src/crates/{core-types,agent-stream,runtime-ports,runtime-services,terminal,tool-runtime}` | （使用 core 指南） |
+| Core 共享 DTO | `src/crates/core-types` | [AGENTS.md](src/crates/core-types/AGENTS.md) |
+| 事件契约 | `src/crates/events` | [AGENTS.md](src/crates/events/AGENTS.md) |
+| Agent stream 归一化 | `src/crates/agent-stream` | [AGENTS.md](src/crates/agent-stream/AGENTS.md) |
+| Runtime ports | `src/crates/runtime-ports` | [AGENTS.md](src/crates/runtime-ports/AGENTS.md) |
+| Runtime services | `src/crates/runtime-services` | [AGENTS.md](src/crates/runtime-services/AGENTS.md) |
+| Terminal 基础设施 | `src/crates/terminal` | [AGENTS.md](src/crates/terminal/AGENTS.md) |
+| 底层 tool runtime | `src/crates/tool-runtime` | [AGENTS.md](src/crates/tool-runtime/AGENTS.md) |
 | Agent runtime owner crate | `src/crates/agent-runtime` | [AGENTS.md](src/crates/agent-runtime/AGENTS.md) |
 | Harness workflow contracts | `src/crates/harness` | [AGENTS.md](src/crates/harness/AGENTS.md) |
 | Service core owner crate | `src/crates/services-core` | [AGENTS.md](src/crates/services-core/AGENTS.md) |
@@ -26,10 +32,11 @@ BitFun 是一个由 Rust workspace 与 React 前端组成的项目。
 | Agent tool contracts | `src/crates/agent-tools` | [AGENTS.md](src/crates/agent-tools/AGENTS.md) |
 | Tool pack provider plan | `src/crates/tool-packs` | [AGENTS.md](src/crates/tool-packs/AGENTS.md) |
 | 产品领域 crate | `src/crates/product-domains` | [AGENTS.md](src/crates/product-domains/AGENTS.md) |
-| Transport 适配层 | `src/crates/transport` | （使用 core 指南） |
-| API layer | `src/crates/api-layer` | （使用 core 指南） |
+| Transport 适配层 | `src/crates/transport` | [AGENTS.md](src/crates/transport/AGENTS.md) |
+| API layer | `src/crates/api-layer` | [AGENTS.md](src/crates/api-layer/AGENTS.md) |
 | ACP 集成 | `src/crates/acp` | [AGENTS.md](src/crates/acp/AGENTS.md) |
 | AI adapters | `src/crates/ai-adapters` | [AGENTS.md](src/crates/ai-adapters/AGENTS.md) |
+| 嵌入式 WebDriver | `src/crates/webdriver` | [AGENTS.md](src/crates/webdriver/AGENTS.md) |
 | 桌面应用 | `src/apps/desktop` | [AGENTS.md](src/apps/desktop/AGENTS.md) |
 | Server | `src/apps/server` | （使用 core 指南） |
 | CLI | `src/apps/cli` | （使用 core 指南） |

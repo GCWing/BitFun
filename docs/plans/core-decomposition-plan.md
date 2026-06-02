@@ -73,8 +73,8 @@ workspace build 证明没有行为或 feature 影响。
 | PR | 主题 | 完整范围 | 不允许混入 | 合入门禁 |
 |---|---|---|---|---|
 | PR-A | Agent Runtime SDK Owner Closure | 承接 prompt cache policy / identity / DTO / in-memory store、shared mode profile / context policy、mode / subagent source presentation facts，并保持 core agent registry 与 session manager 旧路径兼容 | concrete scheduler 生命周期、event emitter、post-turn hook、permission `Tool` handler、custom subagent file IO、产品命令或默认 feature 变更 | `bitfun-agent-runtime` 独立测试、core agents / prompt-cache focused tests、boundary check、repo hygiene、`cargo check -p bitfun-core --features product-full` |
-| PR-B | Product-Domain + Tool Runtime Owner Closure | 在 MiniApp worker / host / builtin asset、function-agent Git / AI、ToolUseContext concrete handles、product registry materialization、collapsed unlock persistence 与具体 IO tools 中迁移完整 owner 主题 | Agent Runtime scheduler / event 行为、Harness execution、feature matrix、UI 或产品语义变更 | MiniApp/function-agent/tool pipeline focused regressions，runtime/service port 边界清晰，产品 surface 不变 |
-| PR-C | Harness / Capability / Build-Benefit Closure | 推进 Harness execution / Product Capability pack / service-tool orchestration，并评估 feature matrix、dependency profile、no-default 编译面、构建收益和可选 crate 目录分组 | runtime owner 主体迁移、默认 feature 副作用、未验证的构建脚本调整 | Harness workflow 等价、capability pack 注册可测、cargo metadata / cargo tree 证据，产品入口完整能力不变 |
+| PR-B | Product-Domain + Tool Runtime Owner Closure | 完成 MiniApp builtin bundle asset owner、ToolUseContext runtime handle bundle、product registry materialization、collapsed unlock lifecycle state，并保持旧路径与产品 tool exposure 兼容 | Agent Runtime scheduler / event 行为、Harness execution、feature matrix、UI 或产品语义变更、MiniApp worker / host dispatch、function-agent Git / AI concrete service、具体 IO tool 行为 | MiniApp builtin seed regressions、function-agent facade regressions、tool pipeline focused regressions，runtime/service port 边界清晰，产品 surface 不变 |
+| PR-C | Harness / Capability / Build-Benefit Closure | 推进 Harness execution / Product Capability pack / service-tool orchestration；评估 MiniApp worker/host、function-agent Git/AI、具体 IO tools 是否具备进一步外移保护；同时评估 feature matrix、dependency profile、no-default 编译面、构建收益和可选 crate 目录分组 | 默认 feature 副作用、未验证的构建脚本调整、未补等价保护的进程/权限/AI provider 迁移 | Harness workflow 等价、capability pack 注册可测、cargo metadata / cargo tree 证据，产品入口完整能力不变 |
 
 ### 4.1 PR-A 实施状态
 
@@ -87,6 +87,17 @@ PR-A 只迁移无 IO、无副作用、可由 contract test 证明等价的 Agent
 5. focused tests 覆盖 runtime contracts、core agent registry、prompt cache restore/clone/invalidation 和 boundary check。
 
 不继续纳入 PR-A 的内容：concrete scheduler 生命周期、event delivery / post-turn hook、permission coordination 的 `Tool` handler 和 custom subagent file IO。这些路径直接连接事件发送、调度执行或文件/配置 IO，若迁移必须在 PR-B/PR-C 前单独补可观测行为等价保护，不能作为“纯 owner 事实迁移”处理。
+
+### 4.2 PR-B 实施状态
+
+PR-B 收敛 Product-Domain 与 Tool Runtime 的真实 owner 逻辑，但不移动会改变进程、权限、Git/AI provider 或具体 IO 行为的实现。当前分支覆盖：
+
+1. `bitfun-product-domains::miniapp::builtin::BUILTIN_APPS` 承接内置 MiniApp bundle identity、版本和 embedded asset；`bitfun-core::miniapp::builtin` 保留旧路径 re-export、seed 写盘、marker IO、用户 storage 保留和 recompile。
+2. `bitfun-runtime-ports::ToolRuntimeHandles` 承接 tool execution context 的 workspace services 与 cancellation handle bundle；`ToolUseContext` 保留 core owner 类型、path/runtime lookup、portable facts 投影和具体 tool 调用上下文。
+3. `product_runtime/materialization.rs` 承接 product provider group plan 到 concrete tool 的 materialization，保持 provider order、tool name 和 registry exposure 不变。
+4. `product_runtime/unlock_state.rs` 承接 collapsed unlock 的 message-derived lifecycle state；`ExecutionEngine` 不再直接解析 `GetToolSpec` result。
+
+不继续纳入 PR-B 的内容：MiniApp worker process / host dispatch、builtin marker IO / seed 写盘、function-agent Git / AI concrete service、具体 IO tools。这些路径连接进程执行、权限检查、文件系统、shell、Git、AI provider 或用户可见工具行为，必须在 PR-C 中先补等价保护后再评估是否外移。
 
 ## 5. 每类 PR 的保护重点
 
@@ -109,7 +120,8 @@ PR-A 只迁移无 IO、无副作用、可由 contract test 证明等价的 Agent
 
 ### 5.3 Product-Domain Runtime Owner
 
-- MiniApp 优先拆 storage/process/asset/Git/AI 的最小 port，避免把 PathManager、worker process、host dispatch、builtin marker IO 下沉到 domain crate。
+- MiniApp 已将 builtin bundle identity、版本和 embedded asset 放入 `bitfun-product-domains`；core 继续负责 seed 写盘、marker IO、用户 storage 保留、recompile、PathManager、worker process 和 host dispatch。
+- 后续若继续迁移 MiniApp worker / host，必须先拆清 process runtime、permission policy、host primitive dispatch、draft worker 与 active worker 的等价边界，不能把 PathManager 或 worker process 下沉到 domain crate。
 - function-agent 保留 Git/AI provider acquisition、error mapping、no-HEAD diff fallback、非 Git workspace fallback、`analyzed_at` 时序。
 - 验证 MiniApp import/sync/recompile/rollback/deps state、builtin seed marker、customized update metadata、function-agent prompt/response policy。
 
@@ -121,14 +133,16 @@ PR-A 只迁移无 IO、无副作用、可由 contract test 证明等价的 Agent
 - 已完成 manifest/catalog/snapshot owner closure；`manifest_resolver.rs` 只保留旧路径兼容 facade，product runtime
   的 `catalog.rs` / `snapshot.rs` 管理 resolved manifest DTO、visible tools、readonly catalog、GetToolSpec catalog
   path 和 snapshot wrapper。
-- 本阶段继续完成两项 owner 收敛：`WorkspaceFileSystem`、`WorkspaceShell`、`WorkspaceServices` 等 workspace service
+- 已完成 `WorkspaceFileSystem`、`WorkspaceShell`、`WorkspaceServices` 等 workspace service
   contract 归入 `bitfun-runtime-ports`，core `workspace.rs` 只保留旧路径 re-export 和 local/remote concrete adapter；
-  collapsed unlock 的 GetToolSpec observation adapter 归入 `product_runtime/unlock_state.rs`，`ExecutionEngine` 不再拥有
-  GetToolSpec 结果解析细节。
+  `ToolRuntimeHandles` 归入 `bitfun-runtime-ports`，承接 ToolUseContext 的 workspace services / cancellation handle bundle。
+- collapsed unlock 的 message-derived state 与 GetToolSpec observation adapter 已归入 `product_runtime/unlock_state.rs`，
+  `ExecutionEngine` 不再拥有 GetToolSpec 结果解析细节。
+- product provider group plan 到 concrete tool 的 materialization 已归入 `product_runtime/materialization.rs`，
+  `product_runtime.rs` 只保留 runtime 组装入口和旧路径兼容。
 - workspace service contract 暂时保留既有 `anyhow::Result` 和 `CancellationToken` 语义，避免在 owner 迁移 PR 中同时改变
   错误分类、取消语义或调用方边界；后续若要收敛为 portable `PortResult`，必须单独补错误映射等价测试。
-- 后续不直接搬全部 concrete tools。只在 collapsed unlock persistence、product registry materialization、
-  `ToolUseContext` concrete service handles 或具体工具 IO 中选择能减少旧路径的完整 owner。
+- 后续不直接搬全部 concrete tools；具体 IO tools 只有在权限、filesystem/shell 行为和 checkpoint hook 均有等价保护时才允许进入 PR-C。
 - 保留 tool name、schema、prompt stub、readonly/enabled/filtering、unlock state 生命周期。
 - 验证 builtin tool list、provider order、expanded/collapsed exposure、dynamic provider metadata、Deep Review 修改类工具 checkpoint hook。
 

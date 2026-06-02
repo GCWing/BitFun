@@ -431,8 +431,7 @@ impl BashTool {
 
     fn cancellation_requested(context: &ToolUseContext) -> bool {
         context
-            .cancellation_token
-            .as_ref()
+            .cancellation_token()
             .is_some_and(|token| token.is_cancelled())
     }
 
@@ -571,10 +570,10 @@ Before executing the command, please follow these steps:
 2. Command Execution:
    - Always quote file paths that contain spaces with double quotes (e.g., cd "path with spaces/file.txt")
    - Examples of proper quoting:
-     - cd "/Users/name/My Documents" (correct)
-     - cd /Users/name/My Documents (incorrect - will fail)
-     - python "/path/with spaces/script.py" (correct)
-     - python /path/with spaces/script.py (incorrect - will fail)
+     - cd "My Documents" (correct)
+     - cd My Documents (incorrect - will fail)
+     - python "scripts/with spaces/script.py" (correct)
+     - python scripts/with spaces/script.py (incorrect - will fail)
    - After ensuring proper quoting, execute the command.
    - Capture the output of the command.
 
@@ -917,7 +916,7 @@ Usage notes:
                     &remote_command,
                     WorkspaceCommandOptions {
                         timeout_ms: Some(timeout_ms),
-                        cancellation_token: context.cancellation_token.clone(),
+                        cancellation_token: context.cancellation_token().cloned(),
                     },
                 )
                 .await
@@ -1132,7 +1131,7 @@ Usage notes:
             };
 
             // Check cancellation request
-            if let Some(token) = &context.cancellation_token {
+            if let Some(token) = context.cancellation_token() {
                 if token.is_cancelled() && !was_interrupted {
                     debug!("Bash tool received cancellation request, sending interrupt signal, tool_id: {}", tool_use_id);
                     was_interrupted = true;

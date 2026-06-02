@@ -4493,12 +4493,8 @@ const requiredContentRules = [
         message: 'missing tool-pack provider group plan delegation',
       },
       {
-        regex: /\bmaterialize_tool\b/,
-        message: 'missing core concrete tool materialization boundary',
-      },
-      {
-        regex: /\bGetToolSpecTool::new\(\)/,
-        message: 'missing GetToolSpec registration anchor',
+        regex: /\bProductToolMaterializer\b/,
+        message: 'missing product tool materializer delegation',
       },
       {
         regex: /\bToolRuntimeAssembly\b/,
@@ -4511,6 +4507,29 @@ const requiredContentRules = [
       {
         regex: /\bproduct_tool_runtime_owner_preserves_registry_contract\b/,
         message: 'missing product runtime owner registry equivalence regression',
+      },
+      {
+        regex: /\bproduct_tool_materializer_preserves_provider_plan_order\b/,
+        message: 'missing product tool materializer order regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/product_runtime/materialization.rs',
+    reason:
+      'product runtime materialization owns concrete tool construction from provider plans until concrete tools migrate',
+    patterns: [
+      {
+        regex: /\bProductToolMaterializer\b/,
+        message: 'missing product tool materializer owner',
+      },
+      {
+        regex: /\bmaterialize_tool\b/,
+        message: 'missing concrete tool materialization boundary',
+      },
+      {
+        regex: /\bGetToolSpecTool::new\(\)/,
+        message: 'missing GetToolSpec registration anchor',
       },
     ],
   },
@@ -5568,15 +5587,11 @@ const requiredContentRules = [
   {
     path: 'src/crates/core/src/miniapp/builtin/mod.rs',
     reason:
-      'core must continue owning built-in MiniApp asset includes, seeding IO, marker writes, and recompilation until builtin asset runtime migration is reviewed',
+      'core must continue owning built-in MiniApp seeding IO, marker writes, and recompilation while product-domains owns bundle assets',
     patterns: [
       {
-        regex: /id: "builtin-pr-review"/,
-        message: 'missing built-in PR Review MiniApp anchor',
-      },
-      {
         regex: /\bBUILTIN_APPS\b/,
-        message: 'missing built-in MiniApp asset include owner',
+        message: 'missing product-domain built-in MiniApp bundle re-export/use',
       },
       {
         regex: /\bbuiltin_content_hash\b/,
@@ -6299,8 +6314,16 @@ const requiredContentRules = [
   {
     path: 'src/crates/product-domains/src/miniapp/builtin.rs',
     reason:
-      'product-domains owns pure built-in MiniApp bundle, marker, hash, and seed-decision contracts while core keeps asset seeding IO and recompilation',
+      'product-domains owns built-in MiniApp bundle assets, marker, hash, and seed-decision contracts while core keeps asset seeding IO and recompilation',
     patterns: [
+      {
+        regex: /id: "builtin-pr-review"/,
+        message: 'missing built-in PR Review MiniApp bundle anchor',
+      },
+      {
+        regex: /\bpub const BUILTIN_APPS\b/,
+        message: 'missing built-in MiniApp bundle asset owner',
+      },
       {
         regex: /\bpub struct BuiltinMiniAppBundle\b/,
         message: 'missing built-in MiniApp bundle contract',
@@ -8148,8 +8171,7 @@ function runManifestParserSelfTest() {
         'builtin_static_tool_providers',
         'StaticToolProviderGroup',
         'product_tool_provider_group_plan',
-        'materialize_tool',
-        'GetToolSpecTool',
+        'ProductToolMaterializer',
         'ToolRuntimeAssembly',
         'create_registry_from_static_providers',
         'wrap_tool_for_snapshot_tracking',
@@ -8169,6 +8191,15 @@ function runManifestParserSelfTest() {
         'product_catalog_provider_default_get_tool_spec_catalog_matches_registry',
         'product_tool_runtime_owner_preserves_registry_contract',
         'GetToolSpec requires agent type context',
+        'product_tool_materializer_preserves_provider_plan_order',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/agentic/tools/product_runtime/materialization.rs',
+      contracts: [
+        'ProductToolMaterializer',
+        'materialize_tool',
+        'GetToolSpecTool',
       ],
     },
     {
@@ -8492,7 +8523,6 @@ function runManifestParserSelfTest() {
     {
       path: 'src/crates/core/src/miniapp/builtin/mod.rs',
       contracts: [
-        'builtin-pr-review',
         'BUILTIN_APPS',
         'builtin_content_hash',
         'should_seed_builtin_app',
@@ -8514,6 +8544,8 @@ function runManifestParserSelfTest() {
     {
       path: 'src/crates/product-domains/src/miniapp/builtin.rs',
       contracts: [
+        'builtin-pr-review',
+        'BUILTIN_APPS',
         'BuiltinMiniAppBundle',
         'BuiltinInstallMarker',
         'BUILTIN_INSTALL_MARKER',

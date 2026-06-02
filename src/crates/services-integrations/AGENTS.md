@@ -15,23 +15,20 @@ slices that are outside pure product logic but still platform-neutral.
   integration feature-group list.
 - MCP config/process/transport lifecycle and dynamic provider helpers may live
   here; product tool registry assembly, manifest filtering, `GetToolSpec`
-  execution, and concrete tool behavior remain core-owned until H1.
-- Remote-connect tracker/wire/pure-policy contracts, dialog submission and
-  cancel-task orchestration ports, image-context adapter contracts, remote
-  workspace file helpers, and command/response assembly may live here. Remote
-  workspace facts, session metadata, file projection DTOs, and
-  workspace/projection host traits are owned by `bitfun-runtime-ports` and
-  re-exported from `remote_connect` for compatibility. Workspace-root source
-  selection, persistence/workspace service reads, concrete scheduler submission,
-  concrete session restore / terminal pre-warm adapters, and product execution
-  remain core-owned unless a later reviewed port/provider moves them with
-  equivalence tests. Core remote dialog/cancel/file/tracker, remote model
-  catalog/session-model selection, and remote chat history persistence/message
-  conversion adapter bindings are centralized in
-  `src/crates/core/src/service_agent_runtime.rs`.
+  execution, and concrete tool behavior remain outside this crate unless a
+  reviewed owner move proves behavior equivalence.
+- Remote-connect contracts, dialog/cancel orchestration ports, image-context
+  adapter contracts, remote workspace helpers, and command/response assembly
+  may live here when they stay platform-neutral.
+- Remote workspace facts, session metadata, file projection DTOs, and
+  workspace/projection host traits belong in `bitfun-runtime-ports`.
+- Workspace-root source selection, persistence/workspace service reads,
+  concrete scheduler/session restore, terminal pre-warm adapters, and product
+  execution remain core-owned unless a reviewed port/provider moves them with
+  equivalence tests.
 - Remote-SSH path/session identity helpers may live here; SSH channels, SFTP,
   remote FS, remote terminal, and manager assembly remain core-owned unless a
-  later reviewed port/provider migration proves equivalence.
+  reviewed port/provider move proves equivalence.
 
 ## Verification
 

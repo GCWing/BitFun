@@ -863,8 +863,7 @@ impl Tool for TaskTool {
             }
             if is_retry || requested_auto_retry || input.get("retry_coverage").is_some() {
                 return Err(BitFunError::tool(
-                    "DeepReview retry fields are not allowed when fork_context is true"
-                        .to_string(),
+                    "DeepReview retry fields are not allowed when fork_context is true".to_string(),
                 ));
             }
         }
@@ -1346,7 +1345,7 @@ impl Tool for TaskTool {
                         context: subagent_context.clone().unwrap_or_default(),
                         delegation_policy: context.delegation_policy().spawn_child(),
                     },
-                    context.cancellation_token.as_ref(),
+                    context.cancellation_token(),
                     timeout_seconds,
                 )
                 .await;
@@ -1389,7 +1388,7 @@ impl Tool for TaskTool {
                         Some(DeepReviewSubagentRole::Reviewer)
                     ) && matches!(error, BitFunError::Cancelled(_))
                         && !context
-                            .cancellation_token
+                            .cancellation_token()
                             .as_ref()
                             .is_some_and(|token| token.is_cancelled())
                     {
@@ -1890,9 +1889,8 @@ mod tests {
                 ),
             ]),
             computer_use_host: None,
-            cancellation_token: None,
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
-            workspace_services: None,
+            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
         };
 
         let error = TaskTool::new()
@@ -2021,9 +2019,8 @@ mod tests {
             unlocked_collapsed_tools: Vec::new(),
             custom_data: HashMap::new(),
             computer_use_host: None,
-            cancellation_token: None,
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
-            workspace_services: None,
+            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
         };
         let deep_review_context = ToolUseContext {
             agent_type: Some("DeepReview".to_string()),
@@ -2057,9 +2054,8 @@ mod tests {
             unlocked_collapsed_tools: Vec::new(),
             custom_data: HashMap::new(),
             computer_use_host: None,
-            cancellation_token: None,
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
-            workspace_services: None,
+            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
         };
 
         let builtin_a = "AAAPromptOrderBuiltin";

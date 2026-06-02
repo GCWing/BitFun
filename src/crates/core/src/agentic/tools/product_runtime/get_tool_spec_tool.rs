@@ -165,9 +165,8 @@ mod tests {
             unlocked_collapsed_tools: vec!["WebFetch".to_string()],
             custom_data: HashMap::new(),
             computer_use_host: None,
-            cancellation_token: None,
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
-            workspace_services: None,
+            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
         };
 
         let results = tool

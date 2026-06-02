@@ -54,81 +54,27 @@ pnpm run e2e:test
 
 ### Desktop debugging tools
 
-When working on desktop UI/UX, the `devtools` Cargo feature provides additional debugging capabilities. It is automatically enabled in `dev` builds and `release-fast` profile builds, but never in `release` builds for end users.
-
-| Shortcut | Action |
-|---|---|
-| `Cmd/Ctrl + Shift + I` | Toggle element inspector — hover to highlight elements, click to capture metadata |
-| `Cmd/Ctrl + Shift + J` | Open native webview DevTools window |
-
-The element inspector injects a lightweight script into the main webview. When you click an element, it captures:
-- Tag, id, class, CSS selector path
-- Computed styles and CSS variables
-- Box model (margin, padding, border)
-- Color values (text, background, border)
-- Element attributes
-
-Captured data is logged as structured JSON under the `bitfun::devtools` target.
+Desktop dev builds enable the `devtools` Cargo feature. Use
+`Cmd/Ctrl + Shift + I` for the element inspector and `Cmd/Ctrl + Shift + J` for
+native webview DevTools. These tools are disabled in end-user `release` builds.
 
 ## Code Standards and Architecture Constraints
 
-### Logging
+Use [`AGENTS.md`](AGENTS.md) as the canonical source for architecture-sensitive
+rules, module boundaries, and the verification matrix. In contributor-facing
+terms:
 
-- English only, avoid verbose logs
-- Frontend: `createLogger('ModuleName')`
-- Backend: `log::{info, debug, warn, error}` macros
-
-### Internationalization
-
-- Locale metadata lives in `src/shared/i18n/contract/locales.json`; run
-  `pnpm run i18n:generate` after editing it.
-- Put stable cross-surface labels in `src/shared/i18n/resources/shared`; keep
-  workflow copy in the owning surface.
-- Web UI route or feature copy should use `useI18n(namespace)`. Do not import
-  Web UI locale catalogs into mobile-web, installer, backend, or static pages.
-- Static self-contained pages may use generated page-scoped shared-term files
-  instead of copying stable labels.
-- User-visible dates, times, and numbers should use shared i18n formatting
-  helpers instead of direct `Intl.*` or `toLocale*` calls.
-- `pnpm run i18n:audit` enforces key/placeholder parity, direct static key
-  existence, dynamic key source proofs, literal fallback and locale-format
-  no-growth baselines, shared-term/l10n governance baselines, non-blocking
-  same-text locale inventory, and the no-hardcoded-CJK source budget.
-
-### Platform-agnostic core
-
-Do not use platform-specific dependencies in `core`:
-
-- ❌ `tauri::AppHandle`
-- ✅ `bitfun_events::EventEmitter`
-
-For `bitfun-core` decomposition or build-speed refactors, follow
-[`docs/architecture/core-decomposition.md`](docs/architecture/core-decomposition.md)
-and do not change product feature sets or release scripts as a side effect.
-
-For Deep Review / Code Review Team changes, keep
-[`docs/architecture/deep-review.md`](docs/architecture/deep-review.md),
-`src/crates/core/src/agentic/deep_review/CONTRIBUTING.md`, and
-`src/web-ui/src/flow_chat/deep-review/CONTRIBUTING.md` aligned with the
-implementation.
-
-### Tauri command conventions
-
-- Command names use `snake_case`
-- Keep Rust and TypeScript naming aligned
-- Always use structured request format:
-
-```rust
-#[tauri::command]
-pub async fn your_command(
-  state: State<'_, AppState>,
-  request: YourRequest,
-) -> Result<YourResponse, String>
-```
-
-```ts
-await api.invoke("your_command", { request: { /* ... */ } });
-```
+- Logs are English-only and should stay useful, not noisy.
+- User-visible copy should use the project i18n flow; do not share Web UI
+  locale catalogs with smaller surfaces.
+- Shared core must stay platform-agnostic. Desktop/Tauri details belong in app
+  adapters and flow back through transport/API layers.
+- Tauri commands use `snake_case` command names and structured `request`
+  payloads.
+- Core decomposition, feature-boundary, dependency-boundary, and build-speed
+  work must follow `docs/architecture/core-decomposition.md`.
+- Deep Review / Code Review Team changes must keep the core and Web UI guidance
+  aligned with the implementation.
 
 ## Key Contribution Focus Areas
 
@@ -185,29 +131,25 @@ Keep PRs small and focused. Avoid bundling unrelated changes.
 
 ## Testing and Verification
 
-Run relevant tests for your change. You do not need to run every row below; choose the smallest set that matches the files and behavior you touched:
+Run the smallest checks that match the changed files and behavior. CI covers
+full builds and broad test suites; local prechecks should stay focused unless
+the change affects build, packaging, release behavior, or a path CI cannot
+protect.
 
-CI covers full builds and broad test suites. Local prechecks should stay focused
-unless the change directly touches build, packaging, or a path not covered by CI.
+Common local checks:
 
-For `/usage` UI copy changes, keep `en-US`, `zh-CN`, and `zh-TW` locale strings in sync.
-
-| Change type | Recommended verification |
+| Change type | Typical verification |
 | --- | --- |
-| Repository metadata, PR/issue templates, or GitHub workflows | `pnpm run check:repo-hygiene && pnpm run check:github-config && git diff --check` |
-| Locale resource-only changes | `pnpm run i18n:audit` |
-| Locale contract or shared terms | `pnpm run i18n:generate && pnpm run i18n:contract:test && pnpm run i18n:audit` |
-| Web UI state, adapters, or runtime code | `pnpm run type-check:web`, plus the nearest focused test when behavior changed |
-| Web UI i18n runtime or namespace-loading changes | `pnpm run i18n:contract:test && pnpm run type-check:web && pnpm --dir src/web-ui run test:run src/infrastructure/i18n/core/I18nService.test.ts` |
-| Mobile web UI, pairing, reconnect, disconnect, or chat-flow changes | `pnpm --dir src/mobile-web run type-check` |
-| Installer frontend or i18n runtime without packaging changes | `pnpm --dir BitFun-Installer run type-check` |
-| Rust core, transport, API layer, services, or shared runtime logic | `cargo check --workspace`, plus the nearest focused `cargo test` when behavior changed |
-| Desktop integration, Tauri APIs, or desktop-only behavior | `cargo check -p bitfun-desktop`, plus focused desktop tests when behavior changed |
-| E2E-covered behavior | Run the closest focused E2E/smoke check; rely on CI for broad build/test coverage unless build behavior changed |
+| Repository metadata or GitHub config | `pnpm run check:repo-hygiene && pnpm run check:github-config && git diff --check` |
+| Frontend runtime or UI | `pnpm run type-check:web`, plus the nearest focused test when behavior changed |
+| Mobile web | `pnpm --dir src/mobile-web run type-check` |
+| Rust shared runtime or services | `cargo check --workspace`, plus a focused `cargo test` when behavior changed |
+| Desktop/Tauri integration | `cargo check -p bitfun-desktop` |
+| i18n resources or contract | use the matching i18n row in `AGENTS.md` |
 
-For mobile-web pairing, reconnect, disconnect, or chat-flow changes, include manual verification steps and screenshots or a short recording when the UI changes.
-
-If you cannot run tests, explain why in the PR and provide manual verification steps.
+For UI changes, include screenshots or a short recording when helpful. If you
+cannot run a relevant check, explain why in the PR and provide a lower-risk
+manual verification path.
 
 ## Security and Compliance
 

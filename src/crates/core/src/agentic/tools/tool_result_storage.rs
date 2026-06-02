@@ -359,9 +359,8 @@ mod tests {
             unlocked_collapsed_tools: Vec::new(),
             custom_data: HashMap::new(),
             computer_use_host: None,
-            cancellation_token: None,
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
-            workspace_services: None,
+            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
         }
     }
 

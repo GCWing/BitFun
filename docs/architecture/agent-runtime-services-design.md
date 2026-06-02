@@ -1,11 +1,7 @@
 # Agent Runtime SDK 与 Runtime Services 设计
 
 本文是 [`core-decomposition.md`](core-decomposition.md) 的开发设计文档，描述目标模块、
-接口、crate 内部结构和迁移保护。本文不作为 PR 进度记录；已完成项、待执行项、PR 范围和
-issue 状态由 [`core-decomposition-plan.md`](../plans/core-decomposition-plan.md)、
-[`core-decomposition-completed.md`](../plans/core-decomposition-completed.md) 和跟踪 issue 维护。
-
-除非发现目标分层、接口归属、行为边界或关键风险判断需要修正，后续 PR 不应修改本文。
+接口、crate 内部结构和行为保护。本文只记录设计约束，不记录实现过程或验证记录。
 
 ## 1. 设计目标与边界
 
@@ -94,7 +90,7 @@ bitfun-runtime-services
 - `bitfun-runtime-services` 的扩展必须保持 typed builder、本地 service、remote service 和 fake provider 三类注入路径可测试。
 - `bitfun-agent-runtime` 的扩展必须保持旧路径 facade、focused tests 和 boundary check，且不得吸收 concrete service、product surface 或平台实现。
 - `bitfun-harness` 的扩展必须保持 descriptor / registry、旧路径兼容、focused tests 和 boundary check，且不得把 provider 注册误写成 concrete workflow execution。
-- 若目标 crate 只能承接单个 helper 或只能通过 `bitfun-core` 才能测试，继续留在迁移期 facade，不提前拆 crate。
+- 若目标 crate 只能承接单个 helper 或只能通过 `bitfun-core` 才能测试，应继续留在初始兼容 facade，不提前拆 crate。
 
 ## 2. 稳定接口与运行时服务
 
@@ -252,14 +248,14 @@ Remote ports 的边界：
 - runtime events。
 - post-turn processor。
 
-迁移期约束：
+旧路径兼容约束：
 
 - `bitfun-agent-runtime` 只能依赖稳定契约、Tool Runtime、Runtime Services 接口和注入的 provider。
 - concrete scheduler 生命周期、session metadata store、token subscriber、event delivery、product `Tool`
   handler、concrete prompt assembly、workspace / remote / config IO、custom subagent file IO 和平台 adapter
   在行为等价未证明前不得下沉到 runtime kernel。
-- prompt、event、thread goal、scheduler 或 subagent 的纯事实可以先迁移，但每次迁移必须删除旧 owner
-  实现主体，保留旧路径兼容，并补 focused contract test 与 boundary check。
+- prompt、event、thread goal、scheduler 或 subagent 的纯事实如果进入 Agent Runtime SDK，必须同时删除旧 owner
+  实现主体，保留旧路径兼容，并具备 focused contract test 与 boundary check。
 
 建议内部模块：
 
@@ -435,12 +431,12 @@ pub struct ToolExecutionContext {
 - workspace service、path policy、runtime artifact reference、remote path containment 和 tool context facts 的
   稳定 contract。
 
-迁移期约束：
+旧路径兼容约束：
 
 - core 可以保留旧路径 facade、concrete tool adapter、state update、registry lookup、confirmation、actual
-  execution 和 filesystem persistence，直到对应 owner 迁移有等价测试保护。
+  execution 和 filesystem persistence；目标状态要求只有在等价测试保护下才能移动这些行为。
 - workspace file/shell contract 保留既有错误与取消语义；不得把错误分类、取消语义或产品 tool exposure
-  变更混入 owner 迁移。
+  变更混入 owner 边界移动。
 
 设计约束：
 
@@ -526,15 +522,15 @@ pub struct HarnessExecutionContext {
 - harness 不直接访问 concrete filesystem / Git / terminal。
 - 产品命令只映射到 harness capability，不把命令展示逻辑下沉。
 - 新 harness 通过 provider 注册，不改 Agent Runtime SDK 内核。
-- descriptor-only / legacy-facade provider 只能表达 route plan；不得被描述为 concrete workflow execution
-  已迁移。执行迁移必须单独证明行为等价。
+- descriptor-only / legacy-facade provider 只能表达 route plan；不得被描述为已经拥有 concrete workflow execution。
+  执行语义移动必须单独证明行为等价。
 
 ## 4. 产品组装与扩展
 
 ### 4.1 Product Assembly
 
-Product Assembly 是 composition root。它可以位于 `bitfun-core` 迁移期 facade 内，也可以在
-后续拆成独立 Product Assembly crate。
+Product Assembly 是 composition root。初始状态可由 `bitfun-core` 兼容 facade 承载；目标状态可拆成独立
+Product Assembly crate。
 
 职责：
 
@@ -852,11 +848,10 @@ pub trait BeforeToolExecution: Send + Sync {
 - fork context 继续保留禁止字段和递归 subagent 保护。
 - provider registry 构建后应尽量 immutable，避免 runtime 期间 materialization 漂移。
 
-### 5.2 计划边界
+### 5.2 设计边界
 
-本文只描述目标接口、crate 内部结构和行为保护要求，不定义 PR 顺序。Runtime Services、
-Tool Runtime、Agent Runtime SDK、Harness Layer 和 Product Assembly 的阶段边界、PR 范围和执行安排
-由 [`core-decomposition-plan.md`](../plans/core-decomposition-plan.md) 维护。
+本文只描述目标接口、crate 内部结构和行为保护要求。若验证发现目标接口、crate 归属、行为边界或风险判断不成立，
+应先修正设计判断，再调整实现边界。
 
 ### 5.3 测试策略
 
@@ -905,6 +900,6 @@ Product 测试：
 - `bitfun-runtime-services` 提供 typed service injection，并由 boundary check 保护。
 - `tool-runtime` 承担 provider registry 和 execution pipeline，具体 tool 通过 provider 注入。
 - `bitfun-harness` 支持工作流 provider 扩展。
-- `bitfun-core` 只作为迁移期 facade / product-full assembly。
+- `bitfun-core` 只作为兼容 facade / product-full assembly。
 - 所有产品形态通过 Product Assembly 显式启用能力。
 - 所有高风险行为有 snapshot、focused regression 或 product check 保护。

@@ -252,9 +252,8 @@ mod tests {
             unlocked_collapsed_tools: Vec::new(),
             custom_data: HashMap::new(),
             computer_use_host: None,
-            cancellation_token: None,
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
-            workspace_services: None,
+            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
         }
     }
 
@@ -489,19 +488,21 @@ impl Tool for FileWriteTool {
             }
         }
 
-        let large_write_warning = input
-            .get("content")
-            .and_then(|v| v.as_str())
-            .and_then(|content| {
-                let line_count = content.lines().count();
-                let byte_count = content.len();
-                if line_count > LARGE_WRITE_SOFT_LINE_LIMIT || byte_count > LARGE_WRITE_SOFT_BYTE_LIMIT
-                {
-                    Some((line_count, byte_count))
-                } else {
-                    None
-                }
-            });
+        let large_write_warning =
+            input
+                .get("content")
+                .and_then(|v| v.as_str())
+                .and_then(|content| {
+                    let line_count = content.lines().count();
+                    let byte_count = content.len();
+                    if line_count > LARGE_WRITE_SOFT_LINE_LIMIT
+                        || byte_count > LARGE_WRITE_SOFT_BYTE_LIMIT
+                    {
+                        Some((line_count, byte_count))
+                    } else {
+                        None
+                    }
+                });
 
         if let Some(ctx) = context {
             if let Some(message) = Self::preflight_write_error(ctx, file_path).await {

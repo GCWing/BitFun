@@ -18,7 +18,13 @@ Repository rule: **keep product logic platform-agnostic, then expose it through 
 | Module | Path | Agent doc |
 |---|---|---|
 | Core (product logic) | `src/crates/core` | [AGENTS.md](src/crates/core/AGENTS.md) |
-| Extracted core support | `src/crates/{core-types,agent-stream,runtime-ports,runtime-services,terminal,tool-runtime}` | (use core guide) |
+| Core shared DTOs | `src/crates/core-types` | [AGENTS.md](src/crates/core-types/AGENTS.md) |
+| Event contracts | `src/crates/events` | [AGENTS.md](src/crates/events/AGENTS.md) |
+| Agent stream normalization | `src/crates/agent-stream` | [AGENTS.md](src/crates/agent-stream/AGENTS.md) |
+| Runtime ports | `src/crates/runtime-ports` | [AGENTS.md](src/crates/runtime-ports/AGENTS.md) |
+| Runtime services | `src/crates/runtime-services` | [AGENTS.md](src/crates/runtime-services/AGENTS.md) |
+| Terminal infrastructure | `src/crates/terminal` | [AGENTS.md](src/crates/terminal/AGENTS.md) |
+| Low-level tool runtime | `src/crates/tool-runtime` | [AGENTS.md](src/crates/tool-runtime/AGENTS.md) |
 | Agent runtime owner crate | `src/crates/agent-runtime` | [AGENTS.md](src/crates/agent-runtime/AGENTS.md) |
 | Harness workflow contracts | `src/crates/harness` | [AGENTS.md](src/crates/harness/AGENTS.md) |
 | Service core owner crate | `src/crates/services-core` | [AGENTS.md](src/crates/services-core/AGENTS.md) |
@@ -26,10 +32,11 @@ Repository rule: **keep product logic platform-agnostic, then expose it through 
 | Agent tool contracts | `src/crates/agent-tools` | [AGENTS.md](src/crates/agent-tools/AGENTS.md) |
 | Tool pack provider plan | `src/crates/tool-packs` | [AGENTS.md](src/crates/tool-packs/AGENTS.md) |
 | Product domains | `src/crates/product-domains` | [AGENTS.md](src/crates/product-domains/AGENTS.md) |
-| Transport adapters | `src/crates/transport` | (use core guide) |
-| API layer | `src/crates/api-layer` | (use core guide) |
+| Transport adapters | `src/crates/transport` | [AGENTS.md](src/crates/transport/AGENTS.md) |
+| API layer | `src/crates/api-layer` | [AGENTS.md](src/crates/api-layer/AGENTS.md) |
 | ACP integration | `src/crates/acp` | [AGENTS.md](src/crates/acp/AGENTS.md) |
 | AI adapters | `src/crates/ai-adapters` | [AGENTS.md](src/crates/ai-adapters/AGENTS.md) |
+| Embedded WebDriver | `src/crates/webdriver` | [AGENTS.md](src/crates/webdriver/AGENTS.md) |
 | Desktop app | `src/apps/desktop` | [AGENTS.md](src/apps/desktop/AGENTS.md) |
 | Server | `src/apps/server` | (use core guide) |
 | CLI | `src/apps/cli` | (use core guide) |

@@ -383,12 +383,14 @@ Use the remote project skill.
             unlocked_collapsed_tools: Vec::new(),
             custom_data: Default::default(),
             computer_use_host: None,
-            cancellation_token: None,
             runtime_tool_restrictions: Default::default(),
-            workspace_services: Some(WorkspaceServices {
-                fs: Arc::new(FakeRemoteFs),
-                shell: Arc::new(FakeShell),
-            }),
+            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::new(
+                Some(WorkspaceServices {
+                    fs: Arc::new(FakeRemoteFs),
+                    shell: Arc::new(FakeShell),
+                }),
+                None,
+            ),
         };
 
         let description = SkillTool::build_available_skills_context_section(Some(&context))
@@ -422,12 +424,14 @@ Use the remote project skill.
             unlocked_collapsed_tools: Vec::new(),
             custom_data: Default::default(),
             computer_use_host: None,
-            cancellation_token: None,
             runtime_tool_restrictions: Default::default(),
-            workspace_services: Some(WorkspaceServices {
-                fs: Arc::new(FakeRemoteFs),
-                shell: Arc::new(FakeShell),
-            }),
+            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::new(
+                Some(WorkspaceServices {
+                    fs: Arc::new(FakeRemoteFs),
+                    shell: Arc::new(FakeShell),
+                }),
+                None,
+            ),
         };
 
         let results = SkillTool::new()

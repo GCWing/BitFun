@@ -1641,7 +1641,7 @@ mod tests {
         assert_eq!(context.session_id.as_deref(), Some("session_1"));
         assert_eq!(context.dialog_turn_id.as_deref(), Some("turn_1"));
         assert_eq!(context.unlocked_collapsed_tools, vec!["WebFetch"]);
-        assert!(context.cancellation_token.is_some());
+        assert!(context.cancellation_token().is_some());
         assert!(context
             .runtime_tool_restrictions
             .is_tool_allowed("WebFetch"));

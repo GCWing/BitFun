@@ -11,8 +11,8 @@ tool provider group plan. It does not own concrete tool implementations yet.
   silently enable new runtime behavior. Boundary checks enforce the current
   feature-group list.
 - Do not depend on `bitfun-core`, concrete service crates, app crates, Tauri,
-  Git, MCP, network clients, or CLI UI dependencies unless H1 explicitly moves a
-  reviewed tool runtime owner here.
+  Git, MCP, network clients, or CLI UI dependencies unless a reviewed tool
+  runtime owner move explicitly changes this boundary.
 - Do not own manifest/exposure contracts, concrete runtime manifest assembly,
   `GetToolSpec` execution, collapsed unlock state, snapshot decoration, or
   `ToolUseContext`. Provider group plans may list group ids and tool names only.

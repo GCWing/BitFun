@@ -38,7 +38,7 @@ pub enum BuiltinSeedAction {
 }
 
 /// Pure built-in MiniApp asset bundle shape. The owning runtime still decides
-/// how assets are embedded, seeded, compiled, and persisted.
+/// how bundles are seeded, compiled, and persisted.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BuiltinMiniAppBundle {
     pub id: &'static str,
@@ -50,6 +50,63 @@ pub struct BuiltinMiniAppBundle {
     pub worker_js: &'static str,
     pub esm_dependencies_json: &'static str,
 }
+
+/// Built-in MiniApps that ship with the product-domain package.
+///
+/// The concrete seeding runtime still lives in the app/core integration layer;
+/// this list owns only the stable bundle identity and embedded source assets.
+pub const BUILTIN_APPS: &[BuiltinMiniAppBundle] = &[
+    BuiltinMiniAppBundle {
+        id: "builtin-gomoku",
+        version: 11,
+        meta_json: include_str!("builtin/assets/gomoku/meta.json"),
+        html: include_str!("builtin/assets/gomoku/index.html"),
+        css: include_str!("builtin/assets/gomoku/style.css"),
+        ui_js: include_str!("builtin/assets/gomoku/ui.js"),
+        worker_js: include_str!("builtin/assets/gomoku/worker.js"),
+        esm_dependencies_json: "[]",
+    },
+    BuiltinMiniAppBundle {
+        id: "builtin-daily-divination",
+        version: 21,
+        meta_json: include_str!("builtin/assets/divination/meta.json"),
+        html: include_str!("builtin/assets/divination/index.html"),
+        css: include_str!("builtin/assets/divination/style.css"),
+        ui_js: include_str!("builtin/assets/divination/ui.js"),
+        worker_js: include_str!("builtin/assets/divination/worker.js"),
+        esm_dependencies_json: "[]",
+    },
+    BuiltinMiniAppBundle {
+        id: "builtin-regex-playground",
+        version: 16,
+        meta_json: include_str!("builtin/assets/regex-playground/meta.json"),
+        html: include_str!("builtin/assets/regex-playground/index.html"),
+        css: include_str!("builtin/assets/regex-playground/style.css"),
+        ui_js: include_str!("builtin/assets/regex-playground/ui.js"),
+        worker_js: include_str!("builtin/assets/regex-playground/worker.js"),
+        esm_dependencies_json: "[]",
+    },
+    BuiltinMiniAppBundle {
+        id: "builtin-coding-selfie",
+        version: 28,
+        meta_json: include_str!("builtin/assets/coding-selfie/meta.json"),
+        html: include_str!("builtin/assets/coding-selfie/index.html"),
+        css: include_str!("builtin/assets/coding-selfie/style.css"),
+        ui_js: include_str!("builtin/assets/coding-selfie/ui.js"),
+        worker_js: include_str!("builtin/assets/coding-selfie/worker.js"),
+        esm_dependencies_json: "[]",
+    },
+    BuiltinMiniAppBundle {
+        id: "builtin-pr-review",
+        version: 3,
+        meta_json: include_str!("builtin/assets/pr-review/meta.json"),
+        html: include_str!("builtin/assets/pr-review/index.html"),
+        css: include_str!("builtin/assets/pr-review/style.css"),
+        ui_js: include_str!("builtin/assets/pr-review/ui.js"),
+        worker_js: include_str!("builtin/assets/pr-review/worker.js"),
+        esm_dependencies_json: "[]",
+    },
+];
 
 pub fn builtin_content_hash(app: &BuiltinMiniAppBundle) -> String {
     let mut hasher = Sha256::new();
@@ -181,4 +238,39 @@ fn hex_encode(bytes: &[u8]) -> String {
         output.push(HEX[(byte & 0x0f) as usize] as char);
     }
     output
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{builtin_content_hash, BUILTIN_APPS};
+
+    #[test]
+    fn builtin_miniapp_bundles_keep_product_domain_asset_owner_contract() {
+        let ids = BUILTIN_APPS.iter().map(|app| app.id).collect::<Vec<_>>();
+
+        assert_eq!(
+            ids,
+            vec![
+                "builtin-gomoku",
+                "builtin-daily-divination",
+                "builtin-regex-playground",
+                "builtin-coding-selfie",
+                "builtin-pr-review",
+            ]
+        );
+        assert_eq!(BUILTIN_APPS[0].version, 11);
+        assert_eq!(BUILTIN_APPS[1].version, 21);
+        assert_eq!(BUILTIN_APPS[2].version, 16);
+        assert_eq!(BUILTIN_APPS[3].version, 28);
+        assert_eq!(BUILTIN_APPS[4].version, 3);
+
+        for app in BUILTIN_APPS {
+            assert!(!app.meta_json.trim().is_empty());
+            assert!(!app.html.trim().is_empty());
+            assert!(!app.css.trim().is_empty());
+            assert!(!app.ui_js.trim().is_empty());
+            assert!(!app.worker_js.trim().is_empty());
+            assert!(builtin_content_hash(app).starts_with("sha256:"));
+        }
+    }
 }
