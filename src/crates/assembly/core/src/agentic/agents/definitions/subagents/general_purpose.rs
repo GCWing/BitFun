@@ -15,14 +15,15 @@ impl GeneralPurposeAgent {
     pub fn new() -> Self {
         Self {
             default_tools: vec![
-                "Bash".to_string(),
                 "Read".to_string(),
                 "Glob".to_string(),
                 "Grep".to_string(),
                 "Write".to_string(),
                 "Edit".to_string(),
                 "Delete".to_string(),
-                "TerminalControl".to_string(),
+                "ExecCommand".to_string(),
+                "WriteStdin".to_string(),
+                "ExecControl".to_string(),
                 "WebSearch".to_string(),
                 "WebFetch".to_string(),
             ],

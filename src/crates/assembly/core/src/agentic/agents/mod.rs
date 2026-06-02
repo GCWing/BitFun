@@ -68,7 +68,9 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
         "Write".to_string(),
         "Edit".to_string(),
         "Delete".to_string(),
-        "Bash".to_string(),
+        "ExecCommand".to_string(),
+        "WriteStdin".to_string(),
+        "ExecControl".to_string(),
         "Grep".to_string(),
         "Glob".to_string(),
         "WebSearch".to_string(),
@@ -83,7 +85,6 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
         "CreatePlan".to_string(),
         "Git".to_string(),
         "Log".to_string(),
-        "TerminalControl".to_string(),
         "ControlHub".to_string(),
         "InitMiniApp".to_string(),
     ]
