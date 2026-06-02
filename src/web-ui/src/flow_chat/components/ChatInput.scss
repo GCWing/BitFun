@@ -5,16 +5,20 @@
 @use '../../component-library/styles/tokens' as *;
 @use '../../component-library/styles/_extended-mixins' as mixins;
 
-.bitfun-chat-input-drop-zone {
+.bitfun-context-drop-zone.bitfun-chat-input-drop-zone {
   position: absolute;
+  flex: 0 0 auto;
   bottom: 4px;
   left: 50%;
   transform: translateX(-50%);
   width: 100%;
+  height: auto;
+  min-height: 0;
   max-width: 900px;
   z-index: $z-overlay;
   display: flex;
   flex-direction: column;
+  justify-content: flex-end;
   padding: 0 $size-gap-2;
   pointer-events: auto !important;
 
