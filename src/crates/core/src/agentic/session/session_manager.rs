@@ -106,6 +106,7 @@ pub struct SessionManager {
     context_store: Arc<SessionContextStore>,
     prompt_cache_store: Arc<SessionPromptCacheStore>,
     turn_skill_agent_snapshot_store: Arc<TurnSkillAgentSnapshotStore>,
+    skill_agent_baseline_override_snapshot_store: Arc<DashMap<String, TurnSkillAgentSnapshot>>,
     file_read_state_store: Arc<FileReadStateStore>,
     evidence_ledger: Arc<SessionEvidenceLedger>,
     persistence_manager: Arc<PersistenceManager>,
@@ -822,6 +823,7 @@ impl SessionManager {
             context_store,
             prompt_cache_store: Arc::new(SessionPromptCacheStore::new()),
             turn_skill_agent_snapshot_store: Arc::new(TurnSkillAgentSnapshotStore::new()),
+            skill_agent_baseline_override_snapshot_store: Arc::new(DashMap::new()),
             file_read_state_store: Arc::new(FileReadStateStore::new()),
             evidence_ledger: Arc::new(SessionEvidenceLedger::new()),
             persistence_manager,
@@ -1010,6 +1012,8 @@ impl SessionManager {
         let context_store = self.context_store.clone();
         let prompt_cache_store = self.prompt_cache_store.clone();
         let turn_skill_agent_snapshot_store = self.turn_skill_agent_snapshot_store.clone();
+        let skill_agent_baseline_override_snapshot_store =
+            self.skill_agent_baseline_override_snapshot_store.clone();
         let file_read_state_store = self.file_read_state_store.clone();
         let evidence_ledger = self.evidence_ledger.clone();
         let persistence_manager = self.persistence_manager.clone();
@@ -1032,6 +1036,7 @@ impl SessionManager {
                 context_store,
                 prompt_cache_store,
                 turn_skill_agent_snapshot_store,
+                skill_agent_baseline_override_snapshot_store,
                 file_read_state_store,
                 evidence_ledger,
                 persistence_manager,
@@ -1472,6 +1477,117 @@ impl SessionManager {
         }
     }
 
+    pub async fn remember_skill_agent_baseline_override_snapshot(
+        &self,
+        session_id: &str,
+        snapshot: TurnSkillAgentSnapshot,
+    ) {
+        self.skill_agent_baseline_override_snapshot_store
+            .insert(session_id.to_string(), snapshot.clone());
+
+        if !self.should_persist_session_id(session_id) {
+            return;
+        }
+
+        let Some(workspace_path) = self.effective_session_workspace_path(session_id).await else {
+            debug!(
+                "Skipping listing reminder baseline override persistence because workspace path is unavailable: session_id={}",
+                session_id
+            );
+            return;
+        };
+
+        match self
+            .persistence_manager
+            .save_skill_agent_baseline_override_snapshot(
+                &workspace_path,
+                session_id,
+                &snapshot,
+            )
+            .await
+        {
+            Err(error) => {
+                warn!(
+                    "Failed to persist listing reminder baseline override snapshot: session_id={}, workspace_path={}, error={}",
+                    session_id,
+                    workspace_path.display(),
+                    error
+                );
+            }
+            Ok(()) => {}
+        }
+    }
+
+    pub async fn skill_agent_baseline_override_snapshot(
+        &self,
+        session_id: &str,
+    ) -> Option<TurnSkillAgentSnapshot> {
+        if let Some(snapshot) = self
+            .skill_agent_baseline_override_snapshot_store
+            .get(session_id)
+            .map(|value| value.clone())
+        {
+            return Some(snapshot);
+        }
+
+        if !self.should_persist_session_id(session_id) {
+            return None;
+        }
+
+        let workspace_path = self.effective_session_workspace_path(session_id).await?;
+        let snapshot = match self
+            .persistence_manager
+            .load_skill_agent_baseline_override_snapshot(&workspace_path, session_id)
+            .await
+        {
+            Ok(snapshot) => snapshot,
+            Err(error) => {
+                warn!(
+                    "Failed to load listing reminder baseline override snapshot: session_id={}, workspace_path={}, error={}",
+                    session_id,
+                    workspace_path.display(),
+                    error
+                );
+                return None;
+            }
+        };
+        let snapshot = snapshot?;
+        self.skill_agent_baseline_override_snapshot_store
+            .insert(session_id.to_string(), snapshot.clone());
+        Some(snapshot)
+    }
+
+    pub async fn seed_forked_skill_agent_listing_baselines(
+        &self,
+        parent_session_id: &str,
+        child_session_id: &str,
+    ) {
+        // Forked children need two different baselines at the same time:
+        // - the parent's turn-0 snapshot stays as the prompt/listing baseline so the child's
+        //   first request can reuse the same full skill/agent listing prefix
+        // - the parent's latest snapshot becomes the child's own turn-0 snapshot so later child
+        //   turns diff against the fork-time surface instead of diffing forever against the
+        //   parent's original turn-0 baseline
+        let prompt_listing_baseline = self.turn_skill_agent_snapshot(parent_session_id, 0).await;
+        if let Some(snapshot) = prompt_listing_baseline.clone() {
+            self.remember_skill_agent_baseline_override_snapshot(child_session_id, snapshot)
+                .await;
+        }
+
+        let latest_parent_snapshot = match self.get_turn_count(parent_session_id).checked_sub(1) {
+            Some(turn_index) => self
+                .latest_turn_skill_agent_snapshot_at_or_before(parent_session_id, turn_index)
+                .await
+                .map(|(_, snapshot)| snapshot),
+            None => None,
+        };
+
+        if let Some(snapshot) = latest_parent_snapshot.or(prompt_listing_baseline) {
+            self.remember_turn_skill_agent_snapshot(child_session_id, 0, snapshot)
+                .await;
+        }
+    }
+
     pub async fn rebuild_skill_agent_listing_baseline_to_latest(&self, session_id: &str) -> bool {
         let Some(turn_index) = self
             .sessions
@@ -1487,6 +1603,18 @@ impl SessionManager {
         else {
             return false;
         };
+
+        if self
+            .skill_agent_baseline_override_snapshot(session_id)
+            .await
+            .is_some()
+        {
+            self.remember_skill_agent_baseline_override_snapshot(
+                session_id,
+                latest_snapshot.clone(),
+            )
+                .await;
+        }
 
         self.recover_first_turn_skill_agent_snapshot(session_id, latest_snapshot)
             .await;
@@ -2111,6 +2239,8 @@ impl SessionManager {
         self.prompt_cache_store.delete_session(session_id);
         self.turn_skill_agent_snapshot_store
             .delete_session(session_id);
+        self.skill_agent_baseline_override_snapshot_store
+            .remove(session_id);
         self.file_read_state_store.delete_session(session_id);
         debug!(
             "Session deletion stage completed: session_id={}, stage=context_store_delete, duration_ms={}",
@@ -2608,6 +2738,8 @@ impl SessionManager {
             self.prompt_cache_store.delete_session(session_id);
             self.turn_skill_agent_snapshot_store
                 .delete_session(session_id);
+            self.skill_agent_baseline_override_snapshot_store
+                .remove(session_id);
             self.file_read_state_store.delete_session(session_id);
         }
 
@@ -2919,7 +3051,6 @@ impl SessionManager {
                     })?
             }
         };
-
         metadata.custom_metadata = Some(match (metadata.custom_metadata.take(), patch) {
             (
                 Some(serde_json::Value::Object(mut existing)),
@@ -2933,7 +3064,8 @@ impl SessionManager {
             (_, value) => value,
         });
 
-        self.persistence_manager
+        self
+            .persistence_manager
             .save_session_metadata(&workspace_path, &metadata)
             .await
     }
@@ -4340,6 +4472,8 @@ impl SessionManager {
         let context_store = self.context_store.clone();
         let prompt_cache_store = self.prompt_cache_store.clone();
         let turn_skill_agent_snapshot_store = self.turn_skill_agent_snapshot_store.clone();
+        let skill_agent_baseline_override_snapshot_store =
+            self.skill_agent_baseline_override_snapshot_store.clone();
         let file_read_state_store = self.file_read_state_store.clone();
 
         tokio::spawn(async move {
@@ -4399,6 +4533,7 @@ impl SessionManager {
                         context_store.delete_session(&candidate.session_id);
                         prompt_cache_store.delete_session(&candidate.session_id);
                         turn_skill_agent_snapshot_store.delete_session(&candidate.session_id);
+                        skill_agent_baseline_override_snapshot_store.remove(&candidate.session_id);
                         file_read_state_store.delete_session(&candidate.session_id);
                     }
                 }
@@ -4459,6 +4594,7 @@ mod tests {
         PromptCachePolicy, PromptCacheScope, SessionContextStore, SystemPromptCacheIdentity,
         UserContextCacheIdentity,
     };
+    use crate::agentic::skill_agent_snapshot::{SkillSnapshotEntry, TurnSkillAgentSnapshot};
     use crate::infrastructure::PathManager;
     use crate::service::config::types::{
         AIConfig as ServiceAIConfig, AIModelConfig as ServiceAIModelConfig,
@@ -6185,6 +6321,166 @@ mod tests {
                 .cached_user_context(&session.session_id, &user_context_identity)
                 .await,
             Some("cached user context".to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn skill_agent_baseline_override_snapshot_persists_across_session_restore() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager =
+            Arc::new(PersistenceManager::new(workspace.path_manager()).expect("persistence"));
+        let manager = test_manager(persistence_manager.clone());
+        let session = manager
+            .create_session(
+                "Listing baseline".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should be created");
+        let baseline = TurnSkillAgentSnapshot {
+            skills: vec![SkillSnapshotEntry {
+                name: "skill-a".to_string(),
+                description: "desc-a".to_string(),
+                location: "/skills/a".to_string(),
+            }],
+            ..Default::default()
+        };
+
+        manager
+            .remember_skill_agent_baseline_override_snapshot(&session.session_id, baseline.clone())
+            .await;
+
+        let metadata = persistence_manager
+            .load_session_metadata(workspace.path(), &session.session_id)
+            .await
+            .expect("metadata load should succeed")
+            .expect("metadata should exist");
+        assert_eq!(metadata.custom_metadata, None);
+        assert_eq!(
+            persistence_manager
+                .load_skill_agent_baseline_override_snapshot(
+                    workspace.path(),
+                    &session.session_id,
+                )
+                .await
+                .expect("override snapshot load should succeed"),
+            Some(baseline.clone())
+        );
+
+        let restored_manager = test_manager(persistence_manager);
+        restored_manager
+            .restore_session(workspace.path(), &session.session_id)
+            .await
+            .expect("session should restore");
+
+        assert_eq!(
+            restored_manager
+                .skill_agent_baseline_override_snapshot(&session.session_id)
+                .await,
+            Some(baseline)
+        );
+    }
+
+    #[tokio::test]
+    async fn seed_forked_skill_agent_listing_baselines_splits_prompt_and_diff_baselines() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager =
+            Arc::new(PersistenceManager::new(workspace.path_manager()).expect("persistence"));
+        let manager = test_manager(persistence_manager.clone());
+        let parent = manager
+            .create_session(
+                "Parent".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("parent session should create");
+        let child = manager
+            .create_session(
+                "Child".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("child session should create");
+        let prompt_baseline = TurnSkillAgentSnapshot {
+            skills: vec![SkillSnapshotEntry {
+                name: "skill-parent-turn-0".to_string(),
+                description: "desc-0".to_string(),
+                location: "/skills/turn-0".to_string(),
+            }],
+            ..Default::default()
+        };
+        let latest_baseline = TurnSkillAgentSnapshot {
+            skills: vec![SkillSnapshotEntry {
+                name: "skill-parent-latest".to_string(),
+                description: "desc-latest".to_string(),
+                location: "/skills/latest".to_string(),
+            }],
+            ..Default::default()
+        };
+
+        manager
+            .remember_turn_skill_agent_snapshot(&parent.session_id, 0, prompt_baseline.clone())
+            .await;
+        manager
+            .remember_turn_skill_agent_snapshot(&parent.session_id, 2, latest_baseline.clone())
+            .await;
+        {
+            let mut parent_session = manager
+                .sessions
+                .get_mut(&parent.session_id)
+                .expect("parent session should remain in memory");
+            parent_session.dialog_turn_ids = vec![
+                "turn-0".to_string(),
+                "turn-1".to_string(),
+                "turn-2".to_string(),
+            ];
+        }
+
+        manager
+            .seed_forked_skill_agent_listing_baselines(&parent.session_id, &child.session_id)
+            .await;
+
+        assert_eq!(
+            manager
+                .skill_agent_baseline_override_snapshot(&child.session_id)
+                .await,
+            Some(prompt_baseline.clone())
+        );
+        assert_eq!(
+            manager
+                .turn_skill_agent_snapshot(&child.session_id, 0)
+                .await,
+            Some(latest_baseline.clone())
+        );
+
+        let restored_manager = test_manager(persistence_manager);
+        restored_manager
+            .restore_session(workspace.path(), &child.session_id)
+            .await
+            .expect("child session should restore");
+        assert_eq!(
+            restored_manager
+                .skill_agent_baseline_override_snapshot(&child.session_id)
+                .await,
+            Some(prompt_baseline)
+        );
+        assert_eq!(
+            restored_manager
+                .turn_skill_agent_snapshot(&child.session_id, 0)
+                .await,
+            Some(latest_baseline)
         );
     }
 

@@ -32,7 +32,11 @@ Instead, it separates two relatively stable layers:
 - the user-context reminder
 
 The cache model lives in
-`src/crates/core/src/agentic/session/prompt_cache.rs`.
+`src/crates/agent-runtime/src/prompt_cache.rs`.
+
+Core still exposes `src/crates/core/src/agentic/session/prompt_cache.rs`, but
+that file is now a compatibility facade that re-exports the owner types from
+`bitfun-agent-runtime`.
 
 Key details:
 
@@ -85,6 +89,7 @@ text:
 - the branched turns up to the selected turn
 - persisted turn context snapshots
 - persisted skill/subagent listing snapshots
+- persisted `skill-agent-baseline-override.json` when the source session has one
 - the source session's prompt cache
 - compression state and lineage metadata
 
@@ -116,6 +121,7 @@ The child session is initialized from a captured parent context snapshot:
 - same workspace and model config
 - inherited message context
 - cloned session-level prompt cache
+- seeded skill/agent listing baselines derived from the parent session
 
 That gives the side thread an already-built conversational prefix.
 
@@ -123,6 +129,8 @@ In other words, `/btw` now reuses both:
 
 - the parent message context snapshot
 - the parent session's prompt cache via `SessionManager::clone_prompt_cache(...)`
+- the parent session's full skill/agent listing baseline via
+  `SessionManager::seed_forked_skill_agent_listing_baselines(...)`
 
 ### `fork_context` subagents
 
@@ -144,6 +152,17 @@ When `Task` is called with `fork_context=true`, BitFun:
   workspace, remote metadata, and model selection
 - clones the parent session's prompt cache into the child session via
   `SessionManager::clone_prompt_cache(...)`
+- seeds a fork-aware skill/agent listing baseline split via
+  `SessionManager::seed_forked_skill_agent_listing_baselines(...)`
+
+That seed step intentionally keeps two different baselines:
+
+- the parent's turn-0 skill/agent snapshot is preserved as a prompt/listing
+  baseline override so the child can reuse the same full-listing prefix on its
+  first request
+- the parent's latest snapshot at fork time becomes the child's own turn-0
+  snapshot so later child turns diff against the fork-time surface, not forever
+  against the parent's original turn-0 baseline
 
 The `Task` tool also forbids fields that would make the fork drift away from
 the inherited prefix, including `subagent_type`, `workspace_path`, `model_id`,
@@ -166,7 +185,7 @@ They are intentionally configured to share the same stable prompt base.
 Relevant code:
 
 - shared constants and tests:
-  `src/crates/core/src/agentic/agents/mod.rs`
+  `src/crates/agent-runtime/src/agents.rs`
 - mode definitions:
   `src/crates/core/src/agentic/agents/definitions/modes/{agentic,plan,debug,multitask}.rs`
 
@@ -217,10 +236,15 @@ Relevant code:
   `src/crates/core/src/agentic/skill_agent_snapshot.rs`
 - sparse snapshot store:
   `src/crates/core/src/agentic/session/turn_skill_agent_snapshot_store.rs`
+- fork baseline override persistence:
+  `snapshots/skill-agent-baseline-override.json` via
+  `src/crates/core/src/agentic/persistence/manager.rs`
 - turn-time diff injection:
   `ConversationCoordinator::wrap_user_input(...)`
 - baseline reminder reuse:
   `ExecutionEngine::build_cached_prepended_prompt_reminders(...)`
+- reminder ordering owner:
+  `src/crates/agent-runtime/src/prompt.rs`
 
 The strategy is:
 
@@ -231,6 +255,12 @@ The strategy is:
 
 This keeps the base cached prefix stable while still letting the model see
 fresh capability changes.
+
+Forked child sessions add one extra wrinkle: prompt/listing reuse and later diff
+correctness do not always want the same baseline. In those cases BitFun can keep
+the child's turn-0 snapshot as the diff baseline while reading the separate
+baseline-override snapshot first when rebuilding the full skill/agent listing
+reminder.
 
 What gets updated dynamically:
 
@@ -451,7 +481,7 @@ The most important implementation choices are:
 ## Implementation Map
 
 - Prompt cache model:
-  `src/crates/core/src/agentic/session/prompt_cache.rs`
+  `src/crates/agent-runtime/src/prompt_cache.rs`
 - Prompt cache lifecycle:
   `src/crates/core/src/agentic/session/session_manager.rs`
 - Request assembly and cache hits:
@@ -464,7 +494,7 @@ The most important implementation choices are:
   `src/crates/core/src/agentic/coordination/coordinator.rs`
   and `src/apps/desktop/src/api/btw_api.rs`
 - Shared coding-mode identities:
-  `src/crates/core/src/agentic/agents/mod.rs`
+  `src/crates/agent-runtime/src/agents.rs`
 - Dynamic skill/agent listing snapshots:
   `src/crates/core/src/agentic/skill_agent_snapshot.rs`
 - Provider cache telemetry:

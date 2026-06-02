@@ -601,14 +601,22 @@ impl ExecutionEngine {
         };
 
         let prompt_builder = PromptBuilder::new(prompt_context);
-        let baseline_tool_sections = self
+        let baseline_snapshot = if let Some(snapshot) = self
             .session_manager
-            .turn_skill_agent_snapshot(session_id, 0)
+            .skill_agent_baseline_override_snapshot(session_id)
             .await
+        {
+            Some(snapshot)
+        } else {
+            self.session_manager
+                .turn_skill_agent_snapshot(session_id, 0)
+                .await
+        };
+        let baseline_tool_sections = baseline_snapshot
             .map(|snapshot| build_skill_agent_tool_listing_sections_from_snapshot(&snapshot));
         if baseline_tool_sections.is_none() {
             warn!(
-                "First-turn skill-agent snapshot unavailable while building prepended reminders: session_id={}",
+                "Listing reminder baseline snapshot unavailable while building prepended reminders: session_id={}",
                 session_id
             );
         }

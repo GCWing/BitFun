@@ -186,6 +186,20 @@ impl PersistenceManager {
                 self.save_prompt_cache(workspace_path, &target_session_id, cache)
                     .await?;
             }
+            if let Some(snapshot) = self
+                .load_skill_agent_baseline_override_snapshot(
+                    workspace_path,
+                    &request.source_session_id,
+                )
+                .await?
+            {
+                self.save_skill_agent_baseline_override_snapshot(
+                    workspace_path,
+                    &target_session_id,
+                    &snapshot,
+                )
+                .await?;
+            }
 
             let now_ms = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -257,6 +271,7 @@ impl PersistenceManager {
 mod tests {
     use super::{PersistenceManager, SessionBranchRequest};
     use crate::agentic::core::{Message, Session, SessionKind};
+    use crate::agentic::skill_agent_snapshot::{SkillSnapshotEntry, TurnSkillAgentSnapshot};
     use crate::agentic::session::{
         CachedSystemPrompt, CachedUserContext, SessionPromptCache, SystemPromptCacheIdentity,
         UserContextCacheIdentity,
@@ -484,5 +499,64 @@ mod tests {
                 "turnIndex": 1
             })
         );
+    }
+
+    #[tokio::test]
+    async fn branch_session_copies_skill_agent_baseline_override_snapshot() {
+        let workspace = TestWorkspace::new();
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
+
+        let mut source_session = Session::new(
+            "Source Title".to_string(),
+            "agentic".to_string(),
+            Default::default(),
+        );
+        source_session.kind = SessionKind::Standard;
+        manager
+            .save_session(workspace.path(), &source_session)
+            .await
+            .expect("source session should save");
+
+        let turn_0 = build_turn(&source_session.session_id, "turn-0", 0, "first");
+        manager
+            .save_dialog_turn(workspace.path(), &turn_0)
+            .await
+            .expect("turn 0 should save");
+
+        let baseline_override = TurnSkillAgentSnapshot {
+            skills: vec![SkillSnapshotEntry {
+                name: "interactive-debug".to_string(),
+                description: "debug helper".to_string(),
+                location: "/skills/interactive-debug".to_string(),
+            }],
+            subagents: Vec::new(),
+        };
+        manager
+            .save_skill_agent_baseline_override_snapshot(
+                workspace.path(),
+                &source_session.session_id,
+                &baseline_override,
+            )
+            .await
+            .expect("baseline override should save");
+
+        let result = manager
+            .branch_session(
+                workspace.path(),
+                &SessionBranchRequest {
+                    source_session_id: source_session.session_id.clone(),
+                    source_turn_id: "turn-0".to_string(),
+                },
+            )
+            .await
+            .expect("branch should succeed");
+
+        let branched_override = manager
+            .load_skill_agent_baseline_override_snapshot(workspace.path(), &result.session_id)
+            .await
+            .expect("branched override should load")
+            .expect("branched override should exist");
+        assert_eq!(branched_override, baseline_override);
     }
 }

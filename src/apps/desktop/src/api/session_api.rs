@@ -433,7 +433,9 @@ pub async fn load_persisted_session_metadata(
         .await
         .map_err(|e| format!("Failed to load persisted session metadata: {}", e))?;
 
-    Ok(metadata.filter(|metadata| !metadata.should_hide_from_user_lists()))
+    // Direct metadata lookups are used by persistence flows that must be able
+    // to read hidden subagent sessions without list-level visibility filtering.
+    Ok(metadata)
 }
 
 #[tauri::command]

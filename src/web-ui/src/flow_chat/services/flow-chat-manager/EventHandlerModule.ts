@@ -385,7 +385,6 @@ function ensureSubagentSession(
   const parentTurnIndex = parentSession
     ?.dialogTurns
     .findIndex(turn => turn.id === parentInfo.dialogTurnId);
-
   store.addExternalSession(
     subagentSessionId,
     buildSubagentSessionTitleWithType(parentInfo, explicitSubagentType),

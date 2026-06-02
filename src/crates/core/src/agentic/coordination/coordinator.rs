@@ -4211,6 +4211,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 "Forked prompt cache into subagent session: source_session_id={}, session_id={}, copied={}",
                 source_session_id, session_id, copied
             );
+            self.session_manager
+                .seed_forked_skill_agent_listing_baselines(source_session_id, &session_id)
+                .await;
         }
         self.session_manager
             .replace_context_messages(&session_id, initial_messages.clone())
@@ -4968,6 +4971,12 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             "Forked prompt cache into /btw child session: parent_session_id={}, child_session_id={}, copied={}",
             parent_session_id, child_session.session_id, copied
         );
+        self.session_manager
+            .seed_forked_skill_agent_listing_baselines(
+                parent_session_id,
+                &child_session.session_id,
+            )
+            .await;
 
         self.session_manager
             .replace_context_messages(&child_session.session_id, snapshot.messages)
@@ -5785,8 +5794,70 @@ mod tests {
         normalize_subagent_max_concurrency, resolve_agent_submission_turn_id,
         ConversationCoordinator,
     };
+    use crate::agentic::core::SessionConfig;
+    use crate::agentic::events::{EventQueue, EventQueueConfig, EventRouter};
+    use crate::agentic::execution::{
+        ExecutionEngine, ExecutionEngineConfig, RoundExecutor, StreamProcessor,
+    };
+    use crate::agentic::persistence::PersistenceManager;
+    use crate::agentic::session::{
+        compression::{CompressionConfig, ContextCompressor},
+        PromptCachePolicy, SessionContextStore, SessionManager, SessionManagerConfig,
+        SystemPromptCacheIdentity, UserContextCacheIdentity,
+    };
+    use crate::agentic::skill_agent_snapshot::SkillSnapshotEntry;
+    use crate::agentic::tools::registry::ToolRegistry;
+    use crate::agentic::tools::{ToolPipeline, ToolStateManager};
+    use crate::agentic::TurnSkillAgentSnapshot;
+    use crate::infrastructure::PathManager;
     use crate::service::remote_ssh::workspace_state::init_remote_workspace_manager;
     use bitfun_runtime_ports::{AgentSubmissionRequest, AgentSubmissionSource};
+    use std::sync::Arc;
+    use std::time::Duration;
+    use tokio::sync::RwLock as TokioRwLock;
+
+    fn test_coordinator() -> (ConversationCoordinator, Arc<SessionManager>) {
+        let event_queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
+        let session_manager = Arc::new(SessionManager::new(
+            Arc::new(SessionContextStore::new()),
+            Arc::new(
+                PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
+                    .expect("persistence manager"),
+            ),
+            SessionManagerConfig {
+                max_active_sessions: 100,
+                session_idle_timeout: Duration::from_secs(3600),
+                auto_save_interval: Duration::from_secs(300),
+                enable_persistence: false,
+                prompt_cache_policy: PromptCachePolicy::default(),
+            },
+        ));
+        let tool_pipeline = Arc::new(ToolPipeline::new(
+            Arc::new(TokioRwLock::new(ToolRegistry::new())),
+            Arc::new(ToolStateManager::new(event_queue.clone())),
+            None,
+        ));
+        let execution_engine = Arc::new(ExecutionEngine::new(
+            Arc::new(RoundExecutor::new(
+                Arc::new(StreamProcessor::new(event_queue.clone())),
+                event_queue.clone(),
+                tool_pipeline.clone(),
+            )),
+            event_queue.clone(),
+            session_manager.clone(),
+            Arc::new(ContextCompressor::new(CompressionConfig::default())),
+            ExecutionEngineConfig::default(),
+        ));
+        let coordinator = ConversationCoordinator::new(
+            session_manager.clone(),
+            execution_engine,
+            tool_pipeline,
+            event_queue,
+            Arc::new(EventRouter::new()),
+        );
+
+        (coordinator, session_manager)
+    }
 
     #[test]
     fn conversation_coordinator_exposes_remote_runtime_ports() {
@@ -5958,5 +6029,96 @@ mod tests {
         );
         assert_eq!(config.remote_ssh_host.as_deref(), Some("remote-host"));
         assert_eq!(config.model_id.as_deref(), Some("model-fast"));
+    }
+
+    #[tokio::test]
+    async fn hidden_btw_session_seeds_forked_listing_baselines() {
+        let (coordinator, session_manager) = test_coordinator();
+        let workspace_path = std::env::temp_dir().join(format!(
+            "bitfun-btw-baseline-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&workspace_path).expect("workspace dir should exist");
+        let parent_session = session_manager
+            .create_session(
+                "Parent".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("parent session should be created");
+        session_manager
+            .replace_context_messages(
+                &parent_session.session_id,
+                vec![crate::agentic::core::Message::user("parent context".to_string())],
+            )
+            .await;
+
+        let system_prompt_identity = SystemPromptCacheIdentity::new("template:agentic_mode");
+        let user_context_identity = UserContextCacheIdentity::new("workspace_context");
+        session_manager
+            .remember_system_prompt(
+                &parent_session.session_id,
+                system_prompt_identity.clone(),
+                "cached system prompt".to_string(),
+            )
+            .await;
+        session_manager
+            .remember_user_context(
+                &parent_session.session_id,
+                user_context_identity.clone(),
+                "cached user context".to_string(),
+            )
+            .await;
+
+        let baseline_snapshot = TurnSkillAgentSnapshot {
+            skills: vec![SkillSnapshotEntry {
+                name: "interactive-debug".to_string(),
+                description: "debug helper".to_string(),
+                location: "C:/Users/wsp/.codex/skills/interactive-debug".to_string(),
+            }],
+            subagents: Vec::new(),
+        };
+        session_manager
+            .remember_turn_skill_agent_snapshot(
+                &parent_session.session_id,
+                0,
+                baseline_snapshot.clone(),
+            )
+            .await;
+
+        let child_session = coordinator
+            .ensure_hidden_btw_session(&parent_session.session_id, "btw-child", None)
+            .await
+            .expect("btw child session should be created");
+
+        assert_eq!(child_session.kind, crate::agentic::core::SessionKind::EphemeralChild);
+        assert_eq!(
+            session_manager
+                .cached_system_prompt(&child_session.session_id, &system_prompt_identity)
+                .await,
+            Some("cached system prompt".to_string())
+        );
+        assert_eq!(
+            session_manager
+                .cached_user_context(&child_session.session_id, &user_context_identity)
+                .await,
+            Some("cached user context".to_string())
+        );
+        assert_eq!(
+            session_manager
+                .skill_agent_baseline_override_snapshot(&child_session.session_id)
+                .await,
+            Some(baseline_snapshot.clone())
+        );
+        assert_eq!(
+            session_manager
+                .turn_skill_agent_snapshot(&child_session.session_id, 0)
+                .await,
+            Some(baseline_snapshot)
+        );
     }
 }

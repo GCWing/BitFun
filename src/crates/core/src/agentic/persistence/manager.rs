@@ -106,6 +106,13 @@ struct StoredTurnSkillAgentSnapshotFile {
     snapshot: TurnSkillAgentSnapshot,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct StoredSkillAgentBaselineOverrideFile {
+    schema_version: u32,
+    session_id: String,
+    snapshot: TurnSkillAgentSnapshot,
+}
+
 #[derive(Debug, Default)]
 struct ContextSnapshotPayloadStats {
     tool_result_count: usize,
@@ -467,6 +474,20 @@ impl PersistenceManager {
     ) -> PathBuf {
         self.snapshots_dir(workspace_path, session_id)
             .join(format!("skill-agent-{:04}.json", turn_index))
+    }
+
+    fn skill_agent_baseline_override_path(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> PathBuf {
+        // Forked subagents need two different "baselines":
+        // - turn-0 skill-agent snapshot remains the child's own diff baseline for later turns
+        // - this override preserves the parent's turn-0 listing baseline so prompt/listing
+        //   reminders can keep the same prefix/cache baseline after forking
+        // Full listing reminder assembly reads this file before falling back to turn 0.
+        self.snapshots_dir(workspace_path, session_id)
+            .join("skill-agent-baseline-override.json")
     }
 
     fn transcript_path(&self, workspace_path: &Path, session_id: &str) -> PathBuf {
@@ -2200,6 +2221,39 @@ impl PersistenceManager {
         Ok(())
     }
 
+    pub async fn save_skill_agent_baseline_override_snapshot(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        snapshot: &TurnSkillAgentSnapshot,
+    ) -> BitFunResult<()> {
+        self.ensure_runtime_for_write(workspace_path).await?;
+        self.ensure_snapshots_dir(workspace_path, session_id).await?;
+
+        self.write_json_atomic(
+            &self.skill_agent_baseline_override_path(workspace_path, session_id),
+            &StoredSkillAgentBaselineOverrideFile {
+                schema_version: SESSION_STORAGE_SCHEMA_VERSION,
+                session_id: session_id.to_string(),
+                snapshot: snapshot.clone(),
+            },
+        )
+        .await
+    }
+
+    pub async fn load_skill_agent_baseline_override_snapshot(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<Option<TurnSkillAgentSnapshot>> {
+        let stored = self
+            .read_json_optional::<StoredSkillAgentBaselineOverrideFile>(
+                &self.skill_agent_baseline_override_path(workspace_path, session_id),
+            )
+            .await?;
+        Ok(stored.map(|value| value.snapshot))
+    }
+
     pub async fn delete_turn_context_snapshots_from(
         &self,
         workspace_path: &Path,
@@ -2251,7 +2305,6 @@ impl PersistenceManager {
         self.ensure_runtime_for_write(workspace_path).await?;
         self.ensure_session_dir(workspace_path, &session.session_id)
             .await?;
-
         let existing_metadata = self
             .load_session_metadata(workspace_path, &session.session_id)
             .await?;
@@ -2565,7 +2618,6 @@ impl PersistenceManager {
             .ok_or_else(|| {
                 BitFunError::NotFound(format!("Session metadata not found: {}", turn.session_id))
             })?;
-
         self.ensure_turns_dir(workspace_path, &turn.session_id)
             .await?;
 
