@@ -28,6 +28,9 @@ anyhow = { workspace = true }
 
 # Logging
 log = { workspace = true }
+rand = { workspace = true }
+chardetng = { workspace = true }
+encoding_rs = { workspace = true }
 
 # UUID for session IDs
 uuid = { workspace = true }
