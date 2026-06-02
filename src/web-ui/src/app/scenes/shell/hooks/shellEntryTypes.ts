@@ -41,7 +41,7 @@ export function compareShellEntries(a: ShellEntry, b: ShellEntry): number {
     return a.isRunning ? -1 : 1;
   }
 
-  return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+  return a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true});
 }
 
 export function createManualProfileEntry(
