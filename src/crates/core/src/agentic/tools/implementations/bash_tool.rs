@@ -228,87 +228,12 @@ impl BashTool {
         env
     }
 
-    fn custom_u64(context: &ToolUseContext, key: &str) -> Option<u64> {
-        context.custom_data.get(key).and_then(|value| {
-            value
-                .as_u64()
-                .or_else(|| value.as_str().and_then(|text| text.parse::<u64>().ok()))
-        })
-    }
-
-    fn eval_budget_state(context: &ToolUseContext) -> Option<(u64, u64, u64, u64)> {
-        let deadline = Self::custom_u64(context, "eval_deadline_sec").filter(|value| *value > 0)?;
-        let elapsed = Self::custom_u64(context, "eval_elapsed_sec").unwrap_or(0);
-        let remaining =
-            Self::custom_u64(context, "eval_remaining_sec").unwrap_or_else(|| deadline.saturating_sub(elapsed));
-        let percent = Self::custom_u64(context, "eval_percent_used")
-            .unwrap_or_else(|| elapsed.saturating_mul(100).saturating_div(deadline.max(1)));
-        Some((deadline, elapsed, remaining, percent))
-    }
-
-    fn eval_foreground_timeout_cap_ms(context: &ToolUseContext) -> Option<u64> {
-        let (deadline_sec, _, _, percent) = Self::eval_budget_state(context)?;
-        let base = match deadline_sec {
-            0..=1200 => 180_000,
-            1201..=1800 => 240_000,
-            _ => 300_000,
-        };
-        let staged = match percent {
-            percent if percent >= 95 => 30_000,
-            percent if percent >= 85 => 60_000,
-            percent if percent >= 70 => 120_000,
-            _ => base,
-        };
-
-        Some(base.min(staged))
-    }
-
     fn effective_foreground_timeout_ms(
         requested_timeout_ms: Option<u64>,
-        context: &ToolUseContext,
     ) -> u64 {
-        let requested = requested_timeout_ms
+        requested_timeout_ms
             .unwrap_or(DEFAULT_TIMEOUT_MS)
-            .min(MAX_TIMEOUT_MS);
-        if let Some(eval_cap) = Self::eval_foreground_timeout_cap_ms(context) {
-            requested.min(eval_cap)
-        } else {
-            requested
-        }
-    }
-
-    fn eval_timeout_guidance(context: &ToolUseContext) -> Option<String> {
-        let cap = Self::eval_foreground_timeout_cap_ms(context)?;
-        Some(format!(
-            "\n\nEvaluation mode: foreground commands are capped at {}ms. For services use run_in_background; for heavy training/build/search commands, run a bounded probe first and switch to a smaller artifact/direct-generation fallback if it does not produce progress quickly.",
-            cap
-        ))
-    }
-
-    fn eval_budget_guidance(context: &ToolUseContext) -> Option<String> {
-        let (deadline, elapsed, remaining, percent) = Self::eval_budget_state(context)?;
-        let phase = if percent >= 95 {
-            "FINAL_AUDIT"
-        } else if percent >= 85 {
-            "FORCE_ARTIFACT"
-        } else if percent >= 70 {
-            "STOP_EXPLORING"
-        } else {
-            "NORMAL"
-        };
-        let instruction = if percent >= 95 {
-            "Stop new experiments. Only perform quick file/process audits, fix trivial formatting, and make sure every required deliverable exists before ending."
-        } else if percent >= 85 {
-            "A minimal verifiable artifact/service must exist now. Prefer writing required files and one focused verification over more exploration."
-        } else if percent >= 70 {
-            "Stop broad exploration. Use bounded probes only, choose the best current approach, and move toward concrete deliverables."
-        } else {
-            "Keep commands bounded and create required deliverables early; missing files usually score zero."
-        };
-
-        Some(format!(
-            "<eval_budget phase=\"{phase}\" elapsed_sec=\"{elapsed}\" remaining_sec=\"{remaining}\" deadline_sec=\"{deadline}\">{instruction}</eval_budget>"
-        ))
+            .min(MAX_TIMEOUT_MS)
     }
 
     /// Resolve shell configuration for bash tool.
@@ -355,7 +280,7 @@ impl BashTool {
 
     fn render_result(
         &self,
-        context: &ToolUseContext,
+        _context: &ToolUseContext,
         terminal_session_id: &str,
         working_directory: &str,
         output_text: &str,
@@ -403,19 +328,10 @@ impl BashTool {
             result_string.push_str(
                 "<status type=\"timeout\">Command timed out before completion. Partial output, if any, is included above. The terminal session was closed so future Bash calls start in a fresh shell.</status>",
             );
-            if let Some(guidance) = Self::eval_timeout_guidance(context) {
-                result_string.push_str("<eval_timeout_guidance>");
-                result_string.push_str(&guidance);
-                result_string.push_str("</eval_timeout_guidance>");
-            }
         } else if interrupted {
             result_string.push_str(
                 "<status type=\"interrupted\">Command was canceled by the user. ASK THE USER what they would like to do next.</status>"
             );
-        }
-
-        if let Some(guidance) = Self::eval_budget_guidance(context) {
-            result_string.push_str(&guidance);
         }
 
         // Terminal session ID
@@ -465,7 +381,7 @@ impl BashTool {
 
     fn render_remote_result(
         &self,
-        context: &ToolUseContext,
+        _context: &ToolUseContext,
         working_directory: &str,
         stdout: &str,
         stderr: &str,
@@ -500,11 +416,6 @@ impl BashTool {
             result_string.push_str(
                 "<status type=\"timeout\">Command timed out before completion. Partial stdout/stderr, if any, is included above.</status>",
             );
-            if let Some(guidance) = Self::eval_timeout_guidance(context) {
-                result_string.push_str("<eval_timeout_guidance>");
-                result_string.push_str(&guidance);
-                result_string.push_str("</eval_timeout_guidance>");
-            }
         } else if interrupted {
             result_string.push_str(
                 "<status type=\"interrupted\">Command was canceled before completion. ASK THE USER what they would like to do next.</status>",
@@ -707,20 +618,6 @@ Usage notes:
             base.push_str(
                 "\n\n**Desktop automation:** Prefer this tool for actions achievable from the **workspace shell** (build, test, git, scripts, CLIs). On **macOS**, `open -a \"AppName\"` can launch or foreground an app. Use the dedicated `ComputerUse` tool or agent for desktop UI perception/control such as screenshots, OCR, mouse, keyboard, app state, clipboard, and OS-level interactions.",
             );
-        }
-        if let Some(eval_cap) =
-            context.and_then(|context| Self::eval_foreground_timeout_cap_ms(context))
-        {
-            base.push_str(&format!(
-                "\n\n**Evaluation timeout discipline:** Foreground commands are capped at {eval_cap}ms in this run. Use short probes for scans/builds/training, run services with `run_in_background`, and after any timeout switch to a smaller fallback plus deliverable audit instead of repeating the same long command."
-            ));
-        }
-        if let Some((_, elapsed, remaining, percent)) =
-            context.and_then(|context| Self::eval_budget_state(context))
-        {
-            base.push_str(&format!(
-                "\n\n**Evaluation budget state:** elapsed {elapsed}s, remaining {remaining}s ({percent}% of deadline used). At 70% stop broad exploration, at 85% force a minimal artifact/service, and at 95% only audit or make tiny fixes."
-            ));
         }
         Ok(base)
     }
@@ -930,22 +827,6 @@ Usage notes:
             };
         }
 
-        if !run_in_background {
-            if let Some(requested) = input.get("timeout_ms").and_then(|v| v.as_u64()) {
-                let effective = Self::effective_foreground_timeout_ms(Some(requested), context);
-                if effective < requested.min(MAX_TIMEOUT_MS) {
-                    return ValidationResult {
-                        result: true,
-                        message: Some(format!(
-                            "Evaluation mode: foreground timeout_ms is capped at {effective}ms for this deadline/stage. Use run_in_background for durable services; for long scans/builds/training, prefer a bounded probe and fallback plan."
-                        )),
-                        error_code: None,
-                        meta: None,
-                    };
-                }
-            }
-        }
-
         ValidationResult {
             result: true,
             message: None,
@@ -1019,7 +900,6 @@ Usage notes:
 
             let timeout_ms = Self::effective_foreground_timeout_ms(
                 input.get("timeout_ms").and_then(|v| v.as_u64()),
-                context,
             );
 
             let exec_result = ws_shell
@@ -1187,7 +1067,6 @@ Usage notes:
 
         let timeout_ms = Some(Self::effective_foreground_timeout_ms(
             input.get("timeout_ms").and_then(|v| v.as_u64()),
-            context,
         ));
 
         debug!(
@@ -1843,25 +1722,6 @@ mod tests {
         }
     }
 
-    fn eval_context(deadline_sec: u64, elapsed_sec: u64) -> ToolUseContext {
-        let mut context = test_context();
-        context
-            .custom_data
-            .insert("eval_deadline_sec".to_string(), json!(deadline_sec));
-        context
-            .custom_data
-            .insert("eval_elapsed_sec".to_string(), json!(elapsed_sec));
-        context.custom_data.insert(
-            "eval_remaining_sec".to_string(),
-            json!(deadline_sec.saturating_sub(elapsed_sec)),
-        );
-        context.custom_data.insert(
-            "eval_percent_used".to_string(),
-            json!(elapsed_sec.saturating_mul(100).saturating_div(deadline_sec.max(1))),
-        );
-        context
-    }
-
     #[test]
     fn checkpoint_detection_flags_mutating_bash_commands() {
         assert!(command_needs_light_checkpoint("cargo fmt"));
@@ -1991,8 +1851,16 @@ mod tests {
     #[test]
     fn render_result_tells_model_timeout_closes_terminal_session() {
         let tool = BashTool::new();
-        let rendered =
-            tool.render_result("session-1", "/repo", "still running", false, true, -1, None);
+        let rendered = tool.render_result(
+            &test_context(),
+            "session-1",
+            "/repo",
+            "still running",
+            false,
+            true,
+            -1,
+            None,
+        );
 
         assert!(rendered.contains("<status type=\"timeout\">"));
         assert!(rendered.contains("terminal session was closed"));
@@ -2077,52 +1945,4 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn eval_deadline_caps_foreground_timeout_for_short_tasks() {
-        let context = eval_context(900, 0);
-
-        assert_eq!(
-            BashTool::effective_foreground_timeout_ms(Some(600_000), &context),
-            180_000
-        );
-        assert_eq!(
-            BashTool::effective_foreground_timeout_ms(Some(60_000), &context),
-            60_000
-        );
-    }
-
-    #[test]
-    fn eval_timeout_result_includes_fallback_guidance() {
-        let tool = BashTool::new();
-        let context = eval_context(900, 0);
-        let rendered =
-            tool.render_result(&context, "session-1", "/repo", "partial", false, true, -1, None);
-
-        assert!(rendered.contains("<status type=\"timeout\">"));
-        assert!(rendered.contains("<eval_timeout_guidance>"));
-        assert!(rendered.contains("bounded probe"));
-    }
-
-    #[test]
-    fn eval_deadline_stage_tightens_foreground_timeout() {
-        let context = eval_context(900, 800);
-
-        assert_eq!(
-            BashTool::effective_foreground_timeout_ms(Some(600_000), &context),
-            60_000
-        );
-        let guidance = BashTool::eval_budget_guidance(&context).unwrap();
-        assert!(guidance.contains("phase=\"FORCE_ARTIFACT\""));
-        assert!(guidance.contains("minimal verifiable artifact"));
-    }
-
-    #[test]
-    fn eval_budget_result_tag_is_rendered() {
-        let tool = BashTool::new();
-        let context = eval_context(900, 860);
-        let rendered = tool.render_result(&context, "session-1", "/repo", "ok", false, false, 0, None);
-
-        assert!(rendered.contains("<eval_budget phase=\"FINAL_AUDIT\""));
-        assert!(rendered.contains("Stop new experiments"));
-    }
 }

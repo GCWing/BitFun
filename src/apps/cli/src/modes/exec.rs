@@ -49,7 +49,6 @@ pub struct ExecMode {
     output_patch: Option<String>,
     output_format: ExecOutputFormat,
     session_options: ExecSessionOptions,
-    deadline_sec: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -75,9 +74,7 @@ impl ExecMode {
         output_patch: Option<String>,
         output_format: ExecOutputFormat,
         session_options: ExecSessionOptions,
-        deadline_sec: Option<u64>,
     ) -> Self {
-        let deadline_sec = deadline_sec.filter(|seconds| *seconds > 0);
         let agent = Arc::new(CoreAgentAdapter::new(
             agentic_system.coordinator.clone(),
             agentic_system.event_queue.clone(),
@@ -93,7 +90,6 @@ impl ExecMode {
             output_patch,
             output_format,
             session_options,
-            deadline_sec,
         }
     }
 
@@ -173,7 +169,6 @@ impl ExecMode {
     }
 
     fn eval_guided_message(&self) -> String {
-        let deadline = self.deadline_guidance();
         let experience = Self::eval_experience_playbook();
 
         format!(
@@ -199,7 +194,7 @@ Evaluation rules:
   verifiable artifact over an unfinished perfect solution.
 - For small generated files, use the Write tool with inline content or a non-interactive shell
   command that writes the file. If a file-write attempt fails once, immediately switch strategy.
-- End only after an explicit audit of deliverables, services, and verification commands.{deadline}
+- End only after an explicit audit of deliverables, services, and verification commands.
 
 Evaluation experience memory:
 {experience}
@@ -257,23 +252,6 @@ Original task:
   move once confidence is good enough; repeated visual probing often runs out the clock.
 - When stuck or near the deadline, stop asking new broad questions. Write the best current
   deliverable, run one verification/audit pass, and leave concrete files behind."
-    }
-
-    fn deadline_guidance(&self) -> String {
-        let Some(seconds) = self.deadline_sec else {
-            return String::new();
-        };
-
-        let stage_70 = seconds.saturating_mul(70) / 100;
-        let stage_85 = seconds.saturating_mul(85) / 100;
-        let stage_95 = seconds.saturating_mul(95) / 100;
-
-        format!(
-            "\n- External agent deadline: {seconds} seconds. Treat this as a hard budget.\n\
-- Budget checkpoints: after about {stage_70}s stop broad exploration; after about {stage_85}s ensure\n\
-  a minimal verifiable artifact/service exists; after about {stage_95}s stop new experiments and run\n\
-  a deliverable audit."
-        )
     }
 
     fn get_git_diff(&self) -> Option<String> {
@@ -483,17 +461,9 @@ Original task:
             println!("Thinking...");
         });
 
-        let effective_message = self.effective_message();
-        let metadata = self.deadline_sec.map(|deadline_sec| {
-            json!({
-                "bitfun_eval": {
-                    "deadline_sec": deadline_sec,
-                }
-            })
-        });
         let turn_id = self
             .agent
-            .send_message_with_metadata(effective_message, &self.agent_type, metadata)
+            .send_message(self.effective_message(), &self.agent_type)
             .await
             .map_err(|e| {
                 emit_exit_diagnostic(
