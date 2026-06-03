@@ -2350,6 +2350,7 @@ impl ExecutionEngine {
         // last response alone is not a valid cost/accounting basis for
         // multi-round agent turns.
         let mut token_usage_totals = TurnTokenUsageTotals::default();
+        let mut persisted_model_rounds = Vec::new();
 
         // Track thinking-only rescue reminders for observability. This counter
         // is not a stop condition.
@@ -2651,6 +2652,7 @@ impl ExecutionEngine {
             if let Some(ref usage) = round_result.usage {
                 token_usage_totals.add_usage(usage, round_result.llm_latency_ms);
             }
+            persisted_model_rounds.push(round_result.model_round.clone());
 
             // Add assistant message to history
             messages.push(round_result.assistant_message.clone());
@@ -3086,6 +3088,11 @@ impl ExecutionEngine {
                 let mut accepted = final_round_result.had_assistant_text
                     && !Self::assistant_has_tool_calls(&final_round_result.assistant_message);
                 let mut chosen_assistant_message: Option<Message> = None;
+                let mut chosen_model_round = if accepted {
+                    Some(final_round_result.model_round.clone())
+                } else {
+                    None
+                };
                 if let Some(ref usage) = final_round_result.usage {
                     token_usage_totals.add_usage(usage, final_round_result.llm_latency_ms);
                 }
@@ -3132,6 +3139,7 @@ impl ExecutionEngine {
                         );
                     } else {
                         accepted = true;
+                        chosen_model_round = Some(retry_result.model_round.clone());
                         chosen_assistant_message = Some(retry_result.assistant_message);
                     }
                 }
@@ -3159,6 +3167,9 @@ impl ExecutionEngine {
                         }
                     }
                     completed_rounds += 1;
+                    if let Some(model_round) = chosen_model_round {
+                        persisted_model_rounds.push(model_round);
+                    }
                     messages.push(msg.clone());
                     if let Err(e) = self
                         .session_manager
@@ -3301,6 +3312,7 @@ impl ExecutionEngine {
             total_rounds: completed_rounds,
             success,
             new_messages,
+            model_rounds: persisted_model_rounds,
             finish_reason,
         })
     }
