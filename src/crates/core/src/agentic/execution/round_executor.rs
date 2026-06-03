@@ -11,9 +11,7 @@ use crate::agentic::core::{Message, ToolCall};
 use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue, ToolEventData};
 use crate::agentic::tools::computer_use_host::ComputerUseHostRef;
 use crate::agentic::tools::framework::ToolUseContext;
-use crate::agentic::tools::implementations::file_write_tool::{
-    FileWriteTool, WRITE_TOOL_MODE_CONTEXT_KEY,
-};
+use crate::agentic::tools::implementations::file_write_tool::FileWriteTool;
 use crate::agentic::tools::pipeline::{ToolExecutionContext, ToolExecutionOptions, ToolPipeline};
 use crate::agentic::tools::registry::get_global_tool_registry;
 use crate::agentic::tools::tool_context_runtime;
@@ -52,13 +50,8 @@ impl RoundExecutor {
         !text.trim().is_empty()
     }
 
-    fn write_tool_mode(context: &RoundContext) -> WriteToolMode {
-        WriteToolMode::from_context_var(
-            context
-                .context_vars
-                .get(WRITE_TOOL_MODE_CONTEXT_KEY)
-                .map(String::as_str),
-        )
+    fn write_tool_mode(_context: &RoundContext) -> WriteToolMode {
+        WriteToolMode::InlineContent
     }
 
     pub fn new(
@@ -2096,12 +2089,10 @@ mod tests {
         assert_eq!(messages[3].role, "user");
         assert_eq!(messages[4].role, "assistant");
         assert_eq!(messages[4].content.as_deref(), Some("<bitfun_contents>"));
-        assert!(
-            messages[4]
-                .content
-                .as_deref()
-                .is_some_and(|content| !content.ends_with(char::is_whitespace))
-        );
+        assert!(messages[4]
+            .content
+            .as_deref()
+            .is_some_and(|content| !content.ends_with(char::is_whitespace)));
     }
 
     #[test]

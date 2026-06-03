@@ -114,7 +114,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn manifest_write_schema_omits_content_in_plaintext_followup_mode() {
+    async fn manifest_write_schema_keeps_content_in_plaintext_followup_mode() {
         let mut context = tool_context();
         context
             .custom_data
@@ -133,9 +133,12 @@ mod tests {
             .find(|tool| tool.name == "Write")
             .expect("Write definition should exist");
 
-        assert_eq!(write.parameters["required"], json!(["file_path"]));
-        assert!(write.parameters["properties"].get("content").is_none());
-        assert!(!write
+        assert_eq!(
+            write.parameters["required"],
+            json!(["file_path", "content"])
+        );
+        assert!(write.parameters["properties"].get("content").is_some());
+        assert!(write
             .description
             .contains("Include the complete file content"));
     }

@@ -1,4 +1,7 @@
 use crate::agentic::core::ToolCall;
+use crate::agentic::execution::write_content_sanitizer::{
+    contains_tool_invocation_artifacts, strip_tool_invocation_artifacts,
+};
 use crate::agentic::tools::file_read_state_runtime::{
     assert_file_not_unexpectedly_modified, file_mutation_timestamp_ms, get_stored_file_read_state,
     local_file_modification_time_ms, read_current_file_content, read_state_tracking_enabled,
@@ -7,9 +10,6 @@ use crate::agentic::tools::file_read_state_runtime::{
 };
 use crate::agentic::tools::file_tool_guidance::{
     file_tool_guidance_message, is_file_tool_guidance_message,
-};
-use crate::agentic::execution::write_content_sanitizer::{
-    contains_tool_invocation_artifacts, strip_tool_invocation_artifacts,
 };
 use crate::agentic::tools::framework::{
     Tool, ToolPathResolution, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
@@ -64,16 +64,8 @@ impl FileWriteTool {
         }
     }
 
-    pub(crate) fn write_tool_mode(context: Option<&ToolUseContext>) -> WriteToolMode {
-        if Self::is_acp_context(context) {
-            return WriteToolMode::InlineContent;
-        }
-
-        WriteToolMode::from_context_var(
-            context
-                .and_then(|ctx| ctx.custom_data.get(WRITE_TOOL_MODE_CONTEXT_KEY))
-                .and_then(|value| value.as_str()),
-        )
+    pub(crate) fn write_tool_mode(_context: Option<&ToolUseContext>) -> WriteToolMode {
+        WriteToolMode::InlineContent
     }
 
     async fn file_exists(context: &ToolUseContext, resolved: &ToolPathResolution) -> bool {
@@ -208,12 +200,6 @@ impl FileWriteTool {
         }
     }
 
-    fn is_acp_context(context: Option<&ToolUseContext>) -> bool {
-        context
-            .and_then(|ctx| ctx.custom_data.get("acp_transport"))
-            .is_some_and(|value| value == "true" || value == &json!(true))
-    }
-
     fn schema_with_content() -> Value {
         json!({
             "type": "object",
@@ -341,6 +327,23 @@ Usage:
             )));
         }
 
+        let file_already_exists = Self::file_exists(context, &resolved).await;
+        if file_already_exists
+            && Self::existing_file_matches_content(context, &resolved, &content).await == Some(true)
+        {
+            let result = Self::write_success_result(
+                &resolved.logical_path,
+                0,
+                "already_exists_same_content",
+                format!(
+                    "Write skipped because {} already exists with identical content.",
+                    resolved.logical_path
+                ),
+                &content,
+            );
+            return Ok(vec![result]);
+        }
+
         Self::assert_atomic_write_freshness_if_exists(context, &resolved).await?;
 
         if resolved.uses_remote_workspace_backend() {
@@ -370,15 +373,33 @@ Usage:
         let timestamp_ms = file_mutation_timestamp_ms(context, &resolved).await;
         update_file_read_state_after_mutation(context, &resolved, &content, timestamp_ms);
 
-        let result = ToolResult::Result {
-            data: json!({
-                "file_path": resolved.logical_path,
-                "bytes_written": content.len(),
-                "success": true
-            }),
-            result_for_assistant: Some(format!("Successfully wrote to {}", resolved.logical_path)),
-            image_attachments: None,
+        let (status, assistant_message) = if file_already_exists {
+            (
+                "overwritten",
+                format!(
+                    "Successfully overwrote {} ({} bytes).",
+                    resolved.logical_path,
+                    content.len()
+                ),
+            )
+        } else {
+            (
+                "created",
+                format!(
+                    "Successfully created {} ({} bytes).",
+                    resolved.logical_path,
+                    content.len()
+                ),
+            )
         };
+
+        let result = Self::write_success_result(
+            &resolved.logical_path,
+            content.len(),
+            status,
+            assistant_message,
+            &content,
+        );
 
         Ok(vec![result])
     }
@@ -686,7 +707,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn default_schema_keeps_two_stage_write_contract() {
+    async fn default_schema_requires_inline_content() {
         let tool = FileWriteTool::new();
         let context = context_with_custom_data(HashMap::new());
 
@@ -694,18 +715,24 @@ mod tests {
             .input_schema_for_model_with_context(Some(&context))
             .await;
 
-        assert_eq!(schema["required"], serde_json::json!(["file_path"]));
-        assert!(schema["properties"].get("content").is_none());
+        assert_eq!(
+            schema["required"],
+            serde_json::json!(["file_path", "content"])
+        );
+        assert!(schema["properties"].get("content").is_some());
     }
 
     #[tokio::test]
-    async fn input_schema_for_model_without_context_omits_content() {
+    async fn input_schema_for_model_without_context_requires_content() {
         let tool = FileWriteTool::new();
 
         let schema = tool.input_schema_for_model().await;
 
-        assert_eq!(schema["required"], serde_json::json!(["file_path"]));
-        assert!(schema["properties"].get("content").is_none());
+        assert_eq!(
+            schema["required"],
+            serde_json::json!(["file_path", "content"])
+        );
+        assert!(schema["properties"].get("content").is_some());
     }
 
     #[test]
@@ -843,7 +870,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn plaintext_followup_missing_content_returns_two_step_guidance() {
+    async fn missing_content_returns_content_required_error() {
         let root = std::env::temp_dir().join(format!("bitfun-write-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&root).expect("create temp workspace");
 
@@ -859,24 +886,11 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
 
         let message = error.to_string();
-        assert!(
-            !message.contains("content is required"),
-            "should not surface the contradictory 'content is required' message: {message}"
-        );
-        assert!(
-            message.contains("two-step protocol")
-                || message.contains("follow-up")
-                || message.contains("did not produce"),
-            "should explain the two-step Write protocol: {message}"
-        );
-        assert!(
-            message.contains(FILE_TOOL_GUIDANCE_PREFIX),
-            "should be wrapped in file-tool guidance prefix: {message}"
-        );
+        assert_eq!(message, "Tool error: content is required");
     }
 
     #[tokio::test]
-    async fn plaintext_followup_executes_system_injected_content() {
+    async fn inline_mode_executes_provided_content() {
         let root = std::env::temp_dir().join(format!("bitfun-write-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&root).expect("create temp workspace");
 
@@ -888,7 +902,7 @@ mod tests {
                 &local_context(root.clone()),
             )
             .await
-            .expect("plaintext followup should write system-injected content");
+            .expect("inline mode should write provided content");
 
         let written =
             std::fs::read_to_string(root.join("generated.txt")).expect("read generated file");
@@ -918,7 +932,7 @@ impl Tool for FileWriteTool {
     }
 
     async fn description(&self) -> BitFunResult<String> {
-        Ok(Self::plaintext_followup_description())
+        Ok(Self::inline_description())
     }
 
     fn short_description(&self) -> String {
@@ -936,7 +950,7 @@ impl Tool for FileWriteTool {
     }
 
     fn input_schema(&self) -> Value {
-        Self::schema_without_content()
+        Self::schema_with_content()
     }
 
     async fn input_schema_for_model(&self) -> Value {
