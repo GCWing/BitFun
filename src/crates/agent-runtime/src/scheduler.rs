@@ -1,13 +1,313 @@
 //! Scheduler owner decisions.
 
+use crate::events::turn_outcome_kind;
 use bitfun_runtime_ports::{
-    DialogQueuePriority, DialogRoundInjectionSource, DialogRoundPreemptSource,
-    DialogSessionStateFact, DialogSubmissionPolicy, DialogTriggerSource, RoundInjection,
-    RoundInjectionTarget,
+    should_skip_agent_session_reply, should_suppress_agent_session_cancelled_reply,
+    AgentSessionReplyRoute, DialogQueuePriority, DialogRoundInjectionSource,
+    DialogRoundPreemptSource, DialogSessionStateFact, DialogSteerOutcome, DialogSubmissionPolicy,
+    DialogTriggerSource, RoundInjection, RoundInjectionKind, RoundInjectionTarget,
 };
+use std::collections::VecDeque;
 use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::SystemTime;
+
+pub const DEFAULT_MAX_DIALOG_QUEUE_DEPTH: usize = 20;
+
+#[derive(Debug, Clone)]
+pub struct ActiveDialogTurn {
+    turn_id: String,
+    workspace_path: Option<String>,
+    agent_type: String,
+    user_input: String,
+    user_message_metadata: Option<serde_json::Value>,
+    policy: DialogSubmissionPolicy,
+    reply_route: Option<AgentSessionReplyRoute>,
+}
+
+impl ActiveDialogTurn {
+    pub fn new(
+        turn_id: String,
+        workspace_path: Option<String>,
+        agent_type: String,
+        user_input: String,
+        user_message_metadata: Option<serde_json::Value>,
+        policy: DialogSubmissionPolicy,
+        reply_route: Option<AgentSessionReplyRoute>,
+    ) -> Self {
+        Self {
+            turn_id,
+            workspace_path,
+            agent_type,
+            user_input,
+            user_message_metadata,
+            policy,
+            reply_route,
+        }
+    }
+
+    pub fn turn_id(&self) -> &str {
+        &self.turn_id
+    }
+
+    pub fn workspace_path(&self) -> Option<&str> {
+        self.workspace_path.as_deref()
+    }
+
+    pub fn workspace_path_owned(&self) -> Option<String> {
+        self.workspace_path.clone()
+    }
+
+    pub fn agent_type(&self) -> &str {
+        &self.agent_type
+    }
+
+    pub fn agent_type_owned(&self) -> String {
+        self.agent_type.clone()
+    }
+
+    pub fn user_input(&self) -> &str {
+        &self.user_input
+    }
+
+    pub fn user_message_metadata(&self) -> Option<&serde_json::Value> {
+        self.user_message_metadata.as_ref()
+    }
+
+    pub fn reply_route(&self) -> Option<&AgentSessionReplyRoute> {
+        self.reply_route.as_ref()
+    }
+
+    pub fn is_agent_session_request(&self) -> bool {
+        self.policy.trigger_source == DialogTriggerSource::AgentSession
+            && self.reply_route.is_some()
+    }
+
+    pub fn should_suppress_cancelled_reply_for_requester(
+        &self,
+        requester_session_id: &str,
+    ) -> bool {
+        should_suppress_agent_session_cancelled_reply(
+            &self.policy,
+            self.reply_route
+                .as_ref()
+                .map(|reply_route| reply_route.source_session_id.as_str()),
+            requester_session_id,
+        )
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct ActiveDialogTurnStore {
+    inner: dashmap::DashMap<String, ActiveDialogTurn>,
+}
+
+impl ActiveDialogTurnStore {
+    pub fn insert(&self, session_id: &str, turn: ActiveDialogTurn) {
+        self.inner.insert(session_id.to_string(), turn);
+    }
+
+    pub fn remove(&self, session_id: &str) -> Option<ActiveDialogTurn> {
+        self.inner.remove(session_id).map(|(_, turn)| turn)
+    }
+
+    pub fn suppression_key_for_requester(
+        &self,
+        target_session_id: &str,
+        requester_session_id: &str,
+    ) -> Option<(String, String)> {
+        self.inner.get(target_session_id).and_then(|active_turn| {
+            active_turn
+                .should_suppress_cancelled_reply_for_requester(requester_session_id)
+                .then(|| {
+                    (
+                        target_session_id.to_string(),
+                        active_turn.turn_id().to_string(),
+                    )
+                })
+        })
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct DialogReplySuppressionSet {
+    inner: dashmap::DashMap<(String, String), ()>,
+}
+
+impl DialogReplySuppressionSet {
+    pub fn mark(&self, session_id: &str, turn_id: &str) {
+        self.inner
+            .insert((session_id.to_string(), turn_id.to_string()), ());
+    }
+
+    pub fn clear(&self, session_id: &str, turn_id: &str) {
+        self.inner
+            .remove(&(session_id.to_string(), turn_id.to_string()));
+    }
+
+    pub fn take(&self, session_id: &str, turn_id: &str) -> bool {
+        self.inner
+            .remove(&(session_id.to_string(), turn_id.to_string()))
+            .is_some()
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct SessionAbortFlags {
+    inner: dashmap::DashMap<String, ()>,
+}
+
+impl SessionAbortFlags {
+    pub fn mark(&self, session_id: &str) {
+        self.inner.insert(session_id.to_string(), ());
+    }
+
+    pub fn clear(&self, session_id: &str) {
+        self.inner.remove(session_id);
+    }
+
+    pub fn contains(&self, session_id: &str) -> bool {
+        self.inner.contains_key(session_id)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DialogTurnQueueError {
+    Full {
+        session_id: String,
+        max_depth: usize,
+    },
+}
+
+impl fmt::Display for DialogTurnQueueError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Full {
+                session_id,
+                max_depth,
+            } => write!(
+                f,
+                "Message queue full for session {session_id} (max {max_depth} messages)"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for DialogTurnQueueError {}
+
+#[derive(Debug, Clone)]
+struct QueuedDialogTurn<T> {
+    priority: DialogQueuePriority,
+    turn: T,
+}
+
+/// Per-session dialog-turn queue with product scheduler priority semantics.
+#[derive(Debug)]
+pub struct DialogTurnQueue<T> {
+    max_depth: usize,
+    inner: dashmap::DashMap<String, VecDeque<QueuedDialogTurn<T>>>,
+}
+
+impl<T> Default for DialogTurnQueue<T> {
+    fn default() -> Self {
+        Self::with_max_depth(DEFAULT_MAX_DIALOG_QUEUE_DEPTH)
+    }
+}
+
+impl<T> DialogTurnQueue<T> {
+    pub fn with_max_depth(max_depth: usize) -> Self {
+        Self {
+            max_depth,
+            inner: dashmap::DashMap::new(),
+        }
+    }
+
+    pub const fn max_depth(&self) -> usize {
+        self.max_depth
+    }
+
+    pub fn depth(&self, session_id: &str) -> usize {
+        self.inner.get(session_id).map(|q| q.len()).unwrap_or(0)
+    }
+
+    pub fn has_items(&self, session_id: &str) -> bool {
+        self.depth(session_id) > 0
+    }
+
+    pub fn enqueue(
+        &self,
+        session_id: &str,
+        turn: T,
+        priority: DialogQueuePriority,
+    ) -> Result<usize, DialogTurnQueueError> {
+        let mut queue = self.inner.entry(session_id.to_string()).or_default();
+        if queue.len() >= self.max_depth {
+            return Err(DialogTurnQueueError::Full {
+                session_id: session_id.to_string(),
+                max_depth: self.max_depth,
+            });
+        }
+
+        let queued = QueuedDialogTurn { priority, turn };
+        let insert_at = queue
+            .iter()
+            .position(|existing| existing.priority < queued.priority);
+        if let Some(index) = insert_at {
+            queue.insert(index, queued);
+        } else {
+            queue.push_back(queued);
+        }
+
+        Ok(queue.len())
+    }
+
+    pub fn clear(&self, session_id: &str) -> usize {
+        self.inner
+            .remove(session_id)
+            .map(|(_, queue)| queue.len())
+            .unwrap_or(0)
+    }
+
+    pub fn dequeue_next(&self, session_id: &str) -> Option<T> {
+        self.inner
+            .get_mut(session_id)
+            .and_then(|mut q| q.pop_front().map(|item| item.turn))
+    }
+
+    pub fn requeue_front(&self, session_id: &str, turn: T, priority: DialogQueuePriority) {
+        self.inner
+            .entry(session_id.to_string())
+            .or_default()
+            .push_front(QueuedDialogTurn { priority, turn });
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentSessionReplyPlan {
+    pub target_session_id: String,
+    pub target_workspace_path: String,
+    pub user_input: String,
+    pub reminder_text: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AgentSessionReplyAction {
+    NoReply,
+    SkipSuppressedCancelledReply,
+    Forward(AgentSessionReplyPlan),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DialogSteeringAction {
+    Reject {
+        error: String,
+    },
+    Buffer {
+        injection: RoundInjection,
+        outcome: DialogSteerOutcome,
+    },
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BackgroundDeliveryFacts {
@@ -21,6 +321,12 @@ pub enum BackgroundDeliveryAction {
         queue_priority: DialogQueuePriority,
         skip_tool_confirmation: bool,
     },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BackgroundInjectionKind {
+    ThreadGoalObjectiveUpdated,
+    BackgroundResult,
 }
 
 impl BackgroundDeliveryAction {
@@ -218,6 +524,29 @@ pub const fn resolve_background_delivery_action(
     }
 }
 
+pub fn resolve_background_delivery_injection(
+    kind: BackgroundInjectionKind,
+    injection_id: String,
+    content: String,
+    display_content: Option<String>,
+    created_at: SystemTime,
+) -> RoundInjection {
+    let display_content = display_content.unwrap_or_else(|| content.clone());
+    RoundInjection {
+        id: injection_id,
+        kind: match kind {
+            BackgroundInjectionKind::ThreadGoalObjectiveUpdated => {
+                RoundInjectionKind::ThreadGoalObjectiveUpdated
+            }
+            BackgroundInjectionKind::BackgroundResult => RoundInjectionKind::BackgroundResult,
+        },
+        target: RoundInjectionTarget::CurrentRunningTurn,
+        content,
+        display_content,
+        created_at,
+    }
+}
+
 /// Outcome of a completed dialog turn, used to notify the concrete scheduler.
 #[derive(Debug, Clone)]
 pub enum TurnOutcome {
@@ -306,5 +635,75 @@ impl TurnOutcome {
             Self::Completed { .. } | Self::Cancelled { .. } => TurnOutcomeQueueAction::DispatchNext,
             Self::Failed { .. } => TurnOutcomeQueueAction::ClearQueue,
         }
+    }
+}
+
+pub fn resolve_agent_session_reply_action(
+    responder_session_id: &str,
+    active_turn: &ActiveDialogTurn,
+    outcome: &TurnOutcome,
+    suppressed_cancelled_reply: bool,
+) -> AgentSessionReplyAction {
+    if !active_turn.is_agent_session_request() {
+        return AgentSessionReplyAction::NoReply;
+    }
+
+    if should_skip_agent_session_reply(turn_outcome_kind(outcome), suppressed_cancelled_reply) {
+        return AgentSessionReplyAction::SkipSuppressedCancelledReply;
+    }
+
+    let Some(reply_route) = active_turn.reply_route() else {
+        return AgentSessionReplyAction::NoReply;
+    };
+
+    let responder_workspace = active_turn
+        .workspace_path()
+        .unwrap_or("<unknown workspace>");
+    let status = outcome.status();
+    AgentSessionReplyAction::Forward(AgentSessionReplyPlan {
+        target_session_id: reply_route.source_session_id.clone(),
+        target_workspace_path: reply_route.source_workspace_path.clone(),
+        user_input: outcome.reply_text(),
+        reminder_text: format!(
+            "This message is an automated reply to a previous SessionMessage call, not a human user message.\n\
+From session: {responder_session_id}\n\
+From workspace: {responder_workspace}\n\
+Status: {status}"
+        ),
+    })
+}
+
+pub fn resolve_dialog_steering_action(
+    active_turn_id: Option<&str>,
+    session_id: &str,
+    turn_id: &str,
+    content: String,
+    display_content: Option<String>,
+    steering_id: String,
+    created_at: SystemTime,
+) -> DialogSteeringAction {
+    if active_turn_id != Some(turn_id) {
+        return DialogSteeringAction::Reject {
+            error: format!(
+                "Dialog turn is no longer running and cannot be steered: session_id={session_id}, turn_id={turn_id}"
+            ),
+        };
+    }
+
+    let display = display_content.unwrap_or_else(|| content.clone());
+    DialogSteeringAction::Buffer {
+        injection: RoundInjection {
+            id: steering_id.clone(),
+            kind: RoundInjectionKind::UserSteering,
+            target: RoundInjectionTarget::ExactTurn(turn_id.to_string()),
+            content,
+            display_content: display,
+            created_at,
+        },
+        outcome: DialogSteerOutcome::Buffered {
+            session_id: session_id.to_string(),
+            turn_id: turn_id.to_string(),
+            steering_id,
+        },
     }
 }

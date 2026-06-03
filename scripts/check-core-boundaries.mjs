@@ -976,6 +976,61 @@ const forbiddenContentRules = [
     path: 'src/crates/core/src/agentic/coordination/scheduler.rs',
     patterns: [
       {
+        regex: /\bconst\s+MAX_QUEUE_DEPTH\b/,
+        message:
+          'core scheduler must not own dialog queue capacity; use bitfun-agent-runtime scheduler',
+      },
+      {
+        regex: /\bstd::collections::VecDeque\b/,
+        message:
+          'core scheduler must not own dialog queue storage; use bitfun-agent-runtime scheduler',
+      },
+      {
+        regex: /\bdashmap::DashMap\b/,
+        message:
+          'core scheduler must not own scheduler state maps; use bitfun-agent-runtime scheduler stores',
+      },
+      {
+        regex: /\bstruct\s+ActiveTurn\b/,
+        message:
+          'core scheduler must not own active-turn facts; use bitfun-agent-runtime scheduler',
+      },
+      {
+        regex: /\bfn\s+format_agent_session_reply\b/,
+        message:
+          'core scheduler must not own agent-session reply text assembly; use bitfun-agent-runtime scheduler',
+      },
+      {
+        regex: /automated reply to a previous SessionMessage call/,
+        message:
+          'core scheduler must not own agent-session reply reminder text; use bitfun-agent-runtime scheduler',
+      },
+      {
+        regex: /RoundInjectionKind::UserSteering/,
+        message:
+          'core scheduler must not own steering injection construction; use bitfun-agent-runtime scheduler',
+      },
+      {
+        regex: /RoundInjectionTarget::ExactTurn/,
+        message:
+          'core scheduler must not own steering exact-turn targeting; use bitfun-agent-runtime scheduler',
+      },
+      {
+        regex: /RoundInjectionKind::ThreadGoalObjectiveUpdated/,
+        message:
+          'core scheduler must not own thread-goal background injection construction; use bitfun-agent-runtime scheduler',
+      },
+      {
+        regex: /RoundInjectionKind::BackgroundResult/,
+        message:
+          'core scheduler must not own background result injection construction; use bitfun-agent-runtime scheduler',
+      },
+      {
+        regex: /RoundInjectionTarget::CurrentRunningTurn/,
+        message:
+          'core scheduler must not own current-turn background injection targeting; use bitfun-agent-runtime scheduler',
+      },
+      {
         regex: /\bfn\s+turn_outcome_kind\s*\(/,
         message:
           'core scheduler must not own turn-outcome event facts; use bitfun-agent-runtime events',
@@ -3781,17 +3836,13 @@ const requiredContentRules = [
       },
       {
         regex:
-          /use bitfun_runtime_ports::\{(?=[\s\S]*DialogSessionStateFact)(?=[\s\S]*DialogSubmitQueueAction)(?=[\s\S]*DialogSubmitQueueFacts)(?=[\s\S]*resolve_dialog_submit_queue_action)(?=[\s\S]*should_skip_agent_session_reply_contract)(?=[\s\S]*should_suppress_agent_session_cancelled_reply_contract)[\s\S]*\};/,
+          /use bitfun_runtime_ports::\{(?=[\s\S]*DialogSessionStateFact)(?=[\s\S]*DialogSubmitQueueAction)(?=[\s\S]*DialogSubmitQueueFacts)(?=[\s\S]*resolve_dialog_submit_queue_action)[\s\S]*\};/,
         message: 'missing dialog scheduler decision contract import',
       },
       {
-        regex: /use bitfun_agent_runtime::events::turn_outcome_kind;/,
-        message: 'missing agent-runtime turn-outcome event fact import',
-      },
-      {
         regex:
-          /use bitfun_agent_runtime::scheduler::\{(?=[\s\S]*BackgroundDeliveryAction)(?=[\s\S]*BackgroundDeliveryFacts)(?=[\s\S]*resolve_background_delivery_action)[\s\S]*\};/,
-        message: 'missing agent-runtime background delivery decision import',
+          /use bitfun_agent_runtime::scheduler::\{(?=[\s\S]*ActiveDialogTurn)(?=[\s\S]*ActiveDialogTurnStore)(?=[\s\S]*AgentSessionReplyAction)(?=[\s\S]*AgentSessionReplyPlan)(?=[\s\S]*BackgroundDeliveryAction)(?=[\s\S]*BackgroundDeliveryFacts)(?=[\s\S]*BackgroundInjectionKind)(?=[\s\S]*DialogReplySuppressionSet)(?=[\s\S]*DialogSteeringAction)(?=[\s\S]*DialogTurnQueue)(?=[\s\S]*SessionAbortFlags)(?=[\s\S]*resolve_agent_session_reply_action)(?=[\s\S]*resolve_background_delivery_action)(?=[\s\S]*resolve_background_delivery_injection)(?=[\s\S]*resolve_dialog_steering_action)[\s\S]*\};/,
+        message: 'missing agent-runtime scheduler owner imports',
       },
     ],
   },
@@ -5357,19 +5408,15 @@ const requiredContentRules = [
   {
     path: 'src/crates/core/src/agentic/coordination/scheduler.rs',
     reason:
-      'core scheduler must continue owning background subagent result delivery until running-turn and idle-session routing equivalence tests exist',
+      'core scheduler keeps concrete background delivery entry points while bitfun-agent-runtime owns running-turn injection construction',
     patterns: [
       {
         regex: /\bdeliver_background_result\b/,
         message: 'missing background subagent delivery entry point',
       },
       {
-        regex: /RoundInjectionKind::BackgroundResult/,
-        message: 'missing running-turn background result injection',
-      },
-      {
-        regex: /RoundInjectionTarget::CurrentRunningTurn/,
-        message: 'missing current-turn injection target',
+        regex: /\bresolve_background_delivery_injection\b/,
+        message: 'missing runtime-owned background injection construction',
       },
       {
         regex: /DialogTriggerSource::AgentSession/,
@@ -7856,9 +7903,22 @@ function runManifestParserSelfTest() {
     {
       path: 'src/crates/agent-runtime/src/scheduler.rs',
       contracts: [
+        'DEFAULT_MAX_DIALOG_QUEUE_DEPTH',
+        'ActiveDialogTurn',
+        'ActiveDialogTurnStore',
+        'AgentSessionReplyAction',
+        'AgentSessionReplyPlan',
         'BackgroundDeliveryFacts',
         'BackgroundDeliveryAction',
+        'BackgroundInjectionKind',
+        'DialogReplySuppressionSet',
+        'DialogSteeringAction',
+        'DialogTurnQueue',
+        'SessionAbortFlags',
+        'resolve_agent_session_reply_action',
         'resolve_background_delivery_action',
+        'resolve_background_delivery_injection',
+        'resolve_dialog_steering_action',
         'follow_up_submission_policy',
         'SubmitAgentSessionFollowUp',
         'InjectIntoRunningTurn',
@@ -7875,6 +7935,20 @@ function runManifestParserSelfTest() {
         'background_delivery_starts_agent_session_follow_up_when_session_is_not_processing',
         'background_delivery_follow_up_uses_agent_session_source_semantics',
         'background_delivery_injection_does_not_expose_follow_up_policy',
+        'background_delivery_injection_builds_thread_goal_current_turn_message',
+        'background_delivery_injection_builds_background_result_with_display_fallback',
+        'dialog_turn_queue_preserves_priority_order_and_fifo_within_priority',
+        'dialog_turn_queue_rejects_overflow_and_preserves_current_error_shape',
+        'dialog_turn_queue_requeued_turn_keeps_original_priority_for_later_ordering',
+        'active_dialog_turn_owns_agent_session_reply_suppression_facts',
+        'active_dialog_turn_store_owns_suppression_key_resolution_and_removal',
+        'reply_suppression_set_marks_takes_and_clears_turn_keys',
+        'session_abort_flags_are_session_scoped',
+        'agent_session_reply_action_forwards_completed_outcome_with_legacy_reminder_text',
+        'agent_session_reply_action_suppresses_cancelled_auto_reply_when_requested',
+        'agent_session_reply_action_ignores_non_agent_session_turns',
+        'dialog_steering_action_buffers_exact_running_turn_with_display_fallback',
+        'dialog_steering_action_rejects_when_target_turn_is_not_running',
         'round_yield_flags_are_session_scoped_and_clearable',
         'round_injection_buffer_drains_only_messages_for_the_active_turn',
         'turn_outcome_status_reply_and_queue_policy_are_portable',
@@ -8134,11 +8208,19 @@ function runManifestParserSelfTest() {
         'DialogSubmitOutcome',
         'DialogSubmitQueueAction',
         'DialogSubmitQueueFacts',
-        'bitfun_agent_runtime::events::turn_outcome_kind',
+        'ActiveDialogTurnStore',
+        'AgentSessionReplyAction',
+        'AgentSessionReplyPlan',
+        'BackgroundInjectionKind',
+        'DialogReplySuppressionSet',
+        'DialogSteeringAction',
+        'DialogTurnQueue',
+        'SessionAbortFlags',
         'dialog_policy_may_preempt',
+        'resolve_agent_session_reply_action',
+        'resolve_background_delivery_injection',
         'resolve_dialog_submit_queue_action',
-        'should_skip_agent_session_reply_contract',
-        'should_suppress_agent_session_cancelled_reply_contract',
+        'resolve_dialog_steering_action',
       ],
     },
     {

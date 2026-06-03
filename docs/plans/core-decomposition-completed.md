@@ -57,7 +57,9 @@
 - `bitfun-agent-runtime` 已建立为可独立构建的 Agent Runtime SDK owner crate，当前承接 scheduler/background
   delivery 纯决策，thread goal runtime 的 turn accounting、goal mutation、continuation plan 和 tool response assembly，
   subagent query scope / visibility / availability 决策，以及 round-boundary yield / injection state 和
-  turn-outcome queue policy；prompt-loop 的 user-context policy、tool / skill / subagent listing reminder
+  turn-outcome queue policy、dialog turn queue、active-turn facts、background running-turn injection construction、
+  steering action、agent-session reply plan、cancelled-reply suppression state 和
+  goal-continuation abort flags；prompt-loop 的 user-context policy、tool / skill / subagent listing reminder
   ordering、prompt cache policy / identity / DTO / scope key / in-memory store、shared mode profile / context policy、
   mode / subagent source presentation facts 已归入该 crate；finish-reason label、session-state event label 和
   turn-outcome event fact 也已由 `bitfun-agent-runtime` 承接，core 只保留旧路径 re-export 或 concrete adapter。
@@ -70,7 +72,7 @@
 明确未完成：
 
 - `bitfun-agent-runtime` 不代表 session manager、session persistence / prompt-cache cold restore、concrete prompt assembly、
-  concrete agent definition loading、custom subagent file IO、scheduler 生命周期、event delivery、permission `Tool` handler
+  concrete agent definition loading、custom subagent file IO、scheduler concrete 生命周期、event delivery、permission `Tool` handler
   或 post-turn hook 已迁移；当前 event 迁移只覆盖无副作用的 wire label / fact 映射。
 - thread goal 的 metadata store、token subscriber、scheduler delivery adapter 和 goal `Tool` handler 仍在
   `bitfun-core`；runtime 决策已经归属 `bitfun-agent-runtime`，后续不应再把它误归入普通 concrete tool IO。

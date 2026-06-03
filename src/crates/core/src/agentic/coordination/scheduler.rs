@@ -21,15 +21,13 @@ use crate::agentic::goal_mode::{
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::init_agents_md::build_init_agents_md_user_input;
 use crate::agentic::round_preempt::{
-    DialogRoundInjectionSource, DialogRoundPreemptSource, RoundInjection, RoundInjectionKind,
-    RoundInjectionTarget, SessionRoundInjectionBuffer, SessionRoundYieldFlags,
+    DialogRoundInjectionSource, DialogRoundPreemptSource, SessionRoundInjectionBuffer,
+    SessionRoundYieldFlags,
 };
 use crate::agentic::session::SessionManager;
 use bitfun_runtime_ports::ThreadGoal;
 use bitfun_runtime_ports::MAX_THREAD_GOAL_AUTO_CONTINUATIONS;
-use dashmap::DashMap;
 use log::{debug, info, warn};
-use std::collections::VecDeque;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::OnceLock;
@@ -37,65 +35,21 @@ use std::time::{Duration, SystemTime};
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
-const MAX_QUEUE_DEPTH: usize = 20;
-
-use bitfun_agent_runtime::events::turn_outcome_kind;
 use bitfun_agent_runtime::scheduler::{
-    resolve_background_delivery_action, BackgroundDeliveryAction, BackgroundDeliveryFacts,
+    resolve_agent_session_reply_action, resolve_background_delivery_action,
+    resolve_background_delivery_injection, resolve_dialog_steering_action, ActiveDialogTurn,
+    ActiveDialogTurnStore, AgentSessionReplyAction, AgentSessionReplyPlan,
+    BackgroundDeliveryAction, BackgroundDeliveryFacts, BackgroundInjectionKind,
+    DialogReplySuppressionSet, DialogSteeringAction, DialogTurnQueue, SessionAbortFlags,
 };
 use bitfun_runtime_ports::{
-    resolve_dialog_submit_queue_action,
-    should_skip_agent_session_reply as should_skip_agent_session_reply_contract,
-    should_suppress_agent_session_cancelled_reply as should_suppress_agent_session_cancelled_reply_contract,
-    DialogSessionStateFact, DialogSubmitQueueAction, DialogSubmitQueueFacts,
+    resolve_dialog_submit_queue_action, DialogSessionStateFact, DialogSubmitQueueAction,
+    DialogSubmitQueueFacts,
 };
 pub use bitfun_runtime_ports::{
     AgentSessionReplyRoute, DialogQueuePriority, DialogSteerOutcome, DialogSubmissionPolicy,
     DialogSubmitOutcome,
 };
-
-#[derive(Debug, Clone)]
-struct ActiveTurn {
-    turn_id: String,
-    workspace_path: Option<String>,
-    agent_type: String,
-    user_input: String,
-    user_message_metadata: Option<serde_json::Value>,
-    policy: DialogSubmissionPolicy,
-    reply_route: Option<AgentSessionReplyRoute>,
-}
-
-impl ActiveTurn {
-    fn from_queued_turn(turn: &QueuedTurn, turn_id: String) -> Self {
-        Self {
-            turn_id,
-            workspace_path: turn.workspace_path.clone(),
-            agent_type: turn.agent_type.clone(),
-            user_input: turn
-                .original_user_input
-                .clone()
-                .unwrap_or_else(|| turn.user_input.clone()),
-            user_message_metadata: turn.user_message_metadata.clone(),
-            policy: turn.policy,
-            reply_route: turn.reply_route.clone(),
-        }
-    }
-
-    fn is_agent_session_request(&self) -> bool {
-        self.policy.trigger_source == DialogTriggerSource::AgentSession
-            && self.reply_route.is_some()
-    }
-
-    fn should_suppress_cancelled_reply_for_requester(&self, requester_session_id: &str) -> bool {
-        should_suppress_agent_session_cancelled_reply_contract(
-            &self.policy,
-            self.reply_route
-                .as_ref()
-                .map(|reply_route| reply_route.source_session_id.as_str()),
-            requester_session_id,
-        )
-    }
-}
 
 /// A message waiting to be dispatched to the coordinator
 #[derive(Debug, Clone)]
@@ -122,15 +76,15 @@ pub struct QueuedTurn {
 pub struct DialogScheduler {
     coordinator: Arc<ConversationCoordinator>,
     session_manager: Arc<SessionManager>,
-    /// Per-session priority message queues
-    queues: Arc<DashMap<String, VecDeque<QueuedTurn>>>,
+    /// Per-session priority message queues.
+    queues: Arc<DialogTurnQueue<QueuedTurn>>,
     /// Currently active turn metadata keyed by target session ID
-    active_turns: Arc<DashMap<String, ActiveTurn>>,
+    active_turns: Arc<ActiveDialogTurnStore>,
     /// Turns whose cancelled auto-reply should be suppressed because the source
     /// agent explicitly cancelled its own outstanding SessionMessage request.
-    suppressed_cancelled_replies: Arc<DashMap<(String, String), ()>>,
+    suppressed_cancelled_replies: Arc<DialogReplySuppressionSet>,
     /// Set when the user cancels an in-flight turn; aborts goal-continuation submit retries.
-    goal_continuation_abort: Arc<DashMap<String, ()>>,
+    goal_continuation_abort: Arc<SessionAbortFlags>,
     /// Cloneable sender given to ConversationCoordinator for turn outcome notifications
     outcome_tx: mpsc::Sender<(String, TurnOutcome)>,
     /// When a user submits while `Processing`, engine yields after the current model round.
@@ -155,10 +109,10 @@ impl DialogScheduler {
         let scheduler = Arc::new(Self {
             coordinator,
             session_manager,
-            queues: Arc::new(DashMap::new()),
-            active_turns: Arc::new(DashMap::new()),
-            suppressed_cancelled_replies: Arc::new(DashMap::new()),
-            goal_continuation_abort: Arc::new(DashMap::new()),
+            queues: Arc::new(DialogTurnQueue::default()),
+            active_turns: Arc::new(ActiveDialogTurnStore::default()),
+            suppressed_cancelled_replies: Arc::new(DialogReplySuppressionSet::default()),
+            goal_continuation_abort: Arc::new(SessionAbortFlags::default()),
             outcome_tx,
             round_yield_flags: Arc::new(SessionRoundYieldFlags::default()),
             round_injection_buffer: Arc::new(SessionRoundInjectionBuffer::default()),
@@ -202,53 +156,48 @@ impl DialogScheduler {
         content: String,
         display_content: Option<String>,
     ) -> Result<DialogSteerOutcome, String> {
-        let active_matches_turn = match self
+        let active_turn_id = match self
             .session_manager
             .get_session(&session_id)
             .map(|s| s.state.clone())
         {
             Some(SessionState::Processing {
                 current_turn_id, ..
-            }) => current_turn_id == turn_id,
-            _ => false,
+            }) => Some(current_turn_id),
+            _ => None,
         };
-
-        if !active_matches_turn {
-            warn!(
-                "submit_steering rejected: target turn is not running: session_id={}, turn_id={}",
-                session_id, turn_id
-            );
-            return Err(format!(
-                "Dialog turn is no longer running and cannot be steered: session_id={}, turn_id={}",
-                session_id, turn_id
-            ));
-        }
 
         let steering_id = Uuid::new_v4().to_string();
-        let display = display_content.unwrap_or_else(|| content.clone());
-        let message = RoundInjection {
-            id: steering_id.clone(),
-            kind: RoundInjectionKind::UserSteering,
-            target: RoundInjectionTarget::ExactTurn(turn_id.clone()),
+        match resolve_dialog_steering_action(
+            active_turn_id.as_deref(),
+            &session_id,
+            &turn_id,
             content,
-            display_content: display,
-            created_at: SystemTime::now(),
-        };
-
-        self.round_injection_buffer.push(&session_id, message);
-        info!(
-            "Steering message buffered: session_id={}, turn_id={}, steering_id={}, pending={}",
-            session_id,
-            turn_id,
+            display_content,
             steering_id,
-            self.round_injection_buffer.pending_count(&session_id)
-        );
+            SystemTime::now(),
+        ) {
+            DialogSteeringAction::Reject { error } => {
+                warn!(
+                    "submit_steering rejected: target turn is not running: session_id={}, turn_id={}",
+                    session_id, turn_id
+                );
+                Err(error)
+            }
+            DialogSteeringAction::Buffer { injection, outcome } => {
+                self.round_injection_buffer.push(&session_id, injection);
+                let DialogSteerOutcome::Buffered { steering_id, .. } = &outcome;
+                info!(
+                    "Steering message buffered: session_id={}, turn_id={}, steering_id={}, pending={}",
+                    session_id,
+                    turn_id,
+                    steering_id,
+                    self.round_injection_buffer.pending_count(&session_id)
+                );
 
-        Ok(DialogSteerOutcome::Buffered {
-            session_id,
-            turn_id,
-            steering_id,
-        })
+                Ok(outcome)
+            }
+        }
     }
 
     /// Resume auto-continuation toward an active thread goal (after pause / blocked / usage limit).
@@ -276,14 +225,13 @@ impl DialogScheduler {
                     .unwrap_or_default();
                 self.round_injection_buffer.push(
                     &session_id,
-                    RoundInjection {
-                        id: Uuid::new_v4().to_string(),
-                        kind: RoundInjectionKind::ThreadGoalObjectiveUpdated,
-                        target: RoundInjectionTarget::CurrentRunningTurn,
-                        content: prompt,
-                        display_content: plan.display_message.clone(),
-                        created_at: SystemTime::now(),
-                    },
+                    resolve_background_delivery_injection(
+                        BackgroundInjectionKind::ThreadGoalObjectiveUpdated,
+                        Uuid::new_v4().to_string(),
+                        prompt,
+                        Some(plan.display_message.clone()),
+                        SystemTime::now(),
+                    ),
                 );
                 Ok(())
             }
@@ -340,14 +288,13 @@ impl DialogScheduler {
             BackgroundDeliveryAction::InjectIntoRunningTurn => {
                 self.round_injection_buffer.push(
                     &session_id,
-                    RoundInjection {
-                        id: Uuid::new_v4().to_string(),
-                        kind: RoundInjectionKind::ThreadGoalObjectiveUpdated,
-                        target: RoundInjectionTarget::CurrentRunningTurn,
-                        content: prompt,
-                        display_content: display,
-                        created_at: SystemTime::now(),
-                    },
+                    resolve_background_delivery_injection(
+                        BackgroundInjectionKind::ThreadGoalObjectiveUpdated,
+                        Uuid::new_v4().to_string(),
+                        prompt,
+                        Some(display),
+                        SystemTime::now(),
+                    ),
                 );
                 Ok(())
             }
@@ -408,17 +355,15 @@ impl DialogScheduler {
             session_state: Self::session_state_fact(state.as_ref()),
         }) {
             BackgroundDeliveryAction::InjectIntoRunningTurn => {
-                let injection_id = Uuid::new_v4().to_string();
                 self.round_injection_buffer.push(
                     &session_id,
-                    RoundInjection {
-                        id: injection_id,
-                        kind: RoundInjectionKind::BackgroundResult,
-                        target: RoundInjectionTarget::CurrentRunningTurn,
+                    resolve_background_delivery_injection(
+                        BackgroundInjectionKind::BackgroundResult,
+                        Uuid::new_v4().to_string(),
                         content,
-                        display_content: display,
-                        created_at: SystemTime::now(),
-                    },
+                        Some(display),
+                        SystemTime::now(),
+                    ),
                 );
                 Ok(())
             }
@@ -489,7 +434,7 @@ impl DialogScheduler {
     ///
     /// - Session idle, queue empty → dispatched immediately.
     /// - Session idle, queue non-empty → enqueued then highest-priority queued message dispatched.
-    /// - Session processing → queued (up to MAX_QUEUE_DEPTH). For interactive sources
+    /// - Session processing → queued up to the runtime-owned queue limit. For interactive sources
     ///   (desktop, CLI, bot, …), also requests a yield after the current model round so
     ///   the queued message can start sooner than a full multi-round turn.
     /// - Session error → queue cleared, dispatched immediately.
@@ -597,11 +542,7 @@ impl DialogScheduler {
             .get_session(&session_id)
             .map(|s| s.state.clone());
 
-        let queue_has_items = self
-            .queues
-            .get(&session_id)
-            .map(|q| !q.is_empty())
-            .unwrap_or(false);
+        let queue_has_items = self.queues.has_items(&session_id);
         let action = resolve_dialog_submit_queue_action(DialogSubmitQueueFacts {
             session_state: Self::session_state_fact(state.as_ref()),
             queue_has_items,
@@ -679,7 +620,7 @@ impl DialogScheduler {
 
     /// Number of messages currently queued for a session.
     pub fn queue_depth(&self, session_id: &str) -> usize {
-        self.queues.get(session_id).map(|q| q.len()).unwrap_or(0)
+        self.queues.depth(session_id)
     }
 
     /// Cancel the target session's active turn on behalf of a requester session.
@@ -695,20 +636,14 @@ impl DialogScheduler {
     ) -> crate::util::errors::BitFunResult<Option<String>> {
         let suppression_key = self
             .active_turns
-            .get(target_session_id)
-            .and_then(|active_turn| {
-                active_turn
-                    .should_suppress_cancelled_reply_for_requester(requester_session_id)
-                    .then(|| (target_session_id.to_string(), active_turn.turn_id.clone()))
-            });
+            .suppression_key_for_requester(target_session_id, requester_session_id);
 
         if let Some((session_id, turn_id)) = suppression_key.as_ref() {
             debug!(
                 "Suppressing cancelled auto-reply for agent-session turn: target_session_id={}, turn_id={}, requester_session_id={}",
                 session_id, turn_id, requester_session_id
             );
-            self.suppressed_cancelled_replies
-                .insert((session_id.clone(), turn_id.clone()), ());
+            self.suppressed_cancelled_replies.mark(session_id, turn_id);
         }
 
         abort_thread_goal_continuation_for_session(target_session_id);
@@ -722,7 +657,7 @@ impl DialogScheduler {
                 if cancelled_turn_id.is_none() {
                     if let Some((session_id, turn_id)) = suppression_key {
                         self.suppressed_cancelled_replies
-                            .remove(&(session_id, turn_id));
+                            .clear(&session_id, &turn_id);
                     }
                 }
                 Ok(cancelled_turn_id)
@@ -730,7 +665,7 @@ impl DialogScheduler {
             Err(error) => {
                 if let Some((session_id, turn_id)) = suppression_key {
                     self.suppressed_cancelled_replies
-                        .remove(&(session_id, turn_id));
+                        .clear(&session_id, &turn_id);
                 }
                 Err(error)
             }
@@ -740,68 +675,43 @@ impl DialogScheduler {
     // ── Private helpers ──────────────────────────────────────────────────────
 
     fn enqueue(&self, session_id: &str, queued_turn: QueuedTurn) -> Result<(), String> {
-        let queue_len = self.queues.get(session_id).map(|q| q.len()).unwrap_or(0);
-
-        if queue_len >= MAX_QUEUE_DEPTH {
-            warn!(
-                "Queue full, rejecting message: session_id={}, max={}",
-                session_id, MAX_QUEUE_DEPTH
-            );
-            return Err(format!(
-                "Message queue full for session {} (max {} messages)",
-                session_id, MAX_QUEUE_DEPTH
-            ));
-        }
-
-        self.queues
-            .entry(session_id.to_string())
-            .or_default()
-            .push_back(queued_turn.clone());
-        if let Some(mut queue) = self.queues.get_mut(session_id) {
-            if let Some(reordered_turn) = queue.pop_back() {
-                let insert_at = queue.iter().position(|existing| {
-                    existing.policy.queue_priority < reordered_turn.policy.queue_priority
-                });
-                if let Some(index) = insert_at {
-                    queue.insert(index, reordered_turn);
-                } else {
-                    queue.push_back(reordered_turn);
-                }
+        let priority = queued_turn.policy.queue_priority;
+        let new_len = match self.queues.enqueue(session_id, queued_turn, priority) {
+            Ok(new_len) => new_len,
+            Err(error) => {
+                let max_depth = self.queues.max_depth();
+                warn!(
+                    "Queue full, rejecting message: session_id={}, max={}",
+                    session_id, max_depth
+                );
+                return Err(error.to_string());
             }
-        }
+        };
 
-        let new_len = self.queues.get(session_id).map(|q| q.len()).unwrap_or(0);
         debug!(
             "Message queued: session_id={}, queue_depth={}, priority={:?}",
-            session_id, new_len, queued_turn.policy.queue_priority
+            session_id, new_len, priority
         );
         Ok(())
     }
 
     fn clear_queue(&self, session_id: &str) {
-        if let Some(mut queue) = self.queues.get_mut(session_id) {
-            let count = queue.len();
-            queue.clear();
-            if count > 0 {
-                info!(
-                    "Cleared {} queued messages: session_id={}",
-                    count, session_id
-                );
-            }
+        let count = self.queues.clear(session_id);
+        if count > 0 {
+            info!(
+                "Cleared {} queued messages: session_id={}",
+                count, session_id
+            );
         }
     }
 
     fn dequeue_next(&self, session_id: &str) -> Option<QueuedTurn> {
-        self.queues
-            .get_mut(session_id)
-            .and_then(|mut q| q.pop_front())
+        self.queues.dequeue_next(session_id)
     }
 
     fn requeue_front(&self, session_id: &str, turn: QueuedTurn) {
-        self.queues
-            .entry(session_id.to_string())
-            .or_default()
-            .push_front(turn);
+        let priority = turn.policy.queue_priority;
+        self.queues.requeue_front(session_id, turn, priority);
     }
 
     async fn try_start_next_queued(&self, session_id: &str) -> Result<Option<String>, String> {
@@ -817,7 +727,7 @@ impl DialogScheduler {
             return Ok(None);
         };
 
-        let remaining = self.queues.get(session_id).map(|q| q.len()).unwrap_or(0);
+        let remaining = self.queues.depth(session_id);
         info!(
             "Dispatching queued message: session_id={}, priority={:?}, remaining_queue_depth={}",
             session_id, next_turn.policy.queue_priority, remaining
@@ -925,8 +835,19 @@ impl DialogScheduler {
             })?;
 
         self.active_turns.insert(
-            session_id.to_string(),
-            ActiveTurn::from_queued_turn(queued_turn, resolved.clone()),
+            session_id,
+            ActiveDialogTurn::new(
+                resolved.clone(),
+                queued_turn.workspace_path.clone(),
+                queued_turn.agent_type.clone(),
+                queued_turn
+                    .original_user_input
+                    .clone()
+                    .unwrap_or_else(|| queued_turn.user_input.clone()),
+                queued_turn.user_message_metadata.clone(),
+                queued_turn.policy,
+                queued_turn.reply_route.clone(),
+            ),
         );
 
         Ok(resolved)
@@ -935,33 +856,24 @@ impl DialogScheduler {
     async fn forward_agent_session_reply(
         &self,
         responder_session_id: &str,
-        active_turn: &ActiveTurn,
-        outcome: &TurnOutcome,
+        plan: AgentSessionReplyPlan,
     ) {
-        if !active_turn.is_agent_session_request() {
-            return;
-        }
-
-        let Some(reply_route) = active_turn.reply_route.as_ref() else {
-            return;
-        };
-
-        let responder_workspace = active_turn
-            .workspace_path
-            .as_deref()
-            .unwrap_or("<unknown workspace>");
-        let reply_user_input = outcome.reply_text();
-        let prepended_messages =
-            Self::format_agent_session_reply(responder_session_id, responder_workspace, outcome);
+        let reply_user_input = plan.user_input;
+        let target_session_id = plan.target_session_id;
+        let target_workspace_path = plan.target_workspace_path;
+        let prepended_messages = vec![Message::internal_reminder(
+            InternalReminderKind::SessionMessageReply,
+            plan.reminder_text,
+        )];
 
         if let Err(error) = self
             .submit_with_prepended_messages(
-                reply_route.source_session_id.clone(),
+                target_session_id.clone(),
                 reply_user_input.clone(),
                 Some(reply_user_input),
                 None,
                 String::new(),
-                Some(reply_route.source_workspace_path.clone()),
+                Some(target_workspace_path),
                 DialogSubmissionPolicy::for_source(DialogTriggerSource::AgentSession),
                 None,
                 None,
@@ -972,42 +884,13 @@ impl DialogScheduler {
         {
             warn!(
                 "Failed to forward agent-session reply: responder_session_id={}, source_session_id={}, error={}",
-                responder_session_id, reply_route.source_session_id, error
+                responder_session_id, target_session_id, error
             );
         }
     }
 
     fn take_suppressed_cancelled_reply(&self, session_id: &str, turn_id: &str) -> bool {
-        self.suppressed_cancelled_replies
-            .remove(&(session_id.to_string(), turn_id.to_string()))
-            .is_some()
-    }
-
-    fn should_skip_agent_session_reply(
-        outcome: &TurnOutcome,
-        suppressed_cancelled_reply: bool,
-    ) -> bool {
-        should_skip_agent_session_reply_contract(
-            turn_outcome_kind(outcome),
-            suppressed_cancelled_reply,
-        )
-    }
-
-    fn format_agent_session_reply(
-        responder_session_id: &str,
-        responder_workspace: &str,
-        outcome: &TurnOutcome,
-    ) -> Vec<Message> {
-        let status = outcome.status();
-        vec![Message::internal_reminder(
-            InternalReminderKind::SessionMessageReply,
-            format!(
-                "This message is an automated reply to a previous SessionMessage call, not a human user message.\n\
-From session: {responder_session_id}\n\
-From workspace: {responder_workspace}\n\
-Status: {status}"
-            ),
-        )]
+        self.suppressed_cancelled_replies.take(session_id, turn_id)
     }
 
     async fn dispatch_next_if_idle(&self, session_id: &str) -> Result<(), String> {
@@ -1031,17 +914,25 @@ Status: {status}"
             let suppressed_cancelled_reply =
                 self.take_suppressed_cancelled_reply(&session_id, outcome.turn_id());
 
-            let active_turn = self.active_turns.remove(&session_id).map(|(_, turn)| turn);
+            let active_turn = self.active_turns.remove(&session_id);
             if let Some(active_turn) = active_turn.as_ref() {
-                if Self::should_skip_agent_session_reply(&outcome, suppressed_cancelled_reply) {
-                    debug!(
-                        "Skipping cancelled auto-reply because the source session explicitly cancelled its own SessionMessage request: session_id={}, turn_id={}",
-                        session_id,
-                        outcome.turn_id()
-                    );
-                } else {
-                    self.forward_agent_session_reply(&session_id, active_turn, &outcome)
-                        .await;
+                match resolve_agent_session_reply_action(
+                    &session_id,
+                    active_turn,
+                    &outcome,
+                    suppressed_cancelled_reply,
+                ) {
+                    AgentSessionReplyAction::NoReply => {}
+                    AgentSessionReplyAction::SkipSuppressedCancelledReply => {
+                        debug!(
+                            "Skipping cancelled auto-reply because the source session explicitly cancelled its own SessionMessage request: session_id={}, turn_id={}",
+                            session_id,
+                            outcome.turn_id()
+                        );
+                    }
+                    AgentSessionReplyAction::Forward(plan) => {
+                        self.forward_agent_session_reply(&session_id, plan).await;
+                    }
                 }
             }
 
@@ -1054,7 +945,7 @@ Status: {status}"
 
             if let Some(active_turn) = active_turn.as_ref() {
                 if matches!(outcome, TurnOutcome::Cancelled { .. }) {
-                    self.goal_continuation_abort.insert(session_id.clone(), ());
+                    self.goal_continuation_abort.mark(&session_id);
                     debug!(
                         "Skipping thread goal continuation after user-cancelled turn: session_id={}, turn_id={}",
                         session_id,
@@ -1062,14 +953,14 @@ Status: {status}"
                     );
                 } else {
                     let turn_completed = matches!(outcome, TurnOutcome::Completed { .. });
-                    self.goal_continuation_abort.remove(&session_id);
+                    self.goal_continuation_abort.clear(&session_id);
                     match self
                         .coordinator
                         .prepare_goal_continuation_after_turn(
                             &session_id,
                             &outcome.turn_id(),
-                            &active_turn.user_input,
-                            active_turn.user_message_metadata.as_ref(),
+                            active_turn.user_input(),
+                            active_turn.user_message_metadata(),
                             turn_completed,
                         )
                         .await
@@ -1087,7 +978,7 @@ Status: {status}"
                                 .collect();
                             let mut last_error = None;
                             for attempt in 1..=MAX_THREAD_GOAL_AUTO_CONTINUATIONS {
-                                if self.goal_continuation_abort.contains_key(&session_id) {
+                                if self.goal_continuation_abort.contains(&session_id) {
                                     debug!(
                                         "Aborting goal continuation submit retries after user cancellation: session_id={}",
                                         session_id
@@ -1101,8 +992,8 @@ Status: {status}"
                                             .to_string(),
                                         Some(plan.display_message.clone()),
                                         None,
-                                        active_turn.agent_type.clone(),
-                                        active_turn.workspace_path.clone(),
+                                        active_turn.agent_type_owned(),
+                                        active_turn.workspace_path_owned(),
                                         DialogSubmissionPolicy::for_source(
                                             DialogTriggerSource::AgentSession,
                                         ),
@@ -1119,7 +1010,7 @@ Status: {status}"
                                     }
                                     Err(error) => {
                                         last_error = Some(error);
-                                        if self.goal_continuation_abort.contains_key(&session_id) {
+                                        if self.goal_continuation_abort.contains(&session_id) {
                                             debug!(
                                                 "Aborting goal continuation submit retries after user cancellation: session_id={}",
                                                 session_id
@@ -1146,7 +1037,7 @@ Status: {status}"
                                 }
                             }
                             if let Some(error) = last_error {
-                                if !self.goal_continuation_abort.contains_key(&session_id) {
+                                if !self.goal_continuation_abort.contains(&session_id) {
                                     warn!(
                                         "Failed to submit goal continuation turn after retries: session_id={}, error={}",
                                         session_id, error
@@ -1202,16 +1093,14 @@ pub fn set_global_scheduler(scheduler: Arc<DialogScheduler>) {
 /// Stop in-flight thread-goal continuation submit retries when the user cancels a turn.
 pub fn abort_thread_goal_continuation_for_session(session_id: &str) {
     if let Some(scheduler) = get_global_scheduler() {
-        scheduler
-            .goal_continuation_abort
-            .insert(session_id.to_string(), ());
+        scheduler.goal_continuation_abort.mark(session_id);
     }
 }
 
 /// Allow goal auto-continuation again after the user explicitly resumes a paused goal.
 pub fn clear_thread_goal_continuation_abort(session_id: &str) {
     if let Some(scheduler) = get_global_scheduler() {
-        scheduler.goal_continuation_abort.remove(session_id);
+        scheduler.goal_continuation_abort.clear(session_id);
     }
 }
 
@@ -1219,19 +1108,19 @@ pub fn clear_thread_goal_continuation_abort(session_id: &str) {
 mod tests {
     use super::*;
 
-    fn agent_session_active_turn(source_session_id: &str) -> ActiveTurn {
-        ActiveTurn {
-            turn_id: "turn_1".to_string(),
-            workspace_path: Some("/workspace".to_string()),
-            agent_type: "agentic".to_string(),
-            user_input: "hello".to_string(),
-            user_message_metadata: None,
-            policy: DialogSubmissionPolicy::for_source(DialogTriggerSource::AgentSession),
-            reply_route: Some(AgentSessionReplyRoute {
+    fn agent_session_active_turn(source_session_id: &str) -> ActiveDialogTurn {
+        ActiveDialogTurn::new(
+            "turn_1".to_string(),
+            Some("/workspace".to_string()),
+            "agentic".to_string(),
+            "hello".to_string(),
+            None,
+            DialogSubmissionPolicy::for_source(DialogTriggerSource::AgentSession),
+            Some(AgentSessionReplyRoute {
                 source_session_id: source_session_id.to_string(),
                 source_workspace_path: "/source".to_string(),
             }),
-        }
+        )
     }
 
     #[test]
@@ -1243,6 +1132,7 @@ mod tests {
 
     #[test]
     fn cancelled_reply_is_skipped_only_when_suppressed() {
+        let active_turn = agent_session_active_turn("session_a");
         let cancelled = TurnOutcome::Cancelled {
             turn_id: "turn_1".to_string(),
         };
@@ -1251,14 +1141,17 @@ mod tests {
             final_response: "done".to_string(),
         };
 
-        assert!(DialogScheduler::should_skip_agent_session_reply(
-            &cancelled, true
+        assert_eq!(
+            resolve_agent_session_reply_action("session_b", &active_turn, &cancelled, true),
+            AgentSessionReplyAction::SkipSuppressedCancelledReply
+        );
+        assert!(matches!(
+            resolve_agent_session_reply_action("session_b", &active_turn, &cancelled, false),
+            AgentSessionReplyAction::Forward(_)
         ));
-        assert!(!DialogScheduler::should_skip_agent_session_reply(
-            &cancelled, false
-        ));
-        assert!(!DialogScheduler::should_skip_agent_session_reply(
-            &completed, true
+        assert!(matches!(
+            resolve_agent_session_reply_action("session_b", &active_turn, &completed, true),
+            AgentSessionReplyAction::Forward(_)
         ));
     }
 

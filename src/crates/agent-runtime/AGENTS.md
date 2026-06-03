@@ -13,7 +13,9 @@ and tested without `bitfun-core`.
   product `Tool` adapters in `bitfun-core` until a reviewed owner migration
   proves behavior equivalence.
 - Prefer pure facts and decisions first: queue policy, background delivery,
-  thread-goal accounting/mutation/continuation decisions, cancellation routing,
+  dialog-turn queue state, active-turn facts, cancellation routing and
+  suppression state, background running-turn injection construction, steering action
+  planning, agent-session reply planning, thread-goal accounting/mutation/continuation decisions,
   runtime event facts, registry visibility/availability, round-boundary
   yield/injection state, turn-outcome queue decisions, registry source/profile
   facts, prompt-loop user-context policy, prompt listing reminder ordering,

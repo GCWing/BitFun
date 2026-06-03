@@ -57,6 +57,11 @@ SessionManager -> Session -> DialogTurn -> ModelRound
 - Remote/service changes must keep external protocol lifecycle, workspace
   projection, scheduler/session restore, terminal pre-warm, and product
   execution boundaries explicit.
+- Scheduler changes should keep queue state, active-turn facts, background
+  running-turn injection construction, cancelled-reply suppression state, steering action planning,
+  agent-session reply planning, and goal-continuation abort flags in
+  `bitfun-agent-runtime`; core keeps coordinator, session-manager wiring,
+  delivery, and concrete lifecycle until an equivalence-protected migration.
 - Feature work must keep `product-full` as the compatibility product assembly
   boundary unless a separate product matrix review changes default capability
   selection.

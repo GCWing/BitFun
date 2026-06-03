@@ -125,12 +125,17 @@ PR-C 评估后不继续迁移的内容：MiniApp worker process / host dispatch 
 
 ### 5.2 Agent Registry / Scheduler Owner
 
-- 先迁移只读 facts、queue policy decision、runtime event facts，不先移动 concrete scheduler 生命周期。
-- 保留 mode-scoped visibility、hidden/custom/review grouping、background result delivery、running-turn injection、idle-session follow-up 和 persisted thread goal continuation 语义。
+- 已迁移只读 facts、queue policy decision、queue state、active-turn facts、background running-turn injection
+  construction、steering action、agent-session reply plan、cancelled-reply suppression state、goal-continuation abort flags 和 runtime event facts；
+  不移动 concrete scheduler 生命周期。
+- 保留 mode-scoped visibility、hidden/custom/review grouping、background delivery entrypoint、idle-session follow-up 和 persisted thread goal continuation 语义。
 - thread goal runtime、subagent visibility/availability、round-boundary yield/injection、turn-outcome queue
-  policy、finish-reason label、session-state event label 和 turn-outcome event fact 已归入
+  policy、dialog turn queue、active-turn state、background running-turn injection construction、steering action、
+  agent-session reply plan、cancel suppression、finish-reason label、session-state event label 和 turn-outcome event fact 已归入
   `bitfun-agent-runtime`；后续只允许 core 继续作为 metadata store、config/file IO adapter、concrete prompt
   assembly、concrete scheduler lifecycle、scheduler delivery、event delivery 和 `Tool` adapter。
+- 若继续迁移 scheduler lifecycle、event delivery、permission `Tool` handler 或 post-turn hook，必须先补端到端等价保护，
+  不能只用 owner contract test 证明。
 - 验证 subagent availability、queue/preempt/cancel suppression、DeepResearch citation / post-turn hook、goal verification events、`get_goal` / `create_goal` / `update_goal` tool response wire shape。
 
 ### 5.3 Product-Domain Runtime Owner
