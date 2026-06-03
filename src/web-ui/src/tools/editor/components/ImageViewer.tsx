@@ -202,6 +202,7 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
             <button
               className="bitfun-image-viewer__btn"
               onClick={handleDownload}
+              style={{display: 'none'}}
             >
               <Download size={14} />
             </button>
@@ -213,6 +214,7 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
             <button
               className="bitfun-image-viewer__btn"
               onClick={handleToggleFullscreen}
+              style={{display: 'none'}}
             >
               <Maximize2 size={14} />
             </button>
