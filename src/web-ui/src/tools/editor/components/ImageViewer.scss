@@ -34,6 +34,7 @@
     border-bottom: 1px solid $border-base;
     min-height: 32px;
     flex-shrink: 0;
+    container-type: inline-size;
   }
 
   &__info {
@@ -43,6 +44,7 @@
     font-size: var(--font-size-sm);
     flex: 1;
     min-width: 0;
+    overflow: hidden;
   }
 
   &__filename {
@@ -51,13 +53,34 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    min-width: 0;
+    flex-shrink: 1;
   }
 
-  &__dimensions,
+  &__dimensions {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
   &__filesize {
     font-size: var(--font-size-xs);
     color: var(--color-text-secondary);
     white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  @container (max-width: 250px) {
+    .bitfun-image-viewer__dimensions {
+      display: none;
+    }
+  }
+
+  @container (max-width: 150px) {
+    .bitfun-image-viewer__filename {
+      display: none;
+    }
   }
 
   &__controls {
@@ -65,7 +88,6 @@
     align-items: center;
     gap: $size-gap-2;
     flex-shrink: 0;
-    margin-left: auto;
   }
 
   // Button Styles
