@@ -5,13 +5,15 @@ use super::schedule::{
 };
 use super::store::CronJobStore;
 use super::types::{
-    CreateCronJobRequest, CronJob, CronJobPayload, CronJobRunStatus, CronSchedule,
-    UpdateCronJobRequest, DEFAULT_RETRY_DELAY_MS,
+    CreateCronJobRequest, CronJob, CronJobPayload, CronJobRunStatus, CronJobTarget,
+    CronJobTargetKind, CronLaunchSpec, CronSchedule, CronWorkspaceRef, UpdateCronJobRequest,
+    DEFAULT_RETRY_DELAY_MS,
 };
 use crate::agentic::coordination::{
-    DialogQueuePriority, DialogScheduler, DialogSubmissionPolicy, DialogTriggerSource,
+    ConversationCoordinator, DialogQueuePriority, DialogScheduler, DialogSubmissionPolicy,
+    DialogTriggerSource,
 };
-use crate::agentic::core::{InternalReminderKind, Message};
+use crate::agentic::core::{InternalReminderKind, Message, SessionConfig};
 use crate::infrastructure::PathManager;
 use crate::util::errors::{BitFunError, BitFunResult};
 use chrono::{Local, SecondsFormat, TimeZone, Utc};
@@ -26,6 +28,7 @@ use uuid::Uuid;
 static GLOBAL_CRON_SERVICE: OnceLock<Arc<CronService>> = OnceLock::new();
 
 pub struct CronService {
+    coordinator: Arc<ConversationCoordinator>,
     scheduler: Arc<DialogScheduler>,
     store: Arc<CronJobStore>,
     jobs: Arc<RwLock<HashMap<String, CronJob>>>,
@@ -37,6 +40,7 @@ pub struct CronService {
 impl CronService {
     pub async fn new(
         path_manager: Arc<PathManager>,
+        coordinator: Arc<ConversationCoordinator>,
         scheduler: Arc<DialogScheduler>,
     ) -> BitFunResult<Arc<Self>> {
         let store = Arc::new(CronJobStore::new(path_manager).await?);
@@ -59,6 +63,7 @@ impl CronService {
         }
 
         let service = Arc::new(Self {
+            coordinator,
             scheduler,
             store,
             jobs: Arc::new(RwLock::new(jobs)),
@@ -97,16 +102,24 @@ impl CronService {
     pub async fn list_jobs_filtered(
         &self,
         workspace_path: Option<&str>,
+        workspace_id: Option<&str>,
+        remote_connection_id: Option<&str>,
         session_id: Option<&str>,
+        target_kind: Option<CronJobTargetKind>,
     ) -> Vec<CronJob> {
         let jobs = self.jobs.read().await;
         jobs.values()
             .filter(|job| {
-                workspace_path
-                    .map(|workspace_path| job.workspace_path == workspace_path)
+                matches_workspace_filter(
+                    job.workspace(),
+                    workspace_path,
+                    workspace_id,
+                    remote_connection_id,
+                ) && session_id
+                    .map(|session_id| job.session_id() == Some(session_id))
                     .unwrap_or(true)
-                    && session_id
-                        .map(|session_id| job.session_id == session_id)
+                    && target_kind
+                        .map(|target_kind| job.target_kind() == target_kind)
                         .unwrap_or(true)
             })
             .cloned()
@@ -122,12 +135,8 @@ impl CronService {
         let mut jobs = self.jobs.write().await;
         let current_ms = now_ms();
         let schedule = materialize_schedule(request.schedule, current_ms);
-        validate_request_fields(
-            &request.name,
-            &request.payload,
-            &request.session_id,
-            &request.workspace_path,
-        )?;
+        let target = materialize_target(request.target);
+        validate_request_fields(&request.name, &request.payload, &target)?;
         validate_schedule(&schedule, current_ms)?;
 
         let mut job = CronJob {
@@ -136,8 +145,7 @@ impl CronService {
             schedule,
             payload: request.payload,
             enabled: request.enabled,
-            session_id: request.session_id.trim().to_string(),
-            workspace_path: request.workspace_path.trim().to_string(),
+            target,
             created_at_ms: current_ms,
             config_updated_at_ms: current_ms,
             updated_at_ms: current_ms,
@@ -174,11 +182,8 @@ impl CronService {
         if let Some(payload) = request.payload {
             job.payload = payload;
         }
-        if let Some(session_id) = request.session_id {
-            job.session_id = session_id.trim().to_string();
-        }
-        if let Some(workspace_path) = request.workspace_path {
-            job.workspace_path = workspace_path.trim().to_string();
+        if let Some(target) = request.target {
+            job.target = materialize_target(target);
         }
         if let Some(enabled) = request.enabled {
             job.enabled = enabled;
@@ -187,12 +192,7 @@ impl CronService {
             job.schedule = materialize_schedule(schedule, current_ms);
         }
 
-        validate_request_fields(
-            &job.name,
-            &job.payload,
-            &job.session_id,
-            &job.workspace_path,
-        )?;
+        validate_request_fields(&job.name, &job.payload, &job.target)?;
         validate_schedule(&job.schedule, job.created_at_ms)?;
 
         job.config_updated_at_ms = current_ms;
@@ -253,7 +253,7 @@ impl CronService {
         let _guard = self.mutation_lock.lock().await;
         let mut jobs = self.jobs.write().await;
         let before = jobs.len();
-        jobs.retain(|_, job| job.session_id.trim() != session_id);
+        jobs.retain(|_, job| job.session_id() != Some(session_id));
         let removed = before - jobs.len();
         if removed > 0 {
             self.persist_jobs_locked(&jobs).await?;
@@ -479,9 +479,10 @@ impl CronService {
                 let (user_input, prepended_messages) =
                     format_scheduled_job_user_input(&job.payload.text, current_ms);
                 enqueue_input = Some(EnqueueInput {
+                    job_id: job.id.clone(),
+                    job_name: job.name.clone(),
                     turn_id,
-                    session_id: job.session_id.clone(),
-                    workspace_path: job.workspace_path.clone(),
+                    target: job.target.clone(),
                     user_input,
                     prepended_messages,
                 });
@@ -510,22 +511,7 @@ impl CronService {
             ))
         })?;
 
-        let submit_result = self
-            .scheduler
-            .submit_with_prepended_messages(
-                enqueue_input.session_id.clone(),
-                enqueue_input.user_input.clone(),
-                Some(enqueue_input.user_input),
-                Some(enqueue_input.turn_id.clone()),
-                String::new(),
-                Some(enqueue_input.workspace_path),
-                scheduled_job_policy(),
-                None,
-                None,
-                enqueue_input.prepended_messages,
-                None,
-            )
-            .await;
+        let submit_result = self.submit_enqueue_input(&enqueue_input).await;
 
         let now_after_submit = now_ms();
         let Some(job) = jobs.get_mut(job_id) else {
@@ -534,7 +520,7 @@ impl CronService {
 
         match submit_result {
             Ok(_) => {
-                job.state.active_turn_id = Some(enqueue_input.turn_id);
+                job.state.active_turn_id = Some(enqueue_input.turn_id.clone());
                 job.state.pending_trigger_at_ms = None;
                 job.state.retry_at_ms = None;
                 job.state.last_enqueued_at_ms = Some(now_after_submit);
@@ -548,8 +534,11 @@ impl CronService {
                 }
 
                 debug!(
-                    "Scheduled job enqueued: job_id={}, session_id={}, scheduled_at_ms={}",
-                    job.id, job.session_id, scheduled_at_ms
+                    "Scheduled job enqueued: job_id={}, target_kind={:?}, target_session_id={}, scheduled_at_ms={}",
+                    job.id,
+                    job.target_kind(),
+                    submit_target_session_id(&enqueue_input),
+                    scheduled_at_ms
                 );
             }
             Err(error) => {
@@ -558,7 +547,9 @@ impl CronService {
                 job.state.last_run_finished_at_ms = Some(now_after_submit);
                 job.updated_at_ms = now_after_submit;
 
-                if cron_enqueue_error_is_missing_session(&error) {
+                if matches!(job.target_kind(), CronJobTargetKind::Session)
+                    && cron_enqueue_error_is_missing_session(&error)
+                {
                     job.enabled = false;
                     job.state.next_run_at_ms = None;
                     job.state.pending_trigger_at_ms = None;
@@ -567,15 +558,19 @@ impl CronService {
                         job.state.consecutive_failures.saturating_add(1);
                     info!(
                         "Scheduled job auto-disabled (session no longer exists): job_id={}, session_id={}",
-                        job.id, job.session_id
+                        job.id,
+                        submit_target_session_id(&enqueue_input)
                     );
                 } else {
                     job.state.retry_at_ms = Some(now_after_submit + DEFAULT_RETRY_DELAY_MS);
                     job.state.consecutive_failures =
                         job.state.consecutive_failures.saturating_add(1);
                     warn!(
-                        "Failed to enqueue scheduled job: job_id={}, session_id={}, error={}",
-                        job.id, job.session_id, error
+                        "Failed to enqueue scheduled job: job_id={}, target_kind={:?}, target_session_id={}, error={}",
+                        job.id,
+                        job.target_kind(),
+                        submit_target_session_id(&enqueue_input),
+                        error
                     );
                 }
             }
@@ -590,6 +585,81 @@ impl CronService {
     async fn persist_snapshot(&self) -> BitFunResult<()> {
         let jobs = self.jobs.read().await;
         self.persist_jobs_locked(&jobs).await
+    }
+
+    async fn submit_enqueue_input(&self, enqueue_input: &EnqueueInput) -> Result<(), String> {
+        let resolved = self.resolve_enqueue_submission(enqueue_input).await?;
+        self.scheduler
+            .submit_with_prepended_messages(
+                resolved.session_id,
+                enqueue_input.user_input.clone(),
+                Some(enqueue_input.user_input.clone()),
+                Some(enqueue_input.turn_id.clone()),
+                resolved.agent_type,
+                Some(resolved.workspace_path),
+                scheduled_job_policy(),
+                None,
+                None,
+                enqueue_input.prepended_messages.clone(),
+                None,
+            )
+            .await
+            .map(|_| ())
+    }
+
+    async fn resolve_enqueue_submission(
+        &self,
+        enqueue_input: &EnqueueInput,
+    ) -> Result<ResolvedEnqueueSubmission, String> {
+        match &enqueue_input.target {
+            CronJobTarget::Session {
+                session_id,
+                workspace,
+            } => {
+                let agent_type = self
+                    .coordinator
+                    .get_session_manager()
+                    .get_session(session_id)
+                    .map(|session| session.agent_type)
+                    .unwrap_or_default();
+                Ok(ResolvedEnqueueSubmission {
+                    session_id: session_id.clone(),
+                    workspace_path: workspace.workspace_path.clone(),
+                    agent_type,
+                })
+            }
+            CronJobTarget::Workspace { workspace, launch } => {
+                let created = self
+                    .coordinator
+                    .create_session_with_workspace(
+                        None,
+                        format!("Scheduled: {}", enqueue_input.job_name.trim()),
+                        launch.agent_type.clone(),
+                        SessionConfig {
+                            workspace_path: Some(workspace.workspace_path.clone()),
+                            workspace_id: workspace.workspace_id.clone(),
+                            remote_connection_id: workspace.remote_connection_id.clone(),
+                            remote_ssh_host: workspace.remote_ssh_host.clone(),
+                            model_id: launch.model_id.clone(),
+                            ..Default::default()
+                        },
+                        workspace.workspace_path.clone(),
+                    )
+                    .await
+                    .map_err(|error| {
+                        format!(
+                            "Failed to create session for scheduled job {}: {}",
+                            enqueue_input.job_id, error
+                        )
+                    })?;
+
+                Ok(ResolvedEnqueueSubmission {
+                    session_id: created.session_id,
+                    workspace_path: workspace.workspace_path.clone(),
+                    agent_type: created.agent_type,
+                })
+            }
+        }
     }
 
     async fn persist_jobs_locked(&self, jobs: &HashMap<String, CronJob>) -> BitFunResult<()> {
@@ -610,12 +680,8 @@ pub fn set_global_cron_service(service: Arc<CronService>) {
 fn reconcile_loaded_job(job: &mut CronJob, now_ms: i64) -> BitFunResult<bool> {
     let original = job.clone();
 
-    validate_request_fields(
-        &job.name,
-        &job.payload,
-        &job.session_id,
-        &job.workspace_path,
-    )?;
+    job.target = materialize_target(job.target.clone());
+    validate_request_fields(&job.name, &job.payload, &job.target)?;
     validate_schedule(&job.schedule, job.created_at_ms)?;
 
     if job.updated_at_ms < job.created_at_ms {
@@ -658,8 +724,7 @@ fn reconcile_loaded_job(job: &mut CronJob, now_ms: i64) -> BitFunResult<bool> {
 fn validate_request_fields(
     name: &str,
     payload: &CronJobPayload,
-    session_id: &str,
-    workspace_path: &str,
+    target: &CronJobTarget,
 ) -> BitFunResult<()> {
     if name.trim().is_empty() {
         return Err(BitFunError::validation(
@@ -671,16 +736,8 @@ fn validate_request_fields(
             "Scheduled job payload.text must not be empty",
         ));
     }
-    if session_id.trim().is_empty() {
-        return Err(BitFunError::validation(
-            "Scheduled job sessionId must not be empty",
-        ));
-    }
-    if workspace_path.trim().is_empty() {
-        return Err(BitFunError::validation(
-            "Scheduled job workspacePath must not be empty",
-        ));
-    }
+
+    validate_target(target)?;
 
     Ok(())
 }
@@ -696,6 +753,111 @@ fn materialize_schedule(schedule: CronSchedule, anchor_ms: i64) -> CronSchedule 
         },
         other => other,
     }
+}
+
+fn materialize_target(target: CronJobTarget) -> CronJobTarget {
+    match target {
+        CronJobTarget::Session {
+            session_id,
+            workspace,
+        } => CronJobTarget::Session {
+            session_id: session_id.trim().to_string(),
+            workspace: materialize_workspace_ref(workspace),
+        },
+        CronJobTarget::Workspace { workspace, launch } => CronJobTarget::Workspace {
+            workspace: materialize_workspace_ref(workspace),
+            launch: materialize_launch_spec(launch),
+        },
+    }
+}
+
+fn materialize_workspace_ref(workspace: CronWorkspaceRef) -> CronWorkspaceRef {
+    CronWorkspaceRef {
+        workspace_id: workspace
+            .workspace_id
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty()),
+        workspace_path: workspace.workspace_path.trim().to_string(),
+        remote_connection_id: workspace
+            .remote_connection_id
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty()),
+        remote_ssh_host: workspace
+            .remote_ssh_host
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty()),
+    }
+}
+
+fn materialize_launch_spec(launch: CronLaunchSpec) -> CronLaunchSpec {
+    CronLaunchSpec {
+        agent_type: normalize_agent_type(&launch.agent_type),
+        model_id: launch
+            .model_id
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty()),
+    }
+}
+
+fn normalize_agent_type(agent_type: &str) -> String {
+    if agent_type.trim().is_empty() {
+        "agentic".to_string()
+    } else {
+        agent_type.trim().to_string()
+    }
+}
+
+fn validate_target(target: &CronJobTarget) -> BitFunResult<()> {
+    validate_workspace_ref(target.workspace())?;
+
+    match target {
+        CronJobTarget::Session { session_id, .. } => {
+            if session_id.trim().is_empty() {
+                return Err(BitFunError::validation(
+                    "Scheduled job sessionId must not be empty",
+                ));
+            }
+        }
+        CronJobTarget::Workspace { launch, .. } => {
+            if launch.agent_type.trim().is_empty() {
+                return Err(BitFunError::validation(
+                    "Scheduled job launch.agentType must not be empty",
+                ));
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_workspace_ref(workspace: &CronWorkspaceRef) -> BitFunResult<()> {
+    if workspace.workspace_path.trim().is_empty() {
+        return Err(BitFunError::validation(
+            "Scheduled job workspacePath must not be empty",
+        ));
+    }
+    Ok(())
+}
+
+fn matches_workspace_filter(
+    workspace: &CronWorkspaceRef,
+    workspace_path: Option<&str>,
+    workspace_id: Option<&str>,
+    remote_connection_id: Option<&str>,
+) -> bool {
+    let workspace_path_matches = workspace_path
+        .map(|value| workspace.workspace_path == value)
+        .unwrap_or(true);
+    let workspace_id_matches = workspace_id
+        .map(|value| {
+            workspace.workspace_id.as_deref() == Some(value) || workspace.workspace_id.is_none()
+        })
+        .unwrap_or(true);
+    let remote_connection_matches = remote_connection_id
+        .map(|value| workspace.remote_connection_id.as_deref() == Some(value))
+        .unwrap_or(true);
+
+    workspace_path_matches && workspace_id_matches && remote_connection_matches
 }
 
 fn pending_is_due(job: &CronJob, now_ms: i64) -> bool {
@@ -754,11 +916,25 @@ fn now_ms() -> i64 {
 }
 
 struct EnqueueInput {
+    job_id: String,
+    job_name: String,
     turn_id: String,
-    session_id: String,
-    workspace_path: String,
+    target: CronJobTarget,
     user_input: String,
     prepended_messages: Vec<Message>,
+}
+
+struct ResolvedEnqueueSubmission {
+    session_id: String,
+    workspace_path: String,
+    agent_type: String,
+}
+
+fn submit_target_session_id(enqueue_input: &EnqueueInput) -> &str {
+    match &enqueue_input.target {
+        CronJobTarget::Session { session_id, .. } => session_id.as_str(),
+        CronJobTarget::Workspace { .. } => "<new-session>",
+    }
 }
 
 /// Permanent failure: coordinator cannot load session metadata (session deleted from disk).

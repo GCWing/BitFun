@@ -213,7 +213,7 @@
     },
     "scheduledJobs": {
       "title": "定時任務",
-      "open": "開啟定時任務",
+      "open": "定時任務",
       "shortLabel": "定時任務",
       "listTitle": "任務列表",
       "assistantFallback": "目前助理",
@@ -223,6 +223,7 @@
       "fields": {
         "workspacePath": "工作區路徑",
         "session": "會話",
+        "agentType": "Agent 類型",
         "name": "任務名稱",
         "enabled": "啟用狀態",
         "enabledHint": "啟用該任務",
@@ -237,10 +238,15 @@
       "placeholders": {
         "workspacePath": "請輸入工作區路徑",
         "session": "請選擇或輸入會話 ID",
+        "optionalSession": "留空則建立新會話後執行",
+        "agentType": "例如：agentic、Cowork 或 Claw",
         "name": "例如：每日全球新聞簡報",
         "anchorMs": "留空則使用建立時刻",
         "timezone": "例如：Asia/Shanghai",
-        "prompt": "請輸入定時觸發時發送給助理的內容"
+        "prompt": "請輸入定時觸發時發送給 Agent 的內容"
+      },
+      "hints": {
+        "cronExpr": "Cron 格式：分 時 日 月 週，例如 0 8 * * * 表示每天 08:00。"
       },
       "scheduleKinds": {
         "at": "單次執行",
@@ -251,6 +257,10 @@
         "every": "每 {{everyMinutes}} 分鐘",
         "cron": "Cron: {{expr}}",
         "cronWithTz": "Cron: {{expr}} · {{tz}}"
+      },
+      "targets": {
+        "session": "會話",
+        "newSession": "新會話"
       },
       "status": {
         "idle": "待命",
@@ -271,13 +281,9 @@
         "create": "建立任務",
         "cancel": "取消"
       },
-      "editor": {
-        "editTitle": "編輯任務",
-        "createTitle": "新增任務"
-      },
       "empty": {
-        "title": "還沒有定時任務",
-        "description": "點擊右上角的加號建立第一條定時任務。"
+        "title": "此會話還沒有定時任務",
+        "workspaceTitle": "此工作區還沒有定時任務，觸發時會建立新會話並執行。"
       },
       "deleteDialog": {
         "title": "刪除任務“{{name}}”？"

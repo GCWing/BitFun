@@ -46,6 +46,8 @@ impl TransportAdapter for TauriTransportAdapter {
                 session_name,
                 agent_type,
                 workspace_path,
+                remote_connection_id,
+                remote_ssh_host,
             } => {
                 self.app_handle.emit(
                     "agentic://session-created",
@@ -54,6 +56,8 @@ impl TransportAdapter for TauriTransportAdapter {
                         "sessionName": session_name,
                         "agentType": agent_type,
                         "workspacePath": workspace_path,
+                        "remoteConnectionId": remote_connection_id,
+                        "remoteSshHost": remote_ssh_host,
                     }),
                 )?;
             }

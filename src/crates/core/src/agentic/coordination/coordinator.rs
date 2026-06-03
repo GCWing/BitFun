@@ -1207,6 +1207,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             session_name: session.session_name.clone(),
             agent_type: session.agent_type.clone(),
             workspace_path: Some(workspace_path),
+            remote_connection_id: session.config.remote_connection_id.clone(),
+            remote_ssh_host: session.config.remote_ssh_host.clone(),
         })
         .await;
         Ok(session)

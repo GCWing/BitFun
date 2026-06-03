@@ -160,7 +160,7 @@ fn normalize_cron_expr(expr: &str) -> BitFunResult<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::service::cron::{CronJobPayload, CronJobState};
+    use crate::service::cron::{CronJobPayload, CronJobState, CronJobTarget, CronWorkspaceRef};
 
     fn sample_job(schedule: CronSchedule) -> CronJob {
         CronJob {
@@ -171,8 +171,15 @@ mod tests {
                 text: "hello".to_string(),
             },
             enabled: true,
-            session_id: "session_1".to_string(),
-            workspace_path: "E:/workspace".to_string(),
+            target: CronJobTarget::Session {
+                session_id: "session_1".to_string(),
+                workspace: CronWorkspaceRef {
+                    workspace_id: None,
+                    workspace_path: "E:/workspace".to_string(),
+                    remote_connection_id: None,
+                    remote_ssh_host: None,
+                },
+            },
             created_at_ms: 1_700_000_000_000,
             config_updated_at_ms: 1_700_000_000_000,
             updated_at_ms: 1_700_000_000_000,

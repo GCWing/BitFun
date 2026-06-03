@@ -735,16 +735,20 @@ function handleSessionCreated(context: FlowChatContext, event: any): void {
 
   const store = FlowChatStore.getInstance();
   const existing = store.getState().sessions.get(sessionId);
+  const workspacePath = resolveExternalSessionWorkspacePath(context, event);
+  const remoteConnectionId = extractEventRemoteConnectionId(event);
+  const remoteSshHost = extractEventRemoteSshHost(event);
+
   if (existing) return;
 
   store.addExternalSession(
     sessionId,
     sessionName || 'Remote Session',
     agentType || 'agentic',
-    resolveExternalSessionWorkspacePath(context, event),
+    workspacePath,
     undefined,
-    extractEventRemoteConnectionId(event),
-    extractEventRemoteSshHost(event)
+    remoteConnectionId,
+    remoteSshHost
   );
 }
 

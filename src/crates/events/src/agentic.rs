@@ -75,6 +75,12 @@ pub enum AgenticEvent {
         /// Workspace path this session belongs to. None for locally-created sessions.
         #[serde(skip_serializing_if = "Option::is_none")]
         workspace_path: Option<String>,
+        /// Remote SSH connection identity for sessions bound to remote workspaces.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        remote_connection_id: Option<String>,
+        /// Remote SSH host for sessions bound to remote workspaces.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        remote_ssh_host: Option<String>,
     },
 
     SessionStateChanged {

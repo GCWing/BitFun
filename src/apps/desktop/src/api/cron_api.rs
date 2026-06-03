@@ -1,7 +1,7 @@
 //! Scheduled jobs API.
 
 use bitfun_core::service::cron::{
-    get_global_cron_service, CreateCronJobRequest, CronJob, UpdateCronJobRequest,
+    get_global_cron_service, CreateCronJobRequest, CronJob, CronJobTargetKind, UpdateCronJobRequest,
 };
 use log::{debug, error};
 use serde::Deserialize;
@@ -10,7 +10,10 @@ use serde::Deserialize;
 #[serde(rename_all = "camelCase")]
 pub struct ListCronJobsRequest {
     pub workspace_path: Option<String>,
+    pub workspace_id: Option<String>,
+    pub remote_connection_id: Option<String>,
     pub session_id: Option<String>,
+    pub target_kind: Option<CronJobTargetKind>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -34,15 +37,22 @@ fn cron_service() -> Result<std::sync::Arc<bitfun_core::service::cron::CronServi
 #[tauri::command]
 pub async fn list_cron_jobs(request: ListCronJobsRequest) -> Result<Vec<CronJob>, String> {
     debug!(
-        "Listing scheduled jobs: workspace_path={:?}, session_id={:?}",
-        request.workspace_path, request.session_id
+        "Listing scheduled jobs: workspace_path={:?}, workspace_id={:?}, remote_connection_id={:?}, session_id={:?}, target_kind={:?}",
+        request.workspace_path,
+        request.workspace_id,
+        request.remote_connection_id,
+        request.session_id,
+        request.target_kind
     );
 
     let service = cron_service()?;
     Ok(service
         .list_jobs_filtered(
             request.workspace_path.as_deref(),
+            request.workspace_id.as_deref(),
+            request.remote_connection_id.as_deref(),
             request.session_id.as_deref(),
+            request.target_kind,
         )
         .await)
 }
@@ -50,8 +60,8 @@ pub async fn list_cron_jobs(request: ListCronJobsRequest) -> Result<Vec<CronJob>
 #[tauri::command]
 pub async fn create_cron_job(request: CreateCronJobRequest) -> Result<CronJob, String> {
     debug!(
-        "Creating scheduled job: name={}, session_id={}, workspace_path={}",
-        request.name, request.session_id, request.workspace_path
+        "Creating scheduled job: name={}, target={:?}",
+        request.name, request.target
     );
 
     let service = cron_service()?;

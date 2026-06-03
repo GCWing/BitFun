@@ -213,7 +213,7 @@
     },
     "scheduledJobs": {
       "title": "Scheduled Jobs",
-      "open": "Open scheduled jobs",
+      "open": "Scheduled jobs",
       "shortLabel": "Schedule",
       "listTitle": "Jobs",
       "assistantFallback": "Current assistant",
@@ -223,6 +223,7 @@
       "fields": {
         "workspacePath": "Workspace path",
         "session": "Session",
+        "agentType": "Agent type",
         "name": "Job name",
         "enabled": "Enabled",
         "enabledHint": "Enable this job",
@@ -237,10 +238,15 @@
       "placeholders": {
         "workspacePath": "Enter workspace path",
         "session": "Select or enter a session ID",
+        "optionalSession": "Leave blank to create a new session",
+        "agentType": "For example: agentic, Cowork, or Claw",
         "name": "For example: Daily global news briefing",
         "anchorMs": "Leave blank to use creation time",
         "timezone": "For example: Asia/Shanghai",
-        "prompt": "Enter the message that should be sent when the schedule fires"
+        "prompt": "Enter the message that should be sent to the agent when the schedule fires"
+      },
+      "hints": {
+        "cronExpr": "Cron format: minute hour day month weekday, for example 0 8 * * * runs every day at 08:00."
       },
       "scheduleKinds": {
         "at": "One-time",
@@ -251,6 +257,10 @@
         "every": "Every {{everyMinutes}} minutes",
         "cron": "Cron: {{expr}}",
         "cronWithTz": "Cron: {{expr}} · {{tz}}"
+      },
+      "targets": {
+        "session": "Session",
+        "newSession": "New session"
       },
       "status": {
         "idle": "Idle",
@@ -271,13 +281,9 @@
         "create": "Create job",
         "cancel": "Cancel"
       },
-      "editor": {
-        "editTitle": "Edit job",
-        "createTitle": "Create job"
-      },
       "empty": {
-        "title": "No scheduled jobs yet",
-        "description": "Click the plus button to create your first scheduled job."
+        "title": "This session has no scheduled jobs yet",
+        "workspaceTitle": "This workspace has no scheduled jobs yet. Runs will create a new session."
       },
       "deleteDialog": {
         "title": "Delete job \"{{name}}\"?"

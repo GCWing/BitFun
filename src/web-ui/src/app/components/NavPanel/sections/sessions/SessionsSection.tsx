@@ -7,7 +7,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Pencil, Trash2, Check, X, Bot, Code2, ClipboardList, Panda, MoreHorizontal, Loader2, Archive } from 'lucide-react';
+import { Pencil, Trash2, Check, X, Bot, Code2, ClipboardList, Panda, MoreHorizontal, Loader2, Archive, Clock3 } from 'lucide-react';
 import { IconButton, Input, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { flowChatStore } from '../../../../../flow_chat/store/FlowChatStore';
@@ -39,6 +39,7 @@ import {
 import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
 import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
 import { confirmWarning } from '@/component-library/components/ConfirmDialog/confirmService';
+import ScheduledJobsModal from '@/app/components/scheduled-jobs/ScheduledJobsModal';
 import './SessionsSection.scss';
 
 /** Top-level parent sessions shown at each expand step (children still nest under visible parents). */
@@ -142,6 +143,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   const [openMenuSessionId, setOpenMenuSessionId] = useState<string | null>(null);
   const [sessionMenuPosition, setSessionMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const [runningSessionIds, setRunningSessionIds] = useState<Set<string>>(new Set());
+  const [scheduledJobsSessionId, setScheduledJobsSessionId] = useState<string | null>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
   const sessionMenuPopoverRef = useRef<HTMLDivElement>(null);
   const sessionMenuAnchorRef = useRef<HTMLButtonElement>(null);
@@ -374,6 +376,9 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   }, [childrenByParent, sessionDisplayLimit, topLevelSessions]);
 
   const activeSessionId = flowChatState.activeSessionId;
+  const scheduledJobsSession = scheduledJobsSessionId
+    ? flowChatState.sessions.get(scheduledJobsSessionId) ?? null
+    : null;
 
   const handleSwitch = useCallback(
     async (sessionId: string) => {
@@ -841,6 +846,19 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                       <button
                         type="button"
                         className="bitfun-nav-panel__inline-item-menu-item"
+                        onClick={e => {
+                          e.stopPropagation();
+                          setOpenMenuSessionId(null);
+                          setScheduledJobsSessionId(session.sessionId);
+                        }}
+                        disabled={!workspacePath}
+                      >
+                        <Clock3 size={13} />
+                        <span>{t('nav.scheduledJobs.open')}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="bitfun-nav-panel__inline-item-menu-item"
                         onClick={e => { setOpenMenuSessionId(null); void handleArchive(e, session.sessionId); }}
                       >
                         <Archive size={13} />
@@ -907,6 +925,21 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           )}
         </button>
       )}
+
+      <ScheduledJobsModal
+        isOpen={scheduledJobsSession != null}
+        onClose={() => setScheduledJobsSessionId(null)}
+        workspacePath={scheduledJobsSession?.workspacePath || workspacePath}
+        workspaceId={scheduledJobsSession?.workspaceId || workspaceId}
+        remoteConnectionId={scheduledJobsSession?.remoteConnectionId || remoteConnectionId}
+        remoteSshHost={scheduledJobsSession?.remoteSshHost || remoteSshHost}
+        sessionId={scheduledJobsSession?.sessionId}
+        targetKind="session"
+        lockSessionId
+        title={t('nav.scheduledJobs.title')}
+        targetLabel={scheduledJobsSession ? resolveSessionTitle(scheduledJobsSession) : undefined}
+        targetDescription={scheduledJobsSession?.workspacePath || workspacePath}
+      />
     </div>
   );
 };

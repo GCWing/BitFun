@@ -6,8 +6,8 @@ use crate::agentic::tools::framework::{
 use crate::agentic::tools::workspace_paths::posix_style_path_is_absolute;
 use crate::service::{
     cron::{
-        CreateCronJobRequest, CronJob, CronJobPayload, CronJobRunStatus, CronSchedule,
-        UpdateCronJobRequest,
+        CreateCronJobRequest, CronJob, CronJobPayload, CronJobRunStatus, CronJobTarget,
+        CronJobTargetKind, CronSchedule, CronWorkspaceRef, UpdateCronJobRequest,
     },
     get_global_cron_service,
 };
@@ -544,8 +544,8 @@ impl TryFrom<&CronJob> for CronToolJobOutput {
             schedule: CronToolScheduleOutput::try_from(&job.schedule)?,
             payload: job.payload.text.clone(),
             enabled: job.enabled,
-            session_id: job.session_id.clone(),
-            workspace_path: job.workspace_path.clone(),
+            session_id: job.session_id().unwrap_or_default().to_string(),
+            workspace_path: job.workspace().workspace_path.clone(),
             created_at_ms: job.created_at_ms,
             config_updated_at_ms: job.config_updated_at_ms,
             updated_at_ms: job.updated_at_ms,
@@ -975,7 +975,13 @@ Patch schema for "update":
                     .resolve_effective_workspace_for_session(&session_id, context)
                     .await?;
                 let mut jobs = cron_service
-                    .list_jobs_filtered(Some(&workspace), Some(&session_id))
+                    .list_jobs_filtered(
+                        Some(&workspace),
+                        None,
+                        None,
+                        Some(&session_id),
+                        Some(CronJobTargetKind::Session),
+                    )
                     .await;
                 jobs.sort_by(|left, right| {
                     left.created_at_ms
@@ -1021,14 +1027,24 @@ Patch schema for "update":
                         schedule: job.schedule.to_service_schedule("job.schedule")?,
                         payload: Self::into_service_payload(job.payload),
                         enabled: job.enabled.unwrap_or(true),
-                        session_id: session_id.clone(),
-                        workspace_path: workspace.clone(),
+                        target: CronJobTarget::Session {
+                            session_id: session_id.clone(),
+                            workspace: CronWorkspaceRef {
+                                workspace_id: None,
+                                workspace_path: workspace.clone(),
+                                remote_connection_id: None,
+                                remote_ssh_host: None,
+                            },
+                        },
                     })
                     .await?;
                 let serialized_job = Self::serialize_job(&created)?;
                 let result_for_assistant = format!(
                     "Created scheduled job '{}' ({}) for session '{}' in workspace '{}'.",
-                    created.name, created.id, created.session_id, created.workspace_path
+                    created.name,
+                    created.id,
+                    created.session_id().unwrap_or(""),
+                    created.workspace().workspace_path
                 );
 
                 Ok(vec![ToolResult::Result {
@@ -1074,8 +1090,7 @@ Patch schema for "update":
                                 .transpose()?,
                             payload: patch.payload.map(Self::into_service_payload),
                             enabled: patch.enabled,
-                            session_id: None,
-                            workspace_path: None,
+                            target: None,
                         },
                     )
                     .await?;

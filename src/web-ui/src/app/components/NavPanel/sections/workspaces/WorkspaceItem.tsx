@@ -1,6 +1,6 @@
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Folder, FolderOpen, MoreHorizontal, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw, Copy, FileText, GitBranch, Bot, Link2, Archive, Loader2 } from 'lucide-react';
+import { Folder, FolderOpen, MoreHorizontal, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw, Copy, FileText, GitBranch, Bot, Link2, Archive, Loader2, Clock3 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { DotMatrixArrowRightIcon } from './DotMatrixArrowRightIcon';
 import { Button, ConfirmDialog, Modal, Tooltip } from '@/component-library';
@@ -38,6 +38,7 @@ import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
 import { confirmWarning } from '@/component-library/components/ConfirmDialog/confirmService';
 import { scheduleAfterStartupSignal } from '@/shared/utils/startupTaskScheduling';
 import { getWorkspaceGitBasicInfoOptions } from './workspaceGitRefreshOptions';
+import ScheduledJobsModal from '@/app/components/scheduled-jobs/ScheduledJobsModal';
 
 
 interface WorkspaceItemProps {
@@ -97,6 +98,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   const [isResettingWorkspace, setIsResettingWorkspace] = useState(false);
   const [sessionsCollapsed, setSessionsCollapsed] = useState(false);
   const [searchIndexModalOpen, setSearchIndexModalOpen] = useState(false);
+  const [scheduledJobsModalOpen, setScheduledJobsModalOpen] = useState(false);
   const [workspaceSearchEnabled, setWorkspaceSearchEnabled] = useState(
     () => aiExperienceConfigService.getSettings().enable_workspace_search,
   );
@@ -459,6 +461,11 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     }
   }, [workspace, t]);
 
+  const handleOpenScheduledJobs = useCallback(() => {
+    setMenuOpen(false);
+    setScheduledJobsModalOpen(true);
+  }, []);
+
   const handleRequestDeleteAssistant = useCallback(() => {
     setMenuOpen(false);
     setDeleteDialogOpen(true);
@@ -815,13 +822,21 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                 role="menu"
                 style={{ top: `${menuPosition.top}px`, left: `${menuPosition.left}px` }}
               >
-                <button type="button" className="bitfun-nav-panel__workspace-item-menu-item" onClick={() => { void handleCreateSession(); }}>
-                  <Plus size={13} />
-                  <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.newSession')}</span>
-                </button>
-                <div className="bitfun-nav-panel__workspace-item-menu-divider" />
-                <button
-                  type="button"
+                  <button type="button" className="bitfun-nav-panel__workspace-item-menu-item" onClick={() => { void handleCreateSession(); }}>
+                    <Plus size={13} />
+                    <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.newSession')}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="bitfun-nav-panel__workspace-item-menu-item"
+                    onClick={handleOpenScheduledJobs}
+                  >
+                    <Clock3 size={13} />
+                    <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.scheduledJobs.open')}</span>
+                  </button>
+                  <div className="bitfun-nav-panel__workspace-item-menu-divider" />
+                  <button
+                    type="button"
                   className="bitfun-nav-panel__workspace-item-menu-item"
                   onClick={() => { void handleCopyWorkspacePath(); }}
                   disabled={!workspace.rootPath}
@@ -903,6 +918,19 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
           cancelText={t('actions.cancel')}
           confirmDanger
           preview={`${t('nav.workspaces.resetWorkspaceDialog.pathLabel')}\n${workspace.rootPath}`}
+        />
+        <ScheduledJobsModal
+          isOpen={scheduledJobsModalOpen}
+          onClose={() => setScheduledJobsModalOpen(false)}
+          workspacePath={workspace.rootPath}
+          workspaceId={workspace.id}
+          workspaceKind={workspace.workspaceKind}
+          remoteConnectionId={isRemoteWorkspace(workspace) ? workspace.connectionId : null}
+          remoteSshHost={isRemoteWorkspace(workspace) ? workspace.sshHost : null}
+          targetKind="workspace"
+          title={t('nav.scheduledJobs.title')}
+          targetLabel={workspaceDisplayName}
+          targetDescription={workspace.rootPath}
         />
       </div>
     );
@@ -1173,6 +1201,14 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                     {t('nav.workspaces.actions.manageRelatedPaths')}
                   </span>
                 </button>
+                <button
+                  type="button"
+                  className="bitfun-nav-panel__workspace-item-menu-item"
+                  onClick={handleOpenScheduledJobs}
+                >
+                  <Clock3 size={13} />
+                  <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.scheduledJobs.open')}</span>
+                </button>
                 <div className="bitfun-nav-panel__workspace-item-menu-divider" />
                 {isLinkedWorktree ? (
                   <button
@@ -1271,6 +1307,19 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
         workspace={workspace}
         isOpen={relatedPathsDialogOpen}
         onClose={() => setRelatedPathsDialogOpen(false)}
+      />
+      <ScheduledJobsModal
+        isOpen={scheduledJobsModalOpen}
+        onClose={() => setScheduledJobsModalOpen(false)}
+        workspacePath={workspace.rootPath}
+        workspaceId={workspace.id}
+        workspaceKind={workspace.workspaceKind}
+        remoteConnectionId={isRemoteWorkspace(workspace) ? workspace.connectionId : null}
+        remoteSshHost={isRemoteWorkspace(workspace) ? workspace.sshHost : null}
+        targetKind="workspace"
+        title={t('nav.scheduledJobs.title')}
+        targetLabel={workspaceDisplayName}
+        targetDescription={workspace.rootPath}
       />
     </div>
   );
