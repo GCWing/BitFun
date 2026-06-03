@@ -98,8 +98,6 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
         "WebFetch".to_string(),
         "TodoWrite".to_string(),
         "Skill".to_string(),
-        "Git".to_string(),
-        "ControlHub".to_string(),
     ]
 }
 
