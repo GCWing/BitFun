@@ -553,20 +553,19 @@ async fn run_cli() -> Result<()> {
     let cli = Cli::parse();
 
     let is_tui_mode = matches!(cli.command, None | Some(Commands::Chat { .. }));
-    let log_level = if cli.verbose {
-        tracing::Level::DEBUG
-    } else if is_tui_mode {
-        tracing::Level::INFO
+    let is_exec_mode = matches!(cli.command, Some(Commands::Exec { .. }));
+    let file_log_level = logging::default_log_level(cli.verbose);
+    let stderr_log_level = if cli.verbose {
+        tracing::Level::TRACE
     } else {
         tracing::Level::ERROR
     };
 
-    let is_exec_mode = matches!(cli.command, Some(Commands::Exec { .. }));
     if is_tui_mode || is_exec_mode {
-        logging::init_file_logging(log_level);
+        logging::init_file_logging(file_log_level);
     } else {
         tracing_subscriber::fmt()
-            .with_max_level(log_level)
+            .with_max_level(stderr_log_level)
             .with_writer(std::io::stderr)
             .with_ansi(false)
             .with_target(false)
