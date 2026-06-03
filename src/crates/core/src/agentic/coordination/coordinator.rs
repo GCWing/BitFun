@@ -1193,17 +1193,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         .await
     }
 
-    /// Ensure the completed/failed/cancelled turn is persisted to the workspace
-    /// session storage. If the frontend already saved a richer version
-    /// during streaming, we only update the final status; otherwise we create
-    /// a minimal record with the user message so the turn is never lost.
-    /// Safety-net persistence: only creates a minimal record when the frontend
-    /// has not saved anything yet.  The frontend's PersistenceModule is the
-    /// authoritative writer for turn content (model rounds, text, tools, etc.)
-    /// and final status.  This function must NOT overwrite frontend-managed
-    /// data, because the spawned task always runs before the frontend receives
-    /// the DialogTurnCompleted event via the transport layer, and the existing
-    /// disk data from debounced saves may have incomplete model rounds.
+    /// Ensure the completed/failed/cancelled turn has at least a minimal
+    /// workspace record. Normal completed turns are authored by core via
+    /// `SessionManager::complete_dialog_turn`; this function is now only the
+    /// crash/transport safety net for missing turn files.
     async fn finalize_turn_in_workspace(
         session_id: &str,
         turn_id: &str,
@@ -1345,6 +1338,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 session_id,
                 turn_id,
                 final_response.clone(),
+                execution_result.model_rounds.clone(),
                 TurnStats {
                     total_rounds: execution_result.total_rounds,
                     total_tools: 0, // TODO: get from execution_result

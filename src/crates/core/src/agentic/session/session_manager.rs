@@ -4,7 +4,8 @@
 
 use crate::agentic::core::{
     new_turn_id, CompressionContract, CompressionState, Message, MessageSemanticKind,
-    ProcessingPhase, Session, SessionConfig, SessionKind, SessionState, SessionSummary, TurnStats,
+    ProcessingPhase, Session, SessionConfig, SessionKind, SessionState, SessionSummary, ToolCall,
+    ToolResult, TurnStats,
 };
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::persistence::PersistenceManager;
@@ -22,7 +23,7 @@ use crate::service::config::{
 };
 use crate::service::session::{
     DialogTurnData, DialogTurnKind, ModelRoundData, SessionMetadata, SessionRelationship,
-    SessionRelationshipKind, TextItemData, TurnStatus, UserMessageData,
+    SessionRelationshipKind, TextItemData, ToolItemData, TurnStatus, UserMessageData,
 };
 use crate::service::snapshot::ensure_snapshot_manager_for_workspace;
 use crate::service::workspace::get_global_workspace_service;
@@ -511,6 +512,69 @@ impl SessionManager {
         None
     }
 
+    fn unix_ms_to_system_time(timestamp_ms: u64) -> SystemTime {
+        SystemTime::UNIX_EPOCH + Duration::from_millis(timestamp_ms)
+    }
+
+    fn assistant_text_for_round(round: &ModelRoundData) -> String {
+        let mut text_items = round.text_items.clone();
+        text_items.sort_by_key(|item| item.order_index.unwrap_or(usize::MAX));
+        text_items
+            .into_iter()
+            .map(|item| item.content)
+            .filter(|value| !value.trim().is_empty())
+            .collect::<Vec<_>>()
+            .join("\n\n")
+    }
+
+    fn assistant_thinking_for_round(round: &ModelRoundData) -> Option<String> {
+        let mut thinking_items = round.thinking_items.clone();
+        thinking_items.sort_by_key(|item| item.order_index.unwrap_or(usize::MAX));
+        let thinking = thinking_items
+            .into_iter()
+            .map(|item| item.content)
+            .filter(|value| !value.trim().is_empty())
+            .collect::<Vec<_>>()
+            .join("\n\n");
+        if thinking.is_empty() {
+            None
+        } else {
+            Some(thinking)
+        }
+    }
+
+    fn tool_call_from_item(item: &ToolItemData) -> ToolCall {
+        ToolCall {
+            tool_id: item.tool_call.id.clone(),
+            tool_name: item.tool_name.clone(),
+            arguments: item.tool_call.input.clone(),
+            raw_arguments: None,
+            is_error: false,
+            recovered_from_truncation: false,
+        }
+    }
+
+    fn tool_result_message_from_item(
+        turn_id: &str,
+        round_id: &str,
+        item: &ToolItemData,
+    ) -> Option<Message> {
+        let result = item.tool_result.as_ref()?;
+        let mut message = Message::tool_result(ToolResult {
+            tool_id: item.tool_call.id.clone(),
+            tool_name: item.tool_name.clone(),
+            result: result.result.clone(),
+            result_for_assistant: result.result_for_assistant.clone(),
+            is_error: !result.success,
+            duration_ms: result.duration_ms,
+            image_attachments: None,
+        })
+        .with_turn_id(turn_id.to_string())
+        .with_round_id(round_id.to_string());
+        message.timestamp = Self::unix_ms_to_system_time(item.end_time.unwrap_or(item.start_time));
+        Some(message)
+    }
+
     fn build_messages_from_turns(turns: &[DialogTurnData]) -> Vec<Message> {
         let mut messages = Vec::new();
 
@@ -559,47 +623,46 @@ impl SessionManager {
             } else {
                 Message::user(turn.user_message.content.clone())
             };
-            messages.push(
-                user_message
+            messages.push({
+                let mut message = user_message
                     .with_turn_id(turn.turn_id.clone())
-                    .with_semantic_kind(MessageSemanticKind::ActualUserInput),
-            );
+                    .with_semantic_kind(MessageSemanticKind::ActualUserInput);
+                message.timestamp = Self::unix_ms_to_system_time(turn.user_message.timestamp);
+                message
+            });
 
-            let assistant_text = turn
-                .model_rounds
-                .iter()
-                .flat_map(|round| round.text_items.iter())
-                .map(|item| item.content.clone())
-                .filter(|value| !value.trim().is_empty())
-                .collect::<Vec<_>>()
-                .join("\n\n");
+            for round in &turn.model_rounds {
+                let assistant_text = Self::assistant_text_for_round(round);
+                let reasoning_content = Self::assistant_thinking_for_round(round);
+                let mut tool_items = round.tool_items.clone();
+                tool_items.sort_by_key(|item| item.order_index.unwrap_or(usize::MAX));
+                let tool_calls = tool_items
+                    .iter()
+                    .map(Self::tool_call_from_item)
+                    .collect::<Vec<_>>();
 
-            let assistant_thinking = turn
-                .model_rounds
-                .iter()
-                .flat_map(|round| round.thinking_items.iter())
-                .map(|item| item.content.clone())
-                .filter(|value| !value.trim().is_empty())
-                .collect::<Vec<_>>()
-                .join("\n\n");
-
-            let has_text = !assistant_text.trim().is_empty();
-            let has_thinking = !assistant_thinking.trim().is_empty();
-
-            if has_text || has_thinking {
-                let reasoning_content = if has_thinking {
-                    Some(assistant_thinking)
-                } else {
-                    None
-                };
-                messages.push(
-                    Message::assistant_with_reasoning(
+                if !assistant_text.trim().is_empty()
+                    || reasoning_content.is_some()
+                    || !tool_calls.is_empty()
+                {
+                    let mut assistant = Message::assistant_with_reasoning(
                         reasoning_content,
                         assistant_text,
-                        Vec::new(),
+                        tool_calls,
                     )
-                    .with_turn_id(turn.turn_id.clone()),
-                );
+                    .with_turn_id(turn.turn_id.clone())
+                    .with_round_id(round.id.clone());
+                    assistant.timestamp = Self::unix_ms_to_system_time(round.timestamp);
+                    messages.push(assistant);
+                }
+
+                for item in &tool_items {
+                    if let Some(tool_result) =
+                        Self::tool_result_message_from_item(&turn.turn_id, &round.id, item)
+                    {
+                        messages.push(tool_result);
+                    }
+                }
             }
         }
 
@@ -2992,6 +3055,7 @@ impl SessionManager {
         session_id: &str,
         turn_id: &str,
         final_response: String,
+        model_rounds: Vec<ModelRoundData>,
         stats: TurnStats,
     ) -> BitFunResult<()> {
         if !self.should_persist_session_id(session_id) {
@@ -3030,6 +3094,10 @@ impl SessionManager {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_millis() as u64;
+        if !model_rounds.is_empty() && Self::should_replace_turn_model_rounds(&turn, &model_rounds)
+        {
+            turn.model_rounds = model_rounds;
+        }
         let has_assistant_text = turn.model_rounds.iter().any(|round| {
             round
                 .text_items
@@ -3096,6 +3164,39 @@ impl SessionManager {
         );
 
         Ok(())
+    }
+
+    fn should_replace_turn_model_rounds(
+        existing_turn: &DialogTurnData,
+        generated_rounds: &[ModelRoundData],
+    ) -> bool {
+        if generated_rounds.is_empty() {
+            return false;
+        }
+
+        if existing_turn.model_rounds.is_empty() {
+            return true;
+        }
+
+        if existing_turn
+            .model_rounds
+            .iter()
+            .all(|round| round.id.ends_with("-final-round"))
+        {
+            return true;
+        }
+
+        let existing_tool_count = existing_turn
+            .model_rounds
+            .iter()
+            .map(|round| round.tool_items.len())
+            .sum::<usize>();
+        let generated_tool_count = generated_rounds
+            .iter()
+            .map(|round| round.tool_items.len())
+            .sum::<usize>();
+
+        generated_tool_count > existing_tool_count
     }
 
     /// Mark a dialog turn as failed and persist it.
@@ -3917,7 +4018,8 @@ fn extract_subagent_relationship(
 mod tests {
     use super::{SessionManager, SessionManagerConfig};
     use crate::agentic::core::{
-        Message, MessageContent, MessageRole, ProcessingPhase, Session, SessionConfig, SessionState,
+        Message, MessageContent, MessageRole, ProcessingPhase, Session, SessionConfig,
+        SessionState, TurnStats,
     };
     use crate::agentic::persistence::PersistenceManager;
     use crate::agentic::session::{
@@ -3931,8 +4033,8 @@ mod tests {
     use crate::service::remote_ssh::workspace_state::local_workspace_roots_equal;
     use crate::service::session::{
         DialogTurnData, DialogTurnKind, ModelRoundData, SessionKind, SessionMetadata,
-        SessionRelationship, SessionRelationshipKind, ToolCallData, ToolItemData, ToolResultData,
-        TurnStatus, UserMessageData,
+        SessionRelationship, SessionRelationshipKind, TextItemData, ToolCallData, ToolItemData,
+        ToolResultData, TurnStatus, UserMessageData,
     };
     use dashmap::try_result::TryResult;
     use serde_json::json;
@@ -4012,6 +4114,72 @@ mod tests {
                 prompt_cache_policy: PromptCachePolicy::default(),
             },
         )
+    }
+
+    fn completed_round_with_tool(turn_id: &str, round_id: &str, tool_id: &str) -> ModelRoundData {
+        ModelRoundData {
+            id: round_id.to_string(),
+            turn_id: turn_id.to_string(),
+            round_index: 0,
+            timestamp: 100,
+            text_items: vec![TextItemData {
+                id: format!("{}-text", round_id),
+                content: "final text".to_string(),
+                is_streaming: false,
+                timestamp: 100,
+                is_markdown: true,
+                order_index: Some(1),
+                is_subagent_item: None,
+                parent_task_tool_id: None,
+                subagent_session_id: None,
+                status: Some("completed".to_string()),
+            }],
+            tool_items: vec![ToolItemData {
+                id: tool_id.to_string(),
+                tool_name: "ExecCommand".to_string(),
+                tool_call: ToolCallData {
+                    input: json!({ "cmd": "date" }),
+                    id: tool_id.to_string(),
+                },
+                tool_result: Some(ToolResultData {
+                    result: json!({ "output": "Wednesday" }),
+                    success: true,
+                    result_for_assistant: Some("Wednesday".to_string()),
+                    error: None,
+                    duration_ms: Some(12),
+                }),
+                ai_intent: None,
+                start_time: 100,
+                end_time: Some(112),
+                duration_ms: Some(12),
+                queue_wait_ms: None,
+                preflight_ms: None,
+                confirmation_wait_ms: None,
+                execution_ms: Some(12),
+                order_index: Some(0),
+                is_subagent_item: None,
+                parent_task_tool_id: None,
+                subagent_session_id: None,
+                subagent_model_id: None,
+                subagent_model_alias: None,
+                status: Some("completed".to_string()),
+                interruption_reason: None,
+            }],
+            thinking_items: vec![],
+            start_time: 100,
+            end_time: Some(112),
+            duration_ms: Some(12),
+            provider_id: None,
+            model_id: Some("test-model".to_string()),
+            model_alias: Some("test-model".to_string()),
+            first_chunk_ms: Some(1),
+            first_visible_output_ms: Some(2),
+            stream_duration_ms: Some(3),
+            attempt_count: Some(1),
+            failure_category: None,
+            token_details: None,
+            status: "completed".to_string(),
+        }
     }
 
     fn test_model(id: &str, context_window: u32) -> ServiceAIModelConfig {
@@ -4300,6 +4468,115 @@ mod tests {
             .expect("metadata should load")
             .expect("metadata should exist");
         assert_eq!(metadata.turn_count, 1);
+    }
+
+    #[tokio::test]
+    async fn complete_dialog_turn_persists_generated_model_rounds() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let session = manager
+            .create_session(
+                "CLI session".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+
+        let turn_id = manager
+            .start_dialog_turn(
+                &session.session_id,
+                "agentic".to_string(),
+                "today?".to_string(),
+                Some("turn-cli-1".to_string()),
+                None,
+                None,
+            )
+            .await
+            .expect("turn should start");
+        let round = completed_round_with_tool(&turn_id, "round-1", "tool-1");
+
+        manager
+            .complete_dialog_turn(
+                &session.session_id,
+                &turn_id,
+                "final text".to_string(),
+                vec![round],
+                TurnStats {
+                    total_rounds: 1,
+                    total_tools: 1,
+                    total_tokens: 0,
+                    duration_ms: 12,
+                },
+            )
+            .await
+            .expect("turn should complete");
+
+        let persisted = persistence_manager
+            .load_dialog_turn(workspace.path(), &session.session_id, 0)
+            .await
+            .expect("turn should load")
+            .expect("turn should exist");
+        assert_eq!(persisted.status, TurnStatus::Completed);
+        assert_eq!(persisted.model_rounds.len(), 1);
+        assert_eq!(persisted.model_rounds[0].id, "round-1");
+        assert_eq!(persisted.model_rounds[0].tool_items.len(), 1);
+        assert_eq!(
+            persisted.model_rounds[0].tool_items[0].tool_name,
+            "ExecCommand"
+        );
+        assert!(!persisted.model_rounds[0].id.ends_with("-final-round"));
+    }
+
+    #[test]
+    fn build_messages_from_turns_restores_tool_calls_and_results() {
+        let turn_id = "turn-restore-1";
+        let mut turn = DialogTurnData::new(
+            turn_id.to_string(),
+            0,
+            "session-restore".to_string(),
+            UserMessageData {
+                id: "user-1".to_string(),
+                content: "today?".to_string(),
+                timestamp: 10,
+                metadata: None,
+            },
+        );
+        turn.model_rounds = vec![completed_round_with_tool(turn_id, "round-1", "tool-1")];
+        turn.status = TurnStatus::Completed;
+
+        let messages = SessionManager::build_messages_from_turns(&[turn]);
+
+        assert_eq!(messages.len(), 3);
+        assert!(matches!(messages[0].role, MessageRole::User));
+        match &messages[1].content {
+            MessageContent::Mixed {
+                text, tool_calls, ..
+            } => {
+                assert_eq!(text, "final text");
+                assert_eq!(tool_calls.len(), 1);
+                assert_eq!(tool_calls[0].tool_name, "ExecCommand");
+                assert_eq!(tool_calls[0].arguments, json!({ "cmd": "date" }));
+            }
+            other => panic!("expected assistant mixed message, got {other:?}"),
+        }
+        match &messages[2].content {
+            MessageContent::ToolResult {
+                tool_id,
+                result_for_assistant,
+                ..
+            } => {
+                assert_eq!(tool_id, "tool-1");
+                assert_eq!(result_for_assistant.as_deref(), Some("Wednesday"));
+            }
+            other => panic!("expected tool result message, got {other:?}"),
+        }
     }
 
     #[tokio::test]

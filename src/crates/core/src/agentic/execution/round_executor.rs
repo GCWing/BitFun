@@ -7,7 +7,7 @@ use super::types::{FinishReason, RoundContext, RoundResult};
 use super::write_content_sanitizer::{
     contains_tool_invocation_artifacts, strip_tool_invocation_artifacts,
 };
-use crate::agentic::core::{Message, ToolCall};
+use crate::agentic::core::{Message, ToolCall, ToolResult};
 use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue, ToolEventData};
 use crate::agentic::tools::computer_use_host::ComputerUseHostRef;
 use crate::agentic::tools::framework::ToolUseContext;
@@ -20,6 +20,9 @@ use crate::agentic::MessageContent;
 use crate::infrastructure::ai::AIClient;
 use crate::service::config::types::WriteToolMode;
 use crate::service::config::GlobalConfigManager;
+use crate::service::session::{
+    ModelRoundData, TextItemData, ThinkingItemData, ToolCallData, ToolItemData, ToolResultData,
+};
 use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::Message as AIMessage;
@@ -28,7 +31,7 @@ use bitfun_ai_adapters::types::ReasoningMode;
 use dashmap::DashMap;
 use log::{debug, error, info, warn};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 use tokio_util::sync::CancellationToken;
 
 /// Round executor
@@ -52,6 +55,153 @@ impl RoundExecutor {
 
     fn write_tool_mode(_context: &RoundContext) -> WriteToolMode {
         WriteToolMode::InlineContent
+    }
+
+    fn system_time_to_unix_ms(time: SystemTime) -> u64 {
+        time.duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn build_model_round_data(
+        turn_id: &str,
+        round_id: &str,
+        round_index: usize,
+        round_started_at: SystemTime,
+        duration_ms: u64,
+        model_id: &str,
+        stream_result: &StreamResult,
+        tool_calls: &[ToolCall],
+        tool_results: &[ToolResult],
+        stream_processing_ms: u64,
+        attempt_count: u32,
+    ) -> ModelRoundData {
+        let start_time = Self::system_time_to_unix_ms(round_started_at);
+        let end_time = start_time.saturating_add(duration_ms);
+        let mut order_index = 0usize;
+
+        let thinking_items =
+            if stream_result.full_thinking.is_empty() && !stream_result.reasoning_content_present {
+                Vec::new()
+            } else {
+                let item = ThinkingItemData {
+                    id: format!("{}-thinking", round_id),
+                    content: stream_result.full_thinking.clone(),
+                    is_streaming: false,
+                    is_collapsed: false,
+                    timestamp: start_time,
+                    order_index: Some(order_index),
+                    status: Some("completed".to_string()),
+                    is_subagent_item: None,
+                    parent_task_tool_id: None,
+                    subagent_session_id: None,
+                };
+                order_index += 1;
+                vec![item]
+            };
+
+        let text_items = if stream_result.full_text.trim().is_empty() {
+            Vec::new()
+        } else {
+            let item = TextItemData {
+                id: format!("{}-text", round_id),
+                content: stream_result.full_text.clone(),
+                is_streaming: false,
+                timestamp: start_time,
+                is_markdown: true,
+                order_index: Some(order_index),
+                is_subagent_item: None,
+                parent_task_tool_id: None,
+                subagent_session_id: None,
+                status: Some("completed".to_string()),
+            };
+            order_index += 1;
+            vec![item]
+        };
+
+        let tool_items = tool_calls
+            .iter()
+            .map(|tool_call| {
+                let result = tool_results
+                    .iter()
+                    .find(|candidate| candidate.tool_id == tool_call.tool_id);
+                let result_duration = result.and_then(|value| value.duration_ms);
+                let status = match result {
+                    Some(result) if result.is_error => "error",
+                    Some(_) => "completed",
+                    None => "pending",
+                };
+                let tool_result = result.map(|result| ToolResultData {
+                    result: result.result.clone(),
+                    success: !result.is_error,
+                    result_for_assistant: result.result_for_assistant.clone(),
+                    error: if result.is_error {
+                        result
+                            .result_for_assistant
+                            .clone()
+                            .or_else(|| serde_json::to_string(&result.result).ok())
+                    } else {
+                        None
+                    },
+                    duration_ms: result.duration_ms,
+                });
+                let item_order_index = order_index;
+                order_index += 1;
+
+                ToolItemData {
+                    id: tool_call.tool_id.clone(),
+                    tool_name: tool_call.tool_name.clone(),
+                    tool_call: ToolCallData {
+                        input: tool_call.arguments.clone(),
+                        id: tool_call.tool_id.clone(),
+                    },
+                    tool_result,
+                    ai_intent: None,
+                    start_time,
+                    end_time: Some(end_time),
+                    duration_ms: result_duration,
+                    queue_wait_ms: None,
+                    preflight_ms: None,
+                    confirmation_wait_ms: None,
+                    execution_ms: result_duration,
+                    order_index: Some(item_order_index),
+                    is_subagent_item: None,
+                    parent_task_tool_id: None,
+                    subagent_session_id: None,
+                    subagent_model_id: None,
+                    subagent_model_alias: None,
+                    status: Some(status.to_string()),
+                    interruption_reason: stream_result.partial_recovery_reason.clone(),
+                }
+            })
+            .collect();
+
+        ModelRoundData {
+            id: round_id.to_string(),
+            turn_id: turn_id.to_string(),
+            round_index,
+            timestamp: start_time,
+            text_items,
+            tool_items,
+            thinking_items,
+            start_time,
+            end_time: Some(end_time),
+            duration_ms: Some(duration_ms),
+            provider_id: None,
+            model_id: Some(model_id.to_string()),
+            model_alias: Some(model_id.to_string()),
+            first_chunk_ms: stream_result.first_chunk_ms,
+            first_visible_output_ms: stream_result.first_visible_output_ms,
+            stream_duration_ms: Some(stream_processing_ms),
+            attempt_count: Some(attempt_count),
+            failure_category: None,
+            token_details: stream_result
+                .usage
+                .as_ref()
+                .and_then(token_details_from_usage),
+            status: "completed".to_string(),
+        }
     }
 
     pub fn new(
@@ -83,6 +233,7 @@ impl RoundExecutor {
         context_window: Option<usize>,
     ) -> BitFunResult<RoundResult> {
         let round_started_at = Instant::now();
+        let round_started_wall_time = SystemTime::now();
         let subagent_parent_info = context.subagent_parent_info.clone();
         let is_subagent = subagent_parent_info.is_some();
 
@@ -535,6 +686,8 @@ impl RoundExecutor {
         .await;
 
         debug!("ModelRoundCompleted event sent");
+        let round_duration_ms = elapsed_ms_u64(round_started_at);
+        let attempt_count = (attempt_index + 1) as u32;
 
         // If no tool calls, this round ends
         if stream_result.tool_calls.is_empty() {
@@ -576,6 +729,19 @@ impl RoundExecutor {
             // Cancellation token will be cleaned up by ExecutionEngine when the entire dialog turn ends
 
             return Ok(RoundResult {
+                model_round: Self::build_model_round_data(
+                    &context.dialog_turn_id,
+                    &round_id,
+                    context.round_number,
+                    round_started_wall_time,
+                    round_duration_ms,
+                    &context.model_name,
+                    &stream_result,
+                    &[],
+                    &[],
+                    stream_processing_ms,
+                    attempt_count,
+                ),
                 assistant_message,
                 tool_calls: vec![],
                 tool_result_messages: vec![],
@@ -844,6 +1010,19 @@ impl RoundExecutor {
         // Cancellation token will be cleaned up by ExecutionEngine when the entire dialog turn ends
 
         Ok(RoundResult {
+            model_round: Self::build_model_round_data(
+                &context.dialog_turn_id,
+                &round_id,
+                context.round_number,
+                round_started_wall_time,
+                round_duration_ms,
+                &context.model_name,
+                &stream_result,
+                &tool_calls,
+                &tool_results,
+                stream_processing_ms,
+                attempt_count,
+            ),
             assistant_message,
             tool_calls: tool_calls.clone(),
             tool_result_messages,
