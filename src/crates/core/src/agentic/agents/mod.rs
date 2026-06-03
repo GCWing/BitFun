@@ -97,14 +97,9 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
         "WebSearch".to_string(),
         "WebFetch".to_string(),
         "TodoWrite".to_string(),
-        "GenerativeUI".to_string(),
         "Skill".to_string(),
-        "AskUserQuestion".to_string(),
-        "CreatePlan".to_string(),
         "Git".to_string(),
-        "Log".to_string(),
         "ControlHub".to_string(),
-        "InitMiniApp".to_string(),
     ]
 }
 
