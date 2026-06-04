@@ -1109,6 +1109,7 @@
     "quit": "Quit",
     "minimizeToTray": "Minimize to Tray"
   },
+  "bashCommandFailedHint": "Command execution failed. For a complete environment, please download DevBox from the app store and restart BitFun.",
   "collapse": "Collapse",
   "expand": "Expand",
   "retry": "Retry"

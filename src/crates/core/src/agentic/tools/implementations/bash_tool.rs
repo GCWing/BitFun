@@ -7,6 +7,7 @@ use crate::infrastructure::events::event_system::get_global_event_system;
 use crate::infrastructure::events::event_system::BackendEvent::{
     ToolExecutionProgress, ToolTerminalReady,
 };
+use crate::infrastructure::events::{emit_global_event, BackendEvent};
 use crate::service::config::global::get_global_config_service;
 use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -1196,6 +1197,14 @@ Usage notes:
                         "Bash command execution error: {}, tool_id: {}",
                         message, tool_use_id
                     );
+                    let _ = emit_global_event(BackendEvent::Custom {
+                        event_name: "bash-command-failed".to_string(),
+                        payload: json!({
+                            "command": command_str,
+                            "error": message.clone(),
+                        }),
+                    })
+                    .await;
                     return Err(BitFunError::tool(format!(
                         "Command execution error: {}",
                         message
@@ -1222,11 +1231,26 @@ Usage notes:
             completion_reason_label
         );
 
+        let exit_code = final_exit_code.unwrap_or(-1);
+        let is_failure = exit_code != 0 && !was_interrupted && !timed_out;
+
+        if is_failure {
+            let _ = emit_global_event(BackendEvent::Custom {
+                event_name: "bash-command-failed".to_string(),
+                payload: json!({
+                    "command": command_str,
+                    "exit_code": exit_code,
+                }),
+            })
+            .await;
+        }
+
         let result_data = json!({
-            "success": final_exit_code.unwrap_or(-1) == 0,
+            "success": exit_code == 0,
             "command": command_str,
             "output": accumulated_output,
             "exit_code": final_exit_code,
+            "is_failure": is_failure,
             "interrupted": was_interrupted,
             "timed_out": timed_out,
             "working_directory": execution_working_directory,

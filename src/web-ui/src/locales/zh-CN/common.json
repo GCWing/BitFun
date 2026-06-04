@@ -1109,6 +1109,7 @@
     "quit": "退出程序",
     "minimizeToTray": "最小化到托盘"
   },
+  "bashCommandFailedHint": "命令执行失败，如需完整环境，请前往应用市场下载 DevBox，然后重启 BitFun",
   "collapse": "折叠",
   "expand": "展开",
   "retry": "重试"
