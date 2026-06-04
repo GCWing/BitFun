@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 globset = { workspace = true }
+dunce = { workspace = true }
 grep-regex = { workspace = true }
 grep-searcher = { workspace = true }
 ignore = { workspace = true }

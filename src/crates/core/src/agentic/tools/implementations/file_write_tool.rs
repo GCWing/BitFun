@@ -19,6 +19,7 @@ use async_trait::async_trait;
 use serde_json::{json, Value};
 use std::path::Path;
 use tokio::fs;
+use tool_runtime::fs::{write_local_file, WriteLocalFileRequest};
 
 pub struct FileWriteTool;
 
@@ -186,14 +187,6 @@ impl FileWriteTool {
             }),
             result_for_assistant: Some(assistant_message),
             image_attachments: None,
-        }
-    }
-
-    fn count_written_lines(content: &str) -> usize {
-        if content.is_empty() {
-            0
-        } else {
-            content.lines().count().max(1)
         }
     }
 
@@ -619,51 +612,62 @@ impl Tool for FileWriteTool {
                 .write_file(&resolved.resolved_path, content.as_bytes())
                 .await
                 .map_err(|e| BitFunError::tool(format!("Failed to write file: {}", e)))?;
-        } else {
-            if let Some(parent) = Path::new(&resolved.resolved_path).parent() {
-                fs::create_dir_all(parent)
-                    .await
-                    .map_err(|e| BitFunError::tool(format!("Failed to create directory: {}", e)))?;
-            }
-            fs::write(&resolved.resolved_path, &content)
-                .await
-                .map_err(|e| {
-                    BitFunError::tool(format!(
-                        "Failed to write file {}: {}",
-                        resolved.logical_path, e
-                    ))
-                })?;
+            let timestamp_ms = file_mutation_timestamp_ms(context, &resolved).await;
+            update_file_read_state_after_mutation(context, &resolved, &content, timestamp_ms);
+
+            let (status, assistant_message) = if file_already_exists {
+                (
+                    "overwritten",
+                    format!(
+                        "Successfully overwrote {} ({} bytes).",
+                        resolved.logical_path,
+                        content.len()
+                    ),
+                )
+            } else {
+                (
+                    "created",
+                    format!(
+                        "Successfully created {} ({} bytes).",
+                        resolved.logical_path,
+                        content.len()
+                    ),
+                )
+            };
+
+            let result = Self::write_success_result(
+                &resolved.logical_path,
+                content.len(),
+                if content.is_empty() {
+                    0
+                } else {
+                    content.lines().count().max(1)
+                },
+                status,
+                assistant_message,
+            );
+            return Ok(vec![result]);
         }
+
+        let write_request = WriteLocalFileRequest {
+            logical_path: resolved.logical_path.clone(),
+            resolved_path: Path::new(&resolved.resolved_path).to_path_buf(),
+            content: content.clone(),
+        };
+        let outcome = tokio::task::spawn_blocking(move || write_local_file(write_request))
+            .await
+            .map_err(|error| BitFunError::tool(format!("Write task failed: {}", error)))?
+            .map_err(BitFunError::tool)?;
 
         let timestamp_ms = file_mutation_timestamp_ms(context, &resolved).await;
         update_file_read_state_after_mutation(context, &resolved, &content, timestamp_ms);
 
-        let (status, assistant_message) = if file_already_exists {
-            (
-                "overwritten",
-                format!(
-                    "Successfully overwrote {} ({} bytes).",
-                    resolved.logical_path,
-                    content.len()
-                ),
-            )
-        } else {
-            (
-                "created",
-                format!(
-                    "Successfully created {} ({} bytes).",
-                    resolved.logical_path,
-                    content.len()
-                ),
-            )
-        };
-
         let result = Self::write_success_result(
             &resolved.logical_path,
-            content.len(),
-            Self::count_written_lines(&content),
-            status,
-            assistant_message,
+            outcome.bytes_written,
+            outcome.lines_written,
+            outcome.status.as_str(),
+            outcome.assistant_message,
         );
 
         Ok(vec![result])

@@ -6,7 +6,8 @@ use bitfun_runtime_ports::{
     RemoteCapabilityPort, RemoteConnectionPort, RemoteProjectionPort, RemoteRecentWorkspaceFacts,
     RemoteWorkspaceFacts, RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind, RemoteWorkspacePort,
     RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate, RuntimeEventEnvelope, RuntimeEventSink,
-    RuntimeServiceCapability, RuntimeServicePort, SessionStorePort, TerminalPort, WorkspacePort,
+    RuntimeServiceCapability, RuntimeServicePort, SessionStorageKind, SessionStoragePathRequest,
+    SessionStoragePathResolution, SessionStorePort, TerminalPort, WorkspacePort,
 };
 
 use crate::{
@@ -32,7 +33,21 @@ impl RuntimeServicePort for FakeRuntimePort {
 
 impl FileSystemPort for FakeRuntimePort {}
 impl WorkspacePort for FakeRuntimePort {}
-impl SessionStorePort for FakeRuntimePort {}
+#[async_trait::async_trait]
+impl SessionStorePort for FakeRuntimePort {
+    async fn resolve_session_storage_path(
+        &self,
+        request: SessionStoragePathRequest,
+    ) -> PortResult<SessionStoragePathResolution> {
+        Ok(SessionStoragePathResolution::new(
+            request.workspace_path.clone(),
+            request.workspace_path,
+            SessionStorageKind::Local,
+            request.remote_connection_id,
+            request.remote_ssh_host,
+        ))
+    }
+}
 impl TerminalPort for FakeRuntimePort {}
 impl NetworkPort for FakeRuntimePort {}
 impl GitPort for FakeRuntimePort {}

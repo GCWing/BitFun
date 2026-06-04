@@ -142,18 +142,57 @@
 - PR-C 只证明 capability / harness / tool provider 组装边界和 no-default / dependency profile 未扩大；不迁移缺少等价保护的
   concrete IO、MiniApp worker/host、function-agent Git/AI 或 scheduler/event/permission lifecycle。
 
+### 1.8 Session Store / Restore Runtime Services Owner：restore 热路径边界
+
+- `bitfun-runtime-ports` 已承接 session store / restore view 的稳定 request、storage path resolution、
+  full/tail turn-load request、`SessionTurnLoadTiming` 和 `SessionViewRestoreTiming`。
+- `SessionStorePort` 已从空 capability marker 扩展为 typed storage path resolution port；`bitfun-runtime-services`
+  fake provider 和 contract test 覆盖该方法。
+- `bitfun-core` 新增 `CoreSessionStorePort` concrete adapter，承接 local / remote / unresolved remote
+  session storage path facts；`SessionManager` 保留旧方法签名，但 path resolution 委托 adapter。
+- `PersistenceManager` 的 full/tail load hot path 改为消费 `SessionTurnLoadRequest`，原有
+  `load_session_with_turns(_timed)` 和 `load_session_with_tail_turns(_timed)` API 保持兼容。
+- Desktop `restore_session_view` 复用 `SessionViewRestoreRequest` 的 tail 归一规则，保留既有 16-turn
+  UI view clamp、旧 response shape、tool-result preview compact 和 startup timing 记录。
+
+明确未完成：
+
+- `SessionManager` concrete 生命周期、auto-save / cleanup、event delivery、prompt assembly 和 runtime context restore
+  仍在 core。
+- session persistence 的具体文件 IO、metadata/index 写入、turn read/write、snapshot restore 和 cold restore 行为
+  仍在 core concrete path；后续迁移必须补充端到端等价和性能保护。
+
+### 1.9 Concrete Tool IO Runtime Owner：本地 tool IO 执行边界
+
+- `bitfun-tool-runtime` 已承接本地 Write / Edit / Delete / Glob 的具体 filesystem/search 执行 primitive：
+  文件写入的 created/overwritten/idempotent retry 结果、edit apply/write-back、delete target inspect/delete 和 glob
+  `rg` / fallback walk 执行与浅层优先限流。
+- `bitfun-core` 保留 agent-facing `Tool` adapter、tool name/schema/prompt stub、readonly/enabled exposure、
+  permission admission、checkpoint hook、file-read freshness、workspace-search 优先路径、remote shell fallback、
+  MCP/ACP catalog 和产品组装边界。
+- 新增 `tool-runtime` 契约测试覆盖本地 write/edit/delete/glob owner 行为；core focused tests 继续覆盖原有
+  FileWrite / FileEdit / Glob 兼容路径。
+
+明确未完成：
+
+- Bash / terminal lifecycle、indexed workspace search service、remote shell execution、permission `Tool` handler 和
+  checkpoint orchestration 仍不属于 `bitfun-tool-runtime` concrete owner。
+- 继续迁移 shell、terminal、remote 或 indexed search 时，必须先补 scheduler / terminal lifecycle / remote protocol
+  等价保护，不能复用本地 filesystem primitive 的低风险假设。
+
 ## 2. 已建立保护
 
 - 新 owner crate 不得依赖回 `bitfun-core`。
 - `product-full` 是完整产品能力保护开关。
 - 构建脚本和 installer 相关脚本不作为 core 拆解的一部分修改。
 - boundary check 覆盖已外移 owner 的旧路径 facade-only / 禁止回流状态。
-- tool manifest、`GetToolSpec`、execution admission gate、MiniApp storage layout adapter、product-domain pure helper、remote workspace search fallback、MCP config / catalog / dynamic manifest、agent-runtime prompt cache、agent registry source/profile facts、product capability pack 和 harness/tool provider assembly 等已有 focused baseline。
+- tool manifest、`GetToolSpec`、execution admission gate、MiniApp storage layout adapter、product-domain pure helper、remote workspace search fallback、MCP config / catalog / dynamic manifest、agent-runtime prompt cache、agent registry source/profile facts、product capability pack、harness/tool provider assembly、session restore path/timing facts 和本地 tool IO primitive 等已有 focused baseline。
 
 ## 3. 当前剩余结论
 
 - 低风险准备项已经完成，不再新增零散小 PR。
-- PR-C 已收敛 Harness / Product Capability / Build-Benefit closure。后续不应继续拆零散 helper PR；若继续迁移
-  MiniApp worker/host、function-agent Git/AI、具体 IO tools、Agent Runtime concrete scheduler/event/permission/post-turn
-  hook，必须先补端到端等价保护并作为新的完整 owner PR 评估。
+- PR-C 已收敛 Harness / Product Capability / Build-Benefit closure；PR-1 已收敛 session restore hot-path
+  request / timing / storage path facts 和 Runtime Services port；PR-2 已收敛本地 Write / Edit / Delete / Glob
+  concrete IO primitive。后续不应继续拆零散 helper PR；若继续迁移 MiniApp worker/host、function-agent Git/AI、
+  Bash/terminal/remote shell/indexed search、Agent Runtime concrete scheduler/event/permission/post-turn hook，必须先补端到端等价保护并作为新的完整 owner PR 评估。
 - 缺陷修复、行为变更、冗余清理、三方库升级和构建脚本调整必须独立评估，不能伪装成 core decomposition 剩余里程碑。

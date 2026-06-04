@@ -13,7 +13,9 @@ use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use serde_json::{json, Value};
 use std::path::Path;
-use tool_runtime::fs::edit_file::apply_edit_to_content;
+use tool_runtime::fs::edit_file::{
+    apply_edit_to_content, edit_local_file_with_content, EditLocalFileWithContentRequest,
+};
 
 pub struct FileEditTool;
 
@@ -374,7 +376,7 @@ impl Tool for FileEditTool {
             return Ok(vec![result]);
         }
 
-        // Local: read → edit in memory → write back so failures can include current file context.
+        // Local: core keeps freshness/checkpoint, tool-runtime owns edit application and write-back.
         let content = std::fs::read_to_string(&resolved.resolved_path).map_err(|e| {
             BitFunError::tool(format!(
                 "Failed to read file {}: {}",
@@ -382,23 +384,21 @@ impl Tool for FileEditTool {
             ))
         })?;
         Self::assert_atomic_edit_freshness(context, &resolved, &content)?;
-        let edit_result = apply_edit_to_content(&content, old_string, new_string, replace_all)
-            .map_err(|error| {
-                if Self::is_edit_content_guardrail_error(&error) {
-                    BitFunError::tool(file_tool_guidance_message(error))
-                } else {
-                    BitFunError::tool(error)
-                }
-            })?;
-
-        std::fs::write(&resolved.resolved_path, edit_result.new_content.as_bytes()).map_err(
-            |e| {
-                BitFunError::tool(format!(
-                    "Failed to write file {}: {}",
-                    resolved.logical_path, e
-                ))
-            },
-        )?;
+        let edit_result = edit_local_file_with_content(EditLocalFileWithContentRequest {
+            logical_path: resolved.logical_path.clone(),
+            resolved_path: Path::new(&resolved.resolved_path).to_path_buf(),
+            current_content: content,
+            old_string: old_string.to_string(),
+            new_string: new_string.to_string(),
+            replace_all,
+        })
+        .map_err(|error| {
+            if Self::is_edit_content_guardrail_error(&error) {
+                BitFunError::tool(file_tool_guidance_message(error))
+            } else {
+                BitFunError::tool(error)
+            }
+        })?;
 
         let timestamp_ms = file_mutation_timestamp_ms(context, &resolved).await;
         update_file_read_state_after_mutation(

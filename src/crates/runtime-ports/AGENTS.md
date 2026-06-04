@@ -13,6 +13,9 @@ facts. It is an interface crate, not a runtime implementation crate.
   or catch-all context structs.
 - This crate may define portable request/response DTOs, runtime handles,
   capability facts, cancellation surfaces, and service traits.
+- `SessionStorePort` owns typed session storage-path resolution plus restore /
+  load request and timing facts only. Concrete session persistence, file IO,
+  session lifecycle, context restore, and prompt assembly do not belong here.
 - Do not put filesystem writes, process execution, network clients, Git/AI/MCP
   concrete behavior, product policy, or UI command logic here.
 - Preserve serialization compatibility for persisted or cross-process DTOs.

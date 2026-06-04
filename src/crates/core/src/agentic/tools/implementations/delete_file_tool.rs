@@ -5,10 +5,9 @@ use crate::agentic::tools::workspace_paths::is_bitfun_runtime_uri;
 use crate::agentic::tools::ToolPathOperation;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
-use log::debug;
 use serde_json::{json, Value};
 use std::path::Path;
-use tokio::fs;
+use tool_runtime::fs::{delete_local_path, inspect_local_delete_target, DeleteLocalPathRequest};
 
 /// File deletion tool - provides safe file/directory deletion functionality
 ///
@@ -205,7 +204,7 @@ Important notes:
         }
 
         if !resolved.uses_remote_workspace_backend() {
-            let local_path = Path::new(&resolved.resolved_path);
+            let local_path = Path::new(&resolved.resolved_path).to_path_buf();
             if !local_path.exists() {
                 return ValidationResult {
                     result: false,
@@ -221,10 +220,13 @@ Important notes:
                     .and_then(|v| v.as_bool())
                     .unwrap_or(false);
 
-                let is_empty = match fs::read_dir(local_path).await {
-                    Ok(mut entries) => entries.next_entry().await.ok().flatten().is_none(),
-                    Err(_) => false,
-                };
+                let is_empty =
+                    tokio::task::spawn_blocking(move || inspect_local_delete_target(&local_path))
+                        .await
+                        .ok()
+                        .and_then(Result::ok)
+                        .map(|target| target.is_empty)
+                        .unwrap_or(false);
 
                 if !is_empty && !recursive {
                     return ValidationResult {
@@ -345,36 +347,21 @@ Important notes:
             }]);
         }
 
-        let path = Path::new(&resolved.resolved_path);
-        let is_directory = path.is_dir();
-
-        debug!(
-            "DeleteFile tool deleting {}: {}",
-            if is_directory { "directory" } else { "file" },
-            resolved.logical_path
-        );
-
-        if is_directory {
-            if recursive {
-                fs::remove_dir_all(path)
-                    .await
-                    .map_err(|e| BitFunError::tool(format!("Failed to delete directory: {}", e)))?;
-            } else {
-                fs::remove_dir(path)
-                    .await
-                    .map_err(|e| BitFunError::tool(format!("Failed to delete directory: {}", e)))?;
-            }
-        } else {
-            fs::remove_file(path)
-                .await
-                .map_err(|e| BitFunError::tool(format!("Failed to delete file: {}", e)))?;
-        }
+        let delete_request = DeleteLocalPathRequest {
+            logical_path: resolved.logical_path.clone(),
+            resolved_path: Path::new(&resolved.resolved_path).to_path_buf(),
+            recursive,
+        };
+        let outcome = tokio::task::spawn_blocking(move || delete_local_path(delete_request))
+            .await
+            .map_err(|error| BitFunError::tool(format!("Delete task failed: {}", error)))?
+            .map_err(BitFunError::tool)?;
 
         let result_data = json!({
             "success": true,
-            "path": resolved.logical_path,
-            "is_directory": is_directory,
-            "recursive": recursive
+            "path": outcome.logical_path,
+            "is_directory": outcome.is_directory,
+            "recursive": outcome.recursive
         });
 
         let result_text = self.render_result_for_assistant(&result_data);

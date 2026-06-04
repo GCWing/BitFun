@@ -21,6 +21,7 @@ use crate::service::session::{
 use crate::service::workspace_runtime::WorkspaceRuntimeService;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::timing::elapsed_ms_u64;
+use bitfun_runtime_ports::{SessionTurnLoadRequest, SessionTurnLoadTiming};
 use futures::{stream, StreamExt};
 use log::{debug, info, warn};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -49,24 +50,6 @@ struct StoredDialogTurnFile {
     schema_version: u32,
     #[serde(flatten)]
     turn: DialogTurnData,
-}
-
-#[derive(Debug, Clone, Default, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SessionTurnLoadTiming {
-    pub requested_tail_turn_count: Option<usize>,
-    pub loaded_turn_count: usize,
-    pub total_turn_count: usize,
-    pub turn_file_count: usize,
-    pub missing_turn_file_count: usize,
-    pub fast_path: bool,
-    pub metadata_duration_ms: u64,
-    pub state_duration_ms: u64,
-    pub scan_duration_ms: u64,
-    pub read_duration_ms: u64,
-    pub max_turn_read_duration_ms: u64,
-    pub build_session_duration_ms: u64,
-    pub total_duration_ms: u64,
 }
 
 struct ReadTurnPathsResult {
@@ -2445,25 +2428,33 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<(Session, Vec<DialogTurnData>, SessionTurnLoadTiming)> {
+        let request = SessionTurnLoadRequest {
+            workspace_path: workspace_path.to_path_buf(),
+            session_id: session_id.to_string(),
+            tail_turn_count: None,
+        };
         let started_at = Instant::now();
         let metadata_started_at = Instant::now();
         let metadata = self
-            .load_session_metadata(workspace_path, session_id)
+            .load_session_metadata(&request.workspace_path, &request.session_id)
             .await?
             .ok_or_else(|| {
-                BitFunError::NotFound(format!("Session metadata not found: {}", session_id))
+                BitFunError::NotFound(format!(
+                    "Session metadata not found: {}",
+                    request.session_id
+                ))
             })?;
         let metadata_duration_ms = elapsed_ms_u64(metadata_started_at);
 
         let state_started_at = Instant::now();
         let stored_state = self
-            .load_stored_session_state(workspace_path, session_id)
+            .load_stored_session_state(&request.workspace_path, &request.session_id)
             .await?;
         let state_duration_ms = elapsed_ms_u64(state_started_at);
 
         let scan_started_at = Instant::now();
         let indexed_paths = self
-            .list_indexed_turn_paths(workspace_path, session_id)
+            .list_indexed_turn_paths(&request.workspace_path, &request.session_id)
             .await?;
         let scan_duration_ms = elapsed_ms_u64(scan_started_at);
 
@@ -2483,7 +2474,7 @@ impl PersistenceManager {
         if total_duration_ms >= 80 || turn_file_count >= 50 {
             debug!(
                 "Loaded session turns: session_id={} turn_count={} turn_file_count={} missing_turn_file_count={} metadata_duration_ms={} state_duration_ms={} scan_duration_ms={} read_duration_ms={} max_turn_read_duration_ms={} build_session_duration_ms={} total_duration_ms={}",
-                session_id,
+                request.session_id,
                 turns.len(),
                 turn_file_count,
                 missing_turn_file_count,
@@ -2533,27 +2524,35 @@ impl PersistenceManager {
         session_id: &str,
         tail_turn_count: usize,
     ) -> BitFunResult<(Session, Vec<DialogTurnData>, usize, SessionTurnLoadTiming)> {
+        let request = SessionTurnLoadRequest {
+            workspace_path: workspace_path.to_path_buf(),
+            session_id: session_id.to_string(),
+            tail_turn_count: Some(tail_turn_count),
+        };
         let started_at = Instant::now();
         let metadata_started_at = Instant::now();
         let metadata = self
-            .load_session_metadata(workspace_path, session_id)
+            .load_session_metadata(&request.workspace_path, &request.session_id)
             .await?
             .ok_or_else(|| {
-                BitFunError::NotFound(format!("Session metadata not found: {}", session_id))
+                BitFunError::NotFound(format!(
+                    "Session metadata not found: {}",
+                    request.session_id
+                ))
             })?;
         let metadata_duration = metadata_started_at.elapsed();
 
         let state_started_at = Instant::now();
         let stored_state = self
-            .load_stored_session_state(workspace_path, session_id)
+            .load_stored_session_state(&request.workspace_path, &request.session_id)
             .await?;
         let state_duration = state_started_at.elapsed();
 
         let fast_path_started_at = Instant::now();
         let fast_path_turns = self
             .read_metadata_tail_turns(
-                workspace_path,
-                session_id,
+                &request.workspace_path,
+                &request.session_id,
                 metadata.turn_count,
                 tail_turn_count,
             )
@@ -2581,7 +2580,7 @@ impl PersistenceManager {
         } else {
             let scan_started_at = Instant::now();
             let indexed_paths = self
-                .list_indexed_turn_paths(workspace_path, session_id)
+                .list_indexed_turn_paths(&request.workspace_path, &request.session_id)
                 .await?;
             let scan_duration = scan_started_at.elapsed();
             let total_turn_count = indexed_paths.len();
@@ -2610,9 +2609,9 @@ impl PersistenceManager {
         if total_duration >= Duration::from_millis(40) || total_turn_count >= 50 {
             debug!(
                 "Loaded session tail view: session_id={} turn_count={} requested_count={} total_turn_count={} missing_turn_file_count={} fast_path={} metadata_duration_ms={} state_duration_ms={} scan_duration_ms={} read_duration_ms={} max_turn_read_duration_ms={} build_session_duration_ms={} total_duration_ms={}",
-                session_id,
+                request.session_id,
                 turns.len(),
-                tail_turn_count,
+                request.tail_turn_count.unwrap_or(tail_turn_count),
                 total_turn_count,
                 missing_turn_file_count,
                 fast_path,
@@ -2627,7 +2626,7 @@ impl PersistenceManager {
         }
 
         let timing = SessionTurnLoadTiming {
-            requested_tail_turn_count: Some(tail_turn_count),
+            requested_tail_turn_count: request.tail_turn_count,
             loaded_turn_count: turns.len(),
             total_turn_count,
             turn_file_count: total_turn_count,

@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use bitfun_runtime_ports::FileSystemPort;
-use bitfun_runtime_ports::{RemoteWorkspaceKind, RuntimeServiceCapability};
+use bitfun_runtime_ports::{
+    RemoteWorkspaceKind, RuntimeServiceCapability, SessionStorageKind, SessionStoragePathRequest,
+};
 use bitfun_runtime_services::test_support::{FakeRuntimePort, FakeRuntimeServicesProvider};
 use bitfun_runtime_services::{
     CapabilityAvailability, RuntimeServicesBuilder, RuntimeServicesError, RuntimeServicesProvider,
@@ -124,4 +126,27 @@ async fn registered_remote_ports_expose_owner_contract_methods() {
     assert_eq!(workspace.kind, RemoteWorkspaceKind::Remote);
     assert_eq!(workspace.path, "/remote/project");
     assert_eq!(projection_root.to_string_lossy(), "/remote/project");
+}
+
+#[tokio::test]
+async fn registered_session_store_port_exposes_storage_path_resolution() {
+    let services = FakeRuntimeServicesProvider::with_all_required()
+        .build_services()
+        .expect("required fake services should build");
+
+    let resolution = services
+        .session_store
+        .resolve_session_storage_path(SessionStoragePathRequest {
+            workspace_path: "/workspace".into(),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        })
+        .await
+        .expect("fake session store should resolve local path");
+
+    assert_eq!(resolution.storage_kind, SessionStorageKind::Local);
+    assert_eq!(
+        resolution.effective_storage_path.to_string_lossy(),
+        "/workspace"
+    );
 }

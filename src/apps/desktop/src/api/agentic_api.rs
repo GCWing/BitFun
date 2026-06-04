@@ -22,7 +22,7 @@ use bitfun_core::agentic::deep_review_policy::{
 };
 use bitfun_core::agentic::goal_mode::{ThreadGoal, ThreadGoalStatus};
 use bitfun_core::agentic::image_analysis::ImageContextData;
-use bitfun_core::agentic::session::SessionViewRestoreTiming;
+use bitfun_core::agentic::session::{SessionViewRestoreRequest, SessionViewRestoreTiming};
 use bitfun_core::agentic::tools::image_context::get_image_context;
 use bitfun_core::service::session::{DialogTurnData, SessionRelationship};
 
@@ -1571,30 +1571,41 @@ pub async fn restore_session_view(
             path_started_at.elapsed().as_millis()
         );
 
-        let tail_turn_count = request.tail_turn_count.filter(|count| *count > 0);
+        let view_request = SessionViewRestoreRequest {
+            workspace_path: effective_path,
+            session_id: request.session_id.clone(),
+            include_internal: request.include_internal,
+            tail_turn_count: request.tail_turn_count,
+        };
+        let tail_turn_count = view_request
+            .tail_turn_count
+            .filter(|count| *count > 0)
+            .map(|count| count.min(16));
         let (session, mut turns, total_turn_count, timings) =
             if let Some(tail_turn_count) = tail_turn_count {
-                let tail_turn_count = tail_turn_count.min(16);
-                if request.include_internal {
+                if view_request.include_internal {
                     coordinator
                         .restore_internal_session_view_tail_timed(
-                            &effective_path,
-                            &request.session_id,
+                            &view_request.workspace_path,
+                            &view_request.session_id,
                             tail_turn_count,
                         )
                         .await
                 } else {
                     coordinator
                         .restore_session_view_tail_timed(
-                            &effective_path,
-                            &request.session_id,
+                            &view_request.workspace_path,
+                            &view_request.session_id,
                             tail_turn_count,
                         )
                         .await
                 }
-            } else if request.include_internal {
+            } else if view_request.include_internal {
                 coordinator
-                    .restore_internal_session_view_timed(&effective_path, &request.session_id)
+                    .restore_internal_session_view_timed(
+                        &view_request.workspace_path,
+                        &view_request.session_id,
+                    )
                     .await
                     .map(|(session, turns, timings)| {
                         let total_turn_count = turns.len();
@@ -1602,7 +1613,7 @@ pub async fn restore_session_view(
                     })
             } else {
                 coordinator
-                    .restore_session_view_timed(&effective_path, &request.session_id)
+                    .restore_session_view_timed(&view_request.workspace_path, &view_request.session_id)
                     .await
                     .map(|(session, turns, timings)| {
                         let total_turn_count = turns.len();

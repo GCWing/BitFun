@@ -101,7 +101,110 @@ pub trait FileSystemPort: RuntimeServicePort {}
 
 pub trait WorkspacePort: RuntimeServicePort {}
 
-pub trait SessionStorePort: RuntimeServicePort {}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionStoragePathRequest {
+    pub workspace_path: PathBuf,
+    pub remote_connection_id: Option<String>,
+    pub remote_ssh_host: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionStorageKind {
+    Local,
+    Remote,
+    UnresolvedRemote,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionStoragePathResolution {
+    pub requested_workspace_path: PathBuf,
+    pub effective_storage_path: PathBuf,
+    pub storage_kind: SessionStorageKind,
+    pub remote_connection_id: Option<String>,
+    pub remote_ssh_host: Option<String>,
+}
+
+impl SessionStoragePathResolution {
+    pub fn new(
+        requested_workspace_path: PathBuf,
+        effective_storage_path: PathBuf,
+        storage_kind: SessionStorageKind,
+        remote_connection_id: Option<String>,
+        remote_ssh_host: Option<String>,
+    ) -> Self {
+        Self {
+            requested_workspace_path,
+            effective_storage_path,
+            storage_kind,
+            remote_connection_id,
+            remote_ssh_host,
+        }
+    }
+
+    pub fn is_remote_storage(&self) -> bool {
+        matches!(
+            self.storage_kind,
+            SessionStorageKind::Remote | SessionStorageKind::UnresolvedRemote
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionViewRestoreRequest {
+    pub workspace_path: PathBuf,
+    pub session_id: String,
+    pub include_internal: bool,
+    pub tail_turn_count: Option<usize>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionTurnLoadRequest {
+    pub workspace_path: PathBuf,
+    pub session_id: String,
+    pub tail_turn_count: Option<usize>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionTurnLoadTiming {
+    pub requested_tail_turn_count: Option<usize>,
+    pub loaded_turn_count: usize,
+    pub total_turn_count: usize,
+    pub turn_file_count: usize,
+    pub missing_turn_file_count: usize,
+    pub fast_path: bool,
+    pub metadata_duration_ms: u64,
+    pub state_duration_ms: u64,
+    pub scan_duration_ms: u64,
+    pub read_duration_ms: u64,
+    pub max_turn_read_duration_ms: u64,
+    pub build_session_duration_ms: u64,
+    pub total_duration_ms: u64,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionViewRestoreTiming {
+    pub resolve_storage_path_duration_ms: u64,
+    pub visibility_metadata_duration_ms: u64,
+    pub load_session_with_turns_duration_ms: u64,
+    pub normalize_turn_ids_duration_ms: u64,
+    pub total_duration_ms: u64,
+    pub turn_load: SessionTurnLoadTiming,
+}
+
+#[async_trait::async_trait]
+pub trait SessionStorePort: RuntimeServicePort {
+    async fn resolve_session_storage_path(
+        &self,
+        request: SessionStoragePathRequest,
+    ) -> PortResult<SessionStoragePathResolution>;
+}
 
 /// One row from [`WorkspaceFileSystem::read_dir`] (POSIX paths when the backend is remote SSH).
 #[derive(Debug, Clone)]

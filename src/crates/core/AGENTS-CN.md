@@ -40,6 +40,7 @@ SessionManager -> Session -> DialogTurn -> ModelRound
   port/provider 设计与行为等价测试前继续留在 core。
 - Tool 改动必须保持 expanded/collapsed exposure、prompt-visible manifest、`GetToolSpec`、权限行为、
   `ToolUseContext` 语义，以及 desktop/MCP/ACP catalog 行为等价。
+- Runtime owner 迁移在目标 owner 具备评审过的 port/provider 设计和行为等价测试前，不应移动 concrete lifecycle、IO、event delivery、permission orchestration 或 remote/platform provider。
 - Product-domain 改动不得在没有明确 owner 设计和 focused regression 覆盖前，把 filesystem writes、worker/host execution、
   Git/AI concrete calls、marker IO 或 path-manager integration 移出 core。
 - Remote/service 改动必须保持 external protocol lifecycle、workspace projection、scheduler/session restore、

@@ -51,17 +51,16 @@ SessionManager -> Session -> DialogTurn -> ModelRound
 - Tool changes must preserve expanded/collapsed exposure, prompt-visible
   manifests, `GetToolSpec`, permission behavior, `ToolUseContext` semantics, and
   desktop/MCP/ACP catalog behavior.
+- Runtime-owner migrations must keep concrete lifecycle, IO, event delivery,
+  permission orchestration, and remote/platform providers in core until the
+  target owner has a reviewed port/provider design plus behavior-equivalence
+  tests.
 - Product-domain changes must not move filesystem writes, worker/host execution,
   Git/AI concrete calls, marker IO, or path-manager integration out of core
   without an explicit owner design and focused regression coverage.
 - Remote/service changes must keep external protocol lifecycle, workspace
   projection, scheduler/session restore, terminal pre-warm, and product
   execution boundaries explicit.
-- Scheduler changes should keep queue state, active-turn facts, background
-  running-turn injection construction, cancelled-reply suppression state, steering action planning,
-  agent-session reply planning, and goal-continuation abort flags in
-  `bitfun-agent-runtime`; core keeps coordinator, session-manager wiring,
-  delivery, and concrete lifecycle until an equivalence-protected migration.
 - Feature work must keep `product-full` as the compatibility product assembly
   boundary unless a separate product matrix review changes default capability
   selection.

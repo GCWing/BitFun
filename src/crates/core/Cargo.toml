@@ -46,7 +46,6 @@ axum = { workspace = true }
 tower-http = { workspace = true }
 
 glob = { workspace = true, optional = true }
-ignore = { workspace = true }
 notify = { workspace = true }
 dirs = { workspace = true }
 dunce = { workspace = true }
@@ -63,8 +62,6 @@ which = { workspace = true }
 similar = { workspace = true, optional = true }
 urlencoding = { workspace = true }
 
-grep-searcher = { workspace = true }
-grep-regex = { workspace = true }
 globset = { workspace = true, optional = true }
 
 eventsource-stream = { workspace = true, optional = true }

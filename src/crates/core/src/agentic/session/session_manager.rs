@@ -8,7 +8,8 @@ use crate::agentic::core::{
     SessionSummary, TurnStats,
 };
 use crate::agentic::image_analysis::ImageContextData;
-use crate::agentic::persistence::{PersistenceManager, SessionTurnLoadTiming};
+use crate::agentic::persistence::PersistenceManager;
+use crate::agentic::session::session_store_port::CoreSessionStorePort;
 use crate::agentic::session::{
     CachedSystemPrompt, CachedUserContext, EvidenceLedgerCheckpoint, EvidenceLedgerEvent,
     EvidenceLedgerEventStatus, EvidenceLedgerSummary, EvidenceLedgerTargetKind, FileReadState,
@@ -31,9 +32,12 @@ use crate::service::workspace::get_global_workspace_service;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::sanitize_plain_model_output;
 use crate::util::timing::elapsed_ms_u64;
+pub use bitfun_runtime_ports::SessionViewRestoreTiming;
+use bitfun_runtime_ports::{
+    SessionStoragePathRequest, SessionStorePort, SessionViewRestoreRequest,
+};
 use dashmap::DashMap;
 use log::{debug, error, info, warn};
-use serde::Serialize;
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -50,17 +54,6 @@ pub struct SessionManagerConfig {
     pub auto_save_interval: Duration,
     pub enable_persistence: bool,
     pub prompt_cache_policy: PromptCachePolicy,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SessionViewRestoreTiming {
-    pub resolve_storage_path_duration_ms: u64,
-    pub visibility_metadata_duration_ms: u64,
-    pub load_session_with_turns_duration_ms: u64,
-    pub normalize_turn_ids_duration_ms: u64,
-    pub total_duration_ms: u64,
-    pub turn_load: SessionTurnLoadTiming,
 }
 
 impl Default for SessionManagerConfig {
@@ -414,29 +407,9 @@ impl SessionManager {
 
     /// Resolve the effective storage path for a session's workspace.
     async fn effective_workspace_path_from_config(config: &SessionConfig) -> Option<PathBuf> {
-        let workspace_path = config.workspace_path.as_ref()?;
-        let identity =
-            crate::service::remote_ssh::workspace_state::resolve_workspace_session_identity(
-                workspace_path,
-                config.remote_connection_id.as_deref(),
-                config.remote_ssh_host.as_deref(),
-            )
-            .await?;
-
-        if identity.hostname
-            == crate::service::remote_ssh::workspace_state::LOCAL_WORKSPACE_SSH_HOST
-        {
-            Some(PathBuf::from(identity.logical_workspace_path()))
-        } else if identity.hostname == "_unresolved" {
-            Some(
-                crate::service::remote_ssh::workspace_state::unresolved_remote_session_storage_dir(
-                    identity.remote_connection_id.as_deref().unwrap_or_default(),
-                    identity.logical_workspace_path(),
-                ),
-            )
-        } else {
-            Some(identity.session_storage_path())
-        }
+        CoreSessionStorePort::resolve_storage_path_for_config(config)
+            .await
+            .map(|resolution| resolution.effective_storage_path)
     }
 
     #[allow(dead_code)]
@@ -2490,22 +2463,27 @@ impl SessionManager {
         usize,
         SessionViewRestoreTiming,
     )> {
+        let restore_request = SessionViewRestoreRequest {
+            workspace_path: workspace_path.to_path_buf(),
+            session_id: session_id.to_string(),
+            include_internal,
+            tail_turn_count,
+        };
         let restore_started_at = Instant::now();
         let storage_path_started_at = Instant::now();
-        let session_storage_path = {
-            let ws = workspace_path.to_string_lossy().to_string();
-            let tmp_config = SessionConfig {
-                workspace_path: Some(ws),
-                ..Default::default()
-            };
-            Self::effective_workspace_path_from_config(&tmp_config)
-                .await
-                .unwrap_or_else(|| workspace_path.to_path_buf())
-        };
+        let session_storage_path = CoreSessionStorePort
+            .resolve_session_storage_path(SessionStoragePathRequest {
+                workspace_path: restore_request.workspace_path.clone(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
+            .await
+            .map(|resolution| resolution.effective_storage_path)
+            .unwrap_or_else(|_| restore_request.workspace_path.clone());
         let resolve_storage_path_duration_ms = elapsed_ms_u64(storage_path_started_at);
         debug!(
             "Session view restore phase completed: session_id={}, phase=resolve_storage_path, duration_ms={}",
-            session_id,
+            restore_request.session_id,
             resolve_storage_path_duration_ms
         );
 
@@ -2514,34 +2492,39 @@ impl SessionManager {
             .persistence_manager
             .load_session_metadata(&session_storage_path, session_id)
             .await?
-            .is_some_and(|metadata| !include_internal && metadata.should_hide_from_user_lists())
+            .is_some_and(|metadata| {
+                !restore_request.include_internal && metadata.should_hide_from_user_lists()
+            })
         {
             return Err(BitFunError::NotFound(format!(
                 "Session not found: {}",
-                session_id
+                restore_request.session_id
             )));
         }
         let visibility_metadata_duration_ms = elapsed_ms_u64(metadata_started_at);
         debug!(
             "Session view restore phase completed: session_id={}, phase=load_metadata, duration_ms={}",
-            session_id,
+            restore_request.session_id,
             visibility_metadata_duration_ms
         );
 
         let session_started_at = Instant::now();
         let (mut session, persisted_turns, total_turn_count, turn_load) =
-            if let Some(tail_turn_count) = tail_turn_count {
+            if let Some(tail_turn_count) = restore_request.tail_turn_count {
                 self.persistence_manager
                     .load_session_with_tail_turns_timed(
                         &session_storage_path,
-                        session_id,
+                        &restore_request.session_id,
                         tail_turn_count,
                     )
                     .await?
             } else {
                 let (session, turns, timing) = self
                     .persistence_manager
-                    .load_session_with_turns_timed(&session_storage_path, session_id)
+                    .load_session_with_turns_timed(
+                        &session_storage_path,
+                        &restore_request.session_id,
+                    )
                     .await?;
                 let total_turn_count = turns.len();
                 (session, turns, total_turn_count, timing)
@@ -2552,7 +2535,7 @@ impl SessionManager {
             session_id,
             persisted_turns.len(),
             total_turn_count,
-            tail_turn_count,
+            restore_request.tail_turn_count,
             load_session_with_turns_duration_ms
         );
 
@@ -4667,7 +4650,7 @@ fn extract_subagent_relationship(
 
 #[cfg(test)]
 mod tests {
-    use super::{SessionManager, SessionManagerConfig};
+    use super::{CoreSessionStorePort, SessionManager, SessionManagerConfig};
     use crate::agentic::core::{
         Message, MessageContent, MessageRole, ProcessingPhase, Session, SessionConfig, SessionState,
     };
@@ -5324,6 +5307,34 @@ mod tests {
         assert_eq!(
             cascade,
             vec!["grandchild".to_string(), "child-root".to_string()]
+        );
+    }
+
+    #[tokio::test]
+    async fn core_session_store_port_resolves_unresolved_remote_storage_path() {
+        use bitfun_runtime_ports::{
+            SessionStorageKind, SessionStoragePathRequest, SessionStorePort,
+        };
+
+        let port = CoreSessionStorePort;
+        let resolution = port
+            .resolve_session_storage_path(SessionStoragePathRequest {
+                workspace_path: PathBuf::from("/remote/project"),
+                remote_connection_id: Some("conn-1".to_string()),
+                remote_ssh_host: None,
+            })
+            .await
+            .expect("storage path should resolve");
+
+        assert_eq!(
+            resolution.storage_kind,
+            SessionStorageKind::UnresolvedRemote
+        );
+        assert!(resolution.is_remote_storage());
+        assert_eq!(resolution.remote_connection_id.as_deref(), Some("conn-1"));
+        assert_ne!(
+            resolution.effective_storage_path,
+            PathBuf::from("/remote/project")
         );
     }
 
