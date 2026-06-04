@@ -1,9 +1,8 @@
 //! Core Agent adapter
 //!
 //! Adapts bitfun-core's Agentic system to CLI's Agent interface.
-//! Event consumption is done in the chat/exec mode main loops, which must also
-//! call [`Self::route_internal_events`] so internal subscribers (e.g. token usage)
-//! receive dequeued envelopes.
+//! Event consumption is done in the chat/exec mode main loops. Internal
+//! subscribers receive the same envelopes from the core event broadcast.
 
 use anyhow::Result;
 use std::path::PathBuf;
@@ -15,7 +14,7 @@ use bitfun_core::agentic::coordination::{
     ConversationCoordinator, DialogSubmissionPolicy, DialogTriggerSource,
 };
 use bitfun_core::agentic::core::SessionConfig;
-use bitfun_core::agentic::events::{EventEnvelope, EventQueue};
+use bitfun_core::agentic::events::EventQueue;
 
 /// Core-based Agent implementation.
 /// Stateless regarding agent_type — callers pass it per-call.
@@ -53,15 +52,6 @@ impl CoreAgentAdapter {
     #[allow(dead_code)]
     pub fn coordinator(&self) -> &Arc<ConversationCoordinator> {
         &self.coordinator
-    }
-
-    /// Forward dequeued envelopes to internal event subscribers.
-    pub async fn route_internal_events(&self, envelopes: &[EventEnvelope]) {
-        for envelope in envelopes {
-            if let Err(error) = self.coordinator.route_internal_event(envelope.clone()).await {
-                tracing::warn!("Internal event routing failed: {}", error);
-            }
-        }
     }
 
     pub fn workspace_path_buf(&self) -> PathBuf {

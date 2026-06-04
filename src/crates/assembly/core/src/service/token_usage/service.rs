@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::fs;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 
 const TOKEN_USAGE_DIR: &str = "token_usage";
 const MODEL_STATS_FILE: &str = "model_stats.json";
@@ -24,6 +24,7 @@ pub struct TokenUsageService {
     path_manager: Arc<PathManager>,
     model_stats: Arc<RwLock<HashMap<String, ModelTokenStats>>>,
     session_cache: Arc<RwLock<HashMap<String, SessionTokenStats>>>,
+    records_write_lock: Arc<Mutex<()>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -38,6 +39,7 @@ impl TokenUsageService {
             path_manager,
             model_stats: Arc::new(RwLock::new(HashMap::new())),
             session_cache: Arc::new(RwLock::new(HashMap::new())),
+            records_write_lock: Arc::new(Mutex::new(())),
         };
 
         // Initialize storage directories
@@ -271,6 +273,7 @@ impl TokenUsageService {
 
     /// Persist record to disk
     async fn persist_record(&self, record: &TokenUsageRecord) -> Result<()> {
+        let _guard = self.records_write_lock.lock().await;
         let path = self.get_records_path(record.timestamp);
 
         // Load existing records for the day
@@ -588,5 +591,80 @@ impl TokenUsageService {
 
         info!("Cleared all token usage statistics");
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn test_path_manager() -> Arc<PathManager> {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock should be after unix epoch")
+            .as_nanos();
+        let root = std::env::temp_dir()
+            .join("bitfun-token-usage-tests")
+            .join(format!("{}-{}", std::process::id(), nanos));
+        Arc::new(PathManager::with_user_root_for_tests(root.join("config")))
+    }
+
+    #[tokio::test]
+    async fn concurrent_record_usage_persists_all_records() {
+        let path_manager = test_path_manager();
+        let cleanup_root = path_manager.user_data_dir();
+        let service = Arc::new(
+            TokenUsageService::new(path_manager)
+                .await
+                .expect("token usage service should initialize"),
+        );
+
+        let mut handles = Vec::new();
+        for index in 0..50u32 {
+            let service = service.clone();
+            handles.push(tokio::spawn(async move {
+                service
+                    .record_usage(
+                        "test-model".to_string(),
+                        format!("session-{}", index % 3),
+                        format!("turn-{}", index),
+                        100 + index,
+                        10,
+                        Some(5),
+                        Some(20),
+                        None,
+                        index % 2 == 0,
+                    )
+                    .await
+                    .expect("record usage should succeed");
+            }));
+        }
+
+        for handle in handles {
+            handle.await.expect("record task should join");
+        }
+
+        let records = service
+            .query_records(TokenUsageQuery {
+                model_id: Some("test-model".to_string()),
+                session_id: None,
+                time_range: TimeRange::Today,
+                limit: None,
+                offset: None,
+                include_subagent: true,
+            })
+            .await
+            .expect("records should query");
+        assert_eq!(records.len(), 50);
+
+        let stats = service
+            .get_model_stats("test-model")
+            .await
+            .expect("model stats should exist");
+        assert_eq!(stats.request_count, 50);
+        assert_eq!(stats.session_count, 3);
+
+        let _ = std::fs::remove_dir_all(cleanup_root);
     }
 }

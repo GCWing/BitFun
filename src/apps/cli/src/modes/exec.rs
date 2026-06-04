@@ -232,7 +232,6 @@ impl ExecMode {
             }
 
             let events = event_queue.dequeue_batch(20).await;
-            self.agent.route_internal_events(&events).await;
 
             for envelope in events {
                 let event = &envelope.event;
