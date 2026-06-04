@@ -40,6 +40,7 @@
     "newProject": "New Project",
     "goHome": "Go Home",
     "about": "About",
+    "feedback": "Feedback",
     "openMenu": "Open Menu",
     "closeMenu": "Close Menu",
     "selectProjectDirectory": "Select a project directory to open",
@@ -1084,5 +1085,6 @@
     "message": "Choose what happens when you click the close button: quit exits the app completely, or minimize to tray keeps it running in the background.",
     "quit": "Quit",
     "minimizeToTray": "Minimize to Tray"
-  }
+  },
+  "bashCommandFailedHint": "Command execution failed. For a complete environment, please download DevBox from the app store and restart BitFun."
 }

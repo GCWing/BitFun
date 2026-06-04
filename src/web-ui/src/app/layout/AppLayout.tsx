@@ -29,7 +29,7 @@ import { NewProjectDialog } from '../components/NewProjectDialog';
 import { AboutDialog } from '../components/AboutDialog';
 import { MCPInteractionDialog } from '../components/MCPInteractionDialog/MCPInteractionDialog';
 import { WorkspaceManager } from '../../tools/workspace';
-import { workspaceAPI } from '@/infrastructure/api';
+import { workspaceAPI, api } from '@/infrastructure/api';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import type { CloseBehavior } from '@/infrastructure/api/service-api/SystemAPI';
 import { confirmDialog } from '@/component-library';
@@ -99,6 +99,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
   const { state, switchLeftPanelTab, toggleLeftPanel, toggleRightPanel } = useApp();
   const [windowModeHint, setWindowModeHint] = useState<WindowModeHint | null>(null);
   const windowModeHintTimerRef = useRef<number | null>(null);
+  const lastBashFailedNotificationTimeRef = useRef<number>(0);
 
   const showWindowFullscreenHint = useCallback((enteredFullscreen: boolean) => {
     if (windowModeHintTimerRef.current) {
@@ -591,6 +592,26 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
     window.addEventListener('bitfun:acp-session-creation', handler);
     return () => window.removeEventListener('bitfun:acp-session-creation', handler);
   }, []);
+
+  React.useEffect(() => {
+    const unlisten = api.listen<{ command?: string; exit_code?: number }>(
+      'bash-command-failed',
+      (_payload) => {
+        const now = Date.now();
+        const cooldownMs = 5 * 60 * 1000;
+        if (now - lastBashFailedNotificationTimeRef.current < cooldownMs) {
+          return;
+        }
+        lastBashFailedNotificationTimeRef.current = now;
+        import('@/shared/notification-system').then(({ notificationService }) => {
+          notificationService.warning(tCommon('bashCommandFailedHint'), { duration: 0 });
+        });
+      }
+    );
+    return () => {
+      unlisten();
+    };
+  }, [tCommon]);
 
   // Global drag-and-drop
   React.useEffect(() => {
