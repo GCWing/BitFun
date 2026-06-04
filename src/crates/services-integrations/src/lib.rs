@@ -9,6 +9,9 @@ pub mod announcement;
 #[cfg(feature = "file-watch")]
 pub mod file_watch;
 
+#[cfg(feature = "function-agents")]
+pub mod function_agents;
+
 #[cfg(feature = "git")]
 pub mod git;
 

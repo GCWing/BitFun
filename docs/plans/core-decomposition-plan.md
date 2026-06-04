@@ -74,9 +74,9 @@ workspace build 证明没有行为或 feature 影响。
 
 | PR | 主题 | 完整范围 | 不允许混入 | 合入门禁 |
 |---|---|---|---|---|
-| PR-D | Product Runtime / Service / Tool Final Closure | 收敛剩余 concrete runtime owner：session persistence / cold restore / metadata IO、workspace-root / persistence / workspace service reads、remote FS / terminal / image context concrete impl、Bash / terminal lifecycle / indexed workspace search / remote shell execution、MiniApp worker / host / seed / marker IO、function-agent concrete service 外移，以及必要的 final boundary / directory organization cleanup | 改变产品能力集合、工具曝光、权限、checkpoint、remote fallback、MiniApp worker 生命周期、function-agent Git/AI 行为、release/installer 构建形态；把独立 feature matrix 或构建性能优化混入迁移 | session persistence / restore tests，remote workspace / file / terminal focused tests，terminal / shell / indexed-search focused tests，MiniApp import/sync/recompile/worker tests，function-agent Git/AI focused tests，`cargo check --workspace` |
+| PR-D | Product Runtime / Service / Tool Final Closure | 收敛剩余 concrete runtime owner：session persistence / cold restore / metadata IO、workspace-root / persistence / workspace service reads、remote FS / terminal / image context concrete impl、Bash / terminal lifecycle / indexed workspace search / remote shell execution、MiniApp worker / host / seed / marker IO、function-agent Git concrete service 外移，以及必要的 final boundary / directory organization cleanup。function-agent AI provider acquisition 暂留 core，后续必须先抽稳定 AI runtime owner，不能让 integration crate 依赖回 core | 改变产品能力集合、工具曝光、权限、checkpoint、remote fallback、MiniApp worker 生命周期、function-agent Git/AI 行为、release/installer 构建形态；把独立 feature matrix 或构建性能优化混入迁移 | session persistence / restore tests，remote workspace / file / terminal focused tests，terminal / shell / indexed-search focused tests，MiniApp import/sync/recompile/worker tests，function-agent Git/AI focused tests，`cargo check --workspace` |
 
-计划优先级：完成最终 PR-D 后做一次总体验收：确认 plan / completed 文档没有剩余活跃迁移队列，`bitfun-core` 只保留兼容 facade 和产品组装，边界脚本覆盖已外移 owner，且所有产品形态仍保持既有能力集合。PR-1 到 PR-4、Agent Runtime Extension Boundary Closure 和最终 PR-C 已进入完成归档；后续不应继续触碰 session restore 热路径、已迁移的本地 tool IO primitive、function-agent Git/AI concrete runtime、scheduled-job runtime state、custom subagent schema/default/markdown IO/discovery/loading、post-call hook routing/executor orchestration、tool confirmation 计划与失败映射，或最终 PR-C 已收敛的 agent-runtime concrete delivery / permission 合同，除非是修复等价测试发现的问题。
+计划优先级：完成最终 PR-D 后做一次总体验收：确认 plan / completed 文档没有剩余活跃迁移队列，`bitfun-core` 只保留兼容 facade 和产品组装，边界脚本覆盖已外移 owner，且所有产品形态仍保持既有能力集合。PR-1 到 PR-4、Agent Runtime Extension Boundary Closure 和最终 PR-C 已进入完成归档；后续不应继续触碰 session restore 热路径、已迁移的本地 tool IO primitive、function-agent Git concrete runtime、scheduled-job runtime state、custom subagent schema/default/markdown IO/discovery/loading、post-call hook routing/executor orchestration、tool confirmation 计划与失败映射，或最终 PR-C 已收敛的 agent-runtime concrete delivery / permission 合同，除非是修复等价测试发现的问题。
 
 ## 5. 每类 PR 的保护重点
 
@@ -113,7 +113,7 @@ workspace build 证明没有行为或 feature 影响。
 
 - MiniApp 已将 builtin bundle identity、版本和 embedded asset 放入 `bitfun-product-domains`；core 继续负责 seed 写盘、marker IO、用户 storage 保留、recompile、PathManager、worker process 和 host dispatch。
 - 后续若继续迁移 MiniApp worker / host，必须先拆清 process runtime、permission policy、host primitive dispatch、draft worker 与 active worker 的等价边界，不能把 PathManager 或 worker process 下沉到 domain crate。
-- function-agent 的 prompt、parser 和 facade policy 已归属 `bitfun-product-domains`；core 通过 `CoreProductDomainRuntime` 和 `function_agents::runtime_services` 保留 concrete Git/AI provider acquisition、error mapping、no-HEAD diff fallback、非 Git workspace fallback、`analyzed_at` 时序和旧 import path 兼容。
+- function-agent 的 prompt、parser 和 facade policy 已归属 `bitfun-product-domains`；Git snapshot / no-HEAD diff fallback / 非 Git workspace fallback 已归属 `bitfun-services-integrations::function_agents`。core 通过 `CoreProductDomainRuntime` 保留旧入口和 AI provider acquisition / error mapping / `analyzed_at` 时序，后续 AI 外移必须先完成独立 AI runtime owner 设计。
 - 验证 MiniApp import/sync/recompile/rollback/deps state、builtin seed marker、customized update metadata、function-agent prompt/response policy。
 
 ### 5.4 Tool Runtime Owner

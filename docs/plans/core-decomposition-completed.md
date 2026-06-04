@@ -35,7 +35,7 @@
 
 - remote-SSH runtime、remote FS / terminal、workspace-root source、persistence / workspace service reads、`ImageContextData` concrete impl 仍未迁移。
 - concrete tools 仍未迁移。
-- MiniApp filesystem IO / worker / host dispatch / builtin marker IO / seed 写盘、function-agent Git / AI concrete service 仍未迁移。
+- MiniApp filesystem IO / worker / host dispatch / builtin marker IO / seed 写盘、function-agent AI provider acquisition 仍未迁移；function-agent Git concrete service 已在后续阶段外移。
 - agent definition loading / concrete scheduler lifecycle 仍未迁移。
 
 ### 1.3 H1-H5 基线收口
@@ -50,7 +50,7 @@
 
 - H5 不代表 per-product feature matrix、构建收益或 runtime owner 深迁移完成。
 - `bitfun-core default = []` 仍是独立评估项，不能混入 runtime owner 迁移。
-- 具体 IO、scheduler 生命周期、workspace-root、persistence、MiniApp worker / host / seed 写盘、function-agent Git / AI 仍需后续完整 owner PR。
+- 具体 IO、scheduler 生命周期、workspace-root、persistence、MiniApp worker / host / seed 写盘、function-agent AI provider acquisition 仍需后续完整 owner PR；function-agent Git concrete service 已在后续阶段外移。
 
 ### 1.4 Runtime owner PR1-PR4：组装、remote、agent runtime 与 harness 边界
 
@@ -143,7 +143,7 @@
 - cargo tree / metadata 证据显示 product-capabilities 只依赖 harness、runtime-ports、tool-packs；core
   no-default 不选入 product owner deps，相关 owner 依赖保持 optional。
 - 早期 PR-C 只证明 capability / harness / tool provider 组装边界和 no-default / dependency profile 未扩大；不迁移缺少等价保护的
-  concrete IO、MiniApp worker/host、function-agent Git/AI 或 scheduler/event/permission lifecycle。
+  concrete IO、MiniApp worker/host、function-agent AI provider acquisition 或 scheduler/event/permission lifecycle。
 
 ### 1.8 Session Store / Restore Runtime Services Owner：restore 热路径边界
 
@@ -183,21 +183,25 @@
 - 继续迁移 shell、terminal、remote 或 indexed search 时，必须先补 scheduler / terminal lifecycle / remote protocol
   等价保护，不能复用本地 filesystem primitive 的低风险假设。
 
-### 1.10 Function-Agent Concrete Runtime Owner：Git / AI 具体服务边界
+### 1.10 Function-Agent Concrete Runtime Owner：Git 具体服务外移与 AI 边界
 
 - `bitfun-product-domains` 继续拥有 function-agent prompt、parser、response policy、port 和 facade orchestration。
 - `bitfun-core::product_domain_runtime::CoreProductDomainRuntime` 承接 function-agent 的 core runtime owner 入口，
   public `GitFunctionAgent` / `StartchatFunctionAgent` 直接通过该入口组装 Git / AI adapter 与 product-domain facade。
-- `bitfun-core::function_agents::runtime_services` 承接 concrete Git snapshot、startchat Git/time snapshot、AI provider
-  acquisition、AI transport error mapping、commit AI analysis 和 work-state AI analysis。
+- `bitfun-services-integrations::function_agents::FunctionAgentGitService` 承接 concrete Git snapshot、startchat Git/time
+  snapshot、no-HEAD diff fallback、非 Git workspace fallback、unpushed/ahead-behind/last-commit fallback 和 project context
+  lookup；core Git adapter 只保留旧路径兼容和 port delegation。
+- `bitfun-core::function_agents::runtime_services` 继续承接 AI provider acquisition、AI transport error mapping、commit AI
+  analysis 和 work-state AI analysis，避免 integration crate 依赖回 core 的 AIClientFactory / Message。
 - 旧 `git_func_agent::AIAnalysisService`、`startchat_func_agent::AIWorkStateService`、`CommitGenerator` 和
   `WorkStateAnalyzer` 只保留兼容 re-export / facade，不再拥有 concrete runtime 主体逻辑。
 - focused regression 覆盖 staged/unstaged diff 边界、no-HEAD fallback、非 Git workspace fallback、startchat snapshot
-  语义、AI parser policy 和 product-domain facade contract。
+  语义、time snapshot、AI parser policy 和 product-domain facade contract。
 
 明确未完成：
 
-- function-agent concrete service 仍保留在 core runtime owner 中，尚未外移为独立 service integration crate。
+- function-agent AI provider acquisition 仍保留在 core runtime owner 中。后续若外移，必须先抽稳定 AI runtime owner 或
+  AI provider port，不能通过 integration crate 依赖 core 或复制 AI client runtime。
 - MiniApp worker process、host dispatch、permission execution、PathManager integration、builtin marker IO / seed 写盘仍在 core；
   后续迁移必须单独证明权限、进程生命周期、recompile 和用户 storage 保留行为等价。
 
@@ -256,14 +260,14 @@
 - `product-full` 是完整产品能力保护开关。
 - 构建脚本和 installer 相关脚本不作为 core 拆解的一部分修改。
 - boundary check 覆盖已外移 owner 的旧路径 facade-only / 禁止回流状态。
-- tool manifest、`GetToolSpec`、execution admission gate、MiniApp storage layout adapter、product-domain pure helper、remote workspace search fallback、MCP config / catalog / dynamic manifest、agent-runtime prompt cache、agent registry source/profile facts、builtin agent catalog、custom subagent schema/default/markdown IO/discovery/loading、thread-goal tool / metadata / event / token / scheduler delivery、AskUserQuestion validation/result、DeepReview hook measurement decision、post-call hook routing/executor orchestration、tool confirmation plan/failure mapping、product capability pack、harness/tool provider assembly、session restore path/timing facts、本地 tool IO primitive、function-agent Git/AI concrete runtime 和 scheduled-job lifecycle state 等已有 focused baseline。
+- tool manifest、`GetToolSpec`、execution admission gate、MiniApp storage layout adapter、product-domain pure helper、remote workspace search fallback、MCP config / catalog / dynamic manifest、agent-runtime prompt cache、agent registry source/profile facts、builtin agent catalog、custom subagent schema/default/markdown IO/discovery/loading、thread-goal tool / metadata / event / token / scheduler delivery、AskUserQuestion validation/result、DeepReview hook measurement decision、post-call hook routing/executor orchestration、tool confirmation plan/failure mapping、product capability pack、harness/tool provider assembly、session restore path/timing facts、本地 tool IO primitive、function-agent Git concrete runtime / AI parser policy 和 scheduled-job lifecycle state 等已有 focused baseline。
 
 ## 3. 当前剩余结论
 
 - 低风险准备项已经完成，不再新增零散小 PR。
 - 早期 PR-C 已收敛 Harness / Product Capability / Build-Benefit closure；PR-1 已收敛 session restore hot-path
   request / timing / storage path facts 和 Runtime Services port；PR-2 已收敛本地 Write / Edit / Delete / Glob
-  concrete IO primitive；PR-3 已收敛 function-agent Git/AI concrete runtime owner closure；PR-4 已收敛 scheduled-job lifecycle state owner closure；Agent Runtime Extension Boundary Closure 已收敛 custom subagent schema/default/markdown IO/discovery/loading、post-call hook routing/executor orchestration 和 tool confirmation 计划 / 失败映射。后续不应继续拆零散 helper PR；
+  concrete IO primitive；PR-3 已收敛 function-agent Git concrete runtime owner 与 AI 边界；PR-4 已收敛 scheduled-job lifecycle state owner closure；Agent Runtime Extension Boundary Closure 已收敛 custom subagent schema/default/markdown IO/discovery/loading、post-call hook routing/executor orchestration 和 tool confirmation 计划 / 失败映射。后续不应继续拆零散 helper PR；
 - 最终 PR-C 已收敛 Agent Runtime concrete delivery / permission 合同：goal/user-question tool handler 合同、thread-goal metadata / token / event / scheduler delivery plan、builtin agent catalog 和 DeepReview hook measurement decision。当前活跃迁移只剩 `core-decomposition-plan.md` 中的最终 PR-D：关闭 Product Runtime、Runtime Services、Tool / Terminal / Search、Remote、MiniApp 和 function-agent 的剩余 concrete owner。
 - PR-D 完成并通过总体验收后，本文档范围内的 core decomposition runtime owner 迁移应关闭；后续只允许独立缺陷修复、feature matrix、构建收益优化、目录整理或产品行为变更评审，不再作为迁移计划遗漏追加。
 - 缺陷修复、行为变更、冗余清理、三方库升级和构建脚本调整必须独立评估，不能伪装成 core decomposition 剩余里程碑。

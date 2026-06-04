@@ -10,8 +10,8 @@ use bitfun_product_domains::function_agents::ports::{
 use bitfun_product_domains::function_agents::{
     git_func_agent::AICommitAnalysis, startchat_func_agent::AIGeneratedAnalysis,
 };
+use bitfun_services_integrations::function_agents::FunctionAgentGitService;
 
-use crate::function_agents::runtime_services::CoreFunctionAgentGitService;
 use crate::infrastructure::ai::AIClientFactory;
 
 #[derive(Debug, Default, Clone)]
@@ -22,27 +22,21 @@ impl FunctionAgentGitPort for CoreFunctionAgentGitAdapter {
         &self,
         repo_path: PathBuf,
     ) -> FunctionAgentFuture<'_, GitCommitSnapshot> {
-        Box::pin(async move { CoreFunctionAgentGitService::git_commit_snapshot(repo_path).await })
+        Box::pin(async move { FunctionAgentGitService::git_commit_snapshot(repo_path).await })
     }
 
     fn startchat_git_snapshot(
         &self,
         repo_path: PathBuf,
     ) -> FunctionAgentFuture<'_, StartchatGitSnapshot> {
-        Box::pin(
-            async move { CoreFunctionAgentGitService::startchat_git_snapshot(repo_path).await },
-        )
+        Box::pin(async move { FunctionAgentGitService::startchat_git_snapshot(repo_path).await })
     }
 
     fn startchat_time_snapshot(
         &self,
         repo_path: PathBuf,
     ) -> FunctionAgentFuture<'_, StartchatTimeSnapshot> {
-        Box::pin(async move {
-            Ok(CoreFunctionAgentGitService::startchat_time_snapshot(
-                &repo_path,
-            ))
-        })
+        Box::pin(async move { Ok(FunctionAgentGitService::startchat_time_snapshot(&repo_path)) })
     }
 }
 

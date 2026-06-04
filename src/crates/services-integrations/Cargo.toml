@@ -15,6 +15,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }
 bitfun-events = { path = "../events" }
+bitfun-product-domains = { path = "../product-domains", default-features = false, optional = true }
 bitfun-runtime-ports = { path = "../runtime-ports", optional = true }
 aes-gcm = { workspace = true, optional = true }
 anyhow = { workspace = true, optional = true }
@@ -43,6 +44,11 @@ default = []
 announcement = []
 git = ["bitfun-services-core", "chrono", "git2", "thiserror"]
 file-watch = ["notify"]
+function-agents = [
+    "bitfun-product-domains/function-agents",
+    "dep:bitfun-product-domains",
+    "git",
+]
 mcp = [
     "aes-gcm",
     "anyhow",
@@ -61,6 +67,7 @@ remote-ssh = ["dunce", "sha2", "tokio-util"]
 product-full = [
     "announcement",
     "file-watch",
+    "function-agents",
     "git",
     "mcp",
     "remote-connect",
