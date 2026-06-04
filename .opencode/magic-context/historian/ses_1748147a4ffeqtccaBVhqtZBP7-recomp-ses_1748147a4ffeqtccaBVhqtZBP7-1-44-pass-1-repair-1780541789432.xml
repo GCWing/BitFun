@@ -1,0 +1,141 @@
+<think>Now I have a very thorough understanding. The existing AGENTS.md is already very comprehensive. Let me identify what genuine improvements could be made, focusing on things that would genuinely help an agent avoid mistakes:
+
+1. **`desktop:build:nsis:fast` is Windows-only** - None of the desktop build commands are explicitly marked as platform-specific. `desktop:build:nsis` is Windows-only (NSIS is a Windows installer format). This could confuse Linux/macOS developers.
+
+2. **`desktop:dev:raw` skips OpenSSL bootstrap** - This is mentioned in CONTRIBUTING.md but not in AGENTS.md. 
+
+The agent could find this useful for debugging OpenSSL issues.
+
+3. **mobile-web `dist` directory workaround** - The CI creates `src/mobile-web/dist` as a workaround for Tauri. An agent might "fix" this thinking it's a missing build step.
+
+4. **`build:web` includes type-check + verify-monaco-assets** - The `build:web` command actually runs type checking, the web build itself, and then verifies Monaco assets. This is worth noting since agents might assume these are separate steps.
+
+5. **`prebuild` is automatically run before `build`** - The `prebuild` script (which copies assets and generates versions) runs automatically as a prebuild hook, so agents don't need to invoke it manually.
+
+6. **Tauri feature `devtools` is enabled in dev builds** - Dev builds automatically include devtools, which is useful for frontend debugging.
+
+7. **`i18n:contract:test` vs `i18n:contract:test:ci`** - Two different test profiles exist; the CI version sets a specific environment profile. For routine local checks, the first is sufficient.
+
+Looking at what's already covered, I can see the Rust formatting gotcha, CI behavior with ignored files, release versioning, Windows OpenSSL setup, the bitfun-cli exclusion, and the i18n generate command are all documented.
+
+What's missing that would genuinely help: the NSIS installer commands should be marked as Windows-only since that could trip up developers on other platforms, the mobile-web dist workaround is an internal detail that shouldn't be "fixed" if discovered, and the `desktop:dev:raw` command has a specific purpose worth noting. I should also point out that certain build and type-check commands already include verification steps, so agents don't need to run those separately. The Tauri devtools feature being enabled in dev builds is useful context too.</think>
+
+Now I have a thorough picture. The existing AGENTS.md is already well-crafted — the "Gotchas" section in particular covers the high-value items. Let me identify the remaining gaps by cross-referencing the CI workflow, package.json scripts, and CONTRIBUTING.md against what the file already says:
+
+**Already covered well:**
+- `pnpm run fmt:rs` workflow (confirmed via `format-changed-rust.mjs`)
+- CI ignores `**/*.md` and `png/**`
+- `release-please` versioning automation
+- Windows OpenSSL bootstrap + opt-out
+- `bitfun-cli` excluded from workspace check
+- `i18n:generate` only after `locales.json` edits
+- `postinstall` runs `copy-assets`
+
+**Genuine gaps found:**
+1. **`desktop:build:nsis*` commands are Windows-only** — NSIS doesn't exist on Linux/macOS
+2. **`desktop:dev:raw`** — skips the dev script/OpenSSL bootstrap; useful for manual OpenSSL wiring
+3. **mobile-web `dist` workaround** — CI creates `src/mobile-web/dist` as a Tauri workaround; an agent might "fix" this as a missing step
+4. **`build:web` includes type-check + monaco verification** — `pnpm run build:web` = `type-check:web` + web-ui build + `verify:monaco-assets`; agents may run these three separately unnecessarily
+5. **`prebuild` is a pre-build hook** — runs automatically before `desktop:build`; agents shouldn't call it manually
+6. **Tauri dev builds always include `devtools` feature** — useful for frontend debugging context
+
+Here's the targeted update:
+
+```markdown
+## Gotchas and non-obvious facts
+
+### Rust formatting
+
+Do not run `cargo fmt` directly — use `pnpm run fmt:rs` which calls
+`scripts/format-changed-rust.mjs`. That script formats only changed/staged
+files and restores collateral files that rustfmt touched through module
+expansion. Running `cargo fmt` on the whole workspace is not the intended
+workflow.
+
+### CI ignores docs and images
+
+CI workflow (`ci.yml`) path-ignores `**/*.md` and `png/**`. Doc-only or
+image-only changes do not trigger Rust/frontend builds. Run
+`check:repo-hygiene` and `check:github-config` locally for metadata changes.
+
+### Release versioning
+
+Versions are automated via `release-please` on the `main` branch. Do not
+manually bump versions in `Cargo.toml` or `package.json` — release-please
+handles it. The workflow watches for conventional commit messages and
+creates releases automatically.
+
+### Windows OpenSSL
+
+Desktop builds on Windows require OpenSSL. `desktop:dev` and all
+`desktop:build*` scripts run `scripts/ensure-openssl-windows.mjs`
+automatically. To opt out: set `BITFUN_SKIP_OPENSSL_BOOTSTRAP=1` and set
+`OPENSSL_DIR` yourself to a pre-built x64 OpenSSL folder with
+`OPENSSL_STATIC=1`. See `CONTRIBUTING.md` for the manual/CI setup script at
+`scripts/ci/setup-openssl-windows.ps1`.
+
+`desktop:dev:raw` skips the dev script entirely (no OpenSSL bootstrap);
+set `OPENSSL_DIR` yourself and run `scripts/ci/setup-openssl-windows.ps1`
+if needed.
+
+### `bitfun-cli` is excluded from `cargo check --workspace`
+
+The CI build check runs `cargo check --workspace --exclude bitfun-cli`. When
+running `cargo check --workspace` locally, expect `bitfun-cli` to
+potentially have errors that CI ignores. Always use `--exclude bitfun-cli`
+for equivalent CI coverage.
+
+### i18n: generate after editing locales.json only
+
+`pnpm run i18n:generate` regenerates generated i18n contract files. Run it
+after editing `src/shared/i18n/contract/locales.json`. For regular locale
+resource edits, `pnpm run i18n:audit` is sufficient.
+
+### postinstall copies assets
+
+`pnpm install` runs `postinstall` which calls `copy-assets` (copies Monaco
+editor and app icons). This is normal — do not suppress the postinstall hook.
+
+### NSIS desktop builds are Windows-only
+
+`desktop:build:nsis` and `desktop:build:nsis:fast` produce Windows NSIS
+installers. Do not run these on Linux or macOS — the NSIS bundler is not
+available there. Use `desktop:build:linux` or `desktop:build:arm64`
+respectively instead.
+
+### build:web includes type-check and asset verification
+
+`pnpm run build:web` is equivalent to `type-check:web` + web-ui build +
+`verify:monaco-assets`. Running these three steps manually is redundant;
+run `build:web` directly.
+
+### prebuild runs automatically before desktop:build
+
+`prebuild` (copies assets + generates version files) is registered as a
+pre-build hook in `package.json` and runs automatically before
+`desktop:build`. Do not call `prebuild` or `prebuild:web` manually.
+
+### Tauri dev builds include devtools automatically
+
+Desktop dev builds always enable the `devtools` Cargo feature. Use
+`Cmd/Ctrl + Shift + I` for the element inspector and `Cmd/Ctrl + Shift + J`
+for native webview DevTools. These are disabled in end-user `release` builds.
+
+### mobile-web dist directory is a CI workaround
+
+CI creates `src/mobile-web/dist` as a placeholder before the Rust build
+because Tauri requires the directory to exist. Do not treat this as a
+missing build step or generate a real mobile-web build during development
+unless you are verifying the full desktop packaging flow.
+```
+
+**What changed and why:**
+
+| Addition | Reason |
+|---|---|
+| NSIS Windows-only | `desktop:build:nsis*` on Linux/macOS would fail; agents on non-Windows hosts need to know this |
+| `desktop:dev:raw` purpose | Explicitly documented in CONTRIBUTING.md but absent from AGENTS.md; useful for OpenSSL debugging |
+| `build:web` = three steps | Agents might run `type-check:web` then `build:web` redundantly |
+| `prebuild` auto-hook | Agents who discover `prebuild` might call it manually before `desktop:build`, unaware it's automatic |
+| Tauri devtools always-on | Gives agents context for frontend debugging shortcuts without needing to search CONTRIBUTING.md |
+| mobile-web `dist` workaround | Discovered from CI; an agent might "fix" this as a missing step and generate an unnecessary build |

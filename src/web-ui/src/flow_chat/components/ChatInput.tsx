@@ -6,9 +6,10 @@
 import React, { useRef, useCallback, useEffect, useReducer, useState, useMemo } from 'react';
 import path from 'path-browserify';
 import { useTranslation } from 'react-i18next';
-import { ArrowUp, Image, RotateCcw, Plus, X, Sparkles, Loader2, ChevronRight, Files, MessageSquarePlus } from 'lucide-react';
+import { ArrowUp, Image, RotateCcw, Plus, X, Sparkles, Loader2, ChevronRight, Files, MessageSquarePlus, Mic, MicOff } from 'lucide-react';
 import { ContextDropZone, useContextStore } from '../../shared/context-system';
 import { useActiveSessionState } from '@/flow_chat/hooks';
+import { useVoiceInputToChat } from '../hooks/useVoiceInput';
 import { RichTextInput, type MentionState } from './RichTextInput';
 import { FileMentionPicker } from './FileMentionPicker';
 import { globalEventBus } from '@/infrastructure/event-bus';
@@ -771,6 +772,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     // applyModeChange). Prefer it over session.mode so a stale store cannot force
     // agentic when the user selected Team or another mode.
     currentAgentType: acpTargetAgentType || modeState.current,
+  });
+
+  const { isListening: isVoiceListening, isSupported: isVoiceSupported, toggleListening: toggleVoice } = useVoiceInputToChat({
+    language: 'zh-CN',
   });
 
   const modeInfoById = useMemo(
@@ -3532,6 +3537,20 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                     maxTokens={tokenUsage.max}
                   />
                 </div>
+
+                {isVoiceSupported && (
+                  <Tooltip content={isVoiceListening ? t('voice.stopListening') : t('voice.startListening')}>
+                    <IconButton
+                      className={`bitfun-chat-input__voice-button ${isVoiceListening ? 'bitfun-chat-input__voice-button--listening' : ''}`}
+                      variant="ghost"
+                      size="xs"
+                      onClick={toggleVoice}
+                      aria-label={isVoiceListening ? t('voice.stopListening') : t('voice.startListening')}
+                    >
+                      {isVoiceListening ? <MicOff size={14} /> : <Mic size={14} />}
+                    </IconButton>
+                  </Tooltip>
+                )}
 
                 {renderActionButton()}
               </div>

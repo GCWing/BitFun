@@ -109,6 +109,7 @@ workspace-search = [
     "thiserror",
     "which",
 ]
+voice = ["async-trait", "bitfun-runtime-ports", "futures"]
 product-full = [
     "announcement",
     "deep-research",
@@ -121,5 +122,6 @@ product-full = [
     "remote-ssh",
     "remote-ssh-concrete",
     "workspace-search",
+    "voice",
 ]
 ssh_config = ["dep:ssh_config"]

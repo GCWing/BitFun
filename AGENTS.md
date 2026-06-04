@@ -201,3 +201,33 @@ change directly affects build, packaging, or CI cannot protect the path.
 ## Agent-doc priority
 
 Prefer the nearest matching `AGENTS.md` / `AGENTS-CN.md` for the directory you are changing. If local guidance conflicts with this file, follow the more specific, nearer document.
+
+## Gotchas and non-obvious facts
+
+### Rust formatting
+
+Do not run `cargo fmt` directly — use `pnpm run fmt:rs` which calls `scripts/format-changed-rust.mjs`. That script formats only changed/staged files and restores collateral files that rustfmt touched through module expansion. Running `cargo fmt` on the whole workspace is not the intended workflow.
+
+### CI ignores docs and images
+
+CI workflow (`ci.yml`) path-ignores `**/*.md` and `png/**`. Doc-only or image-only changes do not trigger Rust/frontend builds. Run `check:repo-hygiene` and `check:github-config` locally for metadata changes.
+
+### Release versioning
+
+Versions are automated via `release-please` on the `main` branch. Do not manually bump versions in `Cargo.toml` or `package.json` — release-please handles it. The workflow watches for conventional commit messages and creates releases automatically.
+
+### Windows OpenSSL
+
+Desktop builds on Windows require OpenSSL. `desktop:dev` and all `desktop:build*` scripts run `scripts/ensure-openssl-windows.mjs` automatically. To opt out: set `BITFUN_SKIP_OPENSSL_BOOTSTRAP=1` and set `OPENSSL_DIR` yourself to a pre-built x64 OpenSSL folder with `OPENSSL_STATIC=1`. See `CONTRIBUTING.md` for the manual/CI setup script at `scripts/ci/setup-openssl-windows.ps1`.
+
+### `bitfun-cli` is excluded from `cargo check --workspace`
+
+The CI build check runs `cargo check --workspace --exclude bitfun-cli`. When running `cargo check --workspace` locally, expect `bitfun-cli` to potentially have errors that CI ignores. Always use `--exclude bitfun-cli` for equivalent CI coverage.
+
+### i18n: generate after editing locales.json only
+
+`pnpm run i18n:generate` regenerates generated i18n contract files. Run it after editing `src/shared/i18n/contract/locales.json`. For regular locale resource edits, `pnpm run i18n:audit` is sufficient.
+
+### postinstall copies assets
+
+`pnpm install` runs `postinstall` which calls `copy-assets` (copies Monaco editor and app icons). This is normal — do not suppress the postinstall hook.

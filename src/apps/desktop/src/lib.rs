@@ -1230,6 +1230,12 @@ pub async fn run() {
             api::debug_api::debug_element_picked,
             api::debug_api::debug_open_devtools,
             api::debug_api::debug_close_devtools,
+            // Voice API
+            api::voice::voice_get_status,
+            api::voice::voice_start_listening,
+            api::voice::voice_stop_listening,
+            api::voice::voice_speak,
+            api::voice::voice_stop_speaking,
         ])
         .build(tauri::generate_context!());
 

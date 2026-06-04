@@ -4,6 +4,8 @@
 //! This crate intentionally contains only DTOs and traits. It must not depend
 //! on concrete managers, platform adapters, `bitfun-core`, or app crates.
 
+pub mod voice;
+
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
