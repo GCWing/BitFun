@@ -56,6 +56,169 @@ pub fn shared_coding_mode_user_context_policy() -> UserContextPolicy {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BuiltinAgentCategory {
+    Mode,
+    SubAgent,
+    Hidden,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BuiltinAgentDefinitionSpec {
+    pub id: &'static str,
+    pub category: BuiltinAgentCategory,
+    pub visibility_policy: SubagentVisibilityPolicy,
+    pub default_model_id: &'static str,
+}
+
+pub fn builtin_agent_definition_specs() -> Vec<BuiltinAgentDefinitionSpec> {
+    use BuiltinAgentCategory::{Hidden, Mode, SubAgent};
+
+    vec![
+        builtin_agent_spec("agentic", Mode, "auto", SubagentVisibilityPolicy::default()),
+        builtin_agent_spec("Cowork", Mode, "auto", SubagentVisibilityPolicy::default()),
+        builtin_agent_spec("debug", Mode, "auto", SubagentVisibilityPolicy::default()),
+        builtin_agent_spec(
+            "Multitask",
+            Mode,
+            "auto",
+            SubagentVisibilityPolicy::default(),
+        ),
+        builtin_agent_spec("Plan", Mode, "auto", SubagentVisibilityPolicy::default()),
+        builtin_agent_spec("Claw", Mode, "auto", SubagentVisibilityPolicy::default()),
+        builtin_agent_spec(
+            "DeepResearch",
+            Mode,
+            "auto",
+            SubagentVisibilityPolicy::default(),
+        ),
+        builtin_agent_spec("Team", Mode, "auto", SubagentVisibilityPolicy::default()),
+        builtin_agent_spec(
+            "ComputerUse",
+            SubAgent,
+            "auto",
+            SubagentVisibilityPolicy::restricted(["Claw", "Team"]),
+        ),
+        builtin_agent_spec(
+            "Explore",
+            SubAgent,
+            "primary",
+            SubagentVisibilityPolicy::public(),
+        ),
+        builtin_agent_spec(
+            "GeneralPurpose",
+            SubAgent,
+            "fast",
+            SubagentVisibilityPolicy::public(),
+        ),
+        builtin_agent_spec(
+            "ResearchSpecialist",
+            SubAgent,
+            "fast",
+            SubagentVisibilityPolicy::restricted(["DeepResearch"]),
+        ),
+        builtin_agent_spec(
+            "FileFinder",
+            SubAgent,
+            "primary",
+            SubagentVisibilityPolicy::public(),
+        ),
+        builtin_agent_spec(
+            "ReviewBusinessLogic",
+            SubAgent,
+            "fast",
+            SubagentVisibilityPolicy::restricted(["DeepReview"]),
+        ),
+        builtin_agent_spec(
+            "ReviewPerformance",
+            SubAgent,
+            "fast",
+            SubagentVisibilityPolicy::restricted(["DeepReview"]),
+        ),
+        builtin_agent_spec(
+            "ReviewSecurity",
+            SubAgent,
+            "fast",
+            SubagentVisibilityPolicy::restricted(["DeepReview"]),
+        ),
+        builtin_agent_spec(
+            "ReviewArchitecture",
+            SubAgent,
+            "fast",
+            SubagentVisibilityPolicy::restricted(["DeepReview"]),
+        ),
+        builtin_agent_spec(
+            "ReviewFrontend",
+            SubAgent,
+            "fast",
+            SubagentVisibilityPolicy::restricted(["DeepReview"]),
+        ),
+        builtin_agent_spec(
+            "ReviewJudge",
+            SubAgent,
+            "fast",
+            SubagentVisibilityPolicy::restricted(["DeepReview"]),
+        ),
+        builtin_agent_spec(
+            "ReviewFixer",
+            SubAgent,
+            "fast",
+            SubagentVisibilityPolicy::restricted(["DeepReview"]),
+        ),
+        builtin_agent_spec(
+            "CodeReview",
+            Hidden,
+            "primary",
+            SubagentVisibilityPolicy::default(),
+        ),
+        builtin_agent_spec(
+            "DeepReview",
+            Hidden,
+            "fast",
+            SubagentVisibilityPolicy::default(),
+        ),
+        builtin_agent_spec(
+            "GenerateDoc",
+            Hidden,
+            "primary",
+            SubagentVisibilityPolicy::default(),
+        ),
+    ]
+}
+
+pub fn default_model_id_for_builtin_agent(agent_type: &str) -> &'static str {
+    match agent_type {
+        "agentic" | "Cowork" | "ComputerUse" | "Plan" | "debug" | "Claw" | "DeepResearch"
+        | "Team" | "Multitask" => "auto",
+        "Explore" | "FileFinder" | "CodeReview" | "GenerateDoc" => "primary",
+        "GeneralPurpose"
+        | "ResearchSpecialist"
+        | "DeepReview"
+        | "ReviewBusinessLogic"
+        | "ReviewPerformance"
+        | "ReviewSecurity"
+        | "ReviewArchitecture"
+        | "ReviewFrontend"
+        | "ReviewJudge"
+        | "ReviewFixer" => "fast",
+        _ => "fast",
+    }
+}
+
+fn builtin_agent_spec(
+    id: &'static str,
+    category: BuiltinAgentCategory,
+    default_model_id: &'static str,
+    visibility_policy: SubagentVisibilityPolicy,
+) -> BuiltinAgentDefinitionSpec {
+    BuiltinAgentDefinitionSpec {
+        id,
+        category,
+        visibility_policy,
+        default_model_id,
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SubagentListScope {
     TaskVisible,
     RegistryManagement,

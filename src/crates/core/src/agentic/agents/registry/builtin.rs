@@ -3,26 +3,13 @@ use super::visibility::SubagentVisibilityPolicy;
 use super::AgentRegistry;
 use crate::agentic::agents::registry::catalog::builtin_agent_specs;
 use crate::agentic::agents::{Agent, AgentCategory, SubAgentSource};
+use bitfun_agent_runtime::agents as runtime_agents;
 use log::error;
 use std::collections::HashMap;
 use std::sync::Arc;
 
 pub(crate) fn default_model_id_for_builtin_agent(agent_type: &str) -> &'static str {
-    match agent_type {
-        "agentic" | "Cowork" | "ComputerUse" | "Plan" | "debug" | "Claw" | "DeepResearch"
-        | "Team" | "Multitask" => "auto",
-        "DeepReview"
-        | "ReviewBusinessLogic"
-        | "ReviewPerformance"
-        | "ReviewSecurity"
-        | "ReviewArchitecture"
-        | "ReviewFrontend"
-        | "ReviewJudge"
-        | "ReviewFixer" => "fast",
-        "Explore" | "FileFinder" | "CodeReview" | "GenerateDoc" => "primary",
-        "GeneralPurpose" => "fast",
-        _ => "fast",
-    }
+    runtime_agents::default_model_id_for_builtin_agent(agent_type)
 }
 
 impl AgentRegistry {

@@ -13,11 +13,12 @@ use crate::agentic::session::SessionManager;
 use crate::util::errors::{BitFunError, BitFunResult};
 pub use bitfun_agent_runtime::thread_goal::{
     billable_tokens_from_counts, build_objective_updated_plan, build_thread_goal_continuation_plan,
-    completion_budget_report, continuation_prompt, effective_subagent_timeout_seconds,
-    goal_continuation_submit_retry_delay_ms, goal_tool_response, objective_updated_prompt,
-    should_skip_goal_continuation_after_turn, should_skip_goal_for_turn,
-    thread_goal_status_is_resumable, ThreadGoalContinuationFacts, ThreadGoalRuntime,
-    GOAL_CONTINUATION_SUBMIT_RETRY_BASE_DELAY_MS, GOAL_CONTINUATION_SUBMIT_RETRY_MAX_DELAY_MS,
+    clear_thread_goal_patch, completion_budget_report, continuation_prompt,
+    effective_subagent_timeout_seconds, goal_continuation_submit_retry_delay_ms,
+    goal_tool_response, objective_updated_prompt, should_skip_goal_continuation_after_turn,
+    should_skip_goal_for_turn, thread_goal_patch, thread_goal_status_is_resumable,
+    ThreadGoalContinuationFacts, ThreadGoalRuntime, GOAL_CONTINUATION_SUBMIT_RETRY_BASE_DELAY_MS,
+    GOAL_CONTINUATION_SUBMIT_RETRY_MAX_DELAY_MS,
 };
 use bitfun_agent_runtime::thread_goal::{
     build_set_thread_goal_result, is_usage_limit_message, SetThreadGoalRequest,
@@ -47,64 +48,14 @@ pub fn now_epoch_seconds() -> i64 {
         .unwrap_or(0)
 }
 
-pub fn thread_goal_patch(goal: &ThreadGoal) -> serde_json::Value {
-    serde_json::json!({
-        THREAD_GOAL_METADATA_KEY: goal,
-    })
-}
-
-pub fn clear_thread_goal_patch() -> serde_json::Value {
-    serde_json::json!({
-        THREAD_GOAL_METADATA_KEY: serde_json::Value::Null,
-    })
-}
-
 pub fn thread_goal_from_custom_metadata(
     custom_metadata: Option<&serde_json::Value>,
 ) -> Option<ThreadGoal> {
-    if let Some(goal) = custom_metadata
-        .and_then(|value| value.get(THREAD_GOAL_METADATA_KEY))
-        .and_then(|value| serde_json::from_value::<ThreadGoal>(value.clone()).ok())
-    {
-        return Some(goal);
-    }
-    migrate_legacy_goal_mode(custom_metadata)
-}
-
-fn migrate_legacy_goal_mode(custom_metadata: Option<&serde_json::Value>) -> Option<ThreadGoal> {
-    let legacy = custom_metadata?.get(GOAL_MODE_METADATA_KEY)?;
-    let active = legacy.get("active")?.as_bool().unwrap_or(false);
-    if !active {
-        return None;
-    }
-    let objective = legacy
-        .get("initialGoal")
-        .and_then(|value| value.get("goalText"))
-        .and_then(|value| value.as_str())
-        .or_else(|| legacy.get("goalText").and_then(|value| value.as_str()))
-        .map(str::trim)
-        .filter(|value| !value.is_empty())?;
-    let session_id = legacy
-        .get("sessionId")
-        .and_then(|value| value.as_str())
-        .unwrap_or("unknown");
-    let created_at = legacy
-        .get("activatedAtMs")
-        .and_then(|value| value.as_u64())
-        .map(|value| value as i64)
-        .unwrap_or_else(now_epoch_seconds);
-    Some(ThreadGoal {
-        goal_id: Uuid::new_v4().to_string(),
-        session_id: session_id.to_string(),
-        objective: objective.to_string(),
-        status: ThreadGoalStatus::Active,
-        token_budget: None,
-        tokens_used: 0,
-        time_used_seconds: 0,
-        created_at,
-        updated_at: created_at,
-        auto_continuation_count: 0,
-    })
+    bitfun_agent_runtime::thread_goal::thread_goal_from_custom_metadata(
+        custom_metadata,
+        Uuid::new_v4().to_string(),
+        now_epoch_seconds(),
+    )
 }
 
 pub fn is_usage_limit_error(error: &BitFunError) -> bool {

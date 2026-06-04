@@ -1,11 +1,12 @@
 //! Scheduler owner decisions.
 
 use crate::events::turn_outcome_kind;
+use crate::thread_goal::{build_objective_updated_plan, build_thread_goal_continuation_plan};
 use bitfun_runtime_ports::{
     should_skip_agent_session_reply, should_suppress_agent_session_cancelled_reply,
     AgentSessionReplyRoute, DialogQueuePriority, DialogRoundInjectionSource,
     DialogRoundPreemptSource, DialogSessionStateFact, DialogSteerOutcome, DialogSubmissionPolicy,
-    DialogTriggerSource, RoundInjection, RoundInjectionKind, RoundInjectionTarget,
+    DialogTriggerSource, RoundInjection, RoundInjectionKind, RoundInjectionTarget, ThreadGoal,
 };
 use std::collections::VecDeque;
 use std::fmt;
@@ -329,6 +330,29 @@ pub enum BackgroundInjectionKind {
     BackgroundResult,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ThreadGoalDeliveryReminderKind {
+    GoalContinuation,
+    GoalObjectiveUpdated,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ThreadGoalDeliveryReminder {
+    pub kind: ThreadGoalDeliveryReminderKind,
+    pub content: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ThreadGoalDeliveryPlan {
+    pub injection_prompt: String,
+    pub injection_display: String,
+    pub display_message: String,
+    pub follow_up_user_input: String,
+    pub follow_up_original_user_input: Option<String>,
+    pub user_message_metadata: serde_json::Value,
+    pub prepended_reminders: Vec<ThreadGoalDeliveryReminder>,
+}
+
 impl BackgroundDeliveryAction {
     pub const fn follow_up_submission_policy(self) -> Option<DialogSubmissionPolicy> {
         match self {
@@ -342,6 +366,60 @@ impl BackgroundDeliveryAction {
                 skip_tool_confirmation,
             )),
         }
+    }
+}
+
+pub fn build_thread_goal_resumed_delivery_plan(goal: &ThreadGoal) -> ThreadGoalDeliveryPlan {
+    let plan = build_thread_goal_continuation_plan(goal);
+    let injection_prompt = plan
+        .prepended_reminders
+        .first()
+        .cloned()
+        .unwrap_or_default();
+    let display_message = plan.display_message;
+    ThreadGoalDeliveryPlan {
+        injection_prompt,
+        injection_display: display_message.clone(),
+        display_message: display_message.clone(),
+        follow_up_user_input: "Resume working toward the active thread goal.".to_string(),
+        follow_up_original_user_input: Some(display_message),
+        user_message_metadata: plan.user_message_metadata,
+        prepended_reminders: plan
+            .prepended_reminders
+            .into_iter()
+            .map(|content| ThreadGoalDeliveryReminder {
+                kind: ThreadGoalDeliveryReminderKind::GoalContinuation,
+                content,
+            })
+            .collect(),
+    }
+}
+
+pub fn build_thread_goal_objective_updated_delivery_plan(
+    goal: &ThreadGoal,
+) -> ThreadGoalDeliveryPlan {
+    let plan = build_objective_updated_plan(goal);
+    let injection_prompt = plan
+        .prepended_reminders
+        .first()
+        .cloned()
+        .unwrap_or_default();
+    let display_message = plan.display_message;
+    ThreadGoalDeliveryPlan {
+        injection_prompt,
+        injection_display: display_message.clone(),
+        display_message: display_message.clone(),
+        follow_up_user_input: "Adjust work to match the updated thread goal.".to_string(),
+        follow_up_original_user_input: Some(display_message),
+        user_message_metadata: plan.user_message_metadata,
+        prepended_reminders: plan
+            .prepended_reminders
+            .into_iter()
+            .map(|content| ThreadGoalDeliveryReminder {
+                kind: ThreadGoalDeliveryReminderKind::GoalObjectiveUpdated,
+                content,
+            })
+            .collect(),
     }
 }
 

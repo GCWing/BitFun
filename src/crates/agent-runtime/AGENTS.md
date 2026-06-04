@@ -9,15 +9,20 @@ and tested without `bitfun-core`.
 
 - Do not depend on `bitfun-core`, app crates, Tauri, ACP protocol, web UI,
   concrete service crates, or product-domain implementations.
-- Keep concrete scheduler/session lifecycle execution, session metadata IO, and
-  product `Tool` adapters in `bitfun-core` until a reviewed owner migration
-  proves behavior equivalence.
+- Keep concrete scheduler/session lifecycle execution, session metadata IO,
+  event emitter wiring, permission UI / channel waits, and product `Tool`
+  adapter execution in `bitfun-core` until a reviewed owner migration proves
+  behavior equivalence.
 - Prefer pure facts and decisions first: queue policy, background delivery,
   dialog-turn queue state, active-turn facts, cancellation routing and
   suppression state, background running-turn injection construction, steering action
   planning, agent-session reply planning, thread-goal accounting/mutation/continuation decisions,
   scheduled-job lifecycle state transitions, runtime event facts,
   registry visibility/availability, custom subagent schema/default decisions,
+  builtin agent definition catalog, thread-goal metadata / event payload /
+  token usage / scheduler delivery plans, thread-goal tool wire contracts,
+  user-question validation/result contracts, DeepReview shared-context
+  measurement decisions,
   custom subagent markdown front-matter IO, custom subagent discovery/loading,
   post-call hook routing/executor orchestration,
   tool confirmation planning/failure mapping, round-boundary yield/injection state, turn-outcome
@@ -25,10 +30,9 @@ and tested without `bitfun-core`.
   policy, prompt listing reminder ordering, prompt-cache policy/identity/store,
   finish-reason labels, session-state event labels, and turn-outcome event facts.
 - Keep concrete prompt assembly, workspace context IO, prompt-cache persistence
-  wiring, dynamic environment collection, concrete non-custom agent definition
-  loading, concrete hook side effects, permission UI/tool side effects, and
-  channel/state mutation outside this crate until a reviewed migration proves
-  behavior equivalence.
+  wiring, dynamic environment collection, concrete hook side effects, concrete
+  product tool execution, and channel/state mutation outside this crate until a
+  reviewed migration proves behavior equivalence.
 - Add focused tests before moving any runtime decision into this crate.
 
 ## Verification

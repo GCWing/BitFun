@@ -1,10 +1,11 @@
 use bitfun_agent_runtime::agents::{
-    mode_config_profile_label, mode_config_profile_member_mode_ids, mode_presentation_rank,
-    resolve_mode_config_profile_id, resolve_subagent_availability,
-    resolve_subagent_default_enabled, shared_coding_mode_user_context_policy, subagent_source_kind,
-    subagent_source_presentation_rank, BuiltinSubagentExposure, SubAgentSource,
-    SubagentOverrideLayers, SubagentOverrideState, SubagentSourceKind, SubagentStateReason,
-    SubagentVisibilityPolicy, SHARED_CODING_MODE_CONFIG_PROFILE_ID,
+    builtin_agent_definition_specs, default_model_id_for_builtin_agent, mode_config_profile_label,
+    mode_config_profile_member_mode_ids, mode_presentation_rank, resolve_mode_config_profile_id,
+    resolve_subagent_availability, resolve_subagent_default_enabled,
+    shared_coding_mode_user_context_policy, subagent_source_kind,
+    subagent_source_presentation_rank, BuiltinAgentCategory, BuiltinSubagentExposure,
+    SubAgentSource, SubagentOverrideLayers, SubagentOverrideState, SubagentSourceKind,
+    SubagentStateReason, SubagentVisibilityPolicy, SHARED_CODING_MODE_CONFIG_PROFILE_ID,
     SHARED_CODING_MODE_CONFIG_PROFILE_LABEL, SHARED_CODING_MODE_IDS,
 };
 
@@ -163,4 +164,77 @@ fn mode_presentation_and_shared_context_policy_match_existing_mode_contract() {
         shared_coding_mode_user_context_policy().cache_scope_key(),
         "workspace_context|workspace_instructions|workspace_memory_files|project_layout"
     );
+}
+
+#[test]
+fn builtin_agent_definition_catalog_preserves_order_categories_models_and_visibility() {
+    let specs = builtin_agent_definition_specs();
+    let ids: Vec<_> = specs.iter().map(|spec| spec.id).collect();
+    assert_eq!(
+        ids,
+        vec![
+            "agentic",
+            "Cowork",
+            "debug",
+            "Multitask",
+            "Plan",
+            "Claw",
+            "DeepResearch",
+            "Team",
+            "ComputerUse",
+            "Explore",
+            "GeneralPurpose",
+            "ResearchSpecialist",
+            "FileFinder",
+            "ReviewBusinessLogic",
+            "ReviewPerformance",
+            "ReviewSecurity",
+            "ReviewArchitecture",
+            "ReviewFrontend",
+            "ReviewJudge",
+            "ReviewFixer",
+            "CodeReview",
+            "DeepReview",
+            "GenerateDoc",
+        ]
+    );
+
+    assert_eq!(specs[0].category, BuiltinAgentCategory::Mode);
+    assert_eq!(specs[8].category, BuiltinAgentCategory::SubAgent);
+    assert_eq!(specs[20].category, BuiltinAgentCategory::Hidden);
+    assert_eq!(default_model_id_for_builtin_agent("agentic"), "auto");
+    assert_eq!(default_model_id_for_builtin_agent("Explore"), "primary");
+    assert_eq!(default_model_id_for_builtin_agent("GeneralPurpose"), "fast");
+    assert_eq!(
+        default_model_id_for_builtin_agent("ResearchSpecialist"),
+        "fast"
+    );
+    assert_eq!(
+        default_model_id_for_builtin_agent("ReviewArchitecture"),
+        "fast"
+    );
+
+    let computer_use = specs
+        .iter()
+        .find(|spec| spec.id == "ComputerUse")
+        .expect("ComputerUse spec should exist");
+    assert_eq!(
+        computer_use.visibility_policy.summary().exposure,
+        BuiltinSubagentExposure::Restricted
+    );
+    assert!(computer_use
+        .visibility_policy
+        .can_access_from_parent(Some("Claw")));
+    assert!(computer_use
+        .visibility_policy
+        .can_access_from_parent(Some("Team")));
+    assert!(!computer_use
+        .visibility_policy
+        .can_access_from_parent(Some("agentic")));
+
+    let research_specialist = specs
+        .iter()
+        .find(|spec| spec.id == "ResearchSpecialist")
+        .expect("ResearchSpecialist spec should exist");
+    assert_eq!(research_specialist.default_model_id, "fast");
 }

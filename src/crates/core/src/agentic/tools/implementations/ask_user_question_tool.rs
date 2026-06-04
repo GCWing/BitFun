@@ -3,8 +3,11 @@
 //! Allows AI to ask questions to users during execution and wait for answers
 
 use async_trait::async_trait;
+use bitfun_agent_runtime::user_questions::{
+    ask_user_question_available_for_acp_transport, build_answered_user_question_result,
+    build_cancelled_user_question_result, validate_ask_user_question_input, AskUserQuestionInput,
+};
 use log::{debug, warn};
-use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use uuid::Uuid;
 
@@ -12,29 +15,6 @@ use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
 use crate::agentic::tools::user_input_manager::get_user_input_manager;
 use crate::infrastructure::events::event_system::{get_global_event_system, BackendEvent};
 use crate::util::errors::BitFunResult;
-
-/// Question option
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct QuestionOption {
-    pub label: String,
-    pub description: String,
-}
-
-/// Question definition
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Question {
-    pub question: String,
-    pub header: String,
-    pub options: Vec<QuestionOption>,
-    #[serde(rename = "multiSelect")]
-    pub multi_select: bool,
-}
-
-/// Tool input parameters - supports multiple questions
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AskUserQuestionInput {
-    pub questions: Vec<Question>,
-}
 
 /// AskUserQuestion tool
 pub struct AskUserQuestionTool;
@@ -50,110 +30,10 @@ impl AskUserQuestionTool {
         Self
     }
 
-    fn is_acp_context(context: Option<&ToolUseContext>) -> bool {
-        context
-            .and_then(|ctx| ctx.custom_data.get("acp_transport"))
-            .is_some_and(|value| value == "true" || value == &json!(true))
-    }
-
-    /// Validate question format (supports multiple questions)
-    fn validate_input(input: &AskUserQuestionInput) -> Result<(), String> {
-        // Validate question count
-        if input.questions.is_empty() {
-            return Err("At least one question is required".to_string());
-        }
-        if input.questions.len() > 4 {
-            return Err("Maximum 4 questions allowed".to_string());
-        }
-
-        // Validate each question
-        for (q_idx, question) in input.questions.iter().enumerate() {
-            let q_num = q_idx + 1;
-
-            // Validate question text
-            if question.question.trim().is_empty() {
-                return Err(format!("Question {} text is required", q_num));
-            }
-
-            // Validate header
-            if question.header.trim().is_empty() {
-                return Err(format!("Question {} header is required", q_num));
-            }
-            if question.header.chars().count() > 20 {
-                return Err(format!(
-                    "Question {} header must be less than 20 characters",
-                    q_num
-                ));
-            }
-
-            // Validate options
-            if question.options.len() < 2 || question.options.len() > 10 {
-                return Err(format!("Question {} must have 2-10 options", q_num));
-            }
-
-            for (opt_idx, opt) in question.options.iter().enumerate() {
-                if opt.label.trim().is_empty() {
-                    return Err(format!(
-                        "Question {} option {} label is required",
-                        q_num,
-                        opt_idx + 1
-                    ));
-                }
-                if opt.description.trim().is_empty() {
-                    return Err(format!(
-                        "Question {} option {} description is required",
-                        q_num,
-                        opt_idx + 1
-                    ));
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Format result for AI (supports multiple questions)
-    fn format_result_for_assistant(questions: &[Question], answers: &Value) -> String {
-        // Try flat structure first (frontend sends {"0": "...", "1": [...]}),
-        // then fall back to nested {"answers": {...}} for backward compatibility
-        let answers_obj = answers
-            .as_object()
-            .or_else(|| answers.get("answers").and_then(|v| v.as_object()));
-
-        if let Some(answers_map) = answers_obj {
-            let mut result_lines = vec!["User has answered your questions:".to_string()];
-
-            for (idx, question) in questions.iter().enumerate() {
-                let idx_str = idx.to_string();
-                let answer_text = if let Some(answer_value) = answers_map.get(&idx_str) {
-                    if let Some(arr) = answer_value.as_array() {
-                        // Multi-select: join answers
-                        arr.iter()
-                            .filter_map(|v| v.as_str())
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    } else if let Some(s) = answer_value.as_str() {
-                        // Single-select
-                        s.to_string()
-                    } else {
-                        "N/A".to_string()
-                    }
-                } else {
-                    "N/A".to_string()
-                };
-
-                result_lines.push(format!(
-                    "- {} ({}): \"{}\"",
-                    question.question, question.header, answer_text
-                ));
-            }
-
-            result_lines
-                .push("\nYou can now continue with the user's answers in mind.".to_string());
-            result_lines.join("\n")
-        } else {
-            "User has answered your questions (no valid answers received).".to_string()
-        }
+    fn is_available_for_tool_context(context: Option<&ToolUseContext>) -> bool {
+        ask_user_question_available_for_acp_transport(
+            context.and_then(|ctx| ctx.custom_data.get("acp_transport")),
+        )
     }
 
     /// Generate tool ID
@@ -287,7 +167,7 @@ Usage notes:
     }
 
     async fn is_available_in_context(&self, context: Option<&ToolUseContext>) -> bool {
-        !Self::is_acp_context(context)
+        Self::is_available_for_tool_context(context)
     }
 
     async fn call_impl(
@@ -305,7 +185,7 @@ Usage notes:
             })?;
 
         // 2. Validate question format
-        if let Err(error) = Self::validate_input(&tool_input) {
+        if let Err(error) = validate_ask_user_question_input(&tool_input) {
             return Err(crate::util::errors::BitFunError::Validation(error));
         }
 
@@ -352,39 +232,20 @@ Usage notes:
                     "AskUserQuestion tool received user response, tool_id: {}",
                     tool_id
                 );
-                let result_text =
-                    Self::format_result_for_assistant(&tool_input.questions, &response.answers);
-
-                // Build question summary for return data
-                let questions_summary: Vec<Value> = tool_input
-                    .questions
-                    .iter()
-                    .map(|q| {
-                        json!({
-                            "question": q.question,
-                            "header": q.header
-                        })
-                    })
-                    .collect();
+                let result = build_answered_user_question_result(&tool_input, response.answers);
 
                 Ok(vec![ToolResult::Result {
-                    data: json!({
-                        "questions": questions_summary,
-                        "answers": response.answers,
-                        "status": "answered"
-                    }),
-                    result_for_assistant: Some(result_text),
+                    data: result.data,
+                    result_for_assistant: Some(result.result_for_assistant),
                     image_attachments: None,
                 }])
             }
             Err(_) => {
                 warn!("AskUserQuestion tool channel closed, tool_id: {}", tool_id);
+                let result = build_cancelled_user_question_result(&tool_input);
                 Ok(vec![ToolResult::Result {
-                    data: json!({
-                        "questions_count": tool_input.questions.len(),
-                        "status": "cancelled"
-                    }),
-                    result_for_assistant: Some("User input request was cancelled.".to_string()),
+                    data: result.data,
+                    result_for_assistant: Some(result.result_for_assistant),
                     image_attachments: None,
                 }])
             }

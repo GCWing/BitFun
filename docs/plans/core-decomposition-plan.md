@@ -68,16 +68,15 @@ workspace build 证明没有行为或 feature 影响。
 
 ## 4. 后续迁移队列
 
-早期 PR-A / PR-B / PR-C、scheduler owner decision 扩展、PR-1 Session Store / Restore Runtime Services Owner、PR-2 Concrete Tool IO Runtime Owner、PR-3 Function-Agent Concrete Runtime Owner、PR-4 Scheduled Job Lifecycle State Owner 和 Agent Runtime Extension Boundary Closure 已进入完成归档。当前活跃队列只保留最终 PR-C / PR-D 两个大块迁移 PR；这里的最终 PR-C / PR-D 是收尾阶段编号，不再复用早期 PR-C 的范围。两者完成并通过验收后，本文档范围内的 core decomposition runtime owner 迁移应关闭，不再继续新增迁移 PR。后续如仍有缺陷修复、feature matrix、构建收益优化或产品行为变更，应作为独立工作评审，不能伪装成迁移收尾。
+早期 PR-A / PR-B / PR-C、scheduler owner decision 扩展、PR-1 Session Store / Restore Runtime Services Owner、PR-2 Concrete Tool IO Runtime Owner、PR-3 Function-Agent Concrete Runtime Owner、PR-4 Scheduled Job Lifecycle State Owner、Agent Runtime Extension Boundary Closure 和最终 PR-C 已进入完成归档。当前活跃队列只保留最终 PR-D。PR-D 完成并通过验收后，本文档范围内的 core decomposition runtime owner 迁移应关闭，不再继续新增迁移 PR。后续如仍有缺陷修复、feature matrix、构建收益优化或产品行为变更，应作为独立工作评审，不能伪装成迁移收尾。
 
 每个 PR 必须迁移真实 owner 逻辑，并同时包含旧路径兼容、focused tests、boundary check 和提交前对抗性审核。只新增抽象、只补 facade 或只增加 guard 不满足准出要求。
 
 | PR | 主题 | 完整范围 | 不允许混入 | 合入门禁 |
 |---|---|---|---|---|
-| PR-C | Agent Runtime Concrete Delivery / Permission Closure | 收敛 Agent Runtime 侧剩余 concrete delivery：event delivery、permission `Tool` handler、goal `Tool` handler、thread-goal metadata / token subscriber / scheduler delivery adapter、非 custom agent definition loading、concrete scheduler lifecycle、post-turn / hook side-effect execution，以及这些路径需要保留在 core 的最小 compatibility adapter | 用 owner contract test 替代端到端行为证明；改变 session lifecycle、event ordering、goal tool wire shape、DeepResearch citation/post-turn behavior、permission UI 语义或默认 agent / subagent 可见性 | queue/preempt/cancel/goal verification/event focused tests，DeepResearch citation/post-turn tests，permission tool handler tests，non-custom agent definition loading tests，`cargo check --workspace` |
 | PR-D | Product Runtime / Service / Tool Final Closure | 收敛剩余 concrete runtime owner：session persistence / cold restore / metadata IO、workspace-root / persistence / workspace service reads、remote FS / terminal / image context concrete impl、Bash / terminal lifecycle / indexed workspace search / remote shell execution、MiniApp worker / host / seed / marker IO、function-agent concrete service 外移，以及必要的 final boundary / directory organization cleanup | 改变产品能力集合、工具曝光、权限、checkpoint、remote fallback、MiniApp worker 生命周期、function-agent Git/AI 行为、release/installer 构建形态；把独立 feature matrix 或构建性能优化混入迁移 | session persistence / restore tests，remote workspace / file / terminal focused tests，terminal / shell / indexed-search focused tests，MiniApp import/sync/recompile/worker tests，function-agent Git/AI focused tests，`cargo check --workspace` |
 
-计划优先级：先完成 PR-C，再完成 PR-D。PR-D 合入后需要做一次总体验收：确认 plan / completed 文档没有剩余活跃迁移队列，`bitfun-core` 只保留兼容 facade 和产品组装，边界脚本覆盖已外移 owner，且所有产品形态仍保持既有能力集合。PR-1 到 PR-4 和 Agent Runtime Extension Boundary Closure 已进入完成归档；后续不应继续触碰 session restore 热路径、已迁移的本地 tool IO primitive、function-agent Git/AI concrete runtime、scheduled-job runtime state、custom subagent schema/default/markdown IO/discovery/loading、post-call hook routing/executor orchestration 或 tool confirmation 计划与失败映射，除非是修复等价测试发现的问题。
+计划优先级：完成最终 PR-D 后做一次总体验收：确认 plan / completed 文档没有剩余活跃迁移队列，`bitfun-core` 只保留兼容 facade 和产品组装，边界脚本覆盖已外移 owner，且所有产品形态仍保持既有能力集合。PR-1 到 PR-4、Agent Runtime Extension Boundary Closure 和最终 PR-C 已进入完成归档；后续不应继续触碰 session restore 热路径、已迁移的本地 tool IO primitive、function-agent Git/AI concrete runtime、scheduled-job runtime state、custom subagent schema/default/markdown IO/discovery/loading、post-call hook routing/executor orchestration、tool confirmation 计划与失败映射，或最终 PR-C 已收敛的 agent-runtime concrete delivery / permission 合同，除非是修复等价测试发现的问题。
 
 ## 5. 每类 PR 的保护重点
 
@@ -94,18 +93,20 @@ workspace build 证明没有行为或 feature 影响。
   construction、steering action、agent-session reply plan、cancelled-reply suppression state、goal-continuation abort flags 和 runtime event facts；
   不移动 concrete scheduler 生命周期。
 - 保留 mode-scoped visibility、hidden/custom/review grouping、background delivery entrypoint、idle-session follow-up 和 persisted thread goal continuation 语义。
-- thread goal runtime、subagent visibility/availability、round-boundary yield/injection、turn-outcome queue
+- thread goal runtime、metadata patch / legacy migration、token usage filter、event payload、scheduler delivery plan、goal
+  `Tool` wire contract、user-question `Tool` validation/result contract、builtin agent definition catalog、DeepReview
+  shared-context measurement decision、subagent visibility/availability、round-boundary yield/injection、turn-outcome queue
   policy、dialog turn queue、active-turn state、background running-turn injection construction、steering action、
   agent-session reply plan、cancel suppression、finish-reason label、session-state event label 和 turn-outcome event fact 已归入
-  `bitfun-agent-runtime`；后续只允许 core 继续作为 metadata store、config/file IO adapter、concrete prompt
-  assembly、concrete scheduler lifecycle、scheduler delivery、event delivery 和 `Tool` adapter。
+  `bitfun-agent-runtime`；后续只允许 core 继续作为 session metadata IO、config/file IO adapter、concrete prompt
+  assembly、concrete scheduler lifecycle、event emitter、channel wait、UI 副作用和 product `Tool` execution adapter。
 - scheduled-job runtime state、run status、retry / coalescing / one-shot / missing-session disable / restart recovery
   transition 已归入 `bitfun-agent-runtime::scheduled_job`；core cron 继续拥有 store、schedule parsing、loop wakeup、session
   creation、scheduler submit 和 API wire compatibility。
 - custom subagent definition schema、required-field 校验、默认值、front-matter 省略决策、markdown front-matter IO、目录 discovery / `.md` loading、successful tool post-call hook routing / executor orchestration
   和 tool confirmation 计划 / 失败映射已归入 `bitfun-agent-runtime`；core 继续供应 concrete root path、持有旧 `Agent` 适配、记录加载错误、执行工具 / 模型校验、写入 registry，并保留 DeepReview shared-context measurement 的具体副作用、confirmation channel wait / 状态更新 / UI 副作用和 `BitFunError` 映射。
-- 若继续迁移 scheduler lifecycle、event delivery、permission `Tool` handler、非 custom agent definition loading 或 concrete hook side-effect execution，必须先补端到端等价保护，
-  不能只用 owner contract test 证明。
+- 若继续迁移 scheduler lifecycle、session metadata IO、event emitter、permission UI/channel wait 或 concrete hook side-effect execution，必须先补端到端等价保护，
+  不能只用 owner contract test 证明；不得把这些剩余 concrete 副作用伪装成 Agent Runtime SDK 纯合同迁移。
 - 验证 subagent availability、queue/preempt/cancel suppression、DeepResearch citation / post-turn hook、goal verification events、`get_goal` / `create_goal` / `update_goal` tool response wire shape。
 
 ### 5.3 Product-Domain Runtime Owner

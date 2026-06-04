@@ -1,12 +1,15 @@
 use bitfun_agent_runtime::thread_goal::{
     billable_tokens_from_counts, build_objective_updated_plan, build_set_thread_goal_result,
-    build_thread_goal_continuation_plan, goal_continuation_submit_retry_delay_ms,
-    goal_tool_response, is_usage_limit_message, should_skip_goal_continuation_after_turn,
-    should_skip_goal_for_turn, thread_goal_status_is_resumable, SetThreadGoalRequest,
-    ThreadGoalContinuationFacts, ThreadGoalRuntime,
+    build_thread_goal_continuation_plan, clear_thread_goal_patch,
+    goal_continuation_submit_retry_delay_ms, goal_tool_response, is_usage_limit_message,
+    should_record_thread_goal_token_usage, should_skip_goal_continuation_after_turn,
+    should_skip_goal_for_turn, thread_goal_event_payload, thread_goal_from_custom_metadata,
+    thread_goal_patch, thread_goal_status_is_resumable, SetThreadGoalRequest,
+    ThreadGoalContinuationFacts, ThreadGoalRuntime, ThreadGoalTokenUsageFacts,
 };
 use bitfun_runtime_ports::{
     ThreadGoal, ThreadGoalStatus, MAX_GOAL_CONTINUATIONS, MAX_THREAD_GOAL_AUTO_CONTINUATIONS,
+    THREAD_GOAL_METADATA_KEY,
 };
 
 fn goal(status: ThreadGoalStatus) -> ThreadGoal {
@@ -251,6 +254,77 @@ fn prompt_and_tool_response_contracts_match_thread_goal_wire_shape() {
 
     let plan = build_thread_goal_continuation_plan(&goal(ThreadGoalStatus::Active));
     assert_eq!(plan.user_message_metadata["autoContinuationMax"], 100);
+}
+
+#[test]
+fn thread_goal_metadata_patch_and_legacy_goal_mode_migration_keep_wire_shape() {
+    let active = goal(ThreadGoalStatus::Active);
+    let patch = thread_goal_patch(&active);
+    assert_eq!(patch[THREAD_GOAL_METADATA_KEY]["goalId"], "g1");
+    assert_eq!(patch[THREAD_GOAL_METADATA_KEY]["status"], "active");
+    assert_eq!(
+        clear_thread_goal_patch()[THREAD_GOAL_METADATA_KEY],
+        serde_json::Value::Null
+    );
+
+    let restored = thread_goal_from_custom_metadata(Some(&patch), "legacy-id".to_string(), 99)
+        .expect("thread_goal metadata should restore");
+    assert_eq!(restored, active);
+
+    let legacy = serde_json::json!({
+        "goal_mode": {
+            "active": true,
+            "sessionId": "session-legacy",
+            "goalText": "  migrate metadata  ",
+            "activatedAtMs": 1234
+        }
+    });
+    let migrated = thread_goal_from_custom_metadata(Some(&legacy), "legacy-id".to_string(), 99)
+        .expect("legacy goal mode should migrate");
+    assert_eq!(migrated.goal_id, "legacy-id");
+    assert_eq!(migrated.session_id, "session-legacy");
+    assert_eq!(migrated.objective, "migrate metadata");
+    assert_eq!(migrated.status, ThreadGoalStatus::Active);
+    assert_eq!(migrated.created_at, 1234);
+    assert_eq!(migrated.updated_at, 1234);
+}
+
+#[test]
+fn thread_goal_event_payload_and_token_usage_filter_preserve_core_delivery_contract() {
+    let active = goal(ThreadGoalStatus::Active);
+    let payload = thread_goal_event_payload(Some(active.clone()))
+        .expect("active goal should serialize for event");
+    assert_eq!(payload["goalId"], active.goal_id);
+    assert_eq!(payload["status"], "active");
+    assert_eq!(thread_goal_event_payload(None), None);
+
+    assert_eq!(
+        should_record_thread_goal_token_usage(ThreadGoalTokenUsageFacts {
+            input_tokens: 100,
+            output_tokens: Some(30),
+            cached_tokens: Some(40),
+            is_subagent: false,
+        }),
+        Some(90)
+    );
+    assert_eq!(
+        should_record_thread_goal_token_usage(ThreadGoalTokenUsageFacts {
+            input_tokens: 100,
+            output_tokens: Some(30),
+            cached_tokens: Some(40),
+            is_subagent: true,
+        }),
+        None
+    );
+    assert_eq!(
+        should_record_thread_goal_token_usage(ThreadGoalTokenUsageFacts {
+            input_tokens: 0,
+            output_tokens: None,
+            cached_tokens: None,
+            is_subagent: false,
+        }),
+        None
+    );
 }
 
 #[test]

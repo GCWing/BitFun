@@ -12,4 +12,6 @@ pub mod prompt_cache;
 pub mod scheduled_job;
 pub mod scheduler;
 pub mod thread_goal;
+pub mod thread_goal_tools;
 pub mod tool_confirmation;
+pub mod user_questions;

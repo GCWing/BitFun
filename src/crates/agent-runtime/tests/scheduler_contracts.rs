@@ -1,17 +1,18 @@
 use bitfun_agent_runtime::scheduler::{
+    build_thread_goal_objective_updated_delivery_plan, build_thread_goal_resumed_delivery_plan,
     resolve_agent_session_reply_action, resolve_background_delivery_action,
     resolve_background_delivery_injection, resolve_dialog_steering_action, ActiveDialogTurn,
     ActiveDialogTurnStore, AgentSessionReplyAction, BackgroundDeliveryAction,
     BackgroundDeliveryFacts, BackgroundInjectionKind, DialogReplySuppressionSet,
     DialogRoundInjectionInterrupt, DialogSteeringAction, DialogTurnQueue, DialogTurnQueueError,
     NoopDialogRoundPreemptSource, SessionAbortFlags, SessionRoundInjectionBuffer,
-    SessionRoundYieldFlags, TurnOutcome, TurnOutcomeQueueAction, TurnOutcomeStatus,
-    DEFAULT_MAX_DIALOG_QUEUE_DEPTH,
+    SessionRoundYieldFlags, ThreadGoalDeliveryReminderKind, TurnOutcome, TurnOutcomeQueueAction,
+    TurnOutcomeStatus, DEFAULT_MAX_DIALOG_QUEUE_DEPTH,
 };
 use bitfun_runtime_ports::{
     AgentSessionReplyRoute, DialogQueuePriority, DialogRoundPreemptSource, DialogSessionStateFact,
     DialogSteerOutcome, DialogSubmissionPolicy, DialogTriggerSource, RoundInjection,
-    RoundInjectionKind, RoundInjectionTarget,
+    RoundInjectionKind, RoundInjectionTarget, ThreadGoal, ThreadGoalStatus,
 };
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -109,6 +110,72 @@ fn background_delivery_injection_builds_background_result_with_display_fallback(
     assert_eq!(injection.content, "result content");
     assert_eq!(injection.display_content, "result content");
     assert_eq!(injection.created_at, created_at);
+}
+
+fn thread_goal() -> ThreadGoal {
+    ThreadGoal {
+        goal_id: "goal-1".to_string(),
+        session_id: "session-1".to_string(),
+        objective: "finish PR-C".to_string(),
+        status: ThreadGoalStatus::Active,
+        token_budget: None,
+        tokens_used: 0,
+        time_used_seconds: 0,
+        created_at: 1,
+        updated_at: 2,
+        auto_continuation_count: 2,
+    }
+}
+
+#[test]
+fn thread_goal_resumed_delivery_plan_preserves_follow_up_and_metadata() {
+    let plan = build_thread_goal_resumed_delivery_plan(&thread_goal());
+
+    assert_eq!(
+        plan.follow_up_user_input,
+        "Resume working toward the active thread goal."
+    );
+    assert_eq!(
+        plan.follow_up_original_user_input,
+        Some(plan.display_message.clone())
+    );
+    assert!(plan
+        .injection_prompt
+        .contains("Continue working toward the active thread goal."));
+    assert_eq!(plan.injection_display, plan.display_message);
+    assert_eq!(
+        plan.prepended_reminders[0].kind,
+        ThreadGoalDeliveryReminderKind::GoalContinuation
+    );
+    assert_eq!(plan.user_message_metadata["threadGoalContinuation"], true);
+    assert_eq!(plan.user_message_metadata["autoContinuationAttempt"], 2);
+}
+
+#[test]
+fn thread_goal_objective_updated_delivery_plan_preserves_follow_up_and_metadata() {
+    let plan = build_thread_goal_objective_updated_delivery_plan(&thread_goal());
+
+    assert_eq!(
+        plan.follow_up_user_input,
+        "Adjust work to match the updated thread goal."
+    );
+    assert_eq!(plan.injection_display, "Thread goal updated: finish PR-C");
+    assert_eq!(
+        plan.follow_up_original_user_input,
+        Some(plan.injection_display.clone())
+    );
+    assert!(plan
+        .injection_prompt
+        .contains("The active thread goal objective was edited by the user."));
+    assert_eq!(
+        plan.prepended_reminders[0].kind,
+        ThreadGoalDeliveryReminderKind::GoalObjectiveUpdated
+    );
+    assert_eq!(
+        plan.user_message_metadata["threadGoalObjectiveUpdated"],
+        true
+    );
+    assert_eq!(plan.user_message_metadata["goalId"], "goal-1");
 }
 
 #[test]

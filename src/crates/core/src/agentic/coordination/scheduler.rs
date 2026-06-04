@@ -14,9 +14,8 @@ use super::coordinator::{ConversationCoordinator, DialogTriggerSource};
 use super::turn_outcome::{TurnOutcome, TurnOutcomeQueueAction, TurnOutcomeStatus};
 use crate::agentic::core::{InternalReminderKind, Message, SessionState};
 use crate::agentic::goal_mode::{
-    build_objective_updated_plan, build_thread_goal_continuation_plan,
     goal_continuation_submit_retry_delay_ms, goal_internal_context_message,
-    goal_objective_updated_message, objective_updated_prompt,
+    goal_objective_updated_message,
 };
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::init_agents_md::build_init_agents_md_user_input;
@@ -36,11 +35,13 @@ use tokio::sync::mpsc;
 use uuid::Uuid;
 
 use bitfun_agent_runtime::scheduler::{
+    build_thread_goal_objective_updated_delivery_plan, build_thread_goal_resumed_delivery_plan,
     resolve_agent_session_reply_action, resolve_background_delivery_action,
     resolve_background_delivery_injection, resolve_dialog_steering_action, ActiveDialogTurn,
     ActiveDialogTurnStore, AgentSessionReplyAction, AgentSessionReplyPlan,
     BackgroundDeliveryAction, BackgroundDeliveryFacts, BackgroundInjectionKind,
     DialogReplySuppressionSet, DialogSteeringAction, DialogTurnQueue, SessionAbortFlags,
+    ThreadGoalDeliveryReminder, ThreadGoalDeliveryReminderKind,
 };
 use bitfun_runtime_ports::{
     resolve_dialog_submit_queue_action, DialogSessionStateFact, DialogSubmitQueueAction,
@@ -208,7 +209,7 @@ impl DialogScheduler {
         workspace_path: Option<String>,
         goal: ThreadGoal,
     ) -> Result<(), String> {
-        let plan = build_thread_goal_continuation_plan(&goal);
+        let plan = build_thread_goal_resumed_delivery_plan(&goal);
         let state = self
             .session_manager
             .get_session(&session_id)
@@ -218,18 +219,13 @@ impl DialogScheduler {
             session_state: Self::session_state_fact(state.as_ref()),
         }) {
             BackgroundDeliveryAction::InjectIntoRunningTurn => {
-                let prompt = plan
-                    .prepended_reminders
-                    .into_iter()
-                    .next()
-                    .unwrap_or_default();
                 self.round_injection_buffer.push(
                     &session_id,
                     resolve_background_delivery_injection(
                         BackgroundInjectionKind::ThreadGoalObjectiveUpdated,
                         Uuid::new_v4().to_string(),
-                        prompt,
-                        Some(plan.display_message.clone()),
+                        plan.injection_prompt,
+                        Some(plan.injection_display),
                         SystemTime::now(),
                     ),
                 );
@@ -239,15 +235,11 @@ impl DialogScheduler {
                 queue_priority,
                 skip_tool_confirmation,
             } => {
-                let prepended: Vec<Message> = plan
-                    .prepended_reminders
-                    .into_iter()
-                    .map(goal_internal_context_message)
-                    .collect();
+                let prepended = thread_goal_delivery_messages(plan.prepended_reminders);
                 self.submit_with_prepended_messages(
                     session_id,
-                    "Resume working toward the active thread goal.".to_string(),
-                    Some(plan.display_message),
+                    plan.follow_up_user_input,
+                    plan.follow_up_original_user_input,
                     None,
                     agent_type,
                     workspace_path,
@@ -275,8 +267,7 @@ impl DialogScheduler {
         workspace_path: Option<String>,
         goal: ThreadGoal,
     ) -> Result<(), String> {
-        let prompt = objective_updated_prompt(&goal);
-        let display = format!("Thread goal updated: {}", goal.objective.trim());
+        let plan = build_thread_goal_objective_updated_delivery_plan(&goal);
         let state = self
             .session_manager
             .get_session(&session_id)
@@ -291,8 +282,8 @@ impl DialogScheduler {
                     resolve_background_delivery_injection(
                         BackgroundInjectionKind::ThreadGoalObjectiveUpdated,
                         Uuid::new_v4().to_string(),
-                        prompt,
-                        Some(display),
+                        plan.injection_prompt,
+                        Some(plan.injection_display),
                         SystemTime::now(),
                     ),
                 );
@@ -302,16 +293,11 @@ impl DialogScheduler {
                 queue_priority,
                 skip_tool_confirmation,
             } => {
-                let plan = build_objective_updated_plan(&goal);
-                let prepended = plan
-                    .prepended_reminders
-                    .into_iter()
-                    .map(goal_objective_updated_message)
-                    .collect();
+                let prepended = thread_goal_delivery_messages(plan.prepended_reminders);
                 self.submit_with_prepended_messages(
                     session_id,
-                    "Adjust work to match the updated thread goal.".to_string(),
-                    Some(display),
+                    plan.follow_up_user_input,
+                    plan.follow_up_original_user_input,
                     None,
                     agent_type,
                     workspace_path,
@@ -1076,6 +1062,20 @@ impl DialogScheduler {
             }
         }
     }
+}
+
+fn thread_goal_delivery_messages(reminders: Vec<ThreadGoalDeliveryReminder>) -> Vec<Message> {
+    reminders
+        .into_iter()
+        .map(|reminder| match reminder.kind {
+            ThreadGoalDeliveryReminderKind::GoalContinuation => {
+                goal_internal_context_message(reminder.content)
+            }
+            ThreadGoalDeliveryReminderKind::GoalObjectiveUpdated => {
+                goal_objective_updated_message(reminder.content)
+            }
+        })
+        .collect()
 }
 
 // ── Global instance ──────────────────────────────────────────────────────────

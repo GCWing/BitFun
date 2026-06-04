@@ -1,32 +1,16 @@
 //! Built-in model tool handlers for persisted session thread goals.
 
 use crate::agentic::coordination::get_global_coordinator;
-use crate::agentic::goal_mode::{
-    completion_budget_report, goal_tool_response, user_facing_thread_goal_error,
-};
+use crate::agentic::goal_mode::user_facing_thread_goal_error;
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
+use bitfun_agent_runtime::thread_goal_tools::{
+    build_goal_tool_result, parse_create_goal_args, parse_update_goal_args,
+    parse_update_goal_status, CREATE_GOAL_TOOL_NAME, GET_GOAL_TOOL_NAME, UPDATE_GOAL_TOOL_NAME,
+};
 use bitfun_runtime_ports::ThreadGoalStatus;
-use serde::Deserialize;
 use serde_json::{json, Value};
-
-pub const GET_GOAL_TOOL_NAME: &str = "get_goal";
-pub const CREATE_GOAL_TOOL_NAME: &str = "create_goal";
-pub const UPDATE_GOAL_TOOL_NAME: &str = "update_goal";
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "snake_case")]
-struct CreateGoalArgs {
-    objective: String,
-    token_budget: Option<i64>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "snake_case")]
-struct UpdateGoalArgs {
-    status: String,
-}
 
 fn require_coordinator(
 ) -> BitFunResult<std::sync::Arc<crate::agentic::coordination::ConversationCoordinator>> {
@@ -44,33 +28,6 @@ fn require_session_context(context: &ToolUseContext) -> BitFunResult<(String, st
         .ok_or_else(|| BitFunError::Validation("workspace_path is unavailable".to_string()))?
         .to_path_buf();
     Ok((session_id, workspace_path))
-}
-
-fn parse_update_goal_status(raw: &str) -> BitFunResult<ThreadGoalStatus> {
-    match raw.trim().to_ascii_lowercase().as_str() {
-        "complete" => Ok(ThreadGoalStatus::Complete),
-        "blocked" => Ok(ThreadGoalStatus::Blocked),
-        other => Err(BitFunError::Validation(format!(
-            "update_goal status must be complete or blocked, got {other}"
-        ))),
-    }
-}
-
-fn serialize_goal_response(
-    goal: Option<bitfun_runtime_ports::ThreadGoal>,
-    include_completion_report: bool,
-) -> BitFunResult<(Value, String)> {
-    let response = goal_tool_response(goal, include_completion_report);
-    let payload = serde_json::to_value(response).map_err(|error| {
-        BitFunError::Validation(format!("failed to serialize goal tool result: {error}"))
-    })?;
-    let summary = payload
-        .get("goal")
-        .and_then(|goal| goal.get("status"))
-        .and_then(|status| status.as_str())
-        .map(|status| format!("Thread goal status: {status}"))
-        .unwrap_or_else(|| "No thread goal is set.".to_string());
-    Ok((payload, summary))
 }
 
 pub struct GetGoalTool;
@@ -124,10 +81,11 @@ impl Tool for GetGoalTool {
             .get_thread_goal(&session_id, workspace_path.as_path())
             .await
             .map_err(user_facing_thread_goal_error)?;
-        let (data, summary) = serialize_goal_response(goal, false)?;
+        let result = build_goal_tool_result(goal, false)
+            .map_err(|error| BitFunError::Validation(error.to_string()))?;
         Ok(vec![ToolResult::Result {
-            data,
-            result_for_assistant: Some(summary),
+            data: result.data,
+            result_for_assistant: Some(result.result_for_assistant),
             image_attachments: None,
         }])
     }
@@ -187,9 +145,8 @@ Set token_budget only when an explicit token budget is requested. Fails if a goa
         input: &Value,
         context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
-        let parsed: CreateGoalArgs = serde_json::from_value(input.clone()).map_err(|error| {
-            BitFunError::Validation(format!("invalid create_goal args: {error}"))
-        })?;
+        let parsed = parse_create_goal_args(input.clone())
+            .map_err(|error| BitFunError::Validation(error.to_string()))?;
         let coordinator = require_coordinator()?;
         let (session_id, workspace_path) = require_session_context(context)?;
         let goal = coordinator
@@ -201,10 +158,11 @@ Set token_budget only when an explicit token budget is requested. Fails if a goa
             )
             .await
             .map_err(user_facing_thread_goal_error)?;
-        let (data, summary) = serialize_goal_response(Some(goal), false)?;
+        let result = build_goal_tool_result(Some(goal), false)
+            .map_err(|error| BitFunError::Validation(error.to_string()))?;
         Ok(vec![ToolResult::Result {
-            data,
-            result_for_assistant: Some(summary),
+            data: result.data,
+            result_for_assistant: Some(result.result_for_assistant),
             image_attachments: None,
         }])
     }
@@ -264,10 +222,10 @@ You cannot use this tool to pause, resume, budget-limit, or usage-limit a goal."
         input: &Value,
         context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
-        let parsed: UpdateGoalArgs = serde_json::from_value(input.clone()).map_err(|error| {
-            BitFunError::Validation(format!("invalid update_goal args: {error}"))
-        })?;
-        let status = parse_update_goal_status(&parsed.status)?;
+        let parsed = parse_update_goal_args(input.clone())
+            .map_err(|error| BitFunError::Validation(error.to_string()))?;
+        let status = parse_update_goal_status(&parsed.status)
+            .map_err(|error| BitFunError::Validation(error.to_string()))?;
         let coordinator = require_coordinator()?;
         let (session_id, workspace_path) = require_session_context(context)?;
         let goal = coordinator
@@ -280,11 +238,11 @@ You cannot use this tool to pause, resume, budget-limit, or usage-limit a goal."
             .await
             .map_err(user_facing_thread_goal_error)?;
         let include_report = status == ThreadGoalStatus::Complete;
-        let _ = completion_budget_report(&goal);
-        let (data, summary) = serialize_goal_response(Some(goal), include_report)?;
+        let result = build_goal_tool_result(Some(goal), include_report)
+            .map_err(|error| BitFunError::Validation(error.to_string()))?;
         Ok(vec![ToolResult::Result {
-            data,
-            result_for_assistant: Some(summary),
+            data: result.data,
+            result_for_assistant: Some(result.result_for_assistant),
             image_attachments: None,
         }])
     }

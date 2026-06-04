@@ -5815,19 +5815,38 @@ const requiredContentRules = [
   {
     path: 'src/crates/core/src/agentic/agents/registry/builtin.rs',
     reason:
-      'core builtin registry must continue registering latest-main mode and subagent defaults until agent registry ownership migrates with API equivalence tests',
+      'core builtin registry must delegate builtin default model facts to agent-runtime while preserving latest-main compatibility',
     patterns: [
       {
         regex: /\bbuiltin_agent_specs\(\)/,
         message: 'missing builtin agent spec registration source',
       },
       {
-        regex: /"Multitask"\s*=>\s*"auto"/,
-        message: 'missing Multitask default model mapping',
+        regex: /\bruntime_agents::default_model_id_for_builtin_agent\(agent_type\)/,
+        message: 'missing default model delegation to agent-runtime',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/agent-runtime/src/agents.rs',
+    reason:
+      'agent-runtime builtin agent catalog must own latest-main mode/subagent categories, visibility, and default model facts',
+    patterns: [
+      {
+        regex: /\bbuiltin_agent_definition_specs\(\)/,
+        message: 'missing builtin agent definition catalog owner',
       },
       {
-        regex: /"GeneralPurpose"\s*=>\s*"fast"/,
-        message: 'missing GeneralPurpose default model mapping',
+        regex: /builtin_agent_spec\(\s*"Multitask",\s*Mode,\s*"auto"/,
+        message: 'missing Multitask runtime default model mapping',
+      },
+      {
+        regex: /builtin_agent_spec\(\s*"GeneralPurpose",\s*SubAgent,\s*"fast"/,
+        message: 'missing GeneralPurpose runtime default model mapping',
+      },
+      {
+        regex: /SubagentVisibilityPolicy::restricted\(\["Claw",\s*"Team"\]\)/,
+        message: 'missing ComputerUse restricted visibility mapping',
       },
     ],
   },

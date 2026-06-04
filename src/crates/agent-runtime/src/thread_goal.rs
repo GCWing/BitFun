@@ -2,7 +2,8 @@
 
 use bitfun_runtime_ports::{
     validate_thread_goal_objective, SetThreadGoalResult, ThreadGoal, ThreadGoalContinuationPlan,
-    ThreadGoalStatus, ThreadGoalToolResponse, MAX_THREAD_GOAL_AUTO_CONTINUATIONS,
+    ThreadGoalStatus, ThreadGoalToolResponse, GOAL_MODE_METADATA_KEY,
+    MAX_THREAD_GOAL_AUTO_CONTINUATIONS, THREAD_GOAL_METADATA_KEY,
 };
 use std::fmt;
 use std::sync::{Mutex, MutexGuard};
@@ -167,6 +168,27 @@ pub fn billable_tokens_from_counts(
     input_tokens.saturating_sub(cached_tokens) + output_tokens
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ThreadGoalTokenUsageFacts {
+    pub input_tokens: usize,
+    pub output_tokens: Option<usize>,
+    pub cached_tokens: Option<usize>,
+    pub is_subagent: bool,
+}
+
+pub fn should_record_thread_goal_token_usage(facts: ThreadGoalTokenUsageFacts) -> Option<usize> {
+    if facts.is_subagent {
+        return None;
+    }
+
+    let billable = billable_tokens_from_counts(
+        facts.input_tokens,
+        facts.cached_tokens.unwrap_or(0),
+        facts.output_tokens.unwrap_or(0),
+    );
+    (billable > 0).then_some(billable)
+}
+
 pub fn is_usage_limit_message(message: &str) -> bool {
     let message = message.to_ascii_lowercase();
     [
@@ -223,6 +245,76 @@ pub fn goal_tool_response(
         remaining_tokens,
         completion_budget_report,
     }
+}
+
+pub fn thread_goal_patch(goal: &ThreadGoal) -> serde_json::Value {
+    serde_json::json!({
+        THREAD_GOAL_METADATA_KEY: goal,
+    })
+}
+
+pub fn clear_thread_goal_patch() -> serde_json::Value {
+    serde_json::json!({
+        THREAD_GOAL_METADATA_KEY: serde_json::Value::Null,
+    })
+}
+
+pub fn thread_goal_event_payload(goal: Option<ThreadGoal>) -> Option<serde_json::Value> {
+    goal.and_then(|goal| serde_json::to_value(goal).ok())
+}
+
+pub fn thread_goal_from_custom_metadata(
+    custom_metadata: Option<&serde_json::Value>,
+    legacy_goal_id: String,
+    legacy_created_at: i64,
+) -> Option<ThreadGoal> {
+    if let Some(goal) = custom_metadata
+        .and_then(|value| value.get(THREAD_GOAL_METADATA_KEY))
+        .and_then(|value| serde_json::from_value::<ThreadGoal>(value.clone()).ok())
+    {
+        return Some(goal);
+    }
+    migrate_legacy_goal_mode(custom_metadata, legacy_goal_id, legacy_created_at)
+}
+
+fn migrate_legacy_goal_mode(
+    custom_metadata: Option<&serde_json::Value>,
+    legacy_goal_id: String,
+    legacy_created_at: i64,
+) -> Option<ThreadGoal> {
+    let legacy = custom_metadata?.get(GOAL_MODE_METADATA_KEY)?;
+    let active = legacy.get("active")?.as_bool().unwrap_or(false);
+    if !active {
+        return None;
+    }
+    let objective = legacy
+        .get("initialGoal")
+        .and_then(|value| value.get("goalText"))
+        .and_then(|value| value.as_str())
+        .or_else(|| legacy.get("goalText").and_then(|value| value.as_str()))
+        .map(str::trim)
+        .filter(|value| !value.is_empty())?;
+    let session_id = legacy
+        .get("sessionId")
+        .and_then(|value| value.as_str())
+        .unwrap_or("unknown");
+    let created_at = legacy
+        .get("activatedAtMs")
+        .and_then(|value| value.as_u64())
+        .map(|value| value as i64)
+        .unwrap_or(legacy_created_at);
+    Some(ThreadGoal {
+        goal_id: legacy_goal_id,
+        session_id: session_id.to_string(),
+        objective: objective.to_string(),
+        status: ThreadGoalStatus::Active,
+        token_budget: None,
+        tokens_used: 0,
+        time_used_seconds: 0,
+        created_at,
+        updated_at: created_at,
+        auto_continuation_count: 0,
+    })
 }
 
 /// Statuses where the user may explicitly resume auto-continuation toward the goal.

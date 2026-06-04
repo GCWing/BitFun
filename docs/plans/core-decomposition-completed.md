@@ -228,13 +228,35 @@
 - 非 custom agent definition loading、event delivery、permission `Tool` handler、concrete hook side-effect execution 和 concrete scheduler lifecycle 仍未迁移。
 - 继续迁移这些路径必须先补端到端等价保护，不能只依赖 owner contract test。
 
+### 1.13 最终 PR-C：Agent Runtime concrete delivery / permission closure
+
+- `bitfun-agent-runtime::thread_goal_tools` 承接 `get_goal` / `create_goal` / `update_goal` 的参数解析、status 解析、tool response
+  wire shape 和 assistant summary；core `Tool` adapter 只保留 coordinator 调用、session/workspace context 获取和 `BitFunError` 映射。
+- `bitfun-agent-runtime::user_questions` 承接 `AskUserQuestion` 的 input DTO、ACP 可用性判断、问题校验、answered/cancelled result
+  wire shape 和 assistant-facing result text；core 只保留 event emit、oneshot channel 和 user-input manager 适配。
+- thread goal 的 metadata patch、legacy `goal_mode` migration、event payload 序列化、token usage 过滤和 scheduler delivery plan 已归入
+  `bitfun-agent-runtime`；core 只保留 session metadata IO、全局 coordinator/runtime 调用、event emitter 和 scheduler submit / injection。
+- 非 custom builtin agent definition catalog 的顺序、分类、默认模型和 visibility policy 已归入
+  `bitfun-agent-runtime::agents`；core registry 只保留 legacy `Agent` factory 映射和注册适配。
+- DeepReview successful tool post-call hook 的 shared-context measurement 过滤、subagent/parent-turn 提取、local path 归一和 runtime URI
+  过滤已归入 `bitfun-agent-runtime::post_call_hooks`；core 只执行最终 diagnostics 记录副作用。
+- focused coverage 覆盖 goal tool wire shape、AskUserQuestion validation/result、builtin agent catalog、thread-goal metadata/event/token
+  delivery、scheduler resumed/objective-updated delivery plan 和 DeepReview hook measurement decision；core 聚焦测试覆盖 registry、goal mode、
+  scheduler、AskUserQuestion 和 DeepReview 旧路径兼容。
+
+明确未完成：
+
+- concrete scheduler lifecycle、session metadata / persistence IO、event emitter wiring、permission UI/channel wait、concrete prompt assembly、
+  product `Tool` execution adapter 和 DeepReview diagnostics store 仍是 core compatibility / product assembly 副作用，不属于 Agent Runtime SDK 纯 owner。
+- 这些剩余 concrete 副作用若继续外移，必须作为独立行为等价迁移评审，不得混入最终 PR-D 的 Product Runtime / Service / Tool closure。
+
 ## 2. 已建立保护
 
 - 新 owner crate 不得依赖回 `bitfun-core`。
 - `product-full` 是完整产品能力保护开关。
 - 构建脚本和 installer 相关脚本不作为 core 拆解的一部分修改。
 - boundary check 覆盖已外移 owner 的旧路径 facade-only / 禁止回流状态。
-- tool manifest、`GetToolSpec`、execution admission gate、MiniApp storage layout adapter、product-domain pure helper、remote workspace search fallback、MCP config / catalog / dynamic manifest、agent-runtime prompt cache、agent registry source/profile facts、custom subagent schema/default/markdown IO/discovery/loading、post-call hook routing/executor orchestration、tool confirmation plan/failure mapping、product capability pack、harness/tool provider assembly、session restore path/timing facts、本地 tool IO primitive、function-agent Git/AI concrete runtime 和 scheduled-job lifecycle state 等已有 focused baseline。
+- tool manifest、`GetToolSpec`、execution admission gate、MiniApp storage layout adapter、product-domain pure helper、remote workspace search fallback、MCP config / catalog / dynamic manifest、agent-runtime prompt cache、agent registry source/profile facts、builtin agent catalog、custom subagent schema/default/markdown IO/discovery/loading、thread-goal tool / metadata / event / token / scheduler delivery、AskUserQuestion validation/result、DeepReview hook measurement decision、post-call hook routing/executor orchestration、tool confirmation plan/failure mapping、product capability pack、harness/tool provider assembly、session restore path/timing facts、本地 tool IO primitive、function-agent Git/AI concrete runtime 和 scheduled-job lifecycle state 等已有 focused baseline。
 
 ## 3. 当前剩余结论
 
@@ -242,6 +264,6 @@
 - 早期 PR-C 已收敛 Harness / Product Capability / Build-Benefit closure；PR-1 已收敛 session restore hot-path
   request / timing / storage path facts 和 Runtime Services port；PR-2 已收敛本地 Write / Edit / Delete / Glob
   concrete IO primitive；PR-3 已收敛 function-agent Git/AI concrete runtime owner closure；PR-4 已收敛 scheduled-job lifecycle state owner closure；Agent Runtime Extension Boundary Closure 已收敛 custom subagent schema/default/markdown IO/discovery/loading、post-call hook routing/executor orchestration 和 tool confirmation 计划 / 失败映射。后续不应继续拆零散 helper PR；
-- 当前活跃迁移只剩 `core-decomposition-plan.md` 中的最终 PR-C / PR-D：最终 PR-C 关闭 Agent Runtime concrete delivery / permission / scheduler / event / hook / non-custom agent definition loading；最终 PR-D 关闭 Product Runtime、Runtime Services、Tool / Terminal / Search、Remote、MiniApp 和 function-agent 的剩余 concrete owner。最终 PR-C / PR-D 是收尾阶段编号，不再复用早期 PR-C 的范围。
+- 最终 PR-C 已收敛 Agent Runtime concrete delivery / permission 合同：goal/user-question tool handler 合同、thread-goal metadata / token / event / scheduler delivery plan、builtin agent catalog 和 DeepReview hook measurement decision。当前活跃迁移只剩 `core-decomposition-plan.md` 中的最终 PR-D：关闭 Product Runtime、Runtime Services、Tool / Terminal / Search、Remote、MiniApp 和 function-agent 的剩余 concrete owner。
 - PR-D 完成并通过总体验收后，本文档范围内的 core decomposition runtime owner 迁移应关闭；后续只允许独立缺陷修复、feature matrix、构建收益优化、目录整理或产品行为变更评审，不再作为迁移计划遗漏追加。
 - 缺陷修复、行为变更、冗余清理、三方库升级和构建脚本调整必须独立评估，不能伪装成 core decomposition 剩余里程碑。

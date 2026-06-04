@@ -2400,7 +2400,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     }
 
     pub async fn emit_thread_goal_updated(&self, session_id: &str, goal: Option<ThreadGoal>) {
-        let goal = goal.and_then(|goal| serde_json::to_value(goal).ok());
+        let goal = bitfun_agent_runtime::thread_goal::thread_goal_event_payload(goal);
         self.emit_event(AgenticEvent::ThreadGoalUpdated {
             session_id: session_id.to_string(),
             goal,

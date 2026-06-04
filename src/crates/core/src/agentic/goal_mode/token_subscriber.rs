@@ -2,8 +2,10 @@
 
 use crate::agentic::coordination::get_global_coordinator;
 use crate::agentic::events::{AgenticEvent, EventSubscriber};
-use crate::agentic::goal_mode::billable_tokens_from_counts;
 use crate::util::errors::BitFunResult;
+use bitfun_agent_runtime::thread_goal::{
+    should_record_thread_goal_token_usage, ThreadGoalTokenUsageFacts,
+};
 use log::debug;
 
 pub struct ThreadGoalTokenSubscriber;
@@ -24,16 +26,14 @@ impl EventSubscriber for ThreadGoalTokenSubscriber {
             return Ok(());
         };
 
-        if *is_subagent {
+        let Some(billable) = should_record_thread_goal_token_usage(ThreadGoalTokenUsageFacts {
+            input_tokens: *input_tokens,
+            output_tokens: *output_tokens,
+            cached_tokens: *cached_tokens,
+            is_subagent: *is_subagent,
+        }) else {
             return Ok(());
-        }
-
-        let output_tokens = output_tokens.unwrap_or(0);
-        let cached_tokens = cached_tokens.unwrap_or(0);
-        let billable = billable_tokens_from_counts(*input_tokens, cached_tokens, output_tokens);
-        if billable == 0 {
-            return Ok(());
-        }
+        };
 
         let Some(coordinator) = get_global_coordinator() else {
             return Ok(());
