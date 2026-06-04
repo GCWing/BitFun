@@ -1085,5 +1085,6 @@
     "message": "请选择关闭操作：退出程序将完全停止运行，最小化到托盘可保持后台运行随时唤回。",
     "quit": "退出程序",
     "minimizeToTray": "最小化到托盘"
-  }
+  },
+  "bashCommandFailedHint": "命令执行失败，如需完整环境，请前往应用市场下载 DevBox，然后重启 BitFun"
 }
