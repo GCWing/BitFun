@@ -1,3 +1,4 @@
+use super::progress::ExecOutputProgressBridge;
 use super::rendering::render_exec_response_for_assistant;
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
 use crate::service::remote_ssh::{get_global_remote_exec_process_manager, RemoteWriteStdinRequest};
@@ -42,7 +43,11 @@ impl WriteStdinTool {
         render_exec_response_for_assistant(data, status_lines, 4)
     }
 
-    async fn call_remote_pipe(&self, input: &Value) -> BitFunResult<Vec<ToolResult>> {
+    async fn call_remote_pipe(
+        &self,
+        input: &Value,
+        context: &ToolUseContext,
+    ) -> BitFunResult<Vec<ToolResult>> {
         let session_id = Self::session_id_from_input(input).ok_or_else(|| {
             BitFunError::tool("session_id is required for WriteStdin".to_string())
         })?;
@@ -63,15 +68,27 @@ impl WriteStdinTool {
             .try_into()
             .unwrap_or(usize::MAX);
 
-        let response = get_global_remote_exec_process_manager()
-            .write_stdin(RemoteWriteStdinRequest {
-                session_id,
-                chars,
-                append_enter,
-                yield_time_ms,
-                max_output_chars: Some(max_output_chars),
-            })
-            .await
+        let request = RemoteWriteStdinRequest {
+            session_id,
+            chars,
+            append_enter,
+            yield_time_ms,
+            max_output_chars: Some(max_output_chars),
+        };
+        let progress_bridge = ExecOutputProgressBridge::start(context, self.name());
+        let response_result = if let Some(bridge) = progress_bridge.as_ref() {
+            get_global_remote_exec_process_manager()
+                .write_stdin_streaming(request, bridge.sender())
+                .await
+        } else {
+            get_global_remote_exec_process_manager()
+                .write_stdin(request)
+                .await
+        };
+        if let Some(bridge) = progress_bridge {
+            bridge.finish().await;
+        }
+        let response = response_result
             .map_err(|error| BitFunError::tool(format!("WriteStdin failed: {error}")))?;
 
         let data = json!({
@@ -182,7 +199,7 @@ Output is only what was produced during this tool call's wait window."#
         context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
         if context.is_remote() {
-            return self.call_remote_pipe(input).await;
+            return self.call_remote_pipe(input, context).await;
         }
 
         let session_id = Self::session_id_from_input(input).ok_or_else(|| {
@@ -205,15 +222,25 @@ Output is only what was produced during this tool call's wait window."#
             .try_into()
             .unwrap_or(usize::MAX);
 
-        let response = get_global_exec_process_manager()
-            .write_stdin(LocalWriteStdinRequest {
-                session_id,
-                chars,
-                append_enter,
-                yield_time_ms,
-                max_output_chars: Some(max_output_chars),
-            })
-            .await
+        let request = LocalWriteStdinRequest {
+            session_id,
+            chars,
+            append_enter,
+            yield_time_ms,
+            max_output_chars: Some(max_output_chars),
+        };
+        let progress_bridge = ExecOutputProgressBridge::start(context, self.name());
+        let response_result = if let Some(bridge) = progress_bridge.as_ref() {
+            get_global_exec_process_manager()
+                .write_stdin_streaming(request, bridge.sender())
+                .await
+        } else {
+            get_global_exec_process_manager().write_stdin(request).await
+        };
+        if let Some(bridge) = progress_bridge {
+            bridge.finish().await;
+        }
+        let response = response_result
             .map_err(|error| BitFunError::tool(format!("WriteStdin failed: {error}")))?;
 
         let data = json!({

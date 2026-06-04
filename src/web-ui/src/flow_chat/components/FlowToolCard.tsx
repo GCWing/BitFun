@@ -94,6 +94,8 @@ export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
   // Compare streaming parameters and progress messages to avoid stale renders.
   const prevProgress = (prevProps.toolItem as any)._progressMessage;
   const nextProgress = (nextProps.toolItem as any)._progressMessage;
+  const prevProgressLogs = (prevProps.toolItem as any)._progressLogs;
+  const nextProgressLogs = (nextProps.toolItem as any)._progressLogs;
   
   return (
     prevProps.toolItem.id === nextProps.toolItem.id &&
@@ -109,6 +111,7 @@ export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
     prevProps.toolItem.subagentModelAlias === nextProps.toolItem.subagentModelAlias &&
     prevProps.displayContext === nextProps.displayContext &&
     prevProgress === nextProgress &&
+    prevProgressLogs === nextProgressLogs &&
     prevProps.toolItem.partialParams === nextProps.toolItem.partialParams &&
     prevProps.toolItem.toolResult === nextProps.toolItem.toolResult
   );

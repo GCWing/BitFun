@@ -78,9 +78,25 @@ impl RemoteExecProcessManager {
         Err(unsupported())
     }
 
+    pub async fn exec_command_streaming(
+        &self,
+        _request: RemoteExecCommandRequest,
+        _output_tx: tokio::sync::mpsc::Sender<String>,
+    ) -> anyhow::Result<RemoteExecCommandResponse> {
+        Err(unsupported())
+    }
+
     pub async fn write_stdin(
         &self,
         _request: RemoteWriteStdinRequest,
+    ) -> anyhow::Result<RemoteExecCommandResponse> {
+        Err(unsupported())
+    }
+
+    pub async fn write_stdin_streaming(
+        &self,
+        _request: RemoteWriteStdinRequest,
+        _output_tx: tokio::sync::mpsc::Sender<String>,
     ) -> anyhow::Result<RemoteExecCommandResponse> {
         Err(unsupported())
     }

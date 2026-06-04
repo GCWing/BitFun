@@ -151,6 +151,22 @@ impl ExecProcessManager {
         &self,
         request: ExecCommandRequest,
     ) -> TerminalResult<ExecCommandResponse> {
+        self.exec_command_inner(request, None).await
+    }
+
+    pub async fn exec_command_streaming(
+        &self,
+        request: ExecCommandRequest,
+        output_tx: mpsc::Sender<String>,
+    ) -> TerminalResult<ExecCommandResponse> {
+        self.exec_command_inner(request, Some(output_tx)).await
+    }
+
+    async fn exec_command_inner(
+        &self,
+        request: ExecCommandRequest,
+        output_tx: Option<mpsc::Sender<String>>,
+    ) -> TerminalResult<ExecCommandResponse> {
         let process = Arc::new(spawn_exec_process(&request).await?);
         let cursor = OutputCursor { next_seq: 0 };
         let started_at = tokio::time::Instant::now();
@@ -160,6 +176,7 @@ impl ExecProcessManager {
                 cursor,
                 deadline_from_now(request.yield_time_ms),
                 request.max_output_chars.unwrap_or(DEFAULT_MAX_OUTPUT_CHARS),
+                output_tx.as_ref(),
             )
             .await;
 
@@ -186,6 +203,22 @@ impl ExecProcessManager {
     pub async fn write_stdin(
         &self,
         request: WriteStdinRequest,
+    ) -> TerminalResult<ExecCommandResponse> {
+        self.write_stdin_inner(request, None).await
+    }
+
+    pub async fn write_stdin_streaming(
+        &self,
+        request: WriteStdinRequest,
+        output_tx: mpsc::Sender<String>,
+    ) -> TerminalResult<ExecCommandResponse> {
+        self.write_stdin_inner(request, Some(output_tx)).await
+    }
+
+    async fn write_stdin_inner(
+        &self,
+        request: WriteStdinRequest,
+        output_tx: Option<mpsc::Sender<String>>,
     ) -> TerminalResult<ExecCommandResponse> {
         let (process, tty, cursor) = {
             let mut sessions = self.sessions.lock().await;
@@ -215,6 +248,7 @@ impl ExecProcessManager {
                 cursor,
                 deadline_from_now(request.yield_time_ms),
                 request.max_output_chars.unwrap_or(DEFAULT_MAX_OUTPUT_CHARS),
+                output_tx.as_ref(),
             )
             .await;
 
@@ -268,6 +302,7 @@ impl ExecProcessManager {
                 cursor,
                 deadline_from_now(request.yield_time_ms),
                 request.max_output_chars.unwrap_or(DEFAULT_MAX_OUTPUT_CHARS),
+                None,
             )
             .await;
 
@@ -438,11 +473,20 @@ impl OutputState {
         self.inner.lock().await.exit_code
     }
 
-    async fn drain_since(&self, cursor: &mut OutputCursor, sink: &mut HeadTailText) -> bool {
+    async fn drain_since_with_output(
+        &self,
+        cursor: &mut OutputCursor,
+        sink: &mut HeadTailText,
+        output_tx: Option<&mpsc::Sender<String>>,
+    ) -> bool {
         let inner = self.inner.lock().await;
         for (seq, chunk) in inner.chunks.iter() {
             if *seq >= cursor.next_seq {
-                sink.push_str(&bytes_to_string_smart(chunk));
+                let text = bytes_to_string_smart(chunk);
+                sink.push_str(&text);
+                if let Some(tx) = output_tx {
+                    let _ = tx.try_send(text);
+                }
             }
         }
         cursor.next_seq = inner.next_seq;
@@ -454,11 +498,14 @@ impl OutputState {
         mut cursor: OutputCursor,
         deadline: tokio::time::Instant,
         max_output_chars: usize,
+        output_tx: Option<&mpsc::Sender<String>>,
     ) -> CollectedOutput {
         let mut sink = HeadTailText::new(max_output_chars);
 
         loop {
-            let closed = self.drain_since(&mut cursor, &mut sink).await;
+            let closed = self
+                .drain_since_with_output(&mut cursor, &mut sink, output_tx)
+                .await;
             if closed || tokio::time::Instant::now() >= deadline {
                 break;
             }

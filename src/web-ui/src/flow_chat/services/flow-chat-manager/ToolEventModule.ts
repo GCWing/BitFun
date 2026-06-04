@@ -571,7 +571,7 @@ export function handleToolExecutionProgress(
   event: any
 ): void {
   const eventData = (event as any).value || event;
-  const { tool_use_id, progress_message, percentage } = eventData;
+  const { tool_use_id, tool_name, progress_message, percentage } = eventData;
 
   const store = FlowChatStore.getInstance();
   const state = store.getState();
@@ -587,10 +587,18 @@ export function handleToolExecutionProgress(
           ? (toolItem as any)._progressLogs
           : [];
         const lastLog = existingLogs.length > 0 ? existingLogs[existingLogs.length - 1] : undefined;
-        const shouldAppend =
-          typeof progress_message === 'string' &&
-          progress_message.trim().length > 0 &&
-          progress_message !== lastLog;
+        const isTerminalLikeProgress =
+          tool_name === 'Bash' ||
+          tool_name === 'ExecCommand' ||
+          tool_name === 'WriteStdin' ||
+          (toolItem as any).toolName === 'Bash' ||
+          (toolItem as any).toolName === 'ExecCommand' ||
+          (toolItem as any).toolName === 'WriteStdin';
+        const shouldAppend = typeof progress_message === 'string' && (
+          isTerminalLikeProgress
+            ? progress_message.length > 0
+            : progress_message.trim().length > 0 && progress_message !== lastLog
+        );
         const nextLogs = shouldAppend ? [...existingLogs, progress_message].slice(-200) : existingLogs;
 
         store.updateModelRoundItem(sessionId, dialogTurn.id, tool_use_id, {

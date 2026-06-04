@@ -1266,6 +1266,23 @@
       "commandInterrupted": "命令已被中斷",
       "executionFailed": "命令執行失敗"
     },
+    "execProcess": {
+      "executeCommand": "執行命令:",
+      "writeStdin": "寫入標準輸入:",
+      "pollProcess": "輪詢進程:",
+      "executingCommand": "正在執行命令...",
+      "waitingForOutput": "等待輸出...",
+      "pollingOutput": "正在輪詢輸出...",
+      "pollSession": "輪詢會話 #{{id}}",
+      "session": "會話:",
+      "wallTime": "{{seconds}}秒",
+      "remote": "遠端",
+      "tty": "TTY",
+      "noOutput": "無輸出",
+      "copyPrimary": "複製",
+      "primaryCopied": "已複製",
+      "copyPrimaryFailed": "複製失敗"
+    },
     "plan": {
       "loadingPlan": "正在載入計劃...",
       "generating": "生成中...",

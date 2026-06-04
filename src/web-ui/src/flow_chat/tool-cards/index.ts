@@ -27,6 +27,8 @@ import { GitToolDisplay } from './GitToolDisplay';
 import { GetFileDiffDisplay } from './GetFileDiffDisplay';
 import { CreatePlanDisplay } from './CreatePlanDisplay';
 import { TerminalToolCard } from './TerminalToolCard';
+import { ExecCommandToolCard } from './ExecCommandToolCard';
+import { WriteStdinToolCard } from './WriteStdinToolCard';
 import { TerminalControlDisplay } from './TerminalControlDisplay';
 import { InitMiniAppDisplay } from './MiniAppToolDisplay';
 import { GenerativeWidgetToolCard } from './GenerativeWidgetToolCard';
@@ -291,6 +293,28 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     primaryColor: '#10b981' // Teal, classic terminal color
   },
 
+  'ExecCommand': {
+    toolName: 'ExecCommand',
+    displayName: 'Run Command',
+    icon: 'TERM',
+    requiresConfirmation: false,
+    resultDisplayType: 'detailed',
+    description: 'Run a command in a fresh process',
+    displayMode: 'standard',
+    primaryColor: '#10b981'
+  },
+
+  'WriteStdin': {
+    toolName: 'WriteStdin',
+    displayName: 'Write Input',
+    icon: 'TERM',
+    requiresConfirmation: false,
+    resultDisplayType: 'detailed',
+    description: 'Write to or poll a running command process',
+    displayMode: 'standard',
+    primaryColor: '#10b981'
+  },
+
   // MiniApp tool
   'InitMiniApp': {
     toolName: 'InitMiniApp',
@@ -365,6 +389,10 @@ export const TOOL_CARD_COMPONENTS = {
 
   // Bash tool
   'Bash': TerminalToolCard,
+
+  // Exec process tools
+  'ExecCommand': ExecCommandToolCard,
+  'WriteStdin': WriteStdinToolCard,
 
   // MiniApp tool
   'InitMiniApp': InitMiniAppDisplay,

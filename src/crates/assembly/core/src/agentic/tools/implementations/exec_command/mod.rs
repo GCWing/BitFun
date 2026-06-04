@@ -1,6 +1,7 @@
 mod command;
 mod control;
 mod env_snapshot;
+mod progress;
 mod rendering;
 mod stdin;
 

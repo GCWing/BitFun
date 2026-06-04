@@ -1266,6 +1266,23 @@
       "commandInterrupted": "Command interrupted",
       "executionFailed": "Command execution failed"
     },
+    "execProcess": {
+      "executeCommand": "Run command:",
+      "writeStdin": "Write stdin:",
+      "pollProcess": "Poll process:",
+      "executingCommand": "Running command...",
+      "waitingForOutput": "Waiting for output...",
+      "pollingOutput": "Polling output...",
+      "pollSession": "Poll session #{{id}}",
+      "session": "Session:",
+      "wallTime": "{{seconds}}s",
+      "remote": "Remote",
+      "tty": "TTY",
+      "noOutput": "No output",
+      "copyPrimary": "Copy",
+      "primaryCopied": "Copied",
+      "copyPrimaryFailed": "Failed to copy"
+    },
     "plan": {
       "loadingPlan": "Loading plan...",
       "generating": "Generating...",

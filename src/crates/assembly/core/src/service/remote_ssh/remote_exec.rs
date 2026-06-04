@@ -141,6 +141,22 @@ impl RemoteExecProcessManager {
         &self,
         request: RemoteExecCommandRequest,
     ) -> anyhow::Result<RemoteExecCommandResponse> {
+        self.exec_command_inner(request, None).await
+    }
+
+    pub async fn exec_command_streaming(
+        &self,
+        request: RemoteExecCommandRequest,
+        output_tx: mpsc::Sender<String>,
+    ) -> anyhow::Result<RemoteExecCommandResponse> {
+        self.exec_command_inner(request, Some(output_tx)).await
+    }
+
+    async fn exec_command_inner(
+        &self,
+        request: RemoteExecCommandRequest,
+        output_tx: Option<mpsc::Sender<String>>,
+    ) -> anyhow::Result<RemoteExecCommandResponse> {
         let process = Arc::new(spawn_remote_process(request.clone()).await?);
         let cursor = OutputCursor { next_seq: 0 };
         let started_at = Instant::now();
@@ -150,6 +166,7 @@ impl RemoteExecProcessManager {
                 cursor,
                 deadline_from_now(request.yield_time_ms),
                 request.max_output_chars.unwrap_or(DEFAULT_MAX_OUTPUT_CHARS),
+                output_tx.as_ref(),
             )
             .await;
 
@@ -177,6 +194,22 @@ impl RemoteExecProcessManager {
         &self,
         request: RemoteWriteStdinRequest,
     ) -> anyhow::Result<RemoteExecCommandResponse> {
+        self.write_stdin_inner(request, None).await
+    }
+
+    pub async fn write_stdin_streaming(
+        &self,
+        request: RemoteWriteStdinRequest,
+        output_tx: mpsc::Sender<String>,
+    ) -> anyhow::Result<RemoteExecCommandResponse> {
+        self.write_stdin_inner(request, Some(output_tx)).await
+    }
+
+    async fn write_stdin_inner(
+        &self,
+        request: RemoteWriteStdinRequest,
+        output_tx: Option<mpsc::Sender<String>>,
+    ) -> anyhow::Result<RemoteExecCommandResponse> {
         let (process, tty, cursor) = {
             let mut sessions = self.sessions.lock().await;
             let entry = sessions
@@ -202,6 +235,7 @@ impl RemoteExecProcessManager {
                 cursor,
                 deadline_from_now(request.yield_time_ms),
                 request.max_output_chars.unwrap_or(DEFAULT_MAX_OUTPUT_CHARS),
+                output_tx.as_ref(),
             )
             .await;
 
@@ -244,6 +278,7 @@ impl RemoteExecProcessManager {
                 cursor,
                 deadline_from_now(request.yield_time_ms),
                 request.max_output_chars.unwrap_or(DEFAULT_MAX_OUTPUT_CHARS),
+                None,
             )
             .await;
 
@@ -569,11 +604,20 @@ impl OutputState {
         self.inner.lock().await.exit_code
     }
 
-    async fn drain_since(&self, cursor: &mut OutputCursor, sink: &mut HeadTailText) -> bool {
+    async fn drain_since_with_output(
+        &self,
+        cursor: &mut OutputCursor,
+        sink: &mut HeadTailText,
+        output_tx: Option<&mpsc::Sender<String>>,
+    ) -> bool {
         let inner = self.inner.lock().await;
         for (seq, chunk) in inner.chunks.iter() {
             if *seq >= cursor.next_seq {
-                sink.push_str(&String::from_utf8_lossy(chunk));
+                let text = String::from_utf8_lossy(chunk).to_string();
+                sink.push_str(&text);
+                if let Some(tx) = output_tx {
+                    let _ = tx.try_send(text);
+                }
             }
         }
         cursor.next_seq = inner.next_seq;
@@ -585,11 +629,14 @@ impl OutputState {
         mut cursor: OutputCursor,
         deadline: Instant,
         max_output_chars: usize,
+        output_tx: Option<&mpsc::Sender<String>>,
     ) -> CollectedOutput {
         let mut sink = HeadTailText::new(max_output_chars);
 
         loop {
-            let closed = self.drain_since(&mut cursor, &mut sink).await;
+            let closed = self
+                .drain_since_with_output(&mut cursor, &mut sink, output_tx)
+                .await;
             if closed || Instant::now() >= deadline {
                 break;
             }

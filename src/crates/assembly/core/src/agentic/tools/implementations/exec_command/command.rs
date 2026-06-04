@@ -1,4 +1,5 @@
 use super::env_snapshot::{remote_env_snapshot_for, RemoteEnvSnapshot};
+use super::progress::ExecOutputProgressBridge;
 use super::rendering::render_exec_response_for_assistant;
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
 use crate::service::remote_ssh::{
@@ -328,16 +329,28 @@ impl ExecCommandTool {
         let command =
             Self::remote_login_shell_command(&workdir, cmd, &shell, env_snapshot.as_ref());
 
-        let response = get_global_remote_exec_process_manager()
-            .exec_command(RemoteExecCommandRequest {
-                ssh_manager,
-                connection_id,
-                command,
-                tty,
-                yield_time_ms,
-                max_output_chars: Some(max_output_chars),
-            })
-            .await
+        let request = RemoteExecCommandRequest {
+            ssh_manager,
+            connection_id,
+            command,
+            tty,
+            yield_time_ms,
+            max_output_chars: Some(max_output_chars),
+        };
+        let progress_bridge = ExecOutputProgressBridge::start(context, self.name());
+        let response_result = if let Some(bridge) = progress_bridge.as_ref() {
+            get_global_remote_exec_process_manager()
+                .exec_command_streaming(request, bridge.sender())
+                .await
+        } else {
+            get_global_remote_exec_process_manager()
+                .exec_command(request)
+                .await
+        };
+        if let Some(bridge) = progress_bridge {
+            bridge.finish().await;
+        }
+        let response = response_result
             .map_err(|error| BitFunError::tool(format!("ExecCommand failed: {error}")))?;
 
         let data = json!({
@@ -639,16 +652,28 @@ Output is only what was produced during this tool call's wait window."#
             .try_into()
             .unwrap_or(usize::MAX);
 
-        let response = get_global_exec_process_manager()
-            .exec_command(LocalExecCommandRequest {
-                argv: Self::argv_for_shell(&shell.path, &shell.shell_type, cmd),
-                cwd: workdir.clone(),
-                env: Self::command_env(),
-                tty,
-                yield_time_ms,
-                max_output_chars: Some(max_output_chars),
-            })
-            .await
+        let request = LocalExecCommandRequest {
+            argv: Self::argv_for_shell(&shell.path, &shell.shell_type, cmd),
+            cwd: workdir.clone(),
+            env: Self::command_env(),
+            tty,
+            yield_time_ms,
+            max_output_chars: Some(max_output_chars),
+        };
+        let progress_bridge = ExecOutputProgressBridge::start(context, self.name());
+        let response_result = if let Some(bridge) = progress_bridge.as_ref() {
+            get_global_exec_process_manager()
+                .exec_command_streaming(request, bridge.sender())
+                .await
+        } else {
+            get_global_exec_process_manager()
+                .exec_command(request)
+                .await
+        };
+        if let Some(bridge) = progress_bridge {
+            bridge.finish().await;
+        }
+        let response = response_result
             .map_err(|error| BitFunError::tool(format!("ExecCommand failed: {error}")))?;
 
         let data = json!({
