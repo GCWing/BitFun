@@ -497,9 +497,6 @@ impl ChatMode {
             // 2. Process core events (non-blocking)
             let events =
                 tokio::task::block_in_place(|| rt_handle.block_on(event_queue.dequeue_batch(20)));
-            tokio::task::block_in_place(|| {
-                rt_handle.block_on(self.agent.route_internal_events(&events))
-            });
             for envelope in events {
                 let event = &envelope.event;
 
