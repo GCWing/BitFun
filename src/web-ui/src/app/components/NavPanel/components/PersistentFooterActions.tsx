@@ -11,7 +11,9 @@ import {
   ExternalLink,
   BarChart3,
   ChevronUp,
+  MessageCircle,
 } from 'lucide-react';
+import { systemAPI } from '@/infrastructure/api';
 import { Tooltip, Modal } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { useSceneManager } from '../../../hooks/useSceneManager';
@@ -111,6 +113,11 @@ const PersistentFooterActions: React.FC = () => {
     closeMenu();
     setShowAbout(true);
   };
+
+  const handleFeedback = useCallback(() => {
+    closeMenu();
+    void systemAPI.openExternal('https://gitcode.com/OpenHarmonyPCDeveloper/BitFun/issues');
+  }, [closeMenu]);
 
   const handleFloatingMode = () => {
     closeMenu();
@@ -222,6 +229,15 @@ const PersistentFooterActions: React.FC = () => {
                   >
                     <Settings size={14} />
                     <span>{t('tabs.settings')}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="bitfun-nav-panel__footer-menu-item"
+                    role="menuitem"
+                    onClick={handleFeedback}
+                  >
+                    <MessageCircle size={14} />
+                    <span>{t('header.feedback')}</span>
                   </button>
                   <button
                     type="button"
