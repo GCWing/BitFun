@@ -13,6 +13,7 @@ pub use types::*;
 pub use work_state_analyzer::WorkStateAnalyzer;
 
 use crate::infrastructure::ai::AIClientFactory;
+use crate::product_domain_runtime::CoreProductDomainRuntime;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -32,7 +33,12 @@ impl StartchatFunctionAgent {
         repo_path: &Path,
         options: WorkStateOptions,
     ) -> AgentResult<WorkStateAnalysis> {
-        WorkStateAnalyzer::analyze_work_state(self.factory.clone(), repo_path, options).await
+        CoreProductDomainRuntime::analyze_function_agent_work_state(
+            self.factory.clone(),
+            repo_path,
+            options,
+        )
+        .await
     }
 
     /// Quickly analyze work state (use default options with specified language)

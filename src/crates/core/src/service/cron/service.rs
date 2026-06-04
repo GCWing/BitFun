@@ -5,9 +5,8 @@ use super::schedule::{
 };
 use super::store::CronJobStore;
 use super::types::{
-    CreateCronJobRequest, CronJob, CronJobPayload, CronJobRunStatus, CronJobTarget,
-    CronJobTargetKind, CronLaunchSpec, CronSchedule, CronWorkspaceRef, UpdateCronJobRequest,
-    DEFAULT_RETRY_DELAY_MS,
+    CreateCronJobRequest, CronJob, CronJobPayload, CronJobTarget, CronJobTargetKind,
+    CronLaunchSpec, CronSchedule, CronWorkspaceRef, UpdateCronJobRequest, DEFAULT_RETRY_DELAY_MS,
 };
 use crate::agentic::coordination::{
     ConversationCoordinator, DialogQueuePriority, DialogScheduler, DialogSubmissionPolicy,
@@ -16,6 +15,7 @@ use crate::agentic::coordination::{
 use crate::agentic::core::{InternalReminderKind, Message, SessionConfig};
 use crate::infrastructure::PathManager;
 use crate::util::errors::{BitFunError, BitFunResult};
+use bitfun_agent_runtime::scheduled_job::ScheduledJobEnqueueFailureAction;
 use chrono::{Local, SecondsFormat, TimeZone, Utc};
 use log::{debug, info, warn};
 use std::collections::HashMap;
@@ -197,8 +197,7 @@ impl CronService {
 
         job.config_updated_at_ms = current_ms;
         job.updated_at_ms = current_ms;
-        job.state.pending_trigger_at_ms = None;
-        job.state.retry_at_ms = None;
+        job.state.clear_pending_trigger();
 
         if !job.enabled {
             job.state.next_run_at_ms = None;
@@ -272,13 +271,7 @@ impl CronService {
                 BitFunError::NotFound(format!("Scheduled job not found: {}", job_id))
             })?;
 
-            if job.state.pending_trigger_at_ms.is_some() {
-                job.state.coalesced_run_count = job.state.coalesced_run_count.saturating_add(1);
-            }
-
-            job.state.pending_trigger_at_ms = Some(current_ms);
-            job.state.last_trigger_at_ms = Some(current_ms);
-            job.state.retry_at_ms = None;
+            job.state.mark_manual_trigger(current_ms);
             job.updated_at_ms = current_ms;
 
             self.persist_jobs_locked(&jobs).await?;
@@ -294,8 +287,7 @@ impl CronService {
 
     pub async fn handle_turn_started(&self, turn_id: &str) -> BitFunResult<()> {
         self.handle_turn_state_change(turn_id, |job, now_ms| {
-            job.state.last_run_status = Some(CronJobRunStatus::Running);
-            job.state.last_run_started_at_ms = Some(now_ms);
+            job.state.mark_turn_started(now_ms);
             job.updated_at_ms = now_ms;
         })
         .await
@@ -303,13 +295,7 @@ impl CronService {
 
     pub async fn handle_turn_completed(&self, turn_id: &str, duration_ms: u64) -> BitFunResult<()> {
         self.handle_turn_state_change(turn_id, |job, now_ms| {
-            job.state.active_turn_id = None;
-            job.state.last_run_status = Some(CronJobRunStatus::Ok);
-            job.state.last_error = None;
-            job.state.last_duration_ms = Some(duration_ms);
-            job.state.last_run_finished_at_ms = Some(now_ms);
-            job.state.last_run_started_at_ms = Some(now_ms.saturating_sub(duration_ms as i64));
-            job.state.consecutive_failures = 0;
+            job.state.mark_turn_completed(now_ms, duration_ms);
             job.updated_at_ms = now_ms;
         })
         .await
@@ -317,11 +303,7 @@ impl CronService {
 
     pub async fn handle_turn_failed(&self, turn_id: &str, error: &str) -> BitFunResult<()> {
         self.handle_turn_state_change(turn_id, |job, now_ms| {
-            job.state.active_turn_id = None;
-            job.state.last_run_status = Some(CronJobRunStatus::Error);
-            job.state.last_error = Some(error.to_string());
-            job.state.last_run_finished_at_ms = Some(now_ms);
-            job.state.consecutive_failures = job.state.consecutive_failures.saturating_add(1);
+            job.state.mark_turn_failed(now_ms, error.to_string());
             job.updated_at_ms = now_ms;
         })
         .await
@@ -329,10 +311,7 @@ impl CronService {
 
     pub async fn handle_turn_cancelled(&self, turn_id: &str) -> BitFunResult<()> {
         self.handle_turn_state_change(turn_id, |job, now_ms| {
-            job.state.active_turn_id = None;
-            job.state.last_run_status = Some(CronJobRunStatus::Cancelled);
-            job.state.last_error = None;
-            job.state.last_run_finished_at_ms = Some(now_ms);
+            job.state.mark_turn_cancelled(now_ms);
             job.updated_at_ms = now_ms;
         })
         .await
@@ -438,35 +417,16 @@ impl CronService {
 
             if let Some(next_run_at_ms) = job.state.next_run_at_ms {
                 if next_run_at_ms <= current_ms {
-                    if job.state.active_turn_id.is_some()
-                        || job.state.pending_trigger_at_ms.is_some()
-                    {
-                        job.state.last_trigger_at_ms = Some(next_run_at_ms);
-                        job.state.coalesced_run_count =
-                            job.state.coalesced_run_count.saturating_add(1);
-                        job.state.next_run_at_ms = compute_next_run_after_ms(
-                            &job.schedule,
-                            job.created_at_ms,
-                            current_ms,
-                        )?;
-                        job.updated_at_ms = current_ms;
-                        should_persist = true;
-                    } else {
-                        job.state.pending_trigger_at_ms = Some(next_run_at_ms);
-                        job.state.last_trigger_at_ms = Some(next_run_at_ms);
-                        job.state.retry_at_ms = None;
-                        job.state.next_run_at_ms = compute_next_run_after_ms(
-                            &job.schedule,
-                            job.created_at_ms,
-                            current_ms,
-                        )?;
-                        job.updated_at_ms = current_ms;
-                        should_persist = true;
-                    }
+                    let next_run_after_ms =
+                        compute_next_run_after_ms(&job.schedule, job.created_at_ms, current_ms)?;
+                    job.state
+                        .apply_due_scheduled_trigger(next_run_at_ms, next_run_after_ms);
+                    job.updated_at_ms = current_ms;
+                    should_persist = true;
                 }
             }
 
-            if job.state.active_turn_id.is_none() && pending_is_due(job, current_ms) {
+            if job.state.active_turn_id.is_none() && job.state.pending_is_due(current_ms) {
                 let pending_trigger_at_ms = job.state.pending_trigger_at_ms.ok_or_else(|| {
                     BitFunError::service(format!(
                         "Scheduled job {} is missing pending trigger timestamp",
@@ -520,17 +480,13 @@ impl CronService {
 
         match submit_result {
             Ok(_) => {
-                job.state.active_turn_id = Some(enqueue_input.turn_id.clone());
-                job.state.pending_trigger_at_ms = None;
-                job.state.retry_at_ms = None;
-                job.state.last_enqueued_at_ms = Some(now_after_submit);
-                job.state.last_run_status = Some(CronJobRunStatus::Queued);
-                job.state.last_error = None;
+                let one_shot = job.is_one_shot();
+                job.state
+                    .mark_enqueued(enqueue_input.turn_id.clone(), now_after_submit, one_shot);
                 job.updated_at_ms = now_after_submit;
 
-                if job.is_one_shot() {
+                if one_shot {
                     job.enabled = false;
-                    job.state.next_run_at_ms = None;
                 }
 
                 debug!(
@@ -542,29 +498,27 @@ impl CronService {
                 );
             }
             Err(error) => {
-                job.state.last_run_status = Some(CronJobRunStatus::Error);
-                job.state.last_error = Some(error.clone());
-                job.state.last_run_finished_at_ms = Some(now_after_submit);
+                let missing_session = matches!(job.target_kind(), CronJobTargetKind::Session)
+                    && cron_enqueue_error_is_missing_session(&error);
+                let failure_action = job.state.mark_enqueue_failed(
+                    now_after_submit,
+                    error.clone(),
+                    DEFAULT_RETRY_DELAY_MS,
+                    missing_session,
+                );
                 job.updated_at_ms = now_after_submit;
 
-                if matches!(job.target_kind(), CronJobTargetKind::Session)
-                    && cron_enqueue_error_is_missing_session(&error)
-                {
+                if matches!(
+                    failure_action,
+                    ScheduledJobEnqueueFailureAction::DisableMissingSession
+                ) {
                     job.enabled = false;
-                    job.state.next_run_at_ms = None;
-                    job.state.pending_trigger_at_ms = None;
-                    job.state.retry_at_ms = None;
-                    job.state.consecutive_failures =
-                        job.state.consecutive_failures.saturating_add(1);
                     info!(
                         "Scheduled job auto-disabled (session no longer exists): job_id={}, session_id={}",
                         job.id,
                         submit_target_session_id(&enqueue_input)
                     );
                 } else {
-                    job.state.retry_at_ms = Some(now_after_submit + DEFAULT_RETRY_DELAY_MS);
-                    job.state.consecutive_failures =
-                        job.state.consecutive_failures.saturating_add(1);
                     warn!(
                         "Failed to enqueue scheduled job: job_id={}, target_kind={:?}, target_session_id={}, error={}",
                         job.id,
@@ -694,26 +648,17 @@ fn reconcile_loaded_job(job: &mut CronJob, now_ms: i64) -> BitFunResult<bool> {
         }
     }
 
-    if job.state.active_turn_id.is_some() {
-        job.state.active_turn_id = None;
-        job.state.pending_trigger_at_ms = None;
-        job.state.retry_at_ms = None;
-        job.state.last_run_status = Some(CronJobRunStatus::Error);
-        job.state.last_error =
-            Some("Application restarted before the scheduled job finished".to_string());
-        job.state.last_run_finished_at_ms = Some(now_ms);
-        job.state.consecutive_failures = job.state.consecutive_failures.saturating_add(1);
+    if job.state.recover_interrupted_turn_after_restart(
+        now_ms,
+        "Application restarted before the scheduled job finished".to_string(),
+    ) {
         job.updated_at_ms = now_ms;
     }
 
     if !job.enabled {
-        job.state.next_run_at_ms = None;
-        job.state.pending_trigger_at_ms = None;
-        job.state.retry_at_ms = None;
+        job.state.mark_disabled();
     } else if job.state.pending_trigger_at_ms.is_some() {
-        if job.state.retry_at_ms.is_none() {
-            job.state.retry_at_ms = Some(now_ms);
-        }
+        job.state.ensure_pending_retry_at(now_ms);
     } else if job.state.next_run_at_ms.is_none() {
         job.state.next_run_at_ms = compute_initial_next_run_at_ms(job, now_ms)?;
     }
@@ -860,28 +805,8 @@ fn matches_workspace_filter(
     workspace_path_matches && workspace_id_matches && remote_connection_matches
 }
 
-fn pending_is_due(job: &CronJob, now_ms: i64) -> bool {
-    let Some(pending_trigger_at_ms) = job.state.pending_trigger_at_ms else {
-        return false;
-    };
-
-    let retry_at_ms = job.state.retry_at_ms.unwrap_or(pending_trigger_at_ms);
-    retry_at_ms <= now_ms
-}
-
 fn next_wakeup_for_job(job: &CronJob) -> Option<i64> {
-    let schedule_wakeup = job.state.next_run_at_ms;
-    let retry_wakeup = job
-        .state
-        .pending_trigger_at_ms
-        .map(|pending_trigger_at_ms| job.state.retry_at_ms.unwrap_or(pending_trigger_at_ms));
-
-    match (schedule_wakeup, retry_wakeup) {
-        (Some(left), Some(right)) => Some(left.min(right)),
-        (Some(left), None) => Some(left),
-        (None, Some(right)) => Some(right),
-        (None, None) => None,
-    }
+    job.state.next_wakeup_at_ms()
 }
 
 fn format_scheduled_job_user_input(payload: &str, current_ms: i64) -> (String, Vec<Message>) {

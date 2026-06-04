@@ -16,6 +16,7 @@ pub use context_analyzer::ContextAnalyzer;
 pub use types::*;
 
 use crate::infrastructure::ai::AIClientFactory;
+use crate::product_domain_runtime::CoreProductDomainRuntime;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -34,7 +35,12 @@ impl GitFunctionAgent {
         repo_path: &Path,
         options: CommitMessageOptions,
     ) -> AgentResult<CommitMessage> {
-        CommitGenerator::generate_commit_message(repo_path, options, self.factory.clone()).await
+        CoreProductDomainRuntime::generate_function_agent_commit_message(
+            self.factory.clone(),
+            repo_path,
+            options,
+        )
+        .await
     }
 
     /// Quickly generate commit message (use default options)

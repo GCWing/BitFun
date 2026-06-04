@@ -2781,6 +2781,150 @@ const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/agent-runtime/src/scheduled_job.rs',
+    reason:
+      'agent-runtime must own scheduled-job portable lifecycle state and transition decisions without concrete cron storage, schedule parsing, or session dispatch',
+    patterns: [
+      {
+        regex: /\bpub struct ScheduledJobRuntimeState\b/,
+        message: 'missing scheduled-job runtime state owner',
+      },
+      {
+        regex: /\bpub enum ScheduledJobRunStatus\b/,
+        message: 'missing scheduled-job run status owner',
+      },
+      {
+        regex: /\bpub fn mark_manual_trigger\b/,
+        message: 'missing manual trigger transition',
+      },
+      {
+        regex: /\bpub fn apply_due_scheduled_trigger\b/,
+        message: 'missing due scheduled trigger transition',
+      },
+      {
+        regex: /\bpub fn mark_enqueued\b/,
+        message: 'missing enqueue success transition',
+      },
+      {
+        regex: /\bpub fn mark_enqueue_failed\b/,
+        message: 'missing enqueue failure transition',
+      },
+      {
+        regex: /\bpub fn recover_interrupted_turn_after_restart\b/,
+        message: 'missing restart recovery transition',
+      },
+      {
+        regex: /\bpub fn next_wakeup_at_ms\b/,
+        message: 'missing scheduled-job wakeup decision',
+      },
+      {
+        regex: /\bpub fn clear_pending_trigger\b/,
+        message: 'missing scheduled-job pending trigger clear transition',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/agent-runtime/tests/scheduled_job_contracts.rs',
+    reason:
+      'agent-runtime scheduled-job owner must keep behavior-equivalence contracts for wire shape, retry, coalescing, one-shot, missing-session, and restart recovery semantics',
+    patterns: [
+      {
+        regex: /\bmanual_trigger_coalesces_existing_pending_run\b/,
+        message: 'missing manual trigger coalescing regression',
+      },
+      {
+        regex: /\bdue_scheduled_trigger_coalesces_when_active_or_pending\b/,
+        message: 'missing scheduled trigger coalescing regression',
+      },
+      {
+        regex: /\bpending_wakeup_prefers_retry_time_when_present\b/,
+        message: 'missing retry wakeup regression',
+      },
+      {
+        regex: /\bdisabled_and_config_clear_remove_pending_retry_without_touching_history\b/,
+        message: 'missing disabled/config clear regression',
+      },
+      {
+        regex: /\benqueue_success_sets_active_turn_and_disables_one_shot_next_run\b/,
+        message: 'missing enqueue success one-shot regression',
+      },
+      {
+        regex: /\benqueue_failure_preserves_retry_and_missing_session_disable_semantics\b/,
+        message: 'missing enqueue failure regression',
+      },
+      {
+        regex: /\brestart_recovery_marks_active_turn_error\b/,
+        message: 'missing restart recovery regression',
+      },
+      {
+        regex: /\bserde_shape_preserves_legacy_cron_state_wire_contract\b/,
+        message: 'missing legacy cron state wire-shape regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/cron/types.rs',
+    reason:
+      'core cron types must preserve old import and wire paths while bitfun-agent-runtime owns scheduled-job runtime state',
+    patterns: [
+      {
+        regex: /ScheduledJobRuntimeState as CronJobState/,
+        message: 'missing scheduled-job state compatibility alias',
+      },
+      {
+        regex: /ScheduledJobRunStatus as CronJobRunStatus/,
+        message: 'missing scheduled-job status compatibility alias',
+      },
+      {
+        regex: /DEFAULT_SCHEDULED_JOB_RETRY_DELAY_MS/,
+        message: 'missing scheduled-job retry delay compatibility constant',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/cron/service.rs',
+    reason:
+      'core cron service may own concrete storage, schedule parsing, and scheduler dispatch, but scheduled-job lifecycle state transitions must delegate to agent-runtime',
+    patterns: [
+      {
+        regex: /\bmark_manual_trigger\b/,
+        message: 'missing manual trigger owner delegation',
+      },
+      {
+        regex: /\bapply_due_scheduled_trigger\b/,
+        message: 'missing scheduled trigger owner delegation',
+      },
+      {
+        regex: /\bmark_enqueued\b/,
+        message: 'missing enqueue success owner delegation',
+      },
+      {
+        regex: /\bmark_enqueue_failed\b/,
+        message: 'missing enqueue failure owner delegation',
+      },
+      {
+        regex: /\brecover_interrupted_turn_after_restart\b/,
+        message: 'missing restart recovery owner delegation',
+      },
+      {
+        regex: /\bpending_is_due\b/,
+        message: 'missing pending due owner delegation',
+      },
+      {
+        regex: /\bnext_wakeup_at_ms\b/,
+        message: 'missing wakeup owner delegation',
+      },
+      {
+        regex: /\bclear_pending_trigger\b/,
+        message: 'missing pending trigger clear owner delegation',
+      },
+      {
+        regex: /\bScheduledJobEnqueueFailureAction\b/,
+        message: 'missing enqueue failure action owner delegation',
+      },
+    ],
+  },
+  {
     path: 'src/crates/core/src/agentic/agents/prompt_builder/user_context.rs',
     reason:
       'core prompt_builder user_context path must stay a compatibility facade over agent-runtime',
@@ -6450,9 +6594,9 @@ const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/core/src/function_agents/git-func-agent/ai_service.rs',
+    path: 'src/crates/core/src/function_agents/runtime_services.rs',
     reason:
-      'core must continue owning Git function-agent AI client calls while product-domains owns prompt and response policy',
+      'core function-agent runtime services must continue owning Git/AI concrete calls while product-domains owns prompt, parser, and facade policy',
     patterns: [
       {
         regex: /\bprepare_commit_ai_prompt\b/,
@@ -6463,25 +6607,6 @@ const requiredContentRules = [
         message: 'missing product-domain Git function-agent response policy use',
       },
       {
-        regex: /\bai_client\s*\.\s*send_message\b/,
-        message: 'missing core-owned function-agent AI call',
-      },
-      {
-        regex: /\bAgentError::internal_error\b/,
-        message: 'missing core-owned function-agent AI transport error mapping',
-      },
-      {
-        regex: /\bparse_commit_response_preserves_product_domain_response_policy\b/,
-        message: 'missing Git function-agent AI response boundary regression test',
-      },
-    ],
-  },
-  {
-    path: 'src/crates/core/src/function_agents/startchat-func-agent/ai_service.rs',
-    reason:
-      'core must continue owning Startchat AI client calls while product-domains owns prompt and response policy',
-    patterns: [
-      {
         regex: /\bbuild_work_state_analysis_prompt\b/,
         message: 'missing product-domain Startchat prompt policy use',
       },
@@ -6491,11 +6616,23 @@ const requiredContentRules = [
       },
       {
         regex: /\bai_client\s*\.\s*send_message\b/,
-        message: 'missing core-owned Startchat AI call',
+        message: 'missing core-owned function-agent AI call',
       },
       {
         regex: /\bAgentError::internal_error\b/,
-        message: 'missing core-owned Startchat AI transport error mapping',
+        message: 'missing core-owned function-agent AI transport error mapping',
+      },
+      {
+        regex: /\bCoreFunctionAgentGitService\b/,
+        message: 'missing core-owned function-agent Git concrete service',
+      },
+      {
+        regex: /\bgit_stdout_lenient\b/,
+        message: 'missing Startchat lenient Git command fallback',
+      },
+      {
+        regex: /\bparse_commit_response_preserves_product_domain_response_policy\b/,
+        message: 'missing Git function-agent AI response boundary regression test',
       },
       {
         regex: /\bparse_complete_analysis_preserves_product_domain_response_policy\b/,
@@ -6504,25 +6641,39 @@ const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/core/src/function_agents/git-func-agent/ai_service.rs',
+    reason:
+      'legacy Git function-agent AI service path must remain a compatibility re-export only',
+    patterns: [
+      {
+        regex: /\bCoreCommitAiAnalysisService as AIAnalysisService\b/,
+        message: 'missing Git function-agent AI service compatibility re-export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/function_agents/startchat-func-agent/ai_service.rs',
+    reason:
+      'legacy Startchat AI service path must remain a compatibility re-export only',
+    patterns: [
+      {
+        regex: /\bCoreWorkStateAiAnalysisService as AIWorkStateService\b/,
+        message: 'missing Startchat AI service compatibility re-export',
+      },
+    ],
+  },
+  {
     path: 'src/crates/core/src/function_agents/git-func-agent/commit_generator.rs',
     reason:
-      'Git function-agent commit generation must route through the core product-domain runtime owner while core keeps concrete adapters',
+      'legacy Git commit generator must delegate to the core product-domain runtime owner',
     patterns: [
       {
         regex: /\bCoreProductDomainRuntime\b/,
         message: 'missing core product-domain runtime owner routing',
       },
       {
-        regex: /\bfunction_agent_git_adapter\b/,
-        message: 'missing core-owned Git adapter factory wiring',
-      },
-      {
-        regex: /\bfunction_agent_ai_adapter\b/,
-        message: 'missing core-owned AI adapter factory wiring',
-      },
-      {
-        regex: /\bfunction_agent_runtime_facade\b/,
-        message: 'missing product-domain function-agent runtime facade owner routing',
+        regex: /\bgenerate_function_agent_commit_message\b/,
+        message: 'missing Git commit owner method delegation',
       },
     ],
   },
@@ -6612,23 +6763,15 @@ const requiredContentRules = [
   {
     path: 'src/crates/core/src/function_agents/startchat-func-agent/work_state_analyzer.rs',
     reason:
-      'Startchat work-state analysis must route through the core product-domain runtime owner while core keeps concrete adapters',
+      'legacy Startchat work-state analyzer must delegate to the core product-domain runtime owner',
     patterns: [
       {
         regex: /\bCoreProductDomainRuntime\b/,
         message: 'missing core product-domain runtime owner routing',
       },
       {
-        regex: /\bfunction_agent_git_adapter\b/,
-        message: 'missing core-owned Git adapter factory wiring',
-      },
-      {
-        regex: /\bfunction_agent_ai_adapter\b/,
-        message: 'missing core-owned AI adapter factory wiring',
-      },
-      {
-        regex: /\bfunction_agent_runtime_facade\b/,
-        message: 'missing product-domain function-agent runtime facade owner routing',
+        regex: /\banalyze_function_agent_work_state\b/,
+        message: 'missing Startchat work-state owner method delegation',
       },
     ],
   },
@@ -6797,7 +6940,7 @@ const requiredContentRules = [
   {
     path: 'src/crates/core/src/function_agents/port_adapters.rs',
     reason:
-      'core must continue owning function-agent Git/AI runtime adapters until Git/AI service migration is reviewed',
+      'core function-agent port adapters must stay thin adapters over concrete runtime services',
     patterns: [
       {
         regex: /\bpub struct CoreFunctionAgentGitAdapter\b/,
@@ -6814,6 +6957,18 @@ const requiredContentRules = [
       {
         regex: /\bimpl FunctionAgentAiPort for CoreFunctionAgentAiAdapter\b/,
         message: 'missing function-agent AI port adapter owner',
+      },
+      {
+        regex: /\bCoreFunctionAgentGitService::git_commit_snapshot\b/,
+        message: 'missing Git adapter delegation to concrete runtime service',
+      },
+      {
+        regex: /\bCoreCommitAiAnalysisService::new_with_agent_config\b/,
+        message: 'missing commit AI adapter delegation to concrete runtime service',
+      },
+      {
+        regex: /\bCoreWorkStateAiAnalysisService::new_with_agent_config\b/,
+        message: 'missing Startchat AI adapter delegation to concrete runtime service',
       },
       {
         regex: /\bgit_adapter_commit_snapshot_keeps_staged_diff_and_unstaged_count_separate\b/,
@@ -6849,6 +7004,14 @@ const requiredContentRules = [
       {
         regex: /\bfn function_agent_runtime_facade\b/,
         message: 'missing function-agent runtime facade owner factory',
+      },
+      {
+        regex: /\bfn generate_function_agent_commit_message\b/,
+        message: 'missing Git function-agent concrete runtime owner entrypoint',
+      },
+      {
+        regex: /\bfn analyze_function_agent_work_state\b/,
+        message: 'missing Startchat concrete runtime owner entrypoint',
       },
       {
         regex: /\bCoreFunctionAgentGitAdapter\b/,
@@ -8024,6 +8187,57 @@ function runManifestParserSelfTest() {
       ],
     },
     {
+      path: 'src/crates/agent-runtime/src/scheduled_job.rs',
+      contracts: [
+        'ScheduledJobRuntimeState',
+        'ScheduledJobRunStatus',
+        'DEFAULT_SCHEDULED_JOB_RETRY_DELAY_MS',
+        'mark_manual_trigger',
+        'apply_due_scheduled_trigger',
+        'mark_enqueued',
+        'mark_enqueue_failed',
+        'recover_interrupted_turn_after_restart',
+        'pending_is_due',
+        'next_wakeup_at_ms',
+        'clear_pending_trigger',
+      ],
+    },
+    {
+      path: 'src/crates/agent-runtime/tests/scheduled_job_contracts.rs',
+      contracts: [
+        'manual_trigger_coalesces_existing_pending_run',
+        'due_scheduled_trigger_coalesces_when_active_or_pending',
+        'pending_wakeup_prefers_retry_time_when_present',
+        'disabled_and_config_clear_remove_pending_retry_without_touching_history',
+        'enqueue_success_sets_active_turn_and_disables_one_shot_next_run',
+        'enqueue_failure_preserves_retry_and_missing_session_disable_semantics',
+        'restart_recovery_marks_active_turn_error',
+        'serde_shape_preserves_legacy_cron_state_wire_contract',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/service/cron/types.rs',
+      contracts: [
+        'ScheduledJobRuntimeState as CronJobState',
+        'ScheduledJobRunStatus as CronJobRunStatus',
+        'DEFAULT_SCHEDULED_JOB_RETRY_DELAY_MS',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/service/cron/service.rs',
+      contracts: [
+        'mark_manual_trigger',
+        'apply_due_scheduled_trigger',
+        'mark_enqueued',
+        'mark_enqueue_failed',
+        'recover_interrupted_turn_after_restart',
+        'pending_is_due',
+        'next_wakeup_at_ms',
+        'clear_pending_trigger',
+        'ScheduledJobEnqueueFailureAction',
+      ],
+    },
+    {
       path: 'src/crates/core/src/agentic/execution/types.rs',
       contracts: ['bitfun_agent_runtime::events::FinishReason'],
     },
@@ -9074,42 +9288,35 @@ function runManifestParserSelfTest() {
       ],
     },
     {
-      path: 'src/crates/core/src/function_agents/git-func-agent/ai_service.rs',
+      path: 'src/crates/core/src/function_agents/runtime_services.rs',
       contracts: [
         'prepare_commit_ai_prompt',
         'parse_commit_ai_response',
-        'send_message',
-        'AgentError::internal_error',
-        'parse_commit_response_preserves_product_domain_response_policy',
-      ],
-    },
-    {
-      path: 'src/crates/core/src/function_agents/startchat-func-agent/ai_service.rs',
-      contracts: [
         'build_work_state_analysis_prompt',
         'parse_work_state_analysis_response',
         'send_message',
         'AgentError::internal_error',
+        'CoreFunctionAgentGitService',
+        'git_stdout_lenient',
+        'parse_commit_response_preserves_product_domain_response_policy',
         'parse_complete_analysis_preserves_product_domain_response_policy',
       ],
     },
     {
+      path: 'src/crates/core/src/function_agents/git-func-agent/ai_service.rs',
+      contracts: ['CoreCommitAiAnalysisService as AIAnalysisService'],
+    },
+    {
+      path: 'src/crates/core/src/function_agents/startchat-func-agent/ai_service.rs',
+      contracts: ['CoreWorkStateAiAnalysisService as AIWorkStateService'],
+    },
+    {
       path: 'src/crates/core/src/function_agents/git-func-agent/commit_generator.rs',
-      contracts: [
-        'CoreProductDomainRuntime',
-        'function_agent_git_adapter',
-        'function_agent_ai_adapter',
-        'function_agent_runtime_facade',
-      ],
+      contracts: ['CoreProductDomainRuntime', 'generate_function_agent_commit_message'],
     },
     {
       path: 'src/crates/core/src/function_agents/startchat-func-agent/work_state_analyzer.rs',
-      contracts: [
-        'CoreProductDomainRuntime',
-        'function_agent_git_adapter',
-        'function_agent_ai_adapter',
-        'function_agent_runtime_facade',
-      ],
+      contracts: ['CoreProductDomainRuntime', 'analyze_function_agent_work_state'],
     },
     {
       path: 'src/crates/product-domains/src/function_agents/ports.rs',

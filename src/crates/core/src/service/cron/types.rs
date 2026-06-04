@@ -1,10 +1,14 @@
 //! Scheduled job data types.
 
+pub use bitfun_agent_runtime::scheduled_job::{
+    ScheduledJobRunStatus as CronJobRunStatus, ScheduledJobRuntimeState as CronJobState,
+    DEFAULT_SCHEDULED_JOB_RETRY_DELAY_MS,
+};
 use serde::{Deserialize, Serialize};
 
 pub const CRON_JOBS_VERSION: u32 = 2;
 
-pub const DEFAULT_RETRY_DELAY_MS: i64 = 5_000;
+pub const DEFAULT_RETRY_DELAY_MS: i64 = DEFAULT_SCHEDULED_JOB_RETRY_DELAY_MS;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -164,47 +168,6 @@ pub enum CronSchedule {
 #[serde(rename_all = "camelCase")]
 pub struct CronJobPayload {
     pub text: String,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum CronJobRunStatus {
-    Queued,
-    Running,
-    Ok,
-    Error,
-    Cancelled,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CronJobState {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub next_run_at_ms: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub pending_trigger_at_ms: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub retry_at_ms: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_trigger_at_ms: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_enqueued_at_ms: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_run_started_at_ms: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_run_finished_at_ms: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_duration_ms: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_run_status: Option<CronJobRunStatus>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_error: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub active_turn_id: Option<String>,
-    #[serde(default)]
-    pub consecutive_failures: u32,
-    #[serde(default)]
-    pub coalesced_run_count: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

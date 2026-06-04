@@ -16,7 +16,7 @@ and tested without `bitfun-core`.
   dialog-turn queue state, active-turn facts, cancellation routing and
   suppression state, background running-turn injection construction, steering action
   planning, agent-session reply planning, thread-goal accounting/mutation/continuation decisions,
-  runtime event facts, registry visibility/availability, round-boundary
+  scheduled-job lifecycle state transitions, runtime event facts, registry visibility/availability, round-boundary
   yield/injection state, turn-outcome queue decisions, registry source/profile
   facts, prompt-loop user-context policy, prompt listing reminder ordering,
   prompt-cache policy/identity/store, finish-reason labels, session-state event

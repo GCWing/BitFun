@@ -68,14 +68,13 @@ workspace build 证明没有行为或 feature 影响。
 
 ## 4. 后续迁移队列
 
-PR-A / PR-B / PR-C、scheduler owner decision 扩展和 PR-1 Session Store / Restore Runtime Services Owner 已进入完成归档。后续不再沿用这些编号作为活跃队列；活跃计划只保留仍未完成、且需要端到端等价保护的高风险 owner 迁移。每个 PR 必须迁移真实 owner 逻辑，并同时包含旧路径兼容、focused tests、boundary check 和提交前对抗性审核。只新增抽象、只补 facade 或只增加 guard 不满足准出要求。
+PR-A / PR-B / PR-C、scheduler owner decision 扩展、PR-1 Session Store / Restore Runtime Services Owner、PR-2 Concrete Tool IO Runtime Owner、PR-3 Function-Agent Concrete Runtime Owner 和 PR-4 Scheduled Job Lifecycle State Owner 已进入完成归档。后续不再沿用这些编号作为活跃队列；活跃计划只保留仍未完成、且需要端到端等价保护的高风险 owner 迁移。每个 PR 必须迁移真实 owner 逻辑，并同时包含旧路径兼容、focused tests、boundary check 和提交前对抗性审核。只新增抽象、只补 facade 或只增加 guard 不满足准出要求。
 
 | PR | 主题 | 完整范围 | 不允许混入 | 合入门禁 |
 |---|---|---|---|---|
-| PR-3 | Product-Domain Concrete Runtime Owner | 在端到端保护下评估并迁移 MiniApp worker/host/seed IO 或 function-agent Git/AI concrete service 的可移动部分；必须先拆清 process、permission、`PathManager`、provider acquisition 和 fallback 边界 | 同时迁移 MiniApp worker 与 function-agent Git/AI 全部主体；worker lifecycle、host primitive dispatch、seed marker、Git/no-HEAD fallback 或 AI provider error mapping 变更 | MiniApp import/sync/recompile/rollback/deps regression，function-agent Git/AI fallback regression，product surface checks，`cargo check -p bitfun-core --features product-full` |
-| PR-4 | Agent Runtime Lifecycle / Event / Permission Closure | 仅在 PR-1/PR-2 保护足够后，评估 scheduler lifecycle、event delivery、permission `Tool` handler、post-turn hook、agent definition loading 和 custom subagent file IO 的可迁移边界 | 用 owner contract test 替代端到端行为证明；session lifecycle、event ordering、goal tool wire shape、DeepResearch citation/post-turn behavior 变更 | queue/preempt/cancel/goal verification/event focused tests，DeepResearch citation/post-turn tests，permission tool handler tests，`cargo check --workspace` |
+| PR-5 | Agent Runtime Event / Permission / Post-turn Concrete Closure | 在补齐端到端保护后，评估 event delivery、permission `Tool` handler、post-turn hook、agent definition loading 和 custom subagent file IO 的可迁移边界 | 用 owner contract test 替代端到端行为证明；session lifecycle、event ordering、goal tool wire shape、DeepResearch citation/post-turn behavior 变更 | queue/preempt/cancel/goal verification/event focused tests，DeepResearch citation/post-turn tests，permission tool handler tests，`cargo check --workspace` |
 
-计划优先级：PR-3 先做。PR-1 和 PR-2 已进入完成归档；后续不应继续触碰 session restore 热路径或已迁移的本地 tool IO primitive，除非是修复等价测试发现的问题。
+计划优先级：下一步进入 PR-5。PR-1 到 PR-4 已进入完成归档；后续不应继续触碰 session restore 热路径、已迁移的本地 tool IO primitive、function-agent Git/AI concrete runtime 或 scheduled-job runtime state，除非是修复等价测试发现的问题。
 
 ## 5. 每类 PR 的保护重点
 
@@ -97,6 +96,9 @@ PR-A / PR-B / PR-C、scheduler owner decision 扩展和 PR-1 Session Store / Res
   agent-session reply plan、cancel suppression、finish-reason label、session-state event label 和 turn-outcome event fact 已归入
   `bitfun-agent-runtime`；后续只允许 core 继续作为 metadata store、config/file IO adapter、concrete prompt
   assembly、concrete scheduler lifecycle、scheduler delivery、event delivery 和 `Tool` adapter。
+- scheduled-job runtime state、run status、retry / coalescing / one-shot / missing-session disable / restart recovery
+  transition 已归入 `bitfun-agent-runtime::scheduled_job`；core cron 继续拥有 store、schedule parsing、loop wakeup、session
+  creation、scheduler submit 和 API wire compatibility。
 - 若继续迁移 scheduler lifecycle、event delivery、permission `Tool` handler 或 post-turn hook，必须先补端到端等价保护，
   不能只用 owner contract test 证明。
 - 验证 subagent availability、queue/preempt/cancel suppression、DeepResearch citation / post-turn hook、goal verification events、`get_goal` / `create_goal` / `update_goal` tool response wire shape。
@@ -105,7 +107,7 @@ PR-A / PR-B / PR-C、scheduler owner decision 扩展和 PR-1 Session Store / Res
 
 - MiniApp 已将 builtin bundle identity、版本和 embedded asset 放入 `bitfun-product-domains`；core 继续负责 seed 写盘、marker IO、用户 storage 保留、recompile、PathManager、worker process 和 host dispatch。
 - 后续若继续迁移 MiniApp worker / host，必须先拆清 process runtime、permission policy、host primitive dispatch、draft worker 与 active worker 的等价边界，不能把 PathManager 或 worker process 下沉到 domain crate。
-- function-agent 保留 Git/AI provider acquisition、error mapping、no-HEAD diff fallback、非 Git workspace fallback、`analyzed_at` 时序。
+- function-agent 的 prompt、parser 和 facade policy 已归属 `bitfun-product-domains`；core 通过 `CoreProductDomainRuntime` 和 `function_agents::runtime_services` 保留 concrete Git/AI provider acquisition、error mapping、no-HEAD diff fallback、非 Git workspace fallback、`analyzed_at` 时序和旧 import path 兼容。
 - 验证 MiniApp import/sync/recompile/rollback/deps state、builtin seed marker、customized update metadata、function-agent prompt/response policy。
 
 ### 5.4 Tool Runtime Owner

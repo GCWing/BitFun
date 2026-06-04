@@ -180,19 +180,51 @@
 - 继续迁移 shell、terminal、remote 或 indexed search 时，必须先补 scheduler / terminal lifecycle / remote protocol
   等价保护，不能复用本地 filesystem primitive 的低风险假设。
 
+### 1.10 Function-Agent Concrete Runtime Owner：Git / AI 具体服务边界
+
+- `bitfun-product-domains` 继续拥有 function-agent prompt、parser、response policy、port 和 facade orchestration。
+- `bitfun-core::product_domain_runtime::CoreProductDomainRuntime` 承接 function-agent 的 core runtime owner 入口，
+  public `GitFunctionAgent` / `StartchatFunctionAgent` 直接通过该入口组装 Git / AI adapter 与 product-domain facade。
+- `bitfun-core::function_agents::runtime_services` 承接 concrete Git snapshot、startchat Git/time snapshot、AI provider
+  acquisition、AI transport error mapping、commit AI analysis 和 work-state AI analysis。
+- 旧 `git_func_agent::AIAnalysisService`、`startchat_func_agent::AIWorkStateService`、`CommitGenerator` 和
+  `WorkStateAnalyzer` 只保留兼容 re-export / facade，不再拥有 concrete runtime 主体逻辑。
+- focused regression 覆盖 staged/unstaged diff 边界、no-HEAD fallback、非 Git workspace fallback、startchat snapshot
+  语义、AI parser policy 和 product-domain facade contract。
+
+明确未完成：
+
+- function-agent concrete service 仍保留在 core runtime owner 中，尚未外移为独立 service integration crate。
+- MiniApp worker process、host dispatch、permission execution、PathManager integration、builtin marker IO / seed 写盘仍在 core；
+  后续迁移必须单独证明权限、进程生命周期、recompile 和用户 storage 保留行为等价。
+
+### 1.11 Scheduled Job Lifecycle State Owner：运行时状态机边界
+
+- `bitfun-agent-runtime::scheduled_job` 承接 scheduled-job runtime state、run status、默认 retry delay 和纯状态转移决策。
+- manual trigger、scheduled trigger coalescing、pending retry wakeup、enqueue success、enqueue failure、missing-session auto-disable、turn started / completed / failed / cancelled 和 restart recovery 的状态字段更新由 agent-runtime owner 管理。
+- `bitfun-core::service::cron::types` 保留 `CronJobState` / `CronJobRunStatus` 旧路径兼容 alias，保持 jobs.json state wire shape 不变。
+- `CronService` 继续拥有 concrete store、schedule parsing、loop wakeup、session creation、scheduler submit、API filtering 和 product runtime integration。
+- focused contract 覆盖 retry/coalescing/one-shot/missing-session/restart recovery 和 legacy cron state JSON shape；boundary check 覆盖 owner module、旧路径 alias 和 core service delegation。
+
+明确未完成：
+
+- concrete CronService loop、store、session creation、scheduler submit、event delivery、permission `Tool` handler、post-turn hook、agent definition loading 和 custom subagent file IO 仍未迁移。
+- 继续迁移上述路径必须先补端到端等价保护，不能只依赖 scheduled-job owner contract。
+
 ## 2. 已建立保护
 
 - 新 owner crate 不得依赖回 `bitfun-core`。
 - `product-full` 是完整产品能力保护开关。
 - 构建脚本和 installer 相关脚本不作为 core 拆解的一部分修改。
 - boundary check 覆盖已外移 owner 的旧路径 facade-only / 禁止回流状态。
-- tool manifest、`GetToolSpec`、execution admission gate、MiniApp storage layout adapter、product-domain pure helper、remote workspace search fallback、MCP config / catalog / dynamic manifest、agent-runtime prompt cache、agent registry source/profile facts、product capability pack、harness/tool provider assembly、session restore path/timing facts 和本地 tool IO primitive 等已有 focused baseline。
+- tool manifest、`GetToolSpec`、execution admission gate、MiniApp storage layout adapter、product-domain pure helper、remote workspace search fallback、MCP config / catalog / dynamic manifest、agent-runtime prompt cache、agent registry source/profile facts、product capability pack、harness/tool provider assembly、session restore path/timing facts、本地 tool IO primitive、function-agent Git/AI concrete runtime 和 scheduled-job lifecycle state 等已有 focused baseline。
 
 ## 3. 当前剩余结论
 
 - 低风险准备项已经完成，不再新增零散小 PR。
 - PR-C 已收敛 Harness / Product Capability / Build-Benefit closure；PR-1 已收敛 session restore hot-path
   request / timing / storage path facts 和 Runtime Services port；PR-2 已收敛本地 Write / Edit / Delete / Glob
-  concrete IO primitive。后续不应继续拆零散 helper PR；若继续迁移 MiniApp worker/host、function-agent Git/AI、
-  Bash/terminal/remote shell/indexed search、Agent Runtime concrete scheduler/event/permission/post-turn hook，必须先补端到端等价保护并作为新的完整 owner PR 评估。
+  concrete IO primitive；PR-3 已收敛 function-agent Git/AI concrete runtime owner closure；PR-4 已收敛 scheduled-job lifecycle state owner closure。后续不应继续拆零散 helper PR；
+  若继续迁移 MiniApp worker/host、Bash/terminal/remote shell/indexed search、Agent Runtime concrete
+  scheduler/event/permission/post-turn hook，必须先补端到端等价保护并作为新的完整 owner PR 评估。
 - 缺陷修复、行为变更、冗余清理、三方库升级和构建脚本调整必须独立评估，不能伪装成 core decomposition 剩余里程碑。

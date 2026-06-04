@@ -13,6 +13,7 @@ pub mod git_func_agent;
 pub mod startchat_func_agent;
 
 pub mod port_adapters;
+pub(crate) mod runtime_services;
 
 // Re-export shared types from common module
 pub use common::{AgentError, AgentErrorType, AgentResult, Language};
