@@ -8,6 +8,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { Brain, ChevronDown, Check } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
@@ -147,6 +148,11 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   const acpOptionsRef = useRef<AcpSessionOptions | null>(null);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const portalDropdownRef = useRef<HTMLDivElement>(null);
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({
+    position: 'fixed',
+    visibility: 'hidden',
+  });
   const activeSession = sessionId ? FlowChatStore.getInstance().getState().sessions.get(sessionId) : undefined;
   const acpClientId =
     acpClientIdFromAgentType(activeSession?.config.agentType) ??
@@ -267,17 +273,47 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (dropdownRef.current && !dropdownRef.current.contains(target)
+          && portalDropdownRef.current && !portalDropdownRef.current.contains(target)) {
         setDropdownOpen(false);
       }
     };
-    
+
     if (dropdownOpen) {
       document.addEventListener('mousedown', handleClickOutside);
     }
-    
+
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [dropdownOpen]);
+
+  // Calculate portal dropdown position relative to the trigger container.
+  useEffect(() => {
+    if (!dropdownOpen || !dropdownRef.current) return;
+
+    const updatePosition = () => {
+      if (!dropdownRef.current) return;
+      const rect = dropdownRef.current.getBoundingClientRect();
+      setDropdownStyle({
+        position: 'fixed',
+        visibility: 'visible',
+        bottom: `${window.innerHeight - rect.top + 6}px`,
+        left: `${rect.left}px`,
+        minWidth: '220px',
+        maxWidth: '280px',
+      });
+    };
+
+    updatePosition();
+
+    window.addEventListener('scroll', updatePosition, true);
+    window.addEventListener('resize', updatePosition);
+
+    return () => {
+      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('resize', updatePosition);
     };
   }, [dropdownOpen]);
 
@@ -304,6 +340,21 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   }, [acpAvailableModels, acpClientId, acpOptions?.currentModelId, isAcpSession]);
   
   const getCurrentModelId = useCallback((): string => {
+    // Session-owned model takes priority so that each session remembers
+    // its own model selection independently.
+    const sessionModelName = activeSession?.config.modelName?.trim();
+    if (sessionModelName && sessionModelName !== 'auto') {
+      if (sessionModelName === 'primary' || sessionModelName === 'fast') {
+        const actualModelId = defaultModels[sessionModelName];
+        const model = allModels.find(m => m.id === actualModelId);
+        if (model) return sessionModelName;
+      } else {
+        const model = allModels.find(m => m.id === sessionModelName);
+        if (model) return sessionModelName;
+      }
+    }
+
+    // Fall back to global per-mode configuration.
     const configuredModelId = agentModels[currentMode] || 'auto';
     if (configuredModelId === 'auto') return 'auto';
     if (configuredModelId === 'primary' || configuredModelId === 'fast') {
@@ -313,7 +364,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     }
     const model = allModels.find(m => m.id === configuredModelId);
     return model ? configuredModelId : 'auto';
-  }, [allModels, currentMode, agentModels, defaultModels]);
+  }, [allModels, currentMode, agentModels, defaultModels, activeSession?.config.modelName]);
 
   const currentModel = useMemo((): ModelInfo | null => {
     const modelId = getCurrentModelId();
@@ -380,6 +431,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     if (loading) return;
 
     setLoading(true);
+    setDropdownOpen(false);
+
     try {
       if (isAcpSession && acpClientId && sessionId) {
         const options = await ACPClientAPI.setSessionModel({
@@ -394,7 +447,6 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         syncAcpContextUsageToStore(sessionId, options);
         FlowChatStore.getInstance().updateSessionModelName(sessionId, modelId);
         log.info('ACP session model updated', { sessionId, acpClientId, modelId });
-        setDropdownOpen(false);
         return;
       }
 
@@ -425,8 +477,6 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       log.info('Mode model updated', { mode: currentMode, modelId });
 
       globalEventBus.emit('mode:config:updated');
-
-      setDropdownOpen(false);
     } catch (error) {
       log.error('Failed to switch model', error);
     } finally {
@@ -500,8 +550,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           </button>
         </Tooltip>
 
-        {dropdownOpen && (
-          <div className="bitfun-model-selector__dropdown">
+        {dropdownOpen && createPortal(
+          <div className="bitfun-model-selector__dropdown" ref={portalDropdownRef} style={dropdownStyle}>
             <div className="bitfun-model-selector__dropdown-header">
               <span>ACP model</span>
               <span className="bitfun-model-selector__dropdown-hint">
@@ -532,7 +582,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                 );
               })}
             </div>
-          </div>
+          </div>,
+          document.body
         )}
       </div>
     );
@@ -582,8 +633,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         </button>
       </Tooltip>
 
-      {dropdownOpen && (
-        <div className="bitfun-model-selector__dropdown">
+      {dropdownOpen && createPortal(
+        <div className="bitfun-model-selector__dropdown" ref={portalDropdownRef} style={dropdownStyle}>
           <div className="bitfun-model-selector__dropdown-header">
             <span>{t('modelSelector.modelSelection')}</span>
             <span className="bitfun-model-selector__dropdown-hint">
@@ -683,7 +734,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
               );
             })}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
