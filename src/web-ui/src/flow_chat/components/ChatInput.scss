@@ -1220,11 +1220,12 @@
   
   &__slash-command-item {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: var(--flowchat-control-gap, 0.5rem);
     padding: var(--flowchat-inline-gap, 0.35rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
     cursor: pointer;
     transition: all 0.15s ease;
+    min-width: 0;
     
     &:hover {
       background: var(--element-bg-soft);
@@ -1246,13 +1247,23 @@
     font-weight: 500;
     color: rgba(120, 160, 255, 0.9);
     font-family: var(--font-mono);
-    min-width: 100px;
+    flex: 0 0 112px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   
   &__slash-command-label {
     font-size: var(--flowchat-font-size-2xs);
     color: var(--color-text-secondary);
     flex: 1;
+    min-width: 0;
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
   }
   
   &__slash-command-current {
@@ -1262,6 +1273,7 @@
     background: rgba(100, 140, 255, 0.15);
     color: rgba(140, 180, 255, 0.9);
     font-weight: 500;
+    flex: 0 0 auto;
   }
   
   &__slash-command-empty {

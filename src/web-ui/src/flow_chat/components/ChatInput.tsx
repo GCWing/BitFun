@@ -293,6 +293,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     [effectiveTargetSession],
   );
   const { commands: acpAgentCommands } = useAcpSlashCommands(acpSessionForInput);
+  const isAcpInputSession = Boolean(acpSessionForInput);
   const { entries: acpPlanEntries } = useAcpPlan(acpSessionForInput?.sessionId ?? null);
   const threadGoalController = useThreadGoalController(effectiveTargetSession, {
     isBtwSession,
@@ -849,6 +850,26 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     setChatPopupActive(slashCommandState.isActive || mentionState.isActive);
   }, [slashCommandState.isActive, mentionState.isActive]);
 
+  useEffect(() => {
+    if (!slashCommandState.isActive) {
+      return;
+    }
+
+    const frameId = requestAnimationFrame(() => {
+      const selectedItem = containerRef.current?.querySelector(
+        '.bitfun-chat-input__slash-command-list .bitfun-chat-input__slash-command-item--selected'
+      ) as HTMLElement | null;
+      selectedItem?.scrollIntoView({ block: 'nearest' });
+    });
+
+    return () => cancelAnimationFrame(frameId);
+  }, [
+    slashCommandState.isActive,
+    slashCommandState.kind,
+    slashCommandState.query,
+    slashCommandState.selectedIndex,
+  ]);
+
   const clearPendingLargePastes = useCallback(() => {
     pendingLargePastesRef.current = {};
   }, []);
@@ -1391,6 +1412,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [effectiveTargetSessionId, workspacePath, derivedState?.isProcessing]);
 
   const getFilteredActions = useCallback(() => {
+    if (isAcpInputSession) {
+      return [];
+    }
+
     const items: SlashActionItem[] = [
       ...(isBtwSession
         ? []
@@ -1435,7 +1460,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           ]
         : []),
     ];
-
     const q = (slashCommandState.query || '').trim().toLowerCase();
     if (!q) return items;
 
@@ -1443,9 +1467,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       const cmd = i.command.slice(1).toLowerCase();
       return cmd.includes(q) || i.label.toLowerCase().includes(q);
     });
-  }, [derivedState?.isProcessing, isBtwSession, slashCommandState.query, t]);
+  }, [derivedState?.isProcessing, isAcpInputSession, isBtwSession, slashCommandState.query, t]);
 
   const getFilteredMcpPromptCommands = useCallback((): SlashMcpPromptItem[] => {
+    if (isAcpInputSession) {
+      return [];
+    }
+
     const q = (slashCommandState.query || '').trim().toLowerCase();
     if (!q) {
       return mcpPromptCommands;
@@ -1459,7 +1487,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         item.label.toLowerCase().includes(q)
       );
     });
-  }, [mcpPromptCommands, slashCommandState.query]);
+  }, [isAcpInputSession, mcpPromptCommands, slashCommandState.query]);
 
   const getFilteredAcpCommands = useCallback((): SlashAcpCommandItem[] => {
     return filterSlashCommands(acpAgentCommands, slashCommandState.query).map(command => ({
@@ -1487,9 +1515,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [mcpPromptCommands]);
 
   const getSlashPickerItems = useCallback((): SlashPickerItem[] => {
+    const acpCommands = getFilteredAcpCommands();
+    if (isAcpInputSession) {
+      return acpCommands;
+    }
+
     const actions = getFilteredActions();
     const mcpPrompts = getFilteredMcpPromptCommands();
-    const acpCommands = getFilteredAcpCommands();
     let modeList = incrementalCodeModes;
     if (canSwitchModes && slashCommandState.query) {
       const q = slashCommandState.query;
@@ -1505,7 +1537,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       name: mode.name,
     }));
     return [...acpCommands, ...actions, ...mcpPrompts, ...modes];
-  }, [canSwitchModes, getFilteredActions, getFilteredAcpCommands, getFilteredMcpPromptCommands, incrementalCodeModes, slashCommandState.query]);
+  }, [canSwitchModes, getFilteredActions, getFilteredAcpCommands, getFilteredMcpPromptCommands, incrementalCodeModes, isAcpInputSession, slashCommandState.query]);
   
   const handleInputChange = useCallback((text: string, activeContexts: import('../../shared/types/context').ContextItem[]) => {
     if (!inputState.isActive && text.length > 0) {
@@ -1527,12 +1559,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     dispatchInput({ type: 'SET_VALUE', payload: text });
     inputValueRef.current = text;
 
+    const localSlashCommandsEnabled = !isAcpInputSession;
     const trimmedLower = text.trim().toLowerCase();
-    const isBtwCommand = trimmedLower.startsWith('/btw');
-    const isCompactCommand = trimmedLower.startsWith('/compact');
-    const isGoalCommand = isGoalSlashCommand(text);
-    const isUsageCommand = trimmedLower.startsWith('/usage');
-    const isDeepReviewCommand = isDeepReviewSlashCommand(text);
+    const isBtwCommand = localSlashCommandsEnabled && trimmedLower.startsWith('/btw');
+    const isCompactCommand = localSlashCommandsEnabled && trimmedLower.startsWith('/compact');
+    const isGoalCommand = localSlashCommandsEnabled && isGoalSlashCommand(text);
+    const isUsageCommand = localSlashCommandsEnabled && trimmedLower.startsWith('/usage');
+    const isDeepReviewCommand = localSlashCommandsEnabled && isDeepReviewSlashCommand(text);
     const isProcessing = !!derivedState?.isProcessing;
 
     // Don't queue /btw or /goal while the main session is processing; they have dedicated flows.
@@ -1544,10 +1577,26 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       const afterSlash = text.slice(1);
       const hasWhitespace = /\s/.test(afterSlash);
       const query = afterSlash.trimStart().split(/\s+/, 1)[0]?.toLowerCase?.() ?? '';
-      const matchedMcpPrompt = resolveTypedMcpPromptCommand(text);
+      const matchedMcpPrompt = localSlashCommandsEnabled
+        ? resolveTypedMcpPromptCommand(text)
+        : null;
+
+      if (isAcpInputSession && hasWhitespace) {
+        if (slashCommandState.isActive) {
+          setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+        }
+        return;
+      }
 
       // While the main session is running, expose a single quick action (/btw) via the same picker UX.
       if (isProcessing) {
+        if (!localSlashCommandsEnabled) {
+          if (slashCommandState.isActive) {
+            setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
+          }
+          return;
+        }
+
         // Only show the picker for "/..." patterns that are plausibly a command (/ or /b... /d...).
         // Once the user types a space (starts composing the real question), stop showing the picker
         // so Enter can submit "/btw ..." or "/DeepReview ..." instead of selecting from the picker.
@@ -1584,7 +1633,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         selectedIndex: 0,
       });
     }
-  }, [contexts, derivedState, inputState.isActive, prunePendingLargePastes, removeContext, resolveTypedMcpPromptCommand, setQueuedInput, slashCommandState.isActive, slashCommandState.kind]);
+  }, [contexts, derivedState, inputState.isActive, isAcpInputSession, prunePendingLargePastes, removeContext, resolveTypedMcpPromptCommand, setQueuedInput, slashCommandState.isActive, slashCommandState.kind]);
 
   const submitBtwFromInput = useCallback(async () => {
     if (!derivedState) return;
@@ -2123,65 +2172,66 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const originalPendingLargePastes = { ...pendingLargePastesRef.current };
     const message = expandComposerSpecialTokens(originalMessage);
     const messageCharCount = getCharacterCount(message);
+    const localSlashCommandsEnabled = !isAcpInputSession;
 
-    if (message.toLowerCase().startsWith('/btw')) {
+    if (localSlashCommandsEnabled && message.toLowerCase().startsWith('/btw')) {
       // When idle, /btw can be sent via the normal send button.
       await submitBtwFromInput();
       return;
     }
 
-    if (isGoalSlashCommand(message)) {
+    if (localSlashCommandsEnabled && isGoalSlashCommand(message)) {
       await submitGoalFromInput();
       return;
     }
 
-    if (/^\/compact\s*$/i.test(message)) {
+    if (localSlashCommandsEnabled && /^\/compact\s*$/i.test(message)) {
       await submitCompactFromInput();
       return;
     }
 
-    if (/^\/usage\s*$/i.test(message)) {
+    if (localSlashCommandsEnabled && /^\/usage\s*$/i.test(message)) {
       await submitUsageFromInput();
       return;
     }
 
-    if (/^\/init\s*$/i.test(message)) {
+    if (localSlashCommandsEnabled && /^\/init\s*$/i.test(message)) {
       await submitInitFromInput();
       return;
     }
 
-    if (isDeepReviewSlashCommand(message)) {
+    if (localSlashCommandsEnabled && isDeepReviewSlashCommand(message)) {
       await submitDeepreviewFromInput();
       return;
     }
 
-    if (resolveTypedMcpPromptCommand(message)) {
+    if (localSlashCommandsEnabled && resolveTypedMcpPromptCommand(message)) {
       await submitMcpPromptFromInput();
       return;
     }
 
-    if (message.toLowerCase().startsWith('/compact')) {
+    if (localSlashCommandsEnabled && message.toLowerCase().startsWith('/compact')) {
       notificationService.warning(
         t('chatInput.compactUsage')
       );
       return;
     }
 
-    if (message.toLowerCase().startsWith('/usage')) {
+    if (localSlashCommandsEnabled && message.toLowerCase().startsWith('/usage')) {
       notificationService.warning(
         t('chatInput.usageCommandUsage')
       );
       return;
     }
 
-    if (message.toLowerCase().startsWith('/init')) {
+    if (localSlashCommandsEnabled && message.toLowerCase().startsWith('/init')) {
       notificationService.warning(
         t('chatInput.initUsage')
       );
       return;
     }
 
-    if (message.toLowerCase().startsWith('/goal') && !isGoalSlashCommand(message)) {
+    if (localSlashCommandsEnabled && message.toLowerCase().startsWith('/goal') && !isGoalSlashCommand(message)) {
       notificationService.warning(
         t('chatInput.goalUsage')
       );
@@ -2245,6 +2295,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     effectiveTargetSessionId,
     clearPendingLargePastes,
     expandComposerSpecialTokens,
+    isAcpInputSession,
     setQueuedInput,
     submitBtwFromInput,
     submitGoalFromInput,
@@ -3103,36 +3154,42 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                             {t('chatInput.loadingMcpPrompts')}
                           </div>
                         ) : items.length > 0 ? (
-                          items.map((item, index) => (
-                            <div
-                              key={`${item.kind}-${item.id}`}
-                              className={`bitfun-chat-input__slash-command-item ${index === slashCommandState.selectedIndex ? 'bitfun-chat-input__slash-command-item--selected' : ''} ${item.kind === 'mode' && item.id === modeState.current ? 'bitfun-chat-input__slash-command-item--active' : ''}`}
-                              onClick={() => {
-                                if (item.kind === 'mode') {
-                                  selectSlashCommandMode(item.id);
-                                } else if (item.kind === 'mcpPrompt') {
-                                  selectSlashPromptCommand(item);
-                                } else if (item.kind === 'acpCommand') {
-                                  selectSlashAcpCommand(item);
-                                } else {
-                                  selectSlashCommandAction(item.id);
-                                }
-                              }}
-                              onMouseEnter={() => setSlashCommandState(prev => ({ ...prev, selectedIndex: index }))}
-                            >
-                              <span className="bitfun-chat-input__slash-command-name">
-                                {item.kind === 'mode' ? `/${item.id}` : item.command}
-                              </span>
-                              <span className="bitfun-chat-input__slash-command-label">
-                                {item.kind === 'mode'
-                                  ? item.name
-                                  : item.kind === 'mcpPrompt'
-                                    ? `${item.serverName} · ${item.label}`
-                                    : item.label}
-                              </span>
-                              {item.kind === 'mode' && item.id === modeState.current && <span className="bitfun-chat-input__slash-command-current">{t('chatInput.current')}</span>}
-                            </div>
-                          ))
+                          items.map((item, index) => {
+                            const commandText = item.kind === 'mode' ? `/${item.id}` : item.command;
+                            const labelText = item.kind === 'mode'
+                              ? item.name
+                              : item.kind === 'mcpPrompt'
+                                ? `${item.serverName} · ${item.label}`
+                                : item.label;
+
+                            return (
+                              <div
+                                key={`${item.kind}-${item.id}`}
+                                className={`bitfun-chat-input__slash-command-item ${index === slashCommandState.selectedIndex ? 'bitfun-chat-input__slash-command-item--selected' : ''} ${item.kind === 'mode' && item.id === modeState.current ? 'bitfun-chat-input__slash-command-item--active' : ''}`}
+                                title={`${commandText}\n${labelText}`}
+                                onClick={() => {
+                                  if (item.kind === 'mode') {
+                                    selectSlashCommandMode(item.id);
+                                  } else if (item.kind === 'mcpPrompt') {
+                                    selectSlashPromptCommand(item);
+                                  } else if (item.kind === 'acpCommand') {
+                                    selectSlashAcpCommand(item);
+                                  } else {
+                                    selectSlashCommandAction(item.id);
+                                  }
+                                }}
+                                onMouseEnter={() => setSlashCommandState(prev => ({ ...prev, selectedIndex: index }))}
+                              >
+                                <span className="bitfun-chat-input__slash-command-name">
+                                  {commandText}
+                                </span>
+                                <span className="bitfun-chat-input__slash-command-label">
+                                  {labelText}
+                                </span>
+                                {item.kind === 'mode' && item.id === modeState.current && <span className="bitfun-chat-input__slash-command-current">{t('chatInput.current')}</span>}
+                              </div>
+                            );
+                          })
                         ) : (
                           <div className="bitfun-chat-input__slash-command-empty">
                             {t('chatInput.noMatchingCommand')}

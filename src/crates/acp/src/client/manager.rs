@@ -65,6 +65,8 @@ const PERMISSION_TIMEOUT: Duration = Duration::from_secs(600);
 const SESSION_CLOSE_TIMEOUT: Duration = Duration::from_secs(5);
 const LOAD_REPLAY_DRAIN_QUIET_WINDOW: Duration = Duration::from_millis(250);
 const LOAD_REPLAY_DRAIN_MAX_DURATION: Duration = Duration::from_secs(2);
+const SESSION_METADATA_DRAIN_QUIET_WINDOW: Duration = Duration::from_millis(250);
+const SESSION_METADATA_DRAIN_MAX_DURATION: Duration = Duration::from_secs(2);
 const TURN_COMPLETION_DRAIN_QUIET_WINDOW: Duration = Duration::from_millis(250);
 const TURN_COMPLETION_DRAIN_MAX_DURATION: Duration = Duration::from_secs(2);
 
@@ -510,10 +512,13 @@ impl AcpClientService {
         workspace_path: Option<&str>,
         remote_connection_id: Option<&str>,
     ) -> BitFunResult<()> {
-        if let Some(existing) = self.clients.get(connection_id) {
+        if let Some(existing) = self.clients.get(connection_id).map(|entry| entry.clone()) {
             let status = *existing.status.read().await;
-            if matches!(status, AcpClientStatus::Running | AcpClientStatus::Starting) {
+            if matches!(status, AcpClientStatus::Running) {
                 return Ok(());
+            }
+            if matches!(status, AcpClientStatus::Starting) {
+                return wait_for_client_connection(existing, connection_id).await;
             }
         }
 
@@ -865,6 +870,7 @@ impl AcpClientService {
             &mut session,
         )
         .await?;
+        drain_pending_session_metadata_updates(&mut session).await?;
         Ok(session_options_from_state(
             session.models.as_ref(),
             &session.config_options,
@@ -899,6 +905,7 @@ impl AcpClientService {
             &mut session,
         )
         .await?;
+        drain_pending_session_metadata_updates(&mut session).await?;
         Ok(session.available_commands.clone())
     }
 
@@ -1811,6 +1818,32 @@ impl AcpClientConnection {
     }
 }
 
+async fn wait_for_client_connection(
+    client: Arc<AcpClientConnection>,
+    connection_id: &str,
+) -> BitFunResult<()> {
+    let started_at = Instant::now();
+    loop {
+        if client.connection.read().await.is_some() {
+            return Ok(());
+        }
+
+        let status = *client.status.read().await;
+        if matches!(status, AcpClientStatus::Failed | AcpClientStatus::Stopped) {
+            return Err(BitFunError::service(format!(
+                "ACP client '{}' is not running",
+                connection_id
+            )));
+        }
+
+        if started_at.elapsed() >= CLIENT_STARTUP_TIMEOUT {
+            return Err(startup_timeout_error(&client.client_id, "initialize"));
+        }
+
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+}
+
 fn parse_config_value(value: serde_json::Value) -> BitFunResult<AcpClientConfigFile> {
     if value.get("acpClients").is_some() {
         serde_json::from_value(value)
@@ -2177,6 +2210,50 @@ fn append_agent_text(output: &mut String, events: Vec<AcpClientStreamEvent>) {
             output.push_str(&text);
         }
     }
+}
+
+async fn drain_pending_session_metadata_updates(
+    session: &mut AcpRemoteSession,
+) -> BitFunResult<()> {
+    let started_at = Instant::now();
+    let mut drained_count = 0usize;
+    let mut tool_call_tracker = AcpToolCallTracker::new();
+
+    while started_at.elapsed() < SESSION_METADATA_DRAIN_MAX_DURATION {
+        let update = {
+            let Some(active) = session.active.as_mut() else {
+                return Ok(());
+            };
+            tokio::time::timeout(SESSION_METADATA_DRAIN_QUIET_WINDOW, active.read_update()).await
+        };
+
+        match update {
+            Ok(Ok(SessionMessage::SessionMessage(dispatch))) => {
+                let events =
+                    acp_dispatch_to_stream_events_with_tracker(dispatch, &mut tool_call_tracker)
+                        .await?;
+                update_session_from_events(session, &events);
+                drained_count += 1;
+            }
+            Ok(Ok(SessionMessage::StopReason(_))) => {
+                drained_count += 1;
+            }
+            Ok(Ok(_)) => {
+                drained_count += 1;
+            }
+            Ok(Err(error)) => return Err(protocol_error(error)),
+            Err(_) => break,
+        }
+    }
+
+    if drained_count > 0 {
+        debug!(
+            "Drained ACP session metadata updates: count={}",
+            drained_count
+        );
+    }
+
+    Ok(())
 }
 
 async fn discard_pending_session_updates_if_needed(session: &mut AcpRemoteSession) {
