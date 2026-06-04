@@ -3130,8 +3130,8 @@ export const requiredContentRules = [
         message: 'missing product registry assembly adapter delegation',
       },
       {
-        regex: /\bdefault_product_capability_assembly\b/,
-        message: 'missing product capability assembly provider group plan delegation',
+        regex: /\bproduct_assembly_plan_for_profile\b/,
+        message: 'missing product assembly plan provider group plan delegation',
       },
       {
         regex: /\bproduct_tool_runtime_owner_preserves_registry_contract\b/,

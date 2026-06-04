@@ -1,8 +1,10 @@
 use bitfun_harness::{HarnessCapability, HarnessWorkflow};
 use bitfun_product_capabilities::{
-    default_product_capability_assembly, default_product_capability_registry,
-    default_product_harness_registry, ProductCapabilityBuildError, ProductCapabilityId,
-    ProductCapabilityPack, ProductCapabilityRegistry, ProductServiceCapabilityRequirement,
+    default_product_assembly_plan, default_product_capability_assembly,
+    default_product_capability_registry, default_product_harness_registry,
+    product_assembly_plan_for_profile, DeliveryProfile, ProductCapabilityBuildError,
+    ProductCapabilityId, ProductCapabilityPack, ProductCapabilityRegistry,
+    ProductServiceCapabilityRequirement, ProductServiceCapabilityStatus,
 };
 use bitfun_runtime_ports::RuntimeServiceCapability;
 
@@ -103,6 +105,76 @@ fn capability_packs_describe_service_tool_and_harness_requirements() {
 }
 
 #[test]
+fn product_assembly_plan_makes_delivery_profile_explicit_without_reducing_capabilities() {
+    let expected_capabilities = vec!["code-agent", "deep-review", "deep-research", "miniapp"];
+    let expected_tool_groups = vec![
+        "core.basic",
+        "core.agent",
+        "core.session",
+        "core.integration",
+    ];
+
+    for profile in DeliveryProfile::all_current_product_profiles()
+        .iter()
+        .copied()
+    {
+        let plan = product_assembly_plan_for_profile(profile);
+
+        assert_eq!(plan.profile(), profile);
+        assert_eq!(
+            plan.capability_set()
+                .ids()
+                .iter()
+                .map(|capability_id| capability_id.id())
+                .collect::<Vec<_>>(),
+            expected_capabilities,
+            "{profile} must preserve the current product-full capability set until explicit trimming is proven"
+        );
+        assert_eq!(
+            plan.capability_assembly()
+                .tool_provider_group_plan()
+                .iter()
+                .map(|group| group.provider_id())
+                .collect::<Vec<_>>(),
+            expected_tool_groups,
+            "{profile} must preserve current tool provider groups"
+        );
+    }
+}
+
+#[test]
+fn product_assembly_plan_reports_service_availability_by_capability() {
+    let plan = default_product_assembly_plan();
+
+    let unavailable = plan
+        .service_availability_report(|capability| {
+            !matches!(
+                capability,
+                RuntimeServiceCapability::Git | RuntimeServiceCapability::Network
+            )
+        })
+        .into_iter()
+        .filter(|entry| entry.status() == ProductServiceCapabilityStatus::Unavailable)
+        .collect::<Vec<_>>();
+
+    assert_eq!(unavailable.len(), 2);
+    assert_eq!(
+        unavailable[0].requirement(),
+        ProductServiceCapabilityRequirement::new(
+            ProductCapabilityId::DeepReview,
+            RuntimeServiceCapability::Git,
+        )
+    );
+    assert_eq!(
+        unavailable[1].requirement(),
+        ProductServiceCapabilityRequirement::new(
+            ProductCapabilityId::DeepResearch,
+            RuntimeServiceCapability::Network,
+        )
+    );
+}
+
+#[test]
 fn default_capability_assembly_keeps_service_tool_and_harness_facts_together() {
     let assembly = default_product_capability_assembly();
 
@@ -126,6 +198,7 @@ fn default_capability_assembly_keeps_service_tool_and_harness_facts_together() {
             RuntimeServiceCapability::Permission,
             RuntimeServiceCapability::Events,
             RuntimeServiceCapability::Clock,
+            RuntimeServiceCapability::Terminal,
             RuntimeServiceCapability::Git,
             RuntimeServiceCapability::Network,
         ]

@@ -1,17 +1,25 @@
 use bitfun_harness::{HarnessRegistry, HarnessRegistryBuildError};
+use bitfun_product_capabilities::{product_assembly_plan_for_profile, DeliveryProfile};
 pub use bitfun_product_capabilities::{
     CORE_DEEP_RESEARCH_HARNESS_PROVIDER_ID, CORE_DEEP_REVIEW_HARNESS_PROVIDER_ID,
     CORE_MINIAPP_HARNESS_PROVIDER_ID,
 };
 
 pub fn product_harness_registry() -> Result<HarnessRegistry, HarnessRegistryBuildError> {
-    bitfun_product_capabilities::default_product_harness_registry()
+    product_harness_registry_for_profile(DeliveryProfile::ProductFull)
+}
+
+pub fn product_harness_registry_for_profile(
+    profile: DeliveryProfile,
+) -> Result<HarnessRegistry, HarnessRegistryBuildError> {
+    product_assembly_plan_for_profile(profile).build_harness_registry()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use bitfun_harness::{HarnessInput, HarnessStepKind, HarnessWorkflow};
+    use bitfun_product_capabilities::DeliveryProfile;
 
     #[test]
     fn product_harness_registry_registers_existing_workflow_facades() {
@@ -56,6 +64,17 @@ mod tests {
         assert!(
             provider.execute(Default::default(), plan).await.is_err(),
             "PR4 must not move concrete workflow execution out of legacy paths"
+        );
+    }
+
+    #[test]
+    fn product_harness_registry_can_be_built_from_explicit_delivery_profile() {
+        let registry = product_harness_registry_for_profile(DeliveryProfile::Cli)
+            .expect("profile-scoped product harness registry should build");
+
+        assert_eq!(
+            registry.provider_ids(),
+            vec!["core.deep_review", "core.deep_research", "core.miniapp"]
         );
     }
 }

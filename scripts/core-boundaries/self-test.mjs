@@ -1440,7 +1440,7 @@ export function runManifestParserSelfTest({
         'ProductToolRuntime',
         'SnapshotToolDecorator',
         'create_product_tool_registry_from_plan',
-        'default_product_capability_assembly',
+        'product_assembly_plan_for_profile',
         'product_tool_runtime_owner_preserves_registry_contract',
         'product_tool_runtime_registry_preserves_provider_plan_order',
       ],

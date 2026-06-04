@@ -12,6 +12,8 @@ pub mod function_agents; // Function-based agents
 pub mod infrastructure; // AI clients, storage, logging, events
 #[cfg(feature = "product-domains")]
 pub mod miniapp; // AI-generated instant apps (Zero-Dialect Runtime)
+#[cfg(feature = "product-full")]
+pub mod product_assembly;
 #[cfg(feature = "product-domains")]
 pub(crate) mod product_domain_runtime;
 pub mod service; // Workspace, Config, FileSystem, Terminal, Git

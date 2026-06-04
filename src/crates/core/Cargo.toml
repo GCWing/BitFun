@@ -143,6 +143,7 @@ bitfun-relay-server = { path = "../../apps/relay-server", optional = true }
 bitfun-core-types = { path = "../core-types" }
 bitfun-events = { path = "../events" }
 bitfun-runtime-ports = { path = "../runtime-ports" }
+bitfun-runtime-services = { path = "../runtime-services", optional = true }
 
 # Transport layer dependency
 bitfun-transport = { path = "../transport" }
@@ -182,11 +183,13 @@ product-full = [
     "ssh-remote",
     "product-capabilities",
     "product-domains",
+    "runtime-services",
     "service-integrations",
     "tool-packs",
 ]
 product-capabilities = ["dep:bitfun-product-capabilities"]
 product-domains = ["dep:bitfun-product-domains", "bitfun-product-domains/product-full"]
+runtime-services = ["dep:bitfun-runtime-services"]
 service-integrations = [
     "dep:aes",
     "dep:aes-gcm",
