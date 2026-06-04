@@ -71,7 +71,7 @@ pub async fn init_agentic_system() -> Result<AgenticSystem> {
     ));
 
     let coordinator = Arc::new(coordination::ConversationCoordinator::new(
-        session_manager,
+        session_manager.clone(),
         execution_engine,
         tool_pipeline,
         event_queue.clone(),
@@ -79,6 +79,12 @@ pub async fn init_agentic_system() -> Result<AgenticSystem> {
     ));
 
     coordination::ConversationCoordinator::set_global(coordinator.clone());
+
+    let scheduler = coordination::DialogScheduler::new(coordinator.clone(), session_manager);
+    coordinator.set_scheduler_notifier(scheduler.outcome_sender());
+    coordinator.set_round_preempt_source(scheduler.preempt_monitor());
+    coordinator.set_round_injection_source(scheduler.round_injection_monitor());
+    coordination::set_global_scheduler(scheduler);
 
     let mut internal_event_rx = event_queue.subscribe();
     let internal_event_router = event_router.clone();

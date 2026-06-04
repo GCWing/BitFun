@@ -9,6 +9,13 @@ fi
 
 TERMINAL_SHELL_INTEGRATION=1
 
+# Agent-run package installs should not block on debconf prompts in minimal
+# benchmark containers.
+export DEBIAN_FRONTEND="${DEBIAN_FRONTEND:-noninteractive}"
+export APT_LISTCHANGES_FRONTEND="${APT_LISTCHANGES_FRONTEND:-none}"
+export NEEDRESTART_MODE="${NEEDRESTART_MODE:-a}"
+export TZ="${TZ:-Etc/UTC}"
+
 # Run relevant rc/profile only if shell integration has been injected
 # NOTE: If user config contains 'exec', 'exit', or 'return', shell integration
 # will fail and the application will report a timeout error.

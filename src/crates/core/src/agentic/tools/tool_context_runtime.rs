@@ -1378,6 +1378,7 @@ mod task_context_tests {
                 },
                 steering_interrupt: None,
                 workspace_services: None,
+                eval_deadline: None,
             },
             ToolExecutionOptions::default(),
         )

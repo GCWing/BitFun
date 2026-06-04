@@ -2137,6 +2137,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             skip_tool_confirmation: true,
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
             workspace_services: manual_workspace_services,
+            eval_deadline: None,
             round_preempt: None,
             round_injection: None,
             recover_partial_on_cancel: false,
@@ -2685,6 +2686,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             skip_tool_confirmation: submission_policy.skip_tool_confirmation,
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
             workspace_services,
+            eval_deadline: None,
             round_preempt: self.round_preempt_source.get().cloned(),
             round_injection: self.round_injection_source.get().cloned(),
             recover_partial_on_cancel: false,
@@ -3830,6 +3832,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             skip_tool_confirmation: true,
             runtime_tool_restrictions,
             workspace_services: subagent_services,
+            eval_deadline: None,
             round_preempt: self.round_preempt_source.get().cloned(),
             // Subagents are autonomous; user steering is targeted at top-level
             // dialog turns only. Leave None so we don't intercept buffer entries

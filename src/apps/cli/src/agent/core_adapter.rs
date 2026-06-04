@@ -5,6 +5,7 @@
 //! subscribers receive the same envelopes from the core event broadcast.
 
 use anyhow::Result;
+use serde_json::Value;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -209,6 +210,15 @@ impl Agent for CoreAgentAdapter {
     }
 
     async fn send_message(&self, message: String, agent_type: &str) -> Result<String> {
+        self.send_message_with_metadata(message, agent_type, None).await
+    }
+
+    async fn send_message_with_metadata(
+        &self,
+        message: String,
+        agent_type: &str,
+        metadata: Option<Value>,
+    ) -> Result<String> {
         let session_id = self.ensure_session(agent_type).await?;
         tracing::info!("Sending message to session {}: {}", session_id, message);
 
@@ -232,7 +242,7 @@ impl Agent for CoreAgentAdapter {
                 agent_type.to_string(),
                 Some(self.workspace_path_string()),
                 DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli),
-                None,
+                metadata.clone(),
             )
             .await;
 
@@ -254,7 +264,7 @@ impl Agent for CoreAgentAdapter {
                         agent_type.to_string(),
                         Some(self.workspace_path_string()),
                         DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli),
-                        None,
+                        metadata,
                     )
                     .await?;
             } else {

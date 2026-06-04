@@ -1481,6 +1481,7 @@ mod tests {
                 runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
                 steering_interrupt: None,
                 workspace_services: None,
+                eval_deadline: None,
             },
             ToolExecutionOptions::default(),
         )

@@ -314,6 +314,25 @@ impl ExecutionEngine {
         }
     }
 
+    fn effective_write_tool_mode(
+        context: &ExecutionContext,
+        configured_mode: WriteToolMode,
+    ) -> WriteToolMode {
+        if context
+            .context
+            .get("acp_transport")
+            .is_some_and(|value| value == "true")
+        {
+            return WriteToolMode::InlineContent;
+        }
+
+        if context.eval_deadline.is_some() {
+            return WriteToolMode::InlineContent;
+        }
+
+        configured_mode
+    }
+
     fn estimate_request_tokens_internal(
         messages: &[Message],
         tools: Option<&[ToolDefinition]>,
@@ -999,6 +1018,7 @@ impl ExecutionEngine {
             cancellation_token: CancellationToken::new(),
             workspace_services: context.workspace_services.clone(),
             recover_partial_on_cancel: context.recover_partial_on_cancel,
+            eval_deadline: context.eval_deadline.clone(),
         };
 
         // Tools are disabled here (None) — model must respond in plain text.
@@ -1464,15 +1484,7 @@ impl ExecutionEngine {
             .get("enable_tools")
             .and_then(|value| value.parse::<bool>().ok())
             .unwrap_or(true);
-        let write_tool_mode = if context
-            .context
-            .get("acp_transport")
-            .is_some_and(|value| value == "true")
-        {
-            WriteToolMode::InlineContent
-        } else {
-            write_tool_mode
-        };
+        let write_tool_mode = Self::effective_write_tool_mode(&context, write_tool_mode);
 
         let mut tool_manifest_context_vars = context.context.clone();
         tool_manifest_context_vars.insert(
@@ -2131,15 +2143,7 @@ impl ExecutionEngine {
             .get("enable_tools")
             .and_then(|v| v.parse::<bool>().ok())
             .unwrap_or(true);
-        let write_tool_mode = if context
-            .context
-            .get("acp_transport")
-            .is_some_and(|value| value == "true")
-        {
-            WriteToolMode::InlineContent
-        } else {
-            configured_write_tool_mode
-        };
+        let write_tool_mode = Self::effective_write_tool_mode(&context, configured_write_tool_mode);
 
         let mut tool_manifest_context_vars = context.context.clone();
         tool_manifest_context_vars.insert(
@@ -2529,6 +2533,7 @@ impl ExecutionEngine {
                 cancellation_token: CancellationToken::new(),
                 workspace_services: context.workspace_services.clone(),
                 recover_partial_on_cancel: context.recover_partial_on_cancel,
+                eval_deadline: context.eval_deadline.clone(),
             };
 
             // Execute single model round

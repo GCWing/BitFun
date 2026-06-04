@@ -31,6 +31,8 @@ use tool_runtime::util::ansi_cleaner::strip_ansi;
 // `output` field instead of this rendered/truncated fallback.
 const MAX_OUTPUT_LENGTH: usize = 30000;
 const INTERRUPT_OUTPUT_DRAIN_MS: u64 = 500;
+const DEFAULT_TIMEOUT_MS: u64 = 120_000;
+const MAX_TIMEOUT_MS: u64 = 600_000;
 
 const BANNED_COMMANDS: &[&str] = &[
     "alias",
@@ -226,6 +228,14 @@ impl BashTool {
         env
     }
 
+    fn effective_foreground_timeout_ms(
+        requested_timeout_ms: Option<u64>,
+    ) -> u64 {
+        requested_timeout_ms
+            .unwrap_or(DEFAULT_TIMEOUT_MS)
+            .min(MAX_TIMEOUT_MS)
+    }
+
     /// Resolve shell configuration for bash tool.
     /// If configured shell doesn't support integration, falls back to system default.
     async fn resolve_shell() -> ResolvedShell {
@@ -270,6 +280,7 @@ impl BashTool {
 
     fn render_result(
         &self,
+        _context: &ToolUseContext,
         terminal_session_id: &str,
         working_directory: &str,
         output_text: &str,
@@ -370,6 +381,7 @@ impl BashTool {
 
     fn render_remote_result(
         &self,
+        _context: &ToolUseContext,
         working_directory: &str,
         stdout: &str,
         stderr: &str,
@@ -658,6 +670,10 @@ Usage notes:
         context: Option<&ToolUseContext>,
     ) -> ValidationResult {
         let command = input.get("command").and_then(|v| v.as_str());
+        let run_in_background = input
+            .get("run_in_background")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
 
         if let Some(cmd) = command {
             let parts: Vec<&str> = cmd.split_whitespace().collect();
@@ -800,11 +816,11 @@ Usage notes:
             }
         }
 
-        if input.get("timeout_ms").is_some() {
+        if run_in_background && input.get("timeout_ms").is_some() {
             return ValidationResult {
                 result: true,
                 message: Some(
-                    "Note: timeout_ms is accepted for compatibility but ignored".to_string(),
+                    "Note: timeout_ms is ignored when run_in_background is true".to_string(),
                 ),
                 error_code: None,
                 meta: None,
@@ -882,18 +898,15 @@ Usage notes:
                 requested_working_directory.as_deref(),
             );
 
-            if let Some(timeout_ms) = input.get("timeout_ms").and_then(|v| v.as_u64()) {
-                debug!(
-                    "Ignoring requested remote Bash timeout: timeout_ms={}",
-                    timeout_ms
-                );
-            }
+            let timeout_ms = Self::effective_foreground_timeout_ms(
+                input.get("timeout_ms").and_then(|v| v.as_u64()),
+            );
 
             let exec_result = ws_shell
                 .exec_with_options(
                     &remote_command,
                     WorkspaceCommandOptions {
-                        timeout_ms: None,
+                        timeout_ms: Some(timeout_ms),
                         cancellation_token: context.cancellation_token.clone(),
                     },
                 )
@@ -911,6 +924,7 @@ Usage notes:
                 .unwrap_or_default();
             let working_directory = requested_working_directory.unwrap_or(working_directory);
             let result_for_assistant = self.render_remote_result(
+                context,
                 &working_directory,
                 &exec_result.stdout,
                 &exec_result.stderr,
@@ -1051,9 +1065,9 @@ Usage notes:
 
         let tool_name = self.name().to_string();
 
-        if let Some(timeout_ms) = input.get("timeout_ms").and_then(|v| v.as_u64()) {
-            debug!("Ignoring requested Bash timeout: timeout_ms={}", timeout_ms);
-        }
+        let timeout_ms = Some(Self::effective_foreground_timeout_ms(
+            input.get("timeout_ms").and_then(|v| v.as_u64()),
+        ));
 
         debug!(
             "Bash tool executing command: {}, session_id: {}, tool_id: {}",
@@ -1064,7 +1078,7 @@ Usage notes:
         let request = ExecuteCommandRequest {
             session_id: primary_session_id.clone(),
             command: command_to_execute,
-            timeout_ms: None,
+            timeout_ms,
             prevent_history: Some(true),
         };
 
@@ -1229,6 +1243,7 @@ Usage notes:
         });
 
         let result_for_assistant = self.render_result(
+            context,
             &primary_session_id,
             &execution_working_directory,
             &accumulated_output,
@@ -1691,6 +1706,22 @@ impl BashTool {
 mod tests {
     use super::*;
 
+    fn test_context() -> ToolUseContext {
+        ToolUseContext {
+            tool_call_id: None,
+            agent_type: None,
+            session_id: Some("session-1".to_string()),
+            dialog_turn_id: Some("turn-1".to_string()),
+            workspace: None,
+            unlocked_collapsed_tools: Vec::new(),
+            custom_data: Default::default(),
+            computer_use_host: None,
+            cancellation_token: None,
+            runtime_tool_restrictions: Default::default(),
+            workspace_services: None,
+        }
+    }
+
     #[test]
     fn checkpoint_detection_flags_mutating_bash_commands() {
         assert!(command_needs_light_checkpoint("cargo fmt"));
@@ -1762,7 +1793,7 @@ mod tests {
             "prefix\n".to_string() + &"y".repeat(MAX_OUTPUT_LENGTH + 100) + "\nfinal-error";
 
         let rendered =
-            tool.render_result("session-1", "/repo", &long_output, false, false, 1, None);
+            tool.render_result(&test_context(), "session-1", "/repo", &long_output, false, false, 1, None);
 
         assert!(rendered.contains("<output truncated=\"true\">"));
         assert!(rendered.contains("tail preserved"));
@@ -1775,7 +1806,7 @@ mod tests {
         let tool = BashTool::new();
 
         let rendered =
-            tool.render_remote_result("/repo", "stdout text", "stderr text", false, false, 2);
+            tool.render_remote_result(&test_context(), "/repo", "stdout text", "stderr text", false, false, 2);
 
         assert!(rendered.contains("<remote_ssh>true</remote_ssh>"));
         assert!(rendered.contains("<exit_code>2</exit_code>"));
@@ -1793,7 +1824,7 @@ mod tests {
             "prefix\n".to_string() + &"z".repeat(MAX_OUTPUT_LENGTH / 2) + "\nstderr-tail";
 
         let rendered =
-            tool.render_remote_result("/repo", &long_stdout, &long_stderr, false, false, 1);
+            tool.render_remote_result(&test_context(), "/repo", &long_stdout, &long_stderr, false, false, 1);
 
         assert!(rendered.contains("<stdout truncated=\"true\">"));
         assert!(rendered.contains("stdout-tail"));
@@ -1808,7 +1839,7 @@ mod tests {
             "prefix\n".to_string() + &"z".repeat(MAX_OUTPUT_LENGTH + 100) + "\nremote-final-error";
 
         let rendered =
-            tool.render_remote_result("/repo", "stdout text", &long_stderr, false, false, 1);
+            tool.render_remote_result(&test_context(), "/repo", "stdout text", &long_stderr, false, false, 1);
 
         assert!(rendered.contains("<stdout truncated=\"true\">"));
         assert!(rendered.contains("no budget remaining"));
@@ -1820,8 +1851,16 @@ mod tests {
     #[test]
     fn render_result_tells_model_timeout_closes_terminal_session() {
         let tool = BashTool::new();
-        let rendered =
-            tool.render_result("session-1", "/repo", "still running", false, true, -1, None);
+        let rendered = tool.render_result(
+            &test_context(),
+            "session-1",
+            "/repo",
+            "still running",
+            false,
+            true,
+            -1,
+            None,
+        );
 
         assert!(rendered.contains("<status type=\"timeout\">"));
         assert!(rendered.contains("terminal session was closed"));
@@ -1870,7 +1909,7 @@ mod tests {
     #[test]
     fn command_result_includes_working_directory_for_model() {
         let tool = BashTool::new();
-        let rendered = tool.render_result(
+        let rendered = tool.render_result(&test_context(),
             "session-1",
             "/private/tmp",
             "ERR_PNPM_NO_PKG_MANIFEST No package.json found in /private/tmp",
@@ -1905,4 +1944,5 @@ mod tests {
             "Full output was saved to: /runtime/sessions/session/tool-results/bash_123.txt"
         ));
     }
+
 }

@@ -371,6 +371,7 @@ impl RoundExecutor {
                     &cancel_token,
                     StreamProcessOptions {
                         recover_partial_on_cancel: context.recover_partial_on_cancel,
+                        max_ineffective_stream_duration: None,
                         strip_write_inline_content: matches!(
                             Self::write_tool_mode(&context),
                             WriteToolMode::PlaintextFollowup
@@ -819,6 +820,7 @@ impl RoundExecutor {
                 runtime_tool_restrictions: context.runtime_tool_restrictions.clone(),
                 steering_interrupt: context.steering_interrupt.clone(),
                 workspace_services: context.workspace_services.clone(),
+                eval_deadline: context.eval_deadline.clone(),
             };
 
             // Read tool execution related configuration from global config
@@ -2061,6 +2063,7 @@ mod tests {
             cancellation_token: CancellationToken::new(),
             workspace_services: None,
             recover_partial_on_cancel: false,
+            eval_deadline: None,
         }
     }
 
