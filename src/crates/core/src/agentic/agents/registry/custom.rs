@@ -1,5 +1,4 @@
 use super::availability::{prune_override_config, resolve_default_enabled, set_override_state};
-use super::custom_loader::CustomSubagentLoader;
 use super::support::{
     get_subagent_overrides, load_project_subagent_overrides_local,
     save_project_subagent_overrides_local,
@@ -13,11 +12,15 @@ use crate::agentic::agents::{
     subagent_source_from_custom_kind, Agent, AgentCategory, CustomSubagentConfig, SubAgentSource,
 };
 use crate::agentic::tools::{get_all_registered_tool_names, get_readonly_registered_tool_names};
+use crate::infrastructure::get_path_manager_arc;
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::config::mode_config_canonicalizer::persist_agent_profile_from_value;
 use crate::service::config::types::AgentSubagentOverrideState;
 use crate::util::errors::{BitFunError, BitFunResult};
-use log::{debug, warn};
+use bitfun_agent_runtime::custom_subagent::{
+    load_custom_subagent_definitions, CustomSubagentDiscoveryRoots, LoadedCustomSubagentDefinition,
+};
+use log::{debug, error, warn};
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
@@ -30,14 +33,24 @@ impl AgentRegistry {
         let readonly_tools = get_readonly_registered_tool_names().await;
         let valid_models = Self::get_valid_model_ids().await;
 
-        let custom = CustomSubagentLoader::load_custom_subagents(workspace_root);
+        let custom =
+            load_custom_subagent_definitions(&custom_subagent_discovery_roots(workspace_root));
+        for load_error in custom.errors {
+            let error = BitFunError::Agent(load_error.error);
+            error!(
+                "Failed to load custom subagent from {}: {}",
+                load_error.path.display(),
+                error
+            );
+        }
         let mut map = self.write_agents();
         map.retain(|_, entry| {
             !(entry.category == AgentCategory::SubAgent
                 && entry.subagent_source == Some(SubAgentSource::User))
         });
         let mut project_entries = HashMap::new();
-        for mut sub in custom {
+        for loaded in custom.definitions {
+            let mut sub = custom_subagent_from_loaded_definition(loaded);
             let id = sub.id().to_string();
             let source = subagent_source_from_custom_kind(sub.kind);
             // validate and correct tools and model
@@ -652,4 +665,18 @@ impl AgentRegistry {
             ))),
         }
     }
+}
+
+fn custom_subagent_discovery_roots(workspace_root: &Path) -> CustomSubagentDiscoveryRoots {
+    CustomSubagentDiscoveryRoots {
+        workspace_root: workspace_root.to_path_buf(),
+        bitfun_user_agents_dir: Some(get_path_manager_arc().user_agents_dir()),
+        home_dir: dirs::home_dir(),
+    }
+}
+
+fn custom_subagent_from_loaded_definition(
+    loaded: LoadedCustomSubagentDefinition,
+) -> CustomSubagent {
+    CustomSubagent::from_definition(loaded.path.to_string_lossy().to_string(), loaded.definition)
 }

@@ -15,6 +15,10 @@ use crate::agentic::tools::tool_context_runtime::ToolUseContext;
 use crate::agentic::tools::tool_result_storage;
 use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
+use bitfun_agent_runtime::tool_confirmation::{
+    resolve_confirmation_failure, resolve_tool_confirmation_plan, ConfirmationFailureKind,
+    ToolConfirmationOutcome, ToolConfirmationPlan, ToolConfirmationRequestFacts,
+};
 use bitfun_agent_tools::{
     build_invalid_tool_call_error_message, build_tool_execution_error_presentation,
     build_user_steering_interrupted_presentation, render_tool_result_for_assistant,
@@ -728,20 +732,21 @@ impl ToolPipeline {
         let is_streaming = tool.supports_streaming();
         let preflight_ms = elapsed_ms_u64(start_time);
 
-        let needs_confirmation =
-            task.options.confirm_before_run && tool.needs_permissions(Some(&tool_args));
+        let confirmation_plan = resolve_tool_confirmation_plan(ToolConfirmationRequestFacts {
+            confirm_before_run: task.options.confirm_before_run,
+            tool_needs_permission: tool.needs_permissions(Some(&tool_args)),
+            confirmation_timeout_secs: task.options.confirmation_timeout_secs,
+            now: SystemTime::now(),
+        });
 
-        if needs_confirmation {
+        if let ToolConfirmationPlan::Await {
+            timeout_at,
+            timeout_secs,
+        } = confirmation_plan
+        {
             info!("Tool requires confirmation: tool_name={}", tool_name);
 
             let (tx, rx) = oneshot::channel::<ConfirmationResponse>();
-
-            // Use 1 year as an approximation of "infinite" when there is no timeout, to avoid overflow
-            const ONE_YEAR_SECS: u64 = 365 * 24 * 60 * 60;
-            let timeout_at = match task.options.confirmation_timeout_secs {
-                Some(secs) => std::time::SystemTime::now() + Duration::from_secs(secs),
-                None => std::time::SystemTime::now() + Duration::from_secs(ONE_YEAR_SECS),
-            };
 
             self.confirmation_channels.insert(tool_id.clone(), tx);
 
@@ -758,7 +763,7 @@ impl ToolPipeline {
             debug!("Waiting for confirmation: tool_name={}", tool_name);
             let confirmation_started_at = Instant::now();
 
-            let confirmation_result = match task.options.confirmation_timeout_secs {
+            let confirmation_result = match timeout_secs {
                 Some(timeout_secs) => {
                     debug!(
                         "Waiting for user confirmation with timeout: timeout_secs={}, tool_name={}",
@@ -777,72 +782,56 @@ impl ToolPipeline {
             };
             confirmation_wait_ms = elapsed_ms_u64(confirmation_started_at);
 
-            match confirmation_result {
+            let confirmation_outcome = match confirmation_result {
                 Some(Ok(ConfirmationResponse::Confirmed)) => {
                     debug!("Tool confirmed: tool_name={}", tool_name);
+                    ToolConfirmationOutcome::Confirmed
                 }
                 Some(Ok(ConfirmationResponse::Rejected(reason))) => {
-                    self.state_manager
-                        .update_state(
-                            &tool_id,
-                            ToolExecutionState::Cancelled {
-                                reason: format!("User rejected: {}", reason),
-                                duration_ms: Some(elapsed_ms_u64(start_time)),
-                                queue_wait_ms: Some(queue_wait_ms),
-                                preflight_ms: Some(preflight_ms),
-                                confirmation_wait_ms: Some(elapsed_ms_u64(confirmation_started_at)),
-                                execution_ms: None,
-                            },
-                        )
-                        .await;
-
-                    return Err(BitFunError::Validation(format!(
-                        "Tool was rejected by user: {}",
-                        reason
-                    )));
+                    ToolConfirmationOutcome::Rejected { reason }
                 }
-                Some(Err(_)) => {
+                Some(Err(_)) => ToolConfirmationOutcome::ChannelClosed,
+                None => ToolConfirmationOutcome::Timeout {
+                    tool_name: tool_name.clone(),
+                },
+            };
+
+            if let Some(failure) = resolve_confirmation_failure(confirmation_outcome) {
+                if matches!(
+                    failure.kind,
+                    ConfirmationFailureKind::ChannelClosed | ConfirmationFailureKind::Timeout
+                ) {
                     self.confirmation_channels.remove(&tool_id);
-
-                    // Channel closed
-                    self.state_manager
-                        .update_state(
-                            &tool_id,
-                            ToolExecutionState::Cancelled {
-                                reason: "Confirmation channel closed".to_string(),
-                                duration_ms: Some(elapsed_ms_u64(start_time)),
-                                queue_wait_ms: Some(queue_wait_ms),
-                                preflight_ms: Some(preflight_ms),
-                                confirmation_wait_ms: Some(elapsed_ms_u64(confirmation_started_at)),
-                                execution_ms: None,
-                            },
-                        )
-                        .await;
-
-                    return Err(BitFunError::service("Confirmation channel closed"));
                 }
-                None => {
-                    self.confirmation_channels.remove(&tool_id);
 
-                    self.state_manager
-                        .update_state(
-                            &tool_id,
-                            ToolExecutionState::Cancelled {
-                                reason: "Confirmation timeout".to_string(),
-                                duration_ms: Some(elapsed_ms_u64(start_time)),
-                                queue_wait_ms: Some(queue_wait_ms),
-                                preflight_ms: Some(preflight_ms),
-                                confirmation_wait_ms: Some(elapsed_ms_u64(confirmation_started_at)),
-                                execution_ms: None,
-                            },
-                        )
-                        .await;
+                if matches!(failure.kind, ConfirmationFailureKind::Timeout) {
+                    warn!("{}", failure.error_message);
+                }
 
-                    warn!("Confirmation timeout: {}", tool_name);
-                    return Err(BitFunError::Timeout(format!(
-                        "Confirmation timeout: {}",
-                        tool_name
-                    )));
+                self.state_manager
+                    .update_state(
+                        &tool_id,
+                        ToolExecutionState::Cancelled {
+                            reason: failure.state_reason,
+                            duration_ms: Some(elapsed_ms_u64(start_time)),
+                            queue_wait_ms: Some(queue_wait_ms),
+                            preflight_ms: Some(preflight_ms),
+                            confirmation_wait_ms: Some(elapsed_ms_u64(confirmation_started_at)),
+                            execution_ms: None,
+                        },
+                    )
+                    .await;
+
+                match failure.kind {
+                    ConfirmationFailureKind::Rejected => {
+                        return Err(BitFunError::Validation(failure.error_message));
+                    }
+                    ConfirmationFailureKind::ChannelClosed => {
+                        return Err(BitFunError::service(failure.error_message));
+                    }
+                    ConfirmationFailureKind::Timeout => {
+                        return Err(BitFunError::Timeout(failure.error_message));
+                    }
                 }
             }
 

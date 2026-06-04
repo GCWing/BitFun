@@ -1151,6 +1151,41 @@ const forbiddenContentRules = [
     ],
   },
   {
+    path: 'src/crates/core/src/agentic/agents/definitions/custom/subagent.rs',
+    patterns: [
+      {
+        regex: /\bFrontMatterMarkdown\b/,
+        message:
+          'core custom subagent facade must not own markdown front-matter IO; use bitfun-agent-runtime',
+      },
+      {
+        regex: /\bserde_yaml::Mapping\b/,
+        message:
+          'core custom subagent facade must not own markdown metadata serialization; use bitfun-agent-runtime',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/agents/registry/custom.rs',
+    patterns: [
+      {
+        regex: /\bCustomSubagentLoader\b/,
+        message:
+          'core custom subagent registry must not restore the old loader owner; use bitfun-agent-runtime discovery report',
+      },
+      {
+        regex: /\bread_dir\b/,
+        message:
+          'core custom subagent registry must not own directory scanning; use bitfun-agent-runtime discovery report',
+      },
+      {
+        regex: /\.extension\(\)\.is_some_and\(\|ext\|\s*ext\s*==\s*"md"\)/,
+        message:
+          'core custom subagent registry must not own markdown file discovery; use bitfun-agent-runtime discovery report',
+      },
+    ],
+  },
+  {
     path: 'src/crates/core/src/agentic/subagent_runtime/mod.rs',
     patterns: [
       {
@@ -2724,6 +2759,220 @@ const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/agent-runtime/src/custom_subagent.rs',
+    reason:
+      'agent-runtime must own custom subagent portable schema defaults, discovery, and markdown front-matter IO',
+    patterns: [
+      {
+        regex: /\bpub enum CustomSubagentKind\b/,
+        message: 'missing custom subagent source-kind contract',
+      },
+      {
+        regex: /\bpub struct CustomSubagentDiscoveryRoots\b/,
+        message: 'missing custom subagent discovery root contract',
+      },
+      {
+        regex: /\bpub struct CustomSubagentLoadReport\b/,
+        message: 'missing custom subagent load report contract',
+      },
+      {
+        regex: /\bpub struct CustomSubagentDefinition\b/,
+        message: 'missing custom subagent definition schema',
+      },
+      {
+        regex: /\bpub enum CustomSubagentDefinitionError\b/,
+        message: 'missing custom subagent definition validation errors',
+      },
+      {
+        regex: /\bDEFAULT_CUSTOM_SUBAGENT_TOOLS\b/,
+        message: 'missing custom subagent default tools contract',
+      },
+      {
+        regex: /\bpub fn custom_subagent_tools_from_front_matter\b/,
+        message: 'missing custom subagent tools front-matter parser',
+      },
+      {
+        regex: /\bpub fn custom_subagent_tools_to_front_matter\b/,
+        message: 'missing custom subagent tools front-matter serializer',
+      },
+      {
+        regex: /\bpub const fn custom_subagent_readonly_should_save\b/,
+        message: 'missing custom subagent readonly save decision',
+      },
+      {
+        regex: /\bpub const fn custom_subagent_review_should_save\b/,
+        message: 'missing custom subagent review save decision',
+      },
+      {
+        regex: /\bpub fn custom_subagent_model_should_save\b/,
+        message: 'missing custom subagent model save decision',
+      },
+      {
+        regex: /\bpub fn custom_subagent_read_markdown_file\b/,
+        message: 'missing custom subagent markdown file reader',
+      },
+      {
+        regex: /\bpub fn custom_subagent_save_markdown_parts\b/,
+        message: 'missing custom subagent markdown file writer',
+      },
+      {
+        regex: /\bpub fn custom_subagent_possible_dirs\b/,
+        message: 'missing custom subagent directory discovery owner',
+      },
+      {
+        regex: /\bpub fn load_custom_subagent_definitions\b/,
+        message: 'missing custom subagent definition loading owner',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/agent-runtime/tests/custom_subagent_discovery_contracts.rs',
+    reason:
+      'agent-runtime custom subagent discovery owner must keep behavior-equivalence contracts for directory priority, deduplication, and load errors',
+    patterns: [
+      {
+        regex:
+          /\bcustom_subagent_discovery_preserves_directory_priority_and_deduplication\b/,
+        message: 'missing custom subagent discovery priority/dedup regression',
+      },
+      {
+        regex:
+          /\bcustom_subagent_discovery_reports_parse_errors_without_dropping_valid_files\b/,
+        message: 'missing custom subagent discovery parse-error regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/agent-runtime/tests/custom_subagent_contracts.rs',
+    reason:
+      'agent-runtime custom subagent owner must keep behavior-equivalence contracts for defaults and front-matter serialization decisions',
+    patterns: [
+      {
+        regex: /\bcustom_subagent_defaults_match_existing_front_matter_contract\b/,
+        message: 'missing custom subagent default regression',
+      },
+      {
+        regex: /\bcustom_subagent_tool_front_matter_keeps_existing_comma_format\b/,
+        message: 'missing custom subagent tools comma-format regression',
+      },
+      {
+        regex: /\bcustom_subagent_default_fields_are_omitted_when_saved\b/,
+        message: 'missing custom subagent default omission regression',
+      },
+      {
+        regex: /\bcustom_subagent_definition_from_front_matter_preserves_schema_and_defaults\b/,
+        message: 'missing custom subagent definition schema/default regression',
+      },
+      {
+        regex: /\bcustom_subagent_definition_reports_legacy_missing_field_errors\b/,
+        message: 'missing custom subagent missing-field regression',
+      },
+      {
+        regex: /\bcustom_subagent_markdown_io_preserves_legacy_front_matter_shape\b/,
+        message: 'missing custom subagent markdown IO regression',
+      },
+      {
+        regex: /\bcustom_subagent_markdown_parse_errors_match_legacy_prefixes\b/,
+        message: 'missing custom subagent markdown parse-error regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/agent-runtime/src/post_call_hooks.rs',
+    reason:
+      'agent-runtime must own portable post-call hook routing decisions while concrete hook execution stays in the owning runtime',
+    patterns: [
+      {
+        regex: /\bpub enum PostCallHookKind\b/,
+        message: 'missing post-call hook kind contract',
+      },
+      {
+        regex: /\bpub const fn successful_tool_post_call_hooks\b/,
+        message: 'missing successful tool post-call hook routing decision',
+      },
+      {
+        regex: /\bpub trait SuccessfulToolPostCallHookExecutor\b/,
+        message: 'missing successful tool post-call hook executor contract',
+      },
+      {
+        regex: /\bpub fn run_successful_tool_post_call_hooks\b/,
+        message: 'missing successful tool post-call hook executor runner',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/agent-runtime/tests/post_call_hook_contracts.rs',
+    reason:
+      'agent-runtime post-call hook owner must keep behavior-equivalence contracts for successful tool-call hook routing',
+    patterns: [
+      {
+        regex: /\bsuccessful_tool_call_routes_to_shared_context_measurement_hook\b/,
+        message: 'missing successful tool post-call hook routing regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/agent-runtime/tests/post_call_hook_execution_contracts.rs',
+    reason:
+      'agent-runtime post-call hook owner must keep concrete-executor routing behavior-equivalence contracts',
+    patterns: [
+      {
+        regex: /\bsuccessful_tool_post_call_executor_runs_deep_review_measurement_route\b/,
+        message: 'missing successful tool post-call executor regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/agent-runtime/src/tool_confirmation.rs',
+    reason:
+      'agent-runtime must own portable tool confirmation planning and failure mapping while core keeps UI/channel side effects',
+    patterns: [
+      {
+        regex: /\bpub struct ToolConfirmationRequestFacts\b/,
+        message: 'missing tool confirmation request facts',
+      },
+      {
+        regex: /\bpub enum ToolConfirmationPlan\b/,
+        message: 'missing tool confirmation plan contract',
+      },
+      {
+        regex: /\bpub enum ToolConfirmationOutcome\b/,
+        message: 'missing tool confirmation outcome contract',
+      },
+      {
+        regex: /\bpub enum ConfirmationFailureKind\b/,
+        message: 'missing tool confirmation failure kind',
+      },
+      {
+        regex: /\bpub fn resolve_tool_confirmation_plan\b/,
+        message: 'missing tool confirmation plan resolver',
+      },
+      {
+        regex: /\bpub fn resolve_confirmation_failure\b/,
+        message: 'missing tool confirmation failure resolver',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/agent-runtime/tests/tool_confirmation_contracts.rs',
+    reason:
+      'agent-runtime tool confirmation owner must keep behavior-equivalence contracts for legacy permission planning and failures',
+    patterns: [
+      {
+        regex: /\bconfirmation_plan_requires_permission_only_when_both_flags_are_true\b/,
+        message: 'missing tool confirmation gate regression',
+      },
+      {
+        regex: /\bconfirmation_plan_preserves_legacy_no_timeout_one_year_deadline\b/,
+        message: 'missing tool confirmation no-timeout regression',
+      },
+      {
+        regex: /\bconfirmation_failure_mapping_preserves_legacy_reasons_and_errors\b/,
+        message: 'missing tool confirmation failure mapping regression',
+      },
+    ],
+  },
+  {
     path: 'src/crates/agent-runtime/tests/prompt_contracts.rs',
     reason:
       'agent-runtime prompt owner must keep behavior-equivalence contracts for user context and reminder ordering',
@@ -2921,6 +3170,82 @@ const requiredContentRules = [
       {
         regex: /\bScheduledJobEnqueueFailureAction\b/,
         message: 'missing enqueue failure action owner delegation',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/agents/definitions/custom/subagent.rs',
+    reason:
+      'core custom subagent path must stay a compatibility facade over agent-runtime schema/default and markdown IO decisions',
+    patterns: [
+      {
+        regex: /pub use bitfun_agent_runtime::custom_subagent::CustomSubagentKind/,
+        message: 'missing custom subagent kind compatibility re-export',
+      },
+      {
+        regex: /\bCustomSubagentDefinition::new\b/,
+        message: 'missing custom subagent definition construction delegation',
+      },
+      {
+        regex: /\bcustom_subagent_read_markdown_file\b/,
+        message: 'missing custom subagent markdown read delegation',
+      },
+      {
+        regex: /\bcustom_subagent_save_markdown_parts\b/,
+        message: 'missing custom subagent markdown save delegation',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/agents/registry/custom.rs',
+    reason:
+      'core custom subagent registry must delegate portable discovery/loading to agent-runtime while retaining validation and registry writes',
+    patterns: [
+      {
+        regex: /\bload_custom_subagent_definitions\b/,
+        message: 'missing custom subagent runtime load delegation',
+      },
+      {
+        regex: /\bCustomSubagentDiscoveryRoots\b/,
+        message: 'missing custom subagent runtime discovery root adapter',
+      },
+      {
+        regex: /\bCustomSubagent::from_definition\b/,
+        message: 'missing custom subagent runtime definition adapter',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/post_call_hooks.rs',
+    reason:
+      'core post-call hooks must delegate portable hook routing to agent-runtime while retaining concrete hook execution',
+    patterns: [
+      {
+        regex: /\brun_successful_tool_post_call_hooks\b/,
+        message: 'missing post-call hook executor runner delegation',
+      },
+      {
+        regex: /\bSuccessfulToolPostCallHookExecutor\b/,
+        message: 'missing post-call hook executor implementation',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/pipeline/tool_pipeline.rs',
+    reason:
+      'core tool pipeline must delegate portable confirmation planning and failure mapping to agent-runtime while retaining UI/channel side effects',
+    patterns: [
+      {
+        regex: /\bresolve_tool_confirmation_plan\b/,
+        message: 'missing tool confirmation plan delegation',
+      },
+      {
+        regex: /\bresolve_confirmation_failure\b/,
+        message: 'missing tool confirmation failure mapping delegation',
+      },
+      {
+        regex: /\bToolConfirmationPlan::Await\b/,
+        message: 'missing tool confirmation await-plan handling',
       },
     ],
   },
@@ -8061,6 +8386,81 @@ function runManifestParserSelfTest() {
         'shared_coding_modes_resolve_to_the_same_config_profile',
         'subagent_source_contract_preserves_runtime_kind_and_presentation_order',
         'mode_presentation_and_shared_context_policy_match_existing_mode_contract',
+      ],
+    },
+    {
+      path: 'src/crates/agent-runtime/src/custom_subagent.rs',
+      contracts: [
+        'CustomSubagentKind',
+        'CustomSubagentDiscoveryRoots',
+        'CustomSubagentLoadReport',
+        'CustomSubagentDefinition',
+        'CustomSubagentDefinitionError',
+        'DEFAULT_CUSTOM_SUBAGENT_TOOLS',
+        'custom_subagent_tools_from_front_matter',
+        'custom_subagent_tools_to_front_matter',
+        'custom_subagent_readonly_should_save',
+        'custom_subagent_review_should_save',
+        'custom_subagent_model_should_save',
+        'custom_subagent_read_markdown_file',
+        'custom_subagent_save_markdown_parts',
+        'custom_subagent_possible_dirs',
+        'load_custom_subagent_definitions',
+      ],
+    },
+    {
+      path: 'src/crates/agent-runtime/tests/custom_subagent_discovery_contracts.rs',
+      contracts: [
+        'custom_subagent_discovery_preserves_directory_priority_and_deduplication',
+        'custom_subagent_discovery_reports_parse_errors_without_dropping_valid_files',
+      ],
+    },
+    {
+      path: 'src/crates/agent-runtime/tests/custom_subagent_contracts.rs',
+      contracts: [
+        'custom_subagent_defaults_match_existing_front_matter_contract',
+        'custom_subagent_tool_front_matter_keeps_existing_comma_format',
+        'custom_subagent_default_fields_are_omitted_when_saved',
+        'custom_subagent_definition_from_front_matter_preserves_schema_and_defaults',
+        'custom_subagent_definition_reports_legacy_missing_field_errors',
+        'custom_subagent_markdown_io_preserves_legacy_front_matter_shape',
+        'custom_subagent_markdown_parse_errors_match_legacy_prefixes',
+      ],
+    },
+    {
+      path: 'src/crates/agent-runtime/src/post_call_hooks.rs',
+      contracts: [
+        'PostCallHookKind',
+        'successful_tool_post_call_hooks',
+        'SuccessfulToolPostCallHookExecutor',
+        'run_successful_tool_post_call_hooks',
+      ],
+    },
+    {
+      path: 'src/crates/agent-runtime/tests/post_call_hook_contracts.rs',
+      contracts: ['successful_tool_call_routes_to_shared_context_measurement_hook'],
+    },
+    {
+      path: 'src/crates/agent-runtime/tests/post_call_hook_execution_contracts.rs',
+      contracts: ['successful_tool_post_call_executor_runs_deep_review_measurement_route'],
+    },
+    {
+      path: 'src/crates/agent-runtime/src/tool_confirmation.rs',
+      contracts: [
+        'ToolConfirmationRequestFacts',
+        'ToolConfirmationPlan',
+        'ToolConfirmationOutcome',
+        'ConfirmationFailureKind',
+        'resolve_tool_confirmation_plan',
+        'resolve_confirmation_failure',
+      ],
+    },
+    {
+      path: 'src/crates/agent-runtime/tests/tool_confirmation_contracts.rs',
+      contracts: [
+        'confirmation_plan_requires_permission_only_when_both_flags_are_true',
+        'confirmation_plan_preserves_legacy_no_timeout_one_year_deadline',
+        'confirmation_failure_mapping_preserves_legacy_reasons_and_errors',
       ],
     },
     {

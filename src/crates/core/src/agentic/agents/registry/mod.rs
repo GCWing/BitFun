@@ -2,7 +2,6 @@ mod availability;
 mod builtin;
 pub mod catalog;
 mod custom;
-mod custom_loader;
 mod query;
 mod resolution;
 mod support;

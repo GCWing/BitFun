@@ -12,5 +12,7 @@ crate-type = ["rlib"]
 [dependencies]
 bitfun-runtime-ports = { path = "../runtime-ports" }
 dashmap = { workspace = true }
+regex = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+serde_yaml = { workspace = true }

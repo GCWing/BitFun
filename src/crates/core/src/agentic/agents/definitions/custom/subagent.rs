@@ -2,19 +2,13 @@ use crate::agentic::agents::Agent;
 use crate::agentic::agents::{PromptBuilder, PromptBuilderContext, UserContextPolicy};
 use crate::agentic::session::SystemPromptCacheIdentity;
 use crate::util::errors::{BitFunError, BitFunResult};
-use crate::util::FrontMatterMarkdown;
 use async_trait::async_trait;
-use serde_yaml::Value;
+pub use bitfun_agent_runtime::custom_subagent::CustomSubagentKind;
+use bitfun_agent_runtime::custom_subagent::{
+    custom_subagent_read_markdown_file, custom_subagent_save_markdown_parts,
+    CustomSubagentDefinition,
+};
 use sha2::{Digest, Sha256};
-
-/// Subagent type: project-level or user-level
-#[derive(Debug, Clone, Copy)]
-pub enum CustomSubagentKind {
-    /// Project subagent
-    Project,
-    /// User subagent
-    User,
-}
 
 pub struct CustomSubagent {
     pub name: String,
@@ -27,6 +21,22 @@ pub struct CustomSubagent {
     pub kind: CustomSubagentKind,
     /// Model ID to use, default "fast"
     pub model: String,
+}
+
+impl CustomSubagent {
+    pub(crate) fn from_definition(path: String, definition: CustomSubagentDefinition) -> Self {
+        Self {
+            name: definition.name,
+            description: definition.description,
+            tools: definition.tools,
+            prompt: definition.prompt,
+            readonly: definition.readonly,
+            review: definition.review,
+            path,
+            kind: definition.kind,
+            model: definition.model,
+        }
+    }
 }
 
 #[async_trait]
@@ -92,80 +102,17 @@ impl CustomSubagent {
         path: String,
         kind: CustomSubagentKind,
     ) -> Self {
-        Self {
-            name,
-            description,
-            tools,
-            prompt,
-            readonly,
-            review: false,
-            path,
-            kind,
-            model: "fast".to_string(),
-        }
+        let definition =
+            CustomSubagentDefinition::new(name, description, tools, prompt, readonly, kind);
+
+        Self::from_definition(path, definition)
     }
 
     pub fn from_file(path: &str, kind: CustomSubagentKind) -> BitFunResult<Self> {
-        let (metadata, content) = FrontMatterMarkdown::load(path)?;
-        let name = metadata
-            .get("name")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| BitFunError::Agent("Missing name field".to_string()))?
-            .to_string();
-        let description = metadata
-            .get("description")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| BitFunError::Agent("Missing description field".to_string()))?
-            .to_string();
-        let tools: Vec<String> = metadata
-            .get("tools")
-            .and_then(|v| v.as_str())
-            .map(|s| s.split(',').map(|x| x.trim().to_string()).collect())
-            .unwrap_or_else(|| Self::DEFAULT_TOOLS.iter().map(|s| s.to_string()).collect());
+        let definition =
+            custom_subagent_read_markdown_file(path, kind).map_err(BitFunError::Agent)?;
 
-        let readonly = metadata
-            .get("readonly")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(Self::DEFAULT_READONLY);
-
-        let review = metadata
-            .get("review")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(Self::DEFAULT_REVIEW);
-
-        let model = metadata
-            .get("model")
-            .and_then(|v| v.as_str())
-            .unwrap_or(Self::DEFAULT_MODEL)
-            .to_string();
-
-        Ok(Self {
-            name,
-            description,
-            tools,
-            prompt: content,
-            readonly,
-            review,
-            path: path.to_string(),
-            kind,
-            model,
-        })
-    }
-
-    const DEFAULT_TOOLS: &'static [&'static str] = &["LS", "Read", "Glob", "Grep"];
-    const DEFAULT_READONLY: bool = true;
-    const DEFAULT_REVIEW: bool = false;
-    const DEFAULT_MODEL: &'static str = "fast";
-
-    /// Check if tools match default values
-    fn is_default_tools(tools: &[String]) -> bool {
-        if tools.len() != Self::DEFAULT_TOOLS.len() {
-            return false;
-        }
-        tools
-            .iter()
-            .zip(Self::DEFAULT_TOOLS.iter())
-            .all(|(a, b)| a == *b)
+        Ok(Self::from_definition(path.to_string(), definition))
     }
 
     /// Save current subagent as markdown file with YAML front matter
@@ -176,36 +123,17 @@ impl CustomSubagent {
     /// Fields equal to default values are not saved
     pub fn save_to_file(&self, model: Option<&str>) -> BitFunResult<()> {
         let model = model.unwrap_or(&self.model);
-
-        let mut metadata = serde_yaml::Mapping::new();
-        metadata.insert(
-            Value::String("name".into()),
-            Value::String(self.name.clone()),
-        );
-        metadata.insert(
-            Value::String("description".into()),
-            Value::String(self.description.clone()),
-        );
-        if !Self::is_default_tools(&self.tools) {
-            metadata.insert(
-                Value::String("tools".into()),
-                Value::String(self.tools.join(", ")),
-            );
-        }
-        if self.readonly != Self::DEFAULT_READONLY {
-            metadata.insert(Value::String("readonly".into()), Value::Bool(self.readonly));
-        }
-        if self.review != Self::DEFAULT_REVIEW {
-            metadata.insert(Value::String("review".into()), Value::Bool(self.review));
-        }
-        if model != Self::DEFAULT_MODEL {
-            metadata.insert(
-                Value::String("model".into()),
-                Value::String(model.to_string()),
-            );
-        }
-        let metadata = Value::Mapping(metadata);
-        FrontMatterMarkdown::save(&self.path, &metadata, &self.prompt).map_err(BitFunError::Agent)
+        custom_subagent_save_markdown_parts(
+            &self.path,
+            &self.name,
+            &self.description,
+            &self.tools,
+            &self.prompt,
+            self.readonly,
+            self.review,
+            model,
+        )
+        .map_err(BitFunError::Agent)
     }
 }
 

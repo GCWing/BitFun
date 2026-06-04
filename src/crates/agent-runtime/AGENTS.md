@@ -16,14 +16,19 @@ and tested without `bitfun-core`.
   dialog-turn queue state, active-turn facts, cancellation routing and
   suppression state, background running-turn injection construction, steering action
   planning, agent-session reply planning, thread-goal accounting/mutation/continuation decisions,
-  scheduled-job lifecycle state transitions, runtime event facts, registry visibility/availability, round-boundary
-  yield/injection state, turn-outcome queue decisions, registry source/profile
-  facts, prompt-loop user-context policy, prompt listing reminder ordering,
-  prompt-cache policy/identity/store, finish-reason labels, session-state event
-  labels, and turn-outcome event facts.
+  scheduled-job lifecycle state transitions, runtime event facts,
+  registry visibility/availability, custom subagent schema/default decisions,
+  custom subagent markdown front-matter IO, custom subagent discovery/loading,
+  post-call hook routing/executor orchestration,
+  tool confirmation planning/failure mapping, round-boundary yield/injection state, turn-outcome
+  queue decisions, registry source/profile facts, prompt-loop user-context
+  policy, prompt listing reminder ordering, prompt-cache policy/identity/store,
+  finish-reason labels, session-state event labels, and turn-outcome event facts.
 - Keep concrete prompt assembly, workspace context IO, prompt-cache persistence
-  wiring, dynamic environment collection, and concrete agent definition loading
-  outside this crate until a reviewed migration proves behavior equivalence.
+  wiring, dynamic environment collection, concrete non-custom agent definition
+  loading, concrete hook side effects, permission UI/tool side effects, and
+  channel/state mutation outside this crate until a reviewed migration proves
+  behavior equivalence.
 - Add focused tests before moving any runtime decision into this crate.
 
 ## Verification
