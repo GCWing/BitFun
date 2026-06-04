@@ -786,6 +786,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     language: 'zh-CN',
   });
 
+  const { isListening: isVoiceListening, isSupported: isVoiceSupported, toggleListening: toggleVoice } = useVoiceInputToChat({
+    language: 'zh-CN',
+  });
+
   const modeInfoById = useMemo(
     () => new Map(modeState.available.map(mode => [mode.id, mode])),
     [modeState.available],
