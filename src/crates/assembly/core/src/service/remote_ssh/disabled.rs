@@ -11,9 +11,86 @@ use crate::service::remote_ssh::types::{
 };
 use crate::service::terminal::session::SessionSource;
 use std::path::PathBuf;
+use std::sync::{Arc, OnceLock};
 
 fn unsupported() -> anyhow::Error {
     anyhow::anyhow!("Remote SSH support is disabled; enable the `ssh-remote` feature")
+}
+
+static GLOBAL_REMOTE_EXEC_MANAGER: OnceLock<Arc<RemoteExecProcessManager>> = OnceLock::new();
+
+pub fn get_global_remote_exec_process_manager() -> Arc<RemoteExecProcessManager> {
+    GLOBAL_REMOTE_EXEC_MANAGER
+        .get_or_init(|| Arc::new(RemoteExecProcessManager))
+        .clone()
+}
+
+#[derive(Debug, Clone)]
+pub struct RemoteExecCommandRequest {
+    pub ssh_manager: SSHConnectionManager,
+    pub connection_id: String,
+    pub command: String,
+    pub tty: bool,
+    pub yield_time_ms: Option<u64>,
+    pub max_output_chars: Option<usize>,
+}
+
+#[derive(Debug, Clone)]
+pub struct RemoteWriteStdinRequest {
+    pub session_id: i32,
+    pub chars: String,
+    pub append_enter: bool,
+    pub yield_time_ms: Option<u64>,
+    pub max_output_chars: Option<usize>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteExecControlAction {
+    Interrupt,
+    Kill,
+}
+
+#[derive(Debug, Clone)]
+pub struct RemoteExecControlRequest {
+    pub session_id: i32,
+    pub action: RemoteExecControlAction,
+    pub yield_time_ms: Option<u64>,
+    pub max_output_chars: Option<usize>,
+}
+
+#[derive(Debug, Clone)]
+pub struct RemoteExecCommandResponse {
+    pub chunk_id: String,
+    pub wall_time_seconds: f64,
+    pub output: String,
+    pub session_id: Option<i32>,
+    pub exit_code: Option<i32>,
+    pub original_output_chars: usize,
+}
+
+pub struct RemoteExecProcessManager;
+
+impl RemoteExecProcessManager {
+    pub async fn exec_command(
+        &self,
+        _request: RemoteExecCommandRequest,
+    ) -> anyhow::Result<RemoteExecCommandResponse> {
+        Err(unsupported())
+    }
+
+    pub async fn write_stdin(
+        &self,
+        _request: RemoteWriteStdinRequest,
+    ) -> anyhow::Result<RemoteExecCommandResponse> {
+        Err(unsupported())
+    }
+
+    pub async fn control_session(
+        &self,
+        _request: RemoteExecControlRequest,
+    ) -> anyhow::Result<RemoteExecCommandResponse> {
+        Err(unsupported())
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

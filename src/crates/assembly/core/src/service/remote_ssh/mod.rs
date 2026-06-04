@@ -11,6 +11,8 @@ pub mod manager;
 #[cfg(feature = "ssh-remote")]
 mod password_vault;
 #[cfg(feature = "ssh-remote")]
+mod remote_exec;
+#[cfg(feature = "ssh-remote")]
 pub mod remote_fs;
 #[cfg(feature = "ssh-remote")]
 pub mod remote_terminal;
@@ -19,14 +21,22 @@ pub mod workspace_state;
 
 #[cfg(not(feature = "ssh-remote"))]
 pub use disabled::{
-    KnownHostEntry, PTYSession, PortForward, PortForwardDirection, PortForwardManager,
-    RemoteFileService, RemoteTerminalManager, RemoteTerminalSession, SSHConnectionManager,
+    get_global_remote_exec_process_manager, KnownHostEntry, PTYSession, PortForward,
+    PortForwardDirection, PortForwardManager, RemoteExecCommandRequest, RemoteExecCommandResponse,
+    RemoteExecControlAction, RemoteExecControlRequest, RemoteExecProcessManager, RemoteFileService,
+    RemoteTerminalManager, RemoteTerminalSession, RemoteWriteStdinRequest, SSHConnectionManager,
     SessionStatus,
 };
 #[cfg(feature = "ssh-remote")]
 pub use manager::{
     KnownHostEntry, PTYSession, PortForward, PortForwardDirection, PortForwardManager,
     SSHConnectionManager,
+};
+#[cfg(feature = "ssh-remote")]
+pub use remote_exec::{
+    get_global_remote_exec_process_manager, RemoteExecCommandRequest, RemoteExecCommandResponse,
+    RemoteExecControlAction, RemoteExecControlRequest, RemoteExecProcessManager,
+    RemoteWriteStdinRequest,
 };
 #[cfg(feature = "ssh-remote")]
 pub use remote_fs::RemoteFileService;

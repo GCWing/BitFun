@@ -1,4 +1,8 @@
+use super::rendering::render_exec_response_for_assistant;
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
+use crate::service::remote_ssh::{
+    get_global_remote_exec_process_manager, RemoteExecControlAction, RemoteExecControlRequest,
+};
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -39,32 +43,76 @@ impl ExecControlTool {
     }
 
     fn response_for_assistant(data: &Value, action: LocalExecControlAction) -> String {
-        let output = data.get("output").and_then(Value::as_str).unwrap_or("");
-        let mut lines = Vec::new();
+        let mut status_lines = Vec::new();
         match action {
             LocalExecControlAction::Interrupt => {
-                lines.push("Sent interrupt to process.".to_string())
+                status_lines.push("Sent interrupt to process.".to_string())
             }
-            LocalExecControlAction::Kill => lines.push("Sent kill to process.".to_string()),
+            LocalExecControlAction::Kill => status_lines.push("Sent kill to process.".to_string()),
         }
         if let Some(exit_code) = data.get("exit_code").and_then(Value::as_i64) {
-            lines.push(format!("Process exited with code {exit_code}."));
+            status_lines.push(format!("Process exited with code {exit_code}."));
         } else if let Some(session_id) = data.get("session_id").and_then(Value::as_i64) {
-            lines.push(format!(
+            status_lines.push(format!(
                 "Process is still running. session_id: {session_id}"
             ));
         }
-        lines.push(format!(
-            "Wall time: {:.4} seconds",
-            data.get("wall_time_seconds")
-                .and_then(Value::as_f64)
-                .unwrap_or_default()
-        ));
-        if !output.is_empty() {
-            lines.push("Output:".to_string());
-            lines.push(output.to_string());
+        render_exec_response_for_assistant(data, status_lines, 4)
+    }
+
+    fn remote_action(action: LocalExecControlAction) -> RemoteExecControlAction {
+        match action {
+            LocalExecControlAction::Interrupt => RemoteExecControlAction::Interrupt,
+            LocalExecControlAction::Kill => RemoteExecControlAction::Kill,
         }
-        lines.join("\n")
+    }
+
+    async fn call_remote_pipe(&self, input: &Value) -> BitFunResult<Vec<ToolResult>> {
+        let session_id = Self::session_id_from_input(input).ok_or_else(|| {
+            BitFunError::tool("session_id is required for ExecControl".to_string())
+        })?;
+        let action = Self::action_from_input(input).ok_or_else(|| {
+            BitFunError::tool("action must be either 'interrupt' or 'kill'".to_string())
+        })?;
+        let yield_time_ms = input.get("yield_time_ms").and_then(Value::as_u64);
+        let max_output_chars = input
+            .get("max_output_chars")
+            .and_then(Value::as_u64)
+            .unwrap_or(DEFAULT_MAX_OUTPUT_CHARS)
+            .try_into()
+            .unwrap_or(usize::MAX);
+
+        let response = get_global_remote_exec_process_manager()
+            .control_session(RemoteExecControlRequest {
+                session_id,
+                action: Self::remote_action(action),
+                yield_time_ms,
+                max_output_chars: Some(max_output_chars),
+            })
+            .await
+            .map_err(|error| BitFunError::tool(format!("ExecControl failed: {error}")))?;
+
+        let action_name = match action {
+            LocalExecControlAction::Interrupt => "interrupt",
+            LocalExecControlAction::Kill => "kill",
+        };
+        let data = json!({
+            "chunk_id": response.chunk_id,
+            "wall_time_seconds": response.wall_time_seconds,
+            "output": response.output,
+            "session_id": response.session_id,
+            "exit_code": response.exit_code,
+            "original_output_chars": response.original_output_chars,
+            "action": action_name,
+            "remote": true,
+        });
+        let result_for_assistant = Self::response_for_assistant(&data, action);
+
+        Ok(vec![ToolResult::Result {
+            data,
+            result_for_assistant: Some(result_for_assistant),
+            image_attachments: None,
+        }])
     }
 }
 
@@ -165,9 +213,7 @@ After the action, yield_time_ms waits for output or exit status. Output is only 
         context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
         if context.is_remote() {
-            return Err(BitFunError::tool(
-                "ExecControl does not support remote workspaces yet.".to_string(),
-            ));
+            return self.call_remote_pipe(input).await;
         }
 
         let session_id = Self::session_id_from_input(input).ok_or_else(|| {

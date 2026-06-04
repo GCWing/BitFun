@@ -1151,7 +1151,11 @@ impl SSHConnectionManager {
                                 )
                             })?
                         } else {
-                            return Err(anyhow!("Failed to read private key '{}': {}, and could not determine home directory", key_path, e));
+                            return Err(anyhow!(
+                                "Failed to read private key '{}': {}, and could not determine home directory",
+                                key_path,
+                                e
+                            ));
                         }
                     }
                 };
@@ -1904,6 +1908,43 @@ impl SSHConnectionManager {
         Ok(channel)
     }
 
+    /// Open a long-lived exec channel with a PTY attached.
+    ///
+    /// This gives the command TTY semantics without starting an interactive shell
+    /// and typing the command into it, so command wrappers are not echoed into
+    /// model-visible output.
+    pub async fn open_pty_exec_channel(
+        &self,
+        connection_id: &str,
+        command: &str,
+        cols: u32,
+        rows: u32,
+    ) -> anyhow::Result<russh::Channel<Msg>> {
+        self.ensure_alive_or_reconnect(connection_id).await?;
+        let handle = {
+            let guard = self.connections.read().await;
+            guard
+                .get(connection_id)
+                .ok_or_else(|| anyhow!("Connection {} not found", connection_id))?
+                .handle
+                .clone()
+        };
+
+        let channel = handle
+            .channel_open_session()
+            .await
+            .map_err(|e| anyhow!("Failed to open SSH PTY exec channel: {}", e))?;
+        channel
+            .request_pty(false, "xterm-256color", cols, rows, 0, 0, &[])
+            .await
+            .map_err(|e| anyhow!("Failed to request PTY for remote command: {}", e))?;
+        channel
+            .exec(true, command)
+            .await
+            .map_err(|e| anyhow!("Failed to start remote PTY command: {}", e))?;
+        Ok(channel)
+    }
+
     /// Get server info for a connection
     pub async fn get_server_info(&self, connection_id: &str) -> Option<ServerInfo> {
         let guard = self.connections.read().await;
@@ -2359,7 +2400,7 @@ impl PTYSession {
             match channel.wait().await {
                 Some(russh::ChannelMsg::Data { data }) => return Ok(Some(data.to_vec())),
                 Some(russh::ChannelMsg::ExtendedData { data, .. }) => {
-                    return Ok(Some(data.to_vec()))
+                    return Ok(Some(data.to_vec()));
                 }
                 Some(russh::ChannelMsg::Eof) | Some(russh::ChannelMsg::Close) => return Ok(None),
                 Some(russh::ChannelMsg::ExitStatus { .. }) => return Ok(None),
