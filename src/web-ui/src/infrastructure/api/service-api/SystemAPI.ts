@@ -60,6 +60,16 @@ export class SystemAPI {
     }
   }
 
+  /** OHOS only: check for update via ArkTS AppGallery Kit, shows system dialog if available. */
+  async checkForUpdatesOhos(): Promise<{ updateAvailable: boolean; error?: string }> {
+    try {
+      const raw: string = await api.invoke('check_for_updates_ohos', {});
+      return JSON.parse(raw) as { updateAvailable: boolean; error?: string };
+    } catch (error) {
+      throw createTauriCommandError('check_for_updates_ohos', error);
+    }
+  }
+
   /** Desktop only: download and install update after user confirms (calls updater again). */
   async installUpdate(): Promise<void> {
     try {

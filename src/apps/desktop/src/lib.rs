@@ -1178,6 +1178,7 @@ pub async fn _run() {
             install_update,
             api::system_api::open_html_file_in_browser,
             restart_app,
+            check_for_updates_ohos,
             send_system_notification,
             api::system_api::quit_app,
             api::system_api::minimize_to_tray,

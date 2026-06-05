@@ -15,6 +15,7 @@ import { fileIo } from '@kit.CoreFileKit';
 import { uniformTypeDescriptor } from '@kit.ArkData';
 import { calendarManager } from '@kit.CalendarKit';
 import { BusinessError } from '@kit.BasicServicesKit';
+import { updateManager } from '@kit.AppGalleryKit';
 import RustModule from 'libbitfun_desktop_lib.so';
 import { AppUpdater } from '../utils/AppUpdater';
 import { CommonUtils } from '../utils/CommonUtils';
@@ -78,6 +79,19 @@ export default class EntryAbility extends RustAbility {
         return 'true';
       } else {
         return 'false';
+      }
+    });
+    RustModule.registerArktsFunction('check_app_update_ohos', async (err: Error, _arg: string): Promise<string> => {
+      try {
+        const checkResult = await updateManager.checkAppUpdate(this.context);
+        if (checkResult.updateAvailable === updateManager.UpdateAvailableCode.LATER_VERSION_EXIST) {
+          await updateManager.showUpdateDialog(this.context);
+          return '{"updateAvailable":true}';
+        }
+        return '{"updateAvailable":false}';
+      } catch (error) {
+        hilog.error(0x0000, 'vnext', 'check_app_update_ohos error: ' + JSON.stringify(error));
+        return '{"updateAvailable":false,"error":"' + (error.message || 'unknown error') + '"}';
       }
     });
     RustModule.registerArktsFunction('open_browser', async (err: Error, url: string): Promise<string> => {

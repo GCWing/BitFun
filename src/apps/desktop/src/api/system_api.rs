@@ -341,6 +341,19 @@ pub async fn open_external_ohos(url: String) -> Result<(), String> {
     }
 }
 #[tauri::command]
+pub async fn check_for_updates_ohos() -> Result<String, String> {
+    #[cfg(target_env = "ohos")]
+    {
+        use crate::api::ohos::update::check_app_update_ohos;
+        check_app_update_ohos().await
+    }
+    #[cfg(not(target_env = "ohos"))]
+    {
+        Err("check_for_updates_ohos is only supported on ohos".to_string())
+    }
+}
+
+#[tauri::command]
 pub async fn set_macos_edit_menu_mode(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
