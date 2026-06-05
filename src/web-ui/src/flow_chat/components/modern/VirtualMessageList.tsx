@@ -1865,9 +1865,18 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
         isFollowingOutputRef.current &&
         isStreamingOutputRef.current &&
         !hasRecentUserUpwardIntent &&
-        !anchorLockRef.current.active
+        !anchorLockRef.current.active &&
+        layoutTransitionCountRef.current === 0
       ) {
-        const clampAmount = -intentCheckScrollDelta;
+        // Cap the clamp amount to what the footer actually needs.  Without
+        // this, repeated scroll-clamp events during CSS transitions can
+        // ratchet `collapse.px` upward without bound because the
+        // consumption path is blocked while transitions are active.
+        const rawClampAmount = -intentCheckScrollDelta;
+        const maxClampAmount = Math.max(0,
+          scrollerElement.scrollHeight - scrollerElement.clientHeight - scrollerElement.scrollTop,
+        );
+        const clampAmount = Math.min(rawClampAmount, maxClampAmount);
         const baseState = bottomReservationStateRef.current;
         const nextReservationState: BottomReservationState = {
           ...baseState,
