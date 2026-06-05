@@ -11,7 +11,7 @@
 //! - Queue cleared on unrecoverable failure
 
 use super::coordinator::{ConversationCoordinator, DialogTriggerSource};
-use super::turn_outcome::{TurnOutcome, TurnOutcomeQueueAction, TurnOutcomeStatus};
+use super::turn_outcome::TurnOutcome;
 use crate::agentic::core::{InternalReminderKind, Message, SessionState};
 use crate::agentic::goal_mode::{
     goal_continuation_submit_retry_delay_ms, goal_internal_context_message,
@@ -37,11 +37,13 @@ use uuid::Uuid;
 use bitfun_agent_runtime::scheduler::{
     build_thread_goal_objective_updated_delivery_plan, build_thread_goal_resumed_delivery_plan,
     resolve_agent_session_reply_action, resolve_background_delivery_action,
-    resolve_background_delivery_injection, resolve_dialog_steering_action, ActiveDialogTurn,
-    ActiveDialogTurnStore, AgentSessionReplyAction, AgentSessionReplyPlan,
-    BackgroundDeliveryAction, BackgroundDeliveryFacts, BackgroundInjectionKind,
-    DialogReplySuppressionSet, DialogSteeringAction, DialogTurnQueue, SessionAbortFlags,
-    ThreadGoalDeliveryReminder, ThreadGoalDeliveryReminderKind,
+    resolve_background_delivery_injection, resolve_dialog_steering_action,
+    resolve_turn_outcome_lifecycle_plan, ActiveDialogTurn, ActiveDialogTurnStore,
+    AgentSessionReplyAction, AgentSessionReplyPlan, BackgroundDeliveryAction,
+    BackgroundDeliveryFacts, BackgroundInjectionKind, DialogReplySuppressionSet,
+    DialogSteeringAction, DialogTurnQueue, GoalContinuationAfterTurnAction, SessionAbortFlags,
+    ThreadGoalDeliveryReminder, ThreadGoalDeliveryReminderKind, TurnOutcomeQueueAction,
+    TurnOutcomeStatus,
 };
 use bitfun_runtime_ports::{
     resolve_dialog_submit_queue_action, DialogSessionStateFact, DialogSubmitQueueAction,
@@ -887,16 +889,25 @@ impl DialogScheduler {
     /// Background loop that receives turn outcome notifications from the coordinator.
     async fn run_outcome_handler(&self, mut outcome_rx: mpsc::Receiver<(String, TurnOutcome)>) {
         while let Some((session_id, outcome)) = outcome_rx.recv().await {
-            self.round_yield_flags.clear(&session_id);
+            let lifecycle_plan = resolve_turn_outcome_lifecycle_plan(
+                &outcome,
+                self.active_turns.contains(&session_id),
+            );
+
+            if lifecycle_plan.clear_round_yield {
+                self.round_yield_flags.clear(&session_id);
+            }
             // Only drop steering messages targeted at the *finished* turn. We
             // must NOT clear the entire session buffer here: a user might have
             // legitimately submitted steering against a brand-new follow-up
             // turn that the dispatcher will pick up immediately after this
             // outcome is processed (race window between turn finalize and the
             // next turn starting). Targeting by turn_id keeps those alive.
-            let _drained = self
-                .round_injection_buffer
-                .drain_for_turn(&session_id, outcome.turn_id());
+            if lifecycle_plan.drain_finished_turn_injections {
+                let _drained = self
+                    .round_injection_buffer
+                    .drain_for_turn(&session_id, outcome.turn_id());
+            }
             let suppressed_cancelled_reply =
                 self.take_suppressed_cancelled_reply(&session_id, outcome.turn_id());
 
@@ -922,91 +933,95 @@ impl DialogScheduler {
                 }
             }
 
-            let status = outcome.status();
-            let queue_action = outcome.queue_action();
+            let status = lifecycle_plan.status;
+            let queue_action = lifecycle_plan.queue_action;
             if queue_action == TurnOutcomeQueueAction::ClearQueue {
                 debug!("Turn {}, clearing queue: session_id={}", status, session_id);
                 self.clear_queue(&session_id);
             }
 
             if let Some(active_turn) = active_turn.as_ref() {
-                if matches!(outcome, TurnOutcome::Cancelled { .. }) {
-                    self.goal_continuation_abort.mark(&session_id);
-                    debug!(
-                        "Skipping thread goal continuation after user-cancelled turn: session_id={}, turn_id={}",
-                        session_id,
-                        outcome.turn_id()
-                    );
-                } else {
-                    let turn_completed = matches!(outcome, TurnOutcome::Completed { .. });
-                    self.goal_continuation_abort.clear(&session_id);
-                    match self
-                        .coordinator
-                        .prepare_goal_continuation_after_turn(
-                            &session_id,
-                            &outcome.turn_id(),
-                            active_turn.user_input(),
-                            active_turn.user_message_metadata(),
-                            turn_completed,
-                        )
-                        .await
-                    {
-                        Ok(Some(plan)) => {
-                            let prepended: Vec<Message> = plan
-                                .prepended_reminders
-                                .into_iter()
-                                .map(|text| {
-                                    Message::internal_reminder(
-                                        InternalReminderKind::GoalContinuation,
-                                        text,
-                                    )
-                                })
-                                .collect();
-                            let mut last_error = None;
-                            for attempt in 1..=MAX_THREAD_GOAL_AUTO_CONTINUATIONS {
-                                if self.goal_continuation_abort.contains(&session_id) {
-                                    debug!(
+                match lifecycle_plan.goal_continuation {
+                    GoalContinuationAfterTurnAction::SkipNoActiveTurn => {}
+                    GoalContinuationAfterTurnAction::AbortForCancelled => {
+                        self.goal_continuation_abort.mark(&session_id);
+                        debug!(
+                            "Skipping thread goal continuation after user-cancelled turn: session_id={}, turn_id={}",
+                            session_id,
+                            outcome.turn_id()
+                        );
+                    }
+                    GoalContinuationAfterTurnAction::Evaluate { turn_completed } => {
+                        self.goal_continuation_abort.clear(&session_id);
+                        match self
+                            .coordinator
+                            .prepare_goal_continuation_after_turn(
+                                &session_id,
+                                &outcome.turn_id(),
+                                active_turn.user_input(),
+                                active_turn.user_message_metadata(),
+                                turn_completed,
+                            )
+                            .await
+                        {
+                            Ok(Some(plan)) => {
+                                let prepended: Vec<Message> = plan
+                                    .prepended_reminders
+                                    .into_iter()
+                                    .map(|text| {
+                                        Message::internal_reminder(
+                                            InternalReminderKind::GoalContinuation,
+                                            text,
+                                        )
+                                    })
+                                    .collect();
+                                let mut last_error = None;
+                                for attempt in 1..=MAX_THREAD_GOAL_AUTO_CONTINUATIONS {
+                                    if self.goal_continuation_abort.contains(&session_id) {
+                                        debug!(
                                         "Aborting goal continuation submit retries after user cancellation: session_id={}",
                                         session_id
                                     );
-                                    break;
-                                }
-                                match self
-                                    .submit_with_prepended_messages(
-                                        session_id.clone(),
-                                        "Continue working toward the active thread goal."
-                                            .to_string(),
-                                        Some(plan.display_message.clone()),
-                                        None,
-                                        active_turn.agent_type_owned(),
-                                        active_turn.workspace_path_owned(),
-                                        DialogSubmissionPolicy::for_source(
-                                            DialogTriggerSource::AgentSession,
-                                        ),
-                                        None,
-                                        Some(plan.user_message_metadata.clone()),
-                                        prepended.clone(),
-                                        None,
-                                    )
-                                    .await
-                                {
-                                    Ok(_) => {
-                                        last_error = None;
                                         break;
                                     }
-                                    Err(error) => {
-                                        last_error = Some(error);
-                                        if self.goal_continuation_abort.contains(&session_id) {
-                                            debug!(
+                                    match self
+                                        .submit_with_prepended_messages(
+                                            session_id.clone(),
+                                            "Continue working toward the active thread goal."
+                                                .to_string(),
+                                            Some(plan.display_message.clone()),
+                                            None,
+                                            active_turn.agent_type_owned(),
+                                            active_turn.workspace_path_owned(),
+                                            DialogSubmissionPolicy::for_source(
+                                                DialogTriggerSource::AgentSession,
+                                            ),
+                                            None,
+                                            Some(plan.user_message_metadata.clone()),
+                                            prepended.clone(),
+                                            None,
+                                        )
+                                        .await
+                                    {
+                                        Ok(_) => {
+                                            last_error = None;
+                                            break;
+                                        }
+                                        Err(error) => {
+                                            last_error = Some(error);
+                                            if self.goal_continuation_abort.contains(&session_id) {
+                                                debug!(
                                                 "Aborting goal continuation submit retries after user cancellation: session_id={}",
                                                 session_id
                                             );
-                                            break;
-                                        }
-                                        if attempt < MAX_THREAD_GOAL_AUTO_CONTINUATIONS {
-                                            let delay_ms =
-                                                goal_continuation_submit_retry_delay_ms(attempt);
-                                            warn!(
+                                                break;
+                                            }
+                                            if attempt < MAX_THREAD_GOAL_AUTO_CONTINUATIONS {
+                                                let delay_ms =
+                                                    goal_continuation_submit_retry_delay_ms(
+                                                        attempt,
+                                                    );
+                                                warn!(
                                                 "Goal continuation submit failed; retrying: session_id={}, attempt={}/{}, delay_ms={}, error={}",
                                                 session_id,
                                                 attempt,
@@ -1014,29 +1029,30 @@ impl DialogScheduler {
                                                 delay_ms,
                                                 last_error.as_ref().unwrap()
                                             );
-                                            tokio::time::sleep(std::time::Duration::from_millis(
-                                                delay_ms,
-                                            ))
-                                            .await;
+                                                tokio::time::sleep(
+                                                    std::time::Duration::from_millis(delay_ms),
+                                                )
+                                                .await;
+                                            }
                                         }
                                     }
                                 }
-                            }
-                            if let Some(error) = last_error {
-                                if !self.goal_continuation_abort.contains(&session_id) {
-                                    warn!(
+                                if let Some(error) = last_error {
+                                    if !self.goal_continuation_abort.contains(&session_id) {
+                                        warn!(
                                         "Failed to submit goal continuation turn after retries: session_id={}, error={}",
                                         session_id, error
                                     );
+                                    }
                                 }
                             }
-                        }
-                        Ok(None) => {}
-                        Err(error) => {
-                            warn!(
+                            Ok(None) => {}
+                            Err(error) => {
+                                warn!(
                                 "Goal verification failed after turn stopped: session_id={}, status={}, error={}",
                                 session_id, status, error
                             );
+                            }
                         }
                     }
                 }

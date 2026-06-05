@@ -113,6 +113,10 @@ impl ActiveDialogTurnStore {
         self.inner.remove(session_id).map(|(_, turn)| turn)
     }
 
+    pub fn contains(&self, session_id: &str) -> bool {
+        self.inner.contains_key(session_id)
+    }
+
     pub fn suppression_key_for_requester(
         &self,
         target_session_id: &str,
@@ -716,6 +720,60 @@ impl TurnOutcome {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GoalContinuationAfterTurnAction {
+    SkipNoActiveTurn,
+    AbortForCancelled,
+    Evaluate { turn_completed: bool },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TurnOutcomeLifecyclePlan {
+    pub status: TurnOutcomeStatus,
+    pub queue_action: TurnOutcomeQueueAction,
+    pub clear_round_yield: bool,
+    pub drain_finished_turn_injections: bool,
+    pub goal_continuation: GoalContinuationAfterTurnAction,
+}
+
+impl TurnOutcomeLifecyclePlan {
+    pub const fn dispatch_next(self) -> bool {
+        matches!(self.queue_action, TurnOutcomeQueueAction::DispatchNext)
+    }
+
+    pub const fn clear_queue(self) -> bool {
+        matches!(self.queue_action, TurnOutcomeQueueAction::ClearQueue)
+    }
+}
+
+pub fn resolve_turn_outcome_lifecycle_plan(
+    outcome: &TurnOutcome,
+    has_active_turn: bool,
+) -> TurnOutcomeLifecyclePlan {
+    let status = outcome.status();
+    let goal_continuation = if !has_active_turn {
+        GoalContinuationAfterTurnAction::SkipNoActiveTurn
+    } else {
+        match status {
+            TurnOutcomeStatus::Cancelled => GoalContinuationAfterTurnAction::AbortForCancelled,
+            TurnOutcomeStatus::Completed => GoalContinuationAfterTurnAction::Evaluate {
+                turn_completed: true,
+            },
+            TurnOutcomeStatus::Failed => GoalContinuationAfterTurnAction::Evaluate {
+                turn_completed: false,
+            },
+        }
+    };
+
+    TurnOutcomeLifecyclePlan {
+        status,
+        queue_action: outcome.queue_action(),
+        clear_round_yield: true,
+        drain_finished_turn_injections: true,
+        goal_continuation,
+    }
+}
+
 pub fn resolve_agent_session_reply_action(
     responder_session_id: &str,
     active_turn: &ActiveDialogTurn,
@@ -783,5 +841,88 @@ pub fn resolve_dialog_steering_action(
             turn_id: turn_id.to_string(),
             steering_id,
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn outcome_lifecycle_dispatches_completed_turn_and_verifies_goal() {
+        let outcome = TurnOutcome::Completed {
+            turn_id: "turn_1".to_string(),
+            final_response: "done".to_string(),
+        };
+
+        let plan = resolve_turn_outcome_lifecycle_plan(&outcome, true);
+
+        assert_eq!(plan.status, TurnOutcomeStatus::Completed);
+        assert_eq!(plan.queue_action, TurnOutcomeQueueAction::DispatchNext);
+        assert!(plan.clear_round_yield);
+        assert!(plan.drain_finished_turn_injections);
+        assert_eq!(
+            plan.goal_continuation,
+            GoalContinuationAfterTurnAction::Evaluate {
+                turn_completed: true
+            }
+        );
+        assert!(plan.dispatch_next());
+        assert!(!plan.clear_queue());
+    }
+
+    #[test]
+    fn outcome_lifecycle_aborts_goal_continuation_for_cancelled_turn() {
+        let outcome = TurnOutcome::Cancelled {
+            turn_id: "turn_1".to_string(),
+        };
+
+        let plan = resolve_turn_outcome_lifecycle_plan(&outcome, true);
+
+        assert_eq!(plan.status, TurnOutcomeStatus::Cancelled);
+        assert_eq!(plan.queue_action, TurnOutcomeQueueAction::DispatchNext);
+        assert_eq!(
+            plan.goal_continuation,
+            GoalContinuationAfterTurnAction::AbortForCancelled
+        );
+        assert!(plan.dispatch_next());
+        assert!(!plan.clear_queue());
+    }
+
+    #[test]
+    fn outcome_lifecycle_clears_queue_for_failed_turn_and_verifies_goal() {
+        let outcome = TurnOutcome::Failed {
+            turn_id: "turn_1".to_string(),
+            error: "boom".to_string(),
+        };
+
+        let plan = resolve_turn_outcome_lifecycle_plan(&outcome, true);
+
+        assert_eq!(plan.status, TurnOutcomeStatus::Failed);
+        assert_eq!(plan.queue_action, TurnOutcomeQueueAction::ClearQueue);
+        assert_eq!(
+            plan.goal_continuation,
+            GoalContinuationAfterTurnAction::Evaluate {
+                turn_completed: false
+            }
+        );
+        assert!(!plan.dispatch_next());
+        assert!(plan.clear_queue());
+    }
+
+    #[test]
+    fn outcome_lifecycle_skips_goal_when_no_active_turn_exists() {
+        let outcome = TurnOutcome::Completed {
+            turn_id: "turn_1".to_string(),
+            final_response: "done".to_string(),
+        };
+
+        let plan = resolve_turn_outcome_lifecycle_plan(&outcome, false);
+
+        assert_eq!(
+            plan.goal_continuation,
+            GoalContinuationAfterTurnAction::SkipNoActiveTurn
+        );
+        assert!(plan.dispatch_next());
     }
 }

@@ -94,15 +94,19 @@ prompt-visible manifest、GetToolSpec、readonly/enabled filtering、expanded/co
 - `pnpm run check:repo-hygiene`
 - `node scripts/check-core-boundaries.mjs`
 
-### 4.3 M3：Agent Runtime concrete lifecycle 闭环
+### 4.3 M3（当前变更已闭环）：Agent Runtime lifecycle 决策闭环
 
 目标：让 Agent Runtime SDK 接管 session / turn / scheduler / event / permission 中可迁移的 runtime kernel 主体。
 
-- 迁移 session lifecycle、turn submission、scheduler queue/lifecycle、cancellation、event fact delivery、permission coordination、
-  prompt-loop 可移植策略和 subagent/background task concrete coordination 中可证明等价的部分。
-- 将 session metadata / persistence IO、event emitter wiring、permission UI/channel wait 和 concrete prompt assembly 明确划入
-  core compatibility / Product Assembly adapter，或在有端到端保护后迁移。
-- 禁止 Agent Runtime SDK 直接依赖 Tauri、ACP protocol、CLI TUI、desktop app state、concrete filesystem/Git/terminal/MCP client。
+完成口径：
+
+- `agent-runtime` 接管 turn outcome 后处理 plan，统一决定 queue action、round 清理、finished-turn injection drain 和
+  thread-goal continuation after-turn 动作；core scheduler 只执行清理、reply、goal continuation 和 dispatch 副作用。
+- `agent-runtime` 接管 `SessionControl` 输入契约、默认值、tool-use render、create/cancel/delete 结果文案和 cancel route 决策；
+  core tool adapter 只保留 workspace 解析、session manager 调用、scheduler/coordinator cancel 和 `ToolResult` 包装。
+- `agent-runtime` 不新增三方依赖，不依赖 `bitfun-core`、Tauri、ACP、CLI TUI、desktop state 或 concrete service crate。
+- concrete session manager、metadata / persistence IO、scheduler task lifecycle、event emitter wiring、permission UI/channel wait、
+  concrete prompt assembly 和 product `Tool` adapter execution 继续留在 core compatibility / Product Assembly adapter。
 
 **不混入：** 改变 `/goal`、AskUserQuestion、Task、subagent、post-turn hook、DeepReview measurement、token usage 或 continuation wire shape。
 

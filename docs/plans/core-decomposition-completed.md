@@ -50,10 +50,11 @@
 
 ### 1.4 Agent Runtime 与 Harness 契约基线
 
-- `agent-runtime` 已承接 scheduler/background delivery 的纯决策、thread goal runtime 的 accounting / mutation /
-  continuation plan、subagent visibility / availability、prompt cache facts、mode/source presentation facts、
+- `agent-runtime` 已承接 scheduler/background delivery 的纯决策、turn outcome lifecycle plan、thread goal runtime 的
+  accounting / mutation / continuation plan、subagent visibility / availability、prompt cache facts、mode/source presentation facts、
   scheduled-job lifecycle state、custom subagent schema/default/markdown IO/discovery/loading、post-call hook routing、
-  tool confirmation plan、goal/user-question tool wire contract、builtin agent catalog 和部分 event fact 映射。
+  tool confirmation plan、goal/user-question tool wire contract、`SessionControl` 输入契约 / cancel route / 结果文案、
+  builtin agent catalog 和部分 event fact 映射。
 - core 仍保留 concrete session manager、metadata/persistence IO、scheduler lifecycle、event emitter、
   permission UI/channel wait、concrete prompt assembly、product `Tool` adapter 和具体 hook side effect。
 - `harness` 已建立 workflow descriptor、legacy route plan、provider registry，并注册 Deep Review、DeepResearch、

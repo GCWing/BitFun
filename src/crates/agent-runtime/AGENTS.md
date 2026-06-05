@@ -21,7 +21,7 @@ and tested without `bitfun-core`.
   registry visibility/availability, custom subagent schema/default decisions,
   builtin agent definition catalog, thread-goal metadata / event payload /
   token usage / scheduler delivery plans, thread-goal tool wire contracts,
-  user-question validation/result contracts, DeepReview shared-context
+  user-question validation/result contracts, SessionControl input/cancel-route/result contracts, DeepReview shared-context
   measurement decisions,
   custom subagent markdown front-matter IO, custom subagent discovery/loading,
   post-call hook routing/executor orchestration,
