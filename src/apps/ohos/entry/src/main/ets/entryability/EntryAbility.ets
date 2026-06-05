@@ -16,6 +16,7 @@ import { uniformTypeDescriptor } from '@kit.ArkData';
 import { calendarManager } from '@kit.CalendarKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import RustModule from 'libbitfun_desktop_lib.so';
+import { AppUpdater } from '../utils/AppUpdater';
 import { CommonUtils } from '../utils/CommonUtils';
 import { runDeveco } from '../utils/DevecoStart';
 
@@ -27,6 +28,7 @@ export default class EntryAbility extends RustAbility {
   public defaultPage: boolean = true;
   public commonEventListener: CommonEventListener | undefined = undefined;
   public remoteUrl: string = "";
+  private appUpdater: AppUpdater = new AppUpdater();
   public shareStatus: boolean = false;
 
   async onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): Promise<void> {
@@ -191,6 +193,7 @@ export default class EntryAbility extends RustAbility {
       }
       return '';
     });
+    this.appUpdater.check(this.context);
     return super.onWindowStageCreate(windowStage);
   }
 
