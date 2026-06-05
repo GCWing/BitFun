@@ -120,11 +120,15 @@ prompt-visible manifest、GetToolSpec、readonly/enabled filtering、expanded/co
 
 目标：让 Harness / Product Domains 不再停留在 descriptor 或 pure policy 层，而是接管符合设计边界的工作流和 domain owner。
 
-- 为 Deep Review、DeepResearch、MiniApp、function-agent 明确哪些属于 Harness workflow、哪些属于 Product Domain policy、
-  哪些属于 Concrete Integration provider。
-- 迁移 MiniApp worker/host/seed/marker IO 中可被 Runtime Services / provider port 保护的主体。
-- 为 function-agent AI provider acquisition 抽稳定 AI runtime/provider port，避免 integration crate 依赖回 core 或复制 AI client runtime。
-- Harness provider 从 legacy route plan 逐步转向可执行 workflow owner；无法迁移的 concrete 副作用必须明确保留在 Product Assembly adapter。
+- MiniApp host primitive 的 `fs.*` / `shell.exec` 纯调用计划、参数默认值、错误契约和权限检查计划归入
+  Product Domain；core 仅消费计划并继续负责权限 policy resolution、路径规范化、文件 IO、进程执行和输出映射。
+- `net.fetch` / `os.info` 不迁入 Product Domain：前者依赖 `reqwest::Url` 与 HTTP client 语义，后者依赖平台 runtime facts，
+  保留在 core concrete path 更符合最小依赖原则。
+- MiniApp seed / marker 的 bundle、hash、marker wire format 与 seed decision 已由 Product Domain 持有；core 仍负责磁盘读写、
+  customization metadata、PathManager integration 和 recompile。
+- function-agent 已通过 Product Domain facade 与 core adapter 隔离 Git/AI 端口；AI provider acquisition 和 transport error mapping
+  仍留在 core，除非后续单独评审稳定 AI runtime/provider 边界。
+- Harness provider 继续保持 legacy route plan / descriptor owner；Deep Review / DeepResearch concrete execution 不混入本阶段。
 
 **不混入：** 改变 MiniApp storage layout、worker 生命周期、host primitive 权限、Deep Review report 语义、function-agent prompt/response policy。
 
@@ -155,7 +159,7 @@ prompt-visible manifest、GetToolSpec、readonly/enabled filtering、expanded/co
 
 ## 5. 执行节奏
 
-后续按 M2 -> M3 -> M4 -> M5 推进。每个里程碑原则上对应一个大 PR；如果发现风险超过单 PR 可控范围，只允许按 owner 边界拆分，
+后续按 M4 收尾 -> M5 推进。每个里程碑原则上对应一个大 PR；如果发现风险超过单 PR 可控范围，只允许按 owner 边界拆分，
 不允许拆成 facade / guard / helper 小 PR。
 
 每个里程碑固定流程：

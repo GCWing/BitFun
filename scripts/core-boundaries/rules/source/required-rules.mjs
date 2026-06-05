@@ -4357,8 +4357,12 @@ export const requiredContentRules = [
         message: 'missing MiniApp fs host dispatch',
       },
       {
-        regex: /\bfs_method_access_mode\b/,
-        message: 'missing product-domain MiniApp fs access-mode policy use',
+        regex: /\bplan_fs_legacy_path_check\b/,
+        message: 'missing product-domain MiniApp legacy fs path-gate plan use',
+      },
+      {
+        regex: /\bplan_fs_host_call\b/,
+        message: 'missing product-domain MiniApp fs host-call plan use',
       },
       {
         regex: /\bfs_policy_scopes\b/,
@@ -4373,20 +4377,8 @@ export const requiredContentRules = [
         message: 'missing MiniApp shell host dispatch',
       },
       {
-        regex: /\bshell_exec_first_token\b/,
-        message: 'missing product-domain MiniApp shell token policy use',
-      },
-      {
-        regex: /\bshell_exec_input_is_empty\b/,
-        message: 'missing product-domain MiniApp shell empty-input policy use',
-      },
-      {
-        regex: /\bshell_exec_cwd\b/,
-        message: 'missing product-domain MiniApp shell cwd policy use',
-      },
-      {
-        regex: /\bshell_exec_timeout_ms\b/,
-        message: 'missing product-domain MiniApp shell timeout policy use',
+        regex: /\bplan_shell_host_call\b/,
+        message: 'missing product-domain MiniApp shell host-call plan use',
       },
       {
         regex: /\bshell_exec_default_env\b/,
@@ -4678,6 +4670,18 @@ export const requiredContentRules = [
         message: 'missing MiniApp fs access mode helper',
       },
       {
+        regex: /\bpub enum MiniAppFsHostCallPlan\b/,
+        message: 'missing MiniApp fs host-call plan contract',
+      },
+      {
+        regex: /\bpub fn plan_fs_host_call\b/,
+        message: 'missing MiniApp fs host-call planner',
+      },
+      {
+        regex: /\bpub fn plan_fs_legacy_path_check\b/,
+        message: 'missing MiniApp legacy fs path-gate planner',
+      },
+      {
         regex: /\bpub fn fs_policy_scopes\b/,
         message: 'missing MiniApp fs policy scope helper',
       },
@@ -4718,6 +4722,14 @@ export const requiredContentRules = [
         message: 'missing MiniApp shell env policy helper',
       },
       {
+        regex: /\bpub struct MiniAppShellHostCallPlan\b/,
+        message: 'missing MiniApp shell host-call plan contract',
+      },
+      {
+        regex: /\bpub fn plan_shell_host_call\b/,
+        message: 'missing MiniApp shell host-call planner',
+      },
+      {
         regex: /\bfs_method_access_mode_preserves_access_bypass_and_default_read_contract\b/,
         message: 'missing MiniApp fs access mode regression test',
       },
@@ -4732,6 +4744,14 @@ export const requiredContentRules = [
       {
         regex: /\bshell_exec_plan_helpers_preserve_defaults_and_precedence\b/,
         message: 'missing MiniApp shell plan regression test',
+      },
+      {
+        regex: /\bminiapp_host_fs_call_plans_preserve_existing_path_and_permission_contract\b/,
+        message: 'missing MiniApp fs host-call plan regression test',
+      },
+      {
+        regex: /\bminiapp_host_shell_call_plans_preserve_existing_input_and_default_contract\b/,
+        message: 'missing MiniApp shell host-call plan regression test',
       },
     ],
   },

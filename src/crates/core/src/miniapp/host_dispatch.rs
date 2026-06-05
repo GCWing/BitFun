@@ -28,10 +28,10 @@ use crate::util::errors::{BitFunError, BitFunResult};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 pub use bitfun_product_domains::miniapp::host_routing::is_host_primitive;
 use bitfun_product_domains::miniapp::host_routing::{
-    command_basename_allowed, command_basename_for_allowlist, fs_method_access_mode,
-    fs_policy_scopes, fs_resolved_path_allowed, host_allowed_by_allowlist, shell_exec_cwd,
-    shell_exec_default_env, shell_exec_first_token, shell_exec_input_is_empty,
-    shell_exec_timeout_ms, split_host_method, FsAccessMode,
+    command_basename_allowed, command_basename_for_allowlist, fs_policy_scopes,
+    fs_resolved_path_allowed, host_allowed_by_allowlist, plan_fs_host_call,
+    plan_fs_legacy_path_check, plan_shell_host_call, shell_exec_default_env, split_host_method,
+    FsAccessMode, MiniAppFsHostCallPlan, MiniAppHostPlanError, MiniAppHostPlanErrorKind,
 };
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
@@ -101,13 +101,8 @@ fn canonicalize_best_effort(p: &Path) -> PathBuf {
 /// canonicalized scope roots. Mirrors the worker_host.js check, but uses real
 /// canonicalization so e.g. `/tmp/foo` on macOS (`/private/tmp/foo`) matches a
 /// `/tmp` scope after both sides resolve symlinks.
-fn path_allowed(policy: &Value, target: &Path, mode: &str) -> bool {
-    let access_mode = if mode == "write" {
-        FsAccessMode::Write
-    } else {
-        FsAccessMode::Read
-    };
-    let scopes = fs_policy_scopes(policy, access_mode);
+fn path_allowed(policy: &Value, target: &Path, mode: FsAccessMode) -> bool {
+    let scopes = fs_policy_scopes(policy, mode);
     if scopes.is_empty() {
         return false;
     }
@@ -119,12 +114,13 @@ fn path_allowed(policy: &Value, target: &Path, mode: &str) -> bool {
     fs_resolved_path_allowed(&resolved, resolved_scopes)
 }
 
-fn arg_path(params: &Value, key: &str) -> BitFunResult<PathBuf> {
-    params
-        .get(key)
-        .and_then(|v| v.as_str())
-        .map(PathBuf::from)
-        .ok_or_else(|| BitFunError::parse(format!("missing param: {}", key)))
+fn host_plan_error(error: MiniAppHostPlanError) -> BitFunError {
+    match error.kind() {
+        MiniAppHostPlanErrorKind::Parse => BitFunError::parse(error.message().to_string()),
+        MiniAppHostPlanErrorKind::Validation => {
+            BitFunError::validation(error.message().to_string())
+        }
+    }
 }
 
 fn resolve_shell_program(command: &str) -> PathBuf {
@@ -137,47 +133,47 @@ fn resolve_shell_program(command: &str) -> PathBuf {
 }
 
 async fn dispatch_fs(policy: &Value, name: &str, params: &Value) -> BitFunResult<Value> {
-    // Common path arg ("path" or legacy "p").
-    let path_param = params
-        .get("path")
-        .or_else(|| params.get("p"))
-        .and_then(|v| v.as_str())
-        .map(PathBuf::from);
-
-    if let Some(ref p) = path_param {
-        if let Some(mode) = fs_method_access_mode(name).policy_key() {
-            if !path_allowed(policy, p, mode) {
-                return Err(deny(format!("Path not allowed: {}", p.display())));
-            }
+    let legacy_path_check = plan_fs_legacy_path_check(name, params);
+    if let Some(check) = &legacy_path_check {
+        if !path_allowed(policy, &check.path, check.mode) {
+            return Err(deny(check.denied_message()));
         }
     }
 
-    match name {
-        "readFile" => {
-            let p = path_param.ok_or_else(|| BitFunError::parse("missing path"))?;
-            let enc = params
-                .get("encoding")
-                .and_then(|v| v.as_str())
-                .unwrap_or("utf8");
+    let plan = plan_fs_host_call(name, params).map_err(host_plan_error)?;
+    for check in plan.path_checks() {
+        if legacy_path_check
+            .as_ref()
+            .is_some_and(|legacy_check| legacy_check == &check)
+        {
+            continue;
+        }
+        if !path_allowed(policy, &check.path, check.mode) {
+            return Err(deny(check.denied_message()));
+        }
+    }
+
+    match plan {
+        MiniAppFsHostCallPlan::ReadFile {
+            path: p,
+            encoding_base64,
+        } => {
             let bytes = tokio::fs::read(&p)
                 .await
                 .map_err(|e| BitFunError::io(format!("readFile {}: {}", p.display(), e)))?;
-            if enc == "base64" {
+            if encoding_base64 {
                 Ok(Value::String(BASE64.encode(&bytes)))
             } else {
                 Ok(Value::String(String::from_utf8_lossy(&bytes).into_owned()))
             }
         }
-        "writeFile" => {
-            let p = path_param.ok_or_else(|| BitFunError::parse("missing path"))?;
-            let data = params.get("data").and_then(|v| v.as_str()).unwrap_or("");
+        MiniAppFsHostCallPlan::WriteFile { path: p, data } => {
             tokio::fs::write(&p, data)
                 .await
                 .map_err(|e| BitFunError::io(format!("writeFile {}: {}", p.display(), e)))?;
             Ok(Value::Null)
         }
-        "readdir" => {
-            let p = path_param.ok_or_else(|| BitFunError::parse("missing path"))?;
+        MiniAppFsHostCallPlan::ReadDir { path: p } => {
             let mut rd = tokio::fs::read_dir(&p)
                 .await
                 .map_err(|e| BitFunError::io(format!("readdir {}: {}", p.display(), e)))?;
@@ -196,8 +192,7 @@ async fn dispatch_fs(policy: &Value, name: &str, params: &Value) -> BitFunResult
             }
             Ok(Value::Array(out))
         }
-        "stat" => {
-            let p = path_param.ok_or_else(|| BitFunError::parse("missing path"))?;
+        MiniAppFsHostCallPlan::Stat { path: p } => {
             let meta = tokio::fs::metadata(&p)
                 .await
                 .map_err(|e| BitFunError::io(format!("stat {}: {}", p.display(), e)))?;
@@ -207,12 +202,7 @@ async fn dispatch_fs(policy: &Value, name: &str, params: &Value) -> BitFunResult
                 "isFile": meta.is_file(),
             }))
         }
-        "mkdir" => {
-            let p = path_param.ok_or_else(|| BitFunError::parse("missing path"))?;
-            let recursive = params
-                .get("recursive")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false);
+        MiniAppFsHostCallPlan::Mkdir { path: p, recursive } => {
             (if recursive {
                 tokio::fs::create_dir_all(&p).await
             } else {
@@ -221,16 +211,11 @@ async fn dispatch_fs(policy: &Value, name: &str, params: &Value) -> BitFunResult
             .map_err(|e| BitFunError::io(format!("mkdir {}: {}", p.display(), e)))?;
             Ok(Value::Null)
         }
-        "rm" => {
-            let p = path_param.ok_or_else(|| BitFunError::parse("missing path"))?;
-            let recursive = params
-                .get("recursive")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false);
-            let force = params
-                .get("force")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false);
+        MiniAppFsHostCallPlan::Rm {
+            path: p,
+            recursive,
+            force,
+        } => {
             let result = match tokio::fs::metadata(&p).await {
                 Ok(m) if m.is_dir() => {
                     if recursive {
@@ -250,38 +235,23 @@ async fn dispatch_fs(policy: &Value, name: &str, params: &Value) -> BitFunResult
             result.map_err(|e| BitFunError::io(format!("rm {}: {}", p.display(), e)))?;
             Ok(Value::Null)
         }
-        "copyFile" => {
-            let src = arg_path(params, "src")?;
-            let dst = arg_path(params, "dst")?;
-            if !path_allowed(policy, &src, "read") {
-                return Err(deny(format!("src not allowed: {}", src.display())));
-            }
-            if !path_allowed(policy, &dst, "write") {
-                return Err(deny(format!("dst not allowed: {}", dst.display())));
-            }
+        MiniAppFsHostCallPlan::CopyFile { src, dst } => {
             tokio::fs::copy(&src, &dst)
                 .await
                 .map_err(|e| BitFunError::io(format!("copyFile: {}", e)))?;
             Ok(Value::Null)
         }
-        "rename" => {
-            let oldp = arg_path(params, "oldPath")?;
-            let newp = arg_path(params, "newPath")?;
-            if !path_allowed(policy, &oldp, "write") {
-                return Err(deny(format!("oldPath not allowed: {}", oldp.display())));
-            }
-            if !path_allowed(policy, &newp, "write") {
-                return Err(deny(format!("newPath not allowed: {}", newp.display())));
-            }
+        MiniAppFsHostCallPlan::Rename {
+            old_path: oldp,
+            new_path: newp,
+        } => {
             tokio::fs::rename(&oldp, &newp)
                 .await
                 .map_err(|e| BitFunError::io(format!("rename: {}", e)))?;
             Ok(Value::Null)
         }
-        "appendFile" => {
+        MiniAppFsHostCallPlan::AppendFile { path: p, data } => {
             use tokio::io::AsyncWriteExt;
-            let p = path_param.ok_or_else(|| BitFunError::parse("missing path"))?;
-            let data = params.get("data").and_then(|v| v.as_str()).unwrap_or("");
             let mut f = tokio::fs::OpenOptions::new()
                 .create(true)
                 .append(true)
@@ -293,17 +263,12 @@ async fn dispatch_fs(policy: &Value, name: &str, params: &Value) -> BitFunResult
                 .map_err(|e| BitFunError::io(format!("appendFile write: {}", e)))?;
             Ok(Value::Null)
         }
-        "access" => {
-            let p = path_param.ok_or_else(|| BitFunError::parse("missing path"))?;
+        MiniAppFsHostCallPlan::Access { path: p } => {
             tokio::fs::metadata(&p)
                 .await
                 .map_err(|e| BitFunError::io(format!("access {}: {}", p.display(), e)))?;
             Ok(Value::Null)
         }
-        other => Err(BitFunError::validation(format!(
-            "unknown fs method: {}",
-            other
-        ))),
     }
 }
 
@@ -314,32 +279,14 @@ async fn dispatch_shell(
     name: &str,
     params: &Value,
 ) -> BitFunResult<Value> {
-    if name != "exec" {
-        return Err(BitFunError::validation(format!(
-            "unknown shell method: {}",
-            name
-        )));
-    }
     // Two input shapes are supported:
     //   1. `{ command: "git status" }` — runs through the platform shell (sh -c / cmd /C).
     //   2. `{ args: ["git", "rev-parse", "--is-inside-work-tree"] }` — spawns the program
     //      directly with no shell. This is the cross-platform safe form: callers no longer
     //      need to worry about per-shell quoting (single quotes from sh do not work under
     //      cmd.exe on Windows, which previously broke `builtin-coding-selfie` git scans).
-    let argv: Option<Vec<String>> = params.get("args").and_then(|v| v.as_array()).map(|a| {
-        a.iter()
-            .filter_map(|x| x.as_str().map(str::to_string))
-            .collect()
-    });
-    let command = params
-        .get("command")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .trim()
-        .to_string();
-    if shell_exec_input_is_empty(argv.as_deref(), &command) {
-        return Err(BitFunError::parse("empty command"));
-    }
+    let plan =
+        plan_shell_host_call(name, params, workspace_dir, app_data_dir).map_err(host_plan_error)?;
 
     // Allowlist check: take the program name (basename of the first token, sans
     // extension) and require it to be in `policy.shell.allow`.
@@ -353,22 +300,12 @@ async fn dispatch_shell(
                 .collect()
         })
         .unwrap_or_default();
-    let first_token = shell_exec_first_token(argv.as_deref(), &command);
-    let base = command_basename_for_allowlist(first_token);
+    let base = command_basename_for_allowlist(&plan.first_token);
     if !command_basename_allowed(&allow, &base) {
         return Err(deny(format!("Command not in allowlist: {}", base)));
     }
 
-    // cwd: explicit > workspace > appdata. Mirrors what worker_host.js gives users
-    // (where process.cwd() is appDir, but the iframe always passes cwd explicitly).
-    let cwd = shell_exec_cwd(
-        params.get("cwd").and_then(|v| v.as_str()),
-        workspace_dir,
-        app_data_dir,
-    );
-    let timeout_ms = shell_exec_timeout_ms(params.get("timeout").and_then(|v| v.as_u64()));
-
-    let mut cmd = if let Some(argv) = argv.as_ref() {
+    let mut cmd = if let Some(argv) = plan.argv.as_ref() {
         let program = resolve_shell_program(&argv[0]);
         let mut c = crate::util::process_manager::create_tokio_command(program.as_os_str());
         if argv.len() > 1 {
@@ -379,26 +316,28 @@ async fn dispatch_shell(
         #[cfg(target_os = "windows")]
         {
             let mut c = crate::util::process_manager::create_tokio_command("cmd");
-            c.args(["/C", &command]);
+            c.args(["/C", &plan.command]);
             c
         }
         #[cfg(not(target_os = "windows"))]
         {
             let mut c = crate::util::process_manager::create_tokio_command("sh");
-            c.args(["-c", &command]);
+            c.args(["-c", &plan.command]);
             c
         }
     };
-    cmd.current_dir(&cwd);
+    cmd.current_dir(&plan.cwd);
     // Match worker_host.js: never let git prompt for credentials, force C locale so
     // stdout parsing is deterministic.
     for (key, value) in shell_exec_default_env() {
         cmd.env(key, value);
     }
 
-    let output = tokio::time::timeout(Duration::from_millis(timeout_ms), cmd.output())
+    let output = tokio::time::timeout(Duration::from_millis(plan.timeout_ms), cmd.output())
         .await
-        .map_err(|_| BitFunError::service(format!("shell.exec timed out after {}ms", timeout_ms)))?
+        .map_err(|_| {
+            BitFunError::service(format!("shell.exec timed out after {}ms", plan.timeout_ms))
+        })?
         .map_err(|e| BitFunError::service(format!("shell.exec spawn failed: {}", e)))?;
 
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();

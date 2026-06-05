@@ -64,12 +64,13 @@
 ### 1.5 Product Domain 与 function-agent / MiniApp 边界
 
 - `product-domains` 已承接 MiniApp 的纯状态、runtime detection policy、worker capacity / idle / LRU policy、
-  host method / fs access / shell token / env 等纯决策，以及 function-agent prompt / parser / response policy / ports。
+  host method、`fs.*` / `shell.exec` host call plan、fs access / shell token / cwd / timeout / env 等纯决策，
+  以及 function-agent prompt / parser / response policy / ports。
 - 内置 MiniApp bundle identity、版本和 embedded source assets 已归入 `product-domains`。
 - function-agent Git concrete snapshot、no-HEAD diff fallback、非 Git workspace fallback、ahead/behind/last-commit
   fallback 和 project context lookup 已迁入 `services-integrations::function_agents`。
-- function-agent AI provider acquisition、AI transport error mapping、MiniApp worker process、host dispatch、
-  PathManager integration、marker IO 和 seed 写盘仍留在 core concrete path。
+- function-agent AI provider acquisition、AI transport error mapping、MiniApp worker process、host side-effect dispatch、
+  `net.fetch` / `os.info` runtime execution、PathManager integration、marker IO 和 seed 写盘仍留在 core concrete path。
 
 ## 2. 已建立的保护
 

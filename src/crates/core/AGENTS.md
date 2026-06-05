@@ -55,9 +55,10 @@ SessionManager -> Session -> DialogTurn -> ModelRound
   permission orchestration, and remote/platform providers in core until the
   target owner has a reviewed port/provider design plus behavior-equivalence
   tests.
-- Product-domain changes must not move filesystem writes, worker/host execution,
-  Git/AI concrete calls, marker IO, or path-manager integration out of core
-  without an explicit owner design and focused regression coverage.
+- Product-domain changes may move pure product-domain plans with equivalence
+  coverage, but filesystem writes, worker/host side effects, Git/AI concrete
+  calls, marker IO, and path-manager integration stay in core unless a reviewed
+  owner design says otherwise.
 - Remote/service changes must keep external protocol lifecycle, workspace
   projection, scheduler/session restore, terminal pre-warm, and product
   execution boundaries explicit.

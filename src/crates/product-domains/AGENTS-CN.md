@@ -19,10 +19,10 @@ ports；具体 runtime 行为不属于本 crate。
 ## 归属边界
 
 - `miniapp` 可以拥有 MiniApp 数据形态、纯生命周期决策、metadata/import policy、built-in bundle identity、embedded source assets、
-  seed-plan facts、marker wire format 和窄 port。
+  seed-plan facts、marker wire format、host primitive call plan 和窄 port。
 - `function-agents` 可以拥有 function-agent DTO、prompt/domain policy、response parsing/repair rule、file-shape analysis
   和 Git/AI port trait。
-- Core 仍拥有 filesystem writes、marker IO、worker/host execution、compile orchestration、`PathManager` integration、
+- Core 仍拥有 filesystem writes、marker IO、worker/host side effect、compile orchestration、`PathManager` integration、
   concrete Git/AI service、provider acquisition 和 transport error mapping。
 
 ## 验证

@@ -41,8 +41,8 @@ SessionManager -> Session -> DialogTurn -> ModelRound
 - Tool 改动必须保持 expanded/collapsed exposure、prompt-visible manifest、`GetToolSpec`、权限行为、
   `ToolUseContext` 语义，以及 desktop/MCP/ACP catalog 行为等价。
 - Runtime owner 迁移在目标 owner 具备评审过的 port/provider 设计和行为等价测试前，不应移动 concrete lifecycle、IO、event delivery、permission orchestration 或 remote/platform provider。
-- Product-domain 改动不得在没有明确 owner 设计和 focused regression 覆盖前，把 filesystem writes、worker/host execution、
-  Git/AI concrete calls、marker IO 或 path-manager integration 移出 core。
+- Product-domain 改动可以在有等价保护时迁移纯产品领域计划；filesystem writes、worker/host side effect、
+  Git/AI concrete calls、marker IO 和 path-manager integration 仍留在 core，除非有经过评审的 owner 设计。
 - Remote/service 改动必须保持 external protocol lifecycle、workspace projection、scheduler/session restore、
   terminal pre-warm 和 product execution 边界清晰。
 - Feature 改动必须保持 `product-full` 作为兼容产品组装边界；默认能力选择只有在单独的 product matrix review 后才能变化。

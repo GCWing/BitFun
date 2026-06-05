@@ -174,40 +174,6 @@ Repository-level decomposition rules:
   compatibility, behavior equivalence tests, and explicit confirmation when a
   behavior boundary could change.
 
-### DeepReview guardrails
-
-Deep Review / Code Review Team work spans the core runtime and web UI. Keep
-target resolution and manifest construction on the frontend; keep policy
-validation, queue/retry state, and report enrichment in shared core.
-
-### Backend flow
-
-Trace most features in this order:
-
-1. `src/web-ui` or app entrypoint
-2. `src/apps/desktop/src/api/*` or server routes
-3. `src/crates/api-layer`
-4. `src/crates/transport`
-5. `src/crates/core`
-
-### `bitfun-core`
-
-`src/crates/core` is the center of the codebase.
-
-Important areas:
-
-- `agentic/`: agents, prompts, tools, sessions, execution, persistence
-- `service/`: config, filesystem, terminal, git, LSP, MCP, remote connect, project context, AI memory
-- `infrastructure/`: AI clients, app paths, event system, storage, debug log server
-
-Agent runtime mental model:
-
-```text
-SessionManager → Session → DialogTurn → ModelRound
-```
-
-Session data is stored under `.bitfun/sessions/{session_id}/`.
-
 ## Verification
 
 Run the smallest local precheck that matches the touched files. CI is expected to
@@ -221,7 +187,6 @@ change directly affects build, packaging, or CI cannot protect the path.
 | Locale contract or shared terms | `pnpm run i18n:generate && pnpm run i18n:contract:test && pnpm run i18n:audit` |
 | Web UI i18n runtime, namespace loading, or direct `i18nService.t(...)` usage | `pnpm run i18n:contract:test && pnpm run type-check:web && pnpm --dir src/web-ui run test:run src/infrastructure/i18n/core/I18nService.test.ts` |
 | Mobile web UI, state, pairing, disconnect, or reconnect behavior | `pnpm --dir src/mobile-web run type-check`; include manual pairing / reconnect notes when behavior changes |
-| Deep Review / Code Review Team behavior | Nearest Web UI check above, plus `cargo test -p bitfun-core deep_review -- --nocapture`; also run Rust / desktop checks when backend or Tauri APIs are touched |
 | Shared Rust logic in `core`, `transport`, `api-layer`, or services | `cargo check --workspace`, plus the nearest focused `cargo test` when behavior changed |
 | Desktop integration, Tauri APIs, browser/computer-use, or desktop-only behavior | `cargo check -p bitfun-desktop`, plus focused desktop tests when behavior changed |
 | Behavior covered by desktop smoke/functional flows | Prefer the nearest focused E2E/smoke check; rely on CI for broad build/test coverage unless build behavior changed |
@@ -229,20 +194,6 @@ change directly affects build, packaging, or CI cannot protect the path.
 | Installer frontend or i18n runtime without packaging changes | `pnpm --dir BitFun-Installer run type-check` |
 | Installer Tauri/Rust changes | `cargo check --manifest-path BitFun-Installer/src-tauri/Cargo.toml` |
 | Installer packaging, payload, install/uninstall flow, or native bundling | `pnpm run installer:build` |
-
-## Where to look first
-
-| Feature | Key paths |
-|---|---|
-| Agent modes | `src/crates/core/src/agentic/agents/`, `src/crates/core/src/agentic/agents/prompts/`, `src/web-ui/src/locales/*/scenes/agents.json` |
-| Deep Review / Code Review Team | `src/crates/core/src/agentic/deep_review/`, `src/crates/core/src/agentic/deep_review_policy.rs`, `src/crates/core/src/agentic/agents/definitions/hidden/deep_review.rs`, `src/crates/core/src/agentic/tools/implementations/{task_tool.rs,code_review_tool.rs}`, `src/web-ui/src/shared/services/review-team/`, `src/web-ui/src/flow_chat/deep-review/`, `src/web-ui/src/app/scenes/agents/components/ReviewTeamPage.tsx` |
-| Mobile web pairing / remote control | `src/mobile-web/src/pages/PairingPage.tsx`, `src/mobile-web/src/pages/SessionListPage.tsx`, `src/mobile-web/src/pages/ChatPage.tsx`, `src/mobile-web/src/services/RemoteSessionManager.ts`, `src/mobile-web/src/services/RelayHttpClient.ts`, `src/mobile-web/src/services/store.ts` |
-| Session usage report (`/usage`) | `src/crates/core/src/service/session_usage/`, `src/web-ui/src/flow_chat/components/usage/`, `src/web-ui/src/locales/*/flow-chat.json` |
-| Tools | `src/crates/core/src/agentic/tools/implementations/`, `src/crates/core/src/agentic/tools/registry.rs` |
-| MCP / LSP / remote | `src/crates/core/src/service/mcp/`, `src/crates/core/src/service/lsp/`, `src/crates/core/src/service/remote_connect/`, `src/crates/core/src/service/remote_ssh/` |
-| Desktop APIs | `src/apps/desktop/src/api/`, `src/crates/api-layer/src/`, `src/crates/transport/src/adapters/tauri.rs` |
-| Relay server | `src/apps/relay-server/` |
-| Web/server communication | `src/web-ui/src/infrastructure/api/`, `src/crates/transport/src/adapters/websocket.rs`, `src/apps/server/src/routes/`, `src/apps/server/src/main.rs` |
 
 ## Agent-doc priority
 

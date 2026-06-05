@@ -19,12 +19,12 @@
 
 #### Windows：OpenSSL 配置
 
-桌面端包含 SSH 远程功能，会链接 OpenSSL。Windows 上**不使用 OpenSSL 源码编译（vendored）**，需使用**预编译**库。
+大多数 Windows 贡献者不需要手动配置 OpenSSL。使用 `pnpm run desktop:dev`
+或常规 `desktop:build*` 脚本即可；脚本会在需要时自动引导预编译的 OpenSSL 包。
 
-- **默认**：Windows 下 `pnpm run desktop:dev` 会调用 `ensure-openssl-windows.mjs`；`pnpm run desktop:preview:debug` 在需要为预览执行快速本地 `cargo build -p bitfun-desktop` 时，也会做同样的 OpenSSL 引导。所有 `desktop:build*` 均通过 `scripts/desktop-tauri-build.mjs` 执行，在 `tauri build` 前做相同引导（首次下载到 `.bitfun/cache/`，之后走缓存）。
-- **手动 / CI**：下载 [FireDaemon ZIP](https://download.firedaemon.com/FireDaemon-OpenSSL/openssl-3.5.5.zip)，解压后将 `OPENSSL_DIR` 指向 `x64`，并设 `OPENSSL_STATIC=1`，或运行 `scripts/ci/setup-openssl-windows.ps1`。
-- **关闭自动下载**：设置 `BITFUN_SKIP_OPENSSL_BOOTSTRAP=1` 并自行配置 `OPENSSL_DIR`。
-- **`desktop:dev:raw`** 不经过 `dev.cjs`（无 OpenSSL 引导）；请自行设置 `OPENSSL_DIR`、运行 `scripts/ci/setup-openssl-windows.ps1`，或执行 `node scripts/ensure-openssl-windows.mjs`（会预热 `.bitfun/cache/` 并打印可在 PowerShell 中粘贴的 `OPENSSL_*` 命令）。
+只有在自动引导失败、准备 CI 环境，或你明确使用 `pnpm run desktop:dev:raw`
+时才需要手动处理。此时运行 `scripts/ci/setup-openssl-windows.ps1`，或将
+`OPENSSL_DIR` 指向预编译的 x64 OpenSSL 目录，并设置 `OPENSSL_STATIC=1`。
 
 ### 安装依赖
 
@@ -54,8 +54,9 @@ pnpm run e2e:test
 
 ### 桌面端调试工具
 
-桌面端 dev 构建会启用 `devtools` Cargo feature。`Cmd/Ctrl + Shift + I` 打开元素检查器，
-`Cmd/Ctrl + Shift + J` 打开原生 webview DevTools；面向最终用户的 `release` 构建不会启用这些工具。
+桌面端 dev 构建会启用 `devtools` Cargo feature。`F12` 打开原生 webview
+DevTools；`Cmd/Ctrl + Shift + I` 切换 BitFun 元素检查器，`Cmd/Ctrl + Shift + J`
+也可以打开原生 DevTools。面向最终用户的 `release` 构建不会启用这些工具。
 
 ## 代码规范与架构约束
 
@@ -67,7 +68,7 @@ pnpm run e2e:test
 - Tauri command 使用 `snake_case` 命令名和结构化 `request` 参数。
 - core 拆解、feature 边界、依赖边界和构建提速重构必须遵循
   `docs/architecture/core-decomposition.md`。
-- Deep Review / 代码审核团队改动需要保持 core 与 Web UI 指南和实现一致。
+- 功能级规则应放在离代码最近的模块 `AGENTS.md` 中。
 
 ## 重点关注的贡献方向
 

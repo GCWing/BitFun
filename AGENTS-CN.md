@@ -164,40 +164,6 @@ await api.invoke('your_command', { request: { ... } });
 - 产品表面可以有差异；共享稳定 facts 或 ports，不共享 UI、protocol、lifecycle 或平台实现。
 - 迁移 runtime owner 必须有评审过的 port/provider 设计、旧路径兼容、行为等价测试；如果可能改变行为边界，还需要先确认。
 
-### DeepReview 护栏
-
-Deep Review / 代码审核团队横跨 core runtime 与 Web UI。target resolution 与
-manifest construction 保持在前端；policy validation、queue/retry state 和
-report enrichment 保持在 shared core。
-
-### 后端链路
-
-大多数功能建议按这个顺序追踪：
-
-1. `src/web-ui` 或应用入口
-2. `src/apps/desktop/src/api/*` 或 server routes
-3. `src/crates/api-layer`
-4. `src/crates/transport`
-5. `src/crates/core`
-
-### `bitfun-core`
-
-`src/crates/core` 是代码库中心。
-
-主要区域：
-
-- `agentic/`：agents、prompts、tools、sessions、execution、persistence
-- `service/`：config、filesystem、terminal、git、LSP、MCP、remote connect、project context、AI memory
-- `infrastructure/`：AI clients、app paths、event system、storage、debug log server
-
-Agent 运行时心智模型：
-
-```text
-SessionManager → Session → DialogTurn → ModelRound
-```
-
-会话数据保存在 `.bitfun/sessions/{session_id}/`。
-
 ## 验证
 
 按触及文件选择最小本地预检。完整构建和大范围测试默认由 CI 保护；只有改动直接影响构建、
@@ -210,7 +176,6 @@ SessionManager → Session → DialogTurn → ModelRound
 | Locale contract 或 shared terms | `pnpm run i18n:generate && pnpm run i18n:contract:test && pnpm run i18n:audit` |
 | Web UI i18n runtime、namespace loading 或直接 `i18nService.t(...)` 调用 | `pnpm run i18n:contract:test && pnpm run type-check:web && pnpm --dir src/web-ui run test:run src/infrastructure/i18n/core/I18nService.test.ts` |
 | Mobile web UI、状态、配对、断开或重连行为 | `pnpm --dir src/mobile-web run type-check`；行为变化还需要在 PR 中说明手动配对 / 重连验证 |
-| Deep Review / 代码审核团队行为 | 运行最近的 Web UI 检查，再运行 `cargo test -p bitfun-core deep_review -- --nocapture`；如果触及后端或 Tauri API，还需要运行对应 Rust / 桌面端检查 |
 | `core`、`transport`、`api-layer` 或共享服务中的 Rust 逻辑 | `cargo check --workspace`；行为变化时再加最近的 focused `cargo test` |
 | 桌面端集成、Tauri API、browser/computer-use 或桌面专属行为 | `cargo check -p bitfun-desktop`；行为变化时再加 focused desktop tests |
 | 被桌面端 smoke/functional 流覆盖的行为 | 优先运行最近的 focused E2E/smoke check；除非改动影响构建，否则 broad build/test 交给 CI |
@@ -218,20 +183,6 @@ SessionManager → Session → DialogTurn → ModelRound
 | 不涉及打包的安装器前端或 i18n runtime | `pnpm --dir BitFun-Installer run type-check` |
 | 安装器 Tauri/Rust 改动 | `cargo check --manifest-path BitFun-Installer/src-tauri/Cargo.toml` |
 | 安装器打包、payload、安装/卸载流程或 native bundling | `pnpm run installer:build` |
-
-## 先看哪里
-
-| 功能 | 关键路径 |
-|---|---|
-| Agent mode | `src/crates/core/src/agentic/agents/`、`src/crates/core/src/agentic/agents/prompts/`、`src/web-ui/src/locales/*/scenes/agents.json` |
-| Deep Review / 代码审核团队 | `src/crates/core/src/agentic/deep_review/`、`src/crates/core/src/agentic/deep_review_policy.rs`、`src/crates/core/src/agentic/agents/definitions/hidden/deep_review.rs`、`src/crates/core/src/agentic/tools/implementations/{task_tool.rs,code_review_tool.rs}`、`src/web-ui/src/shared/services/review-team/`、`src/web-ui/src/flow_chat/deep-review/`、`src/web-ui/src/app/scenes/agents/components/ReviewTeamPage.tsx` |
-| Mobile web 配对 / 远程控制 | `src/mobile-web/src/pages/PairingPage.tsx`、`src/mobile-web/src/pages/SessionListPage.tsx`、`src/mobile-web/src/pages/ChatPage.tsx`、`src/mobile-web/src/services/RemoteSessionManager.ts`、`src/mobile-web/src/services/RelayHttpClient.ts`、`src/mobile-web/src/services/store.ts` |
-| 会话用量报告（`/usage`） | `src/crates/core/src/service/session_usage/`、`src/web-ui/src/flow_chat/components/usage/`、`src/web-ui/src/locales/*/flow-chat.json` |
-| Tool | `src/crates/core/src/agentic/tools/implementations/`、`src/crates/core/src/agentic/tools/registry.rs` |
-| MCP / LSP / remote | `src/crates/core/src/service/mcp/`、`src/crates/core/src/service/lsp/`、`src/crates/core/src/service/remote_connect/`、`src/crates/core/src/service/remote_ssh/` |
-| 桌面端 API | `src/apps/desktop/src/api/`、`src/crates/api-layer/src/`、`src/crates/transport/src/adapters/tauri.rs` |
-| 中继服务器 | `src/apps/relay-server/` |
-| Web/server 通信 | `src/web-ui/src/infrastructure/api/`、`src/crates/transport/src/adapters/websocket.rs`、`src/apps/server/src/routes/`、`src/apps/server/src/main.rs` |
 
 ## Agent 文档优先级
 

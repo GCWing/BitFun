@@ -19,12 +19,14 @@ Be respectful, kind, and constructive. We welcome contributors of all background
 
 #### Windows: OpenSSL Setup
 
-The desktop app includes SSH remote support, which pulls in OpenSSL. On Windows the workspace **does not use vendored OpenSSL**; link against **pre-built** binaries (no Perl/NASM/OpenSSL source build).
+Most Windows contributors do not need to configure OpenSSL manually. Use
+`pnpm run desktop:dev` or the normal `desktop:build*` scripts; they bootstrap a
+pre-built OpenSSL package when needed.
 
-- **Default**: `pnpm run desktop:dev` calls `ensure-openssl-windows.mjs` on Windows. `pnpm run desktop:preview:debug` does the same whenever it needs to fast-rebuild `bitfun-desktop` before preview. Every `desktop:build*` script runs via `scripts/desktop-tauri-build.mjs`, which does the same before invoking Cargo.
-- **Manual / CI**: Download the [FireDaemon OpenSSL 3.5.5 LTS ZIP](https://download.firedaemon.com/FireDaemon-OpenSSL/openssl-3.5.5.zip), extract, set `OPENSSL_DIR` to the `x64` folder, `OPENSSL_STATIC=1`, or run `scripts/ci/setup-openssl-windows.ps1`.
-- **Opt out of auto-download**: `BITFUN_SKIP_OPENSSL_BOOTSTRAP=1` and configure `OPENSSL_DIR` yourself.
-- **`desktop:dev:raw`** skips the dev script (no OpenSSL bootstrap); set `OPENSSL_DIR` yourself, run `scripts/ci/setup-openssl-windows.ps1`, or `node scripts/ensure-openssl-windows.mjs` (warms `.bitfun/cache/` and prints PowerShell `OPENSSL_*` lines to paste).
+Only handle OpenSSL yourself when the bootstrap fails, you are preparing CI, or
+you intentionally use `pnpm run desktop:dev:raw`. In that case, run
+`scripts/ci/setup-openssl-windows.ps1`, or set `OPENSSL_DIR` to a pre-built x64
+OpenSSL directory and set `OPENSSL_STATIC=1`.
 
 ### Install dependencies
 
@@ -54,9 +56,10 @@ pnpm run e2e:test
 
 ### Desktop debugging tools
 
-Desktop dev builds enable the `devtools` Cargo feature. Use
-`Cmd/Ctrl + Shift + I` for the element inspector and `Cmd/Ctrl + Shift + J` for
-native webview DevTools. These tools are disabled in end-user `release` builds.
+Desktop dev builds enable the `devtools` Cargo feature. Use `F12` for native
+webview DevTools. `Cmd/Ctrl + Shift + I` toggles the BitFun element inspector,
+and `Cmd/Ctrl + Shift + J` also opens native DevTools. These tools are disabled
+in end-user `release` builds.
 
 ## Code Standards and Architecture Constraints
 
@@ -73,8 +76,7 @@ terms:
   payloads.
 - Core decomposition, feature-boundary, dependency-boundary, and build-speed
   work must follow `docs/architecture/core-decomposition.md`.
-- Deep Review / Code Review Team changes must keep the core and Web UI guidance
-  aligned with the implementation.
+- Feature-specific rules belong in the nearest module `AGENTS.md`.
 
 ## Key Contribution Focus Areas
 
