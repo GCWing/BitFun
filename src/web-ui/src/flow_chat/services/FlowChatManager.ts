@@ -51,6 +51,7 @@ export class FlowChatManager {
   private context: FlowChatContext;
   private agentService: AgentService;
   private eventListenerInitialized = false;
+  private eventListenerInitializationPromise: Promise<void> | null = null;
   private eventListenerCleanup: (() => void) | null = null;
 
   private constructor() {
@@ -210,13 +211,24 @@ export class FlowChatManager {
     if (this.eventListenerInitialized) {
       return;
     }
+    if (this.eventListenerInitializationPromise) {
+      return this.eventListenerInitializationPromise;
+    }
 
-    this.eventListenerCleanup = await initializeEventListeners(
-      this.context,
-      (sessionId, turnId, result) => this.handleTodoWriteResult(sessionId, turnId, result)
-    );
-    
-    this.eventListenerInitialized = true;
+    this.eventListenerInitializationPromise = (async () => {
+      this.eventListenerCleanup = await initializeEventListeners(
+        this.context,
+        (sessionId, turnId, result) => this.handleTodoWriteResult(sessionId, turnId, result)
+      );
+
+      this.eventListenerInitialized = true;
+    })();
+
+    try {
+      await this.eventListenerInitializationPromise;
+    } finally {
+      this.eventListenerInitializationPromise = null;
+    }
   }
 
   public cleanupEventListeners(): void {
@@ -225,6 +237,7 @@ export class FlowChatManager {
       this.eventListenerCleanup = null;
       this.eventListenerInitialized = false;
     }
+    this.eventListenerInitializationPromise = null;
   }
 
   private processBatchedEvents(events: Array<{ key: string; payload: any }>): void {

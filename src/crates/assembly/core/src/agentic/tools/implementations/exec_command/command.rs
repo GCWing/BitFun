@@ -43,6 +43,9 @@ impl ExecCommandTool {
         HashMap::from([
             ("NO_COLOR".to_string(), "1".to_string()),
             ("TERM".to_string(), "dumb".to_string()),
+            ("LANG".to_string(), "C.UTF-8".to_string()),
+            ("LC_CTYPE".to_string(), "C.UTF-8".to_string()),
+            ("COLORTERM".to_string(), String::new()),
             ("CLICOLOR".to_string(), "0".to_string()),
             ("PAGER".to_string(), "cat".to_string()),
             ("GIT_PAGER".to_string(), "cat".to_string()),
