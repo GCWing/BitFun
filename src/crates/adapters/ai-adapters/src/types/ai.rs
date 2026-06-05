@@ -37,6 +37,32 @@ pub struct GeminiUsage {
     pub cache_creation_token_count: Option<u32>,
 }
 
+impl From<bitfun_agent_stream::UnifiedTokenUsage> for GeminiUsage {
+    fn from(usage: bitfun_agent_stream::UnifiedTokenUsage) -> Self {
+        Self {
+            prompt_token_count: usage.prompt_token_count,
+            candidates_token_count: usage.candidates_token_count,
+            total_token_count: usage.total_token_count,
+            reasoning_token_count: usage.reasoning_token_count,
+            cached_content_token_count: usage.cached_content_token_count,
+            cache_creation_token_count: usage.cache_creation_token_count,
+        }
+    }
+}
+
+impl From<GeminiUsage> for bitfun_agent_stream::UnifiedTokenUsage {
+    fn from(usage: GeminiUsage) -> Self {
+        Self {
+            prompt_token_count: usage.prompt_token_count,
+            candidates_token_count: usage.candidates_token_count,
+            total_token_count: usage.total_token_count,
+            reasoning_token_count: usage.reasoning_token_count,
+            cached_content_token_count: usage.cached_content_token_count,
+            cache_creation_token_count: usage.cache_creation_token_count,
+        }
+    }
+}
+
 /// Structured message codes for localized connection test messaging.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -107,5 +133,48 @@ mod tests {
         let parsed: GeminiUsage = serde_json::from_str(raw).expect("legacy payload");
         assert_eq!(parsed.cached_content_token_count, Some(3));
         assert_eq!(parsed.cache_creation_token_count, None);
+    }
+
+    #[test]
+    fn gemini_usage_converts_to_and_from_unified_token_usage() {
+        let usage = GeminiUsage {
+            prompt_token_count: 100,
+            candidates_token_count: 20,
+            total_token_count: 120,
+            reasoning_token_count: Some(7),
+            cached_content_token_count: Some(30),
+            cache_creation_token_count: Some(20),
+        };
+
+        let unified: bitfun_agent_stream::UnifiedTokenUsage = usage.clone().into();
+        assert_eq!(unified.prompt_token_count, usage.prompt_token_count);
+        assert_eq!(unified.candidates_token_count, usage.candidates_token_count);
+        assert_eq!(unified.total_token_count, usage.total_token_count);
+        assert_eq!(unified.reasoning_token_count, usage.reasoning_token_count);
+        assert_eq!(
+            unified.cached_content_token_count,
+            usage.cached_content_token_count
+        );
+        assert_eq!(
+            unified.cache_creation_token_count,
+            usage.cache_creation_token_count
+        );
+
+        let roundtrip: GeminiUsage = unified.into();
+        assert_eq!(roundtrip.prompt_token_count, usage.prompt_token_count);
+        assert_eq!(
+            roundtrip.candidates_token_count,
+            usage.candidates_token_count
+        );
+        assert_eq!(roundtrip.total_token_count, usage.total_token_count);
+        assert_eq!(roundtrip.reasoning_token_count, usage.reasoning_token_count);
+        assert_eq!(
+            roundtrip.cached_content_token_count,
+            usage.cached_content_token_count
+        );
+        assert_eq!(
+            roundtrip.cache_creation_token_count,
+            usage.cache_creation_token_count
+        );
     }
 }

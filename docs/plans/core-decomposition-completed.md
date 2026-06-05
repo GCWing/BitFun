@@ -43,6 +43,7 @@
 - `src/crates` 已按六层物理布局整理：`interfaces/`、`assembly/`、`adapters/`、`services/`、`execution/`、`contracts/`。
 - 旧 `surfaces` 和 `providers` 目标层级已被移除：协议入口归入 `interfaces`，协议/transport/provider 转换归入 `adapters`，OS/runtime infrastructure 具体实现归入 `services`。
 - execution 下 tool 相关目录已按职责命名：`tool-contracts`、`tool-provider-groups`、`tool-execution`。Cargo package / lib 名保持兼容。
+- `agent-stream` 已成为统一 stream DTO、tool-call 累积和 replay 契约 owner；provider stream 解析测试归属 `ai-adapters`。
 - AGENTS、README、DeepReview path classifier、core boundary rules 和 Cargo workspace path 已同步到当前分层。
 
 ## 2. 已建立的保护

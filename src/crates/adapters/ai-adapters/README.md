@@ -6,8 +6,7 @@ This crate owns the portable AI integration layer:
 
 - provider request building
 - provider-specific message conversion
-- SSE / stream parsing
-- streamed tool-call aggregation
+- SSE / stream parsing into provider-neutral stream contracts
 - shared AI-facing transport types
 - provider model discovery
 - connection health checks
@@ -26,8 +25,8 @@ and re-exports this crate where convenient.
 
 - `client`: shared HTTP transport, retries, aggregation, health checks
 - `providers`: OpenAI / Anthropic / Gemini request and discovery adapters
-- `stream`: provider SSE parsing into unified streaming events
-- `tool_call_accumulator`: reconstruct structured tool calls from streamed deltas
+- `stream`: provider SSE parsing into unified streaming events from `bitfun-agent-stream`
+- `tool_call_accumulator`: compatibility re-export; canonical implementation lives in `bitfun-agent-stream`
 - `types`: portable request/response/config/message types
 
 ## Design Rule

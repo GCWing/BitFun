@@ -13,7 +13,7 @@ delivery form.
 | Crate | Responsibility | Local doc |
 |---|---|---|
 | `agent-runtime` | Agent registry, scheduler, prompt cache, hooks, goals, and runtime control contracts | [AGENTS.md](agent-runtime/AGENTS.md) |
-| `agent-stream` | Provider stream normalization and stream replay contracts | [AGENTS.md](agent-stream/AGENTS.md) |
+| `agent-stream` | Provider-neutral stream DTOs, tool-call accumulation, and replay contracts | [AGENTS.md](agent-stream/AGENTS.md) |
 | `tool-contracts` | Tool contracts, execution gates, input validation, and result presentation contracts. Cargo package remains `bitfun-agent-tools`. | [AGENTS.md](tool-contracts/AGENTS.md) |
 | `harness` | Harness workflow contracts and registry primitives | [AGENTS.md](harness/AGENTS.md) |
 | `runtime-services` | Typed runtime service assembly and service availability facts | [AGENTS.md](runtime-services/AGENTS.md) |
@@ -23,7 +23,7 @@ delivery form.
 ## Placement Rules
 
 - Put portable execution orchestration, agent lifecycle contracts, tool
-  contracts, and provider-neutral execution facts here.
+  contracts, provider-neutral stream contracts, and execution facts here.
 - Keep concrete filesystem, git, terminal, MCP server, remote SSH, and OS
   behavior in `services` unless the code is a pure low-level tool primitive.
 - Keep protocol projection and external provider request shaping in `adapters`.
@@ -35,8 +35,9 @@ delivery form.
 ## Dependency Boundaries
 
 - Execution primitive crates may depend on `contracts` and narrowly scoped
-  provider-neutral DTOs when needed for stream normalization.
+  provider-neutral DTOs owned by this layer.
 - Execution primitive crates must not depend on `assembly/core`, `src/apps`,
   frontend code, Tauri APIs, or product-surface lifecycle.
-- Any new dependency on `adapters` or `services` needs an explicit boundary
-  reason in the nearest module doc or PR description.
+- Dependencies on `adapters` are not allowed from this layer. New dependencies
+  on `services` need an explicit boundary reason in the nearest module doc or
+  PR description.

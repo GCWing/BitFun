@@ -39,7 +39,7 @@ impl From<bitfun_agent_stream::StreamResult> for StreamResult {
             thinking_signature: result.thinking_signature,
             full_text: result.full_text,
             tool_calls: result.tool_calls.into_iter().map(Into::into).collect(),
-            usage: result.usage,
+            usage: result.usage.map(Into::into),
             provider_metadata: result.provider_metadata,
             has_effective_output: result.has_effective_output,
             first_chunk_ms: result.first_chunk_ms,

@@ -226,7 +226,7 @@ flowchart TB
 
 ### 7.3 适配层（Adapters）
 
-适配层负责协议、transport、外部 provider 和宿主通信转换，物理位置是 `src/crates/adapters`。其中 `ai-adapters` 负责 AI provider 请求/响应与 stream 协议，`api-layer` 负责产品宿主共用的后端 API adapter，`transport` 负责事件投递和 host transport adapter，`webdriver` 负责 WebDriver 协议和浏览器自动化 adapter。适配层不拥有产品能力选择，也不承载可复用 OS service 实现。
+适配层负责协议、transport、外部 provider 和宿主通信转换，物理位置是 `src/crates/adapters`。其中 `ai-adapters` 负责 AI provider 请求/响应映射和 provider stream 协议解析，解析结果应转换为 execution 层拥有的统一 stream 契约；`api-layer` 负责产品宿主共用的后端 API adapter，`transport` 负责事件投递和 host transport adapter，`webdriver` 负责 WebDriver 协议和浏览器自动化 adapter。适配层不拥有产品能力选择，也不承载可复用 OS service 实现。
 
 ### 7.4 服务实现层（Services）
 
@@ -234,7 +234,7 @@ flowchart TB
 
 ### 7.5 执行原语层（Execution Primitives）
 
-执行原语层提供 provider-neutral 的 runtime building blocks，物理位置是 `src/crates/execution`。`agent-runtime`、`agent-stream`、`harness`、`runtime-services`、`tool-contracts`、`tool-provider-groups` 和 `tool-execution` 分别定义 agent loop facts、stream normalization、workflow descriptor、typed service bundle、tool manifest / permission / result policy、tool group facts 和低层 tool execution helper。当前 Cargo package / lib 名保持兼容，但物理目录按职责命名。它们只能依赖稳定契约或明确的 provider-neutral DTO，不直接创建 Tauri handle、filesystem manager、Git provider、MCP client、AI client 或 host process。
+执行原语层提供 provider-neutral 的 runtime building blocks，物理位置是 `src/crates/execution`。`agent-runtime`、`agent-stream`、`harness`、`runtime-services`、`tool-contracts`、`tool-provider-groups` 和 `tool-execution` 分别定义 agent loop facts、统一 stream DTO / tool-call 累积 / replay 契约、workflow descriptor、typed service bundle、tool manifest / permission / result policy、tool group facts 和低层 tool execution helper。当前 Cargo package / lib 名保持兼容，但物理目录按职责命名。它们只能依赖稳定契约或明确的 provider-neutral DTO，不直接创建 Tauri handle、filesystem manager、Git provider、MCP client、AI client 或 host process。
 
 ### 7.6 稳定契约与产品领域层（Stable Contracts and Product Domains）
 

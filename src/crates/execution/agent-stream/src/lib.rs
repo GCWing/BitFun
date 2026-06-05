@@ -2,10 +2,12 @@
 //!
 //! Processes AI streaming responses, supports tool pre-detection and parameter streaming
 
-use bitfun_ai_adapters::tool_call_accumulator::{
+pub mod tool_call_accumulator;
+mod unified;
+
+use crate::tool_call_accumulator::{
     FinalizedToolCall, PendingToolCalls, ToolCallBoundary, ToolCallStreamKey,
 };
-use bitfun_ai_adapters::{GeminiUsage, UnifiedResponse, UnifiedTokenUsage, UnifiedToolCall};
 use bitfun_events::{AgenticEvent, AgenticEventPriority as EventPriority, ToolEventData};
 use futures::{Stream, StreamExt};
 use log::{debug, error, trace};
@@ -16,6 +18,7 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::mpsc;
+pub use unified::{UnifiedResponse, UnifiedTokenUsage, UnifiedToolCall};
 
 /// Minimal tool-call value emitted by the stream processor.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -169,7 +172,7 @@ pub struct StreamResult {
     pub full_text: String,
     pub tool_calls: Vec<ToolCall>,
     /// Token usage statistics (from model response)
-    pub usage: Option<GeminiUsage>,
+    pub usage: Option<UnifiedTokenUsage>,
     /// Provider-specific metadata captured from the stream tail.
     pub provider_metadata: Option<Value>,
     /// Whether this stream produced any user-visible output (text/thinking/tool events)
@@ -218,7 +221,7 @@ struct StreamContext {
     thinking_signature: Option<String>,
     full_text: String,
     tool_calls: Vec<ToolCall>,
-    usage: Option<GeminiUsage>,
+    usage: Option<UnifiedTokenUsage>,
     provider_metadata: Option<Value>,
 
     // Current tool call state
@@ -570,14 +573,7 @@ impl StreamProcessor {
 
     /// Handle usage statistics
     fn handle_usage(&self, ctx: &mut StreamContext, response_usage: &UnifiedTokenUsage) {
-        ctx.usage = Some(GeminiUsage {
-            prompt_token_count: response_usage.prompt_token_count,
-            candidates_token_count: response_usage.candidates_token_count,
-            total_token_count: response_usage.total_token_count,
-            reasoning_token_count: response_usage.reasoning_token_count,
-            cached_content_token_count: response_usage.cached_content_token_count,
-            cache_creation_token_count: response_usage.cache_creation_token_count,
-        });
+        ctx.usage = Some(response_usage.clone());
         debug!(
             "Received token usage stats: input={}, output={}, total={}",
             response_usage.prompt_token_count,
@@ -996,7 +992,7 @@ impl StreamProcessor {
 #[cfg(test)]
 mod tests {
     use super::{StreamEventSink, StreamProcessOptions, StreamProcessor};
-    use bitfun_ai_adapters::{UnifiedResponse, UnifiedTokenUsage, UnifiedToolCall};
+    use super::{UnifiedResponse, UnifiedTokenUsage, UnifiedToolCall};
     use bitfun_events::{AgenticEvent, AgenticEventPriority as EventPriority};
     use futures::StreamExt;
     use serde_json::json;

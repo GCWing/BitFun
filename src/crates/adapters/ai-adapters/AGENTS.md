@@ -3,8 +3,8 @@
 Scope: this guide applies to `src/crates/adapters/ai-adapters`.
 
 `bitfun-ai-adapters` owns provider-specific request/response mapping and stream
-normalization. Keep provider quirks here instead of leaking them into core tool
-contracts or product runtime logic.
+protocol parsing. Keep provider quirks here, then convert stream chunks into the
+provider-neutral contracts owned by `bitfun-agent-stream`.
 
 ## Guardrails
 
@@ -16,6 +16,8 @@ contracts or product runtime logic.
   count.
 - Do not change shared stream or usage semantics without updating the focused
   adapter tests and downstream usage expectations.
+- Do not move provider-neutral stream DTOs, replay policy, or tool-call
+  accumulation ownership back into this crate.
 
 ## Verification
 

@@ -9,7 +9,7 @@
 | Crate | 职责 | 本地文档 |
 |---|---|---|
 | `agent-runtime` | Agent registry、scheduler、prompt cache、hooks、goal 和 runtime control 契约 | [AGENTS.md](agent-runtime/AGENTS.md) |
-| `agent-stream` | Provider stream 归一化和 replay 契约 | [AGENTS.md](agent-stream/AGENTS.md) |
+| `agent-stream` | Provider-neutral stream DTO、tool-call 累积和 replay 契约 | [AGENTS.md](agent-stream/AGENTS.md) |
 | `tool-contracts` | Tool 契约、execution gate、input validation 和 result presentation 契约；Cargo package 仍为 `bitfun-agent-tools` | [AGENTS.md](tool-contracts/AGENTS.md) |
 | `harness` | Harness workflow 契约和 registry primitive | [AGENTS.md](harness/AGENTS.md) |
 | `runtime-services` | Typed runtime service assembly 和 service availability facts | [AGENTS.md](runtime-services/AGENTS.md) |
@@ -18,7 +18,7 @@
 
 ## 放置规则
 
-- 可移植 execution 编排、agent lifecycle 契约、tool 契约和 provider-neutral execution facts 放到这里。
+- 可移植 execution 编排、agent lifecycle 契约、tool 契约、provider-neutral stream 契约和 execution facts 放到这里。
 - 具体 filesystem、git、terminal、MCP server、remote SSH、OS 行为应放到 `services`，除非只是纯底层 tool primitive。
 - 协议 projection 与外部 provider 请求整形放到 `adapters`。
 - 产品 feature 选择和 delivery-profile 决策放到 `assembly`，不要放入 execution primitive。
@@ -26,6 +26,6 @@
 
 ## 依赖边界
 
-- Execution primitive crate 可以依赖 `contracts`，在 provider stream 归一化场景下可以窄依赖 provider-neutral DTO。
+- Execution primitive crate 可以依赖 `contracts`，也可以依赖本层拥有的窄 provider-neutral DTO。
 - Execution primitive crate 不得依赖 `assembly/core`、`src/apps`、前端代码、Tauri API 或产品形态 lifecycle。
-- 新增对 `adapters` 或 `services` 的依赖时，必须在最近的模块文档或 PR 描述里说明边界原因。
+- 本层不得依赖 `adapters`。新增对 `services` 的依赖时，必须在最近的模块文档或 PR 描述里说明边界原因。

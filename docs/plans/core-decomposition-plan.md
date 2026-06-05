@@ -23,6 +23,7 @@
 - Desktop / CLI / ACP 仍通过 `bitfun-core/product-full` 获取完整能力；Server / Web / Mobile Web 不直接依赖 core，但尚未完成按交付形态裁剪最小 feature / dependency。
 - `runtime-services` 已有 typed builder、capability availability 和 core product runtime provider adapter，但不少 concrete provider 仍在 core 创建或持有。
 - `tool-contracts` 已承接 provider-neutral tool manifest、admission、catalog、result policy 等纯策略；`tool-execution` 只承接部分低层 IO/search helper；Bash、terminal lifecycle、indexed search、remote shell、permission wait、checkpoint orchestration 和完整 execution pipeline 仍未完全迁移。
+- `agent-stream` 已承接统一 stream DTO、tool-call 累积和 replay 契约；provider SSE / 响应解析测试归属 `ai-adapters`。
 - `harness` 当前主要承接 descriptor / route plan / registry contract；Deep Review、DeepResearch、MiniApp 的 concrete workflow execution 仍在 core 或产品路径。
 - `product-domains` 已承接 MiniApp / function-agent 的部分纯领域逻辑；worker、host side effect、AI acquisition、marker IO 等 concrete path 仍未完成 owner 迁移。
 
