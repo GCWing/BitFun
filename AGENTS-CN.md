@@ -13,39 +13,29 @@ BitFun 是一个由 Rust workspace 与 React 前端组成的项目。
 3. 修改 Rust 文件后，优先使用 `pnpm run fmt:rs`，只格式化已改动或已暂存的 `.rs` 文件。只有在你明确需要更大范围格式化时才使用 `cargo fmt`。
 4. 改完后按下方表格执行与改动范围匹配的最小验证。
 
-## 模块索引
+## 分层模块索引
 
-| 模块 | 路径 | Agent 文档 |
-|---|---|---|
-| Core（产品逻辑） | `src/crates/core` | [AGENTS.md](src/crates/core/AGENTS.md) |
-| Core 共享 DTO | `src/crates/core-types` | [AGENTS.md](src/crates/core-types/AGENTS.md) |
-| 事件契约 | `src/crates/events` | [AGENTS.md](src/crates/events/AGENTS.md) |
-| Agent stream 归一化 | `src/crates/agent-stream` | [AGENTS.md](src/crates/agent-stream/AGENTS.md) |
-| Runtime ports | `src/crates/runtime-ports` | [AGENTS.md](src/crates/runtime-ports/AGENTS.md) |
-| Runtime services | `src/crates/runtime-services` | [AGENTS.md](src/crates/runtime-services/AGENTS.md) |
-| Terminal 基础设施 | `src/crates/terminal` | [AGENTS.md](src/crates/terminal/AGENTS.md) |
-| 底层 tool runtime | `src/crates/tool-runtime` | [AGENTS.md](src/crates/tool-runtime/AGENTS.md) |
-| Agent runtime owner crate | `src/crates/agent-runtime` | [AGENTS.md](src/crates/agent-runtime/AGENTS.md) |
-| Harness workflow contracts | `src/crates/harness` | [AGENTS.md](src/crates/harness/AGENTS.md) |
-| Service core owner crate | `src/crates/services-core` | [AGENTS.md](src/crates/services-core/AGENTS.md) |
-| Service integrations owner crate | `src/crates/services-integrations` | [AGENTS.md](src/crates/services-integrations/AGENTS.md) |
-| Agent tool contracts | `src/crates/agent-tools` | [AGENTS.md](src/crates/agent-tools/AGENTS.md) |
-| Tool pack provider plan | `src/crates/tool-packs` | [AGENTS.md](src/crates/tool-packs/AGENTS.md) |
-| 产品领域 crate | `src/crates/product-domains` | [AGENTS.md](src/crates/product-domains/AGENTS.md) |
-| 产品能力包 | `src/crates/product-capabilities` | [AGENTS.md](src/crates/product-capabilities/AGENTS.md) |
-| Transport 适配层 | `src/crates/transport` | [AGENTS.md](src/crates/transport/AGENTS.md) |
-| API layer | `src/crates/api-layer` | [AGENTS.md](src/crates/api-layer/AGENTS.md) |
-| ACP 集成 | `src/crates/acp` | [AGENTS.md](src/crates/acp/AGENTS.md) |
-| AI adapters | `src/crates/ai-adapters` | [AGENTS.md](src/crates/ai-adapters/AGENTS.md) |
-| 嵌入式 WebDriver | `src/crates/webdriver` | [AGENTS.md](src/crates/webdriver/AGENTS.md) |
-| 桌面应用 | `src/apps/desktop` | [AGENTS.md](src/apps/desktop/AGENTS.md) |
-| Server | `src/apps/server` | （使用 core 指南） |
-| CLI | `src/apps/cli` | （使用 core 指南） |
-| 中继服务器 | `src/apps/relay-server` | （使用 core 指南） |
-| 共享前端 | `src/web-ui` | [AGENTS.md](src/web-ui/AGENTS.md) |
-| Mobile web | `src/mobile-web` | [AGENTS.md](src/mobile-web/AGENTS.md) |
-| 安装器 | `BitFun-Installer` | [AGENTS.md](BitFun-Installer/AGENTS.md) |
-| E2E 测试 | `tests/e2e` | [AGENTS.md](tests/e2e/AGENTS.md) |
+依赖关系按自上而下读取：某一行代码只能依赖更下方的层级。可复用行为放到能够拥有它的最低层；入口、协议外观和交付形态选择留在对应的最高入口层。
+
+| # | 层级 | 路径 | 职责 | 模块 / 入口 | 层级文档 |
+|---|---|---|---|---|---|
+| 1 | 产品入口与协议入口层 | `src/apps/*`, `src/web-ui`, `src/mobile-web`, `BitFun-Installer`, `tests/e2e`, `src/crates/surfaces` | UI、命令、路由、交付形态、宿主集成、协议入口和跨形态测试 | desktop、CLI、server、relay、Web UI、mobile web、installer、E2E、`acp` | 最近的本地 `AGENTS.md`；[surfaces](src/crates/surfaces/AGENTS.md) |
+| 2 | 门面与产品组装层 | `src/crates/facade` | 兼容导出、product-full 组装、交付形态接线和 provider 注册 | `core` | [AGENTS.md](src/crates/facade/AGENTS.md) |
+| 3 | 具体适配实现层 | `src/crates/integrations` | 低层外部协议、provider、transport 和平台 adapter | `ai-adapters`, `api-layer`, `transport`, `webdriver` | [AGENTS.md](src/crates/integrations/AGENTS.md) |
+| 4 | 可复用服务与服务适配层 | `src/crates/services` | 具体非 UI 服务实现，以及窄产品领域 port adapter | `services-core`, `services-integrations`, `terminal` | [AGENTS.md](src/crates/services/AGENTS.md) |
+| 5 | 产品策略与能力层 | `src/crates/product` | 产品领域、feature facts、capability packs、非 UI 产品策略和窄领域 port | `product-domains`, `product-capabilities` | [AGENTS.md](src/crates/product/AGENTS.md) |
+| 6 | 执行原语层 | `src/crates/execution` | provider-neutral 的 agent、tool、harness、stream 和 typed-service 构件 | `agent-runtime`, `agent-stream`, `agent-tools`, `harness`, `runtime-services`, `tool-packs`, `tool-runtime` | [AGENTS.md](src/crates/execution/AGENTS.md) |
+| 7 | 稳定契约层 | `src/crates/contracts` | 跨层共享 DTO、事件形状和 port | `core-types`, `events`, `runtime-ports` | [AGENTS.md](src/crates/contracts/AGENTS.md) |
+
+边界规则：
+
+- 产品入口与协议入口只选择交付形态并调用 facade 或 adapter API；可复用行为应下移。
+- facade 只负责兼容和产品组装接线，不实现 provider、protocol、OS 或 service 细节。
+- 具体适配实现只翻译外部系统；依赖已组装产品行为的协议入口应放入 `surfaces`。
+- 通用 service 不依赖产品 crate；feature-gated service adapter 只能实现窄 `product-domains` port。
+- product 拥有产品策略和能力事实，不拥有 UI、protocol、host 或具体 service 实现。
+- execution 只放可移植执行构件，不等同于完整产品 runtime 或宿主 runtime。
+- contracts 只放轻行为契约，不得向上依赖。
 
 ## 常用命令
 
@@ -179,7 +169,7 @@ await api.invoke('your_command', { request: { ... } });
 | `core`、`transport`、`api-layer` 或共享服务中的 Rust 逻辑 | `cargo check --workspace`；行为变化时再加最近的 focused `cargo test` |
 | 桌面端集成、Tauri API、browser/computer-use 或桌面专属行为 | `cargo check -p bitfun-desktop`；行为变化时再加 focused desktop tests |
 | 被桌面端 smoke/functional 流覆盖的行为 | 优先运行最近的 focused E2E/smoke check；除非改动影响构建，否则 broad build/test 交给 CI |
-| `src/crates/ai-adapters` | 运行上面相关 Rust 检查；只有 stream contract 改动时再加 `cargo test -p bitfun-agent-stream` |
+| `src/crates/integrations/ai-adapters` | 运行上面相关 Rust 检查；只有 stream contract 改动时再加 `cargo test -p bitfun-agent-stream` |
 | 不涉及打包的安装器前端或 i18n runtime | `pnpm --dir BitFun-Installer run type-check` |
 | 安装器 Tauri/Rust 改动 | `cargo check --manifest-path BitFun-Installer/src-tauri/Cargo.toml` |
 | 安装器打包、payload、安装/卸载流程或 native bundling | `pnpm run installer:build` |

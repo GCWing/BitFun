@@ -163,11 +163,13 @@ pnpm run desktop:build
 ## 项目结构一览
 
 ```
-src/crates/core         # 兼容门面与完整产品 runtime 组装点
-src/crates/{core-types,agent-stream,runtime-ports} # 已拆出的 core 支撑边界
-src/crates/{terminal,tool-runtime} # workspace 顶层 terminal / tool 辅助 crate
-src/crates/transport    # Tauri / WebSocket / CLI 传输适配
-src/crates/api-layer    # 共享 handler 与 DTO
+src/crates/contracts/          # 稳定 DTO、事件与 runtime ports
+src/crates/execution/          # Agent、tool、harness 与 runtime-service owners
+src/crates/services/           # 共享本地服务与 terminal 基础设施
+src/crates/product/            # 产品能力与领域 owners
+src/crates/integrations/       # 低层 AI、API、transport 与 WebDriver adapters
+src/crates/surfaces/           # ACP 等面向产品的协议入口
+src/crates/facade/core         # 兼容门面与完整产品 runtime 组装点
 src/apps/desktop        # Tauri 桌面宿主
 src/apps/server         # Web 服务端运行时
 src/apps/cli            # CLI 运行时

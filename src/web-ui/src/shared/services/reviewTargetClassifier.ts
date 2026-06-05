@@ -92,6 +92,16 @@ const REVIEWER_APPLICABILITY_RULES: ReviewerApplicabilityRule[] = [
   },
 ];
 
+const LAYERED_BACKEND_CRATE_PREFIXES = [
+  'src/crates/surfaces/acp/',
+  'src/crates/facade/',
+  'src/crates/integrations/webdriver/',
+  'src/crates/contracts/',
+  'src/crates/execution/',
+  'src/crates/services/',
+  'src/crates/product/',
+];
+
 export function getReviewerApplicabilityRule(
   subagentId: string,
 ): ReviewerApplicabilityRule | undefined {
@@ -122,7 +132,7 @@ const PATH_TAG_RULES: PathTagRule[] = [
   {
     id: 'core-locales',
     tags: ['frontend_i18n'],
-    match: { pathPrefixes: ['src/crates/core/locales/'], extensions: ['.ftl'] },
+    match: { pathPrefixes: ['src/crates/facade/core/locales/'], extensions: ['.ftl'] },
     evidence: 'Core locale file changed',
   },
   {
@@ -158,7 +168,7 @@ const PATH_TAG_RULES: PathTagRule[] = [
   {
     id: 'api-layer-contract',
     tags: ['api_layer', 'frontend_contract'],
-    match: { pathPrefixes: ['src/crates/api-layer/'] },
+    match: { pathPrefixes: ['src/crates/integrations/api-layer/'] },
     evidence: 'API layer may affect frontend/backend contract',
   },
   {
@@ -170,19 +180,31 @@ const PATH_TAG_RULES: PathTagRule[] = [
   {
     id: 'transport',
     tags: ['transport'],
-    match: { pathPrefixes: ['src/crates/transport/'] },
+    match: { pathPrefixes: ['src/crates/integrations/transport/'] },
     evidence: 'Transport layer changed',
+  },
+  {
+    id: 'acp-surface',
+    tags: ['backend_core', 'transport'],
+    match: { pathPrefixes: ['src/crates/surfaces/acp/'] },
+    evidence: 'ACP protocol surface changed',
+  },
+  {
+    id: 'layered-backend-crate',
+    tags: ['backend_core'],
+    match: { pathPrefixes: LAYERED_BACKEND_CRATE_PREFIXES },
+    evidence: 'Layered backend crate changed',
   },
   {
     id: 'core',
     tags: ['backend_core'],
-    match: { pathPrefixes: ['src/crates/core/'] },
+    match: { pathPrefixes: ['src/crates/facade/core/'] },
     evidence: 'Core product logic changed',
   },
   {
     id: 'ai-adapter',
     tags: ['ai_adapter'],
-    match: { pathPrefixes: ['src/crates/ai-adapters/'] },
+    match: { pathPrefixes: ['src/crates/integrations/ai-adapters/'] },
     evidence: 'AI adapter changed',
   },
   {

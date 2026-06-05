@@ -825,7 +825,7 @@ pub trait BeforeToolExecution: Send + Sync {
 错误：
 
 - contract 层使用 portable error facts。
-- runtime 层做错误分类和事件上报。
+- Agent Runtime SDK / Runtime Services 负责错误分类和事件上报边界。
 - Product Surface 只负责展示逻辑。
 - unsupported capability 必须明确，不允许泛化为 unknown failure。
 

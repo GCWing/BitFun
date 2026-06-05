@@ -1,0 +1,18 @@
+[package]
+name = "bitfun-runtime-services"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "Typed runtime service assembly for BitFun runtimes"
+
+[lib]
+name = "bitfun_runtime_services"
+crate-type = ["rlib"]
+
+[dependencies]
+bitfun-runtime-ports = { path = "../../contracts/runtime-ports" }
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }

@@ -10,6 +10,7 @@ import type {
   ReviewTeamStrategyRecommendation,
 } from './types';
 import {
+  crateNameForReviewPath,
   isSecuritySensitiveReviewPath,
   pluralize,
   workspaceAreaForReviewPath,
@@ -102,7 +103,7 @@ function crossCrateChangeCountForReviewTarget(
   const crateNames = new Set(
     target.files
       .filter((file) => !file.excluded)
-      .map((file) => /^src\/crates\/([^/]+)/.exec(file.normalizedPath)?.[1])
+      .map((file) => crateNameForReviewPath(file.normalizedPath))
       .filter((crateName): crateName is string => Boolean(crateName)),
   );
 

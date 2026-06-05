@@ -1,0 +1,28 @@
+[package]
+name = "bitfun-services-core"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "BitFun core service owner crate"
+
+[lib]
+name = "bitfun_services_core"
+crate-type = ["rlib"]
+
+[dependencies]
+bitfun-core-types = { path = "../../contracts/core-types" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+base64 = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+log = { workspace = true }
+ignore = { workspace = true }
+sha2 = { workspace = true }
+which = { workspace = true }
+similar = { workspace = true }
+regex = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+win32job = { workspace = true }

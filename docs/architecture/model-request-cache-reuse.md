@@ -5,7 +5,7 @@ cache reuse and to avoid unnecessary cache invalidation across long-running
 agent sessions.
 
 The implementation is mostly in the shared Rust runtime under
-`src/crates/core/src/agentic/`.
+`src/crates/facade/core/src/agentic/`.
 
 ## The Core Idea
 
@@ -32,9 +32,9 @@ Instead, it separates two relatively stable layers:
 - the user-context reminder
 
 The cache model lives in
-`src/crates/agent-runtime/src/prompt_cache.rs`.
+`src/crates/execution/agent-runtime/src/prompt_cache.rs`.
 
-Core still exposes `src/crates/core/src/agentic/session/prompt_cache.rs`, but
+Core still exposes `src/crates/facade/core/src/agentic/session/prompt_cache.rs`, but
 that file is now a compatibility facade that re-exports the owner types from
 `bitfun-agent-runtime`.
 
@@ -48,7 +48,7 @@ Key details:
   (`DEFAULT_PROMPT_CACHE_PERSISTENCE_TTL`)
 
 Session-level loading, saving, invalidation, and cloning live in
-`src/crates/core/src/agentic/session/session_manager.rs`.
+`src/crates/facade/core/src/agentic/session/session_manager.rs`.
 
 The test coverage in that file also explicitly exercises:
 
@@ -64,7 +64,7 @@ Persistence details:
   memory
 
 Request assembly uses the cache in
-`src/crates/core/src/agentic/execution/execution_engine.rs`:
+`src/crates/facade/core/src/agentic/execution/execution_engine.rs`:
 
 - `resolve_cached_system_prompt(...)` reuses a cached system prompt when the
   scope key still matches
@@ -81,7 +81,7 @@ stable while still handling workspace-dependent context separately.
 ### Session branching
 
 Persisted session branching is implemented in
-`src/crates/core/src/agentic/persistence/session_branch.rs`.
+`src/crates/facade/core/src/agentic/persistence/session_branch.rs`.
 
 When BitFun branches a session from an existing turn, it copies more than turn
 text:
@@ -107,9 +107,9 @@ Relevant code:
   `src/apps/desktop/src/api/btw_api.rs`
 - child-session creation:
   `ConversationCoordinator::ensure_hidden_btw_session(...)` in
-  `src/crates/core/src/agentic/coordination/coordinator.rs`
+  `src/crates/facade/core/src/agentic/coordination/coordinator.rs`
 - side-question prompt wrapper:
-  `src/crates/core/src/agentic/side_question.rs`
+  `src/crates/facade/core/src/agentic/side_question.rs`
 
 The parent context snapshot is not limited to a hot in-memory session. When
 needed, `load_session_context_messages(...)` restores the parent session from
@@ -139,11 +139,11 @@ Forked subagents reuse even more.
 Relevant code:
 
 - snapshot model:
-  `src/crates/core/src/agentic/fork_agent/mod.rs`
+  `src/crates/facade/core/src/agentic/fork_agent/mod.rs`
 - request validation and tool contract:
-  `src/crates/core/src/agentic/tools/implementations/task_tool.rs`
+  `src/crates/facade/core/src/agentic/tools/implementations/task_tool.rs`
 - execution and prompt-cache cloning:
-  `src/crates/core/src/agentic/coordination/coordinator.rs`
+  `src/crates/facade/core/src/agentic/coordination/coordinator.rs`
 
 When `Task` is called with `fork_context=true`, BitFun:
 
@@ -185,9 +185,9 @@ They are intentionally configured to share the same stable prompt base.
 Relevant code:
 
 - shared constants and tests:
-  `src/crates/agent-runtime/src/agents.rs`
+  `src/crates/execution/agent-runtime/src/agents.rs`
 - mode definitions:
-  `src/crates/core/src/agentic/agents/definitions/modes/{agentic,plan,debug,multitask}.rs`
+  `src/crates/facade/core/src/agentic/agents/definitions/modes/{agentic,plan,debug,multitask}.rs`
 
 Why they reuse cache:
 
@@ -218,7 +218,7 @@ force a base prompt cache reset.
 The frontend also knows about this compatibility:
 
 - `AgentInfo.prompt_cache_scope_key` is produced in
-  `src/crates/core/src/agentic/agents/registry/types.rs`
+  `src/crates/facade/core/src/agentic/agents/registry/types.rs`
 - `ChatInput.tsx` only shows a prompt-cache warning when the next mode's scope
   key differs from the last submitted mode's scope key
 
@@ -233,18 +233,18 @@ BitFun explicitly avoids baking that surface into one permanently rebuilt prompt
 Relevant code:
 
 - snapshot and diff model:
-  `src/crates/core/src/agentic/skill_agent_snapshot.rs`
+  `src/crates/facade/core/src/agentic/skill_agent_snapshot.rs`
 - sparse snapshot store:
-  `src/crates/core/src/agentic/session/turn_skill_agent_snapshot_store.rs`
+  `src/crates/facade/core/src/agentic/session/turn_skill_agent_snapshot_store.rs`
 - fork baseline override persistence:
   `snapshots/skill-agent-baseline-override.json` via
-  `src/crates/core/src/agentic/persistence/manager.rs`
+  `src/crates/facade/core/src/agentic/persistence/manager.rs`
 - turn-time diff injection:
   `ConversationCoordinator::wrap_user_input(...)`
 - baseline reminder reuse:
   `ExecutionEngine::build_cached_prepended_prompt_reminders(...)`
 - reminder ordering owner:
-  `src/crates/agent-runtime/src/prompt.rs`
+  `src/crates/execution/agent-runtime/src/prompt.rs`
 
 The strategy is:
 
@@ -293,10 +293,10 @@ BitFun does allow tool customization at the agent/profile level:
 Relevant code:
 
 - mode/profile tool overrides:
-  `src/crates/core/src/service/config/types.rs`
-  and `src/crates/core/src/service/config/mode_config_canonicalizer.rs`
+  `src/crates/facade/core/src/service/config/types.rs`
+  and `src/crates/facade/core/src/service/config/mode_config_canonicalizer.rs`
 - runtime resolution of effective agent tool policy:
-  `src/crates/core/src/agentic/agents/registry/query.rs`
+  `src/crates/facade/core/src/agentic/agents/registry/query.rs`
 
 However, tool manifests are still recomputed per turn/request, not diff-patched
 like skill and subagent listings.
@@ -312,12 +312,12 @@ More precisely:
 Relevant code:
 
 - request-time tool manifest resolution:
-  `src/crates/core/src/agentic/execution/execution_engine.rs`
+  `src/crates/facade/core/src/agentic/execution/execution_engine.rs`
 - tool definitions included in token estimation:
-  `src/crates/core/src/util/token_counter.rs`
+  `src/crates/facade/core/src/util/token_counter.rs`
 - provider request-body tool attachment:
-  `src/crates/ai-adapters/src/providers/openai/responses.rs`
-  and `src/crates/ai-adapters/src/providers/openai/codex_chatgpt.rs`
+  `src/crates/integrations/ai-adapters/src/providers/openai/responses.rs`
+  and `src/crates/integrations/ai-adapters/src/providers/openai/codex_chatgpt.rs`
 
 This is why tool changes cannot currently be handled the same way as
 skill/subagent listing updates.
@@ -374,9 +374,9 @@ BitFun's cache-hit strategy.
 Relevant code:
 
 - compression flow:
-  `src/crates/core/src/agentic/execution/execution_engine.rs`
+  `src/crates/facade/core/src/agentic/execution/execution_engine.rs`
 - compressor:
-  `src/crates/core/src/agentic/session/compression/`
+  `src/crates/facade/core/src/agentic/session/compression/`
 
 There are two different cache-reuse stories around compression:
 
@@ -443,13 +443,13 @@ measured instead of guessed.
 Relevant code:
 
 - unified usage types:
-  `src/crates/ai-adapters/src/stream/types/unified.rs`
+  `src/crates/integrations/ai-adapters/src/stream/types/unified.rs`
 - Anthropic mapping:
-  `src/crates/ai-adapters/src/stream/types/anthropic.rs`
+  `src/crates/integrations/ai-adapters/src/stream/types/anthropic.rs`
 - OpenAI / DeepSeek mapping:
-  `src/crates/ai-adapters/src/stream/types/openai.rs`
+  `src/crates/integrations/ai-adapters/src/stream/types/openai.rs`
 - runtime event emission:
-  `src/crates/core/src/agentic/execution/round_executor.rs`
+  `src/crates/facade/core/src/agentic/execution/round_executor.rs`
 
 Two fields matter:
 
@@ -481,21 +481,21 @@ The most important implementation choices are:
 ## Implementation Map
 
 - Prompt cache model:
-  `src/crates/agent-runtime/src/prompt_cache.rs`
+  `src/crates/execution/agent-runtime/src/prompt_cache.rs`
 - Prompt cache lifecycle:
-  `src/crates/core/src/agentic/session/session_manager.rs`
+  `src/crates/facade/core/src/agentic/session/session_manager.rs`
 - Request assembly and cache hits:
-  `src/crates/core/src/agentic/execution/execution_engine.rs`
+  `src/crates/facade/core/src/agentic/execution/execution_engine.rs`
 - Fork snapshot model:
-  `src/crates/core/src/agentic/fork_agent/mod.rs`
+  `src/crates/facade/core/src/agentic/fork_agent/mod.rs`
 - Session branching:
-  `src/crates/core/src/agentic/persistence/session_branch.rs`
+  `src/crates/facade/core/src/agentic/persistence/session_branch.rs`
 - Side-question child sessions:
-  `src/crates/core/src/agentic/coordination/coordinator.rs`
+  `src/crates/facade/core/src/agentic/coordination/coordinator.rs`
   and `src/apps/desktop/src/api/btw_api.rs`
 - Shared coding-mode identities:
-  `src/crates/agent-runtime/src/agents.rs`
+  `src/crates/execution/agent-runtime/src/agents.rs`
 - Dynamic skill/agent listing snapshots:
-  `src/crates/core/src/agentic/skill_agent_snapshot.rs`
+  `src/crates/facade/core/src/agentic/skill_agent_snapshot.rs`
 - Provider cache telemetry:
-  `src/crates/ai-adapters/src/stream/types/`
+  `src/crates/integrations/ai-adapters/src/stream/types/`

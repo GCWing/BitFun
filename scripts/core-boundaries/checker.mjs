@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from 'fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { join, relative } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -8,6 +8,11 @@ import {
   lightweightBoundaryRules,
   noCoreDependencyCrates,
 } from './rules/crate-rules.mjs';
+import {
+  crateLayoutLayerNames,
+  crateLayoutRules,
+  cratePathForName,
+} from './rules/crate-layout.mjs';
 import {
   coreProductFullFeatureAssemblyRule,
   optionalDependencyFeatureOwnerRules,
@@ -33,6 +38,23 @@ function toRepoPath(path) {
 
 function readText(path) {
   return readFileSync(path, 'utf8');
+}
+
+function repoPathToFsPath(repoPath) {
+  return join(ROOT, ...repoPath.split('/'));
+}
+
+function crateDirForName(crateName) {
+  const repoPath = cratePathForName(crateName);
+  if (!repoPath) {
+    failures.push({
+      path: ROOT,
+      line: 1,
+      message: `missing crate layout rule for ${crateName}`,
+    });
+    return join(ROOT, 'src', 'crates', crateName);
+  }
+  return repoPathToFsPath(repoPath);
 }
 
 function walkFiles(dir, visit) {
@@ -275,6 +297,121 @@ function collectKnownDependencyNames() {
   );
 }
 
+function parseWorkspaceMembers() {
+  const manifestPath = join(ROOT, 'Cargo.toml');
+  const lines = readText(manifestPath).split(/\r?\n/);
+  const members = [];
+  let inMembers = false;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!inMembers) {
+      if (trimmed === 'members = [' || trimmed.startsWith('members = [')) {
+        inMembers = true;
+      }
+    }
+    if (!inMembers) {
+      continue;
+    }
+    for (const match of trimmed.matchAll(/"([^"]+)"/g)) {
+      members.push(match[1]);
+    }
+    if (trimmed.includes(']')) {
+      break;
+    }
+  }
+  return members;
+}
+
+function checkCrateLayoutRules() {
+  const manifestPath = join(ROOT, 'Cargo.toml');
+  const requiredCrateNames = new Set(['core', ...noCoreDependencyCrates]);
+  const layoutCrateNames = new Set();
+  const layoutPaths = new Set();
+  const workspaceMembers = new Set(parseWorkspaceMembers());
+  const expectedWorkspaceCratePaths = new Set(crateLayoutRules.map((rule) => rule.path));
+
+  for (const rule of crateLayoutRules) {
+    if (!crateLayoutLayerNames.includes(rule.layer)) {
+      failures.push({
+        path: manifestPath,
+        line: 1,
+        message: `crate layout rule for ${rule.crateName} uses unknown layer ${rule.layer}`,
+      });
+    }
+    if (layoutCrateNames.has(rule.crateName)) {
+      failures.push({
+        path: manifestPath,
+        line: 1,
+        message: `duplicate crate layout rule for ${rule.crateName}`,
+      });
+    }
+    if (layoutPaths.has(rule.path)) {
+      failures.push({
+        path: manifestPath,
+        line: 1,
+        message: `duplicate crate layout path ${rule.path}`,
+      });
+    }
+    layoutCrateNames.add(rule.crateName);
+    layoutPaths.add(rule.path);
+
+    const crateManifestPath = repoPathToFsPath(`${rule.path}/Cargo.toml`);
+    if (!existsSync(crateManifestPath)) {
+      failures.push({
+        path: manifestPath,
+        line: 1,
+        message: `crate layout path for ${rule.crateName} is missing Cargo.toml: ${rule.path}`,
+      });
+    }
+    if (!workspaceMembers.has(rule.path)) {
+      failures.push({
+        path: manifestPath,
+        line: 1,
+        message: `workspace members must include crate layout path: ${rule.path}`,
+      });
+    }
+  }
+
+  for (const crateName of requiredCrateNames) {
+    if (!layoutCrateNames.has(crateName)) {
+      failures.push({
+        path: manifestPath,
+        line: 1,
+        message: `crate layout rules must cover workspace owner crate: ${crateName}`,
+      });
+    }
+  }
+
+  for (const member of workspaceMembers) {
+    if (!member.startsWith('src/crates/')) {
+      continue;
+    }
+    if (!expectedWorkspaceCratePaths.has(member)) {
+      failures.push({
+        path: manifestPath,
+        line: 1,
+        message: `workspace crate member must use an approved layered path: ${member}`,
+      });
+    }
+  }
+
+  const cratesRoot = join(ROOT, 'src', 'crates');
+  const allowedRootEntries = new Set([...crateLayoutLayerNames, 'LOGGING.md']);
+  for (const entry of readdirSync(cratesRoot)) {
+    if (allowedRootEntries.has(entry)) {
+      continue;
+    }
+    const entryPath = join(cratesRoot, entry);
+    if (statSync(entryPath).isDirectory() && existsSync(join(entryPath, 'Cargo.toml'))) {
+      failures.push({
+        path: entryPath,
+        line: 1,
+        message: `workspace crate must live under a layer directory, not directly under src/crates: ${entry}`,
+      });
+    }
+  }
+}
+
 function forbiddenRuleTextForPath(path) {
   return forbiddenContentRules
     .filter((rule) => rule.path === path)
@@ -403,7 +540,7 @@ function checkOptionalDependencyFeatureOwners(crateDir, rule) {
 }
 
 function checkProductCoreFeatureAssembly(rule) {
-  const manifestPath = join(ROOT, ...rule.manifestPath.split('/'));
+  const manifestPath = repoPathToFsPath(rule.manifestPath);
   const deps = parseManifestDependencies(readText(manifestPath).split(/\r?\n/));
   const dep = deps.find((candidate) => candidate.name === rule.dependencyName);
   if (!dep) {
@@ -450,7 +587,7 @@ function checkProductCoreFeatureAssemblyCoverage() {
 }
 
 function checkCoreDefaultProductFullFeature() {
-  const manifestPath = join(ROOT, 'src', 'crates', 'core', 'Cargo.toml');
+  const manifestPath = join(crateDirForName('core'), 'Cargo.toml');
   const features = parseManifestFeatures(readText(manifestPath).split(/\r?\n/));
   if (!featureReferencesFeature(features.get('default'), 'product-full')) {
     failures.push({
@@ -463,7 +600,7 @@ function checkCoreDefaultProductFullFeature() {
 }
 
 function checkCoreProductFullFeatureAssembly(rule) {
-  const manifestPath = join(ROOT, ...rule.manifestPath.split('/'));
+  const manifestPath = repoPathToFsPath(rule.manifestPath);
   const features = parseManifestFeatures(readText(manifestPath).split(/\r?\n/));
   const productFull = features.get(rule.featureName);
   if (!productFull) {
@@ -486,7 +623,7 @@ function checkCoreProductFullFeatureAssembly(rule) {
 }
 
 function checkOwnerCrateFeatureAssembly(rule) {
-  const manifestPath = join(ROOT, ...rule.manifestPath.split('/'));
+  const manifestPath = repoPathToFsPath(rule.manifestPath);
   const features = parseManifestFeatures(readText(manifestPath).split(/\r?\n/));
   const allowedProductFullFeatures = new Set(rule.requiredProductFullFeatures);
   const defaultFeature = features.get('default');
@@ -646,7 +783,7 @@ function createFacadeLineChecker(importPrefix) {
 }
 
 function checkFacadeOnlyFile(repoPath, importPrefix, reason) {
-  const path = join(ROOT, ...repoPath.split('/'));
+  const path = repoPathToFsPath(repoPath);
   const acceptsLine = createFacadeLineChecker(importPrefix);
   const lines = readText(path).split(/\r?\n/);
   lines.forEach((line, index) => {
@@ -669,7 +806,7 @@ function checkFacadeOnlyFile(repoPath, importPrefix, reason) {
 }
 
 function checkForbiddenContent(repoPath, patterns) {
-  const path = join(ROOT, ...repoPath.split('/'));
+  const path = repoPathToFsPath(repoPath);
   const lines = readText(path).split(/\r?\n/);
   lines.forEach((line, index) => {
     for (const pattern of patterns) {
@@ -685,7 +822,7 @@ function checkForbiddenContent(repoPath, patterns) {
 }
 
 function checkRequiredContent(repoPath, patterns, reason) {
-  const path = join(ROOT, ...repoPath.split('/'));
+  const path = repoPathToFsPath(repoPath);
   const text = readText(path);
   for (const pattern of patterns) {
     if (!pattern.regex.test(text)) {
@@ -699,7 +836,7 @@ function checkRequiredContent(repoPath, patterns, reason) {
 }
 
 function checkForbiddenContentUnder(repoDir, patterns, reason) {
-  const dir = join(ROOT, ...repoDir.split('/'));
+  const dir = repoPathToFsPath(repoDir);
   walkFiles(dir, (path) => {
     if (!path.endsWith('.rs')) {
       return;
@@ -754,28 +891,30 @@ export function runCoreBoundaryCheck() {
     return;
   }
 
+  checkCrateLayoutRules();
+
   for (const crateName of noCoreDependencyCrates) {
-    const crateDir = join(ROOT, 'src', 'crates', crateName);
+    const crateDir = crateDirForName(crateName);
     checkCargoManifest(crateDir);
     checkRustImports(crateDir);
   }
 
   for (const rule of lightweightBoundaryRules) {
-    const crateDir = join(ROOT, 'src', 'crates', rule.crateName);
+    const crateDir = crateDirForName(rule.crateName);
     const messageForDep = (dep) => `${rule.reason}; forbidden dependency: ${dep}`;
     checkForbiddenManifestDeps(crateDir, rule.forbiddenDeps, messageForDep);
     checkForbiddenRustImports(crateDir, rule.forbiddenDeps, messageForDep);
   }
 
   for (const rule of dependencyProfileRules) {
-    const crateDir = join(ROOT, 'src', 'crates', rule.crateName);
+    const crateDir = crateDirForName(rule.crateName);
     const messageForDep = (dep) =>
       `${rule.reason}; ${rule.profileName} forbids non-optional dependency: ${dep}`;
     checkForbiddenNonOptionalManifestDeps(crateDir, rule.forbiddenNonOptionalDeps, messageForDep);
   }
 
   for (const rule of optionalDependencyFeatureOwnerRules) {
-    const crateDir = join(ROOT, 'src', 'crates', rule.crateName);
+    const crateDir = crateDirForName(rule.crateName);
     checkOptionalDependencyFeatureOwners(crateDir, rule);
   }
 

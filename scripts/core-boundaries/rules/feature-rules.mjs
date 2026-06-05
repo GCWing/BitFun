@@ -98,17 +98,20 @@ export const productCoreFeatureAssemblyRules = [
     reason: 'CLI must explicitly assemble the full bitfun-core product runtime',
   },
   {
-    manifestPath: 'src/crates/acp/Cargo.toml',
+    manifestPath: 'src/crates/surfaces/acp/Cargo.toml',
     dependencyName: 'bitfun-core',
     requiredFeatures: ['product-full'],
     reason: 'ACP must explicitly assemble the full bitfun-core product runtime',
   },
 ];
 
-export const productCoreFeatureAssemblyScanRoots = ['src/apps', 'src/crates/acp'];
+export const productCoreFeatureAssemblyScanRoots = [
+  'src/apps',
+  'src/crates/surfaces/acp',
+];
 
 export const coreProductFullFeatureAssemblyRule = {
-  manifestPath: 'src/crates/core/Cargo.toml',
+  manifestPath: 'src/crates/facade/core/Cargo.toml',
   featureName: 'product-full',
   requiredFeatureRefs: [
     'ssh-remote',
@@ -122,7 +125,7 @@ export const coreProductFullFeatureAssemblyRule = {
 
 export const ownerCrateFeatureAssemblyRules = [
   {
-    manifestPath: 'src/crates/tool-packs/Cargo.toml',
+    manifestPath: 'src/crates/execution/tool-packs/Cargo.toml',
     reason: 'tool-packs must keep product feature groups explicit and default-light',
     requiredProductFullFeatures: [
       'basic',
@@ -136,7 +139,7 @@ export const ownerCrateFeatureAssemblyRules = [
     ],
   },
   {
-    manifestPath: 'src/crates/services-integrations/Cargo.toml',
+    manifestPath: 'src/crates/services/services-integrations/Cargo.toml',
     reason: 'services-integrations must keep integration feature groups explicit and default-light',
     requiredProductFullFeatures: [
       'announcement',
@@ -149,7 +152,7 @@ export const ownerCrateFeatureAssemblyRules = [
     ],
   },
   {
-    manifestPath: 'src/crates/product-domains/Cargo.toml',
+    manifestPath: 'src/crates/product/product-domains/Cargo.toml',
     reason: 'product-domains must keep product domain feature groups explicit and default-light',
     requiredProductFullFeatures: ['miniapp', 'function-agents'],
   },
