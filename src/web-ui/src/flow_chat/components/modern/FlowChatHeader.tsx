@@ -5,7 +5,7 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { Activity, Bot, ChevronDown, ChevronUp, GitPullRequest, Keyboard, List, MoreHorizontal, Search, Square, Terminal, X } from 'lucide-react';
+import { Activity, Bot, ChevronDown, ChevronUp, GitPullRequest, Keyboard, List, MoreHorizontal, Search, Square, Terminal, VolumeX, X } from 'lucide-react';
 import { Tooltip, IconButton, Input } from '@/component-library';
 import { useTranslation } from 'react-i18next';
 import { SessionFilesBadge } from './SessionFilesBadge';
@@ -89,8 +89,6 @@ export interface FlowChatHeaderProps {
   onOpenBackgroundSubagent?: (sessionId: string) => void;
   /** Called when user clicks to stop TTS playback. */
   onStopSpeaking?: () => void;
-  /** Whether TTS is currently speaking. */
-  isSpeaking?: boolean;
   /** Open a read-only output panel for a background command. */
   onOpenBackgroundCommandOutput?: (command: FlowChatHeaderCommandSummary) => void;
   /** Request user-provided stdin for an interactive background command. */

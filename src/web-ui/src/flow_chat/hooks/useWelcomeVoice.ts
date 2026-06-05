@@ -58,6 +58,7 @@ export function useWelcomeVoice() {
       try {
         const provider = createTtsProvider(cfg.ttsProvider);
         provider.configure(cfg.ttsVoice, cfg.language);
+<<<<<<< HEAD
         await provider.speak(i18nService.t('app.ttsWelcome', { ns: 'common' }));
         log.debug('Welcome voice spoken');
       } catch (err) {

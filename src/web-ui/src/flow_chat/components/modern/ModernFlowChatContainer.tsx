@@ -1378,6 +1378,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
           onOpenBackgroundSubagent={handleOpenBackgroundSubagent}
           isSpeaking={isTtsSpeaking}
           onStopSpeaking={stopTts}
+<<<<<<<< HEAD
           onOpenBackgroundCommandOutput={handleOpenBackgroundCommandOutput}
           onRequestBackgroundCommandInput={handleRequestBackgroundCommandInput}
           onStopBackgroundCommand={handleStopBackgroundCommand}
@@ -1388,6 +1389,8 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
           isSending={isSendingBackgroundCommandInput}
           onClose={handleCloseBackgroundCommandInput}
           onSend={handleSendBackgroundCommandInput}
+=======
+>>>>>>> c2f205e3 (添加语音播报功能)
         />
 
         <div

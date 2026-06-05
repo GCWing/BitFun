@@ -33,6 +33,7 @@ function stripMarkdown(text: string): string {
   return text
     .replace(/<scratchpad>[\s\S]*?<\/scratchpad>/gi, '')
     .replace(/<thinking>[\s\S]*?<\/thinking>/gi, '')
+    .replace(/<反思>[\s\S]*?<\/反思>/gi, '')
     .replace(/<scratch[\s\S]*?<\/scratch>/gi, '')
     .replace(/<noscratch>[\s\S]*?<\/noscratch>/gi, '')
     .replace(/<search_plan>[\s\S]*?<\/search_plan>/gi, '')
