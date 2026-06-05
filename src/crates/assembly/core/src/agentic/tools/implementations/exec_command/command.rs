@@ -17,6 +17,7 @@ use terminal_core::{
 
 const DEFAULT_MAX_OUTPUT_CHARS: u64 = 10_000;
 const REMOTE_SHELL_PROBE_TIMEOUT_MS: u64 = 3_000;
+const REMOTE_NON_TTY_INTERRUPT_GRACE_SECONDS: u64 = 2;
 const POWERSHELL_UTF8_OUTPUT_PREFIX: &str =
     "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8;\n";
 
@@ -219,6 +220,41 @@ impl ExecCommandTool {
         )
     }
 
+    fn remote_non_tty_control_wrapper(cmd: &str, shell_path: &str) -> String {
+        let escaped_shell = shell_escape(shell_path);
+        let escaped_cmd = shell_escape(cmd);
+        format!(
+            r#"__bitfun_shell={escaped_shell}
+__bitfun_cmd={escaped_cmd}
+if command -v setsid >/dev/null 2>&1; then
+  setsid "$__bitfun_shell" -lc "$__bitfun_cmd" &
+else
+  "$__bitfun_shell" -lc "$__bitfun_cmd" &
+fi
+__bitfun_child=$!
+__bitfun_pgid=$__bitfun_child
+__bitfun_stop() {{
+  __bitfun_signal=${{1:-INT}}
+  __bitfun_exit=${{2:-130}}
+  __bitfun_grace=${{3:-{REMOTE_NON_TTY_INTERRUPT_GRACE_SECONDS}}}
+  trap - INT TERM
+  kill -"$__bitfun_signal" "-$__bitfun_pgid" 2>/dev/null || kill -"$__bitfun_signal" "$__bitfun_child" 2>/dev/null || true
+  if [ "$__bitfun_grace" -gt 0 ]; then
+    sleep "$__bitfun_grace"
+  fi
+  kill -KILL "-$__bitfun_pgid" 2>/dev/null || kill -KILL "$__bitfun_child" 2>/dev/null || true
+  wait "$__bitfun_child" 2>/dev/null || true
+  exit "$__bitfun_exit"
+}}
+trap '__bitfun_stop INT 130 {REMOTE_NON_TTY_INTERRUPT_GRACE_SECONDS}' INT
+trap '__bitfun_stop KILL 137 0' TERM
+wait "$__bitfun_child"
+__bitfun_status=$?
+trap - INT TERM
+exit "$__bitfun_status""#
+        )
+    }
+
     fn merged_remote_env(env_snapshot: Option<&RemoteEnvSnapshot>) -> HashMap<String, String> {
         let mut env = env_snapshot
             .map(|snapshot| snapshot.env.clone())
@@ -329,8 +365,17 @@ impl ExecCommandTool {
             &shell.shell_type,
         )
         .await;
-        let command =
-            Self::remote_login_shell_command(&workdir, cmd, &shell, env_snapshot.as_ref());
+        let command_body = if tty {
+            cmd.to_string()
+        } else {
+            Self::remote_non_tty_control_wrapper(cmd, &shell.path)
+        };
+        let command = Self::remote_login_shell_command(
+            &workdir,
+            &command_body,
+            &shell,
+            env_snapshot.as_ref(),
+        );
 
         let request = RemoteExecCommandRequest {
             ssh_manager,
@@ -504,6 +549,20 @@ mod tests {
         assert!(command.contains("'PATH=/home/me/.nvm/bin:/usr/bin'"));
         assert!(command.ends_with(" '/bin/bash' -lc 'node --version'"));
         assert!(!command.contains(" -lic "));
+    }
+
+    #[test]
+    fn remote_non_tty_control_wrapper_cleans_process_group_after_interrupt_grace() {
+        let wrapper =
+            ExecCommandTool::remote_non_tty_control_wrapper("python3 -c 'print(1)'", "/bin/bash");
+
+        assert!(wrapper.contains("setsid \"$__bitfun_shell\" -lc \"$__bitfun_cmd\" &"));
+        assert!(wrapper.contains("trap '__bitfun_stop INT 130 2' INT"));
+        assert!(wrapper.contains("trap '__bitfun_stop KILL 137 0' TERM"));
+        assert!(wrapper.contains("__bitfun_grace=${3:-2}"));
+        assert!(wrapper.contains("sleep \"$__bitfun_grace\""));
+        assert!(wrapper.contains("kill -KILL \"-$__bitfun_pgid\""));
+        assert!(wrapper.contains("__bitfun_cmd='python3 -c '\\''print(1)'\\'''"));
     }
 
     #[test]

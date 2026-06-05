@@ -19,6 +19,7 @@ const DEFAULT_YIELD_TIME_MS: u64 = 10_000;
 const DEFAULT_MAX_OUTPUT_CHARS: usize = 10_000;
 const MAX_RETAINED_OUTPUT_BYTES: usize = 1024 * 1024;
 const MAX_REMOTE_EXEC_SESSIONS: usize = 64;
+const REMOTE_INTERRUPT_GRACE_TIMEOUT_MS: u64 = 3_000;
 const REMOTE_CONTROL_DRAIN_TIMEOUT_MS: u64 = 500;
 
 static GLOBAL_REMOTE_EXEC_MANAGER: OnceLock<Arc<RemoteExecProcessManager>> = OnceLock::new();
@@ -99,6 +100,20 @@ struct RemoteExecProcess {
 enum RemoteExecProcessCommand {
     Write(Vec<u8>),
     Control(RemoteExecControlAction),
+}
+
+#[derive(Debug, Clone, Copy)]
+enum RemotePipeControlState {
+    InterruptGrace { deadline: Instant },
+    KillDrain { deadline: Instant },
+}
+
+impl RemotePipeControlState {
+    fn deadline(self) -> Instant {
+        match self {
+            Self::InterruptGrace { deadline } | Self::KillDrain { deadline } => deadline,
+        }
+    }
 }
 
 struct OutputState {
@@ -409,15 +424,30 @@ async fn remote_pipe_owner(
     output: Arc<OutputState>,
 ) {
     let mut exit_code = None;
-    let mut close_after_control_at: Option<Instant> = None;
+    let mut control_state: Option<RemotePipeControlState> = None;
 
     loop {
-        if close_after_control_at.is_some_and(|deadline| Instant::now() >= deadline) {
-            let _ = channel.close().await;
-            break;
+        if let Some(state) = control_state {
+            if Instant::now() >= state.deadline() {
+                match state {
+                    RemotePipeControlState::InterruptGrace { .. } => {
+                        let _ = channel.signal(Sig::KILL).await;
+                        let _ = channel.eof().await;
+                        control_state = Some(RemotePipeControlState::KillDrain {
+                            deadline: Instant::now()
+                                + Duration::from_millis(REMOTE_CONTROL_DRAIN_TIMEOUT_MS),
+                        });
+                    }
+                    RemotePipeControlState::KillDrain { .. } => {
+                        let _ = channel.close().await;
+                        break;
+                    }
+                }
+            }
         }
 
-        let wait_budget = close_after_control_at
+        let wait_budget = control_state
+            .map(RemotePipeControlState::deadline)
             .map(|deadline| deadline.saturating_duration_since(Instant::now()))
             .filter(|duration| !duration.is_zero())
             .unwrap_or_else(|| Duration::from_millis(100));
@@ -431,16 +461,18 @@ async fn remote_pipe_owner(
                     Some(RemoteExecProcessCommand::Control(RemoteExecControlAction::Interrupt)) => {
                         let _ = channel.signal(Sig::INT).await;
                         let _ = channel.eof().await;
-                        close_after_control_at = Some(
-                            Instant::now() + Duration::from_millis(REMOTE_CONTROL_DRAIN_TIMEOUT_MS)
-                        );
+                        control_state = Some(RemotePipeControlState::InterruptGrace {
+                            deadline: Instant::now()
+                                + Duration::from_millis(REMOTE_INTERRUPT_GRACE_TIMEOUT_MS),
+                        });
                     }
                     Some(RemoteExecProcessCommand::Control(RemoteExecControlAction::Kill)) => {
-                        let _ = channel.signal(Sig::KILL).await;
+                        let _ = channel.signal(Sig::TERM).await;
                         let _ = channel.eof().await;
-                        close_after_control_at = Some(
-                            Instant::now() + Duration::from_millis(REMOTE_CONTROL_DRAIN_TIMEOUT_MS)
-                        );
+                        control_state = Some(RemotePipeControlState::KillDrain {
+                            deadline: Instant::now()
+                                + Duration::from_millis(REMOTE_CONTROL_DRAIN_TIMEOUT_MS),
+                        });
                     }
                     None => {
                         let _ = channel.signal(Sig::KILL).await;
@@ -472,7 +504,7 @@ async fn remote_pipe_owner(
                 }
             }
 
-            _ = tokio::time::sleep(wait_budget), if close_after_control_at.is_some() => {}
+            _ = tokio::time::sleep(wait_budget), if control_state.is_some() => {}
         }
     }
 

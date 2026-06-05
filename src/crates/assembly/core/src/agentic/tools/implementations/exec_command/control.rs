@@ -12,6 +12,26 @@ use terminal_core::{
 
 const DEFAULT_MAX_OUTPUT_CHARS: u64 = 10_000;
 
+// ExecControl termination semantics by execution surface:
+//
+// Local workspace:
+// - tty=true: interrupt writes Ctrl+C to the PTY; kill uses the PTY child killer.
+// - tty=false, Windows: interrupt and kill both terminate the process tree via
+//   taskkill /T /F, with child.kill() as fallback. This is intentionally
+//   forceful because Windows pipe-mode Ctrl+C delivery is not reliable.
+// - tty=false, Unix: the pipe child starts in its own session/process group.
+//   interrupt sends SIGINT to that group, waits a short grace window, then
+//   sends SIGKILL to clean up descendants; kill sends SIGKILL to the group.
+//
+// Remote SSH workspace:
+// - tty=true: interrupt writes Ctrl+C to the remote PTY; kill sends an SSH
+//   SIGKILL request and closes the channel after a short drain.
+// - tty=false, Unix/POSIX SSH host: ExecCommand wraps the user command in a
+//   remote process-group owner. interrupt asks the wrapper to send SIGINT,
+//   wait its grace window, then SIGKILL the remote process group. kill sends a
+//   catchable TERM to the wrapper, which immediately SIGKILLs the remote group.
+// - Remote Windows SSH hosts are not part of the current ExecCommand contract;
+//   remote workspaces assume POSIX paths and shells.
 pub struct ExecControlTool;
 
 impl Default for ExecControlTool {

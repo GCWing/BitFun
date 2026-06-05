@@ -18,7 +18,7 @@ use std::time::Duration;
 use tokio::io::AsyncRead;
 use tokio::io::AsyncReadExt;
 use tokio::process::Command;
-use tokio::sync::{mpsc, oneshot, Mutex, Notify};
+use tokio::sync::{mpsc, Mutex, Notify};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 
@@ -26,6 +26,8 @@ const DEFAULT_YIELD_TIME_MS: u64 = 10_000;
 const DEFAULT_MAX_OUTPUT_CHARS: usize = 10_000;
 const MAX_RETAINED_OUTPUT_BYTES: usize = 1024 * 1024;
 const MAX_EXEC_SESSIONS: usize = 64;
+#[cfg(unix)]
+const PIPE_INTERRUPT_GRACE_TIMEOUT_MS: u64 = 2_000;
 const PTY_EXIT_DRAIN_TIMEOUT_MS: u64 = 500;
 
 static GLOBAL_EXEC_MANAGER: OnceLock<Arc<ExecProcessManager>> = OnceLock::new();
@@ -108,7 +110,7 @@ struct ExecProcess {
 
 enum Terminator {
     Pty(Box<dyn portable_pty::ChildKiller + Send + Sync>),
-    Pipe(oneshot::Sender<()>),
+    Pipe(mpsc::Sender<ExecControlAction>),
 }
 
 struct PtyKeepAlive {
@@ -291,7 +293,7 @@ impl ExecProcessManager {
                 process.write_input_bytes(vec![0x03]).await?;
             }
             ExecControlAction::Interrupt | ExecControlAction::Kill => {
-                process.request_terminate();
+                process.request_control(request.action);
             }
         }
 
@@ -391,7 +393,7 @@ impl ExecProcess {
             .map_err(|_| TerminalError::ProcessNotRunning)
     }
 
-    fn request_terminate(&self) {
+    fn request_control(&self, action: ExecControlAction) {
         if let Ok(mut terminator) = self.terminator.lock() {
             if let Some(terminator) = terminator.take() {
                 match terminator {
@@ -399,11 +401,15 @@ impl ExecProcess {
                         let _ = killer.kill();
                     }
                     Terminator::Pipe(tx) => {
-                        let _ = tx.send(());
+                        let _ = tx.try_send(action);
                     }
                 }
             }
         }
+    }
+
+    fn request_terminate(&self) {
+        self.request_control(ExecControlAction::Kill);
     }
 
     fn terminate(&self) {
@@ -740,6 +746,7 @@ async fn spawn_pipe_process(request: &ExecCommandRequest) -> TerminalResult<Exec
     command.stdin(Stdio::null());
     command.stdout(Stdio::piped());
     command.stderr(Stdio::piped());
+    configure_pipe_process_group(&mut command);
     command.kill_on_drop(true);
 
     let mut child = command.spawn()?;
@@ -755,15 +762,13 @@ async fn spawn_pipe_process(request: &ExecCommandRequest) -> TerminalResult<Exec
         reader_tasks.push(spawn_pipe_reader(stderr, Arc::clone(&output)));
     }
 
-    let (kill_tx, kill_rx) = oneshot::channel::<()>();
+    let (control_tx, mut control_rx) = mpsc::channel::<ExecControlAction>(1);
     let wait_output = Arc::clone(&output);
     let wait_task = tokio::spawn(async move {
-        tokio::pin!(kill_rx);
         let code = tokio::select! {
             status = child.wait() => status.ok().and_then(|status| status.code()),
-            _ = &mut kill_rx => {
-                let _ = child.kill().await;
-                child.wait().await.ok().and_then(|status| status.code())
+            action = control_rx.recv() => {
+                control_pipe_child(&mut child, action.unwrap_or(ExecControlAction::Kill)).await
             }
         };
         for task in reader_tasks {
@@ -775,10 +780,107 @@ async fn spawn_pipe_process(request: &ExecCommandRequest) -> TerminalResult<Exec
     Ok(ExecProcess {
         output,
         writer: None,
-        terminator: StdMutex::new(Some(Terminator::Pipe(kill_tx))),
+        terminator: StdMutex::new(Some(Terminator::Pipe(control_tx))),
         helper_tasks: StdMutex::new(vec![wait_task]),
         pty_handles: Arc::new(StdMutex::new(None)),
     })
+}
+
+#[cfg(unix)]
+fn configure_pipe_process_group(command: &mut Command) {
+    use std::os::unix::process::CommandExt;
+
+    unsafe {
+        command.pre_exec(|| {
+            if libc::setsid() == -1 {
+                let err = std::io::Error::last_os_error();
+                if err.raw_os_error() != Some(libc::EPERM) || libc::setpgid(0, 0) == -1 {
+                    return Err(err);
+                }
+            }
+            Ok(())
+        });
+    }
+}
+
+#[cfg(not(unix))]
+fn configure_pipe_process_group(_command: &mut Command) {}
+
+async fn control_pipe_child(
+    child: &mut tokio::process::Child,
+    action: ExecControlAction,
+) -> Option<i32> {
+    match action {
+        ExecControlAction::Interrupt => interrupt_pipe_child(child).await,
+        ExecControlAction::Kill => kill_pipe_child(child).await,
+    }
+}
+
+#[cfg(windows)]
+async fn interrupt_pipe_child(child: &mut tokio::process::Child) -> Option<i32> {
+    kill_pipe_child(child).await
+}
+
+#[cfg(windows)]
+async fn kill_pipe_child(child: &mut tokio::process::Child) -> Option<i32> {
+    if let Some(pid) = child.id() {
+        let pid = pid.to_string();
+        let mut command = Command::new("taskkill");
+        command.args(["/PID", &pid, "/T", "/F"]);
+        command.stdin(Stdio::null());
+        command.stdout(Stdio::null());
+        command.stderr(Stdio::null());
+        {
+            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+            command.creation_flags(CREATE_NO_WINDOW);
+        }
+
+        let taskkill_result = command.status().await;
+        if taskkill_result.is_ok_and(|status| status.success()) {
+            return child.wait().await.ok().and_then(|status| status.code());
+        }
+    }
+
+    let _ = child.kill().await;
+    child.wait().await.ok().and_then(|status| status.code())
+}
+
+#[cfg(unix)]
+async fn interrupt_pipe_child(child: &mut tokio::process::Child) -> Option<i32> {
+    signal_pipe_process_group(child, libc::SIGINT);
+    tokio::time::sleep(Duration::from_millis(PIPE_INTERRUPT_GRACE_TIMEOUT_MS)).await;
+    signal_pipe_process_group(child, libc::SIGKILL);
+    let _ = child.start_kill();
+    child.wait().await.ok().and_then(|status| status.code())
+}
+
+#[cfg(unix)]
+async fn kill_pipe_child(child: &mut tokio::process::Child) -> Option<i32> {
+    signal_pipe_process_group(child, libc::SIGKILL);
+    let _ = child.start_kill();
+    child.wait().await.ok().and_then(|status| status.code())
+}
+
+#[cfg(unix)]
+fn signal_pipe_process_group(child: &tokio::process::Child, signal: libc::c_int) {
+    let Some(pid) = child.id() else {
+        return;
+    };
+    let pgid = pid as libc::pid_t;
+    unsafe {
+        libc::killpg(pgid, signal);
+    }
+}
+
+#[cfg(not(any(unix, windows)))]
+async fn interrupt_pipe_child(child: &mut tokio::process::Child) -> Option<i32> {
+    kill_pipe_child(child).await
+}
+
+#[cfg(not(any(unix, windows)))]
+async fn kill_pipe_child(child: &mut tokio::process::Child) -> Option<i32> {
+    let _ = child.kill().await;
+    child.wait().await.ok().and_then(|status| status.code())
 }
 
 fn spawn_pipe_reader<R>(mut reader: R, output: Arc<OutputState>) -> JoinHandle<()>
@@ -930,6 +1032,8 @@ mod tests {
         bytes_to_string_smart, input_bytes_for_write, ExecCommandRequest, ExecControlAction,
         ExecControlRequest, ExecProcessManager, HeadTailText, WriteStdinRequest,
     };
+    #[cfg(windows)]
+    use crate::shell::{ShellDetector, ShellType};
     use encoding_rs::GBK;
     use std::collections::HashMap;
 
@@ -945,6 +1049,32 @@ mod tests {
     #[cfg(not(windows))]
     fn shell_argv(script: &str) -> Vec<String> {
         vec!["sh".to_string(), "-lc".to_string(), script.to_string()]
+    }
+
+    #[cfg(windows)]
+    fn default_windows_shell_argv(script: &str) -> Vec<String> {
+        let shell = ShellDetector::get_default_shell();
+        match shell.shell_type {
+            ShellType::PowerShell | ShellType::PowerShellCore => {
+                vec![
+                    shell.path.to_string_lossy().to_string(),
+                    "-Command".to_string(),
+                    script.to_string(),
+                ]
+            }
+            ShellType::Cmd => {
+                vec![
+                    shell.path.to_string_lossy().to_string(),
+                    "/C".to_string(),
+                    script.to_string(),
+                ]
+            }
+            _ => vec![
+                shell.path.to_string_lossy().to_string(),
+                "-lc".to_string(),
+                script.to_string(),
+            ],
+        }
     }
 
     #[tokio::test]
@@ -1140,6 +1270,122 @@ mod tests {
         assert!(second.exit_code.is_some());
     }
 
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn control_interrupt_kills_running_pipe_process_group_after_grace() {
+        let manager = ExecProcessManager::default();
+        let unique = format!(
+            "{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system time should be after unix epoch")
+                .as_nanos()
+        );
+        let pid_file = std::env::temp_dir().join(format!("bitfun-exec-child-{unique}.pid"));
+        let tick_file = std::env::temp_dir().join(format!("bitfun-exec-child-{unique}.tick"));
+        let pid_path = pid_file.to_string_lossy();
+        let tick_path = tick_file.to_string_lossy();
+        let script = format!(
+            "rm -f '{pid_path}' '{tick_path}'; \
+             (trap '' INT TERM HUP; echo $$ > '{pid_path}'; i=0; while :; do echo $i >> '{tick_path}'; i=$((i+1)); sleep 1; done) & \
+             wait $!"
+        );
+
+        let first = manager
+            .exec_command(ExecCommandRequest {
+                argv: shell_argv(&script),
+                cwd: std::env::current_dir().expect("current dir"),
+                env: HashMap::new(),
+                tty: false,
+                yield_time_ms: Some(500),
+                max_output_chars: Some(10_000),
+            })
+            .await
+            .expect("exec command should start");
+
+        let session_id = first
+            .session_id
+            .expect("background child should keep shell waiting");
+        let second = manager
+            .control_session(ExecControlRequest {
+                session_id,
+                action: ExecControlAction::Interrupt,
+                yield_time_ms: Some(5_000),
+                max_output_chars: Some(10_000),
+            })
+            .await
+            .expect("interrupt should return process state");
+
+        assert!(second.session_id.is_none());
+
+        let ticks_after_interrupt = line_count(&tick_file);
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        let ticks_later = line_count(&tick_file);
+        assert_eq!(
+            ticks_after_interrupt, ticks_later,
+            "background child should stop writing ticks after interrupt cleanup"
+        );
+
+        if let Ok(pid) = std::fs::read_to_string(&pid_file) {
+            let _ = std::process::Command::new("kill")
+                .args(["-KILL", pid.trim()])
+                .status();
+        }
+        let _ = std::fs::remove_file(pid_file);
+        let _ = std::fs::remove_file(tick_file);
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn control_kill_terminates_python_child_started_by_default_windows_shell() {
+        assert_default_windows_shell_python_child_control(ExecControlAction::Kill).await;
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn control_interrupt_terminates_python_child_started_by_default_windows_shell() {
+        assert_default_windows_shell_python_child_control(ExecControlAction::Interrupt).await;
+    }
+
+    #[cfg(windows)]
+    async fn assert_default_windows_shell_python_child_control(action: ExecControlAction) {
+        let manager = ExecProcessManager::default();
+        let script = r#"python -c "import time; [print(i, flush=True) or time.sleep(1) for i in range(30)]""#;
+
+        let first = manager
+            .exec_command(ExecCommandRequest {
+                argv: default_windows_shell_argv(script),
+                cwd: std::env::current_dir().expect("current dir"),
+                env: HashMap::new(),
+                tty: false,
+                yield_time_ms: Some(1_500),
+                max_output_chars: Some(10_000),
+            })
+            .await
+            .expect("exec command should start");
+
+        let session_id = first
+            .session_id
+            .expect("python loop should still be active");
+        let second = manager
+            .control_session(ExecControlRequest {
+                session_id,
+                action,
+                yield_time_ms: Some(3_000),
+                max_output_chars: Some(10_000),
+            })
+            .await
+            .expect("control action should return process state");
+
+        assert!(
+            second.session_id.is_none(),
+            "control action should close the shell child process tree, got output: {}",
+            second.output
+        );
+        assert!(second.exit_code.is_some());
+    }
+
     #[tokio::test]
     async fn control_interrupt_writes_ctrl_c_for_tty_session() {
         let manager = ExecProcessManager::default();
@@ -1216,5 +1462,12 @@ mod tests {
             bytes_to_string_smart(b"\x93\x94 test \x96 dash"),
             "\u{201C}\u{201D} test \u{2013} dash"
         );
+    }
+
+    #[cfg(unix)]
+    fn line_count(path: &std::path::Path) -> usize {
+        std::fs::read_to_string(path)
+            .map(|contents| contents.lines().count())
+            .unwrap_or(0)
     }
 }

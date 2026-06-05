@@ -31,6 +31,7 @@ log = { workspace = true }
 rand = { workspace = true }
 chardetng = { workspace = true }
 encoding_rs = { workspace = true }
+libc = { workspace = true }
 
 # UUID for session IDs
 uuid = { workspace = true }
