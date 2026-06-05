@@ -1,27 +1,25 @@
 **中文** | [English](AGENTS.md)
 
-# 服务层
+# 服务实现层
 
-本层负责可复用的非 UI 服务实现和服务 adapter：filesystem、git、process/system、diagnostics、terminal、MCP、remote 以及持久化相关能力。通用服务应通过窄 API 或 port 被调用，而不是通过产品 facade 泄漏。产品特定 adapter 可以实现产品领域 port，但不得拥有产品策略。
+本层负责接触本地系统或 runtime infrastructure 的可复用具体实现：filesystem、git、file watch、terminal、MCP、remote connectivity、process lifecycle 以及类似 OS/network 能力。
 
 ## 模块
 
 | Crate | 职责 | 本地文档 |
 |---|---|---|
-| `services-core` | filesystem、diff、diagnostics、session usage、token usage、system、process 等核心可复用服务 | [AGENTS.md](services-core/AGENTS.md) |
-| `services-integrations` | announcement、file watch、function agents、git、MCP、remote connect、remote SSH 等具体集成服务 | [AGENTS.md](services-integrations/AGENTS.md) |
-| `terminal` | Terminal API、PTY、shell integration 和 persistent terminal sessions | [AGENTS.md](terminal/AGENTS.md) |
+| `services-core` | 不包含产品组装决策的本地 service primitive | [AGENTS.md](services-core/AGENTS.md) |
+| `services-integrations` | MCP、git、remote、file watch 与产品领域 port 的具体实现 | [AGENTS.md](services-integrations/AGENTS.md) |
+| `terminal` | PTY、shell integration 与 terminal session infrastructure | [AGENTS.md](terminal/AGENTS.md) |
 
 ## 放置规则
 
-- 可被多个产品或 runtime 路径复用的具体 host/service 行为放到这里。
-- UI 状态、产品 feature 选择和交付组装不要进入本层。
-- 优先提供小而清晰的 service API，不要做混合多种职责的大 manager。
-- 依赖平台能力的行为要通过 service module 或 feature gate 隔离。
+- 具体 OS、process、filesystem、git、terminal、MCP、remote SSH、file watch 和 network service 实现放在这里。
+- 需要具体依赖的 `contracts`、`execution` 或 `contracts/product-domains` port 实现在这里。
+- 协议/transport projection 放在 `adapters`，产品能力选择放在 `assembly`。
 
 ## 依赖边界
 
-- 通用 service crate 不应依赖产品 crate。
-- service adapter 只有在 feature gate 后实现产品层定义的窄 port/DTO 时，才允许依赖 `product-domains`。当前例子是 `services-integrations` 为 `product-domains` function-agent ports 实现 Git snapshot。不要把这个例外扩展成 service 拥有产品策略。
-- Services 不得依赖 `facade/core`、`src/apps`、前端代码或 Tauri `AppHandle`。
-- Remote 和平台支持必须通过 typed service error 或明确 unsupported-state 处理失败，不要泛化成字符串错误。
+- Services 可以依赖 `contracts`，实现 runtime port 时可以窄依赖 provider-neutral 的 `execution` crate。
+- Services 不得依赖 `assembly/core`、interface crate、产品 UI 或 app command handler。
+- Service 之间直接依赖必须保持窄边界；可复用契约应下沉到 `contracts` 或 `execution`，避免形成大范围耦合。

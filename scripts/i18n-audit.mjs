@@ -29,7 +29,7 @@ const mobileWebSourceDir = path.join(root, 'src', 'mobile-web', 'src');
 const mobileWebMessagesPath = path.join(mobileWebSourceDir, 'i18n', 'messages.ts');
 const installerSourceDir = path.join(root, 'BitFun-Installer', 'src');
 const installerLocalesDir = path.join(installerSourceDir, 'i18n', 'locales');
-const coreLocalesDir = path.join(root, 'src', 'crates', 'facade', 'core', 'locales');
+const coreLocalesDir = path.join(root, 'src', 'crates', 'assembly', 'core', 'locales');
 const relayHomepageDir = path.join(root, 'src', 'apps', 'relay-server', 'static', 'homepage');
 const relayHomepageI18nPath = path.join(relayHomepageDir, 'i18n.json');
 const supportedLocales = fs
@@ -1115,7 +1115,7 @@ function collectI18nResourceEntries(namespaces) {
         locale,
         key,
         value,
-        file: `src/crates/facade/core/locales/${locale}.ftl`,
+        file: `src/crates/assembly/core/locales/${locale}.ftl`,
       });
     }
   }
@@ -2172,7 +2172,7 @@ function createLocaleFormatScanSpecs() {
     },
     {
       surface: 'core-miniapp',
-      root: path.join(root, 'src', 'crates', 'product', 'product-domains', 'src', 'miniapp', 'builtin', 'assets'),
+      root: path.join(root, 'src', 'crates', 'contracts', 'product-domains', 'src', 'miniapp', 'builtin', 'assets'),
       predicate: (file) => file.endsWith('.js'),
     },
   ];

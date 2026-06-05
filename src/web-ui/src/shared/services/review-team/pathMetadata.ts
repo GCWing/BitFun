@@ -7,11 +7,10 @@ const SECURITY_SENSITIVE_PATH_PATTERN =
   /(^|[/._-])(auth|oauth|crypto|security|permission|permissions|secret|secrets|token|tokens|credential|credentials)([/._-]|$)/;
 
 const LAYERED_CRATE_ROOTS = new Set([
-  'surfaces',
-  'facade',
-  'integrations',
+  'interfaces',
+  'assembly',
+  'adapters',
   'services',
-  'product',
   'execution',
   'contracts',
 ]);

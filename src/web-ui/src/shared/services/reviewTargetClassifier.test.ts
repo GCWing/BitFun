@@ -45,7 +45,7 @@ describe('reviewTargetClassifier', () => {
 
   it('classifies backend core files without frontend tags', () => {
     const target = classifyReviewTargetFromFiles(
-      ['src/crates/facade/core/src/service/config/types.rs'],
+      ['src/crates/assembly/core/src/service/config/types.rs'],
       'session_files',
     );
 
@@ -58,11 +58,11 @@ describe('reviewTargetClassifier', () => {
       [
         'src/crates/contracts/runtime-ports/src/lib.rs',
         'src/crates/execution/agent-runtime/src/lib.rs',
-        'src/crates/execution/agent-tools/src/lib.rs',
+        'src/crates/execution/tool-contracts/src/lib.rs',
         'src/crates/services/services-core/src/lib.rs',
-        'src/crates/product/product-capabilities/src/lib.rs',
-        'src/crates/surfaces/acp/src/lib.rs',
-        'src/crates/integrations/webdriver/src/lib.rs',
+        'src/crates/assembly/product-capabilities/src/lib.rs',
+        'src/crates/interfaces/acp/src/lib.rs',
+        'src/crates/adapters/webdriver/src/lib.rs',
       ],
       'session_files',
     );
@@ -74,7 +74,7 @@ describe('reviewTargetClassifier', () => {
     expect(target.tags).not.toContain('unknown');
     expect(target.files.every((file) => !file.tags.includes('unknown'))).toBe(true);
     expect(target.files.find((file) =>
-      file.normalizedPath === 'src/crates/surfaces/acp/src/lib.rs',
+      file.normalizedPath === 'src/crates/interfaces/acp/src/lib.rs',
     )?.tags).toEqual(expect.arrayContaining(['backend_core', 'transport']));
   });
 
@@ -82,7 +82,7 @@ describe('reviewTargetClassifier', () => {
     const target = classifyReviewTargetFromFiles(
       [
         'src/web-ui/src/locales/zh-TW/flow-chat.json',
-        'src/crates/facade/core/locales/zh-TW.ftl',
+        'src/crates/assembly/core/locales/zh-TW.ftl',
         'BitFun-Installer/src/i18n/locales/zh-TW.json',
       ],
       'session_files',
@@ -125,7 +125,7 @@ describe('reviewTargetClassifier', () => {
 
   it('evaluates conditional reviewer applicability from registry tags', () => {
     const backendTarget = classifyReviewTargetFromFiles(
-      ['src/crates/facade/core/src/service/config/types.rs'],
+      ['src/crates/assembly/core/src/service/config/types.rs'],
       'session_files',
     );
     const frontendTarget = classifyReviewTargetFromFiles(

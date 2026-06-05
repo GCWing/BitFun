@@ -15,7 +15,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }
 bitfun-events = { path = "../../contracts/events" }
-bitfun-product-domains = { path = "../../product/product-domains", default-features = false, optional = true }
+bitfun-product-domains = { path = "../../contracts/product-domains", default-features = false, optional = true }
 bitfun-runtime-ports = { path = "../../contracts/runtime-ports", optional = true }
 aes-gcm = { workspace = true, optional = true }
 anyhow = { workspace = true, optional = true }

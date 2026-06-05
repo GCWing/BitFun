@@ -26,7 +26,7 @@
 按优先级取上下文：
 
 1. 用户提供的截图 / 品牌资料 / 现成代码
-2. `MiniApp/Demo/` 与 `src/crates/product/product-domains/src/miniapp/builtin/assets/` 中**最贴近形态**的内置应用——直接 `ls` + `Read` 拿到它的 `style.css`、`index.html`，识别它的视觉语言（间距、圆角、卡片密度、配色）
+2. `MiniApp/Demo/` 与 `src/crates/contracts/product-domains/src/miniapp/builtin/assets/` 中**最贴近形态**的内置应用——直接 `ls` + `Read` 拿到它的 `style.css`、`index.html`，识别它的视觉语言（间距、圆角、卡片密度、配色）
 3. `--bitfun-*` 主题变量（见 SKILL.md 的"主题集成"章节）——所有颜色都优先 `var(--bitfun-xxx, fallback)`
 
 **从零生成是最后选择**——它直接导致千篇一律的"AI 味"产出。
@@ -247,9 +247,9 @@
 
 完整体现以上原则的内置/示例小应用：
 
-- `src/crates/product/product-domains/src/miniapp/builtin/assets/regex-playground/` — 工具型，单 motif（"/"包裹的 pattern row），克制配色
-- `src/crates/product/product-domains/src/miniapp/builtin/assets/coding-selfie/` — 数据可视化，使用 worker，i18n 完整
-- `src/crates/product/product-domains/src/miniapp/builtin/assets/gomoku/` — 交互型，主题切换 + i18n + 持久化范例
+- `src/crates/contracts/product-domains/src/miniapp/builtin/assets/regex-playground/` — 工具型，单 motif（"/"包裹的 pattern row），克制配色
+- `src/crates/contracts/product-domains/src/miniapp/builtin/assets/coding-selfie/` — 数据可视化，使用 worker，i18n 完整
+- `src/crates/contracts/product-domains/src/miniapp/builtin/assets/gomoku/` — 交互型，主题切换 + i18n + 持久化范例
 - `MiniApp/Demo/git-graph/` — 复杂应用拆模块的范例（`ui/components`, `ui/panels`, `ui/services`）
 - `MiniApp/Demo/icon-design-system/` — 设计系统型应用范例
 

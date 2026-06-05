@@ -19,10 +19,10 @@ serde_json = { workspace = true }
 
 [dependencies]
 # Internal crates
-bitfun-core = { path = "../../crates/facade/core", default-features = false, features = ["product-full"] }
-bitfun-transport = { path = "../../crates/integrations/transport", features = ["tauri-adapter"] }
-bitfun-webdriver = { path = "../../crates/integrations/webdriver" }
-bitfun-acp = { path = "../../crates/surfaces/acp" }
+bitfun-core = { path = "../../crates/assembly/core", default-features = false, features = ["product-full"] }
+bitfun-transport = { path = "../../crates/adapters/transport", features = ["tauri-adapter"] }
+bitfun-webdriver = { path = "../../crates/adapters/webdriver" }
+bitfun-acp = { path = "../../crates/interfaces/acp" }
 
 # Tauri
 tauri = { workspace = true }

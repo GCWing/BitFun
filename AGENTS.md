@@ -15,28 +15,25 @@ Repository rule: **keep product logic platform-agnostic, then expose it through 
 
 ## Layered Module Index
 
-Dependencies flow top to bottom: code in a row may depend only on lower rows.
-Put reusable behavior in the lowest layer that can own it; put entrypoint and
-profile selection in the highest layer that owns the surface.
+Dependencies flow top to bottom. A layer may depend on lower layers only; keep
+crate dependencies inside each layer to the smallest set needed.
 
 | # | Layer | Path | Owns | Modules / entries | Layer doc |
 |---|---|---|---|---|---|
-| 1 | Product surfaces and protocol surfaces | `src/apps/*`, `src/web-ui`, `src/mobile-web`, `BitFun-Installer`, `tests/e2e`, `src/crates/surfaces` | UI, commands, routes, delivery profiles, host integration, protocol entrypoints, and cross-surface tests | desktop, CLI, server, relay, Web UI, mobile web, installer, E2E, `acp` | nearest local `AGENTS.md`; [surfaces](src/crates/surfaces/AGENTS.md) |
-| 2 | Facade and product assembly | `src/crates/facade` | Compatibility exports, product-full assembly, delivery-profile wiring, and provider registration | `core` | [AGENTS.md](src/crates/facade/AGENTS.md) |
-| 3 | Concrete provider adapters | `src/crates/integrations` | Low-level external protocol, provider, transport, and platform adapters | `ai-adapters`, `api-layer`, `transport`, `webdriver` | [AGENTS.md](src/crates/integrations/AGENTS.md) |
-| 4 | Reusable services and service adapters | `src/crates/services` | Concrete non-UI services and narrow product-domain port adapters | `services-core`, `services-integrations`, `terminal` | [AGENTS.md](src/crates/services/AGENTS.md) |
-| 5 | Product policy and capabilities | `src/crates/product` | Product domains, feature facts, capability packs, product-owned non-UI policy, and narrow domain ports | `product-domains`, `product-capabilities` | [AGENTS.md](src/crates/product/AGENTS.md) |
-| 6 | Execution primitives | `src/crates/execution` | Provider-neutral agent, tool, harness, stream, and typed-service building blocks | `agent-runtime`, `agent-stream`, `agent-tools`, `harness`, `runtime-services`, `tool-packs`, `tool-runtime` | [AGENTS.md](src/crates/execution/AGENTS.md) |
-| 7 | Stable contracts | `src/crates/contracts` | Shared DTOs, event shapes, and ports | `core-types`, `events`, `runtime-ports` | [AGENTS.md](src/crates/contracts/AGENTS.md) |
+| 1 | Interfaces and entrypoints | `src/apps/*`, `src/web-ui`, `src/mobile-web`, `BitFun-Installer`, `tests/e2e`, `src/crates/interfaces` | Product hosts, commands, UI entrypoints, protocol interfaces, and cross-surface tests | desktop, CLI, server, relay, Web UI, mobile web, installer, E2E, `acp` | nearest local `AGENTS.md`; [interfaces](src/crates/interfaces/AGENTS.md) |
+| 2 | Product assembly | `src/crates/assembly` | Compatibility exports, product capability selection, product-full wiring, and adapter/service registration | `core`, `product-capabilities` | [AGENTS.md](src/crates/assembly/AGENTS.md) |
+| 3 | Adapters | `src/crates/adapters` | AI/API/transport/WebDriver protocol adapters and external-provider translation | `ai-adapters`, `api-layer`, `transport`, `webdriver` | [AGENTS.md](src/crates/adapters/AGENTS.md) |
+| 4 | Services | `src/crates/services` | Reusable OS, filesystem, terminal, MCP, remote, git, watch, process, and network implementations | `services-core`, `services-integrations`, `terminal` | [AGENTS.md](src/crates/services/AGENTS.md) |
+| 5 | Execution primitives | `src/crates/execution` | Portable agent, harness, stream, typed-service, tool-contract, tool-group, and tool-execution building blocks | `agent-runtime`, `agent-stream`, `tool-contracts`, `harness`, `runtime-services`, `tool-provider-groups`, `tool-execution` | [AGENTS.md](src/crates/execution/AGENTS.md) |
+| 6 | Stable contracts and product domains | `src/crates/contracts` | Shared DTOs, event shapes, runtime ports, and product domain contracts/policies | `core-types`, `events`, `runtime-ports`, `product-domains` | [AGENTS.md](src/crates/contracts/AGENTS.md) |
 
 Boundary rules:
 
-- Surfaces and protocol surfaces choose delivery profiles and call facade or adapter APIs; reusable behavior moves down.
-- Facade wires lower layers for compatibility and product assembly; it must not implement provider, protocol, OS, or service details.
-- Concrete provider adapters translate external systems; product-facing protocol entrypoints that depend on assembled product behavior belong in `surfaces`.
-- Generic services stay product-independent; feature-gated service adapters may implement narrow `product-domains` ports.
-- Product owns product policy and capability facts, not UI, protocol, host, or concrete service implementations.
-- Execution primitives are portable building blocks, not the full product runtime or host-specific runtime.
+- Interfaces and app entrypoints expose selected product behavior; reusable behavior moves down.
+- Assembly wires lower layers and selects product capability facts; it must not implement concrete adapter, OS, or service details.
+- Adapters translate protocols and external systems; they should not own product capability selection or reusable OS service behavior.
+- Services implement reusable concrete OS, process, terminal, MCP, remote, git, and filesystem capabilities.
+- Execution crates are portable runtime building blocks, not host-specific or delivery-profile owners.
 - Contracts stay behavior-light and must not depend upward.
 
 
@@ -135,7 +132,7 @@ await api.invoke('your_command', { request: { ... } });
 ### Platform boundaries
 
 - Do not call Tauri APIs directly from UI components; go through the adapter/infrastructure layer.
-- Desktop-only integrations belong in `src/apps/desktop`, then flow back through transport/API layers.
+- Desktop-only host adapters belong in `src/apps/desktop`, then flow back through transport/API layers.
 - In shared core, avoid host-specific APIs such as `tauri::AppHandle`; use shared abstractions such as `bitfun_events::EventEmitter`.
 
 ### Remote compatibility
@@ -180,10 +177,10 @@ change directly affects build, packaging, or CI cannot protect the path.
 | Locale contract or shared terms | `pnpm run i18n:generate && pnpm run i18n:contract:test && pnpm run i18n:audit` |
 | Web UI i18n runtime, namespace loading, or direct `i18nService.t(...)` usage | `pnpm run i18n:contract:test && pnpm run type-check:web && pnpm --dir src/web-ui run test:run src/infrastructure/i18n/core/I18nService.test.ts` |
 | Mobile web UI, state, pairing, disconnect, or reconnect behavior | `pnpm --dir src/mobile-web run type-check`; include manual pairing / reconnect notes when behavior changes |
-| Shared Rust logic in `core`, `transport`, `api-layer`, or services | `cargo check --workspace`, plus the nearest focused `cargo test` when behavior changed |
+| Shared Rust logic in `core`, `transport`, `api-layer`, adapters, or services | `cargo check --workspace`, plus the nearest focused `cargo test` when behavior changed |
 | Desktop integration, Tauri APIs, browser/computer-use, or desktop-only behavior | `cargo check -p bitfun-desktop`, plus focused desktop tests when behavior changed |
 | Behavior covered by desktop smoke/functional flows | Prefer the nearest focused E2E/smoke check; rely on CI for broad build/test coverage unless build behavior changed |
-| `src/crates/integrations/ai-adapters` | Relevant Rust checks above; add `cargo test -p bitfun-agent-stream` only when stream contracts changed |
+| `src/crates/adapters/ai-adapters` | Relevant Rust checks above; add `cargo test -p bitfun-agent-stream` only when stream contracts changed |
 | Installer frontend or i18n runtime without packaging changes | `pnpm --dir BitFun-Installer run type-check` |
 | Installer Tauri/Rust changes | `cargo check --manifest-path BitFun-Installer/src-tauri/Cargo.toml` |
 | Installer packaging, payload, install/uninstall flow, or native bundling | `pnpm run installer:build` |

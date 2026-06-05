@@ -2,10 +2,11 @@
 
 # Execution Primitives Layer
 
-This layer owns reusable agent, tool, harness, stream, and typed-service
+This layer owns reusable agent, harness, stream, typed-service, and tool
 execution primitives. It is not the complete Agent Runtime SDK and not the
 assembled product runtime. Product assembly decides which primitives, tool
-packs, harness providers, and service providers are active for a delivery form.
+provider groups, harness providers, adapters, and services are active for a
+delivery form.
 
 ## Modules
 
@@ -13,11 +14,11 @@ packs, harness providers, and service providers are active for a delivery form.
 |---|---|---|
 | `agent-runtime` | Agent registry, scheduler, prompt cache, hooks, goals, and runtime control contracts | [AGENTS.md](agent-runtime/AGENTS.md) |
 | `agent-stream` | Provider stream normalization and stream replay contracts | [AGENTS.md](agent-stream/AGENTS.md) |
-| `agent-tools` | Tool contracts, execution gates, input validation, and result presentation contracts | [AGENTS.md](agent-tools/AGENTS.md) |
+| `tool-contracts` | Tool contracts, execution gates, input validation, and result presentation contracts. Cargo package remains `bitfun-agent-tools`. | [AGENTS.md](tool-contracts/AGENTS.md) |
 | `harness` | Harness workflow contracts and registry primitives | [AGENTS.md](harness/AGENTS.md) |
 | `runtime-services` | Typed runtime service assembly and service availability facts | [AGENTS.md](runtime-services/AGENTS.md) |
-| `tool-packs` | Tool provider group facts and product-full tool-pack composition | [AGENTS.md](tool-packs/AGENTS.md) |
-| `tool-runtime` | Low-level file/search/tool IO helpers | [AGENTS.md](tool-runtime/AGENTS.md) |
+| `tool-provider-groups` | Tool provider group facts and product-full tool group composition. Cargo package remains `bitfun-tool-packs`. | [AGENTS.md](tool-provider-groups/AGENTS.md) |
+| `tool-execution` | Low-level file/search/tool IO helpers. Cargo package remains `tool-runtime`. | [AGENTS.md](tool-execution/AGENTS.md) |
 
 ## Placement Rules
 
@@ -25,16 +26,17 @@ packs, harness providers, and service providers are active for a delivery form.
   contracts, and provider-neutral execution facts here.
 - Keep concrete filesystem, git, terminal, MCP server, remote SSH, and OS
   behavior in `services` unless the code is a pure low-level tool primitive.
-- Keep product feature selection and delivery-profile decisions in `product` or
-  `facade`, not in execution primitives.
+- Keep protocol projection and external provider request shaping in `adapters`.
+- Keep product feature selection and delivery-profile decisions in `assembly`,
+  not in execution primitives.
 - Tool packs should describe provider groups and required services; concrete
   service access should flow through ports or typed runtime services.
 
 ## Dependency Boundaries
 
 - Execution primitive crates may depend on `contracts` and narrowly scoped
-  integration DTOs when needed for provider stream normalization.
-- Execution primitive crates must not depend on `facade/core`, `src/apps`,
+  provider-neutral DTOs when needed for stream normalization.
+- Execution primitive crates must not depend on `assembly/core`, `src/apps`,
   frontend code, Tauri APIs, or product-surface lifecycle.
-- Any new dependency on `services`, `product`, or `integrations` needs an
-  explicit boundary reason in the nearest module doc or PR description.
+- Any new dependency on `adapters` or `services` needs an explicit boundary
+  reason in the nearest module doc or PR description.

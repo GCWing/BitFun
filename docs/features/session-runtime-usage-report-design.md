@@ -173,10 +173,10 @@ BitFun can reuse several existing surfaces.
 | Capability | Current anchor |
 | --- | --- |
 | Agentic event definitions | `src/crates/contracts/events/src/agentic.rs` |
-| Token usage persistence and aggregation | `src/crates/facade/core/src/service/token_usage/{types.rs,service.rs,subscriber.rs}` |
-| Model stream timing currently logged/held during execution | `src/crates/facade/core/src/agentic/execution/{round_executor.rs,stream_processor.rs}` |
-| Context compression events and tool-like UI item | `src/crates/facade/core/src/agentic/execution/execution_engine.rs`, `src/web-ui/src/flow_chat/tool-cards/ContextCompressionDisplay.tsx` |
-| Tool lifecycle and total duration | `src/crates/facade/core/src/agentic/tools/pipeline/{tool_pipeline.rs,state_manager.rs}` |
+| Token usage persistence and aggregation | `src/crates/assembly/core/src/service/token_usage/{types.rs,service.rs,subscriber.rs}` |
+| Model stream timing currently logged/held during execution | `src/crates/assembly/core/src/agentic/execution/{round_executor.rs,stream_processor.rs}` |
+| Context compression events and tool-like UI item | `src/crates/assembly/core/src/agentic/execution/execution_engine.rs`, `src/web-ui/src/flow_chat/tool-cards/ContextCompressionDisplay.tsx` |
+| Tool lifecycle and total duration | `src/crates/assembly/core/src/agentic/tools/pipeline/{tool_pipeline.rs,state_manager.rs}` |
 | CLI slash command handling | `src/apps/cli/src/modes/chat.rs` |
 | CLI session/tool persistence | `src/apps/cli/src/session.rs`, `src/apps/cli/src/agent/core_adapter.rs` |
 | Desktop token/compression event routing | `src/web-ui/src/flow_chat/services/flow-chat-manager/EventHandlerModule.ts` |
@@ -234,7 +234,7 @@ considered complete.
 
 | Area | Current status | Code evidence | Remaining work |
 | --- | --- | --- | --- |
-| Shared report service | Done | `src/crates/facade/core/src/service/session_usage/{service.rs,types.rs,render.rs}` and `SessionAPI.getSessionUsageReport` | Keep the API contract stable while adding future report fields. |
+| Shared report service | Done | `src/crates/assembly/core/src/service/session_usage/{service.rs,types.rs,render.rs}` and `SessionAPI.getSessionUsageReport` | Keep the API contract stable while adding future report fields. |
 | Durable local report message | Done | `DialogTurnKind::LocalCommand`, `localCommandKind: 'usage_report'`, `modelVisible: false` | Keep usage report snapshots model-invisible through future history, export, and transcript changes. |
 | CLI `/usage` coverage | Done for interactive CLI | CLI `usage_*` coverage and the shared renderer | Top-level `bitfun usage --session` is outside the closed product scope. |
 | Model timing | Mostly done | Optional event and persisted fields for duration, provider/model identity, first chunk, visible output, stream duration, attempts, failure category, and token details | Throughput/TPS and provider-latency claims are outside the closed product scope. |
@@ -765,13 +765,13 @@ Executable implementation plan:
 P1 must move `/usage` from P0 approximation toward factual runtime accounting without changing the report command contract. The implementation order below is test-first and split by ownership boundary so each step can be reviewed independently.
 
 1. Persist runtime facts already owned by the runtime.
-   - Files: `src/crates/facade/core/src/service/session/types.rs`, `src/crates/facade/core/src/agentic/session/session_manager.rs`, `src/crates/facade/core/src/agentic/coordination/coordinator.rs`, and the tool/model execution call sites that construct persisted session items.
+   - Files: `src/crates/assembly/core/src/service/session/types.rs`, `src/crates/assembly/core/src/agentic/session/session_manager.rs`, `src/crates/assembly/core/src/agentic/coordination/coordinator.rs`, and the tool/model execution call sites that construct persisted session items.
    - Add optional fields to persisted model rounds for provider/model identity, first chunk latency, first visible output latency, stream duration, attempt count, failure category, token details, and total duration.
    - Add optional tool phase durations to persisted tool items: queue wait, preflight, confirmation wait, and execution.
    - Acceptance: old session JSON still deserializes, new session JSON round-trips with these fields, and missing fields never fail report generation.
 
 2. Consume persisted facts in the usage service.
-   - File: `src/crates/facade/core/src/service/session_usage/service.rs`.
+   - File: `src/crates/assembly/core/src/service/session_usage/service.rs`.
    - Prefer persisted model/tool duration fields when present; fall back to existing start/end or result durations only when facts are missing.
    - Compute active time as a union of known active intervals so overlapping spans do not double-count the denominator.
    - Exclude `local_command` usage-report turns from scope, wall/active time, model/tool/file/error rows, and slowest spans so generating a report cannot affect the next report.
@@ -780,7 +780,7 @@ P1 must move `/usage` from P0 approximation toward factual runtime accounting wi
    - Acceptance: model rows can exist from runtime span facts even when token records are absent, tool rows expose phase subtotals, slowest spans include model rounds and tools, and the coverage panel explains missing facts conservatively.
 
 3. Keep file-change correlation conservative.
-   - File: `src/crates/facade/core/src/service/session_usage/service.rs`.
+   - File: `src/crates/assembly/core/src/service/session_usage/service.rs`.
    - Keep snapshot operations as the highest-trust source for file rows, including remote sessions when cached snapshot summaries are present, then use tool-call metadata as a fallback only for recognized edit/write/delete operations.
    - Preserve operation ids and turn indexes for later UI navigation, but do not invent line counts when no snapshot or diff fact exists.
    - Acceptance: remote sessions with cached snapshot summaries show file/line rows; remote sessions that only have tool metadata show edited files with unknown line counts instead of "unavailable"; files without trustworthy evidence remain omitted.
@@ -963,7 +963,7 @@ Files:
 - Read: `session-runtime-usage-report-design.md`
 - Read: `AGENTS.md`
 - Read: `src/web-ui/AGENTS.md`
-- Read: `src/crates/facade/core/AGENTS.md`
+- Read: `src/crates/assembly/core/AGENTS.md`
 
 Steps:
 
@@ -1000,10 +1000,10 @@ Goal: define the stable structured contract used by CLI, Desktop, and future ser
 
 Files:
 
-- Create: `src/crates/facade/core/src/service/session_usage/types.rs`
-- Create: `src/crates/facade/core/src/service/session_usage/mod.rs`
-- Modify: `src/crates/facade/core/src/service/mod.rs`
-- Test: `src/crates/facade/core/src/service/session_usage/types.rs` or nearby module tests
+- Create: `src/crates/assembly/core/src/service/session_usage/types.rs`
+- Create: `src/crates/assembly/core/src/service/session_usage/mod.rs`
+- Modify: `src/crates/assembly/core/src/service/mod.rs`
+- Test: `src/crates/assembly/core/src/service/session_usage/types.rs` or nearby module tests
 
 Steps:
 
@@ -1046,8 +1046,8 @@ Goal: give Desktop `/usage` a durable chat representation without polluting futu
 
 Files:
 
-- Modify: `src/crates/facade/core/src/service/session/types.rs`
-- Modify: `src/crates/facade/core/src/agentic/session/session_manager.rs`
+- Modify: `src/crates/assembly/core/src/service/session/types.rs`
+- Modify: `src/crates/assembly/core/src/agentic/session/session_manager.rs`
 - Modify: `src/web-ui/src/flow_chat/types/flow-chat.ts`
 - Modify: `src/web-ui/src/flow_chat/store/FlowChatStore.ts`
 - Test: session serialization/deserialization tests near existing session tests
@@ -1090,13 +1090,13 @@ Goal: produce a useful `/usage` report without changing runtime event production
 
 Files:
 
-- Create: `src/crates/facade/core/src/service/session_usage/service.rs`
-- Modify: `src/crates/facade/core/src/service/session_usage/mod.rs`
-- Modify: `src/crates/facade/core/src/service/mod.rs`
-- Read/reuse: `src/crates/facade/core/src/service/token_usage/service.rs`
-- Read/reuse: `src/crates/facade/core/src/service/session/types.rs`
-- Read/reuse: `src/crates/facade/core/src/service/snapshot/service.rs`
-- Test: `src/crates/facade/core/src/service/session_usage/service.rs`
+- Create: `src/crates/assembly/core/src/service/session_usage/service.rs`
+- Modify: `src/crates/assembly/core/src/service/session_usage/mod.rs`
+- Modify: `src/crates/assembly/core/src/service/mod.rs`
+- Read/reuse: `src/crates/assembly/core/src/service/token_usage/service.rs`
+- Read/reuse: `src/crates/assembly/core/src/service/session/types.rs`
+- Read/reuse: `src/crates/assembly/core/src/service/snapshot/service.rs`
+- Test: `src/crates/assembly/core/src/service/session_usage/service.rs`
 
 Steps:
 
@@ -1143,8 +1143,8 @@ Goal: render the same report as CLI terminal text and Desktop Markdown without d
 
 Files:
 
-- Create: `src/crates/facade/core/src/service/session_usage/render.rs`
-- Modify: `src/crates/facade/core/src/service/session_usage/mod.rs`
+- Create: `src/crates/assembly/core/src/service/session_usage/render.rs`
+- Modify: `src/crates/assembly/core/src/service/session_usage/mod.rs`
 - Test: renderer snapshot or exact-output tests in Rust
 
 Steps:
@@ -1324,10 +1324,10 @@ Goal: make model speed and wait-time metrics accurate after the minimal report i
 Files:
 
 - Modify: `src/crates/contracts/events/src/agentic.rs`
-- Modify: `src/crates/facade/core/src/agentic/execution/round_executor.rs`
-- Modify: `src/crates/facade/core/src/agentic/execution/stream_processor.rs`
-- Modify: `src/crates/integrations/transport/src/adapters/tauri.rs`
-- Modify: `src/crates/integrations/transport/src/adapters/websocket.rs`
+- Modify: `src/crates/assembly/core/src/agentic/execution/round_executor.rs`
+- Modify: `src/crates/assembly/core/src/agentic/execution/stream_processor.rs`
+- Modify: `src/crates/adapters/transport/src/adapters/tauri.rs`
+- Modify: `src/crates/adapters/transport/src/adapters/websocket.rs`
 - Test: Rust event serialization and stream/round executor tests
 
 Steps:
@@ -1371,8 +1371,8 @@ Goal: explain tool-heavy sessions without relying on logs.
 Files:
 
 - Modify: `src/crates/contracts/events/src/agentic.rs`
-- Modify: `src/crates/facade/core/src/agentic/tools/pipeline/tool_pipeline.rs`
-- Modify: `src/crates/facade/core/src/agentic/tools/pipeline/state_manager.rs`
+- Modify: `src/crates/assembly/core/src/agentic/tools/pipeline/tool_pipeline.rs`
+- Modify: `src/crates/assembly/core/src/agentic/tools/pipeline/state_manager.rs`
 - Modify: transport adapters for new optional timing fields
 - Test: tool pipeline/state manager tests
 
@@ -1414,8 +1414,8 @@ Goal: connect usage reports with existing file diff affordances without changing
 
 Files:
 
-- Modify: `src/crates/facade/core/src/service/session_usage/service.rs`
-- Read/reuse: `src/crates/facade/core/src/service/snapshot/service.rs`
+- Modify: `src/crates/assembly/core/src/service/session_usage/service.rs`
+- Read/reuse: `src/crates/assembly/core/src/service/snapshot/service.rs`
 - Read/reuse: `src/web-ui/src/infrastructure/api/service-api/SnapshotAPI.ts`
 - Modify later UI: `src/web-ui/src/flow_chat/tool-cards/FileOperationToolCard.tsx` only for report link integration
 - Test: report aggregation tests with snapshot operation summaries
@@ -1549,7 +1549,7 @@ Goal: keep `/usage` focused on current-session observability and prevent scope d
 
 Files:
 
-- Harden: `src/crates/facade/core/src/service/session_usage/render.rs`
+- Harden: `src/crates/assembly/core/src/service/session_usage/render.rs`
 - Harden: `src/apps/cli/src/main.rs`
 - Update: `session-runtime-usage-report-design.md`
 - Test: current-session report and top-level CLI scope tests

@@ -163,13 +163,12 @@ pnpm run desktop:build
 ## 项目结构一览
 
 ```
-src/crates/contracts/          # 稳定 DTO、事件与 runtime ports
-src/crates/execution/          # Agent、tool、harness 与 runtime-service owners
-src/crates/services/           # 共享本地服务与 terminal 基础设施
-src/crates/product/            # 产品能力与领域 owners
-src/crates/integrations/       # 低层 AI、API、transport 与 WebDriver adapters
-src/crates/surfaces/           # ACP 等面向产品的协议入口
-src/crates/facade/core         # 兼容门面与完整产品 runtime 组装点
+src/crates/interfaces/         # ACP 等产品协议接口
+src/crates/assembly/           # 兼容门面与产品能力组装
+src/crates/adapters/           # AI、API、transport 与 WebDriver adapter
+src/crates/services/           # OS、terminal、MCP、remote、git 与 filesystem service
+src/crates/execution/          # Agent、harness、stream、typed-service 与 tool 原语
+src/crates/contracts/          # 稳定 DTO、事件、runtime ports 与产品领域契约
 src/apps/desktop        # Tauri 桌面宿主
 src/apps/server         # Web 服务端运行时
 src/apps/cli            # CLI 运行时

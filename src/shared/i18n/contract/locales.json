@@ -48,7 +48,7 @@
       "loading": "surface-minimal"
     },
     "core": {
-      "resourceRoot": "src/crates/facade/core/locales",
+      "resourceRoot": "src/crates/assembly/core/locales",
       "loading": "backend-service"
     },
     "relay-static-homepage": {

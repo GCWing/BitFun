@@ -94,10 +94,10 @@ We welcome contributions beyond standard feature or bug-fix PRs. Examples includ
 
 | Contribution area | Location / files | Example |
 | --- | --- | --- |
-| Prompts | `src/crates/facade/core/src/agentic/agents/prompts/` | Add or refine prompts, and update related logic as needed |
-| Tools | `src/crates/facade/core/src/agentic/tools/implementations/`, `src/crates/facade/core/src/agentic/tools/registry.rs` | Add tool implementations and register them in the tool registry |
-| Subagents | `src/crates/facade/core/src/agentic/agents/custom_subagents/`, `src/crates/facade/core/src/agentic/agents/registry.rs` | Add subagent implementations and register them in the subagent registry |
-| Mode contributions | `src/crates/facade/core/src/agentic/agents/*_mode.rs`, `src/crates/facade/core/src/agentic/agents/prompts/*_mode.md`, `src/web-ui/src/locales/*/settings/modes.json` | Add/improve agent modes (e.g. Plan/Debug/Agentic or custom modes) and keep prompts + UI copy in sync |
+| Prompts | `src/crates/assembly/core/src/agentic/agents/prompts/` | Add or refine prompts, and update related logic as needed |
+| Tools | `src/crates/assembly/core/src/agentic/tools/implementations/`, `src/crates/assembly/core/src/agentic/tools/registry.rs` | Add tool implementations and register them in the tool registry |
+| Subagents | `src/crates/assembly/core/src/agentic/agents/custom_subagents/`, `src/crates/assembly/core/src/agentic/agents/registry.rs` | Add subagent implementations and register them in the subagent registry |
+| Mode contributions | `src/crates/assembly/core/src/agentic/agents/*_mode.rs`, `src/crates/assembly/core/src/agentic/agents/prompts/*_mode.md`, `src/web-ui/src/locales/*/settings/modes.json` | Add/improve agent modes (e.g. Plan/Debug/Agentic or custom modes) and keep prompts + UI copy in sync |
 | Scenario guides for Code Agent and AIIde | `website/src/docs/` | Add workflows, playbooks, and real-world scenario docs (or link them from `README.md`) |
 
 ### Before you start

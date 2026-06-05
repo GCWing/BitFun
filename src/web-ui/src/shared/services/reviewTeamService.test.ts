@@ -728,7 +728,7 @@ describe('reviewTeamService', () => {
       storedConfigWithExtra([], { strategy_level: 'quick' }),
     );
     const files = [
-      'src/crates/facade/core/src/agentic/deep_review/report.rs',
+      'src/crates/assembly/core/src/agentic/deep_review/report.rs',
       'src/apps/desktop/src/api/agentic_api.rs',
       'src/web-ui/src/app/scenes/agents/components/ReviewTeamPage.tsx',
     ];
@@ -846,7 +846,7 @@ describe('reviewTeamService', () => {
     const target = classifyReviewTargetFromFiles(
       [
         'src/web-ui/src/locales/zh-TW/flow-chat.json',
-        'src/crates/facade/core/locales/zh-TW.ftl',
+        'src/crates/assembly/core/locales/zh-TW.ftl',
         'BitFun-Installer/src/i18n/locales/zh-TW.json',
       ],
       'session_files',
@@ -897,8 +897,8 @@ describe('reviewTeamService', () => {
         'src/web-ui/src/shared/services/reviewTeamService.ts',
         'src/web-ui/src/app/scenes/agents/components/ReviewTeamPage.tsx',
         'src/web-ui/src/locales/en-US/scenes/agents.json',
-        'src/crates/facade/core/src/agentic/deep_review_policy.rs',
-        'src/crates/facade/core/src/agentic/tools/implementations/task_tool.rs',
+        'src/crates/assembly/core/src/agentic/deep_review_policy.rs',
+        'src/crates/assembly/core/src/agentic/tools/implementations/task_tool.rs',
       ],
       'session_files',
     );
@@ -930,8 +930,8 @@ describe('reviewTeamService', () => {
           key: 'crate:core',
           fileCount: 2,
           sampleFiles: [
-            'src/crates/facade/core/src/agentic/deep_review_policy.rs',
-            'src/crates/facade/core/src/agentic/tools/implementations/task_tool.rs',
+            'src/crates/assembly/core/src/agentic/deep_review_policy.rs',
+            'src/crates/assembly/core/src/agentic/tools/implementations/task_tool.rs',
           ],
         },
       ],
@@ -954,7 +954,7 @@ describe('reviewTeamService', () => {
     const target = classifyReviewTargetFromFiles(
       [
         'src/web-ui/src/shared/services/reviewTeamService.ts',
-        'src/crates/facade/core/src/agentic/deep_review_policy.rs',
+        'src/crates/assembly/core/src/agentic/deep_review_policy.rs',
       ],
       'session_files',
     );
@@ -1000,7 +1000,7 @@ describe('reviewTeamService', () => {
     const files = [
       'src/web-ui/src/locales/en-US/flow-chat.json',
       'src/apps/desktop/src/api/agentic_api.rs',
-      'src/crates/integrations/api-layer/src/review.rs',
+      'src/crates/adapters/api-layer/src/review.rs',
       'package.json',
     ];
 
@@ -1044,7 +1044,7 @@ describe('reviewTeamService', () => {
         }),
         expect.objectContaining({
           kind: 'api_contract',
-          filePath: 'src/crates/integrations/api-layer/src/review.rs',
+          filePath: 'src/crates/adapters/api-layer/src/review.rs',
         }),
         expect.objectContaining({
           kind: 'config_key',
@@ -1075,7 +1075,7 @@ describe('reviewTeamService', () => {
     );
     const files = [
       'src/web-ui/src/locales/en-US/flow-chat.json',
-      'src/crates/integrations/api-layer/src/review.rs',
+      'src/crates/adapters/api-layer/src/review.rs',
     ];
     const manifest = buildEffectiveReviewTeamManifest(team, {
       target: classifyReviewTargetFromFiles(files, 'workspace_diff'),
@@ -1107,7 +1107,7 @@ describe('reviewTeamService', () => {
     const target = classifyReviewTargetFromFiles(
       [
         'src/web-ui/src/shared/services/reviewTeamService.ts',
-        'src/crates/facade/core/src/agentic/deep_review_policy.rs',
+        'src/crates/assembly/core/src/agentic/deep_review_policy.rs',
       ],
       'session_files',
     );
@@ -1124,7 +1124,7 @@ describe('reviewTeamService', () => {
       source: 'target_manifest',
       strategy: 'reuse_completed_packets_when_fingerprint_matches',
       filePaths: [
-        'src/crates/facade/core/src/agentic/deep_review_policy.rs',
+        'src/crates/assembly/core/src/agentic/deep_review_policy.rs',
         'src/web-ui/src/shared/services/reviewTeamService.ts',
       ],
       workspaceAreas: ['crate:core', 'web-ui'],
@@ -1231,16 +1231,16 @@ describe('reviewTeamService', () => {
     const target = classifyReviewTargetFromFiles(
       [
         'src/web-ui/src/components/ReviewPanel.tsx',
-        'src/crates/facade/core/src/agentic/deep_review_policy.rs',
+        'src/crates/assembly/core/src/agentic/deep_review_policy.rs',
         'src/apps/desktop/src/api/review.rs',
         'src/web-ui/src/shared/services/reviewTeamService.ts',
-        'src/crates/facade/core/src/agentic/tools/implementations/task_tool.rs',
+        'src/crates/assembly/core/src/agentic/tools/implementations/task_tool.rs',
         'src/apps/desktop/src/api/agent.rs',
         'src/web-ui/src/app/scenes/agents/components/ReviewTeamPage.tsx',
-        'src/crates/facade/core/src/agentic/agents/deep_review_agent.rs',
+        'src/crates/assembly/core/src/agentic/agents/deep_review_agent.rs',
         'src/apps/desktop/src/api/config.rs',
         'src/web-ui/src/locales/en-US/scenes/agents.json',
-        'src/crates/facade/core/src/agentic/agents/prompts/deep_review_agent.md',
+        'src/crates/assembly/core/src/agentic/agents/prompts/deep_review_agent.md',
         'src/apps/desktop/src/api/subagent.rs',
       ],
       'session_files',
@@ -1266,10 +1266,10 @@ describe('reviewTeamService', () => {
         'src/web-ui/src/locales/en-US/scenes/agents.json',
       ],
       [
-        'src/crates/facade/core/src/agentic/deep_review_policy.rs',
-        'src/crates/facade/core/src/agentic/tools/implementations/task_tool.rs',
-        'src/crates/facade/core/src/agentic/agents/deep_review_agent.rs',
-        'src/crates/facade/core/src/agentic/agents/prompts/deep_review_agent.md',
+        'src/crates/assembly/core/src/agentic/deep_review_policy.rs',
+        'src/crates/assembly/core/src/agentic/tools/implementations/task_tool.rs',
+        'src/crates/assembly/core/src/agentic/agents/deep_review_agent.rs',
+        'src/crates/assembly/core/src/agentic/agents/prompts/deep_review_agent.md',
       ],
       [
         'src/apps/desktop/src/api/review.rs',
@@ -1411,7 +1411,7 @@ describe('reviewTeamService', () => {
 
     const manifest = buildEffectiveReviewTeamManifest(team, {
       target: classifyReviewTargetFromFiles(
-        ['src/crates/facade/core/src/service/config/types.rs'],
+        ['src/crates/assembly/core/src/service/config/types.rs'],
         'session_files',
       ),
     });
@@ -1440,7 +1440,7 @@ describe('reviewTeamService', () => {
 
     const manifest = buildEffectiveReviewTeamManifest(team, {
       workspacePath: WORKSPACE_PATH,
-      reviewTargetFilePaths: ['src/crates/facade/core/src/agentic/deep_review_policy.rs'],
+      reviewTargetFilePaths: ['src/crates/assembly/core/src/agentic/deep_review_policy.rs'],
     });
 
     expect(manifest.coreReviewers.map((member) => member.subagentId)).toEqual([
@@ -1526,8 +1526,8 @@ describe('reviewTeamService', () => {
     );
     const target = classifyReviewTargetFromFiles(
       [
-        'src/crates/facade/core/src/service/auth/token_store.rs',
-        'src/crates/integrations/api-layer/src/review.rs',
+        'src/crates/assembly/core/src/service/auth/token_store.rs',
+        'src/crates/adapters/api-layer/src/review.rs',
         'src/web-ui/src/components/ReviewPanel.tsx',
       ],
       'workspace_diff',
@@ -1585,7 +1585,7 @@ describe('reviewTeamService', () => {
     );
     const files = Array.from(
       { length: 48 },
-      (_, index) => `src/crates/facade/core/src/agentic/large_change_${index}.rs`,
+      (_, index) => `src/crates/assembly/core/src/agentic/large_change_${index}.rs`,
     );
     const target = classifyReviewTargetFromFiles(files, 'workspace_diff');
 
@@ -1679,7 +1679,7 @@ describe('reviewTeamService', () => {
     );
     const files = Array.from(
       { length: 6 },
-      (_, index) => `src/crates/facade/core/src/agentic/large_change_${index}.rs`,
+      (_, index) => `src/crates/assembly/core/src/agentic/large_change_${index}.rs`,
     );
     const target = classifyReviewTargetFromFiles(files, 'workspace_diff');
 
@@ -1734,7 +1734,7 @@ describe('reviewTeamService', () => {
     );
     const files = Array.from(
       { length: 5 },
-      (_, index) => `src/crates/facade/core/src/agentic/small_${index}.rs`,
+      (_, index) => `src/crates/assembly/core/src/agentic/small_${index}.rs`,
     );
     const target = classifyReviewTargetFromFiles(files, 'workspace_diff');
 
@@ -1851,7 +1851,7 @@ describe('reviewTeamService', () => {
     );
     const target = classifyReviewTargetFromFiles(
       [
-        'src/crates/facade/core/src/service/auth/token_store.rs',
+        'src/crates/assembly/core/src/service/auth/token_store.rs',
         'src/apps/desktop/src/api/agentic_api.rs',
         ...Array.from(
           { length: 18 },
@@ -1924,7 +1924,7 @@ describe('reviewTeamService', () => {
       [
         ...Array.from(
           { length: 24 },
-          (_, index) => `src/crates/facade/core/src/review/module_${index}.rs`,
+          (_, index) => `src/crates/assembly/core/src/review/module_${index}.rs`,
         ),
       ],
       'workspace_diff',

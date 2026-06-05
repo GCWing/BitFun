@@ -6,15 +6,15 @@ DeepReview is a child-session workflow that runs a configurable Code Review Team
 
 - Frontend launch and UI orchestration in `src/web-ui`.
 - Platform adapter commands in `src/apps/desktop/src/api/agentic_api.rs`.
-- Platform-agnostic runtime policy, task admission, queue state, retry metadata, and report enrichment in `src/crates/facade/core/src/agentic`.
+- Platform-agnostic runtime policy, task admission, queue state, retry metadata, and report enrichment in `src/crates/assembly/core/src/agentic`.
 
 The backend does not choose the review target or build the launch manifest. The frontend builds the effective `ReviewTeamRunManifest`, persists it on the DeepReview child session, and sends it with the first user message.
 
 ## Runtime Roles
 
-`src/crates/facade/core/src/agentic/agents/deep_review_agent.rs` defines the writable `DeepReview` orchestrator. It can call `Task`, read/search/git tools, `submit_code_review`, `AskUserQuestion`, and write/edit/bash tools for user-approved remediation.
+`src/crates/assembly/core/src/agentic/agents/deep_review_agent.rs` defines the writable `DeepReview` orchestrator. It can call `Task`, read/search/git tools, `submit_code_review`, `AskUserQuestion`, and write/edit/bash tools for user-approved remediation.
 
-`src/crates/facade/core/src/agentic/agents/review_specialist_agents.rs` defines read-only reviewer agents:
+`src/crates/assembly/core/src/agentic/agents/review_specialist_agents.rs` defines read-only reviewer agents:
 
 - `ReviewBusinessLogic`
 - `ReviewPerformance`
@@ -57,8 +57,8 @@ The default review team contract is mirrored in Rust and TypeScript.
 
 Rust source:
 
-- `src/crates/facade/core/src/agentic/deep_review/team_definition.rs`
-- `src/crates/facade/core/src/agentic/deep_review_policy.rs`
+- `src/crates/assembly/core/src/agentic/deep_review/team_definition.rs`
+- `src/crates/assembly/core/src/agentic/deep_review_policy.rs`
 - `src/apps/desktop/src/api/agentic_api.rs`
 
 Frontend source:
@@ -147,7 +147,7 @@ If the included file count exceeds the reviewer file-split threshold and same-ro
 
 ## Backend Policy and Admission
 
-`DeepReviewExecutionPolicy` in `src/crates/facade/core/src/agentic/deep_review/execution_policy.rs` parses runtime policy from config and classifies subagent launches.
+`DeepReviewExecutionPolicy` in `src/crates/assembly/core/src/agentic/deep_review/execution_policy.rs` parses runtime policy from config and classifies subagent launches.
 
 Allowed DeepReview runtime launches are:
 
@@ -169,10 +169,10 @@ Rejected launches include:
 
 The generic `Task` tool is adapted for DeepReview in:
 
-- `src/crates/facade/core/src/agentic/tools/implementations/task_tool.rs`
-- `src/crates/facade/core/src/agentic/deep_review/task_adapter.rs`
-- `src/crates/facade/core/src/agentic/deep_review/queue.rs`
-- `src/crates/facade/core/src/agentic/deep_review/budget.rs`
+- `src/crates/assembly/core/src/agentic/tools/implementations/task_tool.rs`
+- `src/crates/assembly/core/src/agentic/deep_review/task_adapter.rs`
+- `src/crates/assembly/core/src/agentic/deep_review/queue.rs`
+- `src/crates/assembly/core/src/agentic/deep_review/budget.rs`
 
 DeepReview task execution uses the manifest and tool context to:
 
@@ -234,7 +234,7 @@ The frontend listens through `AgentAPI.onDeepReviewQueueStateChanged` on `agenti
 
 ## Report Submission
 
-Review results are submitted through `submit_code_review` in `src/crates/facade/core/src/agentic/tools/implementations/code_review_tool.rs`.
+Review results are submitted through `submit_code_review` in `src/crates/assembly/core/src/agentic/tools/implementations/code_review_tool.rs`.
 
 In DeepReview context, the tool requires the deep-review fields in addition to the standard summary/issues/positive-points shape:
 
@@ -243,7 +243,7 @@ In DeepReview context, the tool requires the deep-review fields in addition to t
 - `reviewers`
 - `remediation_plan`
 
-DeepReview report enrichment lives in `src/crates/facade/core/src/agentic/deep_review/report.rs`. It fills missing reviewer packet metadata when a unique packet can be inferred, adds runtime diagnostics, updates incremental cache data, and adds reliability signals for cache hits, cache misses, partial coverage, capacity skips, retry guidance, queue waits, reduced scope, and evidence-pack metadata.
+DeepReview report enrichment lives in `src/crates/assembly/core/src/agentic/deep_review/report.rs`. It fills missing reviewer packet metadata when a unique packet can be inferred, adds runtime diagnostics, updates incremental cache data, and adds reliability signals for cache hits, cache misses, partial coverage, capacity skips, retry guidance, queue waits, reduced scope, and evidence-pack metadata.
 
 Report enrichment is guarded by the tool context. Standard Code Review output should not receive DeepReview-only metadata unless the active tool context proves `agent_type == 'DeepReview'`.
 

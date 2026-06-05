@@ -119,7 +119,7 @@ describe('DeepReviewService slash command', () => {
 
   it('classifies explicit slash-command file paths before building the review team manifest', async () => {
     await buildDeepReviewPromptFromSlashCommand(
-      '/DeepReview src/web-ui/src/App.tsx src/crates/facade/core/src/service/config/types.rs for regressions',
+      '/DeepReview src/web-ui/src/App.tsx src/crates/assembly/core/src/service/config/types.rs for regressions',
       'D:\\workspace\\repo',
     );
 
@@ -139,7 +139,7 @@ describe('DeepReviewService slash command', () => {
   it('classifies workspace diff files for a slash command without an explicit target', async () => {
     mockGitGetStatus.mockResolvedValueOnce({
       staged: [{ path: 'src/web-ui/src/App.tsx', status: 'modified' }],
-      unstaged: [{ path: 'src/crates/facade/core/src/service/config/types.rs', status: 'modified' }],
+      unstaged: [{ path: 'src/crates/assembly/core/src/service/config/types.rs', status: 'modified' }],
       untracked: ['src/web-ui/src/newFeature.tsx'],
       conflicts: [],
       current_branch: 'main',
@@ -169,7 +169,7 @@ describe('DeepReviewService slash command', () => {
   it('passes workspace diff line stats into the review manifest', async () => {
     mockGitGetStatus.mockResolvedValueOnce({
       staged: [{ path: 'src/web-ui/src/App.tsx', status: 'modified' }],
-      unstaged: [{ path: 'src/crates/facade/core/src/service/config/types.rs', status: 'modified' }],
+      unstaged: [{ path: 'src/crates/assembly/core/src/service/config/types.rs', status: 'modified' }],
       untracked: [],
       conflicts: [],
       current_branch: 'main',
@@ -177,7 +177,7 @@ describe('DeepReviewService slash command', () => {
       behind: 0,
     });
     mockGitGetDiff.mockResolvedValueOnce([
-      'diff --git a/src/crates/facade/core/src/service/config/types.rs b/src/crates/facade/core/src/service/config/types.rs',
+      'diff --git a/src/crates/assembly/core/src/service/config/types.rs b/src/crates/assembly/core/src/service/config/types.rs',
       '@@ -1,2 +1,3 @@',
       '-old core line',
       '+new core line',
@@ -368,7 +368,7 @@ describe('DeepReviewService slash command', () => {
   it('classifies explicit ref ranges through the git changed-files API', async () => {
     mockGitGetChangedFiles.mockResolvedValueOnce([
       {
-        path: 'src/crates/facade/core/src/service/config/types.rs',
+        path: 'src/crates/assembly/core/src/service/config/types.rs',
         old_path: undefined,
         status: 'modified',
       },
@@ -453,7 +453,7 @@ describe('DeepReviewService slash command', () => {
     vi.mocked(buildEffectiveReviewTeamManifest).mockReturnValueOnce(runManifest as any);
 
     const result = await buildDeepReviewPreviewFromSessionFiles(
-      ['src/crates/facade/core/src/service/config/types.rs'],
+      ['src/crates/assembly/core/src/service/config/types.rs'],
       'D:\\workspace\\repo',
     );
 

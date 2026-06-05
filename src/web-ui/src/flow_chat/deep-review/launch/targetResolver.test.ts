@@ -46,7 +46,7 @@ describe('Deep Review target resolver', () => {
 
   it('resolves explicit file targets before reading git state', async () => {
     const result = await resolveSlashCommandReviewTarget(
-      'src/web-ui/src/App.tsx src/crates/facade/core/src/lib.rs for regressions',
+      'src/web-ui/src/App.tsx src/crates/assembly/core/src/lib.rs for regressions',
       'D:\\workspace\\repo',
     );
 

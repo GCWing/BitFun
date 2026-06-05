@@ -159,7 +159,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/product/product-capabilities/src/lib.rs',
+    path: 'src/crates/assembly/product-capabilities/src/lib.rs',
     reason:
       'product-capabilities must select harness descriptors from the harness owner instead of owning descriptor construction',
     patterns: [
@@ -908,7 +908,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/service/cron/types.rs',
+    path: 'src/crates/assembly/core/src/service/cron/types.rs',
     reason:
       'core cron types must preserve old import and wire paths while bitfun-agent-runtime owns scheduled-job runtime state',
     patterns: [
@@ -927,7 +927,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/service/cron/service.rs',
+    path: 'src/crates/assembly/core/src/service/cron/service.rs',
     reason:
       'core cron service may own concrete storage, schedule parsing, and scheduler dispatch, but scheduled-job lifecycle state transitions must delegate to agent-runtime',
     patterns: [
@@ -970,7 +970,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/agents/definitions/custom/subagent.rs',
+    path: 'src/crates/assembly/core/src/agentic/agents/definitions/custom/subagent.rs',
     reason:
       'core custom subagent path must stay a compatibility facade over agent-runtime schema/default and markdown IO decisions',
     patterns: [
@@ -993,7 +993,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/agents/registry/custom.rs',
+    path: 'src/crates/assembly/core/src/agentic/agents/registry/custom.rs',
     reason:
       'core custom subagent registry must delegate portable discovery/loading to agent-runtime while retaining validation and registry writes',
     patterns: [
@@ -1012,7 +1012,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/tools/post_call_hooks.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/post_call_hooks.rs',
     reason:
       'core post-call hooks must delegate portable hook routing to agent-runtime while retaining concrete hook execution',
     patterns: [
@@ -1027,7 +1027,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/tools/pipeline/tool_pipeline.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/pipeline/tool_pipeline.rs',
     reason:
       'core tool pipeline must delegate portable confirmation planning and failure mapping to agent-runtime while retaining UI/channel side effects',
     patterns: [
@@ -1046,7 +1046,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/execution/types.rs',
+    path: 'src/crates/assembly/core/src/agentic/execution/types.rs',
     reason:
       'core execution types must preserve legacy import path while agent-runtime owns finish-reason event facts',
     patterns: [
@@ -1057,7 +1057,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/events/types.rs',
+    path: 'src/crates/assembly/core/src/agentic/events/types.rs',
     reason:
       'core event types must preserve legacy import path while agent-runtime owns session-state labels',
     patterns: [
@@ -1068,7 +1068,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/agents/prompt_builder/user_context.rs',
+    path: 'src/crates/assembly/core/src/agentic/agents/prompt_builder/user_context.rs',
     reason:
       'core prompt_builder user_context path must stay a compatibility facade over agent-runtime',
     patterns: [
@@ -1079,7 +1079,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/session/prompt_cache.rs',
+    path: 'src/crates/assembly/core/src/agentic/session/prompt_cache.rs',
     reason:
       'core prompt_cache path must stay a compatibility facade over agent-runtime',
     patterns: [
@@ -1090,7 +1090,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/agents/mod.rs',
+    path: 'src/crates/assembly/core/src/agentic/agents/mod.rs',
     reason:
       'core agent mode module must keep old import paths while agent-runtime owns shared mode profile facts',
     patterns: [
@@ -1128,7 +1128,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/service/filesystem/service.rs',
+    path: 'src/crates/assembly/core/src/service/filesystem/service.rs',
     reason:
       'core filesystem service may keep remote-workspace overlay and BitFunError compatibility, but local filesystem owner must remain services-core',
     patterns: [
@@ -1147,7 +1147,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/session/session_manager.rs',
+    path: 'src/crates/assembly/core/src/agentic/session/session_manager.rs',
     reason:
       'core session manager must keep forked Task prompt-cache and existing-context turn baselines until session branch ownership migrates',
     patterns: [
@@ -1170,7 +1170,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/tools/pipeline/tool_pipeline.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/pipeline/tool_pipeline.rs',
     reason:
       'core tool pipeline must keep latest-main truncation and per-tool denial behavior until tool runtime ownership migrates',
     patterns: [
@@ -1193,7 +1193,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/tools/restrictions.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/restrictions.rs',
     reason:
       'core tool restrictions facade must preserve per-tool denial messages while runtime restrictions live in agent-tools',
     patterns: [
@@ -1208,7 +1208,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/tools/tool_result_storage.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/tool_result_storage.rs',
     reason:
       'core tool-result storage must keep explicit file flush until runtime artifact ownership migrates',
     patterns: [
@@ -1269,13 +1269,13 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/Cargo.toml',
+    path: 'src/crates/assembly/core/Cargo.toml',
     reason:
       'bitfun-core product-full must explicitly aggregate owner crate feature groups instead of forcing them through dependency declarations',
     patterns: [
       {
         regex:
-          /bitfun-tool-packs = \{ path = "\.\.\/\.\.\/execution\/tool-packs", default-features = false, optional = true \}/,
+          /bitfun-tool-packs = \{ path = "\.\.\/\.\.\/execution\/tool-provider-groups", default-features = false, optional = true \}/,
         message: 'bitfun-tool-packs dependency must stay optional and not force product-full outside the core feature graph',
       },
       {
@@ -1286,13 +1286,13 @@ export const requiredContentRules = [
       },
       {
         regex:
-          /bitfun-product-domains = \{ path = "\.\.\/\.\.\/product\/product-domains", default-features = false, optional = true \}/,
+          /bitfun-product-domains = \{ path = "\.\.\/\.\.\/contracts\/product-domains", default-features = false, optional = true \}/,
         message:
           'bitfun-product-domains dependency must stay optional and not force product-full outside the core feature graph',
       },
       {
         regex:
-          /bitfun-product-capabilities = \{ path = "\.\.\/\.\.\/product\/product-capabilities", default-features = false, optional = true \}/,
+          /bitfun-product-capabilities = \{ path = "\.\.\/product-capabilities", default-features = false, optional = true \}/,
         message:
           'bitfun-product-capabilities dependency must stay optional and not force product-full outside the core feature graph',
       },
@@ -1324,7 +1324,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/lib.rs',
+    path: 'src/crates/assembly/core/src/lib.rs',
     reason:
       'no-default bitfun-core must keep product runtime surfaces behind explicit features',
     patterns: [
@@ -1347,7 +1347,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/service/mod.rs',
+    path: 'src/crates/assembly/core/src/service/mod.rs',
     reason:
       'service integration and agent-runtime surfaces must not compile in no-default core builds',
     patterns: [
@@ -1374,7 +1374,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/service/config/mod.rs',
+    path: 'src/crates/assembly/core/src/service/config/mod.rs',
     reason:
       'mode config canonicalization depends on product agent/tool registries and must stay out of no-default builds',
     patterns: [
@@ -1385,7 +1385,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/service/workspace/manager.rs',
+    path: 'src/crates/assembly/core/src/service/workspace/manager.rs',
     reason:
       'workspace metadata may omit git worktree enrichment when service integrations are disabled',
     patterns: [
@@ -1400,7 +1400,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/service/workspace_runtime/service.rs',
+    path: 'src/crates/assembly/core/src/service/workspace_runtime/service.rs',
     reason:
       'workspace runtime binding helpers may depend on agentic runtime only in full product builds',
     patterns: [
@@ -1415,7 +1415,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/service/remote_ssh/mod.rs',
+    path: 'src/crates/assembly/core/src/service/remote_ssh/mod.rs',
     reason:
       'core remote SSH runtime must keep concrete SSH dependencies behind the ssh-remote feature while preserving lightweight workspace identity helpers',
     patterns: [
@@ -1442,7 +1442,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/service/remote_ssh/disabled.rs',
+    path: 'src/crates/assembly/core/src/service/remote_ssh/disabled.rs',
     reason:
       'no-default core builds must expose explicit unsupported remote SSH stubs instead of compiling russh-backed runtime code',
     patterns: [
@@ -1724,7 +1724,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/subagent_runtime/mod.rs',
+    path: 'src/crates/assembly/core/src/agentic/subagent_runtime/mod.rs',
     reason:
       'core subagent runtime must preserve legacy import path while runtime-ports owns portable subagent contracts',
     patterns: [
@@ -1739,7 +1739,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/execution/agent-tools/src/framework.rs',
+    path: 'src/crates/execution/tool-contracts/src/framework.rs',
     reason:
       'agent-tools may own pure and generic prompt-visible tool contracts and provider-neutral execution gate policy without owning product registry or concrete execution',
     patterns: [
@@ -2026,7 +2026,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/execution/agent-tools/src/file_guidance.rs',
+    path: 'src/crates/execution/tool-contracts/src/file_guidance.rs',
     reason: 'agent-tools owns provider-neutral file tool guidance marker contracts',
     patterns: [
       {
@@ -2044,7 +2044,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/execution/agent-tools/src/file_read_freshness.rs',
+    path: 'src/crates/execution/tool-contracts/src/file_read_freshness.rs',
     reason: 'agent-tools owns pure file-read freshness policy for Read/Edit/Write guardrails',
     patterns: [
       {
@@ -2066,7 +2066,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/execution/agent-tools/src/tool_result_storage.rs',
+    path: 'src/crates/execution/tool-contracts/src/tool_result_storage.rs',
     reason:
       'agent-tools owns pure oversized tool-result storage policy and rendering without session IO',
     patterns: [
@@ -2109,7 +2109,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/execution/agent-tools/src/tool_execution_presentation.rs',
+    path: 'src/crates/execution/tool-contracts/src/tool_execution_presentation.rs',
     reason:
       'agent-tools owns provider-neutral tool execution result and error presentation helpers',
     patterns: [
@@ -2152,7 +2152,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/coordination/coordinator.rs',
+    path: 'src/crates/assembly/core/src/agentic/coordination/coordinator.rs',
     reason:
       'core must keep current coordinator port adapters and attachment guard until remote runtime migration is reviewed',
     patterns: [
@@ -2183,7 +2183,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/coordination/scheduler.rs',
+    path: 'src/crates/assembly/core/src/agentic/coordination/scheduler.rs',
     reason:
       'core scheduler must preserve legacy submission policy import path while runtime-ports owns portable dialog policy contracts',
     patterns: [
@@ -2213,7 +2213,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/round_preempt.rs',
+    path: 'src/crates/assembly/core/src/agentic/round_preempt.rs',
     reason:
       'core round preempt runtime must preserve legacy import paths while runtime-ports owns portable contracts and agent-runtime owns round-boundary state',
     patterns: [
@@ -2230,7 +2230,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/goal_mode/mod.rs',
+    path: 'src/crates/assembly/core/src/agentic/goal_mode/mod.rs',
     reason:
       'core goal mode must preserve legacy import paths while runtime-ports owns portable contracts and agent-runtime owns runtime decisions',
     patterns: [
@@ -2247,7 +2247,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/core/message.rs',
+    path: 'src/crates/assembly/core/src/agentic/core/message.rs',
     reason:
       'core message model must preserve legacy compression contract import path while runtime-ports owns portable compaction facts',
     patterns: [
@@ -2258,7 +2258,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/service/workspace/manager.rs',
+    path: 'src/crates/assembly/core/src/service/workspace/manager.rs',
     reason:
       'core workspace manager must preserve legacy related-path import path while runtime-ports owns portable request-context facts',
     patterns: [
@@ -2269,7 +2269,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/service_agent_runtime.rs',
+    path: 'src/crates/assembly/core/src/service_agent_runtime.rs',
     reason:
       'core service/agent runtime owner must centralize concrete remote-connect and agent runtime port bindings without moving runtime behavior',
     patterns: [
@@ -2961,7 +2961,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/service/remote_connect/remote_server.rs',
+    path: 'src/crates/assembly/core/src/service/remote_connect/remote_server.rs',
     reason:
       'core remote-connect server must remain a product runtime adapter around integrations-owned contracts',
     patterns: [
@@ -3048,7 +3048,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/service/remote_connect/bot/command_router.rs',
+    path: 'src/crates/assembly/core/src/service/remote_connect/bot/command_router.rs',
     reason:
       'remote-connect bot must route concrete agent runtime port bindings through the core service/agent runtime owner',
     patterns: [
@@ -3067,7 +3067,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/coordination/scheduler.rs',
+    path: 'src/crates/assembly/core/src/agentic/coordination/scheduler.rs',
     reason:
       'core scheduler keeps remote queue policy semantics until agent-runtime migration is reviewed',
     patterns: [
@@ -3078,7 +3078,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/tools/registry.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/registry.rs',
     reason:
       'core registry must stay a compatibility container that delegates product tool runtime assembly through the core owner module',
     patterns: [
@@ -3113,7 +3113,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/tools/product_runtime.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/product_runtime.rs',
     reason:
       'core product tool runtime owner delegates generic registry assembly and only wires product plan, decorator, and compatibility facade',
     patterns: [
@@ -3144,7 +3144,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/tools/product_runtime/materialization.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/product_runtime/materialization.rs',
     reason:
       'product runtime materialization must keep only concrete tool construction and product plan adapter while delegating generic registry assembly to agent-tools',
     patterns: [
@@ -3183,7 +3183,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/tools/product_runtime/snapshot.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/product_runtime/snapshot.rs',
     reason:
       'product runtime snapshot wrapper must stay isolated from registry and catalog ownership',
     patterns: [
@@ -3202,7 +3202,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/tools/product_runtime/catalog.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/product_runtime/catalog.rs',
     reason:
       'product runtime catalog owner keeps manifest, snapshot, readonly, and GetToolSpec product facades explicit',
     patterns: [
@@ -3281,7 +3281,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/tools/tool_adapter.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/tool_adapter.rs',
     reason:
       'core must keep the product Tool-to-agent-tools adapters explicit until ToolUseContext and concrete tools migrate',
     patterns: [
@@ -3316,7 +3316,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/execution/agent-tools/src/framework.rs',
+    path: 'src/crates/execution/tool-contracts/src/framework.rs',
     reason: 'agent-tools owns portable tool facts plus generic registry and provider contracts',
     patterns: [
       {
@@ -3386,7 +3386,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/execution/tool-packs/src/lib.rs',
+    path: 'src/crates/execution/tool-provider-groups/src/lib.rs',
     reason:
       'tool-packs must keep its feature-group scaffold explicit without owning concrete tools yet',
     patterns: [
@@ -3425,7 +3425,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/tools/manifest_resolver.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/manifest_resolver.rs',
     reason:
       'core must continue owning manifest resolver wrappers while delegating product catalog access and generic manifest assembly',
     patterns: [
@@ -3456,7 +3456,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/tools/product_runtime/get_tool_spec_tool.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/product_runtime/get_tool_spec_tool.rs',
     reason:
       'product runtime must own the GetToolSpec Tool adapter while delegating generic runtime surface to agent-tools',
     patterns: [
@@ -3487,7 +3487,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/tools/framework.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/framework.rs',
     reason:
       'core tool framework must keep compatibility re-exports while ToolUseContext is owned by tool_context_runtime',
     patterns: [
@@ -3502,7 +3502,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/tools/tool_context_runtime.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/tool_context_runtime.rs',
     reason:
       'core must keep ToolUseContext runtime/service bindings centralized while ToolUseContext and concrete tools remain core-owned',
     patterns: [
@@ -3625,7 +3625,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/tools/pipeline/tool_pipeline.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/pipeline/tool_pipeline.rs',
     reason:
       'core must continue carrying collapsed-tool unlock state while delegating provider-neutral execution gate policy to agent-tools',
     patterns: [
@@ -3664,7 +3664,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/execution/execution_engine.rs',
+    path: 'src/crates/assembly/core/src/agentic/execution/execution_engine.rs',
     reason:
       'core execution must pass collapsed-tool unlock state through product runtime owner and keep DeepResearch post-turn hooks',
     patterns: [
@@ -3691,7 +3691,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/tools/product_runtime/unlock_state.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/product_runtime/unlock_state.rs',
     reason:
       'product runtime owns collapsed-tool unlock observation adaptation while preserving generic agent-tools policy',
     patterns: [
@@ -3714,7 +3714,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/agents/registry/availability.rs',
+    path: 'src/crates/assembly/core/src/agentic/agents/registry/availability.rs',
     reason:
       'core agent registry must adapt config and AgentEntry facts while bitfun-agent-runtime owns mode-scoped subagent availability decisions',
     patterns: [
@@ -3741,7 +3741,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/agents/registry/types.rs',
+    path: 'src/crates/assembly/core/src/agentic/agents/registry/types.rs',
     reason:
       'core agent registry must preserve legacy DTO fields while bitfun-agent-runtime owns query scope and availability reason contracts',
     patterns: [
@@ -3764,7 +3764,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/agents/definitions/modes/mod.rs',
+    path: 'src/crates/assembly/core/src/agentic/agents/definitions/modes/mod.rs',
     reason:
       'core agent mode definitions must continue exposing Multitask mode until an approved agent-runtime migration preserves mode registration semantics',
     patterns: [
@@ -3779,7 +3779,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/agents/definitions/subagents/mod.rs',
+    path: 'src/crates/assembly/core/src/agentic/agents/definitions/subagents/mod.rs',
     reason:
       'core subagent definitions must continue exposing the built-in GeneralPurpose subagent until registry ownership migration has equivalence coverage',
     patterns: [
@@ -3794,7 +3794,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/agents/registry/builtin.rs',
+    path: 'src/crates/assembly/core/src/agentic/agents/registry/builtin.rs',
     reason:
       'core builtin registry must delegate builtin default model facts to agent-runtime while preserving latest-main compatibility',
     patterns: [
@@ -3832,7 +3832,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/tools/implementations/task_tool.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/task_tool.rs',
     reason:
       'core Task tool must continue owning fork-aware background subagent launch semantics until a reviewed agent-runtime port preserves delivery behavior',
     patterns: [
@@ -3875,7 +3875,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/coordination/scheduler.rs',
+    path: 'src/crates/assembly/core/src/agentic/coordination/scheduler.rs',
     reason:
       'core scheduler keeps concrete background delivery entry points while bitfun-agent-runtime owns running-turn injection construction',
     patterns: [
@@ -3948,7 +3948,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/agents/citation_renumber.rs',
+    path: 'src/crates/assembly/core/src/agentic/agents/citation_renumber.rs',
     reason:
       'core DeepResearch runtime must continue owning citation renumber post-processing until agent-runtime migration is reviewed',
     patterns: [
@@ -3971,7 +3971,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/service/workspace/service.rs',
+    path: 'src/crates/assembly/core/src/service/workspace/service.rs',
     reason:
       'core workspace runtime must continue owning startup remote-workspace guards until workspace service migration is reviewed',
     patterns: [
@@ -3994,7 +3994,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/service/search/service.rs',
+    path: 'src/crates/assembly/core/src/service/search/service.rs',
     reason:
       'core search runtime must continue owning local flashgrep fallback and preview mapping until search migration is reviewed',
     patterns: [
@@ -4017,7 +4017,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/service/search/remote.rs',
+    path: 'src/crates/assembly/core/src/service/search/remote.rs',
     reason:
       'core remote search runtime must continue owning remote flashgrep fallback/session behavior until search migration is reviewed',
     patterns: [
@@ -4040,7 +4040,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/service/search/mod.rs',
+    path: 'src/crates/assembly/core/src/service/search/mod.rs',
     reason:
       'remote workspace search must route to the real implementation only when ssh-remote is enabled',
     patterns: [
@@ -4059,7 +4059,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/service/search/remote_disabled.rs',
+    path: 'src/crates/assembly/core/src/service/search/remote_disabled.rs',
     reason:
       'no-default core builds must keep remote search unavailable with an explicit diagnostic',
     patterns: [
@@ -4078,7 +4078,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/surfaces/acp/src/client/manager.rs',
+    path: 'src/crates/interfaces/acp/src/client/manager.rs',
     reason:
       'ACP surface runtime must continue owning startup timeout diagnostics until ACP migration is reviewed',
     patterns: [
@@ -4258,7 +4258,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/miniapp/storage.rs',
+    path: 'src/crates/assembly/core/src/miniapp/storage.rs',
     reason:
       'core must continue owning MiniApp storage runtime adapter until storage IO migration is reviewed',
     patterns: [
@@ -4269,7 +4269,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/miniapp/builtin/mod.rs',
+    path: 'src/crates/assembly/core/src/miniapp/builtin/mod.rs',
     reason:
       'core must continue owning built-in MiniApp seeding IO, marker writes, and recompilation while product-domains owns bundle assets',
     patterns: [
@@ -4340,7 +4340,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/miniapp/host_dispatch.rs',
+    path: 'src/crates/assembly/core/src/miniapp/host_dispatch.rs',
     reason:
       'core must continue owning MiniApp host-dispatch execution until host/runtime migration is reviewed',
     patterns: [
@@ -4426,7 +4426,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/product/product-domains/src/miniapp/storage.rs',
+    path: 'src/crates/contracts/product-domains/src/miniapp/storage.rs',
     reason:
       'product-domains owns MiniApp storage shape contracts while core/adapters keep filesystem IO',
     patterns: [
@@ -4477,7 +4477,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/product/product-domains/src/miniapp/lifecycle.rs',
+    path: 'src/crates/contracts/product-domains/src/miniapp/lifecycle.rs',
     reason:
       'product-domains owns pure MiniApp lifecycle state transitions while core keeps compile, storage IO, and runtime execution',
     patterns: [
@@ -4544,7 +4544,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/product/product-domains/src/miniapp/draft.rs',
+    path: 'src/crates/contracts/product-domains/src/miniapp/draft.rs',
     reason:
       'product-domains owns MiniApp draft DTO and response shape while core keeps draft filesystem IO',
     patterns: [
@@ -4567,7 +4567,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/product/product-domains/src/miniapp/runtime.rs',
+    path: 'src/crates/contracts/product-domains/src/miniapp/runtime.rs',
     reason:
       'product-domains owns MiniApp runtime detection, including the reviewed concrete PATH/fs/version probe',
     patterns: [
@@ -4614,7 +4614,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/product/product-domains/src/miniapp/worker.rs',
+    path: 'src/crates/contracts/product-domains/src/miniapp/worker.rs',
     reason:
       'product-domains owns MiniApp worker pool policy and install-deps planning while core keeps worker process execution',
     patterns: [
@@ -4653,7 +4653,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/product/product-domains/src/miniapp/host_routing.rs',
+    path: 'src/crates/contracts/product-domains/src/miniapp/host_routing.rs',
     reason:
       'product-domains owns MiniApp host-routing and allowlist decision policy while core keeps host execution',
     patterns: [
@@ -4756,7 +4756,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/product/product-domains/src/miniapp/exporter.rs',
+    path: 'src/crates/contracts/product-domains/src/miniapp/exporter.rs',
     reason:
       'product-domains owns MiniApp export check result policy while core keeps runtime detection',
     patterns: [
@@ -4775,7 +4775,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/miniapp/exporter.rs',
+    path: 'src/crates/assembly/core/src/miniapp/exporter.rs',
     reason:
       'core MiniApp exporter must delegate export check result policy while retaining runtime detection and export skeleton',
     patterns: [
@@ -4794,7 +4794,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/product/product-domains/src/miniapp/customization.rs',
+    path: 'src/crates/contracts/product-domains/src/miniapp/customization.rs',
     reason:
       'product-domains owns MiniApp customization metadata, built-in update policy, and permission-diff contracts while core keeps draft storage/runtime',
     patterns: [
@@ -4833,7 +4833,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/miniapp/manager.rs',
+    path: 'src/crates/assembly/core/src/miniapp/manager.rs',
     reason:
       'core MiniApp manager must use product-domain policy/facade helpers while retaining compile, storage IO, and built-in source-hash lookup',
     patterns: [
@@ -4916,7 +4916,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/product/product-domains/src/miniapp/ports.rs',
+    path: 'src/crates/contracts/product-domains/src/miniapp/ports.rs',
     reason:
       'product-domains owns MiniApp runtime-state port facade while core keeps concrete storage IO, compile, worker, and host execution',
     patterns: [
@@ -4939,7 +4939,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/function_agents/runtime_services.rs',
+    path: 'src/crates/assembly/core/src/function_agents/runtime_services.rs',
     reason:
       'core function-agent runtime services must continue owning AI concrete calls while product-domains owns prompt, parser, and facade policy',
     patterns: [
@@ -5056,7 +5056,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/function_agents/git-func-agent/ai_service.rs',
+    path: 'src/crates/assembly/core/src/function_agents/git-func-agent/ai_service.rs',
     reason:
       'legacy Git function-agent AI service path must remain a compatibility re-export only',
     patterns: [
@@ -5067,7 +5067,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/function_agents/startchat-func-agent/ai_service.rs',
+    path: 'src/crates/assembly/core/src/function_agents/startchat-func-agent/ai_service.rs',
     reason:
       'legacy Startchat AI service path must remain a compatibility re-export only',
     patterns: [
@@ -5078,7 +5078,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/function_agents/git-func-agent/commit_generator.rs',
+    path: 'src/crates/assembly/core/src/function_agents/git-func-agent/commit_generator.rs',
     reason:
       'legacy Git commit generator must delegate to the core product-domain runtime owner',
     patterns: [
@@ -5093,7 +5093,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/product/product-domains/src/miniapp/builtin.rs',
+    path: 'src/crates/contracts/product-domains/src/miniapp/builtin.rs',
     reason:
       'product-domains owns built-in MiniApp bundle assets, marker, hash, and seed-decision contracts while core keeps asset seeding IO and recompilation',
     patterns: [
@@ -5176,7 +5176,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/function_agents/startchat-func-agent/work_state_analyzer.rs',
+    path: 'src/crates/assembly/core/src/function_agents/startchat-func-agent/work_state_analyzer.rs',
     reason:
       'legacy Startchat work-state analyzer must delegate to the core product-domain runtime owner',
     patterns: [
@@ -5191,9 +5191,9 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/product/product-domains/src/function_agents/ports.rs',
+    path: 'src/crates/contracts/product-domains/src/function_agents/ports.rs',
     reason:
-      'product-domains owns port-backed function-agent facade orchestration while integrations/core keep concrete Git/AI runtime calls',
+      'product-domains owns port-backed function-agent facade orchestration while providers/core keep concrete Git/AI runtime calls',
     patterns: [
       {
         regex: /\bpub struct FunctionAgentRuntimeFacade\b/,
@@ -5222,7 +5222,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/product/product-domains/src/function_agents/common.rs',
+    path: 'src/crates/contracts/product-domains/src/function_agents/common.rs',
     reason:
       'product-domains owns function-agent AI response JSON extraction while core keeps concrete AI clients',
     patterns: [
@@ -5237,7 +5237,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/product/product-domains/src/function_agents/startchat_func_agent/utils.rs',
+    path: 'src/crates/contracts/product-domains/src/function_agents/startchat_func_agent/utils.rs',
     reason:
       'product-domains owns Startchat function-agent prompt and response policy while core keeps AI calls',
     patterns: [
@@ -5272,7 +5272,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/product/product-domains/src/function_agents/git_func_agent/utils.rs',
+    path: 'src/crates/contracts/product-domains/src/function_agents/git_func_agent/utils.rs',
     reason:
       'product-domains owns Git function-agent prompt and response policy while core keeps AI calls',
     patterns: [
@@ -5311,7 +5311,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/miniapp/runtime_detect.rs',
+    path: 'src/crates/assembly/core/src/miniapp/runtime_detect.rs',
     reason:
       'core MiniApp runtime detection must be a compatibility facade over product-domain runtime detection',
     patterns: [
@@ -5326,7 +5326,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/miniapp/js_worker_pool.rs',
+    path: 'src/crates/assembly/core/src/miniapp/js_worker_pool.rs',
     reason:
       'core must continue owning MiniApp worker runtime adapter until process/runtime migration is reviewed',
     patterns: [
@@ -5353,7 +5353,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/function_agents/port_adapters.rs',
+    path: 'src/crates/assembly/core/src/function_agents/port_adapters.rs',
     reason:
       'core function-agent port adapters must stay thin adapters over integration Git services and core AI services',
     patterns: [
@@ -5396,7 +5396,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/product_domain_runtime.rs',
+    path: 'src/crates/assembly/core/src/product_domain_runtime.rs',
     reason:
       'core product-domain runtime owner must centralize concrete MiniApp and function-agent runtime port bindings without moving runtime behavior',
     patterns: [

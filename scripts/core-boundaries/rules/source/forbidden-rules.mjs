@@ -2,7 +2,7 @@
 
 export const forbiddenContentRules = [
   {
-    path: 'src/crates/facade/core/src/product_assembly.rs',
+    path: 'src/crates/assembly/core/src/product_assembly.rs',
     patterns: [
       {
         regex: /\bpub struct CoreRuntimeServicesProvider\b/,
@@ -22,7 +22,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/harness.rs',
+    path: 'src/crates/assembly/core/src/agentic/harness.rs',
     patterns: [
       {
         regex: /\bproduct_assembly_plan_for_profile\b/,
@@ -37,7 +37,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/function_agents/runtime_services.rs',
+    path: 'src/crates/assembly/core/src/function_agents/runtime_services.rs',
     patterns: [
       {
         regex: /\bCoreFunctionAgentGitService\b/,
@@ -62,7 +62,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/product/product-capabilities/src/lib.rs',
+    path: 'src/crates/assembly/product-capabilities/src/lib.rs',
     patterns: [
       {
         regex: /\bpub struct HarnessProviderDescriptor\b/,
@@ -92,7 +92,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/service/filesystem/service.rs',
+    path: 'src/crates/assembly/core/src/service/filesystem/service.rs',
     patterns: [
       {
         regex: /\btokio::fs::/,
@@ -122,7 +122,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/miniapp/runtime_detect.rs',
+    path: 'src/crates/assembly/core/src/miniapp/runtime_detect.rs',
     patterns: [
       {
         regex: /\bCoreMiniAppRuntimeProbe\b/,
@@ -147,7 +147,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/agents/prompt_builder/user_context.rs',
+    path: 'src/crates/assembly/core/src/agentic/agents/prompt_builder/user_context.rs',
     patterns: [
       {
         regex: /\bpub\s+enum\s+UserContextSection\b/,
@@ -162,7 +162,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/agents/mod.rs',
+    path: 'src/crates/assembly/core/src/agentic/agents/mod.rs',
     patterns: [
       {
         regex: /\bpub const SHARED_CODING_MODE_PROMPT_TEMPLATE\b/,
@@ -202,7 +202,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/agents/registry/query.rs',
+    path: 'src/crates/assembly/core/src/agentic/agents/registry/query.rs',
     patterns: [
       {
         regex: /"agentic"\s*=>\s*0[\s\S]*"Cowork"\s*=>\s*1/,
@@ -217,7 +217,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/agents/registry/types.rs',
+    path: 'src/crates/assembly/core/src/agentic/agents/registry/types.rs',
     patterns: [
       {
         regex: /\bpub enum SubAgentSource\b/,
@@ -227,7 +227,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/session/prompt_cache.rs',
+    path: 'src/crates/assembly/core/src/agentic/session/prompt_cache.rs',
     patterns: [
       {
         regex: /\bpub const PROMPT_CACHE_SCHEMA_VERSION\b/,
@@ -262,7 +262,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/agents/prompt_builder/prompt_builder_impl.rs',
+    path: 'src/crates/assembly/core/src/agentic/agents/prompt_builder/prompt_builder_impl.rs',
     patterns: [
       {
         regex: /\bpub\s+struct\s+ToolListingSections\b/,
@@ -277,7 +277,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/execution/types.rs',
+    path: 'src/crates/assembly/core/src/agentic/execution/types.rs',
     patterns: [
       {
         regex: /\bpub\s+enum\s+FinishReason\b/,
@@ -287,7 +287,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/events/types.rs',
+    path: 'src/crates/assembly/core/src/agentic/events/types.rs',
     patterns: [
       {
         regex: /SessionState::Idle\s*=>\s*"idle"/,
@@ -307,7 +307,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/coordination/scheduler.rs',
+    path: 'src/crates/assembly/core/src/agentic/coordination/scheduler.rs',
     patterns: [
       {
         regex: /\bconst\s+MAX_QUEUE_DEPTH\b/,
@@ -372,7 +372,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/tools/framework.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/framework.rs',
     patterns: [
       {
         regex: /\bpub struct DynamicMcpToolInfo\b/,
@@ -450,7 +450,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/tools/pipeline/tool_pipeline.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/pipeline/tool_pipeline.rs',
     patterns: [
       {
         regex: /framework::(?:\{[^}]*\bToolUseContext\b[^}]*\}|\bToolUseContext\b)/,
@@ -485,7 +485,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/agents/definitions/custom/subagent.rs',
+    path: 'src/crates/assembly/core/src/agentic/agents/definitions/custom/subagent.rs',
     patterns: [
       {
         regex: /\bFrontMatterMarkdown\b/,
@@ -500,7 +500,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/agents/registry/custom.rs',
+    path: 'src/crates/assembly/core/src/agentic/agents/registry/custom.rs',
     patterns: [
       {
         regex: /\bCustomSubagentLoader\b/,
@@ -520,7 +520,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/subagent_runtime/mod.rs',
+    path: 'src/crates/assembly/core/src/agentic/subagent_runtime/mod.rs',
     patterns: [
       {
         regex: /\bstruct\s+DelegationPolicy\b/,
@@ -535,7 +535,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/coordination/coordinator.rs',
+    path: 'src/crates/assembly/core/src/agentic/coordination/coordinator.rs',
     patterns: [
       {
         regex: /\benum\s+DialogTriggerSource\b/,
@@ -545,7 +545,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/coordination/scheduler.rs',
+    path: 'src/crates/assembly/core/src/agentic/coordination/scheduler.rs',
     patterns: [
       {
         regex: /\benum\s+DialogQueuePriority\b/,
@@ -575,7 +575,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/round_preempt.rs',
+    path: 'src/crates/assembly/core/src/agentic/round_preempt.rs',
     patterns: [
       {
         regex: /\btrait\s+DialogRoundPreemptSource\b/,
@@ -615,7 +615,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/goal_mode/mod.rs',
+    path: 'src/crates/assembly/core/src/agentic/goal_mode/mod.rs',
     patterns: [
       {
         regex: /\bconst\s+GOAL_MODE_METADATA_KEY\b/,
@@ -676,7 +676,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/core/message.rs',
+    path: 'src/crates/assembly/core/src/agentic/core/message.rs',
     patterns: [
       {
         regex: /\bstruct\s+CompressionContract\b/,
@@ -693,7 +693,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/service/workspace/manager.rs',
+    path: 'src/crates/assembly/core/src/service/workspace/manager.rs',
     patterns: [
       {
         regex: /\bstruct\s+RelatedPath\b/,
@@ -702,7 +702,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/tools/file_read_state_runtime.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/file_read_state_runtime.rs',
     patterns: [
       {
         regex: /framework::(?:\{[^}]*\bToolUseContext\b[^}]*\}|\bToolUseContext\b)/,
@@ -712,7 +712,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/tools/tool_result_storage.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/tool_result_storage.rs',
     patterns: [
       {
         regex: /framework::(?:\{[^}]*\bToolUseContext\b[^}]*\}|\bToolUseContext\b)/,
@@ -722,7 +722,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/tools/post_call_hooks.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/post_call_hooks.rs',
     patterns: [
       {
         regex: /framework::(?:\{[^}]*\bToolUseContext\b[^}]*\}|\bToolUseContext\b)/,
@@ -732,7 +732,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/tools/tool_adapter.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/tool_adapter.rs',
     patterns: [
       {
         regex: /framework::(?:\{[^}]*\bToolUseContext\b[^}]*\}|\bToolUseContext\b)/,
@@ -742,7 +742,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/tools/product_runtime.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/product_runtime.rs',
     patterns: [
       {
         regex: /framework::(?:\{[^}]*\bToolUseContext\b[^}]*\}|\bToolUseContext\b)/,
@@ -752,7 +752,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/tools/product_runtime/catalog.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/product_runtime/catalog.rs',
     patterns: [
       {
         regex: /framework::(?:\{[^}]*\bToolUseContext\b[^}]*\}|\bToolUseContext\b)/,
@@ -762,7 +762,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/tools/product_runtime/get_tool_spec_tool.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/product_runtime/get_tool_spec_tool.rs',
     patterns: [
       {
         regex: /framework::(?:\{[^}]*\bToolUseContext\b[^}]*\}|\bToolUseContext\b)/,
@@ -772,7 +772,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/tools/manifest_resolver.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/manifest_resolver.rs',
     patterns: [
       {
         regex: /framework::(?:\{[^}]*\bToolUseContext\b[^}]*\}|\bToolUseContext\b)/,
@@ -802,7 +802,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/workspace.rs',
+    path: 'src/crates/assembly/core/src/agentic/workspace.rs',
     patterns: [
       {
         regex: /\bpub\s+trait\s+WorkspaceFileSystem\b/,
@@ -837,7 +837,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/execution/execution_engine.rs',
+    path: 'src/crates/assembly/core/src/agentic/execution/execution_engine.rs',
     patterns: [
       {
         regex: /\bGetToolSpecLoadObservation\b/,
@@ -857,7 +857,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/miniapp/manager.rs',
+    path: 'src/crates/assembly/core/src/miniapp/manager.rs',
     patterns: [
       {
         regex: /\bbuild_runtime_state\b/,
@@ -887,7 +887,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/tools/restrictions.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/restrictions.rs',
     patterns: [
       {
         regex: /\bpub enum ToolPathOperation\b/,
@@ -910,7 +910,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/tools/workspace_paths.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/workspace_paths.rs',
     patterns: [
       {
         regex: /\bpub const BITFUN_RUNTIME_URI_PREFIX\b/,
@@ -935,7 +935,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/tools/registry.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/registry.rs',
     patterns: [
       {
         regex: /\bstruct DynamicToolMetadata\b/,
@@ -955,7 +955,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/tools/file_read_state_runtime.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/file_read_state_runtime.rs',
     patterns: [
       {
         regex: /\bnormalize_string\b/,
@@ -965,7 +965,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/tools/tool_result_storage.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/tool_result_storage.rs',
     patterns: [
       {
         regex: /\bfn\s+generate_preview\b/,
@@ -990,7 +990,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/service/mcp/server/process.rs',
+    path: 'src/crates/assembly/core/src/service/mcp/server/process.rs',
     patterns: [
       {
         regex: /\bpub enum MCPServerType\b/,
@@ -1027,7 +1027,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/service/mcp/server/manager/mod.rs',
+    path: 'src/crates/assembly/core/src/service/mcp/server/manager/mod.rs',
     patterns: [
       {
         regex: /\benum ListChangedKind\b/,
@@ -1044,7 +1044,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/service/mcp/server/manager/reconnect.rs',
+    path: 'src/crates/assembly/core/src/service/mcp/server/manager/reconnect.rs',
     patterns: [
       {
         regex: /\bfn compute_backoff_delay\b/,
@@ -1053,7 +1053,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/service/mcp/server/manager/interaction.rs',
+    path: 'src/crates/assembly/core/src/service/mcp/server/manager/interaction.rs',
     patterns: [
       {
         regex: /\bfn detect_list_changed_kind\b/,
@@ -1062,7 +1062,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/service/mcp/adapter/tool.rs',
+    path: 'src/crates/assembly/core/src/service/mcp/adapter/tool.rs',
     patterns: [
       {
         regex: /\bfn behavior_hints\b/,
@@ -1083,7 +1083,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/service/mcp/adapter/context.rs',
+    path: 'src/crates/assembly/core/src/service/mcp/adapter/context.rs',
     patterns: [
       {
         regex: /\bpub struct ContextEnhancerConfig\b/,
@@ -1100,7 +1100,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/function_agents/git-func-agent/commit_generator.rs',
+    path: 'src/crates/assembly/core/src/function_agents/git-func-agent/commit_generator.rs',
     patterns: [
       {
         regex: /\bGitService::get_status\b/,
@@ -1120,7 +1120,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/function_agents/startchat-func-agent/work_state_analyzer.rs',
+    path: 'src/crates/assembly/core/src/function_agents/startchat-func-agent/work_state_analyzer.rs',
     patterns: [
       {
         regex: /\bAIWorkStateService::new_with_agent_config\b/,
@@ -1135,7 +1135,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/service/mcp/server/config.rs',
+    path: 'src/crates/assembly/core/src/service/mcp/server/config.rs',
     patterns: [
       {
         regex: /\bpub enum MCPServerTransport\b/,
@@ -1168,7 +1168,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/service/mcp/config/cursor_format.rs',
+    path: 'src/crates/assembly/core/src/service/mcp/config/cursor_format.rs',
     patterns: [
       {
         regex: /\bfn parse_source\b/,
@@ -1185,7 +1185,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/service/mcp/config/json_config.rs',
+    path: 'src/crates/assembly/core/src/service/mcp/config/json_config.rs',
     patterns: [
       {
         regex: /\bfn normalize_source\b/,
@@ -1206,7 +1206,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/service/mcp/config/service.rs',
+    path: 'src/crates/assembly/core/src/service/mcp/config/service.rs',
     patterns: [
       {
         regex: /\bconst AUTHORIZATION_KEYS\b/,
@@ -1231,7 +1231,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/service/mcp/auth.rs',
+    path: 'src/crates/assembly/core/src/service/mcp/auth.rs',
     patterns: [
       {
         regex: /\bstruct VaultFile\b/,
@@ -1260,7 +1260,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/service/mcp/protocol/transport_remote.rs',
+    path: 'src/crates/assembly/core/src/service/mcp/protocol/transport_remote.rs',
     patterns: [
       {
         regex: /\bfn normalize_authorization_value\b/,
@@ -1321,7 +1321,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/service/mcp/protocol/jsonrpc.rs',
+    path: 'src/crates/assembly/core/src/service/mcp/protocol/jsonrpc.rs',
     patterns: [
       {
         regex: /\bfn serialize_params\b/,
@@ -1362,7 +1362,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/service/remote_ssh/workspace_state.rs',
+    path: 'src/crates/assembly/core/src/service/remote_ssh/workspace_state.rs',
     patterns: [
       {
         regex: /\bpub const LOCAL_WORKSPACE_SSH_HOST\b/,
@@ -1435,7 +1435,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/service/remote_connect/remote_server.rs',
+    path: 'src/crates/assembly/core/src/service/remote_connect/remote_server.rs',
     patterns: [
       {
         regex: /\bpub\(crate\) struct CoreRemoteDialogRuntimeHost\b/,
@@ -1743,7 +1743,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/service/remote_connect/bot/mod.rs',
+    path: 'src/crates/assembly/core/src/service/remote_connect/bot/mod.rs',
     patterns: [
       {
         regex: /\bfn strip_workspace_path_prefix\b/,
@@ -1764,7 +1764,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/service/announcement/state_store.rs',
+    path: 'src/crates/assembly/core/src/service/announcement/state_store.rs',
     patterns: [
       {
         regex: /\btokio::fs\b/,
@@ -1784,7 +1784,7 @@ export const forbiddenContentRules = [
 
 export const forbiddenContentUnderRules = [
   {
-    path: 'src/crates/facade/core/src',
+    path: 'src/crates/assembly/core/src',
     reason:
       'core must use runtime-ports as the owner path for portable subagent contracts',
     patterns: [
@@ -1797,13 +1797,13 @@ export const forbiddenContentUnderRules = [
     ],
   },
   {
-    path: 'src/crates/product/product-domains/src',
+    path: 'src/crates/contracts/product-domains/src',
     reason:
       'product-domains must not own IO/process/Git/AI/platform runtime behavior without an approved port/provider migration',
     patterns: [
       {
         regex: /\bCommand::new\(/,
-        allowPaths: ['src/crates/product/product-domains/src/miniapp/runtime.rs'],
+        allowPaths: ['src/crates/contracts/product-domains/src/miniapp/runtime.rs'],
         message:
           'product-domains must not spawn processes outside the reviewed MiniApp runtime detector owner',
       },
@@ -1860,7 +1860,7 @@ export const forbiddenContentUnderRules = [
     ],
   },
   {
-    path: 'src/crates/execution/agent-tools/src',
+    path: 'src/crates/execution/tool-contracts/src',
     reason:
       'agent-tools may own pure tool manifest contracts, but not product manifest runtime or GetToolSpec execution without an approved provider migration',
     patterns: [
@@ -1883,7 +1883,7 @@ export const forbiddenContentUnderRules = [
     ],
   },
   {
-    path: 'src/crates/execution/tool-packs/src',
+    path: 'src/crates/execution/tool-provider-groups/src',
     reason:
       'tool-packs may own provider group plans, but not product tool manifest/exposure or GetToolSpec runtime',
     patterns: [
@@ -1910,7 +1910,7 @@ export const forbiddenContentUnderRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/tools/implementations',
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations',
     reason:
       'GetToolSpec concrete adapter belongs in the product tool runtime owner, not the generic concrete-tool implementations module',
     patterns: [
@@ -1921,7 +1921,7 @@ export const forbiddenContentUnderRules = [
     ],
   },
   {
-    path: 'src/crates/facade/core/src/agentic/tools/pipeline',
+    path: 'src/crates/assembly/core/src/agentic/tools/pipeline',
     reason:
       'core pipeline must delegate deterministic tool execution admission policy to bitfun-agent-tools',
     patterns: [

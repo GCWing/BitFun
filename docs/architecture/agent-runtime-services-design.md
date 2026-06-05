@@ -7,8 +7,8 @@
 
 - Agent Runtime SDK 可被 Desktop、CLI、Server、Remote、ACP 等产品形态嵌入。
 - Runtime 不感知平台差异、工具实现差异和构建形态差异。
-- Tool 使用通用接口和 provider 注册，不绑定底层实现。
-- 具体 service 实现由上层 Product Assembly 注入。
+- Tool 使用通用接口和 provider group 注册，不绑定底层实现。
+- 具体 adapter 与 service 实现由上层 Product Assembly 注入。
 - Harness 可扩展，新增 SDD 等工作流不侵入 runtime kernel。
 - 每个 crate 只依赖最小稳定集合，依赖方向可检查。
 
@@ -19,8 +19,9 @@ bitfun-core-types
 bitfun-events
 bitfun-runtime-ports
 bitfun-runtime-services      # typed service bundle / capability availability
-bitfun-agent-tools
-tool-runtime
+tool-contracts              # Cargo package: bitfun-agent-tools
+tool-provider-groups        # Cargo package: bitfun-tool-packs
+tool-execution              # Cargo package: tool-runtime
 bitfun-agent-runtime         # agent kernel contracts and portable runtime decisions
 bitfun-harness               # workflow descriptor / provider / registry contracts
 bitfun-services-core
@@ -42,25 +43,25 @@ Product Assembly
   -> product capability packs
   -> bitfun-agent-runtime
   -> bitfun-harness
-  -> tool-runtime
+  -> tool-contracts / tool-provider-groups / tool-execution
   -> bitfun-runtime-services
-  -> 具体 service crates
+  -> adapters / services
 
 Product Capability packs
   -> bitfun-harness
   -> bitfun-agent-runtime
-  -> tool-runtime
+  -> tool-provider-groups
   -> bitfun-product-domains
 
 bitfun-agent-runtime
   -> bitfun-runtime-ports
   -> bitfun-events
   -> bitfun-agent-stream
-  -> tool-runtime
+  -> tool-contracts
   -> bitfun-runtime-services
 
-tool-runtime
-  -> bitfun-agent-tools
+tool-execution
+  -> tool-contracts
   -> bitfun-runtime-ports
   -> bitfun-events
 
@@ -68,7 +69,7 @@ bitfun-runtime-services
   -> bitfun-runtime-ports
   -> bitfun-core-types / bitfun-events（仅当 service DTO 或 event contract 需要时引入）
 
-具体 service crates
+adapters / services
   -> bitfun-runtime-ports
   -> bitfun-core-types
   -> 允许的 third-party 依赖
@@ -78,8 +79,8 @@ bitfun-runtime-services
 禁止依赖：
 
 - `bitfun-runtime-ports` -> `bitfun-core`
-- `bitfun-agent-tools` -> 具体 service crate
-- `tool-runtime` -> 具体 tool 实现 crate
+- `tool-contracts` -> 具体 service crate
+- `tool-execution` -> 产品 registry / permission policy / 具体 tool 实现 crate
 - `bitfun-agent-runtime` -> `bitfun-core`
 - `bitfun-agent-runtime` -> Tauri / CLI / ACP protocol / Web UI
 - `bitfun-harness` -> 具体 filesystem / Git / terminal manager
@@ -366,33 +367,38 @@ impl AgentRuntime {
 - `Task.fork_context` 禁止字段、prompt cache clone、context seeding 不漂移。
 - DeepResearch citation renumber post-turn hook 保持 deterministic。
 
-### 3.2 Tool Runtime
+### 3.2 Tool Primitives
 
 所属 crate：
 
-- `bitfun-agent-tools`
-- `tool-runtime`
-- `bitfun-tool-packs`
+- `tool-contracts`（Cargo package: `bitfun-agent-tools`）
+- `tool-provider-groups`（Cargo package: `bitfun-tool-packs`）
+- `tool-execution`（Cargo package: `tool-runtime`）
 
 目标职责：
 
-- `bitfun-agent-tools`：tool DTO、manifest、exposure、schema、path policy、result policy。
-- `tool-runtime`：provider registry、permission gate、execution pipeline、hook。
-- `bitfun-tool-packs`：tool pack feature metadata 和 provider plan。
+- `tool-contracts`：tool DTO、manifest、exposure、schema、path policy、result policy、admission gate 和 provider-neutral registry assembly。
+- `tool-provider-groups`：tool provider group feature metadata 和 provider plan。
+- `tool-execution`：低层 file/search/tool IO helper，不拥有产品 registry、permission policy 或 agent-facing tool surface。
 
-建议 `tool-runtime` 模块：
+建议模块：
 
 ```text
-tool-runtime
-  runtime.rs
-  registry.rs
-  provider.rs
-  context.rs
-  permission.rs
-  execution.rs
-  hooks.rs
-  result.rs
-  catalog.rs
+tool-contracts
+  framework.rs
+  restrictions.rs
+  file_guidance.rs
+  tool_result_storage.rs
+  tool_execution_presentation.rs
+
+tool-provider-groups
+  provider_groups.rs
+
+tool-execution
+  filesystem.rs
+  search.rs
+  remote.rs
+  result_window.rs
 ```
 
 核心接口：
@@ -442,11 +448,11 @@ pub struct ToolExecutionContext {
 
 - `ToolExecutionContext` 不暴露具体 manager。
 - `ToolContextFacts` 只包含 portable facts。
-- Tool Runtime 只消费 `ToolExecutionServices` 这样的窄 service 视图，不依赖完整
+- Tool primitives 只消费 `ToolExecutionServices` 这样的窄 service 视图，不依赖完整
   `RuntimeServices` bundle。
-- path policy、runtime artifact ref、remote POSIX containment 由 `bitfun-agent-tools` 承载。
+- path policy、runtime artifact ref、remote POSIX containment 由 `tool-contracts` 承载。
 - MCP tool 作为 external tool provider 注入，不内置在 Agent Runtime SDK。
-- `GetToolSpec` 是 tool runtime/catalog 能力，不是产品 UI。
+- `GetToolSpec` 是 tool catalog 能力，不是产品 UI。
 
 必须保护：
 
@@ -534,14 +540,14 @@ Product Assembly crate。
 
 职责：
 
-- 创建具体 service 实现。
+- 创建或接收具体 adapter / service 实现。
 - 构建 `RuntimeServices`。
-- 注册 tool providers。
+- 注册 tool provider groups。
 - 注册 harness providers。
 - 注册 agent definitions、subagents、skills、prompt modules。
 - 建立产品 feature matrix。
-- 把 surface 命令映射到 capability / harness / runtime request。
-- 根据交付形态选择 `DeliveryProfile`、`CapabilitySet` 和 service provider 集合。
+- 把 interface 命令映射到 capability / harness / runtime request。
+- 根据交付形态选择 `DeliveryProfile`、`CapabilitySet`、adapter 和 service provider 集合。
 - 对不支持能力返回 typed unsupported / unavailable 错误，而不是让下层 runtime 判断产品形态。
 
 建议模块：
@@ -898,7 +904,7 @@ Product 测试：
 
 - `bitfun-agent-runtime` 能在不依赖 `bitfun-core` 的情况下构建 runtime kernel。
 - `bitfun-runtime-services` 提供 typed service injection，并由 boundary check 保护。
-- `tool-runtime` 承担 provider registry 和 execution pipeline，具体 tool 通过 provider 注入。
+- `tool-contracts`、`tool-provider-groups` 和 `tool-execution` 分别承担 tool contract、provider group plan 和低层 execution helper；具体 tool 通过 Product Assembly 注册。
 - `bitfun-harness` 支持工作流 provider 扩展。
 - `bitfun-core` 只作为兼容 facade / product-full assembly。
 - 所有产品形态通过 Product Assembly 显式启用能力。

@@ -12,7 +12,7 @@ crate-type = ["rlib"]
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-bitfun-ai-adapters = { path = "../../integrations/ai-adapters" }
+bitfun-ai-adapters = { path = "../../adapters/ai-adapters" }
 bitfun-events = { path = "../../contracts/events" }
 futures = { workspace = true }
 log = { workspace = true }

@@ -112,7 +112,7 @@ function buildPreview(): ReviewTeamRunManifest {
       source: 'session_files',
       resolution: 'resolved',
       tags: ['backend_core'],
-      files: ['src/crates/facade/core/src/service/config/types.rs'],
+      files: ['src/crates/assembly/core/src/service/config/types.rs'],
       warnings: [],
     },
     strategyLevel: 'normal',

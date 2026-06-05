@@ -11,9 +11,9 @@ path = "src/main.rs"
 
 [dependencies]
 # Internal crates
-bitfun-core = { path = "../../crates/facade/core", default-features = false, features = ["product-full"] }
+bitfun-core = { path = "../../crates/assembly/core", default-features = false, features = ["product-full"] }
 bitfun-events = { path = "../../crates/contracts/events" }
-bitfun-acp = { path = "../../crates/surfaces/acp" }
+bitfun-acp = { path = "../../crates/interfaces/acp" }
 
 # CLI framework
 clap = { workspace = true }

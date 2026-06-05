@@ -2,9 +2,9 @@
 
 # Contracts Layer
 
-This layer owns stable contracts that can be shared by runtime, services,
-product, integrations, facade, and app surfaces without pulling implementation
-details upward.
+This layer owns stable contracts and product-domain models that can be shared by
+execution, services, adapters, assembly, and interfaces without pulling
+implementation details upward.
 
 ## Modules
 
@@ -12,6 +12,7 @@ details upward.
 |---|---|---|
 | `core-types` | Shared DTOs, errors, session/surface data, and small value types | [AGENTS.md](core-types/AGENTS.md) |
 | `events` | Event payloads and emitter contracts | [AGENTS.md](events/AGENTS.md) |
+| `product-domains` | Product domain DTOs, rules, policies, and narrow ports | [AGENTS.md](product-domains/AGENTS.md) |
 | `runtime-ports` | Runtime-facing traits and ports used by owner crates | [AGENTS.md](runtime-ports/AGENTS.md) |
 
 ## Placement Rules
@@ -26,7 +27,7 @@ details upward.
 ## Dependency Boundaries
 
 - This layer may depend on workspace primitives and other contract crates.
-- It must not depend on `runtime`, `services`, `product`, `integrations`,
-  `facade`, `src/apps`, frontend packages, Tauri, or OS-specific adapters.
+- It must not depend on `execution`, `services`, `adapters`, `assembly`,
+  `interfaces`, `src/apps`, frontend packages, Tauri, or OS-specific adapters.
 - New dependencies must stay minimal and justified by contract shape, not by
   implementation convenience.

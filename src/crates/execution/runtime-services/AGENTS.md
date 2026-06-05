@@ -16,7 +16,7 @@ implementation layer.
 - Fake/test providers may live here only when they protect port behavior without
   pulling product runtime dependencies.
 - Concrete filesystem, terminal, network, Git, MCP, remote, or AI provider
-  implementations belong in service/integration owner crates or app adapters.
+  implementations belong in provider crates or app adapters.
 
 ## Verification
 

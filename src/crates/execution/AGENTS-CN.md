@@ -2,7 +2,7 @@
 
 # 执行原语层
 
-本层负责可复用的 agent、tool、harness、stream 和 typed-service 执行原语。它不是完整 Agent Runtime SDK，也不是组装后的产品 runtime。由产品组装决定某个交付形态启用哪些 execution primitive、tool pack、harness provider 和 service provider。
+本层负责可复用的 agent、harness、stream、typed-service 和 tool 执行原语。它不是完整 Agent Runtime SDK，也不是组装后的产品 runtime。由产品组装决定某个交付形态启用哪些 execution primitive、tool provider group、harness provider、adapter 和 service。
 
 ## 模块
 
@@ -10,21 +10,22 @@
 |---|---|---|
 | `agent-runtime` | Agent registry、scheduler、prompt cache、hooks、goal 和 runtime control 契约 | [AGENTS.md](agent-runtime/AGENTS.md) |
 | `agent-stream` | Provider stream 归一化和 replay 契约 | [AGENTS.md](agent-stream/AGENTS.md) |
-| `agent-tools` | Tool 契约、execution gate、input validation 和 result presentation 契约 | [AGENTS.md](agent-tools/AGENTS.md) |
+| `tool-contracts` | Tool 契约、execution gate、input validation 和 result presentation 契约；Cargo package 仍为 `bitfun-agent-tools` | [AGENTS.md](tool-contracts/AGENTS.md) |
 | `harness` | Harness workflow 契约和 registry primitive | [AGENTS.md](harness/AGENTS.md) |
 | `runtime-services` | Typed runtime service assembly 和 service availability facts | [AGENTS.md](runtime-services/AGENTS.md) |
-| `tool-packs` | Tool provider group facts 和 product-full tool-pack composition | [AGENTS.md](tool-packs/AGENTS.md) |
-| `tool-runtime` | 底层 file/search/tool IO helper | [AGENTS.md](tool-runtime/AGENTS.md) |
+| `tool-provider-groups` | Tool provider group facts 和 product-full tool group composition；Cargo package 仍为 `bitfun-tool-packs` | [AGENTS.md](tool-provider-groups/AGENTS.md) |
+| `tool-execution` | 底层 file/search/tool IO helper；Cargo package 仍为 `tool-runtime` | [AGENTS.md](tool-execution/AGENTS.md) |
 
 ## 放置规则
 
 - 可移植 execution 编排、agent lifecycle 契约、tool 契约和 provider-neutral execution facts 放到这里。
 - 具体 filesystem、git、terminal、MCP server、remote SSH、OS 行为应放到 `services`，除非只是纯底层 tool primitive。
-- 产品 feature 选择和 delivery-profile 决策放到 `product` 或 `facade`，不要放入 execution primitive。
+- 协议 projection 与外部 provider 请求整形放到 `adapters`。
+- 产品 feature 选择和 delivery-profile 决策放到 `assembly`，不要放入 execution primitive。
 - Tool packs 只描述 provider group 和所需服务；具体服务访问应通过 port 或 typed runtime service。
 
 ## 依赖边界
 
-- Execution primitive crate 可以依赖 `contracts`，在 provider stream 归一化场景下可以窄依赖 integration DTO。
-- Execution primitive crate 不得依赖 `facade/core`、`src/apps`、前端代码、Tauri API 或产品形态 lifecycle。
-- 新增对 `services`、`product` 或 `integrations` 的依赖时，必须在最近的模块文档或 PR 描述里说明边界原因。
+- Execution primitive crate 可以依赖 `contracts`，在 provider stream 归一化场景下可以窄依赖 provider-neutral DTO。
+- Execution primitive crate 不得依赖 `assembly/core`、`src/apps`、前端代码、Tauri API 或产品形态 lifecycle。
+- 新增对 `adapters` 或 `services` 的依赖时，必须在最近的模块文档或 PR 描述里说明边界原因。

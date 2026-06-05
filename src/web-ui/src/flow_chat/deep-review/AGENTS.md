@@ -21,4 +21,4 @@ This file applies to DeepReview launch, report, queue, and action UI code.
 
 Use the nearest focused Web UI test or `pnpm run type-check:web`. If the change
 updates manifest, queue, retry, or report contracts, also run the matching core
-DeepReview check from `src/crates/facade/core/src/agentic/deep_review/AGENTS.md`.
+DeepReview check from `src/crates/assembly/core/src/agentic/deep_review/AGENTS.md`.

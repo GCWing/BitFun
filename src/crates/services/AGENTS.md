@@ -1,40 +1,33 @@
 [中文](AGENTS-CN.md) | **English**
 
-# Services Layer
+# Service Layer
 
-This layer owns reusable non-UI service implementations and service adapters:
-filesystem, git, process/system, diagnostics, terminal, MCP, remote, and
-persistence-adjacent capabilities. Generic services should be callable through
-narrow APIs or ports rather than through product facades. Product-specific
-adapters may implement product-domain ports, but must not own product policy.
+This layer owns reusable concrete implementations that touch local systems or
+runtime infrastructure: filesystem, git, file watch, terminal, MCP, remote
+connectivity, process lifecycle, and similar OS/network capabilities.
 
 ## Modules
 
 | Crate | Responsibility | Local doc |
 |---|---|---|
-| `services-core` | Core reusable services for filesystem, diff, diagnostics, session usage, token usage, system, and process concerns | [AGENTS.md](services-core/AGENTS.md) |
-| `services-integrations` | Concrete integrations for announcement, file watch, function agents, git, MCP, remote connect, and remote SSH | [AGENTS.md](services-integrations/AGENTS.md) |
-| `terminal` | Terminal API, PTY, shell integration, and persistent terminal sessions | [AGENTS.md](terminal/AGENTS.md) |
+| `services-core` | Reusable local service primitives without product assembly decisions | [AGENTS.md](services-core/AGENTS.md) |
+| `services-integrations` | Concrete MCP, git, remote, file-watch, and product-domain port implementations | [AGENTS.md](services-integrations/AGENTS.md) |
+| `terminal` | PTY, shell integration, and terminal session infrastructure | [AGENTS.md](terminal/AGENTS.md) |
 
 ## Placement Rules
 
-- Put concrete host/service behavior here when it is reusable by more than one
-  product or runtime path.
-- Keep UI state, product feature selection, and delivery assembly out of this
-  layer.
-- Prefer small service APIs over broad managers that mix unrelated concerns.
-- If behavior depends on platform capabilities, isolate those details behind a
-  service module or feature gate.
+- Put concrete OS, process, filesystem, git, terminal, MCP, remote SSH,
+  file-watch, and network service implementations here.
+- Implement `contracts`, `execution`, or `contracts/product-domains` ports here
+  when the implementation needs concrete dependencies.
+- Keep protocol/transport projection in `adapters`, and keep product capability
+  selection in `assembly`.
 
 ## Dependency Boundaries
 
-- Generic service crates should not depend on product crates.
-- A service adapter may depend on narrowly scoped `product-domains` port/DTO
-  types only when it implements a product-owned port behind a feature gate.
-  Current example: `services-integrations` implements function-agent Git
-  snapshots for `product-domains` function-agent ports. Do not generalize this
-  into service-owned product policy.
-- Services must not depend on `facade/core`, `src/apps`, frontend code, or
-  Tauri `AppHandle`.
-- Remote and platform support must fail through typed service errors or clear
-  unsupported-state handling, not generic string failures.
+- Services may depend on `contracts` and narrowly on provider-neutral execution
+  crates when implementing runtime ports.
+- Services must not depend on `assembly/core`, interface crates, product UI code,
+  or app command handlers.
+- Service-to-service dependencies must stay narrow; reusable contracts should
+  move to `contracts` or `execution` instead of creating broad coupling.

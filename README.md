@@ -159,13 +159,12 @@ For more details, see the [Contributing guide](./CONTRIBUTING.md).
 ## Project structure at a glance
 
 ```
-src/crates/contracts/          # Stable DTOs, events, and runtime ports
-src/crates/execution/          # Agent, tool, harness, and runtime-service owners
-src/crates/services/           # Shared local service and terminal infrastructure
-src/crates/product/            # Product capability and domain owners
-src/crates/integrations/       # Low-level AI, API, transport, and WebDriver adapters
-src/crates/surfaces/           # Product-facing protocol surfaces such as ACP
-src/crates/facade/core         # Compatibility facade and product runtime assembly
+src/crates/interfaces/         # Product protocol interfaces such as ACP
+src/crates/assembly/           # Compatibility facade and product capability assembly
+src/crates/adapters/           # AI, API, transport, and WebDriver adapters
+src/crates/services/           # Reusable OS, terminal, MCP, remote, git, and filesystem services
+src/crates/execution/          # Agent, harness, stream, typed-service, and tool primitives
+src/crates/contracts/          # Stable DTOs, events, runtime ports, and product domains
 src/apps/desktop        # Tauri desktop host
 src/apps/server         # Web server runtime
 src/apps/cli            # CLI runtime

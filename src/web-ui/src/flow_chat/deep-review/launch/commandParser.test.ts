@@ -28,11 +28,11 @@ describe('Deep Review launch command parser', () => {
   it('extracts explicit review file paths once and ignores prose tokens', () => {
     expect(
       extractExplicitReviewFilePaths(
-        'please inspect `src/web-ui/src/App.tsx`, src/web-ui/src/App.tsx and src/crates/facade/core/src/lib.rs for risk',
+        'please inspect `src/web-ui/src/App.tsx`, src/web-ui/src/App.tsx and src/crates/assembly/core/src/lib.rs for risk',
       ),
     ).toEqual([
       'src/web-ui/src/App.tsx',
-      'src/crates/facade/core/src/lib.rs',
+      'src/crates/assembly/core/src/lib.rs',
     ]);
   });
 

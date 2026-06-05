@@ -4,7 +4,7 @@ This note explains the cache-friendly request shape BitFun tries to preserve
 for long-running agent sessions, where each layer is stored, and which kinds
 of changes tend to preserve or break provider-side prefix cache reuse.
 
-The implementation is mostly in `src/crates/facade/core/src/agentic/`.
+The implementation is mostly in `src/crates/assembly/core/src/agentic/`.
 
 ## Request Shape
 
@@ -30,11 +30,11 @@ Two details matter here:
 Relevant code:
 
 - request assembly:
-  `src/crates/facade/core/src/agentic/execution/execution_engine.rs`
+  `src/crates/assembly/core/src/agentic/execution/execution_engine.rs`
 - prepended reminder ordering:
   `src/crates/execution/agent-runtime/src/prompt.rs`
 - tool manifest resolution:
-  `src/crates/facade/core/src/agentic/tools/manifest_resolver.rs`
+  `src/crates/assembly/core/src/agentic/tools/manifest_resolver.rs`
 
 In practice the model-visible layout looks like this:
 
@@ -91,9 +91,9 @@ Relevant code:
 - cache model:
   `src/crates/execution/agent-runtime/src/prompt_cache.rs`
 - cache lifecycle:
-  `src/crates/facade/core/src/agentic/session/session_manager.rs`
+  `src/crates/assembly/core/src/agentic/session/session_manager.rs`
 
-The old core path `src/crates/facade/core/src/agentic/session/prompt_cache.rs` is now
+The old core path `src/crates/assembly/core/src/agentic/session/prompt_cache.rs` is now
 a compatibility facade that re-exports the owner types from `bitfun-agent-runtime`.
 
 ### 2. Tool definitions
@@ -206,11 +206,11 @@ Special rewrite path:
 Relevant code:
 
 - snapshot model and diffing:
-  `src/crates/facade/core/src/agentic/skill_agent_snapshot.rs`
+  `src/crates/assembly/core/src/agentic/skill_agent_snapshot.rs`
 - sparse snapshot store:
-  `src/crates/facade/core/src/agentic/session/turn_skill_agent_snapshot_store.rs`
+  `src/crates/assembly/core/src/agentic/session/turn_skill_agent_snapshot_store.rs`
 - baseline rebuild and cleanup:
-  `src/crates/facade/core/src/agentic/session/session_manager.rs`
+  `src/crates/assembly/core/src/agentic/session/session_manager.rs`
 
 ### 5. User context
 
@@ -313,14 +313,14 @@ If you intentionally need to reset or rewrite the prefix:
 ## Implementation Map
 
 - request assembly:
-  `src/crates/facade/core/src/agentic/execution/execution_engine.rs`
+  `src/crates/assembly/core/src/agentic/execution/execution_engine.rs`
 - reminder ordering and prompt builder helpers:
   `src/crates/execution/agent-runtime/src/prompt.rs`
 - prompt cache model:
   `src/crates/execution/agent-runtime/src/prompt_cache.rs`
 - prompt cache lifecycle and listing baseline rebuild:
-  `src/crates/facade/core/src/agentic/session/session_manager.rs`
+  `src/crates/assembly/core/src/agentic/session/session_manager.rs`
 - listing snapshots and diffs:
-  `src/crates/facade/core/src/agentic/skill_agent_snapshot.rs`
+  `src/crates/assembly/core/src/agentic/skill_agent_snapshot.rs`
 - session persistence paths:
-  `src/crates/facade/core/src/agentic/persistence/manager.rs`
+  `src/crates/assembly/core/src/agentic/persistence/manager.rs`

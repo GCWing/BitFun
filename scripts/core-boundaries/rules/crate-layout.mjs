@@ -4,38 +4,37 @@
 export const crateLayoutRules = [
   { crateName: 'core-types', layer: 'contracts', path: 'src/crates/contracts/core-types' },
   { crateName: 'events', layer: 'contracts', path: 'src/crates/contracts/events' },
+  { crateName: 'product-domains', layer: 'contracts', path: 'src/crates/contracts/product-domains' },
   { crateName: 'runtime-ports', layer: 'contracts', path: 'src/crates/contracts/runtime-ports' },
 
   { crateName: 'agent-runtime', layer: 'execution', path: 'src/crates/execution/agent-runtime' },
   { crateName: 'agent-stream', layer: 'execution', path: 'src/crates/execution/agent-stream' },
-  { crateName: 'agent-tools', layer: 'execution', path: 'src/crates/execution/agent-tools' },
+  { crateName: 'agent-tools', layer: 'execution', path: 'src/crates/execution/tool-contracts' },
   { crateName: 'harness', layer: 'execution', path: 'src/crates/execution/harness' },
   { crateName: 'runtime-services', layer: 'execution', path: 'src/crates/execution/runtime-services' },
-  { crateName: 'tool-packs', layer: 'execution', path: 'src/crates/execution/tool-packs' },
-  { crateName: 'tool-runtime', layer: 'execution', path: 'src/crates/execution/tool-runtime' },
+  { crateName: 'tool-packs', layer: 'execution', path: 'src/crates/execution/tool-provider-groups' },
+  { crateName: 'tool-runtime', layer: 'execution', path: 'src/crates/execution/tool-execution' },
 
-  { crateName: 'product-capabilities', layer: 'product', path: 'src/crates/product/product-capabilities' },
-  { crateName: 'product-domains', layer: 'product', path: 'src/crates/product/product-domains' },
+  { crateName: 'product-capabilities', layer: 'assembly', path: 'src/crates/assembly/product-capabilities' },
 
   { crateName: 'services-core', layer: 'services', path: 'src/crates/services/services-core' },
   { crateName: 'services-integrations', layer: 'services', path: 'src/crates/services/services-integrations' },
   { crateName: 'terminal', layer: 'services', path: 'src/crates/services/terminal' },
 
-  { crateName: 'acp', layer: 'surfaces', path: 'src/crates/surfaces/acp' },
-  { crateName: 'ai-adapters', layer: 'integrations', path: 'src/crates/integrations/ai-adapters' },
-  { crateName: 'api-layer', layer: 'integrations', path: 'src/crates/integrations/api-layer' },
-  { crateName: 'transport', layer: 'integrations', path: 'src/crates/integrations/transport' },
-  { crateName: 'webdriver', layer: 'integrations', path: 'src/crates/integrations/webdriver' },
+  { crateName: 'acp', layer: 'interfaces', path: 'src/crates/interfaces/acp' },
+  { crateName: 'ai-adapters', layer: 'adapters', path: 'src/crates/adapters/ai-adapters' },
+  { crateName: 'api-layer', layer: 'adapters', path: 'src/crates/adapters/api-layer' },
+  { crateName: 'transport', layer: 'adapters', path: 'src/crates/adapters/transport' },
+  { crateName: 'webdriver', layer: 'adapters', path: 'src/crates/adapters/webdriver' },
 
-  { crateName: 'core', layer: 'facade', path: 'src/crates/facade/core' },
+  { crateName: 'core', layer: 'assembly', path: 'src/crates/assembly/core' },
 ];
 
 export const crateLayoutLayerNames = [
-  'surfaces',
-  'facade',
-  'integrations',
+  'interfaces',
+  'assembly',
+  'adapters',
   'services',
-  'product',
   'execution',
   'contracts',
 ];
