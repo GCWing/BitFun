@@ -1865,8 +1865,12 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
         isFollowingOutputRef.current &&
         isStreamingOutputRef.current &&
         !hasRecentUserUpwardIntent &&
-        !anchorLockRef.current.active
+        !anchorLockRef.current.active &&
+        layoutTransitionCountRef.current === 0
       ) {
+        // The layoutTransitionCountRef guard above already prevents this branch
+        // from firing during CSS transitions, which avoids unbounded ratcheting
+        // (the consumption path is blocked while transitions are active).
         const clampAmount = -intentCheckScrollDelta;
         const baseState = bottomReservationStateRef.current;
         const nextReservationState: BottomReservationState = {
