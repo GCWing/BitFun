@@ -44,6 +44,8 @@ type LongSessionViewportState = {
   latestModelRoundTextLength: number;
   latestContentVisible: boolean;
   historyPlaceholderVisible: boolean;
+  historyPlaceholderCoversMessages: boolean;
+  latestContentVisuallyVisible: boolean;
   scrollerTop: number | null;
   scrollerBottom: number | null;
   effectiveScrollerBottom: number | null;
@@ -82,6 +84,10 @@ type LongSessionViewportState = {
 type LongSessionViewportTimelineSample = {
   atMs: number;
   sinceClickMs: number;
+  historyOpenIntentAtMs: number | null;
+  sinceHistoryOpenIntentMs: number | null;
+  activeSessionId: string | null;
+  pendingHistoryOpenSessionId: string | null;
   hasRoot: boolean;
   hasScroller: boolean;
   latestRendered: boolean;
@@ -90,6 +96,8 @@ type LongSessionViewportTimelineSample = {
   latestModelRoundTextLength: number;
   latestContentVisible: boolean;
   historyPlaceholderVisible: boolean;
+  historyPlaceholderCoversMessages: boolean;
+  latestContentVisuallyVisible: boolean;
   latestVisible: boolean;
   latestTurnId: string | null;
   scrollTop: number | null;
@@ -137,9 +145,199 @@ type LongSessionMainThreadTask = {
   entryType: string;
 };
 
+type LongSessionLayoutShiftEvent = {
+  startMs: number;
+  sinceClickMs: number;
+  value: number;
+  hadRecentInput: boolean;
+  sources: Array<{
+    node: string | null;
+    previousRect: LongSessionRectSummary | null;
+    currentRect: LongSessionRectSummary | null;
+  }>;
+};
+
+type LongSessionRectSummary = {
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
+  width: number;
+  height: number;
+};
+
+type LongSessionLoadingSurface = {
+  selector: string;
+  node: string | null;
+  visible: boolean;
+  textLength: number;
+  rect: LongSessionRectSummary | null;
+};
+
+type LongSessionSurfacePoint = {
+  label: string;
+  x: number;
+  y: number;
+  category: string;
+  topNode: string | null;
+  topElementId: string | null;
+  itemType: string | null;
+  turnId: string | null;
+  latestTurnHit: boolean;
+  effectiveOpacity: number;
+  textLength: number;
+  modelRoundGroupCount: number | null;
+  modelRoundRenderedGroupCount: number | null;
+  modelRoundVisibleGroupStart: number | null;
+  modelRoundVisibleGroupEnd: number | null;
+  modelRoundRenderAll: string | null;
+  modelRoundHasDeferredEarlier: string | null;
+  modelRoundHasDeferredLater: string | null;
+  backgroundChain: string[];
+};
+
+type LongSessionVirtualItemSummary = {
+  elementId: string;
+  virtualIndex: number | null;
+  itemType: string | null;
+  turnId: string | null;
+  textLength: number;
+  modelRoundGroupCount: number | null;
+  modelRoundRenderedGroupCount: number | null;
+  modelRoundVisibleGroupStart: number | null;
+  modelRoundVisibleGroupEnd: number | null;
+  modelRoundRenderAll: string | null;
+  modelRoundHasDeferredEarlier: string | null;
+  modelRoundHasDeferredLater: string | null;
+  codeBlockWrapperCount: number;
+  codeBlockFallbackCount: number;
+  highlightedCodeBlockCount: number;
+  tableCount: number;
+  completedToolTransitionCount: number;
+  completedToolTransitionHeight: number;
+  completedToolTransitionMaxHeights: string[];
+  completedToolTransitionAnimations: string[];
+  completedToolTransitionOpacities: string[];
+  rect: LongSessionRectSummary | null;
+};
+
+type LongSessionDomMutationEvent = {
+  atMs: number;
+  sinceClickMs: number;
+  reason: string;
+  activeSessionId: string | null;
+  historyState: string | null;
+  contextRestoreState: string | null;
+  isPartial: string | null;
+  dialogTurnCount: number | null;
+  virtualItemCount: number | null;
+  showHistoryPlaceholder: string | null;
+  showHistoryTransitionOverlay: string | null;
+  showHistoryLoadingLayer: string | null;
+  showHistoryOpenIntentOverlay: string | null;
+  hasPendingHistoryCompletion: string | null;
+  hasDeferredHistoryProjection: string | null;
+  latestTurnId: string | null;
+  historyInitialContentReady: string | null;
+  pendingHistoryOpenSessionId: string | null;
+  placeholderCount: number;
+  overlayCount: number;
+  historyInitialPreviewCount: number;
+  historyInitialPreviewVisible: boolean;
+  historyProjectionHandoffCount: number;
+  historyProjectionHandoffVisible: boolean;
+  virtualListCount: number;
+  virtualItemDomCount: number;
+  visibleLoadingSurfaceCount: number;
+  visibleTextLength: number;
+  loadingSurfaces: LongSessionLoadingSurface[];
+  overlayElementIds: string[];
+  placeholderElementIds: string[];
+  virtualListElementIds: string[];
+  virtualItemElementIds: string[];
+  virtualItemSummaries: LongSessionVirtualItemSummary[];
+  surfaceSignature: string;
+  surfacePoints: LongSessionSurfacePoint[];
+  messagesRect: LongSessionRectSummary | null;
+  scrollerRect: LongSessionRectSummary | null;
+  overlayRect: LongSessionRectSummary | null;
+  placeholderRect: LongSessionRectSummary | null;
+  messagesBackground: string | null;
+  overlayBackground: string | null;
+  containerBackground: string | null;
+  bodyBackground: string | null;
+  htmlBackground: string | null;
+};
+
+type LongSessionVisualStateEvent = {
+  atMs: number;
+  sinceClickMs: number;
+  sinceHistoryOpenIntentMs: number | null;
+  frame: number;
+  reason: string;
+  signature: string;
+  activeSessionId: string | null;
+  historyState: string | null;
+  contextRestoreState: string | null;
+  isPartial: string | null;
+  dialogTurnCount: number | null;
+  virtualItemCount: number | null;
+  showHistoryPlaceholder: string | null;
+  showHistoryTransitionOverlay: string | null;
+  showHistoryLoadingLayer: string | null;
+  showHistoryOpenIntentOverlay: string | null;
+  hasPendingHistoryCompletion: string | null;
+  hasDeferredHistoryProjection: string | null;
+  latestTurnId: string | null;
+  historyInitialContentReady: string | null;
+  pendingHistoryOpenSessionId: string | null;
+  placeholderCount: number;
+  overlayCount: number;
+  historyInitialPreviewCount: number;
+  historyInitialPreviewVisible: boolean;
+  historyProjectionHandoffCount: number;
+  historyProjectionHandoffVisible: boolean;
+  virtualListCount: number;
+  virtualItemDomCount: number;
+  visibleLoadingSurfaceCount: number;
+  virtualListElementIds: string[];
+  virtualItemElementIds: string[];
+  virtualItemSummaries: LongSessionVirtualItemSummary[];
+  completedToolTransitionCount: number;
+  completedToolTransitionHeight: number;
+  completedToolTransitionSignature: string;
+  visibleTextLength: number;
+  loadingSurfaces: LongSessionLoadingSurface[];
+  latestContentVisuallyVisible: boolean;
+  latestModelRoundTextLength: number;
+  surfaceSignature: string;
+  surfacePoints: LongSessionSurfacePoint[];
+  scrollerExists: boolean;
+  scrollTop: number | null;
+  scrollHeight: number | null;
+  clientHeight: number | null;
+  footerHeight: number | null;
+  footerStyleHeight: string | null;
+  footerStyleMinHeight: string | null;
+  inputOverlayHeight: number | null;
+  messagesRect: LongSessionRectSummary | null;
+  scrollerRect: LongSessionRectSummary | null;
+  overlayRect: LongSessionRectSummary | null;
+  placeholderRect: LongSessionRectSummary | null;
+  inputOverlayRect: LongSessionRectSummary | null;
+  messagesBackground: string | null;
+  overlayBackground: string | null;
+  containerBackground: string | null;
+  bodyBackground: string | null;
+  htmlBackground: string | null;
+};
+
 type LongSessionViewportTimeline = {
   samples: LongSessionViewportTimelineSample[];
   mainThreadTasks: LongSessionMainThreadTask[];
+  mutationEvents: LongSessionDomMutationEvent[];
+  visualStateEvents: LongSessionVisualStateEvent[];
+  layoutShiftEvents: LongSessionLayoutShiftEvent[];
 };
 
 type LongSessionViewportTimelineSummary = {
@@ -149,24 +347,167 @@ type LongSessionViewportTimelineSummary = {
   firstHistoryPlaceholderAtMs: number | null;
   firstLatestVisibleAtMs: number | null;
   firstLatestContentVisibleAtMs: number | null;
+  firstLatestContentVisuallyVisibleAtMs: number | null;
   firstLatestTextVisibleAtMs: number | null;
   firstLatestVisibleTextlessAtMs: number | null;
   firstLatestContentVisibleTextlessAtMs: number | null;
   latestTextDelayAfterVisibleMs: number | null;
   latestTextDelayAfterContentVisibleMs: number | null;
+  latestTextDelayAfterContentVisuallyVisibleMs: number | null;
   latestVisibleTextlessSampleCount: number;
   latestContentVisibleTextlessSampleCount: number;
   maxTextlessVisibleBlankGapPx: number | null;
   maxTextlessVisibleBottomBlankPx: number | null;
   preLatestTextVisibleBlankSampleCount: number;
   preLatestTextVisibleBlankWithoutPlaceholderSampleCount: number;
+  preLatestTextVisibleUncoveredAfterIntentSampleCount: number;
+  firstPreLatestTextVisibleUncoveredAfterIntentAtMs: number | null;
   maxPreLatestTextVisibleBlankGapPx: number | null;
   maxPreLatestTextVisibleBlankWithoutPlaceholderGapPx: number | null;
   maxPreLatestTextVisibleBottomBlankPx: number | null;
   postLatestTextVisibleBlankSampleCount: number;
+  postLatestTextVisibleCoveredSampleCount: number;
   maxPostLatestTextVisibleBlankGapPx: number | null;
   maxPostLatestTextVisibleBottomBlankPx: number | null;
   postLatestTextVisibleLatestContentMissingSampleCount: number;
+};
+
+type LongSessionVisualStateSummary = {
+  visualStateEventCount: number;
+  mutationEventCount: number;
+  firstVisualStateAtMs: number | null;
+  firstLoadingLayerAtMs: number | null;
+  lastLoadingLayerAtMs: number | null;
+  historyInitialPreviewVisibleAtEnd: boolean;
+  historyProjectionHandoffVisibleAtEnd: boolean;
+  historyInitialPreviewActivationAfterActiveSessionCount: number;
+  loadingLayerToggleCount: number;
+  overlayCountToggleCount: number;
+  placeholderCountToggleCount: number;
+  overlayElementIdChangeCount: number;
+  placeholderElementIdChangeCount: number;
+  virtualListElementIdChangeCount: number;
+  virtualItemElementIdChangeCount: number;
+  backgroundChangeCount: number;
+  scrollerScrollJumpCount: number;
+  scrollerSizeChangeCount: number;
+  layoutShiftCount: number;
+  layoutShiftScore: number;
+  postLatestTextVisibleVisualChangeCount: number;
+  postLatestTextVisibleLoadingEventCount: number;
+  postFirstVisibleItemVisualChangeCount: number;
+  postFirstVisibleItemLoadingEventCount: number;
+  postLatestTextVisibleBackgroundChangeCount: number;
+  postLatestTextVisibleScrollJumpCount: number;
+  postLatestTextVisibleVirtualItemElementChangeCount: number;
+  postLatestTextVisibleSurfaceChangeCount: number;
+  postLatestTextVisibleLoadingSurfacePointEventCount: number;
+  postLatestTextVisibleBlankSurfacePointEventCount: number;
+  postLatestTextVisibleTransparentSurfacePointEventCount: number;
+  postLatestTextVisibleLayoutShiftCount: number;
+  postLatestTextVisibleLayoutShiftScore: number;
+  firstUserInteractionAtMs: number | null;
+  postUserInteractionScrollJumpCount: number;
+  postUserInteractionScrollerCollapseCount: number;
+  postUserInteractionBlankSurfacePointEventCount: number;
+  openIntentBlankSurfacePointEventCount: number;
+  openIntentBlankSurfaceHoldCount: number;
+  maxOpenIntentBlankSurfaceHoldMs: number | null;
+  postOpenIntentNonTargetContentEventCount: number;
+  postOpenIntentNonTargetContentHoldCount: number;
+  maxPostOpenIntentNonTargetContentHoldMs: number | null;
+  lastPostOpenIntentNonTargetContentAtMs: number | null;
+  loadingTransitions: Array<{
+    sinceClickMs: number;
+    reason: string;
+    showHistoryLoadingLayer: string | null;
+    overlayCount: number;
+    placeholderCount: number;
+    visibleLoadingSurfaceCount: number;
+    loadingSurfaces: LongSessionLoadingSurface[];
+    virtualItemDomCount: number;
+    latestContentVisuallyVisible: boolean;
+  }>;
+  backgroundTransitions: Array<{
+    sinceClickMs: number;
+    reason: string;
+    from: string;
+    to: string;
+  }>;
+  historyInitialPreviewTransitions: Array<{
+    sinceClickMs: number;
+    reason: string;
+    from: boolean;
+    to: boolean;
+  }>;
+  overlayElementTransitions: Array<{
+    sinceClickMs: number;
+    reason: string;
+    from: string[];
+    to: string[];
+  }>;
+  virtualItemElementTransitions: Array<{
+    sinceClickMs: number;
+    reason: string;
+    from: string[];
+    to: string[];
+  }>;
+  surfaceTransitions: Array<{
+    sinceClickMs: number;
+    reason: string;
+    from: string;
+    to: string;
+    surfacePoints: LongSessionSurfacePoint[];
+  }>;
+  postOpenIntentNonTargetContentEvents: Array<{
+    sinceClickMs: number;
+    sinceHistoryOpenIntentMs: number | null;
+    reason: string;
+    activeSessionId: string | null;
+    pendingHistoryOpenSessionId: string | null;
+    virtualItemDomCount: number;
+    visibleTextLength: number;
+    surfacePoints: LongSessionSurfacePoint[];
+  }>;
+  postOpenIntentNonTargetContentHolds: Array<{
+    sinceClickMs: number;
+    sinceHistoryOpenIntentMs: number | null;
+    untilHistoryOpenIntentMs: number | null;
+    holdAfterGraceMs: number;
+    reason: string;
+    activeSessionId: string | null;
+    virtualItemDomCount: number;
+    visibleTextLength: number;
+  }>;
+  scrollTransitions: Array<{
+    sinceClickMs: number;
+    reason: string;
+    fromScrollTop: number | null;
+    toScrollTop: number | null;
+    fromScrollHeight: number | null;
+    toScrollHeight: number | null;
+    fromClientHeight: number | null;
+    toClientHeight: number | null;
+    fromFooterHeight: number | null;
+    toFooterHeight: number | null;
+    fromFooterStyleHeight: string | null;
+    toFooterStyleHeight: string | null;
+  }>;
+  postUserInteractionScrollTransitions: Array<{
+    sinceClickMs: number;
+    reason: string;
+    fromScrollTop: number | null;
+    toScrollTop: number | null;
+    fromScrollHeight: number | null;
+    toScrollHeight: number | null;
+    fromClientHeight: number | null;
+    toClientHeight: number | null;
+    fromFooterHeight: number | null;
+    toFooterHeight: number | null;
+    fromFooterStyleHeight: string | null;
+    toFooterStyleHeight: string | null;
+  }>;
+  layoutShiftEvents: LongSessionLayoutShiftEvent[];
 };
 
 function reportDir(): string {
@@ -187,6 +528,23 @@ function countPhase(snapshot: StartupTraceSnapshot, phase: string): number {
   return snapshot.phases.events.filter(event => event.phase === phase).length;
 }
 
+function traceEventSessionId(event: StartupTraceSnapshot['phases']['events'][number]): string | null {
+  return typeof event.sessionId === 'string' ? event.sessionId : null;
+}
+
+function traceEventMatchesSessionPhaseSince(
+  event: StartupTraceSnapshot['phases']['events'][number],
+  phase: string,
+  sessionId: string,
+  sinceMs: number,
+): boolean {
+  return (
+    event.phase === phase &&
+    event.atMs >= sinceMs &&
+    traceEventSessionId(event) === sessionId
+  );
+}
+
 function numericEnv(name: string): number | undefined {
   const raw = process.env[name];
   if (!raw) {
@@ -195,6 +553,8 @@ function numericEnv(name: string): number | undefined {
   const value = Number(raw);
   return Number.isFinite(value) ? value : undefined;
 }
+
+const DEFAULT_POST_VISIBLE_OBSERVE_MS = 3000;
 
 async function waitForOptionalPhaseCount(
   phase: string,
@@ -208,9 +568,43 @@ async function waitForOptionalPhaseCount(
   }
 }
 
+async function waitForTracePhaseForSessionSince(
+  phase: string,
+  sessionId: string,
+  sinceMs: number,
+  timeoutMs: number,
+): Promise<StartupTraceSnapshot> {
+  let latest = await readStartupTraceSnapshot();
+  await browser.waitUntil(async () => {
+    latest = await readStartupTraceSnapshot();
+    return latest.phases.events.some(event =>
+      traceEventMatchesSessionPhaseSince(event, phase, sessionId, sinceMs)
+    );
+  }, {
+    timeout: timeoutMs,
+    interval: 100,
+    timeoutMsg:
+      `Timed out waiting for startup trace phase '${phase}' for session '${sessionId}' after ${sinceMs}`,
+  });
+  return latest;
+}
+
+async function waitForOptionalTracePhaseForSessionSince(
+  phase: string,
+  sessionId: string,
+  sinceMs: number,
+  timeoutMs: number,
+): Promise<StartupTraceSnapshot> {
+  try {
+    return await waitForTracePhaseForSessionSince(phase, sessionId, sinceMs, timeoutMs);
+  } catch {
+    return readStartupTraceSnapshot();
+  }
+}
+
 async function findSessionItem(sessionId: string): Promise<ReturnType<typeof $> | null> {
   let lastVisibleSessionIds: string[] = [];
-  for (let attempt = 0; attempt < 6; attempt += 1) {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
     const item = await $(`[data-testid="session-nav-item"][data-session-id="${sessionId}"]`);
     if (await item.isExisting()) {
       return item;
@@ -306,6 +700,19 @@ type LongSessionMetadata = {
 };
 
 async function readLongSessionMetadata(sessionId: string): Promise<LongSessionMetadata | null> {
+  const metadataPath = await findLongSessionMetadataPath(sessionId);
+  if (!metadataPath) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(await fs.readFile(metadataPath, 'utf8')) as LongSessionMetadata;
+  } catch {
+    return null;
+  }
+}
+
+async function findLongSessionMetadataPath(sessionId: string): Promise<string | null> {
   const bitfunHome = process.env.BITFUN_HOME || path.join(os.homedir(), '.bitfun');
   const workspaceCandidates = Array.from(new Set([
     process.env.E2E_TEST_WORKSPACE,
@@ -323,10 +730,30 @@ async function readLongSessionMetadata(sessionId: string): Promise<LongSessionMe
         sessionId,
         'metadata.json',
       );
-      return JSON.parse(await fs.readFile(metadataPath, 'utf8')) as LongSessionMetadata;
+      await fs.access(metadataPath);
+      return metadataPath;
     } catch {
       // Try the next known E2E workspace candidate.
     }
+  }
+
+  try {
+    const projectsDir = path.join(bitfunHome, 'projects');
+    const projectEntries = await fs.readdir(projectsDir, { withFileTypes: true });
+    for (const entry of projectEntries) {
+      if (!entry.isDirectory()) {
+        continue;
+      }
+      const metadataPath = path.join(projectsDir, entry.name, 'sessions', sessionId, 'metadata.json');
+      try {
+        await fs.access(metadataPath);
+        return metadataPath;
+      } catch {
+        // Try the next persisted project.
+      }
+    }
+  } catch {
+    // No global project fallback is available.
   }
 
   return null;
@@ -337,6 +764,22 @@ async function readExpectedLatestTurnId(sessionId: string): Promise<string | nul
   const turnCount = Number(metadata?.turnCount);
   if (!Number.isFinite(turnCount) || turnCount < 1) {
     return null;
+  }
+  const metadataPath = await findLongSessionMetadataPath(sessionId);
+  if (metadataPath) {
+    const latestTurnPath = path.join(
+      path.dirname(metadataPath),
+      'turns',
+      `turn-${String(turnCount - 1).padStart(4, '0')}.json`,
+    );
+    try {
+      const latestTurn = JSON.parse(await fs.readFile(latestTurnPath, 'utf8')) as { turnId?: unknown };
+      if (typeof latestTurn.turnId === 'string' && latestTurn.turnId.length > 0) {
+        return latestTurn.turnId;
+      }
+    } catch {
+      // Fall back to the deterministic fixture id below.
+    }
   }
   return `${sessionId}-turn-${String(turnCount - 1).padStart(4, '0')}`;
 }
@@ -360,7 +803,10 @@ function siblingSessionId(sessionId: string): string | null {
 
 async function switchAwayFromSession(sessionId: string): Promise<void> {
   const alternateId = siblingSessionId(sessionId);
-  const alternate = alternateId ? await findSessionItem(alternateId) : null;
+  if (!alternateId) {
+    return;
+  }
+  const alternate = await findSessionItem(alternateId);
   if (!alternate) {
     return;
   }
@@ -373,17 +819,52 @@ async function switchAwayFromSession(sessionId: string): Promise<void> {
     beforeSnapshot,
     'historical_session_after_state_commit_frame',
   );
+  const clickedAtMs = await readPerformanceNow();
   await alternate.click();
-  await waitForOptionalPhaseCount(
+  const afterFrameSnapshot = await waitForOptionalTracePhaseForSessionSince(
     'historical_session_after_state_commit_frame',
-    frameCountBefore + 1,
+    alternateId,
+    clickedAtMs,
     10000,
   );
+  if (countPhase(afterFrameSnapshot, 'historical_session_after_state_commit_frame') <= frameCountBefore) {
+    await waitForOptionalPhaseCount(
+      'historical_session_after_state_commit_frame',
+      frameCountBefore + 1,
+      1000,
+    );
+  }
   await browser.pause(50);
 }
 
 async function readLongSessionViewportState(expectedLatestTurnId?: string | null): Promise<LongSessionViewportState> {
   return browser.execute((targetTurnId) => {
+    const effectiveOpacityFor = (element: HTMLElement | null): number => {
+      if (!element) {
+        return 0;
+      }
+
+      let opacity = 1;
+      let current: HTMLElement | null = element;
+      while (current) {
+        const style = window.getComputedStyle(current);
+        if (style.display === 'none' || style.visibility === 'hidden') {
+          return 0;
+        }
+        const styleOpacity = Number(style.opacity);
+        if (Number.isFinite(styleOpacity)) {
+          opacity *= styleOpacity;
+        }
+        if (opacity <= 0.01) {
+          return 0;
+        }
+        current = current.parentElement;
+      }
+      return opacity;
+    };
+    const isElementEffectivelyVisible = (element: HTMLElement | null): boolean => (
+      effectiveOpacityFor(element) > 0.01
+    );
     const root = document.querySelector<HTMLElement>(
       '.modern-flowchat-container__messages .virtual-message-list',
     );
@@ -421,28 +902,49 @@ async function readLongSessionViewportState(expectedLatestTurnId?: string | null
       historyPlaceholderRect.height > 0 &&
       historyPlaceholderStyle?.visibility !== 'hidden' &&
       historyPlaceholderStyle?.display !== 'none' &&
-      historyPlaceholderStyle?.opacity !== '0'
+      isElementEffectivelyVisible(historyPlaceholder)
     );
     const effectiveScrollerBottom = scrollerRect
       ? Math.min(scrollerRect.bottom, inputOverlayRect?.top ?? scrollerRect.bottom)
       : null;
+    const historyPlaceholderCoversMessages = Boolean(
+      historyPlaceholderVisible &&
+      historyPlaceholderRect &&
+      (
+        !scrollerRect ||
+        (
+          historyPlaceholderRect.top <= scrollerRect.top + 4 &&
+          historyPlaceholderRect.bottom >= (effectiveScrollerBottom ?? scrollerRect.bottom) - 4 &&
+          historyPlaceholderRect.left <= scrollerRect.left + 4 &&
+          historyPlaceholderRect.right >= scrollerRect.right - 4
+        )
+      )
+    );
     const latestRect = latest?.getBoundingClientRect() ?? null;
-    const isVisibleWithinScroller = (rect: DOMRect | null): boolean => Boolean(
+    const isVisibleWithinScroller = (rect: DOMRect | null, element?: HTMLElement | null): boolean => Boolean(
       scrollerRect &&
       rect &&
+      (!element || isElementEffectivelyVisible(element)) &&
       rect.bottom > scrollerRect.top &&
       rect.top < (effectiveScrollerBottom ?? scrollerRect.bottom)
     );
     const latestModelRoundVisibleSegments = latestModelRoundSegments
-      .filter(element => isVisibleWithinScroller(element.getBoundingClientRect()));
+      .filter(element => isVisibleWithinScroller(element.getBoundingClientRect(), element));
     const latestModelRoundVisible = latestModelRoundVisibleSegments.length > 0;
     const latestModelRoundTextLength = latestModelRoundVisibleSegments
       .reduce((total, element) => total + (element.innerText?.length ?? 0), 0);
-    const latestVisible = isVisibleWithinScroller(latestRect);
+    const latestVisible = isVisibleWithinScroller(latestRect, latest);
+    const latestContentVisible = latestVisible || latestModelRoundVisible;
+    const latestContentVisuallyVisible =
+      latestContentVisible && !historyPlaceholderCoversMessages;
     const visibleUserMessages = scrollerRect
       ? userMessages.filter(element => {
         const rect = element.getBoundingClientRect();
-        return rect.bottom > scrollerRect.top && rect.top < (effectiveScrollerBottom ?? scrollerRect.bottom);
+        return (
+          isElementEffectivelyVisible(element) &&
+          rect.bottom > scrollerRect.top &&
+          rect.top < (effectiveScrollerBottom ?? scrollerRect.bottom)
+        );
       })
       : [];
     const visibleItems = scrollerRect
@@ -457,7 +959,8 @@ async function readLongSessionViewportState(expectedLatestTurnId?: string | null
             rawBottom: rect.bottom,
           };
         })
-        .filter(({ top, bottom }) =>
+        .filter(({ element, top, bottom }) =>
+          isElementEffectivelyVisible(element) &&
           bottom > scrollerRect.top &&
           top < (effectiveScrollerBottom ?? scrollerRect.bottom) &&
           bottom > top
@@ -532,8 +1035,10 @@ async function readLongSessionViewportState(expectedLatestTurnId?: string | null
       latestModelRoundRendered: latestModelRoundSegments.length > 0,
       latestModelRoundVisible,
       latestModelRoundTextLength,
-      latestContentVisible: latestVisible || latestModelRoundVisible,
+      latestContentVisible,
       historyPlaceholderVisible,
+      historyPlaceholderCoversMessages,
+      latestContentVisuallyVisible,
       scrollerTop: scrollerRect?.top ?? null,
       scrollerBottom: scrollerRect?.bottom ?? null,
       effectiveScrollerBottom,
@@ -579,17 +1084,1024 @@ async function startLongSessionViewportTimelineRecorder(
     const globalWindow = window as typeof window & {
       __bitfunLongSessionViewportTimeline?: LongSessionViewportTimelineSample[];
       __bitfunLongSessionMainThreadTasks?: LongSessionMainThreadTask[];
+      __bitfunLongSessionMutationEvents?: LongSessionDomMutationEvent[];
+      __bitfunLongSessionVisualStateEvents?: LongSessionVisualStateEvent[];
+      __bitfunLongSessionLayoutShiftEvents?: LongSessionLayoutShiftEvent[];
       __bitfunLongSessionViewportTimelineTimer?: number;
+      __bitfunLongSessionVisualFrameRequest?: number;
+      __bitfunLongSessionVisualProbeTimers?: number[];
       __bitfunLongSessionLongTaskObserver?: PerformanceObserver;
+      __bitfunLongSessionLayoutShiftObserver?: PerformanceObserver;
+      __bitfunLongSessionMutationObserver?: MutationObserver;
+      __bitfunLongSessionOpenIntentAt?: number;
+      __bitfunLongSessionOpenIntentHandler?: EventListener;
+      __bitfunLongSessionUserInteractionHandler?: EventListener;
       __BITFUN_RENDER_PROFILE_ENABLED__?: boolean;
     };
     globalWindow.__BITFUN_RENDER_PROFILE_ENABLED__ = shouldEnableRenderProfile;
     if (globalWindow.__bitfunLongSessionViewportTimelineTimer !== undefined) {
       window.clearInterval(globalWindow.__bitfunLongSessionViewportTimelineTimer);
     }
+    if (globalWindow.__bitfunLongSessionVisualFrameRequest !== undefined) {
+      window.cancelAnimationFrame(globalWindow.__bitfunLongSessionVisualFrameRequest);
+    }
+    for (const timerId of globalWindow.__bitfunLongSessionVisualProbeTimers ?? []) {
+      window.clearTimeout(timerId);
+    }
+    globalWindow.__bitfunLongSessionVisualProbeTimers = [];
     globalWindow.__bitfunLongSessionLongTaskObserver?.disconnect();
+    globalWindow.__bitfunLongSessionLayoutShiftObserver?.disconnect();
+    globalWindow.__bitfunLongSessionMutationObserver?.disconnect();
+    if (globalWindow.__bitfunLongSessionOpenIntentHandler) {
+      window.removeEventListener(
+        'flowchat:history-session-open-intent',
+        globalWindow.__bitfunLongSessionOpenIntentHandler,
+      );
+    }
+    if (globalWindow.__bitfunLongSessionUserInteractionHandler) {
+      window.removeEventListener(
+        'bitfun:e2e-long-session-user-interaction',
+        globalWindow.__bitfunLongSessionUserInteractionHandler,
+      );
+    }
+    globalWindow.__bitfunLongSessionOpenIntentAt = undefined;
+    const handleOpenIntent: EventListener = () => {
+      globalWindow.__bitfunLongSessionOpenIntentAt = performance.now();
+      recordMutationEvent('history-open-intent');
+      recordVisualStateEvent('history-open-intent', true);
+      for (const delayMs of [100, 250, 500, 1_000]) {
+        const timerId = window.setTimeout(
+          () => recordVisualStateEvent(`history-open-intent-probe-${delayMs}ms`, true),
+          delayMs,
+        );
+        globalWindow.__bitfunLongSessionVisualProbeTimers?.push(timerId);
+      }
+    };
+    globalWindow.__bitfunLongSessionOpenIntentHandler = handleOpenIntent;
+    window.addEventListener('flowchat:history-session-open-intent', handleOpenIntent);
+    const handleUserInteraction: EventListener = event => {
+      const interactionType =
+        event instanceof CustomEvent && typeof event.detail?.type === 'string'
+          ? event.detail.type
+          : 'unknown';
+      recordVisualStateEvent(`user-interaction-${interactionType}`, true);
+      for (const delayMs of [16, 50, 100, 250, 500]) {
+        window.setTimeout(
+          () => recordVisualStateEvent(`user-interaction-${interactionType}-probe-${delayMs}ms`, true),
+          delayMs,
+        );
+      }
+    };
+    globalWindow.__bitfunLongSessionUserInteractionHandler = handleUserInteraction;
+    window.addEventListener('bitfun:e2e-long-session-user-interaction', handleUserInteraction);
     const samples: LongSessionViewportTimelineSample[] = [];
     const mainThreadTasks: LongSessionMainThreadTask[] = [];
+    const mutationEvents: LongSessionDomMutationEvent[] = [];
+    const visualStateEvents: LongSessionVisualStateEvent[] = [];
+    const layoutShiftEvents: LongSessionLayoutShiftEvent[] = [];
+    const elementIds = new WeakMap<Element, string>();
+    let nextElementId = 1;
+    let visualFrame = 0;
+    let previousVisualSignature: string | null = null;
+
+    const toNumberOrNull = (value: string | null | undefined): number | null => {
+      if (value === null || value === undefined || value === '') {
+        return null;
+      }
+      const numeric = Number(value);
+      return Number.isFinite(numeric) ? numeric : null;
+    };
+
+    const rectSummary = (rect: DOMRect | null | undefined): LongSessionRectSummary | null => {
+      if (!rect) {
+        return null;
+      }
+      const round = (value: number) => Math.round(value * 10) / 10;
+      return {
+        top: round(rect.top),
+        bottom: round(rect.bottom),
+        left: round(rect.left),
+        right: round(rect.right),
+        width: round(rect.width),
+        height: round(rect.height),
+      };
+    };
+
+    const getElementId = (element: Element, prefix: string): string => {
+      const existing = elementIds.get(element);
+      if (existing) {
+        return existing;
+      }
+      const id = `${prefix}-${nextElementId}`;
+      nextElementId += 1;
+      elementIds.set(element, id);
+      return id;
+    };
+
+    const getBackground = (element: Element | null | undefined): string | null => {
+      if (!element) {
+        return null;
+      }
+      return window.getComputedStyle(element).backgroundColor || null;
+    };
+
+    const effectiveOpacityFor = (element: HTMLElement | null): number => {
+      if (!element) {
+        return 0;
+      }
+
+      let opacity = 1;
+      let current: HTMLElement | null = element;
+      while (current) {
+        const style = window.getComputedStyle(current);
+        if (style.display === 'none' || style.visibility === 'hidden') {
+          return 0;
+        }
+        const styleOpacity = Number(style.opacity);
+        if (Number.isFinite(styleOpacity)) {
+          opacity *= styleOpacity;
+        }
+        if (opacity <= 0.01) {
+          return 0;
+        }
+        current = current.parentElement;
+      }
+      return Math.round(opacity * 1000) / 1000;
+    };
+
+    const isElementEffectivelyVisible = (element: HTMLElement | null): boolean =>
+      effectiveOpacityFor(element) > 0.01;
+
+    const describeNode = (node: Node | null | undefined): string | null => {
+      if (!(node instanceof HTMLElement)) {
+        return node?.nodeName ?? null;
+      }
+      const testId = node.getAttribute('data-testid');
+      const turnId = node.getAttribute('data-turn-id');
+      const itemType = node.getAttribute('data-item-type');
+      const id = node.id ? `#${node.id}` : '';
+      const className = Array.from(node.classList).slice(0, 4).map(name => `.${name}`).join('');
+      const data = [
+        testId ? `[data-testid="${testId}"]` : '',
+        turnId ? `[data-turn-id="${turnId}"]` : '',
+        itemType ? `[data-item-type="${itemType}"]` : '',
+      ].join('');
+      return `${node.tagName.toLowerCase()}${id}${className}${data}` || node.tagName.toLowerCase();
+    };
+
+    const LOADING_SURFACE_SELECTORS = [
+      '.modern-flowchat-container__history-overlay',
+      '.history-session-placeholder',
+      '.bitfun-scene-viewport__lazy-fallback',
+      '.bitfun-assistant-scene__loading',
+      '.bitfun-app-acp-session-loading',
+      '[role="status"][aria-busy="true"]',
+    ];
+    const OBSERVED_MUTATION_SELECTOR = [
+      '.modern-flowchat-container__messages',
+      '.modern-flowchat-container__history-open-intent-shield',
+      '.modern-flowchat-container__history-overlay',
+      '.history-session-placeholder',
+      '.virtual-message-list',
+      '.virtual-message-list__projection-handoff-overlay',
+      '.virtual-item-wrapper',
+      ...LOADING_SURFACE_SELECTORS,
+    ].join(', ');
+
+    const readLoadingSurfaces = (): LongSessionLoadingSurface[] => {
+      const seen = new Set<Element>();
+      const surfaces: LongSessionLoadingSurface[] = [];
+      for (const selector of LOADING_SURFACE_SELECTORS) {
+        for (const element of Array.from(document.querySelectorAll<HTMLElement>(selector))) {
+          if (seen.has(element)) {
+            continue;
+          }
+          seen.add(element);
+          const rect = element.getBoundingClientRect();
+          const style = window.getComputedStyle(element);
+          const visible = (
+            rect.width > 0 &&
+            rect.height > 0 &&
+            style.visibility !== 'hidden' &&
+            style.display !== 'none' &&
+            isElementEffectivelyVisible(element)
+          );
+          surfaces.push({
+            selector,
+            node: describeNode(element),
+            visible,
+            textLength: element.innerText?.length ?? 0,
+            rect: rectSummary(rect),
+          });
+        }
+      }
+      return surfaces.slice(0, 24);
+    };
+
+    const visibleTextLengthFor = (elements: HTMLElement[]): number => elements.reduce((total, element) => {
+      const rect = element.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) {
+        return total;
+      }
+      const style = window.getComputedStyle(element);
+      if (style.visibility === 'hidden' || style.display === 'none' || !isElementEffectivelyVisible(element)) {
+        return total;
+      }
+      return total + (element.innerText?.length ?? 0);
+    }, 0);
+
+    const readModelRoundMetrics = (element: HTMLElement | null) => {
+      const modelRound = element?.querySelector<HTMLElement>('.model-round-item') ??
+        element?.closest<HTMLElement>('.model-round-item') ??
+        null;
+      return {
+        modelRoundGroupCount: toNumberOrNull(modelRound?.dataset.modelRoundGroupCount),
+        modelRoundRenderedGroupCount: toNumberOrNull(modelRound?.dataset.modelRoundRenderedGroupCount),
+        modelRoundVisibleGroupStart: toNumberOrNull(modelRound?.dataset.modelRoundVisibleGroupStart),
+        modelRoundVisibleGroupEnd: toNumberOrNull(modelRound?.dataset.modelRoundVisibleGroupEnd),
+        modelRoundRenderAll: modelRound?.dataset.modelRoundRenderAll || null,
+        modelRoundHasDeferredEarlier: modelRound?.dataset.modelRoundHasDeferredEarlier || null,
+        modelRoundHasDeferredLater: modelRound?.dataset.modelRoundHasDeferredLater || null,
+      };
+    };
+
+    const summarizeVirtualItems = (elements: HTMLElement[]): LongSessionVirtualItemSummary[] =>
+      elements.slice(0, 160).map(element => {
+        const modelRoundMetrics = readModelRoundMetrics(element);
+        const completedToolTransitions = Array.from(
+          element.querySelectorAll<HTMLElement>(
+            '.flowchat-flow-item--tool-transition.flowchat-flow-item--tool-completed',
+          ),
+        );
+        const completedToolTransitionStyles = completedToolTransitions.map(tool => window.getComputedStyle(tool));
+        const uniqueStyleValues = (values: string[]): string[] => Array.from(new Set(values)).slice(0, 8);
+        return {
+          elementId: getElementId(element, 'virtual-item'),
+          virtualIndex: toNumberOrNull(element.dataset.virtualIndex),
+          itemType: element.dataset.itemType || null,
+          turnId: element.dataset.turnId || null,
+          textLength: element.innerText?.length ?? 0,
+          ...modelRoundMetrics,
+          codeBlockWrapperCount: element.querySelectorAll('.code-block-wrapper').length,
+          codeBlockFallbackCount: element.querySelectorAll('.code-block-fallback').length,
+          highlightedCodeBlockCount: element.querySelectorAll('.code-block-body pre:not(.code-block-fallback)').length,
+          tableCount: element.querySelectorAll('.table-wrapper table').length,
+          completedToolTransitionCount: completedToolTransitions.length,
+          completedToolTransitionHeight: completedToolTransitions.reduce(
+            (total, tool) => total + tool.getBoundingClientRect().height,
+            0,
+          ),
+          completedToolTransitionMaxHeights: uniqueStyleValues(
+            completedToolTransitionStyles.map(style => style.maxHeight),
+          ),
+          completedToolTransitionAnimations: uniqueStyleValues(
+            completedToolTransitionStyles.map(style => `${style.animationName}:${style.animationDuration}:${style.animationPlayState}`),
+          ),
+          completedToolTransitionOpacities: uniqueStyleValues(
+            completedToolTransitionStyles.map(style => style.opacity),
+          ),
+          rect: rectSummary(element.getBoundingClientRect()),
+        };
+      });
+
+    const getElementBackgroundChain = (elements: Element[]): string[] =>
+      elements
+        .filter((element): element is HTMLElement => element instanceof HTMLElement)
+        .slice(0, 6)
+        .map(element => {
+          const style = window.getComputedStyle(element);
+          return [
+            describeNode(element),
+            style.backgroundColor || 'none',
+            style.opacity || '1',
+            style.visibility || 'visible',
+            style.display || 'block',
+          ].join('@');
+        });
+
+    const isLoadingSurfaceElement = (element: HTMLElement): boolean =>
+      Boolean(
+        element.closest('.modern-flowchat-container__history-overlay') ||
+        element.closest('.history-session-placeholder') ||
+        element.closest('.bitfun-scene-viewport__lazy-fallback') ||
+        element.closest('.bitfun-assistant-scene__loading') ||
+        element.closest('.bitfun-app-acp-session-loading') ||
+        element.closest('[role="status"][aria-busy="true"]'),
+      );
+
+    const classifySurfaceElement = (
+      element: HTMLElement | null,
+      latestTurnId: string,
+    ): Pick<LongSessionSurfacePoint, 'category' | 'itemType' | 'turnId' | 'latestTurnHit' | 'effectiveOpacity' | 'textLength' | 'modelRoundGroupCount' | 'modelRoundRenderedGroupCount' | 'modelRoundVisibleGroupStart' | 'modelRoundVisibleGroupEnd' | 'modelRoundRenderAll' | 'modelRoundHasDeferredEarlier' | 'modelRoundHasDeferredLater'> => {
+      if (!element) {
+        return {
+          category: 'missing',
+          itemType: null,
+          turnId: null,
+          latestTurnHit: false,
+          effectiveOpacity: 0,
+          textLength: 0,
+          ...readModelRoundMetrics(null),
+        };
+      }
+
+      const virtualItem = element.closest<HTMLElement>('.virtual-item-wrapper[data-turn-id]');
+      const effectiveOpacity = effectiveOpacityFor(element);
+      const virtualItemEffectiveOpacity = virtualItem ? effectiveOpacityFor(virtualItem) : effectiveOpacity;
+      const modelRoundMetrics = readModelRoundMetrics(virtualItem ?? element);
+      if (isLoadingSurfaceElement(element)) {
+        return {
+          category: element.closest('.modern-flowchat-container__history-overlay')
+            ? 'history-overlay'
+            : 'loading-surface',
+          itemType: virtualItem?.dataset.itemType || null,
+          turnId: virtualItem?.dataset.turnId || null,
+          latestTurnHit: virtualItem?.dataset.turnId === latestTurnId,
+          effectiveOpacity,
+          textLength: virtualItem?.innerText?.length ?? element.innerText?.length ?? 0,
+          ...modelRoundMetrics,
+        };
+      }
+
+      if (element.closest('.modern-flowchat-container__history-open-intent-shield')) {
+        return {
+          category: 'history-open-intent-shield',
+          itemType: null,
+          turnId: null,
+          latestTurnHit: false,
+          effectiveOpacity,
+          textLength: element.innerText?.length ?? 0,
+          ...readModelRoundMetrics(null),
+        };
+      }
+
+      if (virtualItem) {
+        return {
+          category: virtualItemEffectiveOpacity > 0.01
+            ? `virtual-item:${virtualItem.dataset.itemType || 'unknown'}`
+            : `transparent-virtual-item:${virtualItem.dataset.itemType || 'unknown'}`,
+          itemType: virtualItem.dataset.itemType || null,
+          turnId: virtualItem.dataset.turnId || null,
+          latestTurnHit: virtualItem.dataset.turnId === latestTurnId,
+          effectiveOpacity: virtualItemEffectiveOpacity,
+          textLength: virtualItem.innerText?.length ?? 0,
+          ...modelRoundMetrics,
+        };
+      }
+
+      if (element.closest('.bitfun-chat-input-drop-zone')) {
+        return {
+          category: 'input-overlay',
+          itemType: null,
+          turnId: null,
+          latestTurnHit: false,
+          effectiveOpacity,
+          textLength: element.innerText?.length ?? 0,
+          ...readModelRoundMetrics(null),
+        };
+      }
+
+      if (element.closest('[data-virtuoso-scroller], .virtual-message-list')) {
+        return {
+          category: 'list-blank',
+          itemType: null,
+          turnId: null,
+          latestTurnHit: false,
+          effectiveOpacity,
+          textLength: element.innerText?.length ?? 0,
+          ...readModelRoundMetrics(null),
+        };
+      }
+
+      if (element.closest('.modern-flowchat-container__messages')) {
+        return {
+          category: 'messages-blank',
+          itemType: null,
+          turnId: null,
+          latestTurnHit: false,
+          effectiveOpacity,
+          textLength: element.innerText?.length ?? 0,
+          ...readModelRoundMetrics(null),
+        };
+      }
+
+      if (element.closest('.modern-flowchat-container')) {
+        return {
+          category: 'flowchat-shell',
+          itemType: null,
+          turnId: null,
+          latestTurnHit: false,
+          effectiveOpacity,
+          textLength: element.innerText?.length ?? 0,
+          ...readModelRoundMetrics(null),
+        };
+      }
+
+      return {
+        category: 'other',
+        itemType: null,
+        turnId: null,
+        latestTurnHit: false,
+        effectiveOpacity,
+        textLength: element.innerText?.length ?? 0,
+        ...readModelRoundMetrics(null),
+      };
+    };
+
+    const readSurfacePoints = (
+      messages: HTMLElement | null,
+      scroller: HTMLElement | null,
+      inputOverlay: HTMLElement | null,
+      latestTurnId: string,
+    ): LongSessionSurfacePoint[] => {
+      const messagesRect = messages?.getBoundingClientRect() ?? null;
+      if (!messagesRect || messagesRect.width <= 0 || messagesRect.height <= 0) {
+        return [];
+      }
+
+      const inputOverlayTop = inputOverlay?.getBoundingClientRect().top ?? messagesRect.bottom;
+      const sampleTop = messagesRect.top;
+      const sampleBottom = Math.max(
+        sampleTop,
+        Math.min(messagesRect.bottom, inputOverlayTop),
+      );
+      const sampleHeight = sampleBottom - sampleTop;
+      if (sampleHeight <= 0) {
+        return [];
+      }
+
+      const pointSpecs = [
+        ['top-left', 0.25, 0.16],
+        ['top-center', 0.5, 0.16],
+        ['top-right', 0.75, 0.16],
+        ['middle-left', 0.25, 0.48],
+        ['middle-center', 0.5, 0.48],
+        ['middle-right', 0.75, 0.48],
+        ['bottom-left', 0.25, 0.82],
+        ['bottom-center', 0.5, 0.82],
+        ['bottom-right', 0.75, 0.82],
+      ] as const;
+
+      const findPaintedHandoffElementAtPoint = (x: number, y: number): HTMLElement | null => {
+        const handoffs = Array.from(
+          messages.querySelectorAll<HTMLElement>('.virtual-message-list__projection-handoff-overlay'),
+        );
+        for (let handoffIndex = handoffs.length - 1; handoffIndex >= 0; handoffIndex -= 1) {
+          const handoff = handoffs[handoffIndex];
+          const handoffRect = handoff.getBoundingClientRect();
+          const handoffStyle = window.getComputedStyle(handoff);
+          const handoffVisible = (
+            handoffRect.width > 0 &&
+            handoffRect.height > 0 &&
+            handoffStyle.visibility !== 'hidden' &&
+            handoffStyle.display !== 'none' &&
+            isElementEffectivelyVisible(handoff)
+          );
+          if (
+            !handoffVisible ||
+            x < handoffRect.left ||
+            x > handoffRect.right ||
+            y < handoffRect.top ||
+            y > handoffRect.bottom
+          ) {
+            continue;
+          }
+
+          const handoffItems = Array.from(
+            handoff.querySelectorAll<HTMLElement>('.virtual-item-wrapper[data-turn-id]'),
+          );
+          for (let itemIndex = handoffItems.length - 1; itemIndex >= 0; itemIndex -= 1) {
+            const item = handoffItems[itemIndex];
+            const itemRect = item.getBoundingClientRect();
+            if (
+              itemRect.width > 0 &&
+              itemRect.height > 0 &&
+              x >= itemRect.left &&
+              x <= itemRect.right &&
+              y >= itemRect.top &&
+              y <= itemRect.bottom &&
+              isElementEffectivelyVisible(item)
+            ) {
+              return item;
+            }
+          }
+
+          return handoff;
+        }
+
+        return null;
+      };
+
+      return pointSpecs.map(([label, xRatio, yRatio]) => {
+        const x = Math.round(messagesRect.left + messagesRect.width * xRatio);
+        const y = Math.round(sampleTop + sampleHeight * yRatio);
+        const elements = document.elementsFromPoint(x, y);
+        const paintedHandoffElement = findPaintedHandoffElementAtPoint(x, y);
+        const topElement =
+          paintedHandoffElement ??
+          elements.find((element): element is HTMLElement => element instanceof HTMLElement) ??
+          null;
+        const classified = classifySurfaceElement(topElement, latestTurnId);
+        return {
+          label,
+          x,
+          y,
+          ...classified,
+          topNode: describeNode(topElement),
+          topElementId: topElement ? getElementId(topElement, 'surface') : null,
+          backgroundChain: getElementBackgroundChain(
+            paintedHandoffElement ? [paintedHandoffElement, ...elements] : elements,
+          ),
+        };
+      });
+    };
+
+    const surfaceSignatureFor = (surfacePoints: LongSessionSurfacePoint[]): string =>
+      surfacePoints
+        .map(point => [
+          point.label,
+          point.category,
+          point.topElementId,
+          point.itemType,
+          point.latestTurnHit ? 'latest' : point.turnId,
+          point.effectiveOpacity,
+          Math.min(point.textLength, 9999),
+          point.modelRoundGroupCount,
+          point.modelRoundRenderedGroupCount,
+          point.modelRoundVisibleGroupStart,
+          point.modelRoundVisibleGroupEnd,
+          point.modelRoundRenderAll,
+          point.modelRoundHasDeferredEarlier,
+          point.modelRoundHasDeferredLater,
+          point.backgroundChain[0] ?? '',
+        ].join(':'))
+        .join('|');
+
+    const readMutationEvent = (reason: string): LongSessionDomMutationEvent => {
+      const atMs = performance.now();
+      const messages = document.querySelector<HTMLElement>('.modern-flowchat-container__messages');
+      const container = document.querySelector<HTMLElement>('.modern-flowchat-container');
+      const inputOverlay = document.querySelector<HTMLElement>('.bitfun-chat-input-drop-zone');
+      const placeholders = Array.from(
+        messages?.querySelectorAll<HTMLElement>('.history-session-placeholder') ?? []
+      );
+      const overlays = Array.from(
+        messages?.querySelectorAll<HTMLElement>('.modern-flowchat-container__history-overlay') ?? []
+      );
+      const historyInitialPreviews = Array.from(
+        messages?.querySelectorAll<HTMLElement>('.virtual-message-list__history-initial-preview') ?? []
+      );
+      const historyProjectionHandoffs = Array.from(
+        messages?.querySelectorAll<HTMLElement>('.virtual-message-list__projection-handoff-overlay') ?? []
+      );
+      const virtualLists = Array.from(
+        messages?.querySelectorAll<HTMLElement>('.virtual-message-list') ?? []
+      );
+      const scroller = messages?.querySelector<HTMLElement>(
+        '[data-virtuoso-scroller="true"], [data-virtuoso-scroller]',
+      ) ?? null;
+      const virtualItems = Array.from(
+        scroller?.querySelectorAll<HTMLElement>('.virtual-item-wrapper[data-turn-id]') ?? []
+      );
+      const visibleTextLength = visibleTextLengthFor(virtualItems);
+      const loadingSurfaces = readLoadingSurfaces();
+      const visibleLoadingSurfaceCount = loadingSurfaces.filter(surface => surface.visible).length;
+      const surfacePoints = readSurfacePoints(messages ?? null, scroller, inputOverlay, targetTurnId);
+      const surfaceSignature = surfaceSignatureFor(surfacePoints);
+      const historyInitialPreviewVisible = historyInitialPreviews.some(element => {
+        const rect = element.getBoundingClientRect();
+        const style = window.getComputedStyle(element);
+        return (
+          rect.width > 0 &&
+          rect.height > 0 &&
+          style.visibility !== 'hidden' &&
+          style.display !== 'none' &&
+          isElementEffectivelyVisible(element)
+        );
+      });
+      const historyProjectionHandoffVisible = historyProjectionHandoffs.some(element => {
+        const rect = element.getBoundingClientRect();
+        const style = window.getComputedStyle(element);
+        return (
+          rect.width > 0 &&
+          rect.height > 0 &&
+          style.visibility !== 'hidden' &&
+          style.display !== 'none' &&
+          isElementEffectivelyVisible(element)
+        );
+      });
+
+      return {
+        atMs,
+        sinceClickMs: atMs - clickTime,
+        reason,
+        activeSessionId: messages?.dataset.activeSessionId || null,
+        historyState: messages?.dataset.historyState || null,
+        contextRestoreState: messages?.dataset.contextRestoreState || null,
+        isPartial: messages?.dataset.isPartial || null,
+        dialogTurnCount: toNumberOrNull(messages?.dataset.dialogTurnCount),
+        virtualItemCount: toNumberOrNull(messages?.dataset.virtualItemCount),
+        showHistoryPlaceholder: messages?.dataset.showHistoryPlaceholder || null,
+        showHistoryTransitionOverlay: messages?.dataset.showHistoryTransitionOverlay || null,
+        showHistoryLoadingLayer: messages?.dataset.showHistoryLoadingLayer || null,
+        showHistoryOpenIntentOverlay: messages?.dataset.showHistoryOpenIntentOverlay || null,
+        hasPendingHistoryCompletion: messages?.dataset.hasPendingHistoryCompletion || null,
+        hasDeferredHistoryProjection: messages?.dataset.hasDeferredHistoryProjection || null,
+        latestTurnId: messages?.dataset.latestTurnId || null,
+        historyInitialContentReady: messages?.dataset.historyInitialContentReady || null,
+        pendingHistoryOpenSessionId: messages?.dataset.pendingHistoryOpenSessionId || null,
+        placeholderCount: placeholders.length,
+        overlayCount: overlays.length,
+        historyInitialPreviewCount: historyInitialPreviews.length,
+        historyInitialPreviewVisible,
+        historyProjectionHandoffCount: historyProjectionHandoffs.length,
+        historyProjectionHandoffVisible,
+        virtualListCount: virtualLists.length,
+        virtualItemDomCount: virtualItems.length,
+        visibleLoadingSurfaceCount,
+        visibleTextLength,
+        loadingSurfaces,
+        overlayElementIds: overlays.map(element => getElementId(element, 'overlay')),
+        placeholderElementIds: placeholders.map(element => getElementId(element, 'placeholder')),
+        virtualListElementIds: virtualLists.map(element => getElementId(element, 'virtual-list')),
+        virtualItemElementIds: virtualItems
+          .slice(0, 32)
+          .map(element => getElementId(element, 'virtual-item')),
+        virtualItemSummaries: summarizeVirtualItems(virtualItems),
+        surfaceSignature,
+        surfacePoints,
+        messagesRect: rectSummary(messages?.getBoundingClientRect()),
+        scrollerRect: rectSummary(scroller?.getBoundingClientRect()),
+        overlayRect: rectSummary(overlays[0]?.getBoundingClientRect()),
+        placeholderRect: rectSummary(placeholders[0]?.getBoundingClientRect()),
+        messagesBackground: getBackground(messages),
+        overlayBackground: getBackground(overlays[0]),
+        containerBackground: getBackground(container),
+        bodyBackground: getBackground(document.body),
+        htmlBackground: getBackground(document.documentElement),
+      };
+    };
+
+    const readVisualStateEvent = (reason: string): LongSessionVisualStateEvent => {
+      const atMs = performance.now();
+      const messages = document.querySelector<HTMLElement>('.modern-flowchat-container__messages');
+      const container = document.querySelector<HTMLElement>('.modern-flowchat-container');
+      const placeholders = Array.from(
+        messages?.querySelectorAll<HTMLElement>('.history-session-placeholder') ?? []
+      );
+      const overlays = Array.from(
+        messages?.querySelectorAll<HTMLElement>('.modern-flowchat-container__history-overlay') ?? []
+      );
+      const historyInitialPreviews = Array.from(
+        messages?.querySelectorAll<HTMLElement>('.virtual-message-list__history-initial-preview') ?? []
+      );
+      const historyProjectionHandoffs = Array.from(
+        messages?.querySelectorAll<HTMLElement>('.virtual-message-list__projection-handoff-overlay') ?? []
+      );
+      const virtualLists = Array.from(
+        messages?.querySelectorAll<HTMLElement>('.virtual-message-list') ?? []
+      );
+      const root = document.querySelector<HTMLElement>(
+        '.modern-flowchat-container__messages .virtual-message-list',
+      );
+      const scroller = root?.querySelector<HTMLElement>(
+        '[data-virtuoso-scroller="true"], [data-virtuoso-scroller]',
+      ) ?? null;
+      const footer = scroller?.querySelector<HTMLElement>('.message-list-footer') ?? null;
+      const footerRect = footer?.getBoundingClientRect() ?? null;
+      const footerStyle = footer ? window.getComputedStyle(footer) : null;
+      const virtualItems = Array.from(
+        scroller?.querySelectorAll<HTMLElement>('.virtual-item-wrapper[data-turn-id]') ?? []
+      );
+      const completedToolTransitions = Array.from(
+        scroller?.querySelectorAll<HTMLElement>(
+          '.flowchat-flow-item--tool-transition.flowchat-flow-item--tool-completed',
+        ) ?? []
+      );
+      const completedToolTransitionStyles = completedToolTransitions
+        .map(tool => window.getComputedStyle(tool));
+      const completedToolTransitionHeight = completedToolTransitions.reduce(
+        (total, tool) => total + tool.getBoundingClientRect().height,
+        0,
+      );
+      const completedToolTransitionSignature = completedToolTransitionStyles
+        .slice(0, 16)
+        .map(style => [
+          Math.round(Number.parseFloat(style.maxHeight || '0') || 0),
+          Math.round(Number.parseFloat(style.opacity || '0') * 100) / 100,
+          style.animationName,
+          style.animationPlayState,
+        ].join(':'))
+        .join(',');
+      const inputOverlay = document.querySelector<HTMLElement>('.bitfun-chat-input-drop-zone');
+      const scrollerRect = scroller?.getBoundingClientRect() ?? null;
+      const inputOverlayRect = inputOverlay?.getBoundingClientRect() ?? null;
+      const historyPlaceholderRect = placeholders[0]?.getBoundingClientRect() ?? null;
+      const historyPlaceholderStyle = placeholders[0]
+        ? window.getComputedStyle(placeholders[0])
+        : null;
+      const historyPlaceholderVisible = Boolean(
+        placeholders[0] &&
+        historyPlaceholderRect &&
+        historyPlaceholderRect.width > 0 &&
+        historyPlaceholderRect.height > 0 &&
+        historyPlaceholderStyle?.visibility !== 'hidden' &&
+        historyPlaceholderStyle?.display !== 'none' &&
+        isElementEffectivelyVisible(placeholders[0] ?? null)
+      );
+      const historyInitialPreviewVisible = historyInitialPreviews.some(element => {
+        const rect = element.getBoundingClientRect();
+        const style = window.getComputedStyle(element);
+        return (
+          rect.width > 0 &&
+          rect.height > 0 &&
+          style.visibility !== 'hidden' &&
+          style.display !== 'none' &&
+          isElementEffectivelyVisible(element)
+        );
+      });
+      const historyProjectionHandoffVisible = historyProjectionHandoffs.some(element => {
+        const rect = element.getBoundingClientRect();
+        const style = window.getComputedStyle(element);
+        return (
+          rect.width > 0 &&
+          rect.height > 0 &&
+          style.visibility !== 'hidden' &&
+          style.display !== 'none' &&
+          isElementEffectivelyVisible(element)
+        );
+      });
+      const effectiveScrollerBottom = scrollerRect
+        ? Math.min(scrollerRect.bottom, inputOverlayRect?.top ?? scrollerRect.bottom)
+        : null;
+      const historyPlaceholderCoversMessages = Boolean(
+        historyPlaceholderVisible &&
+        historyPlaceholderRect &&
+        (
+          !scrollerRect ||
+          (
+            historyPlaceholderRect.top <= scrollerRect.top + 4 &&
+            historyPlaceholderRect.bottom >= (effectiveScrollerBottom ?? scrollerRect.bottom) - 4 &&
+            historyPlaceholderRect.left <= scrollerRect.left + 4 &&
+            historyPlaceholderRect.right >= scrollerRect.right - 4
+          )
+        )
+      );
+      const latest = targetTurnId
+        ? root?.querySelector<HTMLElement>(
+          `.virtual-item-wrapper[data-turn-id="${targetTurnId}"][data-item-type="user-message"]`,
+        ) ?? null
+        : null;
+      const latestModelRoundSegments = targetTurnId
+        ? Array.from(root?.querySelectorAll<HTMLElement>(
+          `.virtual-item-wrapper[data-turn-id="${targetTurnId}"][data-item-type="model-round"]`,
+        ) ?? [])
+        : [];
+      const isVisibleWithinScroller = (rect: DOMRect | null, element?: HTMLElement | null): boolean => Boolean(
+        scrollerRect &&
+        rect &&
+        (!element || isElementEffectivelyVisible(element)) &&
+        rect.bottom > scrollerRect.top &&
+        rect.top < (effectiveScrollerBottom ?? scrollerRect.bottom)
+      );
+      const latestVisible = isVisibleWithinScroller(latest?.getBoundingClientRect() ?? null, latest);
+      const latestModelRoundVisibleSegments = latestModelRoundSegments
+        .filter(element => isVisibleWithinScroller(element.getBoundingClientRect(), element));
+      const latestModelRoundTextLength = latestModelRoundVisibleSegments
+        .reduce((total, element) => total + (element.innerText?.length ?? 0), 0);
+      const latestContentVisuallyVisible =
+        (latestVisible || latestModelRoundVisibleSegments.length > 0) &&
+        !historyPlaceholderCoversMessages;
+      const scrollTop = scroller?.scrollTop ?? null;
+      const scrollHeight = scroller?.scrollHeight ?? null;
+      const clientHeight = scroller?.clientHeight ?? null;
+      const footerHeight = footerRect?.height ?? null;
+      const footerStyleHeight = footerStyle?.height ?? null;
+      const footerStyleMinHeight = footerStyle?.minHeight ?? null;
+      const inputOverlayHeight = inputOverlayRect?.height ?? null;
+      const messagesBackground = getBackground(messages);
+      const overlayBackground = getBackground(overlays[0]);
+      const containerBackground = getBackground(container);
+      const bodyBackground = getBackground(document.body);
+      const htmlBackground = getBackground(document.documentElement);
+      const loadingSurfaces = readLoadingSurfaces();
+      const visibleLoadingSurfaceCount = loadingSurfaces.filter(surface => surface.visible).length;
+      const surfacePoints = readSurfacePoints(messages ?? null, scroller, inputOverlay, targetTurnId);
+      const surfaceSignature = surfaceSignatureFor(surfacePoints);
+      const roundMetric = (value: number | null): string =>
+        value === null ? 'null' : String(Math.round(value));
+      const signature = [
+        messages?.dataset.activeSessionId || '',
+        messages?.dataset.historyState || '',
+        messages?.dataset.contextRestoreState || '',
+        messages?.dataset.isPartial || '',
+        messages?.dataset.dialogTurnCount || '',
+        messages?.dataset.virtualItemCount || '',
+        messages?.dataset.showHistoryPlaceholder || '',
+        messages?.dataset.showHistoryTransitionOverlay || '',
+        messages?.dataset.showHistoryLoadingLayer || '',
+        messages?.dataset.showHistoryOpenIntentOverlay || '',
+        messages?.dataset.hasPendingHistoryCompletion || '',
+        messages?.dataset.hasDeferredHistoryProjection || '',
+        messages?.dataset.historyInitialContentReady || '',
+        messages?.dataset.pendingHistoryOpenSessionId || '',
+        placeholders.length,
+        overlays.length,
+        historyInitialPreviews.length,
+        historyInitialPreviewVisible ? 'history-preview-visible' : 'history-preview-hidden',
+        historyProjectionHandoffs.length,
+        historyProjectionHandoffVisible ? 'history-projection-handoff-visible' : 'history-projection-handoff-hidden',
+        visibleLoadingSurfaceCount,
+        loadingSurfaces
+          .filter(surface => surface.visible)
+          .map(surface => `${surface.selector}:${surface.node}:${surface.textLength}`)
+          .join(','),
+        virtualLists.length,
+        virtualItems.length,
+        completedToolTransitions.length,
+        roundMetric(completedToolTransitionHeight),
+        completedToolTransitionSignature,
+        latestContentVisuallyVisible ? 'latest-visible' : 'latest-hidden',
+        latestModelRoundTextLength > 0 ? 'latest-text' : 'latest-no-text',
+        roundMetric(scrollTop),
+        roundMetric(scrollHeight),
+        roundMetric(clientHeight),
+        roundMetric(footerHeight),
+        footerStyleHeight,
+        footerStyleMinHeight,
+        roundMetric(inputOverlayHeight),
+        roundMetric(scrollerRect?.top ?? null),
+        roundMetric(scrollerRect?.bottom ?? null),
+        roundMetric(inputOverlayRect?.top ?? null),
+        surfaceSignature,
+        messagesBackground,
+        overlayBackground,
+        containerBackground,
+        bodyBackground,
+        htmlBackground,
+      ].join('|');
+
+      return {
+        atMs,
+        sinceClickMs: atMs - clickTime,
+        sinceHistoryOpenIntentMs: typeof globalWindow.__bitfunLongSessionOpenIntentAt === 'number'
+          ? atMs - globalWindow.__bitfunLongSessionOpenIntentAt
+          : null,
+        frame: visualFrame,
+        reason,
+        signature,
+        activeSessionId: messages?.dataset.activeSessionId || null,
+        historyState: messages?.dataset.historyState || null,
+        contextRestoreState: messages?.dataset.contextRestoreState || null,
+        isPartial: messages?.dataset.isPartial || null,
+        dialogTurnCount: toNumberOrNull(messages?.dataset.dialogTurnCount),
+        virtualItemCount: toNumberOrNull(messages?.dataset.virtualItemCount),
+        showHistoryPlaceholder: messages?.dataset.showHistoryPlaceholder || null,
+        showHistoryTransitionOverlay: messages?.dataset.showHistoryTransitionOverlay || null,
+        showHistoryLoadingLayer: messages?.dataset.showHistoryLoadingLayer || null,
+        showHistoryOpenIntentOverlay: messages?.dataset.showHistoryOpenIntentOverlay || null,
+        hasPendingHistoryCompletion: messages?.dataset.hasPendingHistoryCompletion || null,
+        hasDeferredHistoryProjection: messages?.dataset.hasDeferredHistoryProjection || null,
+        latestTurnId: messages?.dataset.latestTurnId || null,
+        historyInitialContentReady: messages?.dataset.historyInitialContentReady || null,
+        pendingHistoryOpenSessionId: messages?.dataset.pendingHistoryOpenSessionId || null,
+        placeholderCount: placeholders.length,
+        overlayCount: overlays.length,
+        historyInitialPreviewCount: historyInitialPreviews.length,
+        historyInitialPreviewVisible,
+        historyProjectionHandoffCount: historyProjectionHandoffs.length,
+        historyProjectionHandoffVisible,
+        virtualListCount: virtualLists.length,
+        virtualItemDomCount: virtualItems.length,
+        visibleLoadingSurfaceCount,
+        virtualListElementIds: virtualLists.map(element => getElementId(element, 'virtual-list')),
+        virtualItemElementIds: virtualItems
+          .slice(0, 32)
+          .map(element => getElementId(element, 'virtual-item')),
+        virtualItemSummaries: summarizeVirtualItems(virtualItems),
+        completedToolTransitionCount: completedToolTransitions.length,
+        completedToolTransitionHeight,
+        completedToolTransitionSignature,
+        visibleTextLength: visibleTextLengthFor(virtualItems),
+        loadingSurfaces,
+        latestContentVisuallyVisible,
+        latestModelRoundTextLength,
+        surfaceSignature,
+        surfacePoints,
+        scrollerExists: Boolean(scroller),
+        scrollTop,
+        scrollHeight,
+        clientHeight,
+        footerHeight,
+        footerStyleHeight,
+        footerStyleMinHeight,
+        inputOverlayHeight,
+        messagesRect: rectSummary(messages?.getBoundingClientRect()),
+        scrollerRect: rectSummary(scrollerRect),
+        overlayRect: rectSummary(overlays[0]?.getBoundingClientRect()),
+        placeholderRect: rectSummary(historyPlaceholderRect),
+        inputOverlayRect: rectSummary(inputOverlayRect),
+        messagesBackground,
+        overlayBackground,
+        containerBackground,
+        bodyBackground,
+        htmlBackground,
+      };
+    };
+
+    const recordVisualStateEvent = (reason: string, force = false) => {
+      const event = readVisualStateEvent(reason);
+      if (!force && event.signature === previousVisualSignature) {
+        return;
+      }
+      previousVisualSignature = event.signature;
+      visualStateEvents.push(event);
+      if (visualStateEvents.length > 1200) {
+        visualStateEvents.shift();
+      }
+    };
+
+    function recordMutationEvent(reason: string) {
+      mutationEvents.push(readMutationEvent(reason));
+      if (mutationEvents.length > 800) {
+        mutationEvents.shift();
+      }
+      recordVisualStateEvent(reason);
+    }
+
+    recordMutationEvent('initial');
+    const recordAnimationFrame = () => {
+      visualFrame += 1;
+      recordVisualStateEvent('raf');
+      globalWindow.__bitfunLongSessionVisualFrameRequest =
+        window.requestAnimationFrame(recordAnimationFrame);
+    };
+    globalWindow.__bitfunLongSessionVisualFrameRequest =
+      window.requestAnimationFrame(recordAnimationFrame);
+    globalWindow.__bitfunLongSessionVisualProbeTimers = [
+      500,
+      1_000,
+      2_000,
+      3_000,
+      5_000,
+      7_000,
+    ].map(delayMs => window.setTimeout(
+      () => recordVisualStateEvent(`probe-${delayMs}ms`, true),
+      Math.max(0, clickTime + delayMs - performance.now()),
+    ));
+    const mutationObserver = new MutationObserver(records => {
+      const relevant = records.some(record => {
+        if (record.type === 'attributes') {
+          const target = record.target as HTMLElement | null;
+          return Boolean(
+            target?.matches?.(OBSERVED_MUTATION_SELECTOR)
+          );
+        }
+        const nodes = [
+          ...Array.from(record.addedNodes),
+          ...Array.from(record.removedNodes),
+        ];
+        return nodes.some(node => {
+          if (!(node instanceof HTMLElement)) {
+            return false;
+          }
+          return Boolean(
+            node.matches?.(OBSERVED_MUTATION_SELECTOR) ||
+            node.querySelector?.(OBSERVED_MUTATION_SELECTOR)
+          );
+        });
+      });
+      if (relevant) {
+        recordMutationEvent('mutation');
+      }
+    });
+    mutationObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: [
+        'class',
+        'style',
+        'data-active-session-id',
+        'data-history-state',
+        'data-context-restore-state',
+        'data-is-partial',
+        'data-dialog-turn-count',
+        'data-virtual-item-count',
+        'data-show-history-placeholder',
+        'data-show-history-transition-overlay',
+        'data-show-history-loading-layer',
+        'data-show-history-open-intent-overlay',
+        'data-has-pending-history-completion',
+        'data-has-deferred-history-projection',
+        'data-latest-turn-id',
+        'data-history-initial-content-ready',
+        'data-pending-history-open-session-id',
+        'aria-busy',
+        'role',
+      ],
+    });
+    globalWindow.__bitfunLongSessionMutationObserver = mutationObserver;
     try {
       if (PerformanceObserver.supportedEntryTypes.includes('longtask')) {
         const observer = new PerformanceObserver(list => {
@@ -612,7 +2124,46 @@ async function startLongSessionViewportTimelineRecorder(
     } catch {
       globalWindow.__bitfunLongSessionLongTaskObserver = undefined;
     }
+    try {
+      if (PerformanceObserver.supportedEntryTypes.includes('layout-shift')) {
+        const observer = new PerformanceObserver(list => {
+          for (const entry of list.getEntries()) {
+            if (entry.startTime < clickTime) {
+              continue;
+            }
+            const layoutEntry = entry as PerformanceEntry & {
+              value?: number;
+              hadRecentInput?: boolean;
+              sources?: Array<{
+                node?: Node;
+                previousRect?: DOMRectReadOnly;
+                currentRect?: DOMRectReadOnly;
+              }>;
+            };
+            layoutShiftEvents.push({
+              startMs: entry.startTime,
+              sinceClickMs: entry.startTime - clickTime,
+              value: layoutEntry.value ?? 0,
+              hadRecentInput: layoutEntry.hadRecentInput === true,
+              sources: (layoutEntry.sources ?? []).slice(0, 6).map(source => ({
+                node: describeNode(source.node),
+                previousRect: rectSummary(source.previousRect as DOMRect | undefined),
+                currentRect: rectSummary(source.currentRect as DOMRect | undefined),
+              })),
+            });
+            if (layoutShiftEvents.length > 160) {
+              layoutShiftEvents.shift();
+            }
+          }
+        });
+        observer.observe({ type: 'layout-shift', buffered: true });
+        globalWindow.__bitfunLongSessionLayoutShiftObserver = observer;
+      }
+    } catch {
+      globalWindow.__bitfunLongSessionLayoutShiftObserver = undefined;
+    }
     const readSample = (): LongSessionViewportTimelineSample => {
+      const messages = document.querySelector<HTMLElement>('.modern-flowchat-container__messages');
       const root = document.querySelector<HTMLElement>(
         '.modern-flowchat-container__messages .virtual-message-list',
       );
@@ -636,11 +2187,24 @@ async function startLongSessionViewportTimelineRecorder(
         historyPlaceholderRect.height > 0 &&
         historyPlaceholderStyle?.visibility !== 'hidden' &&
         historyPlaceholderStyle?.display !== 'none' &&
-        historyPlaceholderStyle?.opacity !== '0'
+        isElementEffectivelyVisible(historyPlaceholder)
       );
       const effectiveScrollerBottom = scrollerRect
         ? Math.min(scrollerRect.bottom, inputOverlayRect?.top ?? scrollerRect.bottom)
         : null;
+      const historyPlaceholderCoversMessages = Boolean(
+        historyPlaceholderVisible &&
+        historyPlaceholderRect &&
+        (
+          !scrollerRect ||
+          (
+            historyPlaceholderRect.top <= scrollerRect.top + 4 &&
+            historyPlaceholderRect.bottom >= (effectiveScrollerBottom ?? scrollerRect.bottom) - 4 &&
+            historyPlaceholderRect.left <= scrollerRect.left + 4 &&
+            historyPlaceholderRect.right >= scrollerRect.right - 4
+          )
+        )
+      );
       const latest = targetTurnId
         ? root?.querySelector<HTMLElement>(
           `.virtual-item-wrapper[data-turn-id="${targetTurnId}"][data-item-type="user-message"]`,
@@ -652,18 +2216,22 @@ async function startLongSessionViewportTimelineRecorder(
         ) ?? [])
         : [];
       const latestRect = latest?.getBoundingClientRect() ?? null;
-      const isVisibleWithinScroller = (rect: DOMRect | null): boolean => Boolean(
+      const isVisibleWithinScroller = (rect: DOMRect | null, element?: HTMLElement | null): boolean => Boolean(
         scrollerRect &&
         rect &&
+        (!element || isElementEffectivelyVisible(element)) &&
         rect.bottom > scrollerRect.top &&
         rect.top < (effectiveScrollerBottom ?? scrollerRect.bottom)
       );
       const latestModelRoundVisibleSegments = latestModelRoundSegments
-        .filter(element => isVisibleWithinScroller(element.getBoundingClientRect()));
+        .filter(element => isVisibleWithinScroller(element.getBoundingClientRect(), element));
       const latestModelRoundVisible = latestModelRoundVisibleSegments.length > 0;
       const latestModelRoundTextLength = latestModelRoundVisibleSegments
         .reduce((total, element) => total + (element.innerText?.length ?? 0), 0);
-      const latestVisible = isVisibleWithinScroller(latestRect);
+      const latestVisible = isVisibleWithinScroller(latestRect, latest);
+      const latestContentVisible = latestVisible || latestModelRoundVisible;
+      const latestContentVisuallyVisible =
+        latestContentVisible && !historyPlaceholderCoversMessages;
       const renderedItems = scrollerRect
         ? Array.from(root?.querySelectorAll<HTMLElement>('.virtual-item-wrapper[data-turn-id]') ?? [])
           .map(element => {
@@ -752,18 +2320,25 @@ async function startLongSessionViewportTimelineRecorder(
         ? Math.max(0, effectiveScrollerBottom - scrollerRect.top)
         : null;
       const atMs = performance.now();
+      const historyOpenIntentAtMs = globalWindow.__bitfunLongSessionOpenIntentAt ?? null;
 
       return {
         atMs,
         sinceClickMs: atMs - clickTime,
+        historyOpenIntentAtMs,
+        sinceHistoryOpenIntentMs: historyOpenIntentAtMs === null ? null : atMs - historyOpenIntentAtMs,
+        activeSessionId: messages?.dataset.activeSessionId || null,
+        pendingHistoryOpenSessionId: messages?.dataset.pendingHistoryOpenSessionId || null,
         hasRoot: Boolean(root),
         hasScroller: Boolean(scroller),
         latestRendered: Boolean(latest),
         latestModelRoundRendered: latestModelRoundSegments.length > 0,
         latestModelRoundVisible,
         latestModelRoundTextLength,
-        latestContentVisible: latestVisible || latestModelRoundVisible,
+        latestContentVisible,
         historyPlaceholderVisible,
+        historyPlaceholderCoversMessages,
+        latestContentVisuallyVisible,
         latestVisible,
         latestTurnId: latest?.dataset.turnId ?? targetTurnId ?? null,
         scrollTop: scroller?.scrollTop ?? null,
@@ -793,13 +2368,16 @@ async function startLongSessionViewportTimelineRecorder(
 
     const record = () => {
       samples.push(readSample());
-      if (samples.length > 120) {
+      if (samples.length > 1200) {
         samples.shift();
       }
     };
 
     globalWindow.__bitfunLongSessionViewportTimeline = samples;
     globalWindow.__bitfunLongSessionMainThreadTasks = mainThreadTasks;
+    globalWindow.__bitfunLongSessionMutationEvents = mutationEvents;
+    globalWindow.__bitfunLongSessionVisualStateEvents = visualStateEvents;
+    globalWindow.__bitfunLongSessionLayoutShiftEvents = layoutShiftEvents;
     record();
     globalWindow.__bitfunLongSessionViewportTimelineTimer = window.setInterval(record, 50);
   }, expectedLatestTurnId, clickedAtMs, enableRenderProfile);
@@ -810,22 +2388,65 @@ async function stopLongSessionViewportTimelineRecorder(): Promise<LongSessionVie
     const globalWindow = window as typeof window & {
       __bitfunLongSessionViewportTimeline?: LongSessionViewportTimelineSample[];
       __bitfunLongSessionMainThreadTasks?: LongSessionMainThreadTask[];
+      __bitfunLongSessionMutationEvents?: LongSessionDomMutationEvent[];
+      __bitfunLongSessionVisualStateEvents?: LongSessionVisualStateEvent[];
+      __bitfunLongSessionLayoutShiftEvents?: LongSessionLayoutShiftEvent[];
       __bitfunLongSessionViewportTimelineTimer?: number;
+      __bitfunLongSessionVisualFrameRequest?: number;
+      __bitfunLongSessionVisualProbeTimers?: number[];
       __bitfunLongSessionLongTaskObserver?: PerformanceObserver;
+      __bitfunLongSessionLayoutShiftObserver?: PerformanceObserver;
+      __bitfunLongSessionMutationObserver?: MutationObserver;
+      __bitfunLongSessionOpenIntentAt?: number;
+      __bitfunLongSessionOpenIntentHandler?: EventListener;
+      __bitfunLongSessionUserInteractionHandler?: EventListener;
       __BITFUN_RENDER_PROFILE_ENABLED__?: boolean;
     };
     if (globalWindow.__bitfunLongSessionViewportTimelineTimer !== undefined) {
       window.clearInterval(globalWindow.__bitfunLongSessionViewportTimelineTimer);
       globalWindow.__bitfunLongSessionViewportTimelineTimer = undefined;
     }
+    if (globalWindow.__bitfunLongSessionVisualFrameRequest !== undefined) {
+      window.cancelAnimationFrame(globalWindow.__bitfunLongSessionVisualFrameRequest);
+      globalWindow.__bitfunLongSessionVisualFrameRequest = undefined;
+    }
+    for (const timerId of globalWindow.__bitfunLongSessionVisualProbeTimers ?? []) {
+      window.clearTimeout(timerId);
+    }
+    globalWindow.__bitfunLongSessionVisualProbeTimers = undefined;
     globalWindow.__bitfunLongSessionLongTaskObserver?.disconnect();
     globalWindow.__bitfunLongSessionLongTaskObserver = undefined;
+    globalWindow.__bitfunLongSessionLayoutShiftObserver?.disconnect();
+    globalWindow.__bitfunLongSessionLayoutShiftObserver = undefined;
+    globalWindow.__bitfunLongSessionMutationObserver?.disconnect();
+    globalWindow.__bitfunLongSessionMutationObserver = undefined;
+    if (globalWindow.__bitfunLongSessionOpenIntentHandler) {
+      window.removeEventListener(
+        'flowchat:history-session-open-intent',
+        globalWindow.__bitfunLongSessionOpenIntentHandler,
+      );
+      globalWindow.__bitfunLongSessionOpenIntentHandler = undefined;
+    }
+    if (globalWindow.__bitfunLongSessionUserInteractionHandler) {
+      window.removeEventListener(
+        'bitfun:e2e-long-session-user-interaction',
+        globalWindow.__bitfunLongSessionUserInteractionHandler,
+      );
+      globalWindow.__bitfunLongSessionUserInteractionHandler = undefined;
+    }
+    globalWindow.__bitfunLongSessionOpenIntentAt = undefined;
     const samples = globalWindow.__bitfunLongSessionViewportTimeline ?? [];
     const mainThreadTasks = globalWindow.__bitfunLongSessionMainThreadTasks ?? [];
+    const mutationEvents = globalWindow.__bitfunLongSessionMutationEvents ?? [];
+    const visualStateEvents = globalWindow.__bitfunLongSessionVisualStateEvents ?? [];
+    const layoutShiftEvents = globalWindow.__bitfunLongSessionLayoutShiftEvents ?? [];
     globalWindow.__bitfunLongSessionViewportTimeline = undefined;
     globalWindow.__bitfunLongSessionMainThreadTasks = undefined;
+    globalWindow.__bitfunLongSessionMutationEvents = undefined;
+    globalWindow.__bitfunLongSessionVisualStateEvents = undefined;
+    globalWindow.__bitfunLongSessionLayoutShiftEvents = undefined;
     globalWindow.__BITFUN_RENDER_PROFILE_ENABLED__ = false;
-    return { samples, mainThreadTasks };
+    return { samples, mainThreadTasks, mutationEvents, visualStateEvents, layoutShiftEvents };
   });
 }
 
@@ -837,7 +2458,7 @@ async function waitForLatestLongSessionTurnVisible(timeoutMs: number, expectedLa
   try {
     await browser.waitUntil(async () => {
       viewport = await readLongSessionViewportState(expectedLatestTurnId);
-      return viewport.latestContentVisible;
+      return viewport.latestContentVisuallyVisible;
     }, {
       timeout: timeoutMs,
       interval: 50,
@@ -872,6 +2493,7 @@ function isLongSessionViewportUsable(viewport: LongSessionViewportState): boolea
   const largestBlankGapPx = viewport.largestBlankGapPx ?? Number.POSITIVE_INFINITY;
   return (
     viewport.latestContentVisible &&
+    viewport.latestContentVisuallyVisible &&
     viewport.latestModelRoundVisible &&
     viewport.latestModelRoundTextLength > 0 &&
     coverageRatio >= LONG_SESSION_VIEWPORT_MIN_COVERAGE_RATIO &&
@@ -885,7 +2507,7 @@ function isLongSessionLatestVisibleViewportPositioned(viewport: LongSessionViewp
   const bottomBlankPx = viewport.bottomBlankPx ?? Number.POSITIVE_INFINITY;
   const largestBlankGapPx = viewport.largestBlankGapPx ?? Number.POSITIVE_INFINITY;
   return (
-    viewport.latestContentVisible &&
+    viewport.latestContentVisuallyVisible &&
     coverageRatio >= LONG_SESSION_VIEWPORT_MIN_COVERAGE_RATIO &&
     bottomBlankPx <= LONG_SESSION_LATEST_VISIBLE_MAX_BOTTOM_BLANK_PX &&
     largestBlankGapPx <= LONG_SESSION_LATEST_VISIBLE_MAX_BLANK_GAP_PX
@@ -926,6 +2548,7 @@ function isLongSessionInputAnchoredNearBottom(viewport: LongSessionViewportState
 
 function summarizeLongSessionViewportTimeline(
   samples: LongSessionViewportTimelineSample[],
+  targetSessionId: string,
 ): LongSessionViewportTimelineSummary {
   const firstScroller = samples.find(sample => sample.hasScroller);
   const firstScrollerBlank = samples.find(sample =>
@@ -936,9 +2559,17 @@ function summarizeLongSessionViewportTimeline(
   const firstHistoryPlaceholder = samples.find(sample => sample.historyPlaceholderVisible);
   const firstLatestVisible = samples.find(sample => sample.latestVisible);
   const firstLatestContentVisible = samples.find(sample => sample.latestContentVisible);
+  const firstLatestContentVisuallyVisible = samples.find(sample =>
+    sample.latestContentVisuallyVisible
+  );
   const firstLatestTextVisible = samples.find(sample =>
+    sample.latestContentVisuallyVisible &&
     sample.latestModelRoundVisible &&
     sample.latestModelRoundTextLength > 0
+  );
+  const samplesAfterOpenIntent = samples.filter(sample =>
+    typeof sample.sinceHistoryOpenIntentMs === 'number' &&
+    sample.sinceHistoryOpenIntentMs >= 0
   );
   const latestVisibleTextlessSamples = samples.filter(sample =>
     sample.latestVisible &&
@@ -947,7 +2578,7 @@ function summarizeLongSessionViewportTimeline(
   );
   const firstLatestVisibleTextless = latestVisibleTextlessSamples[0];
   const latestContentVisibleTextlessSamples = samples.filter(sample =>
-    sample.latestContentVisible &&
+    sample.latestContentVisuallyVisible &&
       sample.latestModelRoundVisible &&
       sample.latestModelRoundTextLength === 0
   );
@@ -981,12 +2612,31 @@ function summarizeLongSessionViewportTimeline(
   const preLatestTextVisibleBottomBlanks = preLatestTextVisibleBlankSamples
     .map(sample => sample.bottomBlankPx)
     .filter((value): value is number => typeof value === 'number');
+  const preLatestTextVisibleUncoveredAfterIntentSamples = samplesAfterOpenIntent.filter(sample =>
+    (firstLatestTextVisible
+      ? sample.sinceClickMs < firstLatestTextVisible.sinceClickMs
+      : true) &&
+    sample.activeSessionId === targetSessionId &&
+    !sample.historyPlaceholderCoversMessages &&
+    !sample.latestContentVisuallyVisible &&
+    (
+      sample.visibleItemCount > 0 ||
+      sample.renderedItemCount > 0 ||
+      sample.visibleTextLength > 0
+    )
+  );
   const postLatestTextVisibleBlankSamples = firstLatestTextVisible
     ? samples.filter(sample =>
       sample.sinceClickMs > firstLatestTextVisible.sinceClickMs &&
       sample.hasRoot &&
       sample.hasScroller &&
       sample.visibleItemCount === 0
+    )
+    : [];
+  const postLatestTextVisibleCoveredSamples = firstLatestTextVisible
+    ? samples.filter(sample =>
+      sample.sinceClickMs > firstLatestTextVisible.sinceClickMs &&
+      sample.historyPlaceholderCoversMessages
     )
     : [];
   const postLatestTextVisibleBlankGaps = postLatestTextVisibleBlankSamples
@@ -1000,7 +2650,7 @@ function summarizeLongSessionViewportTimeline(
       sample.sinceClickMs > firstLatestTextVisible.sinceClickMs &&
       sample.hasRoot &&
       sample.hasScroller &&
-      !sample.latestContentVisible
+      !sample.latestContentVisuallyVisible
     )
     : [];
 
@@ -1011,6 +2661,7 @@ function summarizeLongSessionViewportTimeline(
     firstHistoryPlaceholderAtMs: firstHistoryPlaceholder?.sinceClickMs ?? null,
     firstLatestVisibleAtMs: firstLatestVisible?.sinceClickMs ?? null,
     firstLatestContentVisibleAtMs: firstLatestContentVisible?.sinceClickMs ?? null,
+    firstLatestContentVisuallyVisibleAtMs: firstLatestContentVisuallyVisible?.sinceClickMs ?? null,
     firstLatestTextVisibleAtMs: firstLatestTextVisible?.sinceClickMs ?? null,
     firstLatestVisibleTextlessAtMs: firstLatestVisibleTextless?.sinceClickMs ?? null,
     firstLatestContentVisibleTextlessAtMs: firstLatestContentVisibleTextless?.sinceClickMs ?? null,
@@ -1024,6 +2675,11 @@ function summarizeLongSessionViewportTimeline(
         ? firstLatestTextVisible.sinceClickMs - firstLatestContentVisible.sinceClickMs
         : null
     ),
+    latestTextDelayAfterContentVisuallyVisibleMs: (
+      firstLatestContentVisuallyVisible && firstLatestTextVisible
+        ? firstLatestTextVisible.sinceClickMs - firstLatestContentVisuallyVisible.sinceClickMs
+        : null
+    ),
     latestVisibleTextlessSampleCount: latestVisibleTextlessSamples.length,
     latestContentVisibleTextlessSampleCount: latestContentVisibleTextlessSamples.length,
     maxTextlessVisibleBlankGapPx: textlessBlankGaps.length > 0
@@ -1034,6 +2690,11 @@ function summarizeLongSessionViewportTimeline(
       : null,
     preLatestTextVisibleBlankSampleCount: preLatestTextVisibleBlankSamples.length,
     preLatestTextVisibleBlankWithoutPlaceholderSampleCount: preLatestTextVisibleBlankWithoutPlaceholderSamples.length,
+    preLatestTextVisibleUncoveredAfterIntentSampleCount: preLatestTextVisibleUncoveredAfterIntentSamples.length,
+    firstPreLatestTextVisibleUncoveredAfterIntentAtMs:
+      preLatestTextVisibleUncoveredAfterIntentSamples[0]?.sinceHistoryOpenIntentMs ??
+      preLatestTextVisibleUncoveredAfterIntentSamples[0]?.sinceClickMs ??
+      null,
     maxPreLatestTextVisibleBlankGapPx: preLatestTextVisibleBlankGaps.length > 0
       ? Math.max(...preLatestTextVisibleBlankGaps)
       : null,
@@ -1044,6 +2705,7 @@ function summarizeLongSessionViewportTimeline(
       ? Math.max(...preLatestTextVisibleBottomBlanks)
       : null,
     postLatestTextVisibleBlankSampleCount: postLatestTextVisibleBlankSamples.length,
+    postLatestTextVisibleCoveredSampleCount: postLatestTextVisibleCoveredSamples.length,
     maxPostLatestTextVisibleBlankGapPx: postLatestTextVisibleBlankGaps.length > 0
       ? Math.max(...postLatestTextVisibleBlankGaps)
       : null,
@@ -1051,6 +2713,558 @@ function summarizeLongSessionViewportTimeline(
       ? Math.max(...postLatestTextVisibleBottomBlanks)
       : null,
     postLatestTextVisibleLatestContentMissingSampleCount: postLatestTextVisibleLatestContentMissingSamples.length,
+  };
+}
+
+function summarizeLongSessionVisualStateEvents(
+  visualStateEvents: LongSessionVisualStateEvent[],
+  mutationEvents: LongSessionDomMutationEvent[],
+  layoutShiftEvents: LongSessionLayoutShiftEvent[],
+  viewportTimelineSummary: LongSessionViewportTimelineSummary,
+  sessionId: string,
+): LongSessionVisualStateSummary {
+  const firstLatestTextVisibleAtMs = viewportTimelineSummary.firstLatestTextVisibleAtMs;
+  const firstVisibleItemAtMs = viewportTimelineSummary.firstVisibleItemAtMs;
+  const isForcedVisualProbeEvent = (event: LongSessionVisualStateEvent): boolean =>
+    event.reason.startsWith('probe-');
+  const isUserInteractionVisualEvent = (event: LongSessionVisualStateEvent): boolean =>
+    event.reason.startsWith('user-interaction-');
+  const postLatestTextEvents = firstLatestTextVisibleAtMs === null
+    ? []
+    : visualStateEvents.filter(event => event.sinceClickMs > firstLatestTextVisibleAtMs);
+  const postLatestTextChangeEvents = postLatestTextEvents.filter(event => !isForcedVisualProbeEvent(event));
+  const firstUserInteractionEvent = visualStateEvents.find(event =>
+    event.reason.startsWith('user-interaction-') &&
+    !event.reason.includes('-probe-')
+  ) ?? null;
+  const firstUserInteractionAtMs = firstUserInteractionEvent?.sinceClickMs ?? null;
+  const postUserInteractionEvents = firstUserInteractionAtMs === null
+    ? []
+    : visualStateEvents.filter(event =>
+      event.sinceClickMs > firstUserInteractionAtMs &&
+      !isForcedVisualProbeEvent(event) &&
+      !isUserInteractionVisualEvent(event)
+    );
+  const postFirstVisibleItemEvents = firstVisibleItemAtMs === null
+    ? []
+    : visualStateEvents.filter(event => event.sinceClickMs > firstVisibleItemAtMs);
+  const postFirstVisibleItemChangeEvents = postFirstVisibleItemEvents.filter(event => !isForcedVisualProbeEvent(event));
+  const backgroundKey = (event: LongSessionVisualStateEvent): string => [
+    event.htmlBackground,
+    event.bodyBackground,
+    event.containerBackground,
+    event.messagesBackground,
+    event.overlayBackground,
+  ].join('|');
+  const arrayKey = (values: string[]): string => values.join('|');
+  const surfaceCategoryKey = (event: LongSessionVisualStateEvent): string =>
+    event.surfacePoints
+      .map(point => [
+        point.label,
+        point.category,
+        point.itemType,
+        point.latestTurnHit ? 'latest' : point.turnId,
+        point.effectiveOpacity,
+        Math.min(point.textLength, 9999),
+        point.modelRoundGroupCount,
+        point.modelRoundRenderedGroupCount,
+        point.modelRoundVisibleGroupStart,
+        point.modelRoundVisibleGroupEnd,
+        point.modelRoundRenderAll,
+        point.modelRoundHasDeferredEarlier,
+        point.modelRoundHasDeferredLater,
+        point.backgroundChain[0] ?? '',
+      ].join(':'))
+      .join('|');
+  const isLoadingVisualEvent = (event: LongSessionVisualStateEvent): boolean =>
+    event.showHistoryLoadingLayer === 'true' ||
+    event.overlayCount > 0 ||
+    event.placeholderCount > 0 ||
+    event.visibleLoadingSurfaceCount > 0;
+  const isLoadingSurfacePointEvent = (event: LongSessionVisualStateEvent): boolean =>
+    event.surfacePoints.some(point =>
+      point.category === 'history-overlay' ||
+      point.category === 'loading-surface'
+    );
+  const isBlankSurfacePointEvent = (event: LongSessionVisualStateEvent): boolean => {
+    if (event.surfacePoints.length === 0) {
+      return false;
+    }
+
+    const contentPointCount = event.surfacePoints.filter(point =>
+      point.category.startsWith('virtual-item:') &&
+      point.textLength > 0
+    ).length;
+    const blankPointCount = event.surfacePoints.filter(point =>
+      point.category === 'list-blank' ||
+      point.category === 'messages-blank' ||
+      point.category === 'flowchat-shell' ||
+      point.category === 'history-open-intent-shield' ||
+      point.category === 'missing'
+    ).length;
+    return contentPointCount === 0 && blankPointCount >= Math.ceil(event.surfacePoints.length * 0.6);
+  };
+  const isOpenIntentBlankSurfaceEvent = (event: LongSessionVisualStateEvent): boolean =>
+    event.sinceHistoryOpenIntentMs !== null &&
+    isBlankSurfacePointEvent(event) &&
+    event.surfacePoints.some(point => point.category === 'history-open-intent-shield');
+  const isTransparentSurfacePointEvent = (event: LongSessionVisualStateEvent): boolean =>
+    event.surfacePoints.some(point =>
+      point.category.startsWith('transparent-virtual-item:')
+    );
+  const isVisibleNonTargetContentEvent = (event: LongSessionVisualStateEvent): boolean =>
+    event.activeSessionId !== null &&
+    event.activeSessionId !== sessionId &&
+    event.pendingHistoryOpenSessionId !== sessionId &&
+    (
+      event.surfacePoints.some(point =>
+        point.category.startsWith('virtual-item:') &&
+        point.textLength > 0 &&
+        point.effectiveOpacity > 0.01
+      ) ||
+      (
+        !event.surfacePoints.some(point => point.category === 'history-open-intent-shield') &&
+        event.virtualItemDomCount > 0 &&
+        event.visibleTextLength > 0
+      )
+    );
+  const openIntentBlankSurfaceEvents = visualStateEvents.filter(isOpenIntentBlankSurfaceEvent);
+  const openIntentBlankSurfaceHolds = openIntentBlankSurfaceEvents
+    .map(event => {
+      const index = visualStateEvents.indexOf(event);
+      const nextEvent = visualStateEvents
+        .slice(index + 1)
+        .find(candidate => candidate.sinceHistoryOpenIntentMs !== null);
+      const untilHistoryOpenIntentMs = nextEvent?.sinceHistoryOpenIntentMs ?? event.sinceHistoryOpenIntentMs;
+      const holdAfterGraceMs = Math.max(
+        0,
+        untilHistoryOpenIntentMs - Math.max(event.sinceHistoryOpenIntentMs ?? 0, 50),
+      );
+      if (holdAfterGraceMs <= 0) {
+        return null;
+      }
+
+      return {
+        event,
+        untilHistoryOpenIntentMs,
+        holdAfterGraceMs,
+      };
+    })
+    .filter((entry): entry is {
+      event: LongSessionVisualStateEvent;
+      untilHistoryOpenIntentMs: number;
+      holdAfterGraceMs: number;
+    } => entry !== null);
+  const postOpenIntentNonTargetContentEvents = visualStateEvents.filter(event =>
+    event.sinceHistoryOpenIntentMs !== null &&
+    event.sinceHistoryOpenIntentMs > 100 &&
+    isVisibleNonTargetContentEvent(event)
+  );
+  const postOpenIntentNonTargetContentHolds = visualStateEvents
+    .map((event, index) => {
+      if (
+        event.sinceHistoryOpenIntentMs === null ||
+        event.sinceHistoryOpenIntentMs < 100 ||
+        !isVisibleNonTargetContentEvent(event)
+      ) {
+        return null;
+      }
+
+      const nextEvent = visualStateEvents
+        .slice(index + 1)
+        .find(candidate => candidate.sinceHistoryOpenIntentMs !== null);
+      const untilHistoryOpenIntentMs = nextEvent?.sinceHistoryOpenIntentMs ?? event.sinceHistoryOpenIntentMs;
+      const holdAfterGraceMs = Math.max(
+        0,
+        untilHistoryOpenIntentMs - Math.max(event.sinceHistoryOpenIntentMs, 100),
+      );
+      if (holdAfterGraceMs <= 0) {
+        return null;
+      }
+
+      return {
+        event,
+        untilHistoryOpenIntentMs,
+        holdAfterGraceMs,
+      };
+    })
+    .filter((entry): entry is {
+      event: LongSessionVisualStateEvent;
+      untilHistoryOpenIntentMs: number;
+      holdAfterGraceMs: number;
+    } => entry !== null);
+  const isHistoryInitialPreviewVisibleAt = (sinceClickMs: number): boolean => {
+    let nearest: LongSessionVisualStateEvent | null = null;
+    for (const event of visualStateEvents) {
+      if (event.sinceClickMs > sinceClickMs) {
+        break;
+      }
+      nearest = event;
+    }
+    return nearest?.historyInitialPreviewVisible === true;
+  };
+  const isHistoryProjectionHandoffVisibleAt = (sinceClickMs: number): boolean => {
+    let nearest: LongSessionVisualStateEvent | null = null;
+    for (const event of visualStateEvents) {
+      if (event.sinceClickMs > sinceClickMs) {
+        break;
+      }
+      nearest = event;
+    }
+    return nearest?.historyProjectionHandoffVisible === true;
+  };
+  const loadingEvents = visualStateEvents.filter(isLoadingVisualEvent);
+
+  let loadingLayerToggleCount = 0;
+  let overlayCountToggleCount = 0;
+  let placeholderCountToggleCount = 0;
+  let backgroundChangeCount = 0;
+  let scrollerScrollJumpCount = 0;
+  let scrollerSizeChangeCount = 0;
+  let postLatestTextVisibleBackgroundChangeCount = 0;
+  let postLatestTextVisibleScrollJumpCount = 0;
+  let postLatestTextVisibleVirtualItemElementChangeCount = 0;
+  let postLatestTextVisibleSurfaceChangeCount = 0;
+  let postUserInteractionScrollJumpCount = 0;
+  let postUserInteractionScrollerCollapseCount = 0;
+  let hasSeenTargetSession = false;
+  let historyInitialPreviewActivationAfterActiveSessionCount = 0;
+  const loadingTransitions: LongSessionVisualStateSummary['loadingTransitions'] = [];
+  const backgroundTransitions: LongSessionVisualStateSummary['backgroundTransitions'] = [];
+  const historyInitialPreviewTransitions: LongSessionVisualStateSummary['historyInitialPreviewTransitions'] = [];
+  const scrollTransitions: LongSessionVisualStateSummary['scrollTransitions'] = [];
+  const postUserInteractionScrollTransitions: LongSessionVisualStateSummary['postUserInteractionScrollTransitions'] = [];
+  const surfaceTransitions: LongSessionVisualStateSummary['surfaceTransitions'] = [];
+
+  for (let index = 1; index < visualStateEvents.length; index += 1) {
+    const previous = visualStateEvents[index - 1];
+    const current = visualStateEvents[index];
+    if (previous.activeSessionId === sessionId) {
+      hasSeenTargetSession = true;
+    }
+    if (
+      previous.historyInitialPreviewVisible !== current.historyInitialPreviewVisible &&
+      current.activeSessionId === sessionId
+    ) {
+      historyInitialPreviewTransitions.push({
+        sinceClickMs: current.sinceClickMs,
+        reason: current.reason,
+        from: previous.historyInitialPreviewVisible,
+        to: current.historyInitialPreviewVisible,
+      });
+      if (
+        hasSeenTargetSession &&
+        previous.historyInitialPreviewVisible === false &&
+        current.historyInitialPreviewVisible === true
+      ) {
+        historyInitialPreviewActivationAfterActiveSessionCount += 1;
+      }
+    }
+    if (current.activeSessionId === sessionId) {
+      hasSeenTargetSession = true;
+    }
+    const loadingChanged =
+      previous.showHistoryLoadingLayer !== current.showHistoryLoadingLayer ||
+      previous.overlayCount !== current.overlayCount ||
+      previous.placeholderCount !== current.placeholderCount;
+    if (previous.showHistoryLoadingLayer !== current.showHistoryLoadingLayer) {
+      loadingLayerToggleCount += 1;
+    }
+    if (previous.overlayCount !== current.overlayCount) {
+      overlayCountToggleCount += 1;
+    }
+    if (previous.placeholderCount !== current.placeholderCount) {
+      placeholderCountToggleCount += 1;
+    }
+    if (loadingChanged) {
+      loadingTransitions.push({
+        sinceClickMs: current.sinceClickMs,
+        reason: current.reason,
+        showHistoryLoadingLayer: current.showHistoryLoadingLayer,
+        overlayCount: current.overlayCount,
+        placeholderCount: current.placeholderCount,
+        visibleLoadingSurfaceCount: current.visibleLoadingSurfaceCount,
+        loadingSurfaces: current.loadingSurfaces.filter(surface => surface.visible).slice(0, 8),
+        virtualItemDomCount: current.virtualItemDomCount,
+        latestContentVisuallyVisible: current.latestContentVisuallyVisible,
+      });
+    }
+
+    const previousBackground = backgroundKey(previous);
+    const currentBackground = backgroundKey(current);
+    if (previousBackground !== currentBackground) {
+      backgroundChangeCount += 1;
+      if (
+        firstLatestTextVisibleAtMs !== null &&
+        current.sinceClickMs > firstLatestTextVisibleAtMs
+      ) {
+        postLatestTextVisibleBackgroundChangeCount += 1;
+      }
+      backgroundTransitions.push({
+        sinceClickMs: current.sinceClickMs,
+        reason: current.reason,
+        from: previousBackground,
+        to: currentBackground,
+      });
+    }
+
+    const previousSurface = surfaceCategoryKey(previous);
+    const currentSurface = surfaceCategoryKey(current);
+    if (previousSurface !== currentSurface) {
+      if (
+        firstLatestTextVisibleAtMs !== null &&
+        current.sinceClickMs > firstLatestTextVisibleAtMs &&
+        !previous.historyInitialPreviewVisible &&
+        !current.historyInitialPreviewVisible &&
+        !previous.historyProjectionHandoffVisible &&
+        !current.historyProjectionHandoffVisible &&
+        !isUserInteractionVisualEvent(current)
+      ) {
+        postLatestTextVisibleSurfaceChangeCount += 1;
+      }
+      surfaceTransitions.push({
+        sinceClickMs: current.sinceClickMs,
+        reason: current.reason,
+        from: previousSurface,
+        to: currentSurface,
+        surfacePoints: current.surfacePoints,
+      });
+    }
+
+    const scrollTopDelta = Math.abs((current.scrollTop ?? 0) - (previous.scrollTop ?? 0));
+    const scrollHeightDelta = Math.abs((current.scrollHeight ?? 0) - (previous.scrollHeight ?? 0));
+    const clientHeightDelta = Math.abs((current.clientHeight ?? 0) - (previous.clientHeight ?? 0));
+    const previousDistanceFromBottom =
+      previous.scrollTop === null || previous.scrollHeight === null || previous.clientHeight === null
+        ? null
+        : previous.scrollHeight - previous.clientHeight - previous.scrollTop;
+    const currentDistanceFromBottom =
+      current.scrollTop === null || current.scrollHeight === null || current.clientHeight === null
+        ? null
+        : current.scrollHeight - current.clientHeight - current.scrollTop;
+    const distanceFromBottomDelta =
+      previousDistanceFromBottom === null || currentDistanceFromBottom === null
+        ? scrollTopDelta
+        : Math.abs(currentDistanceFromBottom - previousDistanceFromBottom);
+    const hasScrollJump = scrollTopDelta > 32;
+    const hasVisualScrollJump = hasScrollJump && distanceFromBottomDelta > 32;
+    const hasSizeJump = scrollHeightDelta > 16 || clientHeightDelta > 16;
+    const isPostUserInteractionNonUserEvent =
+      firstUserInteractionAtMs !== null &&
+      current.sinceClickMs > firstUserInteractionAtMs &&
+      !isUserInteractionVisualEvent(current) &&
+      !isForcedVisualProbeEvent(current);
+    if (hasScrollJump) {
+      scrollerScrollJumpCount += 1;
+      if (
+        firstLatestTextVisibleAtMs !== null &&
+        current.sinceClickMs > firstLatestTextVisibleAtMs &&
+        hasVisualScrollJump &&
+        !previous.historyInitialPreviewVisible &&
+        !current.historyInitialPreviewVisible &&
+        !previous.historyProjectionHandoffVisible &&
+        !current.historyProjectionHandoffVisible &&
+        !isUserInteractionVisualEvent(current)
+      ) {
+        postLatestTextVisibleScrollJumpCount += 1;
+      }
+    }
+    if (isPostUserInteractionNonUserEvent && hasVisualScrollJump) {
+      postUserInteractionScrollJumpCount += 1;
+    }
+    if (
+      isPostUserInteractionNonUserEvent &&
+      previous.scrollHeight !== null &&
+      current.scrollHeight !== null &&
+      previous.scrollHeight - current.scrollHeight > Math.max(120, (previous.clientHeight ?? 0) * 0.5)
+    ) {
+      postUserInteractionScrollerCollapseCount += 1;
+    }
+    if (hasSizeJump) {
+      scrollerSizeChangeCount += 1;
+    }
+    if (hasScrollJump || hasSizeJump) {
+      scrollTransitions.push({
+        sinceClickMs: current.sinceClickMs,
+        reason: current.reason,
+        fromScrollTop: previous.scrollTop,
+        toScrollTop: current.scrollTop,
+        fromScrollHeight: previous.scrollHeight,
+        toScrollHeight: current.scrollHeight,
+        fromClientHeight: previous.clientHeight,
+        toClientHeight: current.clientHeight,
+        fromFooterHeight: previous.footerHeight,
+        toFooterHeight: current.footerHeight,
+        fromFooterStyleHeight: previous.footerStyleHeight,
+        toFooterStyleHeight: current.footerStyleHeight,
+      });
+      if (isPostUserInteractionNonUserEvent) {
+        postUserInteractionScrollTransitions.push({
+          sinceClickMs: current.sinceClickMs,
+          reason: current.reason,
+          fromScrollTop: previous.scrollTop,
+          toScrollTop: current.scrollTop,
+          fromScrollHeight: previous.scrollHeight,
+          toScrollHeight: current.scrollHeight,
+          fromClientHeight: previous.clientHeight,
+          toClientHeight: current.clientHeight,
+          fromFooterHeight: previous.footerHeight,
+          toFooterHeight: current.footerHeight,
+          fromFooterStyleHeight: previous.footerStyleHeight,
+          toFooterStyleHeight: current.footerStyleHeight,
+        });
+      }
+    }
+  }
+
+  let overlayElementIdChangeCount = 0;
+  let placeholderElementIdChangeCount = 0;
+  let virtualListElementIdChangeCount = 0;
+  let virtualItemElementIdChangeCount = 0;
+  const overlayElementTransitions: LongSessionVisualStateSummary['overlayElementTransitions'] = [];
+  const virtualItemElementTransitions: LongSessionVisualStateSummary['virtualItemElementTransitions'] = [];
+  for (let index = 1; index < mutationEvents.length; index += 1) {
+    const previous = mutationEvents[index - 1];
+    const current = mutationEvents[index];
+    const previousOverlayKey = arrayKey(previous.overlayElementIds);
+    const currentOverlayKey = arrayKey(current.overlayElementIds);
+    if (previousOverlayKey !== currentOverlayKey) {
+      overlayElementIdChangeCount += 1;
+      overlayElementTransitions.push({
+        sinceClickMs: current.sinceClickMs,
+        reason: current.reason,
+        from: previous.overlayElementIds,
+        to: current.overlayElementIds,
+      });
+    }
+    if (arrayKey(previous.placeholderElementIds) !== arrayKey(current.placeholderElementIds)) {
+      placeholderElementIdChangeCount += 1;
+    }
+    if (arrayKey(previous.virtualListElementIds) !== arrayKey(current.virtualListElementIds)) {
+      virtualListElementIdChangeCount += 1;
+    }
+    const previousVirtualItemKey = arrayKey(previous.virtualItemElementIds);
+    const currentVirtualItemKey = arrayKey(current.virtualItemElementIds);
+    if (previousVirtualItemKey !== currentVirtualItemKey) {
+      virtualItemElementIdChangeCount += 1;
+      if (
+        firstLatestTextVisibleAtMs !== null &&
+        current.sinceClickMs > firstLatestTextVisibleAtMs &&
+        !previous.historyInitialPreviewVisible &&
+        !current.historyInitialPreviewVisible &&
+        !previous.historyProjectionHandoffVisible &&
+        !current.historyProjectionHandoffVisible
+      ) {
+        postLatestTextVisibleVirtualItemElementChangeCount += 1;
+      }
+      virtualItemElementTransitions.push({
+        sinceClickMs: current.sinceClickMs,
+        reason: current.reason,
+        from: previous.virtualItemElementIds,
+        to: current.virtualItemElementIds,
+      });
+    }
+  }
+  const layoutShiftScore = layoutShiftEvents
+    .reduce((total, event) => total + event.value, 0);
+  const postLatestTextVisibleLayoutShiftEvents = firstLatestTextVisibleAtMs === null
+    ? []
+    : layoutShiftEvents.filter(event => (
+      event.sinceClickMs > firstLatestTextVisibleAtMs &&
+      !isHistoryInitialPreviewVisibleAt(event.sinceClickMs) &&
+      !isHistoryProjectionHandoffVisibleAt(event.sinceClickMs)
+    ));
+
+  return {
+    visualStateEventCount: visualStateEvents.length,
+    mutationEventCount: mutationEvents.length,
+    firstVisualStateAtMs: visualStateEvents[0]?.sinceClickMs ?? null,
+    firstLoadingLayerAtMs: loadingEvents[0]?.sinceClickMs ?? null,
+    lastLoadingLayerAtMs: loadingEvents[loadingEvents.length - 1]?.sinceClickMs ?? null,
+    historyInitialPreviewVisibleAtEnd:
+      visualStateEvents.findLast(event => event.activeSessionId === sessionId)?.historyInitialPreviewVisible === true,
+    historyProjectionHandoffVisibleAtEnd:
+      visualStateEvents.findLast(event => event.activeSessionId === sessionId)?.historyProjectionHandoffVisible === true,
+    historyInitialPreviewActivationAfterActiveSessionCount,
+    loadingLayerToggleCount,
+    overlayCountToggleCount,
+    placeholderCountToggleCount,
+    overlayElementIdChangeCount,
+    placeholderElementIdChangeCount,
+    virtualListElementIdChangeCount,
+    virtualItemElementIdChangeCount,
+    backgroundChangeCount,
+    scrollerScrollJumpCount,
+    scrollerSizeChangeCount,
+    layoutShiftCount: layoutShiftEvents.length,
+    layoutShiftScore,
+    postLatestTextVisibleVisualChangeCount: postLatestTextChangeEvents.length,
+    postLatestTextVisibleLoadingEventCount: postLatestTextEvents.filter(isLoadingVisualEvent).length,
+    postFirstVisibleItemVisualChangeCount: postFirstVisibleItemChangeEvents.length,
+    postFirstVisibleItemLoadingEventCount: postFirstVisibleItemEvents.filter(isLoadingVisualEvent).length,
+    postLatestTextVisibleBackgroundChangeCount,
+    postLatestTextVisibleScrollJumpCount,
+    postLatestTextVisibleVirtualItemElementChangeCount,
+    postLatestTextVisibleSurfaceChangeCount,
+    postLatestTextVisibleLoadingSurfacePointEventCount: postLatestTextEvents
+      .filter(isLoadingSurfacePointEvent).length,
+    postLatestTextVisibleBlankSurfacePointEventCount: postLatestTextEvents
+      .filter(isBlankSurfacePointEvent).length,
+    postLatestTextVisibleTransparentSurfacePointEventCount: postLatestTextEvents
+      .filter(isTransparentSurfacePointEvent).length,
+    postLatestTextVisibleLayoutShiftCount: postLatestTextVisibleLayoutShiftEvents.length,
+    postLatestTextVisibleLayoutShiftScore: postLatestTextVisibleLayoutShiftEvents
+      .reduce((total, event) => total + event.value, 0),
+    firstUserInteractionAtMs,
+    postUserInteractionScrollJumpCount,
+    postUserInteractionScrollerCollapseCount,
+    postUserInteractionBlankSurfacePointEventCount: postUserInteractionEvents
+      .filter(isBlankSurfacePointEvent).length,
+    openIntentBlankSurfacePointEventCount: openIntentBlankSurfaceEvents.length,
+    openIntentBlankSurfaceHoldCount: openIntentBlankSurfaceHolds.length,
+    maxOpenIntentBlankSurfaceHoldMs: openIntentBlankSurfaceHolds.length > 0
+      ? Math.max(...openIntentBlankSurfaceHolds.map(entry => entry.holdAfterGraceMs))
+      : null,
+    postOpenIntentNonTargetContentEventCount: postOpenIntentNonTargetContentEvents.length,
+    postOpenIntentNonTargetContentHoldCount: postOpenIntentNonTargetContentHolds.length,
+    maxPostOpenIntentNonTargetContentHoldMs: postOpenIntentNonTargetContentHolds.length > 0
+      ? Math.max(...postOpenIntentNonTargetContentHolds.map(entry => entry.holdAfterGraceMs))
+      : null,
+    lastPostOpenIntentNonTargetContentAtMs:
+      postOpenIntentNonTargetContentEvents.at(-1)?.sinceHistoryOpenIntentMs ?? null,
+    loadingTransitions: loadingTransitions.slice(0, 40),
+    backgroundTransitions: backgroundTransitions.slice(0, 40),
+    historyInitialPreviewTransitions: historyInitialPreviewTransitions.slice(0, 40),
+    overlayElementTransitions: overlayElementTransitions.slice(0, 40),
+    virtualItemElementTransitions: virtualItemElementTransitions.slice(0, 40),
+    surfaceTransitions: surfaceTransitions.slice(0, 80),
+    postOpenIntentNonTargetContentEvents: postOpenIntentNonTargetContentEvents
+      .slice(0, 40)
+      .map(event => ({
+        sinceClickMs: event.sinceClickMs,
+        sinceHistoryOpenIntentMs: event.sinceHistoryOpenIntentMs,
+        reason: event.reason,
+        activeSessionId: event.activeSessionId,
+        pendingHistoryOpenSessionId: event.pendingHistoryOpenSessionId,
+        virtualItemDomCount: event.virtualItemDomCount,
+        visibleTextLength: event.visibleTextLength,
+        surfacePoints: event.surfacePoints,
+      })),
+    postOpenIntentNonTargetContentHolds: postOpenIntentNonTargetContentHolds
+      .slice(0, 40)
+      .map(({ event, untilHistoryOpenIntentMs, holdAfterGraceMs }) => ({
+        sinceClickMs: event.sinceClickMs,
+        sinceHistoryOpenIntentMs: event.sinceHistoryOpenIntentMs,
+        untilHistoryOpenIntentMs,
+        holdAfterGraceMs,
+        reason: event.reason,
+        activeSessionId: event.activeSessionId,
+        virtualItemDomCount: event.virtualItemDomCount,
+        visibleTextLength: event.visibleTextLength,
+      })),
+    scrollTransitions: scrollTransitions.slice(0, 40),
+    postUserInteractionScrollTransitions: postUserInteractionScrollTransitions.slice(0, 20),
+    layoutShiftEvents: layoutShiftEvents.slice(0, 40),
   };
 }
 
@@ -1096,6 +3310,10 @@ type LongSessionOpenMeasurement = {
   sessionId: string;
   fixtureScenario: string | null;
   expectedLatestTurnId: string | null;
+  postVisibleInteraction: 'first-scroll' | null;
+  postVisibleObserveMs: number;
+  verboseTimelineReport: boolean;
+  traceWaitErrors: string[];
   clickedAtMs: number;
   sessionOpen: ReturnType<typeof summarizeSessionOpen>;
   latestVisibleAtMs: number;
@@ -1114,6 +3332,10 @@ type LongSessionOpenMeasurement = {
   viewportTimeline: LongSessionViewportTimelineSample[];
   viewportTimelineSummary: LongSessionViewportTimelineSummary;
   mainThreadTasks: LongSessionMainThreadTask[];
+  mutationEvents: LongSessionDomMutationEvent[];
+  visualStateEvents: LongSessionVisualStateEvent[];
+  layoutShiftEvents: LongSessionLayoutShiftEvent[];
+  visualStateSummary: LongSessionVisualStateSummary;
   screenshotPath: string | null;
   events: StartupTraceSnapshot['phases']['events'];
   apiSegments: ReturnType<typeof summarizeApiCommandSegments>;
@@ -1123,7 +3345,54 @@ type LongSessionOpenMeasurement = {
 
 type LongSessionOpenMeasurementOptions = {
   requireFrameTrace?: boolean;
+  expectNoHistoryLoadingAfterClick?: boolean;
+  postVisibleInteraction?: 'first-scroll';
 };
+
+function readPostVisibleInteractionOption(
+  options: LongSessionOpenMeasurementOptions,
+): 'first-scroll' | null {
+  const envValue = process.env.BITFUN_E2E_PERF_POST_VISIBLE_INTERACTION;
+  if (envValue === 'first-scroll') {
+    return envValue;
+  }
+  return options.postVisibleInteraction ?? null;
+}
+
+async function performLongSessionPostVisibleInteraction(interaction: 'first-scroll'): Promise<void> {
+  if (interaction !== 'first-scroll') {
+    return;
+  }
+
+  await browser.execute(() => {
+    const scroller = document.querySelector<HTMLElement>(
+      '.modern-flowchat-container__messages [data-virtuoso-scroller="true"], ' +
+      '.modern-flowchat-container__messages [data-virtuoso-scroller]',
+    );
+    if (!scroller) {
+      throw new Error('Could not find long-session scroller for first-scroll interaction');
+    }
+
+    const beforeScrollTop = scroller.scrollTop;
+    const deltaY = -Math.min(520, Math.max(160, scroller.clientHeight * 0.45));
+    scroller.dispatchEvent(new WheelEvent('wheel', {
+      bubbles: true,
+      cancelable: true,
+      deltaMode: WheelEvent.DOM_DELTA_PIXEL,
+      deltaY,
+    }));
+    scroller.scrollTop = Math.max(0, beforeScrollTop + deltaY);
+    scroller.dispatchEvent(new Event('scroll', { bubbles: true }));
+    window.dispatchEvent(new CustomEvent('bitfun:e2e-long-session-user-interaction', {
+      detail: {
+        type: 'first-scroll',
+        beforeScrollTop,
+        afterScrollTop: scroller.scrollTop,
+        deltaY,
+      },
+    }));
+  });
+}
 
 async function collectLongSessionOpenMeasurement(
   sessionId: string,
@@ -1141,28 +3410,28 @@ async function collectLongSessionOpenMeasurement(
   }
   const fixtureScenario = await readLongSessionFixtureScenario(sessionId);
 
-  const beforeClickSnapshot = await readStartupTraceSnapshot();
-  const frameCountBefore = countPhase(
-    beforeClickSnapshot,
-    'historical_session_after_state_commit_frame',
-  );
-  const fullHydrateCountBefore = countPhase(
-    beforeClickSnapshot,
-    'historical_session_full_hydrate_end',
-  );
-  const fullHydrateFrameCountBefore = countPhase(
-    beforeClickSnapshot,
-    'historical_session_full_hydrate_after_state_commit_frame',
-  );
-  const latestAnchorAttemptCountBefore = countPhase(
-    beforeClickSnapshot,
-    'historical_session_latest_anchor_attempt',
-  );
   const requireFrameTrace = options.requireFrameTrace !== false;
   const afterFrameTimeoutMs = requireFrameTrace ? 20000 : 1000;
   const fullHydrateTimeoutMs = requireFrameTrace ? 10000 : 1000;
   const latestAnchorTimeoutMs = requireFrameTrace ? 5000 : 1000;
   const clickedAtMs = await readPerformanceNow();
+  const traceWaitErrors: string[] = [];
+  const waitForRequiredTracePhase = async (
+    phase: string,
+    timeoutMs: number,
+  ): Promise<StartupTraceSnapshot> => {
+    try {
+      return await waitForTracePhaseForSessionSince(
+        phase,
+        sessionId,
+        clickedAtMs,
+        timeoutMs,
+      );
+    } catch (error) {
+      traceWaitErrors.push(error instanceof Error ? error.message : String(error));
+      return readStartupTraceSnapshot();
+    }
+  };
   await startLongSessionViewportTimelineRecorder(
     expectedLatestTurnId,
     clickedAtMs,
@@ -1174,33 +3443,46 @@ async function collectLongSessionOpenMeasurement(
   const latestUsablePromise = waitForLatestLongSessionViewportUsable(5000, expectedLatestTurnId);
 
   const afterFrameSnapshot = requireFrameTrace
-    ? await waitForTracePhaseCount(
+    ? await waitForRequiredTracePhase(
       'historical_session_after_state_commit_frame',
-      frameCountBefore + 1,
       afterFrameTimeoutMs,
     )
-    : await waitForOptionalPhaseCount(
+    : await waitForOptionalTracePhaseForSessionSince(
       'historical_session_after_state_commit_frame',
-      frameCountBefore + 1,
+      sessionId,
+      clickedAtMs,
       afterFrameTimeoutMs,
     );
-  const afterFullSnapshot = await waitForOptionalPhaseCount(
+  const afterFullSnapshot = await waitForOptionalTracePhaseForSessionSince(
     'historical_session_full_hydrate_end',
-    fullHydrateCountBefore + 1,
+    sessionId,
+    clickedAtMs,
     fullHydrateTimeoutMs,
   );
-  const afterFullFrameSnapshot = await waitForOptionalPhaseCount(
+  const afterFullFrameSnapshot = await waitForOptionalTracePhaseForSessionSince(
     'historical_session_full_hydrate_after_state_commit_frame',
-    fullHydrateFrameCountBefore + 1,
-    fullHydrateTimeoutMs,
+    sessionId,
+    clickedAtMs,
+    Math.min(fullHydrateTimeoutMs, 1000),
   );
-  const afterAnchorSnapshot = await waitForOptionalPhaseCount(
+  const afterAnchorSnapshot = await waitForOptionalTracePhaseForSessionSince(
     'historical_session_latest_anchor_attempt',
-    latestAnchorAttemptCountBefore + 1,
+    sessionId,
+    clickedAtMs,
     latestAnchorTimeoutMs,
   );
   const latestVisible = await latestVisiblePromise;
   const latestUsable = await latestUsablePromise;
+  const postVisibleInteraction = readPostVisibleInteractionOption(options);
+  if (postVisibleInteraction) {
+    await performLongSessionPostVisibleInteraction(postVisibleInteraction);
+  }
+  const postVisibleObserveMs =
+    numericEnv('BITFUN_E2E_PERF_POST_VISIBLE_OBSERVE_MS') ?? DEFAULT_POST_VISIBLE_OBSERVE_MS;
+  const observeRemainingMs = latestUsable.usableAtMs + postVisibleObserveMs - await readPerformanceNow();
+  if (observeRemainingMs > 0) {
+    await browser.pause(Math.ceil(observeRemainingMs));
+  }
   let finalViewport = await readLongSessionViewportState(expectedLatestTurnId);
   let finalViewportCheckedAtMs = await readPerformanceNow();
   if (!isLongSessionViewportUsable(finalViewport)) {
@@ -1212,7 +3494,18 @@ async function collectLongSessionOpenMeasurement(
     finalViewportCheckedAtMs = finalUsable.usableAtMs;
   }
   const viewportTimeline = await stopLongSessionViewportTimelineRecorder();
-  const viewportTimelineSummary = summarizeLongSessionViewportTimeline(viewportTimeline.samples);
+  const viewportTimelineSummary = summarizeLongSessionViewportTimeline(
+    viewportTimeline.samples,
+    sessionId,
+  );
+  const visualStateSummary = summarizeLongSessionVisualStateEvents(
+    viewportTimeline.visualStateEvents,
+    viewportTimeline.mutationEvents,
+    viewportTimeline.layoutShiftEvents,
+    viewportTimelineSummary,
+    sessionId,
+  );
+  const verboseTimelineReport = process.env.BITFUN_E2E_PERF_VERBOSE_REPORT === '1';
   const finalSnapshot = await readStartupTraceSnapshot()
     .catch(() => [
       afterFrameSnapshot,
@@ -1225,7 +3518,10 @@ async function collectLongSessionOpenMeasurement(
   const sessionEvents = finalSnapshot.phases.events.filter(event =>
     event.atMs >= clickedAtMs &&
     (
-      event.phase.startsWith('historical_session') ||
+      (
+        event.phase.startsWith('historical_session') &&
+        traceEventSessionId(event) === sessionId
+      ) ||
       event.phase.startsWith('flowchat_latest_end_anchor') ||
       event.phase === 'react_render_profile'
     )
@@ -1237,6 +3533,10 @@ async function collectLongSessionOpenMeasurement(
     sessionId,
     fixtureScenario,
     expectedLatestTurnId,
+    postVisibleInteraction,
+    postVisibleObserveMs,
+    verboseTimelineReport,
+    traceWaitErrors,
     clickedAtMs,
     sessionOpen: summarizeSessionOpen(sessionEvents, clickedAtMs),
     latestVisibleAtMs: latestVisible.visibleAtMs,
@@ -1256,9 +3556,13 @@ async function collectLongSessionOpenMeasurement(
     latestUsableViewport: latestUsable.viewport,
     latestAnswerTextVisibleViewport: latestUsable.viewport,
     viewport: finalViewport,
-    viewportTimeline: viewportTimeline.samples,
+    viewportTimeline: verboseTimelineReport ? viewportTimeline.samples : [],
     viewportTimelineSummary,
-    mainThreadTasks: viewportTimeline.mainThreadTasks,
+    mainThreadTasks: verboseTimelineReport ? viewportTimeline.mainThreadTasks : [],
+    mutationEvents: verboseTimelineReport ? viewportTimeline.mutationEvents : [],
+    visualStateEvents: verboseTimelineReport ? viewportTimeline.visualStateEvents : [],
+    layoutShiftEvents: verboseTimelineReport ? viewportTimeline.layoutShiftEvents : [],
+    visualStateSummary,
     screenshotPath,
     events: sessionEvents,
     apiSegments: summarizeApiCommandSegments(finalSnapshot),
@@ -1274,34 +3578,69 @@ function expectLongSessionMeasurementUsable(
 ): void {
   expect(measurement.clickToLatestVisibleMs).toBeGreaterThan(0);
   expect(measurement.clickToLatestUsableMs).toBeGreaterThan(0);
-  if (options.requireFrameTrace !== false) {
+  if (options.requireFrameTrace !== false && measurement.traceWaitErrors.length === 0) {
     expect(measurement.clickToPostHydrateUsableMs).toBeGreaterThan(0);
   }
-  if (options.requireFrameTrace !== false) {
+  if (options.requireFrameTrace !== false && measurement.traceWaitErrors.length === 0) {
     expect(measurement.sessionOpen.hydrateDurationMs).toBeGreaterThan(0);
     expect(measurement.sessionOpen.latestFrameSinceHydrateMs).toBeGreaterThan(0);
     expect(measurement.sessionOpen.clickToLatestFrameMs).toBeGreaterThan(0);
   }
   expect(measurement.viewport.hasScroller).toBe(true);
   expect(measurement.viewport.latestContentVisible).toBe(true);
+  expect(measurement.viewport.latestContentVisuallyVisible).toBe(true);
+  expect(measurement.viewport.historyPlaceholderCoversMessages).toBe(false);
   expect(measurement.viewport.latestModelRoundVisible).toBe(true);
   expect(measurement.viewport.latestModelRoundTextLength).toBeGreaterThan(0);
   expect(measurement.viewport.latestTurnId).toBe(measurement.expectedLatestTurnId);
   expect(measurement.latestVisibleViewport.hasScroller).toBe(true);
   expect(measurement.latestVisibleViewport.latestContentVisible).toBe(true);
+  expect(measurement.latestVisibleViewport.latestContentVisuallyVisible).toBe(true);
+  expect(measurement.latestVisibleViewport.historyPlaceholderCoversMessages).toBe(false);
   expect(measurement.latestVisibleViewport.latestModelRoundVisible).toBe(true);
   expect(measurement.latestVisibleViewport.latestTurnId).toBe(measurement.expectedLatestTurnId);
   expect(isLongSessionLatestVisibleViewportPositioned(measurement.latestVisibleViewport)).toBe(true);
   expect(measurement.latestAnswerTextVisibleViewport.latestModelRoundVisible).toBe(true);
   expect(measurement.latestAnswerTextVisibleViewport.latestModelRoundTextLength).toBeGreaterThan(0);
   expect(isLongSessionViewportUsable(measurement.latestAnswerTextVisibleViewport)).toBe(true);
-  if (measurement.viewportTimelineSummary.latestTextDelayAfterContentVisibleMs !== null) {
-    expect(measurement.viewportTimelineSummary.latestTextDelayAfterContentVisibleMs)
+  if (measurement.viewportTimelineSummary.latestTextDelayAfterContentVisuallyVisibleMs !== null) {
+    expect(measurement.viewportTimelineSummary.latestTextDelayAfterContentVisuallyVisibleMs)
       .toBeLessThanOrEqual(LONG_SESSION_MAX_LATEST_TEXT_DELAY_AFTER_VISIBLE_MS);
   }
   expect(measurement.viewportTimelineSummary.preLatestTextVisibleBlankWithoutPlaceholderSampleCount).toBe(0);
+  expect(measurement.viewportTimelineSummary.preLatestTextVisibleUncoveredAfterIntentSampleCount).toBe(0);
   expect(measurement.viewportTimelineSummary.postLatestTextVisibleBlankSampleCount).toBe(0);
+  expect(measurement.viewportTimelineSummary.postLatestTextVisibleCoveredSampleCount).toBe(0);
   expect(measurement.viewportTimelineSummary.postLatestTextVisibleLatestContentMissingSampleCount).toBe(0);
+  if (options.expectNoHistoryLoadingAfterClick === true) {
+    expect(measurement.visualStateSummary.firstLoadingLayerAtMs).toBeNull();
+    expect(measurement.visualStateSummary.lastLoadingLayerAtMs).toBeNull();
+    expect(measurement.visualStateSummary.loadingLayerToggleCount).toBe(0);
+    expect(measurement.visualStateSummary.overlayCountToggleCount).toBe(0);
+    expect(measurement.visualStateSummary.placeholderCountToggleCount).toBe(0);
+    expect(measurement.visualStateSummary.postFirstVisibleItemLoadingEventCount).toBe(0);
+    expect(measurement.visualStateSummary.postLatestTextVisibleLoadingEventCount).toBe(0);
+    expect(measurement.visualStateSummary.postLatestTextVisibleLoadingSurfacePointEventCount).toBe(0);
+    expect(measurement.visualStateSummary.postLatestTextVisibleBlankSurfacePointEventCount).toBe(0);
+    expect(measurement.visualStateSummary.postLatestTextVisibleTransparentSurfacePointEventCount).toBe(0);
+    expect(measurement.visualStateSummary.postLatestTextVisibleScrollJumpCount).toBe(0);
+    expect(measurement.visualStateSummary.postLatestTextVisibleVirtualItemElementChangeCount).toBe(0);
+    expect(measurement.visualStateSummary.postLatestTextVisibleLayoutShiftScore).toBeLessThanOrEqual(0.005);
+    expect(measurement.visualStateSummary.openIntentBlankSurfacePointEventCount).toBe(0);
+    expect(measurement.visualStateSummary.openIntentBlankSurfaceHoldCount).toBe(0);
+    expect(measurement.visualStateSummary.postOpenIntentNonTargetContentEventCount).toBe(0);
+    expect(measurement.visualStateSummary.postOpenIntentNonTargetContentHoldCount).toBe(0);
+    expect(measurement.visualStateSummary.historyInitialPreviewActivationAfterActiveSessionCount).toBe(0);
+    expect(measurement.visualStateSummary.historyInitialPreviewVisibleAtEnd).toBe(false);
+    expect(measurement.visualStateSummary.loadingTransitions).toHaveLength(0);
+    if (measurement.postVisibleInteraction === 'first-scroll') {
+      expect(measurement.visualStateSummary.firstUserInteractionAtMs).not.toBeNull();
+      expect(measurement.visualStateSummary.postUserInteractionScrollJumpCount).toBe(0);
+      expect(measurement.visualStateSummary.postUserInteractionScrollerCollapseCount).toBe(0);
+      expect(measurement.visualStateSummary.postUserInteractionBlankSurfacePointEventCount).toBe(0);
+      expect(measurement.visualStateSummary.postUserInteractionScrollTransitions).toHaveLength(0);
+    }
+  }
   if (measurement.fixtureScenario === 'mixed-visible') {
     expect(measurement.latestVisibleViewport.visibleModelRoundCount).toBeGreaterThan(0);
   }
@@ -1383,7 +3722,10 @@ describe('Performance telemetry', () => {
     }));
 
     await writeReport('long-session-first-open', measurement);
-    expectLongSessionMeasurementUsable(measurement, maxLatestFrameMs, { requireFrameTrace: true });
+    expectLongSessionMeasurementUsable(measurement, maxLatestFrameMs, {
+      requireFrameTrace: true,
+      expectNoHistoryLoadingAfterClick: true,
+    });
   });
 
   it('collects warm-reopen timing for a generated long session', async function () {
@@ -1412,6 +3754,9 @@ describe('Performance telemetry', () => {
     }));
 
     await writeReport('long-session-warm-reopen', measurement);
-    expectLongSessionMeasurementUsable(measurement, maxLatestFrameMs, { requireFrameTrace: false });
+    expectLongSessionMeasurementUsable(measurement, maxLatestFrameMs, {
+      requireFrameTrace: false,
+      expectNoHistoryLoadingAfterClick: true,
+    });
   });
 });

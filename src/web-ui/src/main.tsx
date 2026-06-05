@@ -2,6 +2,7 @@ import ReactDOM from "react-dom/client";
 import App from "./app/App";
 import AgentCompanionDesktopPet from "./app/components/AgentCompanionDesktopPet/AgentCompanionDesktopPet";
 import AppErrorBoundary from "./app/components/AppErrorBoundary";
+import { STARTUP_OVERLAY_HIDDEN_EVENT } from "./app/startup/startupSignals";
 import { WorkspaceProvider } from "./infrastructure/contexts/WorkspaceProvider";
 import "./app/styles/index.scss";
 
@@ -373,7 +374,7 @@ async function startApplication(): Promise<void> {
   });
 
   startupTrace.markPhase('non_critical_init_scheduled', {
-    signalName: 'bitfun:interactive-shell-ready',
+    signalName: STARTUP_OVERLAY_HIDDEN_EVENT,
     fallbackTimeoutMs: 10000,
     frameCount: 1,
   });
@@ -392,7 +393,7 @@ async function startApplication(): Promise<void> {
       });
     }
   }, {
-    signalName: 'bitfun:interactive-shell-ready',
+    signalName: STARTUP_OVERLAY_HIDDEN_EVENT,
     fallbackTimeoutMs: 10000,
     frameCount: 1,
     onError: error => {

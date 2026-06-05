@@ -1,6 +1,28 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { shouldScheduleDeferredStartupSystems } from './deferredStartupGate';
 import { scheduleDeferredStartupSystems } from './deferredStartupSystems';
+
+describe('shouldScheduleDeferredStartupSystems', () => {
+  it('waits for both interactive readiness and startup overlay handoff', () => {
+    expect(shouldScheduleDeferredStartupSystems({
+      interactiveShellReady: false,
+      startupOverlayVisible: true,
+    })).toBe(false);
+    expect(shouldScheduleDeferredStartupSystems({
+      interactiveShellReady: true,
+      startupOverlayVisible: true,
+    })).toBe(false);
+    expect(shouldScheduleDeferredStartupSystems({
+      interactiveShellReady: false,
+      startupOverlayVisible: false,
+    })).toBe(false);
+    expect(shouldScheduleDeferredStartupSystems({
+      interactiveShellReady: true,
+      startupOverlayVisible: false,
+    })).toBe(true);
+  });
+});
 
 describe('scheduleDeferredStartupSystems', () => {
   it('schedules MCP, ACP, and IDE startup as deferred idle work', async () => {

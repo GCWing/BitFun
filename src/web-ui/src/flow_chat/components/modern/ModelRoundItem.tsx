@@ -20,7 +20,12 @@ import { FlowChatStore } from '../../store/FlowChatStore';
 import { taskCollapseStateManager } from '../../store/TaskCollapseStateManager';
 import { ExportImageButton } from './ExportImageButton';
 import { ForkSessionButton } from './ForkSessionButton';
-import { buildModelRoundItemGroups, COMPLETED_TOOL_TRANSIENT_MS, type ModelRoundItemGroup } from './modelRoundItemGrouping';
+import {
+  buildModelRoundItemGroups,
+  COMPLETED_TOOL_TRANSIENT_MS,
+  isCompletedToolInTransientWindow,
+  type ModelRoundItemGroup,
+} from './modelRoundItemGrouping';
 import {
   MODEL_ROUND_GROUP_RENDER_CHUNK_DELAY_MS,
   getInitialModelRoundGroupRenderCount,
@@ -163,6 +168,7 @@ interface TaskWithSubagentWrapperProps {
   directSubagentSessionId?: string;
   turnId: string;
   roundId?: string;
+  completedToolExitNowMs: number;
 }
 
 const TaskWithSubagentWrapper: React.FC<TaskWithSubagentWrapperProps> = React.memo(({
@@ -172,6 +178,7 @@ const TaskWithSubagentWrapper: React.FC<TaskWithSubagentWrapperProps> = React.me
   directSubagentSessionId,
   turnId,
   roundId,
+  completedToolExitNowMs,
 }) => {
   const isCollapsed = useTaskCollapsed(parentTaskToolId);
   const isTaskRunning =
@@ -193,6 +200,7 @@ const TaskWithSubagentWrapper: React.FC<TaskWithSubagentWrapperProps> = React.me
         turnId={turnId}
         roundId={roundId}
         isLastItem={false}
+        completedToolExitNowMs={completedToolExitNowMs}
       />
       <SubagentProjectionView
         parentTaskToolId={parentTaskToolId}
@@ -482,6 +490,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                   turnId={turnId}
                   roundId={round.id}
                   isLastItem={isLast && itemIdx === group.items.length - 1}
+                  completedToolExitNowMs={transientNowMs}
                 />
               ));
 
@@ -499,6 +508,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                     directSubagentSessionId={projectedSubagent.subagentSessionId}
                     turnId={turnId}
                     roundId={round.id}
+                    completedToolExitNowMs={transientNowMs}
                   />
                 );
               }
@@ -509,6 +519,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                   turnId={turnId}
                   roundId={round.id}
                   isLastItem={isLast}
+                  completedToolExitNowMs={transientNowMs}
                 />
               );
             }
@@ -570,10 +581,17 @@ interface FlowItemRendererProps {
   turnId: string;
   roundId?: string;
   isLastItem?: boolean;
+  completedToolExitNowMs: number;
 }
 
 // Do not memoize: streaming content updates frequently.
-const FlowItemRenderer: React.FC<FlowItemRendererProps> = ({ item, turnId, roundId, isLastItem }) => {
+const FlowItemRenderer: React.FC<FlowItemRendererProps> = ({
+  item,
+  turnId,
+  roundId,
+  isLastItem,
+  completedToolExitNowMs,
+}) => {
   const {
     onToolConfirm,
     onToolReject,
@@ -604,10 +622,16 @@ const FlowItemRenderer: React.FC<FlowItemRendererProps> = ({ item, turnId, round
       const toolItem = item as FlowToolItem;
       const isCompletedTool = toolItem.status === 'completed';
       const isCollapsible = isCollapsibleTool(toolItem.toolName);
+      const shouldAnimateCompletedExit =
+        isCollapsible &&
+        isCompletedTool &&
+        isCompletedToolInTransientWindow(toolItem, completedToolExitNowMs);
+      const isSettledCompletedTool = isCollapsible && isCompletedTool && !shouldAnimateCompletedExit;
       const toolClassName = [
         'flowchat-flow-item',
         isCollapsible && isCompletedTool ? 'flowchat-flow-item--tool-transition' : null,
-        isCollapsible && isCompletedTool ? 'flowchat-flow-item--tool-completed' : null,
+        shouldAnimateCompletedExit ? 'flowchat-flow-item--tool-completed' : null,
+        isSettledCompletedTool ? 'flowchat-flow-item--tool-settled' : null,
         isCollapsible && !isCompletedTool ? 'flowchat-flow-item--tool-active' : null,
       ].filter(Boolean).join(' ');
 

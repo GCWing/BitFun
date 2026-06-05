@@ -9,7 +9,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { immer } from 'zustand/middleware/immer';
 import type { Session, DialogTurn, ModelRound, FlowItem, FlowToolItem, FlowUserSteeringItem, AnyFlowItem } from '../types/flow-chat';
 import { isCollapsibleTool, READ_TOOL_NAMES, SEARCH_TOOL_NAMES, COMMAND_TOOL_NAMES } from '../tool-cards';
-import { COMPLETED_TOOL_TRANSIENT_MS } from '../components/modern/modelRoundItemGrouping';
+import { isCompletedToolInTransientWindow } from '../components/modern/modelRoundItemGrouping';
 import { flowChatStore } from './FlowChatStore';
 
 /**
@@ -119,9 +119,7 @@ function hasActiveTool(round: ModelRound): boolean {
 
 function hasRecentlyCompletedTool(round: ModelRound, nowMs: number): boolean {
   return round.items.some(item => {
-    if (item.type !== 'tool' || item.status !== 'completed') return false;
-    const endTime = (item as FlowToolItem).endTime;
-    return typeof endTime === 'number' && nowMs - endTime < COMPLETED_TOOL_TRANSIENT_MS;
+    return isCompletedToolInTransientWindow(item, nowMs);
   });
 }
 

@@ -93,6 +93,7 @@ export const VirtualItemRenderer = React.memo<VirtualItemRendererProps>(
         className={wrapperClassName}
         data-turn-id={item.turnId}
         data-item-type={item.type}
+        data-virtual-index={index}
       >
         {content || <div style={{ minHeight: '1px' }} />}
       </div>

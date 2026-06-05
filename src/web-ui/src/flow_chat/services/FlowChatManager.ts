@@ -189,7 +189,8 @@ export class FlowChatManager {
             workspacePath,
             undefined,
             latestSession.remoteConnectionId,
-            latestSession.remoteSshHost
+            latestSession.remoteSshHost,
+            { deferFullHistoryUntilActive: true },
           );
         }
 

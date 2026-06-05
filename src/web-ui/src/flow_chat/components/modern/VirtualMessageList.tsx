@@ -11,7 +11,7 @@
  * - "Scroll to latest" bar appears whenever the list is not at bottom.
  */
 
-import React, { useRef, useState, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react';
+import React, { useRef, useState, useCallback, useEffect, useLayoutEffect, forwardRef, useImperativeHandle } from 'react';
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
 import { useActiveSessionState } from '../../hooks/useActiveSessionState';
 import { VirtualItemRenderer } from './VirtualItemRenderer';
@@ -40,7 +40,10 @@ import {
 } from '../../utils/flowChatTurnScrollPolicy';
 import { flowChatStore } from '../../store/FlowChatStore';
 import { startupTrace } from '@/shared/utils/startupTrace';
-import { getVirtualMessageDefaultItemHeight } from './virtualMessageListLayout';
+import {
+  estimateVirtualMessageItemHeight,
+  getVirtualMessageDefaultItemHeight,
+} from './virtualMessageListLayout';
 import './VirtualMessageList.scss';
 
 const COMPENSATION_EPSILON_PX = 0.5;
@@ -56,6 +59,9 @@ const LATEST_END_ANCHOR_VISIBILITY_MARGIN_PX = 4;
 const LATEST_END_ANCHOR_STABLE_EPSILON_PX = 1;
 const VIRTUOSO_FIRST_ITEM_INDEX_BASE = 1_000_000;
 const PARTIAL_HISTORY_INITIAL_TAIL_TURN_BUDGET = 16;
+const PARTIAL_HISTORY_FULL_PROJECTION_TOP_THRESHOLD_PX = 1200;
+const HISTORY_PROJECTION_HANDOFF_MAX_DURATION_MS = 5000;
+const SESSION_OPEN_HANDOFF_ITEM_BUDGET = 24;
 
 type LatestEndAnchorResolveReason =
   | 'raf'
@@ -113,6 +119,21 @@ interface LatestEndAnchorRequestState {
   lastScrollTop: number | null;
   lastTargetTop: number | null;
   lastTargetBottom: number | null;
+}
+
+interface HistoryProjectionHandoffSnapshot {
+  sessionId: string;
+  reason: string;
+  createdAtMs: number;
+  items: VirtualItem[];
+  mode: 'scroll-position' | 'bottom-tail';
+  targetTurnId: string | null;
+  anchorKey: string | null;
+  anchorOffsetTopPx: number;
+  scrollTop: number;
+  scrollHeight: number;
+  clientHeight: number;
+  footerHeightPx: number;
 }
 
 type BottomReservationKind = 'collapse' | 'pin';
@@ -324,9 +345,18 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
     () => createInitialBottomReservationState()
   );
   const [pendingTurnPin, setPendingTurnPin] = useState<PendingTurnPinState | null>(null);
+  const [historyProjectionHandoff, setHistoryProjectionHandoff] = useState<HistoryProjectionHandoffSnapshot | null>(null);
 
   const scrollerElementRef = useRef<HTMLElement | null>(null);
   const footerElementRef = useRef<HTMLDivElement | null>(null);
+  const activeSessionIdRef = useRef<string | null>(null);
+  const pendingHistoryProjectionHandoffRef = useRef<HistoryProjectionHandoffSnapshot | null>(null);
+  const historyProjectionHandoffRef = useRef<HistoryProjectionHandoffSnapshot | null>(null);
+  const historyProjectionHandoffReleaseFrameRef = useRef<number | null>(null);
+  const fullHistoryProjectionIntentFrameRef = useRef<number | null>(null);
+  const pendingFullHistoryProjectionReasonRef = useRef<string | null>(null);
+  const sessionOpenHandoffSessionIdRef = useRef<string | null>(null);
+  const previousActiveSessionIdForOpenHandoffRef = useRef<string | null | undefined>(undefined);
   const bottomReservationStateRef = useRef<BottomReservationState>(createInitialBottomReservationState());
   const previousMeasuredHeightRef = useRef<number | null>(null);
   const previousScrollTopRef = useRef(0);
@@ -382,6 +412,7 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
   const isStreamingOutputRef = useRef(false);
   const previousIsStreamingOutputRef = useRef(false);
   const transientTurnPinStabilizationRef = useRef<PendingTurnPinState | null>(null);
+  activeSessionIdRef.current = activeSessionId;
 
   const isInputActive = useChatInputState(state => state.isActive);
   const isInputExpanded = useChatInputState(state => state.isExpanded);
@@ -721,6 +752,14 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
 
   const latestTurnId = userMessageItems[userMessageItems.length - 1]?.item.turnId ?? null;
   const latestUserMessageIndex = userMessageItems[userMessageItems.length - 1]?.index ?? 0;
+  const hasPendingHistoryCompletion = activeSession?.sessionId
+    ? flowChatStore.hasPendingSessionHistoryCompletion(activeSession.sessionId)
+    : false;
+  const hasPartialHistoryInitialViewport =
+    activeSession?.historyState === 'ready' &&
+    activeSession.contextRestoreState === 'pending' &&
+    (activeSession.dialogTurns.length ?? 0) <= PARTIAL_HISTORY_INITIAL_TAIL_TURN_BUDGET;
+  const useInitialHistoryRenderBudget = hasPendingHistoryCompletion || hasPartialHistoryInitialViewport;
   const latestTurnAutoFollowStateRef = useRef<{
     turnId: string | null;
     sawPositiveFloor: boolean;
@@ -822,12 +861,44 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
     run(Math.max(1, frames));
   }, [measureVisibleTurn]);
 
+  const escapeTurnIdSelector = useCallback((turnId: string) => (
+    typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+      ? CSS.escape(turnId)
+      : turnId.replace(/["\\]/g, '\\$&')
+  ), []);
+
+  const getRenderedTurnElements = useCallback((turnId: string, options?: { includeHistoryProjectionHandoff?: boolean }) => {
+    const scroller = scrollerElementRef.current;
+    if (!scroller) return [];
+
+    const escapedTurnId = escapeTurnIdSelector(turnId);
+    const nodes = Array.from(scroller.querySelectorAll<HTMLElement>(
+      `.virtual-item-wrapper[data-turn-id="${escapedTurnId}"]`,
+    ));
+
+    if (options?.includeHistoryProjectionHandoff === false) {
+      return nodes.filter(node => !node.closest('[data-history-projection-handoff="true"]'));
+    }
+
+    return nodes;
+  }, [escapeTurnIdSelector]);
+
   const getRenderedUserMessageElement = useCallback((turnId: string) => {
     const scroller = scrollerElementRef.current;
     if (!scroller) return null;
 
+    const escapedTurnId = escapeTurnIdSelector(turnId);
     return scroller.querySelector<HTMLElement>(
-      `.virtual-item-wrapper[data-item-type="user-message"][data-turn-id="${turnId}"]`,
+      `.virtual-item-wrapper[data-item-type="user-message"][data-turn-id="${escapedTurnId}"]`,
+    );
+  }, [escapeTurnIdSelector]);
+
+  const getRenderedVirtualItemElement = useCallback((itemIndex: number) => {
+    const scroller = scrollerElementRef.current;
+    if (!scroller) return null;
+
+    return scroller.querySelector<HTMLElement>(
+      `.virtual-item-wrapper[data-virtual-index="${itemIndex}"]`,
     );
   }, []);
 
@@ -838,18 +909,13 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
     }
 
     const scrollerRect = scroller.getBoundingClientRect();
-    const escapedTurnId = typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
-      ? CSS.escape(turnId)
-      : turnId.replace(/["\\]/g, '\\$&');
-    const nodes = scroller.querySelectorAll<HTMLElement>(
-      `.virtual-item-wrapper[data-turn-id="${escapedTurnId}"]`,
-    );
+    const nodes = getRenderedTurnElements(turnId);
 
-    return Array.from(nodes).some(node => {
+    return nodes.some(node => {
       const rect = node.getBoundingClientRect();
       return rect.bottom > scrollerRect.top && rect.top < scrollerRect.bottom;
     });
-  }, []);
+  }, [getRenderedTurnElements]);
 
   const isTurnTextRenderedInViewport = useCallback((turnId: string) => {
     const scroller = scrollerElementRef.current;
@@ -858,19 +924,241 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
     }
 
     const scrollerRect = scroller.getBoundingClientRect();
-    const escapedTurnId = typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
-      ? CSS.escape(turnId)
-      : turnId.replace(/["\\]/g, '\\$&');
-    const nodes = scroller.querySelectorAll<HTMLElement>(
-      `.virtual-item-wrapper[data-turn-id="${escapedTurnId}"]`,
-    );
+    const nodes = getRenderedTurnElements(turnId);
 
-    return Array.from(nodes).some(node => {
+    return nodes.some(node => {
       const rect = node.getBoundingClientRect();
       const visible = rect.bottom > scrollerRect.top && rect.top < scrollerRect.bottom;
       return visible && (node.innerText?.trim().length ?? 0) > 0;
     });
+  }, [getRenderedTurnElements]);
+
+  const isTurnTextRenderedInViewportOutsideHandoff = useCallback((turnId: string) => {
+    const scroller = scrollerElementRef.current;
+    if (!scroller) {
+      return false;
+    }
+
+    const scrollerRect = scroller.getBoundingClientRect();
+    const nodes = getRenderedTurnElements(turnId, { includeHistoryProjectionHandoff: false });
+
+    return nodes.some(node => {
+      const rect = node.getBoundingClientRect();
+      const visible = rect.bottom > scrollerRect.top && rect.top < scrollerRect.bottom;
+      return visible && (node.innerText?.trim().length ?? 0) > 0;
+    });
+  }, [getRenderedTurnElements]);
+
+  const hasVisibleRenderedVirtualItem = useCallback(() => {
+    const scroller = scrollerElementRef.current;
+    if (!scroller) {
+      return false;
+    }
+
+    const scrollerRect = scroller.getBoundingClientRect();
+    const nodes = Array.from(
+      scroller.querySelectorAll<HTMLElement>('.virtual-item-wrapper[data-turn-id]'),
+    );
+
+    return nodes.some(node => {
+      const rect = node.getBoundingClientRect();
+      const style = window.getComputedStyle(node);
+      return (
+        rect.bottom > scrollerRect.top &&
+        rect.top < scrollerRect.bottom &&
+        rect.width > 0 &&
+        rect.height > 0 &&
+        style.visibility !== 'hidden' &&
+        style.display !== 'none' &&
+        (node.innerText?.trim().length ?? 0) > 0
+      );
+    });
   }, []);
+
+  const findVirtualItemIndexByStableKey = useCallback((stableKey: string | null) => {
+    if (!stableKey) {
+      return -1;
+    }
+
+    return virtualItems.findIndex(item => getVirtualItemStableKey(item) === stableKey);
+  }, [virtualItems]);
+
+  const captureVisibleVirtualItemAnchor = useCallback(() => {
+    const scroller = scrollerElementRef.current;
+    if (!scroller) {
+      return { anchorKey: null, anchorOffsetTopPx: 0 };
+    }
+
+    const scrollerRect = scroller.getBoundingClientRect();
+    const nodes = Array.from(
+      scroller.querySelectorAll<HTMLElement>('.virtual-item-wrapper[data-virtual-index]'),
+    );
+    const anchorNode = nodes.find(node => {
+      const rect = node.getBoundingClientRect();
+      return rect.bottom > scrollerRect.top && rect.top < scrollerRect.bottom;
+    });
+    const anchorIndex = Number(anchorNode?.dataset.virtualIndex);
+    const anchorItem = Number.isInteger(anchorIndex) ? virtualItems[anchorIndex] : undefined;
+    if (!anchorNode || !anchorItem) {
+      return { anchorKey: null, anchorOffsetTopPx: 0 };
+    }
+
+    return {
+      anchorKey: getVirtualItemStableKey(anchorItem),
+      anchorOffsetTopPx: anchorNode.getBoundingClientRect().top - scrollerRect.top,
+    };
+  }, [virtualItems]);
+
+  const isHistoryProjectionHandoffAnchorReady = useCallback((snapshot: HistoryProjectionHandoffSnapshot) => {
+    const scroller = scrollerElementRef.current;
+    const anchorIndex = findVirtualItemIndexByStableKey(snapshot.anchorKey);
+    if (!scroller || anchorIndex < 0) {
+      return false;
+    }
+
+    const anchorElement = getRenderedVirtualItemElement(anchorIndex);
+    if (!anchorElement) {
+      return false;
+    }
+
+    const scrollerRect = scroller.getBoundingClientRect();
+    const anchorRect = anchorElement.getBoundingClientRect();
+    const visible = anchorRect.bottom > scrollerRect.top && anchorRect.top < scrollerRect.bottom;
+    const offsetDelta = Math.abs((anchorRect.top - scrollerRect.top) - snapshot.anchorOffsetTopPx);
+    return visible && offsetDelta <= 8;
+  }, [findVirtualItemIndexByStableKey, getRenderedVirtualItemElement]);
+
+  const isHistoryProjectionHandoffTargetReady = useCallback((snapshot: HistoryProjectionHandoffSnapshot) => {
+    if (snapshot.mode === 'scroll-position' && snapshot.anchorKey) {
+      return isHistoryProjectionHandoffAnchorReady(snapshot);
+    }
+
+    if (snapshot.targetTurnId) {
+      return isTurnTextRenderedInViewportOutsideHandoff(snapshot.targetTurnId);
+    }
+
+    return hasVisibleRenderedVirtualItem();
+  }, [
+    hasVisibleRenderedVirtualItem,
+    isHistoryProjectionHandoffAnchorReady,
+    isTurnTextRenderedInViewportOutsideHandoff,
+  ]);
+
+  const clearHistoryProjectionHandoff = useCallback((reason: string) => {
+    if (historyProjectionHandoffReleaseFrameRef.current !== null) {
+      cancelAnimationFrame(historyProjectionHandoffReleaseFrameRef.current);
+      historyProjectionHandoffReleaseFrameRef.current = null;
+    }
+
+    const snapshot = historyProjectionHandoffRef.current;
+    pendingHistoryProjectionHandoffRef.current = null;
+    historyProjectionHandoffRef.current = null;
+    setHistoryProjectionHandoff(null);
+
+    if (snapshot) {
+      startupTrace.markPhase('flowchat_history_projection_handoff_cleared', {
+        sessionId: snapshot.sessionId,
+        reason,
+        handoffReason: snapshot.reason,
+        durationMs: Math.round(performance.now() - snapshot.createdAtMs),
+      });
+    }
+  }, []);
+
+  const scheduleHistoryProjectionHandoffRelease = useCallback((frames = 1) => {
+    if (historyProjectionHandoffReleaseFrameRef.current !== null) {
+      cancelAnimationFrame(historyProjectionHandoffReleaseFrameRef.current);
+      historyProjectionHandoffReleaseFrameRef.current = null;
+    }
+
+    const run = (remainingFrames: number) => {
+      historyProjectionHandoffReleaseFrameRef.current = requestAnimationFrame(() => {
+        historyProjectionHandoffReleaseFrameRef.current = null;
+
+        const snapshot = historyProjectionHandoffRef.current;
+        if (!snapshot) {
+          return;
+        }
+
+        if (remainingFrames > 1) {
+          run(remainingFrames - 1);
+          return;
+        }
+
+        if (activeSessionIdRef.current !== snapshot.sessionId) {
+          clearHistoryProjectionHandoff('session-changed');
+          return;
+        }
+
+        if (isHistoryProjectionHandoffTargetReady(snapshot)) {
+          clearHistoryProjectionHandoff('target-content-ready');
+          return;
+        }
+
+        if (performance.now() - snapshot.createdAtMs >= HISTORY_PROJECTION_HANDOFF_MAX_DURATION_MS) {
+          clearHistoryProjectionHandoff('timeout');
+          return;
+        }
+
+        run(1);
+      });
+    };
+
+    run(Math.max(1, frames));
+  }, [clearHistoryProjectionHandoff, isHistoryProjectionHandoffTargetReady]);
+
+  const captureHistoryProjectionHandoffSnapshot = useCallback((reason: string) => {
+    const sessionId = activeSession?.sessionId;
+    const scroller = scrollerElementRef.current;
+    if (
+      !sessionId ||
+      activeSession?.isPartial !== true ||
+      !scroller ||
+      virtualItems.length === 0
+    ) {
+      return;
+    }
+
+    const { anchorKey, anchorOffsetTopPx } = captureVisibleVirtualItemAnchor();
+    const snapshot: HistoryProjectionHandoffSnapshot = {
+      sessionId,
+      reason,
+      createdAtMs: performance.now(),
+      items: virtualItems,
+      mode: 'scroll-position',
+      targetTurnId: latestTurnId,
+      anchorKey,
+      anchorOffsetTopPx,
+      scrollTop: scroller.scrollTop,
+      scrollHeight: scroller.scrollHeight,
+      clientHeight: scroller.clientHeight,
+      footerHeightPx: getFooterHeightPx(getTotalBottomCompensationPx()),
+    };
+
+    pendingHistoryProjectionHandoffRef.current = snapshot;
+    historyProjectionHandoffRef.current = snapshot;
+    setHistoryProjectionHandoff(snapshot);
+    startupTrace.markPhase('flowchat_history_projection_handoff_captured', {
+      sessionId,
+      reason,
+      anchorKey,
+      anchorOffsetTopPx: Math.round(anchorOffsetTopPx),
+      itemCount: snapshot.items.length,
+      scrollTop: Math.round(snapshot.scrollTop),
+      scrollHeight: Math.round(snapshot.scrollHeight),
+      clientHeight: Math.round(snapshot.clientHeight),
+    });
+    scheduleHistoryProjectionHandoffRelease(2);
+  }, [
+    activeSession?.isPartial,
+    activeSession?.sessionId,
+    captureVisibleVirtualItemAnchor,
+    getFooterHeightPx,
+    getTotalBottomCompensationPx,
+    latestTurnId,
+    scheduleHistoryProjectionHandoffRelease,
+    virtualItems,
+  ]);
 
   const buildPinReservation = useCallback((
     turnId: string,
@@ -1273,6 +1561,107 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
     setScrollerElement(null);
   }, []);
 
+  const requestFullHistoryProjectionForUserIntent = useCallback((reason: string) => {
+    const sessionId = activeSession?.sessionId;
+    if (
+      !sessionId ||
+      activeSession.historyState !== 'ready' ||
+      activeSession.isPartial !== true
+    ) {
+      return;
+    }
+
+    const hasFullHistoryWork =
+      flowChatStore.hasPendingSessionHistoryCompletion(sessionId) ||
+      flowChatStore.hasDeferredSessionHistoryProjection(sessionId);
+    if (!hasFullHistoryWork) {
+      return;
+    }
+
+    captureHistoryProjectionHandoffSnapshot(reason);
+    flowChatStore.requestSessionFullHistoryProjection(sessionId, reason);
+  }, [
+    activeSession?.historyState,
+    activeSession?.isPartial,
+    activeSession?.sessionId,
+    captureHistoryProjectionHandoffSnapshot,
+  ]);
+
+  const shouldRequestFullHistoryProjectionForUserIntent = useCallback((options?: { force?: boolean }) => {
+    if (options?.force === true) {
+      return true;
+    }
+
+    const scroller = scrollerElementRef.current;
+    if (!scroller) {
+      return false;
+    }
+
+    const topThresholdPx = Math.max(
+      PARTIAL_HISTORY_FULL_PROJECTION_TOP_THRESHOLD_PX,
+      scroller.clientHeight * 1.5,
+    );
+    return scroller.scrollTop <= topThresholdPx;
+  }, []);
+
+  const scheduleFullHistoryProjectionForUserIntent = useCallback((reason: string, options?: { force?: boolean }) => {
+    const scheduledSessionId = activeSession?.sessionId ?? null;
+    pendingFullHistoryProjectionReasonRef.current = reason;
+    if (fullHistoryProjectionIntentFrameRef.current !== null) {
+      cancelAnimationFrame(fullHistoryProjectionIntentFrameRef.current);
+      fullHistoryProjectionIntentFrameRef.current = null;
+    }
+
+    fullHistoryProjectionIntentFrameRef.current = requestAnimationFrame(() => {
+      fullHistoryProjectionIntentFrameRef.current = requestAnimationFrame(() => {
+        fullHistoryProjectionIntentFrameRef.current = null;
+        const pendingReason = pendingFullHistoryProjectionReasonRef.current;
+        pendingFullHistoryProjectionReasonRef.current = null;
+        if (!pendingReason || activeSessionIdRef.current !== scheduledSessionId) {
+          return;
+        }
+
+        if (!shouldRequestFullHistoryProjectionForUserIntent(options)) {
+          return;
+        }
+
+        requestFullHistoryProjectionForUserIntent(pendingReason);
+      });
+    });
+  }, [
+    activeSession?.sessionId,
+    requestFullHistoryProjectionForUserIntent,
+    shouldRequestFullHistoryProjectionForUserIntent,
+  ]);
+
+  useLayoutEffect(() => {
+    const snapshot = pendingHistoryProjectionHandoffRef.current;
+    if (
+      !snapshot ||
+      activeSession?.sessionId !== snapshot.sessionId ||
+      activeSession?.isPartial === true ||
+      virtualItems.length <= snapshot.items.length
+    ) {
+      return;
+    }
+
+    pendingHistoryProjectionHandoffRef.current = null;
+    historyProjectionHandoffRef.current = snapshot;
+    setHistoryProjectionHandoff(snapshot);
+    startupTrace.markPhase('flowchat_history_projection_handoff_activated', {
+      sessionId: snapshot.sessionId,
+      reason: snapshot.reason,
+      previousItemCount: snapshot.items.length,
+      nextItemCount: virtualItems.length,
+    });
+    scheduleHistoryProjectionHandoffRelease(2);
+  }, [
+    activeSession?.isPartial,
+    activeSession?.sessionId,
+    scheduleHistoryProjectionHandoffRelease,
+    virtualItems.length,
+  ]);
+
   const shouldSuspendAutoFollow = useCallback(() => {
     const collapseIntent = pendingCollapseIntentRef.current;
     return (
@@ -1312,8 +1701,17 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
       baseTotalCompensationPx: 0,
       cumulativeShrinkPx: 0,
     };
+    const currentSessionId = activeSession?.sessionId ?? null;
+    const activeHandoff = historyProjectionHandoffRef.current;
+    if (!activeHandoff || activeHandoff.sessionId !== currentSessionId) {
+      clearHistoryProjectionHandoff('session-reset');
+    }
+    const pendingHandoff = pendingHistoryProjectionHandoffRef.current;
+    if (pendingHandoff && pendingHandoff.sessionId !== currentSessionId) {
+      pendingHistoryProjectionHandoffRef.current = null;
+    }
     resetBottomReservations();
-  }, [activeSession?.sessionId, cancelLatestEndAnchorStabilization, clearTurnPinRequest, resetBottomReservations]);
+  }, [activeSession?.sessionId, cancelLatestEndAnchorStabilization, clearHistoryProjectionHandoff, clearTurnPinRequest, resetBottomReservations]);
 
   useEffect(() => {
     previousIsStreamingOutputRef.current = false;
@@ -1331,6 +1729,10 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
   useEffect(() => {
     return () => {
       cancelLatestEndAnchorStabilization();
+      if (historyProjectionHandoffReleaseFrameRef.current !== null) {
+        cancelAnimationFrame(historyProjectionHandoffReleaseFrameRef.current);
+        historyProjectionHandoffReleaseFrameRef.current = null;
+      }
     };
   }, [cancelLatestEndAnchorStabilization]);
 
@@ -1356,6 +1758,7 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
       schedulePinReservationReconcile(2);
       scheduleTransientTurnPinStabilization(2);
       scheduleFollowToLatestWithViewportState('resize-observer');
+      scheduleHistoryProjectionHandoffRelease(1);
     });
     resizeObserverRef.current.observe(resizeTarget);
 
@@ -1383,6 +1786,7 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
         schedulePinReservationReconcile(2);
         scheduleTransientTurnPinStabilization(2);
         scheduleFollowToLatestWithViewportState('mutation-observer');
+        scheduleHistoryProjectionHandoffRelease(1);
       });
     });
     mutationObserverRef.current.observe(scrollerElement, {
@@ -1410,6 +1814,7 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
       scheduleVisibleTurnMeasure(2);
       schedulePinReservationReconcile(2);
       scheduleTransientTurnPinStabilization(2);
+      scheduleHistoryProjectionHandoffRelease(1);
       if (layoutTransitionCountRef.current === 0 && pendingCollapseIntentRef.current.active) {
         pendingCollapseIntentRef.current = {
           active: false,
@@ -1517,6 +1922,7 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
       previousScrollTopRef.current = scrollerElement.scrollTop;
       scheduleVisibleTurnMeasure();
       followOutputControllerRef.current.handleScroll();
+      scheduleFullHistoryProjectionForUserIntent('scroll-near-partial-history-boundary');
 
       if (anchorLockRef.current.active && performance.now() > anchorLockRef.current.lockUntilMs && layoutTransitionCountRef.current === 0) {
         releaseAnchorLock('expired-after-scroll');
@@ -1533,6 +1939,7 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
       if (event.deltaY < 0) {
         userInitiatedUpwardScrollUntilMsRef.current =
           performance.now() + USER_UPWARD_SCROLL_INTENT_WINDOW_MS;
+        scheduleFullHistoryProjectionForUserIntent('wheel-up');
         followOutputControllerRef.current.handleUserScrollIntent();
         releaseAnchorLock('wheel-up');
       }
@@ -1558,6 +1965,7 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
         touchScrollIntentStartYRef.current = currentY;
         userInitiatedUpwardScrollUntilMsRef.current =
           performance.now() + USER_UPWARD_SCROLL_INTENT_WINDOW_MS;
+        scheduleFullHistoryProjectionForUserIntent('touch-scroll-up');
         followOutputControllerRef.current.handleUserScrollIntent();
         releaseAnchorLock('touch-scroll-up');
       }
@@ -1576,6 +1984,7 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
       cancelLatestEndAnchorStabilization();
       userInitiatedUpwardScrollUntilMsRef.current =
         performance.now() + USER_UPWARD_SCROLL_INTENT_WINDOW_MS;
+      scheduleFullHistoryProjectionForUserIntent('keyboard-scroll-up', { force: event.key === 'Home' });
       followOutputControllerRef.current.handleUserScrollIntent();
       releaseAnchorLock('keyboard-scroll-up');
     };
@@ -1594,6 +2003,7 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
       cancelLatestEndAnchorStabilization();
       userInitiatedUpwardScrollUntilMsRef.current =
         performance.now() + USER_UPWARD_SCROLL_INTENT_WINDOW_MS;
+      scheduleFullHistoryProjectionForUserIntent('scrollbar-pointer-down');
       followOutputControllerRef.current.handleUserScrollIntent();
       releaseAnchorLock('scrollbar-pointer-down');
     };
@@ -1612,6 +2022,7 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
       cancelLatestEndAnchorStabilization();
       userInitiatedUpwardScrollUntilMsRef.current =
         performance.now() + USER_UPWARD_SCROLL_INTENT_WINDOW_MS;
+      scheduleFullHistoryProjectionForUserIntent('scrollbar-pointer-move');
       followOutputControllerRef.current.handleUserScrollIntent();
       releaseAnchorLock('scrollbar-pointer-move');
     };
@@ -1635,6 +2046,7 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
       scheduleHeightMeasure(2);
       scheduleVisibleTurnMeasure(2);
       schedulePinReservationReconcile(2);
+      scheduleHistoryProjectionHandoffRelease(1);
     };
 
     const handleToolCardCollapseIntent = (event: Event) => {
@@ -1743,6 +2155,12 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
         cancelAnimationFrame(turnPinStabilizationFrameRef.current);
         turnPinStabilizationFrameRef.current = null;
       }
+
+      if (fullHistoryProjectionIntentFrameRef.current !== null) {
+        cancelAnimationFrame(fullHistoryProjectionIntentFrameRef.current);
+        fullHistoryProjectionIntentFrameRef.current = null;
+      }
+      pendingFullHistoryProjectionReasonRef.current = null;
     };
   }, [
     activateAnchorLock,
@@ -1757,6 +2175,8 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
     releaseAnchorLock,
     scheduleHeightMeasure,
     scheduleFollowToLatestWithViewportState,
+    scheduleFullHistoryProjectionForUserIntent,
+    scheduleHistoryProjectionHandoffRelease,
     schedulePinReservationReconcile,
     scheduleTransientTurnPinStabilization,
     scheduleVisibleTurnMeasure,
@@ -1784,7 +2204,7 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
 
     const scroller = scrollerElementRef.current;
     const virtuoso = virtuosoRef.current;
-    if (!scroller || !virtuoso) {
+    if (!scroller) {
       request.attempts += 1;
       if (request.attempts >= LATEST_END_ANCHOR_STABILIZATION_MAX_ATTEMPTS) {
         cancelLatestEndAnchorStabilization();
@@ -1793,7 +2213,7 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
           reason,
           targetIndex: request.targetIndex,
           turnId: request.turnId,
-          cause: !scroller ? 'missing_scroller' : 'missing_virtuoso',
+          cause: 'missing_scroller',
         });
         return false;
       }
@@ -1820,7 +2240,7 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
     }
 
     request.attempts += 1;
-    const targetElement = getRenderedUserMessageElement(request.turnId);
+    const targetElement = getRenderedVirtualItemElement(targetIndex);
     const scrollerRect = scroller.getBoundingClientRect();
     const inputOverlayInsetPx = Math.max(
       0,
@@ -1833,7 +2253,7 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
     );
 
     const isTargetVisible = () => {
-      const currentTargetElement = getRenderedUserMessageElement(request.turnId);
+      const currentTargetElement = getRenderedVirtualItemElement(targetIndex);
       if (!currentTargetElement) {
         return false;
       }
@@ -1842,7 +2262,7 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
     };
 
     const settleIfStableVisible = () => {
-      const currentTargetElement = getRenderedUserMessageElement(request.turnId);
+      const currentTargetElement = getRenderedVirtualItemElement(targetIndex);
       if (!currentTargetElement) {
         request.visibleFrames = 0;
         request.stableVisibleFrames = 0;
@@ -1917,20 +2337,31 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
         previousScrollTopRef.current = nextScrollTop;
         previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller);
       }
-    } else {
+    } else if (virtuoso) {
       request.visibleFrames = 0;
       virtuoso.scrollToIndex({
         index: toVirtuosoIndex(targetIndex),
         align: 'end',
         behavior: 'auto',
       });
-      if (request.attempts >= 3) {
+      const shouldUseTailFallback =
+        targetIndex >= virtualItems.length - 1 ||
+        request.turnId === latestTurnId;
+      if (shouldUseTailFallback) {
         const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
         if (Math.abs(maxScrollTop - scroller.scrollTop) > COMPENSATION_EPSILON_PX) {
           scroller.scrollTop = maxScrollTop;
           previousScrollTopRef.current = maxScrollTop;
           previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller);
         }
+      }
+    } else {
+      request.visibleFrames = 0;
+      const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+      if (Math.abs(maxScrollTop - scroller.scrollTop) > COMPENSATION_EPSILON_PX) {
+        scroller.scrollTop = maxScrollTop;
+        previousScrollTopRef.current = maxScrollTop;
+        previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller);
       }
     }
 
@@ -1955,7 +2386,8 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
     return false;
   }, [
     cancelLatestEndAnchorStabilization,
-    getRenderedUserMessageElement,
+    getRenderedVirtualItemElement,
+    latestTurnId,
     scheduleVisibleTurnMeasure,
     snapshotMeasuredContentHeight,
     toVirtuosoIndex,
@@ -1971,9 +2403,11 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
     schedulePinReservationReconcile(2);
     scheduleTransientTurnPinStabilization(2);
     scheduleFollowToLatestWithViewportState('range-changed');
+    scheduleHistoryProjectionHandoffRelease(1);
   }, [
     resolveLatestEndAnchorStabilization,
     scheduleFollowToLatestWithViewportState,
+    scheduleHistoryProjectionHandoffRelease,
     schedulePinReservationReconcile,
     scheduleTransientTurnPinStabilization,
     scheduleVisibleTurnMeasure,
@@ -2158,6 +2592,19 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
     return lastDialogTurn.modelRounds.some(round => round.isStreaming);
   }, [activeSession, isProcessing]);
   const initialTopMostItemIndex = React.useMemo(() => {
+    if (
+      historyProjectionHandoff?.mode === 'scroll-position' &&
+      historyProjectionHandoff.sessionId === activeSessionId
+    ) {
+      const anchorIndex = findVirtualItemIndexByStableKey(historyProjectionHandoff.anchorKey);
+      if (anchorIndex >= 0) {
+        return {
+          index: toVirtuosoIndex(anchorIndex),
+          align: 'start' as const,
+        };
+      }
+    }
+
     if (isStreamingOutput) {
       return toVirtuosoIndex(latestUserMessageIndex);
     }
@@ -2166,7 +2613,17 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
       index: toVirtuosoIndex(Math.max(0, virtualItems.length - 1)),
       align: 'end' as const,
     };
-  }, [isStreamingOutput, latestUserMessageIndex, toVirtuosoIndex, virtualItems.length]);
+  }, [
+    activeSessionId,
+    findVirtualItemIndexByStableKey,
+    historyProjectionHandoff?.anchorKey,
+    historyProjectionHandoff?.mode,
+    historyProjectionHandoff?.sessionId,
+    isStreamingOutput,
+    latestUserMessageIndex,
+    toVirtuosoIndex,
+    virtualItems.length,
+  ]);
 
   useEffect(() => {
     const wasStreaming = previousIsStreamingOutputRef.current;
@@ -2738,6 +3195,91 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
   }, [lastItemInfo.isTurnProcessing, lastItemInfo.lastItem, isProcessing, processingPhase, isContentGrowing]);
 
   const footerHeightPx = getFooterHeightPx(getTotalBottomCompensationPx(bottomReservationState));
+  const useStaticInitialHistoryList = useInitialHistoryRenderBudget;
+  const sessionOpenProjectionHandoff = React.useMemo<HistoryProjectionHandoffSnapshot | null>(() => {
+    const previousActiveSessionId = previousActiveSessionIdForOpenHandoffRef.current;
+    const isSessionSwitch = (
+      previousActiveSessionId !== undefined &&
+      previousActiveSessionId !== activeSessionId
+    );
+
+    if (
+      !activeSessionId ||
+      !isSessionSwitch ||
+      activeSession?.historyState !== 'ready' ||
+      activeSession?.isPartial === true ||
+      useStaticInitialHistoryList ||
+      !latestTurnId ||
+      virtualItems.length < SESSION_OPEN_HANDOFF_ITEM_BUDGET ||
+      sessionOpenHandoffSessionIdRef.current === activeSessionId ||
+      historyProjectionHandoff?.sessionId === activeSessionId
+    ) {
+      return null;
+    }
+
+    const scroller = scrollerElementRef.current;
+    const budgetStartIndex = Math.max(0, virtualItems.length - SESSION_OPEN_HANDOFF_ITEM_BUDGET);
+    const latestStartIndex = Math.max(0, Math.min(latestUserMessageIndex, virtualItems.length - 1));
+    const startIndex = Math.min(budgetStartIndex, latestStartIndex);
+    const items = virtualItems.slice(startIndex);
+    if (items.length === 0) {
+      return null;
+    }
+
+    const clientHeight = scroller?.clientHeight ?? 0;
+    return {
+      sessionId: activeSessionId,
+      reason: 'session-open',
+      createdAtMs: performance.now(),
+      items,
+      mode: 'bottom-tail',
+      targetTurnId: latestTurnId,
+      anchorKey: null,
+      anchorOffsetTopPx: 0,
+      scrollTop: 0,
+      scrollHeight: clientHeight,
+      clientHeight,
+      footerHeightPx,
+    };
+  }, [
+    activeSession?.historyState,
+    activeSession?.isPartial,
+    activeSessionId,
+    footerHeightPx,
+    historyProjectionHandoff?.sessionId,
+    latestTurnId,
+    latestUserMessageIndex,
+    useStaticInitialHistoryList,
+    virtualItems,
+  ]);
+  useLayoutEffect(() => {
+    if (
+      !sessionOpenProjectionHandoff ||
+      sessionOpenHandoffSessionIdRef.current === sessionOpenProjectionHandoff.sessionId
+    ) {
+      return;
+    }
+
+    pendingHistoryProjectionHandoffRef.current = null;
+    historyProjectionHandoffRef.current = sessionOpenProjectionHandoff;
+    sessionOpenHandoffSessionIdRef.current = sessionOpenProjectionHandoff.sessionId;
+    setHistoryProjectionHandoff(sessionOpenProjectionHandoff);
+    startupTrace.markPhase('flowchat_history_projection_handoff_activated', {
+      sessionId: sessionOpenProjectionHandoff.sessionId,
+      reason: sessionOpenProjectionHandoff.reason,
+      previousItemCount: 0,
+      nextItemCount: virtualItems.length,
+    });
+    scheduleHistoryProjectionHandoffRelease(2);
+  }, [
+    scheduleHistoryProjectionHandoffRelease,
+    sessionOpenProjectionHandoff,
+    virtualItems.length,
+  ]);
+  useLayoutEffect(() => {
+    previousActiveSessionIdForOpenHandoffRef.current = activeSessionId;
+  }, [activeSessionId]);
+  const activeHistoryProjectionHandoff = historyProjectionHandoff ?? sessionOpenProjectionHandoff;
   const hasCompactHistoricalProjection = virtualItems.length >= 6 && virtualItems
     .slice(-16)
     .every(item =>
@@ -2745,14 +3287,6 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
       item.type === 'user-steering-message' ||
       item.type === 'explore-group'
     );
-  const hasPendingHistoryCompletion = activeSession?.sessionId
-    ? flowChatStore.hasPendingSessionHistoryCompletion(activeSession.sessionId)
-    : false;
-  const hasPartialHistoryInitialViewport =
-    activeSession?.historyState === 'ready' &&
-    activeSession.contextRestoreState === 'pending' &&
-    (activeSession.dialogTurns.length ?? 0) <= PARTIAL_HISTORY_INITIAL_TAIL_TURN_BUDGET;
-  const useInitialHistoryRenderBudget = hasPendingHistoryCompletion || hasPartialHistoryInitialViewport;
   const hasInitialHistoryModelRoundProjection =
     useInitialHistoryRenderBudget &&
     virtualItems.slice(-16).some(item => item.type === 'model-round');
@@ -2761,14 +3295,86 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
     hasCompactHistoricalProjection,
     hasInitialHistoryModelRoundProjection,
   });
-  const virtuosoOverscan = useInitialHistoryRenderBudget
-    ? { main: 0, reverse: 0 }
-    : { main: 600, reverse: 600 };
-  const virtuosoViewportIncrease = useInitialHistoryRenderBudget
-    ? { top: 0, bottom: 0 }
-    : { top: 600, bottom: 600 };
+  const initialHistoryHeightEstimates = React.useMemo(
+    () => useInitialHistoryRenderBudget
+      ? virtualItems.map(estimateVirtualMessageItemHeight)
+      : undefined,
+    [useInitialHistoryRenderBudget, virtualItems],
+  );
+  const virtuosoOverscan = { main: 600, reverse: 600 };
+  const virtuosoViewportIncrease = { top: 600, bottom: 600 };
+  useLayoutEffect(() => {
+    if (!useStaticInitialHistoryList) {
+      return;
+    }
 
+    const scroller = scrollerElementRef.current;
+    if (!scroller) {
+      return;
+    }
+
+    const nextScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+    scroller.scrollTop = nextScrollTop;
+    previousScrollTopRef.current = nextScrollTop;
+    previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller);
+    scheduleVisibleTurnMeasure(1);
+  }, [
+    activeSessionId,
+    footerHeightPx,
+    latestTurnId,
+    scheduleVisibleTurnMeasure,
+    snapshotMeasuredContentHeight,
+    useStaticInitialHistoryList,
+    virtualItems.length,
+  ]);
   // ── Render ────────────────────────────────────────────────────────────
+  useLayoutEffect(() => {
+    const snapshot = historyProjectionHandoffRef.current;
+    if (
+      !snapshot ||
+      snapshot.mode !== 'scroll-position' ||
+      snapshot.sessionId !== activeSessionId ||
+      !snapshot.anchorKey
+    ) {
+      return;
+    }
+
+    const scroller = scrollerElementRef.current;
+    const anchorIndex = findVirtualItemIndexByStableKey(snapshot.anchorKey);
+    if (!scroller || anchorIndex < 0) {
+      return;
+    }
+
+    const anchorElement = getRenderedVirtualItemElement(anchorIndex);
+    if (!anchorElement) {
+      return;
+    }
+
+    const scrollerRect = scroller.getBoundingClientRect();
+    const anchorRect = anchorElement.getBoundingClientRect();
+    const offsetDelta = (anchorRect.top - scrollerRect.top) - snapshot.anchorOffsetTopPx;
+    if (Math.abs(offsetDelta) <= COMPENSATION_EPSILON_PX) {
+      return;
+    }
+
+    const nextScrollTop = Math.max(0, scroller.scrollTop + offsetDelta);
+    scroller.scrollTop = nextScrollTop;
+    previousScrollTopRef.current = nextScrollTop;
+    previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller);
+    scheduleHistoryProjectionHandoffRelease(2);
+  }, [
+    activeSessionId,
+    findVirtualItemIndexByStableKey,
+    getRenderedVirtualItemElement,
+    historyProjectionHandoff?.anchorKey,
+    historyProjectionHandoff?.anchorOffsetTopPx,
+    historyProjectionHandoff?.mode,
+    historyProjectionHandoff?.sessionId,
+    scheduleHistoryProjectionHandoffRelease,
+    snapshotMeasuredContentHeight,
+    virtualItems,
+  ]);
+
   if (virtualItems.length === 0) {
     return (
       <div className="virtual-message-list virtual-message-list--empty">
@@ -2780,58 +3386,131 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
   }
 
   return (
-    <div className="virtual-message-list">
-      <Virtuoso
-        ref={virtuosoRef}
-        data={virtualItems}
-        computeItemKey={(_, item) => getVirtualItemStableKey(item)}
-        itemContent={(index, item) => (
-          <VirtualItemRenderer
-            item={item}
-            index={index - virtuosoFirstItemIndex}
-          />
-        )}
-        followOutput={false}
-
-        alignToBottom={false}
-        firstItemIndex={virtuosoFirstItemIndex}
-        // New mounts start near the latest user turn to avoid flashing older
-        // content before sticky pin logic can finish.
-        initialTopMostItemIndex={initialTopMostItemIndex}
-
-        overscan={virtuosoOverscan}
-
-        atBottomThreshold={50}
-        atBottomStateChange={handleAtBottomStateChange}
-
-        rangeChanged={handleRangeChanged}
-
-        // Historical sessions often restore into compact user/explore rows.
-        // Keep live sessions on the legacy estimate because active assistant
-        // output can be much taller while streaming.
-        defaultItemHeight={defaultItemHeight}
-
-        increaseViewportBy={virtuosoViewportIncrease}
-
-        scrollerRef={handleScrollerRef}
-
-        components={{
-          Header: () => <div className="message-list-header" />,
-          Footer: () => (
-            <>
-              <ProcessingIndicator visible={showBreathingIndicator} reserveSpace={reserveSpaceForIndicator} />
-              <div
-                ref={footerElementRef}
-                className="message-list-footer"
-                style={{
-                  height: `${footerHeightPx}px`,
-                  minHeight: `${footerHeightPx}px`,
-                }}
+    <div
+      className="virtual-message-list"
+    >
+      {useStaticInitialHistoryList ? (
+        <div
+          ref={handleScrollerRef}
+          className="virtual-message-list__static-scroller"
+          data-virtuoso-scroller="true"
+        >
+          <div className="message-list-header" />
+          <div className="virtual-message-list__static-items">
+            {virtualItems.map((item, index) => (
+              <VirtualItemRenderer
+                key={`${activeSessionId ?? 'no-active-session'}:${getVirtualItemStableKey(item)}`}
+                item={item}
+                index={index}
               />
-            </>
-          ),
-        }}
-      />
+            ))}
+          </div>
+          <ProcessingIndicator visible={showBreathingIndicator} reserveSpace={reserveSpaceForIndicator} />
+          <div
+            ref={footerElementRef}
+            className="message-list-footer"
+            style={{
+              height: `${footerHeightPx}px`,
+              minHeight: `${footerHeightPx}px`,
+            }}
+          />
+        </div>
+      ) : (
+        <Virtuoso
+          key={activeSessionId ?? 'no-active-session'}
+          ref={virtuosoRef}
+          data={virtualItems}
+          computeItemKey={(_, item) => `${activeSessionId ?? 'no-active-session'}:${getVirtualItemStableKey(item)}`}
+          itemContent={(index, item) => (
+            <VirtualItemRenderer
+              item={item}
+              index={index - virtuosoFirstItemIndex}
+            />
+          )}
+          followOutput={false}
+
+          alignToBottom={false}
+          firstItemIndex={virtuosoFirstItemIndex}
+          // New mounts start near the latest user turn to avoid flashing older
+          // content before sticky pin logic can finish.
+          initialTopMostItemIndex={initialTopMostItemIndex}
+          overscan={virtuosoOverscan}
+
+          atBottomThreshold={50}
+          atBottomStateChange={handleAtBottomStateChange}
+
+          rangeChanged={handleRangeChanged}
+
+          // Historical sessions often restore into compact user/explore rows.
+          // Keep live sessions on the legacy estimate because active assistant
+          // output can be much taller while streaming.
+          defaultItemHeight={defaultItemHeight}
+          heightEstimates={initialHistoryHeightEstimates}
+
+          increaseViewportBy={virtuosoViewportIncrease}
+
+          scrollerRef={handleScrollerRef}
+
+          components={{
+            Header: () => <div className="message-list-header" />,
+            Footer: () => (
+              <>
+                <ProcessingIndicator visible={showBreathingIndicator} reserveSpace={reserveSpaceForIndicator} />
+                <div
+                  ref={footerElementRef}
+                  className="message-list-footer"
+                  style={{
+                    height: `${footerHeightPx}px`,
+                    minHeight: `${footerHeightPx}px`,
+                  }}
+                />
+              </>
+            ),
+          }}
+        />
+      )}
+
+      {activeHistoryProjectionHandoff ? (
+        <div
+          className="virtual-message-list__projection-handoff-overlay"
+          data-history-projection-handoff="true"
+          data-session-id={activeHistoryProjectionHandoff.sessionId}
+          aria-hidden="true"
+        >
+          <div
+            className={[
+              'virtual-message-list__projection-handoff-content',
+              activeHistoryProjectionHandoff.mode === 'bottom-tail'
+                ? 'virtual-message-list__projection-handoff-content--bottom'
+                : null,
+            ].filter(Boolean).join(' ')}
+            style={activeHistoryProjectionHandoff.mode === 'bottom-tail'
+              ? undefined
+              : {
+                minHeight: `${Math.max(activeHistoryProjectionHandoff.scrollHeight, activeHistoryProjectionHandoff.clientHeight)}px`,
+                transform: `translate3d(0, -${Math.max(0, activeHistoryProjectionHandoff.scrollTop)}px, 0)`,
+              }}
+          >
+            <div className="message-list-header" />
+            <div className="virtual-message-list__static-items">
+              {activeHistoryProjectionHandoff.items.map((item, index) => (
+                <VirtualItemRenderer
+                  key={`history-projection-handoff:${activeHistoryProjectionHandoff.sessionId}:${getVirtualItemStableKey(item)}`}
+                  item={item}
+                  index={index}
+                />
+              ))}
+            </div>
+            <div
+              className="message-list-footer"
+              style={{
+                height: `${activeHistoryProjectionHandoff.footerHeightPx}px`,
+                minHeight: `${activeHistoryProjectionHandoff.footerHeightPx}px`,
+              }}
+            />
+          </div>
+        </div>
+      ) : null}
 
       <ScrollAnchor
         onAnchorNavigate={(turnId) => {
