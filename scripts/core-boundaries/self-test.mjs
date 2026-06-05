@@ -113,7 +113,7 @@ export function runManifestParserSelfTest({
   for (const manifestPath of [
     'src/apps/desktop/Cargo.toml',
     'src/apps/cli/Cargo.toml',
-    'src/crates/acp/Cargo.toml',
+    'src/crates/surfaces/acp/Cargo.toml',
   ]) {
     if (!productCoreRulePaths.has(manifestPath)) {
       throw new Error(`product core feature assembly rule must cover ${manifestPath}`);
@@ -139,27 +139,27 @@ export function runManifestParserSelfTest({
     {
       manifestPath: 'src/apps/desktop/Cargo.toml',
       text:
-        '[dependencies]\nbitfun-core = { path = "../../crates/core", default-features = false, features = ["product-full"] }',
+        '[dependencies]\nbitfun-core = { path = "../../crates/facade/core", default-features = false, features = ["product-full"] }',
     },
     {
       manifestPath: 'src/apps/server/Cargo.toml',
       text: '[dependencies]\naxum = { workspace = true }',
     },
     {
-      manifestPath: 'src/crates/acp/Cargo.toml',
-      text: '[dependencies."bitfun-core"]\npath = "../core"\ndefault-features = false\nfeatures = ["product-full"]',
+      manifestPath: 'src/crates/surfaces/acp/Cargo.toml',
+      text: '[dependencies."bitfun-core"]\npath = "../../facade/core"\ndefault-features = false\nfeatures = ["product-full"]',
     },
   ]);
-  if (discoveredProductCoreManifests.join(',') !== 'src/apps/desktop/Cargo.toml,src/crates/acp/Cargo.toml') {
+  if (discoveredProductCoreManifests.join(',') !== 'src/apps/desktop/Cargo.toml,src/crates/surfaces/acp/Cargo.toml') {
     throw new Error('product core dependency scanner must discover only manifests that depend on bitfun-core');
   }
   const ownerFeatureRulePaths = new Set(
     ownerCrateFeatureAssemblyRules.map((rule) => rule.manifestPath),
   );
   for (const manifestPath of [
-    'src/crates/tool-packs/Cargo.toml',
-    'src/crates/services-integrations/Cargo.toml',
-    'src/crates/product-domains/Cargo.toml',
+    'src/crates/execution/tool-packs/Cargo.toml',
+    'src/crates/services/services-integrations/Cargo.toml',
+    'src/crates/product/product-domains/Cargo.toml',
   ]) {
     if (!ownerFeatureRulePaths.has(manifestPath)) {
       throw new Error(`owner crate feature assembly rule must cover ${manifestPath}`);
@@ -250,7 +250,7 @@ export function runManifestParserSelfTest({
     throw new Error('agent-tools lightweight boundary must forbid bitfun-ai-adapters');
   }
   const coreToolFrameworkRuleText = forbiddenRuleTextForPath(
-    'src/crates/core/src/agentic/tools/framework.rs',
+    'src/crates/facade/core/src/agentic/tools/framework.rs',
   );
   if (!coreToolFrameworkRuleText) {
     throw new Error('missing core tool framework boundary rule');
@@ -274,7 +274,7 @@ export function runManifestParserSelfTest({
     }
   }
   const coreToolRestrictionRuleText = forbiddenRuleTextForPath(
-    'src/crates/core/src/agentic/tools/restrictions.rs',
+    'src/crates/facade/core/src/agentic/tools/restrictions.rs',
   );
   if (!coreToolRestrictionRuleText) {
     throw new Error('missing core tool restrictions boundary rule');
@@ -291,7 +291,7 @@ export function runManifestParserSelfTest({
     }
   }
   const agentToolsFrameworkRule = requiredContentRules.find(
-    (rule) => rule.path === 'src/crates/agent-tools/src/framework.rs',
+    (rule) => rule.path === 'src/crates/execution/agent-tools/src/framework.rs',
   );
   if (!agentToolsFrameworkRule) {
     throw new Error('missing agent-tools framework boundary rule');
@@ -313,7 +313,7 @@ export function runManifestParserSelfTest({
     }
   }
   const coreWorkspacePathRuleText = forbiddenRuleTextForPath(
-    'src/crates/core/src/agentic/tools/workspace_paths.rs',
+    'src/crates/facade/core/src/agentic/tools/workspace_paths.rs',
   );
   if (!coreWorkspacePathRuleText) {
     throw new Error('missing core workspace path boundary rule');
@@ -330,7 +330,7 @@ export function runManifestParserSelfTest({
     }
   }
   const coreToolRegistryRuleText = forbiddenRuleTextForPath(
-    'src/crates/core/src/agentic/tools/registry.rs',
+    'src/crates/facade/core/src/agentic/tools/registry.rs',
   );
   if (!coreToolRegistryRuleText) {
     throw new Error('missing core tool registry boundary rule');
@@ -346,7 +346,7 @@ export function runManifestParserSelfTest({
     }
   }
   const coreSubagentRuntimeRuleText = forbiddenRuleTextForPath(
-    'src/crates/core/src/agentic/subagent_runtime/mod.rs',
+    'src/crates/facade/core/src/agentic/subagent_runtime/mod.rs',
   );
   if (!coreSubagentRuntimeRuleText) {
     throw new Error('missing core subagent runtime boundary rule');
@@ -357,7 +357,7 @@ export function runManifestParserSelfTest({
     }
   }
   const coreCoordinatorRuleText = forbiddenRuleTextForPath(
-    'src/crates/core/src/agentic/coordination/coordinator.rs',
+    'src/crates/facade/core/src/agentic/coordination/coordinator.rs',
   );
   if (!coreCoordinatorRuleText) {
     throw new Error('missing core coordinator boundary rule');
@@ -366,7 +366,7 @@ export function runManifestParserSelfTest({
     throw new Error('core coordinator boundary rule must forbid DialogTriggerSource redefinition');
   }
   const coreSchedulerRuleText = forbiddenRuleTextForPath(
-    'src/crates/core/src/agentic/coordination/scheduler.rs',
+    'src/crates/facade/core/src/agentic/coordination/scheduler.rs',
   );
   if (!coreSchedulerRuleText) {
     throw new Error('missing core scheduler boundary rule');
@@ -383,7 +383,7 @@ export function runManifestParserSelfTest({
     }
   }
   const coreRoundPreemptRuleText = forbiddenRuleTextForPath(
-    'src/crates/core/src/agentic/round_preempt.rs',
+    'src/crates/facade/core/src/agentic/round_preempt.rs',
   );
   if (!coreRoundPreemptRuleText) {
     throw new Error('missing core round preempt boundary rule');
@@ -400,7 +400,7 @@ export function runManifestParserSelfTest({
     }
   }
   const coreGoalModeTypesRuleText = forbiddenRuleTextForPath(
-    'src/crates/core/src/agentic/goal_mode/mod.rs',
+    'src/crates/facade/core/src/agentic/goal_mode/mod.rs',
   );
   if (!coreGoalModeTypesRuleText) {
     throw new Error('missing core goal mode types boundary rule');
@@ -420,7 +420,7 @@ export function runManifestParserSelfTest({
     }
   }
   const coreMessageRuleText = forbiddenRuleTextForPath(
-    'src/crates/core/src/agentic/core/message.rs',
+    'src/crates/facade/core/src/agentic/core/message.rs',
   );
   if (!coreMessageRuleText) {
     throw new Error('missing core message boundary rule');
@@ -431,7 +431,7 @@ export function runManifestParserSelfTest({
     }
   }
   const coreWorkspaceRuleText = forbiddenRuleTextForPath(
-    'src/crates/core/src/service/workspace/manager.rs',
+    'src/crates/facade/core/src/service/workspace/manager.rs',
   );
   if (!coreWorkspaceRuleText) {
     throw new Error('missing core workspace manager boundary rule');
@@ -440,7 +440,7 @@ export function runManifestParserSelfTest({
     throw new Error('core workspace manager boundary rule must forbid contract: RelatedPath');
   }
   const coreSubagentRuntimeOwnerPathRule = forbiddenContentUnderRules.find(
-    (rule) => rule.path === 'src/crates/core/src',
+    (rule) => rule.path === 'src/crates/facade/core/src',
   );
   if (!coreSubagentRuntimeOwnerPathRule) {
     throw new Error('missing core subagent runtime owner-path boundary rule');
@@ -515,7 +515,7 @@ export function runManifestParserSelfTest({
     }
   }
   const productDomainRuntimeRule = forbiddenContentUnderRules.find(
-    (rule) => rule.path === 'src/crates/product-domains/src',
+    (rule) => rule.path === 'src/crates/product/product-domains/src',
   );
   if (!productDomainRuntimeRule) {
     throw new Error('missing product-domains runtime-owner boundary rule');
@@ -540,7 +540,7 @@ export function runManifestParserSelfTest({
   );
   if (
     !productDomainCommandRule?.allowPaths?.includes(
-      'src/crates/product-domains/src/miniapp/runtime.rs',
+      'src/crates/product/product-domains/src/miniapp/runtime.rs',
     )
   ) {
     throw new Error('product-domains Command::new exception must stay scoped to MiniApp runtime detection');
@@ -606,7 +606,7 @@ export function runManifestParserSelfTest({
     throw new Error('product-capabilities dependency profile must forbid bitfun-core');
   }
   const agentToolsManifestRule = forbiddenContentUnderRules.find(
-    (rule) => rule.path === 'src/crates/agent-tools/src',
+    (rule) => rule.path === 'src/crates/execution/agent-tools/src',
   );
   if (!agentToolsManifestRule) {
     throw new Error('missing agent-tools manifest-owner boundary rule');
@@ -626,7 +626,7 @@ export function runManifestParserSelfTest({
     }
   }
   const toolPacksManifestRule = forbiddenContentUnderRules.find(
-    (rule) => rule.path === 'src/crates/tool-packs/src',
+    (rule) => rule.path === 'src/crates/execution/tool-packs/src',
   );
   if (!toolPacksManifestRule) {
     throw new Error('missing tool-packs manifest-owner boundary rule');
@@ -649,7 +649,7 @@ export function runManifestParserSelfTest({
 
   const requiredContentContracts = [
     {
-      path: 'src/crates/runtime-ports/src/lib.rs',
+      path: 'src/crates/contracts/runtime-ports/src/lib.rs',
       contracts: [
         'AgentTurnCancellationPort',
         'RemoteControlStatePort',
@@ -717,7 +717,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/runtime-services/src/lib.rs',
+      path: 'src/crates/execution/runtime-services/src/lib.rs',
       contracts: [
         'RuntimeServices',
         'RuntimeServicesBuilder',
@@ -729,7 +729,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/runtime-services/tests/runtime_services_contracts.rs',
+      path: 'src/crates/execution/runtime-services/tests/runtime_services_contracts.rs',
       contracts: [
         'builder_requires_mandatory_runtime_services',
         'fake_provider_registers_required_and_remote_services_through_registry',
@@ -740,7 +740,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/agent-runtime/src/agents.rs',
+      path: 'src/crates/execution/agent-runtime/src/agents.rs',
       contracts: [
         'SubagentQueryContext',
         'SubagentListScope',
@@ -760,7 +760,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/agent-runtime/tests/agent_registry_contracts.rs',
+      path: 'src/crates/execution/agent-runtime/tests/agent_registry_contracts.rs',
       contracts: [
         'visibility_policy_supports_public_restricted_hidden_and_denied_parents',
         'availability_preserves_builtin_project_and_user_override_layering',
@@ -771,7 +771,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/agent-runtime/src/custom_subagent.rs',
+      path: 'src/crates/execution/agent-runtime/src/custom_subagent.rs',
       contracts: [
         'CustomSubagentKind',
         'CustomSubagentDiscoveryRoots',
@@ -791,14 +791,14 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/agent-runtime/tests/custom_subagent_discovery_contracts.rs',
+      path: 'src/crates/execution/agent-runtime/tests/custom_subagent_discovery_contracts.rs',
       contracts: [
         'custom_subagent_discovery_preserves_directory_priority_and_deduplication',
         'custom_subagent_discovery_reports_parse_errors_without_dropping_valid_files',
       ],
     },
     {
-      path: 'src/crates/agent-runtime/tests/custom_subagent_contracts.rs',
+      path: 'src/crates/execution/agent-runtime/tests/custom_subagent_contracts.rs',
       contracts: [
         'custom_subagent_defaults_match_existing_front_matter_contract',
         'custom_subagent_tool_front_matter_keeps_existing_comma_format',
@@ -810,7 +810,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/agent-runtime/src/post_call_hooks.rs',
+      path: 'src/crates/execution/agent-runtime/src/post_call_hooks.rs',
       contracts: [
         'PostCallHookKind',
         'successful_tool_post_call_hooks',
@@ -819,15 +819,15 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/agent-runtime/tests/post_call_hook_contracts.rs',
+      path: 'src/crates/execution/agent-runtime/tests/post_call_hook_contracts.rs',
       contracts: ['successful_tool_call_routes_to_shared_context_measurement_hook'],
     },
     {
-      path: 'src/crates/agent-runtime/tests/post_call_hook_execution_contracts.rs',
+      path: 'src/crates/execution/agent-runtime/tests/post_call_hook_execution_contracts.rs',
       contracts: ['successful_tool_post_call_executor_runs_deep_review_measurement_route'],
     },
     {
-      path: 'src/crates/agent-runtime/src/tool_confirmation.rs',
+      path: 'src/crates/execution/agent-runtime/src/tool_confirmation.rs',
       contracts: [
         'ToolConfirmationRequestFacts',
         'ToolConfirmationPlan',
@@ -838,7 +838,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/agent-runtime/tests/tool_confirmation_contracts.rs',
+      path: 'src/crates/execution/agent-runtime/tests/tool_confirmation_contracts.rs',
       contracts: [
         'confirmation_plan_requires_permission_only_when_both_flags_are_true',
         'confirmation_plan_preserves_legacy_no_timeout_one_year_deadline',
@@ -846,7 +846,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/agent-runtime/src/scheduler.rs',
+      path: 'src/crates/execution/agent-runtime/src/scheduler.rs',
       contracts: [
         'DEFAULT_MAX_DIALOG_QUEUE_DEPTH',
         'ActiveDialogTurn',
@@ -874,7 +874,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/agent-runtime/tests/scheduler_contracts.rs',
+      path: 'src/crates/execution/agent-runtime/tests/scheduler_contracts.rs',
       contracts: [
         'background_delivery_injects_when_session_is_processing',
         'background_delivery_starts_agent_session_follow_up_when_session_is_not_processing',
@@ -900,7 +900,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/agent-runtime/src/thread_goal.rs',
+      path: 'src/crates/execution/agent-runtime/src/thread_goal.rs',
       contracts: [
         'ThreadGoalRuntime',
         'SetThreadGoalRequest',
@@ -912,7 +912,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/agent-runtime/tests/thread_goal_contracts.rs',
+      path: 'src/crates/execution/agent-runtime/tests/thread_goal_contracts.rs',
       contracts: [
         'set_thread_goal_creates_new_active_goal_with_trimmed_objective',
         'continuation_outcome_increments_active_goal_and_builds_plan',
@@ -922,7 +922,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/agent-runtime/src/prompt.rs',
+      path: 'src/crates/execution/agent-runtime/src/prompt.rs',
       contracts: [
         'UserContextSection',
         'UserContextPolicy',
@@ -931,7 +931,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/agent-runtime/src/prompt_cache.rs',
+      path: 'src/crates/execution/agent-runtime/src/prompt_cache.rs',
       contracts: [
         'PROMPT_CACHE_SCHEMA_VERSION',
         'PromptCachePolicy',
@@ -941,7 +941,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/agent-runtime/tests/prompt_cache_contracts.rs',
+      path: 'src/crates/execution/agent-runtime/tests/prompt_cache_contracts.rs',
       contracts: [
         'prompt_cache_policy_keeps_existing_default_persistence_ttl',
         'prompt_cache_lookup_preserves_identity_and_expiry_semantics',
@@ -949,7 +949,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/agent-runtime/tests/prompt_contracts.rs',
+      path: 'src/crates/execution/agent-runtime/tests/prompt_contracts.rs',
       contracts: [
         'user_context_policy_preserves_order_and_deduplicates_sections',
         'tool_listing_sections_render_only_present_sections',
@@ -957,11 +957,11 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/agent-runtime/src/events.rs',
+      path: 'src/crates/execution/agent-runtime/src/events.rs',
       contracts: ['FinishReason', 'session_state_label', 'turn_outcome_kind'],
     },
     {
-      path: 'src/crates/agent-runtime/tests/events_contracts.rs',
+      path: 'src/crates/execution/agent-runtime/tests/events_contracts.rs',
       contracts: [
         'finish_reason_display_preserves_wire_labels',
         'session_state_labels_match_existing_event_wire_values',
@@ -969,7 +969,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/agent-runtime/src/scheduled_job.rs',
+      path: 'src/crates/execution/agent-runtime/src/scheduled_job.rs',
       contracts: [
         'ScheduledJobRuntimeState',
         'ScheduledJobRunStatus',
@@ -985,7 +985,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/agent-runtime/tests/scheduled_job_contracts.rs',
+      path: 'src/crates/execution/agent-runtime/tests/scheduled_job_contracts.rs',
       contracts: [
         'manual_trigger_coalesces_existing_pending_run',
         'due_scheduled_trigger_coalesces_when_active_or_pending',
@@ -998,7 +998,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/service/cron/types.rs',
+      path: 'src/crates/facade/core/src/service/cron/types.rs',
       contracts: [
         'ScheduledJobRuntimeState as CronJobState',
         'ScheduledJobRunStatus as CronJobRunStatus',
@@ -1006,7 +1006,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/service/cron/service.rs',
+      path: 'src/crates/facade/core/src/service/cron/service.rs',
       contracts: [
         'mark_manual_trigger',
         'apply_due_scheduled_trigger',
@@ -1020,19 +1020,19 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/agentic/execution/types.rs',
+      path: 'src/crates/facade/core/src/agentic/execution/types.rs',
       contracts: ['bitfun_agent_runtime::events::FinishReason'],
     },
     {
-      path: 'src/crates/core/src/agentic/events/types.rs',
+      path: 'src/crates/facade/core/src/agentic/events/types.rs',
       contracts: ['bitfun_agent_runtime::events::session_state_label'],
     },
     {
-      path: 'src/crates/core/src/agentic/agents/prompt_builder/user_context.rs',
+      path: 'src/crates/facade/core/src/agentic/agents/prompt_builder/user_context.rs',
       contracts: ['bitfun_agent_runtime::prompt'],
     },
     {
-      path: 'src/crates/core/src/agentic/subagent_runtime/mod.rs',
+      path: 'src/crates/facade/core/src/agentic/subagent_runtime/mod.rs',
       contracts: [
         'bitfun_runtime_ports',
         'DelegationPolicy',
@@ -1041,7 +1041,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/agentic/session/session_manager.rs',
+      path: 'src/crates/facade/core/src/agentic/session/session_manager.rs',
       contracts: [
         'clone_prompt_cache',
         'start_dialog_turn_with_existing_context',
@@ -1050,7 +1050,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/agentic/tools/pipeline/tool_pipeline.rs',
+      path: 'src/crates/facade/core/src/agentic/tools/pipeline/tool_pipeline.rs',
       contracts: [
         'build_truncation_recovery_notice',
         'truncation_notice_for_interactive_tools_does_not_claim_file_write',
@@ -1059,15 +1059,15 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/agentic/tools/restrictions.rs',
+      path: 'src/crates/facade/core/src/agentic/tools/restrictions.rs',
       contracts: ['denied_tool_messages', 'custom_deny_message_overrides_generic_runtime_error'],
     },
     {
-      path: 'src/crates/core/src/agentic/tools/tool_result_storage.rs',
+      path: 'src/crates/facade/core/src/agentic/tools/tool_result_storage.rs',
       contracts: ['write_once', 'file\\.flush\\(\\)\\.await'],
     },
     {
-      path: 'src/crates/services-integrations/src/mcp/server/connection.rs',
+      path: 'src/crates/services/services-integrations/src/mcp/server/connection.rs',
       contracts: [
         'send_request_with_id',
         'initialize_timeout',
@@ -1078,11 +1078,11 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/services-integrations/src/mcp/protocol/transport.rs',
+      path: 'src/crates/services/services-integrations/src/mcp/protocol/transport.rs',
       contracts: ['send_request_with_id', '\\.flush\\(\\)\\s*\\.await'],
     },
     {
-      path: 'src/crates/agent-tools/src/framework.rs',
+      path: 'src/crates/execution/agent-tools/src/framework.rs',
       contracts: [
         'GET_TOOL_SPEC_TOOL_NAME',
         'ToolExposure',
@@ -1138,7 +1138,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/agent-tools/src/file_guidance.rs',
+      path: 'src/crates/execution/agent-tools/src/file_guidance.rs',
       contracts: [
         'FILE_TOOL_GUIDANCE_PREFIX',
         'file_tool_guidance_message',
@@ -1146,7 +1146,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/agent-tools/src/file_read_freshness.rs',
+      path: 'src/crates/execution/agent-tools/src/file_read_freshness.rs',
       contracts: [
         'FileReadFreshnessFacts',
         'normalize_tool_file_content',
@@ -1155,7 +1155,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/agent-tools/src/tool_result_storage.rs',
+      path: 'src/crates/execution/agent-tools/src/tool_result_storage.rs',
       contracts: [
         'ToolResultStoragePolicy',
         'PersistedToolOutput',
@@ -1169,7 +1169,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/agent-tools/src/tool_execution_presentation.rs',
+      path: 'src/crates/execution/agent-tools/src/tool_execution_presentation.rs',
       contracts: [
         'TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES',
         'USER_STEERING_INTERRUPTED_MESSAGE',
@@ -1183,7 +1183,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/agentic/coordination/coordinator.rs',
+      path: 'src/crates/facade/core/src/agentic/coordination/coordinator.rs',
       contracts: [
         'AgentSubmissionPort',
         'SessionTranscriptReader',
@@ -1194,7 +1194,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/agentic/coordination/scheduler.rs',
+      path: 'src/crates/facade/core/src/agentic/coordination/scheduler.rs',
       contracts: [
         'AgentSessionReplyRoute',
         'DialogQueuePriority',
@@ -1220,7 +1220,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/agentic/round_preempt.rs',
+      path: 'src/crates/facade/core/src/agentic/round_preempt.rs',
       contracts: [
         'bitfun_agent_runtime',
         'bitfun_runtime_ports',
@@ -1234,7 +1234,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/agentic/goal_mode/mod.rs',
+      path: 'src/crates/facade/core/src/agentic/goal_mode/mod.rs',
       contracts: [
         'bitfun_runtime_ports',
         'SetThreadGoalResult',
@@ -1246,15 +1246,15 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/agentic/core/message.rs',
+      path: 'src/crates/facade/core/src/agentic/core/message.rs',
       contracts: ['bitfun_runtime_ports', 'CompressionContract', 'CompressionContractItem'],
     },
     {
-      path: 'src/crates/core/src/service/workspace/manager.rs',
+      path: 'src/crates/facade/core/src/service/workspace/manager.rs',
       contracts: ['bitfun_runtime_ports', 'RelatedPath'],
     },
     {
-      path: 'src/crates/core/src/service_agent_runtime.rs',
+      path: 'src/crates/facade/core/src/service_agent_runtime.rs',
       contracts: [
         'CoreServiceAgentRuntime',
         'remote_dialog_host',
@@ -1304,7 +1304,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/services-integrations/src/remote_connect.rs',
+      path: 'src/crates/services/services-integrations/src/remote_connect.rs',
       contracts: [
         'RemoteSessionStateTracker',
         'TrackerEvent',
@@ -1378,7 +1378,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/services-integrations/tests/remote_connect_contracts.rs',
+      path: 'src/crates/services/services-integrations/tests/remote_connect_contracts.rs',
       contracts: [
         'remote_connect_command_wire_shape_lives_in_owner_contract',
         'remote_connect_response_wire_shape_lives_in_owner_contract',
@@ -1403,7 +1403,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/service/remote_connect/remote_server.rs',
+      path: 'src/crates/facade/core/src/service/remote_connect/remote_server.rs',
       contracts: [
         'CoreServiceAgentRuntime',
         'remote_image_context',
@@ -1421,11 +1421,11 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/agentic/coordination/scheduler.rs',
+      path: 'src/crates/facade/core/src/agentic/coordination/scheduler.rs',
       contracts: ['remote_queue_policy_preserves_interactive_preempt_and_confirmation_boundary'],
     },
     {
-      path: 'src/crates/core/src/agentic/tools/registry.rs',
+      path: 'src/crates/facade/core/src/agentic/tools/registry.rs',
       contracts: [
         'from_inner',
         'ProductToolDecoratorRef',
@@ -1435,7 +1435,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/agentic/tools/product_runtime.rs',
+      path: 'src/crates/facade/core/src/agentic/tools/product_runtime.rs',
       contracts: [
         'ProductToolRuntime',
         'SnapshotToolDecorator',
@@ -1446,7 +1446,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/agentic/tools/product_runtime/snapshot.rs',
+      path: 'src/crates/facade/core/src/agentic/tools/product_runtime/snapshot.rs',
       contracts: [
         'ProductSnapshotToolWrapper',
         'SnapshotToolWrapper',
@@ -1454,7 +1454,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/agentic/tools/product_runtime/catalog.rs',
+      path: 'src/crates/facade/core/src/agentic/tools/product_runtime/catalog.rs',
       contracts: [
         'ProductToolCatalogProvider',
         'ToolCatalogSnapshotProvider',
@@ -1475,7 +1475,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/agentic/tools/product_runtime/materialization.rs',
+      path: 'src/crates/facade/core/src/agentic/tools/product_runtime/materialization.rs',
       contracts: [
         'ProductConcreteToolFactory',
         'StaticToolProviderFactory',
@@ -1488,7 +1488,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/agent-tools/src/framework.rs',
+      path: 'src/crates/execution/agent-tools/src/framework.rs',
       contracts: [
         'ToolContextFacts',
         'PortableToolContextProvider',
@@ -1517,7 +1517,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/tool-packs/src/lib.rs',
+      path: 'src/crates/execution/tool-packs/src/lib.rs',
       contracts: [
         'ToolPackFeatureGroup',
         'ToolProviderGroupPlan',
@@ -1530,7 +1530,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/agentic/tools/tool_adapter.rs',
+      path: 'src/crates/facade/core/src/agentic/tools/tool_adapter.rs',
       contracts: [
         'ToolRegistryItem',
         'ContextualToolManifestItem',
@@ -1542,7 +1542,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/agentic/tools/manifest_resolver.rs',
+      path: 'src/crates/facade/core/src/agentic/tools/manifest_resolver.rs',
       contracts: [
         'resolve_tool_manifest',
         'GET_TOOL_SPEC_TOOL_NAME',
@@ -1552,7 +1552,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/agentic/tools/product_runtime/get_tool_spec_tool.rs',
+      path: 'src/crates/facade/core/src/agentic/tools/product_runtime/get_tool_spec_tool.rs',
       contracts: [
         'GetToolSpecTool',
         'build_collapsed_tools_context_section',
@@ -1563,7 +1563,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/agentic/tools/framework.rs',
+      path: 'src/crates/facade/core/src/agentic/tools/framework.rs',
       contracts: [
         'ToolExposure',
         'ToolUseContext',
@@ -1571,7 +1571,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/agentic/tools/tool_context_runtime.rs',
+      path: 'src/crates/facade/core/src/agentic/tools/tool_context_runtime.rs',
       contracts: [
         'pub struct ToolUseContext',
         'to_tool_context_facts',
@@ -1599,7 +1599,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/agentic/tools/pipeline/tool_pipeline.rs',
+      path: 'src/crates/facade/core/src/agentic/tools/pipeline/tool_pipeline.rs',
       contracts: [
         'validate_tool_execution_admission',
         'unlocked_collapsed_tools',
@@ -1611,7 +1611,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/agentic/execution/execution_engine.rs',
+      path: 'src/crates/facade/core/src/agentic/execution/execution_engine.rs',
       contracts: [
         'collect_product_unlocked_collapsed_tools',
         'unlocked_collapsed_tools',
@@ -1621,7 +1621,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/agentic/tools/product_runtime/unlock_state.rs',
+      path: 'src/crates/facade/core/src/agentic/tools/product_runtime/unlock_state.rs',
       contracts: [
         'collect_product_unlocked_collapsed_tools',
         'GetToolSpecLoadObservation',
@@ -1630,7 +1630,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/agentic/agents/registry/availability.rs',
+      path: 'src/crates/facade/core/src/agentic/agents/registry/availability.rs',
       contracts: [
         'resolve_availability',
         'resolve_override_layers',
@@ -1639,23 +1639,23 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/agentic/agents/registry/types.rs',
+      path: 'src/crates/facade/core/src/agentic/agents/registry/types.rs',
       contracts: ['SubagentQueryContext', 'SubagentListScope', 'default_enabled', 'effective_enabled', 'SubagentStateReason'],
     },
     {
-      path: 'src/crates/core/src/agentic/agents/definitions/modes/mod.rs',
+      path: 'src/crates/facade/core/src/agentic/agents/definitions/modes/mod.rs',
       contracts: ['mod multitask', 'MultitaskMode'],
     },
     {
-      path: 'src/crates/core/src/agentic/agents/definitions/subagents/mod.rs',
+      path: 'src/crates/facade/core/src/agentic/agents/definitions/subagents/mod.rs',
       contracts: ['mod general_purpose', 'GeneralPurposeAgent'],
     },
     {
-      path: 'src/crates/core/src/agentic/agents/registry/builtin.rs',
+      path: 'src/crates/facade/core/src/agentic/agents/registry/builtin.rs',
       contracts: ['builtin_agent_specs', 'runtime_agents::default_model_id_for_builtin_agent'],
     },
     {
-      path: 'src/crates/core/src/agentic/tools/implementations/task_tool.rs',
+      path: 'src/crates/facade/core/src/agentic/tools/implementations/task_tool.rs',
       contracts: [
         'fork_context',
         'SubagentContextMode::Fork',
@@ -1669,7 +1669,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/agentic/coordination/scheduler.rs',
+      path: 'src/crates/facade/core/src/agentic/coordination/scheduler.rs',
       contracts: [
         'deliver_background_result',
         'BackgroundResult',
@@ -1697,36 +1697,36 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/agentic/agents/citation_renumber.rs',
+      path: 'src/crates/facade/core/src/agentic/agents/citation_renumber.rs',
       contracts: ['run_for_session_workspace', 'try_renumber_research_report', 'display_map', 'REJECTED'],
     },
     {
-      path: 'src/crates/core/src/service/workspace/service.rs',
+      path: 'src/crates/facade/core/src/service/workspace/service.rs',
       contracts: ['prepare_startup_restored_workspaces', 'WorkspaceKind::Remote', 'ensure_remote_workspace_runtime', 'sshHost'],
     },
     {
-      path: 'src/crates/core/src/service/search/service.rs',
+      path: 'src/crates/facade/core/src/service/search/service.rs',
       contracts: ['with_scan_fallback', 'convert_hits_to_file_search_results', 'split_preview', 'preview_inside'],
     },
     {
-      path: 'src/crates/core/src/service/search/remote.rs',
+      path: 'src/crates/facade/core/src/service/search/remote.rs',
       contracts: ['remote_workspace_search_service_for_path', 'lookup_remote_connection_with_hint', 'allow_scan_fallback', 'fallback_query'],
     },
     {
-      path: 'src/crates/core/src/service/search/mod.rs',
+      path: 'src/crates/facade/core/src/service/search/mod.rs',
       contracts: ['mod remote_disabled', 'feature = "ssh-remote"', 'pub use remote_disabled'],
     },
     {
-      path: 'src/crates/core/src/service/search/remote_disabled.rs',
+      path: 'src/crates/facade/core/src/service/search/remote_disabled.rs',
       contracts: ['Remote SSH search is disabled', 'RemoteWorkspaceSearchService', 'remote_workspace_search_service_for_path'],
     },
     {
-      path: 'src/crates/core/Cargo.toml',
+      path: 'src/crates/facade/core/Cargo.toml',
       contracts: [
-        'bitfun-product-capabilities = \\{ path = "\\.\\.\\/product-capabilities", default-features = false, optional = true \\}',
-        'bitfun-tool-packs = \\{ path = "\\.\\.\\/tool-packs", default-features = false, optional = true \\}',
-        'bitfun-services-integrations = \\{ path = "\\.\\.\\/services-integrations", default-features = false, features = \\["remote-ssh"\\] \\}',
-        'bitfun-product-domains = \\{ path = "\\.\\.\\/product-domains", default-features = false, optional = true \\}',
+        'bitfun-product-capabilities = \\{ path = "\\.\\.\\/\\.\\.\\/product\\/product-capabilities", default-features = false, optional = true \\}',
+        'bitfun-tool-packs = \\{ path = "\\.\\.\\/\\.\\.\\/execution\\/tool-packs", default-features = false, optional = true \\}',
+        'bitfun-services-integrations = \\{ path = "\\.\\.\\/\\.\\.\\/services\\/services-integrations", default-features = false, features = \\["remote-ssh"\\] \\}',
+        'bitfun-product-domains = \\{ path = "\\.\\.\\/\\.\\.\\/product\\/product-domains", default-features = false, optional = true \\}',
         'dep:bitfun-product-capabilities',
         'dep:bitfun-tool-packs',
         'bitfun-tool-packs\\/product-full',
@@ -1736,7 +1736,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/lib.rs',
+      path: 'src/crates/facade/core/src/lib.rs',
       contracts: [
         'feature = "product-full"',
         'pub mod agentic',
@@ -1748,7 +1748,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/service/mod.rs',
+      path: 'src/crates/facade/core/src/service/mod.rs',
       contracts: [
         'feature = "service-integrations"',
         'pub mod git',
@@ -1760,19 +1760,19 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/service/config/mod.rs',
+      path: 'src/crates/facade/core/src/service/config/mod.rs',
       contracts: ['feature = "product-full"', 'mode_config_canonicalizer'],
     },
     {
-      path: 'src/crates/core/src/service/workspace/manager.rs',
+      path: 'src/crates/facade/core/src/service/workspace/manager.rs',
       contracts: ['feature = "service-integrations"', 'GitService', 'return None'],
     },
     {
-      path: 'src/crates/core/src/service/workspace_runtime/service.rs',
+      path: 'src/crates/facade/core/src/service/workspace_runtime/service.rs',
       contracts: ['feature = "product-full"', 'WorkspaceBinding', 'ensure_runtime_for_workspace_binding'],
     },
     {
-      path: 'src/crates/acp/src/client/manager.rs',
+      path: 'src/crates/surfaces/acp/src/client/manager.rs',
       contracts: ['CLIENT_STARTUP_TIMEOUT_SECS', 'startup_timeout_error_message', 'formats_startup_timeout_error_message'],
     },
     {
@@ -1816,11 +1816,11 @@ export function runManifestParserSelfTest({
       contracts: ['historical_session_hydrate_request', 'Load history in the background', "historyState: 'ready'"],
     },
     {
-      path: 'src/crates/core/src/miniapp/storage.rs',
+      path: 'src/crates/facade/core/src/miniapp/storage.rs',
       contracts: ['MiniAppStoragePort'],
     },
     {
-      path: 'src/crates/core/src/miniapp/builtin/mod.rs',
+      path: 'src/crates/facade/core/src/miniapp/builtin/mod.rs',
       contracts: [
         'BUILTIN_APPS',
         'builtin_content_hash',
@@ -1841,7 +1841,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/product-domains/src/miniapp/builtin.rs',
+      path: 'src/crates/product/product-domains/src/miniapp/builtin.rs',
       contracts: [
         'builtin-pr-review',
         'BUILTIN_APPS',
@@ -1865,7 +1865,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/miniapp/host_dispatch.rs',
+      path: 'src/crates/facade/core/src/miniapp/host_dispatch.rs',
       contracts: [
         'dispatch_host',
         'split_host_method',
@@ -1882,7 +1882,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/miniapp/js_worker_pool.rs',
+      path: 'src/crates/facade/core/src/miniapp/js_worker_pool.rs',
       contracts: [
         'MiniAppRuntimePort',
         'plan_install_deps',
@@ -1892,7 +1892,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/function_agents/port_adapters.rs',
+      path: 'src/crates/facade/core/src/function_agents/port_adapters.rs',
       contracts: [
         'CoreFunctionAgentGitAdapter',
         'FunctionAgentGitPort',
@@ -1903,7 +1903,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/service/remote_connect/bot/command_router.rs',
+      path: 'src/crates/facade/core/src/service/remote_connect/bot/command_router.rs',
       contracts: [
         'CoreServiceAgentRuntime',
         'agent_submission_port',
@@ -1911,7 +1911,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/product_domain_runtime.rs',
+      path: 'src/crates/facade/core/src/product_domain_runtime.rs',
       contracts: [
         'CoreProductDomainRuntime',
         'miniapp_runtime_facade',
@@ -1928,15 +1928,15 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/service/remote_ssh/mod.rs',
+      path: 'src/crates/facade/core/src/service/remote_ssh/mod.rs',
       contracts: ['mod disabled', 'pub mod manager', 'pub mod remote_fs', 'pub mod remote_terminal', 'pub mod workspace_state'],
     },
     {
-      path: 'src/crates/core/src/service/remote_ssh/disabled.rs',
+      path: 'src/crates/facade/core/src/service/remote_ssh/disabled.rs',
       contracts: ['Remote SSH support is disabled', 'SSHConnectionManager', 'RemoteFileService', 'RemoteTerminalManager'],
     },
     {
-      path: 'src/crates/services-integrations/src/remote_ssh/paths.rs',
+      path: 'src/crates/services/services-integrations/src/remote_ssh/paths.rs',
       contracts: [
         'remote_workspace_runtime_root',
         'remote_workspace_session_mirror_dir',
@@ -1947,7 +1947,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/product-domains/src/miniapp/ports.rs',
+      path: 'src/crates/product/product-domains/src/miniapp/ports.rs',
       contracts: [
         'MiniAppRuntimeFacade',
         'mark_deps_installed_state',
@@ -1956,7 +1956,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/product-domains/src/miniapp/storage.rs',
+      path: 'src/crates/product/product-domains/src/miniapp/storage.rs',
       contracts: [
         'MiniAppStorageLayout',
         'META_JSON',
@@ -1972,7 +1972,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/product-domains/src/miniapp/lifecycle.rs',
+      path: 'src/crates/product/product-domains/src/miniapp/lifecycle.rs',
       contracts: [
         'MiniAppCreateInput',
         'MiniAppUpdatePatch',
@@ -1992,11 +1992,11 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/product-domains/src/miniapp/draft.rs',
+      path: 'src/crates/product/product-domains/src/miniapp/draft.rs',
       contracts: ['MiniAppDraftManifest', 'MiniAppDraft', 'build_draft_manifest', 'build_draft_response'],
     },
     {
-      path: 'src/crates/product-domains/src/miniapp/runtime.rs',
+      path: 'src/crates/product/product-domains/src/miniapp/runtime.rs',
       contracts: [
         'runtime_lookup_order',
         'detect_runtime',
@@ -2011,7 +2011,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/product-domains/src/miniapp/worker.rs',
+      path: 'src/crates/product/product-domains/src/miniapp/worker.rs',
       contracts: [
         'InstallDepsPlan',
         'plan_install_deps',
@@ -2022,7 +2022,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/product-domains/src/miniapp/host_routing.rs',
+      path: 'src/crates/product/product-domains/src/miniapp/host_routing.rs',
       contracts: [
         'split_host_method',
         'FsAccessMode',
@@ -2045,15 +2045,15 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/product-domains/src/miniapp/exporter.rs',
+      path: 'src/crates/product/product-domains/src/miniapp/exporter.rs',
       contracts: ['MISSING_JS_RUNTIME_MESSAGE', 'export_runtime_label', 'build_export_check_result'],
     },
     {
-      path: 'src/crates/core/src/miniapp/exporter.rs',
+      path: 'src/crates/facade/core/src/miniapp/exporter.rs',
       contracts: ['detect_runtime', 'build_export_check_result', 'Export not yet implemented'],
     },
     {
-      path: 'src/crates/product-domains/src/miniapp/customization.rs',
+      path: 'src/crates/product/product-domains/src/miniapp/customization.rs',
       contracts: [
         'MiniAppCustomizationMetadata',
         'MiniAppDeclinedBuiltinUpdate',
@@ -2066,7 +2066,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/miniapp/manager.rs',
+      path: 'src/crates/facade/core/src/miniapp/manager.rs',
       contracts: [
         'apply_draft_customization_metadata',
         'mark_builtin_update_available_metadata',
@@ -2090,7 +2090,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/function_agents/runtime_services.rs',
+      path: 'src/crates/facade/core/src/function_agents/runtime_services.rs',
       contracts: [
         'prepare_commit_ai_prompt',
         'parse_commit_ai_response',
@@ -2105,7 +2105,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/services-integrations/src/function_agents.rs',
+      path: 'src/crates/services/services-integrations/src/function_agents.rs',
       contracts: [
         'FunctionAgentGitService',
         'git_commit_snapshot',
@@ -2118,7 +2118,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/services-integrations/tests/function_agent_contracts.rs',
+      path: 'src/crates/services/services-integrations/tests/function_agent_contracts.rs',
       contracts: [
         'git_service_builds_commit_snapshot_from_staged_diff_without_unstaged_content',
         'git_service_startchat_snapshot_preserves_no_head_and_non_git_fallback',
@@ -2126,23 +2126,23 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/function_agents/git-func-agent/ai_service.rs',
+      path: 'src/crates/facade/core/src/function_agents/git-func-agent/ai_service.rs',
       contracts: ['CoreCommitAiAnalysisService as AIAnalysisService'],
     },
     {
-      path: 'src/crates/core/src/function_agents/startchat-func-agent/ai_service.rs',
+      path: 'src/crates/facade/core/src/function_agents/startchat-func-agent/ai_service.rs',
       contracts: ['CoreWorkStateAiAnalysisService as AIWorkStateService'],
     },
     {
-      path: 'src/crates/core/src/function_agents/git-func-agent/commit_generator.rs',
+      path: 'src/crates/facade/core/src/function_agents/git-func-agent/commit_generator.rs',
       contracts: ['CoreProductDomainRuntime', 'generate_function_agent_commit_message'],
     },
     {
-      path: 'src/crates/core/src/function_agents/startchat-func-agent/work_state_analyzer.rs',
+      path: 'src/crates/facade/core/src/function_agents/startchat-func-agent/work_state_analyzer.rs',
       contracts: ['CoreProductDomainRuntime', 'analyze_function_agent_work_state'],
     },
     {
-      path: 'src/crates/product-domains/src/function_agents/ports.rs',
+      path: 'src/crates/product/product-domains/src/function_agents/ports.rs',
       contracts: [
         'FunctionAgentRuntimeFacade',
         'generate_commit_message',
@@ -2153,11 +2153,11 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/product-domains/src/function_agents/common.rs',
+      path: 'src/crates/product/product-domains/src/function_agents/common.rs',
       contracts: ['extract_json_from_ai_response', 'try_repair_json'],
     },
     {
-      path: 'src/crates/product-domains/src/function_agents/startchat_func_agent/utils.rs',
+      path: 'src/crates/product/product-domains/src/function_agents/startchat_func_agent/utils.rs',
       contracts: [
         'WORK_STATE_ANALYSIS_PROMPT',
         'build_work_state_analysis_prompt',
@@ -2168,7 +2168,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/product-domains/src/function_agents/git_func_agent/utils.rs',
+      path: 'src/crates/product/product-domains/src/function_agents/git_func_agent/utils.rs',
       contracts: [
         'COMMIT_MESSAGE_PROMPT',
         'parse_commit_analysis_value',
@@ -2180,7 +2180,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/core/src/miniapp/runtime_detect.rs',
+      path: 'src/crates/facade/core/src/miniapp/runtime_detect.rs',
       contracts: ['pub use bitfun_product_domains::miniapp::runtime::{', 'detect_runtime'],
     },
   ];
@@ -2201,7 +2201,7 @@ export function runManifestParserSelfTest({
   }
 
   const remoteWorkspaceRule = forbiddenContentRules.find(
-    (rule) => rule.path === 'src/crates/core/src/service/remote_ssh/workspace_state.rs',
+    (rule) => rule.path === 'src/crates/facade/core/src/service/remote_ssh/workspace_state.rs',
   );
   if (!remoteWorkspaceRule) {
     throw new Error('missing remote SSH workspace_state boundary rule');
@@ -2233,14 +2233,14 @@ export function runManifestParserSelfTest({
   }
 
   const announcementStateStoreRule = forbiddenContentRules.find(
-    (rule) => rule.path === 'src/crates/core/src/service/announcement/state_store.rs',
+    (rule) => rule.path === 'src/crates/facade/core/src/service/announcement/state_store.rs',
   );
   if (!announcementStateStoreRule) {
     throw new Error('missing announcement state store boundary rule');
   }
 
   const mcpProcessRule = forbiddenContentRules.find(
-    (rule) => rule.path === 'src/crates/core/src/service/mcp/server/process.rs',
+    (rule) => rule.path === 'src/crates/facade/core/src/service/mcp/server/process.rs',
   );
   if (!mcpProcessRule) {
     throw new Error('missing MCP server process boundary rule');
@@ -2265,7 +2265,7 @@ export function runManifestParserSelfTest({
   }
 
   const mcpManagerRule = forbiddenContentRules.find(
-    (rule) => rule.path === 'src/crates/core/src/service/mcp/server/manager/mod.rs',
+    (rule) => rule.path === 'src/crates/facade/core/src/service/mcp/server/manager/mod.rs',
   );
   if (!mcpManagerRule) {
     throw new Error('missing MCP server manager boundary rule');
@@ -2285,7 +2285,7 @@ export function runManifestParserSelfTest({
   }
 
   const mcpReconnectRule = forbiddenContentRules.find(
-    (rule) => rule.path === 'src/crates/core/src/service/mcp/server/manager/reconnect.rs',
+    (rule) => rule.path === 'src/crates/facade/core/src/service/mcp/server/manager/reconnect.rs',
   );
   if (!mcpReconnectRule) {
     throw new Error('missing MCP reconnect boundary rule');
@@ -2300,7 +2300,7 @@ export function runManifestParserSelfTest({
   }
 
   const mcpInteractionRule = forbiddenContentRules.find(
-    (rule) => rule.path === 'src/crates/core/src/service/mcp/server/manager/interaction.rs',
+    (rule) => rule.path === 'src/crates/facade/core/src/service/mcp/server/manager/interaction.rs',
   );
   if (!mcpInteractionRule) {
     throw new Error('missing MCP interaction boundary rule');
@@ -2315,7 +2315,7 @@ export function runManifestParserSelfTest({
   }
 
   const mcpToolAdapterRule = forbiddenContentRules.find(
-    (rule) => rule.path === 'src/crates/core/src/service/mcp/adapter/tool.rs',
+    (rule) => rule.path === 'src/crates/facade/core/src/service/mcp/adapter/tool.rs',
   );
   if (!mcpToolAdapterRule) {
     throw new Error('missing MCP tool adapter boundary rule');
@@ -2336,7 +2336,7 @@ export function runManifestParserSelfTest({
   }
 
   const mcpContextAdapterRule = forbiddenContentRules.find(
-    (rule) => rule.path === 'src/crates/core/src/service/mcp/adapter/context.rs',
+    (rule) => rule.path === 'src/crates/facade/core/src/service/mcp/adapter/context.rs',
   );
   if (!mcpContextAdapterRule) {
     throw new Error('missing MCP context adapter boundary rule');
@@ -2356,7 +2356,7 @@ export function runManifestParserSelfTest({
   }
 
   const mcpJsonConfigRule = forbiddenContentRules.find(
-    (rule) => rule.path === 'src/crates/core/src/service/mcp/config/json_config.rs',
+    (rule) => rule.path === 'src/crates/facade/core/src/service/mcp/config/json_config.rs',
   );
   if (!mcpJsonConfigRule) {
     throw new Error('missing MCP JSON config boundary rule');
@@ -2377,7 +2377,7 @@ export function runManifestParserSelfTest({
   }
 
   const mcpConfigServiceRule = forbiddenContentRules.find(
-    (rule) => rule.path === 'src/crates/core/src/service/mcp/config/service.rs',
+    (rule) => rule.path === 'src/crates/facade/core/src/service/mcp/config/service.rs',
   );
   if (!mcpConfigServiceRule) {
     throw new Error('missing MCP config service boundary rule');
@@ -2399,7 +2399,7 @@ export function runManifestParserSelfTest({
   }
 
   const mcpAuthRule = forbiddenContentRules.find(
-    (rule) => rule.path === 'src/crates/core/src/service/mcp/auth.rs',
+    (rule) => rule.path === 'src/crates/facade/core/src/service/mcp/auth.rs',
   );
   if (!mcpAuthRule) {
     throw new Error('missing MCP auth boundary rule');
@@ -2420,7 +2420,7 @@ export function runManifestParserSelfTest({
   }
 
   const mcpRemoteTransportRule = forbiddenContentRules.find(
-    (rule) => rule.path === 'src/crates/core/src/service/mcp/protocol/transport_remote.rs',
+    (rule) => rule.path === 'src/crates/facade/core/src/service/mcp/protocol/transport_remote.rs',
   );
   if (!mcpRemoteTransportRule) {
     throw new Error('missing MCP remote transport boundary rule');
@@ -2451,7 +2451,7 @@ export function runManifestParserSelfTest({
   }
 
   const mcpJsonrpcRule = forbiddenContentRules.find(
-    (rule) => rule.path === 'src/crates/core/src/service/mcp/protocol/jsonrpc.rs',
+    (rule) => rule.path === 'src/crates/facade/core/src/service/mcp/protocol/jsonrpc.rs',
   );
   if (!mcpJsonrpcRule) {
     throw new Error('missing MCP JSON-RPC boundary rule');
@@ -2477,7 +2477,7 @@ export function runManifestParserSelfTest({
   }
 
   const mcpServerConfigRule = forbiddenContentRules.find(
-    (rule) => rule.path === 'src/crates/core/src/service/mcp/server/config.rs',
+    (rule) => rule.path === 'src/crates/facade/core/src/service/mcp/server/config.rs',
   );
   if (!mcpServerConfigRule) {
     throw new Error('missing MCP server config boundary rule');
@@ -2510,7 +2510,7 @@ export function runManifestParserSelfTest({
   }
 
   const remoteConnectRule = forbiddenContentRules.find(
-    (rule) => rule.path === 'src/crates/core/src/service/remote_connect/remote_server.rs',
+    (rule) => rule.path === 'src/crates/facade/core/src/service/remote_connect/remote_server.rs',
   );
   if (!remoteConnectRule) {
     throw new Error('missing remote-connect remote_server boundary rule');
@@ -2590,9 +2590,9 @@ export function runManifestParserSelfTest({
 
   const facadePaths = new Set(facadeOnlyFiles.map((facade) => facade.path));
   for (const path of [
-    'src/crates/core/src/service/mcp/protocol/transport.rs',
-    'src/crates/core/src/service/mcp/protocol/transport_remote.rs',
-    'src/crates/core/src/service/mcp/server/connection.rs',
+    'src/crates/facade/core/src/service/mcp/protocol/transport.rs',
+    'src/crates/facade/core/src/service/mcp/protocol/transport_remote.rs',
+    'src/crates/facade/core/src/service/mcp/server/connection.rs',
   ]) {
     if (!facadePaths.has(path)) {
       throw new Error(`missing MCP runtime facade-only rule for ${path}`);

@@ -12,28 +12,31 @@
 ## 1. 执行原则
 
 - 最终目标是让 `bitfun-core` 从 concrete runtime / product logic 中心收敛为 compatibility facade 与产品组装边界。
-- 依赖方向保持为：Product Surfaces -> Product Assembly / Capabilities -> Harness / Tool Runtime / Agent Runtime SDK
-  -> Runtime Services -> Stable Contracts / External Providers。
+- 依赖方向保持为：Product Surfaces / Protocol Surfaces -> Facade / Product Assembly
+  -> Product Capabilities / Concrete Provider Adapters / Services -> Execution Primitives
+  -> Stable Contracts / External Providers。
 - 新增抽象必须同时删除、迁移或显著简化既有 core 路径；纯 facade、纯 guard、纯文档或只新增空接口不算 owner 迁移完成。
 - 设计文档保持稳定，只在目标架构判断本身需要修正时修改；阶段状态和执行节奏只写入本计划和 completed 归档。
 - 任何可能改变产品行为、权限语义、工具曝光、事件语义、session 生命周期、remote 行为、MiniApp 行为或发布形态的变更必须暂停并单独评审。
 
 ## 2. 当前代码基线判断
 
-最新 `main` 已包含 function-agent Git concrete service owner 迁移，且当前分支已开始把 Product Assembly 与
-Runtime Services provider 组合显式化。但当前代码仍未达到设计文档的目标状态：
+当前代码基线已包含 M1-M4 的 owner 迁移与 M5 的 workspace 分层整理。但当前代码仍未达到设计文档的最终目标状态：
 
-- 产品入口仍通过 `bitfun-core` 的 `product-full` 获得完整能力；Product Assembly 已可表达当前完整能力集合，
-  但尚未支撑按交付形态裁剪 feature / dependency。
-- `runtime-services` 已有 typed builder、capability availability 和 core product assembly provider 组合，
-  但许多 concrete provider 仍在 core 创建或持有。
+- 产品入口仍通过 `bitfun-core` 的 `product-full` 获得完整能力；Desktop / CLI / ACP 已显式选择完整能力集合，
+  Server / Web / Mobile Web 不直接依赖 core，但尚未完成按交付形态裁剪 default feature / dependency。
+- `src/crates` 已按 `surfaces/`、`facade/`、`integrations/`、`services/`、`product/`、`execution/`、`contracts/` 分层，
+  并由 boundary check 保护；package 名称和产品功能语义保持不变。
+- `runtime-services` 已有 typed builder、capability availability 和 core product runtime provider adapter 组合；
+  `product_assembly` 已收敛为兼容 facade，但许多 concrete provider 仍在 core 创建或持有。
 - core 仍持有 `SessionManager`、`ExecutionEngine`、`PersistenceManager`、`CronService`、`MiniAppManager`、
   `RemoteFileService`、`RemoteTerminalManager`、`WorkspaceSearchService`、AI client factory 和大量 concrete tool adapter。
 - `tool-runtime` 已迁移部分低风险本地 IO primitive，但 Bash、terminal lifecycle、indexed search、remote shell、
   permission UI/channel wait、checkpoint orchestration 和完整 execution pipeline 仍不是独立 Tool Runtime owner。
 - `harness` 当前主要承接 descriptor / route plan / registry contract，Deep Review、DeepResearch、MiniApp 的 concrete workflow execution
   仍留在 core 或产品路径。
-- feature / dependency trimming 还没有数据证明，不能声称不同交付形态已经可以按最小依赖组合。
+- feature / dependency 已有 no-default 与 product-full 的基线数据，但 no-default 仍包含较多 concrete 依赖，
+  不能声称不同交付形态已经可以按最小依赖组合。
 
 ## 3. PR 准出门禁
 
@@ -47,120 +50,37 @@ Runtime Services provider 组合显式化。但当前代码仍未达到设计文
 
 不满足上述门禁时，不允许把变更作为独立 PR 提交。
 
-## 4. 后续里程碑
+## 4. 当前计划闭环
 
-### 4.1 M1（当前变更已闭环）：Product Assembly 与 Runtime Services concrete provider 组合
+M1-M5 已完成当前计划中的低风险边界收敛、保护基线和目录分层工作。
+[`core-decomposition-completed.md`](core-decomposition-completed.md) 保留已完成事实与明确未完成边界。
 
-目标：让产品能力选择、service provider 注册和 capability availability 从 core 隐式聚合转为显式组装边界。
+| 阶段 | 已完成内容 | 未闭合边界 |
+|---|---|---|
+| M1 Product Assembly / Runtime Services | 建立 product-full provider plan、capability availability 和 service provider 基线；Product Assembly facade 已收口到兼容导出 | 具体 provider 构造仍大量留在 core product runtime adapter |
+| M2 Tool Runtime IO/search helper | 将低层 filesystem/search 规划与 helper 迁入 `tool-runtime` | Bash、checkpoint、UI/channel 与 workspace shell 仍由 core adapter 组装 |
+| M3 Agent Runtime lifecycle | turn outcome、SessionControl、thread goal、scheduler 决策等 runtime 纯逻辑进入 `agent-runtime` | concrete session manager、event emitter、permission wait 与 prompt assembly 仍在 core |
+| M4 Harness / Product Domain | MiniApp 纯决策、bundle facts、function-agent Git concrete snapshot 等进入 owner crate | MiniApp worker/IO、AI provider acquisition 与 DeepReview concrete workflow 仍未完成迁移 |
+| M5 feature matrix / directory layout | `src/crates` 已物理分层，feature matrix 与 no-default/product-full 数据基线已更新 | no-default 仍包含较多 concrete 依赖，产品形态尚未达到最小依赖闭环 |
 
-完成口径：
+### 4.1 M5 capability / feature matrix
 
-- Product Assembly 已建立 `DeliveryProfile`、`CapabilitySet`、tool provider plan、harness provider plan 和
-  service availability report；当前 Desktop / CLI / Server / Remote / ACP / Web 均保持完整 product-full 能力集合，
-  先证明“不减少能力”。
-- core 的 tool runtime 与 harness registry 已改为消费显式 Product Assembly plan，旧 facade 输出保持等价。
-- core product assembly provider 已把现有 session store path resolution、remote workspace/projection adapter，以及当前
-  product-full 需要的 terminal / Git / Network / MCP catalog capability marker 注册进 `RuntimeServicesBuilder` 组合。
-- 基础必选端口、search concrete、AI provider acquisition 和按交付形态裁剪不在 M1 中完成，继续留给后续 owner 迁移和
-  feature/dependency 收尾阶段。
+| 产品形态 | 当前依赖 / feature 状态 | 判断 |
+|---|---|---|
+| Desktop | `src/apps/desktop` 以 `default-features = false` + `product-full` 依赖 `bitfun-core` | 保持完整产品能力；Tauri / WebDriver 仍属于 app / integration 层 |
+| CLI | `src/apps/cli` 以 `default-features = false` + `product-full` 依赖 `bitfun-core`，并启用 ACP 协议入口 | 保持现有能力集合；后续可继续收敛 CLI feature set |
+| ACP | `src/crates/surfaces/acp` 当前依赖 `bitfun-core/product-full` | ACP 是产品协议入口，不是 execution/runtime owner |
+| Server | `src/apps/server` 当前不直接依赖 `bitfun-core` | 维持 server route / static runtime 边界 |
+| Remote | 通过 `service-integrations`、`ssh-remote` 和 runtime ports 表达 | 属于能力组合和 provider 实现，不是独立产品 crate |
+| Web / Mobile Web | 当前不直接依赖 Rust core crate，通过 API / transport / event DTO 消费能力 | 分层路径迁移不应改变前端行为 |
 
-**不混入：** default feature 调整、构建收益声明、大规模目录移动、UI 行为变更。
-
-**门禁：**
-- `cargo check -p bitfun-core --features product-full`
-- `cargo test -p bitfun-runtime-services`
-- 涉及 remote / terminal / search / Git / AI 时补对应 focused tests。
-
-### 4.2 M2（当前变更已闭环）：Tool Runtime concrete IO/search execution helper
-
-目标：在不改变产品工具语义的前提下，让 `tool-runtime` 接管低层 filesystem / search 工具中可证明等价的执行 helper，
-减少 core 对 remote shell 命令形态、stdout/stderr marker 和结果窗口裁剪的直接理解。
-
-完成口径：
-- `tool-runtime` 承接远程 Delete 命令规划、Read awk 命令规划与 marker 解析、LS 命令规划与 stdout entry 规整。
-- `tool-runtime` 承接远程 Glob stdout 规整，以及远程 Grep 命令规划、result text 规整、match count 和 offset/limit windowing。
-- core 删除对应重复拼接/解析逻辑，只保留 agent-facing `Tool` adapter、`ToolUseContext` path resolution、workspace shell 执行、
-  checkpoint、UI/channel 副作用和 `ToolResult` 包装。
-- `agent-tools` 继续拥有 manifest / admission / GetToolSpec 等 provider-neutral contract；`terminal-core` 继续拥有 PTY 与 terminal lifecycle。
-
-**不混入：** 改变工具 schema、权限默认值、checkpoint 语义、remote fallback、shell 工作目录、terminal prewarm / PTY lifecycle、
-prompt-visible manifest、GetToolSpec、readonly/enabled filtering、expanded/collapsed exposure、MCP/ACP catalog。
-
-**门禁：**
-- `cargo test -p tool-runtime`
-- `cargo test -p bitfun-agent-tools`
-- core Grep / remote filesystem focused tests
-- `cargo check --workspace`
-- `pnpm run check:repo-hygiene`
-- `node scripts/check-core-boundaries.mjs`
-
-### 4.3 M3（当前变更已闭环）：Agent Runtime lifecycle 决策闭环
-
-目标：让 Agent Runtime SDK 接管 session / turn / scheduler / event / permission 中可迁移的 runtime kernel 主体。
-
-完成口径：
-
-- `agent-runtime` 接管 turn outcome 后处理 plan，统一决定 queue action、round 清理、finished-turn injection drain 和
-  thread-goal continuation after-turn 动作；core scheduler 只执行清理、reply、goal continuation 和 dispatch 副作用。
-- `agent-runtime` 接管 `SessionControl` 输入契约、默认值、tool-use render、create/cancel/delete 结果文案和 cancel route 决策；
-  core tool adapter 只保留 workspace 解析、session manager 调用、scheduler/coordinator cancel 和 `ToolResult` 包装。
-- `agent-runtime` 不新增三方依赖，不依赖 `bitfun-core`、Tauri、ACP、CLI TUI、desktop state 或 concrete service crate。
-- concrete session manager、metadata / persistence IO、scheduler task lifecycle、event emitter wiring、permission UI/channel wait、
-  concrete prompt assembly 和 product `Tool` adapter execution 继续留在 core compatibility / Product Assembly adapter。
-
-**不混入：** 改变 `/goal`、AskUserQuestion、Task、subagent、post-turn hook、DeepReview measurement、token usage 或 continuation wire shape。
-
-**门禁：**
-- `cargo test -p bitfun-agent-runtime`
-- `cargo test -p bitfun-core --features product-full` 中 session / scheduler / goal / subagent focused tests
-- `cargo check -p bitfun-core --features product-full`
-- boundary check 证明 agent-runtime 不依赖 core 或平台实现。
-
-### 4.4 M4：Harness 与 Product Domain concrete workflow 闭环
-
-目标：让 Harness / Product Domains 不再停留在 descriptor 或 pure policy 层，而是接管符合设计边界的工作流和 domain owner。
-
-- MiniApp host primitive 的 `fs.*` / `shell.exec` 纯调用计划、参数默认值、错误契约和权限检查计划归入
-  Product Domain；core 仅消费计划并继续负责权限 policy resolution、路径规范化、文件 IO、进程执行和输出映射。
-- `net.fetch` / `os.info` 不迁入 Product Domain：前者依赖 `reqwest::Url` 与 HTTP client 语义，后者依赖平台 runtime facts，
-  保留在 core concrete path 更符合最小依赖原则。
-- MiniApp seed / marker 的 bundle、hash、marker wire format 与 seed decision 已由 Product Domain 持有；core 仍负责磁盘读写、
-  customization metadata、PathManager integration 和 recompile。
-- function-agent 已通过 Product Domain facade 与 core adapter 隔离 Git/AI 端口；AI provider acquisition 和 transport error mapping
-  仍留在 core，除非后续单独评审稳定 AI runtime/provider 边界。
-- Harness provider 继续保持 legacy route plan / descriptor owner；Deep Review / DeepResearch concrete execution 不混入本阶段。
-
-**不混入：** 改变 MiniApp storage layout、worker 生命周期、host primitive 权限、Deep Review report 语义、function-agent prompt/response policy。
-
-**门禁：**
-- `cargo test -p bitfun-harness`
-- `cargo test -p bitfun-product-domains`
-- MiniApp import/sync/recompile/worker focused tests
-- function-agent Git/AI focused tests
-- 涉及 desktop / API 时补 `cargo check -p bitfun-desktop`
-
-### 4.5 M5：feature matrix、依赖收益与目录组织收尾
-
-目标：在 owner 边界稳定后，用数据证明不同产品形态可以最小依赖组合，并整理 workspace crate 可读性。
-
-- 建立 Desktop / CLI / Server / Remote / ACP / Web 的 capability matrix 与 feature group 显式映射。
-- 用 `cargo metadata`、`cargo tree`、`cargo check` 数据证明 no-default、product-full 和关键交付形态的依赖边界。
-- 评估 `src/crates` 是否按 `contracts/`、`runtime/`、`services/`、`integrations/`、`product/` 等目录分组。
-- 目录移动只允许在 owner 边界稳定后执行，并必须同步 Cargo path、AGENTS module index、boundary check 和 workspace build。
-
-**不混入：** 运行时 owner 深迁移、三方库大版本升级、构建脚本行为变更、installer 发布流程变更。
-
-**门禁：**
-- `cargo metadata`
-- `cargo tree` 对比
-- `cargo check --workspace`
-- `pnpm run check:repo-hygiene`
-- `node scripts/check-core-boundaries.mjs`
+M5 已通过 `cargo metadata --no-deps` 验证 workspace 结构；`bitfun-core` no-default 依赖树为 649 行，`product-full` 为 1228 行。
+`cargo check --workspace`、`node scripts/check-core-boundaries.mjs` 和 repo hygiene 已验证通过。
 
 ## 5. 执行节奏
 
-后续按 M4 收尾 -> M5 推进。每个里程碑原则上对应一个大 PR；如果发现风险超过单 PR 可控范围，只允许按 owner 边界拆分，
-不允许拆成 facade / guard / helper 小 PR。
+M1-M5 已作为当前计划闭环。后续如继续推进设计文档中的 runtime / service / product owner 深迁移，需要从 Issue #970
+和稳定设计文档重新确认 owner 边界；如果发现风险超过单 PR 可控范围，只允许按 owner 边界拆分，不允许拆成 facade / guard / helper 小 PR。
 
 每个里程碑固定流程：
 
@@ -192,13 +112,15 @@ prompt-visible manifest、GetToolSpec、readonly/enabled filtering、expanded/co
 - 新 owner crate 必须依赖回 `bitfun-core` 才能编译或测试。
 - Runtime / contract crate 开始吸收 Tauri、CLI/TUI、process execution、network client、Git provider、AI provider、MCP client 等 concrete dependency。
 - Product Assembly 变成无类型 service locator 或全局 mutable app state。
+- `bitfun-core::product_assembly` 重新承载 concrete provider 注册、harness registry 构造或非兼容 facade 逻辑。
 - 无法为 remote、tool、MiniApp、function-agent、scheduler、session lifecycle 迁移提供等价测试或可复核 snapshot。
 - PR 只新增抽象而没有迁移、删除或显著简化旧 core 主体路径。
 
 ## 8. 完成标准
 
-- `bitfun-core` 只保留 compatibility facade 与 product-full / Product Assembly 兼容边界。
-- Agent Runtime SDK、Runtime Services、Tool Runtime、Harness、Product Capabilities、Product Domains 和 Concrete Integrations
+- `bitfun-core` 只保留 compatibility facade 与 product-full / Product Assembly 兼容边界；Product Assembly 事实由 owner crate
+  提供，core-specific adapter 留在清晰的 product runtime 边界内。
+- Agent Runtime SDK、Runtime Services、Tool Runtime、Harness、Product Capabilities、Product Domains、Concrete Provider Adapters 和 Services
   的职责边界可被代码结构、依赖检查和测试证明。
 - 产品入口通过 Product Assembly / capability matrix 显式选择能力和 provider，不再被完整 core 隐式牵引。
 - 高风险路径具备旧路径兼容、等价保护、明确回滚边界和产品形态验证。

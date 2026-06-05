@@ -25,9 +25,9 @@ Runtime Services、Tool Runtime 和 Harness Layer 分别隔离 service、tool、
 
 ## 2. 架构原则
 
-- 依赖只能从产品层流向 runtime 层，再流向 contract 层；下层不得感知上层产品形态。
+- 依赖只能从产品入口 / 产品组装流向产品能力、具体适配、服务和执行原语，再流向稳定契约；下层不得感知上层产品形态。
 - 接口和实现必须分开：接口属于稳定契约、Runtime Services、Tool Runtime 或 Harness contract；
-  具体实现属于 Product Assembly 或具体实现层。
+  具体实现属于 Product Assembly 或具体适配实现。
 - Product Surface 可以有差异，capability contract 必须收敛。不同产品入口可以选择不同能力集合，
   但不能通过下沉 UI、命令或协议逻辑来换取复用。
 - `bitfun-core` 保留兼容 facade 和 `product-full` 组装边界；新 owner crate 不得依赖回
@@ -45,7 +45,7 @@ helper 和 product domain 纯逻辑，但完整运行时仍以 `bitfun-core` 为
 flowchart TB
   Surfaces["产品入口<br/>Desktop / CLI / Server / Relay / Remote / Web"]
   Core["bitfun-core<br/>兼容 facade + 完整产品 runtime 组装"]
-  Acp["bitfun-acp<br/>ACP protocol / client integration"]
+  Acp["bitfun-acp<br/>ACP protocol surface / client behavior"]
   Transport["transport / api-layer<br/>API 与传输 adapter"]
   CoreTypes["bitfun-core-types<br/>稳定 DTO 子集"]
   Events["bitfun-events<br/>事件事实与 emitter 抽象"]
@@ -95,7 +95,7 @@ flowchart TB
 | `bitfun-services-core` | 基础 service helper、本地 filesystem facade、部分通用 service 逻辑 | 适合作为本地基础 service owner，但不能吸收产品 runtime 语义 |
 | `bitfun-services-integrations` | MCP、Git、remote-connect、remote-SSH 等 integration helper | 适合拥有外部协议和重依赖 adapter，不应反向感知产品 surface |
 | `bitfun-product-domains` | MiniApp、function-agent 等纯状态、策略、port 和部分决策逻辑 | 适合承接 pure domain，不应直接执行 filesystem/Git/AI concrete call |
-| `bitfun-acp` | ACP protocol 和 client integration | 应保持 external capability owner，不下沉到 Agent Runtime SDK |
+| `bitfun-acp` | ACP protocol surface 和 client behavior | 应保持产品协议入口，不下沉到 Agent Runtime SDK |
 | `transport` / `api-layer` | surface 到 runtime 的 API/transport adapter | 应保持传输层，不拥有 runtime owner |
 
 ## 4. 初始状态主要问题
@@ -182,7 +182,7 @@ agents 分为 primary agents 和 subagents，可配置 prompt、model 与 tool a
 
 ## 6. 目标逻辑视图
 
-目标架构以层级为入口描述系统。每层只暴露本层 contract，具体实现由上层组装或下层 integration 提供。
+目标架构以层级为入口描述系统。每层只暴露本层 contract，具体 provider 或 adapter 由产品组装接入。
 
 ```mermaid
 flowchart TB
@@ -193,7 +193,7 @@ flowchart TB
   AgentRuntime["Agent 运行时 SDK（Agent Runtime SDK）<br/>session / turn / scheduler / prompt / subagent"]
   ToolRuntime["工具运行时（Tool Runtime）<br/>manifest / permission / execution / catalog"]
   RuntimeServices["运行时服务层（Runtime Services）<br/>typed service bundle / capability availability"]
-  Integrations["具体实现层（Concrete Integrations）<br/>Tool / OS / Remote / Protocol providers"]
+  Integrations["具体适配实现（Concrete Providers）<br/>Tool / OS / Remote / Protocol providers"]
   Contracts["稳定契约层（Stable Contracts）<br/>DTO / event / permission / artifact / port"]
   External["外部系统（External Systems）<br/>OS / Git / MCP server / ACP client / AI provider"]
 
@@ -279,17 +279,17 @@ workspace file/shell、remote connection / projection、session store、Git、te
 等接口应以 stable port 表达；初始状态可保留旧路径 facade 和 concrete adapter，目标状态应由 typed service bundle
 消费这些端口。
 
-### 7.8 具体实现层（Concrete Integrations）
+### 7.8 具体适配实现（Concrete Providers）
 
-具体实现层拥有外部系统连接和重依赖，但它不是一个混合大筐，需要按实现类型保持边界：
+具体适配实现拥有外部系统连接和重依赖，但它不是一个混合大筐，需要按实现类型保持边界：
 Tool 实现器负责具体 tool provider 和 tool pack；OS 实现器负责 filesystem、terminal、process、network、
-environment 等平台能力；协议实现器负责 MCP、ACP、AI provider、Git 等外部协议；Remote 实现器负责 remote
+environment 等平台能力；协议实现器负责 MCP、AI provider、Git 等低层外部协议；ACP 这类依赖产品组装的协议入口属于 Product Surfaces / Protocol Surfaces；Remote 实现器负责 remote
 connection、remote workspace projection 和 remote host capability。
 
 Remote 不应作为 Agent Runtime SDK 的内部能力，也不应只按 Desktop/CLI 入口区分。它的稳定接口应拆为
 remote connection、remote workspace、remote filesystem/terminal projection、remote capability facts 等 port；
 SSH、relay、本地隧道、远端 OS 差异和认证方式属于具体 Remote provider，由 Product Assembly 按产品形态注册。
-初始状态相关 crate 包括 `bitfun-services-*`、`bitfun-ai-adapters`、`terminal-core`、`bitfun-acp` 和 app adapters。
+初始状态相关 crate 包括 `bitfun-services-*`、`bitfun-ai-adapters`、`terminal-core` 和 app adapters；`bitfun-acp` 属于产品协议入口。
 
 ### 7.9 稳定契约层（Stable Contracts）
 
@@ -301,7 +301,7 @@ host trait 应归入稳定契约；integration crate 可保留旧路径 re-expor
 
 ## 8. 接口与实现关系
 
-接口由稳定契约、Runtime Services、Tool Runtime 或 Harness contract 定义；具体实现由产品入口或具体实现层创建；
+接口由稳定契约、Runtime Services、Tool Runtime 或 Harness contract 定义；具体实现由产品入口或具体适配实现创建；
 注册动作只能发生在 Product Assembly。Agent Runtime SDK、Tool Runtime 和 Harness 只接收已经组装好的接口或
 provider registry，不直接创建平台实现。
 
@@ -315,7 +315,7 @@ flowchart TB
   AgentRegistry["Agent 运行时 SDK（Agent Runtime SDK）<br/>AgentDefinitionRegistry"]
   CommandRegistry["产品入口 / 产品组装层<br/>ProductCommandRegistry"]
   Runtime["Agent Runtime SDK / Tool Runtime / Harness<br/>只消费接口"]
-  Impl["具体实现层（Concrete Integrations）<br/>Tool / OS / Remote / Protocol providers"]
+  Impl["具体适配实现（Concrete Providers）<br/>Tool / OS / Remote / Protocol providers"]
   Contracts["稳定契约层（Stable Contracts）<br/>DTO / event / port trait"]
 
   Surface --> Assembly
@@ -344,7 +344,7 @@ flowchart TB
 | `HarnessRegistryBuilder` | 工作流编排层（Harness Layer） | 目标在 `bitfun-harness`；初始可由 `bitfun-core::agentic::harness` 注册 legacy-facade provider | SDD、Deep Review、DeepResearch、MiniApp 等 harness provider |
 | `AgentDefinitionRegistry` | Agent 运行时 SDK（Agent Runtime SDK） | 目标在 `bitfun-agent-runtime`；初始可由 `bitfun-core` agent definition 代码承载 | agent、subagent、prompt module、skill definition |
 | `ProductCommandRegistry` | 产品入口（Product Surfaces）与产品组装层（Product Assembly）的边界 | 产品入口或 assembly 模块 | 输入框命令、审核入口、MiniApp 入口到 capability / harness / runtime request 的映射 |
-| concrete provider set | 具体实现层（Concrete Integrations） | `bitfun-services-*`、`bitfun-ai-adapters`、`terminal-core`、`bitfun-acp`、app adapters | Tool、OS、Remote、Protocol 的具体 provider；Remote provider 内部继续区分 SSH、relay、本地隧道、远端 OS 支持 |
+| concrete provider set | 具体适配实现（Concrete Providers） | `bitfun-services-*`、`bitfun-ai-adapters`、`terminal-core`、app adapters；产品协议入口如 `bitfun-acp` 属于 Product Surfaces / Protocol Surfaces | Tool、OS、Remote、Protocol 的具体 provider；Remote provider 内部继续区分 SSH、relay、本地隧道、远端 OS 支持 |
 
 注册路径必须是显式、typed、可测试的：
 
@@ -376,7 +376,7 @@ flowchart TB
 
 - `bitfun-core` 不再是事实上的完整 runtime owner，而是兼容 facade 和 `product-full` 组装边界。
 - Agent Runtime SDK、Tool Runtime、Runtime Services、Harness 和 Product Capabilities 分别拥有可审查的职责边界。
-- 稳定契约和各 runtime owner 定义接口；具体 Tool、OS、Remote、Protocol provider 留在具体实现层。
+- 稳定契约和各 runtime owner 定义接口；具体 Tool、OS、Remote、Protocol provider 留在具体适配实现。
 - 产品组装层（Product Assembly）是唯一注册点，通过 typed builder / registry 连接接口和具体实现。
 - Tauri 只属于 Desktop concrete provider / adapter，不进入 core、runtime owner 或 contract crate。
 - runtime 只依赖 remote connection、remote workspace、remote projection 和 capability facts 等 port；SSH、relay、

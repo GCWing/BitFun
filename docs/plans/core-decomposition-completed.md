@@ -28,9 +28,9 @@
   trait 已归入稳定接口层，并保留旧路径 re-export。
 - session restore 的 storage path resolution、turn-load request、restore timing facts 已进入 Runtime Services /
   Runtime Ports 边界；core 仍保留具体 persistence IO。
-- `bitfun-core::product_assembly::CoreRuntimeServicesProvider` 已把现有 core session store path resolution、
+- `bitfun-core::product_runtime::CoreRuntimeServicesProvider` 已把现有 core session store path resolution、
   remote workspace/projection adapter，以及当前完整产品能力需要的 terminal / Git / Network / MCP catalog
-  capability marker 注册到 `RuntimeServicesBuilder` 组合中；该边界只表达当前能力可用性，不改变具体执行逻辑。
+  capability marker 注册到 `RuntimeServicesBuilder` 组合中；`bitfun-core::product_assembly` 只保留旧路径兼容导出。
 
 ### 1.3 Tool Runtime 与 Product Capability 基线
 
@@ -45,8 +45,9 @@
 - `tool-packs` 已承接 tool provider group plan、按 id 选择和 unknown provider group 校验。
 - `product-capabilities` 已承接 capability id、required service capability、tool provider group selection 和
   harness provider selection 等 assembly facts。
-- Product Assembly 已承接 `DeliveryProfile`、`CapabilitySet`、完整 product-full provider plan 和 service availability
-  report；core tool runtime 与 harness registry 已改为消费显式 Product Assembly plan，并保持旧 facade 输出等价。
+- Product Assembly 已承接 `DeliveryProfile`、`CapabilitySet`、完整 product-full provider plan、service availability
+  report 和 profile-scoped harness registry 入口；core tool runtime 与 harness facade 已改为消费显式 Product Assembly plan，
+  并保持旧 facade 输出等价。
 
 ### 1.4 Agent Runtime 与 Harness 契约基线
 
@@ -72,11 +73,32 @@
 - function-agent AI provider acquisition、AI transport error mapping、MiniApp worker process、host side-effect dispatch、
   `net.fetch` / `os.info` runtime execution、PathManager integration、marker IO 和 seed 写盘仍留在 core concrete path。
 
+### 1.6 M5 feature matrix 与 workspace crate 分层
+
+- Desktop、CLI 与 ACP 入口均显式以 `default-features = false` + `product-full` 依赖 `bitfun-core`，继续保护完整产品能力集合。
+- Server、Web UI 与 Mobile Web 当前不直接依赖 `bitfun-core`，通过 app / API / transport 边界消费能力。
+- Remote 能力仍作为完整产品集合中的 capability / service integration 组合存在，主要由 `service-integrations` 与 `ssh-remote`
+  feature group 表达，不声明为独立交付 crate。
+- `src/crates` 已按 `surfaces/`、`facade/`、`integrations/`、`services/`、`product/`、`execution/`、`contracts/` 物理分层；
+  package name、crate name 和产品功能语义保持不变。
+- `cargo metadata --no-deps`、`cargo tree` 与 `cargo check --workspace` 已证明迁移后的 workspace path 和 product-full
+  feature graph 可解析。当前 `bitfun-core` no-default 依赖树为 649 行，product-full 为 1228 行。
+- AGENTS module index、README / Contributing 路径说明、i18n contract、DeepReview path classifier 和 core boundary rules
+  已同步到分层路径。
+
+### 1.7 Product Assembly / Core Facade 收口
+
+- `bitfun-core::product_assembly` 已收敛为兼容 facade，provider-neutral assembly facts 由
+  `bitfun-product-capabilities` 提供，core-specific runtime service provider 移到 `bitfun-core::product_runtime`。
+- `agentic::harness` 不再在 core 内重新构造 Product Assembly plan，profile-scoped harness registry 入口由
+  `bitfun-product-capabilities` 提供，旧 core 路径继续 re-export 保持兼容。
+- boundary check 已禁止 `product_assembly` 重新承载 concrete provider 注册，以及 core harness facade 重新构造 product assembly plan。
+
 ## 2. 已建立的保护
 
 - owner crate 不得依赖回 `bitfun-core`。
 - `product-full` 继续保护完整产品能力集合。
-- boundary check 已覆盖多个 owner crate 的禁止依赖、旧路径 facade-only 和回流约束。
+- boundary check 已覆盖多个 owner crate 的禁止依赖、旧路径 facade-only、回流约束、Product Assembly facade 收口和物理 crate layout。
 - 已有 focused baseline 覆盖 tool manifest、GetToolSpec、execution admission、MiniApp storage / builtin asset、
   remote workspace fallback、MCP config/catalog、agent-runtime prompt cache、custom subagent、thread-goal tools、
   AskUserQuestion、DeepReview hook measurement、tool confirmation、product capability pack、session restore、
@@ -85,12 +107,13 @@
 
 ## 3. 明确未完成边界
 
-- `bitfun-core` 仍是完整产品 runtime 组装点，不能声明已经退化为纯 compatibility facade。
+- `bitfun-core` 仍是完整产品 runtime 组装点，不能声明已经退化为纯 compatibility facade；本次只完成 Product Assembly facade
+  与 core product runtime adapter 的边界收口。
 - 产品入口仍主要通过 `bitfun-core` 的 `product-full` 获取完整能力；Product Assembly 已可表达当前完整能力集合，
-  但尚未完成按交付形态裁剪 feature / dependency。
+  但尚未真正按交付形态裁剪 default feature / dependency。
 - concrete session manager、scheduler lifecycle、event delivery、permission UI/channel wait、prompt assembly、
   session persistence IO、AI client factory / provider acquisition 仍在 core。
 - Bash tool orchestration、terminal lifecycle / PTY、indexed workspace search service owner、remote shell executor abstraction、
   remote terminal concrete impl、MiniApp worker / host / seed / marker IO、Deep Review / DeepResearch / MiniApp concrete workflow execution
   仍未完成 owner 迁移。
-- feature matrix、dependency trimming、build-benefit 仍未用 `cargo metadata` / `cargo tree` / build check 数据闭环。
+- no-default 与 product-full 的依赖边界已有数据基线，但 no-default 仍包含较多 concrete 依赖；不能声称各交付形态已达到最小依赖。
