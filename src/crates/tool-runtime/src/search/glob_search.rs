@@ -1,3 +1,4 @@
+use crate::util::string::{escape_posix_single_quotes, shell_single_quote};
 use globset::{GlobBuilder, GlobMatcher};
 use ignore::WalkBuilder;
 use log::{info, warn};
@@ -273,6 +274,19 @@ pub fn limit_paths(paths: &[PathBuf], limit: usize) -> Vec<PathBuf> {
     result
 }
 
+pub fn collect_remote_glob_matches(search_dir: &str, stdout: &str, limit: usize) -> Vec<PathBuf> {
+    let matches = stdout
+        .lines()
+        .filter(|line| !line.is_empty())
+        .map(|line| {
+            let relative_path = line.strip_prefix("./").unwrap_or(line);
+            Path::new(search_dir).join(relative_path)
+        })
+        .collect::<Vec<_>>();
+
+    limit_paths(&matches, limit)
+}
+
 pub fn execute_local_glob(request: LocalGlobRequest) -> Result<LocalGlobResult, String> {
     if !request.search_path.exists() {
         return Err(format!(
@@ -379,7 +393,7 @@ pub fn execute_local_glob(request: LocalGlobRequest) -> Result<LocalGlobResult, 
 }
 
 pub fn shell_escape(value: &str) -> String {
-    value.replace('\'', "'\\''")
+    escape_posix_single_quotes(value)
 }
 
 pub fn build_remote_rg_command(search_dir: &str, pattern: &str) -> String {
@@ -389,15 +403,12 @@ pub fn build_remote_rg_command(search_dir: &str, pattern: &str) -> String {
 
     let mut parts = vec![
         "cd".to_string(),
-        format!(
-            "'{}'",
-            shell_escape(remote_walk_root.to_string_lossy().as_ref())
-        ),
+        shell_single_quote(remote_walk_root.to_string_lossy().as_ref()),
         "&&".to_string(),
         "rg".to_string(),
         "--files".to_string(),
         "--glob".to_string(),
-        format!("'{}'", shell_escape(&remote_pattern)),
+        shell_single_quote(&remote_pattern),
         "--sort".to_string(),
         "path".to_string(),
     ];
@@ -427,11 +438,11 @@ pub fn build_remote_find_command(search_dir: &str, pattern: &str, limit: usize) 
         remote_pattern
     };
 
-    let escaped_dir = remote_walk_root.to_string_lossy().replace('\'', "'\\''");
-    let escaped_pattern = name_pattern.replace('\'', "'\\''");
+    let escaped_dir = shell_single_quote(remote_walk_root.to_string_lossy().as_ref());
+    let escaped_pattern = shell_single_quote(&name_pattern);
 
     format!(
-        "find '{}' -maxdepth 10 -name '{}' -not -path '*/.git/*' -not -path '*/node_modules/*' 2>/dev/null | head -n {}",
+        "find {} -maxdepth 10 -name {} -not -path '*/.git/*' -not -path '*/node_modules/*' 2>/dev/null | head -n {}",
         escaped_dir, escaped_pattern, limit
     )
 }

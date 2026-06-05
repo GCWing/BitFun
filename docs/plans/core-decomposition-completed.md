@@ -38,6 +38,8 @@
   collapsed unlock gate、static provider materialization 和 plan-to-registry assembly。
 - `tool-runtime` 已承接本地 Write / Edit / Delete / Glob 的低风险 concrete IO primitive；core 保留 agent-facing
   `Tool` adapter、权限、checkpoint、file-read freshness、remote fallback 和具体 tool context。
+- `tool-runtime` 已承接远程 Delete / Read / LS / Glob / Grep 的命令规划、stdout/stderr 规整、marker 解析、
+  path display 和 offset/limit windowing 等低层 execution helper；core 仍负责 workspace shell 执行和 ToolResult 包装。
 - GetToolSpec concrete adapter、manifest resolver、visible tools、readonly catalog、snapshot wrapper、collapsed unlock
   message-derived state 已收敛到 product/tool runtime owner 边界。
 - `tool-packs` 已承接 tool provider group plan、按 id 选择和 unknown provider group 校验。
@@ -76,7 +78,7 @@
 - 已有 focused baseline 覆盖 tool manifest、GetToolSpec、execution admission、MiniApp storage / builtin asset、
   remote workspace fallback、MCP config/catalog、agent-runtime prompt cache、custom subagent、thread-goal tools、
   AskUserQuestion、DeepReview hook measurement、tool confirmation、product capability pack、session restore、
-  local tool IO、function-agent Git、scheduled-job state 等路径。
+  local/remote tool IO helper、function-agent Git、scheduled-job state 等路径。
 - 构建脚本、installer 和发布形态不是 core decomposition 迁移的默认修改范围。
 
 ## 3. 明确未完成边界
@@ -86,6 +88,7 @@
   但尚未完成按交付形态裁剪 feature / dependency。
 - concrete session manager、scheduler lifecycle、event delivery、permission UI/channel wait、prompt assembly、
   session persistence IO、AI client factory / provider acquisition 仍在 core。
-- Bash / terminal lifecycle、indexed workspace search、remote shell execution、remote FS / terminal concrete impl、
-  MiniApp worker / host / seed / marker IO、Deep Review / DeepResearch / MiniApp concrete workflow execution 仍未完成 owner 迁移。
+- Bash tool orchestration、terminal lifecycle / PTY、indexed workspace search service owner、remote shell executor abstraction、
+  remote terminal concrete impl、MiniApp worker / host / seed / marker IO、Deep Review / DeepResearch / MiniApp concrete workflow execution
+  仍未完成 owner 迁移。
 - feature matrix、dependency trimming、build-benefit 仍未用 `cargo metadata` / `cargo tree` / build check 数据闭环。

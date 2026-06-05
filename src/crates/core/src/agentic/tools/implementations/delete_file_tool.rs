@@ -7,7 +7,10 @@ use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use serde_json::{json, Value};
 use std::path::Path;
-use tool_runtime::fs::{delete_local_path, inspect_local_delete_target, DeleteLocalPathRequest};
+use tool_runtime::fs::{
+    build_remote_delete_command, delete_local_path, inspect_local_delete_target,
+    DeleteLocalPathRequest,
+};
 
 /// File deletion tool - provides safe file/directory deletion functionality
 ///
@@ -314,11 +317,7 @@ Important notes:
                 BitFunError::tool("Workspace shell not available for remote Delete".to_string())
             })?;
 
-            let rm_cmd = if recursive {
-                format!("rm -rf '{}'", resolved.resolved_path.replace('\'', "'\\''"))
-            } else {
-                format!("rm -f '{}'", resolved.resolved_path.replace('\'', "'\\''"))
-            };
+            let rm_cmd = build_remote_delete_command(&resolved.resolved_path, recursive);
 
             let (_stdout, stderr, exit_code) = ws_shell
                 .exec(&rm_cmd, Some(15_000))
