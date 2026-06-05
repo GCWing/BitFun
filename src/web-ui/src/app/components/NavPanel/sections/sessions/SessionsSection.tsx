@@ -44,6 +44,15 @@ import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport
 import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
 import { confirmWarning } from '@/component-library/components/ConfirmDialog/confirmService';
 import ScheduledJobsModal from '@/app/components/scheduled-jobs/ScheduledJobsModal';
+import { scheduleAfterStartupPaint, scheduleAfterStartupSignal } from '@/shared/utils/startupTaskScheduling';
+import {
+  SESSION_METADATA_DEFERRED_FALLBACK_MS,
+  SESSION_METADATA_DEFERRED_FRAME_COUNT,
+  SESSION_METADATA_DEFERRED_SIGNAL,
+  getDeferredSessionMetadataDelayMs,
+  getInitialSessionMetadataLoadMode,
+  hasStartupOverlayHandedOff,
+} from './sessionMetadataStartup';
 import './SessionsSection.scss';
 
 /** Top-level parent sessions shown at each expand step (children still nest under visible parents). */
@@ -127,7 +136,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   workspacePath,
   remoteConnectionId = null,
   remoteSshHost = null,
-  isActiveWorkspace: _isActiveWorkspace = true,
+  isActiveWorkspace = true,
   assistantLabel,
   showSessionModeIcon = true,
   isVisible = true,
@@ -164,6 +173,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   const sessionMenuPopoverRef = useRef<HTMLDivElement>(null);
   const sessionMenuAnchorRef = useRef<HTMLButtonElement>(null);
   const metadataLoadRequestIdRef = useRef(0);
+  const initialMetadataLoadKeyRef = useRef<string | null>(null);
 
   // Subscribe to state machine changes for running status
   useEffect(() => {
@@ -203,6 +213,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
 
   useEffect(() => {
     metadataLoadRequestIdRef.current += 1;
+    initialMetadataLoadKeyRef.current = null;
     setExpandLevel(0);
     setMetadataPageState({
       totalTopLevelCount: null,
@@ -251,13 +262,98 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     [workspacePath, remoteConnectionId, remoteSshHost]
   );
 
+  const initialMetadataKey = useMemo(
+    () => [
+      workspacePath ?? '',
+      remoteConnectionId ?? '',
+      remoteSshHost ?? '',
+    ].join('\n'),
+    [workspacePath, remoteConnectionId, remoteSshHost],
+  );
+
+  const loadInitialMetadataPage = useCallback(
+    async (source: string) => {
+      if (!workspacePath) {
+        return;
+      }
+      if (initialMetadataLoadKeyRef.current === initialMetadataKey) {
+        return;
+      }
+
+      initialMetadataLoadKeyRef.current = initialMetadataKey;
+      const page = await loadMetadataPage(SESSIONS_LEVEL_0, undefined, source);
+      if (!page && initialMetadataLoadKeyRef.current === initialMetadataKey) {
+        initialMetadataLoadKeyRef.current = null;
+      }
+    },
+    [initialMetadataKey, loadMetadataPage, workspacePath],
+  );
+
   useEffect(() => {
     if (!isVisible || !workspacePath) {
       return;
     }
 
-    void loadMetadataPage(SESSIONS_LEVEL_0, undefined, 'sessions_nav_initial');
-  }, [isVisible, workspacePath, remoteConnectionId, remoteSshHost, loadMetadataPage]);
+    const loadMode = getInitialSessionMetadataLoadMode({
+      hasWorkspacePath: Boolean(workspacePath),
+      isActiveWorkspace,
+      isVisible,
+      startupOverlayHandedOff: hasStartupOverlayHandedOff(),
+    });
+
+    if (loadMode === 'skip') {
+      return;
+    }
+
+    if (loadMode === 'immediate') {
+      void loadInitialMetadataPage('sessions_nav_initial_active');
+      return;
+    }
+
+    let cancelled = false;
+    let delayTimer: number | null = null;
+    const scheduleDeferredMetadataLoad = () => {
+      if (cancelled) {
+        return;
+      }
+      const delayMs = getDeferredSessionMetadataDelayMs(workspaceId ?? workspacePath);
+      const runDeferredLoad = () => {
+        delayTimer = null;
+        if (!cancelled) {
+          void loadInitialMetadataPage('sessions_nav_initial_deferred');
+        }
+      };
+
+      if (delayMs > 0) {
+        delayTimer = window.setTimeout(runDeferredLoad, delayMs);
+        return;
+      }
+      runDeferredLoad();
+    };
+    const cancelStartupSchedule = loadMode === 'after-startup-paint'
+      ? scheduleAfterStartupPaint(scheduleDeferredMetadataLoad, {
+          frameCount: SESSION_METADATA_DEFERRED_FRAME_COUNT,
+        })
+      : scheduleAfterStartupSignal(scheduleDeferredMetadataLoad, {
+          signalName: SESSION_METADATA_DEFERRED_SIGNAL,
+          fallbackTimeoutMs: SESSION_METADATA_DEFERRED_FALLBACK_MS,
+          frameCount: SESSION_METADATA_DEFERRED_FRAME_COUNT,
+        });
+
+    return () => {
+      cancelled = true;
+      cancelStartupSchedule();
+      if (delayTimer !== null) {
+        window.clearTimeout(delayTimer);
+      }
+    };
+  }, [
+    isActiveWorkspace,
+    isVisible,
+    loadInitialMetadataPage,
+    workspaceId,
+    workspacePath,
+  ]);
 
   useEffect(() => {
     if (!openMenuSessionId) return;
@@ -379,6 +475,12 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   const totalTopLevelSessionCount = metadataPageState.totalTopLevelCount ?? topLevelSessions.length;
   const hasMoreUnloadedSessions =
     metadataPageState.hasMore || topLevelSessions.length < totalTopLevelSessionCount;
+  const expandToggleAction =
+    expandLevel === 0
+      ? 'show-more'
+      : expandLevel === 1 && totalTopLevelSessionCount > SESSIONS_LEVEL_1
+        ? 'show-all'
+        : 'show-less';
 
   const visibleItems = useMemo(() => {
     const visibleParents = topLevelSessions.slice(0, sessionDisplayLimit);
@@ -961,6 +1063,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           type="button"
           className={`bitfun-nav-panel__inline-toggle${metadataPageState.isLoading ? ' is-loading' : ''}`}
           data-testid="session-nav-show-more"
+          data-session-nav-toggle-action={expandToggleAction}
           disabled={metadataPageState.isLoading}
           onClick={() => { void handleExpandToggle(); }}
         >

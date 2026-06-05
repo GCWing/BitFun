@@ -603,43 +603,93 @@ async function waitForOptionalTracePhaseForSessionSince(
 }
 
 async function findSessionItem(sessionId: string): Promise<ReturnType<typeof $> | null> {
-  let lastVisibleSessionIds: string[] = [];
-  for (let attempt = 0; attempt < 40; attempt += 1) {
-    const item = await $(`[data-testid="session-nav-item"][data-session-id="${sessionId}"]`);
-    if (await item.isExisting()) {
-      return item;
-    }
-
-    lastVisibleSessionIds = await browser.execute(() =>
+  const readVisibleSessionIds = async (): Promise<string[]> =>
+    browser.execute(() =>
       Array.from(document.querySelectorAll('[data-testid="session-nav-item"]'))
         .map(element => element.getAttribute('data-session-id') || '')
         .filter(Boolean)
     );
-    const showMore = await $('[data-testid="session-nav-show-more"]');
-    if (!(await showMore.isExisting()) || !(await showMore.isEnabled())) {
+
+  const findTarget = async (): Promise<ReturnType<typeof $> | null> => {
+    const item = await $(`[data-testid="session-nav-item"][data-session-id="${sessionId}"]`);
+    return await item.isExisting() ? item : null;
+  };
+
+  const findExpandableToggles = async (): Promise<Array<ReturnType<typeof $>>> => {
+    const toggles = await browser.$$('[data-testid="session-nav-show-more"]');
+    const expandable: Array<ReturnType<typeof $>> = [];
+    for (const toggle of toggles) {
+      if (
+        !(await toggle.isExisting()) ||
+        !(await toggle.isDisplayed()) ||
+        !(await toggle.isEnabled())
+      ) {
+        continue;
+      }
+
+      const action = await toggle.getAttribute('data-session-nav-toggle-action').catch(() => null);
+      if (action === 'show-less') {
+        continue;
+      }
+      expandable.push(toggle);
+    }
+    return expandable;
+  };
+
+  let lastVisibleSessionIds: string[] = [];
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const existing = await findTarget();
+    if (existing) {
+      return existing;
+    }
+
+    lastVisibleSessionIds = await readVisibleSessionIds();
+    const toggles = await findExpandableToggles();
+    if (toggles.length === 0) {
       break;
     }
 
-    const beforeCount = lastVisibleSessionIds.length;
-    await showMore.click();
-    await browser.waitUntil(async () => {
-      const ids = await browser.execute(() =>
-        Array.from(document.querySelectorAll('[data-testid="session-nav-item"]'))
-          .map(element => element.getAttribute('data-session-id') || '')
-          .filter(Boolean)
-      );
-      const toggle = await $('[data-testid="session-nav-show-more"]');
-      const toggleReady = !(await toggle.isExisting()) || (await toggle.isEnabled());
-      return ids.length !== beforeCount && toggleReady;
-    }, { timeout: 3000, interval: 100 }).catch(() => undefined);
+    let clickedAny = false;
+    for (let toggleIndex = 0; toggleIndex < toggles.length; toggleIndex += 1) {
+      const item = await findTarget();
+      if (item) {
+        return item;
+      }
 
-    const currentVisibleSessionIds = await browser.execute(() =>
-      Array.from(document.querySelectorAll('[data-testid="session-nav-item"]'))
-        .map(element => element.getAttribute('data-session-id') || '')
-        .filter(Boolean)
-    );
-    if (currentVisibleSessionIds.length <= beforeCount && attempt > 0) {
-      lastVisibleSessionIds = currentVisibleSessionIds;
+      const currentToggles = await findExpandableToggles();
+      const toggle = currentToggles[toggleIndex];
+      if (!toggle) {
+        break;
+      }
+
+      if (
+        !(await toggle.isExisting()) ||
+        !(await toggle.isDisplayed()) ||
+        !(await toggle.isEnabled())
+      ) {
+        continue;
+      }
+
+      const action = await toggle.getAttribute('data-session-nav-toggle-action').catch(() => null);
+      if (action === 'show-less') {
+        continue;
+      }
+
+      const beforeCount = lastVisibleSessionIds.length;
+      clickedAny = true;
+      await toggle.click();
+      await browser.waitUntil(async () => {
+        if (await findTarget()) {
+          return true;
+        }
+        const ids = await readVisibleSessionIds();
+        const nextToggles = await findExpandableToggles();
+        return ids.length !== beforeCount || nextToggles.length !== toggles.length;
+      }, { timeout: 3000, interval: 100 }).catch(() => undefined);
+      lastVisibleSessionIds = await readVisibleSessionIds();
+    }
+
+    if (!clickedAny) {
       break;
     }
   }

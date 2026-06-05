@@ -234,6 +234,23 @@ describe('startup performance contract', () => {
     expect(getSource).not.toContain('restore_session');
   });
 
+  it('keeps non-active workspace session metadata out of the first startup window', () => {
+    const source = readSource('../../app/components/NavPanel/sections/sessions/SessionsSection.tsx');
+
+    expect(source).toContain('isActiveWorkspace = true');
+    expect(source).not.toContain('isActiveWorkspace: _isActiveWorkspace');
+    expect(source).toContain('getInitialSessionMetadataLoadMode');
+    expect(source).toContain("loadMode === 'immediate'");
+    expect(source).toContain("loadMode === 'after-startup-paint'");
+    expect(source).toContain('scheduleAfterStartupSignal');
+    expect(source).toContain('scheduleAfterStartupPaint');
+    expect(source).toContain('hasStartupOverlayHandedOff');
+    expect(source).toContain('SESSION_METADATA_DEFERRED_SIGNAL');
+    expect(source).toContain('sessions_nav_initial_active');
+    expect(source).toContain('sessions_nav_initial_deferred');
+    expect(source).toContain('data-session-nav-toggle-action');
+  });
+
   it('keeps Git diff editor from importing the broad editor barrel', () => {
     const source = readSource('../../tools/git/components/GitDiffEditor/GitDiffEditor.tsx');
 
