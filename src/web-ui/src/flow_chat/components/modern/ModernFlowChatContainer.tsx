@@ -35,8 +35,12 @@ import {
   findDialogTurn,
   shouldUseStickyLatestPin,
 } from '../../utils/flowChatTurnScrollPolicy';
-import { startupTrace } from '@/shared/utils/startupTrace';
+import { isRemoteTraceContext, startupTrace } from '@/shared/utils/startupTrace';
 import { scheduleAfterStartupPaint } from '@/shared/utils/startupTaskScheduling';
+import {
+  HISTORY_SESSION_OPEN_INTENT_EVENT,
+  type HistorySessionOpenIntentDetail,
+} from '../../services/sessionOpenIntent';
 import './ModernFlowChatContainer.scss';
 
 interface ModernFlowChatContainerProps {
@@ -176,6 +180,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   const activeSession = useActiveSession();
   const visibleTurnInfo = useVisibleTurnInfo();
   const [pendingHeaderTurnId, setPendingHeaderTurnId] = useState<string | null>(null);
+  const [pendingHistoryOpenSession, setPendingHistoryOpenSession] = useState<HistorySessionOpenIntentDetail | null>(null);
   const [searchOpenRequest, setSearchOpenRequest] = useState(0);
   // Track whether a slash-command or @-mention popup is open in ChatInput.
   // When a popup is active, the global Escape shortcut is disabled so the
@@ -206,6 +211,9 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     historyState === 'failed' ||
     hasRestoredTurnsPendingVirtualItems
   );
+  const showHistoryOpenIntentOverlay =
+    pendingHistoryOpenSession !== null &&
+    activeSession?.sessionId !== pendingHistoryOpenSession.sessionId;
   const {
     exploreGroupStates,
     onExploreGroupToggle: handleExploreGroupToggle,
@@ -254,6 +262,53 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     virtualListRef,
     onExpandExploreGroup: handleExpandGroup,
   });
+
+  useEffect(() => {
+    const handleHistorySessionOpenIntent = (event: Event) => {
+      const detail = (event as CustomEvent<HistorySessionOpenIntentDetail>).detail;
+      if (!detail?.sessionId) {
+        return;
+      }
+
+      setPendingHistoryOpenSession({
+        sessionId: detail.sessionId,
+        sessionTitle: detail.sessionTitle,
+      });
+      startupTrace.markPhase('historical_session_open_intent_overlay', {
+        sessionId: detail.sessionId,
+      });
+    };
+
+    window.addEventListener(HISTORY_SESSION_OPEN_INTENT_EVENT, handleHistorySessionOpenIntent);
+    return () => {
+      window.removeEventListener(HISTORY_SESSION_OPEN_INTENT_EVENT, handleHistorySessionOpenIntent);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!pendingHistoryOpenSession) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setPendingHistoryOpenSession(current =>
+        current?.sessionId === pendingHistoryOpenSession.sessionId ? null : current
+      );
+    }, 4000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [pendingHistoryOpenSession]);
+
+  useEffect(() => {
+    if (
+      pendingHistoryOpenSession &&
+      activeSession?.sessionId === pendingHistoryOpenSession.sessionId
+    ) {
+      setPendingHistoryOpenSession(null);
+    }
+  }, [activeSession?.sessionId, pendingHistoryOpenSession]);
 
   const contextValue: FlowChatContextValue = useMemo(() => ({
     onFileViewRequest: handleFileViewRequest,
@@ -352,6 +407,9 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   const hasPendingHistoryCompletion = activeSession?.sessionId
     ? flowChatStore.hasPendingSessionHistoryCompletion(activeSession.sessionId)
     : false;
+  const hasDeferredHistoryProjection = activeSession?.sessionId
+    ? flowChatStore.hasDeferredSessionHistoryProjection(activeSession.sessionId)
+    : false;
   const historyInitialContentKey =
     activeSession?.sessionId &&
     latestTurnId &&
@@ -361,19 +419,26 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       activeSession.contextRestoreState === 'pending' ||
       hasPendingHistoryCompletion
     )
-      ? `${activeSession.sessionId}:${latestTurnId}:${turnSummaries.length}`
+      ? `${activeSession.sessionId}:${latestTurnId}`
       : null;
-  const showHistoryInitialContentOverlay =
+  const shouldBlockHistoryInitialContentInteraction =
     historyInitialContentKey !== null &&
     historyInitialContentReadyKey !== historyInitialContentKey;
+  const shouldBlockHistoryTransitionInteraction =
+    shouldBlockHistoryInitialContentInteraction ||
+    showHistoryOpenIntentOverlay;
+  const showFailedHistoryPlaceholder =
+    showHistoryPlaceholder && historyState === 'failed';
+  const showHistoryLoadingLayer =
+    !showFailedHistoryPlaceholder && showHistoryPlaceholder;
   const blockHistoryOverlayActivation = useCallback((event: React.SyntheticEvent<HTMLElement>) => {
-    if (!showHistoryInitialContentOverlay) {
+    if (!showHistoryLoadingLayer && !shouldBlockHistoryTransitionInteraction) {
       return;
     }
 
     event.preventDefault();
     event.stopPropagation();
-  }, [showHistoryInitialContentOverlay]);
+  }, [shouldBlockHistoryTransitionInteraction, showHistoryLoadingLayer]);
   const latestTurn = useMemo(
     () => findDialogTurn(activeSession?.dialogTurns, latestTurnId),
     [activeSession?.dialogTurns, latestTurnId],
@@ -479,9 +544,26 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     const hasPreviouslyAnchoredSameLatestTurn =
       autoPinnedTurnKeyRef.current?.startsWith(previousAnchoredLatestTurnKeyPrefix) === true;
     const latestTurnRenderedInViewport = virtualListRef.current?.isTurnRenderedInViewport(latestTurnId) === true;
-    const shouldForceLatestAnchorAfterTurnCountChange =
+    const sameLatestTurnCountChanged =
       hasPreviouslyAnchoredSameLatestTurn &&
       autoPinnedTurnKeyRef.current !== resolvedLatestTurnKey;
+    const shouldSkipLocalFullHistoryReanchor =
+      sameLatestTurnCountChanged &&
+      !isRemoteTraceContext(activeSession.remoteConnectionId, activeSession.remoteSshHost);
+    const shouldForceLatestAnchorAfterTurnCountChange =
+      sameLatestTurnCountChanged &&
+      !shouldSkipLocalFullHistoryReanchor;
+    if (shouldSkipLocalFullHistoryReanchor) {
+      autoPinnedTurnKeyRef.current = resolvedLatestTurnKey;
+      startupTrace.markPhase('historical_session_latest_anchor_skipped', {
+        sessionId,
+        latestTurnId,
+        reason: 'local_full_history_projection',
+        mode: pinMode ?? 'bottom',
+        turnCount: turnSummaries.length,
+      });
+      return;
+    }
     if (
       !shouldForceLatestAnchorAfterTurnCountChange &&
       hasPreviouslyAnchoredSameLatestTurn &&
@@ -490,6 +572,8 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     ) {
       autoPinnedTurnKeyRef.current = resolvedLatestTurnKey;
       startupTrace.markPhase('historical_session_latest_anchor_skipped', {
+        sessionId,
+        latestTurnId,
         reason: 'latest_turn_already_visible',
         mode: pinMode ?? 'bottom',
       });
@@ -501,6 +585,8 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       !latestTurnRenderedInViewport
     ) {
       startupTrace.markPhase('historical_session_latest_anchor_stale_visible_info', {
+        sessionId,
+        latestTurnId,
         mode: pinMode ?? 'bottom',
       });
     }
@@ -530,6 +616,8 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       }
 
       startupTrace.markPhase('historical_session_latest_anchor_attempt', {
+        sessionId,
+        latestTurnId: resolvedLatestTurnId,
         accepted,
         attempt: attempts,
         mode: pinMode ?? 'bottom',
@@ -543,6 +631,8 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       if (attempts >= LATEST_TURN_AUTO_PIN_MAX_ATTEMPTS) {
         setPendingHeaderTurnId(null);
         startupTrace.markPhase('historical_session_latest_anchor_failed', {
+          sessionId,
+          latestTurnId: resolvedLatestTurnId,
           attempts,
           mode: pinMode ?? 'bottom',
         });
@@ -552,7 +642,13 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       frameId = requestAnimationFrame(attemptLatestViewportAnchor);
     };
 
-    if (shouldForceLatestAnchorAfterTurnCountChange) {
+    const shouldAttemptLatestAnchorImmediately =
+      shouldForceLatestAnchorAfterTurnCountChange ||
+      activeSession?.isHistorical === true ||
+      activeSession?.contextRestoreState === 'pending' ||
+      hasPendingHistoryCompletion;
+
+    if (shouldAttemptLatestAnchorImmediately) {
       attemptLatestViewportAnchor();
     } else {
       frameId = requestAnimationFrame(attemptLatestViewportAnchor);
@@ -566,6 +662,11 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     };
   }, [
     activeSession?.sessionId,
+    activeSession?.isHistorical,
+    activeSession?.contextRestoreState,
+    activeSession?.remoteConnectionId,
+    activeSession?.remoteSshHost,
+    hasPendingHistoryCompletion,
     latestTurnId,
     latestTurnUsesStickyPin,
     turnSummaries.length,
@@ -586,7 +687,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       return;
     }
 
-    const releaseKey = `${sessionId}:${latestTurnId}:${turnSummaries.length}`;
+    const releaseKey = `${sessionId}:${latestTurnId}`;
     if (releasedHistoryCompletionKeyRef.current === releaseKey) {
       return;
     }
@@ -602,13 +703,12 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       }
       releasedHistoryCompletionKeyRef.current = releaseKey;
       const released = flowChatStore.releaseSessionHistoryCompletionAfterInitialPaint(sessionId);
-      if (released) {
-        startupTrace.markPhase('historical_session_initial_content_painted', {
-          sessionId,
-          latestTurnId,
-          turnCount: turnSummaries.length,
-        });
-      }
+      startupTrace.markPhase('historical_session_initial_content_painted', {
+        sessionId,
+        latestTurnId,
+        released,
+        turnCount: turnSummaries.length,
+      });
     };
 
     const checkLatestTextVisibility = () => {
@@ -626,12 +726,10 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       if (attempts >= HISTORY_INITIAL_CONTENT_PAINT_MAX_ATTEMPTS) {
         setHistoryInitialContentReadyKey(releaseKey);
         releasedHistoryCompletionKeyRef.current = releaseKey;
-        const released = flowChatStore.releaseSessionHistoryCompletionAfterInitialPaint(sessionId);
         startupTrace.markPhase('historical_session_initial_content_paint_signal_missed', {
           sessionId,
           latestTurnId,
           attempts,
-          released,
         });
         return;
       }
@@ -673,18 +771,21 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     if (
       !sessionId ||
       activeSession.historyState !== 'ready' ||
-      !hasPendingHistoryCompletion ||
+      (
+        !hasPendingHistoryCompletion &&
+        !hasDeferredHistoryProjection
+      ) ||
       trimmedSearchQuery.length === 0
     ) {
       return;
     }
 
     if (latestTurnId) {
-      releasedHistoryCompletionKeyRef.current = `${sessionId}:${latestTurnId}:${turnSummaries.length}`;
+      releasedHistoryCompletionKeyRef.current = `${sessionId}:${latestTurnId}`;
     }
 
-    const released = flowChatStore.releaseSessionHistoryCompletionAfterInitialPaint(sessionId);
-    if (released) {
+    const requested = flowChatStore.requestSessionFullHistoryProjection(sessionId, 'search');
+    if (requested) {
       startupTrace.markPhase('historical_session_full_hydrate_released_for_search', {
         sessionId,
         queryLength: trimmedSearchQuery.length,
@@ -694,6 +795,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   }, [
     activeSession?.historyState,
     activeSession?.sessionId,
+    hasDeferredHistoryProjection,
     hasPendingHistoryCompletion,
     latestTurnId,
     searchQuery,
@@ -849,47 +951,80 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
 
         <div
           className="modern-flowchat-container__messages"
+          data-active-session-id={activeSession?.sessionId ?? ''}
+          data-history-state={historyState ?? 'none'}
+          data-context-restore-state={activeSession?.contextRestoreState ?? 'none'}
+          data-is-partial={activeSession?.isPartial === true ? 'true' : 'false'}
+          data-dialog-turn-count={activeSession?.dialogTurns.length ?? 0}
+          data-virtual-item-count={virtualItems.length}
+          data-show-history-placeholder={showHistoryPlaceholder ? 'true' : 'false'}
+          data-show-history-transition-overlay={shouldBlockHistoryTransitionInteraction ? 'true' : 'false'}
+          data-show-history-loading-layer={showHistoryLoadingLayer ? 'true' : 'false'}
+          data-show-history-open-intent-overlay={showHistoryOpenIntentOverlay ? 'true' : 'false'}
+          data-has-pending-history-completion={hasPendingHistoryCompletion ? 'true' : 'false'}
+          data-has-deferred-history-projection={hasDeferredHistoryProjection ? 'true' : 'false'}
+          data-latest-turn-id={latestTurnId ?? ''}
+          data-history-initial-content-ready={
+            historyInitialContentKey === null || historyInitialContentReadyKey === historyInitialContentKey
+              ? 'true'
+              : 'false'
+          }
+          data-pending-history-open-session-id={pendingHistoryOpenSession?.sessionId ?? ''}
           onClickCapture={blockHistoryOverlayActivation}
+          onContextMenuCapture={blockHistoryOverlayActivation}
           onMouseDownCapture={blockHistoryOverlayActivation}
           onPointerDownCapture={blockHistoryOverlayActivation}
         >
-          {showHistoryPlaceholder ? (
-            <HistorySessionPlaceholder
-              state={
-                historyState === 'failed'
-                  ? 'failed'
-                  : historyState === 'metadata-only'
-                    ? 'metadata-only'
-                    : 'hydrating'
-              }
-              onRetry={handleRetryHistoryLoad}
-            />
-          ) : virtualItems.length === 0 ? (
-            <WelcomePanel
-              key={activeSession?.sessionId ?? 'welcome'}
-              sessionMode={activeSession?.mode}
-              workspacePath={activeSession?.workspacePath}
-              onQuickAction={(command) => {
-                window.dispatchEvent(new CustomEvent('fill-chat-input', {
-                  detail: { message: command }
-                }));
-              }}
-            />
-          ) : (
-            <>
-              <VirtualMessageList
-                // Remount per session so Virtuoso does not reuse the previous
-                // viewport before the new session's auto-pin settles.
-                key={activeSession?.sessionId ?? 'virtual-message-list'}
-                ref={virtualListRef}
+          <>
+            {showFailedHistoryPlaceholder ? (
+              <HistorySessionPlaceholder
+                state="failed"
+                onRetry={handleRetryHistoryLoad}
               />
-              {showHistoryInitialContentOverlay && (
-                <div className="modern-flowchat-container__history-overlay">
-                  <HistorySessionPlaceholder state="hydrating" />
-                </div>
-              )}
-            </>
-          )}
+            ) : virtualItems.length === 0 ? (
+              showHistoryLoadingLayer ? null : (
+                <WelcomePanel
+                  key={activeSession?.sessionId ?? 'welcome'}
+                  sessionMode={activeSession?.mode}
+                  workspacePath={activeSession?.workspacePath}
+                  onQuickAction={(command) => {
+                    window.dispatchEvent(new CustomEvent('fill-chat-input', {
+                      detail: { message: command }
+                    }));
+                  }}
+                />
+              )
+            ) : (
+              <>
+                <VirtualMessageList
+                  ref={virtualListRef}
+                />
+              </>
+            )}
+            {showHistoryLoadingLayer && (
+              <div
+                className="modern-flowchat-container__history-overlay"
+                role="status"
+                aria-label={t('historyState.loadingTitle')}
+              >
+                <HistorySessionPlaceholder
+                  state={historyState === 'metadata-only' ? 'metadata-only' : 'hydrating'}
+                />
+              </div>
+            )}
+            {showHistoryOpenIntentOverlay && (
+              <div
+                className="modern-flowchat-container__history-open-intent-shield"
+                role="status"
+                aria-label={t('historyState.loadingTitle')}
+              >
+                <span
+                  className="modern-flowchat-container__history-open-intent-spinner"
+                  aria-hidden="true"
+                />
+              </div>
+            )}
+          </>
         </div>
       </div>
     </FlowChatContext.Provider>

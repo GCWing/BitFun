@@ -28,10 +28,12 @@ function isActiveToolItem(item: FlowItem): boolean {
   return item.status !== 'completed' && item.status !== 'cancelled' && item.status !== 'error';
 }
 
-function isRecentlyCompletedToolItem(item: FlowItem, nowMs: number): boolean {
+export function isCompletedToolInTransientWindow(item: FlowItem, nowMs: number): boolean {
   if (item.type !== 'tool' || item.status !== 'completed') return false;
   const endTime = (item as FlowToolItem).endTime;
-  return typeof endTime === 'number' && nowMs - endTime < COMPLETED_TOOL_TRANSIENT_MS;
+  if (typeof endTime !== 'number') return false;
+  const elapsedMs = nowMs - endTime;
+  return elapsedMs >= 0 && elapsedMs < COMPLETED_TOOL_TRANSIENT_MS;
 }
 
 export function buildModelRoundItemGroups({
@@ -93,7 +95,7 @@ export function buildModelRoundItemGroups({
         const keepTransientlyCritical =
           deferExploreGrouping ||
           isActiveToolItem(item) ||
-          (isStreaming && isRecentlyCompletedToolItem(item, nowMs));
+          (isStreaming && isCompletedToolInTransientWindow(item, nowMs));
 
         if (keepTransientlyCritical) {
           flushExploreBuffer(false);

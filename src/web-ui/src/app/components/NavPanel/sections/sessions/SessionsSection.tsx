@@ -22,6 +22,10 @@ import {
   openMainSession,
   selectActiveBtwSessionTab,
 } from '@/flow_chat/services/openBtwSession';
+import {
+  dispatchHistorySessionOpenIntent,
+  shouldShowHistorySessionOpenIntent,
+} from '@/flow_chat/services/sessionOpenIntent';
 import { resolveSessionRelationship } from '@/flow_chat/utils/sessionMetadata';
 import {
   compareSessionsForNavStable,
@@ -61,6 +65,18 @@ const resolveSessionModeType = (session: Session): SessionMode => {
 
 const getTitle = (session: Session): string =>
   resolveSessionTitle(session, (key, options) => i18nService.t(key, options));
+
+const waitForHistoryOpenIntentPaint = (): Promise<void> =>
+  new Promise(resolve => {
+    if (typeof window === 'undefined' || typeof window.requestAnimationFrame !== 'function') {
+      globalThis.setTimeout(resolve, 0);
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => resolve());
+    });
+  });
 
 const getChildSessionBadge = (kind: Session['sessionKind']): string => {
   const normalizedKind =
@@ -379,12 +395,48 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   const scheduledJobsSession = scheduledJobsSessionId
     ? flowChatState.sessions.get(scheduledJobsSessionId) ?? null
     : null;
+  const lastHistoryOpenIntentRef = useRef<{ sessionId: string; atMs: number } | null>(null);
+
+  const dispatchHistoryOpenIntentForSession = useCallback(
+    (session: Session): boolean => {
+      const sessionId = session.sessionId;
+      if (
+        sessionId === activeSessionId ||
+        !shouldShowHistorySessionOpenIntent(session)
+      ) {
+        return false;
+      }
+
+      const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      const lastIntent = lastHistoryOpenIntentRef.current;
+      if (
+        lastIntent &&
+        lastIntent.sessionId === sessionId &&
+        now - lastIntent.atMs < 250
+      ) {
+        return true;
+      }
+
+      lastHistoryOpenIntentRef.current = { sessionId, atMs: now };
+      dispatchHistorySessionOpenIntent(sessionId, getTitle(session));
+      return true;
+    },
+    [activeSessionId],
+  );
 
   const handleSwitch = useCallback(
     async (sessionId: string) => {
       if (editingSessionId) return;
       try {
         const session = flowChatStore.getState().sessions.get(sessionId);
+        const historyOpenIntentDispatched = session
+          ? dispatchHistoryOpenIntentForSession(session)
+          : false;
+        if (session) {
+          if (historyOpenIntentDispatched) {
+            await waitForHistoryOpenIntentPaint();
+          }
+        }
         const relationship = resolveSessionRelationship(session);
         const parentSessionId = relationship.parentSessionId;
         const mustActivateWorkspace =
@@ -429,11 +481,28 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     },
     [
       activeSessionId,
+      dispatchHistoryOpenIntentForSession,
       editingSessionId,
       setActiveWorkspace,
       workspaceId,
       currentWorkspace?.id,
     ]
+  );
+
+  const handleSessionOpenPointerDown = useCallback(
+    (event: React.PointerEvent<HTMLElement>, session: Session) => {
+      if (editingSessionId || session.sessionId === activeSessionId) {
+        return;
+      }
+
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('.bitfun-nav-panel__inline-item-actions, .bitfun-nav-panel__inline-item-edit')) {
+        return;
+      }
+
+      dispatchHistoryOpenIntentForSession(session);
+    },
+    [activeSessionId, dispatchHistoryOpenIntentForSession, editingSessionId],
   );
 
   const resolveSessionTitle = useCallback(
@@ -711,6 +780,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
               data-testid="session-nav-item"
               data-session-id={session.sessionId}
               data-session-title={sessionTitle}
+              onPointerDown={event => handleSessionOpenPointerDown(event, session)}
               onClick={() => handleSwitch(session.sessionId)}
             >
               {showSessionModeIcon ? (

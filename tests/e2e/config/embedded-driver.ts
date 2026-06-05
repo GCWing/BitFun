@@ -455,7 +455,7 @@ export function createEmbeddedConfig(specs: string[], label: string): Options.Te
       'bitfun:embedded': true,
     } as any],
 
-    logLevel: 'info',
+    logLevel: (process.env.E2E_LOG_LEVEL || 'info') as Options.Testrunner['logLevel'],
     bail: 0,
     baseUrl: '',
     waitforTimeout: 10000,

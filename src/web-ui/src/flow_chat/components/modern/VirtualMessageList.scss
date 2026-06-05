@@ -67,5 +67,47 @@
     min-height: 72px;
     overflow-anchor: none;
   }
-}
 
+  &__static-scroller {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    z-index: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overflow-anchor: none;
+    scrollbar-gutter: stable;
+  }
+
+  &__static-items {
+    width: 100%;
+  }
+
+  &__projection-handoff-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    overflow: hidden;
+    pointer-events: none;
+    background: var(--color-bg-flowchat, var(--color-bg-scene, var(--color-bg-primary, #fff)));
+    contain: paint;
+  }
+
+  &__projection-handoff-content {
+    width: 100%;
+    will-change: transform;
+
+    &--bottom {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      min-height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      transform: none;
+    }
+  }
+
+}

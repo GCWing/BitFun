@@ -118,9 +118,53 @@ describe('SessionModule historical session coordination', () => {
     vi.clearAllMocks();
   });
 
-  it('switches to a historical session immediately while hydrating in the background', async () => {
+  it('hydrates a metadata-only historical session before switching to avoid an empty loading page', async () => {
     const load = createDeferred<void>();
     const { context, flowChatStore } = createContext(createSession());
+    flowChatStore.loadSessionHistory.mockReturnValueOnce(load.promise);
+    persistenceMocks.touchSessionActivity.mockResolvedValueOnce(undefined);
+
+    const switching = switchChatSession(context, 'history-1');
+    await Promise.resolve();
+
+    expect(flowChatStore.switchSession).not.toHaveBeenCalled();
+    expect(flowChatStore.loadSessionHistory).toHaveBeenCalledTimes(1);
+
+    load.resolve();
+    await switching;
+
+    expect(flowChatStore.switchSession).toHaveBeenCalledWith('history-1');
+  });
+
+  it('switches immediately when a historical session already has renderable tail content', async () => {
+    const load = createDeferred<void>();
+    const { context, flowChatStore } = createContext(createSession({
+      historyState: 'ready',
+      dialogTurns: [{
+        id: 'turn-1',
+        userMessage: { id: 'user-turn-1', content: 'Latest prompt', timestamp: 1 },
+        modelRounds: [],
+        status: 'completed',
+      } as any],
+    }));
+    flowChatStore.loadSessionHistory.mockReturnValueOnce(load.promise);
+    persistenceMocks.touchSessionActivity.mockResolvedValueOnce(undefined);
+
+    await switchChatSession(context, 'history-1');
+
+    expect(flowChatStore.switchSession).toHaveBeenCalledWith('history-1');
+    expect(flowChatStore.loadSessionHistory).toHaveBeenCalledTimes(1);
+
+    load.resolve();
+    await load.promise;
+  });
+
+  it('does not block remote metadata-only historical sessions on local pre-hydration before switching', async () => {
+    const load = createDeferred<void>();
+    const { context, flowChatStore } = createContext(createSession({
+      remoteConnectionId: 'remote-1',
+      remoteSshHost: 'remote-host',
+    }));
     flowChatStore.loadSessionHistory.mockReturnValueOnce(load.promise);
     persistenceMocks.touchSessionActivity.mockResolvedValueOnce(undefined);
 

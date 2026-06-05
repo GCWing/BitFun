@@ -155,6 +155,14 @@
   animation: flow-tool-completed-exit 1000ms ease-in-out both;
 }
 
+.flowchat-flow-item--tool-settled {
+  opacity: 0;
+  transform: translateY(-4px);
+  max-height: 0;
+  margin-bottom: 0;
+  pointer-events: none;
+}
+
 @keyframes flow-tool-active-enter {
   from {
     opacity: 0;

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useCallback, useState, useRef } from 'react';
+import { lazy, Suspense, useEffect, useCallback, useLayoutEffect, useState, useRef } from 'react';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
 import { useHasDismissibleLayer } from '@/infrastructure/hooks/useDismissibleLayer';
 import { dismissibleLayerManager } from '@/infrastructure/services/DismissibleLayerManager';
@@ -17,6 +17,8 @@ import { useGlobalSceneShortcuts } from './hooks/useGlobalSceneShortcuts';
 import { useDebugInspector } from '@/infrastructure/debug/useDebugInspector';
 import { useI18n } from '@/infrastructure/i18n';
 import { scheduleDeferredStartupSystems } from './startup/deferredStartupSystems';
+import { shouldScheduleDeferredStartupSystems } from './startup/deferredStartupGate';
+import { STARTUP_OVERLAY_HIDDEN_EVENT } from './startup/startupSignals';
 import {
   getStartupOverlayElapsedMs,
   hideStartupOverlay,
@@ -41,7 +43,7 @@ const LazyAppLayout = lazy(async () => {
     startupTrace.markPhase('app_layout_import_end');
     return {
       default: function AppLayoutStartupGate({ onReady }: AppLayoutStartupGateProps) {
-        useEffect(() => {
+        useLayoutEffect(() => {
           startupTrace.markPhase('app_layout_ready');
           onReady();
         }, [onReady]);
@@ -77,12 +79,77 @@ function App() {
   const [startupOverlayVisible, setStartupOverlayVisible] = useState(isStartupOverlayPresent);
   const hasAppDismissibleLayer = useHasDismissibleLayer('app');
   const mainWindowShownRef = useRef(false);
+  const userCloseRequestedRef = useRef(false);
   const interactiveShellReadyRef = useRef(false);
+  const interactiveShellReadyFrameRef = useRef<number | null>(null);
+  const workspaceLoadingRef = useRef(workspaceLoading);
+  const appLayoutReadyRef = useRef(false);
   const [interactiveShellReady, setInteractiveShellReady] = useState(false);
   const [appLayoutReady, setAppLayoutReady] = useState(false);
+
+  workspaceLoadingRef.current = workspaceLoading;
+
+  const releaseInteractiveShellReadyIfReady = useCallback((reason: string) => {
+    const latestWorkspaceLoading = workspaceLoadingRef.current;
+    const latestAppLayoutReady = appLayoutReadyRef.current;
+    startupTrace.markPhase('interactive_shell_ready_gate_check', {
+      workspaceLoading: latestWorkspaceLoading,
+      appLayoutReady: latestAppLayoutReady,
+      alreadyReady: interactiveShellReadyRef.current,
+      reason,
+      afterPaint: true,
+    });
+    if (latestWorkspaceLoading || !latestAppLayoutReady || interactiveShellReadyRef.current) {
+      return;
+    }
+    interactiveShellReadyRef.current = true;
+    startupTrace.markPhase('interactive_shell_ready', { reason });
+    window.dispatchEvent(new CustomEvent('bitfun:interactive-shell-ready', {
+      detail: { reason },
+    }));
+    setInteractiveShellReady(true);
+  }, []);
+
+  const markInteractiveShellReadyIfReady = useCallback((reason: string) => {
+    const latestWorkspaceLoading = workspaceLoadingRef.current;
+    const latestAppLayoutReady = appLayoutReadyRef.current;
+    startupTrace.markPhase('interactive_shell_ready_gate_check', {
+      workspaceLoading: latestWorkspaceLoading,
+      appLayoutReady: latestAppLayoutReady,
+      alreadyReady: interactiveShellReadyRef.current,
+      alreadyScheduled: interactiveShellReadyFrameRef.current !== null,
+      reason,
+    });
+    if (
+      latestWorkspaceLoading ||
+      !latestAppLayoutReady ||
+      interactiveShellReadyRef.current ||
+      interactiveShellReadyFrameRef.current !== null
+    ) {
+      return;
+    }
+
+    startupTrace.markPhase('interactive_shell_ready_after_paint_scheduled', { reason });
+    interactiveShellReadyFrameRef.current = window.requestAnimationFrame(() => {
+      interactiveShellReadyFrameRef.current = null;
+      releaseInteractiveShellReadyIfReady(`${reason}-after-paint`);
+    });
+  }, [releaseInteractiveShellReadyIfReady]);
+
   const handleAppLayoutReady = useCallback(() => {
     startupTrace.markPhase('app_layout_ready_state_update_requested');
+    appLayoutReadyRef.current = true;
     setAppLayoutReady(true);
+    markInteractiveShellReadyIfReady('app-layout-ready');
+  }, [markInteractiveShellReadyIfReady]);
+
+  useEffect(() => {
+    return () => {
+      if (interactiveShellReadyFrameRef.current !== null) {
+        window.cancelAnimationFrame(interactiveShellReadyFrameRef.current);
+        interactiveShellReadyFrameRef.current = null;
+      }
+    };
   }, []);
 
   // Once the workspace finishes loading, wait for the remaining min-display
@@ -96,6 +163,8 @@ function App() {
       void hideStartupOverlay().then(() => {
         if (!cancelled) {
           setStartupOverlayVisible(false);
+          startupTrace.markPhase('startup_overlay_hidden');
+          window.dispatchEvent(new CustomEvent(STARTUP_OVERLAY_HIDDEN_EVENT));
         }
       });
     }, remaining);
@@ -104,6 +173,38 @@ function App() {
       window.clearTimeout(timer);
     };
   }, [workspaceLoading, appLayoutReady]);
+
+  useEffect(() => {
+    if (!isTauriRuntime()) {
+      return;
+    }
+
+    let unlisten: (() => void) | null = null;
+    let disposed = false;
+
+    void import('@tauri-apps/api/event')
+      .then(({ listen }) => listen('bitfun_main_window_close_requested', () => {
+        userCloseRequestedRef.current = true;
+        startupTrace.markPhase('main_window_user_close_requested', { reason: 'user-close-requested' });
+      }))
+      .then(removeListener => {
+        if (disposed) {
+          removeListener();
+          return;
+        }
+        unlisten = removeListener;
+      })
+      .catch(error => {
+        if (!disposed) {
+          log.warn('Failed to listen for main window close request in startup visibility guard', error);
+        }
+      });
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
 
   const showMainWindow = useCallback(async (reason: string) => {
     if (mainWindowShownRef.current) {
@@ -136,6 +237,14 @@ function App() {
   }, []);
 
   const verifyMainWindowVisible = useCallback(async (reason: string) => {
+    if (userCloseRequestedRef.current) {
+      log.debug('Skipping main window startup visibility retry after user close request', {
+        reason,
+        closeReason: 'user-close-requested',
+      });
+      return;
+    }
+
     if (!isTauriRuntime()) {
       void showMainWindow(reason);
       return;
@@ -172,21 +281,11 @@ function App() {
   }, [showMainWindow]);
 
   useEffect(() => {
-    startupTrace.markPhase('interactive_shell_ready_gate_check', {
-      workspaceLoading,
-      appLayoutReady,
-      alreadyReady: interactiveShellReadyRef.current,
-    });
-    if (workspaceLoading || !appLayoutReady || interactiveShellReadyRef.current) {
-      return;
+    if (appLayoutReady) {
+      appLayoutReadyRef.current = true;
     }
-    interactiveShellReadyRef.current = true;
-    startupTrace.markPhase('interactive_shell_ready');
-    window.dispatchEvent(new CustomEvent('bitfun:interactive-shell-ready', {
-      detail: { reason: 'workspace-and-layout-ready' },
-    }));
-    setInteractiveShellReady(true);
-  }, [workspaceLoading, appLayoutReady]);
+    markInteractiveShellReadyIfReady('workspace-or-layout-state');
+  }, [workspaceLoading, appLayoutReady, markInteractiveShellReadyIfReady]);
 
   // If the early reveal path fails, keep the old post-splash show as a retry.
   useEffect(() => {
@@ -210,13 +309,14 @@ function App() {
     return () => window.clearTimeout(timer);
   }, [verifyMainWindowVisible]);
 
-  // Non-critical systems are delayed until the shell is interactive.
+  // Non-critical systems are delayed until the shell is interactive and the
+  // startup overlay has fully handed off to the app surface.
   useEffect(() => {
-    if (!interactiveShellReady) {
+    if (!shouldScheduleDeferredStartupSystems({ interactiveShellReady, startupOverlayVisible })) {
       return;
     }
 
-    log.info('Application interactive, scheduling deferred systems');
+    log.info('Application visible and interactive, scheduling deferred systems');
     const startupSystemsHandle = scheduleDeferredStartupSystems();
     startupSystemsHandle.promise.catch(error => {
       if (!isBackgroundTaskCancelledError(error)) {
@@ -225,7 +325,7 @@ function App() {
     });
 
     return () => startupSystemsHandle.cancel();
-  }, [interactiveShellReady]);
+  }, [interactiveShellReady, startupOverlayVisible]);
 
   useEffect(() => {
     if (!interactiveShellReady || startupOverlayVisible) {

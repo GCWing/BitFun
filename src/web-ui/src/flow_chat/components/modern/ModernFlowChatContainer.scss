@@ -36,15 +36,6 @@
     background: transparent;
   }
 
-  &__history-overlay {
-    position: absolute;
-    inset: 0;
-    z-index: 10;
-    background: var(--color-bg-scene);
-    pointer-events: none;
-  }
-
-  
   &__input {
     flex-shrink: 0;
     padding: var(--flowchat-card-expanded-pad-x, 0.625rem);
@@ -126,6 +117,36 @@
 
 .history-session-placeholder__retry:hover {
   background: var(--color-surface-active, rgba(255, 255, 255, 0.1));
+}
+
+.modern-flowchat-container__history-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+  background: var(--color-bg-scene);
+}
+
+.modern-flowchat-container__history-open-intent-shield {
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 76px;
+  pointer-events: none;
+}
+
+.modern-flowchat-container__history-open-intent-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--color-border, rgba(255, 255, 255, 0.16));
+  border-top-color: var(--color-accent, #5b8def);
+  border-radius: 50%;
+  background: var(--color-bg-scene);
+  box-shadow: 0 0 0 6px var(--color-bg-scene);
+  animation: history-placeholder-spin 0.9s linear infinite;
 }
 
 @keyframes history-placeholder-spin {

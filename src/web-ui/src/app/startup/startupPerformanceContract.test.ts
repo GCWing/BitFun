@@ -2,6 +2,9 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
+import { shouldScheduleDeferredStartupSystems } from './deferredStartupGate';
+import { STARTUP_OVERLAY_HIDDEN_EVENT } from './startupSignals';
+
 function readSource(relativePath: string): string {
   return readFileSync(fileURLToPath(new URL(relativePath, import.meta.url)), 'utf8');
 }
@@ -81,12 +84,44 @@ describe('startup performance contract', () => {
     );
   });
 
-  it('starts non-critical work after the shell is interactive', () => {
+  it('keeps Windows startup show wait state-driven instead of fixed-delay only', () => {
+    const desktopThemeSource = readSource('../../../../apps/desktop/src/theme.rs');
+
+    expect(desktopThemeSource).toContain('WINDOWS_STARTUP_MAXIMIZE_SHOW_WAIT_MAX');
+    expect(desktopThemeSource).toContain('WINDOWS_STARTUP_MAXIMIZE_SHOW_WAIT_MIN');
+    expect(desktopThemeSource).toContain('WINDOWS_STARTUP_MAXIMIZE_SHOW_WAIT_POLL');
+    expect(desktopThemeSource).toContain('windows_maximize_show_wait_action');
+    expect(desktopThemeSource).toContain('window.is_maximized()');
+    expect(desktopThemeSource).toContain('windows_show_after_maximize_wait');
+    expect(desktopThemeSource).not.toContain(
+      'std::thread::sleep(std::time::Duration::from_millis(150))'
+    );
+  });
+
+  it('starts non-critical work after the startup overlay handoff', () => {
     const source = readSource('../../main.tsx');
 
-    expect(source).toContain("signalName: 'bitfun:interactive-shell-ready'");
+    expect(STARTUP_OVERLAY_HIDDEN_EVENT).toBe('bitfun:startup-overlay-hidden');
+    expect(source).toContain('STARTUP_OVERLAY_HIDDEN_EVENT');
+    expect(source).not.toContain("signalName: 'bitfun:interactive-shell-ready'");
     expect(source).not.toContain("signalName: 'bitfun:main-window-shown'");
     expect(source).toContain('fallbackTimeoutMs: 10000');
+  });
+
+  it('starts deferred app systems only after the startup overlay has handed off', () => {
+    const source = readSource('../App.tsx');
+
+    expect(shouldScheduleDeferredStartupSystems({
+      interactiveShellReady: true,
+      startupOverlayVisible: true,
+    })).toBe(false);
+    expect(shouldScheduleDeferredStartupSystems({
+      interactiveShellReady: true,
+      startupOverlayVisible: false,
+    })).toBe(true);
+    expect(source).toContain('shouldScheduleDeferredStartupSystems({ interactiveShellReady, startupOverlayVisible })');
+    expect(source).toContain('window.dispatchEvent(new CustomEvent(STARTUP_OVERLAY_HIDDEN_EVENT))');
+    expect(source).toContain('}, [interactiveShellReady, startupOverlayVisible]);');
   });
 
   it('does not initialize AI from the root app component', () => {
@@ -97,6 +132,7 @@ describe('startup performance contract', () => {
     expect(source).not.toMatch(/useCurrentModelConfig/);
     expect(source).not.toMatch(/from\s+['"]@\/infrastructure\/config\/services\/AIExperienceConfigService['"]/);
     expect(source).toContain('bitfun:interactive-shell-ready');
+    expect(source).toContain('STARTUP_OVERLAY_HIDDEN_EVENT');
   });
 
   it('keeps the heavy app layout out of the root startup module', () => {
@@ -106,6 +142,21 @@ describe('startup performance contract', () => {
     expect(source).toContain("import('./layout/AppLayout')");
     expect(source).toContain('app_layout_ready');
     expect(source).toContain('!appLayoutReady');
+  });
+
+  it('releases interactive shell readiness without waiting for an extra AppLayout state commit', () => {
+    const source = readSource('../App.tsx');
+
+    expect(source).toContain('workspaceLoadingRef.current');
+    expect(source).toContain('appLayoutReadyRef.current');
+    expect(source).toContain('interactiveShellReadyFrameRef.current');
+    expect(source).toContain('markInteractiveShellReadyIfReady');
+    expect(source).toContain('releaseInteractiveShellReadyIfReady');
+    expect(source).toContain('useLayoutEffect');
+    expect(source).toContain('requestAnimationFrame');
+    expect(source).toContain('interactive_shell_ready_after_paint_scheduled');
+    expect(source).toContain("markInteractiveShellReadyIfReady('app-layout-ready')");
+    expect(source).toContain("markInteractiveShellReadyIfReady('workspace-or-layout-state')");
   });
 
   it('loads Monaco styling and loader config only through editor initialization', () => {
@@ -144,12 +195,23 @@ describe('startup performance contract', () => {
     expect(source).toMatch(/import\s+type\s+\*\s+as\s+monaco\s+from\s+['"]monaco-editor['"]/);
   });
 
-  it('prewarms editor runtime only after the shell is interactive', () => {
+  it('prewarms editor runtime only after the shell is interactive and visible', () => {
     const source = readSource('../App.tsx');
 
     expect(source).toContain('interactiveShellReady');
+    expect(source).toContain('startupOverlayVisible');
     expect(source).toContain("import('@/tools/editor/services/MonacoStartupWarmup')");
     expect(source).toContain('scheduleMonacoStartupWarmup()');
+  });
+
+  it('does not let startup visibility retries reopen a user-hidden main window', () => {
+    const source = readSource('../App.tsx');
+
+    expect(source).toContain('userCloseRequestedRef');
+    expect(source).toContain("listen('bitfun_main_window_close_requested'");
+    expect(source).toContain('user-close-requested');
+    expect(source).toContain('startup-complete');
+    expect(source).toContain('startup-watchdog');
   });
 
   it('does not remount the historical message list when full hydration prepends older turns', () => {
@@ -221,6 +283,15 @@ describe('startup performance contract', () => {
       expect(source).not.toMatch(/from\s+['"]\.\.\/\.\.\/flow_chat['"]/);
       expect(source).not.toMatch(/from\s+['"]@\/flow_chat['"]/);
     }
+  });
+
+  it('keeps startup session metadata paging on the narrow SessionAPI entrypoint', () => {
+    const source = readSource('../../flow_chat/store/FlowChatStore.ts');
+
+    expect(source).toContain("import('@/infrastructure/api/service-api/SessionAPI')");
+    expect(source).not.toMatch(
+      /const\s+\{\s*sessionAPI\s*\}\s*=\s*await\s+import\(['"]@\/infrastructure\/api['"]\)/
+    );
   });
 
   it('keeps Agent companion implementation modules out of the root startup bundle', () => {

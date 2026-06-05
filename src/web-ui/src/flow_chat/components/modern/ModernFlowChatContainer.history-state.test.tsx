@@ -6,6 +6,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { ModernFlowChatContainer } from './ModernFlowChatContainer';
 import type { Session } from '../../types/flow-chat';
 import { flowChatStore } from '../../store/FlowChatStore';
+import { HISTORY_SESSION_OPEN_INTENT_EVENT } from '../../services/sessionOpenIntent';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -116,6 +117,7 @@ vi.mock('./VirtualMessageList', () => ({
 }));
 
 vi.mock('@/shared/utils/startupTrace', () => ({
+  isRemoteTraceContext: () => false,
   startupTrace: startupTraceMock,
 }));
 
@@ -311,7 +313,101 @@ describe('ModernFlowChatContainer historical empty state', () => {
     expect(container.querySelector('[data-testid="welcome-panel"]')).toBeNull();
   });
 
-  it('keeps a history loading overlay until restored latest text is visible', async () => {
+  it('covers the current message list after a historical session open intent', async () => {
+    stateMocks.activeSession = createSession({
+      sessionId: 'current-session',
+      isHistorical: false,
+      historyState: 'ready',
+      dialogTurns: [createTurn('turn-1', 'Current visible prompt')],
+    } as Partial<Session>);
+    stateMocks.virtualItems = [
+      { type: 'user-message', turnId: 'turn-1', data: { id: 'user-turn-1', content: 'Current visible prompt' } },
+    ];
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    expect(container.querySelector('[data-testid="virtual-list"]')).not.toBeNull();
+    expect(container.querySelector('.modern-flowchat-container__history-overlay')).toBeNull();
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent(HISTORY_SESSION_OPEN_INTENT_EVENT, {
+        detail: { sessionId: 'history-session', sessionTitle: 'Saved investigation' },
+      }));
+    });
+
+    expect(container.textContent).not.toContain('Loading saved session');
+    expect(container.querySelector('[data-testid="virtual-list"]')).not.toBeNull();
+    expect(container.querySelector('.modern-flowchat-container__history-overlay')).toBeNull();
+    expect(container.querySelector('.modern-flowchat-container__history-open-intent-shield')).not.toBeNull();
+    expect(container.querySelector('.modern-flowchat-container__history-open-intent-spinner')).not.toBeNull();
+    expect(container.textContent).toContain('Hidden action');
+    expect(container.textContent).not.toContain('Saved investigation');
+    expect(container.querySelector('.modern-flowchat-container__messages')?.getAttribute('data-show-history-open-intent-overlay'))
+      .toBe('true');
+    (container.querySelector('[data-testid="virtual-list-action"]') as HTMLButtonElement | null)?.click();
+    expect(virtualListActionClickMock).not.toHaveBeenCalled();
+
+    stateMocks.activeSession = createSession({
+      sessionId: 'history-session',
+      historyState: 'metadata-only',
+    } as Partial<Session>);
+    stateMocks.virtualItems = [];
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    expect(container.textContent).toContain('Loading saved session');
+    expect(container.querySelector('.modern-flowchat-container__history-overlay')).not.toBeNull();
+  });
+
+  it('removes the loading layer when a hydrating session receives its initial tail turns', async () => {
+    stateMocks.activeSession = createSession({
+      sessionId: 'history-session',
+      historyState: 'hydrating',
+      dialogTurns: [],
+    } as Partial<Session>);
+    stateMocks.virtualItems = [];
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    const initialOverlay = container.querySelector('.modern-flowchat-container__history-overlay');
+    expect(initialOverlay).not.toBeNull();
+    expect(container.querySelector('[data-testid="virtual-list"]')).toBeNull();
+
+    stateMocks.activeSession = createSession({
+      sessionId: 'history-session',
+      isHistorical: false,
+      historyState: 'ready',
+      contextRestoreState: 'pending',
+      dialogTurns: [
+        createTurn('turn-1', 'Older restored prompt'),
+        createTurn('turn-2', 'Latest restored prompt'),
+      ],
+    } as Partial<Session>);
+    stateMocks.virtualItems = [
+      { type: 'user-message', turnId: 'turn-1', data: { id: 'user-turn-1', content: 'Older restored prompt' } },
+      { type: 'user-message', turnId: 'turn-2', data: { id: 'user-turn-2', content: 'Latest restored prompt' } },
+    ];
+    virtualListMock.isTurnTextRenderedInViewport.mockReturnValue(false);
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    expect(container.querySelector('[data-testid="virtual-list"]')).not.toBeNull();
+    expect(container.querySelector('.modern-flowchat-container__history-overlay')).not.toBe(initialOverlay);
+    expect(container.querySelector('.modern-flowchat-container__history-overlay')).toBeNull();
+    expect(container.textContent).not.toContain('Loading saved session');
+    expect(container.querySelector('.modern-flowchat-container__messages')?.getAttribute('data-show-history-transition-overlay'))
+      .toBe('true');
+  });
+
+  it('keeps restored content visible while restored latest text is not ready', async () => {
     stateMocks.activeSession = createSession({
       isHistorical: false,
       historyState: 'ready',
@@ -332,18 +428,78 @@ describe('ModernFlowChatContainer historical empty state', () => {
     });
 
     expect(container.querySelector('[data-testid="virtual-list"]')).not.toBeNull();
-    expect(container.textContent).toContain('Loading saved session');
+    expect(container.textContent).not.toContain('Loading saved session');
+    expect(container.querySelector('.modern-flowchat-container__history-overlay')).toBeNull();
+    expect(container.querySelector('.modern-flowchat-container__messages')?.getAttribute('data-show-history-transition-overlay'))
+      .toBe('true');
 
     flushAnimationFrame();
-    expect(container.textContent).toContain('Loading saved session');
+    expect(container.querySelector('[data-testid="virtual-list"]')).not.toBeNull();
+    expect(container.textContent).not.toContain('Loading saved session');
+    expect(container.querySelector('.modern-flowchat-container__history-overlay')).toBeNull();
 
     virtualListMock.isTurnTextRenderedInViewport.mockReturnValue(true);
     flushAnimationFrame();
 
     expect(container.textContent).not.toContain('Loading saved session');
+    expect(container.querySelector('.modern-flowchat-container__history-overlay')).toBeNull();
   });
 
-  it('blocks pointer activation behind the history loading overlay', async () => {
+  it('does not show the initial history progress again when full hydration adds older turns', async () => {
+    stateMocks.activeSession = createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      contextRestoreState: 'pending',
+      dialogTurns: [
+        createTurn('turn-1', 'Older restored prompt'),
+        createTurn('turn-2', 'Latest restored prompt'),
+      ],
+    } as Partial<Session>);
+    stateMocks.virtualItems = [
+      { type: 'user-message', turnId: 'turn-1', data: { id: 'user-turn-1', content: 'Older restored prompt' } },
+      { type: 'user-message', turnId: 'turn-2', data: { id: 'user-turn-2', content: 'Latest restored prompt' } },
+    ];
+    virtualListMock.isTurnTextRenderedInViewport.mockReturnValue(false);
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    expect(container.querySelector('.modern-flowchat-container__history-overlay')).toBeNull();
+
+    virtualListMock.isTurnTextRenderedInViewport.mockReturnValue(true);
+    flushAnimationFrame();
+
+    expect(container.querySelector('.modern-flowchat-container__history-overlay')).toBeNull();
+
+    stateMocks.activeSession = createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      contextRestoreState: 'pending',
+      dialogTurns: [
+        createTurn('turn-0', 'Restored older prompt'),
+        createTurn('turn-1', 'Older restored prompt'),
+        createTurn('turn-2', 'Latest restored prompt'),
+      ],
+    } as Partial<Session>);
+    stateMocks.virtualItems = [
+      { type: 'user-message', turnId: 'turn-0', data: { id: 'user-turn-0', content: 'Restored older prompt' } },
+      { type: 'user-message', turnId: 'turn-1', data: { id: 'user-turn-1', content: 'Older restored prompt' } },
+      { type: 'user-message', turnId: 'turn-2', data: { id: 'user-turn-2', content: 'Latest restored prompt' } },
+    ];
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    expect(container.querySelector('.modern-flowchat-container__history-overlay')).toBeNull();
+  });
+
+  it('blocks pointer activation until restored latest text is visible', async () => {
+    const releaseSpy = vi
+      .spyOn(flowChatStore, 'releaseSessionHistoryCompletionAfterInitialPaint')
+      .mockReturnValue(true);
+
     stateMocks.activeSession = createSession({
       isHistorical: false,
       historyState: 'ready',
@@ -365,7 +521,8 @@ describe('ModernFlowChatContainer historical empty state', () => {
 
     const hiddenAction = container.querySelector('[data-testid="virtual-list-action"]') as HTMLButtonElement;
     expect(hiddenAction).not.toBeNull();
-    expect(container.textContent).toContain('Loading saved session');
+    expect(container.textContent).not.toContain('Loading saved session');
+    expect(container.querySelector('.modern-flowchat-container__history-overlay')).toBeNull();
 
     act(() => {
       hiddenAction.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
@@ -375,15 +532,29 @@ describe('ModernFlowChatContainer historical empty state', () => {
 
     virtualListMock.isTurnTextRenderedInViewport.mockReturnValue(true);
     flushAnimationFrame();
+    flushAnimationFrame();
+    flushAnimationFrame();
+
+    expect(container.querySelector('.modern-flowchat-container__history-overlay')).toBeNull();
+    expect(releaseSpy).toHaveBeenCalledWith('session-1');
+    expect(startupTraceMock.markPhase).toHaveBeenCalledWith(
+      'historical_session_initial_content_painted',
+      expect.objectContaining({
+        sessionId: 'session-1',
+        latestTurnId: 'turn-2',
+        released: true,
+      }),
+    );
 
     act(() => {
       hiddenAction.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     });
 
     expect(virtualListActionClickMock).toHaveBeenCalledTimes(1);
+    releaseSpy.mockRestore();
   });
 
-  it('releases pending full history hydration when latest text visibility signal is missed', async () => {
+  it('keeps full history projection deferred when latest text visibility signal is missed', async () => {
     const releaseSpy = vi
       .spyOn(flowChatStore, 'releaseSessionHistoryCompletionAfterInitialPaint')
       .mockReturnValue(true);
@@ -412,21 +583,21 @@ describe('ModernFlowChatContainer historical empty state', () => {
     }
 
     expect(container.textContent).not.toContain('Loading saved session');
-    expect(releaseSpy).toHaveBeenCalledWith('session-1');
+    expect(releaseSpy).not.toHaveBeenCalled();
     expect(startupTraceMock.markPhase).toHaveBeenCalledWith(
       'historical_session_initial_content_paint_signal_missed',
-      expect.objectContaining({ released: true }),
+      expect.objectContaining({ attempts: 120 }),
     );
 
     releaseSpy.mockRestore();
   });
 
-  it('releases pending full history hydration when searching a partially loaded session', async () => {
+  it('requests full history projection when searching a partially loaded session', async () => {
     const pendingSpy = vi
       .spyOn(flowChatStore, 'hasPendingSessionHistoryCompletion')
       .mockReturnValue(true);
-    const releaseSpy = vi
-      .spyOn(flowChatStore, 'releaseSessionHistoryCompletionAfterInitialPaint')
+    const projectionSpy = vi
+      .spyOn(flowChatStore, 'requestSessionFullHistoryProjection')
       .mockReturnValue(true);
 
     searchStateMock.searchQuery = 'older prompt';
@@ -447,7 +618,7 @@ describe('ModernFlowChatContainer historical empty state', () => {
       root.render(<ModernFlowChatContainer />);
     });
 
-    expect(releaseSpy).toHaveBeenCalledWith('session-1');
+    expect(projectionSpy).toHaveBeenCalledWith('session-1', 'search');
     expect(startupTraceMock.markPhase).toHaveBeenCalledWith(
       'historical_session_full_hydrate_released_for_search',
       expect.objectContaining({
@@ -456,7 +627,7 @@ describe('ModernFlowChatContainer historical empty state', () => {
       }),
     );
 
-    releaseSpy.mockRestore();
+    projectionSpy.mockRestore();
     pendingSpy.mockRestore();
   });
 
@@ -602,17 +773,19 @@ describe('ModernFlowChatContainer historical empty state', () => {
     });
 
     expect(container.querySelector('[data-testid="virtual-list"]')).not.toBeNull();
-    expect(rafCallbacks.length).toBeGreaterThan(0);
-
-    flushAnimationFrame();
     expect(virtualListMock.pinTurnToTop).toHaveBeenCalledTimes(1);
     expect(virtualListMock.pinTurnToTop).toHaveBeenLastCalledWith('turn-2', {
       behavior: 'auto',
       pinMode: 'sticky-latest',
     });
+    expect(rafCallbacks.length).toBeGreaterThan(0);
 
     flushAnimationFrame();
     expect(virtualListMock.pinTurnToTop).toHaveBeenCalledTimes(2);
+    expect(virtualListMock.pinTurnToTop).toHaveBeenLastCalledWith('turn-2', {
+      behavior: 'auto',
+      pinMode: 'sticky-latest',
+    });
     expect(startupTraceMock.markPhase).toHaveBeenCalledWith(
       'historical_session_latest_anchor_attempt',
       expect.objectContaining({ accepted: false, attempt: 1, mode: 'sticky-latest' }),
@@ -690,7 +863,7 @@ describe('ModernFlowChatContainer historical empty state', () => {
     );
   });
 
-  it('re-anchors completed restored history after full hydration expands the same latest turn', async () => {
+  it('does not re-anchor local restored history after full hydration expands the same latest turn', async () => {
     stateMocks.activeSession = createSession({
       isHistorical: false,
       historyState: 'ready',
@@ -730,12 +903,16 @@ describe('ModernFlowChatContainer historical empty state', () => {
 
     flushAnimationFrame();
 
-    expect(virtualListMock.scrollToTurnEndAndClearPin).toHaveBeenCalledTimes(2);
+    expect(virtualListMock.scrollToTurnEndAndClearPin).toHaveBeenCalledTimes(1);
     expect(virtualListMock.scrollToTurnEndAndClearPin).toHaveBeenLastCalledWith('turn-80');
     expect(virtualListMock.pinTurnToTop).not.toHaveBeenCalled();
+    expect(startupTraceMock.markPhase).toHaveBeenCalledWith(
+      'historical_session_latest_anchor_skipped',
+      expect.objectContaining({ reason: 'local_full_history_projection' }),
+    );
   });
 
-  it('re-anchors full hydration even when the latest restored turn is already visible', async () => {
+  it('does not re-anchor local full hydration when the latest restored turn is already visible', async () => {
     stateMocks.activeSession = createSession({
       isHistorical: false,
       historyState: 'ready',
@@ -780,17 +957,17 @@ describe('ModernFlowChatContainer historical empty state', () => {
       root.render(<ModernFlowChatContainer />);
     });
 
-    expect(virtualListMock.scrollToTurnEndAndClearPin).toHaveBeenCalledTimes(2);
+    expect(virtualListMock.scrollToTurnEndAndClearPin).toHaveBeenCalledTimes(1);
     expect(virtualListMock.scrollToTurnEndAndClearPin).toHaveBeenLastCalledWith('turn-80');
 
     flushAnimationFrame();
 
-    expect(virtualListMock.scrollToTurnEndAndClearPin).toHaveBeenCalledTimes(2);
+    expect(virtualListMock.scrollToTurnEndAndClearPin).toHaveBeenCalledTimes(1);
     expect(virtualListMock.scrollToTurnEndAndClearPin).toHaveBeenLastCalledWith('turn-80');
     expect(virtualListMock.pinTurnToTop).not.toHaveBeenCalled();
   });
 
-  it('re-anchors full hydration when visible turn info is stale after prepending older turns', async () => {
+  it('does not re-anchor local full hydration when visible turn info is stale after prepending older turns', async () => {
     stateMocks.activeSession = createSession({
       isHistorical: false,
       historyState: 'ready',
@@ -839,7 +1016,7 @@ describe('ModernFlowChatContainer historical empty state', () => {
 
     flushAnimationFrame();
 
-    expect(virtualListMock.scrollToTurnEndAndClearPin).toHaveBeenCalledTimes(2);
+    expect(virtualListMock.scrollToTurnEndAndClearPin).toHaveBeenCalledTimes(1);
     expect(virtualListMock.scrollToTurnEndAndClearPin).toHaveBeenLastCalledWith('turn-80');
     expect(virtualListMock.pinTurnToTop).not.toHaveBeenCalled();
   });

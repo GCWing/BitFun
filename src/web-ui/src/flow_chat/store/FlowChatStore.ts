@@ -74,6 +74,13 @@ const HISTORICAL_SESSION_INITIAL_REMOTE_TAIL_TURN_COUNT = 3;
 const HISTORICAL_SESSION_INITIAL_LOCAL_TAIL_TURN_COUNT = 8;
 const HISTORICAL_SESSION_FULL_HISTORY_IDLE_TIMEOUT_MS = 1500;
 const HISTORICAL_SESSION_FULL_HISTORY_FIRST_PAINT_TIMEOUT_MS = 2500;
+const HISTORICAL_SESSION_FULL_HISTORY_STABLE_VIEWPORT_DELAY_MS = 750;
+const MAX_DEFERRED_FULL_HISTORY_PROJECTIONS = 3;
+
+interface FullHistoryHydrationReleaseOptions {
+  immediate?: boolean;
+  reason?: string;
+}
 
 interface MetadataListRequest {
   promise: Promise<void>;
@@ -89,9 +96,12 @@ interface MetadataPageRequest {
 
 interface FullHistoryHydrationRequest {
   sessionId: string;
+  remote: boolean;
+  requireActiveSession: boolean;
+  sessionTraceId: string;
   promise: Promise<void>;
   cancel?: () => void;
-  releaseAfterInitialPaint?: () => void;
+  releaseAfterInitialPaint?: (options?: FullHistoryHydrationReleaseOptions) => void;
 }
 
 interface CompleteSessionHistoryLoadRequest {
@@ -100,8 +110,19 @@ interface CompleteSessionHistoryLoadRequest {
   remoteConnectionId?: string;
   remoteSshHost?: string;
   includeInternal?: boolean;
+  requireActiveSession?: boolean;
   initialSessionTraceId: string;
   expectedDialogTurnIds: string[];
+}
+
+interface DeferredFullHistoryProjection {
+  remote: boolean;
+  requireActiveSession: boolean;
+  expectedDialogTurnIds: string[];
+  dialogTurns: DialogTurn[];
+  contextRestoreState: SessionContextRestoreState;
+  restoredSessionInfo?: AgentSessionInfo;
+  restoredLastUserDialogMode?: string;
 }
 
 function areStringArraysEqual(left: string[], right: string[]): boolean {
@@ -146,26 +167,31 @@ function scheduleHistoricalSessionFullHydrate(callback: () => void): () => void 
 }
 
 function scheduleLocalHistoricalSessionFullHydrate(
-  callback: (reason: 'initial_paint' | 'timeout') => void,
+  callback: (reason: 'initial_paint' | 'timeout' | 'explicit') => void,
 ): {
   cancel: () => void;
-  releaseAfterInitialPaint: () => void;
+  releaseAfterInitialPaint: (options?: FullHistoryHydrationReleaseOptions) => void;
 } {
   let cancelled = false;
   let started = false;
   let cancelIdle: (() => void) | undefined;
+  let stableViewportTimer: ReturnType<typeof setTimeout> | undefined;
   const timeout = globalThis.setTimeout(
     () => start('timeout'),
     HISTORICAL_SESSION_FULL_HISTORY_FIRST_PAINT_TIMEOUT_MS,
   );
 
-  function start(reason: 'initial_paint' | 'timeout') {
+  function start(reason: 'initial_paint' | 'timeout' | 'explicit') {
     if (cancelled || started) {
       return;
     }
 
     started = true;
     globalThis.clearTimeout(timeout);
+    if (stableViewportTimer) {
+      globalThis.clearTimeout(stableViewportTimer);
+      stableViewportTimer = undefined;
+    }
     cancelIdle = scheduleHistoricalSessionFullHydrate(() => callback(reason));
   }
 
@@ -173,9 +199,25 @@ function scheduleLocalHistoricalSessionFullHydrate(
     cancel: () => {
       cancelled = true;
       globalThis.clearTimeout(timeout);
+      if (stableViewportTimer) {
+        globalThis.clearTimeout(stableViewportTimer);
+      }
       cancelIdle?.();
     },
-    releaseAfterInitialPaint: () => start('initial_paint'),
+    releaseAfterInitialPaint: (options?: FullHistoryHydrationReleaseOptions) => {
+      if (options?.immediate === true) {
+        start('explicit');
+        return;
+      }
+      if (stableViewportTimer || started || cancelled) {
+        return;
+      }
+      globalThis.clearTimeout(timeout);
+      stableViewportTimer = globalThis.setTimeout(
+        () => start('initial_paint'),
+        HISTORICAL_SESSION_FULL_HISTORY_STABLE_VIEWPORT_DELAY_MS,
+      );
+    },
   };
 }
 
@@ -266,6 +308,8 @@ export class FlowChatStore {
   private metadataListRequests = new Map<string, MetadataListRequest>();
   private metadataPageRequests = new Map<string, MetadataPageRequest>();
   private fullHistoryHydrationRequests = new Map<string, FullHistoryHydrationRequest>();
+  private deferredFullHistoryProjections = new Map<string, DeferredFullHistoryProjection>();
+  private fullHistoryProjectionApplyRequests = new Set<string>();
   private unsupportedRestoreCommands = new Set<string>();
   private onPersistUnreadCompletion?: (sessionId: string, value: 'completed' | 'error' | 'interrupted' | undefined) => void;
 
@@ -370,19 +414,25 @@ export class FlowChatStore {
     }
 
     const remote = isRemoteTraceContext(request.remoteConnectionId, request.remoteSshHost);
+    const requireActiveSession = request.requireActiveSession === true;
     startupTrace.markPhase('historical_session_full_hydrate_scheduled', {
       remote,
+      sessionId: request.sessionId,
       sessionTraceId: request.initialSessionTraceId,
       loadedTurnCount: request.expectedDialogTurnIds.length,
+      requireActiveSession,
       scheduler: remote ? 'idle' : 'after_initial_paint_idle',
     });
 
     let cancelScheduled: (() => void) | undefined;
-    let releaseAfterInitialPaint: (() => void) | undefined;
+    let releaseAfterInitialPaint: ((options?: FullHistoryHydrationReleaseOptions) => void) | undefined;
+    let resolveRequest: (() => void) | undefined;
     const promise = new Promise<void>(resolve => {
-      const startFullHydrate = (trigger: 'idle' | 'initial_paint' | 'timeout') => {
+      resolveRequest = resolve;
+      const startFullHydrate = (trigger: 'idle' | 'initial_paint' | 'timeout' | 'explicit') => {
         startupTrace.markPhase('historical_session_full_hydrate_released', {
           remote,
+          sessionId: request.sessionId,
           sessionTraceId: request.initialSessionTraceId,
           trigger,
         });
@@ -390,6 +440,7 @@ export class FlowChatStore {
           .catch(error => {
             startupTrace.markPhase('historical_session_full_hydrate_failed', {
               remote,
+              sessionId: request.sessionId,
               sessionTraceId: `${request.initialSessionTraceId}-full`,
             });
             log.warn('Failed to complete partial session history restore', {
@@ -417,10 +468,105 @@ export class FlowChatStore {
 
     this.fullHistoryHydrationRequests.set(requestKey, {
       sessionId: request.sessionId,
+      remote,
+      requireActiveSession,
+      sessionTraceId: request.initialSessionTraceId,
       promise,
-      cancel: () => cancelScheduled?.(),
-      releaseAfterInitialPaint: () => releaseAfterInitialPaint?.(),
+      cancel: () => {
+        cancelScheduled?.();
+        resolveRequest?.();
+      },
+      releaseAfterInitialPaint: (options?: FullHistoryHydrationReleaseOptions) => {
+        releaseAfterInitialPaint?.(options);
+      },
     });
+  }
+
+  private cancelLocalSessionHistoryCompletion(sessionId: string, reason: string): boolean {
+    let cancelled = false;
+    for (const [requestKey, request] of this.fullHistoryHydrationRequests) {
+      if (request.sessionId !== sessionId || request.remote || !request.requireActiveSession) {
+        continue;
+      }
+      request.cancel?.();
+      this.fullHistoryHydrationRequests.delete(requestKey);
+      startupTrace.markPhase('historical_session_full_hydrate_cancelled', {
+        remote: false,
+        sessionId,
+        sessionTraceId: request.sessionTraceId,
+        reason,
+      });
+      cancelled = true;
+    }
+    return cancelled;
+  }
+
+  private clearRemovedSessionHistoryState(sessionIds: Iterable<string>, reason: string): void {
+    const removedSessionIds = new Set(sessionIds);
+    if (removedSessionIds.size === 0) {
+      return;
+    }
+
+    for (const [requestKey, request] of this.fullHistoryHydrationRequests) {
+      if (!removedSessionIds.has(request.sessionId)) {
+        continue;
+      }
+
+      request.cancel?.();
+      this.fullHistoryHydrationRequests.delete(requestKey);
+      startupTrace.markPhase('historical_session_full_hydrate_cancelled', {
+        remote: request.remote,
+        sessionId: request.sessionId,
+        sessionTraceId: request.sessionTraceId,
+        reason,
+      });
+    }
+
+    for (const sessionId of removedSessionIds) {
+      this.deferredFullHistoryProjections.delete(sessionId);
+      this.fullHistoryProjectionApplyRequests.delete(sessionId);
+    }
+  }
+
+  private scheduleActiveLocalPartialSessionHistoryCompletion(
+    sessionId: string,
+    reason: string
+  ): boolean {
+    const session = this.state.sessions.get(sessionId);
+    if (
+      this.state.activeSessionId !== sessionId ||
+      !session ||
+      session.historyState !== 'ready' ||
+      session.isPartial !== true ||
+      isRemoteTraceContext(session.remoteConnectionId, session.remoteSshHost) ||
+      this.hasPendingSessionHistoryCompletion(sessionId) ||
+      this.hasDeferredSessionHistoryProjection(sessionId)
+    ) {
+      return false;
+    }
+
+    const workspacePath = session.workspacePath || session.config.workspacePath;
+    if (!workspacePath || session.dialogTurns.length === 0) {
+      return false;
+    }
+
+    const sessionTraceId = `${sessionId.slice(0, 8)}-${Math.random().toString(36).slice(2, 8)}`;
+    startupTrace.markPhase('historical_session_full_hydrate_rescheduled', {
+      remote: false,
+      sessionId,
+      sessionTraceId,
+      reason,
+      loadedTurnCount: session.dialogTurns.length,
+      totalTurnCount: session.totalTurnCount,
+    });
+    this.scheduleCompleteSessionHistoryLoad({
+      sessionId,
+      workspacePath,
+      initialSessionTraceId: sessionTraceId,
+      requireActiveSession: true,
+      expectedDialogTurnIds: session.dialogTurns.map(turn => turn.id),
+    });
+    return true;
   }
 
   public hasPendingSessionHistoryCompletion(sessionId: string): boolean {
@@ -432,16 +578,163 @@ export class FlowChatStore {
     return false;
   }
 
-  public releaseSessionHistoryCompletionAfterInitialPaint(sessionId: string): boolean {
+  public hasDeferredSessionHistoryProjection(sessionId: string): boolean {
+    return this.deferredFullHistoryProjections.has(sessionId);
+  }
+
+  public requestSessionFullHistoryProjection(sessionId: string, reason: string): boolean {
+    this.fullHistoryProjectionApplyRequests.add(sessionId);
+    const applied = this.applyDeferredSessionHistoryProjection(sessionId, reason);
+    const released = this.releaseSessionHistoryCompletionAfterInitialPaint(sessionId, {
+      immediate: true,
+      reason,
+    });
+
+    if (!applied && !released) {
+      this.fullHistoryProjectionApplyRequests.delete(sessionId);
+    }
+
+    if (applied || released) {
+      startupTrace.markPhase('historical_session_full_hydrate_projection_requested', {
+        sessionId,
+        reason,
+        applied,
+        released,
+      });
+    }
+
+    return applied || released;
+  }
+
+  public releaseSessionHistoryCompletionAfterInitialPaint(
+    sessionId: string,
+    options?: FullHistoryHydrationReleaseOptions
+  ): boolean {
     let released = false;
     for (const request of this.fullHistoryHydrationRequests.values()) {
       if (request.sessionId !== sessionId) {
         continue;
       }
-      request.releaseAfterInitialPaint?.();
+      request.releaseAfterInitialPaint?.(options);
       released = true;
     }
     return released;
+  }
+
+  private shouldDeferFullHistoryProjection(sessionId: string, remote: boolean, _requireActiveSession: boolean): boolean {
+    return (
+      !remote &&
+      this.state.activeSessionId === sessionId &&
+      !this.fullHistoryProjectionApplyRequests.has(sessionId)
+    );
+  }
+
+  private setDeferredFullHistoryProjection(
+    sessionId: string,
+    projection: DeferredFullHistoryProjection
+  ): void {
+    this.deferredFullHistoryProjections.delete(sessionId);
+    this.deferredFullHistoryProjections.set(sessionId, projection);
+
+    while (this.deferredFullHistoryProjections.size > MAX_DEFERRED_FULL_HISTORY_PROJECTIONS) {
+      const oldestSessionId = this.deferredFullHistoryProjections.keys().next().value;
+      if (!oldestSessionId) {
+        break;
+      }
+
+      this.deferredFullHistoryProjections.delete(oldestSessionId);
+      this.fullHistoryProjectionApplyRequests.delete(oldestSessionId);
+      startupTrace.markPhase('historical_session_full_hydrate_deferred_projection_evicted', {
+        sessionId: oldestSessionId,
+        reason: 'cache-limit',
+      });
+    }
+  }
+
+  private applyDeferredSessionHistoryProjection(sessionId: string, reason: string): boolean {
+    const projection = this.deferredFullHistoryProjections.get(sessionId);
+    if (!projection) {
+      return false;
+    }
+
+    const result = this.applyCompletedSessionHistoryProjection(sessionId, projection);
+    if (result.applied) {
+      this.deferredFullHistoryProjections.delete(sessionId);
+      this.fullHistoryProjectionApplyRequests.delete(sessionId);
+      startupTrace.markPhase('historical_session_full_hydrate_deferred_projection_applied', {
+        remote: projection.remote,
+        sessionId,
+        reason,
+        turnCount: projection.dialogTurns.length,
+        preservedTurnCount: result.preservedTurnCount,
+      });
+    }
+
+    return result.applied;
+  }
+
+  private applyCompletedSessionHistoryProjection(
+    sessionId: string,
+    projection: DeferredFullHistoryProjection
+  ): { applied: boolean; preservedTurnCount: number } {
+    let applied = false;
+    let preservedTurnCount = 0;
+
+    this.setState(prev => {
+      if (projection.requireActiveSession && !projection.remote && prev.activeSessionId !== sessionId) {
+        return prev;
+      }
+
+      const session = prev.sessions.get(sessionId);
+      if (!session || session.historyState !== 'ready') {
+        return prev;
+      }
+
+      const currentDialogTurns = session.dialogTurns;
+      const currentDialogTurnIds = currentDialogTurns.map(turn => turn.id);
+      const canMergeCurrentTurns =
+        areStringArraysEqual(currentDialogTurnIds, projection.expectedDialogTurnIds) ||
+        startsWithStringArray(currentDialogTurnIds, projection.expectedDialogTurnIds);
+      if (!canMergeCurrentTurns) {
+        return prev;
+      }
+
+      const currentDialogTurnsById = new Map(currentDialogTurns.map(turn => [turn.id, turn]));
+      const restoredDialogTurnIds = new Set(projection.dialogTurns.map(turn => turn.id));
+      const appendedCurrentDialogTurns = currentDialogTurns
+        .slice(projection.expectedDialogTurnIds.length)
+        .filter(turn => !restoredDialogTurnIds.has(turn.id));
+      const mergedDialogTurns = [
+        ...projection.dialogTurns.map(turn => currentDialogTurnsById.get(turn.id) ?? turn),
+        ...appendedCurrentDialogTurns,
+      ];
+      preservedTurnCount = mergedDialogTurns.reduce(
+        (count, turn) => count + (currentDialogTurnsById.get(turn.id) === turn ? 1 : 0),
+        0,
+      );
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(sessionId, {
+        ...session,
+        dialogTurns: mergedDialogTurns,
+        isPartial: false,
+        loadedTurnCount: mergedDialogTurns.length,
+        totalTurnCount: mergedDialogTurns.length,
+        contextRestoreState:
+          session.contextRestoreState === 'ready' ? 'ready' : projection.contextRestoreState,
+        mode: projection.restoredSessionInfo?.agentType || session.mode,
+        lastUserDialogMode: projection.restoredLastUserDialogMode,
+        lastSubmittedMode:
+          projection.restoredSessionInfo?.lastSubmittedAgentType ?? session.lastSubmittedMode,
+      });
+      applied = true;
+
+      return {
+        ...prev,
+        sessions: newSessions,
+      };
+    });
+
+    return { applied, preservedTurnCount };
   }
 
   private async completeSessionHistoryLoad(
@@ -450,8 +743,18 @@ export class FlowChatStore {
     const fullTraceId = `${request.initialSessionTraceId}-full`;
     const startedAt = nowMs();
     const remote = isRemoteTraceContext(request.remoteConnectionId, request.remoteSshHost);
+    if (request.requireActiveSession === true && !remote && this.state.activeSessionId !== request.sessionId) {
+      startupTrace.markPhase('historical_session_full_hydrate_skipped', {
+        remote,
+        sessionId: request.sessionId,
+        sessionTraceId: fullTraceId,
+        reason: 'inactive-before-start',
+      });
+      return;
+    }
     startupTrace.markPhase('historical_session_full_hydrate_start', {
       remote,
+      sessionId: request.sessionId,
       sessionTraceId: fullTraceId,
       loadedTurnCount: request.expectedDialogTurnIds.length,
     });
@@ -467,6 +770,18 @@ export class FlowChatStore {
       undefined,
     );
 
+    if (request.requireActiveSession === true && !remote && this.state.activeSessionId !== request.sessionId) {
+      startupTrace.markPhase('historical_session_full_hydrate_skipped', {
+        remote,
+        sessionId: request.sessionId,
+        sessionTraceId: fullTraceId,
+        reason: 'inactive-after-restore',
+        ...sessionViewRestoreTimingTraceFields(restored.timings),
+        durationMs: elapsedMs(startedAt),
+      });
+      return;
+    }
+
     const convertStartedAt = nowMs();
     const dialogTurns = this.convertToDialogTurns(restored.turns);
     const restoredLastUserDialogMode =
@@ -475,65 +790,44 @@ export class FlowChatStore {
       restored.contextRestoreState === 'ready' ? 'ready' : 'pending';
     startupTrace.markPhase('historical_session_full_hydrate_convert_end', {
       remote,
+      sessionId: request.sessionId,
       sessionTraceId: fullTraceId,
       turnCount: dialogTurns.length,
       durationMs: elapsedMs(convertStartedAt),
     });
 
+    const projection: DeferredFullHistoryProjection = {
+      remote,
+      requireActiveSession: request.requireActiveSession === true,
+      expectedDialogTurnIds: request.expectedDialogTurnIds,
+      dialogTurns,
+      contextRestoreState,
+      restoredSessionInfo: restored.session,
+      restoredLastUserDialogMode,
+    };
     let applied = false;
     let preservedTurnCount = 0;
-    this.setState(prev => {
-      const session = prev.sessions.get(request.sessionId);
-      if (!session || session.historyState !== 'ready') {
-        return prev;
-      }
-
-      const currentDialogTurns = session.dialogTurns;
-      const currentDialogTurnIds = currentDialogTurns.map(turn => turn.id);
-      const canMergeCurrentTurns =
-        areStringArraysEqual(currentDialogTurnIds, request.expectedDialogTurnIds) ||
-        startsWithStringArray(currentDialogTurnIds, request.expectedDialogTurnIds);
-      if (!canMergeCurrentTurns) {
-        return prev;
-      }
-
-      const currentDialogTurnsById = new Map(currentDialogTurns.map(turn => [turn.id, turn]));
-      const restoredDialogTurnIds = new Set(dialogTurns.map(turn => turn.id));
-      const appendedCurrentDialogTurns = currentDialogTurns
-        .slice(request.expectedDialogTurnIds.length)
-        .filter(turn => !restoredDialogTurnIds.has(turn.id));
-      const mergedDialogTurns = [
-        ...dialogTurns.map(turn => currentDialogTurnsById.get(turn.id) ?? turn),
-        ...appendedCurrentDialogTurns,
-      ];
-      preservedTurnCount = mergedDialogTurns.reduce(
-        (count, turn) => count + (currentDialogTurnsById.get(turn.id) === turn ? 1 : 0),
-        0,
-      );
-      const newSessions = new Map(prev.sessions);
-      newSessions.set(request.sessionId, {
-        ...session,
-        dialogTurns: mergedDialogTurns,
-        isPartial: false,
-        loadedTurnCount: mergedDialogTurns.length,
-        totalTurnCount: mergedDialogTurns.length,
-        contextRestoreState:
-          session.contextRestoreState === 'ready' ? 'ready' : contextRestoreState,
-        mode: restored.session.agentType || session.mode,
-        lastUserDialogMode: restoredLastUserDialogMode,
-        lastSubmittedMode:
-          restored.session.lastSubmittedAgentType ?? session.lastSubmittedMode,
+    if (this.shouldDeferFullHistoryProjection(request.sessionId, remote, request.requireActiveSession === true)) {
+      this.setDeferredFullHistoryProjection(request.sessionId, projection);
+      startupTrace.markPhase('historical_session_full_hydrate_deferred_projection', {
+        remote,
+        sessionId: request.sessionId,
+        sessionTraceId: fullTraceId,
+        turnCount: dialogTurns.length,
       });
-      applied = true;
-
-      return {
-        ...prev,
-        sessions: newSessions,
-      };
-    });
+    } else {
+      const result = this.applyCompletedSessionHistoryProjection(request.sessionId, projection);
+      applied = result.applied;
+      preservedTurnCount = result.preservedTurnCount;
+      if (applied) {
+        this.deferredFullHistoryProjections.delete(request.sessionId);
+        this.fullHistoryProjectionApplyRequests.delete(request.sessionId);
+      }
+    }
 
     startupTrace.markPhase('historical_session_full_hydrate_end', {
       remote,
+      sessionId: request.sessionId,
       sessionTraceId: fullTraceId,
       turnCount: dialogTurns.length,
       applied,
@@ -544,6 +838,7 @@ export class FlowChatStore {
     if (applied) {
       markPhaseAfterAnimationFrames(startupTrace, 'historical_session_full_hydrate_after_state_commit_frame', {
         remote,
+        sessionId: request.sessionId,
         sessionTraceId: fullTraceId,
         turnCount: dialogTurns.length,
         durationMs: elapsedMs(startedAt),
@@ -820,6 +1115,12 @@ export class FlowChatStore {
   }
 
   public switchSession(sessionId: string): void {
+    const previousSessionId = this.state.activeSessionId;
+    const targetSessionExists = this.state.sessions.has(sessionId);
+    if (targetSessionExists && previousSessionId && previousSessionId !== sessionId) {
+      this.cancelLocalSessionHistoryCompletion(previousSessionId, 'session-switch');
+    }
+
     let sessionMode: string | undefined;
     
     this.setState(prev => {
@@ -846,6 +1147,10 @@ export class FlowChatStore {
     window.dispatchEvent(new CustomEvent('bitfun:session-switched', {
       detail: { sessionId, mode: sessionMode || 'agentic' }
     }));
+
+    if (targetSessionExists && previousSessionId !== sessionId) {
+      this.scheduleActiveLocalPartialSessionHistoryCompletion(sessionId, 'session-switch');
+    }
   }
 
   /**
@@ -1225,6 +1530,7 @@ export class FlowChatStore {
     if (removedSessionIds.length === 0) {
       return [];
     }
+    this.clearRemovedSessionHistoryState(removedSessionIds, 'session-removed');
 
     this.setState(prev => {
       const removedSessionIdSet = new Set(removedSessionIds);
@@ -1381,6 +1687,7 @@ export class FlowChatStore {
     if (removedSessionIds.length === 0) {
       return [];
     }
+    this.clearRemovedSessionHistoryState(removedSessionIds, 'sessions-removed');
 
     const removedSessionIdSet = new Set(removedSessionIds);
 
@@ -2178,7 +2485,7 @@ export class FlowChatStore {
    */
   private async saveCancelledDialogTurn(sessionId: string, turnId: string): Promise<void> {
     try {
-      const { sessionAPI } = await import('@/infrastructure/api');
+      const { sessionAPI } = await import('@/infrastructure/api/service-api/SessionAPI');
       const session = this.state.sessions.get(sessionId);
       if (!session) {
         log.warn('Session not found, skipping save', { sessionId, turnId });
@@ -2630,7 +2937,7 @@ export class FlowChatStore {
         source: traceSource,
         metadataListTraceId,
       });
-      const { sessionAPI } = await import('@/infrastructure/api');
+      const { sessionAPI } = await import('@/infrastructure/api/service-api/SessionAPI');
       startupTrace.markPhase('session_metadata_api_import_end', {
         remote,
         source: traceSource,
@@ -2743,7 +3050,7 @@ export class FlowChatStore {
       metadataListTraceId,
     });
     try {
-      const { sessionAPI } = await import('@/infrastructure/api');
+      const { sessionAPI } = await import('@/infrastructure/api/service-api/SessionAPI');
       const sessions = await sessionAPI.listSessions(workspacePath, remoteConnectionId, remoteSshHost);
       sessionCount = sessions.length;
       startupTrace.markPhase('session_metadata_list_loaded', {
@@ -2787,7 +3094,7 @@ export class FlowChatStore {
           if (isLegacyPersistedBtwSession(metadata)) {
             return;
           }
-          // Skip archived sessions — they are managed in the settings page
+          // Skip archived sessions - they are managed in the settings page
           if (metadata.status === 'archived') {
             return;
           }
@@ -2962,12 +3269,17 @@ export class FlowChatStore {
     remoteSshHost?: string,
     options?: {
       includeInternal?: boolean;
+      deferFullHistoryUntilActive?: boolean;
     }
   ): Promise<void> {
     const traceStartedAt = nowMs();
     const remote = isRemoteTraceContext(remoteConnectionId, remoteSshHost);
     const sessionTraceId = `${sessionId.slice(0, 8)}-${Math.random().toString(36).slice(2, 8)}`;
-    startupTrace.markPhase('historical_session_hydrate_start', { remote, sessionTraceId });
+    startupTrace.markPhase('historical_session_hydrate_start', {
+      remote,
+      sessionId,
+      sessionTraceId,
+    });
     this.setSessionHistoryState(sessionId, 'hydrating');
 
     try {
@@ -2986,7 +3298,11 @@ export class FlowChatStore {
       let restoredTiming: SessionViewRestoreTiming | undefined;
       if (!isAcpSession) {
         const restoreStartedAt = nowMs();
-        startupTrace.markPhase('historical_session_restore_start', { remote, sessionTraceId });
+        startupTrace.markPhase('historical_session_restore_start', {
+          remote,
+          sessionId,
+          sessionTraceId,
+        });
         try {
           const { agentAPI } = await import('@/infrastructure/api');
           const restoreSessionViewSupportKey = restoreCommandSupportKey(
@@ -3024,6 +3340,7 @@ export class FlowChatStore {
                 this.unsupportedRestoreCommands.add(restoreSessionWithTurnsSupportKey);
                 startupTrace.markPhase('historical_session_restore_fallback', {
                   remote,
+                  sessionId,
                   sessionTraceId,
                   from: 'restore_session_with_turns',
                   to: 'restore_session',
@@ -3072,6 +3389,7 @@ export class FlowChatStore {
               this.unsupportedRestoreCommands.add(restoreSessionViewSupportKey);
               startupTrace.markPhase('historical_session_restore_fallback', {
                 remote,
+                sessionId,
                 sessionTraceId,
                 from: 'restore_session_view',
                 to: 'restore_session_with_turns',
@@ -3084,6 +3402,7 @@ export class FlowChatStore {
           }
           startupTrace.markPhase('historical_session_restore_end', {
             remote,
+            sessionId,
             sessionTraceId,
             turnCount: Array.isArray(turns) ? turns.length : 0,
             loadedTurnCount: restoredLoadedTurnCount,
@@ -3097,6 +3416,7 @@ export class FlowChatStore {
           contextRestoreState = 'pending';
           startupTrace.markPhase('historical_session_restore_failed', {
             remote,
+            sessionId,
             sessionTraceId,
             durationMs: elapsedMs(restoreStartedAt),
           });
@@ -3106,8 +3426,12 @@ export class FlowChatStore {
       
       if (!turns) {
         const turnsLoadStartedAt = nowMs();
-        startupTrace.markPhase('historical_session_turns_load_start', { remote, sessionTraceId });
-        const { sessionAPI } = await import('@/infrastructure/api');
+        startupTrace.markPhase('historical_session_turns_load_start', {
+          remote,
+          sessionId,
+          sessionTraceId,
+        });
+        const { sessionAPI } = await import('@/infrastructure/api/service-api/SessionAPI');
         turns = await sessionAPI.loadSessionTurns(
           sessionId,
           workspacePath,
@@ -3117,6 +3441,7 @@ export class FlowChatStore {
         );
         startupTrace.markPhase('historical_session_turns_load_end', {
           remote,
+          sessionId,
           sessionTraceId,
           turnCount: Array.isArray(turns) ? turns.length : 0,
           durationMs: elapsedMs(turnsLoadStartedAt),
@@ -3124,6 +3449,7 @@ export class FlowChatStore {
       }
       startupTrace.markPhase('historical_session_turns_loaded', {
         remote,
+        sessionId,
         sessionTraceId,
         turnCount: Array.isArray(turns) ? turns.length : 0,
       });
@@ -3134,6 +3460,7 @@ export class FlowChatStore {
         restoredSessionInfo?.lastUserDialogAgentType || this.deriveLastUserDialogMode(dialogTurns);
       startupTrace.markPhase('historical_session_convert_end', {
         remote,
+        sessionId,
         sessionTraceId,
         turnCount: dialogTurns.length,
         durationMs: elapsedMs(convertStartedAt),
@@ -3170,6 +3497,7 @@ export class FlowChatStore {
       });
       startupTrace.markPhase('historical_session_state_commit_end', {
         remote,
+        sessionId,
         sessionTraceId,
         turnCount: dialogTurns.length,
         totalTurnCount: restoredTotalTurnCount,
@@ -3178,6 +3506,7 @@ export class FlowChatStore {
       });
       markPhaseAfterAnimationFrames(startupTrace, 'historical_session_after_state_commit_frame', {
         remote,
+        sessionId,
         sessionTraceId,
         turnCount: dialogTurns.length,
         totalTurnCount: restoredTotalTurnCount,
@@ -3192,6 +3521,7 @@ export class FlowChatStore {
       stateMachineManager.reset(sessionId);
       startupTrace.markPhase('historical_session_hydrate_end', {
         remote,
+        sessionId,
         sessionTraceId,
         turnCount: dialogTurns.length,
         totalTurnCount: restoredTotalTurnCount,
@@ -3199,15 +3529,31 @@ export class FlowChatStore {
         durationMs: elapsedMs(traceStartedAt),
       });
       if (restoredHistoryPartial) {
-        this.scheduleCompleteSessionHistoryLoad({
-          sessionId,
-          workspacePath,
-          remoteConnectionId,
-          remoteSshHost,
-          includeInternal: options?.includeInternal,
-          initialSessionTraceId: sessionTraceId,
-          expectedDialogTurnIds: dialogTurns.map(turn => turn.id),
-        });
+        const deferFullHistoryUntilActive =
+          !remote &&
+          options?.deferFullHistoryUntilActive === true &&
+          this.state.activeSessionId !== sessionId;
+        if (!deferFullHistoryUntilActive) {
+          this.scheduleCompleteSessionHistoryLoad({
+            sessionId,
+            workspacePath,
+            remoteConnectionId,
+            remoteSshHost,
+            includeInternal: options?.includeInternal,
+            requireActiveSession: options?.deferFullHistoryUntilActive === true,
+            initialSessionTraceId: sessionTraceId,
+            expectedDialogTurnIds: dialogTurns.map(turn => turn.id),
+          });
+        } else {
+          startupTrace.markPhase('historical_session_full_hydrate_deferred', {
+            remote,
+            sessionId,
+            sessionTraceId,
+            reason: 'inactive-after-tail-restore',
+            loadedTurnCount: dialogTurns.length,
+            totalTurnCount: restoredTotalTurnCount,
+          });
+        }
       }
     } catch (error) {
       this.setState(prev => {
@@ -3228,6 +3574,7 @@ export class FlowChatStore {
       });
       startupTrace.markPhase('historical_session_hydrate_failed', {
         remote,
+        sessionId,
         sessionTraceId,
         durationMs: elapsedMs(traceStartedAt),
       });
