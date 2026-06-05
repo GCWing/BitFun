@@ -2,12 +2,21 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use tool_runtime::fs::read_file::{build_remote_read_command, parse_remote_read_output};
 use tool_runtime::fs::{
-    delete_local_path, edit_local_file, inspect_local_delete_target, write_local_file,
+    build_remote_delete_command, build_remote_list_commands, delete_local_path, edit_local_file,
+    inspect_local_delete_target, parse_remote_list_entries, write_local_file,
     DeleteLocalPathRequest, EditLocalFileRequest, LocalDeleteTarget, WriteLocalFileRequest,
     WriteLocalFileStatus,
 };
-use tool_runtime::search::glob_search::{execute_local_glob, LocalGlobRequest};
+use tool_runtime::search::glob_search::{
+    collect_remote_glob_matches, execute_local_glob, LocalGlobRequest,
+};
+use tool_runtime::search::grep_search::{
+    apply_offset_and_limit, build_remote_grep_command, count_remote_grep_matches,
+    relativize_result_text, render_remote_grep_result_text, OutputMode, RemoteGrepCommandRequest,
+};
+use tool_runtime::util::string::shell_single_quote;
 
 fn make_temp_dir(name: &str) -> PathBuf {
     let unique = SystemTime::now()
@@ -159,4 +168,141 @@ fn execute_local_glob_keeps_shallowest_matches() {
         .any(|path| path.ends_with("/src/deep/mod.rs")));
 
     let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn remote_glob_stdout_is_normalized_and_limited_by_tool_runtime() {
+    let matches =
+        collect_remote_glob_matches("C:/repo", "./src/deep/mod.rs\nsrc/lib.rs\nREADME.md\n\n", 2)
+            .into_iter()
+            .map(|path| normalized(&path))
+            .collect::<Vec<_>>();
+
+    assert_eq!(matches, vec!["C:/repo/README.md", "C:/repo/src/lib.rs"]);
+}
+
+#[test]
+fn shell_single_quote_preserves_existing_remote_escape_style() {
+    assert_eq!(shell_single_quote("C:/repo/a'b"), "'C:/repo/a'\\''b'");
+}
+
+#[test]
+fn remote_read_command_and_parser_preserve_existing_window_markers() {
+    let command =
+        build_remote_read_command("C:/repo/a'b.txt", 2, 3, 120, 1_000).expect("command builds");
+
+    assert!(command.starts_with(
+        "if [ ! -f 'C:/repo/a'\\''b.txt' ]; then exit 3; fi; awk -v start=2 -v end=4 -v max=120 -v budget=1000"
+    ));
+    assert!(command.contains("__BITFUN_TOTAL_LINES__="));
+    assert!(command.contains("__BITFUN_HIT_TOTAL_CHAR_LIMIT__="));
+    assert!(command.ends_with("'C:/repo/a'\\''b.txt'"));
+
+    let result = parse_remote_read_output(
+        "     2\talpha\n",
+        "__BITFUN_TOTAL_LINES__=5\n__BITFUN_HIT_TOTAL_CHAR_LIMIT__=1\n",
+        0,
+        "C:/repo/a'b.txt",
+        2,
+    )
+    .expect("remote output parses");
+
+    assert_eq!(result.start_line, 2);
+    assert_eq!(result.end_line, 2);
+    assert_eq!(result.total_lines, 5);
+    assert_eq!(result.content, "     2\talpha");
+    assert!(result.hit_total_char_limit);
+}
+
+#[test]
+fn remote_ls_command_plan_and_stdout_parser_preserve_existing_shape() {
+    let plan = build_remote_list_commands("/repo/a'b", 10);
+
+    assert_eq!(
+        plan.scan_command,
+        "find '/repo/a'\\''b' -maxdepth 1 -not -name '.*' -not -path '/repo/a'\\''b' | head -n 11 | sort"
+    );
+    assert_eq!(
+        plan.listing_command,
+        "ls -la --time-style=long-iso '/repo/a'\\''b' 2>/dev/null || ls -la '/repo/a'\\''b'"
+    );
+
+    let entries = parse_remote_list_entries("/repo/a'b/file.txt\n/repo/a'b/dir/\n\n");
+
+    assert_eq!(entries.len(), 2);
+    assert_eq!(entries[0].name, "file.txt");
+    assert_eq!(entries[0].path, "/repo/a'b/file.txt");
+    assert!(!entries[0].is_dir);
+    assert_eq!(entries[1].name, "dir");
+    assert_eq!(entries[1].path, "/repo/a'b/dir/");
+    assert!(entries[1].is_dir);
+}
+
+#[test]
+fn remote_delete_command_preserves_existing_recursive_flag_and_escaping() {
+    assert_eq!(
+        build_remote_delete_command("/repo/a'b.txt", false),
+        "rm -f '/repo/a'\\''b.txt'"
+    );
+    assert_eq!(
+        build_remote_delete_command("/repo/a'b", true),
+        "rm -rf '/repo/a'\\''b'"
+    );
+}
+
+#[test]
+fn remote_grep_command_preserves_rg_fallback_filters_and_windowing() {
+    let command = build_remote_grep_command(&RemoteGrepCommandRequest {
+        pattern: "panic('x')".to_string(),
+        path: "/repo/src app".to_string(),
+        case_insensitive: true,
+        output_mode: OutputMode::Content,
+        show_line_numbers: true,
+        context: Some(2),
+        before_context: Some(1),
+        after_context: Some(1),
+        glob_patterns: vec!["*.rs".to_string(), "**/*.ts".to_string()],
+        file_type: Some("rust".to_string()),
+        head_limit: Some(7),
+        offset: 3,
+    });
+
+    assert_eq!(
+        command,
+        "if command -v rg >/dev/null 2>&1; then rg --no-heading --hidden --max-columns 500 -i --line-number -C 2 --glob '*.rs' --glob '**/*.ts' --type 'rust' -e 'panic('\\''x'\\'')' '/repo/src app' 2>/dev/null | tail -n +4 | head -n 7; else grep -rni -e 'panic('\\''x'\\'')' '/repo/src app' 2>/dev/null | tail -n +4 | head -n 7; fi"
+    );
+}
+
+#[test]
+fn remote_grep_result_rendering_preserves_counts_and_display_paths() {
+    let stdout = "/repo/src/main.rs:12:panic!(\"x\")\n/repo/src/lib.rs:3:pub fn lib() {}\n";
+
+    assert_eq!(count_remote_grep_matches(stdout), 2);
+    assert_eq!(
+        render_remote_grep_result_text(stdout, "panic", Some("/repo")),
+        "src/main.rs:12:panic!(\"x\")\nsrc/lib.rs:3:pub fn lib() {}"
+    );
+    assert_eq!(
+        render_remote_grep_result_text("", "panic", Some("/repo")),
+        "No matches found for pattern 'panic'"
+    );
+}
+
+#[test]
+fn grep_result_windowing_can_be_applied_outside_core() {
+    let mut items = vec![
+        "one".to_string(),
+        "two".to_string(),
+        "three".to_string(),
+        "four".to_string(),
+    ];
+
+    apply_offset_and_limit(&mut items, 1, Some(2));
+    assert_eq!(items, vec!["two", "three"]);
+
+    let text = "C:/repo/src/main.rs:1:one\nC:/repo/src/lib.rs:2:two";
+    assert_eq!(
+        relativize_result_text(text, Some("C:/repo")),
+        "src/main.rs:1:one\nsrc/lib.rs:2:two"
+    );
 }

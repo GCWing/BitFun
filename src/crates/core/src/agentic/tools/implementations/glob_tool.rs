@@ -7,10 +7,10 @@ use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use log::{info, warn};
 use serde_json::{json, Value};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tool_runtime::search::glob_search::{
-    build_remote_find_command, build_remote_rg_command, execute_local_glob, limit_paths,
-    normalize_path, LocalGlobRequest,
+    build_remote_find_command, build_remote_rg_command, collect_remote_glob_matches,
+    execute_local_glob, normalize_path, LocalGlobRequest,
 };
 
 pub struct GlobTool;
@@ -227,15 +227,7 @@ impl Tool for GlobTool {
                     BitFunError::tool(format!("Failed to glob on remote with rg: {}", e))
                 })?;
 
-            let matches = stdout
-                .lines()
-                .filter(|l| !l.is_empty())
-                .map(|line| {
-                    let relative_path = line.strip_prefix("./").unwrap_or(line);
-                    Path::new(&search_dir).join(relative_path)
-                })
-                .collect::<Vec<_>>();
-            let limited = limit_paths(&matches, limit)
+            let limited = collect_remote_glob_matches(&search_dir, &stdout, limit)
                 .into_iter()
                 .map(|path| {
                     resolved

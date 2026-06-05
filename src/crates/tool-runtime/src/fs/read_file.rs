@@ -1,7 +1,10 @@
-use crate::util::string::truncate_string_by_chars;
+use crate::util::string::{shell_single_quote, truncate_string_by_chars};
 use std::fs::File;
 use std::io::BufRead;
 use std::io::BufReader;
+
+const REMOTE_TOTAL_LINES_MARKER: &str = "__BITFUN_TOTAL_LINES__=";
+const REMOTE_HIT_TOTAL_CHAR_LIMIT_MARKER: &str = "__BITFUN_HIT_TOTAL_CHAR_LIMIT__=";
 
 #[derive(Debug)]
 pub struct ReadFileResult {
@@ -10,6 +13,106 @@ pub struct ReadFileResult {
     pub total_lines: usize,
     pub content: String,
     pub hit_total_char_limit: bool,
+}
+
+pub fn build_remote_read_command(
+    resolved_path: &str,
+    start_line: usize,
+    limit: usize,
+    max_line_chars: usize,
+    max_total_chars: usize,
+) -> Result<String, String> {
+    let end_line = start_line
+        .checked_add(limit.saturating_sub(1))
+        .ok_or_else(|| "Requested line range is too large".to_string())?;
+    let escaped_path = shell_single_quote(resolved_path);
+
+    Ok(format!(
+        "if [ ! -f {path} ]; then exit 3; fi; awk -v start={start} -v end={end} -v max={max} -v budget={budget} 'BEGIN {{ total = 0; used = 0; hit = 0; }} {{ total = NR; if (!hit && NR >= start && NR <= end) {{ line = $0; if (length(line) > max) {{ line = substr(line, 1, max) \" [truncated]\"; }} rendered = sprintf(\"%6d\\t%s\", NR, line); extra = (used > 0 ? 1 : 0); next_used = used + extra + length(rendered); if (next_used > budget) {{ hit = 1; next; }} print rendered; used = next_used; }} }} END {{ printf(\"{marker}%d\\n\", total) > \"/dev/stderr\"; printf(\"{hit_marker}%d\\n\", hit) > \"/dev/stderr\"; }}' {path}",
+        path = escaped_path,
+        start = start_line,
+        end = end_line,
+        max = max_line_chars,
+        budget = max_total_chars,
+        marker = REMOTE_TOTAL_LINES_MARKER,
+        hit_marker = REMOTE_HIT_TOTAL_CHAR_LIMIT_MARKER,
+    ))
+}
+
+pub fn parse_remote_read_output(
+    stdout: &str,
+    stderr: &str,
+    status: i32,
+    resolved_path: &str,
+    start_line: usize,
+) -> Result<ReadFileResult, String> {
+    let mut total_lines = None;
+    let mut hit_total_char_limit = false;
+    let mut stderr_messages = Vec::new();
+    for line in stderr.lines() {
+        if let Some(rest) = line.strip_prefix(REMOTE_TOTAL_LINES_MARKER) {
+            total_lines = rest.trim().parse::<usize>().ok();
+        } else if let Some(rest) = line.strip_prefix(REMOTE_HIT_TOTAL_CHAR_LIMIT_MARKER) {
+            hit_total_char_limit = rest.trim() == "1";
+        } else if !line.trim().is_empty() {
+            stderr_messages.push(line.to_string());
+        }
+    }
+
+    if status != 0 {
+        let message = if status == 3 {
+            format!("File not found or not a regular file: {}", resolved_path)
+        } else if !stderr_messages.is_empty() {
+            stderr_messages.join("\n")
+        } else {
+            format!(
+                "Failed to read file: remote command exited with status {}",
+                status
+            )
+        };
+        return Err(message);
+    }
+
+    let total_lines = total_lines.ok_or_else(|| {
+        "Failed to read file: remote command did not return line-count markers".to_string()
+    })?;
+
+    if total_lines == 0 {
+        return Ok(ReadFileResult {
+            start_line: 0,
+            end_line: 0,
+            total_lines: 0,
+            content: String::new(),
+            hit_total_char_limit,
+        });
+    }
+
+    if start_line > total_lines {
+        return Err(format!(
+            "`start_line` {} is larger than the number of lines in the file: {}",
+            start_line, total_lines
+        ));
+    }
+
+    let content = stdout.trim_end_matches('\n').to_string();
+    let lines_read = if content.is_empty() {
+        0
+    } else {
+        content.lines().count()
+    };
+    let end_line = if lines_read == 0 {
+        start_line
+    } else {
+        (start_line + lines_read).saturating_sub(1)
+    };
+
+    Ok(ReadFileResult {
+        start_line,
+        end_line,
+        total_lines,
+        content,
+        hit_total_char_limit,
+    })
 }
 
 /// start_line: starts from 1

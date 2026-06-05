@@ -13,10 +13,7 @@ use chrono::{DateTime, Local};
 use serde_json::{json, Value};
 use std::path::Path;
 use std::time::SystemTime;
-
-fn shell_escape(s: &str) -> String {
-    format!("'{}'", s.replace('\'', "'\\''"))
-}
+use tool_runtime::fs::{build_remote_list_commands, parse_remote_list_entries};
 
 /// LS tool - list directory tree
 pub struct LSTool {
@@ -247,43 +244,22 @@ Usage:
                 BitFunError::tool("Workspace shell not available for remote LS".to_string())
             })?;
 
-            let ls_cmd = format!(
-                "find {} -maxdepth 1 -not -name '.*' -not -path {} | head -n {} | sort",
-                shell_escape(&resolved.resolved_path),
-                shell_escape(&resolved.resolved_path),
-                limit + 1
-            );
+            let list_commands = build_remote_list_commands(&resolved.resolved_path, limit);
 
-            let (stdout, _stderr, _exit_code) =
-                ws_shell.exec(&ls_cmd, Some(15_000)).await.map_err(|e| {
+            let (stdout, _stderr, _exit_code) = ws_shell
+                .exec(&list_commands.scan_command, Some(15_000))
+                .await
+                .map_err(|e| {
                     BitFunError::tool(format!("Failed to list remote directory: {}", e))
                 })?;
 
-            let mut file_lines = Vec::new();
-            let mut dir_lines = Vec::new();
-
-            for line in stdout.lines().filter(|l| !l.is_empty()) {
-                let name = Path::new(line)
-                    .file_name()
-                    .map(|n| n.to_string_lossy().to_string())
-                    .unwrap_or_else(|| line.to_string());
-                let is_dir = line.ends_with('/');
-                if is_dir || name.is_empty() {
-                    dir_lines.push((name, line.to_string()));
-                } else {
-                    file_lines.push((name, line.to_string()));
-                }
-            }
-
             // Use a simpler stat-based listing for the text output
-            let stat_cmd = format!(
-                "ls -la --time-style=long-iso {} 2>/dev/null || ls -la {}",
-                shell_escape(&resolved.resolved_path),
-                shell_escape(&resolved.resolved_path)
-            );
-            let (ls_output, _, _) = ws_shell.exec(&stat_cmd, Some(15_000)).await.map_err(|e| {
-                BitFunError::tool(format!("Failed to list remote directory: {}", e))
-            })?;
+            let (ls_output, _, _) = ws_shell
+                .exec(&list_commands.listing_command, Some(15_000))
+                .await
+                .map_err(|e| {
+                    BitFunError::tool(format!("Failed to list remote directory: {}", e))
+                })?;
 
             let result_text = format!(
                 "Directory listing: {}\n\n{}",
@@ -291,18 +267,13 @@ Usage:
                 ls_output.trim()
             );
 
-            let entries_json: Vec<Value> = stdout
-                .lines()
-                .filter(|l| !l.is_empty())
-                .map(|line| {
-                    let name = Path::new(line)
-                        .file_name()
-                        .map(|n| n.to_string_lossy().to_string())
-                        .unwrap_or_else(|| line.to_string());
+            let entries_json: Vec<Value> = parse_remote_list_entries(&stdout)
+                .into_iter()
+                .map(|entry| {
                     json!({
-                        "name": name,
-                        "path": line,
-                        "is_dir": line.ends_with('/'),
+                        "name": entry.name,
+                        "path": entry.path,
+                        "is_dir": entry.is_dir,
                     })
                 })
                 .collect();

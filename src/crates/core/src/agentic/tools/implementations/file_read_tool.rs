@@ -12,7 +12,7 @@ use log::{debug, warn};
 use serde_json::{json, Value};
 use std::path::Path;
 use std::time::Instant;
-use tool_runtime::fs::read_file::read_file;
+use tool_runtime::fs::read_file::{build_remote_read_command, parse_remote_read_output, read_file};
 
 pub struct FileReadTool {
     default_max_lines_to_read: usize,
@@ -57,28 +57,18 @@ impl FileReadTool {
         limit: usize,
         context: &ToolUseContext,
     ) -> BitFunResult<tool_runtime::fs::read_file::ReadFileResult> {
-        const TOTAL_LINES_MARKER: &str = "__BITFUN_TOTAL_LINES__=";
-        const HIT_TOTAL_CHAR_LIMIT_MARKER: &str = "__BITFUN_HIT_TOTAL_CHAR_LIMIT__=";
-
-        let end_line = start_line
-            .checked_add(limit.saturating_sub(1))
-            .ok_or_else(|| BitFunError::tool("Requested line range is too large".to_string()))?;
-
         let ws_shell = context.ws_shell().ok_or_else(|| {
             BitFunError::tool("Remote workspace shell is unavailable".to_string())
         })?;
 
-        let escaped_path = shell_escape(resolved_path);
-        let command = format!(
-            "if [ ! -f {path} ]; then exit 3; fi; awk -v start={start} -v end={end} -v max={max} -v budget={budget} 'BEGIN {{ total = 0; used = 0; hit = 0; }} {{ total = NR; if (!hit && NR >= start && NR <= end) {{ line = $0; if (length(line) > max) {{ line = substr(line, 1, max) \" [truncated]\"; }} rendered = sprintf(\"%6d\\t%s\", NR, line); extra = (used > 0 ? 1 : 0); next_used = used + extra + length(rendered); if (next_used > budget) {{ hit = 1; next; }} print rendered; used = next_used; }} }} END {{ printf(\"{marker}%d\\n\", total) > \"/dev/stderr\"; printf(\"{hit_marker}%d\\n\", hit) > \"/dev/stderr\"; }}' {path}",
-            path = escaped_path,
-            start = start_line,
-            end = end_line,
-            max = self.max_line_chars,
-            budget = self.max_total_chars,
-            marker = TOTAL_LINES_MARKER,
-            hit_marker = HIT_TOTAL_CHAR_LIMIT_MARKER,
-        );
+        let command = build_remote_read_command(
+            resolved_path,
+            start_line,
+            limit,
+            self.max_line_chars,
+            self.max_total_chars,
+        )
+        .map_err(BitFunError::tool)?;
 
         let remote_read_started_at = Instant::now();
         debug!(
@@ -115,90 +105,21 @@ impl FileReadTool {
             elapsed_ms_u64(remote_read_started_at)
         );
 
-        let mut total_lines = None;
-        let mut hit_total_char_limit = false;
-        let mut stderr_messages = Vec::new();
-        for line in stderr.lines() {
-            if let Some(rest) = line.strip_prefix(TOTAL_LINES_MARKER) {
-                total_lines = rest.trim().parse::<usize>().ok();
-            } else if let Some(rest) = line.strip_prefix(HIT_TOTAL_CHAR_LIMIT_MARKER) {
-                hit_total_char_limit = rest.trim() == "1";
-            } else if !line.trim().is_empty() {
-                stderr_messages.push(line.to_string());
-            }
-        }
-
-        if status != 0 {
-            let message = if status == 3 {
-                format!("File not found or not a regular file: {}", resolved_path)
-            } else if !stderr_messages.is_empty() {
-                stderr_messages.join("\n")
-            } else {
-                format!(
-                    "Failed to read file: remote command exited with status {}",
-                    status
-                )
-            };
-            return Err(BitFunError::tool(message));
-        }
-
-        let total_lines = total_lines.ok_or_else(|| {
-            BitFunError::tool(
-                "Failed to read file: remote command did not return line-count markers".to_string(),
-            )
-        })?;
-
-        if total_lines == 0 {
-            return Ok(tool_runtime::fs::read_file::ReadFileResult {
-                start_line: 0,
-                end_line: 0,
-                total_lines: 0,
-                content: String::new(),
-                hit_total_char_limit,
-            });
-        }
-
-        if start_line > total_lines {
-            return Err(BitFunError::tool(format!(
-                "`start_line` {} is larger than the number of lines in the file: {}",
-                start_line, total_lines
-            )));
-        }
-
-        let content = stdout.trim_end_matches('\n').to_string();
-        let lines_read = if content.is_empty() {
-            0
-        } else {
-            content.lines().count()
-        };
-        let end_line = if lines_read == 0 {
-            start_line
-        } else {
-            (start_line + lines_read).saturating_sub(1)
-        };
+        let result = parse_remote_read_output(&stdout, &stderr, status, resolved_path, start_line)
+            .map_err(BitFunError::tool)?;
 
         debug!(
             "Remote file read parsed successfully: path={}, start_line={}, end_line={}, total_lines={}, hit_total_char_limit={}, duration_ms={}",
             resolved_path,
-            start_line,
-            end_line,
-            total_lines,
-            hit_total_char_limit,
+            result.start_line,
+            result.end_line,
+            result.total_lines,
+            result.hit_total_char_limit,
             elapsed_ms_u64(remote_read_started_at)
         );
 
-        Ok(tool_runtime::fs::read_file::ReadFileResult {
-            start_line,
-            end_line,
-            total_lines,
-            content,
-            hit_total_char_limit,
-        })
+        Ok(result)
     }
-}
-
-fn shell_escape(s: &str) -> String {
-    format!("'{}'", s.replace('\'', "'\\''"))
 }
 
 #[async_trait]

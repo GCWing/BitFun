@@ -71,21 +71,27 @@ Runtime Services provider 组合显式化。但当前代码仍未达到设计文
 - `cargo test -p bitfun-runtime-services`
 - 涉及 remote / terminal / search / Git / AI 时补对应 focused tests。
 
-### 4.2 M2：Tool Runtime concrete execution 闭环
+### 4.2 M2（当前变更已闭环）：Tool Runtime concrete IO/search execution helper
 
-目标：让 Tool Runtime 不再只承接 manifest / admission，而是接管可证明等价的工具执行管线主体。
+目标：在不改变产品工具语义的前提下，让 `tool-runtime` 接管低层 filesystem / search 工具中可证明等价的执行 helper，
+减少 core 对 remote shell 命令形态、stdout/stderr marker 和结果窗口裁剪的直接理解。
 
-- 迁移 Bash、terminal lifecycle、indexed workspace search、remote shell execution 中可被 port/provider 保护的执行主体。
-- 将 permission gate、tool execution services、result/artifact policy、tool hook 顺序和 cancellation 语义收敛到 Tool Runtime 边界。
-- core 保留 agent-facing `Tool` adapter、旧 import path、UI/channel 副作用和必要 checkpoint adapter。
-- 继续保护 prompt-visible manifest、GetToolSpec、readonly/enabled filtering、expanded/collapsed exposure、MCP/ACP catalog。
+完成口径：
+- `tool-runtime` 承接远程 Delete 命令规划、Read awk 命令规划与 marker 解析、LS 命令规划与 stdout entry 规整。
+- `tool-runtime` 承接远程 Glob stdout 规整，以及远程 Grep 命令规划、result text 规整、match count 和 offset/limit windowing。
+- core 删除对应重复拼接/解析逻辑，只保留 agent-facing `Tool` adapter、`ToolUseContext` path resolution、workspace shell 执行、
+  checkpoint、UI/channel 副作用和 `ToolResult` 包装。
+- `agent-tools` 继续拥有 manifest / admission / GetToolSpec 等 provider-neutral contract；`terminal-core` 继续拥有 PTY 与 terminal lifecycle。
 
-**不混入：** 改变工具 schema、权限默认值、checkpoint 语义、remote fallback、shell 工作目录或 terminal prewarm 行为。
+**不混入：** 改变工具 schema、权限默认值、checkpoint 语义、remote fallback、shell 工作目录、terminal prewarm / PTY lifecycle、
+prompt-visible manifest、GetToolSpec、readonly/enabled filtering、expanded/collapsed exposure、MCP/ACP catalog。
 
 **门禁：**
+- `cargo test -p tool-runtime`
 - `cargo test -p bitfun-agent-tools`
-- `cargo test -p bitfun-tool-runtime`
-- tool manifest / GetToolSpec / Bash / terminal / search / remote shell focused tests
+- core Grep / remote filesystem focused tests
+- `cargo check --workspace`
+- `pnpm run check:repo-hygiene`
 - `node scripts/check-core-boundaries.mjs`
 
 ### 4.3 M3：Agent Runtime concrete lifecycle 闭环

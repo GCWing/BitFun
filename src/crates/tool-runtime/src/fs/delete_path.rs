@@ -1,3 +1,4 @@
+use crate::util::string::shell_single_quote;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -74,4 +75,12 @@ pub fn delete_local_path(
         is_directory: target.is_directory,
         recursive: request.recursive,
     })
+}
+
+pub fn build_remote_delete_command(resolved_path: &str, recursive: bool) -> String {
+    if recursive {
+        format!("rm -rf {}", shell_single_quote(resolved_path))
+    } else {
+        format!("rm -f {}", shell_single_quote(resolved_path))
+    }
 }
