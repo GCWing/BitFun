@@ -596,7 +596,8 @@ Each call starts a separate process. Commands currently run through {shell_name}
 Use tty=true only for commands that need interactive stdin; otherwise leave tty=false.
 yield_time_ms waits for output until the process exits or the deadline is reached. It does not stop the process.
 If the process is still running, the result includes a numeric session_id. Use WriteStdin to poll or send input, and ExecControl to interrupt or kill it.
-Output is only what was produced during this tool call's wait window."#,
+Output is only what was produced during this tool call's wait window. 
+With tty=false, stdout and stderr ordering is not guaranteed; use tty=true or redirect stderr with 2>&1 when terminal ordering matters."#,
             shell_path = shell_path.display(),
         ))
     }
@@ -611,7 +612,8 @@ Output is only what was produced during this tool call's wait window."#,
 Each call starts a separate remote SSH process. Remote commands run through the remote user's default shell with login semantics and, when available, a cached environment snapshot captured from a tool-owned interactive PTY so terminal PATH customizations such as nvm can load without running the user command through interactive shell startup. Remote tty=false runs as SSH exec; remote tty=true runs the same command inside a tool-owned remote PTY.
 yield_time_ms waits for output until the process exits or the deadline is reached. It does not stop the process.
 If the process is still running, the result includes a numeric session_id. Use WriteStdin to poll for more output or send input to tty=true sessions, and ExecControl to interrupt or kill it.
-Output is only what was produced during this tool call's wait window."#
+Output is only what was produced during this tool call's wait window. 
+With tty=false, stdout and stderr ordering is not guaranteed; use tty=true or redirect stderr with 2>&1 when terminal ordering matters."#
                 .to_string());
         }
 
