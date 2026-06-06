@@ -1,13 +1,17 @@
 use super::rendering::render_exec_response_for_assistant;
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
 use crate::service::remote_ssh::{
-    get_global_remote_exec_process_manager, RemoteExecControlAction, RemoteExecControlRequest,
+    get_global_remote_exec_process_manager, RemoteExecControlAction, RemoteExecControlOrigin,
+    RemoteExecControlRequest, RemoteExecSessionCompletion, RemoteExecSessionCompletionSource,
+    RemoteExecSessionCompletionStatus,
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use serde_json::{json, Value};
 use terminal_core::{
-    get_global_exec_process_manager, LocalExecControlAction, LocalExecControlRequest,
+    get_global_exec_process_manager, LocalExecControlAction, LocalExecControlOrigin,
+    LocalExecControlRequest, LocalExecSessionCompletion, LocalExecSessionCompletionSource,
+    LocalExecSessionCompletionStatus,
 };
 
 const DEFAULT_MAX_OUTPUT_CHARS: u64 = 10_000;
@@ -34,6 +38,113 @@ const DEFAULT_MAX_OUTPUT_CHARS: u64 = 10_000;
 //   remote workspaces assume POSIX paths and shells.
 pub struct ExecControlTool;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExecCommandControlAction {
+    Interrupt,
+    Kill,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExecCommandControlOrigin {
+    ModelTool,
+    OutOfBand,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExecCommandCompletionStatus {
+    Exited,
+    Interrupted,
+    Killed,
+    Pruned,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExecCommandCompletionSource {
+    Process,
+    OutOfBandControl,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExecCommandCompletion {
+    pub status: ExecCommandCompletionStatus,
+    pub source: ExecCommandCompletionSource,
+}
+
+#[derive(Debug, Clone)]
+pub struct ExecCommandControlRequest {
+    pub session_id: i32,
+    pub action: ExecCommandControlAction,
+    pub origin: ExecCommandControlOrigin,
+    pub remote: bool,
+    pub yield_time_ms: Option<u64>,
+    pub max_output_chars: Option<usize>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ExecCommandControlResponse {
+    pub chunk_id: String,
+    pub wall_time_seconds: f64,
+    pub output: String,
+    pub session_id: Option<i32>,
+    pub exit_code: Option<i32>,
+    pub original_output_chars: usize,
+    pub action: ExecCommandControlAction,
+    pub remote: bool,
+    pub completion: Option<ExecCommandCompletion>,
+}
+
+pub async fn control_exec_command_session(
+    request: ExecCommandControlRequest,
+) -> BitFunResult<ExecCommandControlResponse> {
+    if request.remote {
+        let response = get_global_remote_exec_process_manager()
+            .control_session(RemoteExecControlRequest {
+                session_id: request.session_id,
+                action: ExecControlTool::remote_action(request.action),
+                origin: ExecControlTool::remote_origin(request.origin),
+                yield_time_ms: request.yield_time_ms,
+                max_output_chars: request.max_output_chars,
+            })
+            .await
+            .map_err(|error| BitFunError::tool(format!("ExecControl failed: {error}")))?;
+
+        return Ok(ExecCommandControlResponse {
+            chunk_id: response.chunk_id,
+            wall_time_seconds: response.wall_time_seconds,
+            output: response.output,
+            session_id: response.session_id,
+            exit_code: response.exit_code,
+            original_output_chars: response.original_output_chars,
+            action: request.action,
+            remote: true,
+            completion: response.completion.map(ExecControlTool::remote_completion),
+        });
+    }
+
+    let response = get_global_exec_process_manager()
+        .control_session(LocalExecControlRequest {
+            session_id: request.session_id,
+            action: ExecControlTool::local_action(request.action),
+            origin: ExecControlTool::local_origin(request.origin),
+            yield_time_ms: request.yield_time_ms,
+            max_output_chars: request.max_output_chars,
+        })
+        .await
+        .map_err(|error| BitFunError::tool(format!("ExecControl failed: {error}")))?;
+
+    Ok(ExecCommandControlResponse {
+        chunk_id: response.chunk_id,
+        wall_time_seconds: response.wall_time_seconds,
+        output: response.output,
+        session_id: response.session_id,
+        exit_code: response.exit_code,
+        original_output_chars: response.original_output_chars,
+        action: request.action,
+        remote: false,
+        completion: response.completion.map(ExecControlTool::local_completion),
+    })
+}
+
 impl Default for ExecControlTool {
     fn default() -> Self {
         Self::new()
@@ -54,21 +165,23 @@ impl ExecControlTool {
         })
     }
 
-    fn action_from_input(input: &Value) -> Option<LocalExecControlAction> {
+    fn action_from_input(input: &Value) -> Option<ExecCommandControlAction> {
         match input.get("action").and_then(Value::as_str)?.trim() {
-            "interrupt" => Some(LocalExecControlAction::Interrupt),
-            "kill" => Some(LocalExecControlAction::Kill),
+            "interrupt" => Some(ExecCommandControlAction::Interrupt),
+            "kill" => Some(ExecCommandControlAction::Kill),
             _ => None,
         }
     }
 
-    fn response_for_assistant(data: &Value, action: LocalExecControlAction) -> String {
+    fn response_for_assistant(data: &Value, action: ExecCommandControlAction) -> String {
         let mut status_lines = Vec::new();
         match action {
-            LocalExecControlAction::Interrupt => {
+            ExecCommandControlAction::Interrupt => {
                 status_lines.push("Sent interrupt to process.".to_string())
             }
-            LocalExecControlAction::Kill => status_lines.push("Sent kill to process.".to_string()),
+            ExecCommandControlAction::Kill => {
+                status_lines.push("Sent kill to process.".to_string())
+            }
         }
         if let Some(exit_code) = data.get("exit_code").and_then(Value::as_i64) {
             status_lines.push(format!("Process exited with code {exit_code}."));
@@ -80,10 +193,69 @@ impl ExecControlTool {
         render_exec_response_for_assistant(data, status_lines, 4)
     }
 
-    fn remote_action(action: LocalExecControlAction) -> RemoteExecControlAction {
+    fn local_action(action: ExecCommandControlAction) -> LocalExecControlAction {
         match action {
-            LocalExecControlAction::Interrupt => RemoteExecControlAction::Interrupt,
-            LocalExecControlAction::Kill => RemoteExecControlAction::Kill,
+            ExecCommandControlAction::Interrupt => LocalExecControlAction::Interrupt,
+            ExecCommandControlAction::Kill => LocalExecControlAction::Kill,
+        }
+    }
+
+    fn local_origin(origin: ExecCommandControlOrigin) -> LocalExecControlOrigin {
+        match origin {
+            ExecCommandControlOrigin::ModelTool => LocalExecControlOrigin::ModelTool,
+            ExecCommandControlOrigin::OutOfBand => LocalExecControlOrigin::OutOfBand,
+        }
+    }
+
+    fn remote_action(action: ExecCommandControlAction) -> RemoteExecControlAction {
+        match action {
+            ExecCommandControlAction::Interrupt => RemoteExecControlAction::Interrupt,
+            ExecCommandControlAction::Kill => RemoteExecControlAction::Kill,
+        }
+    }
+
+    fn remote_origin(origin: ExecCommandControlOrigin) -> RemoteExecControlOrigin {
+        match origin {
+            ExecCommandControlOrigin::ModelTool => RemoteExecControlOrigin::ModelTool,
+            ExecCommandControlOrigin::OutOfBand => RemoteExecControlOrigin::OutOfBand,
+        }
+    }
+
+    fn local_completion(completion: LocalExecSessionCompletion) -> ExecCommandCompletion {
+        ExecCommandCompletion {
+            status: match completion.status {
+                LocalExecSessionCompletionStatus::Exited => ExecCommandCompletionStatus::Exited,
+                LocalExecSessionCompletionStatus::Interrupted => {
+                    ExecCommandCompletionStatus::Interrupted
+                }
+                LocalExecSessionCompletionStatus::Killed => ExecCommandCompletionStatus::Killed,
+                LocalExecSessionCompletionStatus::Pruned => ExecCommandCompletionStatus::Pruned,
+            },
+            source: match completion.source {
+                LocalExecSessionCompletionSource::Process => ExecCommandCompletionSource::Process,
+                LocalExecSessionCompletionSource::OutOfBandControl => {
+                    ExecCommandCompletionSource::OutOfBandControl
+                }
+            },
+        }
+    }
+
+    fn remote_completion(completion: RemoteExecSessionCompletion) -> ExecCommandCompletion {
+        ExecCommandCompletion {
+            status: match completion.status {
+                RemoteExecSessionCompletionStatus::Exited => ExecCommandCompletionStatus::Exited,
+                RemoteExecSessionCompletionStatus::Interrupted => {
+                    ExecCommandCompletionStatus::Interrupted
+                }
+                RemoteExecSessionCompletionStatus::Killed => ExecCommandCompletionStatus::Killed,
+                RemoteExecSessionCompletionStatus::Pruned => ExecCommandCompletionStatus::Pruned,
+            },
+            source: match completion.source {
+                RemoteExecSessionCompletionSource::Process => ExecCommandCompletionSource::Process,
+                RemoteExecSessionCompletionSource::OutOfBandControl => {
+                    ExecCommandCompletionSource::OutOfBandControl
+                }
+            },
         }
     }
 
@@ -102,19 +274,19 @@ impl ExecControlTool {
             .try_into()
             .unwrap_or(usize::MAX);
 
-        let response = get_global_remote_exec_process_manager()
-            .control_session(RemoteExecControlRequest {
-                session_id,
-                action: Self::remote_action(action),
-                yield_time_ms,
-                max_output_chars: Some(max_output_chars),
-            })
-            .await
-            .map_err(|error| BitFunError::tool(format!("ExecControl failed: {error}")))?;
+        let response = control_exec_command_session(ExecCommandControlRequest {
+            session_id,
+            action,
+            origin: ExecCommandControlOrigin::ModelTool,
+            remote: true,
+            yield_time_ms,
+            max_output_chars: Some(max_output_chars),
+        })
+        .await?;
 
         let action_name = match action {
-            LocalExecControlAction::Interrupt => "interrupt",
-            LocalExecControlAction::Kill => "kill",
+            ExecCommandControlAction::Interrupt => "interrupt",
+            ExecCommandControlAction::Kill => "kill",
         };
         let data = json!({
             "chunk_id": response.chunk_id,
@@ -124,7 +296,7 @@ impl ExecControlTool {
             "exit_code": response.exit_code,
             "original_output_chars": response.original_output_chars,
             "action": action_name,
-            "remote": true,
+            "remote": response.remote,
         });
         let result_for_assistant = Self::response_for_assistant(&data, action);
 
@@ -250,19 +422,19 @@ After the action, yield_time_ms waits for output or exit status. Output is only 
             .try_into()
             .unwrap_or(usize::MAX);
 
-        let response = get_global_exec_process_manager()
-            .control_session(LocalExecControlRequest {
-                session_id,
-                action,
-                yield_time_ms,
-                max_output_chars: Some(max_output_chars),
-            })
-            .await
-            .map_err(|error| BitFunError::tool(format!("ExecControl failed: {error}")))?;
+        let response = control_exec_command_session(ExecCommandControlRequest {
+            session_id,
+            action,
+            origin: ExecCommandControlOrigin::ModelTool,
+            remote: false,
+            yield_time_ms,
+            max_output_chars: Some(max_output_chars),
+        })
+        .await?;
 
         let action_name = match action {
-            LocalExecControlAction::Interrupt => "interrupt",
-            LocalExecControlAction::Kill => "kill",
+            ExecCommandControlAction::Interrupt => "interrupt",
+            ExecCommandControlAction::Kill => "kill",
         };
         let data = json!({
             "chunk_id": response.chunk_id,

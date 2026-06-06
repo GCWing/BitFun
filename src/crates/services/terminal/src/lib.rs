@@ -32,8 +32,12 @@ pub use events::{TerminalEvent, TerminalEventEmitter};
 pub use exec::{
     get_global_exec_process_manager, ExecCommandRequest as LocalExecCommandRequest,
     ExecCommandResponse as LocalExecCommandResponse, ExecControlAction as LocalExecControlAction,
-    ExecControlRequest as LocalExecControlRequest, ExecProcessManager,
-    WriteStdinRequest as LocalWriteStdinRequest,
+    ExecControlOrigin as LocalExecControlOrigin, ExecControlRequest as LocalExecControlRequest,
+    ExecProcessLifecycleEvent, ExecProcessLifecycleStatus, ExecProcessManager,
+    ExecSessionCompletion as LocalExecSessionCompletion,
+    ExecSessionCompletionSource as LocalExecSessionCompletionSource,
+    ExecSessionCompletionStatus as LocalExecSessionCompletionStatus,
+    SendStdinRequest as LocalSendStdinRequest, WriteStdinRequest as LocalWriteStdinRequest,
 };
 pub use pty::{
     // New component-based types

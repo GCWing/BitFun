@@ -1,19 +1,32 @@
+use super::background_command_output::{
+    background_command_output_capture, BackgroundCommandOutputStatus,
+    StartBackgroundCommandOutputCapture,
+};
 use super::env_snapshot::{remote_env_snapshot_for, RemoteEnvSnapshot};
 use super::progress::ExecOutputProgressBridge;
 use super::rendering::render_exec_response_for_assistant;
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
+use crate::infrastructure::events::event_system::{
+    get_global_event_system, BackendEvent::BackgroundCommandLifecycle,
+};
 use crate::service::remote_ssh::{
     get_global_remote_exec_process_manager, get_remote_workspace_manager, RemoteExecCommandRequest,
-    SSHCommandOptions, SSHConnectionManager,
+    RemoteExecProcessLifecycleEvent, RemoteExecProcessLifecycleStatus, RemoteExecSessionCompletion,
+    RemoteExecSessionCompletionSource, RemoteExecSessionCompletionStatus, SSHCommandOptions,
+    SSHConnectionManager,
 };
 use crate::util::errors::{BitFunError, BitFunResult};
+use crate::util::types::event::BackgroundCommandLifecycleInfo;
 use async_trait::async_trait;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use terminal_core::{
-    get_global_exec_process_manager, LocalExecCommandRequest, ShellDetector, ShellType,
+    get_global_exec_process_manager, ExecProcessLifecycleEvent, ExecProcessLifecycleStatus,
+    LocalExecCommandRequest, LocalExecSessionCompletion, LocalExecSessionCompletionSource,
+    LocalExecSessionCompletionStatus, ShellDetector, ShellType,
 };
+use tokio::sync::mpsc;
 
 const DEFAULT_MAX_OUTPUT_CHARS: u64 = 10_000;
 const REMOTE_SHELL_PROBE_TIMEOUT_MS: u64 = 3_000;
@@ -307,7 +320,30 @@ exit "$__bitfun_status""#
 
     fn response_for_assistant(data: &Value) -> String {
         let mut status_lines = Vec::new();
-        if let Some(exit_code) = data.get("exit_code").and_then(Value::as_i64) {
+        let completion = data.get("completion");
+        let completion_source = completion
+            .and_then(|value| value.get("source"))
+            .and_then(Value::as_str);
+        let completion_status = completion
+            .and_then(|value| value.get("status"))
+            .and_then(Value::as_str);
+        if completion_source == Some("out_of_band_control") {
+            match completion_status {
+                Some("interrupted") => {
+                    status_lines.push("Process was interrupted externally.".to_string())
+                }
+                Some("killed") => {
+                    status_lines.push("Process was terminated externally.".to_string())
+                }
+                Some(status) => {
+                    status_lines.push(format!("Process ended externally with status {status}."))
+                }
+                None => status_lines.push("Process ended externally.".to_string()),
+            }
+            if let Some(exit_code) = data.get("exit_code").and_then(Value::as_i64) {
+                status_lines.push(format!("Process exited with code {exit_code}."));
+            }
+        } else if let Some(exit_code) = data.get("exit_code").and_then(Value::as_i64) {
             status_lines.push(format!("Process exited with code {exit_code}."));
         } else if let Some(session_id) = data.get("session_id").and_then(Value::as_i64) {
             status_lines.push(format!(
@@ -315,6 +351,213 @@ exit "$__bitfun_status""#
             ));
         }
         render_exec_response_for_assistant(data, status_lines, 3)
+    }
+
+    fn local_completion_value(completion: LocalExecSessionCompletion) -> Value {
+        json!({
+            "status": match completion.status {
+                LocalExecSessionCompletionStatus::Exited => "exited",
+                LocalExecSessionCompletionStatus::Interrupted => "interrupted",
+                LocalExecSessionCompletionStatus::Killed => "killed",
+                LocalExecSessionCompletionStatus::Pruned => "pruned",
+            },
+            "source": match completion.source {
+                LocalExecSessionCompletionSource::Process => "process",
+                LocalExecSessionCompletionSource::OutOfBandControl => "out_of_band_control",
+            },
+        })
+    }
+
+    fn remote_completion_value(completion: RemoteExecSessionCompletion) -> Value {
+        json!({
+            "status": match completion.status {
+                RemoteExecSessionCompletionStatus::Exited => "exited",
+                RemoteExecSessionCompletionStatus::Interrupted => "interrupted",
+                RemoteExecSessionCompletionStatus::Killed => "killed",
+                RemoteExecSessionCompletionStatus::Pruned => "pruned",
+            },
+            "source": match completion.source {
+                RemoteExecSessionCompletionSource::Process => "process",
+                RemoteExecSessionCompletionSource::OutOfBandControl => "out_of_band_control",
+            },
+        })
+    }
+
+    fn local_background_output_status_for_completion(
+        completion: Option<LocalExecSessionCompletion>,
+    ) -> BackgroundCommandOutputStatus {
+        match completion.map(|completion| completion.status) {
+            Some(LocalExecSessionCompletionStatus::Interrupted) => {
+                BackgroundCommandOutputStatus::Interrupted
+            }
+            Some(LocalExecSessionCompletionStatus::Killed) => BackgroundCommandOutputStatus::Killed,
+            Some(LocalExecSessionCompletionStatus::Pruned) => BackgroundCommandOutputStatus::Pruned,
+            Some(LocalExecSessionCompletionStatus::Exited) | None => {
+                BackgroundCommandOutputStatus::Exited
+            }
+        }
+    }
+
+    fn remote_background_output_status_for_completion(
+        completion: Option<RemoteExecSessionCompletion>,
+    ) -> BackgroundCommandOutputStatus {
+        match completion.map(|completion| completion.status) {
+            Some(RemoteExecSessionCompletionStatus::Interrupted) => {
+                BackgroundCommandOutputStatus::Interrupted
+            }
+            Some(RemoteExecSessionCompletionStatus::Killed) => {
+                BackgroundCommandOutputStatus::Killed
+            }
+            Some(RemoteExecSessionCompletionStatus::Pruned) => {
+                BackgroundCommandOutputStatus::Pruned
+            }
+            Some(RemoteExecSessionCompletionStatus::Exited) | None => {
+                BackgroundCommandOutputStatus::Exited
+            }
+        }
+    }
+
+    fn local_lifecycle_status(status: ExecProcessLifecycleStatus) -> &'static str {
+        match status {
+            ExecProcessLifecycleStatus::Running => "running",
+            ExecProcessLifecycleStatus::Exited => "exited",
+            ExecProcessLifecycleStatus::Interrupted => "interrupted",
+            ExecProcessLifecycleStatus::Killed => "killed",
+            ExecProcessLifecycleStatus::Pruned => "pruned",
+        }
+    }
+
+    fn local_background_output_status(
+        status: ExecProcessLifecycleStatus,
+    ) -> BackgroundCommandOutputStatus {
+        match status {
+            ExecProcessLifecycleStatus::Running => BackgroundCommandOutputStatus::Running,
+            ExecProcessLifecycleStatus::Exited => BackgroundCommandOutputStatus::Exited,
+            ExecProcessLifecycleStatus::Interrupted => BackgroundCommandOutputStatus::Interrupted,
+            ExecProcessLifecycleStatus::Killed => BackgroundCommandOutputStatus::Killed,
+            ExecProcessLifecycleStatus::Pruned => BackgroundCommandOutputStatus::Pruned,
+        }
+    }
+
+    fn remote_lifecycle_status(status: RemoteExecProcessLifecycleStatus) -> &'static str {
+        match status {
+            RemoteExecProcessLifecycleStatus::Running => "running",
+            RemoteExecProcessLifecycleStatus::Exited => "exited",
+            RemoteExecProcessLifecycleStatus::Interrupted => "interrupted",
+            RemoteExecProcessLifecycleStatus::Killed => "killed",
+            RemoteExecProcessLifecycleStatus::Pruned => "pruned",
+        }
+    }
+
+    fn remote_background_output_status(
+        status: RemoteExecProcessLifecycleStatus,
+    ) -> BackgroundCommandOutputStatus {
+        match status {
+            RemoteExecProcessLifecycleStatus::Running => BackgroundCommandOutputStatus::Running,
+            RemoteExecProcessLifecycleStatus::Exited => BackgroundCommandOutputStatus::Exited,
+            RemoteExecProcessLifecycleStatus::Interrupted => {
+                BackgroundCommandOutputStatus::Interrupted
+            }
+            RemoteExecProcessLifecycleStatus::Killed => BackgroundCommandOutputStatus::Killed,
+            RemoteExecProcessLifecycleStatus::Pruned => BackgroundCommandOutputStatus::Pruned,
+        }
+    }
+
+    fn now_unix_seconds() -> u64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs()
+    }
+
+    fn start_local_lifecycle_bridge(
+        context: &ToolUseContext,
+        _tool_name: &str,
+    ) -> Option<mpsc::UnboundedSender<ExecProcessLifecycleEvent>> {
+        let capture_id = context.tool_call_id.clone()?;
+        let agent_session_id = context.session_id.clone();
+        let (tx, mut rx) = mpsc::unbounded_channel::<ExecProcessLifecycleEvent>();
+        tokio::spawn(async move {
+            let event_system = get_global_event_system();
+            let output_capture = background_command_output_capture();
+            while let Some(event) = rx.recv().await {
+                let capture_status = Self::local_background_output_status(event.status);
+                if let Some(metadata) = output_capture
+                    .update_lifecycle(
+                        &capture_id,
+                        event.session_id,
+                        capture_status,
+                        event.exit_code,
+                    )
+                    .await
+                {
+                    let timestamp = Self::now_unix_seconds();
+                    let _ = event_system
+                        .emit(BackgroundCommandLifecycle(BackgroundCommandLifecycleInfo {
+                            agent_session_id: metadata
+                                .agent_session_id
+                                .or(agent_session_id.clone()),
+                            exec_session_id: event.session_id,
+                            command: metadata.command,
+                            workdir: metadata.workdir,
+                            remote: false,
+                            tty: metadata.tty,
+                            status: Self::local_lifecycle_status(event.status).to_string(),
+                            exit_code: event.exit_code,
+                            started_at: metadata.started_at,
+                            ended_at: metadata.ended_at,
+                            timestamp,
+                        }))
+                        .await;
+                }
+            }
+        });
+        Some(tx)
+    }
+
+    fn start_remote_lifecycle_bridge(
+        context: &ToolUseContext,
+        _tool_name: &str,
+    ) -> Option<mpsc::UnboundedSender<RemoteExecProcessLifecycleEvent>> {
+        let capture_id = context.tool_call_id.clone()?;
+        let agent_session_id = context.session_id.clone();
+        let (tx, mut rx) = mpsc::unbounded_channel::<RemoteExecProcessLifecycleEvent>();
+        tokio::spawn(async move {
+            let event_system = get_global_event_system();
+            let output_capture = background_command_output_capture();
+            while let Some(event) = rx.recv().await {
+                let capture_status = Self::remote_background_output_status(event.status);
+                if let Some(metadata) = output_capture
+                    .update_lifecycle(
+                        &capture_id,
+                        event.session_id,
+                        capture_status,
+                        event.exit_code,
+                    )
+                    .await
+                {
+                    let timestamp = Self::now_unix_seconds();
+                    let _ = event_system
+                        .emit(BackgroundCommandLifecycle(BackgroundCommandLifecycleInfo {
+                            agent_session_id: metadata
+                                .agent_session_id
+                                .or(agent_session_id.clone()),
+                            exec_session_id: event.session_id,
+                            command: metadata.command,
+                            workdir: metadata.workdir,
+                            remote: true,
+                            tty: metadata.tty,
+                            status: Self::remote_lifecycle_status(event.status).to_string(),
+                            exit_code: event.exit_code,
+                            started_at: metadata.started_at,
+                            ended_at: metadata.ended_at,
+                            timestamp,
+                        }))
+                        .await;
+                }
+            }
+        });
+        Some(tx)
     }
 
     async fn call_remote_pipe(
@@ -376,6 +619,22 @@ exit "$__bitfun_status""#
             &shell,
             env_snapshot.as_ref(),
         );
+        let output_capture_tx = if let Some(capture_id) = context.tool_call_id.as_ref() {
+            Some(
+                background_command_output_capture()
+                    .start_capture(StartBackgroundCommandOutputCapture {
+                        capture_id: capture_id.clone(),
+                        agent_session_id: context.session_id.clone(),
+                        command: cmd.to_string(),
+                        workdir: Some(workdir.clone()),
+                        remote: true,
+                        tty,
+                    })
+                    .await,
+            )
+        } else {
+            None
+        };
 
         let request = RemoteExecCommandRequest {
             ssh_manager,
@@ -384,6 +643,8 @@ exit "$__bitfun_status""#
             tty,
             yield_time_ms,
             max_output_chars: Some(max_output_chars),
+            lifecycle_tx: Self::start_remote_lifecycle_bridge(context, self.name()),
+            output_capture_tx,
         };
         let progress_bridge = ExecOutputProgressBridge::start(context, self.name());
         let response_result = if let Some(bridge) = progress_bridge.as_ref() {
@@ -398,8 +659,33 @@ exit "$__bitfun_status""#
         if let Some(bridge) = progress_bridge {
             bridge.finish().await;
         }
-        let response = response_result
-            .map_err(|error| BitFunError::tool(format!("ExecCommand failed: {error}")))?;
+        let response = match response_result {
+            Ok(response) => response,
+            Err(error) => {
+                if let Some(capture_id) = context.tool_call_id.as_ref() {
+                    background_command_output_capture()
+                        .finish(capture_id, BackgroundCommandOutputStatus::Failed, None)
+                        .await;
+                }
+                return Err(BitFunError::tool(format!("ExecCommand failed: {error}")));
+            }
+        };
+        if let Some(capture_id) = context.tool_call_id.as_ref() {
+            if let Some(session_id) = response.session_id {
+                background_command_output_capture()
+                    .set_session_id(capture_id, Some(session_id))
+                    .await;
+            }
+            if response.session_id.is_none() {
+                background_command_output_capture()
+                    .finish(
+                        capture_id,
+                        Self::remote_background_output_status_for_completion(response.completion),
+                        response.exit_code,
+                    )
+                    .await;
+            }
+        }
 
         let data = json!({
             "chunk_id": response.chunk_id,
@@ -408,6 +694,7 @@ exit "$__bitfun_status""#
             "session_id": response.session_id,
             "exit_code": response.exit_code,
             "original_output_chars": response.original_output_chars,
+            "completion": response.completion.map(Self::remote_completion_value),
             "workdir": workdir.clone(),
             "tty": tty,
             "remote": true,
@@ -715,6 +1002,22 @@ With tty=false, stdout and stderr ordering is not guaranteed; use tty=true or re
             .unwrap_or(DEFAULT_MAX_OUTPUT_CHARS)
             .try_into()
             .unwrap_or(usize::MAX);
+        let output_capture_tx = if let Some(capture_id) = context.tool_call_id.as_ref() {
+            Some(
+                background_command_output_capture()
+                    .start_capture(StartBackgroundCommandOutputCapture {
+                        capture_id: capture_id.clone(),
+                        agent_session_id: context.session_id.clone(),
+                        command: cmd.to_string(),
+                        workdir: Some(workdir.to_string_lossy().to_string()),
+                        remote: false,
+                        tty,
+                    })
+                    .await,
+            )
+        } else {
+            None
+        };
 
         let request = LocalExecCommandRequest {
             argv: Self::argv_for_shell(&shell.path, &shell.shell_type, cmd),
@@ -723,6 +1026,8 @@ With tty=false, stdout and stderr ordering is not guaranteed; use tty=true or re
             tty,
             yield_time_ms,
             max_output_chars: Some(max_output_chars),
+            lifecycle_tx: Self::start_local_lifecycle_bridge(context, self.name()),
+            output_capture_tx,
         };
         let progress_bridge = ExecOutputProgressBridge::start(context, self.name());
         let response_result = if let Some(bridge) = progress_bridge.as_ref() {
@@ -737,8 +1042,33 @@ With tty=false, stdout and stderr ordering is not guaranteed; use tty=true or re
         if let Some(bridge) = progress_bridge {
             bridge.finish().await;
         }
-        let response = response_result
-            .map_err(|error| BitFunError::tool(format!("ExecCommand failed: {error}")))?;
+        let response = match response_result {
+            Ok(response) => response,
+            Err(error) => {
+                if let Some(capture_id) = context.tool_call_id.as_ref() {
+                    background_command_output_capture()
+                        .finish(capture_id, BackgroundCommandOutputStatus::Failed, None)
+                        .await;
+                }
+                return Err(BitFunError::tool(format!("ExecCommand failed: {error}")));
+            }
+        };
+        if let Some(capture_id) = context.tool_call_id.as_ref() {
+            if let Some(session_id) = response.session_id {
+                background_command_output_capture()
+                    .set_session_id(capture_id, Some(session_id))
+                    .await;
+            }
+            if response.session_id.is_none() {
+                background_command_output_capture()
+                    .finish(
+                        capture_id,
+                        Self::local_background_output_status_for_completion(response.completion),
+                        response.exit_code,
+                    )
+                    .await;
+            }
+        }
 
         let data = json!({
             "chunk_id": response.chunk_id,
@@ -747,6 +1077,7 @@ With tty=false, stdout and stderr ordering is not guaranteed; use tty=true or re
             "session_id": response.session_id,
             "exit_code": response.exit_code,
             "original_output_chars": response.original_output_chars,
+            "completion": response.completion.map(Self::local_completion_value),
             "workdir": workdir.to_string_lossy(),
             "tty": tty,
             "shell": {

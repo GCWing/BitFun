@@ -300,6 +300,50 @@ export function createReviewPlatformTab(workspacePath?: string): void {
   window.dispatchEvent(new CustomEvent(TAB_EVENTS.AGENT_CREATE_TAB, { detail }));
 }
 
+export function createBackgroundCommandOutputTab(options: {
+  execSessionKey: string;
+  execSessionId: number;
+  remote: boolean;
+  title?: string;
+  command?: string;
+  mockKind?: string;
+}): void {
+  const title = options.title || i18nService.getT()('flow-chat:backgroundCommandOutput.title');
+  const duplicateKey = `background-command-output:${options.execSessionKey}`;
+  const detail = {
+    type: 'background-command-output',
+    title,
+    data: {
+      execSessionKey: options.execSessionKey,
+      execSessionId: options.execSessionId,
+      remote: options.remote,
+      title,
+      command: options.command,
+      mockKind: options.mockKind,
+    },
+    metadata: {
+      execSessionKey: options.execSessionKey,
+      execSessionId: options.execSessionId,
+      duplicateCheckKey: duplicateKey,
+      contentRole: 'background-command-output',
+    },
+    checkDuplicate: true,
+    duplicateCheckKey: duplicateKey,
+    replaceExisting: true,
+  };
+
+  window.dispatchEvent(new CustomEvent(TAB_EVENTS.EXPAND_RIGHT_PANEL));
+
+  if (isRightPanelCollapsed()) {
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent(TAB_EVENTS.AGENT_CREATE_TAB, { detail }));
+    }, 300);
+    return;
+  }
+
+  window.dispatchEvent(new CustomEvent(TAB_EVENTS.AGENT_CREATE_TAB, { detail }));
+}
+
 export function createReviewPlatformPullRequestDetailTab(options: CreateReviewPlatformPullRequestDetailTabOptions): void {
   const pullRequestLabel = options.pullRequestId ? `#${options.pullRequestId}` : 'Pull Request';
   const title = options.title || pullRequestLabel;

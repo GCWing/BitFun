@@ -1,0 +1,76 @@
+.background-command-input-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+
+  &__modal {
+    padding: 14px;
+  }
+
+  &__summary {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--element-bg-soft) 70%, transparent);
+
+    code {
+      min-width: 0;
+      color: var(--color-text-primary);
+      font-size: 12px;
+      line-height: 1.5;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+
+  &__summary-label {
+    color: var(--color-text-secondary);
+    font-size: 11px;
+  }
+
+  &__textarea {
+    .bitfun-textarea__field {
+      min-height: 96px;
+      resize: vertical;
+      font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    &--masked .bitfun-textarea__field {
+      -webkit-text-security: disc;
+    }
+  }
+
+  &__options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+
+    .bitfun-checkbox__label {
+      color: var(--color-text-primary);
+    }
+
+    .bitfun-checkbox__description {
+      color: var(--color-text-secondary);
+    }
+  }
+
+  &__note {
+    margin: 0;
+    color: var(--color-text-secondary);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  &__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+}

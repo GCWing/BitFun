@@ -29,6 +29,21 @@ pub struct ToolTerminalReadyInfo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BackgroundCommandLifecycleInfo {
+    pub agent_session_id: Option<String>,
+    pub exec_session_id: i32,
+    pub command: String,
+    pub workdir: Option<String>,
+    pub remote: bool,
+    pub tty: bool,
+    pub status: String,
+    pub exit_code: Option<i32>,
+    pub started_at: u64,
+    pub ended_at: Option<u64>,
+    pub timestamp: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolExecutionCompletedInfo {
     pub tool_use_id: String,
     pub tool_name: String,
