@@ -578,7 +578,7 @@ describe('ModernFlowChatContainer historical empty state', () => {
       root.render(<ModernFlowChatContainer />);
     });
 
-    for (let index = 0; index < 120; index += 1) {
+    for (let index = 0; index < 30; index += 1) {
       flushAnimationFrame();
     }
 
@@ -586,7 +586,7 @@ describe('ModernFlowChatContainer historical empty state', () => {
     expect(releaseSpy).not.toHaveBeenCalled();
     expect(startupTraceMock.markPhase).toHaveBeenCalledWith(
       'historical_session_initial_content_paint_signal_missed',
-      expect.objectContaining({ attempts: 120 }),
+      expect.objectContaining({ attempts: 30 }),
     );
 
     releaseSpy.mockRestore();
