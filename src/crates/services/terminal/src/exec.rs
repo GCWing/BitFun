@@ -26,6 +26,7 @@ const DEFAULT_YIELD_TIME_MS: u64 = 10_000;
 const DEFAULT_MAX_OUTPUT_CHARS: usize = 10_000;
 const MAX_RETAINED_OUTPUT_BYTES: usize = 1024 * 1024;
 const MAX_EXEC_SESSIONS: usize = 64;
+const MAX_COMPLETED_EXEC_SESSIONS: usize = 64;
 #[cfg(unix)]
 const PIPE_INTERRUPT_GRACE_TIMEOUT_MS: u64 = 2_000;
 const PTY_EXIT_DRAIN_TIMEOUT_MS: u64 = 500;
@@ -46,6 +47,8 @@ pub struct ExecCommandRequest {
     pub tty: bool,
     pub yield_time_ms: Option<u64>,
     pub max_output_chars: Option<usize>,
+    pub lifecycle_tx: Option<mpsc::UnboundedSender<ExecProcessLifecycleEvent>>,
+    pub output_capture_tx: Option<mpsc::UnboundedSender<String>>,
 }
 
 #[derive(Debug, Clone)]
@@ -57,18 +60,52 @@ pub struct WriteStdinRequest {
     pub max_output_chars: Option<usize>,
 }
 
+#[derive(Debug, Clone)]
+pub struct SendStdinRequest {
+    pub session_id: i32,
+    pub chars: String,
+    pub append_enter: bool,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExecControlAction {
     Interrupt,
     Kill,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExecControlOrigin {
+    ModelTool,
+    OutOfBand,
+}
+
 #[derive(Debug, Clone)]
 pub struct ExecControlRequest {
     pub session_id: i32,
     pub action: ExecControlAction,
+    pub origin: ExecControlOrigin,
     pub yield_time_ms: Option<u64>,
     pub max_output_chars: Option<usize>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExecSessionCompletionStatus {
+    Exited,
+    Interrupted,
+    Killed,
+    Pruned,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExecSessionCompletionSource {
+    Process,
+    OutOfBandControl,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExecSessionCompletion {
+    pub status: ExecSessionCompletionStatus,
+    pub source: ExecSessionCompletionSource,
 }
 
 #[derive(Debug, Clone)]
@@ -79,16 +116,35 @@ pub struct ExecCommandResponse {
     pub session_id: Option<i32>,
     pub exit_code: Option<i32>,
     pub original_output_chars: usize,
+    pub completion: Option<ExecSessionCompletion>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExecProcessLifecycleStatus {
+    Running,
+    Exited,
+    Interrupted,
+    Killed,
+    Pruned,
+}
+
+#[derive(Debug, Clone)]
+pub struct ExecProcessLifecycleEvent {
+    pub session_id: i32,
+    pub status: ExecProcessLifecycleStatus,
+    pub exit_code: Option<i32>,
 }
 
 pub struct ExecProcessManager {
     sessions: Mutex<HashMap<i32, ExecSessionEntry>>,
+    completed_sessions: Mutex<HashMap<i32, CompletedExecSession>>,
 }
 
 impl Default for ExecProcessManager {
     fn default() -> Self {
         Self {
             sessions: Mutex::new(HashMap::new()),
+            completed_sessions: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -98,12 +154,23 @@ struct ExecSessionEntry {
     tty: bool,
     cursor: OutputCursor,
     last_used: tokio::time::Instant,
+    lifecycle_tx: Option<mpsc::UnboundedSender<ExecProcessLifecycleEvent>>,
+}
+
+#[derive(Clone)]
+struct CompletedExecSession {
+    output: String,
+    exit_code: Option<i32>,
+    original_output_chars: usize,
+    completion: ExecSessionCompletion,
+    completed_at: tokio::time::Instant,
 }
 
 struct ExecProcess {
     output: Arc<OutputState>,
     writer: Option<mpsc::Sender<Vec<u8>>>,
     terminator: StdMutex<Option<Terminator>>,
+    out_of_band_control_action: StdMutex<Option<ExecControlAction>>,
     helper_tasks: StdMutex<Vec<JoinHandle<()>>>,
     pty_handles: Arc<StdMutex<Option<PtyKeepAlive>>>,
 }
@@ -121,6 +188,7 @@ struct PtyKeepAlive {
 struct OutputState {
     inner: Mutex<OutputInner>,
     notify: Notify,
+    output_capture_tx: Option<mpsc::UnboundedSender<String>>,
 }
 
 struct OutputInner {
@@ -171,6 +239,14 @@ impl ExecProcessManager {
     ) -> TerminalResult<ExecCommandResponse> {
         let process = Arc::new(spawn_exec_process(&request).await?);
         let cursor = OutputCursor { next_seq: 0 };
+        let session_id = self
+            .store_session(
+                Arc::clone(&process),
+                request.tty,
+                cursor.clone(),
+                request.lifecycle_tx,
+            )
+            .await;
         let started_at = tokio::time::Instant::now();
         let collected = process
             .output
@@ -183,22 +259,29 @@ impl ExecProcessManager {
             .await;
 
         let exit_code = process.output.exit_code().await;
-        let session_id = if process.output.is_closed().await {
-            None
+        let closed = process.output.is_closed().await;
+        let completion = if closed {
+            Some(completion_for_closed_process(
+                process.out_of_band_control_action(),
+            ))
         } else {
-            let session_id = self
-                .store_session(process, request.tty, collected.cursor.clone())
-                .await;
-            Some(session_id)
+            None
         };
+        if closed {
+            self.remove_session(session_id).await;
+        } else {
+            self.update_session_cursor(session_id, collected.cursor.clone())
+                .await;
+        }
 
         Ok(ExecCommandResponse {
             chunk_id: new_chunk_id(),
             wall_time_seconds: started_at.elapsed().as_secs_f64(),
             output: collected.output,
-            session_id,
+            session_id: (!closed).then_some(session_id),
             exit_code,
             original_output_chars: collected.original_output_chars,
+            completion,
         })
     }
 
@@ -217,18 +300,62 @@ impl ExecProcessManager {
         self.write_stdin_inner(request, Some(output_tx)).await
     }
 
-    async fn write_stdin_inner(
-        &self,
-        request: WriteStdinRequest,
-        output_tx: Option<mpsc::Sender<String>>,
-    ) -> TerminalResult<ExecCommandResponse> {
-        let (process, tty, cursor) = {
+    pub async fn send_stdin(&self, request: SendStdinRequest) -> TerminalResult<()> {
+        let (process, tty) = {
             let mut sessions = self.sessions.lock().await;
             let entry = sessions
                 .get_mut(&request.session_id)
                 .ok_or_else(|| TerminalError::SessionNotFound(request.session_id.to_string()))?;
             entry.last_used = tokio::time::Instant::now();
-            (Arc::clone(&entry.process), entry.tty, entry.cursor.clone())
+            (Arc::clone(&entry.process), entry.tty)
+        };
+
+        let input = input_bytes_for_write(&request.chars, request.append_enter);
+        if input.is_empty() {
+            return Ok(());
+        }
+        if !tty {
+            return Err(TerminalError::InvalidConfig(
+                "stdin input requires a tty session".to_string(),
+            ));
+        }
+
+        process.write_input_bytes(input).await
+    }
+
+    async fn write_stdin_inner(
+        &self,
+        request: WriteStdinRequest,
+        output_tx: Option<mpsc::Sender<String>>,
+    ) -> TerminalResult<ExecCommandResponse> {
+        let (process, tty, cursor, lifecycle_tx) = {
+            let mut sessions = self.sessions.lock().await;
+            let Some(entry) = sessions.get_mut(&request.session_id) else {
+                drop(sessions);
+                if request.chars.is_empty() {
+                    if let Some(completed) = self.take_completed_session(request.session_id).await {
+                        return Ok(ExecCommandResponse {
+                            chunk_id: new_chunk_id(),
+                            wall_time_seconds: 0.0,
+                            output: completed.output,
+                            session_id: None,
+                            exit_code: completed.exit_code,
+                            original_output_chars: completed.original_output_chars,
+                            completion: Some(completed.completion),
+                        });
+                    }
+                }
+                return Err(TerminalError::SessionNotFound(
+                    request.session_id.to_string(),
+                ));
+            };
+            entry.last_used = tokio::time::Instant::now();
+            (
+                Arc::clone(&entry.process),
+                entry.tty,
+                entry.cursor.clone(),
+                entry.lifecycle_tx.clone(),
+            )
         };
 
         let input = input_bytes_for_write(&request.chars, request.append_enter);
@@ -256,7 +383,26 @@ impl ExecProcessManager {
 
         let closed = process.output.is_closed().await;
         let exit_code = process.output.exit_code().await;
+        let completion = if closed {
+            Some(completion_for_closed_process(
+                process.out_of_band_control_action(),
+            ))
+        } else {
+            None
+        };
         if closed {
+            emit_lifecycle(
+                lifecycle_tx,
+                ExecProcessLifecycleEvent {
+                    session_id: request.session_id,
+                    status: lifecycle_status_for_completion(
+                        completion
+                            .expect("closed process should have completion")
+                            .status,
+                    ),
+                    exit_code,
+                },
+            );
             self.remove_session(request.session_id).await;
         } else {
             let mut sessions = self.sessions.lock().await;
@@ -272,6 +418,7 @@ impl ExecProcessManager {
             session_id: (!closed).then_some(request.session_id),
             exit_code,
             original_output_chars: collected.original_output_chars,
+            completion,
         })
     }
 
@@ -279,13 +426,21 @@ impl ExecProcessManager {
         &self,
         request: ExecControlRequest,
     ) -> TerminalResult<ExecCommandResponse> {
-        let (process, tty, cursor) = {
+        let (process, tty, cursor, lifecycle_tx) = {
             let mut sessions = self.sessions.lock().await;
             let entry = sessions
                 .get_mut(&request.session_id)
                 .ok_or_else(|| TerminalError::SessionNotFound(request.session_id.to_string()))?;
             entry.last_used = tokio::time::Instant::now();
-            (Arc::clone(&entry.process), entry.tty, entry.cursor.clone())
+            if request.origin == ExecControlOrigin::OutOfBand {
+                entry.process.mark_out_of_band_control(request.action);
+            }
+            (
+                Arc::clone(&entry.process),
+                entry.tty,
+                entry.cursor.clone(),
+                entry.lifecycle_tx.clone(),
+            )
         };
 
         match request.action {
@@ -310,12 +465,47 @@ impl ExecProcessManager {
 
         let closed = process.output.is_closed().await;
         let exit_code = process.output.exit_code().await;
+        let completion = closed.then_some(ExecSessionCompletion {
+            status: completion_status_for_control_action(request.action),
+            source: match request.origin {
+                ExecControlOrigin::ModelTool => ExecSessionCompletionSource::Process,
+                ExecControlOrigin::OutOfBand => ExecSessionCompletionSource::OutOfBandControl,
+            },
+        });
         if closed {
+            let status = lifecycle_status_for_completion(
+                completion
+                    .expect("closed process should have completion")
+                    .status,
+            );
+            emit_lifecycle(
+                lifecycle_tx,
+                ExecProcessLifecycleEvent {
+                    session_id: request.session_id,
+                    status,
+                    exit_code,
+                },
+            );
             self.remove_session(request.session_id).await;
+            if request.origin == ExecControlOrigin::OutOfBand {
+                self.store_completed_session(
+                    request.session_id,
+                    CompletedExecSession {
+                        output: collected.output.clone(),
+                        exit_code,
+                        original_output_chars: collected.original_output_chars,
+                        completion: completion.expect("closed process should have completion"),
+                        completed_at: tokio::time::Instant::now(),
+                    },
+                )
+                .await;
+            }
         } else {
-            let mut sessions = self.sessions.lock().await;
-            if let Some(entry) = sessions.get_mut(&request.session_id) {
-                entry.cursor = collected.cursor.clone();
+            if request.origin == ExecControlOrigin::ModelTool {
+                let mut sessions = self.sessions.lock().await;
+                if let Some(entry) = sessions.get_mut(&request.session_id) {
+                    entry.cursor = collected.cursor.clone();
+                }
             }
         }
 
@@ -326,6 +516,7 @@ impl ExecProcessManager {
             session_id: (!closed).then_some(request.session_id),
             exit_code,
             original_output_chars: collected.original_output_chars,
+            completion,
         })
     }
 
@@ -334,15 +525,16 @@ impl ExecProcessManager {
         process: Arc<ExecProcess>,
         tty: bool,
         cursor: OutputCursor,
+        lifecycle_tx: Option<mpsc::UnboundedSender<ExecProcessLifecycleEvent>>,
     ) -> i32 {
-        let pruned = {
+        let (session_id, pruned_entry) = {
             let mut sessions = self.sessions.lock().await;
             let pruned = if sessions.len() >= MAX_EXEC_SESSIONS {
                 sessions
                     .iter()
                     .min_by_key(|(_, entry)| entry.last_used)
-                    .map(|(id, _)| id.clone())
-                    .and_then(|id| sessions.remove(&id))
+                    .map(|(id, _)| *id)
+                    .and_then(|id| sessions.remove(&id).map(|entry| (id, entry)))
             } else {
                 None
             };
@@ -350,25 +542,69 @@ impl ExecProcessManager {
             sessions.insert(
                 session_id,
                 ExecSessionEntry {
-                    process,
+                    process: Arc::clone(&process),
                     tty,
                     cursor,
                     last_used: tokio::time::Instant::now(),
+                    lifecycle_tx: lifecycle_tx.clone(),
                 },
             );
             (session_id, pruned)
         };
 
-        if let Some(entry) = pruned.1 {
+        if let Some((pruned_session_id, entry)) = pruned_entry {
+            emit_lifecycle(
+                entry.lifecycle_tx.clone(),
+                ExecProcessLifecycleEvent {
+                    session_id: pruned_session_id,
+                    status: ExecProcessLifecycleStatus::Pruned,
+                    exit_code: None,
+                },
+            );
             entry.process.terminate();
         }
 
-        pruned.0
+        emit_lifecycle(
+            lifecycle_tx.clone(),
+            ExecProcessLifecycleEvent {
+                session_id,
+                status: ExecProcessLifecycleStatus::Running,
+                exit_code: None,
+            },
+        );
+        spawn_lifecycle_exit_watcher(session_id, process, lifecycle_tx);
+
+        session_id
     }
 
     async fn remove_session(&self, session_id: i32) {
         let mut sessions = self.sessions.lock().await;
         sessions.remove(&session_id);
+    }
+
+    async fn update_session_cursor(&self, session_id: i32, cursor: OutputCursor) {
+        let mut sessions = self.sessions.lock().await;
+        if let Some(entry) = sessions.get_mut(&session_id) {
+            entry.cursor = cursor;
+        }
+    }
+
+    async fn store_completed_session(&self, session_id: i32, completed: CompletedExecSession) {
+        let mut completed_sessions = self.completed_sessions.lock().await;
+        if completed_sessions.len() >= MAX_COMPLETED_EXEC_SESSIONS {
+            if let Some(oldest_session_id) = completed_sessions
+                .iter()
+                .min_by_key(|(_, session)| session.completed_at)
+                .map(|(id, _)| *id)
+            {
+                completed_sessions.remove(&oldest_session_id);
+            }
+        }
+        completed_sessions.insert(session_id, completed);
+    }
+
+    async fn take_completed_session(&self, session_id: i32) -> Option<CompletedExecSession> {
+        self.completed_sessions.lock().await.remove(&session_id)
     }
 }
 
@@ -379,6 +615,19 @@ impl Drop for ExecProcess {
 }
 
 impl ExecProcess {
+    fn mark_out_of_band_control(&self, action: ExecControlAction) {
+        if let Ok(mut out_of_band_action) = self.out_of_band_control_action.lock() {
+            *out_of_band_action = Some(action);
+        }
+    }
+
+    fn out_of_band_control_action(&self) -> Option<ExecControlAction> {
+        self.out_of_band_control_action
+            .lock()
+            .ok()
+            .and_then(|action| *action)
+    }
+
     async fn write_input_bytes(&self, bytes: Vec<u8>) -> TerminalResult<()> {
         if bytes.is_empty() {
             return Ok(());
@@ -428,7 +677,7 @@ impl ExecProcess {
 }
 
 impl OutputState {
-    fn new() -> Self {
+    fn new(output_capture_tx: Option<mpsc::UnboundedSender<String>>) -> Self {
         Self {
             inner: Mutex::new(OutputInner {
                 chunks: VecDeque::new(),
@@ -438,6 +687,7 @@ impl OutputState {
                 exit_code: None,
             }),
             notify: Notify::new(),
+            output_capture_tx,
         }
     }
 
@@ -445,6 +695,10 @@ impl OutputState {
         if chunk.is_empty() {
             return;
         }
+        let capture_text = self
+            .output_capture_tx
+            .as_ref()
+            .map(|_| bytes_to_string_smart(&chunk));
         {
             let mut inner = self.inner.lock().await;
             let seq = inner.next_seq;
@@ -458,6 +712,9 @@ impl OutputState {
                     break;
                 }
             }
+        }
+        if let (Some(tx), Some(text)) = (&self.output_capture_tx, capture_text) {
+            let _ = tx.send(text);
         }
         self.notify.notify_waiters();
     }
@@ -477,6 +734,19 @@ impl OutputState {
 
     async fn exit_code(&self) -> Option<i32> {
         self.inner.lock().await.exit_code
+    }
+
+    async fn wait_closed(&self) -> Option<i32> {
+        loop {
+            let notified = self.notify.notified();
+            {
+                let inner = self.inner.lock().await;
+                if inner.closed {
+                    return inner.exit_code;
+                }
+            }
+            notified.await;
+        }
     }
 
     async fn drain_since_with_output(
@@ -529,6 +799,72 @@ impl OutputState {
             cursor,
         }
     }
+}
+
+fn emit_lifecycle(
+    lifecycle_tx: Option<mpsc::UnboundedSender<ExecProcessLifecycleEvent>>,
+    event: ExecProcessLifecycleEvent,
+) {
+    if let Some(tx) = lifecycle_tx {
+        let _ = tx.send(event);
+    }
+}
+
+fn completion_status_for_control_action(action: ExecControlAction) -> ExecSessionCompletionStatus {
+    match action {
+        ExecControlAction::Interrupt => ExecSessionCompletionStatus::Interrupted,
+        ExecControlAction::Kill => ExecSessionCompletionStatus::Killed,
+    }
+}
+
+fn completion_for_closed_process(
+    out_of_band_control_action: Option<ExecControlAction>,
+) -> ExecSessionCompletion {
+    if let Some(action) = out_of_band_control_action {
+        return ExecSessionCompletion {
+            status: completion_status_for_control_action(action),
+            source: ExecSessionCompletionSource::OutOfBandControl,
+        };
+    }
+
+    ExecSessionCompletion {
+        status: ExecSessionCompletionStatus::Exited,
+        source: ExecSessionCompletionSource::Process,
+    }
+}
+
+fn lifecycle_status_for_completion(
+    status: ExecSessionCompletionStatus,
+) -> ExecProcessLifecycleStatus {
+    match status {
+        ExecSessionCompletionStatus::Exited => ExecProcessLifecycleStatus::Exited,
+        ExecSessionCompletionStatus::Interrupted => ExecProcessLifecycleStatus::Interrupted,
+        ExecSessionCompletionStatus::Killed => ExecProcessLifecycleStatus::Killed,
+        ExecSessionCompletionStatus::Pruned => ExecProcessLifecycleStatus::Pruned,
+    }
+}
+
+fn spawn_lifecycle_exit_watcher(
+    session_id: i32,
+    process: Arc<ExecProcess>,
+    lifecycle_tx: Option<mpsc::UnboundedSender<ExecProcessLifecycleEvent>>,
+) {
+    if lifecycle_tx.is_none() {
+        return;
+    }
+
+    tokio::spawn(async move {
+        let exit_code = process.output.wait_closed().await;
+        let completion = completion_for_closed_process(process.out_of_band_control_action());
+        emit_lifecycle(
+            lifecycle_tx,
+            ExecProcessLifecycleEvent {
+                session_id,
+                status: lifecycle_status_for_completion(completion.status),
+                exit_code,
+            },
+        );
+    });
 }
 
 struct CollectedOutput {
@@ -634,7 +970,7 @@ async fn spawn_pty_process(request: &ExecCommandRequest) -> TerminalResult<ExecP
 
     let mut child = pair.slave.spawn_command(command)?;
     let killer = child.clone_killer();
-    let output = Arc::new(OutputState::new());
+    let output = Arc::new(OutputState::new(request.output_capture_tx.clone()));
     let mut reader = pair.master.try_clone_reader()?;
     let writer = pair.master.take_writer()?;
     let writer = Arc::new(StdMutex::new(writer));
@@ -730,6 +1066,7 @@ async fn spawn_pty_process(request: &ExecCommandRequest) -> TerminalResult<ExecP
         output,
         writer: Some(writer_tx),
         terminator: StdMutex::new(Some(Terminator::Pty(killer))),
+        out_of_band_control_action: StdMutex::new(None),
         helper_tasks: StdMutex::new(vec![close_task]),
         pty_handles,
     })
@@ -752,7 +1089,7 @@ async fn spawn_pipe_process(request: &ExecCommandRequest) -> TerminalResult<Exec
     let mut child = command.spawn()?;
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
-    let output = Arc::new(OutputState::new());
+    let output = Arc::new(OutputState::new(request.output_capture_tx.clone()));
 
     let mut reader_tasks = Vec::new();
     if let Some(stdout) = stdout {
@@ -781,6 +1118,7 @@ async fn spawn_pipe_process(request: &ExecCommandRequest) -> TerminalResult<Exec
         output,
         writer: None,
         terminator: StdMutex::new(Some(Terminator::Pipe(control_tx))),
+        out_of_band_control_action: StdMutex::new(None),
         helper_tasks: StdMutex::new(vec![wait_task]),
         pty_handles: Arc::new(StdMutex::new(None)),
     })
@@ -1030,12 +1368,15 @@ fn looks_like_windows_1252_punctuation(bytes: &[u8]) -> bool {
 mod tests {
     use super::{
         bytes_to_string_smart, input_bytes_for_write, ExecCommandRequest, ExecControlAction,
-        ExecControlRequest, ExecProcessManager, HeadTailText, WriteStdinRequest,
+        ExecControlOrigin, ExecControlRequest, ExecProcessLifecycleStatus, ExecProcessManager,
+        ExecSessionCompletionSource, ExecSessionCompletionStatus, HeadTailText, SendStdinRequest,
+        WriteStdinRequest,
     };
     #[cfg(windows)]
     use crate::shell::{ShellDetector, ShellType};
     use encoding_rs::GBK;
     use std::collections::HashMap;
+    use std::sync::Arc;
 
     #[cfg(windows)]
     fn shell_argv(script: &str) -> Vec<String> {
@@ -1088,6 +1429,8 @@ mod tests {
                 tty: false,
                 yield_time_ms: Some(5_000),
                 max_output_chars: Some(10_000),
+                lifecycle_tx: None,
+                output_capture_tx: None,
             })
             .await
             .expect("exec command should run");
@@ -1113,6 +1456,8 @@ mod tests {
                 tty: false,
                 yield_time_ms: Some(100),
                 max_output_chars: Some(10_000),
+                lifecycle_tx: None,
+                output_capture_tx: None,
             })
             .await
             .expect("exec command should start");
@@ -1141,6 +1486,110 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn lifecycle_reports_running_and_natural_exit() {
+        let manager = ExecProcessManager::default();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        #[cfg(windows)]
+        let script = "echo lifecycle_first & powershell -NoProfile -Command \"Start-Sleep -Milliseconds 250\" & echo lifecycle_second";
+        #[cfg(not(windows))]
+        let script = "echo lifecycle_first; sleep 0.25; echo lifecycle_second";
+
+        let first = manager
+            .exec_command(ExecCommandRequest {
+                argv: shell_argv(script),
+                cwd: std::env::current_dir().expect("current dir"),
+                env: HashMap::new(),
+                tty: false,
+                yield_time_ms: Some(100),
+                max_output_chars: Some(10_000),
+                lifecycle_tx: Some(tx),
+                output_capture_tx: None,
+            })
+            .await
+            .expect("exec command should start");
+
+        let session_id = first
+            .session_id
+            .expect("process should still be running after first yield");
+        let running = tokio::time::timeout(std::time::Duration::from_secs(2), rx.recv())
+            .await
+            .expect("running lifecycle event should arrive")
+            .expect("lifecycle channel should stay open");
+        assert_eq!(running.session_id, session_id);
+        assert_eq!(running.status, ExecProcessLifecycleStatus::Running);
+
+        let exited = tokio::time::timeout(std::time::Duration::from_secs(3), rx.recv())
+            .await
+            .expect("exit lifecycle event should arrive")
+            .expect("lifecycle channel should stay open until exit");
+        assert_eq!(exited.session_id, session_id);
+        assert_eq!(exited.status, ExecProcessLifecycleStatus::Exited);
+        assert_eq!(exited.exit_code, Some(0));
+    }
+
+    #[tokio::test]
+    async fn out_of_band_kill_during_initial_wait_is_reported_to_exec_command() {
+        let manager = Arc::new(ExecProcessManager::default());
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let exec_manager = Arc::clone(&manager);
+        let exec_task = tokio::spawn(async move {
+            exec_manager
+                .exec_command(ExecCommandRequest {
+                    argv: vec![
+                        "python".to_string(),
+                        "-c".to_string(),
+                        "import time\nprint('initial_wait_start', flush=True)\ntime.sleep(30)"
+                            .to_string(),
+                    ],
+                    cwd: std::env::current_dir().expect("current dir"),
+                    env: HashMap::new(),
+                    tty: false,
+                    yield_time_ms: Some(30_000),
+                    max_output_chars: Some(10_000),
+                    lifecycle_tx: Some(tx),
+                    output_capture_tx: None,
+                })
+                .await
+        });
+
+        let running = tokio::time::timeout(std::time::Duration::from_secs(2), rx.recv())
+            .await
+            .expect("running lifecycle event should arrive before initial wait ends")
+            .expect("lifecycle channel should stay open");
+        assert_eq!(running.status, ExecProcessLifecycleStatus::Running);
+        assert!(
+            !exec_task.is_finished(),
+            "ExecCommand should still be in its initial wait window"
+        );
+
+        let control = manager
+            .control_session(ExecControlRequest {
+                session_id: running.session_id,
+                action: ExecControlAction::Kill,
+                origin: ExecControlOrigin::OutOfBand,
+                yield_time_ms: Some(5_000),
+                max_output_chars: Some(10_000),
+            })
+            .await
+            .expect("out-of-band kill should return process state");
+        assert!(control.session_id.is_none());
+
+        let initial = exec_task
+            .await
+            .expect("exec task should not panic")
+            .expect("exec command should return process state");
+        assert!(initial.session_id.is_none());
+        let completion = initial
+            .completion
+            .expect("externally killed process should include completion metadata");
+        assert_eq!(completion.status, ExecSessionCompletionStatus::Killed);
+        assert_eq!(
+            completion.source,
+            ExecSessionCompletionSource::OutOfBandControl
+        );
+    }
+
+    #[tokio::test]
     async fn tty_poll_after_process_exit_returns_exit_code() {
         let manager = ExecProcessManager::default();
         #[cfg(windows)]
@@ -1156,6 +1605,8 @@ mod tests {
                 tty: true,
                 yield_time_ms: Some(100),
                 max_output_chars: Some(10_000),
+                lifecycle_tx: None,
+                output_capture_tx: None,
             })
             .await
             .expect("tty command should start");
@@ -1209,6 +1660,8 @@ mod tests {
                 tty: true,
                 yield_time_ms: Some(500),
                 max_output_chars: Some(10_000),
+                lifecycle_tx: None,
+                output_capture_tx: None,
             })
             .await
             .expect("tty command should start");
@@ -1233,6 +1686,57 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn send_stdin_writes_without_advancing_output_cursor() {
+        let manager = ExecProcessManager::default();
+        let first = manager
+            .exec_command(ExecCommandRequest {
+                argv: vec![
+                    "python".to_string(),
+                    "-c".to_string(),
+                    "print('ready', flush=True); s=input(); print('got:'+s)".to_string(),
+                ],
+                cwd: std::env::current_dir().expect("current dir"),
+                env: HashMap::new(),
+                tty: true,
+                yield_time_ms: Some(500),
+                max_output_chars: Some(10_000),
+                lifecycle_tx: None,
+                output_capture_tx: None,
+            })
+            .await
+            .expect("tty command should start");
+
+        let session_id = first
+            .session_id
+            .expect("python input should still be waiting");
+        assert!(first.output.contains("ready"));
+
+        manager
+            .send_stdin(SendStdinRequest {
+                session_id,
+                chars: "from_user".to_string(),
+                append_enter: true,
+            })
+            .await
+            .expect("stdin-only write should succeed");
+
+        let poll = manager
+            .write_stdin(WriteStdinRequest {
+                session_id,
+                chars: String::new(),
+                append_enter: false,
+                yield_time_ms: Some(5_000),
+                max_output_chars: Some(10_000),
+            })
+            .await
+            .expect("next poll should still collect command output");
+
+        assert_eq!(poll.exit_code, Some(0));
+        assert!(poll.session_id.is_none());
+        assert!(poll.output.contains("got:from_user"));
+    }
+
+    #[tokio::test]
     async fn control_kill_terminates_running_pipe_session() {
         let manager = ExecProcessManager::default();
         #[cfg(windows)]
@@ -1249,6 +1753,8 @@ mod tests {
                 tty: false,
                 yield_time_ms: Some(100),
                 max_output_chars: Some(10_000),
+                lifecycle_tx: None,
+                output_capture_tx: None,
             })
             .await
             .expect("exec command should start");
@@ -1260,6 +1766,7 @@ mod tests {
             .control_session(ExecControlRequest {
                 session_id,
                 action: ExecControlAction::Kill,
+                origin: ExecControlOrigin::ModelTool,
                 yield_time_ms: Some(5_000),
                 max_output_chars: Some(10_000),
             })
@@ -1300,6 +1807,8 @@ mod tests {
                 tty: false,
                 yield_time_ms: Some(500),
                 max_output_chars: Some(10_000),
+                lifecycle_tx: None,
+                output_capture_tx: None,
             })
             .await
             .expect("exec command should start");
@@ -1311,6 +1820,7 @@ mod tests {
             .control_session(ExecControlRequest {
                 session_id,
                 action: ExecControlAction::Interrupt,
+                origin: ExecControlOrigin::ModelTool,
                 yield_time_ms: Some(5_000),
                 max_output_chars: Some(10_000),
             })
@@ -1361,6 +1871,8 @@ mod tests {
                 tty: false,
                 yield_time_ms: Some(1_500),
                 max_output_chars: Some(10_000),
+                lifecycle_tx: None,
+                output_capture_tx: None,
             })
             .await
             .expect("exec command should start");
@@ -1372,6 +1884,7 @@ mod tests {
             .control_session(ExecControlRequest {
                 session_id,
                 action,
+                origin: ExecControlOrigin::ModelTool,
                 yield_time_ms: Some(3_000),
                 max_output_chars: Some(10_000),
             })
@@ -1402,6 +1915,8 @@ mod tests {
                 tty: true,
                 yield_time_ms: Some(500),
                 max_output_chars: Some(10_000),
+                lifecycle_tx: None,
+                output_capture_tx: None,
             })
             .await
             .expect("tty command should start");
@@ -1413,6 +1928,7 @@ mod tests {
             .control_session(ExecControlRequest {
                 session_id,
                 action: ExecControlAction::Interrupt,
+                origin: ExecControlOrigin::ModelTool,
                 yield_time_ms: Some(5_000),
                 max_output_chars: Some(10_000),
             })
@@ -1421,6 +1937,80 @@ mod tests {
 
         assert!(second.session_id.is_none());
         assert!(second.output.contains("interrupted"));
+    }
+
+    #[tokio::test]
+    async fn out_of_band_interrupt_preserves_final_output_for_next_empty_poll() {
+        let manager = ExecProcessManager::default();
+        let first = manager
+            .exec_command(ExecCommandRequest {
+                argv: vec![
+                    "python".to_string(),
+                    "-c".to_string(),
+                    "import time\ntry:\n    time.sleep(30)\nexcept KeyboardInterrupt:\n    print('external_interrupted')"
+                        .to_string(),
+                ],
+                cwd: std::env::current_dir().expect("current dir"),
+                env: HashMap::new(),
+                tty: true,
+                yield_time_ms: Some(500),
+                max_output_chars: Some(10_000),
+                lifecycle_tx: None,
+                output_capture_tx: None,
+            })
+            .await
+            .expect("tty command should start");
+
+        let session_id = first
+            .session_id
+            .expect("sleeping process should still be active");
+        let control = manager
+            .control_session(ExecControlRequest {
+                session_id,
+                action: ExecControlAction::Interrupt,
+                origin: ExecControlOrigin::OutOfBand,
+                yield_time_ms: Some(5_000),
+                max_output_chars: Some(10_000),
+            })
+            .await
+            .expect("out-of-band interrupt should return process state");
+
+        assert!(control.session_id.is_none());
+        assert!(control.output.contains("external_interrupted"));
+
+        let poll = manager
+            .write_stdin(WriteStdinRequest {
+                session_id,
+                chars: String::new(),
+                append_enter: false,
+                yield_time_ms: Some(100),
+                max_output_chars: Some(10_000),
+            })
+            .await
+            .expect("empty poll should claim preserved out-of-band result");
+
+        assert!(poll.session_id.is_none());
+        assert!(poll.output.contains("external_interrupted"));
+        let completion = poll
+            .completion
+            .expect("preserved result should include completion metadata");
+        assert_eq!(completion.status, ExecSessionCompletionStatus::Interrupted);
+        assert_eq!(
+            completion.source,
+            ExecSessionCompletionSource::OutOfBandControl
+        );
+
+        let missing = manager
+            .write_stdin(WriteStdinRequest {
+                session_id,
+                chars: String::new(),
+                append_enter: false,
+                yield_time_ms: Some(100),
+                max_output_chars: Some(10_000),
+            })
+            .await
+            .expect_err("preserved result should be consumed once");
+        assert!(missing.to_string().contains("Session not found"));
     }
 
     #[test]

@@ -1,6 +1,6 @@
 use crate::service::remote_ssh::{
     get_global_remote_exec_process_manager, RemoteExecCommandRequest, RemoteExecControlAction,
-    RemoteExecControlRequest, SSHConnectionManager,
+    RemoteExecControlOrigin, RemoteExecControlRequest, SSHConnectionManager,
 };
 use std::collections::HashMap;
 use std::sync::OnceLock;
@@ -97,6 +97,8 @@ async fn capture_remote_env_snapshot(
             tty: true,
             yield_time_ms: Some(ENV_SNAPSHOT_TIMEOUT_MS),
             max_output_chars: Some(ENV_SNAPSHOT_MAX_OUTPUT_CHARS),
+            lifecycle_tx: None,
+            output_capture_tx: None,
         })
         .await?;
 
@@ -105,6 +107,7 @@ async fn capture_remote_env_snapshot(
             .control_session(RemoteExecControlRequest {
                 session_id,
                 action: RemoteExecControlAction::Kill,
+                origin: RemoteExecControlOrigin::ModelTool,
                 yield_time_ms: Some(500),
                 max_output_chars: Some(2_000),
             })

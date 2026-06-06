@@ -1,7 +1,9 @@
 //! Backend event system for tool execution and custom events
 
 use crate::infrastructure::events::EventEmitter;
-use crate::util::types::event::{ToolExecutionProgressInfo, ToolTerminalReadyInfo};
+use crate::util::types::event::{
+    BackgroundCommandLifecycleInfo, ToolExecutionProgressInfo, ToolTerminalReadyInfo,
+};
 use anyhow::Result;
 use log::{error, trace, warn};
 use serde::{Deserialize, Serialize};
@@ -13,6 +15,7 @@ use tokio::sync::Mutex;
 pub enum BackendEvent {
     ToolExecutionProgress(ToolExecutionProgressInfo),
     ToolTerminalReady(ToolTerminalReadyInfo),
+    BackgroundCommandLifecycle(BackgroundCommandLifecycleInfo),
     ToolAwaitingUserInput {
         tool_id: String,
         session_id: String,
@@ -51,6 +54,9 @@ impl BackendEventSystem {
                     "backend-event-toolexecutionprogress".to_string()
                 }
                 BackendEvent::ToolTerminalReady(_) => "backend-event-toolterminalready".to_string(),
+                BackendEvent::BackgroundCommandLifecycle(_) => {
+                    "backend-event-backgroundcommandlifecycle".to_string()
+                }
                 BackendEvent::ToolAwaitingUserInput { .. } => {
                     "backend-event-toolawaitinguserinput".to_string()
                 }

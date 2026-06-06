@@ -24,6 +24,14 @@ use bitfun_core::agentic::goal_mode::{ThreadGoal, ThreadGoalStatus};
 use bitfun_core::agentic::image_analysis::ImageContextData;
 use bitfun_core::agentic::session::{SessionViewRestoreRequest, SessionViewRestoreTiming};
 use bitfun_core::agentic::tools::image_context::get_image_context;
+use bitfun_core::agentic::tools::implementations::exec_command::{
+    background_command_output_capture, control_exec_command_session, send_exec_command_input,
+    ExecCommandControlAction, ExecCommandControlOrigin, ExecCommandControlRequest,
+    ExecCommandInputRequest, ListBackgroundCommandOutputRequest,
+    ListBackgroundCommandOutputResponse,
+    ReadBackgroundCommandOutputRequest as CoreReadBackgroundCommandOutputRequest,
+    ReadBackgroundCommandOutputResponse,
+};
 use bitfun_core::service::session::{DialogTurnData, SessionRelationship};
 
 const SESSION_VIEW_TOOL_RESULT_TOTAL_CHAR_BUDGET: usize = 512 * 1024;
@@ -1467,6 +1475,162 @@ pub async fn set_subagent_timeout(
             );
             format!("Failed to set subagent timeout: {}", e)
         })
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ControlBackgroundCommandRequest {
+    pub exec_session_id: i32,
+    pub action: BackgroundCommandControlActionDTO,
+    pub remote: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum BackgroundCommandControlActionDTO {
+    Interrupt,
+    Kill,
+}
+
+impl From<BackgroundCommandControlActionDTO> for ExecCommandControlAction {
+    fn from(action: BackgroundCommandControlActionDTO) -> Self {
+        match action {
+            BackgroundCommandControlActionDTO::Interrupt => ExecCommandControlAction::Interrupt,
+            BackgroundCommandControlActionDTO::Kill => ExecCommandControlAction::Kill,
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn control_background_command(
+    request: ControlBackgroundCommandRequest,
+) -> Result<(), String> {
+    let session_id = request.exec_session_id;
+    let remote = request.remote;
+    let action: ExecCommandControlAction = request.action.into();
+
+    control_exec_command_session(ExecCommandControlRequest {
+        session_id,
+        action,
+        origin: ExecCommandControlOrigin::OutOfBand,
+        remote,
+        yield_time_ms: Some(250),
+        max_output_chars: Some(4_096),
+    })
+    .await
+    .map(|response| {
+        if response.session_id.is_none() {
+            let status = match response.completion.map(|completion| completion.status) {
+                Some(bitfun_core::agentic::tools::implementations::exec_command::ExecCommandCompletionStatus::Interrupted) => {
+                    bitfun_core::agentic::tools::implementations::exec_command::BackgroundCommandOutputStatus::Interrupted
+                }
+                Some(bitfun_core::agentic::tools::implementations::exec_command::ExecCommandCompletionStatus::Killed) => {
+                    bitfun_core::agentic::tools::implementations::exec_command::BackgroundCommandOutputStatus::Killed
+                }
+                Some(bitfun_core::agentic::tools::implementations::exec_command::ExecCommandCompletionStatus::Pruned) => {
+                    bitfun_core::agentic::tools::implementations::exec_command::BackgroundCommandOutputStatus::Pruned
+                }
+                _ => bitfun_core::agentic::tools::implementations::exec_command::BackgroundCommandOutputStatus::Exited,
+            };
+            let capture = background_command_output_capture();
+            tauri::async_runtime::spawn(async move {
+                capture
+                    .finish_by_session(remote, session_id, status, response.exit_code)
+                    .await;
+            });
+        }
+    })
+    .map_err(|e| {
+        log::error!(
+            "Failed to control background command: exec_session_id={}, remote={}, error={}",
+            session_id,
+            remote,
+            e
+        );
+        format!("Failed to control background command: {}", e)
+    })
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SendBackgroundCommandInputRequest {
+    pub exec_session_id: i32,
+    pub remote: bool,
+    pub chars: String,
+    pub append_enter: bool,
+}
+
+#[tauri::command]
+pub async fn send_background_command_input(
+    request: SendBackgroundCommandInputRequest,
+) -> Result<(), String> {
+    if request.chars.is_empty() && !request.append_enter {
+        return Err("chars or append_enter is required".to_string());
+    }
+
+    send_exec_command_input(ExecCommandInputRequest {
+        session_id: request.exec_session_id,
+        chars: request.chars,
+        append_enter: request.append_enter,
+        remote: request.remote,
+    })
+    .await
+    .map_err(|e| {
+        log::error!(
+            "Failed to send input to background command: exec_session_id={}, remote={}, error={}",
+            request.exec_session_id,
+            request.remote,
+            e
+        );
+        format!("Failed to send input to background command: {}", e)
+    })
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadBackgroundCommandOutputRequest {
+    pub exec_session_id: i32,
+    pub remote: bool,
+    pub cursor: Option<u64>,
+}
+
+#[tauri::command]
+pub async fn read_background_command_output(
+    request: ReadBackgroundCommandOutputRequest,
+) -> Result<ReadBackgroundCommandOutputResponse, String> {
+    background_command_output_capture()
+        .read(CoreReadBackgroundCommandOutputRequest {
+            exec_session_id: request.exec_session_id,
+            remote: request.remote,
+            cursor: request.cursor,
+        })
+        .await
+        .ok_or_else(|| {
+            format!(
+                "Background command output not found: exec_session_id={}, remote={}",
+                request.exec_session_id, request.remote
+            )
+        })
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListBackgroundCommandActivitiesRequest {
+    pub agent_session_id: Option<String>,
+}
+
+#[tauri::command]
+pub async fn list_background_command_activities(
+    request: ListBackgroundCommandActivitiesRequest,
+) -> Result<ListBackgroundCommandOutputResponse, String> {
+    let agent_session_id = request.agent_session_id.and_then(|value| {
+        let trimmed = value.trim().to_string();
+        (!trimmed.is_empty()).then_some(trimmed)
+    });
+
+    Ok(background_command_output_capture()
+        .list(ListBackgroundCommandOutputRequest { agent_session_id })
+        .await)
 }
 
 #[tauri::command]

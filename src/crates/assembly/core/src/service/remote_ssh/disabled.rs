@@ -33,6 +33,8 @@ pub struct RemoteExecCommandRequest {
     pub tty: bool,
     pub yield_time_ms: Option<u64>,
     pub max_output_chars: Option<usize>,
+    pub lifecycle_tx: Option<tokio::sync::mpsc::UnboundedSender<RemoteExecProcessLifecycleEvent>>,
+    pub output_capture_tx: Option<tokio::sync::mpsc::UnboundedSender<String>>,
 }
 
 #[derive(Debug, Clone)]
@@ -44,18 +46,52 @@ pub struct RemoteWriteStdinRequest {
     pub max_output_chars: Option<usize>,
 }
 
+#[derive(Debug, Clone)]
+pub struct RemoteSendStdinRequest {
+    pub session_id: i32,
+    pub chars: String,
+    pub append_enter: bool,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RemoteExecControlAction {
     Interrupt,
     Kill,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteExecControlOrigin {
+    ModelTool,
+    OutOfBand,
+}
+
 #[derive(Debug, Clone)]
 pub struct RemoteExecControlRequest {
     pub session_id: i32,
     pub action: RemoteExecControlAction,
+    pub origin: RemoteExecControlOrigin,
     pub yield_time_ms: Option<u64>,
     pub max_output_chars: Option<usize>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteExecSessionCompletionStatus {
+    Exited,
+    Interrupted,
+    Killed,
+    Pruned,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteExecSessionCompletionSource {
+    Process,
+    OutOfBandControl,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RemoteExecSessionCompletion {
+    pub status: RemoteExecSessionCompletionStatus,
+    pub source: RemoteExecSessionCompletionSource,
 }
 
 #[derive(Debug, Clone)]
@@ -66,6 +102,23 @@ pub struct RemoteExecCommandResponse {
     pub session_id: Option<i32>,
     pub exit_code: Option<i32>,
     pub original_output_chars: usize,
+    pub completion: Option<RemoteExecSessionCompletion>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteExecProcessLifecycleStatus {
+    Running,
+    Exited,
+    Interrupted,
+    Killed,
+    Pruned,
+}
+
+#[derive(Debug, Clone)]
+pub struct RemoteExecProcessLifecycleEvent {
+    pub session_id: i32,
+    pub status: RemoteExecProcessLifecycleStatus,
+    pub exit_code: Option<i32>,
 }
 
 pub struct RemoteExecProcessManager;
@@ -98,6 +151,10 @@ impl RemoteExecProcessManager {
         _request: RemoteWriteStdinRequest,
         _output_tx: tokio::sync::mpsc::Sender<String>,
     ) -> anyhow::Result<RemoteExecCommandResponse> {
+        Err(unsupported())
+    }
+
+    pub async fn send_stdin(&self, _request: RemoteSendStdinRequest) -> anyhow::Result<()> {
         Err(unsupported())
     }
 

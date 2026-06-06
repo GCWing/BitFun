@@ -1,11 +1,17 @@
 use super::progress::ExecOutputProgressBridge;
 use super::rendering::render_exec_response_for_assistant;
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
-use crate::service::remote_ssh::{get_global_remote_exec_process_manager, RemoteWriteStdinRequest};
+use crate::service::remote_ssh::{
+    get_global_remote_exec_process_manager, RemoteExecSessionCompletion,
+    RemoteExecSessionCompletionSource, RemoteExecSessionCompletionStatus, RemoteWriteStdinRequest,
+};
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use serde_json::{json, Value};
-use terminal_core::{get_global_exec_process_manager, LocalWriteStdinRequest};
+use terminal_core::{
+    get_global_exec_process_manager, LocalExecSessionCompletion, LocalExecSessionCompletionSource,
+    LocalExecSessionCompletionStatus, LocalWriteStdinRequest,
+};
 
 const DEFAULT_MAX_OUTPUT_CHARS: u64 = 10_000;
 
@@ -33,7 +39,30 @@ impl WriteStdinTool {
 
     fn response_for_assistant(data: &Value) -> String {
         let mut status_lines = Vec::new();
-        if let Some(exit_code) = data.get("exit_code").and_then(Value::as_i64) {
+        let completion = data.get("completion");
+        let completion_source = completion
+            .and_then(|value| value.get("source"))
+            .and_then(Value::as_str);
+        let completion_status = completion
+            .and_then(|value| value.get("status"))
+            .and_then(Value::as_str);
+        if completion_source == Some("out_of_band_control") {
+            match completion_status {
+                Some("interrupted") => {
+                    status_lines.push("Process was interrupted externally.".to_string())
+                }
+                Some("killed") => {
+                    status_lines.push("Process was terminated externally.".to_string())
+                }
+                Some(status) => {
+                    status_lines.push(format!("Process ended externally with status {status}."))
+                }
+                None => status_lines.push("Process ended externally.".to_string()),
+            }
+            if let Some(exit_code) = data.get("exit_code").and_then(Value::as_i64) {
+                status_lines.push(format!("Process exited with code {exit_code}."));
+            }
+        } else if let Some(exit_code) = data.get("exit_code").and_then(Value::as_i64) {
             status_lines.push(format!("Process exited with code {exit_code}."));
         } else if let Some(session_id) = data.get("session_id").and_then(Value::as_i64) {
             status_lines.push(format!(
@@ -41,6 +70,36 @@ impl WriteStdinTool {
             ));
         }
         render_exec_response_for_assistant(data, status_lines, 4)
+    }
+
+    fn local_completion_value(completion: LocalExecSessionCompletion) -> Value {
+        json!({
+            "status": match completion.status {
+                LocalExecSessionCompletionStatus::Exited => "exited",
+                LocalExecSessionCompletionStatus::Interrupted => "interrupted",
+                LocalExecSessionCompletionStatus::Killed => "killed",
+                LocalExecSessionCompletionStatus::Pruned => "pruned",
+            },
+            "source": match completion.source {
+                LocalExecSessionCompletionSource::Process => "process",
+                LocalExecSessionCompletionSource::OutOfBandControl => "out_of_band_control",
+            },
+        })
+    }
+
+    fn remote_completion_value(completion: RemoteExecSessionCompletion) -> Value {
+        json!({
+            "status": match completion.status {
+                RemoteExecSessionCompletionStatus::Exited => "exited",
+                RemoteExecSessionCompletionStatus::Interrupted => "interrupted",
+                RemoteExecSessionCompletionStatus::Killed => "killed",
+                RemoteExecSessionCompletionStatus::Pruned => "pruned",
+            },
+            "source": match completion.source {
+                RemoteExecSessionCompletionSource::Process => "process",
+                RemoteExecSessionCompletionSource::OutOfBandControl => "out_of_band_control",
+            },
+        })
     }
 
     async fn call_remote_pipe(
@@ -98,6 +157,7 @@ impl WriteStdinTool {
             "session_id": response.session_id,
             "exit_code": response.exit_code,
             "original_output_chars": response.original_output_chars,
+            "completion": response.completion.map(Self::remote_completion_value),
             "remote": true,
         });
         let result_for_assistant = Self::response_for_assistant(&data);
@@ -250,6 +310,7 @@ Output is only what was produced during this tool call's wait window."#
             "session_id": response.session_id,
             "exit_code": response.exit_code,
             "original_output_chars": response.original_output_chars,
+            "completion": response.completion.map(Self::local_completion_value),
         });
         let result_for_assistant = Self::response_for_assistant(&data);
 

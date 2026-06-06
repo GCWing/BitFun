@@ -1,0 +1,290 @@
+@use '../../../component-library/styles/tokens' as *;
+
+.background-command-output-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background:
+    radial-gradient(circle at 8% 0%, color-mix(in srgb, var(--accent-primary) 10%, transparent) 0, transparent 34%),
+    linear-gradient(180deg, color-mix(in srgb, var(--color-bg-elevated) 96%, transparent), var(--color-bg-base));
+  color: var(--color-text-primary);
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $size-gap-3;
+    padding: $size-gap-4;
+    border-bottom: 1px solid var(--border-base);
+  }
+
+  &__header-actions {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    flex: 0 0 auto;
+    margin-left: auto;
+  }
+
+  &__sanitize-toggle-trigger {
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+  }
+
+  &__sanitize-toggle {
+    align-items: center;
+    gap: $size-gap-1;
+    padding: 3px 8px;
+    border: 1px solid var(--border-base);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--element-bg-soft) 72%, transparent);
+
+    .bitfun-checkbox__wrapper {
+      margin-top: 0;
+    }
+
+    .bitfun-checkbox__label {
+      color: var(--color-text-secondary);
+      font-size: var(--flowchat-font-size-xs);
+      font-weight: 500;
+    }
+
+    &:hover .bitfun-checkbox__label {
+      color: var(--color-text-primary);
+    }
+  }
+
+  &__title-group {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-3;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+
+    > div {
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: var(--flowchat-font-size-lg);
+      line-height: 1.2;
+    }
+
+    p {
+      margin: 4px 0 0;
+      max-width: 100%;
+      color: var(--color-text-secondary);
+      font-family: 'Fira Code', 'Noto Sans SC', Consolas, monospace;
+      font-size: var(--flowchat-font-size-xs);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: block;
+    }
+  }
+
+  &__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--accent-primary) 14%, transparent);
+    color: var(--accent-primary);
+    flex: 0 0 auto;
+  }
+
+  &__meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $size-gap-2;
+    padding: $size-gap-2 $size-gap-4 0;
+    color: var(--color-text-secondary);
+    font-size: var(--flowchat-font-size-xs);
+  }
+
+  &__meta-status {
+    display: flex;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    gap: $size-gap-1;
+    min-width: 0;
+
+    > span {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 7px;
+      border: 1px solid var(--border-base);
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--element-bg-soft) 70%, transparent);
+    }
+  }
+
+  &__loading svg {
+    animation: background-command-output-spin 1s linear infinite;
+  }
+
+  &__notice,
+  &__error {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    margin: $size-gap-3 $size-gap-4 0;
+    padding: $size-gap-2 $size-gap-3;
+    border-radius: $size-radius-base;
+    font-size: var(--flowchat-font-size-xs);
+  }
+
+  &__notice {
+    border: 1px solid color-mix(in srgb, var(--color-warning, #f59e0b) 30%, transparent);
+    background: color-mix(in srgb, var(--color-warning, #f59e0b) 10%, transparent);
+    color: var(--color-text-secondary);
+  }
+
+  &__error {
+    border: 1px solid color-mix(in srgb, var(--color-danger, #ef4444) 30%, transparent);
+    background: color-mix(in srgb, var(--color-danger, #ef4444) 10%, transparent);
+    color: var(--color-danger, #ef4444);
+  }
+
+  &__output {
+    flex: 1;
+    min-height: 0;
+    margin: $size-gap-3 $size-gap-4 $size-gap-4;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--border-base) 86%, transparent);
+    border-radius: $size-radius-lg;
+    background: var(--color-bg-scene);
+    scrollbar-color: color-mix(in srgb, var(--color-text-secondary) 36%, transparent) transparent;
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--color-text-primary) 4%, transparent);
+  }
+
+  &__input-editor {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-2;
+    margin: 0 $size-gap-4 $size-gap-4;
+    padding: $size-gap-3;
+    border: 1px solid color-mix(in srgb, var(--border-base) 86%, transparent);
+    border-radius: $size-radius-lg;
+    background: color-mix(in srgb, var(--color-bg-elevated) 88%, transparent);
+    box-shadow: 0 1px 0 color-mix(in srgb, var(--color-text-primary) 4%, transparent) inset;
+  }
+
+  &__input-textarea {
+    .bitfun-textarea__field {
+      min-height: 74px;
+      max-height: 180px;
+      resize: vertical;
+      font-family: 'Fira Code', 'Noto Sans SC', Consolas, monospace;
+      font-size: var(--flowchat-font-size-xs);
+      line-height: 1.5;
+    }
+
+    &--masked .bitfun-textarea__field {
+      -webkit-text-security: disc;
+    }
+  }
+
+  &__input-editor-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $size-gap-3;
+  }
+
+  &__input-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: $size-gap-3;
+  }
+
+  &__input-option {
+    .bitfun-checkbox__label {
+      color: var(--color-text-secondary);
+      font-size: var(--flowchat-font-size-xs);
+    }
+
+    &:hover .bitfun-checkbox__label {
+      color: var(--color-text-primary);
+    }
+  }
+
+  &__input-editor-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: $size-gap-2;
+  }
+
+  &__terminal {
+    height: 100% !important;
+    min-height: 100%;
+
+    .xterm {
+      height: 100%;
+
+      &:not(.allow-transparency) {
+        .xterm-viewport {
+          background-color: var(--color-bg-scene);
+        }
+      }
+
+      .xterm-screen {
+        width: 100%;
+        height: 100%;
+      }
+    }
+  }
+
+  &__empty {
+    display: grid;
+    place-items: center;
+    min-height: 240px;
+    color: color-mix(in srgb, var(--color-text-secondary) 82%, transparent);
+    font-size: var(--flowchat-font-size-sm);
+  }
+
+  @media (max-width: 520px) {
+    &__header {
+      flex-wrap: wrap;
+    }
+
+    &__header-actions {
+      width: 100%;
+      justify-content: flex-end;
+    }
+
+    &__meta {
+      flex-wrap: wrap;
+    }
+
+    &__sanitize-toggle-trigger {
+      margin-left: auto;
+    }
+
+    &__input-editor-footer,
+    &__input-options {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    &__input-editor-actions {
+      justify-content: flex-end;
+    }
+  }
+}
+
+@keyframes background-command-output-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

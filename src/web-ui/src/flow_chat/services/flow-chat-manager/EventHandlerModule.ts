@@ -44,6 +44,7 @@ import {
 } from '@/shared/ai-errors/aiErrorPresenter';
 import { useReviewActionBarStore } from '../../store/deepReviewActionBarStore';
 import { buildDeepReviewCapacityQueueStateFromEvent } from '../../utils/deepReviewQueueStateEvents';
+import { useBackgroundCommandActivityStore } from '../../store/backgroundCommandActivityStore';
 
 const pendingImageAnalysisTurns = new Map<string, string>();
 import { 
@@ -61,7 +62,7 @@ import {
 } from './TextChunkModule';
 import { pendingQueueManager } from './PendingQueueModule';
 import { 
-  processToolEvent, 
+  processToolEvent,
   processToolParamsPartialInternal,
   processToolProgressInternal,
   handleToolExecutionProgress,
@@ -577,6 +578,10 @@ export async function initializeEventListeners(
     const eventData = (event.payload as any)?.value || event.payload;
     handleToolTerminalReady(eventData);
   });
+  const unlistenBackgroundCommandLifecycle = await listen('backend-event-backgroundcommandlifecycle', (event: any) => {
+    const eventData = (event.payload as any)?.value || event.payload;
+    useBackgroundCommandActivityStore.getState().applyLifecycleEvent(eventData);
+  });
   const unlistenMcpInteractionRequest = await listen('backend-event-mcpinteractionrequest', (event: any) => {
     void handleMcpInteractionRequest((event.payload as any)?.value || event.payload);
   });
@@ -664,6 +669,7 @@ export async function initializeEventListeners(
   return () => {
     unlistenProgress();
     unlistenTerminalReady();
+    unlistenBackgroundCommandLifecycle();
     unlistenMcpInteractionRequest();
     unlistenAcpPermissionRequest();
     agenticEventListener.stopListening();

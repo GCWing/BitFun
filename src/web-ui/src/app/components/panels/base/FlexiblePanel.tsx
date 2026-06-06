@@ -127,6 +127,12 @@ const SessionUsagePanel = React.lazy(() =>
   }))
 );
 
+const BackgroundCommandOutputPanel = React.lazy(() =>
+  import('@/flow_chat/components/background-command/BackgroundCommandOutputPanel').then(module => ({
+    default: module.BackgroundCommandOutputPanel
+  }))
+);
+
 const ReviewPlatformPanel = React.lazy(() =>
   import('@/app/components/panels/review-platform/ReviewPlatformPanel')
 );
@@ -795,6 +801,13 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
               workspacePath={content.data?.workspacePath || workspacePath}
               initialTab={content.data?.initialTab}
             />
+          </React.Suspense>
+        );
+
+      case 'background-command-output':
+        return (
+          <React.Suspense fallback={<div className="bitfun-flexible-panel__loading">{t('flexiblePanel.loading.terminal')}</div>}>
+            <BackgroundCommandOutputPanel data={content.data} />
           </React.Suspense>
         );
 

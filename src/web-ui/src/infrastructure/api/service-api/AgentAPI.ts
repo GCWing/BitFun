@@ -180,6 +180,65 @@ export interface UpdateSessionTitleRequest {
   remoteSshHost?: string;
 }
 
+export interface ControlBackgroundCommandRequest {
+  execSessionId: number;
+  action: 'interrupt' | 'kill';
+  remote: boolean;
+}
+
+export interface SendBackgroundCommandInputRequest {
+  execSessionId: number;
+  remote: boolean;
+  chars: string;
+  appendEnter: boolean;
+}
+
+export type BackgroundCommandOutputStatus =
+  | 'running'
+  | 'exited'
+  | 'interrupted'
+  | 'killed'
+  | 'pruned'
+  | 'failed';
+
+export interface BackgroundCommandOutputMetadata {
+  agentSessionId?: string;
+  execSessionId?: number;
+  command: string;
+  workdir?: string;
+  remote: boolean;
+  tty: boolean;
+  status: BackgroundCommandOutputStatus;
+  exitCode?: number;
+  startedAt: number;
+  endedAt?: number;
+  retainedBytes: number;
+  retainedLimitBytes: number;
+  truncatedFromStart: boolean;
+}
+
+export interface ReadBackgroundCommandOutputRequest {
+  execSessionId: number;
+  remote: boolean;
+  cursor?: number;
+}
+
+export interface ReadBackgroundCommandOutputResponse {
+  metadata: BackgroundCommandOutputMetadata;
+  cursor: number;
+  reset: boolean;
+  snapshot?: string;
+  chunks: string[];
+}
+
+export interface ListBackgroundCommandActivitiesRequest {
+  agentSessionId?: string;
+}
+
+export interface ListBackgroundCommandActivitiesResponse {
+  activities: BackgroundCommandOutputMetadata[];
+}
+
  
 export interface ModeInfo {
   id: string;
@@ -918,6 +977,59 @@ export class AgentAPI {
       });
     } catch (error) {
       throw createTauriCommandError('set_subagent_timeout', error, { sessionId, action: action.type });
+    }
+  }
+
+  async controlBackgroundCommand(request: ControlBackgroundCommandRequest): Promise<void> {
+    const actionPayload = request.action === 'interrupt' ? 'interrupt' : 'kill';
+    try {
+      await api.invoke<void>('control_background_command', {
+        request: {
+          execSessionId: request.execSessionId,
+          action: actionPayload,
+          remote: request.remote,
+        },
+      });
+    } catch (error) {
+      throw createTauriCommandError('control_background_command', error, request);
+    }
+  }
+
+  async sendBackgroundCommandInput(request: SendBackgroundCommandInputRequest): Promise<void> {
+    try {
+      await api.invoke<void>('send_background_command_input', {
+        request,
+      });
+    } catch (error) {
+      throw createTauriCommandError('send_background_command_input', error, {
+        execSessionId: request.execSessionId,
+        remote: request.remote,
+        appendEnter: request.appendEnter,
+      });
+    }
+  }
+
+  async readBackgroundCommandOutput(
+    request: ReadBackgroundCommandOutputRequest,
+  ): Promise<ReadBackgroundCommandOutputResponse> {
+    try {
+      return await api.invoke<ReadBackgroundCommandOutputResponse>('read_background_command_output', {
+        request,
+      });
+    } catch (error) {
+      throw createTauriCommandError('read_background_command_output', error, request);
+    }
+  }
+
+  async listBackgroundCommandActivities(
+    request: ListBackgroundCommandActivitiesRequest,
+  ): Promise<ListBackgroundCommandActivitiesResponse> {
+    try {
+      return await api.invoke<ListBackgroundCommandActivitiesResponse>('list_background_command_activities', {
+        request,
+      });
+    } catch (error) {
+      throw createTauriCommandError('list_background_command_activities', error, request);
     }
   }
 

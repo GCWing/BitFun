@@ -10,7 +10,7 @@ use rand::Rng;
 use russh::client::Msg;
 use russh::{Channel, ChannelMsg, Sig};
 use std::collections::{HashMap, VecDeque};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex as StdMutex, OnceLock};
 use tokio::sync::{mpsc, Mutex, Notify};
 use tokio::time::{Duration, Instant};
 use uuid::Uuid;
@@ -19,6 +19,7 @@ const DEFAULT_YIELD_TIME_MS: u64 = 10_000;
 const DEFAULT_MAX_OUTPUT_CHARS: usize = 10_000;
 const MAX_RETAINED_OUTPUT_BYTES: usize = 1024 * 1024;
 const MAX_REMOTE_EXEC_SESSIONS: usize = 64;
+const MAX_COMPLETED_REMOTE_EXEC_SESSIONS: usize = 64;
 const REMOTE_INTERRUPT_GRACE_TIMEOUT_MS: u64 = 3_000;
 const REMOTE_CONTROL_DRAIN_TIMEOUT_MS: u64 = 500;
 
@@ -38,6 +39,8 @@ pub struct RemoteExecCommandRequest {
     pub tty: bool,
     pub yield_time_ms: Option<u64>,
     pub max_output_chars: Option<usize>,
+    pub lifecycle_tx: Option<mpsc::UnboundedSender<RemoteExecProcessLifecycleEvent>>,
+    pub output_capture_tx: Option<mpsc::UnboundedSender<String>>,
 }
 
 #[derive(Debug, Clone)]
@@ -49,18 +52,52 @@ pub struct RemoteWriteStdinRequest {
     pub max_output_chars: Option<usize>,
 }
 
+#[derive(Debug, Clone)]
+pub struct RemoteSendStdinRequest {
+    pub session_id: i32,
+    pub chars: String,
+    pub append_enter: bool,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RemoteExecControlAction {
     Interrupt,
     Kill,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteExecControlOrigin {
+    ModelTool,
+    OutOfBand,
+}
+
 #[derive(Debug, Clone)]
 pub struct RemoteExecControlRequest {
     pub session_id: i32,
     pub action: RemoteExecControlAction,
+    pub origin: RemoteExecControlOrigin,
     pub yield_time_ms: Option<u64>,
     pub max_output_chars: Option<usize>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteExecSessionCompletionStatus {
+    Exited,
+    Interrupted,
+    Killed,
+    Pruned,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteExecSessionCompletionSource {
+    Process,
+    OutOfBandControl,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RemoteExecSessionCompletion {
+    pub status: RemoteExecSessionCompletionStatus,
+    pub source: RemoteExecSessionCompletionSource,
 }
 
 #[derive(Debug, Clone)]
@@ -71,16 +108,35 @@ pub struct RemoteExecCommandResponse {
     pub session_id: Option<i32>,
     pub exit_code: Option<i32>,
     pub original_output_chars: usize,
+    pub completion: Option<RemoteExecSessionCompletion>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteExecProcessLifecycleStatus {
+    Running,
+    Exited,
+    Interrupted,
+    Killed,
+    Pruned,
+}
+
+#[derive(Debug, Clone)]
+pub struct RemoteExecProcessLifecycleEvent {
+    pub session_id: i32,
+    pub status: RemoteExecProcessLifecycleStatus,
+    pub exit_code: Option<i32>,
 }
 
 pub struct RemoteExecProcessManager {
     sessions: Mutex<HashMap<i32, RemoteExecSessionEntry>>,
+    completed_sessions: Mutex<HashMap<i32, CompletedRemoteExecSession>>,
 }
 
 impl Default for RemoteExecProcessManager {
     fn default() -> Self {
         Self {
             sessions: Mutex::new(HashMap::new()),
+            completed_sessions: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -90,11 +146,22 @@ struct RemoteExecSessionEntry {
     tty: bool,
     cursor: OutputCursor,
     last_used: Instant,
+    lifecycle_tx: Option<mpsc::UnboundedSender<RemoteExecProcessLifecycleEvent>>,
+}
+
+#[derive(Clone)]
+struct CompletedRemoteExecSession {
+    output: String,
+    exit_code: Option<i32>,
+    original_output_chars: usize,
+    completion: RemoteExecSessionCompletion,
+    completed_at: Instant,
 }
 
 struct RemoteExecProcess {
     output: Arc<OutputState>,
     command_tx: mpsc::Sender<RemoteExecProcessCommand>,
+    out_of_band_control_action: StdMutex<Option<RemoteExecControlAction>>,
 }
 
 enum RemoteExecProcessCommand {
@@ -119,6 +186,7 @@ impl RemotePipeControlState {
 struct OutputState {
     inner: Mutex<OutputInner>,
     notify: Notify,
+    output_capture_tx: Option<mpsc::UnboundedSender<String>>,
 }
 
 struct OutputInner {
@@ -174,6 +242,14 @@ impl RemoteExecProcessManager {
     ) -> anyhow::Result<RemoteExecCommandResponse> {
         let process = Arc::new(spawn_remote_process(request.clone()).await?);
         let cursor = OutputCursor { next_seq: 0 };
+        let session_id = self
+            .store_session(
+                Arc::clone(&process),
+                request.tty,
+                cursor.clone(),
+                request.lifecycle_tx,
+            )
+            .await;
         let started_at = Instant::now();
         let collected = process
             .output
@@ -186,22 +262,31 @@ impl RemoteExecProcessManager {
             .await;
 
         let exit_code = process.output.exit_code().await;
-        let session_id = if process.output.is_closed().await {
-            None
+        let closed = process.output.is_closed().await;
+        let completion = if closed {
+            Some(completion_for_closed_remote_process(
+                process.out_of_band_control_action(),
+            ))
         } else {
-            Some(
-                self.store_session(process, request.tty, collected.cursor.clone())
-                    .await,
-            )
+            None
         };
+        self.update_or_remove_session(
+            session_id,
+            &process,
+            collected.cursor.clone(),
+            None,
+            exit_code,
+        )
+        .await;
 
         Ok(RemoteExecCommandResponse {
             chunk_id: new_chunk_id(),
             wall_time_seconds: started_at.elapsed().as_secs_f64(),
             output: collected.output,
-            session_id,
+            session_id: (!closed).then_some(session_id),
             exit_code,
             original_output_chars: collected.original_output_chars,
+            completion,
         })
     }
 
@@ -220,6 +305,31 @@ impl RemoteExecProcessManager {
         self.write_stdin_inner(request, Some(output_tx)).await
     }
 
+    pub async fn send_stdin(&self, request: RemoteSendStdinRequest) -> anyhow::Result<()> {
+        let (process, tty) = {
+            let mut sessions = self.sessions.lock().await;
+            let entry = sessions
+                .get_mut(&request.session_id)
+                .ok_or_else(|| anyhow!("session not found: {}", request.session_id))?;
+            entry.last_used = Instant::now();
+            (Arc::clone(&entry.process), entry.tty)
+        };
+
+        let input = input_bytes_for_write(&request.chars, request.append_enter);
+        if input.is_empty() {
+            return Ok(());
+        }
+        if !tty {
+            return Err(anyhow!("stdin input requires a tty session"));
+        }
+
+        process
+            .command_tx
+            .send(RemoteExecProcessCommand::Write(input))
+            .await
+            .context("remote process has already exited")
+    }
+
     async fn write_stdin_inner(
         &self,
         request: RemoteWriteStdinRequest,
@@ -227,9 +337,23 @@ impl RemoteExecProcessManager {
     ) -> anyhow::Result<RemoteExecCommandResponse> {
         let (process, tty, cursor) = {
             let mut sessions = self.sessions.lock().await;
-            let entry = sessions
-                .get_mut(&request.session_id)
-                .ok_or_else(|| anyhow!("session not found: {}", request.session_id))?;
+            let Some(entry) = sessions.get_mut(&request.session_id) else {
+                drop(sessions);
+                if request.chars.is_empty() {
+                    if let Some(completed) = self.take_completed_session(request.session_id).await {
+                        return Ok(RemoteExecCommandResponse {
+                            chunk_id: new_chunk_id(),
+                            wall_time_seconds: 0.0,
+                            output: completed.output,
+                            session_id: None,
+                            exit_code: completed.exit_code,
+                            original_output_chars: completed.original_output_chars,
+                            completion: Some(completed.completion),
+                        });
+                    }
+                }
+                return Err(anyhow!("session not found: {}", request.session_id));
+            };
             entry.last_used = Instant::now();
             (Arc::clone(&entry.process), entry.tty, entry.cursor.clone())
         };
@@ -254,16 +378,32 @@ impl RemoteExecProcessManager {
             )
             .await;
 
-        self.update_or_remove_session(request.session_id, &process, collected.cursor.clone())
-            .await;
+        let closed = process.output.is_closed().await;
+        let exit_code = process.output.exit_code().await;
+        let completion = if closed {
+            Some(completion_for_closed_remote_process(
+                process.out_of_band_control_action(),
+            ))
+        } else {
+            None
+        };
+        self.update_or_remove_session(
+            request.session_id,
+            &process,
+            collected.cursor.clone(),
+            completion.map(|completion| lifecycle_status_for_completion(completion.status)),
+            exit_code,
+        )
+        .await;
 
         Ok(RemoteExecCommandResponse {
             chunk_id: new_chunk_id(),
             wall_time_seconds: started_at.elapsed().as_secs_f64(),
             output: collected.output,
-            session_id: (!process.output.is_closed().await).then_some(request.session_id),
-            exit_code: process.output.exit_code().await,
+            session_id: (!closed).then_some(request.session_id),
+            exit_code,
             original_output_chars: collected.original_output_chars,
+            completion,
         })
     }
 
@@ -277,6 +417,9 @@ impl RemoteExecProcessManager {
                 .get_mut(&request.session_id)
                 .ok_or_else(|| anyhow!("session not found: {}", request.session_id))?;
             entry.last_used = Instant::now();
+            if request.origin == RemoteExecControlOrigin::OutOfBand {
+                entry.process.mark_out_of_band_control(request.action);
+            }
             (Arc::clone(&entry.process), entry.cursor.clone())
         };
 
@@ -290,23 +433,60 @@ impl RemoteExecProcessManager {
         let collected = process
             .output
             .collect_until(
-                cursor,
+                cursor.clone(),
                 deadline_from_now(request.yield_time_ms),
                 request.max_output_chars.unwrap_or(DEFAULT_MAX_OUTPUT_CHARS),
                 None,
             )
             .await;
 
-        self.update_or_remove_session(request.session_id, &process, collected.cursor.clone())
+        let closed = process.output.is_closed().await;
+        let exit_code = process.output.exit_code().await;
+        let completion = closed.then_some(RemoteExecSessionCompletion {
+            status: completion_status_for_control_action(request.action),
+            source: match request.origin {
+                RemoteExecControlOrigin::ModelTool => RemoteExecSessionCompletionSource::Process,
+                RemoteExecControlOrigin::OutOfBand => {
+                    RemoteExecSessionCompletionSource::OutOfBandControl
+                }
+            },
+        });
+        let lifecycle_status =
+            completion.map(|completion| lifecycle_status_for_completion(completion.status));
+        self.update_or_remove_session(
+            request.session_id,
+            &process,
+            if request.origin == RemoteExecControlOrigin::ModelTool {
+                collected.cursor.clone()
+            } else {
+                cursor
+            },
+            lifecycle_status,
+            exit_code,
+        )
+        .await;
+        if request.origin == RemoteExecControlOrigin::OutOfBand && closed {
+            self.store_completed_session(
+                request.session_id,
+                CompletedRemoteExecSession {
+                    output: collected.output.clone(),
+                    exit_code,
+                    original_output_chars: collected.original_output_chars,
+                    completion: completion.expect("closed process should have completion"),
+                    completed_at: Instant::now(),
+                },
+            )
             .await;
+        }
 
         Ok(RemoteExecCommandResponse {
             chunk_id: new_chunk_id(),
             wall_time_seconds: started_at.elapsed().as_secs_f64(),
             output: collected.output,
-            session_id: (!process.output.is_closed().await).then_some(request.session_id),
-            exit_code: process.output.exit_code().await,
+            session_id: (!closed).then_some(request.session_id),
+            exit_code,
             original_output_chars: collected.original_output_chars,
+            completion,
         })
     }
 
@@ -315,15 +495,16 @@ impl RemoteExecProcessManager {
         process: Arc<RemoteExecProcess>,
         tty: bool,
         cursor: OutputCursor,
+        lifecycle_tx: Option<mpsc::UnboundedSender<RemoteExecProcessLifecycleEvent>>,
     ) -> i32 {
-        let pruned = {
+        let (session_id, pruned_entry) = {
             let mut sessions = self.sessions.lock().await;
             let pruned = if sessions.len() >= MAX_REMOTE_EXEC_SESSIONS {
                 sessions
                     .iter()
                     .min_by_key(|(_, entry)| entry.last_used)
                     .map(|(id, _)| *id)
-                    .and_then(|id| sessions.remove(&id))
+                    .and_then(|id| sessions.remove(&id).map(|entry| (id, entry)))
             } else {
                 None
             };
@@ -332,20 +513,39 @@ impl RemoteExecProcessManager {
             sessions.insert(
                 session_id,
                 RemoteExecSessionEntry {
-                    process,
+                    process: Arc::clone(&process),
                     tty,
                     cursor,
                     last_used: Instant::now(),
+                    lifecycle_tx: lifecycle_tx.clone(),
                 },
             );
             (session_id, pruned)
         };
 
-        if let Some(entry) = pruned.1 {
+        if let Some((pruned_session_id, entry)) = pruned_entry {
+            emit_lifecycle(
+                entry.lifecycle_tx.clone(),
+                RemoteExecProcessLifecycleEvent {
+                    session_id: pruned_session_id,
+                    status: RemoteExecProcessLifecycleStatus::Pruned,
+                    exit_code: None,
+                },
+            );
             entry.process.request_control(RemoteExecControlAction::Kill);
         }
 
-        pruned.0
+        emit_lifecycle(
+            lifecycle_tx.clone(),
+            RemoteExecProcessLifecycleEvent {
+                session_id,
+                status: RemoteExecProcessLifecycleStatus::Running,
+                exit_code: None,
+            },
+        );
+        spawn_lifecycle_exit_watcher(session_id, process, lifecycle_tx);
+
+        session_id
     }
 
     async fn update_or_remove_session(
@@ -353,16 +553,51 @@ impl RemoteExecProcessManager {
         session_id: i32,
         process: &RemoteExecProcess,
         cursor: OutputCursor,
+        lifecycle_status: Option<RemoteExecProcessLifecycleStatus>,
+        exit_code: Option<i32>,
     ) {
         if process.output.is_closed().await {
             let mut sessions = self.sessions.lock().await;
-            sessions.remove(&session_id);
+            if let Some(entry) = sessions.remove(&session_id) {
+                if let Some(status) = lifecycle_status {
+                    emit_lifecycle(
+                        entry.lifecycle_tx.clone(),
+                        RemoteExecProcessLifecycleEvent {
+                            session_id,
+                            status,
+                            exit_code,
+                        },
+                    );
+                }
+            }
         } else {
             let mut sessions = self.sessions.lock().await;
             if let Some(entry) = sessions.get_mut(&session_id) {
                 entry.cursor = cursor;
             }
         }
+    }
+
+    async fn store_completed_session(
+        &self,
+        session_id: i32,
+        completed: CompletedRemoteExecSession,
+    ) {
+        let mut completed_sessions = self.completed_sessions.lock().await;
+        if completed_sessions.len() >= MAX_COMPLETED_REMOTE_EXEC_SESSIONS {
+            if let Some(oldest_session_id) = completed_sessions
+                .iter()
+                .min_by_key(|(_, session)| session.completed_at)
+                .map(|(id, _)| *id)
+            {
+                completed_sessions.remove(&oldest_session_id);
+            }
+        }
+        completed_sessions.insert(session_id, completed);
+    }
+
+    async fn take_completed_session(&self, session_id: i32) -> Option<CompletedRemoteExecSession> {
+        self.completed_sessions.lock().await.remove(&session_id)
     }
 }
 
@@ -373,6 +608,19 @@ impl Drop for RemoteExecProcess {
 }
 
 impl RemoteExecProcess {
+    fn mark_out_of_band_control(&self, action: RemoteExecControlAction) {
+        if let Ok(mut out_of_band_action) = self.out_of_band_control_action.lock() {
+            *out_of_band_action = Some(action);
+        }
+    }
+
+    fn out_of_band_control_action(&self) -> Option<RemoteExecControlAction> {
+        self.out_of_band_control_action
+            .lock()
+            .ok()
+            .and_then(|action| *action)
+    }
+
     fn request_control(&self, action: RemoteExecControlAction) {
         let _ = self
             .command_tx
@@ -397,11 +645,15 @@ async fn spawn_remote_pipe_process(
         .ssh_manager
         .open_exec_channel(&request.connection_id, &request.command)
         .await?;
-    let output = Arc::new(OutputState::new());
+    let output = Arc::new(OutputState::new(request.output_capture_tx.clone()));
     let (command_tx, command_rx) = mpsc::channel::<RemoteExecProcessCommand>(8);
     tokio::spawn(remote_pipe_owner(channel, command_rx, output.clone()));
 
-    Ok(RemoteExecProcess { output, command_tx })
+    Ok(RemoteExecProcess {
+        output,
+        command_tx,
+        out_of_band_control_action: StdMutex::new(None),
+    })
 }
 
 async fn spawn_remote_pty_process(
@@ -411,11 +663,15 @@ async fn spawn_remote_pty_process(
         .ssh_manager
         .open_pty_exec_channel(&request.connection_id, &request.command, 80, 24)
         .await?;
-    let output = Arc::new(OutputState::new());
+    let output = Arc::new(OutputState::new(request.output_capture_tx.clone()));
     let (command_tx, command_rx) = mpsc::channel::<RemoteExecProcessCommand>(64);
     tokio::spawn(remote_pty_owner(channel, command_rx, output.clone()));
 
-    Ok(RemoteExecProcess { output, command_tx })
+    Ok(RemoteExecProcess {
+        output,
+        command_tx,
+        out_of_band_control_action: StdMutex::new(None),
+    })
 }
 
 async fn remote_pipe_owner(
@@ -585,7 +841,7 @@ async fn remote_pty_owner(
 }
 
 impl OutputState {
-    fn new() -> Self {
+    fn new(output_capture_tx: Option<mpsc::UnboundedSender<String>>) -> Self {
         Self {
             inner: Mutex::new(OutputInner {
                 chunks: VecDeque::new(),
@@ -595,6 +851,7 @@ impl OutputState {
                 exit_code: None,
             }),
             notify: Notify::new(),
+            output_capture_tx,
         }
     }
 
@@ -602,6 +859,10 @@ impl OutputState {
         if chunk.is_empty() {
             return;
         }
+        let capture_text = self
+            .output_capture_tx
+            .as_ref()
+            .map(|_| String::from_utf8_lossy(&chunk).to_string());
         {
             let mut inner = self.inner.lock().await;
             let seq = inner.next_seq;
@@ -615,6 +876,9 @@ impl OutputState {
                     break;
                 }
             }
+        }
+        if let (Some(tx), Some(text)) = (&self.output_capture_tx, capture_text) {
+            let _ = tx.send(text);
         }
         self.notify.notify_waiters();
     }
@@ -634,6 +898,19 @@ impl OutputState {
 
     async fn exit_code(&self) -> Option<i32> {
         self.inner.lock().await.exit_code
+    }
+
+    async fn wait_closed(&self) -> Option<i32> {
+        loop {
+            let notified = self.notify.notified();
+            {
+                let inner = self.inner.lock().await;
+                if inner.closed {
+                    return inner.exit_code;
+                }
+            }
+            notified.await;
+        }
     }
 
     async fn drain_since_with_output(
@@ -686,6 +963,76 @@ impl OutputState {
             cursor,
         }
     }
+}
+
+fn emit_lifecycle(
+    lifecycle_tx: Option<mpsc::UnboundedSender<RemoteExecProcessLifecycleEvent>>,
+    event: RemoteExecProcessLifecycleEvent,
+) {
+    if let Some(tx) = lifecycle_tx {
+        let _ = tx.send(event);
+    }
+}
+
+fn completion_status_for_control_action(
+    action: RemoteExecControlAction,
+) -> RemoteExecSessionCompletionStatus {
+    match action {
+        RemoteExecControlAction::Interrupt => RemoteExecSessionCompletionStatus::Interrupted,
+        RemoteExecControlAction::Kill => RemoteExecSessionCompletionStatus::Killed,
+    }
+}
+
+fn completion_for_closed_remote_process(
+    out_of_band_control_action: Option<RemoteExecControlAction>,
+) -> RemoteExecSessionCompletion {
+    if let Some(action) = out_of_band_control_action {
+        return RemoteExecSessionCompletion {
+            status: completion_status_for_control_action(action),
+            source: RemoteExecSessionCompletionSource::OutOfBandControl,
+        };
+    }
+
+    RemoteExecSessionCompletion {
+        status: RemoteExecSessionCompletionStatus::Exited,
+        source: RemoteExecSessionCompletionSource::Process,
+    }
+}
+
+fn lifecycle_status_for_completion(
+    status: RemoteExecSessionCompletionStatus,
+) -> RemoteExecProcessLifecycleStatus {
+    match status {
+        RemoteExecSessionCompletionStatus::Exited => RemoteExecProcessLifecycleStatus::Exited,
+        RemoteExecSessionCompletionStatus::Interrupted => {
+            RemoteExecProcessLifecycleStatus::Interrupted
+        }
+        RemoteExecSessionCompletionStatus::Killed => RemoteExecProcessLifecycleStatus::Killed,
+        RemoteExecSessionCompletionStatus::Pruned => RemoteExecProcessLifecycleStatus::Pruned,
+    }
+}
+
+fn spawn_lifecycle_exit_watcher(
+    session_id: i32,
+    process: Arc<RemoteExecProcess>,
+    lifecycle_tx: Option<mpsc::UnboundedSender<RemoteExecProcessLifecycleEvent>>,
+) {
+    if lifecycle_tx.is_none() {
+        return;
+    }
+
+    tokio::spawn(async move {
+        let exit_code = process.output.wait_closed().await;
+        let completion = completion_for_closed_remote_process(process.out_of_band_control_action());
+        emit_lifecycle(
+            lifecycle_tx,
+            RemoteExecProcessLifecycleEvent {
+                session_id,
+                status: lifecycle_status_for_completion(completion.status),
+                exit_code,
+            },
+        );
+    });
 }
 
 impl HeadTailText {

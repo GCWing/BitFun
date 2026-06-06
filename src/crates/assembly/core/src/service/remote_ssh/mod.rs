@@ -23,7 +23,10 @@ pub mod workspace_state;
 pub use disabled::{
     get_global_remote_exec_process_manager, KnownHostEntry, PTYSession, PortForward,
     PortForwardDirection, PortForwardManager, RemoteExecCommandRequest, RemoteExecCommandResponse,
-    RemoteExecControlAction, RemoteExecControlRequest, RemoteExecProcessManager, RemoteFileService,
+    RemoteExecControlAction, RemoteExecControlOrigin, RemoteExecControlRequest,
+    RemoteExecProcessLifecycleEvent, RemoteExecProcessLifecycleStatus, RemoteExecProcessManager,
+    RemoteExecSessionCompletion, RemoteExecSessionCompletionSource,
+    RemoteExecSessionCompletionStatus, RemoteFileService, RemoteSendStdinRequest,
     RemoteTerminalManager, RemoteTerminalSession, RemoteWriteStdinRequest, SSHConnectionManager,
     SessionStatus,
 };
@@ -35,8 +38,10 @@ pub use manager::{
 #[cfg(feature = "ssh-remote")]
 pub use remote_exec::{
     get_global_remote_exec_process_manager, RemoteExecCommandRequest, RemoteExecCommandResponse,
-    RemoteExecControlAction, RemoteExecControlRequest, RemoteExecProcessManager,
-    RemoteWriteStdinRequest,
+    RemoteExecControlAction, RemoteExecControlOrigin, RemoteExecControlRequest,
+    RemoteExecProcessLifecycleEvent, RemoteExecProcessLifecycleStatus, RemoteExecProcessManager,
+    RemoteExecSessionCompletion, RemoteExecSessionCompletionSource,
+    RemoteExecSessionCompletionStatus, RemoteSendStdinRequest, RemoteWriteStdinRequest,
 };
 #[cfg(feature = "ssh-remote")]
 pub use remote_fs::RemoteFileService;
