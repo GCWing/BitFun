@@ -38,11 +38,10 @@ const EDGE_TTS_VOICES = [
 ];
 
 const LANGUAGES = [
-  { id: 'zh-CN', label: '中文 (简体)' },
+  { id: 'zh-CN', label: 'Chinese (Simplified)' },
   { id: 'en-US', label: 'English (US)' },
   { id: 'en-GB', label: 'English (UK)' },
-  { id: 'zh-CN', label: 'Chinese Simplified' },
-  { id: 'zh-TW', label: 'Chinese Traditional' },
+  { id: 'zh-TW', label: 'Chinese (Traditional)' },
   { id: 'ja-JP', label: 'Japanese' },
   { id: 'ko-KR', label: 'Korean' },
 ];
