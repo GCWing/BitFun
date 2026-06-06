@@ -384,7 +384,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     const lastRound = lastTurn.modelRounds[lastTurn.modelRounds.length - 1];
     for (let i = lastRound.items.length - 1; i >= 0; i -= 1) {
       const item = lastRound.items[i];
-      if (item.type === 'tool' && 'toolName' in item && (item as { toolName?: string }).toolName) {
+      if (item.type === 'tool' && item.toolName) {
         return 'waiting' as const;
       }
     }
