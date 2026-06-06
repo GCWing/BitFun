@@ -27,6 +27,7 @@ export interface ExecProcessCardModel {
   copyDisabled?: boolean;
   waitingText: string;
   noOutputText: string;
+  resultNoticeText?: string;
   resultOutput: string;
   workdir?: string;
   sessionId?: number;
@@ -310,6 +311,10 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
                 className="terminal-xterm-output"
                 maxHeight={maxHeight}
               />
+            </div>
+          ) : model.resultNoticeText ? (
+            <div className="terminal-execution-output terminal-waiting exec-process-result-notice">
+              <span className="waiting-text">{model.resultNoticeText}</span>
             </div>
           ) : (
             <div className="terminal-execution-output terminal-waiting exec-process-empty-output">

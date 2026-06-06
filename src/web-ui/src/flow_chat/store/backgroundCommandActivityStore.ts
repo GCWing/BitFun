@@ -132,7 +132,10 @@ function clearTimer(map: Map<string, number>, key: string): void {
   map.delete(key);
 }
 
-function scheduleVisibility(activity: BackgroundCommandActivity): void {
+function scheduleVisibility(
+  activity: BackgroundCommandActivity,
+  revealActivity: (execSessionKey: string) => void,
+): void {
   clearTimer(revealTimers, activity.execSessionKey);
   if (activity.status !== 'running' || activity.visible) {
     return;
@@ -141,12 +144,15 @@ function scheduleVisibility(activity: BackgroundCommandActivity): void {
   const delayMs = Math.max(0, activity.startedAtMs + BACKGROUND_COMMAND_VISIBLE_AFTER_MS - Date.now());
   const timerId = window.setTimeout(() => {
     revealTimers.delete(activity.execSessionKey);
-    useBackgroundCommandActivityStore.getState().revealActivity(activity.execSessionKey);
+    revealActivity(activity.execSessionKey);
   }, delayMs);
   revealTimers.set(activity.execSessionKey, timerId);
 }
 
-function scheduleRemoval(activity: BackgroundCommandActivity): void {
+function scheduleRemoval(
+  activity: BackgroundCommandActivity,
+  removeActivity: (execSessionKey: string) => void,
+): void {
   clearTimer(removalTimers, activity.execSessionKey);
   if (!isTerminalStatus(activity.status)) {
     return;
@@ -154,7 +160,7 @@ function scheduleRemoval(activity: BackgroundCommandActivity): void {
 
   const timerId = window.setTimeout(() => {
     removalTimers.delete(activity.execSessionKey);
-    useBackgroundCommandActivityStore.getState().removeActivity(activity.execSessionKey);
+    removeActivity(activity.execSessionKey);
   }, BACKGROUND_COMMAND_FINISHED_RETENTION_MS);
   removalTimers.set(activity.execSessionKey, timerId);
 }
@@ -202,8 +208,8 @@ export const useBackgroundCommandActivityStore = create<BackgroundCommandActivit
       clearTimer(removalTimers, normalized.execSessionKey);
       return;
     }
-    scheduleVisibility(current);
-    scheduleRemoval(current);
+    scheduleVisibility(current, get().revealActivity);
+    scheduleRemoval(current, get().removeActivity);
   },
 
   hydrateActivities: (agentSessionId, metadataItems) => {
@@ -238,8 +244,8 @@ export const useBackgroundCommandActivityStore = create<BackgroundCommandActivit
       if (!current) {
         continue;
       }
-      scheduleVisibility(current);
-      scheduleRemoval(current);
+      scheduleVisibility(current, get().revealActivity);
+      scheduleRemoval(current, get().removeActivity);
     }
   },
 

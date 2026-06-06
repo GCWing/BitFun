@@ -1108,7 +1108,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
         t('backgroundCommandInput.sendSucceeded'),
         { duration: 2500 },
       );
-    } catch (error) {
+    } catch (_error) {
       notificationService.error(
         t('backgroundCommandInput.sendFailed'),
         { duration: 5000 },
@@ -1142,7 +1142,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
         action: 'interrupt',
         remote: command.remote === true,
       });
-    } catch (error) {
+    } catch (_error) {
       setStoppingBackgroundCommandIds((previous) => {
         const next = new Set(previous);
         next.delete(command.execSessionKey);

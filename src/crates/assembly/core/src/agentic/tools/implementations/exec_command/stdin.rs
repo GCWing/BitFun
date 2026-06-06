@@ -2,7 +2,7 @@ use super::progress::ExecOutputProgressBridge;
 use super::rendering::render_exec_response_for_assistant;
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
 use crate::service::remote_ssh::{
-    get_global_remote_exec_process_manager, RemoteExecSessionCompletion,
+    get_global_remote_exec_process_manager, RemoteExecError, RemoteExecSessionCompletion,
     RemoteExecSessionCompletionSource, RemoteExecSessionCompletionStatus, RemoteWriteStdinRequest,
 };
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use serde_json::{json, Value};
 use terminal_core::{
     get_global_exec_process_manager, LocalExecSessionCompletion, LocalExecSessionCompletionSource,
-    LocalExecSessionCompletionStatus, LocalWriteStdinRequest,
+    LocalExecSessionCompletionStatus, LocalWriteStdinRequest, TerminalError,
 };
 
 const DEFAULT_MAX_OUTPUT_CHARS: u64 = 10_000;
@@ -70,6 +70,30 @@ impl WriteStdinTool {
             ));
         }
         render_exec_response_for_assistant(data, status_lines, 4)
+    }
+
+    fn session_not_found_result(session_id: i32, remote: bool) -> Vec<ToolResult> {
+        let message = format!(
+            "ExecCommand session {session_id} was not found. It may have already exited, been collected, or been pruned."
+        );
+        let mut data = json!({
+            "status": "session_not_found",
+            "message": message,
+            "requested_session_id": session_id,
+            "session_id": null,
+            "exit_code": null,
+            "output": "",
+            "original_output_chars": 0,
+        });
+        if remote {
+            data["remote"] = json!(true);
+        }
+
+        vec![ToolResult::Result {
+            data,
+            result_for_assistant: Some(message),
+            image_attachments: None,
+        }]
     }
 
     fn local_completion_value(completion: LocalExecSessionCompletion) -> Value {
@@ -147,8 +171,13 @@ impl WriteStdinTool {
         if let Some(bridge) = progress_bridge {
             bridge.finish().await;
         }
-        let response = response_result
-            .map_err(|error| BitFunError::tool(format!("WriteStdin failed: {error}")))?;
+        let response = match response_result {
+            Ok(response) => response,
+            Err(RemoteExecError::SessionNotFound(session_id)) => {
+                return Ok(Self::session_not_found_result(session_id, true));
+            }
+            Err(error) => return Err(BitFunError::tool(format!("WriteStdin failed: {error}"))),
+        };
 
         let data = json!({
             "chunk_id": response.chunk_id,
@@ -300,8 +329,13 @@ Output is only what was produced during this tool call's wait window."#
         if let Some(bridge) = progress_bridge {
             bridge.finish().await;
         }
-        let response = response_result
-            .map_err(|error| BitFunError::tool(format!("WriteStdin failed: {error}")))?;
+        let response = match response_result {
+            Ok(response) => response,
+            Err(TerminalError::SessionNotFound(_)) => {
+                return Ok(Self::session_not_found_result(session_id, false));
+            }
+            Err(error) => return Err(BitFunError::tool(format!("WriteStdin failed: {error}"))),
+        };
 
         let data = json!({
             "chunk_id": response.chunk_id,
@@ -319,5 +353,38 @@ Output is only what was produced during this tool call's wait window."#
             result_for_assistant: Some(result_for_assistant),
             image_attachments: None,
         }])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::WriteStdinTool;
+    use crate::agentic::tools::framework::ToolResult;
+
+    #[test]
+    fn session_not_found_result_uses_plain_assistant_message() {
+        let results = WriteStdinTool::session_not_found_result(123, false);
+        let ToolResult::Result {
+            data,
+            result_for_assistant,
+            ..
+        } = &results[0]
+        else {
+            panic!("expected result");
+        };
+
+        assert_eq!(
+            data.get("status").and_then(|value| value.as_str()),
+            Some("session_not_found")
+        );
+        assert_eq!(
+            data.get("requested_session_id")
+                .and_then(|value| value.as_i64()),
+            Some(123)
+        );
+        let assistant = result_for_assistant.as_deref().expect("assistant text");
+        assert!(assistant.contains("ExecCommand session 123 was not found"));
+        assert!(!assistant.contains("<wall_time>"));
+        assert!(!assistant.contains("<output>"));
     }
 }

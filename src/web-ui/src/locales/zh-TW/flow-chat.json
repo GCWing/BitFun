@@ -1327,6 +1327,7 @@
       "remote": "遠端",
       "tty": "TTY",
       "noOutput": "無輸出",
+      "sessionNotFound": "未找到會話 #{{id}}",
       "copyPrimary": "複製",
       "primaryCopied": "已複製",
       "copyPrimaryFailed": "複製失敗"

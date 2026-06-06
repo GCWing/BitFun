@@ -48,7 +48,7 @@ function mockOutputForKind(mockKind: string | undefined): {
         ? undefined
         : 4217;
   const output = kind === 'interactive-input'
-    ? '\x1b[?9001h\x1b[?1004h\x1b[?25l\x1b[2J\x1b[m\x1b[H请输入你的名字:\x1b[1C\x1b]0;PowerShell\x07\x1b[?25h'
+    ? '\x1b[?9001h\x1b[?1004h\x1b[?25l\x1b[2J\x1b[m\x1b[HEnter your name:\x1b[1C\x1b]0;PowerShell\x07\x1b[?25h'
     : [
         `$ ${command}`,
         'Compiling terminal-core v0.1.0',
@@ -122,7 +122,6 @@ export const BackgroundCommandOutputPanel: React.FC<BackgroundCommandOutputPanel
 
   useEffect(() => {
     let cancelled = false;
-    let intervalId: number | undefined;
 
     const readOutput = async (initial = false) => {
       if (data.mockKind) {
@@ -171,7 +170,7 @@ export const BackgroundCommandOutputPanel: React.FC<BackgroundCommandOutputPanel
     };
 
     void readOutput(true);
-    intervalId = window.setInterval(() => {
+    const intervalId = window.setInterval(() => {
       if (metadata?.status && metadata.status !== 'running') {
         return;
       }
@@ -180,9 +179,7 @@ export const BackgroundCommandOutputPanel: React.FC<BackgroundCommandOutputPanel
 
     return () => {
       cancelled = true;
-      if (intervalId != null) {
-        window.clearInterval(intervalId);
-      }
+      window.clearInterval(intervalId);
     };
   }, [data.execSessionId, data.mockKind, data.remote, metadata?.status]);
 

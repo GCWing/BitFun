@@ -105,6 +105,17 @@ pub struct RemoteExecCommandResponse {
     pub completion: Option<RemoteExecSessionCompletion>,
 }
 
+pub type RemoteExecResult<T> = std::result::Result<T, RemoteExecError>;
+
+#[derive(Debug, thiserror::Error)]
+pub enum RemoteExecError {
+    #[error("session not found: {0}")]
+    SessionNotFound(i32),
+
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RemoteExecProcessLifecycleStatus {
     Running,
@@ -127,42 +138,42 @@ impl RemoteExecProcessManager {
     pub async fn exec_command(
         &self,
         _request: RemoteExecCommandRequest,
-    ) -> anyhow::Result<RemoteExecCommandResponse> {
-        Err(unsupported())
+    ) -> RemoteExecResult<RemoteExecCommandResponse> {
+        Err(unsupported().into())
     }
 
     pub async fn exec_command_streaming(
         &self,
         _request: RemoteExecCommandRequest,
         _output_tx: tokio::sync::mpsc::Sender<String>,
-    ) -> anyhow::Result<RemoteExecCommandResponse> {
-        Err(unsupported())
+    ) -> RemoteExecResult<RemoteExecCommandResponse> {
+        Err(unsupported().into())
     }
 
     pub async fn write_stdin(
         &self,
         _request: RemoteWriteStdinRequest,
-    ) -> anyhow::Result<RemoteExecCommandResponse> {
-        Err(unsupported())
+    ) -> RemoteExecResult<RemoteExecCommandResponse> {
+        Err(unsupported().into())
     }
 
     pub async fn write_stdin_streaming(
         &self,
         _request: RemoteWriteStdinRequest,
         _output_tx: tokio::sync::mpsc::Sender<String>,
-    ) -> anyhow::Result<RemoteExecCommandResponse> {
-        Err(unsupported())
+    ) -> RemoteExecResult<RemoteExecCommandResponse> {
+        Err(unsupported().into())
     }
 
-    pub async fn send_stdin(&self, _request: RemoteSendStdinRequest) -> anyhow::Result<()> {
-        Err(unsupported())
+    pub async fn send_stdin(&self, _request: RemoteSendStdinRequest) -> RemoteExecResult<()> {
+        Err(unsupported().into())
     }
 
     pub async fn control_session(
         &self,
         _request: RemoteExecControlRequest,
-    ) -> anyhow::Result<RemoteExecCommandResponse> {
-        Err(unsupported())
+    ) -> RemoteExecResult<RemoteExecCommandResponse> {
+        Err(unsupported().into())
     }
 }
 

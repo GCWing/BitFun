@@ -3,8 +3,10 @@ import type { ExecProcessCardModel } from './ExecProcessToolCardView';
 
 interface ParsedExecResult {
   output: string;
+  status?: string;
   workdir?: string;
   sessionId?: number;
+  requestedSessionId?: number;
   exitCode?: number;
   wallTimeSeconds?: number;
   remote?: boolean;
@@ -51,8 +53,10 @@ export function parseExecProcessResult(raw: unknown): ParsedExecResult {
 
   return {
     output: stringField(record, 'output') ?? '',
+    status: stringField(record, 'status'),
     workdir: stringField(record, 'workdir'),
     sessionId: numberField(record, 'session_id'),
+    requestedSessionId: numberField(record, 'requested_session_id'),
     exitCode: numberField(record, 'exit_code'),
     wallTimeSeconds: numberField(record, 'wall_time_seconds'),
     remote: boolField(record, 'remote'),
@@ -96,14 +100,20 @@ export function buildWriteStdinCardModel(
   const sessionId = typeof input.session_id === 'number'
     ? input.session_id
     : result.sessionId;
+  const displaySessionId = sessionId ?? result.requestedSessionId;
   const chars = typeof input.chars === 'string' ? input.chars : '';
   const appendEnter = Boolean(input.append_enter);
   const isPollOnly = chars.length === 0;
   const primaryText = isPollOnly
-    ? t('toolCards.execProcess.pollSession', { id: sessionId ?? '?' })
+    ? t('toolCards.execProcess.pollSession', { id: displaySessionId ?? '?' })
     : appendEnter
       ? `${chars}\\n`
       : chars;
+  const resultNoticeText = result.status === 'session_not_found'
+    ? t('toolCards.execProcess.sessionNotFound', {
+      id: displaySessionId ?? '?',
+    })
+    : undefined;
 
   return {
     kind: 'stdin',
@@ -111,15 +121,16 @@ export function buildWriteStdinCardModel(
       ? t('toolCards.execProcess.pollProcess')
       : t('toolCards.execProcess.writeStdin'),
     primaryText,
-    emptyText: t('toolCards.execProcess.pollSession', { id: sessionId ?? '?' }),
+    emptyText: t('toolCards.execProcess.pollSession', { id: displaySessionId ?? '?' }),
     copyText: chars,
     copyDisabled: isPollOnly,
     waitingText: isPollOnly
       ? t('toolCards.execProcess.pollingOutput')
       : t('toolCards.execProcess.waitingForOutput'),
     noOutputText: t('toolCards.execProcess.noOutput'),
+    resultNoticeText,
     resultOutput: result.output,
-    sessionId,
+    sessionId: displaySessionId,
     exitCode: result.exitCode,
     wallTimeSeconds: result.wallTimeSeconds,
     remote: result.remote,

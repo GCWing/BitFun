@@ -111,6 +111,17 @@ pub struct RemoteExecCommandResponse {
     pub completion: Option<RemoteExecSessionCompletion>,
 }
 
+pub type RemoteExecResult<T> = std::result::Result<T, RemoteExecError>;
+
+#[derive(Debug, thiserror::Error)]
+pub enum RemoteExecError {
+    #[error("session not found: {0}")]
+    SessionNotFound(i32),
+
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RemoteExecProcessLifecycleStatus {
     Running,
@@ -223,7 +234,7 @@ impl RemoteExecProcessManager {
     pub async fn exec_command(
         &self,
         request: RemoteExecCommandRequest,
-    ) -> anyhow::Result<RemoteExecCommandResponse> {
+    ) -> RemoteExecResult<RemoteExecCommandResponse> {
         self.exec_command_inner(request, None).await
     }
 
@@ -231,7 +242,7 @@ impl RemoteExecProcessManager {
         &self,
         request: RemoteExecCommandRequest,
         output_tx: mpsc::Sender<String>,
-    ) -> anyhow::Result<RemoteExecCommandResponse> {
+    ) -> RemoteExecResult<RemoteExecCommandResponse> {
         self.exec_command_inner(request, Some(output_tx)).await
     }
 
@@ -239,7 +250,7 @@ impl RemoteExecProcessManager {
         &self,
         request: RemoteExecCommandRequest,
         output_tx: Option<mpsc::Sender<String>>,
-    ) -> anyhow::Result<RemoteExecCommandResponse> {
+    ) -> RemoteExecResult<RemoteExecCommandResponse> {
         let process = Arc::new(spawn_remote_process(request.clone()).await?);
         let cursor = OutputCursor { next_seq: 0 };
         let session_id = self
@@ -293,7 +304,7 @@ impl RemoteExecProcessManager {
     pub async fn write_stdin(
         &self,
         request: RemoteWriteStdinRequest,
-    ) -> anyhow::Result<RemoteExecCommandResponse> {
+    ) -> RemoteExecResult<RemoteExecCommandResponse> {
         self.write_stdin_inner(request, None).await
     }
 
@@ -301,16 +312,16 @@ impl RemoteExecProcessManager {
         &self,
         request: RemoteWriteStdinRequest,
         output_tx: mpsc::Sender<String>,
-    ) -> anyhow::Result<RemoteExecCommandResponse> {
+    ) -> RemoteExecResult<RemoteExecCommandResponse> {
         self.write_stdin_inner(request, Some(output_tx)).await
     }
 
-    pub async fn send_stdin(&self, request: RemoteSendStdinRequest) -> anyhow::Result<()> {
+    pub async fn send_stdin(&self, request: RemoteSendStdinRequest) -> RemoteExecResult<()> {
         let (process, tty) = {
             let mut sessions = self.sessions.lock().await;
             let entry = sessions
                 .get_mut(&request.session_id)
-                .ok_or_else(|| anyhow!("session not found: {}", request.session_id))?;
+                .ok_or(RemoteExecError::SessionNotFound(request.session_id))?;
             entry.last_used = Instant::now();
             (Arc::clone(&entry.process), entry.tty)
         };
@@ -320,7 +331,7 @@ impl RemoteExecProcessManager {
             return Ok(());
         }
         if !tty {
-            return Err(anyhow!("stdin input requires a tty session"));
+            return Err(anyhow!("stdin input requires a tty session").into());
         }
 
         process
@@ -328,13 +339,14 @@ impl RemoteExecProcessManager {
             .send(RemoteExecProcessCommand::Write(input))
             .await
             .context("remote process has already exited")
+            .map_err(RemoteExecError::from)
     }
 
     async fn write_stdin_inner(
         &self,
         request: RemoteWriteStdinRequest,
         output_tx: Option<mpsc::Sender<String>>,
-    ) -> anyhow::Result<RemoteExecCommandResponse> {
+    ) -> RemoteExecResult<RemoteExecCommandResponse> {
         let (process, tty, cursor) = {
             let mut sessions = self.sessions.lock().await;
             let Some(entry) = sessions.get_mut(&request.session_id) else {
@@ -352,7 +364,7 @@ impl RemoteExecProcessManager {
                         });
                     }
                 }
-                return Err(anyhow!("session not found: {}", request.session_id));
+                return Err(RemoteExecError::SessionNotFound(request.session_id));
             };
             entry.last_used = Instant::now();
             (Arc::clone(&entry.process), entry.tty, entry.cursor.clone())
@@ -410,12 +422,12 @@ impl RemoteExecProcessManager {
     pub async fn control_session(
         &self,
         request: RemoteExecControlRequest,
-    ) -> anyhow::Result<RemoteExecCommandResponse> {
+    ) -> RemoteExecResult<RemoteExecCommandResponse> {
         let (process, cursor) = {
             let mut sessions = self.sessions.lock().await;
             let entry = sessions
                 .get_mut(&request.session_id)
-                .ok_or_else(|| anyhow!("session not found: {}", request.session_id))?;
+                .ok_or(RemoteExecError::SessionNotFound(request.session_id))?;
             entry.last_used = Instant::now();
             if request.origin == RemoteExecControlOrigin::OutOfBand {
                 entry.process.mark_out_of_band_control(request.action);

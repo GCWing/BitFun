@@ -17,8 +17,9 @@ pub use background_command_output::{
 pub use command::ExecCommandTool;
 pub use control::{
     control_exec_command_session, ExecCommandCompletion, ExecCommandCompletionSource,
-    ExecCommandCompletionStatus, ExecCommandControlAction, ExecCommandControlOrigin,
-    ExecCommandControlRequest, ExecCommandControlResponse, ExecControlTool,
+    ExecCommandCompletionStatus, ExecCommandControlAction, ExecCommandControlError,
+    ExecCommandControlOrigin, ExecCommandControlRequest, ExecCommandControlResponse,
+    ExecControlTool,
 };
 pub use input::{send_exec_command_input, ExecCommandInputRequest};
 pub use stdin::WriteStdinTool;

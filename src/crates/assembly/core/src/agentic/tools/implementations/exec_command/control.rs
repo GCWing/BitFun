@@ -2,8 +2,8 @@ use super::rendering::render_exec_response_for_assistant;
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
 use crate::service::remote_ssh::{
     get_global_remote_exec_process_manager, RemoteExecControlAction, RemoteExecControlOrigin,
-    RemoteExecControlRequest, RemoteExecSessionCompletion, RemoteExecSessionCompletionSource,
-    RemoteExecSessionCompletionStatus,
+    RemoteExecControlRequest, RemoteExecError, RemoteExecSessionCompletion,
+    RemoteExecSessionCompletionSource, RemoteExecSessionCompletionStatus,
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
@@ -11,7 +11,7 @@ use serde_json::{json, Value};
 use terminal_core::{
     get_global_exec_process_manager, LocalExecControlAction, LocalExecControlOrigin,
     LocalExecControlRequest, LocalExecSessionCompletion, LocalExecSessionCompletionSource,
-    LocalExecSessionCompletionStatus,
+    LocalExecSessionCompletionStatus, TerminalError,
 };
 
 const DEFAULT_MAX_OUTPUT_CHARS: u64 = 10_000;
@@ -93,9 +93,18 @@ pub struct ExecCommandControlResponse {
     pub completion: Option<ExecCommandCompletion>,
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum ExecCommandControlError {
+    #[error("session not found: {0}")]
+    SessionNotFound(i32),
+
+    #[error(transparent)]
+    Tool(#[from] BitFunError),
+}
+
 pub async fn control_exec_command_session(
     request: ExecCommandControlRequest,
-) -> BitFunResult<ExecCommandControlResponse> {
+) -> Result<ExecCommandControlResponse, ExecCommandControlError> {
     if request.remote {
         let response = get_global_remote_exec_process_manager()
             .control_session(RemoteExecControlRequest {
@@ -106,7 +115,14 @@ pub async fn control_exec_command_session(
                 max_output_chars: request.max_output_chars,
             })
             .await
-            .map_err(|error| BitFunError::tool(format!("ExecControl failed: {error}")))?;
+            .map_err(|error| match error {
+                RemoteExecError::SessionNotFound(session_id) => {
+                    ExecCommandControlError::SessionNotFound(session_id)
+                }
+                error => ExecCommandControlError::Tool(BitFunError::tool(format!(
+                    "ExecControl failed: {error}"
+                ))),
+            })?;
 
         return Ok(ExecCommandControlResponse {
             chunk_id: response.chunk_id,
@@ -130,7 +146,14 @@ pub async fn control_exec_command_session(
             max_output_chars: request.max_output_chars,
         })
         .await
-        .map_err(|error| BitFunError::tool(format!("ExecControl failed: {error}")))?;
+        .map_err(|error| match error {
+            TerminalError::SessionNotFound(_) => {
+                ExecCommandControlError::SessionNotFound(request.session_id)
+            }
+            error => ExecCommandControlError::Tool(BitFunError::tool(format!(
+                "ExecControl failed: {error}"
+            ))),
+        })?;
 
     Ok(ExecCommandControlResponse {
         chunk_id: response.chunk_id,
@@ -191,6 +214,39 @@ impl ExecControlTool {
             ));
         }
         render_exec_response_for_assistant(data, status_lines, 4)
+    }
+
+    fn session_not_found_result(
+        session_id: i32,
+        action: ExecCommandControlAction,
+        remote: bool,
+    ) -> Vec<ToolResult> {
+        let action_name = match action {
+            ExecCommandControlAction::Interrupt => "interrupt",
+            ExecCommandControlAction::Kill => "kill",
+        };
+        let message = format!(
+            "No {action_name} was sent because ExecCommand session {session_id} was not found. It may have already exited, been collected, or been pruned."
+        );
+        let mut data = json!({
+            "status": "session_not_found",
+            "message": message,
+            "requested_session_id": session_id,
+            "session_id": null,
+            "exit_code": null,
+            "output": "",
+            "original_output_chars": 0,
+            "action": action_name,
+        });
+        if remote {
+            data["remote"] = json!(true);
+        }
+
+        vec![ToolResult::Result {
+            data,
+            result_for_assistant: Some(message),
+            image_attachments: None,
+        }]
     }
 
     fn local_action(action: ExecCommandControlAction) -> LocalExecControlAction {
@@ -274,7 +330,7 @@ impl ExecControlTool {
             .try_into()
             .unwrap_or(usize::MAX);
 
-        let response = control_exec_command_session(ExecCommandControlRequest {
+        let response = match control_exec_command_session(ExecCommandControlRequest {
             session_id,
             action,
             origin: ExecCommandControlOrigin::ModelTool,
@@ -282,7 +338,14 @@ impl ExecControlTool {
             yield_time_ms,
             max_output_chars: Some(max_output_chars),
         })
-        .await?;
+        .await
+        {
+            Ok(response) => response,
+            Err(ExecCommandControlError::SessionNotFound(session_id)) => {
+                return Ok(Self::session_not_found_result(session_id, action, true));
+            }
+            Err(ExecCommandControlError::Tool(error)) => return Err(error),
+        };
 
         let action_name = match action {
             ExecCommandControlAction::Interrupt => "interrupt",
@@ -422,7 +485,7 @@ After the action, yield_time_ms waits for output or exit status. Output is only 
             .try_into()
             .unwrap_or(usize::MAX);
 
-        let response = control_exec_command_session(ExecCommandControlRequest {
+        let response = match control_exec_command_session(ExecCommandControlRequest {
             session_id,
             action,
             origin: ExecCommandControlOrigin::ModelTool,
@@ -430,7 +493,14 @@ After the action, yield_time_ms waits for output or exit status. Output is only 
             yield_time_ms,
             max_output_chars: Some(max_output_chars),
         })
-        .await?;
+        .await
+        {
+            Ok(response) => response,
+            Err(ExecCommandControlError::SessionNotFound(session_id)) => {
+                return Ok(Self::session_not_found_result(session_id, action, false));
+            }
+            Err(ExecCommandControlError::Tool(error)) => return Err(error),
+        };
 
         let action_name = match action {
             ExecCommandControlAction::Interrupt => "interrupt",
@@ -452,5 +522,65 @@ After the action, yield_time_ms waits for output or exit status. Output is only 
             result_for_assistant: Some(result_for_assistant),
             image_attachments: None,
         }])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        control_exec_command_session, ExecCommandControlAction, ExecCommandControlError,
+        ExecCommandControlOrigin, ExecCommandControlRequest, ExecControlTool,
+    };
+    use crate::agentic::tools::framework::ToolResult;
+
+    #[test]
+    fn session_not_found_result_uses_plain_assistant_message() {
+        let results = ExecControlTool::session_not_found_result(
+            456,
+            ExecCommandControlAction::Interrupt,
+            false,
+        );
+        let ToolResult::Result {
+            data,
+            result_for_assistant,
+            ..
+        } = &results[0]
+        else {
+            panic!("expected result");
+        };
+
+        assert_eq!(
+            data.get("status").and_then(|value| value.as_str()),
+            Some("session_not_found")
+        );
+        assert_eq!(
+            data.get("requested_session_id")
+                .and_then(|value| value.as_i64()),
+            Some(456)
+        );
+        let assistant = result_for_assistant.as_deref().expect("assistant text");
+        assert!(assistant.contains("No interrupt was sent"));
+        assert!(assistant.contains("ExecCommand session 456 was not found"));
+        assert!(!assistant.contains("<wall_time>"));
+        assert!(!assistant.contains("<output>"));
+    }
+
+    #[tokio::test]
+    async fn control_exec_command_session_returns_structured_session_not_found() {
+        let error = control_exec_command_session(ExecCommandControlRequest {
+            session_id: 987_654,
+            action: ExecCommandControlAction::Kill,
+            origin: ExecCommandControlOrigin::ModelTool,
+            remote: false,
+            yield_time_ms: Some(0),
+            max_output_chars: Some(1),
+        })
+        .await
+        .expect_err("missing session should be structured");
+
+        assert!(matches!(
+            error,
+            ExecCommandControlError::SessionNotFound(987_654)
+        ));
     }
 }

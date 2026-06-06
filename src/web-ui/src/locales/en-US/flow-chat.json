@@ -1327,6 +1327,7 @@
       "remote": "Remote",
       "tty": "TTY",
       "noOutput": "No output",
+      "sessionNotFound": "Session #{{id}} was not found",
       "copyPrimary": "Copy",
       "primaryCopied": "Copied",
       "copyPrimaryFailed": "Failed to copy"
