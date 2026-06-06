@@ -36,6 +36,30 @@
     background: transparent;
   }
 
+  &__history-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    background: var(--color-bg-scene);
+    pointer-events: none;
+  }
+
+  &__companion-pet {
+    position: absolute;
+    left: 16px;
+    bottom: 16px;
+    z-index: 50;
+    pointer-events: none;
+    cursor: default;
+  }
+
+  &__companion-pet-element {
+    width: 48px;
+    height: 48px;
+    pointer-events: auto;
+  }
+
+
   &__input {
     flex-shrink: 0;
     padding: var(--flowchat-card-expanded-pad-x, 0.625rem);
