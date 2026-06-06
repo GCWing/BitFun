@@ -384,7 +384,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     const lastRound = lastTurn.modelRounds[lastTurn.modelRounds.length - 1];
     for (let i = lastRound.items.length - 1; i >= 0; i -= 1) {
       const item = lastRound.items[i];
-      if (item.type === 'tool' && item.toolName) {
+if (item.type === 'tool' && 'toolName' in item && (item as { toolName?: string }).toolName) {
         return 'waiting' as const;
       }
     }
@@ -1378,7 +1378,6 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
           onOpenBackgroundSubagent={handleOpenBackgroundSubagent}
           isSpeaking={isTtsSpeaking}
           onStopSpeaking={stopTts}
-<<<<<<<< HEAD
           onOpenBackgroundCommandOutput={handleOpenBackgroundCommandOutput}
           onRequestBackgroundCommandInput={handleRequestBackgroundCommandInput}
           onStopBackgroundCommand={handleStopBackgroundCommand}
@@ -1389,8 +1388,6 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
           isSending={isSendingBackgroundCommandInput}
           onClose={handleCloseBackgroundCommandInput}
           onSend={handleSendBackgroundCommandInput}
-=======
->>>>>>> c2f205e3 (添加语音播报功能)
         />
 
         <div
@@ -1468,7 +1465,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
               />
             </div>
           )}
-          <>
+<>
             {showFailedHistoryPlaceholder ? (
               <HistorySessionPlaceholder
                 state="failed"
