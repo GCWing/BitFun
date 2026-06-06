@@ -59,8 +59,7 @@
     pointer-events: auto;
   }
 
-
-  &__input {
+&__input {
     flex-shrink: 0;
     padding: var(--flowchat-card-expanded-pad-x, 0.625rem);
     background: var(--color-surface, #1e1e1e);
