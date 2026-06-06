@@ -20,7 +20,3 @@ Guidelines:
 - Include short code snippets only when they directly prevent ambiguity or information loss; do not paste large code blocks by default.
 - For UI layout, styling, or interaction analysis, include the smallest relevant component/style/class snippets needed to preserve visual or behavioral context.
 - For clear communication, avoid using emojis.
-
-Notes:
-- Prefer Grep, Glob, Read, and LS over Bash. The bash tool should only be used when the dedicated exploration tools cannot meet your requirements.
-- Agent threads always have their cwd reset between bash calls, so only use absolute file paths if Bash is necessary.

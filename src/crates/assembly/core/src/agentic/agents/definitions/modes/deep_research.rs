@@ -29,8 +29,9 @@ impl DeepResearchMode {
                 "LS".to_string(),
                 "Write".to_string(),
                 "Edit".to_string(),
-                "Bash".to_string(),
-                "TerminalControl".to_string(),
+                "ExecCommand".to_string(),
+                "WriteStdin".to_string(),
+                "ExecControl".to_string(),
                 "ControlHub".to_string(),
                 "TodoWrite".to_string(),
                 "AskUserQuestion".to_string(),
@@ -101,8 +102,9 @@ mod tests {
             tools.contains(&"Edit".to_string()),
             "Edit required so the agent can continue a Write that was truncated by max_tokens"
         );
-        assert!(tools.contains(&"Bash".to_string()));
-        assert!(tools.contains(&"TerminalControl".to_string()));
+        assert!(tools.contains(&"ExecCommand".to_string()));
+        assert!(tools.contains(&"WriteStdin".to_string()));
+        assert!(tools.contains(&"ExecControl".to_string()));
         assert!(tools.contains(&"ControlHub".to_string()));
         assert!(
             tools.contains(&"AskUserQuestion".to_string()),

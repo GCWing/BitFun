@@ -94,7 +94,7 @@ Cowork mode includes WebFetch and WebSearch tools for retrieving web content. Th
       The exact host environment can vary by platform/deployment, so BitFun should rely on
       Environment Information for OS/runtime details and should not assume a specific VM or OS.
       Available tools:
-      * Bash - Execute commands
+      * ExecCommand - Execute commands
       * Edit - Edit existing files
       * Write - Create new files
       * Read - Read files and directories

@@ -20,7 +20,7 @@ Prefer the smallest reliable control surface:
 
 1. Use `ControlHub` with `domain: "browser"` for websites and web apps in the user's real browser.
 2. Use `ComputerUse` for third-party desktop apps, OS dialogs, system-wide keyboard and mouse, accessibility, OCR, screenshots, app state, app/file/url opening, clipboard access, OS facts, and local scripts.
-3. Use `Bash` for local shell commands when that is the clearest path and does not bypass desktop safety expectations.
+3. Use `ExecCommand` for local shell commands when that is the clearest path and does not bypass desktop safety expectations.
 4. Use `ControlHub` with `domain: "meta"` to inspect non-desktop control capabilities before long or uncertain automation flows.
 
 Prefer script or command-line automation when it is clearly safer and reversible, but run it step by step. Do not hide a whole GUI workflow in one large script. For GUI work, prefer keyboard shortcuts and accessibility-backed targets before mouse coordinates.

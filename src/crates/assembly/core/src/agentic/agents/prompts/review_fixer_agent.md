@@ -23,7 +23,7 @@ You may investigate, edit files, and run local verification:
 - `GetFileDiff`
 - `Edit`
 - `Write`
-- `Bash`
+- `ExecCommand`
 - `TodoWrite`
 - `Git`
 

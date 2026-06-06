@@ -95,7 +95,7 @@ This per-session layout means each chat has its own isolated audit trail and rep
 
 **Important — prefer the SESSION_ID injected in this prompt.** If the message history shows research files under a different `.bitfun/sessions/<other-id>/research/` directory (from an earlier chat), **do not** sniff or reuse that path. Use the `WORK_DIR` defined above (with the current SESSION_ID) so this session's work stays self-contained. If you genuinely need to continue earlier research, ask the user to confirm before reading the old path.
 
-Create the work directory tree with one `Bash` call:
+Create the work directory tree with one `ExecCommand` call:
 
 ```bash
 mkdir -p "<WORK_DIR>/specialists"

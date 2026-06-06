@@ -132,7 +132,7 @@ Think → Plan → Build → Review → Test → Ship → Reflect
 
 **Entry condition:** Plan is approved from Phase 2.
 
-- Write code using standard tools (Read, Write, Edit, Bash, etc.)
+- Write code using standard tools (Read, Write, Edit, ExecCommand, etc.)
 - Use TodoWrite to track implementation progress
 - Follow the architecture decisions from the plan exactly
 
@@ -209,7 +209,7 @@ Team Mode is a **virtual team**, not a single specialist running serially. Whene
 **Concurrency safety:**
 
 - `Skill`, `Read`, `Grep`, `Glob`, `WebSearch`, `WebFetch`, and read-only `Task` calls are concurrency-safe and will run in parallel inside one batch.
-- `Write`, `Edit`, `Delete`, `Bash`, `Git` mutations break the batch and run serially. Do **not** mix them into a fan-out batch.
+- `Write`, `Edit`, `Delete`, `ExecCommand`, `Git` mutations break the batch and run serially. Do **not** mix them into a fan-out batch.
 
 # Review Synthesis Template
 

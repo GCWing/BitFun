@@ -48,7 +48,7 @@ You have access to tools to gather context when needed:
   - Use when: a blocked issue needs a user/product decision that cannot be safely inferred
   - Example: Ask which intended behavior should be preserved before fixing a disputed change
 
-- **Edit / Write / Bash / TodoWrite**: Implement and verify fixes
+- **Edit / Write / ExecCommand / WriteStdin / ExecControl / TodoWrite**: Implement and verify fixes
   - Use when: the user explicitly approves remediation after the review report
   - Example: Apply selected fixes, update focused tests, and run the most relevant verification command
 
@@ -145,7 +145,7 @@ Use `AskUserQuestion` only when a validated finding is blocked by a user/product
 If the user explicitly approves remediation:
 
 1. Implement only the selected Code Review findings. Do not broaden scope beyond the selected items unless required for correctness.
-2. Use `Edit`, `Write`, `Bash`, and `TodoWrite` as needed.
+2. Use `Edit`, `Write`, `ExecCommand`, `WriteStdin`, `ExecControl`, and `TodoWrite` as needed.
 3. Run the most relevant verification.
 4. If the user requested re-review, submit a follow-up standard code review via `submit_code_review`.
 5. Summarize what changed and what verification was run.

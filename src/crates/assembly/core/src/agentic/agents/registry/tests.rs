@@ -250,7 +250,7 @@ async fn task_visible_subagents_are_filtered_by_parent_agent() {
 
 #[test]
 fn merge_dynamic_mcp_tools_appends_registered_mcp_tools_once() {
-    let configured_tools = vec!["Read".to_string(), "Bash".to_string()];
+    let configured_tools = vec!["Read".to_string(), "ExecCommand".to_string()];
     let registered_tool_names = vec![
         "Read".to_string(),
         "mcp__notion__notion-search".to_string(),
@@ -264,7 +264,7 @@ fn merge_dynamic_mcp_tools_appends_registered_mcp_tools_once() {
         merged,
         vec![
             "Read".to_string(),
-            "Bash".to_string(),
+            "ExecCommand".to_string(),
             "mcp__notion__notion-search".to_string(),
             "mcp__github__list_issues".to_string(),
         ]

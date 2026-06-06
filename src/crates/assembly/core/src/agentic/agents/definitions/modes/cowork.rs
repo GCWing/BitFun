@@ -35,8 +35,9 @@ impl CoworkMode {
                 // Utilities
                 "GetFileDiff".to_string(),
                 "Git".to_string(),
-                "Bash".to_string(),
-                "TerminalControl".to_string(),
+                "ExecCommand".to_string(),
+                "WriteStdin".to_string(),
+                "ExecControl".to_string(),
                 "WebSearch".to_string(),
                 "ControlHub".to_string(),
             ],

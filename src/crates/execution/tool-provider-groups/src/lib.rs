@@ -122,7 +122,6 @@ const PRODUCT_TOOL_PROVIDER_GROUP_PLAN: &[ToolProviderGroupPlan] = &[
             "Write",
             "Edit",
             "Delete",
-            "Bash",
             "ExecCommand",
             "WriteStdin",
             "ExecControl",
@@ -149,13 +148,7 @@ const PRODUCT_TOOL_PROVIDER_GROUP_PLAN: &[ToolProviderGroupPlan] = &[
     ToolProviderGroupPlan {
         provider_id: "core.session",
         feature_groups: CORE_SESSION_FEATURE_GROUPS,
-        tool_names: &[
-            "TerminalControl",
-            "SessionControl",
-            "SessionMessage",
-            "SessionHistory",
-            "Cron",
-        ],
+        tool_names: &["SessionControl", "SessionMessage", "SessionHistory", "Cron"],
     },
     ToolProviderGroupPlan {
         provider_id: "core.integration",
@@ -339,7 +332,6 @@ mod tests {
                 "Write",
                 "Edit",
                 "Delete",
-                "Bash",
                 "ExecCommand",
                 "WriteStdin",
                 "ExecControl",
@@ -355,7 +347,6 @@ mod tests {
                 "GetToolSpec",
                 "GetFileDiff",
                 "Log",
-                "TerminalControl",
                 "SessionControl",
                 "SessionMessage",
                 "SessionHistory",

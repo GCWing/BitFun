@@ -27,7 +27,9 @@ impl CodeReviewAgent {
                 // Remediation tools, only after explicit user approval
                 "Edit".to_string(),
                 "Write".to_string(),
-                "Bash".to_string(),
+                "ExecCommand".to_string(),
+                "WriteStdin".to_string(),
+                "ExecControl".to_string(),
                 "TodoWrite".to_string(),
                 // Git operations tool
                 "Git".to_string(),
@@ -96,7 +98,9 @@ mod tests {
         assert!(tools.contains(&"AskUserQuestion".to_string()));
         assert!(tools.contains(&"Edit".to_string()));
         assert!(tools.contains(&"Write".to_string()));
-        assert!(tools.contains(&"Bash".to_string()));
+        assert!(tools.contains(&"ExecCommand".to_string()));
+        assert!(tools.contains(&"WriteStdin".to_string()));
+        assert!(tools.contains(&"ExecControl".to_string()));
         assert!(tools.contains(&"TodoWrite".to_string()));
         assert!(!agent.is_readonly());
     }

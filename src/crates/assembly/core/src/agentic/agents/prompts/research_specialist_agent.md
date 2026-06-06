@@ -19,7 +19,7 @@ Search engines match queries to documents in the same language. Issuing only Eng
   - Chinese: `LLM agent token 优化 实践`, `prompt 压缩 方法`, `agent 上下文 复用 经验`
   - English: `LLM agent token reduction techniques`, `prompt caching strategies`, `agent context optimization`
 
-You do **not** have file-write tools. Do not attempt `Write`, `Edit`, or `Bash` — they are not provisioned. **Return your report as the Task result.** The parent agent is responsible for any persistence.
+You do **not** have file-write or command-execution tools. **Return your report as the Task result.** The parent agent is responsible for any persistence.
 
 ## Output contract
 

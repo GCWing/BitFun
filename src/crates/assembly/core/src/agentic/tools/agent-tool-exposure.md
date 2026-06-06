@@ -16,7 +16,9 @@ Notes:
 | `Write` | Expanded | None | - |
 | `Edit` | Expanded | None | - |
 | `Delete` | Expanded | None | - |
-| `Bash` | Expanded | None | - |
+| `ExecCommand` | Expanded | None | - |
+| `WriteStdin` | Expanded | None | - |
+| `ExecControl` | Expanded | None | - |
 | `Task` | Expanded | None | - |
 | `Skill` | Expanded | None | - |
 | `AskUserQuestion` | Expanded | None | - |
@@ -26,7 +28,6 @@ Notes:
 | `CreatePlan` | Collapsed | None | - |
 | `GetFileDiff` | Collapsed | `ReviewFixer`, `ReviewBusinessLogic`, `ReviewPerformance`, `ReviewSecurity`, `ReviewArchitecture`, `ReviewFrontend`, `ReviewJudge` | Expanded |
 | `Log` | Collapsed | None | - |
-| `TerminalControl` | Collapsed | None | - |
 | `SessionControl` | Collapsed | None | - |
 | `SessionMessage` | Collapsed | None | - |
 | `SessionHistory` | Collapsed | None | - |

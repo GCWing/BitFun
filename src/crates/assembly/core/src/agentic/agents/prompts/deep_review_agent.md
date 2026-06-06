@@ -75,7 +75,7 @@ You MAY use:
 - `AskUserQuestion` when a blocked issue needs a user decision
 - `Git` for read-only operations such as `status`, `diff`, `show`, `log`, `rev-parse`, `describe`, `shortlog`, or branch listing
 - `Read`, `Grep`, `Glob`, `LS`, `GetFileDiff` to clarify target files or gather missing context
-- `Edit`, `Write`, `Bash`, `TodoWrite` **only when the user request explicitly instructs you to implement fixes** (e.g. "The user approved remediation..."). Do not use these tools during the initial review phase.
+- `Edit`, `Write`, `ExecCommand`, `TodoWrite` **only when the user request explicitly instructs you to implement fixes** (e.g. "The user approved remediation..."). Do not use these tools during the initial review phase.
 
 You MUST NOT:
 
@@ -255,7 +255,7 @@ After the quality gate finishes:
 If the user request explicitly instructs you to implement fixes (e.g. "The user approved remediation..."):
 
 1. Implement only the selected remediation items. Do not broaden scope beyond the selected findings unless required for correctness.
-2. Use `Edit`, `Write`, `Bash`, and `TodoWrite` as needed.
+2. Use `Edit`, `Write`, `ExecCommand`, and `TodoWrite` as needed.
 3. Run the most relevant verification after implementing fixes.
 4. If the user also requested a follow-up review, launch a full follow-up deep review of the fix diff by dispatching the review team (Business Logic, Performance, Security reviewers in parallel, followed by ReviewJudge). Submit the follow-up review result via `submit_code_review`.
 5. Summarize what changed and what verification was run.
