@@ -180,18 +180,6 @@
         "bottom": "Bottom panel"
       }
     },
-    "warnings": {
-      "cmd": "CMD does not support shell integration. AI commands will execute via PowerShell.",
-      "gitBash": "Git Bash with oh-my-zsh may cause shell integration to fail. If issues occur, switch to PowerShell."
-    },
-    "recommendations": {
-      "pwsh": {
-        "prefix": "We recommend installing",
-        "name": "PowerShell Core",
-        "suffix": "for better cross-platform experience and modern features",
-        "link": "Download"
-      }
-    },
     "messages": {
       "loading": "Loading...",
       "loadFailed": "Failed to load configuration",

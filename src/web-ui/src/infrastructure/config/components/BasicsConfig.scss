@@ -86,33 +86,6 @@
     gap: $size-gap-6;
   }
 
-  &__section-hint-sep {
-    color: var(--color-text-muted);
-    opacity: 0.9;
-  }
-
-  &__section-hint-extra {
-    display: inline;
-    color: var(--color-text-muted);
-    font-size: 0.92em;
-    font-weight: $font-weight-normal;
-  }
-
-  &__section-hint-extra-name {
-    font-weight: $font-weight-medium;
-    color: var(--color-text-secondary);
-  }
-
-  &__section-hint-link {
-    color: inherit;
-    text-decoration: underline;
-    text-underline-offset: 2px;
-
-    &:hover {
-      color: var(--color-text-secondary);
-    }
-  }
-
   &__select-wrapper {
     width: 100%;
   }
@@ -124,19 +97,4 @@
     color: var(--color-text-muted);
     font-size: var(--font-size-sm);
   }
-
-  &__inline-alert {
-    border-top: 1px solid var(--border-subtle);
-    padding: $size-gap-3;
-  }
-
 }
-
-@container config-panel (max-width: 520px) {
-  .bitfun-terminal-config {
-    &__inline-alert {
-      padding: $size-gap-2;
-    }
-  }
-}
-

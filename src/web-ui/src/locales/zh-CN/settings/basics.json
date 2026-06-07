@@ -180,18 +180,6 @@
         "bottom": "底部面板"
       }
     },
-    "warnings": {
-      "cmd": "CMD 不支持 Shell 集成，AI 命令将通过 PowerShell 执行。",
-      "gitBash": "Git Bash 安装 oh-my-zsh 后可能导致 Shell 集成失效，如遇异常建议切换至 PowerShell。"
-    },
-    "recommendations": {
-      "pwsh": {
-        "prefix": "推荐安装使用",
-        "name": "PowerShell Core",
-        "suffix": "以获得更好的跨平台体验和现代化功能",
-        "link": "前往下载"
-      }
-    },
     "messages": {
       "loading": "加载中...",
       "loadFailed": "加载配置失败",

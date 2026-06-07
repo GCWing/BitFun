@@ -466,7 +466,6 @@ function BasicsTerminalSection() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
-  const [platform, setPlatform] = useState<string>('');
 
   const showMessage = useCallback((type: 'success' | 'error' | 'info', text: string) => {
     setMessage({ type, text });
@@ -477,10 +476,9 @@ function BasicsTerminalSection() {
     try {
       setLoading(true);
 
-      const [terminalConfig, shells, systemInfo] = await Promise.all([
+      const [terminalConfig, shells] = await Promise.all([
         configManager.getConfig<TerminalSettings>('terminal'),
         getTerminalService().getAvailableShells(),
-        systemAPI.getSystemInfo().catch(() => ({ platform: '' })),
       ]);
 
       setDefaultShell(terminalConfig?.default_shell || '');
@@ -489,8 +487,6 @@ function BasicsTerminalSection() {
 
       const availableOnly = shells.filter((s) => s.available);
       setAvailableShells(availableOnly);
-
-      setPlatform(systemInfo.platform || '');
     } catch (error) {
       log.error('Failed to load terminal config data', error);
       showMessage('error', t('terminal.messages.loadFailed'));
@@ -544,15 +540,6 @@ function BasicsTerminalSection() {
     [showMessage, t],
   );
 
-  const shouldShowPowerShellCoreRecommendation = useMemo(() => {
-    const isWindows = platform === 'windows';
-    if (!isWindows) return false;
-
-    const hasPowerShellCore = availableShells.some((shell) => shell.shellType === 'PowerShellCore');
-
-    return !hasPowerShellCore;
-  }, [availableShells, platform]);
-
   const shellOptions = useMemo(
     () => [
       { value: '', label: t('terminal.controls.autoDetect') },
@@ -572,34 +559,6 @@ function BasicsTerminalSection() {
     [t],
   );
 
-  const terminalSectionDescription = useMemo(() => {
-    const hint = t('terminal.sections.terminalHint');
-    if (!shouldShowPowerShellCoreRecommendation) {
-      return hint;
-    }
-    return (
-      <>
-        {hint}
-        <span className="bitfun-terminal-config__section-hint-sep"> · </span>
-        <span className="bitfun-terminal-config__section-hint-extra">
-          {t('terminal.recommendations.pwsh.prefix')}{' '}
-          <span className="bitfun-terminal-config__section-hint-extra-name">
-            {t('terminal.recommendations.pwsh.name')}
-          </span>
-          {t('terminal.recommendations.pwsh.suffix')}{' '}
-          <a
-            href="https://aka.ms/PSWindows"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="bitfun-terminal-config__section-hint-link"
-          >
-            {t('terminal.recommendations.pwsh.link')}
-          </a>
-        </span>
-      </>
-    );
-  }, [shouldShowPowerShellCoreRecommendation, t]);
-
   if (loading) {
     return <ConfigPageLoading text={t('terminal.messages.loading')} />;
   }
@@ -611,7 +570,7 @@ function BasicsTerminalSection() {
 
         <ConfigPageSection
           title={t('terminal.sections.terminal')}
-          description={terminalSectionDescription}
+          description={t('terminal.sections.terminalHint')}
         >
           <ConfigPageRow
             label={t('terminal.sections.defaultTerminal')}
@@ -648,17 +607,6 @@ function BasicsTerminalSection() {
               />
             </div>
           </ConfigPageRow>
-
-          {platform === 'windows' && defaultShell === 'Cmd' && (
-            <div className="bitfun-terminal-config__inline-alert">
-              <Alert type="warning" message={t('terminal.warnings.cmd')} />
-            </div>
-          )}
-          {platform === 'windows' && defaultShell === 'Bash' && (
-            <div className="bitfun-terminal-config__inline-alert">
-              <Alert type="warning" message={t('terminal.warnings.gitBash')} />
-            </div>
-          )}
         </ConfigPageSection>
       </div>
     </div>
