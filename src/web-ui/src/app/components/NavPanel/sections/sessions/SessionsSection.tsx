@@ -200,7 +200,20 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   }, [flowChatState.sessions]);
 
   useEffect(() => {
-    const unsub = flowChatStore.subscribe(s => setFlowChatState(s));
+    const selector = (s: FlowChatState): string => {
+      const parts: string[] = [s.activeSessionId ?? ''];
+      for (const session of s.sessions.values()) {
+        parts.push(
+          `${session.sessionId}|${session.isTransient ? '1':'0'}|${session.sessionKind}|` +
+          `${session.workspacePath ?? ''}|${session.mode ?? ''}|${session.needsUserAttention ? '1':'0'}|` +
+          `${session.hasUnreadCompletion ? '1':'0'}|${session.title ?? ''}`
+        );
+      }
+      return parts.join(';');
+    };
+    const unsub = flowChatStore.subscribeSelector(selector, (() => {
+      setFlowChatState(flowChatStore.getState());
+    }), { isEqual: (a, b) => a === b });
     return () => unsub();
   }, []);
 

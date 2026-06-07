@@ -300,10 +300,19 @@ function isValidPersistedAgentType(agentType: string): boolean {
   return VALID_AGENT_TYPES.has(agentType) || agentType.startsWith('acp:');
 }
 
+interface SelectorListener<T = any> {
+  selector: (state: FlowChatState) => T;
+  callback: (selected: T) => void;
+  isEqual: (a: T, b: T) => boolean;
+  lastValue: T | undefined;
+  hasLastValue: boolean;
+}
+
 export class FlowChatStore {
   private static instance: FlowChatStore;
   private state: FlowChatState;
   private listeners: Set<(state: FlowChatState) => void> = new Set();
+  private selectorListeners: Set<SelectorListener> = new Set();
   private silentMode = false;
   private metadataListRequests = new Map<string, MetadataListRequest>();
   private metadataPageRequests = new Map<string, MetadataPageRequest>();
@@ -853,11 +862,26 @@ export class FlowChatStore {
     this.state = newState;
     
     if (!this.silentMode) {
+      // Notify plain listeners (backward compat)
       this.listeners.forEach(listener => {
         try {
           listener(newState);
         } catch (error) {
           console.error('[FlowChatStore] Listener threw an error, skipping:', error);
+        }
+      });
+
+      // Notify selector listeners
+      this.selectorListeners.forEach(entry => {
+        try {
+          const nextValue = entry.selector(newState);
+          if (!entry.hasLastValue || !entry.isEqual(entry.lastValue, nextValue)) {
+            entry.lastValue = nextValue;
+            entry.hasLastValue = true;
+            entry.callback(nextValue);
+          }
+        } catch (error) {
+          console.error('[FlowChatStore] Selector listener threw an error, skipping:', error);
         }
       });
     }
@@ -886,6 +910,18 @@ export class FlowChatStore {
         listener(this.state);
       } catch (error) {
         console.error('[FlowChatStore] Listener threw an error during notifyListeners, skipping:', error);
+      }
+    });
+    this.selectorListeners.forEach(entry => {
+      try {
+        const nextValue = entry.selector(this.state);
+        if (!entry.hasLastValue || !entry.isEqual(entry.lastValue, nextValue)) {
+          entry.lastValue = nextValue;
+          entry.hasLastValue = true;
+          entry.callback(nextValue);
+        }
+      } catch (error) {
+        console.error('[FlowChatStore] Selector listener threw an error during notifyListeners, skipping:', error);
       }
     });
   }
@@ -947,6 +983,24 @@ export class FlowChatStore {
     this.listeners.add(listener);
     return () => {
       this.listeners.delete(listener);
+    };
+  }
+
+  public subscribeSelector<T>(
+    selector: (state: FlowChatState) => T,
+    callback: (selected: T) => void,
+    options?: { isEqual?: (a: T, b: T) => boolean },
+  ): () => void {
+    const entry: SelectorListener<T> = {
+      selector,
+      callback,
+      isEqual: options?.isEqual ?? Object.is,
+      lastValue: undefined,
+      hasLastValue: false,
+    };
+    this.selectorListeners.add(entry);
+    return () => {
+      this.selectorListeners.delete(entry);
     };
   }
 

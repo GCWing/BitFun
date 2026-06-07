@@ -692,9 +692,55 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   );
 
   useEffect(() => {
-    const unsubscribe = FlowChatStore.getInstance().subscribe(setFlowChatState);
+    const store = FlowChatStore.getInstance();
+
+    const unsubscribe = store.subscribeSelector(
+      (state: FlowChatState): string => {
+        const parts: string[] = [state.activeSessionId ?? ''];
+        // Track sessions that ChatInput reads in render body (lines 278, 288, 304, 619)
+        const sessionIds = [
+          state.activeSessionId,
+          currentSessionId,
+          effectiveTargetSessionId,
+          activeBtwSessionId,
+        ].filter((id): id is string => !!id);
+        for (const id of sessionIds) {
+          const s = state.sessions.get(id);
+          if (s) {
+            parts.push(
+              `${id}|${s.mode ?? ''}|${s.title ?? ''}|${s.workspacePath ?? ''}|` +
+              `${s.remoteConnectionId ?? ''}|${s.remoteSshHost ?? ''}|${s.lastSubmittedMode ?? ''}|` +
+              `${s.currentAcpContextUsage?.used ?? ''}|${s.currentAcpContextUsage?.size ?? ''}|` +
+              `${s.currentTokenUsage?.totalTokens ?? ''}|${s.maxContextTokens ?? ''}|` +
+              `${s.needsUserAttention ? '1':'0'}`
+            );
+          }
+        }
+        return parts.join(';');
+      },
+      () => {
+        const state = store.getState();
+        setFlowChatState(state);
+        if (effectiveTargetSessionId) {
+          const session = state.sessions.get(effectiveTargetSessionId);
+          if (session) {
+            setTokenUsage(getSessionContextUsageDisplay(session));
+          }
+        }
+      },
+      { isEqual: (a: string, b: string) => a === b },
+    );
+
+    // Initial token usage sync
+    if (effectiveTargetSessionId) {
+      const session = store.getState().sessions.get(effectiveTargetSessionId);
+      if (session) {
+        setTokenUsage(getSessionContextUsageDisplay(session));
+      }
+    }
+
     return () => unsubscribe();
-  }, []);
+  }, [currentSessionId, effectiveTargetSessionId, activeBtwSessionId]);
 
   useEffect(() => {
     if (!showTargetSwitcher || !activeBtwSessionId) {
@@ -933,29 +979,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       clearPendingLargePastes();
     }
   }, [clearPendingLargePastes, inputState.value]);
-  
-  React.useEffect(() => {
-    const store = FlowChatStore.getInstance();
-    
-    const unsubscribe = store.subscribe((state: FlowChatState) => {
-      if (effectiveTargetSessionId) {
-        const session = state.sessions.get(effectiveTargetSessionId);
-        if (session) {
-          setTokenUsage(getSessionContextUsageDisplay(session));
-        }
-      }
-    });
-
-    if (effectiveTargetSessionId) {
-      const state = store.getState();
-      const session = state.sessions.get(effectiveTargetSessionId);
-      if (session) {
-        setTokenUsage(getSessionContextUsageDisplay(session));
-      }
-    }
-
-    return () => unsubscribe();
-  }, [effectiveTargetSessionId]);
 
   React.useEffect(() => {
     const handleFillInput = (event: Event) => {
