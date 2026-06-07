@@ -77,8 +77,12 @@ const VoiceConfig: React.FC = () => {
     }
   }, []);
 
-  const handleEnabledChange = useCallback((checked: boolean) => {
-    void saveSettings({ ...settings, sttEnabled: checked, ttsEnabled: checked });
+  const handleSttEnabledChange = useCallback((checked: boolean) => {
+    void saveSettings({ ...settings, sttEnabled: checked });
+  }, [settings, saveSettings]);
+
+  const handleTtsEnabledChange = useCallback((checked: boolean) => {
+    void saveSettings({ ...settings, ttsEnabled: checked });
   }, [settings, saveSettings]);
 
   const handleSttProviderChange = useCallback((value: string) => {
@@ -118,13 +122,24 @@ const VoiceConfig: React.FC = () => {
       <ConfigPageContent className="bitfun-voice-config__content">
         <ConfigPageSection title="">
           <ConfigPageRow
-            label={t('enabled.label')}
-            description={t('enabled.description')}
+            label={t('stt.enabled.label')}
+            description={t('stt.enabled.description')}
             align="center"
           >
             <Switch
               checked={settings.sttEnabled}
-              onChange={(e) => { void handleEnabledChange(e.target.checked); }}
+              onChange={(e) => { void handleSttEnabledChange(e.target.checked); }}
+              size="small"
+            />
+          </ConfigPageRow>
+          <ConfigPageRow
+            label={t('tts.enabled.label')}
+            description={t('tts.enabled.description')}
+            align="center"
+          >
+            <Switch
+              checked={settings.ttsEnabled}
+              onChange={(e) => { void handleTtsEnabledChange(e.target.checked); }}
               size="small"
             />
           </ConfigPageRow>

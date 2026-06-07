@@ -67,42 +67,65 @@ export function useTtsPlayback(options: UseTtsPlaybackOptions = {}) {
   const prevRoundIdRef = useRef<string | null>(null);
   const voiceConfigRef = useRef<VoiceSettings | null>(null);
 
-  const loadVoiceConfig = useCallback((): VoiceSettings => {
+  const DEFAULT_VOICE_SETTINGS: VoiceSettings = {
+    sttEnabled: true,
+    ttsEnabled: true,
+    sttProvider: 'webspeech',
+    ttsProvider: 'edge',
+    ttsVoice: 'zh-CN-XiaoxiaoNeural',
+    language: 'zh-CN',
+  };
+
+  const loadVoiceConfig = useCallback(async (): Promise<VoiceSettings> => {
     try {
-      const stored = configManager.getConfig<VoiceSettings>('voice');
+      const stored = await configManager.getConfig<VoiceSettings>('voice');
       log.debug('loadVoiceConfig', { stored });
-      voiceConfigRef.current = {
-        sttEnabled: true,
-        ttsEnabled: true,
-        sttProvider: 'webspeech',
-        ttsProvider: 'edge',
-        ttsVoice: 'zh-CN-XiaoxiaoNeural',
-        language: 'zh-CN',
-        ...stored,
-      };
+      voiceConfigRef.current = { ...DEFAULT_VOICE_SETTINGS, ...stored };
     } catch (err) {
       log.warn('loadVoiceConfig failed, using defaults', { err });
-      voiceConfigRef.current = {
-        sttEnabled: true,
-        ttsEnabled: true,
-        sttProvider: 'webspeech',
-        ttsProvider: 'edge',
-        ttsVoice: 'zh-CN-XiaoxiaoNeural',
-        language: 'zh-CN',
-      };
+      voiceConfigRef.current = DEFAULT_VOICE_SETTINGS;
+    }
+    return voiceConfigRef.current;
+  }, []);
+
+  const loadVoiceConfigSync = useCallback((): VoiceSettings => {
+    try {
+      const stored = configManager.get<VoiceSettings>('voice');
+      log.debug('loadVoiceConfigSync', { stored });
+      voiceConfigRef.current = { ...DEFAULT_VOICE_SETTINGS, ...stored };
+    } catch (err) {
+      log.warn('loadVoiceConfigSync failed, using defaults', { err });
+      voiceConfigRef.current = DEFAULT_VOICE_SETTINGS;
     }
     return voiceConfigRef.current;
   }, []);
 
   useEffect(() => {
-    const cfg = loadVoiceConfig();
-    if (!cfg.ttsEnabled) return;
-    if (ttsRef.current) return;
-    ttsRef.current = createTtsProvider(cfg.ttsProvider);
+    void (async () => {
+      const cfg = await loadVoiceConfig();
+      if (!cfg.ttsEnabled) return;
+      if (ttsRef.current) return;
+      ttsRef.current = createTtsProvider(cfg.ttsProvider);
+    })();
   }, [loadVoiceConfig]);
 
+  useEffect(() => {
+    const unwatch = configManager.watch('voice', () => {
+      const cfg = loadVoiceConfigSync();
+      if (!cfg.ttsEnabled) {
+        stop();
+        if (ttsRef.current) {
+          ttsRef.current = null;
+        }
+      } else if (!ttsRef.current) {
+        ttsRef.current = createTtsProvider(cfg.ttsProvider);
+      }
+    });
+    return unwatch;
+  }, [loadVoiceConfigSync]);
+
   const speakNext = useCallback(async () => {
-    const cfg = loadVoiceConfig();
+    const cfg = await loadVoiceConfig();
     if (!cfg.ttsEnabled) return;
     if (speakingItemIdRef.current || !activeItemIdRef.current) return;
 
@@ -168,7 +191,7 @@ export function useTtsPlayback(options: UseTtsPlaybackOptions = {}) {
 
   useEffect(() => {
     const unsubscribe = FlowChatStore.getInstance().subscribe((state: FlowChatState) => {
-      const cfg = loadVoiceConfig();
+      const cfg = loadVoiceConfigSync();
       if (!cfg.ttsEnabled) return;
 
       const state2 = FlowChatStore.getInstance().getState();
