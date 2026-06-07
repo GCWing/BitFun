@@ -32,6 +32,7 @@
       "leftAriaLabel": "Resize left panel",
       "centerAriaLabel": "Resize panel",
       "rightAriaLabel": "Resize right panel",
+      "terminalBottomAriaLabel": "Resize bottom terminal panel",
       "title": "Drag to resize | Double-click to switch mode | Current: {{mode}}"
     }
   },

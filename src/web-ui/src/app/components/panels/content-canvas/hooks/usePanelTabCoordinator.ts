@@ -18,6 +18,14 @@ interface UsePanelTabCoordinatorOptions {
   autoCollapseOnEmpty?: boolean;
   /** Auto-expand when a tab opens */
   autoExpandOnTabOpen?: boolean;
+  /** Custom collapsed state for non-right-panel canvases. */
+  isCollapsed?: boolean;
+  /** Custom expand behavior for non-right-panel canvases. */
+  onExpand?: () => void;
+  /** Custom collapse behavior for non-right-panel canvases. */
+  onCollapse?: () => void;
+  /** Event that requests panel expansion. Defaults to right-panel expansion. */
+  expandEventName?: string;
 }
 
 /**
@@ -33,6 +41,10 @@ export const usePanelTabCoordinator = (options: UsePanelTabCoordinatorOptions = 
   const {
     autoCollapseOnEmpty = true,
     autoExpandOnTabOpen = true,
+    isCollapsed,
+    onExpand,
+    onCollapse,
+    expandEventName = TAB_EVENTS.EXPAND_RIGHT_PANEL,
   } = options;
 
   const {
@@ -51,7 +63,9 @@ export const usePanelTabCoordinator = (options: UsePanelTabCoordinatorOptions = 
 
   // Sync refs
   useEffect(() => {
-    if (state?.layout) {
+    if (typeof isCollapsed === 'boolean') {
+      rightPanelCollapsedRef.current = isCollapsed;
+    } else if (state?.layout) {
       rightPanelCollapsedRef.current = state.layout.rightPanelCollapsed ?? true;
     }
     toggleRightPanelRef.current = toggleRightPanel;
@@ -59,13 +73,18 @@ export const usePanelTabCoordinator = (options: UsePanelTabCoordinatorOptions = 
     if (!isInitializedRef.current) {
       isInitializedRef.current = true;
     }
-  }, [state?.layout, toggleRightPanel]);
+  }, [state?.layout, toggleRightPanel, isCollapsed]);
 
   /**
    * Expand right panel (with debounce and state checks).
    * Set width first, then expand to avoid flicker.
    */
   const expandPanel = useCallback(() => {
+    if (onExpand) {
+      onExpand();
+      return;
+    }
+
     if (rightPanelCollapsedRef.current && toggleRightPanelRef.current && updateRightPanelWidth) {
       // Restore last width if available, otherwise use default
       const lastWidth = loadPanelWidth(STORAGE_KEYS.RIGHT_PANEL_LAST_WIDTH, RIGHT_PANEL_CONFIG.COMFORTABLE_DEFAULT);
@@ -83,12 +102,17 @@ export const usePanelTabCoordinator = (options: UsePanelTabCoordinatorOptions = 
         }
       });
     }
-  }, [updateRightPanelWidth]);
+  }, [onExpand, updateRightPanelWidth]);
 
   /**
    * Collapse right panel (with debounce and state checks).
    */
   const collapsePanel = useCallback(() => {
+    if (onCollapse) {
+      onCollapse();
+      return;
+    }
+
     if (!rightPanelCollapsedRef.current && toggleRightPanelRef.current) {
       requestAnimationFrame(() => {
         if (toggleRightPanelRef.current) {
@@ -96,7 +120,7 @@ export const usePanelTabCoordinator = (options: UsePanelTabCoordinatorOptions = 
         }
       });
     }
-  }, []);
+  }, [onCollapse]);
 
   /**
    * Watch tab count changes and manage panel state.
@@ -142,12 +166,12 @@ export const usePanelTabCoordinator = (options: UsePanelTabCoordinatorOptions = 
       }
     };
 
-    window.addEventListener(TAB_EVENTS.EXPAND_RIGHT_PANEL, handleExpandRightPanel);
+    window.addEventListener(expandEventName, handleExpandRightPanel);
 
     return () => {
-      window.removeEventListener(TAB_EVENTS.EXPAND_RIGHT_PANEL, handleExpandRightPanel);
+      window.removeEventListener(expandEventName, handleExpandRightPanel);
     };
-  }, [autoExpandOnTabOpen, expandPanel]);
+  }, [autoExpandOnTabOpen, expandPanel, expandEventName]);
 
   return {
     // Utilities

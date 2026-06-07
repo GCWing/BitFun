@@ -389,7 +389,7 @@ export function createReviewPlatformPullRequestDetailTab(options: CreateReviewPl
 export function createTerminalTab(
   sessionId: string,
   sessionName: string,
-  mode: 'agent' | 'project' = 'agent',
+  mode: 'agent' | 'project' | 'bottom-terminal' = 'agent',
   options: CreateTerminalTabOptions = {}
 ): void {
   const title = sessionName.length > 20 
@@ -426,6 +426,11 @@ export function createTerminalTab(
     }
 
     window.dispatchEvent(new CustomEvent(TAB_EVENTS.AGENT_CREATE_TAB, { detail }));
+    return;
+  }
+
+  if (mode === 'bottom-terminal') {
+    window.dispatchEvent(new CustomEvent(TAB_EVENTS.BOTTOM_TERMINAL_CREATE_TAB, { detail }));
     return;
   }
 

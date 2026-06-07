@@ -14,8 +14,16 @@ import { useTranslation } from 'react-i18next';
 import { useApp } from '../../hooks/useApp';
 import ChatPane from './ChatPane';
 import AuxPane, { type AuxPaneRef } from './AuxPane';
+import BottomTerminalPane from './BottomTerminalPane';
+import {
+  getCachedTerminalPanelPosition,
+  onTerminalPanelPositionChange,
+  refreshTerminalPanelPosition,
+} from '@/tools/terminal';
+import type { TerminalPanelPosition } from '@/infrastructure/config/types';
 
 import {
+  BOTTOM_TERMINAL_PANEL_CONFIG,
   RIGHT_PANEL_CONFIG,
   PANEL_COMMON_CONFIG,
   STORAGE_KEYS,
@@ -43,11 +51,22 @@ const SessionScene: React.FC<SessionSceneProps> = ({
   isActive = true,
 }) => {
   const { t } = useTranslation('flow-chat');
-  const { state, updateRightPanelWidth, toggleRightPanel } = useApp();
+  const {
+    state,
+    updateRightPanelWidth,
+    toggleRightPanel,
+    updateBottomTerminalPanelHeight,
+    toggleBottomTerminalPanel,
+  } = useApp();
   const auxPaneRef = useRef<AuxPaneRef>(null);
 
-  const [isDragging, setIsDragging] = useState(false);
+  const [isDraggingRight, setIsDraggingRight] = useState(false);
+  const [isDraggingBottom, setIsDraggingBottom] = useState(false);
   const [isHovering, setIsHovering] = useState(false);
+  const [isHoveringBottom, setIsHoveringBottom] = useState(false);
+  const [terminalPanelPosition, setTerminalPanelPosition] = useState<TerminalPanelPosition>(() =>
+    getCachedTerminalPanelPosition(),
+  );
 
   const [, setLastRightWidth] = useState<number>(() =>
     loadPanelWidth(STORAGE_KEYS.RIGHT_PANEL_LAST_WIDTH, RIGHT_PANEL_CONFIG.COMFORTABLE_DEFAULT)
@@ -56,14 +75,31 @@ const SessionScene: React.FC<SessionSceneProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const resizerRef = useRef<HTMLDivElement>(null);
   const auxPaneElementRef = useRef<HTMLDivElement>(null);
+  const bottomTerminalPaneElementRef = useRef<HTMLDivElement>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const bottomExpandPendingRef = useRef(false);
+  const bottomCollapsePendingRef = useRef(false);
 
   const currentRightWidth = state.layout.rightPanelWidth || RIGHT_PANEL_CONFIG.COMFORTABLE_DEFAULT;
+  const currentBottomHeight = state.layout.bottomTerminalPanelHeight || BOTTOM_TERMINAL_PANEL_CONFIG.COMFORTABLE_DEFAULT;
+  const isTerminalDockedBottom = terminalPanelPosition === 'bottom';
+  const isDragging = isDraggingRight || isDraggingBottom;
 
   const rightPanelMode: PanelDisplayMode = useMemo(() => {
     if (state.layout.rightPanelCollapsed) return 'collapsed';
     return getPanelDisplayMode(currentRightWidth, RIGHT_PANEL_CONFIG);
   }, [state.layout.rightPanelCollapsed, currentRightWidth]);
+
+  const bottomTerminalPanelMode: PanelDisplayMode = useMemo(() => {
+    if (state.layout.bottomTerminalPanelCollapsed) return 'collapsed';
+    return getPanelDisplayMode(currentBottomHeight, BOTTOM_TERMINAL_PANEL_CONFIG);
+  }, [state.layout.bottomTerminalPanelCollapsed, currentBottomHeight]);
+
+  useEffect(() => {
+    const unsubscribe = onTerminalPanelPositionChange(setTerminalPanelPosition);
+    void refreshTerminalPanelPosition();
+    return unsubscribe;
+  }, []);
 
   // Keep right panel visible when chat is hidden
   useEffect(() => {
@@ -85,17 +121,38 @@ const SessionScene: React.FC<SessionSceneProps> = ({
     return Math.min(maxWidth, Math.max(RIGHT_PANEL_CONFIG.COMPACT_WIDTH, newWidth));
   }, []);
 
+  const calculateValidBottomHeight = useCallback((newHeight: number): number => {
+    if (!containerRef.current) return newHeight;
+    const containerHeight = containerRef.current.offsetHeight;
+    if (containerHeight <= 0) return newHeight;
+    const reserved = PANEL_COMMON_CONFIG.RESIZER_WIDTH + 220;
+    const dynamicMax = containerHeight - reserved;
+    const maxHeight = Math.min(BOTTOM_TERMINAL_PANEL_CONFIG.MAX_WIDTH, dynamicMax);
+    return Math.min(maxHeight, Math.max(BOTTOM_TERMINAL_PANEL_CONFIG.COMPACT_WIDTH, newHeight));
+  }, []);
+
   const saveAndUpdateRightWidth = useCallback((width: number) => {
     updateRightPanelWidth(width);
     setLastRightWidth(width);
     savePanelWidth(STORAGE_KEYS.RIGHT_PANEL_LAST_WIDTH, width);
   }, [updateRightPanelWidth]);
 
+  const saveAndUpdateBottomHeight = useCallback((height: number) => {
+    updateBottomTerminalPanelHeight(height);
+    savePanelWidth(STORAGE_KEYS.BOTTOM_TERMINAL_PANEL_LAST_HEIGHT, height);
+  }, [updateBottomTerminalPanelHeight]);
+
   const handleDoubleClick = useCallback(() => {
     const nextMode = getNextMode(rightPanelMode);
     const targetWidth = getModeWidth(nextMode, RIGHT_PANEL_CONFIG);
     saveAndUpdateRightWidth(calculateValidRightWidth(targetWidth));
   }, [rightPanelMode, calculateValidRightWidth, saveAndUpdateRightWidth]);
+
+  const handleBottomDoubleClick = useCallback(() => {
+    const nextMode = getNextMode(bottomTerminalPanelMode);
+    const targetHeight = getModeWidth(nextMode, BOTTOM_TERMINAL_PANEL_CONFIG);
+    saveAndUpdateBottomHeight(calculateValidBottomHeight(targetHeight));
+  }, [bottomTerminalPanelMode, calculateValidBottomHeight, saveAndUpdateBottomHeight]);
 
   const handleMouseDownResizer = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -105,7 +162,7 @@ const SessionScene: React.FC<SessionSceneProps> = ({
     const startWidth = currentRightWidth;
     let lastValidWidth = startWidth;
 
-    setIsDragging(true);
+    setIsDraggingRight(true);
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
 
@@ -138,12 +195,59 @@ const SessionScene: React.FC<SessionSceneProps> = ({
         setLastRightWidth(lastValidWidth);
         savePanelWidth(STORAGE_KEYS.RIGHT_PANEL_LAST_WIDTH, lastValidWidth);
       }
-      requestAnimationFrame(() => requestAnimationFrame(() => setIsDragging(false)));
+      requestAnimationFrame(() => requestAnimationFrame(() => setIsDraggingRight(false)));
     };
 
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
   }, [currentRightWidth, calculateValidRightWidth, updateRightPanelWidth, saveAndUpdateRightWidth, state.layout.chatCollapsed]);
+
+  const handleMouseDownBottomResizer = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!containerRef.current) return;
+
+    const startY = e.clientY;
+    const startHeight = currentBottomHeight;
+    let lastValidHeight = startHeight;
+
+    setIsDraggingBottom(true);
+    document.body.style.cursor = 'row-resize';
+    document.body.style.userSelect = 'none';
+
+    const onMove = (ev: MouseEvent) => {
+      if (animationFrameRef.current !== null) cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = requestAnimationFrame(() => {
+        const valid = calculateValidBottomHeight(startHeight + (startY - ev.clientY));
+        lastValidHeight = valid;
+        if (bottomTerminalPaneElementRef.current) {
+          bottomTerminalPaneElementRef.current.style.height = `${valid}px`;
+        } else {
+          updateBottomTerminalPanelHeight(valid);
+        }
+        animationFrameRef.current = null;
+      });
+    };
+
+    const onUp = () => {
+      if (animationFrameRef.current !== null) cancelAnimationFrame(animationFrameRef.current);
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+
+      const snapped = getSnappedWidth(lastValidHeight, BOTTOM_TERMINAL_PANEL_CONFIG, false);
+      if (snapped !== lastValidHeight) {
+        saveAndUpdateBottomHeight(snapped);
+      } else {
+        updateBottomTerminalPanelHeight(lastValidHeight);
+        savePanelWidth(STORAGE_KEYS.BOTTOM_TERMINAL_PANEL_LAST_HEIGHT, lastValidHeight);
+      }
+      requestAnimationFrame(() => requestAnimationFrame(() => setIsDraggingBottom(false)));
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, [calculateValidBottomHeight, currentBottomHeight, saveAndUpdateBottomHeight, updateBottomTerminalPanelHeight]);
 
   // No-animation expansion
   const [isAuxPaneExpandingImmediate, setIsAuxPaneExpandingImmediate] = useState(false);
@@ -159,12 +263,47 @@ const SessionScene: React.FC<SessionSceneProps> = ({
     return () => window.removeEventListener('expand-right-panel-immediate', handler as EventListener);
   }, [state.layout.rightPanelCollapsed]);
 
+  const expandBottomTerminalPanel = useCallback(() => {
+    const saved = loadPanelWidth(
+      STORAGE_KEYS.BOTTOM_TERMINAL_PANEL_LAST_HEIGHT,
+      BOTTOM_TERMINAL_PANEL_CONFIG.COMFORTABLE_DEFAULT,
+    );
+    updateBottomTerminalPanelHeight(calculateValidBottomHeight(saved));
+
+    if (state.layout.bottomTerminalPanelCollapsed && !bottomExpandPendingRef.current) {
+      bottomExpandPendingRef.current = true;
+      requestAnimationFrame(() => {
+        toggleBottomTerminalPanel();
+        bottomExpandPendingRef.current = false;
+      });
+    }
+  }, [
+    calculateValidBottomHeight,
+    state.layout.bottomTerminalPanelCollapsed,
+    toggleBottomTerminalPanel,
+    updateBottomTerminalPanelHeight,
+  ]);
+
+  const collapseBottomTerminalPanel = useCallback(() => {
+    if (!state.layout.bottomTerminalPanelCollapsed && !bottomCollapsePendingRef.current) {
+      bottomCollapsePendingRef.current = true;
+      requestAnimationFrame(() => {
+        toggleBottomTerminalPanel();
+        bottomCollapsePendingRef.current = false;
+      });
+    }
+  }, [state.layout.bottomTerminalPanelCollapsed, toggleBottomTerminalPanel]);
+
   // Responsive resize — also validate on mount to clamp widths restored from
   // localStorage that may exceed the current (non-maximized) window size.
   useEffect(() => {
     const validate = () => {
       const valid = calculateValidRightWidth(currentRightWidth);
       if (valid !== currentRightWidth) updateRightPanelWidth(valid);
+      if (isTerminalDockedBottom) {
+        const validBottom = calculateValidBottomHeight(currentBottomHeight);
+        if (validBottom !== currentBottomHeight) updateBottomTerminalPanelHeight(validBottom);
+      }
     };
     const rafId = requestAnimationFrame(validate);
     window.addEventListener('resize', validate);
@@ -172,7 +311,15 @@ const SessionScene: React.FC<SessionSceneProps> = ({
       cancelAnimationFrame(rafId);
       window.removeEventListener('resize', validate);
     };
-  }, [currentRightWidth, calculateValidRightWidth, updateRightPanelWidth]);
+  }, [
+    currentRightWidth,
+    currentBottomHeight,
+    calculateValidRightWidth,
+    calculateValidBottomHeight,
+    isTerminalDockedBottom,
+    updateRightPanelWidth,
+    updateBottomTerminalPanelHeight,
+  ]);
 
   // Restore right panel width when window regains visibility (e.g. after minimize → restore).
   // This acts as a safety net in case any layout recalculation during the restore
@@ -221,85 +368,147 @@ const SessionScene: React.FC<SessionSceneProps> = ({
       className={[
         'bitfun-session-scene',
         isDragging && 'bitfun-session-scene--dragging',
+        isDraggingBottom && 'bitfun-session-scene--dragging-bottom',
+        isTerminalDockedBottom && 'bitfun-session-scene--terminal-bottom',
         isEntering && 'layout-entering',
       ].filter(Boolean).join(' ')}
       style={panelCollapseHintStyles}
     >
-      {/* ChatPane — FlowChat conversation */}
-      {!isChatHidden && (
+      <div className="bitfun-session-scene__main-row">
+        {/* ChatPane — FlowChat conversation */}
+        {!isChatHidden && (
+          <div
+            className={`bitfun-session-scene__chat-pane ${isDragging ? 'bitfun-session-scene__chat-pane--dragging' : ''}`}
+          >
+            <ChatPane
+              width={0}
+              isFullscreen={false}
+              isDragging={false}
+              workspacePath={workspacePath}
+              showChatInput
+            />
+          </div>
+        )}
+
+        {/* Resizer — always rendered (when chat visible) for slide animation */}
+        {!isChatHidden && (
+          <div
+            ref={resizerRef}
+            className={[
+              'bitfun-pane-resizer',
+              state.layout.rightPanelCollapsed && 'bitfun-pane-resizer--collapsed',
+              isDraggingRight && 'bitfun-pane-resizer--dragging',
+              isHovering && 'bitfun-pane-resizer--hovering',
+            ].filter(Boolean).join(' ')}
+            onMouseDown={handleMouseDownResizer}
+            onDoubleClick={handleDoubleClick}
+            onMouseEnter={() => setIsHovering(true)}
+            onMouseLeave={() => setIsHovering(false)}
+            tabIndex={state.layout.rightPanelCollapsed ? -1 : 0}
+            role="separator"
+            aria-orientation="vertical"
+            aria-label={t('layout.resizer.rightAriaLabel')}
+            aria-valuenow={currentRightWidth}
+            aria-valuemin={RIGHT_PANEL_CONFIG.COMPACT_WIDTH}
+            aria-valuemax={RIGHT_PANEL_CONFIG.MAX_WIDTH}
+            title={t('layout.resizer.title', { mode: panelModeLabels[rightPanelMode] })}
+          >
+            <div className="bitfun-pane-resizer__line" />
+            <div className="bitfun-pane-resizer__handle">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="bitfun-pane-resizer__icon">
+                <circle cx="6" cy="4" r="1" fill="currentColor" />
+                <circle cx="6" cy="8" r="1" fill="currentColor" />
+                <circle cx="6" cy="12" r="1" fill="currentColor" />
+                <circle cx="10" cy="4" r="1" fill="currentColor" />
+                <circle cx="10" cy="8" r="1" fill="currentColor" />
+                <circle cx="10" cy="12" r="1" fill="currentColor" />
+              </svg>
+            </div>
+          </div>
+        )}
+
+        {/* AuxPane — ContentCanvas */}
         <div
-          className={`bitfun-session-scene__chat-pane ${isDragging ? 'bitfun-session-scene__chat-pane--dragging' : ''}`}
+          ref={auxPaneElementRef}
+          className={[
+            'bitfun-session-scene__aux-pane',
+            state.layout.rightPanelCollapsed         && 'bitfun-session-scene__aux-pane--collapsed',
+            isDraggingRight                          && 'bitfun-session-scene__aux-pane--dragging',
+            isRightAsMain                            && 'bitfun-session-scene__aux-pane--editor-mode',
+            isAuxPaneExpandingImmediate              && 'bitfun-session-scene__aux-pane--no-animation',
+          ].filter(Boolean).join(' ')}
+          style={{
+            width: state.layout.rightPanelCollapsed
+              ? undefined
+              : isRightAsMain ? undefined : `${currentRightWidth}px`,
+          }}
+          data-mode={rightPanelMode}
         >
-          <ChatPane
-            width={0}
-            isFullscreen={false}
-            isDragging={false}
+          <AuxPane
+            ref={auxPaneRef}
             workspacePath={workspacePath}
-            showChatInput
+            isSceneActive={isActive}
           />
         </div>
-      )}
-
-      {/* Resizer — always rendered (when chat visible) for slide animation */}
-      {!isChatHidden && (
-        <div
-          ref={resizerRef}
-          className={[
-            'bitfun-pane-resizer',
-            state.layout.rightPanelCollapsed && 'bitfun-pane-resizer--collapsed',
-            isDragging && 'bitfun-pane-resizer--dragging',
-            isHovering && 'bitfun-pane-resizer--hovering',
-          ].filter(Boolean).join(' ')}
-          onMouseDown={handleMouseDownResizer}
-          onDoubleClick={handleDoubleClick}
-          onMouseEnter={() => setIsHovering(true)}
-          onMouseLeave={() => setIsHovering(false)}
-          tabIndex={state.layout.rightPanelCollapsed ? -1 : 0}
-          role="separator"
-          aria-orientation="vertical"
-          aria-label={t('layout.resizer.rightAriaLabel')}
-          aria-valuenow={currentRightWidth}
-          aria-valuemin={RIGHT_PANEL_CONFIG.COMPACT_WIDTH}
-          aria-valuemax={RIGHT_PANEL_CONFIG.MAX_WIDTH}
-          title={t('layout.resizer.title', { mode: panelModeLabels[rightPanelMode] })}
-        >
-          <div className="bitfun-pane-resizer__line" />
-          <div className="bitfun-pane-resizer__handle">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="bitfun-pane-resizer__icon">
-              <circle cx="6" cy="4" r="1" fill="currentColor" />
-              <circle cx="6" cy="8" r="1" fill="currentColor" />
-              <circle cx="6" cy="12" r="1" fill="currentColor" />
-              <circle cx="10" cy="4" r="1" fill="currentColor" />
-              <circle cx="10" cy="8" r="1" fill="currentColor" />
-              <circle cx="10" cy="12" r="1" fill="currentColor" />
-            </svg>
-          </div>
-        </div>
-      )}
-
-      {/* AuxPane — ContentCanvas */}
-      <div
-        ref={auxPaneElementRef}
-        className={[
-          'bitfun-session-scene__aux-pane',
-          state.layout.rightPanelCollapsed         && 'bitfun-session-scene__aux-pane--collapsed',
-          isDragging                               && 'bitfun-session-scene__aux-pane--dragging',
-          isRightAsMain                            && 'bitfun-session-scene__aux-pane--editor-mode',
-          isAuxPaneExpandingImmediate              && 'bitfun-session-scene__aux-pane--no-animation',
-        ].filter(Boolean).join(' ')}
-        style={{
-          width: state.layout.rightPanelCollapsed
-            ? undefined
-            : isRightAsMain ? undefined : `${currentRightWidth}px`,
-        }}
-        data-mode={rightPanelMode}
-      >
-        <AuxPane
-          ref={auxPaneRef}
-          workspacePath={workspacePath}
-          isSceneActive={isActive}
-        />
       </div>
+
+      {isTerminalDockedBottom ? (
+        <>
+          <div
+            className={[
+              'bitfun-bottom-pane-resizer',
+              state.layout.bottomTerminalPanelCollapsed && 'bitfun-bottom-pane-resizer--collapsed',
+              isDraggingBottom && 'bitfun-bottom-pane-resizer--dragging',
+              isHoveringBottom && 'bitfun-bottom-pane-resizer--hovering',
+            ].filter(Boolean).join(' ')}
+            onMouseDown={handleMouseDownBottomResizer}
+            onDoubleClick={handleBottomDoubleClick}
+            onMouseEnter={() => setIsHoveringBottom(true)}
+            onMouseLeave={() => setIsHoveringBottom(false)}
+            tabIndex={state.layout.bottomTerminalPanelCollapsed ? -1 : 0}
+            role="separator"
+            aria-orientation="horizontal"
+            aria-label={t('layout.resizer.terminalBottomAriaLabel')}
+            aria-valuenow={currentBottomHeight}
+            aria-valuemin={BOTTOM_TERMINAL_PANEL_CONFIG.COMPACT_WIDTH}
+            aria-valuemax={BOTTOM_TERMINAL_PANEL_CONFIG.MAX_WIDTH}
+            title={t('layout.resizer.title', { mode: panelModeLabels[bottomTerminalPanelMode] })}
+          >
+            <div className="bitfun-bottom-pane-resizer__line" />
+            <div className="bitfun-bottom-pane-resizer__handle">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="bitfun-bottom-pane-resizer__icon">
+                <circle cx="4" cy="6" r="1" fill="currentColor" />
+                <circle cx="8" cy="6" r="1" fill="currentColor" />
+                <circle cx="12" cy="6" r="1" fill="currentColor" />
+                <circle cx="4" cy="10" r="1" fill="currentColor" />
+                <circle cx="8" cy="10" r="1" fill="currentColor" />
+                <circle cx="12" cy="10" r="1" fill="currentColor" />
+              </svg>
+            </div>
+          </div>
+
+          <div
+            ref={bottomTerminalPaneElementRef}
+            className={[
+              'bitfun-session-scene__bottom-terminal-pane',
+              state.layout.bottomTerminalPanelCollapsed && 'bitfun-session-scene__bottom-terminal-pane--collapsed',
+              isDraggingBottom && 'bitfun-session-scene__bottom-terminal-pane--dragging',
+            ].filter(Boolean).join(' ')}
+            style={{
+              height: state.layout.bottomTerminalPanelCollapsed ? undefined : `${currentBottomHeight}px`,
+            }}
+            data-mode={bottomTerminalPanelMode}
+          >
+            <BottomTerminalPane
+              workspacePath={workspacePath}
+              isSceneActive={isActive}
+              isCollapsed={state.layout.bottomTerminalPanelCollapsed}
+              onExpand={expandBottomTerminalPanel}
+              onCollapse={collapseBottomTerminalPanel}
+            />
+          </div>
+        </>
+      ) : null}
     </div>
   );
 };

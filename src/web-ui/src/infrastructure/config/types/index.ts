@@ -443,6 +443,7 @@ export interface MinimapConfig {
 
 export interface TerminalConfig {
   default_shell: string;
+  terminal_panel_position?: TerminalPanelPosition;
   font_size: number;
   font_family: string;
   cursor_style: string;
@@ -457,6 +458,8 @@ export interface TerminalConfig {
   startup_command: string;
   env_vars: Record<string, string>;
 }
+
+export type TerminalPanelPosition = 'right' | 'bottom';
 
 export interface WorkspaceConfig {
   recent_workspaces: string[];
@@ -538,6 +541,7 @@ export type ConfigPath =
   | 'editor.theme'
   | 'terminal'
   | 'terminal.default_shell'
+  | 'terminal.terminal_panel_position'
   | 'workspace'
   | 'ai'
   | 'ai.default_model'

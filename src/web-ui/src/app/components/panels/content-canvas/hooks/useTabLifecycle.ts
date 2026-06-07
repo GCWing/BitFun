@@ -9,7 +9,13 @@
  */
 
 import { useCallback, useEffect } from 'react';
-import { useCanvasStore, useAgentCanvasStore, useProjectCanvasStore, useGitCanvasStore } from '../stores';
+import {
+  useCanvasStore,
+  useAgentCanvasStore,
+  useProjectCanvasStore,
+  useGitCanvasStore,
+  useBottomTerminalCanvasStore,
+} from '../stores';
 import type { EditorGroupId, PanelContent, CreateTabEventDetail } from '../types';
 import { TAB_EVENTS } from '../types';
 import { useI18n } from '@/infrastructure/i18n';
@@ -17,7 +23,11 @@ import { drainPendingTabs } from '@/shared/services/pendingTabQueue';
 import { confirmDialog } from '@/component-library/components/ConfirmDialog/confirmService';
 interface UseTabLifecycleOptions {
   /** App mode / target canvas */
-  mode?: 'agent' | 'project' | 'git';
+  mode?: 'agent' | 'project' | 'git' | 'bottom-terminal';
+  /** Override the external tab creation event for specialized canvases. */
+  createTabEventName?: string;
+  /** Override the panel expansion event dispatched after tab activation. */
+  expandPanelEventName?: string;
 }
 
 interface UseTabLifecycleReturn {
@@ -44,14 +54,20 @@ interface UseTabLifecycleReturn {
  * Tab lifecycle management hook.
  */
 export const useTabLifecycle = (options: UseTabLifecycleOptions = {}): UseTabLifecycleReturn => {
-  const { mode = 'agent' } = options;
+  const {
+    mode = 'agent',
+    createTabEventName,
+    expandPanelEventName = TAB_EVENTS.EXPAND_RIGHT_PANEL,
+  } = options;
   const { t } = useI18n('components');
   const canvasStoreApi =
     mode === 'project'
       ? useProjectCanvasStore
       : mode === 'git'
         ? useGitCanvasStore
-        : useAgentCanvasStore;
+        : mode === 'bottom-terminal'
+          ? useBottomTerminalCanvasStore
+          : useAgentCanvasStore;
   
   const {
     addTab,
@@ -187,8 +203,9 @@ export const useTabLifecycle = (options: UseTabLifecycleOptions = {}): UseTabLif
    * Listen for left-panel terminal close events to sync right-panel tabs.
    */
   useEffect(() => {
-    const store = mode === 'project' ? useProjectCanvasStore 
-                : mode === 'git' ? useGitCanvasStore 
+    const store = mode === 'project' ? useProjectCanvasStore
+                : mode === 'git' ? useGitCanvasStore
+                : mode === 'bottom-terminal' ? useBottomTerminalCanvasStore
                 : useAgentCanvasStore;
     
     const handleTerminalSessionDestroyed = (event: CustomEvent<{ sessionId: string }>) => {
@@ -207,8 +224,9 @@ export const useTabLifecycle = (options: UseTabLifecycleOptions = {}): UseTabLif
    * Listen for left-panel terminal rename events to sync right-panel tabs.
    */
   useEffect(() => {
-    const store = mode === 'project' ? useProjectCanvasStore 
-                : mode === 'git' ? useGitCanvasStore 
+    const store = mode === 'project' ? useProjectCanvasStore
+                : mode === 'git' ? useGitCanvasStore
+                : mode === 'bottom-terminal' ? useBottomTerminalCanvasStore
                 : useAgentCanvasStore;
     
     const handleTerminalSessionRenamed = (event: CustomEvent<{ sessionId: string; newName: string }>) => {
@@ -227,12 +245,14 @@ export const useTabLifecycle = (options: UseTabLifecycleOptions = {}): UseTabLif
    * Listen for external tab creation events.
    */
   useEffect(() => {
-    const eventName =
-      mode === 'project'
+    const eventName = createTabEventName ??
+      (mode === 'project'
         ? TAB_EVENTS.PROJECT_CREATE_TAB
         : mode === 'git'
           ? TAB_EVENTS.GIT_CREATE_TAB
-          : TAB_EVENTS.AGENT_CREATE_TAB;
+          : mode === 'bottom-terminal'
+            ? TAB_EVENTS.BOTTOM_TERMINAL_CREATE_TAB
+            : TAB_EVENTS.AGENT_CREATE_TAB);
 
     const handleCreateTab = (event: CustomEvent<CreateTabEventDetail>) => {
       const {
@@ -273,8 +293,7 @@ export const useTabLifecycle = (options: UseTabLifecycleOptions = {}): UseTabLif
           // Switch to existing tab
           switchToTab(existing.tab.id, existing.groupId);
           
-          // Trigger right panel expansion
-          window.dispatchEvent(new CustomEvent(TAB_EVENTS.EXPAND_RIGHT_PANEL));
+          window.dispatchEvent(new CustomEvent(expandPanelEventName));
           return;
         }
       }
@@ -285,22 +304,23 @@ export const useTabLifecycle = (options: UseTabLifecycleOptions = {}): UseTabLif
       // Open all tabs in active state by default (no preview replacement)
       addTab(content, 'active', groupId);
       
-      // Trigger right panel expansion
-      window.dispatchEvent(new CustomEvent(TAB_EVENTS.EXPAND_RIGHT_PANEL));
+      window.dispatchEvent(new CustomEvent(expandPanelEventName));
     };
 
     window.addEventListener(eventName, handleCreateTab as EventListener);
 
     // Drain any tab events that were enqueued before this listener was
     // registered (happens when the scene was just mounted for the first time).
-    const pendingMode = mode === 'project' ? 'project' : mode === 'git' ? 'git' : 'agent';
-    const pending = drainPendingTabs(pendingMode);
-    pending.forEach(detail => handleCreateTab({ detail } as CustomEvent<CreateTabEventDetail>));
+    if (mode !== 'bottom-terminal') {
+      const pendingMode = mode === 'project' ? 'project' : mode === 'git' ? 'git' : 'agent';
+      const pending = drainPendingTabs(pendingMode);
+      pending.forEach(detail => handleCreateTab({ detail } as CustomEvent<CreateTabEventDetail>));
+    }
     
     return () => {
       window.removeEventListener(eventName, handleCreateTab as EventListener);
     };
-  }, [mode, findTabByMetadata, updateTabContent, switchToTab, addTab, activeGroupId, layout.splitMode, setSplitMode]);
+  }, [mode, createTabEventName, expandPanelEventName, findTabByMetadata, updateTabContent, switchToTab, addTab, activeGroupId, layout.splitMode, setSplitMode]);
 
   return {
     openPreview,

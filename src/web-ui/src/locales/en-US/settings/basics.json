@@ -171,6 +171,15 @@
       "placeholder": "Select default terminal",
       "noShells": "No available terminals detected"
     },
+    "panelPosition": {
+      "label": "Open terminal in",
+      "description": "Where terminal tabs open when launched from the Shell navigation in a session",
+      "placeholder": "Select terminal location",
+      "options": {
+        "right": "Right panel",
+        "bottom": "Bottom panel"
+      }
+    },
     "warnings": {
       "cmd": "CMD does not support shell integration. AI commands will execute via PowerShell.",
       "gitBash": "Git Bash with oh-my-zsh may cause shell integration to fail. If issues occur, switch to PowerShell."
@@ -187,6 +196,7 @@
       "loading": "Loading...",
       "loadFailed": "Failed to load configuration",
       "updated": "Default terminal updated",
+      "panelPositionUpdated": "Terminal panel location updated",
       "saveFailed": "Failed to save configuration",
       "refreshed": "Available terminals list refreshed"
     }

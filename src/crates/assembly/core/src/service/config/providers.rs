@@ -372,6 +372,14 @@ impl ConfigProvider for TerminalConfigProvider {
             if terminal_config.scrollback > 100000 {
                 warnings.push("Large scrollback buffer may impact performance".to_string());
             }
+
+            if terminal_config.terminal_panel_position != "right"
+                && terminal_config.terminal_panel_position != "bottom"
+            {
+                warnings.push(
+                    "Terminal panel position should be either 'right' or 'bottom'".to_string(),
+                );
+            }
         } else {
             return Err(BitFunError::validation(
                 "Invalid terminal config format".to_string(),

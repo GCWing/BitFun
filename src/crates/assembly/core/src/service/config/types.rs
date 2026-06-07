@@ -370,6 +370,8 @@ pub struct MinimapConfig {
 pub struct TerminalConfig {
     /// Empty string means "auto-detect".
     pub default_shell: String,
+    /// Terminal panel placement in the session layout: "right" or "bottom".
+    pub terminal_panel_position: String,
     pub font_size: u32,
     pub font_family: String,
     pub cursor_blink: bool,
@@ -1486,6 +1488,7 @@ impl Default for TerminalConfig {
     fn default() -> Self {
         Self {
             default_shell: String::new(),
+            terminal_panel_position: "right".to_string(),
             font_size: 14,
             font_family: "Consolas, \"Courier New\", monospace".to_string(),
             cursor_blink: true,
@@ -1828,6 +1831,21 @@ mod tests {
             serialized["project"]["mcp_servers"][0]["id"],
             "project-docs"
         );
+    }
+
+    #[test]
+    fn global_config_preserves_terminal_panel_position() {
+        let config: GlobalConfig = serde_json::from_value(serde_json::json!({
+            "terminal": {
+                "terminal_panel_position": "bottom"
+            }
+        }))
+        .expect("terminal panel position config should deserialize");
+
+        assert_eq!(config.terminal.terminal_panel_position, "bottom");
+
+        let serialized = serde_json::to_value(&config).expect("config should serialize");
+        assert_eq!(serialized["terminal"]["terminal_panel_position"], "bottom");
     }
 
     #[test]

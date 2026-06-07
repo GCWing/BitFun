@@ -32,6 +32,7 @@
       "leftAriaLabel": "調整左側面板大小",
       "centerAriaLabel": "調整面板大小",
       "rightAriaLabel": "調整右側面板大小",
+      "terminalBottomAriaLabel": "調整底部終端面板大小",
       "title": "拖拽調整面板大小 | 雙擊切換模式 | 目前: {{mode}}"
     }
   },

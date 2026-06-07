@@ -58,6 +58,20 @@ export const RIGHT_PANEL_CONFIG = {
   TRANSITION_DURATION: 200,     // Mode transition duration (ms)
 } as const;
 
+// ==================== Bottom terminal panel config ====================
+export const BOTTOM_TERMINAL_PANEL_CONFIG = {
+  COLLAPSED_WIDTH: 0,
+  COMPACT_WIDTH: 180,
+  COMPACT_THRESHOLD: 220,
+  COMFORTABLE_MIN: 240,
+  COMFORTABLE_DEFAULT: 300,
+  EXPANDED_THRESHOLD: 420,
+  MAX_WIDTH: 640,
+  SNAP_POINTS: [180, 300, 420, 560],
+  SNAP_RANGE: 20,
+  TRANSITION_DURATION: 200,
+} as const;
+
 // ==================== Common config ====================
 export const PANEL_COMMON_CONFIG = {
   RESIZER_WIDTH: 4,             // Resizer width
@@ -84,7 +98,7 @@ export const PANEL_SHORTCUTS = {
  */
 export function getPanelDisplayMode(
   width: number,
-  config: typeof LEFT_PANEL_CONFIG | typeof RIGHT_PANEL_CONFIG
+  config: typeof LEFT_PANEL_CONFIG | typeof RIGHT_PANEL_CONFIG | typeof BOTTOM_TERMINAL_PANEL_CONFIG
 ): PanelDisplayMode {
   if (width <= 0) return 'collapsed';
   if (width < config.COMPACT_THRESHOLD) return 'compact';
@@ -97,7 +111,7 @@ export function getPanelDisplayMode(
  */
 export function getModeWidth(
   mode: PanelDisplayMode,
-  config: typeof LEFT_PANEL_CONFIG | typeof RIGHT_PANEL_CONFIG
+  config: typeof LEFT_PANEL_CONFIG | typeof RIGHT_PANEL_CONFIG | typeof BOTTOM_TERMINAL_PANEL_CONFIG
 ): number {
   switch (mode) {
     case 'collapsed':
@@ -122,7 +136,7 @@ export function getModeWidth(
  */
 export function getSnappedWidth(
   width: number,
-  config: typeof LEFT_PANEL_CONFIG | typeof RIGHT_PANEL_CONFIG,
+  config: typeof LEFT_PANEL_CONFIG | typeof RIGHT_PANEL_CONFIG | typeof BOTTOM_TERMINAL_PANEL_CONFIG,
   isDragging: boolean = false
 ): number {
   // Do not force snap while dragging; return original width.
@@ -162,7 +176,7 @@ export function getNextMode(currentMode: PanelDisplayMode): PanelDisplayMode {
  */
 export function clampWidth(
   width: number,
-  config: typeof LEFT_PANEL_CONFIG | typeof RIGHT_PANEL_CONFIG,
+  config: typeof LEFT_PANEL_CONFIG | typeof RIGHT_PANEL_CONFIG | typeof BOTTOM_TERMINAL_PANEL_CONFIG,
   containerWidth?: number
 ): number {
   let maxWidth: number = config.MAX_WIDTH;
@@ -187,6 +201,7 @@ export const STORAGE_KEYS = {
   RIGHT_PANEL_COLLAPSED: 'bitfun:rightPanelCollapsed',
   LEFT_PANEL_LAST_WIDTH: 'bitfun:leftPanelLastWidth',   // Remembered width before collapse
   RIGHT_PANEL_LAST_WIDTH: 'bitfun:rightPanelLastWidth', // Remembered width before collapse
+  BOTTOM_TERMINAL_PANEL_LAST_HEIGHT: 'bitfun:bottomTerminalPanelLastHeight',
 } as const;
 
 /**

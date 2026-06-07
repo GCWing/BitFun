@@ -13,7 +13,11 @@ import {
 import { configAPI, workspaceAPI } from '@/infrastructure/api';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import type { CloseBehavior } from '@/infrastructure/api/service-api/SystemAPI';
-import { getTerminalService } from '@/tools/terminal';
+import {
+  getTerminalService,
+  refreshTerminalPanelPosition,
+  setTerminalPanelPosition,
+} from '@/tools/terminal';
 import type { ShellInfo } from '@/tools/terminal/types/session';
 import {
   ConfigPageContent,
@@ -24,7 +28,12 @@ import {
 } from './common';
 import { configManager } from '../services/ConfigManager';
 import { createLogger } from '@/shared/utils/logger';
-import type { BackendLogLevel, RuntimeLoggingInfo, TerminalConfig as TerminalSettings } from '../types';
+import type {
+  BackendLogLevel,
+  RuntimeLoggingInfo,
+  TerminalConfig as TerminalSettings,
+  TerminalPanelPosition,
+} from '../types';
 import './BasicsConfig.scss';
 
 const log = createLogger('BasicsConfig');
@@ -452,6 +461,7 @@ function BasicsLoggingSection() {
 function BasicsTerminalSection() {
   const { t } = useTranslation('settings/basics');
   const [defaultShell, setDefaultShell] = useState<string>('');
+  const [terminalPanelPosition, setTerminalPanelPositionState] = useState<TerminalPanelPosition>('right');
   const [availableShells, setAvailableShells] = useState<ShellInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -474,6 +484,8 @@ function BasicsTerminalSection() {
       ]);
 
       setDefaultShell(terminalConfig?.default_shell || '');
+      setTerminalPanelPositionState(terminalConfig?.terminal_panel_position === 'bottom' ? 'bottom' : 'right');
+      void refreshTerminalPanelPosition();
 
       const availableOnly = shells.filter((s) => s.available);
       setAvailableShells(availableOnly);
@@ -512,6 +524,26 @@ function BasicsTerminalSection() {
     [showMessage, t]
   );
 
+  const handleTerminalPanelPositionChange = useCallback(
+    async (value: TerminalPanelPosition) => {
+      try {
+        setSaving(true);
+        setTerminalPanelPositionState(value);
+
+        await setTerminalPanelPosition(value);
+        configManager.clearCache();
+
+        showMessage('success', t('terminal.messages.panelPositionUpdated'));
+      } catch (error) {
+        log.error('Failed to save terminal panel position', { value, error });
+        showMessage('error', t('terminal.messages.saveFailed'));
+      } finally {
+        setSaving(false);
+      }
+    },
+    [showMessage, t],
+  );
+
   const shouldShowPowerShellCoreRecommendation = useMemo(() => {
     const isWindows = platform === 'windows';
     if (!isWindows) return false;
@@ -530,6 +562,14 @@ function BasicsTerminalSection() {
       })),
     ],
     [availableShells, t]
+  );
+
+  const terminalPanelPositionOptions = useMemo(
+    () => [
+      { value: 'right', label: t('terminal.panelPosition.options.right') },
+      { value: 'bottom', label: t('terminal.panelPosition.options.bottom') },
+    ],
+    [t],
   );
 
   const terminalSectionDescription = useMemo(() => {
@@ -590,6 +630,22 @@ function BasicsTerminalSection() {
               ) : (
                 <div className="bitfun-terminal-config__no-shells">{t('terminal.controls.noShells')}</div>
               )}
+            </div>
+          </ConfigPageRow>
+
+          <ConfigPageRow
+            label={t('terminal.panelPosition.label')}
+            description={t('terminal.panelPosition.description')}
+            align="center"
+          >
+            <div className="bitfun-terminal-config__select-wrapper">
+              <Select
+                value={terminalPanelPosition}
+                onChange={(v) => handleTerminalPanelPositionChange(v as TerminalPanelPosition)}
+                options={terminalPanelPositionOptions}
+                placeholder={t('terminal.panelPosition.placeholder')}
+                disabled={saving}
+              />
             </div>
           </ConfigPageRow>
 

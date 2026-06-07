@@ -39,7 +39,11 @@ export class AppManager implements IAppManager {
         leftPanelWidth: typeof window !== 'undefined' && window.innerWidth > 0 
           ? Math.min(300, Math.floor(window.innerWidth * 0.15)) // Left 15%, max 300px
           : 280,
-        rightPanelWidth: loadPanelWidth(STORAGE_KEYS.RIGHT_PANEL_LAST_WIDTH, DEFAULT_LAYOUT_STATE.rightPanelWidth)
+        rightPanelWidth: loadPanelWidth(STORAGE_KEYS.RIGHT_PANEL_LAST_WIDTH, DEFAULT_LAYOUT_STATE.rightPanelWidth),
+        bottomTerminalPanelHeight: loadPanelWidth(
+          STORAGE_KEYS.BOTTOM_TERMINAL_PANEL_LAST_HEIGHT,
+          DEFAULT_LAYOUT_STATE.bottomTerminalPanelHeight
+        ),
       },
       currentAgent: DEFAULT_AGENTS[0],
       availableAgents: [...DEFAULT_AGENTS],
@@ -67,6 +71,9 @@ export class AppManager implements IAppManager {
   updateLayout(layout: Partial<LayoutState>): void {
     if (typeof layout.rightPanelWidth === 'number') {
       savePanelWidth(STORAGE_KEYS.RIGHT_PANEL_LAST_WIDTH, layout.rightPanelWidth);
+    }
+    if (typeof layout.bottomTerminalPanelHeight === 'number') {
+      savePanelWidth(STORAGE_KEYS.BOTTOM_TERMINAL_PANEL_LAST_HEIGHT, layout.bottomTerminalPanelHeight);
     }
 
     const newLayout = { ...this.state.layout, ...layout };
