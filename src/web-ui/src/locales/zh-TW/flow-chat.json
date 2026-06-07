@@ -1027,6 +1027,7 @@
     "jumpToCurrentTurn": "跳轉到第 {{turn}} 輪",
     "backgroundActivities": "背景活動（{{count}}）",
     "backgroundSubagentUntitled": "背景子 Agent",
+    "backgroundSubagents": "背景子 Agent（{{count}}）",
     "backgroundSubagentSection": "背景子 Agent（{{count}}）",
     "backgroundCommandSection": "背景命令（{{count}}）",
     "backgroundCommandUntitled": "背景命令",

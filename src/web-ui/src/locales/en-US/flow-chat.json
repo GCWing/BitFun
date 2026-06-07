@@ -1027,6 +1027,7 @@
     "jumpToCurrentTurn": "Jump to Turn {{turn}}",
     "backgroundActivities": "Background activity ({{count}})",
     "backgroundSubagentUntitled": "Background subagent",
+    "backgroundSubagents": "Background subagents ({{count}})",
     "backgroundSubagentSection": "Background subagents ({{count}})",
     "backgroundCommandSection": "Background commands ({{count}})",
     "backgroundCommandUntitled": "Background command",
