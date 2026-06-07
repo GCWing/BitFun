@@ -149,6 +149,7 @@
         "default": "Default"
       },
       "empty": {
+        "all": "No terminals yet",
         "manual": "No user terminals yet",
         "agent": "No agent terminals yet",
         "quickNew": "Quick new terminal"

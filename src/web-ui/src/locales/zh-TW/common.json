@@ -149,6 +149,7 @@
         "default": "默認"
       },
       "empty": {
+        "all": "暫無終端",
         "manual": "還沒有用戶終端",
         "agent": "還沒有 Agent 終端",
         "quickNew": "快速新增"

@@ -256,39 +256,6 @@
     background: color-mix(in srgb, var(--border-subtle) 80%, transparent);
   }
 
-  &__view-toggle {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 4px;
-    margin: 0 $size-gap-3 $size-gap-2;
-    padding: 3px;
-    border-radius: 10px;
-    background: var(--element-bg-soft);
-    flex-shrink: 0;
-  }
-
-  &__view-toggle-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    height: 28px;
-    border: none;
-    border-radius: 8px;
-    background: transparent;
-    color: var(--color-text-muted);
-    font-size: var(--font-size-xs);
-    font-weight: 500;
-    cursor: pointer;
-    transition:
-      color $motion-fast $easing-standard,
-      background $motion-fast $easing-standard;
-
-    &.is-active {
-      color: var(--color-text-primary);
-      background: color-mix(in srgb, var(--color-primary) 12%, transparent);
-    }
-  }
-
   &__sections {
     flex: 1 1 auto;
     min-height: 0;
@@ -523,7 +490,6 @@
     &__split-button-main,
     &__split-button-toggle,
     &__dropdown-item,
-    &__view-toggle-btn,
     &__terminal-item,
     &__terminal-close {
       transition: none;

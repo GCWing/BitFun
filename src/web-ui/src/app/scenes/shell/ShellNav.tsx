@@ -20,7 +20,6 @@ import { useTerminalSceneStore } from '@/app/stores/terminalSceneStore';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { getTerminalService } from '@/tools/terminal';
 import type { ShellInfo } from '@/tools/terminal';
-import { useShellStore } from './shellStore';
 import { useShellEntries } from './hooks';
 import type { ShellEntry } from './hooks/shellEntryTypes';
 import { useShellNavMenuState } from './hooks/useShellNavMenuState';
@@ -45,8 +44,6 @@ function formatShellMenuLabel(shell: ShellInfo, isDefault: boolean, defaultBadge
 const ShellNav: React.FC = () => {
   const { t } = useI18n('common');
   const { activeWorkspace, openedWorkspacesList, workspaceName, setActiveWorkspace } = useWorkspaceContext();
-  const navView = useShellStore((s) => s.navView);
-  const setNavView = useShellStore((s) => s.setNavView);
   const activeSceneId = useSceneStore((s) => s.activeTabId);
   const activeTerminalSessionId = useTerminalSceneStore((s) => s.activeSessionId);
   const showMenu = useContextMenuStore((s) => s.showMenu);
@@ -54,8 +51,7 @@ const ShellNav: React.FC = () => {
   const [defaultShellType, setDefaultShellType] = useState<string>('');
 
   const {
-    manualEntries,
-    agentEntries,
+    entries,
     editModalOpen,
     editingTerminal,
     closeEditModal,
@@ -68,9 +64,8 @@ const ShellNav: React.FC = () => {
     saveEdit,
   } = useShellEntries();
 
-  const visibleEntries = navView === 'agent' ? agentEntries : manualEntries;
   const hasMultipleWorkspaces = openedWorkspacesList.length > 1;
-  const hasVisibleContent = visibleEntries.length > 0;
+  const hasVisibleContent = entries.length > 0;
   const {
     menuOpen,
     setMenuOpen,
@@ -315,38 +310,17 @@ const ShellNav: React.FC = () => {
         </div>
       </div>
 
-      <div className="bitfun-shell-nav__view-toggle" role="tablist" aria-label={t('nav.shell.title')}>
-        <button
-          type="button"
-          role="tab"
-          className={`bitfun-shell-nav__view-toggle-btn${navView === 'manual' ? ' is-active' : ''}`}
-          aria-selected={navView === 'manual'}
-          onClick={() => setNavView('manual')}
-        >
-          {t('nav.shell.views.manual')}
-        </button>
-        <button
-          type="button"
-          role="tab"
-          className={`bitfun-shell-nav__view-toggle-btn${navView === 'agent' ? ' is-active' : ''}`}
-          aria-selected={navView === 'agent'}
-          onClick={() => setNavView('agent')}
-        >
-          {t('nav.shell.views.agent')}
-        </button>
-      </div>
-
       <div
         className={`bitfun-shell-nav__sections${!hasVisibleContent ? ' bitfun-shell-nav__sections--empty' : ''}`}
       >
         {hasVisibleContent ? (
           <div className="bitfun-shell-nav__terminal-list">
-            {visibleEntries.map((entry) => (
+            {entries.map((entry) => (
               <ShellNavEntryItem
                 key={entry.sessionId}
                 entry={entry}
                 isActive={activeSceneId === 'shell' && activeTerminalSessionId === entry.sessionId}
-                showSavedBadge={navView === 'manual' && entry.isPersisted}
+                showSavedBadge={entry.isPersisted}
                 startupCommandBadgeLabel={t('nav.shell.badges.startupCommand')}
                 savedBadgeLabel={t('nav.shell.badges.saved')}
                 quickAction={getQuickAction(entry)}
@@ -359,7 +333,7 @@ const ShellNav: React.FC = () => {
         ) : (
           <div className="bitfun-shell-nav__empty">
             <p className="bitfun-shell-nav__empty-message">
-              {navView === 'agent' ? t('nav.shell.empty.agent') : t('nav.shell.empty.manual')}
+              {t('nav.shell.empty.all')}
             </p>
             <Button
               type="button"
