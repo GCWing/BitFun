@@ -64,6 +64,7 @@ export function useTtsPlayback(options: UseTtsPlaybackOptions = {}) {
   const ttsRef = useRef<TtsProvider | null>(null);
   const speakingItemIdRef = useRef<string | null>(null);
   const activeItemIdRef = useRef<string | null>(null);
+  const activeSessionIdRef = useRef<string | null>(null);
   const prevRoundIdRef = useRef<string | null>(null);
   const voiceConfigRef = useRef<VoiceSettings | null>(null);
 
@@ -130,10 +131,14 @@ export function useTtsPlayback(options: UseTtsPlaybackOptions = {}) {
     if (speakingItemIdRef.current || !activeItemIdRef.current) return;
 
     const itemId = activeItemIdRef.current;
+    const sessionId = activeSessionIdRef.current;
 
     const state = FlowChatStore.getInstance().getState();
+    if (state.activeSessionId !== sessionId) return;
+
     let text: string | null = null;
     for (const [, session] of state.sessions) {
+      if (session.sessionId !== sessionId) continue;
       for (const turn of session.dialogTurns) {
         for (const round of turn.modelRounds) {
           for (const item of round.items) {
@@ -182,6 +187,7 @@ export function useTtsPlayback(options: UseTtsPlaybackOptions = {}) {
     setIsSpeaking(false);
     speakingItemIdRef.current = null;
     activeItemIdRef.current = null;
+    activeSessionIdRef.current = null;
     prevRoundIdRef.current = null;
   }, []);
 
@@ -192,14 +198,14 @@ export function useTtsPlayback(options: UseTtsPlaybackOptions = {}) {
   useEffect(() => {
     const unwatch = configManager.watch('voice', () => {
       log.debug('voice config changed, reloading');
-      const cfg = loadVoiceConfig();
+      const cfg = loadVoiceConfigSync();
       if (!cfg.ttsEnabled) {
         log.debug('voice disabled, stopping playback');
         stop();
       }
     });
     return unwatch;
-  }, [loadVoiceConfig, stop]);
+  }, [loadVoiceConfigSync, stop]);
 
   useEffect(() => {
     const unsubscribe = FlowChatStore.getInstance().subscribe((state: FlowChatState) => {
@@ -234,10 +240,12 @@ export function useTtsPlayback(options: UseTtsPlaybackOptions = {}) {
 
       if (item.id === speakingItemIdRef.current) return;
       if (item.id === activeItemIdRef.current && roundId === prevRoundIdRef.current) return;
+      if (activeSessionIdRef.current && activeSessionIdRef.current !== activeSessionId) return;
 
       log.debug('TTS triggered', { textItemId: item.id, roundId, prevRound: prevRoundIdRef.current });
 
       activeItemIdRef.current = item.id;
+      activeSessionIdRef.current = activeSessionId;
       prevRoundIdRef.current = roundId;
       void speakNext();
     });
