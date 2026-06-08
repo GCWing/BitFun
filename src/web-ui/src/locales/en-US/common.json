@@ -683,10 +683,6 @@
     "globalMenu": {
       "name": "Global Menu",
       "description": "Provides global common menu items"
-    },
-    "projectContextDocumentMenu": {
-      "name": "Project Context Document Menu",
-      "description": "Provides deletion for project context documents"
     }
   },
   "status": {
@@ -894,7 +890,6 @@
     "terminal": "Terminal",
     "git": "Git",
     "fileViewer": "File Viewer",
-    "projectContext": "Profile",
     "agents": "Agents",
     "skills": "Skills",
     "miniApps": "Mini App",

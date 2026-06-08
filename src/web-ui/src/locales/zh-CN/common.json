@@ -683,10 +683,6 @@
     "globalMenu": {
       "name": "全局菜单",
       "description": "提供全局通用的菜单项"
-    },
-    "projectContextDocumentMenu": {
-      "name": "工程上下文文档菜单",
-      "description": "提供工程上下文文档的删除操作"
     }
   },
   "status": {
@@ -894,7 +890,6 @@
     "terminal": "终端",
     "git": "Git",
     "fileViewer": "文件查看",
-    "projectContext": "项目概况",
     "agents": "智能体",
     "skills": "技能",
     "miniApps": "小应用",

@@ -77,7 +77,7 @@ Below is BitFun’s **official Agent and capability inventory**, plus how we tra
 | **Generative UI** | On-demand interactive UI components during chat, embedded in the message stream for immediate use |
 | **Mini App** | One sentence to a standalone runnable app—generate, run, one-click package for desktop |
 | **Markdown-defined Agents** | Write a `.md` file and run it in the Runtime right away for most domain customization |
-| **Long-term memory + project context** | Accumulates across sessions; readable by any Agent |
+| **Long-term memory** | Accumulates across sessions; readable by any Agent |
 | **Self-iteration** | Code Agent can change BitFun’s own repository |
 | **⋯⋯** | Next trends in progress—open an Issue with requests |
 

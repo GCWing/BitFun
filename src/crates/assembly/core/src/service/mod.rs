@@ -19,8 +19,6 @@ pub mod i18n; // I18n service
 pub mod lsp; // LSP (Language Server Protocol) system
 #[cfg(feature = "service-integrations")]
 pub mod mcp; // MCP (Model Context Protocol) system
-#[cfg(feature = "product-full")]
-pub mod project_context; // Project context management
 #[cfg(feature = "service-integrations")]
 pub mod remote_connect; // Remote Connect (phone → desktop)
 pub mod remote_ssh; // Remote SSH (desktop → server)
@@ -70,8 +68,6 @@ pub use i18n::{get_global_i18n_service, I18nConfig, I18nService, LocaleId, Local
 pub use lsp::LspManager;
 #[cfg(feature = "service-integrations")]
 pub use mcp::MCPService;
-#[cfg(feature = "product-full")]
-pub use project_context::{ContextDocumentStatus, ProjectContextConfig, ProjectContextService};
 #[cfg(feature = "service-integrations")]
 pub use review_platform::{
     ReviewAuthSource, ReviewAuthState, ReviewChecks, ReviewDecision, ReviewFileStatus,

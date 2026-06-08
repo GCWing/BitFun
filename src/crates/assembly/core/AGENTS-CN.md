@@ -15,7 +15,7 @@
 主要区域：
 
 - `src/agentic/`：agents、prompts、tools、sessions、execution、persistence
-- `src/service/`：config、filesystem、terminal、git、LSP、MCP、remote connect、project context、AI memory
+- `src/service/`：config、filesystem、terminal、git、LSP、MCP、remote connect、AI memory
 - `src/infrastructure/`：AI clients、app paths、event system、storage、debug log server
 - `src/product_runtime/`：product-full 兼容 adapter 与 runtime service provider wiring
 

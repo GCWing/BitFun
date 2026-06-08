@@ -542,7 +542,6 @@
     "sessions": "Agent 工作台",
     "files": "文件树",
     "terminal": "终端",
-    "projectContext": "工程上下文",
     "git": "Git",
     "capabilities": "能力配置",
     "clickToSelectBranch": "点击选择分支",
