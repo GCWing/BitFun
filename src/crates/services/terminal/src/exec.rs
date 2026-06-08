@@ -30,6 +30,8 @@ const MAX_COMPLETED_EXEC_SESSIONS: usize = 64;
 #[cfg(unix)]
 const PIPE_INTERRUPT_GRACE_TIMEOUT_MS: u64 = 2_000;
 const PTY_EXIT_DRAIN_TIMEOUT_MS: u64 = 500;
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 static GLOBAL_EXEC_MANAGER: OnceLock<Arc<ExecProcessManager>> = OnceLock::new();
 
@@ -1084,6 +1086,7 @@ async fn spawn_pipe_process(request: &ExecCommandRequest) -> TerminalResult<Exec
     command.stdout(Stdio::piped());
     command.stderr(Stdio::piped());
     configure_pipe_process_group(&mut command);
+    configure_pipe_window_visibility(&mut command);
     command.kill_on_drop(true);
 
     let mut child = command.spawn()?;
@@ -1144,6 +1147,14 @@ fn configure_pipe_process_group(command: &mut Command) {
 #[cfg(not(unix))]
 fn configure_pipe_process_group(_command: &mut Command) {}
 
+#[cfg(windows)]
+fn configure_pipe_window_visibility(command: &mut Command) {
+    command.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(windows))]
+fn configure_pipe_window_visibility(_command: &mut Command) {}
+
 async fn control_pipe_child(
     child: &mut tokio::process::Child,
     action: ExecControlAction,
@@ -1169,7 +1180,6 @@ async fn kill_pipe_child(child: &mut tokio::process::Child) -> Option<i32> {
         command.stdout(Stdio::null());
         command.stderr(Stdio::null());
         {
-            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
             command.creation_flags(CREATE_NO_WINDOW);
         }
 
