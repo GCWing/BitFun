@@ -190,6 +190,18 @@ export function useTtsPlayback(options: UseTtsPlaybackOptions = {}) {
   }, [stop]);
 
   useEffect(() => {
+    const unwatch = configManager.watch('voice', () => {
+      log.debug('voice config changed, reloading');
+      const cfg = loadVoiceConfig();
+      if (!cfg.ttsEnabled) {
+        log.debug('voice disabled, stopping playback');
+        stop();
+      }
+    });
+    return unwatch;
+  }, [loadVoiceConfig, stop]);
+
+  useEffect(() => {
     const unsubscribe = FlowChatStore.getInstance().subscribe((state: FlowChatState) => {
       const cfg = loadVoiceConfigSync();
       if (!cfg.ttsEnabled) return;

@@ -536,6 +536,7 @@ fn default_review_team_rate_limit_status() -> serde_json::Value {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
+#[serde(rename_all = "camelCase")]
 pub struct VoiceConfig {
     pub stt_enabled: bool,
     pub tts_enabled: bool,
