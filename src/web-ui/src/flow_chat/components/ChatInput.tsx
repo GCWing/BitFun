@@ -30,6 +30,7 @@ import { SmartRecommendations } from './smart-recommendations';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { WorkspaceKind } from '@/shared/types';
 import { createImageContextFromFile, createImageContextFromClipboard } from '../utils/imageUtils';
+import { isSlashCommand, stripSlashCommand } from '../utils/slashCommand';
 import { notificationService } from '@/shared/notification-system';
 import { inputReducer, initialInputState } from '../reducers/inputReducer';
 import { modeReducer, initialModeState } from '../reducers/modeReducer';
@@ -1595,11 +1596,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     inputValueRef.current = text;
 
     const localSlashCommandsEnabled = !isAcpInputSession;
-    const trimmedLower = text.trim().toLowerCase();
-    const isBtwCommand = localSlashCommandsEnabled && trimmedLower.startsWith('/btw');
-    const isCompactCommand = localSlashCommandsEnabled && trimmedLower.startsWith('/compact');
+    const trimmed = text.trim();
+    const isBtwCommand = localSlashCommandsEnabled && isSlashCommand(trimmed, '/btw');
+    const isCompactCommand = localSlashCommandsEnabled && isSlashCommand(trimmed, '/compact');
     const isGoalCommand = localSlashCommandsEnabled && isGoalSlashCommand(text);
-    const isUsageCommand = localSlashCommandsEnabled && trimmedLower.startsWith('/usage');
+    const isUsageCommand = localSlashCommandsEnabled && isSlashCommand(trimmed, '/usage');
     const isDeepReviewCommand = localSlashCommandsEnabled && isDeepReviewSlashCommand(text);
     const isProcessing = !!derivedState?.isProcessing;
 
@@ -1685,7 +1686,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const originalPendingLargePastes = { ...pendingLargePastesRef.current };
     const message = expandComposerSpecialTokens(originalMessage);
     const messageCharCount = getCharacterCount(message);
-    const question = message.replace(/^\/btw\b/i, '').trim();
+    const question = stripSlashCommand(message, '/btw').trim();
 
     // Clear input without adding to main history.
     dispatchInput({ type: 'CLEAR_VALUE' });
@@ -2250,7 +2251,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const messageCharCount = getCharacterCount(message);
     const localSlashCommandsEnabled = !isAcpInputSession;
 
-    if (localSlashCommandsEnabled && message.toLowerCase().startsWith('/btw')) {
+    if (localSlashCommandsEnabled && isSlashCommand(message, '/btw')) {
       // When idle, /btw can be sent via the normal send button.
       await submitBtwFromInput();
       return;
@@ -2291,35 +2292,28 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       return;
     }
 
-    if (localSlashCommandsEnabled && message.toLowerCase().startsWith('/compact')) {
+    if (localSlashCommandsEnabled && isSlashCommand(message, '/compact')) {
       notificationService.warning(
         t('chatInput.compactUsage')
       );
       return;
     }
 
-    if (localSlashCommandsEnabled && message.toLowerCase().startsWith('/usage')) {
+    if (localSlashCommandsEnabled && isSlashCommand(message, '/usage')) {
       notificationService.warning(
         t('chatInput.usageCommandUsage')
       );
       return;
     }
 
-    if (localSlashCommandsEnabled && message.toLowerCase().startsWith('/init')) {
+    if (localSlashCommandsEnabled && isSlashCommand(message, '/init')) {
       notificationService.warning(
         t('chatInput.initUsage')
       );
       return;
     }
 
-    if (localSlashCommandsEnabled && message.toLowerCase().startsWith('/goal') && !isGoalSlashCommand(message)) {
-      notificationService.warning(
-        t('chatInput.goalUsage')
-      );
-      return;
-    }
-
-    if (localSlashCommandsEnabled && message.toLowerCase().startsWith('/reload-skills')) {
+    if (localSlashCommandsEnabled && isSlashCommand(message, '/reload-skills')) {
       notificationService.warning(t('chatInput.reloadSkillsUsage'));
       return;
     }
@@ -2467,7 +2461,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       if (isBtwSession) {
         return;
       }
-      if (!lower.startsWith('/btw')) {
+      if (!isSlashCommand(lower, '/btw')) {
         next = '/btw ';
       } else {
         // Normalize to "/btw " + rest, preserving any already typed question.
@@ -2483,7 +2477,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     } else if (actionId === 'compact') {
       next = '/compact';
     } else if (actionId === 'goal') {
-      if (!lower.startsWith('/goal')) {
+      if (!isSlashCommand(lower, '/goal')) {
         next = '/goal ';
       } else {
         const m = raw.match(/^(\s*)\/goal\b/i);
@@ -2814,7 +2808,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       
       e.preventDefault();
 
-      const isBtwCommand = inputState.value.trim().toLowerCase().startsWith('/btw');
+      const isBtwCommand = isSlashCommand(inputState.value.trim(), '/btw');
       if (isBtwCommand) {
         // Allow /btw submission even while the main session is generating.
         void submitBtwFromInput();
