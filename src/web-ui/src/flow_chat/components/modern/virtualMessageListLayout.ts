@@ -123,6 +123,36 @@ export interface InitialHistoryRenderWindow {
   isWindowed: boolean;
 }
 
+export function mapInitialHistoryExpansionScrollTop(params: {
+  previousScrollTop: number;
+  previousScrollHeight: number;
+  nextScrollHeight: number;
+  omittedEstimatedHeightPx: number;
+  wasAtBottom: boolean;
+  clientHeight: number;
+}): number {
+  const nextMaxScrollTop = Math.max(0, params.nextScrollHeight - params.clientHeight);
+  if (params.wasAtBottom) {
+    return nextMaxScrollTop;
+  }
+
+  const heightDelta = params.nextScrollHeight - params.previousScrollHeight;
+  const omittedEstimatedHeightPx = Math.max(0, params.omittedEstimatedHeightPx);
+  if (
+    omittedEstimatedHeightPx > 0 &&
+    params.previousScrollTop <= omittedEstimatedHeightPx
+  ) {
+    const actualOmittedHeightPx = Math.max(0, omittedEstimatedHeightPx + heightDelta);
+    const omittedRatio = Math.max(
+      0,
+      Math.min(1, params.previousScrollTop / omittedEstimatedHeightPx),
+    );
+    return Math.min(nextMaxScrollTop, actualOmittedHeightPx * omittedRatio);
+  }
+
+  return Math.min(nextMaxScrollTop, Math.max(0, params.previousScrollTop + heightDelta));
+}
+
 function uniqueTurnCount(items: VirtualItem[]): number {
   const turnIds = new Set<string>();
   items.forEach(item => {

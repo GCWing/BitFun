@@ -43,6 +43,7 @@ import { startupTrace } from '@/shared/utils/startupTrace';
 import {
   estimateVirtualMessageItemHeight,
   getVirtualMessageDefaultItemHeight,
+  mapInitialHistoryExpansionScrollTop,
   selectInitialHistoryRenderWindow,
 } from './virtualMessageListLayout';
 import './VirtualMessageList.scss';
@@ -367,6 +368,7 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
   const pendingInitialHistoryExpansionRef = useRef<{
     scrollTop: number;
     scrollHeight: number;
+    omittedEstimatedHeightPx: number;
     wasAtBottom: boolean;
   } | null>(null);
   const initialHistoryRenderWindowCheckFrameRef = useRef<number | null>(null);
@@ -3321,6 +3323,7 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
       pendingInitialHistoryExpansionRef.current = {
         scrollTop: scroller.scrollTop,
         scrollHeight: scroller.scrollHeight,
+        omittedEstimatedHeightPx: initialHistoryRenderWindow.omittedEstimatedHeightPx,
         wasAtBottom: Math.abs(maxScrollTop - scroller.scrollTop) <= COMPENSATION_EPSILON_PX,
       };
     } else {
@@ -3452,16 +3455,14 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
       return;
     }
 
-    if (pending.wasAtBottom) {
-      const nextScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-      scroller.scrollTop = nextScrollTop;
-      previousScrollTopRef.current = nextScrollTop;
-      previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller);
-      return;
-    }
-
-    const heightDelta = scroller.scrollHeight - pending.scrollHeight;
-    const nextScrollTop = Math.max(0, pending.scrollTop + heightDelta);
+    const nextScrollTop = mapInitialHistoryExpansionScrollTop({
+      previousScrollTop: pending.scrollTop,
+      previousScrollHeight: pending.scrollHeight,
+      nextScrollHeight: scroller.scrollHeight,
+      omittedEstimatedHeightPx: pending.omittedEstimatedHeightPx,
+      wasAtBottom: pending.wasAtBottom,
+      clientHeight: scroller.clientHeight,
+    });
     scroller.scrollTop = nextScrollTop;
     previousScrollTopRef.current = nextScrollTop;
     previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller);

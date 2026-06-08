@@ -967,6 +967,40 @@ describe('ModernFlowChatContainer historical empty state', () => {
     expect(virtualListMock.pinTurnToTop).not.toHaveBeenCalled();
   });
 
+  it('does not repeat immediate latest anchoring after visible turn info catches up', async () => {
+    stateMocks.activeSession = createSession({
+      isHistorical: true,
+      historyState: 'ready',
+      dialogTurns: [
+        createTurn('turn-80', 'Latest restored prompt'),
+      ],
+    } as Partial<Session>);
+    stateMocks.virtualItems = [
+      { type: 'user-message', turnId: 'turn-80', data: { id: 'user-turn-80', content: 'Latest restored prompt' } },
+    ];
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    expect(virtualListMock.scrollToTurnEndAndClearPin).toHaveBeenCalledTimes(1);
+    expect(virtualListMock.scrollToTurnEndAndClearPin).toHaveBeenLastCalledWith('turn-80');
+
+    stateMocks.visibleTurnInfo = {
+      turnId: 'turn-80',
+      turnIndex: 1,
+      totalTurns: 1,
+      userMessage: 'Latest restored prompt',
+    };
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    expect(virtualListMock.scrollToTurnEndAndClearPin).toHaveBeenCalledTimes(1);
+    expect(virtualListMock.pinTurnToTop).not.toHaveBeenCalled();
+  });
+
   it('does not re-anchor local full hydration when visible turn info is stale after prepending older turns', async () => {
     stateMocks.activeSession = createSession({
       isHistorical: false,

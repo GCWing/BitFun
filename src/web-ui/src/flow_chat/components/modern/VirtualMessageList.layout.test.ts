@@ -3,6 +3,7 @@ import {
   estimateTextHeightFromLength,
   estimateVirtualMessageItemHeight,
   getVirtualMessageDefaultItemHeight,
+  mapInitialHistoryExpansionScrollTop,
   selectInitialHistoryRenderWindow,
 } from './virtualMessageListLayout';
 import type { VirtualItem } from '../../store/modernFlowChatStore';
@@ -145,5 +146,88 @@ describe('selectInitialHistoryRenderWindow', () => {
     expect(window.startIndex).toBe(0);
     expect(window.items).toHaveLength(items.length);
     expect(window.omittedEstimatedHeightPx).toBe(0);
+  });
+});
+
+describe('mapInitialHistoryExpansionScrollTop', () => {
+  const base = {
+    previousScrollHeight: 5000,
+    nextScrollHeight: 5600,
+    omittedEstimatedHeightPx: 3000,
+    clientHeight: 1000,
+  };
+
+  it('keeps a direct jump to the omitted history top at the real top', () => {
+    expect(mapInitialHistoryExpansionScrollTop({
+      ...base,
+      previousScrollTop: 0,
+      wasAtBottom: false,
+    })).toBe(0);
+  });
+
+  it('maps positions inside the omitted history spacer by ratio', () => {
+    expect(mapInitialHistoryExpansionScrollTop({
+      ...base,
+      previousScrollTop: 1500,
+      wasAtBottom: false,
+    })).toBe(1800);
+  });
+
+  it('keeps visible tail content stable after the omitted spacer boundary', () => {
+    expect(mapInitialHistoryExpansionScrollTop({
+      ...base,
+      previousScrollTop: 3400,
+      wasAtBottom: false,
+    })).toBe(4000);
+  });
+
+  it('keeps bottom-pinned sessions at the new physical bottom', () => {
+    expect(mapInitialHistoryExpansionScrollTop({
+      ...base,
+      previousScrollTop: 4000,
+      wasAtBottom: true,
+    })).toBe(4600);
+  });
+
+  it('falls back to physical height delta when the omitted estimate is zero', () => {
+    expect(mapInitialHistoryExpansionScrollTop({
+      ...base,
+      previousScrollTop: 700,
+      omittedEstimatedHeightPx: 0,
+      wasAtBottom: false,
+    })).toBe(1300);
+  });
+
+  it('keeps omitted-history ratio stable when the expanded content is shorter than estimated', () => {
+    expect(mapInitialHistoryExpansionScrollTop({
+      previousScrollTop: 1500,
+      previousScrollHeight: 5000,
+      nextScrollHeight: 2600,
+      omittedEstimatedHeightPx: 3000,
+      clientHeight: 1000,
+      wasAtBottom: false,
+    })).toBe(300);
+  });
+
+  it('clamps stale visible-tail scroll positions to the expanded scroll range', () => {
+    expect(mapInitialHistoryExpansionScrollTop({
+      previousScrollTop: 7000,
+      previousScrollHeight: 5000,
+      nextScrollHeight: 5200,
+      omittedEstimatedHeightPx: 3000,
+      clientHeight: 1000,
+      wasAtBottom: false,
+    })).toBe(4200);
+  });
+
+  it('keeps bottom-pinned sessions at zero when content is shorter than the viewport', () => {
+    expect(mapInitialHistoryExpansionScrollTop({
+      previousScrollTop: 4000,
+      previousScrollHeight: 5000,
+      nextScrollHeight: 800,
+      omittedEstimatedHeightPx: 3000,
+      clientHeight: 1000,
+      wasAtBottom: true,
+    })).toBe(0);
   });
 });

@@ -3043,11 +3043,15 @@ function summarizeLongSessionVisualStateEvents(
     if (current.activeSessionId === sessionId) {
       hasSeenTargetSession = true;
     }
+    const historyLoadingLayerChanged =
+      previous.showHistoryLoadingLayer !== null &&
+      current.showHistoryLoadingLayer !== null &&
+      previous.showHistoryLoadingLayer !== current.showHistoryLoadingLayer;
     const loadingChanged =
-      previous.showHistoryLoadingLayer !== current.showHistoryLoadingLayer ||
+      historyLoadingLayerChanged ||
       previous.overlayCount !== current.overlayCount ||
       previous.placeholderCount !== current.placeholderCount;
-    if (previous.showHistoryLoadingLayer !== current.showHistoryLoadingLayer) {
+    if (historyLoadingLayerChanged) {
       loadingLayerToggleCount += 1;
     }
     if (previous.overlayCount !== current.overlayCount) {
@@ -3679,6 +3683,15 @@ async function collectLongSessionOpenMeasurement(
   await item.click();
   const latestVisiblePromise = waitForLatestLongSessionTurnVisible(5000, expectedLatestTurnId);
   const latestUsablePromise = waitForLatestLongSessionViewportUsable(5000, expectedLatestTurnId);
+  const postVisibleInteraction = readPostVisibleInteractionOption(options);
+  let latestVisible: Awaited<typeof latestVisiblePromise> | null = null;
+  let latestUsable: Awaited<typeof latestUsablePromise> | null = null;
+
+  if (postVisibleInteraction) {
+    latestVisible = await latestVisiblePromise;
+    latestUsable = await latestUsablePromise;
+    await performLongSessionPostVisibleInteraction(postVisibleInteraction);
+  }
 
   const afterFrameSnapshot = requireFrameTrace
     ? await waitForRequiredTracePhase(
@@ -3709,12 +3722,8 @@ async function collectLongSessionOpenMeasurement(
     clickedAtMs,
     latestAnchorTimeoutMs,
   );
-  const latestVisible = await latestVisiblePromise;
-  const latestUsable = await latestUsablePromise;
-  const postVisibleInteraction = readPostVisibleInteractionOption(options);
-  if (postVisibleInteraction) {
-    await performLongSessionPostVisibleInteraction(postVisibleInteraction);
-  }
+  latestVisible ??= await latestVisiblePromise;
+  latestUsable ??= await latestUsablePromise;
   const postVisibleObserveMs =
     numericEnv('BITFUN_E2E_PERF_POST_VISIBLE_OBSERVE_MS') ?? DEFAULT_POST_VISIBLE_OBSERVE_MS;
   const observeRemainingMs = latestUsable.usableAtMs + postVisibleObserveMs - await readPerformanceNow();
@@ -3785,7 +3794,7 @@ async function collectLongSessionOpenMeasurement(
     latestAnswerTextVisibleAtMs: latestUsable.usableAtMs,
     clickToLatestAnswerTextVisibleMs: latestUsable.usableAtMs - clickedAtMs,
     finalViewportCheckedAtMs,
-    ...(requireFrameTrace
+    ...(requireFrameTrace && traceWaitErrors.length === 0
       ? {
         postHydrateUsableAtMs: finalViewportCheckedAtMs,
         clickToPostHydrateUsableMs: finalViewportCheckedAtMs - clickedAtMs,
@@ -3948,10 +3957,12 @@ describe('Performance telemetry', () => {
 
     const sessionId = process.env.BITFUN_E2E_PERF_SESSION_ID || DEFAULT_PERF_SESSION_ID;
     const expectedLatestTurnId = await readExpectedLatestTurnId(sessionId);
+    const postVisibleInteraction = readPostVisibleInteractionOption({});
+    const requireFrameTrace = postVisibleInteraction === null;
     const measurement = await collectLongSessionOpenMeasurement(
       sessionId,
       expectedLatestTurnId,
-      { requireFrameTrace: true },
+      { requireFrameTrace },
     );
     if (!measurement) {
       if (expectedLatestTurnId) {
@@ -3972,7 +3983,7 @@ describe('Performance telemetry', () => {
 
     await writeReport('long-session-first-open', measurement);
     expectLongSessionMeasurementUsable(measurement, maxLatestFrameMs, {
-      requireFrameTrace: true,
+      requireFrameTrace,
       expectNoHistoryLoadingAfterClick: true,
     });
   });

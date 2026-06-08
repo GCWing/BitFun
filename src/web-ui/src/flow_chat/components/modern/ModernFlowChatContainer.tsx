@@ -680,9 +680,12 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     }
   }, [pendingHeaderTurnId, turnSummaries, visibleTurnInfo?.turnId]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     autoPinnedTurnKeyRef.current = null;
     releasedHistoryCompletionKeyRef.current = null;
+  }, [activeSession?.sessionId]);
+
+  useEffect(() => {
     setHistoryInitialContentReadyKey(null);
     setPendingHeaderTurnId(null);
   }, [activeSession?.sessionId]);
