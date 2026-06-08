@@ -273,7 +273,7 @@ const SettingsNav: React.FC = () => {
   } = useSettingsNav();
 
   return (
-    <div className="bitfun-settings-nav">
+    <div className="bitfun-settings-nav" data-testid="settings-nav">
       <div className="bitfun-settings-nav__header">
         <span className="bitfun-settings-nav__title">
           {t('configCenter.title', { defaultValue: t('title', { defaultValue: 'Settings' }) })}
@@ -368,6 +368,8 @@ const SettingsNav: React.FC = () => {
                   <button
                     key={tabDef.id}
                     type="button"
+                    data-testid="settings-nav-tab"
+                    data-settings-tab={tabDef.id}
                     className={[
                       'bitfun-settings-nav__item',
                       activeTab === tabDef.id && 'is-active',
