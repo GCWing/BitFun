@@ -1,21 +1,15 @@
-//! Deep Review runtime policy modules and tool adapters.
+//! Deep Review product assembly adapters.
 //!
-//! Keep user-facing review semantics, manifest parsing, queue policy, retry
-//! policy, and report shaping here. Reusable subagent runtime mechanics should
-//! move to `agentic::subagent_runtime` only when they do not depend on Deep
-//! Review roles, manifests, queue reasons, or reliability wording.
+//! Provider-neutral policy, manifest, queue, budget, and shared-context state
+//! are owned by `bitfun-agent-runtime::deep_review`. This module keeps old
+//! core paths compatible while concrete report shaping and product tool side
+//! effects remain in core until separately migrated.
 
-pub mod budget;
-pub mod concurrency_policy;
-pub mod constants;
-pub mod diagnostics;
-pub mod execution_policy;
-pub mod incremental_cache;
-pub mod manifest;
-pub mod queue;
+pub use bitfun_agent_runtime::deep_review::{
+    budget, concurrency_policy, constants, diagnostics, execution_policy, incremental_cache,
+    manifest, queue, shared_context, team_definition, tool_context,
+};
+
 pub mod report;
-pub mod shared_context;
 pub mod task_adapter;
-pub mod team_definition;
-pub mod tool_context;
 pub mod tool_measurement;

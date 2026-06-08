@@ -48,7 +48,7 @@ terminal lifecycle、concrete workflow execution、scheduler/session side effect
 
 | 阶段 | 目标 | 准出标准 |
 |---|---|---|
-| M10 Harness / Agent runtime 收口 | 将 Deep Review / DeepResearch / MiniApp workflow concrete execution、scheduler lifecycle、event delivery、prompt assembly 和 session side effect 继续从 core 收敛到 owner 边界 | workflow route 与 side effect 有 focused tests；agent runtime 不依赖 service/app concrete impl |
+| M10 Harness / Agent runtime 收口 | 在 DeepReview provider-neutral policy/report/cache owner 已迁出基础上，继续将 DeepReview concrete task execution、DeepResearch / MiniApp workflow concrete execution、scheduler lifecycle、event delivery、prompt assembly 和 session side effect 从 core 收敛到 owner 边界 | workflow route 与 side effect 有 focused tests；agent runtime 不依赖 service/app concrete impl |
 | M11 Terminal / product shape / feature trimming | 收敛 terminal lifecycle / PTY、remote shell/terminal concrete impl，并基于 capability matrix 裁剪 no-default/product-full 和不同交付形态依赖 | cargo metadata / cargo tree 有对比数据；terminal、remote 与各产品形态关键入口验证通过 |
 | M12 Core facade 收口 | 将 `bitfun-core` 限定为 compatibility facade、product-full assembly 和少量迁移期 adapter | core 不再是事实 runtime owner；边界脚本阻止 owner 逻辑回流 |
 

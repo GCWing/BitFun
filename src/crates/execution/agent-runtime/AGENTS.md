@@ -21,8 +21,8 @@ and tested without `bitfun-core`.
   registry visibility/availability, custom subagent schema/default decisions,
   builtin agent definition catalog, thread-goal metadata / event payload /
   token usage / scheduler delivery plans, thread-goal tool wire contracts,
-  user-question validation/result contracts, SessionControl input/cancel-route/result contracts, DeepReview shared-context
-  measurement decisions,
+  user-question validation/result contracts, SessionControl input/cancel-route/result contracts, DeepReview
+  policy/manifest/budget/queue/report/cache/shared-context decisions,
   custom subagent markdown front-matter IO, custom subagent discovery/loading,
   post-call hook routing/executor orchestration,
   tool confirmation planning/failure/wait-result mapping, light checkpoint
@@ -31,9 +31,10 @@ and tested without `bitfun-core`.
   policy, prompt listing reminder ordering, prompt-cache policy/identity/store,
   finish-reason labels, session-state event labels, and turn-outcome event facts.
 - Keep concrete prompt assembly, workspace context IO, prompt-cache persistence
-  wiring, dynamic environment collection, concrete hook side effects, concrete
-  product tool execution, and channel/state mutation outside this crate until a
-  reviewed migration proves behavior equivalence.
+  wiring, dynamic environment collection, concrete hook side effects,
+  DeepReview task launch/provider wait/report persistence, concrete product
+  tool execution, and channel/state mutation outside this crate until a reviewed
+  migration proves behavior equivalence.
 - Add focused tests before moving any runtime decision into this crate.
 
 ## Verification

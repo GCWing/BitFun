@@ -107,7 +107,7 @@ pub struct DeepReviewPolicyViolation {
 }
 
 impl DeepReviewPolicyViolation {
-    pub(crate) fn new(code: &'static str, message: impl Into<String>) -> Self {
+    pub fn new(code: &'static str, message: impl Into<String>) -> Self {
         Self {
             code,
             message: message.into(),

@@ -121,6 +121,71 @@ export const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/execution/agent-runtime/src/deep_review/mod.rs',
+    reason:
+      'agent-runtime must own provider-neutral DeepReview policy, manifest, budget, queue, report, and shared-context runtime state',
+    patterns: [
+      {
+        regex: /\bpub mod budget\b/,
+        message: 'missing DeepReview budget owner module',
+      },
+      {
+        regex: /\bpub mod manifest\b/,
+        message: 'missing DeepReview manifest owner module',
+      },
+      {
+        regex: /\bpub mod report\b/,
+        message: 'missing DeepReview report owner module',
+      },
+      {
+        regex: /\bpub use runtime_state::\*/,
+        message: 'missing DeepReview runtime state exports',
+      },
+      {
+        regex: /\bDeepReviewCacheUpdate\b/,
+        message: 'missing DeepReview report cache update export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/src/deep_review/report.rs',
+    reason:
+      'agent-runtime DeepReview report owner must keep provider-neutral packet metadata, reliability signals, and cache update logic out of core',
+    patterns: [
+      {
+        regex: /\bpub fn fill_deep_review_packet_metadata\b/,
+        message: 'missing DeepReview packet metadata owner function',
+      },
+      {
+        regex: /\bpub fn fill_deep_review_reliability_signals\b/,
+        message: 'missing DeepReview reliability signal owner function',
+      },
+      {
+        regex: /\bpub fn deep_review_cache_from_completed_reviewers\b/,
+        message: 'missing DeepReview cache update owner function',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/tests/deep_review_policy_contracts.rs',
+    reason:
+      'agent-runtime DeepReview owner must keep behavior-equivalence contracts for policy, queue state, tool context, report enrichment, and cache updates',
+    patterns: [
+      {
+        regex: /\bdeep_review_policy_owner_exposes_execution_policy_and_manifest_gate\b/,
+        message: 'missing DeepReview policy/manifest owner regression',
+      },
+      {
+        regex: /\bdeep_review_runtime_owner_tracks_budget_queue_and_shared_context\b/,
+        message: 'missing DeepReview budget/queue/shared-context regression',
+      },
+      {
+        regex: /\bdeep_review_report_owner_enriches_packet_reliability_and_cache_facts\b/,
+        message: 'missing DeepReview report/cache owner regression',
+      },
+    ],
+  },
+  {
     path: 'src/crates/execution/agent-runtime/tests/prompt_cache_contracts.rs',
     reason:
       'agent-runtime prompt-cache owner must keep behavior-equivalence contracts for cache identity, expiry, invalidation, and scope-key shape',
@@ -1001,6 +1066,40 @@ export const requiredContentRules = [
       {
         regex: /\bScheduledJobEnqueueFailureAction\b/,
         message: 'missing enqueue failure action owner delegation',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/deep_review_policy.rs',
+    reason:
+      'core DeepReview policy path must stay a compatibility facade over agent-runtime while core keeps product config loading',
+    patterns: [
+      {
+        regex: /pub use bitfun_agent_runtime::deep_review::/,
+        message: 'missing DeepReview agent-runtime compatibility re-export',
+      },
+      {
+        regex: /\bload_default_deep_review_policy\b/,
+        message: 'missing DeepReview product config loading bridge',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/deep_review/report.rs',
+    reason:
+      'core DeepReview report path must delegate provider-neutral enrichment and cache updates to agent-runtime while retaining core-only session IO',
+    patterns: [
+      {
+        regex: /runtime_report::fill_deep_review_reliability_signals/,
+        message: 'missing DeepReview runtime report enrichment delegation',
+      },
+      {
+        regex: /deep_review_cache_from_completed_reviewers/,
+        message: 'missing DeepReview cache update compatibility re-export',
+      },
+      {
+        regex: /\bpersist_deep_review_cache\b/,
+        message: 'missing core session metadata persistence bridge',
       },
     ],
   },

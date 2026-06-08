@@ -7,7 +7,7 @@
 use serde_json::Value;
 use std::collections::HashMap;
 
-pub(crate) struct DeepReviewToolParentContext<'a> {
+pub struct DeepReviewToolParentContext<'a> {
     pub tool_call_id: &'a str,
     pub session_id: &'a str,
     pub dialog_turn_id: &'a str,
@@ -21,7 +21,7 @@ fn context_var_str<'a>(context_vars: &'a HashMap<String, String>, key: &str) -> 
         .filter(|value| !value.is_empty())
 }
 
-pub(crate) fn append_tool_use_context_data(
+pub fn append_tool_use_context_data(
     context_vars: &HashMap<String, String>,
     parent_context: Option<DeepReviewToolParentContext<'_>>,
     custom_data: &mut HashMap<String, Value>,

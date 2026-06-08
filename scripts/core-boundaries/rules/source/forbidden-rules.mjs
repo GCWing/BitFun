@@ -37,6 +37,51 @@ export const forbiddenContentRules = [
     ],
   },
   {
+    path: 'src/crates/assembly/core/src/agentic/deep_review_policy.rs',
+    patterns: [
+      {
+        regex: /\bstatic GLOBAL_DEEP_REVIEW_BUDGET_TRACKER\b/,
+        message:
+          'core DeepReview policy facade must not re-own runtime budget state; use bitfun-agent-runtime::deep_review',
+      },
+      {
+        regex: /\bstatic GLOBAL_DEEP_REVIEW_QUEUE_CONTROL_TRACKER\b/,
+        message:
+          'core DeepReview policy facade must not re-own queue control state; use bitfun-agent-runtime::deep_review',
+      },
+      {
+        regex: /\bpub struct DeepReviewExecutionPolicy\b/,
+        message:
+          'core DeepReview policy facade must not redefine execution policy; use bitfun-agent-runtime::deep_review',
+      },
+      {
+        regex: /\bpub fn record_deep_review_task_budget\b/,
+        message:
+          'core DeepReview policy facade must not re-own task budget recording; use bitfun-agent-runtime::deep_review',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/deep_review/report.rs',
+    patterns: [
+      {
+        regex: /\bfn fill_deep_review_packet_metadata\b/,
+        message:
+          'core DeepReview report must not re-own packet metadata enrichment; use bitfun-agent-runtime::deep_review::report',
+      },
+      {
+        regex: /\bfn deep_review_cache_from_completed_reviewers\b/,
+        message:
+          'core DeepReview report must not re-own cache update logic; use bitfun-agent-runtime::deep_review::report',
+      },
+      {
+        regex: /\bstruct DeepReviewCacheUpdate\b/,
+        message:
+          'core DeepReview report must not re-own cache update DTO; use bitfun-agent-runtime::deep_review::report',
+      },
+    ],
+  },
+  {
     path: 'src/crates/assembly/core/src/function_agents/runtime_services.rs',
     patterns: [
       {

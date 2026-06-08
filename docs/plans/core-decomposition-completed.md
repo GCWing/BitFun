@@ -36,8 +36,8 @@
 
 ### 1.4 Agent Runtime、Harness 与 Product Domain
 
-- `agent-runtime` 已承接 scheduler/background delivery 纯决策、turn outcome lifecycle plan、thread goal runtime、subagent visibility、prompt cache facts、mode/source presentation facts、scheduled-job lifecycle state、custom subagent schema/default/markdown IO/discovery/loading、post-call hook routing、tool confirmation plan、goal/user-question tool wire contract、SessionControl 输入契约和部分 event fact 映射。
-- core 仍保留 concrete session manager、metadata/persistence IO、scheduler lifecycle、event emitter、permission UI/channel wait、concrete prompt assembly、product `Tool` adapter 和具体 hook side effect。
+- `agent-runtime` 已承接 scheduler/background delivery 纯决策、turn outcome lifecycle plan、thread goal runtime、subagent visibility、prompt cache facts、mode/source presentation facts、scheduled-job lifecycle state、custom subagent schema/default/markdown IO/discovery/loading、post-call hook routing、tool confirmation plan、goal/user-question tool wire contract、SessionControl 输入契约、部分 event fact 映射，以及 DeepReview policy / manifest / budget / queue / report enrichment / incremental cache / shared-context runtime state。
+- core 仍保留 concrete session manager、metadata/persistence IO、scheduler lifecycle、event emitter、permission UI/channel wait、concrete prompt assembly、DeepReview task launch / provider wait / report persistence、product `Tool` adapter 和具体 hook side effect。
 - `harness` 已建立 workflow descriptor、legacy route plan、provider registry，并注册 Deep Review、DeepResearch、MiniApp 的 legacy-facade provider；当前只证明 route/descriptor 边界，不代表 concrete workflow execution 已迁移。
 - `product-domains` 已承接 MiniApp 纯状态、runtime detection policy、worker capacity / idle / LRU policy、host method、`fs.*` / `shell.exec` host call plan、function-agent prompt / parser / response policy / ports，以及部分 MiniApp bundle identity 和 function-agent Git snapshot/fallback 逻辑。
 
@@ -66,5 +66,5 @@
 - `bitfun-core` 仍是完整产品 runtime 组装点，不能声称已经退化为纯 compatibility facade。
 - 产品入口仍主要通过 `bitfun-core/product-full` 获取完整能力；Product Assembly 已可表达当前完整能力集合，但尚未真正按交付形态裁剪 default feature / dependency。
 - concrete session manager、scheduler lifecycle、event delivery、permission UI/channel wait、prompt assembly、session persistence IO、AI client factory / provider acquisition 仍在 core。
-- Bash tool orchestration 的可复用 shell helper、本地 indexed workspace search owner、remote workspace search concrete owner、tool confirmation/checkpoint 纯策略和 tool pipeline batching/retry policy 已迁出；terminal lifecycle / PTY、permission UI/channel side effect、tool pipeline concrete state/cancellation/scheduler glue、remote shell executor abstraction、remote terminal concrete impl、MiniApp worker / host / seed / marker IO、Deep Review / DeepResearch / MiniApp concrete workflow execution 仍未完成 owner 迁移。
+- Bash tool orchestration 的可复用 shell helper、本地 indexed workspace search owner、remote workspace search concrete owner、tool confirmation/checkpoint 纯策略、tool pipeline batching/retry policy 和 DeepReview provider-neutral policy/report/cache owner 已迁出；terminal lifecycle / PTY、permission UI/channel side effect、tool pipeline concrete state/cancellation/scheduler glue、remote shell executor abstraction、remote terminal concrete impl、MiniApp worker / host / seed / marker IO、DeepReview concrete task execution、DeepResearch concrete execution 和 MiniApp concrete workflow execution 仍未完成 owner 迁移。
 - no-default 与 product-full 的依赖边界已有数据基线，但 no-default 仍包含较大 concrete 依赖；不能声称各交付形态已达到最小依赖。

@@ -6,6 +6,7 @@
 pub mod agents;
 pub mod checkpoint;
 pub mod custom_subagent;
+pub mod deep_review;
 pub mod events;
 pub mod post_call_hooks;
 pub mod prompt;
