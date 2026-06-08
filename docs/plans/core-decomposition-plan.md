@@ -22,7 +22,8 @@
 - Cargo package / lib 名保持兼容；例如 `tool-contracts` 仍发布为 `bitfun-agent-tools`，`tool-provider-groups` 仍发布为 `bitfun-tool-packs`，`tool-execution` 仍发布为 `tool-runtime`。
 - Desktop / CLI / ACP 仍通过 `bitfun-core/product-full` 获取完整能力；Server / Web / Mobile Web 不直接依赖 core，但尚未完成按交付形态裁剪最小 feature / dependency。
 - `runtime-services` 已有 typed builder、capability availability 和 core product runtime provider adapter，但不少 concrete provider 仍在 core 创建或持有。
-- `tool-contracts` 已承接 provider-neutral tool manifest、admission、catalog、result policy 等纯策略；`tool-execution` 只承接部分低层 IO/search helper；Bash、terminal lifecycle、indexed search、remote shell、permission wait、checkpoint orchestration 和完整 execution pipeline 仍未完全迁移。
+- remote-connect command routing、wire response assembly、workspace/session/poll/file/dialog/cancel/interaction helper 和 state tracker contract 已归入 `services-integrations`；core 保留 host adapter、加密入口和全局 tracker 接线。
+- `tool-contracts` 已承接 provider-neutral tool manifest、admission、catalog、result policy 等纯策略；`tool-execution` 已承接低层 IO/search helper 以及 Bash shell 可复用策略与结果渲染。terminal lifecycle、indexed workspace search service、permission wait、checkpoint orchestration 和完整 execution pipeline 仍未完全迁移。
 - `agent-stream` 已承接统一 stream DTO、tool-call 累积和 replay 契约；provider SSE / 响应解析测试归属 `ai-adapters`。
 - `harness` 当前主要承接 descriptor / route plan / registry contract；Deep Review、DeepResearch、MiniApp 的 concrete workflow execution 仍在 core 或产品路径。
 - `product-domains` 已承接 MiniApp / function-agent 的部分纯领域逻辑；worker、host side effect、AI acquisition、marker IO 等 concrete path 仍未完成 owner 迁移。
@@ -41,13 +42,16 @@
 
 ## 4. 后续执行节奏
 
+M6 Service / Adapter owner 深迁移和 M7 Bash shell execution helper owner 迁移已完成事实归档到
+[`core-decomposition-completed.md`](core-decomposition-completed.md)。后续计划从
+tool pipeline / indexed search 等更高风险 owner 迁移开始，避免再把已完成的 service/adapter 或 Bash helper 收口项重复拆成小 PR。
+
 | 阶段 | 目标 | 准出标准 |
 |---|---|---|
-| M6 Service / Adapter owner 深迁移 | 将 core 中仍直接持有的 service、remote、MCP、Git、terminal、AI/API/transport adapter 创建路径继续下沉到 `services` 或 `adapters` | core 对应路径明显删除或简化；service/adapter 依赖不反向指向 assembly；产品行为等价测试覆盖 |
-| M7 Tool execution 深迁移 | 将 Bash、indexed search、remote shell、checkpoint/permission 边界和 tool execution pipeline 的可复用主体迁入 `tool-contracts` / `tool-execution` / `services` | prompt-visible manifest、permission、GetToolSpec、remote/local IO、oversized result 与 cancellation 行为等价 |
-| M8 Harness / Agent runtime 收口 | 将 Deep Review / DeepResearch / MiniApp workflow concrete execution、scheduler lifecycle、event delivery、prompt assembly 和 session side effect 继续从 core 收敛到 owner 边界 | workflow route 与 side effect 有 focused tests；agent runtime 不依赖 service/app concrete impl |
-| M9 Product shape / feature trimming | 基于 capability matrix 裁剪 no-default/product-full 和不同交付形态依赖 | cargo metadata / cargo tree 有对比数据；各产品形态构建与关键入口验证通过 |
-| M10 Core facade 收口 | 将 `bitfun-core` 限定为 compatibility facade、product-full assembly 和少量迁移期 adapter | core 不再是事实 runtime owner；边界脚本阻止 owner 逻辑回流 |
+| M8 Tool pipeline / indexed search 收口 | 将 indexed workspace search service owner、tool pipeline presentation / oversized-result policy、permission wait 与 checkpoint orchestration 的可复用主体继续收敛到 `tool-contracts` / `tool-execution` / `services` | prompt-visible manifest、permission、GetToolSpec、indexed/local/remote IO、oversized result 与 cancellation 行为等价；不改变工具 schema 和权限语义 |
+| M9 Harness / Agent runtime 收口 | 将 Deep Review / DeepResearch / MiniApp workflow concrete execution、scheduler lifecycle、event delivery、prompt assembly 和 session side effect 继续从 core 收敛到 owner 边界 | workflow route 与 side effect 有 focused tests；agent runtime 不依赖 service/app concrete impl |
+| M10 Product shape / feature trimming | 基于 capability matrix 裁剪 no-default/product-full 和不同交付形态依赖 | cargo metadata / cargo tree 有对比数据；各产品形态构建与关键入口验证通过 |
+| M11 Core facade 收口 | 将 `bitfun-core` 限定为 compatibility facade、product-full assembly 和少量迁移期 adapter | core 不再是事实 runtime owner；边界脚本阻止 owner 逻辑回流 |
 
 ## 5. 固定执行流程
 

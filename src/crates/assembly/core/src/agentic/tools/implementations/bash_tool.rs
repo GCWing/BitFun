@@ -24,124 +24,15 @@ use terminal_core::{
     TerminalBindingOptions, TerminalSessionBinding,
 };
 use tokio::io::AsyncWriteExt;
-use tool_runtime::util::ansi_cleaner::strip_ansi;
-
-// Inline rendering budget for Bash's own result formatter. When the shared
-// oversized tool-result pipeline can persist the result, it stores the raw
-// `output` field instead of this rendered/truncated fallback.
-const MAX_OUTPUT_LENGTH: usize = 30000;
-const INTERRUPT_OUTPUT_DRAIN_MS: u64 = 500;
-
-const BANNED_COMMANDS: &[&str] = &[
-    "alias",
-    // "curl",
-    // "curlie",
-    // "wget",
-    // "axel",
-    // "aria2c",
-    // "nc",
-    // "telnet",
-    // "lynx",
-    // "w3m",
-    // "links",
-    // "httpie",
-    // "xh",
-    // "http-prompt",
-    // "chrome",
-    // "firefox",
-    // "safari",
-];
-
-/// Detect a known-broken pattern: `osascript ... keystroke "<text containing
-/// non-ASCII>"`. AppleScript's `keystroke` sends raw key codes, NOT Unicode
-/// strings — typing CJK / emoji / non-Latin text via `keystroke` produces
-/// garbage like "AAA…" because the receiving app sees the wrong key codes.
-/// The correct path is `ControlHub domain:"desktop" action:"paste"` (which
-/// uses the system clipboard).
-fn detect_osascript_keystroke_non_ascii(cmd: &str) -> Option<String> {
-    if !cmd.contains("osascript") {
-        return None;
-    }
-    // Walk every `keystroke "..."` literal and check for non-ASCII inside.
-    let bytes = cmd.as_bytes();
-    let needle = b"keystroke";
-    let mut i = 0usize;
-    while i + needle.len() < bytes.len() {
-        if &bytes[i..i + needle.len()] == needle {
-            // Find the next quoted string after `keystroke`.
-            let mut j = i + needle.len();
-            while j < bytes.len() && bytes[j] != b'"' {
-                j += 1;
-            }
-            if j >= bytes.len() {
-                break;
-            }
-            let start = j + 1;
-            let mut end = start;
-            while end < bytes.len() && bytes[end] != b'"' {
-                end += 1;
-            }
-            if end > bytes.len() {
-                break;
-            }
-            let literal = &cmd[start..end.min(cmd.len())];
-            if !literal.is_ascii() {
-                return Some(literal.to_string());
-            }
-            i = end + 1;
-        } else {
-            i += 1;
-        }
-    }
-    None
-}
-
-/// Detect `osascript` driving a chat / IM application. The model loves to
-/// reach for AppleScript here, but `tell process "<App>" to keystroke …` is
-/// brittle (no CJK), opaque (no return value to verify), and almost always
-/// loses to `system.open_app + desktop.paste` or the `im_send_message`
-/// playbook. Returns the matched app name when detected.
-fn detect_osascript_im_app(cmd: &str) -> Option<&'static str> {
-    if !cmd.contains("osascript") {
-        return None;
-    }
-    const IM_APPS: &[&str] = &[
-        "WeChat", "微信", "iMessage", "Messages", "Slack", "Lark", "飞书", "Telegram", "DingTalk",
-        "钉钉", "QQ", "Discord", "Teams", "Whatsapp", "WhatsApp",
-    ];
-    let cmd_lc = cmd.to_lowercase();
-    for app in IM_APPS {
-        let app_lc = app.to_lowercase();
-        if cmd.contains(app) || cmd_lc.contains(&app_lc) {
-            return Some(*app);
-        }
-    }
-    None
-}
-
-fn truncate_output_preserving_tail(s: &str, max_chars: usize) -> String {
-    let chars: Vec<char> = s.chars().collect();
-    if chars.len() <= max_chars {
-        return s.to_string();
-    }
-
-    let tail_bias = max_chars.saturating_mul(4) / 5;
-    let separator = "\n... [truncated, middle omitted, tail preserved] ...\n";
-    let separator_len = separator.chars().count();
-
-    if separator_len >= max_chars {
-        return chars[chars.len() - max_chars..].iter().collect();
-    }
-
-    let content_budget = max_chars - separator_len;
-    let tail_len = tail_bias.min(content_budget);
-    let head_len = content_budget.saturating_sub(tail_len);
-
-    let head: String = chars[..head_len].iter().collect();
-    let tail: String = chars[chars.len() - tail_len..].iter().collect();
-
-    format!("{head}{separator}{tail}")
-}
+use tool_runtime::shell::{
+    banned_shell_command, bash_noninteractive_env, command_for_working_directory,
+    detect_osascript_im_app, detect_osascript_keystroke_non_ascii,
+    format_background_command_delivery_text, format_background_command_display_text,
+    format_background_command_error_display_text, format_background_command_error_text,
+    render_local_shell_result, render_remote_shell_result, BackgroundCommandDeliveryTextRequest,
+    BackgroundCommandErrorTextRequest, BackgroundCommandStatusFacts, LocalShellResultRenderRequest,
+    RemoteShellResultRenderRequest, BASH_INTERRUPT_OUTPUT_DRAIN_MS, BASH_RESULT_MAX_OUTPUT_LENGTH,
+};
 
 /// Result of shell resolution for bash tool
 struct ResolvedShell {
@@ -163,18 +54,6 @@ impl Default for BashTool {
 impl BashTool {
     pub fn new() -> Self {
         Self
-    }
-
-    fn sh_quote(s: &str) -> String {
-        format!("'{}'", s.replace('\'', "'\\''"))
-    }
-
-    fn command_for_working_directory(command: &str, working_directory: Option<&str>) -> String {
-        working_directory
-            .map(str::trim)
-            .filter(|dir| !dir.is_empty())
-            .map(|dir| format!("cd {} && {}", Self::sh_quote(dir), command))
-            .unwrap_or_else(|| command.to_string())
     }
 
     fn resolve_working_directory(
@@ -213,17 +92,7 @@ impl BashTool {
     /// Build environment variables that suppress interactive behaviors
     /// (pagers, editors, prompts) so agent-driven commands never block.
     pub fn noninteractive_env() -> std::collections::HashMap<String, String> {
-        let mut env = std::collections::HashMap::new();
-        env.insert("BITFUN_NONINTERACTIVE".to_string(), "1".to_string());
-        // Disable git pager globally (prevents `less`/`more` from blocking)
-        env.insert("GIT_PAGER".to_string(), "cat".to_string());
-        // Disable generic pager for other tools (man, etc.)
-        env.insert("PAGER".to_string(), "cat".to_string());
-        // Prevent git from prompting for credentials or SSH passphrases
-        env.insert("GIT_TERMINAL_PROMPT".to_string(), "0".to_string());
-        // Ensure git never opens an interactive editor (e.g. for commit messages)
-        env.insert("GIT_EDITOR".to_string(), "true".to_string());
-        env
+        bash_noninteractive_env()
     }
 
     /// Resolve shell configuration for bash tool.
@@ -268,151 +137,6 @@ impl BashTool {
         }
     }
 
-    fn render_result(
-        &self,
-        terminal_session_id: &str,
-        working_directory: &str,
-        output_text: &str,
-        interrupted: bool,
-        timed_out: bool,
-        exit_code: i32,
-        shell_state: Option<&str>,
-    ) -> String {
-        let mut result_string = String::new();
-
-        // Exit code
-        result_string.push_str(&format!("<exit_code>{}</exit_code>", exit_code));
-        if !working_directory.is_empty() {
-            result_string.push_str(&format!(
-                "<working_directory>{}</working_directory>",
-                working_directory
-            ));
-        }
-
-        // Main output content
-        if !output_text.is_empty() {
-            let cleaned_output = strip_ansi(output_text);
-            let output_len = cleaned_output.chars().count();
-            if output_len > MAX_OUTPUT_LENGTH {
-                let truncated = truncate_output_preserving_tail(&cleaned_output, MAX_OUTPUT_LENGTH);
-                result_string.push_str(&format!(
-                    "<output truncated=\"true\">{}</output>",
-                    truncated
-                ));
-            } else {
-                result_string.push_str(&format!("<output>{}</output>", cleaned_output));
-            }
-        }
-
-        // Post-command terminal state: shows what the shell displayed after the
-        // command finished (e.g., prompt, continuation prompt, or other state).
-        // This gives AI the full picture of the terminal context.
-        if let Some(state) = shell_state {
-            let cleaned_state = strip_ansi(state);
-            result_string.push_str(&format!("<shell_state>{}</shell_state>", cleaned_state));
-        }
-
-        // Interruption notice
-        if timed_out {
-            result_string.push_str(
-                "<status type=\"timeout\">Command timed out before completion. Partial output, if any, is included above.</status>",
-            );
-        } else if interrupted {
-            result_string.push_str(
-                "<status type=\"interrupted\">Command was canceled by the user. ASK THE USER what they would like to do next.</status>"
-            );
-        }
-
-        // Terminal session ID
-        result_string.push_str(&format!(
-            "<terminal_session_id>{}</terminal_session_id>",
-            terminal_session_id
-        ));
-
-        result_string
-    }
-
-    fn render_output_block_with_limit(
-        tag: &str,
-        output_text: &str,
-        max_chars: usize,
-    ) -> Option<String> {
-        if output_text.is_empty() {
-            return None;
-        }
-
-        let cleaned_output = strip_ansi(output_text);
-        let output_len = cleaned_output.chars().count();
-        if max_chars == 0 {
-            Some(format!(
-                "<{tag} truncated=\"true\">... [truncated, no budget remaining] ...</{tag}>"
-            ))
-        } else if output_len > max_chars {
-            let truncated = truncate_output_preserving_tail(&cleaned_output, max_chars);
-            Some(format!("<{tag} truncated=\"true\">{}</{tag}>", truncated))
-        } else {
-            Some(format!("<{tag}>{}</{tag}>", cleaned_output))
-        }
-    }
-
-    fn remote_stream_budgets(stdout: &str, stderr: &str) -> (usize, usize) {
-        let stdout_len = strip_ansi(stdout).chars().count();
-        let stderr_len = strip_ansi(stderr).chars().count();
-
-        if stderr_len >= MAX_OUTPUT_LENGTH {
-            return (0, MAX_OUTPUT_LENGTH);
-        }
-
-        let stderr_budget = stderr_len;
-        let stdout_budget = MAX_OUTPUT_LENGTH.saturating_sub(stderr_budget);
-        (stdout_budget.min(stdout_len), stderr_budget)
-    }
-
-    fn render_remote_result(
-        &self,
-        working_directory: &str,
-        stdout: &str,
-        stderr: &str,
-        interrupted: bool,
-        timed_out: bool,
-        exit_code: i32,
-    ) -> String {
-        let mut result_string = String::new();
-        result_string.push_str("<remote_ssh>true</remote_ssh>");
-        result_string.push_str(&format!("<exit_code>{}</exit_code>", exit_code));
-        if !working_directory.is_empty() {
-            result_string.push_str(&format!(
-                "<working_directory>{}</working_directory>",
-                working_directory
-            ));
-        }
-
-        let (stdout_budget, stderr_budget) = Self::remote_stream_budgets(stdout, stderr);
-
-        if let Some(stdout_block) =
-            Self::render_output_block_with_limit("stdout", stdout, stdout_budget)
-        {
-            result_string.push_str(&stdout_block);
-        }
-        if let Some(stderr_block) =
-            Self::render_output_block_with_limit("stderr", stderr, stderr_budget)
-        {
-            result_string.push_str(&stderr_block);
-        }
-
-        if timed_out {
-            result_string.push_str(
-                "<status type=\"timeout\">Command timed out before completion. Partial stdout/stderr, if any, is included above.</status>",
-            );
-        } else if interrupted {
-            result_string.push_str(
-                "<status type=\"interrupted\">Command was canceled before completion. ASK THE USER what they would like to do next.</status>",
-            );
-        }
-
-        result_string
-    }
-
     fn emit_terminal_ready_event(tool_use_id: &str, terminal_session_id: &str) {
         let event = ToolTerminalReady(ToolTerminalReadyInfo {
             tool_use_id: tool_use_id.to_string(),
@@ -451,97 +175,6 @@ impl BashTool {
                 &format!("tool-results/{}.txt", tool_use_id),
             )
             .unwrap_or_else(|_| output_file_path.display().to_string())
-    }
-
-    fn format_background_command_delivery_text(
-        command: &str,
-        terminal_session_id: &str,
-        working_directory: &str,
-        exit_code: Option<i32>,
-        timed_out: bool,
-        interrupted: bool,
-        output_file_reference: &str,
-        output_persist_error: Option<&str>,
-    ) -> String {
-        let (status, summary) = if timed_out {
-            ("timeout", "Background Bash command timed out.")
-        } else if interrupted {
-            ("interrupted", "Background Bash command was interrupted.")
-        } else if exit_code == Some(0) {
-            (
-                "completed",
-                "Background Bash command completed successfully.",
-            )
-        } else {
-            (
-                "failed",
-                "Background Bash command completed with a non-zero exit code.",
-            )
-        };
-        let exit_code_attr = exit_code
-            .map(|code| format!(" exit_code=\"{}\"", code))
-            .unwrap_or_default();
-        let persistence_line = output_persist_error.map_or_else(
-            || format!("Full output was saved to: {}", output_file_reference),
-            |error| {
-                format!(
-                    "Output persistence encountered an error while writing {}: {}",
-                    output_file_reference, error
-                )
-            },
-        );
-
-        format!(
-            "{summary}\n<background_command status=\"{status}\" terminal_session_id=\"{terminal_session_id}\"{exit_code_attr}>\nCommand: {command}\nWorking directory: {working_directory}\n{persistence_line}\n</background_command>"
-        )
-    }
-
-    fn format_background_command_display_text(
-        exit_code: Option<i32>,
-        timed_out: bool,
-        interrupted: bool,
-    ) -> String {
-        if timed_out {
-            "Background Bash command timed out.".to_string()
-        } else if interrupted {
-            "Background Bash command was interrupted.".to_string()
-        } else if exit_code == Some(0) {
-            "Background Bash command completed successfully.".to_string()
-        } else {
-            "Background Bash command completed with a non-zero exit code.".to_string()
-        }
-    }
-
-    fn format_background_command_error_text(
-        command: &str,
-        terminal_session_id: &str,
-        working_directory: &str,
-        output_file_reference: &str,
-        error: &str,
-        output_persist_error: Option<&str>,
-    ) -> String {
-        let persistence_line = output_persist_error.map_or_else(
-            || {
-                format!(
-                    "Any captured output was saved to: {}",
-                    output_file_reference
-                )
-            },
-            |persist_error| {
-                format!(
-                    "Output persistence encountered an error while writing {}: {}",
-                    output_file_reference, persist_error
-                )
-            },
-        );
-
-        format!(
-            "Background Bash command failed before producing a final completion result.\n<background_command status=\"error\" terminal_session_id=\"{terminal_session_id}\">\nCommand: {command}\nWorking directory: {working_directory}\n{persistence_line}\nError: {error}\n</background_command>"
-        )
-    }
-
-    fn format_background_command_error_display_text() -> String {
-        "Background Bash command failed before producing a final completion result.".to_string()
     }
 }
 
@@ -582,7 +215,7 @@ Usage notes:
   - DO NOT use multiline commands or HEREDOC syntax (e.g., <<EOF, heredoc with newlines). Only single-line commands are supported.
   - You can specify an optional timeout in milliseconds (up to 600000ms / 10 minutes). If not specified, commands will timeout after 120000ms (2 minutes).
   - It is very helpful if you write a clear, concise description of what this command does. For simple commands, keep it brief (5-10 words). For complex commands (piped commands, obscure flags, or anything hard to understand at a glance), add enough context to clarify what it does.
-  - If the output exceeds {MAX_OUTPUT_LENGTH} characters, output will be truncated before being returned to you, with the tail of the output preserved because the ending is usually more important.
+  - If the output exceeds {BASH_RESULT_MAX_OUTPUT_LENGTH} characters, output will be truncated before being returned to you, with the tail of the output preserved because the ending is usually more important.
   - You can use the `run_in_background` parameter to run the command in a new dedicated background terminal session. The tool returns immediately without waiting for the command to finish. The final completion result will be delivered back to you automatically when it is done, and the full output will be saved to a session runtime file instead of being pasted back into chat. Only use this for long-running processes (e.g., dev servers, watchers) where you do not need the output right away. You do not need to append '&' to the command. NOTE: `timeout_ms` is ignored when `run_in_background` is true.
   - Each result includes a `<terminal_session_id>` tag identifying the terminal session. The persistent shell session ID remains constant throughout the entire conversation; background sessions each have their own unique ID.
   - The output may include the command echo and/or the shell prompt prefix (for example, a printed `PS` or `$` prompt line). Do not treat these as part of the command's actual result.
@@ -683,20 +316,16 @@ Usage notes:
             .unwrap_or(false);
 
         if let Some(cmd) = command {
-            let parts: Vec<&str> = cmd.split_whitespace().collect();
-            if let Some(base_cmd) = parts.first() {
-                // Check if command is banned
-                if BANNED_COMMANDS.contains(&base_cmd.to_lowercase().as_str()) {
-                    return ValidationResult {
-                        result: false,
-                        message: Some(format!(
-                            "Command '{}' is not allowed for security reasons",
-                            base_cmd
-                        )),
-                        error_code: Some(403),
-                        meta: None,
-                    };
-                }
+            if let Some(base_cmd) = banned_shell_command(cmd) {
+                return ValidationResult {
+                    result: false,
+                    message: Some(format!(
+                        "Command '{}' is not allowed for security reasons",
+                        base_cmd
+                    )),
+                    error_code: Some(403),
+                    meta: None,
+                };
             }
 
             // Reject `osascript ... keystroke "<non-ASCII>"` — fundamentally
@@ -901,10 +530,8 @@ Usage notes:
                 "Executing command on remote workspace via SSH: {}",
                 command_str
             );
-            let remote_command = Self::command_for_working_directory(
-                command_str,
-                requested_working_directory.as_deref(),
-            );
+            let remote_command =
+                command_for_working_directory(command_str, requested_working_directory.as_deref());
 
             let timeout_ms = input
                 .get("timeout_ms")
@@ -932,14 +559,14 @@ Usage notes:
                 .map(|p| p.to_string_lossy().to_string())
                 .unwrap_or_default();
             let working_directory = requested_working_directory.unwrap_or(working_directory);
-            let result_for_assistant = self.render_remote_result(
-                &working_directory,
-                &exec_result.stdout,
-                &exec_result.stderr,
-                exec_result.interrupted,
-                exec_result.timed_out,
-                exec_result.exit_code,
-            );
+            let result_for_assistant = render_remote_shell_result(RemoteShellResultRenderRequest {
+                working_directory: &working_directory,
+                stdout: &exec_result.stdout,
+                stderr: &exec_result.stderr,
+                interrupted: exec_result.interrupted,
+                timed_out: exec_result.timed_out,
+                exit_code: exec_result.exit_code,
+            });
 
             let result = ToolResult::Result {
                 data: json!({
@@ -1064,10 +691,8 @@ Usage notes:
             .as_ref()
             .cloned()
             .unwrap_or_else(|| primary_cwd.clone());
-        let command_to_execute = Self::command_for_working_directory(
-            command_str,
-            requested_working_directory.as_deref(),
-        );
+        let command_to_execute =
+            command_for_working_directory(command_str, requested_working_directory.as_deref());
 
         // --- Foreground execution ---
 
@@ -1137,7 +762,7 @@ Usage notes:
                     was_interrupted = true;
                     interrupt_drain_deadline = Some(
                         tokio::time::Instant::now()
-                            + Duration::from_millis(INTERRUPT_OUTPUT_DRAIN_MS),
+                            + Duration::from_millis(BASH_INTERRUPT_OUTPUT_DRAIN_MS),
                     );
 
                     let _ = terminal_api
@@ -1253,15 +878,15 @@ Usage notes:
             "terminal_session_id": primary_session_id,
         });
 
-        let result_for_assistant = self.render_result(
-            &primary_session_id,
-            &execution_working_directory,
-            &accumulated_output,
-            was_interrupted,
+        let result_for_assistant = render_local_shell_result(LocalShellResultRenderRequest {
+            terminal_session_id: &primary_session_id,
+            working_directory: &execution_working_directory,
+            output_text: &accumulated_output,
+            interrupted: was_interrupted,
             timed_out,
-            final_exit_code.unwrap_or(-1),
-            final_shell_state.as_deref(),
-        );
+            exit_code: final_exit_code.unwrap_or(-1),
+            shell_state: final_shell_state.as_deref(),
+        });
 
         Ok(vec![ToolResult::Result {
             data: result_data,
@@ -1519,21 +1144,27 @@ impl BashTool {
                         let timed_out = completion_reason == CommandCompletionReason::TimedOut;
                         let interrupted =
                             !timed_out && matches!(exit_code, Some(130) | Some(-1073741510));
-                        let delivery_text = Self::format_background_command_delivery_text(
-                            &command,
-                            &terminal_session_id,
-                            &working_directory,
+                        let status = BackgroundCommandStatusFacts {
                             exit_code,
                             timed_out,
                             interrupted,
-                            &output_file_reference_for_task,
-                            output_persist_error.as_deref(),
+                        };
+                        let delivery_text = format_background_command_delivery_text(
+                            BackgroundCommandDeliveryTextRequest {
+                                command: &command,
+                                terminal_session_id: &terminal_session_id,
+                                working_directory: &working_directory,
+                                status,
+                                output_file_reference: &output_file_reference_for_task,
+                                output_persist_error: output_persist_error.as_deref(),
+                            },
                         );
-                        let display_text = Self::format_background_command_display_text(
-                            exit_code,
-                            timed_out,
-                            interrupted,
-                        );
+                        let display_text =
+                            format_background_command_display_text(BackgroundCommandStatusFacts {
+                                exit_code,
+                                timed_out,
+                                interrupted,
+                            });
                         let metadata = json!({
                             "kind": "background_result",
                             "sourceKind": "bash_command",
@@ -1572,15 +1203,17 @@ impl BashTool {
                         break;
                     }
                     CommandStreamEvent::Error { message } => {
-                        let delivery_text = Self::format_background_command_error_text(
-                            &command,
-                            &terminal_session_id,
-                            &working_directory,
-                            &output_file_reference_for_task,
-                            &message,
-                            output_persist_error.as_deref(),
+                        let delivery_text = format_background_command_error_text(
+                            BackgroundCommandErrorTextRequest {
+                                command: &command,
+                                terminal_session_id: &terminal_session_id,
+                                working_directory: &working_directory,
+                                output_file_reference: &output_file_reference_for_task,
+                                error: &message,
+                                output_persist_error: output_persist_error.as_deref(),
+                            },
                         );
-                        let display_text = Self::format_background_command_error_display_text();
+                        let display_text = format_background_command_error_display_text();
                         let metadata = json!({
                             "kind": "background_result",
                             "sourceKind": "bash_command",
@@ -1623,15 +1256,16 @@ impl BashTool {
             }
 
             if !saw_completion && !delivery_sent {
-                let delivery_text = Self::format_background_command_error_text(
-                    &command,
-                    &terminal_session_id,
-                    &working_directory,
-                    &output_file_reference_for_task,
-                    "Background Bash command stream ended without a completion event.",
-                    output_persist_error.as_deref(),
-                );
-                let display_text = Self::format_background_command_error_display_text();
+                let delivery_text =
+                    format_background_command_error_text(BackgroundCommandErrorTextRequest {
+                        command: &command,
+                        terminal_session_id: &terminal_session_id,
+                        working_directory: &working_directory,
+                        output_file_reference: &output_file_reference_for_task,
+                        error: "Background Bash command stream ended without a completion event.",
+                        output_persist_error: output_persist_error.as_deref(),
+                    });
+                let display_text = format_background_command_error_display_text();
                 let metadata = json!({
                     "kind": "background_result",
                     "sourceKind": "bash_command",
@@ -1716,7 +1350,7 @@ mod tests {
     fn truncate_output_preserving_tail_keeps_end_of_output() {
         let input = "BEGIN-".to_string() + &"x".repeat(120) + "-IMPORTANT-END";
 
-        let truncated = truncate_output_preserving_tail(&input, 80);
+        let truncated = tool_runtime::shell::truncate_output_preserving_tail(&input, 80);
 
         assert!(truncated.contains("tail preserved"));
         assert!(truncated.ends_with("IMPORTANT-END"));
@@ -1769,12 +1403,19 @@ mod tests {
 
     #[test]
     fn render_result_marks_truncated_output_and_keeps_tail() {
-        let tool = BashTool::new();
-        let long_output =
-            "prefix\n".to_string() + &"y".repeat(MAX_OUTPUT_LENGTH + 100) + "\nfinal-error";
+        let long_output = "prefix\n".to_string()
+            + &"y".repeat(BASH_RESULT_MAX_OUTPUT_LENGTH + 100)
+            + "\nfinal-error";
 
-        let rendered =
-            tool.render_result("session-1", "/repo", &long_output, false, false, 1, None);
+        let rendered = render_local_shell_result(LocalShellResultRenderRequest {
+            terminal_session_id: "session-1",
+            working_directory: "/repo",
+            output_text: &long_output,
+            interrupted: false,
+            timed_out: false,
+            exit_code: 1,
+            shell_state: None,
+        });
 
         assert!(rendered.contains("<output truncated=\"true\">"));
         assert!(rendered.contains("tail preserved"));
@@ -1784,10 +1425,14 @@ mod tests {
 
     #[test]
     fn render_remote_result_keeps_stdout_and_stderr_separate() {
-        let tool = BashTool::new();
-
-        let rendered =
-            tool.render_remote_result("/repo", "stdout text", "stderr text", false, false, 2);
+        let rendered = render_remote_shell_result(RemoteShellResultRenderRequest {
+            working_directory: "/repo",
+            stdout: "stdout text",
+            stderr: "stderr text",
+            interrupted: false,
+            timed_out: false,
+            exit_code: 2,
+        });
 
         assert!(rendered.contains("<remote_ssh>true</remote_ssh>"));
         assert!(rendered.contains("<exit_code>2</exit_code>"));
@@ -1798,14 +1443,21 @@ mod tests {
 
     #[test]
     fn render_remote_result_uses_shared_budget_with_stderr_priority() {
-        let tool = BashTool::new();
-        let long_stdout =
-            "prefix\n".to_string() + &"x".repeat(MAX_OUTPUT_LENGTH + 100) + "\nstdout-tail";
-        let long_stderr =
-            "prefix\n".to_string() + &"z".repeat(MAX_OUTPUT_LENGTH / 2) + "\nstderr-tail";
+        let long_stdout = "prefix\n".to_string()
+            + &"x".repeat(BASH_RESULT_MAX_OUTPUT_LENGTH + 100)
+            + "\nstdout-tail";
+        let long_stderr = "prefix\n".to_string()
+            + &"z".repeat(BASH_RESULT_MAX_OUTPUT_LENGTH / 2)
+            + "\nstderr-tail";
 
-        let rendered =
-            tool.render_remote_result("/repo", &long_stdout, &long_stderr, false, false, 1);
+        let rendered = render_remote_shell_result(RemoteShellResultRenderRequest {
+            working_directory: "/repo",
+            stdout: &long_stdout,
+            stderr: &long_stderr,
+            interrupted: false,
+            timed_out: false,
+            exit_code: 1,
+        });
 
         assert!(rendered.contains("<stdout truncated=\"true\">"));
         assert!(rendered.contains("stdout-tail"));
@@ -1815,12 +1467,18 @@ mod tests {
 
     #[test]
     fn render_remote_result_gives_all_budget_to_oversized_stderr() {
-        let tool = BashTool::new();
-        let long_stderr =
-            "prefix\n".to_string() + &"z".repeat(MAX_OUTPUT_LENGTH + 100) + "\nremote-final-error";
+        let long_stderr = "prefix\n".to_string()
+            + &"z".repeat(BASH_RESULT_MAX_OUTPUT_LENGTH + 100)
+            + "\nremote-final-error";
 
-        let rendered =
-            tool.render_remote_result("/repo", "stdout text", &long_stderr, false, false, 1);
+        let rendered = render_remote_shell_result(RemoteShellResultRenderRequest {
+            working_directory: "/repo",
+            stdout: "stdout text",
+            stderr: &long_stderr,
+            interrupted: false,
+            timed_out: false,
+            exit_code: 1,
+        });
 
         assert!(rendered.contains("<stdout truncated=\"true\">"));
         assert!(rendered.contains("no budget remaining"));
@@ -1840,33 +1498,30 @@ mod tests {
 
     #[test]
     fn command_is_prefixed_with_quoted_working_directory_when_requested() {
-        let command = BashTool::command_for_working_directory(
-            "pnpm install",
-            Some("/Users/example/My Project"),
-        );
+        let command =
+            command_for_working_directory("pnpm install", Some("/Users/example/My Project"));
 
         assert_eq!(command, "cd '/Users/example/My Project' && pnpm install");
     }
 
     #[test]
     fn command_prefix_escapes_single_quotes_in_working_directory() {
-        let command = BashTool::command_for_working_directory("pwd", Some("/tmp/it's fine"));
+        let command = command_for_working_directory("pwd", Some("/tmp/it's fine"));
 
         assert_eq!(command, "cd '/tmp/it'\\''s fine' && pwd");
     }
 
     #[test]
     fn command_result_includes_working_directory_for_model() {
-        let tool = BashTool::new();
-        let rendered = tool.render_result(
-            "session-1",
-            "/private/tmp",
-            "ERR_PNPM_NO_PKG_MANIFEST No package.json found in /private/tmp",
-            false,
-            false,
-            1,
-            None,
-        );
+        let rendered = render_local_shell_result(LocalShellResultRenderRequest {
+            terminal_session_id: "session-1",
+            working_directory: "/private/tmp",
+            output_text: "ERR_PNPM_NO_PKG_MANIFEST No package.json found in /private/tmp",
+            interrupted: false,
+            timed_out: false,
+            exit_code: 1,
+            shell_state: None,
+        });
 
         assert!(rendered.contains("<exit_code>1</exit_code>"));
         assert!(rendered.contains("<working_directory>/private/tmp</working_directory>"));
@@ -1875,16 +1530,19 @@ mod tests {
 
     #[test]
     fn background_delivery_text_points_to_saved_output_file() {
-        let rendered = BashTool::format_background_command_delivery_text(
-            "pnpm test",
-            "bg-session-1",
-            "/repo",
-            Some(0),
-            false,
-            false,
-            "/runtime/sessions/session/tool-results/bash_123.txt",
-            None,
-        );
+        let rendered =
+            format_background_command_delivery_text(BackgroundCommandDeliveryTextRequest {
+                command: "pnpm test",
+                terminal_session_id: "bg-session-1",
+                working_directory: "/repo",
+                status: BackgroundCommandStatusFacts {
+                    exit_code: Some(0),
+                    timed_out: false,
+                    interrupted: false,
+                },
+                output_file_reference: "/runtime/sessions/session/tool-results/bash_123.txt",
+                output_persist_error: None,
+            });
 
         assert!(rendered.contains("Background Bash command completed successfully."));
         assert!(rendered.contains("status=\"completed\""));
@@ -1897,23 +1555,39 @@ mod tests {
     #[test]
     fn background_display_text_is_concise() {
         assert_eq!(
-            BashTool::format_background_command_display_text(Some(0), false, false),
+            format_background_command_display_text(BackgroundCommandStatusFacts {
+                exit_code: Some(0),
+                timed_out: false,
+                interrupted: false,
+            }),
             "Background Bash command completed successfully."
         );
         assert_eq!(
-            BashTool::format_background_command_display_text(Some(1), false, false),
+            format_background_command_display_text(BackgroundCommandStatusFacts {
+                exit_code: Some(1),
+                timed_out: false,
+                interrupted: false,
+            }),
             "Background Bash command completed with a non-zero exit code."
         );
         assert_eq!(
-            BashTool::format_background_command_display_text(None, true, false),
+            format_background_command_display_text(BackgroundCommandStatusFacts {
+                exit_code: None,
+                timed_out: true,
+                interrupted: false,
+            }),
             "Background Bash command timed out."
         );
         assert_eq!(
-            BashTool::format_background_command_display_text(Some(130), false, true),
+            format_background_command_display_text(BackgroundCommandStatusFacts {
+                exit_code: Some(130),
+                timed_out: false,
+                interrupted: true,
+            }),
             "Background Bash command was interrupted."
         );
         assert_eq!(
-            BashTool::format_background_command_error_display_text(),
+            format_background_command_error_display_text(),
             "Background Bash command failed before producing a final completion result."
         );
     }

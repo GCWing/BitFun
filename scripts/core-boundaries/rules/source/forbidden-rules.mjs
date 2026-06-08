@@ -1780,6 +1780,53 @@ export const forbiddenContentRules = [
       },
     ],
   },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/bash_tool.rs',
+    reason:
+      'BashTool must stay as terminal/session/checkpoint glue and must not re-own reusable shell execution helpers',
+    patterns: [
+      {
+        regex: /\bconst\s+MAX_OUTPUT_LENGTH\b/,
+        message: 'Bash output rendering budget is owned by tool-runtime::shell',
+      },
+      {
+        regex: /\bconst\s+BANNED_COMMANDS\b/,
+        message: 'Bash banned-command policy is owned by tool-runtime::shell',
+      },
+      {
+        regex: /\bfn\s+detect_osascript_keystroke_non_ascii\b/,
+        message: 'Bash osascript keystroke guard is owned by tool-runtime::shell',
+      },
+      {
+        regex: /\bfn\s+detect_osascript_im_app\b/,
+        message: 'Bash IM AppleScript guard is owned by tool-runtime::shell',
+      },
+      {
+        regex: /\bfn\s+truncate_output_preserving_tail\b/,
+        message: 'Bash output truncation is owned by tool-runtime::shell',
+      },
+      {
+        regex: /\bfn\s+command_for_working_directory\b/,
+        message: 'Bash working-directory command wrapping is owned by tool-runtime::shell',
+      },
+      {
+        regex: /\bfn\s+render_result\b/,
+        message: 'Bash local result rendering is owned by tool-runtime::shell',
+      },
+      {
+        regex: /\bfn\s+render_remote_result\b/,
+        message: 'Bash remote result rendering is owned by tool-runtime::shell',
+      },
+      {
+        regex: /\bfn\s+format_background_command_delivery_text\b/,
+        message: 'Bash background-result delivery text is owned by tool-runtime::shell',
+      },
+      {
+        regex: /\bfn\s+format_background_command_error_text\b/,
+        message: 'Bash background-result error text is owned by tool-runtime::shell',
+      },
+    ],
+  },
 ];
 
 export const forbiddenContentUnderRules = [

@@ -10,19 +10,18 @@
 
 use crate::service_agent_runtime::{CoreRemoteSessionTrackerHost, CoreServiceAgentRuntime};
 use anyhow::{anyhow, Result};
-use log::info;
 use serde_json::Value;
 use std::sync::{Arc, OnceLock};
 
 use super::encryption;
 use bitfun_services_integrations::remote_connect::{
     build_remote_image_contexts, cancel_remote_task, generate_remote_initial_sync,
-    handle_remote_interaction_command, handle_remote_poll_command, handle_remote_session_command,
-    handle_remote_workspace_command, handle_remote_workspace_file_command,
-    remote_dialog_submit_response, remote_task_cancel_response,
-    resolve_remote_execution_image_contexts, submit_remote_dialog, RemoteCancelTaskRequest,
-    RemoteConnectSubmissionSource, RemoteDialogSubmissionPolicy, RemoteDialogSubmissionRequest,
-    RemoteDialogSubmitOutcome, RemoteImageContext, RemoteSessionTrackerRegistry,
+    handle_remote_command, handle_remote_interaction_command, handle_remote_poll_command,
+    handle_remote_session_command, handle_remote_workspace_command,
+    handle_remote_workspace_file_command, submit_remote_dialog, RemoteCancelTaskRequest,
+    RemoteCommandRuntimeHost, RemoteConnectSubmissionSource, RemoteDialogSubmissionPolicy,
+    RemoteDialogSubmissionRequest, RemoteDialogSubmitOutcome, RemoteImageContext,
+    RemoteSessionTrackerRegistry,
 };
 pub use bitfun_services_integrations::remote_connect::{
     ActiveTurnSnapshot, AssistantEntry, ChatImageAttachment, ChatMessage, ChatMessageItem,
@@ -57,9 +56,10 @@ fn remote_image_context_to_core(
 
 // ── RemoteExecutionDispatcher (global singleton) ────────────────────
 
-/// Shared dispatch layer that owns the session state trackers.
-/// Both `RemoteServer` (mobile relay) and the bot use this to
-/// dispatch commands through the same path.
+/// Shared tracker adapter for remote relay and bot execution paths.
+///
+/// Command routing lives in `bitfun-services-integrations`; core only keeps the
+/// global tracker registry adapter needed by concrete session/runtime hosts.
 pub struct RemoteExecutionDispatcher {
     tracker_registry: RemoteSessionTrackerRegistry,
 }
@@ -156,10 +156,82 @@ impl RemoteExecutionDispatcher {
     }
 }
 
+struct CoreRemoteCommandRuntimeHost<'a> {
+    dispatcher: &'a RemoteExecutionDispatcher,
+}
+
+impl<'a> CoreRemoteCommandRuntimeHost<'a> {
+    fn new(dispatcher: &'a RemoteExecutionDispatcher) -> Self {
+        Self { dispatcher }
+    }
+}
+
+#[async_trait::async_trait]
+impl RemoteCommandRuntimeHost for CoreRemoteCommandRuntimeHost<'_> {
+    type ImageContext = crate::agentic::image_analysis::ImageContextData;
+
+    async fn handle_workspace_command(&self, command: &RemoteCommand) -> RemoteResponse {
+        let host = CoreServiceAgentRuntime::remote_workspace_host();
+        handle_remote_workspace_command(&host, command).await
+    }
+
+    async fn handle_session_command(&self, command: &RemoteCommand) -> RemoteResponse {
+        let host = match CoreServiceAgentRuntime::remote_session_host() {
+            Ok(host) => host,
+            Err(message) => return RemoteResponse::Error { message },
+        };
+        handle_remote_session_command(&host, command).await
+    }
+
+    async fn handle_poll_command(&self, command: &RemoteCommand) -> RemoteResponse {
+        let host = CoreServiceAgentRuntime::remote_poll_host(self.dispatcher);
+        handle_remote_poll_command(&host, command).await
+    }
+
+    async fn handle_workspace_file_command(&self, command: &RemoteCommand) -> RemoteResponse {
+        let host = CoreServiceAgentRuntime::remote_workspace_file_host();
+        handle_remote_workspace_file_command(&host, command).await
+    }
+
+    async fn handle_interaction_command(&self, command: &RemoteCommand) -> RemoteResponse {
+        let host = CoreServiceAgentRuntime::remote_interaction_host();
+        handle_remote_interaction_command(&host, command).await
+    }
+
+    async fn submit_dialog(
+        &self,
+        request: RemoteDialogSubmissionRequest<Self::ImageContext>,
+    ) -> std::result::Result<RemoteDialogSubmitOutcome, String> {
+        let host = CoreServiceAgentRuntime::remote_dialog_host(self.dispatcher)?;
+        submit_remote_dialog(&host, request).await
+    }
+
+    async fn cancel_task(
+        &self,
+        request: RemoteCancelTaskRequest,
+    ) -> std::result::Result<(), String> {
+        let host = CoreServiceAgentRuntime::remote_cancel_host()?;
+        cancel_remote_task(&host, request).await
+    }
+
+    fn legacy_image_contexts(&self, images: Option<&[ImageAttachment]>) -> Vec<Self::ImageContext> {
+        build_core_image_contexts(images)
+    }
+
+    fn explicit_image_contexts(
+        &self,
+        contexts: Vec<RemoteImageContext>,
+    ) -> Vec<Self::ImageContext> {
+        contexts
+            .into_iter()
+            .map(remote_image_context_to_core)
+            .collect()
+    }
+}
+
 // ── RemoteServer ───────────────────────────────────────────────────
 
-/// Bridges remote commands to local session operations.
-/// Delegates execution and tracker management to the global `RemoteExecutionDispatcher`.
+/// Bridges encrypted remote payloads to the integrations-owned command router.
 pub struct RemoteServer {
     shared_secret: [u8; 32],
 }
@@ -205,39 +277,9 @@ impl RemoteServer {
     }
 
     pub async fn dispatch(&self, cmd: &RemoteCommand) -> RemoteResponse {
-        match cmd {
-            RemoteCommand::Ping => RemoteResponse::Pong,
-
-            RemoteCommand::GetWorkspaceInfo
-            | RemoteCommand::ListRecentWorkspaces
-            | RemoteCommand::SetWorkspace { .. }
-            | RemoteCommand::ListAssistants
-            | RemoteCommand::SetAssistant { .. } => self.handle_workspace_command(cmd).await,
-
-            RemoteCommand::ListSessions { .. }
-            | RemoteCommand::CreateSession { .. }
-            | RemoteCommand::GetModelCatalog { .. }
-            | RemoteCommand::SetSessionModel { .. }
-            | RemoteCommand::UpdateSessionTitle { .. }
-            | RemoteCommand::GetSessionMessages { .. }
-            | RemoteCommand::DeleteSession { .. } => self.handle_session_command(cmd).await,
-
-            RemoteCommand::SendMessage { .. }
-            | RemoteCommand::CancelTask { .. }
-            | RemoteCommand::ConfirmTool { .. }
-            | RemoteCommand::RejectTool { .. }
-            | RemoteCommand::CancelTool { .. }
-            | RemoteCommand::AnswerQuestion { .. } => self.handle_execution_command(cmd).await,
-
-            RemoteCommand::PollSession { .. } => self.handle_poll_command(cmd).await,
-
-            RemoteCommand::ReadFile { .. }
-            | RemoteCommand::ReadFileChunk { .. }
-            | RemoteCommand::GetFileInfo { .. } => {
-                let host = CoreServiceAgentRuntime::remote_workspace_file_host();
-                handle_remote_workspace_file_command(&host, cmd).await
-            }
-        }
+        let dispatcher = get_or_init_global_dispatcher();
+        let host = CoreRemoteCommandRuntimeHost::new(dispatcher.as_ref());
+        handle_remote_command(&host, cmd, RemoteConnectSubmissionSource::Relay).await
     }
 
     pub async fn generate_initial_sync(
@@ -247,94 +289,6 @@ impl RemoteServer {
         let host = CoreServiceAgentRuntime::remote_initial_sync_host();
         generate_remote_initial_sync(&host, authenticated_user_id).await
     }
-
-    // ── Poll command handler ────────────────────────────────────────
-
-    async fn handle_poll_command(&self, cmd: &RemoteCommand) -> RemoteResponse {
-        let dispatcher = get_or_init_global_dispatcher();
-        let host = CoreServiceAgentRuntime::remote_poll_host(dispatcher.as_ref());
-        handle_remote_poll_command(&host, cmd).await
-    }
-
-    // ── Workspace commands ──────────────────────────────────────────
-
-    async fn handle_workspace_command(&self, cmd: &RemoteCommand) -> RemoteResponse {
-        let host = CoreServiceAgentRuntime::remote_workspace_host();
-        handle_remote_workspace_command(&host, cmd).await
-    }
-
-    // ── Session commands ────────────────────────────────────────────
-
-    async fn handle_session_command(&self, cmd: &RemoteCommand) -> RemoteResponse {
-        let host = match CoreServiceAgentRuntime::remote_session_host() {
-            Ok(host) => host,
-            Err(message) => return RemoteResponse::Error { message },
-        };
-        handle_remote_session_command(&host, cmd).await
-    }
-
-    // ── Execution commands ──────────────────────────────────────────
-
-    async fn handle_execution_command(&self, cmd: &RemoteCommand) -> RemoteResponse {
-        let dispatcher = get_or_init_global_dispatcher();
-
-        match cmd {
-            RemoteCommand::SendMessage {
-                session_id,
-                content,
-                agent_type: requested_agent_type,
-                images,
-                image_contexts,
-            } => {
-                // Unified: prefer image_contexts (new format), fall back to legacy images
-                let explicit_contexts = image_contexts.clone().map(|contexts| {
-                    contexts
-                        .into_iter()
-                        .map(remote_image_context_to_core)
-                        .collect()
-                });
-                let resolved_contexts = resolve_remote_execution_image_contexts(
-                    images.as_ref().map(Vec::as_slice),
-                    explicit_contexts,
-                    build_core_image_contexts,
-                );
-                info!(
-                    "Remote send_message: session={session_id}, agent_type={}, image_contexts={}",
-                    requested_agent_type.as_deref().unwrap_or("agentic"),
-                    resolved_contexts.len()
-                );
-                remote_dialog_submit_response(
-                    dispatcher
-                        .send_message(
-                            session_id,
-                            content.clone(),
-                            requested_agent_type.as_deref(),
-                            resolved_contexts,
-                            RemoteConnectSubmissionSource::Relay,
-                            None,
-                        )
-                        .await,
-                )
-            }
-            RemoteCommand::CancelTask {
-                session_id,
-                turn_id,
-            } => remote_task_cancel_response(
-                session_id.clone(),
-                dispatcher.cancel_task(session_id, turn_id.as_deref()).await,
-            ),
-            RemoteCommand::ConfirmTool { .. }
-            | RemoteCommand::RejectTool { .. }
-            | RemoteCommand::CancelTool { .. }
-            | RemoteCommand::AnswerQuestion { .. } => {
-                let host = CoreServiceAgentRuntime::remote_interaction_host();
-                handle_remote_interaction_command(&host, cmd).await
-            }
-            _ => RemoteResponse::Error {
-                message: "Unknown execution command".into(),
-            },
-        }
-    }
 }
 
 #[cfg(test)]
@@ -342,7 +296,8 @@ mod tests {
     use super::*;
     use crate::service::remote_connect::encryption::KeyPair;
     use bitfun_services_integrations::remote_connect::{
-        remote_session_restore_target, resolve_remote_cancel_decision, RemoteCancelDecision,
+        remote_session_restore_target, resolve_remote_cancel_decision,
+        resolve_remote_execution_image_contexts, RemoteCancelDecision,
     };
 
     #[test]

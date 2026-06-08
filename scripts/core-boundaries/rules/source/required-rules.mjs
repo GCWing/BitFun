@@ -1223,6 +1223,64 @@ export const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/execution/tool-execution/src/shell/mod.rs',
+    reason:
+      'tool-runtime must own reusable Bash shell execution policy, rendering, and background-result text helpers',
+    patterns: [
+      {
+        regex: /\bpub fn banned_shell_command\b/,
+        message: 'missing Bash banned-command policy owner',
+      },
+      {
+        regex: /\bpub fn detect_osascript_keystroke_non_ascii\b/,
+        message: 'missing Bash osascript keystroke guard owner',
+      },
+      {
+        regex: /\bpub fn detect_osascript_im_app\b/,
+        message: 'missing Bash IM AppleScript guard owner',
+      },
+      {
+        regex: /\bpub fn command_for_working_directory\b/,
+        message: 'missing Bash working-directory command wrapper owner',
+      },
+      {
+        regex: /\bpub fn bash_noninteractive_env\b/,
+        message: 'missing Bash noninteractive environment owner',
+      },
+      {
+        regex: /\bpub fn render_local_shell_result\b/,
+        message: 'missing local shell result rendering owner',
+      },
+      {
+        regex: /\bpub fn render_remote_shell_result\b/,
+        message: 'missing remote shell result rendering owner',
+      },
+      {
+        regex: /\bpub fn format_background_command_delivery_text\b/,
+        message: 'missing background command delivery text owner',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/tool-execution/tests/tool_io_contracts.rs',
+    reason:
+      'tool-runtime shell owner must keep focused behavior-equivalence contracts for Bash execution helpers',
+    patterns: [
+      {
+        regex: /\bbash_shell_owner_preserves_command_wrapping_and_env\b/,
+        message: 'missing Bash command/env owner regression',
+      },
+      {
+        regex: /\bbash_shell_owner_preserves_guard_and_result_rendering\b/,
+        message: 'missing Bash guard/rendering owner regression',
+      },
+      {
+        regex: /\bbash_shell_owner_preserves_background_delivery_texts\b/,
+        message: 'missing Bash background-result text owner regression',
+      },
+    ],
+  },
+  {
     path: 'src/crates/services/services-integrations/src/mcp/server/connection.rs',
     reason:
       'services-integrations MCP connection must keep initialize-scoped timeout and channel-close cleanup until MCP owner migration is reviewed',
@@ -2653,6 +2711,14 @@ export const requiredContentRules = [
         message: 'missing remote interaction command owner handler',
       },
       {
+        regex: /\bpub trait RemoteCommandRuntimeHost\b/,
+        message: 'missing remote command runtime host contract',
+      },
+      {
+        regex: /\bpub async fn handle_remote_command\b/,
+        message: 'missing remote command routing owner',
+      },
+      {
         regex: /\bpub fn remote_file_content_response\b/,
         message: 'missing remote file content response assembly helper',
       },
@@ -2923,6 +2989,14 @@ export const requiredContentRules = [
         message: 'missing remote execution response helper contract test',
       },
       {
+        regex: /\bremote_connect_command_owner_routes_send_message_and_prefers_explicit_images\b/,
+        message: 'missing remote command routing image/source regression',
+      },
+      {
+        regex: /\bremote_connect_command_owner_preserves_cancel_and_group_routing\b/,
+        message: 'missing remote command routing group/cancel regression',
+      },
+      {
         regex: /\bremote_connect_tracker_keeps_finished_turn_snapshot_until_persistence_finalizes\b/,
         message: 'missing tracker completion contract test',
       },
@@ -2982,12 +3056,12 @@ export const requiredContentRules = [
         message: 'missing remote file command owner delegation',
       },
       {
-        regex: /\bremote_dialog_submit_response\b/,
-        message: 'missing remote dialog response assembly delegation',
+        regex: /\bRemoteCommandRuntimeHost\b/,
+        message: 'missing remote command runtime host adapter',
       },
       {
-        regex: /\bremote_task_cancel_response\b/,
-        message: 'missing remote cancel response assembly delegation',
+        regex: /\bhandle_remote_command\b/,
+        message: 'missing remote command routing owner delegation',
       },
       {
         regex: /\bhandle_remote_interaction_command\b/,

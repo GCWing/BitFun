@@ -17,6 +17,7 @@ pub use bitfun_runtime_ports::{
     RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind, RemoteWorkspacePort,
     RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate,
 };
+use log::info;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -2098,6 +2099,115 @@ pub enum RemoteResponse {
     Error {
         message: String,
     },
+}
+
+/// Host callbacks required by full remote-connect command routing.
+///
+/// This owner crate decides how wire commands are grouped and translated into
+/// remote responses. Product runtimes only provide concrete service adapters.
+#[async_trait::async_trait]
+pub trait RemoteCommandRuntimeHost: Send + Sync {
+    type ImageContext: Send + Sync + 'static;
+
+    async fn handle_workspace_command(&self, command: &RemoteCommand) -> RemoteResponse;
+    async fn handle_session_command(&self, command: &RemoteCommand) -> RemoteResponse;
+    async fn handle_poll_command(&self, command: &RemoteCommand) -> RemoteResponse;
+    async fn handle_workspace_file_command(&self, command: &RemoteCommand) -> RemoteResponse;
+    async fn handle_interaction_command(&self, command: &RemoteCommand) -> RemoteResponse;
+
+    async fn submit_dialog(
+        &self,
+        request: RemoteDialogSubmissionRequest<Self::ImageContext>,
+    ) -> Result<RemoteDialogSubmitOutcome, String>;
+
+    async fn cancel_task(&self, request: RemoteCancelTaskRequest) -> Result<(), String>;
+
+    fn legacy_image_contexts(&self, images: Option<&[ImageAttachment]>) -> Vec<Self::ImageContext>;
+
+    fn explicit_image_contexts(&self, contexts: Vec<RemoteImageContext>)
+        -> Vec<Self::ImageContext>;
+}
+
+pub async fn handle_remote_command<H>(
+    host: &H,
+    command: &RemoteCommand,
+    source: RemoteConnectSubmissionSource,
+) -> RemoteResponse
+where
+    H: RemoteCommandRuntimeHost + ?Sized,
+{
+    match command {
+        RemoteCommand::Ping => RemoteResponse::Pong,
+
+        RemoteCommand::GetWorkspaceInfo
+        | RemoteCommand::ListRecentWorkspaces
+        | RemoteCommand::SetWorkspace { .. }
+        | RemoteCommand::ListAssistants
+        | RemoteCommand::SetAssistant { .. } => host.handle_workspace_command(command).await,
+
+        RemoteCommand::ListSessions { .. }
+        | RemoteCommand::CreateSession { .. }
+        | RemoteCommand::GetModelCatalog { .. }
+        | RemoteCommand::SetSessionModel { .. }
+        | RemoteCommand::UpdateSessionTitle { .. }
+        | RemoteCommand::GetSessionMessages { .. }
+        | RemoteCommand::DeleteSession { .. } => host.handle_session_command(command).await,
+
+        RemoteCommand::PollSession { .. } => host.handle_poll_command(command).await,
+
+        RemoteCommand::ReadFile { .. }
+        | RemoteCommand::ReadFileChunk { .. }
+        | RemoteCommand::GetFileInfo { .. } => host.handle_workspace_file_command(command).await,
+
+        RemoteCommand::ConfirmTool { .. }
+        | RemoteCommand::RejectTool { .. }
+        | RemoteCommand::CancelTool { .. }
+        | RemoteCommand::AnswerQuestion { .. } => host.handle_interaction_command(command).await,
+
+        RemoteCommand::SendMessage {
+            session_id,
+            content,
+            agent_type,
+            images,
+            image_contexts,
+        } => {
+            let resolved_contexts = resolve_remote_execution_image_contexts(
+                images.as_ref().map(Vec::as_slice),
+                image_contexts
+                    .clone()
+                    .map(|contexts| host.explicit_image_contexts(contexts)),
+                |images| host.legacy_image_contexts(images),
+            );
+            info!(
+                "Remote send_message: session={session_id}, agent_type={}, image_contexts={}",
+                agent_type.as_deref().unwrap_or("agentic"),
+                resolved_contexts.len()
+            );
+            remote_dialog_submit_response(
+                host.submit_dialog(RemoteDialogSubmissionRequest {
+                    session_id: session_id.clone(),
+                    content: content.clone(),
+                    agent_type: agent_type.clone(),
+                    image_contexts: resolved_contexts,
+                    policy: RemoteDialogSubmissionPolicy::for_source(source),
+                    turn_id: None,
+                })
+                .await,
+            )
+        }
+
+        RemoteCommand::CancelTask {
+            session_id,
+            turn_id,
+        } => remote_task_cancel_response(
+            session_id.clone(),
+            host.cancel_task(RemoteCancelTaskRequest {
+                session_id: session_id.clone(),
+                requested_turn_id: turn_id.clone(),
+            })
+            .await,
+        ),
+    }
 }
 
 /// Build a slim version of tool params for remote preview payloads.

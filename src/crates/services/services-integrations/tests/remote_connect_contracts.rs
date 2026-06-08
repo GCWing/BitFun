@@ -8,9 +8,9 @@ use bitfun_services_integrations::remote_connect::{
     build_remote_chat_messages, build_remote_image_attachment, build_remote_image_contexts,
     build_remote_image_submission_request, build_remote_model_catalog,
     build_remote_session_create_request, build_remote_submission_request, cancel_remote_task,
-    handle_remote_workspace_file_command, make_slim_tool_params, normalize_remote_model_selection,
-    normalize_remote_session_model_id, read_remote_workspace_file,
-    read_remote_workspace_file_chunk, read_remote_workspace_file_info,
+    handle_remote_command, handle_remote_workspace_file_command, make_slim_tool_params,
+    normalize_remote_model_selection, normalize_remote_session_model_id,
+    read_remote_workspace_file, read_remote_workspace_file_chunk, read_remote_workspace_file_info,
     remote_answer_question_response, remote_assistant_list_response,
     remote_assistant_updated_response, remote_dialog_submit_outcome_from_scheduler,
     remote_dialog_submit_response, remote_file_chunk_response, remote_file_content_response,
@@ -29,15 +29,15 @@ use bitfun_services_integrations::remote_connect::{
     RemoteAssistantWorkspaceFacts, RemoteCancelDecision, RemoteCancelRuntimeHost,
     RemoteCancelTaskRequest, RemoteChatHistoryRound, RemoteChatHistoryTextItem,
     RemoteChatHistoryThinkingItem, RemoteChatHistoryToolCall, RemoteChatHistoryToolItem,
-    RemoteChatHistoryTurn, RemoteCommand, RemoteConnectSubmissionSource, RemoteDefaultModelsConfig,
-    RemoteDialogQueuePriority, RemoteDialogResolvedSubmission, RemoteDialogRuntimeHost,
-    RemoteDialogSchedulerOutcomeFact, RemoteDialogSubmissionPolicy, RemoteDialogSubmissionRequest,
-    RemoteDialogSubmitOutcome, RemoteImageContext, RemoteImageContextAdapter,
-    RemoteModelCapabilityFact, RemoteModelCatalog, RemoteModelCatalogFacts, RemoteModelConfig,
-    RemoteModelFacts, RemoteReasoningModeFact, RemoteRecentWorkspaceFacts, RemoteResponse,
-    RemoteSessionMetadata, RemoteSessionStateTracker, RemoteSessionTrackerHost,
-    RemoteSessionTrackerRegistry, RemoteTerminalPrewarmRequest, RemoteToolStatus,
-    RemoteWorkspaceFacts, RemoteWorkspaceFileChunk, RemoteWorkspaceFileContent,
+    RemoteChatHistoryTurn, RemoteCommand, RemoteCommandRuntimeHost, RemoteConnectSubmissionSource,
+    RemoteDefaultModelsConfig, RemoteDialogQueuePriority, RemoteDialogResolvedSubmission,
+    RemoteDialogRuntimeHost, RemoteDialogSchedulerOutcomeFact, RemoteDialogSubmissionPolicy,
+    RemoteDialogSubmissionRequest, RemoteDialogSubmitOutcome, RemoteImageContext,
+    RemoteImageContextAdapter, RemoteModelCapabilityFact, RemoteModelCatalog,
+    RemoteModelCatalogFacts, RemoteModelConfig, RemoteModelFacts, RemoteReasoningModeFact,
+    RemoteRecentWorkspaceFacts, RemoteResponse, RemoteSessionMetadata, RemoteSessionStateTracker,
+    RemoteSessionTrackerHost, RemoteSessionTrackerRegistry, RemoteTerminalPrewarmRequest,
+    RemoteToolStatus, RemoteWorkspaceFacts, RemoteWorkspaceFileChunk, RemoteWorkspaceFileContent,
     RemoteWorkspaceFileInfo, RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind,
     RemoteWorkspaceUpdate, TrackerEvent, REMOTE_FILE_MAX_CHUNK_BYTES, REMOTE_FILE_MAX_READ_BYTES,
 };
@@ -576,6 +576,259 @@ impl RemoteCancelRuntimeHost for RecordingCancelHost {
             Ok(())
         }
     }
+}
+
+#[derive(Default)]
+struct RecordingCommandHost {
+    events: Mutex<Vec<String>>,
+    submitted_dialog: Mutex<Option<RemoteDialogSubmissionRequest<String>>>,
+    cancel_request: Mutex<Option<RemoteCancelTaskRequest>>,
+    explicit_context_ids: Mutex<Vec<String>>,
+    legacy_image_names: Mutex<Vec<String>>,
+}
+
+impl RecordingCommandHost {
+    fn events(&self) -> Vec<String> {
+        self.events.lock().unwrap().clone()
+    }
+
+    fn submitted_dialog(&self) -> RemoteDialogSubmissionRequest<String> {
+        self.submitted_dialog
+            .lock()
+            .unwrap()
+            .clone()
+            .expect("dialog submitted")
+    }
+
+    fn cancel_request(&self) -> RemoteCancelTaskRequest {
+        self.cancel_request
+            .lock()
+            .unwrap()
+            .clone()
+            .expect("cancel requested")
+    }
+}
+
+#[async_trait::async_trait]
+impl RemoteCommandRuntimeHost for RecordingCommandHost {
+    type ImageContext = String;
+
+    async fn handle_workspace_command(&self, _command: &RemoteCommand) -> RemoteResponse {
+        self.events.lock().unwrap().push("workspace".to_string());
+        RemoteResponse::WorkspaceInfo {
+            has_workspace: false,
+            path: None,
+            project_name: None,
+            git_branch: None,
+            workspace_kind: None,
+            assistant_id: None,
+        }
+    }
+
+    async fn handle_session_command(&self, _command: &RemoteCommand) -> RemoteResponse {
+        self.events.lock().unwrap().push("session".to_string());
+        RemoteResponse::SessionCreated {
+            session_id: "session-created".to_string(),
+        }
+    }
+
+    async fn handle_poll_command(&self, _command: &RemoteCommand) -> RemoteResponse {
+        self.events.lock().unwrap().push("poll".to_string());
+        RemoteResponse::SessionPoll {
+            version: 0,
+            changed: false,
+            session_state: None,
+            title: None,
+            new_messages: None,
+            total_msg_count: None,
+            active_turn: None,
+            model_catalog: Box::new(None),
+        }
+    }
+
+    async fn handle_workspace_file_command(&self, _command: &RemoteCommand) -> RemoteResponse {
+        self.events.lock().unwrap().push("file".to_string());
+        RemoteResponse::FileInfo {
+            name: "file.txt".to_string(),
+            size: 1,
+            mime_type: "text/plain".to_string(),
+        }
+    }
+
+    async fn handle_interaction_command(&self, _command: &RemoteCommand) -> RemoteResponse {
+        self.events.lock().unwrap().push("interaction".to_string());
+        RemoteResponse::InteractionAccepted {
+            action: "confirm_tool".to_string(),
+            target_id: "tool-1".to_string(),
+        }
+    }
+
+    async fn submit_dialog(
+        &self,
+        request: RemoteDialogSubmissionRequest<Self::ImageContext>,
+    ) -> Result<RemoteDialogSubmitOutcome, String> {
+        self.events.lock().unwrap().push("submit".to_string());
+        *self.submitted_dialog.lock().unwrap() = Some(request.clone());
+        Ok(RemoteDialogSubmitOutcome::Started {
+            session_id: request.session_id,
+            turn_id: "turn-command".to_string(),
+        })
+    }
+
+    async fn cancel_task(&self, request: RemoteCancelTaskRequest) -> Result<(), String> {
+        self.events.lock().unwrap().push("cancel".to_string());
+        *self.cancel_request.lock().unwrap() = Some(request);
+        Ok(())
+    }
+
+    fn legacy_image_contexts(&self, images: Option<&[ImageAttachment]>) -> Vec<Self::ImageContext> {
+        let names = images
+            .unwrap_or_default()
+            .iter()
+            .map(|image| image.name.clone())
+            .collect::<Vec<_>>();
+        *self.legacy_image_names.lock().unwrap() = names.clone();
+        names
+            .into_iter()
+            .map(|name| format!("legacy:{name}"))
+            .collect()
+    }
+
+    fn explicit_image_contexts(
+        &self,
+        contexts: Vec<RemoteImageContext>,
+    ) -> Vec<Self::ImageContext> {
+        let ids = contexts
+            .into_iter()
+            .map(|context| context.id)
+            .collect::<Vec<_>>();
+        *self.explicit_context_ids.lock().unwrap() = ids.clone();
+        ids.into_iter().map(|id| format!("explicit:{id}")).collect()
+    }
+}
+
+#[tokio::test]
+async fn remote_connect_command_owner_routes_send_message_and_prefers_explicit_images() {
+    let host = RecordingCommandHost::default();
+
+    let response = handle_remote_command(
+        &host,
+        &RemoteCommand::SendMessage {
+            session_id: "session-1".to_string(),
+            content: "hello".to_string(),
+            agent_type: Some("code".to_string()),
+            images: Some(vec![ImageAttachment {
+                name: "legacy.png".to_string(),
+                data_url: "data:image/png;base64,legacy".to_string(),
+            }]),
+            image_contexts: Some(vec![RemoteImageContext {
+                id: "ctx-1".to_string(),
+                image_path: Some("D:/workspace/project/screenshot.png".to_string()),
+                data_url: None,
+                mime_type: "image/png".to_string(),
+                metadata: Some(serde_json::json!({ "source": "desktop" })),
+            }]),
+        },
+        RemoteConnectSubmissionSource::Bot,
+    )
+    .await;
+
+    assert_eq!(
+        response,
+        RemoteResponse::MessageSent {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-command".to_string()
+        }
+    );
+    assert_eq!(host.events(), vec!["submit"]);
+    assert_eq!(
+        host.explicit_context_ids.lock().unwrap().as_slice(),
+        &["ctx-1".to_string()]
+    );
+    assert!(host.legacy_image_names.lock().unwrap().is_empty());
+
+    let submitted = host.submitted_dialog();
+    assert_eq!(submitted.session_id, "session-1");
+    assert_eq!(submitted.content, "hello");
+    assert_eq!(submitted.agent_type.as_deref(), Some("code"));
+    assert_eq!(submitted.image_contexts, vec!["explicit:ctx-1".to_string()]);
+    assert_eq!(submitted.policy.source, RemoteConnectSubmissionSource::Bot);
+    assert!(submitted.turn_id.is_none());
+}
+
+#[tokio::test]
+async fn remote_connect_command_owner_preserves_cancel_and_group_routing() {
+    let host = RecordingCommandHost::default();
+
+    assert_eq!(
+        handle_remote_command(
+            &host,
+            &RemoteCommand::Ping,
+            RemoteConnectSubmissionSource::Relay
+        )
+        .await,
+        RemoteResponse::Pong
+    );
+
+    let workspace = handle_remote_command(
+        &host,
+        &RemoteCommand::GetWorkspaceInfo,
+        RemoteConnectSubmissionSource::Relay,
+    )
+    .await;
+    assert!(matches!(workspace, RemoteResponse::WorkspaceInfo { .. }));
+
+    let file = handle_remote_command(
+        &host,
+        &RemoteCommand::GetFileInfo {
+            path: "README.md".to_string(),
+            session_id: None,
+        },
+        RemoteConnectSubmissionSource::Relay,
+    )
+    .await;
+    assert!(matches!(file, RemoteResponse::FileInfo { .. }));
+
+    let interaction = handle_remote_command(
+        &host,
+        &RemoteCommand::ConfirmTool {
+            tool_id: "tool-1".to_string(),
+            updated_input: None,
+        },
+        RemoteConnectSubmissionSource::Relay,
+    )
+    .await;
+    assert!(matches!(
+        interaction,
+        RemoteResponse::InteractionAccepted { .. }
+    ));
+
+    let cancel = handle_remote_command(
+        &host,
+        &RemoteCommand::CancelTask {
+            session_id: "session-1".to_string(),
+            turn_id: Some("turn-1".to_string()),
+        },
+        RemoteConnectSubmissionSource::Relay,
+    )
+    .await;
+    assert_eq!(
+        cancel,
+        RemoteResponse::TaskCancelled {
+            session_id: "session-1".to_string()
+        }
+    );
+    assert_eq!(
+        host.events(),
+        vec!["workspace", "file", "interaction", "cancel"]
+    );
+    assert_eq!(
+        host.cancel_request(),
+        RemoteCancelTaskRequest {
+            session_id: "session-1".to_string(),
+            requested_turn_id: Some("turn-1".to_string()),
+        }
+    );
 }
 
 #[tokio::test]

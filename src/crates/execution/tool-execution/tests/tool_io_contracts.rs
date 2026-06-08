@@ -16,6 +16,16 @@ use tool_runtime::search::grep_search::{
     apply_offset_and_limit, build_remote_grep_command, count_remote_grep_matches,
     relativize_result_text, render_remote_grep_result_text, OutputMode, RemoteGrepCommandRequest,
 };
+use tool_runtime::shell::{
+    banned_shell_command, bash_noninteractive_env, command_for_working_directory,
+    detect_osascript_im_app, detect_osascript_keystroke_non_ascii,
+    format_background_command_delivery_text, format_background_command_display_text,
+    format_background_command_error_display_text, format_background_command_error_text,
+    render_local_shell_result, render_output_block_with_limit, render_remote_shell_result,
+    BackgroundCommandDeliveryTextRequest, BackgroundCommandErrorTextRequest,
+    BackgroundCommandStatusFacts, LocalShellResultRenderRequest, RemoteShellResultRenderRequest,
+    BASH_RESULT_MAX_OUTPUT_LENGTH,
+};
 use tool_runtime::util::string::shell_single_quote;
 
 fn make_temp_dir(name: &str) -> PathBuf {
@@ -184,6 +194,132 @@ fn remote_glob_stdout_is_normalized_and_limited_by_tool_runtime() {
 #[test]
 fn shell_single_quote_preserves_existing_remote_escape_style() {
     assert_eq!(shell_single_quote("C:/repo/a'b"), "'C:/repo/a'\\''b'");
+}
+
+#[test]
+fn bash_shell_owner_preserves_command_wrapping_and_env() {
+    assert_eq!(
+        command_for_working_directory("pnpm test", Some(" C:/repo/a'b ")),
+        "cd 'C:/repo/a'\\''b' && pnpm test"
+    );
+    assert_eq!(command_for_working_directory("pwd", Some("  ")), "pwd");
+    assert_eq!(command_for_working_directory("pwd", None), "pwd");
+
+    let env = bash_noninteractive_env();
+    assert_eq!(
+        env.get("BITFUN_NONINTERACTIVE").map(String::as_str),
+        Some("1")
+    );
+    assert_eq!(env.get("GIT_PAGER").map(String::as_str), Some("cat"));
+    assert_eq!(env.get("PAGER").map(String::as_str), Some("cat"));
+    assert_eq!(
+        env.get("GIT_TERMINAL_PROMPT").map(String::as_str),
+        Some("0")
+    );
+    assert_eq!(env.get("GIT_EDITOR").map(String::as_str), Some("true"));
+
+    assert_eq!(banned_shell_command("alias ll='ls -la'"), Some("alias"));
+    assert_eq!(banned_shell_command(" git status "), None);
+}
+
+#[test]
+fn bash_shell_owner_preserves_guard_and_result_rendering() {
+    assert_eq!(
+        detect_osascript_keystroke_non_ascii(
+            r#"osascript -e 'tell app "System Events" to keystroke "你好"'"#
+        ),
+        Some("你好".to_string())
+    );
+    assert_eq!(
+        detect_osascript_im_app(r#"osascript -e 'tell application "Slack" to activate'"#),
+        Some("Slack")
+    );
+    assert_eq!(
+        detect_osascript_im_app(r#"osascript -e 'tell application "微信" to activate'"#),
+        Some("微信")
+    );
+
+    let local = render_local_shell_result(LocalShellResultRenderRequest {
+        terminal_session_id: "term-1",
+        working_directory: "C:/repo",
+        output_text: "\u{1b}[31mhello\u{1b}[0m",
+        interrupted: true,
+        timed_out: false,
+        exit_code: 130,
+        shell_state: Some("\u{1b}[32mPS C:/repo>\u{1b}[0m"),
+    });
+    assert!(local.contains("<exit_code>130</exit_code>"));
+    assert!(local.contains("<working_directory>C:/repo</working_directory>"));
+    assert!(local.contains("<output>hello</output>"));
+    assert!(local.contains("<shell_state>PS C:/repo></shell_state>"));
+    assert!(local.contains("<status type=\"interrupted\">"));
+    assert!(local.contains("<terminal_session_id>term-1</terminal_session_id>"));
+
+    let truncated =
+        render_output_block_with_limit("stdout", "abcdef", 4).expect("output block should render");
+    assert!(truncated.contains("truncated=\"true\""));
+    assert!(truncated.ends_with(">cdef</stdout>"));
+
+    let remote = render_remote_shell_result(RemoteShellResultRenderRequest {
+        working_directory: "/repo",
+        stdout: "ok",
+        stderr: "err",
+        interrupted: false,
+        timed_out: true,
+        exit_code: 124,
+    });
+    assert!(remote.contains("<remote_ssh>true</remote_ssh>"));
+    assert!(remote.contains("<stdout>ok</stdout>"));
+    assert!(remote.contains("<stderr>err</stderr>"));
+    assert!(remote.contains("<status type=\"timeout\">"));
+    assert_eq!(BASH_RESULT_MAX_OUTPUT_LENGTH, 30_000);
+}
+
+#[test]
+fn bash_shell_owner_preserves_background_delivery_texts() {
+    let delivery = format_background_command_delivery_text(BackgroundCommandDeliveryTextRequest {
+        command: "pnpm dev",
+        terminal_session_id: "term-bg",
+        working_directory: "C:/repo",
+        status: BackgroundCommandStatusFacts {
+            exit_code: Some(0),
+            timed_out: false,
+            interrupted: false,
+        },
+        output_file_reference: "artifact://tool-results/bg.txt",
+        output_persist_error: None,
+    });
+    assert!(delivery.starts_with("Background Bash command completed successfully."));
+    assert!(delivery.contains(
+        "<background_command status=\"completed\" terminal_session_id=\"term-bg\" exit_code=\"0\">"
+    ));
+    assert!(delivery.contains("Full output was saved to: artifact://tool-results/bg.txt"));
+
+    assert_eq!(
+        format_background_command_display_text(BackgroundCommandStatusFacts {
+            exit_code: None,
+            timed_out: true,
+            interrupted: false,
+        }),
+        "Background Bash command timed out."
+    );
+
+    let error = format_background_command_error_text(BackgroundCommandErrorTextRequest {
+        command: "pnpm dev",
+        terminal_session_id: "term-bg",
+        working_directory: "C:/repo",
+        output_file_reference: "artifact://tool-results/bg.txt",
+        error: "boom",
+        output_persist_error: Some("disk full"),
+    });
+    assert!(error
+        .starts_with("Background Bash command failed before producing a final completion result."));
+    assert!(error.contains("Output persistence encountered an error"));
+    assert!(error.contains("Error: boom"));
+    assert_eq!(
+        format_background_command_error_display_text(),
+        "Background Bash command failed before producing a final completion result."
+    );
 }
 
 #[test]
