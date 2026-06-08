@@ -347,6 +347,25 @@ function resolveDisplayFilePath(targetPath: string, basePath?: string, workspace
   return normalizeDisplayPath(resolveBaseRelativePath(baseResolved, workspacePath));
 }
 
+function extractMarkdownLinkHrefFromSource(
+  markdownSource: string,
+  position?: { start?: { offset?: number }; end?: { offset?: number } },
+): string | undefined {
+  const start = position?.start?.offset;
+  const end = position?.end?.offset;
+  if (typeof start !== 'number' || typeof end !== 'number' || end <= start) {
+    return undefined;
+  }
+
+  const snippet = markdownSource.slice(start, end);
+  const markerIndex = snippet.indexOf('](');
+  if (markerIndex === -1 || !snippet.endsWith(')')) {
+    return undefined;
+  }
+
+  return snippet.slice(markerIndex + 2, -1);
+}
+
 function isLocalAssetPath(src: string): boolean {
   if (!src) {
     return false;
@@ -759,20 +778,6 @@ export const Markdown = React.memo<MarkdownProps>(({
     return { markdownContent: body, reproductionSteps: steps };
   }, [contentStr, isStreaming]);
 
-  const linkMap = useMemo(() => {
-    const map = new Map<string, string>();
-    const linkMatches = contentStr.match(/\[([^\]]+)\]\(([^)]+)\)/g) || [];
-    
-    linkMatches.forEach(match => {
-      const linkMatch = match.match(/\[([^\]]+)\]\(([^)]+)\)/);
-      if (linkMatch) {
-        const [, text, href] = linkMatch;
-        map.set(text, href);
-      }
-    });
-    return map;
-  }, [contentStr]);
-
   const markdownFeatureProfile = useMemo(() => ({
     contentLength: markdownContent.length,
     hasCodeBlock: /^[ \t]{0,3}(`{3,}|~{3,})/m.test(markdownContent),
@@ -1052,9 +1057,10 @@ export const Markdown = React.memo<MarkdownProps>(({
     },
     
     a({ node, href, children, ...props }: any) {
-      const linkText = typeof children === 'string' ? children : String(children);
-      const originalHref = linkMap.get(linkText);
-      const hrefValue = originalHref || href || node?.properties?.href;
+      const hrefValue = href || node?.properties?.href || extractMarkdownLinkHrefFromSource(
+        markdownContent,
+        node?.position,
+      );
       const isHashLink = typeof hrefValue === 'string' && hrefValue.startsWith('#');
       const isComputerLink = typeof hrefValue === 'string' && hrefValue.startsWith(COMPUTER_LINK_PREFIX);
       const isVisualizationLink = typeof hrefValue === 'string' && hrefValue.startsWith('visualization:');
@@ -1096,7 +1102,8 @@ export const Markdown = React.memo<MarkdownProps>(({
         const fileName = filePath.split(/[\\/]/).pop() || filePath;
 
         const isFolder = filePath.endsWith('/');
-        const shouldRevealInExplorer = isComputerLink || !isEditorOpenableFilePath(filePath);
+        const editorOpenable = isEditorOpenableFilePath(filePath);
+        const shouldRevealInExplorer = isComputerLink || !editorOpenable;
         if (!isFolder) {
           const fileLinkButton = (
             <button
@@ -1286,7 +1293,7 @@ export const Markdown = React.memo<MarkdownProps>(({
     basePath,
     expandDetailsByDefault,
     isStreaming,
-    linkMap,
+    markdownContent,
     handleFileViewRequest,
     handleRevealInExplorer,
     handleLocalFileContextMenu,
