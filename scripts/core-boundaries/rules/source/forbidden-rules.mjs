@@ -157,6 +157,90 @@ export const forbiddenContentRules = [
     ],
   },
   {
+    path: 'src/crates/assembly/core/src/service/search/mod.rs',
+    patterns: [
+      {
+        regex: /\bbitfun_services_integrations::workspace_search::flashgrep\b/,
+        message:
+          'core must not import flashgrep internals; use the remote workspace-search stdio facade instead',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/service/search/service.rs',
+    patterns: [
+      {
+        regex:
+          /\b(?:owner::flashgrep|workspace_search::flashgrep|bitfun_services_integrations::workspace_search::flashgrep)\b/,
+        message:
+          'core workspace search facade must not depend on flashgrep internals; use stable workspace-search config and DTO APIs',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/service/search/remote.rs',
+    patterns: [
+      {
+        regex: /\bconst\s+REMOTE_FLASHGREP_INSTALL_DIR\b/,
+        message:
+          'core remote workspace search must not own remote flashgrep install facts; use bitfun-services-integrations::remote_ssh::workspace_search',
+      },
+      {
+        regex: /\bconst\s+REMOTE_(?:OS|ARCHITECTURE)_PROBES\b/,
+        message:
+          'core remote workspace search must not own remote probe facts; use bitfun-services-integrations::remote_ssh::workspace_search',
+      },
+      {
+        regex: /\bstruct\s+LocalFlashgrepBundle\b/,
+        message:
+          'core remote workspace search must not own local remote-search bundle DTOs; use bitfun-services-integrations::remote_ssh::workspace_search',
+      },
+      {
+        regex:
+          /\bfn\s+(?:build_remote_scope|normalize_remote_scope_path|remote_flashgrep_install_dir|parse_remote_architecture_output|parse_remote_os_output|local_flashgrep_bundle_for_arch|remote_stdio_search_mode|should_retry_remote_scan_fallback_as_files_with_matches|join_remote_path|shell_escape)\b/,
+        message:
+          'core remote workspace search must not re-own provider-neutral remote search strategy helpers',
+      },
+      {
+        regex: /\b(?:RemoteStdioRepoSession|RemoteStdioDaemonClient|RemoteSearchContext|REMOTE_STDIO_SESSIONS|REMOTE_SEARCH_CONTEXTS)\b/,
+        message:
+          'core remote workspace search must not own remote flashgrep session/context lifecycle; use bitfun-services-integrations::remote_ssh::workspace_search',
+      },
+      {
+        regex: /\bfn\s+(?:ensure_remote_search_context|convert_stdio_search_results|remote_stdio_session_key|remote_search_context_key|schedule_remote_stdio_session_release)\b/,
+        message:
+          'core remote workspace search must not re-own remote search concrete lifecycle helpers',
+      },
+      {
+        regex:
+          /\b(?:ProtocolClient|drain_content_length_messages|log_flashgrep_stderr_line_with_context|FLASHGREP_LOG_TARGET)\b/,
+        message:
+          'core remote workspace search must not depend on flashgrep protocol internals; use RemoteWorkspaceSearchStdioProtocol',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-integrations/src/workspace_search/mod.rs',
+    patterns: [
+      {
+        regex: /\bpub\s+mod\s+flashgrep\b/,
+        message:
+          'workspace_search must not publicly expose flashgrep protocol internals',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-integrations/src/remote_ssh/workspace_search/mod.rs',
+    patterns: [
+      {
+        regex:
+          /\bpub\s+(?:const|struct|fn)\s+(?:REMOTE_OS_PROBES|REMOTE_ARCHITECTURE_PROBES|LocalFlashgrepBundle|build_remote_scope|remote_flashgrep_install_dir|remote_workspace_search_storage_root|looks_like_linux_workspace_root|parse_remote_architecture_output|parse_remote_os_output|local_flashgrep_bundle_for_arch|remote_stdio_search_mode|should_retry_remote_scan_fallback_as_files_with_matches|join_remote_path|shell_escape)\b/,
+        message:
+          'remote workspace-search helper APIs must stay crate-internal; expose only reviewed provider/service contracts',
+      },
+    ],
+  },
+  {
     path: 'src/crates/assembly/core/src/miniapp/runtime_detect.rs',
     patterns: [
       {
@@ -526,6 +610,41 @@ export const forbiddenContentRules = [
         regex: /\bfn is_write_like_tool_name\b/,
         message:
           'core tool pipeline must not own write-like truncation classification; use bitfun-agent-tools',
+      },
+      {
+        regex: /\bstruct\s+ToolBatch\b/,
+        message:
+          'core tool pipeline must not own portable batching DTOs; use tool-runtime::pipeline',
+      },
+      {
+        regex: /\bfn\s+partition_tool_batches\b/,
+        message:
+          'core tool pipeline must not own portable batching strategy; use tool-runtime::pipeline',
+      },
+      {
+        regex: /Duration::from_millis\(100\s*\*\s*attempts/,
+        message:
+          'core tool pipeline must not own retry backoff policy; use tool-runtime::pipeline',
+      },
+      {
+        regex: /ToolConfirmationOutcome::(?:Rejected|ChannelClosed|Timeout)/,
+        message:
+          'core tool pipeline must not own confirmation wait-result mapping; use bitfun-agent-runtime',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/tool_context_runtime.rs',
+    patterns: [
+      {
+        regex: /remote_workspace_git_metadata_unavailable|workspace_unavailable|git_status_unavailable:/,
+        message:
+          'core tool context must not own light-checkpoint summary policy; use bitfun-agent-runtime::checkpoint',
+      },
+      {
+        regex: /format!\(\s*"staged=\{\}, unstaged=\{\}, untracked=\{\}"/,
+        message:
+          'core tool context must not own local git dirty-state checkpoint formatting; use bitfun-agent-runtime::checkpoint',
       },
     ],
   },

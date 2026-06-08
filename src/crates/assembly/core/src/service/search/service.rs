@@ -109,7 +109,7 @@ struct CoreWorkspaceSearchRuntimeHooks;
 
 #[async_trait]
 impl owner::WorkspaceSearchRuntimeHooks for CoreWorkspaceSearchRuntimeHooks {
-    async fn repo_config(&self) -> owner::flashgrep::RepoConfig {
+    async fn repo_config(&self) -> owner::WorkspaceSearchRepoConfig {
         let max_file_size = match get_global_config_service().await {
             Ok(config_service) => match config_service
                 .get_config::<WorkspaceConfig>(Some("workspace"))
@@ -133,10 +133,7 @@ impl owner::WorkspaceSearchRuntimeHooks for CoreWorkspaceSearchRuntimeHooks {
             }
         };
 
-        owner::flashgrep::RepoConfig {
-            max_file_size,
-            ..owner::flashgrep::RepoConfig::default()
-        }
+        owner::WorkspaceSearchRepoConfig { max_file_size }
     }
 
     async fn ensure_workspace_ready(&self, repo_root: &Path) -> owner::WorkspaceSearchResult<()> {

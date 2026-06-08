@@ -25,7 +25,8 @@ and tested without `bitfun-core`.
   measurement decisions,
   custom subagent markdown front-matter IO, custom subagent discovery/loading,
   post-call hook routing/executor orchestration,
-  tool confirmation planning/failure mapping, round-boundary yield/injection state, turn-outcome
+  tool confirmation planning/failure/wait-result mapping, light checkpoint
+  summary policy, round-boundary yield/injection state, turn-outcome
   queue decisions, registry source/profile facts, prompt-loop user-context
   policy, prompt listing reminder ordering, prompt-cache policy/identity/store,
   finish-reason labels, session-state event labels, and turn-outcome event facts.

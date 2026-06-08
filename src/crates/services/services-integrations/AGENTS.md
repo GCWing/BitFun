@@ -32,6 +32,10 @@ slices that are outside pure product logic but still platform-neutral.
 - Workspace search owns the local flashgrep daemon/session lifecycle and
   indexed-search result conversion behind `workspace-search`; product config
   and workspace bootstrap stay in the core facade as injected hooks.
+- Remote SSH workspace-search owns path/scope/probe/bundle/retry strategy plus
+  flashgrep session/context lifecycle behind a provider boundary. SSH channels
+  and manager assembly remain outside this crate until a reviewed provider
+  boundary moves them with equivalence tests.
 
 ## Verification
 

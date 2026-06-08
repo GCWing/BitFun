@@ -1,11 +1,10 @@
 use super::flashgrep::{
     ConsistencyMode, FlashgrepRepoSession, GlobRequest, ManagedClient, OpenRepoParams, PathScope,
-    QuerySpec, RefreshPolicyConfig, RepoConfig, RepoSession, SearchRequest, SearchResults,
-    FLASHGREP_LOG_TARGET,
+    QuerySpec, RefreshPolicyConfig, RepoConfig, RepoSession, SearchRequest, FLASHGREP_LOG_TARGET,
 };
 use async_trait::async_trait;
-use bitfun_services_core::filesystem::{FileSearchOutcome, FileSearchResult, SearchMatchType};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use bitfun_services_core::filesystem::FileSearchOutcome;
+use std::collections::{HashMap, HashSet};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::{
@@ -15,17 +14,39 @@ use std::sync::{
 use std::time::{Duration, Instant};
 use tokio::sync::{Mutex, RwLock};
 
+use super::result_mapping::convert_search_results;
 use super::types::{
-    ContentSearchOutputMode, ContentSearchRequest, ContentSearchResult, GlobSearchRequest,
-    GlobSearchResult, IndexTaskHandle, WorkspaceIndexStatus, WorkspaceSearchFileCount,
-    WorkspaceSearchHit,
+    ContentSearchRequest, ContentSearchResult, GlobSearchRequest, GlobSearchResult,
+    IndexTaskHandle, WorkspaceIndexStatus, WorkspaceSearchFileCount, WorkspaceSearchHit,
 };
 
 pub type WorkspaceSearchResult<T> = Result<T, String>;
 
+#[derive(Debug, Clone)]
+pub struct WorkspaceSearchRepoConfig {
+    pub max_file_size: u64,
+}
+
+impl Default for WorkspaceSearchRepoConfig {
+    fn default() -> Self {
+        let default = RepoConfig::default();
+        Self {
+            max_file_size: default.max_file_size,
+        }
+    }
+}
+
+impl From<WorkspaceSearchRepoConfig> for RepoConfig {
+    fn from(value: WorkspaceSearchRepoConfig) -> Self {
+        let mut config = RepoConfig::default();
+        config.max_file_size = value.max_file_size;
+        config
+    }
+}
+
 #[async_trait]
 pub trait WorkspaceSearchRuntimeHooks: Send + Sync {
-    async fn repo_config(&self) -> RepoConfig;
+    async fn repo_config(&self) -> WorkspaceSearchRepoConfig;
 
     async fn ensure_workspace_ready(&self, _repo_root: &Path) -> WorkspaceSearchResult<()> {
         Ok(())
@@ -36,8 +57,8 @@ struct DefaultWorkspaceSearchRuntimeHooks;
 
 #[async_trait]
 impl WorkspaceSearchRuntimeHooks for DefaultWorkspaceSearchRuntimeHooks {
-    async fn repo_config(&self) -> RepoConfig {
-        RepoConfig::default()
+    async fn repo_config(&self) -> WorkspaceSearchRepoConfig {
+        WorkspaceSearchRepoConfig::default()
     }
 }
 
@@ -431,7 +452,7 @@ impl WorkspaceSearchService {
             }
         }
 
-        let repo_config = self.hooks.repo_config().await;
+        let repo_config: RepoConfig = self.hooks.repo_config().await.into();
         if let Err(error) = self.hooks.ensure_workspace_ready(&repo_root).await {
             log::warn!(
                 target: FLASHGREP_LOG_TARGET,
@@ -785,192 +806,6 @@ fn normalize_scope_path(repo_root: &Path, search_path: &Path) -> WorkspaceSearch
     Ok(normalized)
 }
 
-fn convert_search_results(
-    search_results: &SearchResults,
-    output_mode: ContentSearchOutputMode,
-) -> Vec<FileSearchResult> {
-    match output_mode {
-        ContentSearchOutputMode::Content => {
-            let hit_results = convert_hits_to_file_search_results(search_results);
-            if !hit_results.is_empty() {
-                return hit_results;
-            }
-
-            let line_results = convert_line_matches_to_file_search_results(search_results);
-            if !line_results.is_empty() {
-                return line_results;
-            }
-
-            let count_results = convert_file_counts_to_search_results(search_results);
-            if !count_results.is_empty() {
-                return count_results;
-            }
-
-            let match_count_results = convert_file_match_counts_to_search_results(search_results);
-            if !match_count_results.is_empty() {
-                return match_count_results;
-            }
-
-            convert_matched_paths_to_file_only_results(search_results)
-        }
-        ContentSearchOutputMode::Count => convert_file_counts_to_search_results(search_results),
-        ContentSearchOutputMode::FilesWithMatches => {
-            convert_matched_paths_to_file_only_results(search_results)
-        }
-    }
-}
-
-fn convert_line_matches_to_file_search_results(
-    search_results: &SearchResults,
-) -> Vec<FileSearchResult> {
-    search_results
-        .line_matches
-        .iter()
-        .map(|matched| FileSearchResult {
-            path: matched.path.clone(),
-            name: Path::new(&matched.path)
-                .file_name()
-                .and_then(|file_name| file_name.to_str())
-                .unwrap_or(&matched.path)
-                .to_string(),
-            is_directory: false,
-            match_type: SearchMatchType::Content,
-            line_number: Some(matched.line_number),
-            matched_content: Some(matched.line_text.clone()),
-            preview_before: None,
-            preview_inside: Some(matched.line_text.clone()),
-            preview_after: None,
-        })
-        .collect()
-}
-
-fn convert_file_counts_to_search_results(search_results: &SearchResults) -> Vec<FileSearchResult> {
-    search_results
-        .file_counts
-        .iter()
-        .map(|count| FileSearchResult {
-            path: count.path.clone(),
-            name: Path::new(&count.path)
-                .file_name()
-                .and_then(|file_name| file_name.to_str())
-                .unwrap_or(&count.path)
-                .to_string(),
-            is_directory: false,
-            match_type: SearchMatchType::Content,
-            line_number: None,
-            matched_content: Some(count.matched_lines.to_string()),
-            preview_before: None,
-            preview_inside: None,
-            preview_after: None,
-        })
-        .collect()
-}
-
-fn convert_file_match_counts_to_search_results(
-    search_results: &SearchResults,
-) -> Vec<FileSearchResult> {
-    search_results
-        .file_match_counts
-        .iter()
-        .map(|count| FileSearchResult {
-            path: count.path.clone(),
-            name: Path::new(&count.path)
-                .file_name()
-                .and_then(|file_name| file_name.to_str())
-                .unwrap_or(&count.path)
-                .to_string(),
-            is_directory: false,
-            match_type: SearchMatchType::Content,
-            line_number: None,
-            matched_content: Some(count.matched_occurrences.to_string()),
-            preview_before: None,
-            preview_inside: None,
-            preview_after: None,
-        })
-        .collect()
-}
-
-fn convert_hits_to_file_search_results(search_results: &SearchResults) -> Vec<FileSearchResult> {
-    let mut file_results = Vec::new();
-    for hit in &search_results.hits {
-        let name = Path::new(&hit.path)
-            .file_name()
-            .and_then(|file_name| file_name.to_str())
-            .unwrap_or(&hit.path)
-            .to_string();
-
-        let mut lines = BTreeMap::new();
-        for file_match in &hit.matches {
-            lines
-                .entry(file_match.location.line)
-                .or_insert_with(|| file_match.clone());
-        }
-
-        for (_, file_match) in lines {
-            let (preview_before, preview_inside, preview_after) =
-                split_preview(&file_match.snippet, &file_match.matched_text);
-            file_results.push(FileSearchResult {
-                path: hit.path.clone(),
-                name: name.clone(),
-                is_directory: false,
-                match_type: SearchMatchType::Content,
-                line_number: Some(file_match.location.line),
-                matched_content: Some(file_match.snippet),
-                preview_before,
-                preview_inside,
-                preview_after,
-            });
-        }
-    }
-    file_results
-}
-
-fn convert_matched_paths_to_file_only_results(
-    search_results: &SearchResults,
-) -> Vec<FileSearchResult> {
-    search_results
-        .matched_paths
-        .iter()
-        .map(|path| FileSearchResult {
-            path: path.clone(),
-            name: Path::new(path)
-                .file_name()
-                .and_then(|file_name| file_name.to_str())
-                .unwrap_or(path)
-                .to_string(),
-            is_directory: false,
-            match_type: SearchMatchType::Content,
-            line_number: None,
-            matched_content: None,
-            preview_before: None,
-            preview_inside: None,
-            preview_after: None,
-        })
-        .collect()
-}
-
-fn split_preview(
-    snippet: &str,
-    matched_text: &str,
-) -> (Option<String>, Option<String>, Option<String>) {
-    if matched_text.is_empty() {
-        return (None, Some(snippet.to_string()), None);
-    }
-
-    if let Some(offset) = snippet.find(matched_text) {
-        let before = snippet[..offset].to_string();
-        let inside = matched_text.to_string();
-        let after = snippet[offset + matched_text.len()..].to_string();
-        return (
-            (!before.is_empty()).then_some(before),
-            Some(inside),
-            (!after.is_empty()).then_some(after),
-        );
-    }
-
-    (None, Some(snippet.to_string()), None)
-}
-
 fn map_flashgrep_error(
     prefix: &'static str,
 ) -> impl Fn(super::flashgrep::error::AppError) -> String {
@@ -990,6 +825,8 @@ fn map_flashgrep_error(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::workspace_search::flashgrep::SearchResults;
+    use crate::workspace_search::ContentSearchOutputMode;
 
     fn empty_search_results() -> SearchResults {
         serde_json::from_value(serde_json::json!({
@@ -1003,10 +840,18 @@ mod tests {
     }
 
     #[test]
-    fn content_search_uses_flashgrep_line_matches_protocol() {
+    fn content_search_output_modes_use_current_flashgrep_protocol_modes() {
         assert_eq!(
             ContentSearchOutputMode::Content.search_mode(),
             crate::workspace_search::flashgrep::SearchModeConfig::LineMatches
+        );
+        assert_eq!(
+            ContentSearchOutputMode::Count.search_mode(),
+            crate::workspace_search::flashgrep::SearchModeConfig::CountOnly
+        );
+        assert_eq!(
+            ContentSearchOutputMode::FilesWithMatches.search_mode(),
+            crate::workspace_search::flashgrep::SearchModeConfig::FilesWithMatches
         );
     }
 

@@ -6,6 +6,8 @@
 pub mod paths;
 pub mod types;
 pub mod workspace_registry;
+#[cfg(feature = "workspace-search")]
+pub mod workspace_search;
 
 pub use paths::*;
 pub use types::*;

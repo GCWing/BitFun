@@ -888,7 +888,6 @@ Usage:
                     let (request, output_mode, show_line_numbers, offset, head_limit) =
                         self.build_workspace_search_request(input, context)?;
                     let pattern = request.pattern.clone();
-                    let search_mode = request.output_mode.search_mode();
                     let path = request
                         .search_path
                         .as_ref()
@@ -922,11 +921,10 @@ Usage:
                     let workspace_search_elapsed_ms = search_started_at.elapsed().as_millis();
 
                     log::info!(
-                        "Grep tool remote workspace-search result: pattern={}, path={}, output_mode={}, search_mode={:?}, file_count={}, total_matches={}, backend={:?}, repo_phase={:?}, rebuild_recommended={}, dirty_modified={}, dirty_deleted={}, dirty_new={}, candidate_docs={}, matched_lines={}, matched_occurrences={}, workspace_search_ms={}",
+                        "Grep tool remote workspace-search result: pattern={}, path={}, output_mode={}, file_count={}, total_matches={}, backend={:?}, repo_phase={:?}, rebuild_recommended={}, dirty_modified={}, dirty_deleted={}, dirty_new={}, candidate_docs={}, matched_lines={}, matched_occurrences={}, workspace_search_ms={}",
                         pattern,
                         path,
                         output_mode,
-                        search_mode,
                         file_count,
                         total_matches,
                         search_result.backend,
@@ -979,7 +977,6 @@ Usage:
                 let (request, output_mode, show_line_numbers, offset, head_limit) =
                     self.build_workspace_search_request(input, context)?;
                 let pattern = request.pattern.clone();
-                let search_mode = request.output_mode.search_mode();
                 let path = request
                     .search_path
                     .as_ref()
@@ -999,11 +996,10 @@ Usage:
                 let workspace_search_elapsed_ms = search_started_at.elapsed().as_millis();
 
                 log::info!(
-                    "Grep tool workspace-search result: pattern={}, path={}, output_mode={}, search_mode={:?}, file_count={}, total_matches={}, backend={:?}, repo_phase={:?}, rebuild_recommended={}, dirty_modified={}, dirty_deleted={}, dirty_new={}, candidate_docs={}, matched_lines={}, matched_occurrences={}, workspace_search_ms={}",
+                    "Grep tool workspace-search result: pattern={}, path={}, output_mode={}, file_count={}, total_matches={}, backend={:?}, repo_phase={:?}, rebuild_recommended={}, dirty_modified={}, dirty_deleted={}, dirty_new={}, candidate_docs={}, matched_lines={}, matched_occurrences={}, workspace_search_ms={}",
                     pattern,
                     path,
                     output_mode,
-                    search_mode,
                     file_count,
                     total_matches,
                     search_result.backend,

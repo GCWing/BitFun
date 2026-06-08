@@ -1,9 +1,8 @@
 #[cfg(feature = "workspace-search")]
 mod workspace_search {
     use bitfun_services_integrations::workspace_search::{
-        flashgrep::SearchModeConfig, workspace_search_daemon_binary_name,
-        workspace_search_daemon_binary_names, workspace_search_daemon_missing_hint,
-        ContentSearchOutputMode, WorkspaceSearchService,
+        workspace_search_daemon_binary_name, workspace_search_daemon_binary_names,
+        workspace_search_daemon_missing_hint, WorkspaceSearchService,
     };
 
     #[test]
@@ -26,18 +25,5 @@ mod workspace_search {
     #[test]
     fn service_constructs_without_core_runtime_dependencies() {
         let _service = WorkspaceSearchService::new();
-
-        assert_eq!(
-            ContentSearchOutputMode::Content.search_mode(),
-            SearchModeConfig::LineMatches
-        );
-        assert_eq!(
-            ContentSearchOutputMode::Count.search_mode(),
-            SearchModeConfig::CountOnly
-        );
-        assert_eq!(
-            ContentSearchOutputMode::FilesWithMatches.search_mode(),
-            SearchModeConfig::FilesWithMatches
-        );
     }
 }

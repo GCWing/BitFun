@@ -3,8 +3,9 @@
 Scope: this guide applies to `src/crates/execution/tool-execution`.
 
 `tool-runtime` owns low-level reusable tool execution helpers such as filesystem
-and search utilities. It is not the product tool registry, permission model, or
-agent-facing tool surface.
+and search utilities plus provider-neutral pipeline planning/retry policy. It
+is not the product tool registry, permission model, or agent-facing tool
+surface.
 
 ## Guardrails
 

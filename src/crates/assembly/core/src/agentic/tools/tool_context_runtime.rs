@@ -31,6 +31,10 @@ use crate::service::git::{GitDiffParams, GitService};
 use crate::service::remote_ssh::workspace_state::remote_workspace_runtime_root;
 use crate::service::{get_workspace_runtime_service_arc, WorkspaceRuntimeContext};
 use crate::util::errors::{BitFunError, BitFunResult};
+use bitfun_agent_runtime::checkpoint::{
+    build_light_checkpoint as build_runtime_light_checkpoint, GitStatusCheckpointFacts,
+    LightCheckpoint, LightCheckpointWorkspaceFacts,
+};
 use bitfun_agent_tools::{PortableToolContextProvider, ToolContextFacts, ToolWorkspaceKind};
 use bitfun_runtime_ports::{DelegationPolicy, ToolRuntimeHandles};
 use log::warn;
@@ -57,6 +61,17 @@ pub struct ToolUseContext {
     pub runtime_tool_restrictions: ToolRuntimeRestrictions,
     /// Runtime handles such as workspace I/O services and cancellation.
     pub runtime_handles: ToolRuntimeHandles,
+}
+
+impl From<LightCheckpoint> for EvidenceLedgerCheckpoint {
+    fn from(value: LightCheckpoint) -> Self {
+        Self {
+            current_branch: value.current_branch,
+            dirty_state_summary: value.dirty_state_summary,
+            touched_files: value.touched_files,
+            diff_hash: value.diff_hash,
+        }
+    }
 }
 
 impl ToolUseContext {
@@ -349,42 +364,42 @@ impl ToolUseContext {
     }
 
     async fn build_light_checkpoint(&self, touched_files: Vec<String>) -> EvidenceLedgerCheckpoint {
-        let mut checkpoint = EvidenceLedgerCheckpoint {
-            current_branch: None,
-            dirty_state_summary: "workspace_unavailable".to_string(),
-            touched_files,
-            diff_hash: None,
-        };
-
         if self.is_remote() {
-            checkpoint.dirty_state_summary =
-                "remote_workspace_git_metadata_unavailable".to_string();
-            return checkpoint;
+            return build_runtime_light_checkpoint(
+                touched_files,
+                LightCheckpointWorkspaceFacts::RemoteWorkspace,
+            )
+            .into();
         }
 
         let Some(workspace_root) = self.workspace_root() else {
-            return checkpoint;
+            return build_runtime_light_checkpoint(
+                touched_files,
+                LightCheckpointWorkspaceFacts::WorkspaceUnavailable,
+            )
+            .into();
         };
 
-        match GitService::get_status(workspace_root).await {
-            Ok(status) => {
-                checkpoint.current_branch = Some(status.current_branch);
-                checkpoint.dirty_state_summary = format!(
-                    "staged={}, unstaged={}, untracked={}",
-                    status.staged.len(),
-                    status.unstaged.len(),
-                    status.untracked.len()
-                );
-            }
-            Err(error) => {
-                checkpoint.dirty_state_summary = format!("git_status_unavailable: {}", error);
-            }
-        }
-
-        checkpoint.diff_hash = self
-            .checkpoint_diff_hash(workspace_root, &checkpoint.touched_files)
+        let git_status = GitService::get_status(workspace_root)
+            .await
+            .map(|status| GitStatusCheckpointFacts {
+                current_branch: status.current_branch,
+                staged_count: status.staged.len(),
+                unstaged_count: status.unstaged.len(),
+                untracked_count: status.untracked.len(),
+            })
+            .map_err(|error| error.to_string());
+        let diff_hash = self
+            .checkpoint_diff_hash(workspace_root, &touched_files)
             .await;
-        checkpoint
+        build_runtime_light_checkpoint(
+            touched_files,
+            LightCheckpointWorkspaceFacts::LocalWorkspace {
+                git_status,
+                diff_hash,
+            },
+        )
+        .into()
     }
 
     async fn checkpoint_diff_hash(

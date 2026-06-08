@@ -1,6 +1,7 @@
 use bitfun_agent_runtime::tool_confirmation::{
-    resolve_confirmation_failure, resolve_tool_confirmation_plan, ConfirmationFailureKind,
-    ToolConfirmationOutcome, ToolConfirmationPlan, ToolConfirmationRequestFacts,
+    resolve_confirmation_failure, resolve_confirmation_wait_result, resolve_tool_confirmation_plan,
+    ConfirmationFailureKind, ToolConfirmationOutcome, ToolConfirmationPlan,
+    ToolConfirmationRequestFacts, ToolConfirmationWaitResult,
 };
 use std::time::{Duration, UNIX_EPOCH};
 
@@ -85,4 +86,31 @@ fn confirmation_failure_mapping_preserves_legacy_reasons_and_errors() {
     assert_eq!(timeout.kind, ConfirmationFailureKind::Timeout);
     assert_eq!(timeout.state_reason, "Confirmation timeout");
     assert_eq!(timeout.error_message, "Confirmation timeout: Bash");
+}
+
+#[test]
+fn confirmation_wait_result_mapping_preserves_legacy_timeout_and_rejection() {
+    assert_eq!(
+        resolve_confirmation_wait_result(ToolConfirmationWaitResult::Confirmed, "Bash"),
+        ToolConfirmationOutcome::Confirmed
+    );
+    assert_eq!(
+        resolve_confirmation_wait_result(
+            ToolConfirmationWaitResult::Rejected("unsafe".to_string()),
+            "Edit"
+        ),
+        ToolConfirmationOutcome::Rejected {
+            reason: "unsafe".to_string(),
+        }
+    );
+    assert_eq!(
+        resolve_confirmation_wait_result(ToolConfirmationWaitResult::ChannelClosed, "Read"),
+        ToolConfirmationOutcome::ChannelClosed
+    );
+    assert_eq!(
+        resolve_confirmation_wait_result(ToolConfirmationWaitResult::TimedOut, "Bash"),
+        ToolConfirmationOutcome::Timeout {
+            tool_name: "Bash".to_string(),
+        }
+    );
 }

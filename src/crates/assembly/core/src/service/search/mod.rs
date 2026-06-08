@@ -4,8 +4,6 @@ mod remote;
 mod remote_disabled;
 pub mod service;
 
-pub use bitfun_services_integrations::workspace_search::flashgrep;
-
 pub use bitfun_services_integrations::workspace_search::{
     ContentSearchOutputMode, ContentSearchRequest, ContentSearchResult, GlobSearchRequest,
     GlobSearchResult, IndexTaskHandle, WorkspaceIndexStatus, WorkspaceSearchBackend,

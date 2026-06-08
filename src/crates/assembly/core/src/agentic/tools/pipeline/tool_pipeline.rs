@@ -16,8 +16,9 @@ use crate::agentic::tools::tool_result_storage;
 use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_agent_runtime::tool_confirmation::{
-    resolve_confirmation_failure, resolve_tool_confirmation_plan, ConfirmationFailureKind,
-    ToolConfirmationOutcome, ToolConfirmationPlan, ToolConfirmationRequestFacts,
+    resolve_confirmation_failure, resolve_confirmation_wait_result, resolve_tool_confirmation_plan,
+    ConfirmationFailureKind, ToolConfirmationPlan, ToolConfirmationRequestFacts,
+    ToolConfirmationWaitResult,
 };
 use bitfun_agent_tools::{
     build_invalid_tool_call_error_message, build_tool_call_truncation_recovery_notice,
@@ -35,12 +36,10 @@ use std::time::{Instant, SystemTime};
 use tokio::sync::{oneshot, RwLock as TokioRwLock};
 use tokio::time::{timeout, Duration};
 use tokio_util::sync::CancellationToken;
-
-/// A batch of tool tasks to execute together.
-struct ToolBatch {
-    task_ids: Vec<String>,
-    is_concurrent: bool,
-}
+use tool_runtime::pipeline::{
+    partition_tool_batches, retry_delay_ms, should_retry_tool_attempt, ToolExecutionErrorClass,
+    ToolRetryAttemptFacts,
+};
 
 /// Convert framework::ToolResult to core::ToolResult
 ///
@@ -223,6 +222,14 @@ fn should_retry_tool_error(error: &BitFunError) -> bool {
     )
 }
 
+fn classify_tool_retry_error(error: &BitFunError) -> ToolExecutionErrorClass {
+    if should_retry_tool_error(error) {
+        ToolExecutionErrorClass::Retryable
+    } else {
+        ToolExecutionErrorClass::Terminal
+    }
+}
+
 fn map_tool_execution_admission_rejection(error: ToolExecutionAdmissionRejection) -> BitFunError {
     match error {
         ToolExecutionAdmissionRejection::RuntimeRestriction(error) => error.into(),
@@ -387,7 +394,7 @@ impl ToolPipeline {
         }
 
         // Partition into batches of consecutive same-safety tool calls
-        let batches = Self::partition_tool_batches(&task_ids, &concurrency_flags);
+        let batches = partition_tool_batches(&task_ids, &concurrency_flags);
         debug!(
             "Tool execution plan: total_tools={}, batches={}, concurrency_safe={}, non_concurrency_safe={}, allow_parallel=true, tools={}",
             task_ids.len(),
@@ -441,30 +448,6 @@ impl ToolPipeline {
         }
 
         Ok(all_results)
-    }
-
-    /// Partition task IDs into batches where consecutive concurrency-safe tasks
-    /// are grouped together (parallel batch) and each non-safe task forms its
-    /// own batch (serial batch).
-    fn partition_tool_batches(task_ids: &[String], flags: &[bool]) -> Vec<ToolBatch> {
-        let mut batches: Vec<ToolBatch> = Vec::new();
-
-        for (id, &is_safe) in task_ids.iter().zip(flags.iter()) {
-            if is_safe {
-                if let Some(last) = batches.last_mut() {
-                    if last.is_concurrent {
-                        last.task_ids.push(id.clone());
-                        continue;
-                    }
-                }
-            }
-            batches.push(ToolBatch {
-                task_ids: vec![id.clone()],
-                is_concurrent: is_safe,
-            });
-        }
-
-        batches
     }
 
     /// Execute tools in parallel
@@ -766,19 +749,19 @@ impl ToolPipeline {
             };
             confirmation_wait_ms = elapsed_ms_u64(confirmation_started_at);
 
-            let confirmation_outcome = match confirmation_result {
+            let confirmation_wait_result = match confirmation_result {
                 Some(Ok(ConfirmationResponse::Confirmed)) => {
                     debug!("Tool confirmed: tool_name={}", tool_name);
-                    ToolConfirmationOutcome::Confirmed
+                    ToolConfirmationWaitResult::Confirmed
                 }
                 Some(Ok(ConfirmationResponse::Rejected(reason))) => {
-                    ToolConfirmationOutcome::Rejected { reason }
+                    ToolConfirmationWaitResult::Rejected(reason)
                 }
-                Some(Err(_)) => ToolConfirmationOutcome::ChannelClosed,
-                None => ToolConfirmationOutcome::Timeout {
-                    tool_name: tool_name.clone(),
-                },
+                Some(Err(_)) => ToolConfirmationWaitResult::ChannelClosed,
+                None => ToolConfirmationWaitResult::TimedOut,
             };
+            let confirmation_outcome =
+                resolve_confirmation_wait_result(confirmation_wait_result, &tool_name);
 
             if let Some(failure) = resolve_confirmation_failure(confirmation_outcome) {
                 if matches!(
@@ -1026,7 +1009,11 @@ impl ToolPipeline {
             match result {
                 Ok(r) => return Ok(r),
                 Err(e) => {
-                    if attempts >= max_attempts || !should_retry_tool_error(&e) {
+                    if !should_retry_tool_attempt(ToolRetryAttemptFacts {
+                        attempts,
+                        max_attempts,
+                        error_class: classify_tool_retry_error(&e),
+                    }) {
                         return Err(e);
                     }
 
@@ -1036,7 +1023,7 @@ impl ToolPipeline {
                     );
 
                     // Wait for a period of time and retry
-                    tokio::time::sleep(Duration::from_millis(100 * attempts as u64)).await;
+                    tokio::time::sleep(Duration::from_millis(retry_delay_ms(attempts))).await;
                 }
             }
         }

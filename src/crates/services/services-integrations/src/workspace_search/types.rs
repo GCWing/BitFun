@@ -20,7 +20,7 @@ pub enum ContentSearchOutputMode {
 }
 
 impl ContentSearchOutputMode {
-    pub fn search_mode(self) -> SearchModeConfig {
+    pub(crate) fn search_mode(self) -> SearchModeConfig {
         match self {
             Self::Content => SearchModeConfig::LineMatches,
             Self::Count => SearchModeConfig::CountOnly,

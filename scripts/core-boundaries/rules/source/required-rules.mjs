@@ -466,6 +466,10 @@ export const requiredContentRules = [
         message: 'missing tool confirmation outcome contract',
       },
       {
+        regex: /\bpub enum ToolConfirmationWaitResult\b/,
+        message: 'missing tool confirmation wait-result contract',
+      },
+      {
         regex: /\bpub enum ConfirmationFailureKind\b/,
         message: 'missing tool confirmation failure kind',
       },
@@ -476,6 +480,33 @@ export const requiredContentRules = [
       {
         regex: /\bpub fn resolve_confirmation_failure\b/,
         message: 'missing tool confirmation failure resolver',
+      },
+      {
+        regex: /\bpub fn resolve_confirmation_wait_result\b/,
+        message: 'missing tool confirmation wait-result resolver',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/src/checkpoint.rs',
+    reason:
+      'agent-runtime must own provider-neutral light-checkpoint summary policy while core keeps concrete Git/session IO',
+    patterns: [
+      {
+        regex: /\bpub struct LightCheckpoint\b/,
+        message: 'missing light checkpoint DTO',
+      },
+      {
+        regex: /\bpub enum LightCheckpointWorkspaceFacts\b/,
+        message: 'missing light checkpoint workspace facts',
+      },
+      {
+        regex: /\bpub struct GitStatusCheckpointFacts\b/,
+        message: 'missing git status checkpoint facts',
+      },
+      {
+        regex: /\bpub fn build_light_checkpoint\b/,
+        message: 'missing light checkpoint builder',
       },
     ],
   },
@@ -495,6 +526,10 @@ export const requiredContentRules = [
       {
         regex: /\bconfirmation_failure_mapping_preserves_legacy_reasons_and_errors\b/,
         message: 'missing tool confirmation failure mapping regression',
+      },
+      {
+        regex: /\bconfirmation_wait_result_mapping_preserves_legacy_timeout_and_rejection\b/,
+        message: 'missing tool confirmation wait-result mapping regression',
       },
     ],
   },
@@ -1040,8 +1075,20 @@ export const requiredContentRules = [
         message: 'missing tool confirmation failure mapping delegation',
       },
       {
+        regex: /\bresolve_confirmation_wait_result\b/,
+        message: 'missing tool confirmation wait-result mapping delegation',
+      },
+      {
         regex: /\bToolConfirmationPlan::Await\b/,
         message: 'missing tool confirmation await-plan handling',
+      },
+      {
+        regex: /\bshould_retry_tool_attempt\b/,
+        message: 'missing tool-runtime retry decision delegation',
+      },
+      {
+        regex: /\bretry_delay_ms\b/,
+        message: 'missing tool-runtime retry backoff delegation',
       },
     ],
   },
@@ -1277,6 +1324,52 @@ export const requiredContentRules = [
       {
         regex: /\bbash_shell_owner_preserves_background_delivery_texts\b/,
         message: 'missing Bash background-result text owner regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/tool-execution/src/pipeline.rs',
+    reason:
+      'tool-runtime must own provider-neutral tool batching and retry policy while core keeps concrete execution state',
+    patterns: [
+      {
+        regex: /\bpub struct ToolBatch\b/,
+        message: 'missing tool batch DTO',
+      },
+      {
+        regex: /\bpub fn partition_tool_batches\b/,
+        message: 'missing tool batching policy',
+      },
+      {
+        regex: /\bpub enum ToolExecutionErrorClass\b/,
+        message: 'missing tool retry error class',
+      },
+      {
+        regex: /\bpub struct ToolRetryAttemptFacts\b/,
+        message: 'missing tool retry attempt facts',
+      },
+      {
+        regex: /\bpub fn should_retry_tool_attempt\b/,
+        message: 'missing tool retry decision policy',
+      },
+      {
+        regex: /\bpub fn retry_delay_ms\b/,
+        message: 'missing tool retry backoff policy',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/tool-execution/tests/tool_pipeline_planning.rs',
+    reason:
+      'tool-runtime pipeline owner must keep behavior-equivalence contracts for batching and retry policy',
+    patterns: [
+      {
+        regex: /\bpartitions_consecutive_concurrency_safe_tools_into_parallel_batches\b/,
+        message: 'missing tool batching regression',
+      },
+      {
+        regex: /\bretry_policy_preserves_attempt_limit_and_error_class_contract\b/,
+        message: 'missing tool retry policy regression',
       },
     ],
   },
@@ -3625,6 +3718,14 @@ export const requiredContentRules = [
         message: 'missing Deep Review checkpoint binding',
       },
       {
+        regex: /\bbuild_runtime_light_checkpoint\b/,
+        message: 'missing agent-runtime light checkpoint policy delegation',
+      },
+      {
+        regex: /\bLightCheckpointWorkspaceFacts::LocalWorkspace\b/,
+        message: 'missing local checkpoint facts delegation',
+      },
+      {
         regex: /\bcall_with_tool_runtime_hooks\b/,
         message: 'missing tool-call cancellation/post-call hook binding',
       },
@@ -4080,14 +4181,36 @@ export const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/services/services-integrations/src/workspace_search/mod.rs',
+    reason:
+      'workspace_search must keep flashgrep protocol internals crate-private and expose stable DTO/service APIs only',
+    patterns: [
+      {
+        regex: /\bpub\(crate\)\s+mod\s+flashgrep\b/,
+        message: 'flashgrep protocol internals must stay crate-private',
+      },
+    ],
+  },
+  {
     path: 'src/crates/services/services-integrations/src/workspace_search/service.rs',
     reason:
-      'services-integrations workspace_search must own local flashgrep fallback, session lifecycle, and preview/result conversion',
+      'services-integrations workspace_search must own local flashgrep fallback and session lifecycle',
     patterns: [
+      {
+        regex: /\bpub struct WorkspaceSearchRepoConfig\b/,
+        message: 'missing stable workspace-search repo config contract',
+      },
       {
         regex: /\bwith_scan_fallback\b/,
         message: 'missing flashgrep scan fallback request flag',
       },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-integrations/src/workspace_search/result_mapping.rs',
+    reason:
+      'services-integrations workspace_search result mapping must own shared flashgrep preview/result conversion',
+    patterns: [
       {
         regex: /\bconvert_hits_to_file_search_results\b/,
         message: 'missing hit-to-file-result conversion owner',
@@ -4116,6 +4239,10 @@ export const requiredContentRules = [
         message: 'missing core runtime hook adapter',
       },
       {
+        regex: /\bWorkspaceSearchRepoConfig\b/,
+        message: 'missing stable workspace-search repo config hook',
+      },
+      {
         regex: /\bget_global_config_service\b/,
         message: 'missing product config hook for workspace-search repo config',
       },
@@ -4126,25 +4253,95 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/assembly/core/src/service/search/remote.rs',
+    path: 'src/crates/services/services-integrations/src/remote_ssh/workspace_search/mod.rs',
     reason:
-      'core remote search runtime must continue owning remote flashgrep fallback/session behavior until search migration is reviewed',
+      'remote SSH workspace_search strategy helpers must stay crate-internal and keep behavior-equivalence tests near the owner',
     patterns: [
       {
-        regex: /\bremote_workspace_search_service_for_path\b/,
-        message: 'missing remote workspace search resolver',
+        regex: /\bpub\(crate\)\s+fn\s+build_remote_scope\b/,
+        message: 'remote scope helper must stay crate-internal',
       },
       {
-        regex: /\blookup_remote_connection_with_hint\b/,
-        message: 'missing preferred remote connection lookup',
+        regex: /\bpub\(crate\)\s+fn\s+shell_escape\b/,
+        message: 'remote shell escaping helper must stay crate-internal',
       },
       {
-        regex: /\ballow_scan_fallback\b/,
+        regex: /\bpub\(crate\)\s+fn\s+should_retry_remote_scan_fallback_as_files_with_matches\b/,
+        message: 'remote scan fallback retry policy must stay crate-internal',
+      },
+      {
+        regex: /\bremote_workspace_search_paths_preserve_current_contract\b/,
+        message: 'missing remote path contract regression',
+      },
+      {
+        regex: /\bremote_scan_fallback_retry_policy_preserves_current_contract\b/,
+        message: 'missing remote scan fallback retry regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-integrations/src/remote_ssh/workspace_search/service.rs',
+    reason:
+      'services-integrations remote SSH workspace_search must own remote flashgrep concrete session, fallback, and binary lifecycle behind provider traits',
+    patterns: [
+      {
+        regex: /\bpub trait RemoteWorkspaceSearchProvider\b/,
+        message: 'missing remote search provider boundary',
+      },
+      {
+        regex: /\bpub struct RemoteWorkspaceSearchService\b/,
+        message: 'missing remote workspace search service owner',
+      },
+      {
+        regex: /\bpub struct RemoteWorkspaceSearchStdioProtocol\b/,
+        message: 'missing narrow remote stdio protocol facade',
+      },
+      {
+        regex: /\bREMOTE_STDIO_SESSIONS\b/,
+        message: 'missing remote stdio session lifecycle owner',
+      },
+      {
+        regex: /\bensure_remote_search_context\b/,
+        message: 'missing remote search context lifecycle owner',
+      },
+      {
+        regex: /\ballow_scan_fallback:\s*true\b/,
         message: 'missing remote scan fallback contract',
       },
       {
         regex: /\bfallback_query\b/,
         message: 'missing FilesWithMatches fallback query',
+      },
+      {
+        regex: /\bremote_search_rejects_non_linux_before_stdio_open\b/,
+        message: 'missing remote OS gate regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/service/search/remote.rs',
+    reason:
+      'core remote search runtime must remain a compatibility facade over services-integrations while retaining concrete SSH/russh bridge adapters',
+    patterns: [
+      {
+        regex: /\bServiceRemoteWorkspaceSearchService\b/,
+        message: 'missing services remote search owner delegation',
+      },
+      {
+        regex: /\bimpl RemoteWorkspaceSearchProvider for CoreRemoteWorkspaceSearchProvider\b/,
+        message: 'missing core remote search provider adapter',
+      },
+      {
+        regex: /\blookup_remote_connection_with_hint\b/,
+        message: 'missing preferred remote connection lookup adapter',
+      },
+      {
+        regex: /\bopen_exec_channel\b/,
+        message: 'missing SSH stdio bridge adapter',
+      },
+      {
+        regex: /\bRemoteWorkspaceSearchStdioProtocol\b/,
+        message: 'missing narrow stdio protocol facade in core remote bridge',
       },
     ],
   },

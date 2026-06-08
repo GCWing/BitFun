@@ -322,3 +322,31 @@ fn request_name(request: &Request) -> &'static str {
         Request::Shutdown => "shutdown",
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn drains_remote_stdio_content_length_messages() {
+        let body = r#"{"jsonrpc":"2.0","id":7,"result":{"kind":"pong","now_unix_secs":1}}"#;
+        let mut buffer = format!("Content-Length: {}\r\n\r\n{}", body.len(), body).into_bytes();
+        let messages = drain_content_length_messages(&mut buffer)
+            .expect("expected content-length message to decode");
+
+        assert_eq!(messages.len(), 1);
+        assert!(buffer.is_empty());
+    }
+
+    #[test]
+    fn drains_remote_stdio_initialize_response_with_legacy_search_modes() {
+        let body = r#"{"jsonrpc":"2.0","id":1,"result":{"kind":"initialize_result","protocol_version":1,"server_info":{"name":"flashgrep","version":"0.1.0"},"capabilities":{"workspace_open":true,"workspace_ensure":true,"workspace_list":false,"workspace_refresh":true,"base_snapshot_build":true,"base_snapshot_rebuild":true,"task_status":true,"task_cancel":true,"search_query":true,"glob_query":true,"progress_notifications":true,"status_notifications":true},"search":{"search_modes":["files_with_matches","line_matches","count_only","count_matches"]}}}"#;
+        let mut buffer = format!("Content-Length: {}\r\n\r\n{}", body.len(), body).into_bytes();
+        let messages = drain_content_length_messages(&mut buffer)
+            .expect("expected initialize response to decode");
+
+        assert_eq!(messages.len(), 1);
+        let debug = format!("{:?}", messages[0]);
+        assert!(debug.contains("InitializeResult"));
+    }
+}

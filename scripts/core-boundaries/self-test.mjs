@@ -832,9 +832,11 @@ export function runManifestParserSelfTest({
         'ToolConfirmationRequestFacts',
         'ToolConfirmationPlan',
         'ToolConfirmationOutcome',
+        'ToolConfirmationWaitResult',
         'ConfirmationFailureKind',
         'resolve_tool_confirmation_plan',
         'resolve_confirmation_failure',
+        'resolve_confirmation_wait_result',
       ],
     },
     {
@@ -843,6 +845,16 @@ export function runManifestParserSelfTest({
         'confirmation_plan_requires_permission_only_when_both_flags_are_true',
         'confirmation_plan_preserves_legacy_no_timeout_one_year_deadline',
         'confirmation_failure_mapping_preserves_legacy_reasons_and_errors',
+        'confirmation_wait_result_mapping_preserves_legacy_timeout_and_rejection',
+      ],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/src/checkpoint.rs',
+      contracts: [
+        'LightCheckpoint',
+        'LightCheckpointWorkspaceFacts',
+        'GitStatusCheckpointFacts',
+        'build_light_checkpoint',
       ],
     },
     {
@@ -1052,6 +1064,12 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/assembly/core/src/agentic/tools/pipeline/tool_pipeline.rs',
       contracts: [
+        'resolve_tool_confirmation_plan',
+        'resolve_confirmation_failure',
+        'resolve_confirmation_wait_result',
+        'ToolConfirmationPlan::Await',
+        'should_retry_tool_attempt',
+        'retry_delay_ms',
         'build_tool_call_truncation_recovery_notice',
         'truncation_notice_for_interactive_tools_does_not_claim_file_write',
         'truncation_notice_for_write_tools_keeps_write_continuation_guidance',
@@ -1065,6 +1083,24 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/assembly/core/src/agentic/tools/tool_result_storage.rs',
       contracts: ['write_once', 'file\\.flush\\(\\)\\.await'],
+    },
+    {
+      path: 'src/crates/execution/tool-execution/src/pipeline.rs',
+      contracts: [
+        'ToolBatch',
+        'partition_tool_batches',
+        'ToolExecutionErrorClass',
+        'ToolRetryAttemptFacts',
+        'should_retry_tool_attempt',
+        'retry_delay_ms',
+      ],
+    },
+    {
+      path: 'src/crates/execution/tool-execution/tests/tool_pipeline_planning.rs',
+      contracts: [
+        'partitions_consecutive_concurrency_safe_tools_into_parallel_batches',
+        'retry_policy_preserves_attempt_limit_and_error_class_contract',
+      ],
     },
     {
       path: 'src/crates/services/services-integrations/src/mcp/server/connection.rs',
@@ -1582,6 +1618,8 @@ export function runManifestParserSelfTest({
         'unlocked_collapsed_tools',
         'impl ToolUseContext',
         'record_light_checkpoint',
+        'build_runtime_light_checkpoint',
+        'LightCheckpointWorkspaceFacts::LocalWorkspace',
         'call_with_tool_runtime_hooks',
         'call_tool_with_runtime_hooks',
         'call_records_deep_review_read_file_measurement_without_touching_result',
@@ -1705,16 +1743,38 @@ export function runManifestParserSelfTest({
       contracts: ['prepare_startup_restored_workspaces', 'WorkspaceKind::Remote', 'ensure_remote_workspace_runtime', 'sshHost'],
     },
     {
+      path: 'src/crates/services/services-integrations/src/workspace_search/mod.rs',
+      contracts: ['flashgrep'],
+    },
+    {
       path: 'src/crates/services/services-integrations/src/workspace_search/service.rs',
-      contracts: ['with_scan_fallback', 'convert_hits_to_file_search_results', 'split_preview', 'preview_inside'],
+      contracts: ['WorkspaceSearchRepoConfig', 'with_scan_fallback'],
+    },
+    {
+      path: 'src/crates/services/services-integrations/src/workspace_search/result_mapping.rs',
+      contracts: ['convert_hits_to_file_search_results', 'split_preview', 'preview_inside'],
     },
     {
       path: 'src/crates/assembly/core/src/service/search/service.rs',
-      contracts: ['owner::WorkspaceSearchService::new_with_hooks', 'CoreWorkspaceSearchRuntimeHooks', 'get_global_config_service', 'ensure_workspace_gitignore_ignores_bitfun'],
+      contracts: ['owner::WorkspaceSearchService::new_with_hooks', 'CoreWorkspaceSearchRuntimeHooks', 'WorkspaceSearchRepoConfig', 'get_global_config_service', 'ensure_workspace_gitignore_ignores_bitfun'],
     },
     {
       path: 'src/crates/assembly/core/src/service/search/remote.rs',
-      contracts: ['remote_workspace_search_service_for_path', 'lookup_remote_connection_with_hint', 'allow_scan_fallback', 'fallback_query'],
+      contracts: ['ServiceRemoteWorkspaceSearchService', 'impl RemoteWorkspaceSearchProvider for CoreRemoteWorkspaceSearchProvider', 'lookup_remote_connection_with_hint', 'open_exec_channel', 'RemoteWorkspaceSearchStdioProtocol'],
+    },
+    {
+      path: 'src/crates/services/services-integrations/src/remote_ssh/workspace_search/mod.rs',
+      contracts: [
+        'build_remote_scope',
+        'shell_escape',
+        'should_retry_remote_scan_fallback_as_files_with_matches',
+        'remote_workspace_search_paths_preserve_current_contract',
+        'remote_scan_fallback_retry_policy_preserves_current_contract',
+      ],
+    },
+    {
+      path: 'src/crates/services/services-integrations/src/remote_ssh/workspace_search/service.rs',
+      contracts: ['RemoteWorkspaceSearchProvider', 'RemoteWorkspaceSearchService', 'RemoteWorkspaceSearchStdioProtocol', 'REMOTE_STDIO_SESSIONS', 'ensure_remote_search_context', 'allow_scan_fallback', 'fallback_query', 'remote_search_rejects_non_linux_before_stdio_open'],
     },
     {
       path: 'src/crates/assembly/core/src/service/search/mod.rs',

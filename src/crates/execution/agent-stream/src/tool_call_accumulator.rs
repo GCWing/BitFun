@@ -957,6 +957,25 @@ mod tests {
     }
 
     #[test]
+    fn write_like_recovery_classification_matches_tool_presentation_contract() {
+        for tool_name in [
+            "Write",
+            "file_write",
+            "write_notebook",
+            "Read",
+            "Edit",
+            "AskUserQuestion",
+            "TodoWrite",
+        ] {
+            assert_eq!(
+                super::is_write_like_tool_name(tool_name),
+                bitfun_agent_tools::is_write_like_tool_name(tool_name),
+                "tool_name={tool_name}"
+            );
+        }
+    }
+
+    #[test]
     fn write_truncated_with_chinese_multibyte_is_recovered() {
         let raw = "{\"file_path\": \"/tmp/r.md\", \"content\": \"深度研究报告：未完";
         let mut pending = PendingToolCall::default();
