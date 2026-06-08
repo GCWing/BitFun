@@ -16,7 +16,7 @@ import {
 } from '../../helpers/performance-trace';
 import { StartupPage } from '../../page-objects/StartupPage';
 import { ensureWorkspaceOpen } from '../../helpers/workspace-utils';
-import { ensureCodeSessionOpen, openWorkspace } from '../../helpers/workspace-helper';
+import { openWorkspace } from '../../helpers/workspace-helper';
 
 const DEFAULT_PERF_SESSION_ID = 'perf-long-session-000';
 const MAX_PROJECT_SLUG_LEN = 120;
@@ -85,6 +85,7 @@ type LongSessionViewportTimelineSample = {
   atMs: number;
   sinceClickMs: number;
   historyOpenIntentAtMs: number | null;
+  historyOpenIntentSessionId: string | null;
   sinceHistoryOpenIntentMs: number | null;
   activeSessionId: string | null;
   pendingHistoryOpenSessionId: string | null;
@@ -272,6 +273,7 @@ type LongSessionDomMutationEvent = {
 type LongSessionVisualStateEvent = {
   atMs: number;
   sinceClickMs: number;
+  historyOpenIntentSessionId: string | null;
   sinceHistoryOpenIntentMs: number | null;
   frame: number;
   reason: string;
@@ -461,6 +463,7 @@ type LongSessionVisualStateSummary = {
   }>;
   postOpenIntentNonTargetContentEvents: Array<{
     sinceClickMs: number;
+    historyOpenIntentSessionId: string | null;
     sinceHistoryOpenIntentMs: number | null;
     reason: string;
     activeSessionId: string | null;
@@ -471,6 +474,7 @@ type LongSessionVisualStateSummary = {
   }>;
   postOpenIntentNonTargetContentHolds: Array<{
     sinceClickMs: number;
+    historyOpenIntentSessionId: string | null;
     sinceHistoryOpenIntentMs: number | null;
     untilHistoryOpenIntentMs: number | null;
     holdAfterGraceMs: number;
@@ -693,22 +697,23 @@ async function findSessionItem(sessionId: string): Promise<ReturnType<typeof $> 
       break;
     }
   }
-  console.log('[Perf] visible session ids while locating target', JSON.stringify({
-    target: sessionId,
-    visibleSessionIds: lastVisibleSessionIds.slice(0, 40),
-    visibleSessionCount: lastVisibleSessionIds.length,
-  }));
+  if (process.env.BITFUN_E2E_PERF_VERBOSE_REPORT === '1') {
+    console.log('[Perf] visible session ids while locating target', JSON.stringify({
+      target: sessionId,
+      visibleSessionIds: lastVisibleSessionIds.slice(0, 40),
+      visibleSessionCount: lastVisibleSessionIds.length,
+    }));
+  }
   return null;
 }
 
 async function ensurePerformanceWorkspace(startupPage: StartupPage): Promise<boolean> {
-  const isBundledApp = await browser.execute(() => window.location.hostname === 'tauri.localhost');
-  if (isBundledApp) {
-    return true;
-  }
-
   const targetWorkspace = process.env.E2E_TEST_WORKSPACE;
   if (!targetWorkspace) {
+    const isBundledApp = await browser.execute(() => window.location.hostname === 'tauri.localhost');
+    if (isBundledApp) {
+      return true;
+    }
     return ensureWorkspaceOpen(startupPage);
   }
 
@@ -716,7 +721,6 @@ async function ensurePerformanceWorkspace(startupPage: StartupPage): Promise<boo
   if (!opened) {
     return ensureWorkspaceOpen(startupPage);
   }
-  await ensureCodeSessionOpen();
   return true;
 }
 
@@ -1144,6 +1148,7 @@ async function startLongSessionViewportTimelineRecorder(
       __bitfunLongSessionLayoutShiftObserver?: PerformanceObserver;
       __bitfunLongSessionMutationObserver?: MutationObserver;
       __bitfunLongSessionOpenIntentAt?: number;
+      __bitfunLongSessionOpenIntentSessionId?: string | null;
       __bitfunLongSessionOpenIntentHandler?: EventListener;
       __bitfunLongSessionUserInteractionHandler?: EventListener;
       __BITFUN_RENDER_PROFILE_ENABLED__?: boolean;
@@ -1175,8 +1180,14 @@ async function startLongSessionViewportTimelineRecorder(
       );
     }
     globalWindow.__bitfunLongSessionOpenIntentAt = undefined;
-    const handleOpenIntent: EventListener = () => {
+    globalWindow.__bitfunLongSessionOpenIntentSessionId = undefined;
+    const handleOpenIntent: EventListener = event => {
+      const detail =
+        event instanceof CustomEvent && typeof event.detail?.sessionId === 'string'
+          ? event.detail
+          : null;
       globalWindow.__bitfunLongSessionOpenIntentAt = performance.now();
+      globalWindow.__bitfunLongSessionOpenIntentSessionId = detail?.sessionId ?? null;
       recordMutationEvent('history-open-intent');
       recordVisualStateEvent('history-open-intent', true);
       for (const delayMs of [100, 250, 500, 1_000]) {
@@ -1473,9 +1484,18 @@ async function startLongSessionViewportTimelineRecorder(
         };
       }
 
-      if (element.closest('.modern-flowchat-container__history-open-intent-shield')) {
+      const historyOpenIntentShield = element.closest<HTMLElement>('.modern-flowchat-container__history-open-intent-shield');
+      if (historyOpenIntentShield) {
+        const shieldBeforeStyle = window.getComputedStyle(historyOpenIntentShield, '::before');
+        const hasContinuitySurface =
+          shieldBeforeStyle.content !== 'none' &&
+          shieldBeforeStyle.display !== 'none' &&
+          shieldBeforeStyle.backgroundImage !== 'none' &&
+          historyOpenIntentShield.getBoundingClientRect().height > 0;
         return {
-          category: 'history-open-intent-shield',
+          category: hasContinuitySurface
+            ? 'history-open-intent-transition-surface'
+            : 'history-open-intent-shield',
           itemType: null,
           turnId: null,
           latestTurnHit: false,
@@ -1973,6 +1993,7 @@ async function startLongSessionViewportTimelineRecorder(
         completedToolTransitionSignature,
         latestContentVisuallyVisible ? 'latest-visible' : 'latest-hidden',
         latestModelRoundTextLength > 0 ? 'latest-text' : 'latest-no-text',
+        globalWindow.__bitfunLongSessionOpenIntentSessionId ?? 'no-open-intent-session',
         roundMetric(scrollTop),
         roundMetric(scrollHeight),
         roundMetric(clientHeight),
@@ -1997,6 +2018,7 @@ async function startLongSessionViewportTimelineRecorder(
         sinceHistoryOpenIntentMs: typeof globalWindow.__bitfunLongSessionOpenIntentAt === 'number'
           ? atMs - globalWindow.__bitfunLongSessionOpenIntentAt
           : null,
+        historyOpenIntentSessionId: globalWindow.__bitfunLongSessionOpenIntentSessionId ?? null,
         frame: visualFrame,
         reason,
         signature,
@@ -2371,11 +2393,13 @@ async function startLongSessionViewportTimelineRecorder(
         : null;
       const atMs = performance.now();
       const historyOpenIntentAtMs = globalWindow.__bitfunLongSessionOpenIntentAt ?? null;
+      const historyOpenIntentSessionId = globalWindow.__bitfunLongSessionOpenIntentSessionId ?? null;
 
       return {
         atMs,
         sinceClickMs: atMs - clickTime,
         historyOpenIntentAtMs,
+        historyOpenIntentSessionId,
         sinceHistoryOpenIntentMs: historyOpenIntentAtMs === null ? null : atMs - historyOpenIntentAtMs,
         activeSessionId: messages?.dataset.activeSessionId || null,
         pendingHistoryOpenSessionId: messages?.dataset.pendingHistoryOpenSessionId || null,
@@ -2836,6 +2860,10 @@ function summarizeLongSessionVisualStateEvents(
       point.category === 'history-overlay' ||
       point.category === 'loading-surface'
     );
+  const isHistoryOpenIntentSurfacePoint = (category: string): boolean =>
+    category === 'history-open-intent-shield' ||
+    category === 'history-open-intent-transition-surface';
+
   const isBlankSurfacePointEvent = (event: LongSessionVisualStateEvent): boolean => {
     if (event.surfacePoints.length === 0) {
       return false;
@@ -2856,6 +2884,7 @@ function summarizeLongSessionVisualStateEvents(
   };
   const isOpenIntentBlankSurfaceEvent = (event: LongSessionVisualStateEvent): boolean =>
     event.sinceHistoryOpenIntentMs !== null &&
+    event.historyOpenIntentSessionId === sessionId &&
     isBlankSurfacePointEvent(event) &&
     event.surfacePoints.some(point => point.category === 'history-open-intent-shield');
   const isTransparentSurfacePointEvent = (event: LongSessionVisualStateEvent): boolean =>
@@ -2863,6 +2892,7 @@ function summarizeLongSessionVisualStateEvents(
       point.category.startsWith('transparent-virtual-item:')
     );
   const isVisibleNonTargetContentEvent = (event: LongSessionVisualStateEvent): boolean =>
+    event.historyOpenIntentSessionId === sessionId &&
     event.activeSessionId !== null &&
     event.activeSessionId !== sessionId &&
     event.pendingHistoryOpenSessionId !== sessionId &&
@@ -2873,7 +2903,7 @@ function summarizeLongSessionVisualStateEvents(
         point.effectiveOpacity > 0.01
       ) ||
       (
-        !event.surfacePoints.some(point => point.category === 'history-open-intent-shield') &&
+        !event.surfacePoints.some(point => isHistoryOpenIntentSurfacePoint(point.category)) &&
         event.virtualItemDomCount > 0 &&
         event.visibleTextLength > 0
       )
@@ -3292,6 +3322,7 @@ function summarizeLongSessionVisualStateEvents(
       .slice(0, 40)
       .map(event => ({
         sinceClickMs: event.sinceClickMs,
+        historyOpenIntentSessionId: event.historyOpenIntentSessionId,
         sinceHistoryOpenIntentMs: event.sinceHistoryOpenIntentMs,
         reason: event.reason,
         activeSessionId: event.activeSessionId,
@@ -3304,6 +3335,7 @@ function summarizeLongSessionVisualStateEvents(
       .slice(0, 40)
       .map(({ event, untilHistoryOpenIntentMs, holdAfterGraceMs }) => ({
         sinceClickMs: event.sinceClickMs,
+        historyOpenIntentSessionId: event.historyOpenIntentSessionId,
         sinceHistoryOpenIntentMs: event.sinceHistoryOpenIntentMs,
         untilHistoryOpenIntentMs,
         holdAfterGraceMs,
@@ -3399,6 +3431,34 @@ type LongSessionOpenMeasurementOptions = {
   postVisibleInteraction?: 'first-scroll';
 };
 
+type RapidLongSessionSwitchMeasurement = {
+  appMode: string;
+  sessionIds: string[];
+  targetSessionId: string;
+  expectedLatestTurnId: string;
+  clickedAtMs: number;
+  clickPlan: Array<{
+    sessionId: string;
+    clickedAtMs: number;
+  }>;
+  activeSessionIdAtEnd: string | null;
+  targetLatestVisibleAtMs: number;
+  targetLatestUsableAtMs: number;
+  clickToTargetLatestVisibleMs: number;
+  clickToTargetLatestUsableMs: number;
+  postVisibleObserveMs: number;
+  viewport: LongSessionViewportState;
+  viewportTimelineSummary: LongSessionViewportTimelineSummary;
+  visualStateSummary: LongSessionVisualStateSummary;
+  visualStateEvents: LongSessionVisualStateEvent[];
+  mutationEvents: LongSessionDomMutationEvent[];
+  layoutShiftEvents: LongSessionLayoutShiftEvent[];
+  events: StartupTraceSnapshot['phases']['events'];
+  apiSegments: ReturnType<typeof summarizeApiCommandSegments>;
+  api: StartupTraceSnapshot['api'];
+  native: StartupTraceSnapshot['native'];
+};
+
 function readPostVisibleInteractionOption(
   options: LongSessionOpenMeasurementOptions,
 ): 'first-scroll' | null {
@@ -3442,6 +3502,134 @@ async function performLongSessionPostVisibleInteraction(interaction: 'first-scro
       },
     }));
   });
+}
+
+function readRapidSwitchSessionIds(): string[] {
+  const raw = process.env.BITFUN_E2E_PERF_RAPID_SWITCH_SESSION_IDS;
+  const sessionIds = (raw ?? 'perf-rapid-a-000,perf-rapid-b-000,perf-rapid-c-000')
+    .split(',')
+    .map(value => value.trim())
+    .filter(Boolean);
+  return Array.from(new Set(sessionIds));
+}
+
+async function readActiveSessionNavId(): Promise<string | null> {
+  return browser.execute(() => {
+    const active = document.querySelector<HTMLElement>(
+      '[data-testid="session-nav-item"].is-active, ' +
+      '.bitfun-nav-panel__inline-item.is-active[data-session-id]',
+    );
+    return active?.getAttribute('data-session-id') ?? null;
+  });
+}
+
+async function collectRapidLongSessionSwitchMeasurement(
+  sessionIds: string[],
+  expectedLatestTurnId: string,
+): Promise<RapidLongSessionSwitchMeasurement | null> {
+  if (sessionIds.length < 3) {
+    throw new Error('Rapid switch measurement requires at least 3 session ids');
+  }
+
+  for (const sessionId of sessionIds) {
+    const item = await findSessionItem(sessionId);
+    if (!item) {
+      return null;
+    }
+  }
+
+  const targetSessionId = sessionIds[sessionIds.length - 1];
+  const clickedAtMs = await readPerformanceNow();
+  const clickPlan: RapidLongSessionSwitchMeasurement['clickPlan'] = [];
+  await startLongSessionViewportTimelineRecorder(
+    expectedLatestTurnId,
+    clickedAtMs,
+    process.env.BITFUN_E2E_RENDER_PROFILE === '1',
+  );
+
+  for (let index = 0; index < sessionIds.length; index += 1) {
+    const sessionId = sessionIds[index];
+    const item = await findSessionItem(sessionId);
+    if (!item) {
+      throw new Error(`Rapid switch session disappeared before click: ${sessionId}`);
+    }
+    clickPlan.push({
+      sessionId,
+      clickedAtMs: await readPerformanceNow(),
+    });
+    await item.click();
+    if (index < sessionIds.length - 1) {
+      const delayMs = numericEnv('BITFUN_E2E_PERF_RAPID_SWITCH_DELAY_MS') ?? 75;
+      await browser.pause(Math.max(0, delayMs));
+    }
+  }
+
+  const latestVisible = await waitForLatestLongSessionTurnVisible(5000, expectedLatestTurnId);
+  const latestUsable = await waitForLatestLongSessionViewportUsable(5000, expectedLatestTurnId);
+  const postVisibleObserveMs =
+    numericEnv('BITFUN_E2E_PERF_RAPID_SWITCH_OBSERVE_MS') ??
+    numericEnv('BITFUN_E2E_PERF_POST_VISIBLE_OBSERVE_MS') ??
+    DEFAULT_POST_VISIBLE_OBSERVE_MS;
+  const observeRemainingMs = latestUsable.usableAtMs + postVisibleObserveMs - await readPerformanceNow();
+  if (observeRemainingMs > 0) {
+    await browser.pause(Math.ceil(observeRemainingMs));
+  }
+
+  const activeSessionIdAtEnd = await readActiveSessionNavId();
+  const viewport = await readLongSessionViewportState(expectedLatestTurnId);
+  const viewportTimeline = await stopLongSessionViewportTimelineRecorder();
+  const viewportTimelineSummary = summarizeLongSessionViewportTimeline(
+    viewportTimeline.samples,
+    targetSessionId,
+  );
+  const visualStateSummary = summarizeLongSessionVisualStateEvents(
+    viewportTimeline.visualStateEvents,
+    viewportTimeline.mutationEvents,
+    viewportTimeline.layoutShiftEvents,
+    viewportTimelineSummary,
+    targetSessionId,
+  );
+  const finalSnapshot = await readStartupTraceSnapshot();
+  const sessionIdSet = new Set(sessionIds);
+  const events = finalSnapshot.phases.events.filter(event =>
+    event.atMs >= clickedAtMs &&
+    (
+      (
+        event.phase.startsWith('historical_session') &&
+        typeof event.sessionId === 'string' &&
+        sessionIdSet.has(event.sessionId)
+      ) ||
+      event.phase.startsWith('flowchat_latest_end_anchor') ||
+      event.phase.startsWith('flowchat_initial_history') ||
+      event.phase === 'react_render_profile'
+    )
+  );
+  const verboseTimelineReport = process.env.BITFUN_E2E_PERF_VERBOSE_REPORT === '1';
+
+  return {
+    appMode: process.env.BITFUN_E2E_APP_MODE ?? 'auto',
+    sessionIds,
+    targetSessionId,
+    expectedLatestTurnId,
+    clickedAtMs,
+    clickPlan,
+    activeSessionIdAtEnd,
+    targetLatestVisibleAtMs: latestVisible.visibleAtMs,
+    targetLatestUsableAtMs: latestUsable.usableAtMs,
+    clickToTargetLatestVisibleMs: latestVisible.visibleAtMs - clickedAtMs,
+    clickToTargetLatestUsableMs: latestUsable.usableAtMs - clickedAtMs,
+    postVisibleObserveMs,
+    viewport,
+    viewportTimelineSummary,
+    visualStateSummary,
+    visualStateEvents: verboseTimelineReport ? viewportTimeline.visualStateEvents : [],
+    mutationEvents: verboseTimelineReport ? viewportTimeline.mutationEvents : [],
+    layoutShiftEvents: verboseTimelineReport ? viewportTimeline.layoutShiftEvents : [],
+    events,
+    apiSegments: summarizeApiCommandSegments(finalSnapshot),
+    api: finalSnapshot.api,
+    native: finalSnapshot.native,
+  };
 }
 
 async function collectLongSessionOpenMeasurement(
@@ -3573,6 +3761,7 @@ async function collectLongSessionOpenMeasurement(
         traceEventSessionId(event) === sessionId
       ) ||
       event.phase.startsWith('flowchat_latest_end_anchor') ||
+      event.phase.startsWith('flowchat_initial_history') ||
       event.phase === 'react_render_profile'
     )
   );
@@ -3662,6 +3851,15 @@ function expectLongSessionMeasurementUsable(
   expect(measurement.viewportTimelineSummary.postLatestTextVisibleBlankSampleCount).toBe(0);
   expect(measurement.viewportTimelineSummary.postLatestTextVisibleCoveredSampleCount).toBe(0);
   expect(measurement.viewportTimelineSummary.postLatestTextVisibleLatestContentMissingSampleCount).toBe(0);
+  const latestAnchorFailures = measurement.events.filter(event =>
+    event.phase === 'historical_session_latest_anchor_failed' &&
+    traceEventSessionId(event) === measurement.sessionId
+  );
+  if (latestAnchorFailures.length > 0) {
+    throw new Error(
+      `Unexpected latest anchor failures: ${JSON.stringify(latestAnchorFailures.slice(-5))}`,
+    );
+  }
   if (options.expectNoHistoryLoadingAfterClick === true) {
     expect(measurement.visualStateSummary.firstLoadingLayerAtMs).toBeNull();
     expect(measurement.visualStateSummary.lastLoadingLayerAtMs).toBeNull();
@@ -3710,7 +3908,6 @@ describe('Performance telemetry', () => {
 
   before(async () => {
     await waitForTracePhaseCount('interactive_shell_ready', 1, 30000);
-    await ensurePerformanceWorkspace(startupPage);
   });
 
   it('collects startup timing from the current build', async () => {
@@ -3747,6 +3944,8 @@ describe('Performance telemetry', () => {
   });
 
   it('collects first-open timing for a generated long session', async function () {
+    await ensurePerformanceWorkspace(startupPage);
+
     const sessionId = process.env.BITFUN_E2E_PERF_SESSION_ID || DEFAULT_PERF_SESSION_ID;
     const expectedLatestTurnId = await readExpectedLatestTurnId(sessionId);
     const measurement = await collectLongSessionOpenMeasurement(
@@ -3779,6 +3978,8 @@ describe('Performance telemetry', () => {
   });
 
   it('collects warm-reopen timing for a generated long session', async function () {
+    await ensurePerformanceWorkspace(startupPage);
+
     const sessionId = process.env.BITFUN_E2E_PERF_SESSION_ID || DEFAULT_PERF_SESSION_ID;
     const expectedLatestTurnId = await readExpectedLatestTurnId(sessionId);
     const measurement = await collectLongSessionOpenMeasurement(
@@ -3808,5 +4009,57 @@ describe('Performance telemetry', () => {
       requireFrameTrace: false,
       expectNoHistoryLoadingAfterClick: true,
     });
+  });
+
+  it('collects rapid-switch timing across generated long sessions', async function () {
+    await ensurePerformanceWorkspace(startupPage);
+
+    const sessionIds = readRapidSwitchSessionIds();
+    const targetSessionId = sessionIds[sessionIds.length - 1];
+    const expectedLatestTurnId = await readExpectedLatestTurnId(targetSessionId);
+    if (!expectedLatestTurnId) {
+      console.log(
+        `[Perf] Rapid switch target session ${targetSessionId} not found; generate rapid fixtures before running this check.`,
+      );
+      this.skip();
+      return;
+    }
+
+    const measurement = await collectRapidLongSessionSwitchMeasurement(
+      sessionIds,
+      expectedLatestTurnId,
+    );
+    if (!measurement) {
+      console.log(`[Perf] Rapid switch sessions not found; requested=${sessionIds.join(',')}`);
+      this.skip();
+      return;
+    }
+
+    console.log('[Perf] long-session-rapid-switch', JSON.stringify({
+      appMode: measurement.appMode,
+      sessionIds,
+      targetSessionId,
+      clickToTargetLatestVisibleMs: measurement.clickToTargetLatestVisibleMs,
+      clickToTargetLatestUsableMs: measurement.clickToTargetLatestUsableMs,
+      visualStateSummary: {
+        postLatestTextVisibleLoadingEventCount:
+          measurement.visualStateSummary.postLatestTextVisibleLoadingEventCount,
+        postLatestTextVisibleBlankSurfacePointEventCount:
+          measurement.visualStateSummary.postLatestTextVisibleBlankSurfacePointEventCount,
+        postLatestTextVisibleScrollJumpCount:
+          measurement.visualStateSummary.postLatestTextVisibleScrollJumpCount,
+        postOpenIntentNonTargetContentHoldCount:
+          measurement.visualStateSummary.postOpenIntentNonTargetContentHoldCount,
+      },
+    }));
+
+    await writeReport('long-session-rapid-switch', measurement);
+
+    expect(measurement.activeSessionIdAtEnd).toBe(targetSessionId);
+    expect(isLongSessionViewportUsable(measurement.viewport)).toBe(true);
+    expect(measurement.visualStateSummary.postLatestTextVisibleLoadingEventCount).toBe(0);
+    expect(measurement.visualStateSummary.postLatestTextVisibleBlankSurfacePointEventCount).toBe(0);
+    expect(measurement.visualStateSummary.postLatestTextVisibleScrollJumpCount).toBe(0);
+    expect(measurement.visualStateSummary.postOpenIntentNonTargetContentHoldCount).toBe(0);
   });
 });

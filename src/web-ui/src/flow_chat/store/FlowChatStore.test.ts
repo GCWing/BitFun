@@ -130,7 +130,7 @@ async function flushAsyncWork(): Promise<void> {
 }
 
 async function advanceReleasedLocalFullHistoryCompletion(): Promise<void> {
-  await vi.advanceTimersByTimeAsync(750);
+  await vi.advanceTimersByTimeAsync(250);
   await flushAsyncWork();
   await vi.advanceTimersByTimeAsync(1500);
   await flushAsyncWork();
@@ -1484,7 +1484,7 @@ describe('FlowChatStore historical session hydration state', () => {
       flowChatStore.releaseSessionHistoryCompletionAfterInitialPaint('history-1');
 
       expect(idleCallback).toBeNull();
-      await vi.advanceTimersByTimeAsync(749);
+      await vi.advanceTimersByTimeAsync(249);
       await flushAsyncWork();
       expect(idleCallback).toBeNull();
 
@@ -1591,7 +1591,7 @@ describe('FlowChatStore historical session hydration state', () => {
 
       flowChatStore.releaseSessionHistoryCompletionAfterInitialPaint('history-1');
 
-      await vi.advanceTimersByTimeAsync(2249);
+      await vi.advanceTimersByTimeAsync(1749);
       await flushAsyncWork();
       expect(apiMocks.restoreSessionView).toHaveBeenCalledTimes(1);
 
@@ -1601,6 +1601,7 @@ describe('FlowChatStore historical session hydration state', () => {
       expect(hydrationPromise).toBeInstanceOf(Promise);
 
       await vi.advanceTimersByTimeAsync(1);
+      await flushAsyncWork();
       await hydrationPromise;
 
       expect(apiMocks.restoreSessionView).toHaveBeenCalledTimes(2);

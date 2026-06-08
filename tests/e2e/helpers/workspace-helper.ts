@@ -5,6 +5,16 @@
 import { browser, $, $$ } from '@wdio/globals';
 import * as path from 'path';
 
+declare global {
+  interface Window {
+    __TAURI__?: {
+      core?: {
+        invoke?: (command: string, args?: unknown) => Promise<unknown>;
+      };
+    };
+  }
+}
+
 export interface WorkspaceState {
   currentWorkspacePath: string | null;
   openedWorkspacePaths: string[];
@@ -16,6 +26,17 @@ export interface WorkspaceState {
  */
 export async function openWorkspaceThroughFrontend(workspacePath: string): Promise<void> {
   await browser.execute(async (targetWorkspacePath: string) => {
+    const invoke = window.__TAURI__?.core?.invoke;
+    if (typeof invoke === 'function') {
+      const workspace = await invoke('open_workspace', { request: { path: targetWorkspacePath } }) as {
+        id?: string;
+      };
+      if (workspace?.id) {
+        await invoke('set_active_workspace', { request: { workspaceId: workspace.id } });
+      }
+      return;
+    }
+
     const { workspaceManager } = await import('/src/infrastructure/services/business/workspaceManager.ts');
     await workspaceManager.openWorkspace(targetWorkspacePath);
   }, workspacePath);
@@ -26,6 +47,25 @@ export async function openWorkspaceThroughFrontend(workspacePath: string): Promi
  */
 export async function getWorkspaceState(): Promise<WorkspaceState> {
   return browser.execute(async () => {
+    const invoke = window.__TAURI__?.core?.invoke;
+    if (typeof invoke === 'function') {
+      const currentWorkspace = await invoke('get_current_workspace', { request: {} }) as {
+        rootPath?: string;
+      } | null;
+      const openedWorkspaces = await invoke('get_opened_workspaces', { request: {} }) as Array<{
+        rootPath?: string;
+      }>;
+      const workspaceLabels = Array.from(document.querySelectorAll('.bitfun-nav-panel__workspace-item-label'))
+        .map(element => element.textContent?.trim() || '')
+        .filter(Boolean);
+
+      return {
+        currentWorkspacePath: currentWorkspace?.rootPath || null,
+        openedWorkspacePaths: openedWorkspaces.map(workspace => workspace.rootPath || '').filter(Boolean),
+        workspaceLabels,
+      };
+    }
+
     const { globalStateAPI } = await import('/src/shared/types/global-state.ts');
     const currentWorkspace = await globalStateAPI.getCurrentWorkspace();
     const openedWorkspaces = await globalStateAPI.getOpenedWorkspaces();

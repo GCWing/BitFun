@@ -14,6 +14,7 @@
 //! periodically, and after locale changes.
 
 use std::sync::OnceLock;
+use std::time::Instant;
 
 use tauri::menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -24,6 +25,7 @@ use bitfun_core::service::config::types::AIExperienceConfig;
 use bitfun_core::service::i18n::LocaleId;
 
 use crate::api::app_state::AppState;
+use crate::startup_trace::DesktopStartupTrace;
 
 static TRAY_ICON: OnceLock<tauri::tray::TrayIcon> = OnceLock::new();
 
@@ -164,13 +166,19 @@ async fn tray_toggle_desktop_pet(app: &AppHandle) -> Result<(), String> {
 }
 
 /// Build and attach the system tray icon to the Tauri application.
-pub fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+pub fn setup_tray(
+    app: &tauri::App,
+    startup_trace: &DesktopStartupTrace,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let step_started = Instant::now();
     let pet_item = CheckMenuItemBuilder::with_id("toggle_desktop_pet", STRINGS_EN_US.desktop_pet)
         .checked(false)
         .build(app)?;
     let show_item = MenuItemBuilder::with_id("show_window", STRINGS_EN_US.show_app).build(app)?;
     let quit_item = MenuItemBuilder::with_id("quit", STRINGS_EN_US.quit_app).build(app)?;
+    startup_trace.record_elapsed_step("native_setup", "setup_tray.menu_items", step_started);
 
+    let step_started = Instant::now();
     let initial_menu = MenuBuilder::new(app)
         .item(&pet_item)
         .separator()
@@ -178,12 +186,16 @@ pub fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         .separator()
         .item(&quit_item)
         .build()?;
+    startup_trace.record_elapsed_step("native_setup", "setup_tray.menu", step_started);
 
+    let step_started = Instant::now();
     let icon = app
         .default_window_icon()
         .ok_or("No default window icon")?
         .clone();
+    startup_trace.record_elapsed_step("native_setup", "setup_tray.icon", step_started);
 
+    let step_started = Instant::now();
     let tray = TrayIconBuilder::new()
         .icon(icon)
         .menu(&initial_menu)
@@ -222,9 +234,13 @@ pub fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             _ => {}
         })
         .build(app)?;
+    startup_trace.record_elapsed_step("native_setup", "setup_tray.build", step_started);
 
+    let step_started = Instant::now();
     let _ = TRAY_ICON.set(tray);
+    startup_trace.record_elapsed_step("native_setup", "setup_tray.store", step_started);
 
+    let step_started = Instant::now();
     let app_handle = app.handle().clone();
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
@@ -236,6 +252,7 @@ pub fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             rebuild_tray_menu(&app_handle).await;
         }
     });
+    startup_trace.record_elapsed_step("native_setup", "setup_tray.spawn_refresh", step_started);
 
     Ok(())
 }

@@ -130,15 +130,37 @@
 .modern-flowchat-container__history-open-intent-shield {
   position: absolute;
   inset: 0;
-  z-index: 9;
+  z-index: 11;
   display: flex;
   align-items: flex-start;
   justify-content: center;
   padding-top: 76px;
-  pointer-events: none;
+  pointer-events: auto;
+  background: var(--color-bg-scene);
+  contain: paint;
+}
+
+.modern-flowchat-container__history-open-intent-shield::before {
+  content: "";
+  position: absolute;
+  top: 116px;
+  left: 50%;
+  width: min(720px, calc(100% - 48px));
+  height: min(220px, calc(100% - 168px));
+  min-height: 120px;
+  transform: translateX(-50%);
+  border-radius: 8px;
+  opacity: 0.72;
+  background:
+    linear-gradient(90deg, transparent 0 4%, var(--color-surface-hover, rgba(127, 127, 127, 0.12)) 4% 62%, transparent 62% 100%) 0 0 / 100% 24px no-repeat,
+    linear-gradient(90deg, transparent 0 9%, var(--color-surface-hover, rgba(127, 127, 127, 0.12)) 9% 86%, transparent 86% 100%) 0 48px / 100% 24px no-repeat,
+    linear-gradient(90deg, transparent 0 6%, var(--color-surface-hover, rgba(127, 127, 127, 0.12)) 6% 74%, transparent 74% 100%) 0 96px / 100% 24px no-repeat,
+    linear-gradient(90deg, transparent 0 12%, var(--color-surface-hover, rgba(127, 127, 127, 0.12)) 12% 68%, transparent 68% 100%) 0 144px / 100% 24px no-repeat;
 }
 
 .modern-flowchat-container__history-open-intent-spinner {
+  position: relative;
+  z-index: 1;
   width: 18px;
   height: 18px;
   border: 2px solid var(--color-border, rgba(255, 255, 255, 0.16));

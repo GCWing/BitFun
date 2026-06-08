@@ -3,6 +3,7 @@ import {
   estimateTextHeightFromLength,
   estimateVirtualMessageItemHeight,
   getVirtualMessageDefaultItemHeight,
+  selectInitialHistoryRenderWindow,
 } from './virtualMessageListLayout';
 import type { VirtualItem } from '../../store/modernFlowChatStore';
 
@@ -82,5 +83,67 @@ describe('estimateVirtualMessageItemHeight', () => {
     } as VirtualItem;
 
     expect(estimateVirtualMessageItemHeight(item)).toBeLessThanOrEqual(160);
+  });
+});
+
+describe('selectInitialHistoryRenderWindow', () => {
+  function userItem(turnIndex: number): VirtualItem {
+    const id = `turn-${turnIndex}`;
+    return {
+      type: 'user-message',
+      turnId: id,
+      data: {
+        id: `user-${id}`,
+        content: `prompt ${turnIndex}`,
+        timestamp: turnIndex,
+      },
+    } as VirtualItem;
+  }
+
+  function modelItem(turnIndex: number, textLength = 2000): VirtualItem {
+    const id = `turn-${turnIndex}`;
+    return {
+      type: 'model-round',
+      turnId: id,
+      isLastRound: turnIndex === 7,
+      isTurnComplete: true,
+      data: {
+        id: `round-${id}`,
+        status: 'completed',
+        isStreaming: false,
+        items: [{
+          id: `text-${id}`,
+          type: 'text',
+          content: 'x'.repeat(textLength),
+          status: 'completed',
+          timestamp: turnIndex,
+        }],
+      },
+    } as VirtualItem;
+  }
+
+  it('keeps only the latest render window on large partial history tails', () => {
+    const items = Array.from({ length: 8 }, (_, index) => [
+      userItem(index),
+      modelItem(index),
+    ]).flat();
+
+    const window = selectInitialHistoryRenderWindow(items);
+
+    expect(window.startIndex).toBeGreaterThan(0);
+    expect(window.items.length).toBeLessThan(items.length);
+    expect(window.items[0]?.turnId).toBe('turn-6');
+    expect(window.items.at(-1)?.turnId).toBe('turn-7');
+    expect(window.omittedEstimatedHeightPx).toBeGreaterThan(0);
+  });
+
+  it('keeps all items when the partial history tail is already small', () => {
+    const items = [userItem(0), modelItem(0), userItem(1), modelItem(1)];
+
+    const window = selectInitialHistoryRenderWindow(items);
+
+    expect(window.startIndex).toBe(0);
+    expect(window.items).toHaveLength(items.length);
+    expect(window.omittedEstimatedHeightPx).toBe(0);
   });
 });

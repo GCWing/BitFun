@@ -53,6 +53,7 @@ export class FlowChatManager {
   private eventListenerInitialized = false;
   private eventListenerInitializationPromise: Promise<void> | null = null;
   private eventListenerCleanup: (() => void) | null = null;
+  private initializationRequests = new Map<string, Promise<boolean>>();
 
   private constructor() {
     this.context = {
@@ -94,6 +95,52 @@ export class FlowChatManager {
   }
 
   async initialize(
+    workspacePath: string,
+    preferredMode?: string,
+    remoteConnectionId?: string,
+    remoteSshHost?: string
+  ): Promise<boolean> {
+    const requestKey = FlowChatManager.createInitializationRequestKey(
+      workspacePath,
+      preferredMode,
+      remoteConnectionId,
+      remoteSshHost,
+    );
+    const existingRequest = this.initializationRequests.get(requestKey);
+    if (existingRequest) {
+      return existingRequest;
+    }
+
+    let request: Promise<boolean>;
+    request = this.initializeWorkspace(
+      workspacePath,
+      preferredMode,
+      remoteConnectionId,
+      remoteSshHost,
+    ).finally(() => {
+      if (this.initializationRequests.get(requestKey) === request) {
+        this.initializationRequests.delete(requestKey);
+      }
+    });
+    this.initializationRequests.set(requestKey, request);
+    return request;
+  }
+
+  private static createInitializationRequestKey(
+    workspacePath: string,
+    preferredMode?: string,
+    remoteConnectionId?: string,
+    remoteSshHost?: string
+  ): string {
+    return JSON.stringify([
+      workspacePath,
+      preferredMode ?? '',
+      remoteConnectionId ?? '',
+      remoteSshHost ?? '',
+    ]);
+  }
+
+  private async initializeWorkspace(
     workspacePath: string,
     preferredMode?: string,
     remoteConnectionId?: string,

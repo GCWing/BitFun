@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ensureBtwSessionAvailable, openBtwSessionInAuxPane } from './openBtwSession';
+import { ensureBtwSessionAvailable, openBtwSessionInAuxPane, openMainSession } from './openBtwSession';
 
 const mocks = vi.hoisted(() => ({
   createTab: vi.fn(),
@@ -10,10 +10,15 @@ const mocks = vi.hoisted(() => ({
   addExternalSession: vi.fn(),
   loadSessionHistory: vi.fn(),
   updateSessionRelationship: vi.fn(),
+  switchChatSession: vi.fn(),
+  syncSessionToModernStore: vi.fn(),
+  updateLayout: vi.fn(),
+  openScene: vi.fn(),
 }));
 
 let animationFrameCallbacks: FrameRequestCallback[] = [];
 let sessions = new Map();
+let activeSessionId: string | null = null;
 
 const stubWindowForPanelExpansion = (rightPanelCollapsed: boolean) => {
   const dispatchEvent = vi.fn();
@@ -44,14 +49,14 @@ vi.mock('@/infrastructure/i18n', () => ({
 
 vi.mock('@/app/services/AppManager', () => ({
   appManager: {
-    updateLayout: vi.fn(),
+    updateLayout: (...args: unknown[]) => mocks.updateLayout(...args),
   },
 }));
 
 vi.mock('@/app/stores/sceneStore', () => ({
   useSceneStore: {
     getState: () => ({
-      openScene: vi.fn(),
+      openScene: (...args: unknown[]) => mocks.openScene(...args),
     }),
   },
 }));
@@ -78,6 +83,7 @@ vi.mock('../store/FlowChatStore', () => ({
   flowChatStore: {
     getState: () => ({
       sessions,
+      activeSessionId,
     }),
     addExternalSession: (...args: unknown[]) =>
       mocks.addExternalSession(...args),
@@ -92,12 +98,12 @@ vi.mock('../store/FlowChatStore', () => ({
 
 vi.mock('./FlowChatManager', () => ({
   flowChatManager: {
-    switchChatSession: vi.fn(),
+    switchChatSession: (...args: unknown[]) => mocks.switchChatSession(...args),
   },
 }));
 
 vi.mock('./storeSync', () => ({
-  syncSessionToModernStore: vi.fn(),
+  syncSessionToModernStore: (...args: unknown[]) => mocks.syncSessionToModernStore(...args),
 }));
 
 describe('openBtwSessionInAuxPane', () => {
@@ -113,7 +119,12 @@ describe('openBtwSessionInAuxPane', () => {
     mocks.addExternalSession.mockClear();
     mocks.loadSessionHistory.mockClear();
     mocks.updateSessionRelationship.mockClear();
+    mocks.switchChatSession.mockReset();
+    mocks.syncSessionToModernStore.mockClear();
+    mocks.updateLayout.mockClear();
+    mocks.openScene.mockClear();
     sessions = new Map();
+    activeSessionId = null;
     vi.stubGlobal('requestAnimationFrame', vi.fn((callback: FrameRequestCallback) => {
       animationFrameCallbacks.push(callback);
       return animationFrameCallbacks.length;
@@ -279,5 +290,36 @@ describe('openBtwSessionInAuxPane', () => {
       'host-1',
       { includeInternal: true },
     );
+  });
+});
+
+describe('openMainSession', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    mocks.switchChatSession.mockReset();
+    mocks.syncSessionToModernStore.mockClear();
+    mocks.updateLayout.mockClear();
+    mocks.openScene.mockClear();
+    sessions = new Map();
+    activeSessionId = null;
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('does not sync a superseded switch result into the modern store', async () => {
+    sessions.set('session-b', { sessionId: 'session-b' });
+    sessions.set('session-c', { sessionId: 'session-c' });
+    mocks.switchChatSession.mockImplementationOnce(async () => {
+      activeSessionId = 'session-c';
+    });
+
+    await openMainSession('session-b');
+
+    expect(mocks.switchChatSession).toHaveBeenCalledWith('session-b');
+    expect(mocks.syncSessionToModernStore).not.toHaveBeenCalledWith('session-b');
+    expect(mocks.openScene).not.toHaveBeenCalledWith('session');
   });
 });

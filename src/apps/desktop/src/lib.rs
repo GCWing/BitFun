@@ -660,7 +660,7 @@ pub async fn run() {
 
             // Set up system tray icon.
             let step_started = Instant::now();
-            if let Err(error) = crate::tray::setup_tray(app) {
+            if let Err(error) = crate::tray::setup_tray(app, &startup_trace) {
                 log::warn!("Failed to set up system tray: {}", error);
             }
             startup_trace.record_elapsed_step("native_setup", "setup_tray", step_started);

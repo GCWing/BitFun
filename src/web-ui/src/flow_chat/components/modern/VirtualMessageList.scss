@@ -83,6 +83,13 @@
     width: 100%;
   }
 
+  &__initial-history-spacer {
+    width: 100%;
+    flex: 0 0 auto;
+    pointer-events: none;
+    overflow-anchor: none;
+  }
+
   &__projection-handoff-overlay {
     position: absolute;
     inset: 0;

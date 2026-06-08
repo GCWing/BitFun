@@ -122,6 +122,14 @@ export type StartupPerfBreakdown = {
     windowsShowAfterMaximizeWaitMs?: number;
     showWindowDurationMs?: number;
     focusWindowDurationMs?: number;
+    setupSteps: Record<string, number>;
+    windowSteps: Record<string, number>;
+    slowSteps: Array<{
+      step: string;
+      category: string;
+      durationMs: number;
+      atMs?: number;
+    }>;
   };
   frontend: {
     firstScriptToRenderScheduledMs?: number;
@@ -443,6 +451,32 @@ export function summarizeStartupBreakdown(snapshot: StartupTraceSnapshot): Start
   const last = (name: string) => snapshot.phases.events.filter(event => event.phase === name).at(-1);
   const nativeStep = (step: string) =>
     snapshot.native?.events.find(event => event.phase === 'native_step_end' && event.step === step);
+  const nativeStepRecord = (category: string): Record<string, number> =>
+    Object.fromEntries(
+      (snapshot.native?.events ?? [])
+        .filter(event =>
+          event.phase === 'native_step_end' &&
+          event.category === category &&
+          typeof event.step === 'string' &&
+          typeof event.durationMs === 'number'
+        )
+        .map(event => [event.step!, event.durationMs as number])
+    );
+  const slowNativeSteps = (snapshot.native?.events ?? [])
+    .filter(event =>
+      event.phase === 'native_step_end' &&
+      (event.category === 'native_setup' || event.category === 'native_window') &&
+      typeof event.step === 'string' &&
+      typeof event.durationMs === 'number'
+    )
+    .sort((left, right) => (right.durationMs ?? 0) - (left.durationMs ?? 0))
+    .slice(0, 12)
+    .map(event => ({
+      step: event.step!,
+      category: event.category ?? 'unknown',
+      durationMs: event.durationMs as number,
+      atMs: event.atMs,
+    }));
   const nativeCommandStep = (step: string) =>
     snapshot.native?.events.find(event => event.category === 'tauri_command' && event.step === step);
   const frontendStepDuration = (phase: string, step: string) =>
@@ -515,6 +549,9 @@ export function summarizeStartupBreakdown(snapshot: StartupTraceSnapshot): Start
       windowsShowAfterMaximizeWaitMs: nativeStep('windows_show_after_maximize_wait')?.durationMs,
       showWindowDurationMs: nativeStep('show_window')?.durationMs,
       focusWindowDurationMs: nativeStep('focus_window')?.durationMs,
+      setupSteps: nativeStepRecord('native_setup'),
+      windowSteps: nativeStepRecord('native_window'),
+      slowSteps: slowNativeSteps,
     },
     frontend: {
       firstScriptToRenderScheduledMs: round(

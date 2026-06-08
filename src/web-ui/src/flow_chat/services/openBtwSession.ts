@@ -213,10 +213,15 @@ export async function openMainSession(
     await options.activateWorkspace(options.workspaceId);
   }
 
-  if (flowChatStore.getState().activeSessionId === sessionId) {
+  const isTargetActive = () => flowChatStore.getState().activeSessionId === sessionId;
+
+  if (isTargetActive()) {
     syncSessionToModernStore(sessionId);
   } else {
     await flowChatManager.switchChatSession(sessionId);
+    if (!isTargetActive()) {
+      return;
+    }
     syncSessionToModernStore(sessionId);
   }
 

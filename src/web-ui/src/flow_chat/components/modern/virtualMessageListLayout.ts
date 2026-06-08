@@ -4,6 +4,8 @@ import type { VirtualItem } from '../../store/modernFlowChatStore';
 export const LIVE_SESSION_DEFAULT_ITEM_HEIGHT_PX = 200;
 export const HISTORICAL_SESSION_DEFAULT_ITEM_HEIGHT_PX = 72;
 export const HISTORICAL_SESSION_MODEL_ROUND_DEFAULT_ITEM_HEIGHT_PX = 960;
+export const INITIAL_HISTORY_RENDER_MIN_TURN_COUNT = 2;
+export const INITIAL_HISTORY_RENDER_MIN_ESTIMATED_HEIGHT_PX = 1400;
 const USER_MESSAGE_BASE_HEIGHT_PX = 96;
 const USER_MESSAGE_LINE_HEIGHT_PX = 22;
 const MODEL_ROUND_BASE_HEIGHT_PX = 80;
@@ -110,4 +112,87 @@ export function estimateVirtualMessageItemHeight(item: VirtualItem): number {
     case 'image-analyzing':
       return LIVE_SESSION_DEFAULT_ITEM_HEIGHT_PX;
   }
+}
+
+export interface InitialHistoryRenderWindow {
+  items: VirtualItem[];
+  startIndex: number;
+  omittedEstimatedHeightPx: number;
+  renderedEstimatedHeightPx: number;
+  totalEstimatedHeightPx: number;
+  isWindowed: boolean;
+}
+
+function uniqueTurnCount(items: VirtualItem[]): number {
+  const turnIds = new Set<string>();
+  items.forEach(item => {
+    if (item.turnId) {
+      turnIds.add(item.turnId);
+    }
+  });
+  return turnIds.size;
+}
+
+export function selectInitialHistoryRenderWindow(
+  items: VirtualItem[],
+  options: {
+    minTurnCount?: number;
+    minEstimatedHeightPx?: number;
+  } = {},
+): InitialHistoryRenderWindow {
+  const minTurnCount = Math.max(1, Math.floor(options.minTurnCount ?? INITIAL_HISTORY_RENDER_MIN_TURN_COUNT));
+  const minEstimatedHeightPx = Math.max(0, options.minEstimatedHeightPx ?? INITIAL_HISTORY_RENDER_MIN_ESTIMATED_HEIGHT_PX);
+  const totalEstimatedHeightPx = items.reduce(
+    (total, item) => total + estimateVirtualMessageItemHeight(item),
+    0,
+  );
+
+  if (items.length === 0 || uniqueTurnCount(items) <= minTurnCount) {
+    return {
+      items,
+      startIndex: 0,
+      omittedEstimatedHeightPx: 0,
+      renderedEstimatedHeightPx: totalEstimatedHeightPx,
+      totalEstimatedHeightPx,
+      isWindowed: false,
+    };
+  }
+
+  let startIndex = items.length;
+  let renderedEstimatedHeightPx = 0;
+  const includedTurnIds = new Set<string>();
+
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index];
+    startIndex = index;
+    renderedEstimatedHeightPx += estimateVirtualMessageItemHeight(item);
+    if (item.turnId) {
+      includedTurnIds.add(item.turnId);
+    }
+
+    const previousItem = items[index - 1];
+    const stillInsideSameTurn =
+      Boolean(item.turnId) &&
+      previousItem?.turnId === item.turnId;
+    if (
+      !stillInsideSameTurn &&
+      includedTurnIds.size >= minTurnCount &&
+      renderedEstimatedHeightPx >= minEstimatedHeightPx
+    ) {
+      break;
+    }
+  }
+
+  const omittedEstimatedHeightPx = items
+    .slice(0, startIndex)
+    .reduce((total, item) => total + estimateVirtualMessageItemHeight(item), 0);
+
+  return {
+    items: items.slice(startIndex),
+    startIndex,
+    omittedEstimatedHeightPx,
+    renderedEstimatedHeightPx,
+    totalEstimatedHeightPx,
+    isWindowed: startIndex > 0,
+  };
 }
