@@ -85,6 +85,28 @@ impl CdpClient {
         Ok(pages)
     }
 
+    /// Create a new page/tab on the given debug port.
+    pub async fn create_page(port: u16, url: Option<&str>) -> BitFunResult<CdpPageInfo> {
+        let endpoint = if let Some(url) = url {
+            let encoded = url.replace(' ', "%20");
+            format!("http://127.0.0.1:{}/json/new?{}", port, encoded)
+        } else {
+            format!("http://127.0.0.1:{}/json/new", port)
+        };
+        let resp = reqwest::Client::new()
+            .put(&endpoint)
+            .send()
+            .await
+            .map_err(|e| {
+                BitFunError::tool(format!("Cannot create CDP page on port {}: {}", port, e))
+            })?;
+        let page: CdpPageInfo = resp
+            .json()
+            .await
+            .map_err(|e| BitFunError::tool(format!("Invalid CDP new page response: {}", e)))?;
+        Ok(page)
+    }
+
     /// Connect to a specific page by its WebSocket debugger URL.
     pub async fn connect(ws_url: &str) -> BitFunResult<Self> {
         info!("CDP connecting to {}", ws_url);

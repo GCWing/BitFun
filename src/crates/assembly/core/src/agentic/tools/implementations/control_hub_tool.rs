@@ -14,7 +14,7 @@ use crate::agentic::tools::browser_control::browser_launcher::{
 };
 use crate::agentic::tools::browser_control::cdp_client::CdpClient;
 use crate::agentic::tools::browser_control::session_registry::{
-    BrowserSession, BrowserSessionRegistry,
+    BrowserSession, BrowserSessionRegistry, BrowserSessionState, DialogHandler,
 };
 use crate::agentic::tools::framework::{
     Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
@@ -96,10 +96,10 @@ Use this tool via `{ domain, action, params }` for browser automation, terminal 
 ## Domains
 
 ### domain: "browser"  (DOM/CDP browser control)
-- Two browser modes:
-  * `connect { mode: "headless" }` — attach to a headless test browser on the test port for project Web UI testing that does not depend on user login state.
-  * `connect { mode: "default" }` (default) — attach to the user's default browser via CDP for flows that require login state, cookies, extensions, or the user's real profile.
-- Actions: connect, navigate, snapshot, click, fill, type, select, press_key, scroll, wait, get_text, get_url, get_title, screenshot, evaluate, close, list_pages, tab_query, switch_page, list_sessions.
+- Browser modes:
+  * `connect { mode: "default" }` (default) — start or attach the stable managed browser profile with CDP enabled.
+  * `connect { mode: "headless" }` — start or attach the stable managed headless browser profile for project Web UI testing that does not depend on user login state.
+- Actions: connect, tab_new, navigate, back, forward, reload, snapshot, click, hover, fill, type, check, uncheck, select, press_key, scroll, auto_scroll, wait, get, get_text, get_url, get_title, get_html, screenshot, evaluate, fetch, cookies, set_cookies, set_file_input_files, cdp, network, console, errors, trace, dialog, frame, frame_main, read_article, close, list_pages, tab_query, switch_page, list_sessions.
 - Workflow: connect -> navigate -> snapshot (returns @e1, @e2 ... refs) -> click/fill using refs.
 - Take a fresh snapshot after any DOM mutation; stale refs return `error.code = STALE_REF`.
 
@@ -384,6 +384,32 @@ Branch on `ok` and `error.code`, not on English messages.
         }
     }
 
+    fn is_allowed_browser_cdp_method(method: &str) -> bool {
+        matches!(
+            method,
+            "Accessibility.getFullAXTree"
+                | "DOM.getDocument"
+                | "DOM.getBoxModel"
+                | "DOM.getContentQuads"
+                | "DOM.querySelector"
+                | "DOM.querySelectorAll"
+                | "DOM.scrollIntoViewIfNeeded"
+                | "DOM.setFileInputFiles"
+                | "DOMSnapshot.captureSnapshot"
+                | "Input.dispatchMouseEvent"
+                | "Input.dispatchKeyEvent"
+                | "Input.insertText"
+                | "Network.getCookies"
+                | "Network.getResponseBody"
+                | "Network.setCookie"
+                | "Page.getLayoutMetrics"
+                | "Page.captureScreenshot"
+                | "Runtime.enable"
+                | "Emulation.setDeviceMetricsOverride"
+                | "Emulation.clearDeviceMetricsOverride"
+        )
+    }
+
     async fn handle_browser(&self, action: &str, params: &Value) -> BitFunResult<Vec<ToolResult>> {
         let port = params
             .get("port")
@@ -532,8 +558,16 @@ Branch on `ok` and `error.code`, not on English messages.
                             session_id: page.id.clone(),
                             port,
                             client: Arc::new(client),
+                            state: Arc::new(BrowserSessionState::new()),
                         };
                         browser_sessions().register(session.clone()).await;
+
+                        // Enable CDP observers so network/console/error events
+                        // start recording immediately for later query via
+                        // browser.network / browser.console / browser.errors.
+                        let _ = BrowserActions::new(session.client.as_ref())
+                            .enable_observers()
+                            .await;
 
                         // If the model targeted a specific tab AND wants it
                         // foregrounded (default), bring it to front the same
@@ -700,6 +734,45 @@ Branch on `ok` and `error.code`, not on English messages.
                 )])
             }
 
+            "tab_new" => {
+                let url = params.get("url").and_then(|v| v.as_str());
+                let activate = params
+                    .get("activate")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(true);
+                let page = CdpClient::create_page(port, url).await?;
+                let ws_url = page
+                    .web_socket_debugger_url
+                    .as_ref()
+                    .ok_or_else(|| {
+                        BitFunError::tool("New tab has no WebSocket URL".to_string())
+                    })?;
+                let client = CdpClient::connect(ws_url).await?;
+                let session = BrowserSession {
+                    session_id: page.id.clone(),
+                    port,
+                    client: Arc::new(client),
+                    state: Arc::new(BrowserSessionState::new()),
+                };
+                browser_sessions().register(session.clone()).await;
+                let _ = BrowserActions::new(session.client.as_ref())
+                    .enable_observers()
+                    .await;
+                if activate {
+                    let _ = session.client.send("Page.bringToFront", None).await;
+                }
+                Ok(vec![ToolResult::ok(
+                    json!({
+                        "success": true,
+                        "session_id": session.session_id,
+                        "page_url": page.url,
+                        "page_title": page.title,
+                        "activated": activate,
+                    }),
+                    Some(format!("New tab opened: {} (session {})", page.title, session.session_id)),
+                )])
+            }
+
             "switch_page" => {
                 let page_id = params
                     .get("page_id")
@@ -736,8 +809,12 @@ Branch on `ok` and `error.code`, not on English messages.
                         session_id: page.id.clone(),
                         port,
                         client: Arc::new(client),
+                        state: Arc::new(BrowserSessionState::new()),
                     };
                     registry.register(session.clone()).await;
+                    let _ = BrowserActions::new(session.client.as_ref())
+                        .enable_observers()
+                        .await;
                     session
                 };
 
@@ -782,17 +859,200 @@ Branch on `ok` and `error.code`, not on English messages.
                 )])
             }
 
-            "list_sessions" => {
-                let registry = browser_sessions();
-                let ids = registry.list().await;
-                let default = registry.default_id().await;
-                Ok(vec![ToolResult::ok(
-                    json!({
-                        "sessions": ids,
-                        "default_session_id": default,
-                    }),
-                    Some(format!("{} session(s) tracked", ids.len())),
-                )])
+            "list_sessions" | "network" | "network_requests"
+            | "console" | "errors" | "trace" => {
+                match action {
+                    "list_sessions" => {
+                        let registry = browser_sessions();
+                        let ids = registry.list().await;
+                        let default = registry.default_id().await;
+                        Ok(vec![ToolResult::ok(
+                            json!({
+                                "sessions": ids,
+                                "default_session_id": default,
+                            }),
+                            Some(format!("{} session(s) tracked", ids.len())),
+                        )])
+                    }
+                    "network" | "network_requests" => {
+                        let session = browser_sessions()
+                            .get(session_id_param.as_deref())
+                            .await?;
+                        let state = &session.state;
+                        let sub = params
+                            .get("sub_command")
+                            .and_then(|v| v.as_str());
+                        match sub {
+                            Some("clear") => {
+                                state.clear_network().await;
+                                Ok(vec![ToolResult::ok(
+                                    json!({ "success": true, "cleared": true }),
+                                    Some("Network events cleared".to_string()),
+                                )])
+                            }
+                            Some("summary") => {
+                                let total = state
+                                    .query_network(None, None, None, None, usize::MAX)
+                                    .await
+                                    .len();
+                                let requests = state
+                                    .query_network_requests(None, None, None, None, 50)
+                                    .await;
+                                Ok(vec![ToolResult::ok(
+                                    json!({
+                                        "total_events": total,
+                                        "requests": requests,
+                                    }),
+                                    Some(format!("Network summary: {} total events", total)),
+                                )])
+                            }
+                            _ => {
+                                let filter =
+                                    params.get("filter").and_then(|v| v.as_str());
+                                let method =
+                                    params.get("method").and_then(|v| v.as_str());
+                                let status =
+                                    params.get("status").and_then(|v| v.as_str());
+                                let since =
+                                    params.get("since").and_then(|v| v.as_str());
+                                let limit = params
+                                    .get("limit")
+                                    .and_then(|v| v.as_u64())
+                                    .unwrap_or(20) as usize;
+                                let events = if sub == Some("requests") {
+                                    state
+                                        .query_network_requests(
+                                            filter, method, status, since, limit,
+                                        )
+                                        .await
+                                } else {
+                                    state
+                                        .query_network(
+                                            filter, method, status, since, limit,
+                                        )
+                                        .await
+                                };
+                                Ok(vec![ToolResult::ok(
+                                    json!({ "events": events, "count": events.len() }),
+                                    Some(format!("{} network event(s)", events.len())),
+                                )])
+                            }
+                        }
+                    }
+                    "console" => {
+                        let session = browser_sessions()
+                            .get(session_id_param.as_deref())
+                            .await?;
+                        let state = &session.state;
+                        let sub = params
+                            .get("sub_command")
+                            .and_then(|v| v.as_str());
+                        if sub == Some("clear") {
+                            state.clear_console().await;
+                            return Ok(vec![ToolResult::ok(
+                                json!({ "success": true, "cleared": true }),
+                                Some("Console events cleared".to_string()),
+                            )]);
+                        }
+                        let filter =
+                            params.get("filter").and_then(|v| v.as_str());
+                        let since =
+                            params.get("since").and_then(|v| v.as_str());
+                        let limit = params
+                            .get("limit")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(20) as usize;
+                        let events = state.query_console(filter, since, limit).await;
+                        Ok(vec![ToolResult::ok(
+                            json!({ "events": events, "count": events.len() }),
+                            Some(format!("{} console event(s)", events.len())),
+                        )])
+                    }
+                    "errors" => {
+                        let session = browser_sessions()
+                            .get(session_id_param.as_deref())
+                            .await?;
+                        let state = &session.state;
+                        let sub = params
+                            .get("sub_command")
+                            .and_then(|v| v.as_str());
+                        if sub == Some("clear") {
+                            state.clear_errors().await;
+                            return Ok(vec![ToolResult::ok(
+                                json!({ "success": true, "cleared": true }),
+                                Some("JS error events cleared".to_string()),
+                            )]);
+                        }
+                        let filter =
+                            params.get("filter").and_then(|v| v.as_str());
+                        let since =
+                            params.get("since").and_then(|v| v.as_str());
+                        let limit = params
+                            .get("limit")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(20) as usize;
+                        let events = state.query_errors(filter, since, limit).await;
+                        Ok(vec![ToolResult::ok(
+                            json!({ "events": events, "count": events.len() }),
+                            Some(format!("{} JS error event(s)", events.len())),
+                        )])
+                    }
+                    "trace" => {
+                        let session = browser_sessions()
+                            .get(session_id_param.as_deref())
+                            .await?;
+                        let state = &session.state;
+                        let sub = params
+                            .get("sub_command")
+                            .and_then(|v| v.as_str());
+                        match sub {
+                            Some("start") => {
+                                let result = state.trace_start().await;
+                                Ok(vec![ToolResult::ok(
+                                    result,
+                                    Some("CDP trace recording started".to_string()),
+                                )])
+                            }
+                            Some("stop") => {
+                                let limit = params
+                                    .get("limit")
+                                    .and_then(|v| v.as_u64())
+                                    .unwrap_or(200) as usize;
+                                let result = state.trace_stop(limit).await;
+                                Ok(vec![ToolResult::ok(
+                                    result,
+                                    Some("CDP trace recording stopped".to_string()),
+                                )])
+                            }
+                            Some("status") => {
+                                let result = state.trace_status().await;
+                                Ok(vec![ToolResult::ok(
+                                    result,
+                                    Some("CDP trace status".to_string()),
+                                )])
+                            }
+                            Some("clear") => {
+                                let result = state.trace_clear().await;
+                                Ok(vec![ToolResult::ok(
+                                    result,
+                                    Some("CDP trace cleared".to_string()),
+                                )])
+                            }
+                            _ => {
+                                let limit = params
+                                    .get("limit")
+                                    .and_then(|v| v.as_u64())
+                                    .unwrap_or(100) as usize;
+                                let result = state.trace_stop(limit).await;
+                                Ok(vec![ToolResult::ok(
+                                    result,
+                                    Some("CDP trace events".to_string()),
+                                )])
+                            }
+                        }
+                    }
+                    _ => unreachable!(),
+                }
             }
 
             _ => {
@@ -845,6 +1105,7 @@ Branch on `ok` and `error.code`, not on English messages.
                     "fill" => {
                         let selector = params
                             .get("selector")
+                            .or_else(|| params.get("ref"))
                             .and_then(|v| v.as_str())
                             .ok_or_else(|| {
                                 BitFunError::tool("fill requires 'selector'".to_string())
@@ -995,7 +1256,26 @@ Branch on `ok` and `error.code`, not on English messages.
                         )])
                     }
                     "screenshot" => {
-                        let result = actions.screenshot().await?;
+                        let format = params
+                            .get("format")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("jpeg");
+                        let quality = params
+                            .get("quality")
+                            .and_then(|v| v.as_u64())
+                            .map(|q| q as u8);
+                        let from_surface = params
+                            .get("from_surface")
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(true);
+                        let full_page = params
+                            .get("full_page")
+                            .or_else(|| params.get("fullPage"))
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(false);
+                        let result = actions
+                            .screenshot_with_options_ext(format, quality, from_surface, full_page)
+                            .await?;
                         let data_len = result
                             .get("data_length")
                             .and_then(|v| v.as_u64())
@@ -1012,6 +1292,16 @@ Branch on `ok` and `error.code`, not on English messages.
                             .ok_or_else(|| {
                                 BitFunError::tool("evaluate requires 'expression'".to_string())
                             })?;
+                        let await_promise = params
+                            .get("await_promise")
+                            .or_else(|| params.get("awaitPromise"))
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(true);
+                        let return_by_value = params
+                            .get("return_by_value")
+                            .or_else(|| params.get("returnByValue"))
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(true);
                         // Bound the size of the returned value so a runaway
                         // `JSON.stringify(document)` can't blow up the model
                         // context window. Default 16 KiB; clamp to [1 KiB, 256 KiB].
@@ -1020,7 +1310,9 @@ Branch on `ok` and `error.code`, not on English messages.
                             .and_then(|v| v.as_u64())
                             .unwrap_or(16 * 1024)
                             .clamp(1024, 256 * 1024) as usize;
-                        let mut result = actions.evaluate(expression).await?;
+                        let mut result = actions
+                            .evaluate_with_options(expression, await_promise, return_by_value)
+                            .await?;
                         let mut truncated = false;
                         if let Some(value) = result.pointer_mut("/result/value") {
                             let serialized = value.to_string();
@@ -1041,6 +1333,291 @@ Branch on `ok` and `error.code`, not on English messages.
                             .unwrap_or_else(|| result.to_string());
                         Ok(vec![ToolResult::ok(result, Some(display))])
                     }
+                    "back" => {
+                        let result = actions.back().await?;
+                        Ok(vec![ToolResult::ok(result, Some("Navigated back".to_string()))])
+                    }
+                    "forward" => {
+                        let result = actions.forward().await?;
+                        Ok(vec![ToolResult::ok(result, Some("Navigated forward".to_string()))])
+                    }
+                    "reload" | "refresh" => {
+                        let ignore_cache = params
+                            .get("ignore_cache")
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(false);
+                        let result = actions.reload(ignore_cache).await?;
+                        Ok(vec![ToolResult::ok(result, Some("Page reloaded".to_string()))])
+                    }
+                    "hover" => {
+                        let selector = params
+                            .get("selector")
+                            .or_else(|| params.get("ref"))
+                            .and_then(|v| v.as_str())
+                            .ok_or_else(|| {
+                                BitFunError::tool("hover requires 'selector'".to_string())
+                            })?;
+                        let result = actions.hover(selector).await?;
+                        Ok(vec![ToolResult::ok(result, Some(format!("Hovered {}", selector)))])
+                    }
+                    "check" | "uncheck" => {
+                        let selector = params
+                            .get("selector")
+                            .or_else(|| params.get("ref"))
+                            .and_then(|v| v.as_str())
+                            .ok_or_else(|| {
+                                BitFunError::tool("check/uncheck requires 'selector'".to_string())
+                            })?;
+                        let result = actions.set_checked(selector, action == "check").await?;
+                        Ok(vec![ToolResult::ok(result, Some(format!("Set checked on {}", selector)))])
+                    }
+                    "get" => {
+                        let selector = params
+                            .get("selector")
+                            .or_else(|| params.get("ref"))
+                            .and_then(|v| v.as_str())
+                            .ok_or_else(|| {
+                                BitFunError::tool("get requires 'selector'".to_string())
+                            })?;
+                        let attribute = params
+                            .get("attribute")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("text");
+                        match actions.get_attribute(selector, attribute).await? {
+                            Some(value) => {
+                                let display = value.to_string();
+                                Ok(vec![ToolResult::ok(
+                                    json!({ "value": value, "found": true, "selector": selector, "attribute": attribute }),
+                                    Some(display),
+                                )])
+                            }
+                            None => Ok(err_response(
+                                "browser",
+                                "get",
+                                ControlHubError::new(
+                                    ErrorCode::NotFound,
+                                    format!("No element matched selector '{}'", selector),
+                                )
+                                .with_hint("Take a fresh snapshot and verify the @ref / CSS selector"),
+                            )),
+                        }
+                    }
+                    "get_html" | "content" => {
+                        let selector = params
+                            .get("selector")
+                            .and_then(|v| v.as_str());
+                        let result = if let Some(sel) = selector {
+                            actions.get_attribute(sel, "html").await?
+                        } else {
+                            actions.get_attribute("html", "html").await? // will fallback to document
+                        };
+                        match result {
+                            Some(value) => {
+                                let html = value.as_str().unwrap_or("").to_string();
+                                Ok(vec![ToolResult::ok(
+                                    json!({ "html": html, "found": true }),
+                                    Some(format!("HTML: {} chars", html.len())),
+                                )])
+                            }
+                            None => {
+                                // Fallback: evaluate document.documentElement.outerHTML
+                                let result = actions.evaluate("document.documentElement.outerHTML").await?;
+                                let html = result
+                                    .get("result")
+                                    .and_then(|r| r.get("value"))
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("");
+                                Ok(vec![ToolResult::ok(
+                                    json!({ "html": html, "found": true }),
+                                    Some(format!("HTML: {} chars", html.len())),
+                                )])
+                            }
+                        }
+                    }
+                    "auto_scroll" => {
+                        let direction = params
+                            .get("direction")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("down");
+                        let max_scrolls = params
+                            .get("max_scrolls")
+                            .or_else(|| params.get("maxScrolls"))
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(20);
+                        let delay_ms = params
+                            .get("delay_ms")
+                            .or_else(|| params.get("delayMs"))
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(800);
+                        let result = actions.auto_scroll(direction, max_scrolls, delay_ms).await?;
+                        Ok(vec![ToolResult::ok(result, Some(format!("Auto-scrolled {}", direction)))])
+                    }
+                    "fetch" => {
+                        let url = params
+                            .get("url")
+                            .and_then(|v| v.as_str())
+                            .ok_or_else(|| {
+                                BitFunError::tool("fetch requires 'url'".to_string())
+                            })?;
+                        let method = params
+                            .get("method")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("GET");
+                        let headers = params
+                            .get("headers")
+                            .cloned()
+                            .unwrap_or(json!({}));
+                        let body = params
+                            .get("body")
+                            .and_then(|v| v.as_str());
+                        let result = actions.fetch(url, method, headers, body).await?;
+                        Ok(vec![ToolResult::ok(result, Some(format!("Fetched {}", url)))])
+                    }
+                    "cookies" | "get_cookies" => {
+                        let urls = params
+                            .get("urls")
+                            .and_then(|v| v.as_array())
+                            .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect());
+                        let result = actions.get_cookies(urls).await?;
+                        let cookies = result
+                            .get("cookies")
+                            .and_then(|v| v.as_array())
+                            .map(|a| a.len())
+                            .unwrap_or(0);
+                        Ok(vec![ToolResult::ok(
+                            result,
+                            Some(format!("{} cookie(s)", cookies)),
+                        )])
+                    }
+                    "set_cookies" => {
+                        let cookies = params
+                            .get("cookies")
+                            .and_then(|v| v.as_array())
+                            .ok_or_else(|| {
+                                BitFunError::tool("set_cookies requires 'cookies' array".to_string())
+                            })?;
+                        let result = actions.set_cookies(cookies).await?;
+                        let set = result.get("set").and_then(|v| v.as_u64()).unwrap_or(0);
+                        Ok(vec![ToolResult::ok(
+                            result,
+                            Some(format!("{} cookie(s) set", set)),
+                        )])
+                    }
+                    "set_file_input_files" | "file_upload" => {
+                        let selector = params
+                            .get("selector")
+                            .and_then(|v| v.as_str());
+                        let files: Vec<String> = params
+                            .get("files")
+                            .and_then(|v| v.as_array())
+                            .ok_or_else(|| {
+                                BitFunError::tool("set_file_input_files requires 'files' array".to_string())
+                            })?
+                            .iter()
+                            .filter_map(|v| v.as_str().map(str::to_string))
+                            .collect();
+                        let result = actions.set_file_input_files(selector, &files).await?;
+                        Ok(vec![ToolResult::ok(result, Some("Files set on input".to_string()))])
+                    }
+                    "cdp" => {
+                        let method = params
+                            .get("method")
+                            .and_then(|v| v.as_str())
+                            .ok_or_else(|| {
+                                BitFunError::tool("cdp requires 'method'".to_string())
+                            })?;
+                        if !Self::is_allowed_browser_cdp_method(method) {
+                            return Ok(err_response(
+                                "browser",
+                                "cdp",
+                                ControlHubError::new(
+                                    ErrorCode::InvalidParams,
+                                    format!("CDP method '{}' is not in the allowlist", method),
+                                )
+                                .with_hint("Only safe DOM/Input/Page/Network/Runtime/Emulation methods are allowed for sandbox protection"),
+                            ));
+                        }
+                        let cdp_params = params.get("params").cloned();
+                        let result = session.client.send(method, cdp_params).await?;
+                        Ok(vec![ToolResult::ok(
+                            json!({ "success": true, "method": method, "result": result }),
+                            Some(format!("CDP {} executed", method)),
+                        )])
+                    }
+                    "dialog" => {
+                        let response = params
+                            .get("response")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("accept");
+                        let accept = response != "dismiss";
+                        let prompt_text = params
+                            .get("prompt_text")
+                            .and_then(|v| v.as_str())
+                            .map(str::to_string);
+                        session.state.arm_dialog(DialogHandler { accept, prompt_text }).await;
+                        let _ = session.client.send("Page.enable", None).await;
+                        Ok(vec![ToolResult::ok(
+                            json!({ "success": true, "dialog_armed": true, "accept": accept }),
+                            Some("Dialog handler armed".to_string()),
+                        )])
+                    }
+                    "read_article" => {
+                        if let Some(url) = params.get("url").and_then(|v| v.as_str()) {
+                            actions.navigate(url).await?;
+                        }
+                        let result = actions.read_article().await?;
+                        let article = result.get("article").cloned().unwrap_or(Value::Null);
+                        let excerpt = article
+                            .get("excerpt")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("");
+                        Ok(vec![ToolResult::ok(
+                            result,
+                            Some(format!("Article: {}", excerpt)),
+                        )])
+                    }
+                    "frame" => {
+                        let selector = params
+                            .get("selector")
+                            .and_then(|v| v.as_str())
+                            .ok_or_else(|| {
+                                BitFunError::tool("frame requires 'selector'".to_string())
+                            })?;
+                        let script = format!(
+                            r#"(function(){{
+                                const el = document.querySelector('{}');
+                                if (!el) return JSON.stringify({{ found: false }});
+                                return JSON.stringify({{ found: true, selector: '{}', name: el.name || '', url: el.src || '' }});
+                            }})()"#,
+                            selector.replace('\'', "\\'"),
+                            selector.replace('\'', "\\'"),
+                        );
+                        let result = actions.evaluate(&script).await?;
+                        let raw = result.get("result").and_then(|r| r.get("value")).and_then(|v| v.as_str()).unwrap_or("{}");
+                        let parsed: Value = serde_json::from_str(raw).unwrap_or(json!({}));
+                        if !parsed.get("found").and_then(|v| v.as_bool()).unwrap_or(false) {
+                            return Ok(err_response(
+                                "browser",
+                                "frame",
+                                ControlHubError::new(
+                                    ErrorCode::NotFound,
+                                    format!("iframe not found: {}", selector),
+                                ),
+                            ));
+                        }
+                        session.state.set_active_frame(Some(selector.to_string())).await;
+                        Ok(vec![ToolResult::ok(
+                            json!({ "frame": parsed }),
+                            Some("Frame context noted".to_string()),
+                        )])
+                    }
+                    "frame_main" => {
+                        session.state.set_active_frame(None).await;
+                        Ok(vec![ToolResult::ok(
+                            json!({ "frame": "main" }),
+                            Some("Frame context reset".to_string()),
+                        )])
+                    }
                     "close" => {
                         let result = actions.close_page().await?;
                         // After a close, drop the session so subsequent calls
@@ -1049,7 +1626,7 @@ Branch on `ok` and `error.code`, not on English messages.
                         Ok(vec![ToolResult::ok(result, Some("Page closed".to_string()))])
                     }
                     other => Err(BitFunError::tool(format!(
-                        "Unknown browser action: '{}'. Valid: connect, navigate, snapshot, click, fill, type, select, press_key, scroll, wait, get_text, get_url, get_title, screenshot, evaluate, close, list_pages, switch_page, list_sessions",
+                        "Unknown browser action: '{}'. Valid: connect, tab_new, navigate, back, forward, reload, snapshot, click, hover, fill, type, check, uncheck, select, press_key, scroll, auto_scroll, wait, get, get_text, get_url, get_title, get_html, screenshot, evaluate, fetch, cookies, set_cookies, set_file_input_files, cdp, network, console, errors, trace, dialog, frame, frame_main, read_article, close, list_pages, tab_query, switch_page, list_sessions",
                         other
                     ))),
                 }
@@ -1708,8 +2285,8 @@ mod control_hub_tests {
     async fn description_documents_two_browser_modes() {
         let desc = ControlHubTool::new().description().await.unwrap();
         assert!(
-            desc.contains("Two browser modes"),
-            "description must describe the two browser control modes"
+            desc.contains("Browser modes"),
+            "description must describe the browser control modes"
         );
         assert!(
             desc.contains("mode: \"headless\"") && desc.contains("mode: \"default\""),
