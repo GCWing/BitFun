@@ -24,6 +24,7 @@ pub use encryption::{decrypt_from_base64, encrypt_to_base64, KeyPair};
 pub use pairing::{PairingProtocol, PairingState};
 pub use qr_generator::QrGenerator;
 pub use relay_client::RelayClient;
+pub use relay_client::ensure_rustls_crypto_provider;
 pub use remote_server::RemoteServer;
 
 use anyhow::Result;

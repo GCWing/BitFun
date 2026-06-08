@@ -219,6 +219,12 @@ pub async fn run() {
     crash_diagnostics::initialize_run_state(session_log_dir.clone(), &startup_trace_id);
     setup_panic_hook();
 
+    // Install the rustls ring CryptoProvider as the process-level default early,
+    // so that all subsequent TLS operations (relay_client, reqwest, tokio-tungstenite)
+    // reuse the same provider instead of each attempting their own install_default().
+    // This is a no-op on non-Windows platforms where tokio-tungstenite handles it.
+    bitfun_core::service::remote_connect::ensure_rustls_crypto_provider();
+
     eprintln!("=== BitFun Desktop Starting ===");
 
     let step_started = Instant::now();
@@ -1422,6 +1428,9 @@ fn setup_panic_hook() {
         let thread = std::thread::current();
         let thread_name = thread.name().map(str::to_string);
         let thread_id = format!("{:?}", thread.id());
+        let is_main_thread = thread_name.as_deref() == Some("main")
+            || thread_name.is_none(); // unnamed threads in simple test contexts
+
         let location = panic_info
             .location()
             .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
@@ -1439,11 +1448,18 @@ fn setup_panic_hook() {
             })
             .unwrap_or("unknown panic message");
 
-        log::error!("Application panic at {}: {}", location, message);
+        log::error!(
+            "Application panic at {} (thread={:?}, id={}, main={}): {}",
+            location,
+            thread_name,
+            thread_id,
+            is_main_thread,
+            message,
+        );
         crate::crash_diagnostics::write_panic_report(
             location.clone(),
             message.to_string(),
-            thread_name,
+            thread_name.clone(),
             thread_id,
         );
 
@@ -1463,6 +1479,19 @@ fn setup_panic_hook() {
             log::error!("  1) Restart the application");
             log::error!("  2) Check Windows network service status");
             log::error!("  3) Run as administrator");
+        }
+
+        // ── Recovery strategy ──────────────────────────────────────────
+        // Main-thread panics are unrecoverable — the event loop is gone.
+        // Spawned-thread panics only kill that thread; the rest of the
+        // application can continue.  We log a clear message and skip the
+        // hard exit so the user isn't forced to restart.
+        if !is_main_thread {
+            log::warn!(
+                "Non-main thread panicked — application will continue. \
+                 The affected feature may be degraded until the next restart."
+            );
+            return;
         }
 
         perform_process_exit_cleanup();

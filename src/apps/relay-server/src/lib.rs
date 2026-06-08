@@ -244,24 +244,24 @@ pub fn build_relay_router(
     Router::new()
         .route("/health", get(routes::api::health_check))
         .route("/api/info", get(routes::api::server_info))
-        .route("/api/rooms/:room_id/pair", post(routes::api::pair))
+        .route("/api/rooms/{room_id}/pair", post(routes::api::pair))
         .route(
-            "/api/rooms/:room_id/command",
+            "/api/rooms/{room_id}/command",
             post(routes::api::command).layer(DefaultBodyLimit::max(10 * 1024 * 1024)),
         )
         .route(
-            "/api/rooms/:room_id/upload-web",
+            "/api/rooms/{room_id}/upload-web",
             post(routes::api::upload_web).layer(DefaultBodyLimit::max(10 * 1024 * 1024)),
         )
         .route(
-            "/api/rooms/:room_id/check-web-files",
+            "/api/rooms/{room_id}/check-web-files",
             post(routes::api::check_web_files),
         )
         .route(
-            "/api/rooms/:room_id/upload-web-files",
+            "/api/rooms/{room_id}/upload-web-files",
             post(routes::api::upload_web_files).layer(DefaultBodyLimit::max(10 * 1024 * 1024)),
         )
-        .route("/r/*rest", get(routes::api::serve_room_web_catchall))
+        .route("/r/{*rest}", get(routes::api::serve_room_web_catchall))
         .route("/ws", get(routes::websocket::websocket_handler))
         .layer(tower_http::cors::CorsLayer::permissive())
         .with_state(state)

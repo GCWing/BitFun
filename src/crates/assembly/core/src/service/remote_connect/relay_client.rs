@@ -18,6 +18,24 @@ use tokio_tungstenite::tungstenite::Message;
 #[cfg(windows)]
 use tokio_tungstenite::{tungstenite::client::IntoClientRequest, Connector};
 
+/// Install the rustls ring CryptoProvider as the process-level default.
+///
+/// Call this once at application startup so that all subsequent TLS operations
+/// (relay_client, reqwest, tokio-tungstenite) reuse the same provider.
+/// `install_default()` returns `Err` only when a provider is already installed,
+/// which is harmless — we silently ignore it.
+///
+/// This is safe to call multiple times and from any thread.
+#[cfg(windows)]
+pub fn ensure_rustls_crypto_provider() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+}
+
+/// No-op on non-Windows platforms: tokio-tungstenite's built-in TLS support
+/// handles CryptoProvider installation automatically.
+#[cfg(not(windows))]
+pub fn ensure_rustls_crypto_provider() {}
+
 type WsStream =
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
@@ -409,7 +427,16 @@ async fn dial(ws_url: &str) -> Result<WsStream> {
         let request = ws_url
             .into_client_request()
             .map_err(|e| anyhow!("dial {ws_url}: build request failed: {e}"))?;
-        let connector = build_windows_rustls_connector()?;
+
+        // Wrap TLS connector construction in catch_unwind so that a panic
+        // (e.g. duplicate CryptoProvider install) is converted to an error
+        // instead of unwinding the tokio task and potentially crashing the
+        // process.
+        let connector = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            build_windows_rustls_connector()
+        }))
+        .map_err(|_| anyhow!("dial {ws_url}: TLS connector construction panicked"))??;
+
         let (stream, _) = tokio_tungstenite::connect_async_tls_with_config(
             request,
             Some(config),
@@ -423,6 +450,8 @@ async fn dial(ws_url: &str) -> Result<WsStream> {
 
     #[cfg(not(windows))]
     {
+        // Non-Windows uses tokio-tungstenite's built-in rustls connector,
+        // which installs the CryptoProvider as needed.
         let (stream, _) = tokio_tungstenite::connect_async_with_config(ws_url, Some(config), false)
             .await
             .map_err(|e| anyhow!("dial {ws_url}: {e}"))?;
@@ -432,6 +461,12 @@ async fn dial(ws_url: &str) -> Result<WsStream> {
 
 #[cfg(windows)]
 fn build_windows_rustls_connector() -> Result<Connector> {
+    // Install the ring CryptoProvider as the process-level default.
+    // Required by rustls 0.23+ when `default-features = false`.
+    // `install_default()` returns Err only when a provider is already installed,
+    // which is fine — subsequent reconnects reuse the same process-level provider.
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
     let mut root_store = rustls::RootCertStore::empty();
 
     let native_certs = rustls_native_certs::load_native_certs();

@@ -52,6 +52,7 @@ src/apps/desktop/.tauri/*.key
 !.vscode/extensions.json
 .idea
 .claude
+.codebuddy
 .DS_Store
 *.suo
 *.ntvs*
