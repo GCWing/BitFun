@@ -29,6 +29,10 @@ use crate::agentic::goal_mode::{
     ThreadGoalStore,
 };
 use crate::agentic::image_analysis::ImageContextData;
+use crate::agentic::remote_file_delivery::{
+    needs_computer_links_for_source, remote_file_delivery_reminder,
+    TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY,
+};
 use crate::agentic::round_preempt::{DialogRoundInjectionSource, DialogRoundPreemptSource};
 use crate::agentic::session::SessionManager;
 use crate::agentic::side_question::build_btw_user_input;
@@ -2992,6 +2996,12 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .await?;
         let effective_user_input = wrapped_user_input_payload.content.clone();
         let mut prepended_messages = additional_prepended_messages;
+        if needs_computer_links_for_source(submission_policy.trigger_source) {
+            prepended_messages.push(Message::internal_reminder(
+                InternalReminderKind::RemoteFileDelivery,
+                remote_file_delivery_reminder(),
+            ));
+        }
         prepended_messages.extend(wrapped_user_input_payload.prepended_messages.clone());
 
         if original_user_input != effective_user_input {
@@ -3152,6 +3162,12 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .unwrap_or(false)
         {
             context_vars.insert("acp_transport".to_string(), "true".to_string());
+        }
+        if needs_computer_links_for_source(submission_policy.trigger_source) {
+            context_vars.insert(
+                TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY.to_string(),
+                "true".to_string(),
+            );
         }
         let session_workspace_path = session_workspace
             .as_ref()

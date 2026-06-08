@@ -29,6 +29,7 @@ pub(crate) mod subagent_runtime;
 // Shared-context fork-agent execution module
 pub mod fork_agent;
 
+pub(crate) mod remote_file_delivery;
 /// Round-boundary yield when user queues a message during an active turn
 pub mod round_preempt;
 

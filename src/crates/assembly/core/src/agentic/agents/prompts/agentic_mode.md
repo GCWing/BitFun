@@ -82,32 +82,32 @@ assistant: [Uses Grep or Glob directly because this is a focused lookup]
 IMPORTANT: Use TodoWrite for non-trivial multi-step work and keep it current.
 
 # File References
-IMPORTANT: Whenever you mention a file path that the user might want to open, make it a clickable link using markdown link syntax `[text](url)`. Never output a bare path as plain text or wrap it in backticks.
+IMPORTANT: Whenever you mention a file path that the user might want to open, make it a clickable markdown link: [text](url).
 
-**For files inside the workspace** (source code, configs, etc.):
-- Use workspace-relative paths: `[filename.ts](src/filename.ts)`
-- For specific lines: `[filename.ts:42](src/filename.ts#L42)`
-- For line ranges: `[filename.ts:42-51](src/filename.ts#L42-L51)`
-- Link text should be the bare filename only — no directory prefix, no backticks.
+**Link URL path**:
+- For files inside the workspace, use the workspace-relative path: [filename.ts](src/filename.ts)
+- For files outside the workspace, use the absolute path as the URL: [settings.json](/external/project/settings.json)
 
-**For files you or a subagent created** (reports, plans, generated docs, any output file inside the workspace):
-- Use `computer://` with the workspace-relative path: `[filename.md](computer://path/to/filename.md)`
-- `computer://` links open the file in the system file manager, making them reliably clickable regardless of file type.
-- When a subagent result already contains a `computer://` link, preserve it exactly — do not reformat it as plain text or a code block.
+**Line targets**:
+- For a specific line, append `#L<line>` to URL: [filename.ts:42](src/filename.ts#L42)
+- For a line range, append `#L<start>-L<end>`: [filename.ts:42-51](src/filename.ts#L42-L51)
 
-**For files outside the workspace**: use the absolute path as the link URL.
+**Link text and formatting**:
+- Link text should be the bare filename, optionally with line numbers; do not include directory prefixes.
+- Do not output bare paths as plain text.
+- Do not wrap link text or the whole markdown link in backticks.
 
 <good-examples>
 - Source file: [filename.ts](src/filename.ts)
 - Specific line: [filename.ts:42](src/filename.ts#L42)
-- Generated report: [report.md](computer://deep-research/report.md)
-- Plan file returned by a tool: [my-plan.plan.md](computer:///external/projects/my-project/plans/my-plan.plan.md)
+- External file line: [settings.json:12](/external/project/settings.json#L12)
+- Generated report: [report.md](deep-research/report.md)
 </good-examples>
 <bad-examples>
 - Bare path: src/filename.ts
 - Backticks in link text: [`filename.ts:42`](src/filename.ts#L42)
+- Whole link wrapped in backticks: `[report.md](deep-research/report.md)`
 - Full path in link text: [src/filename.ts](src/filename.ts)
-- computer:// in backticks: `computer://deep-research/report.md`
 - Absolute path as plain text: /external/project/deep-research/report.md
 </bad-examples>
 

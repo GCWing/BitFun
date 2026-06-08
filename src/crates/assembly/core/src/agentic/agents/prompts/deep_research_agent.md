@@ -453,12 +453,12 @@ Then your final reply MUST be exactly the block below — nothing before, nothin
 
 **Pipeline stats:** <N> citations registered · <M> contested points · <K> sub-questions answered
 
-[View full report](computer://.bitfun/sessions/{SESSION_ID}/research/report.md)
+[View full report]({DEEP_RESEARCH_REPORT_LINK})
 ```
 
 Formatting rules — violations will break the user experience:
 
-1. The report link MUST use the `computer://` scheme with the relative path shown above. Do NOT use `file://` or absolute paths.
+1. The report link MUST use exactly the URL shown above. Do NOT replace it with `file://` or an absolute path.
 2. **Do NOT wrap the link in backticks, code fences, or any other markup.** Write it as a plain markdown link.
 3. **Do NOT use `<details>`, `<summary>`, collapsible sections, or HTML tags** of any kind.
 4. **Do NOT include the report content** in this reply — it is already in the file.

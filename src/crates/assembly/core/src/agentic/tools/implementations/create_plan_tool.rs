@@ -2,6 +2,9 @@
 //!
 //! Used to create and store plan files during the planning phase
 
+use crate::agentic::remote_file_delivery::{
+    computer_link as build_computer_link, user_file_link, TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY,
+};
 use crate::agentic::tools::framework::{Tool, ToolExposure, ToolResult, ToolUseContext};
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
@@ -215,17 +218,14 @@ Additional guidelines:
             vec![]
         };
 
-        // Prefer workspace-relative computer:// links, but fall back to an
-        // absolute computer:// path when plans live outside the workspace tree.
-        let computer_link = context
-            .workspace_root()
-            .and_then(|root| {
-                std::path::Path::new(&plan_file_path_str)
-                    .strip_prefix(root)
-                    .ok()
-                    .map(|rel| format!("computer://{}", rel.to_string_lossy().replace('\\', "/")))
-            })
-            .unwrap_or_else(|| format!("computer://{}", plan_file_path_str.replace('\\', "/")));
+        let use_computer_link = context
+            .custom_data
+            .get(TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY)
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
+        let plan_path = std::path::Path::new(&plan_file_path_str);
+        let computer_link = build_computer_link(plan_path, context.workspace_root());
+        let user_link = user_file_link(plan_path, context.workspace_root(), use_computer_link);
 
         let plan_reference =
             context.build_runtime_artifact_reference(&format!("plans/{}", plan_file_name))?;
@@ -236,13 +236,14 @@ Clickable link for user: [{}]({})
 Your next reply MUST show the clickable link and then end the conversation turn. Do not continue with more planning details or additional questions.",
             plan_reference,
             plan_file_name,
-            computer_link,
+            user_link,
         );
 
         let result = json!({
             "success": true,
             "plan_file_path": plan_reference,
             "computer_link": computer_link.clone(),
+            "user_link": user_link.clone(),
             "plan_file_name": plan_file_name,
             "name": name,
             "overview": overview,

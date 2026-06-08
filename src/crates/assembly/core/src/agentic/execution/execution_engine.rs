@@ -19,6 +19,7 @@ use crate::agentic::image_analysis::{
     build_multimodal_message_with_images, process_image_contexts_for_provider, ImageContextData,
     ImageLimits,
 };
+use crate::agentic::remote_file_delivery::TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY;
 use crate::agentic::round_preempt::RoundInjectionKind;
 use crate::agentic::session::{CompressionMode, ContextCompressor, SessionManager};
 use crate::agentic::skill_agent_snapshot::build_skill_agent_tool_listing_sections_from_snapshot;
@@ -578,6 +579,12 @@ impl ExecutionEngine {
         tool_listing_sections: ToolListingSections,
     ) -> Option<PromptBuilderContext> {
         let workspace = context.workspace.as_ref()?;
+        let remote_file_delivery_channel = context
+            .context
+            .get(TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY)
+            .and_then(|value| value.parse::<bool>().ok())
+            .unwrap_or(false);
+
         build_prompt_context_for_workspace(
             workspace,
             workspace.workspace_id.as_deref(),
@@ -587,6 +594,9 @@ impl ExecutionEngine {
             tool_listing_sections,
         )
         .await
+        .map(|prompt_context| {
+            prompt_context.with_remote_file_delivery_channel(remote_file_delivery_channel)
+        })
     }
 
     async fn build_cached_prepended_prompt_reminders(

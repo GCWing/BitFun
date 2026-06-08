@@ -108,6 +108,7 @@ describe('Markdown file links', () => {
       `2. [README.md](${EXAMPLE_ABSOLUTE_README})`,
       '3. [README.md](computer://README.md)',
       `4. [README.md](computer://${EXAMPLE_ABSOLUTE_README})`,
+      '5. [deck.pptx](computer://deck.pptx)',
     ].join('\n');
 
     await act(async () => {
@@ -122,7 +123,7 @@ describe('Markdown file links', () => {
     });
 
     const buttons = Array.from(container.querySelectorAll<HTMLButtonElement>('button.file-link'));
-    expect(buttons).toHaveLength(4);
+    expect(buttons).toHaveLength(5);
 
     await act(async () => {
       buttons[0].click();
@@ -143,19 +144,26 @@ describe('Markdown file links', () => {
     await act(async () => {
       buttons[2].click();
       await Promise.resolve();
-      await Promise.resolve();
     });
 
-    expect(mocks.revealInExplorer).toHaveBeenNthCalledWith(1, `${EXAMPLE_WORKSPACE}\\README.md`);
-    expect(onFileViewRequest).toHaveBeenCalledTimes(2);
+    expect(onFileViewRequest).toHaveBeenNthCalledWith(3, 'README.md', 'README.md', undefined);
+    expect(mocks.revealInExplorer).not.toHaveBeenCalled();
 
     await act(async () => {
       buttons[3].click();
       await Promise.resolve();
+    });
+
+    expect(onFileViewRequest).toHaveBeenNthCalledWith(4, EXAMPLE_ABSOLUTE_README, 'README.md', undefined);
+    expect(mocks.revealInExplorer).not.toHaveBeenCalled();
+
+    await act(async () => {
+      buttons[4].click();
+      await Promise.resolve();
       await Promise.resolve();
     });
 
-    expect(mocks.revealInExplorer).toHaveBeenNthCalledWith(2, EXAMPLE_ABSOLUTE_README);
-    expect(onFileViewRequest).toHaveBeenCalledTimes(2);
+    expect(mocks.revealInExplorer).toHaveBeenNthCalledWith(1, `${EXAMPLE_WORKSPACE}\\deck.pptx`);
+    expect(onFileViewRequest).toHaveBeenCalledTimes(4);
   });
 });

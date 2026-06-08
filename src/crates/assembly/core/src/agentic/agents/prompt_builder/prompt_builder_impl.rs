@@ -1,4 +1,5 @@
 //! System prompts module providing main dialogue and agent dialogue prompts
+use crate::agentic::remote_file_delivery::user_workspace_relative_file_link;
 use crate::agentic::util::remote_workspace_layout::build_remote_workspace_layout_preview;
 use crate::agentic::workspace::WorkspaceBackend;
 use crate::agentic::WorkspaceBinding;
@@ -29,6 +30,7 @@ const PLACEHOLDER_AGENT_MEMORY: &str = "{AGENT_MEMORY}";
 const PLACEHOLDER_CLAW_WORKSPACE: &str = "{CLAW_WORKSPACE}";
 const PLACEHOLDER_VISUAL_MODE: &str = "{VISUAL_MODE}";
 const PLACEHOLDER_SESSION_ID: &str = "{SESSION_ID}";
+const PLACEHOLDER_DEEP_RESEARCH_REPORT_LINK: &str = "{DEEP_RESEARCH_REPORT_LINK}";
 const USER_CONTEXT_PROMPT: &str =
     "As you answer the user's questions, you can use the following context.\nNote: this is a snapshot captured at the start of the conversation and may not reflect real-time changes made afterward.";
 /// SSH remote host facts for system prompt (workspace tools run here, not on the local client).
@@ -53,6 +55,8 @@ pub struct PromptBuilderContext {
     pub supports_image_understanding: Option<bool>,
     /// Dynamic tool listings injected outside tool descriptions for cache stability.
     pub tool_listing_sections: ToolListingSections,
+    /// Remote mobile/bot turns need `computer://` links for file delivery.
+    pub remote_file_delivery_channel: bool,
 }
 
 impl PromptBuilderContext {
@@ -70,6 +74,7 @@ impl PromptBuilderContext {
             remote_project_layout: None,
             supports_image_understanding: None,
             tool_listing_sections: ToolListingSections::default(),
+            remote_file_delivery_channel: false,
         }
     }
 
@@ -95,6 +100,11 @@ impl PromptBuilderContext {
     ) -> Self {
         self.remote_execution = Some(execution);
         self.remote_project_layout = project_layout;
+        self
+    }
+
+    pub fn with_remote_file_delivery_channel(mut self, enabled: bool) -> Self {
+        self.remote_file_delivery_channel = enabled;
         self
     }
 }
@@ -562,11 +572,28 @@ Do not read from, modify, create, move, or delete files outside this workspace u
         // Replace {SESSION_ID} — used by deep-research Pro mode to anchor a per-session
         // work_dir under .bitfun/sessions/{SESSION_ID}/research/. Falls back to a
         // timestamp slug when no session is bound (e.g. one-shot prompt builds in tests).
-        if result.contains(PLACEHOLDER_SESSION_ID) {
+        let mut resolved_session_id: Option<String> = None;
+        if result.contains(PLACEHOLDER_SESSION_ID)
+            || result.contains(PLACEHOLDER_DEEP_RESEARCH_REPORT_LINK)
+        {
             let session_id = self.context.session_id.clone().unwrap_or_else(|| {
                 format!("unbound-{}", chrono::Local::now().format("%Y%m%d-%H%M%S"))
             });
+            resolved_session_id = Some(session_id.clone());
             result = result.replace(PLACEHOLDER_SESSION_ID, &session_id);
+        }
+
+        if result.contains(PLACEHOLDER_DEEP_RESEARCH_REPORT_LINK) {
+            let session_id = resolved_session_id.unwrap_or_else(|| {
+                self.context.session_id.clone().unwrap_or_else(|| {
+                    format!("unbound-{}", chrono::Local::now().format("%Y%m%d-%H%M%S"))
+                })
+            });
+            let report_link = user_workspace_relative_file_link(
+                &format!(".bitfun/sessions/{session_id}/research/report.md"),
+                self.context.remote_file_delivery_channel,
+            );
+            result = result.replace(PLACEHOLDER_DEEP_RESEARCH_REPORT_LINK, &report_link);
         }
 
         if self.context.supports_image_understanding == Some(false) {
@@ -656,6 +683,37 @@ mod tests {
             .await;
 
         assert_eq!(reminders, PrependedPromptReminders::default());
+    }
+
+    #[tokio::test]
+    async fn deep_research_report_link_defaults_to_workspace_relative_path() {
+        let context =
+            PromptBuilderContext::new("workspace/root", Some("session-1".to_string()), None);
+        let prompt = PromptBuilder::new(context)
+            .build_prompt_from_template("[View full report]({DEEP_RESEARCH_REPORT_LINK})")
+            .await
+            .expect("prompt should build");
+
+        assert_eq!(
+            prompt,
+            "[View full report](.bitfun/sessions/session-1/research/report.md)"
+        );
+    }
+
+    #[tokio::test]
+    async fn deep_research_report_link_uses_computer_scheme_for_remote_delivery() {
+        let context =
+            PromptBuilderContext::new("workspace/root", Some("session-1".to_string()), None)
+                .with_remote_file_delivery_channel(true);
+        let prompt = PromptBuilder::new(context)
+            .build_prompt_from_template("[View full report]({DEEP_RESEARCH_REPORT_LINK})")
+            .await
+            .expect("prompt should build");
+
+        assert_eq!(
+            prompt,
+            "[View full report](computer://.bitfun/sessions/session-1/research/report.md)"
+        );
     }
 
     #[test]

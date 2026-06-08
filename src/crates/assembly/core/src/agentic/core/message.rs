@@ -96,6 +96,7 @@ pub enum InternalReminderKind {
     GoalMode,
     GoalContinuation,
     GoalObjectiveUpdated,
+    RemoteFileDelivery,
     SessionMessageRequest,
     SessionMessageReply,
     LoopRecovery,

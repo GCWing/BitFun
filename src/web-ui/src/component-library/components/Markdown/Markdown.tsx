@@ -1062,7 +1062,6 @@ export const Markdown = React.memo<MarkdownProps>(({
         node?.position,
       );
       const isHashLink = typeof hrefValue === 'string' && hrefValue.startsWith('#');
-      const isComputerLink = typeof hrefValue === 'string' && hrefValue.startsWith(COMPUTER_LINK_PREFIX);
       const isVisualizationLink = typeof hrefValue === 'string' && hrefValue.startsWith('visualization:');
       const isTabLink = typeof hrefValue === 'string' && hrefValue.startsWith('tab:');
       const isHttpLink = typeof hrefValue === 'string' &&
@@ -1103,7 +1102,7 @@ export const Markdown = React.memo<MarkdownProps>(({
 
         const isFolder = filePath.endsWith('/');
         const editorOpenable = isEditorOpenableFilePath(filePath);
-        const shouldRevealInExplorer = isComputerLink || !editorOpenable;
+        const shouldRevealInExplorer = !editorOpenable;
         if (!isFolder) {
           const fileLinkButton = (
             <button
