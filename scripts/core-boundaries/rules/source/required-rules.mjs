@@ -1172,11 +1172,11 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/core/src/agentic/tools/pipeline/tool_pipeline.rs',
     reason:
-      'core tool pipeline must keep latest-main truncation and per-tool denial behavior until tool runtime ownership migrates',
+      'core tool pipeline must preserve latest-main truncation behavior through agent-tools delegation and keep per-tool denial behavior until tool runtime ownership migrates',
     patterns: [
       {
-        regex: /\bfn build_truncation_recovery_notice\b/,
-        message: 'missing tool-call truncation recovery notice helper',
+        regex: /\bbuild_tool_call_truncation_recovery_notice\b/,
+        message: 'missing tool-call truncation recovery notice owner delegation',
       },
       {
         regex: /\btruncation_notice_for_interactive_tools_does_not_claim_file_write\b/,
@@ -1338,9 +1338,9 @@ export const requiredContentRules = [
       },
       {
         regex:
-          /bitfun-services-integrations = \{ path = "\.\.\/\.\.\/services\/services-integrations", default-features = false, features = \["remote-ssh"\] \}/,
+          /bitfun-services-integrations = \{ path = "\.\.\/\.\.\/services\/services-integrations", default-features = false, features = \["remote-ssh", "workspace-search"\] \}/,
         message:
-          'bitfun-services-integrations dependency may keep remote workspace identity helpers but must not force product-full outside the core feature graph',
+          'bitfun-services-integrations dependency may keep remote workspace identity and workspace-search owner helpers but must not force product-full outside the core feature graph',
       },
       {
         regex:
@@ -2206,6 +2206,14 @@ export const requiredContentRules = [
       {
         regex: /\bpub fn build_invalid_tool_call_error_message\b/,
         message: 'missing invalid tool call error message helper',
+      },
+      {
+        regex: /\bpub fn is_write_like_tool_name\b/,
+        message: 'missing write-like tool classification helper',
+      },
+      {
+        regex: /\bpub fn build_tool_call_truncation_recovery_notice\b/,
+        message: 'missing truncation recovery notice helper',
       },
     ],
   },
@@ -3735,6 +3743,10 @@ export const requiredContentRules = [
         regex: /\bbuild_invalid_tool_call_error_message\b/,
         message: 'missing invalid tool call presentation owner delegation',
       },
+      {
+        regex: /\bbuild_tool_call_truncation_recovery_notice\b/,
+        message: 'missing truncation recovery notice owner delegation',
+      },
     ],
   },
   {
@@ -4068,9 +4080,9 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/assembly/core/src/service/search/service.rs',
+    path: 'src/crates/services/services-integrations/src/workspace_search/service.rs',
     reason:
-      'core search runtime must continue owning local flashgrep fallback and preview mapping until search migration is reviewed',
+      'services-integrations workspace_search must own local flashgrep fallback, session lifecycle, and preview/result conversion',
     patterns: [
       {
         regex: /\bwith_scan_fallback\b/,
@@ -4087,6 +4099,29 @@ export const requiredContentRules = [
       {
         regex: /\bpreview_inside\b/,
         message: 'missing preview-inside rendering contract',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/service/search/service.rs',
+    reason:
+      'core workspace search service must remain a compatibility facade that injects product config/bootstrap hooks into the integration owner',
+    patterns: [
+      {
+        regex: /\bowner::WorkspaceSearchService::new_with_hooks\b/,
+        message: 'missing workspace-search owner delegation',
+      },
+      {
+        regex: /\bCoreWorkspaceSearchRuntimeHooks\b/,
+        message: 'missing core runtime hook adapter',
+      },
+      {
+        regex: /\bget_global_config_service\b/,
+        message: 'missing product config hook for workspace-search repo config',
+      },
+      {
+        regex: /\bensure_workspace_gitignore_ignores_bitfun\b/,
+        message: 'missing workspace bootstrap hook for search warmup',
       },
     ],
   },

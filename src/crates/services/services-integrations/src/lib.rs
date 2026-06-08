@@ -24,6 +24,9 @@ pub mod remote_connect;
 #[cfg(feature = "remote-ssh")]
 pub mod remote_ssh;
 
+#[cfg(feature = "workspace-search")]
+pub mod workspace_search;
+
 #[cfg(all(windows, feature = "git"))]
 #[link(name = "advapi32")]
 unsafe extern "system" {}

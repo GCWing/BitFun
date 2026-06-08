@@ -29,8 +29,9 @@ use bitfun_agent_tools::{
     GET_TOOL_SPEC_TOOL_NAME,
 };
 use bitfun_agent_tools::{
-    build_invalid_tool_call_error_message, build_tool_execution_error_presentation,
-    build_user_steering_interrupted_presentation, render_tool_result_for_assistant,
+    build_invalid_tool_call_error_message, build_tool_call_truncation_recovery_notice,
+    build_tool_execution_error_presentation, build_user_steering_interrupted_presentation,
+    is_write_like_tool_name, render_tool_result_for_assistant,
     truncate_raw_tool_arguments_preview_to, truncate_tool_arguments_preview,
     TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES, USER_STEERING_INTERRUPTED_MESSAGE,
 };
@@ -179,6 +180,30 @@ fn invalid_tool_call_error_message_preserves_current_contract() {
 
     let message = build_invalid_tool_call_error_message("Write", true, false, None);
     assert_eq!(message, "Arguments are invalid JSON.");
+}
+
+#[test]
+fn truncation_recovery_notice_preserves_write_like_guidance() {
+    assert!(is_write_like_tool_name("Write"));
+    assert!(is_write_like_tool_name("file_write"));
+    assert!(is_write_like_tool_name("write_notebook"));
+    assert!(!is_write_like_tool_name("Read"));
+
+    let notice = build_tool_call_truncation_recovery_notice("Write");
+
+    assert!(notice.contains("latest Read result"));
+    assert!(notice.contains("ONE Edit call"));
+    assert!(notice.contains("Do NOT rewrite the whole file with Write"));
+    assert!(notice.ends_with("Original tool result follows.\n\n"));
+}
+
+#[test]
+fn truncation_recovery_notice_preserves_non_write_guidance() {
+    let notice = build_tool_call_truncation_recovery_notice("AskUserQuestion");
+
+    assert!(notice.contains("repaired, potentially incomplete arguments"));
+    assert!(notice.contains("issue a fresh complete AskUserQuestion call"));
+    assert!(!notice.contains("ONE Edit call"));
 }
 
 #[test]

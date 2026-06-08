@@ -1,5 +1,6 @@
-use crate::infrastructure::FileSearchOutcome;
-use crate::service::search::flashgrep::{
+use bitfun_services_core::filesystem::FileSearchOutcome;
+
+use super::flashgrep::{
     DirtyFileStats as FlashgrepDirtyFileStats, FileCount as FlashgrepFileCount,
     FileMatch as FlashgrepFileMatch, MatchLocation as FlashgrepMatchLocation,
     RepoPhase as FlashgrepRepoPhase, RepoStatus as FlashgrepRepoStatus,
@@ -19,7 +20,7 @@ pub enum ContentSearchOutputMode {
 }
 
 impl ContentSearchOutputMode {
-    pub(crate) fn search_mode(self) -> SearchModeConfig {
+    pub fn search_mode(self) -> SearchModeConfig {
         match self {
             Self::Content => SearchModeConfig::LineMatches,
             Self::Count => SearchModeConfig::CountOnly,

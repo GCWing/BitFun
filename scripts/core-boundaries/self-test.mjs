@@ -1052,7 +1052,7 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/assembly/core/src/agentic/tools/pipeline/tool_pipeline.rs',
       contracts: [
-        'build_truncation_recovery_notice',
+        'build_tool_call_truncation_recovery_notice',
         'truncation_notice_for_interactive_tools_does_not_claim_file_write',
         'truncation_notice_for_write_tools_keeps_write_continuation_guidance',
         'denied_tool_messages',
@@ -1705,8 +1705,12 @@ export function runManifestParserSelfTest({
       contracts: ['prepare_startup_restored_workspaces', 'WorkspaceKind::Remote', 'ensure_remote_workspace_runtime', 'sshHost'],
     },
     {
-      path: 'src/crates/assembly/core/src/service/search/service.rs',
+      path: 'src/crates/services/services-integrations/src/workspace_search/service.rs',
       contracts: ['with_scan_fallback', 'convert_hits_to_file_search_results', 'split_preview', 'preview_inside'],
+    },
+    {
+      path: 'src/crates/assembly/core/src/service/search/service.rs',
+      contracts: ['owner::WorkspaceSearchService::new_with_hooks', 'CoreWorkspaceSearchRuntimeHooks', 'get_global_config_service', 'ensure_workspace_gitignore_ignores_bitfun'],
     },
     {
       path: 'src/crates/assembly/core/src/service/search/remote.rs',
@@ -1725,7 +1729,7 @@ export function runManifestParserSelfTest({
       contracts: [
         'bitfun-product-capabilities = \\{ path = "\\.\\.\\/product-capabilities", default-features = false, optional = true \\}',
         'bitfun-tool-packs = \\{ path = "\\.\\.\\/\\.\\.\\/execution\\/tool-provider-groups", default-features = false, optional = true \\}',
-        'bitfun-services-integrations = \\{ path = "\\.\\.\\/\\.\\.\\/services\\/services-integrations", default-features = false, features = \\["remote-ssh"\\] \\}',
+        'bitfun-services-integrations = \\{ path = "\\.\\.\\/\\.\\.\\/services\\/services-integrations", default-features = false, features = \\["remote-ssh", "workspace-search"\\] \\}',
         'bitfun-product-domains = \\{ path = "\\.\\.\\/\\.\\.\\/contracts\\/product-domains", default-features = false, optional = true \\}',
         'dep:bitfun-product-capabilities',
         'dep:bitfun-tool-packs',

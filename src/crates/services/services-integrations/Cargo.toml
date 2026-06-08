@@ -35,6 +35,7 @@ sse-stream = { workspace = true, optional = true }
 thiserror = { workspace = true, optional = true }
 tokio-util = { workspace = true, optional = true }
 uuid = { workspace = true, optional = true }
+which = { workspace = true, optional = true }
 
 [target.'cfg(not(windows))'.dependencies]
 git2 = { workspace = true, features = ["vendored-openssl"], optional = true }
@@ -64,6 +65,13 @@ mcp = [
 ]
 remote-connect = ["async-trait", "base64", "bitfun-runtime-ports", "uuid"]
 remote-ssh = ["dunce", "sha2", "tokio-util"]
+workspace-search = [
+    "async-trait",
+    "bitfun-services-core",
+    "dunce",
+    "thiserror",
+    "which",
+]
 product-full = [
     "announcement",
     "file-watch",
@@ -72,4 +80,5 @@ product-full = [
     "mcp",
     "remote-connect",
     "remote-ssh",
+    "workspace-search",
 ]

@@ -17,6 +17,22 @@ pub fn render_tool_result_for_assistant(tool_name: &str, data: &Value) -> String
         .unwrap_or_else(|| format!("Tool {tool_name} returned no serializable result."))
 }
 
+pub fn is_write_like_tool_name(tool_name: &str) -> bool {
+    matches!(tool_name, "Write" | "file_write" | "write_notebook")
+}
+
+pub fn build_tool_call_truncation_recovery_notice(tool_name: &str) -> String {
+    if is_write_like_tool_name(tool_name) {
+        return format!(
+            "[Your previous {tool_name} call was truncated mid-stream by max_tokens and was auto-repaired before execution; the file may have been written with partial content. Use the latest Read result for that file (or call Read once if no current Read result is available) to inspect what is on disk. To finish it, issue ONE Edit call where `old_string` is a final unique substring from the current file and `new_string` is that same substring plus the continuation. If you do not have a concrete plan for the continuation, stop tool-calling and tell the user the output was truncated (suggest raising max_tokens). Do NOT rewrite the whole file with Write.]\n\nOriginal tool result follows.\n\n"
+        );
+    }
+
+    format!(
+        "[Your previous {tool_name} call was truncated mid-stream by max_tokens and was auto-repaired before execution. The tool ran with the repaired, potentially incomplete arguments. Review the tool result and continue normally; if important information is missing, issue a fresh complete {tool_name} call rather than trying to continue a file write.]\n\nOriginal tool result follows.\n\n"
+    )
+}
+
 pub fn truncate_tool_arguments_preview(value: &Value) -> String {
     let raw = serde_json::to_string(value).unwrap_or_default();
     truncate_raw_tool_arguments_preview(&raw)

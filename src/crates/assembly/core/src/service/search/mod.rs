@@ -1,11 +1,20 @@
-pub(crate) mod flashgrep;
 #[cfg(feature = "ssh-remote")]
 mod remote;
 #[cfg(not(feature = "ssh-remote"))]
 mod remote_disabled;
 pub mod service;
-pub mod types;
 
+pub use bitfun_services_integrations::workspace_search::flashgrep;
+
+pub use bitfun_services_integrations::workspace_search::{
+    ContentSearchOutputMode, ContentSearchRequest, ContentSearchResult, GlobSearchRequest,
+    GlobSearchResult, IndexTaskHandle, WorkspaceIndexStatus, WorkspaceSearchBackend,
+    WorkspaceSearchContextLine, WorkspaceSearchDirtyFiles, WorkspaceSearchFileCount,
+    WorkspaceSearchHit, WorkspaceSearchLine, WorkspaceSearchMatch, WorkspaceSearchMatchLocation,
+    WorkspaceSearchOverlayStatus, WorkspaceSearchRepoPhase, WorkspaceSearchRepoStatus,
+    WorkspaceSearchTaskKind, WorkspaceSearchTaskPhase, WorkspaceSearchTaskState,
+    WorkspaceSearchTaskStatus,
+};
 #[cfg(feature = "ssh-remote")]
 pub use remote::{remote_workspace_search_service_for_path, RemoteWorkspaceSearchService};
 #[cfg(not(feature = "ssh-remote"))]
@@ -16,13 +25,4 @@ pub use service::{
     workspace_search_daemon_binary_name, workspace_search_daemon_binary_names,
     workspace_search_daemon_missing_hint, workspace_search_feature_enabled,
     workspace_search_runtime_available, WorkspaceSearchService,
-};
-pub use types::{
-    ContentSearchOutputMode, ContentSearchRequest, ContentSearchResult, GlobSearchRequest,
-    GlobSearchResult, IndexTaskHandle, WorkspaceIndexStatus, WorkspaceSearchBackend,
-    WorkspaceSearchContextLine, WorkspaceSearchDirtyFiles, WorkspaceSearchFileCount,
-    WorkspaceSearchHit, WorkspaceSearchLine, WorkspaceSearchMatch, WorkspaceSearchMatchLocation,
-    WorkspaceSearchOverlayStatus, WorkspaceSearchRepoPhase, WorkspaceSearchRepoStatus,
-    WorkspaceSearchTaskKind, WorkspaceSearchTaskPhase, WorkspaceSearchTaskState,
-    WorkspaceSearchTaskStatus,
 };

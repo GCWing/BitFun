@@ -122,6 +122,41 @@ export const forbiddenContentRules = [
     ],
   },
   {
+    path: 'src/crates/assembly/core/src/service/search/service.rs',
+    patterns: [
+      {
+        regex: /\bManagedClient\b/,
+        message:
+          'core workspace-search facade must not own flashgrep daemon clients; use bitfun-services-integrations::workspace_search',
+      },
+      {
+        regex: /\bRepoSession\b/,
+        message:
+          'core workspace-search facade must not own flashgrep repo sessions; use bitfun-services-integrations::workspace_search',
+      },
+      {
+        regex: /\bwith_scan_fallback\b/,
+        message:
+          'core workspace-search facade must not own scan fallback policy; use bitfun-services-integrations::workspace_search',
+      },
+      {
+        regex: /\bconvert_hits_to_file_search_results\b/,
+        message:
+          'core workspace-search facade must not own hit conversion; use bitfun-services-integrations::workspace_search',
+      },
+      {
+        regex: /\bsplit_preview\b/,
+        message:
+          'core workspace-search facade must not own preview mapping; use bitfun-services-integrations::workspace_search',
+      },
+      {
+        regex: /\bdunce::canonicalize\b/,
+        message:
+          'core workspace-search facade must not own local search path normalization; use bitfun-services-integrations::workspace_search',
+      },
+    ],
+  },
+  {
     path: 'src/crates/assembly/core/src/miniapp/runtime_detect.rs',
     patterns: [
       {
@@ -481,6 +516,16 @@ export const forbiddenContentRules = [
         regex: /\bconst USER_STEERING_INTERRUPTED_MESSAGE\b/,
         message:
           'core tool pipeline must not own steering-interrupted result presentation; use bitfun-agent-tools',
+      },
+      {
+        regex: /\bfn build_truncation_recovery_notice\b/,
+        message:
+          'core tool pipeline must not own truncation recovery notice policy; use bitfun-agent-tools',
+      },
+      {
+        regex: /\bfn is_write_like_tool_name\b/,
+        message:
+          'core tool pipeline must not own write-like truncation classification; use bitfun-agent-tools',
       },
     ],
   },

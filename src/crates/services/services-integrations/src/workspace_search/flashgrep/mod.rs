@@ -1,4 +1,4 @@
-#![cfg_attr(not(feature = "ssh-remote"), allow(unused_imports, dead_code))]
+#![cfg_attr(not(feature = "remote-ssh"), allow(unused_imports, dead_code))]
 
 mod client;
 pub mod error;
@@ -7,13 +7,13 @@ mod repo_session;
 mod rpc_client;
 mod types;
 
-pub(crate) const FLASHGREP_LOG_TARGET: &str = "flashgrep";
+pub const FLASHGREP_LOG_TARGET: &str = "flashgrep";
 
-pub(crate) fn log_flashgrep_stderr_line(line: &str) {
+pub fn log_flashgrep_stderr_line(line: &str) {
     log_flashgrep_stderr_line_with_context(None, line);
 }
 
-pub(crate) fn log_flashgrep_stderr_line_with_context(context: Option<&str>, line: &str) {
+pub fn log_flashgrep_stderr_line_with_context(context: Option<&str>, line: &str) {
     let trimmed = line.trim();
     if trimmed.is_empty() {
         return;
@@ -45,14 +45,14 @@ pub(crate) fn log_flashgrep_stderr_line_with_context(context: Option<&str>, line
     }
 }
 
-pub(crate) use client::{ManagedClient, RepoSession};
-pub(crate) use protocol::{
+pub use client::{ManagedClient, RepoSession};
+pub use protocol::{
     ClientCapabilities, ClientInfo, FileMatch, GlobParams, InitializeParams, MatchLocation,
     RepoRef, Request, Response, SearchHit, SearchLine, SearchParams, TaskRef,
 };
-pub(crate) use repo_session::FlashgrepRepoSession;
-pub(crate) use rpc_client::{drain_content_length_messages, ProtocolClient};
-pub(crate) use types::{
+pub use repo_session::FlashgrepRepoSession;
+pub use rpc_client::{drain_content_length_messages, ProtocolClient};
+pub use types::{
     ConsistencyMode, DirtyFileStats, FileCount, GlobOutcome, GlobRequest, OpenRepoParams,
     PathScope, QuerySpec, RefreshPolicyConfig, RepoConfig, RepoPhase, RepoStatus, SearchBackend,
     SearchModeConfig, SearchOutcome, SearchRequest, SearchResults, TaskKind, TaskPhase, TaskState,

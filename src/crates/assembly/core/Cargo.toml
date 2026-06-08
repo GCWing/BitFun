@@ -97,7 +97,7 @@ bitfun-tool-packs = { path = "../../execution/tool-provider-groups", default-fea
 bitfun-services-core = { path = "../../services/services-core" }
 
 # Integration service owner crate
-bitfun-services-integrations = { path = "../../services/services-integrations", default-features = false, features = ["remote-ssh"] }
+bitfun-services-integrations = { path = "../../services/services-integrations", default-features = false, features = ["remote-ssh", "workspace-search"] }
 
 # Product domain owner crate
 bitfun-product-domains = { path = "../../contracts/product-domains", default-features = false, optional = true }

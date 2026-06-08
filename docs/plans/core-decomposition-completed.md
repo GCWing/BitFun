@@ -28,6 +28,8 @@
 
 - `tool-contracts`（Cargo package `bitfun-agent-tools`）已承接 provider-neutral tool DTO、manifest/catalog 策略、execution admission gate、collapsed unlock gate、static provider materialization 和 plan-to-registry assembly。
 - `tool-execution`（Cargo package `tool-runtime`）已承接本地 Write / Edit / Delete / Glob、远程 Delete / Read / LS / Glob / Grep，以及 Bash shell 可复用策略：禁用命令、工作目录命令包装、非交互环境、AppleScript/IM guard、本地/远程结果渲染和 background result 文本。core BashTool 只保留 agent-facing adapter、终端 session、权限、checkpoint、cancellation、scheduler delivery 和 host context glue。
+- `services-integrations` 已承接本地 indexed workspace search 的 flashgrep daemon/session lifecycle、scan fallback、scope/path normalization、status/result conversion、preview mapping 和 daemon binary resolution；core `WorkspaceSearchService` 只保留旧路径 facade、产品 config hook、workspace bootstrap hook 和 `BitFunError` 映射。remote workspace search concrete owner 仍在 core remote SSH glue，迁移前会临时复用公开的 flashgrep 协议/session 类型。
+- `tool-contracts` 已承接 tool pipeline 的截断恢复提示和 write-like tool 分类；core tool pipeline 只委托该纯策略并保留执行状态、permission channel、checkpoint、scheduler 和 cancellation glue。
 - `tool-provider-groups`（Cargo package `bitfun-tool-packs`）已承接 tool provider group plan、按 id 选择和 unknown provider group 校验。
 - `product-capabilities` 已承接 capability id、required service capability、tool provider group selection 和 harness provider selection 等 assembly facts。
 - Product Assembly 已承接 `DeliveryProfile`、`CapabilitySet`、product-full provider plan、service availability report 和 profile-scoped harness registry 入口。
@@ -54,6 +56,8 @@
 - boundary check 覆盖 owner crate 禁止依赖、旧路径 facade-only、回流约束、Product Assembly facade 收口和物理 crate layout。
 - boundary check 覆盖 remote-connect command routing owner，要求 core 委托 `services-integrations`，并阻止 response assembly / command policy 回流 core。
 - boundary check 覆盖 Bash shell helper owner，要求 core 委托 `tool-runtime::shell`，并阻止输出渲染、background result 文本、命令包装和 guard 策略回流 core。
+- boundary check 覆盖本地 workspace search owner，要求 core search facade 委托 `services-integrations::workspace_search`，并阻止 flashgrep session、scan fallback、preview/result conversion 和 path normalization 回流 core。
+- boundary check 覆盖 tool truncation recovery presentation owner，要求 core tool pipeline 委托 `bitfun-agent-tools`。
 - DeepReview 路径分类按六层物理 crate 解析，避免把同层多个 crate 合并成一个风险 area。
 - focused baseline 已覆盖 tool manifest、GetToolSpec、execution admission、MiniApp storage / builtin asset、remote workspace fallback、MCP config/catalog、agent-runtime prompt cache、custom subagent、thread-goal tools、AskUserQuestion、DeepReview hook measurement、tool confirmation、product capability pack、session restore、local/remote tool IO helper、function-agent Git、scheduled-job state 等路径。
 
@@ -62,5 +66,5 @@
 - `bitfun-core` 仍是完整产品 runtime 组装点，不能声称已经退化为纯 compatibility facade。
 - 产品入口仍主要通过 `bitfun-core/product-full` 获取完整能力；Product Assembly 已可表达当前完整能力集合，但尚未真正按交付形态裁剪 default feature / dependency。
 - concrete session manager、scheduler lifecycle、event delivery、permission UI/channel wait、prompt assembly、session persistence IO、AI client factory / provider acquisition 仍在 core。
-- Bash tool orchestration 的可复用 shell helper 已迁出；terminal lifecycle / PTY、permission wait、checkpoint orchestration、indexed workspace search service owner、remote shell executor abstraction、remote terminal concrete impl、MiniApp worker / host / seed / marker IO、Deep Review / DeepResearch / MiniApp concrete workflow execution 仍未完成 owner 迁移。
+- Bash tool orchestration 的可复用 shell helper 和本地 indexed workspace search owner 已迁出；terminal lifecycle / PTY、permission wait、checkpoint orchestration、remote workspace search concrete owner、remote shell executor abstraction、remote terminal concrete impl、MiniApp worker / host / seed / marker IO、Deep Review / DeepResearch / MiniApp concrete workflow execution 仍未完成 owner 迁移。
 - no-default 与 product-full 的依赖边界已有数据基线，但 no-default 仍包含较大 concrete 依赖；不能声称各交付形态已达到最小依赖。

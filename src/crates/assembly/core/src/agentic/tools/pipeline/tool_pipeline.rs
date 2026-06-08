@@ -20,12 +20,12 @@ use bitfun_agent_runtime::tool_confirmation::{
     ToolConfirmationOutcome, ToolConfirmationPlan, ToolConfirmationRequestFacts,
 };
 use bitfun_agent_tools::{
-    build_invalid_tool_call_error_message, build_tool_execution_error_presentation,
-    build_user_steering_interrupted_presentation, render_tool_result_for_assistant,
-    truncate_raw_tool_arguments_preview, truncate_tool_arguments_preview,
-    validate_tool_execution_admission, ToolCallLoopDecision, ToolCallLoopHistory,
-    ToolExecutionAdmissionRejection, ToolExecutionAdmissionRequest, GET_TOOL_SPEC_TOOL_NAME,
-    USER_STEERING_INTERRUPTED_MESSAGE,
+    build_invalid_tool_call_error_message, build_tool_call_truncation_recovery_notice,
+    build_tool_execution_error_presentation, build_user_steering_interrupted_presentation,
+    render_tool_result_for_assistant, truncate_raw_tool_arguments_preview,
+    truncate_tool_arguments_preview, validate_tool_execution_admission, ToolCallLoopDecision,
+    ToolCallLoopHistory, ToolExecutionAdmissionRejection, ToolExecutionAdmissionRequest,
+    GET_TOOL_SPEC_TOOL_NAME, USER_STEERING_INTERRUPTED_MESSAGE,
 };
 use dashmap::DashMap;
 use futures::future::join_all;
@@ -40,22 +40,6 @@ use tokio_util::sync::CancellationToken;
 struct ToolBatch {
     task_ids: Vec<String>,
     is_concurrent: bool,
-}
-
-fn is_write_like_tool_name(tool_name: &str) -> bool {
-    matches!(tool_name, "Write" | "file_write" | "write_notebook")
-}
-
-fn build_truncation_recovery_notice(tool_name: &str) -> String {
-    if is_write_like_tool_name(tool_name) {
-        return format!(
-            "[Your previous {tool_name} call was truncated mid-stream by max_tokens and was auto-repaired before execution; the file may have been written with partial content. Use the latest Read result for that file (or call Read once if no current Read result is available) to inspect what is on disk. To finish it, issue ONE Edit call where `old_string` is a final unique substring from the current file and `new_string` is that same substring plus the continuation. If you do not have a concrete plan for the continuation, stop tool-calling and tell the user the output was truncated (suggest raising max_tokens). Do NOT rewrite the whole file with Write.]\n\nOriginal tool result follows.\n\n"
-        );
-    }
-
-    format!(
-        "[Your previous {tool_name} call was truncated mid-stream by max_tokens and was auto-repaired before execution. The tool ran with the repaired, potentially incomplete arguments. Review the tool result and continue normally; if important information is missing, issue a fresh complete {tool_name} call rather than trying to continue a file write.]\n\nOriginal tool result follows.\n\n"
-    )
 }
 
 /// Convert framework::ToolResult to core::ToolResult
@@ -908,7 +892,7 @@ impl ToolPipeline {
                 // to be continued or regenerated.
                 if recovered_from_truncation {
                     let original = tool_result.result_for_assistant.unwrap_or_default();
-                    let notice = build_truncation_recovery_notice(&tool_name);
+                    let notice = build_tool_call_truncation_recovery_notice(&tool_name);
                     tool_result.result_for_assistant = Some(if original.is_empty() {
                         notice.trim_end().to_string()
                     } else {
@@ -1580,7 +1564,7 @@ mod tests {
 
     #[test]
     fn truncation_notice_for_interactive_tools_does_not_claim_file_write() {
-        let notice = build_truncation_recovery_notice("AskUserQuestion");
+        let notice = build_tool_call_truncation_recovery_notice("AskUserQuestion");
 
         assert!(notice.contains("AskUserQuestion call was truncated"));
         assert!(notice.contains("fresh complete AskUserQuestion call"));
@@ -1590,7 +1574,7 @@ mod tests {
 
     #[test]
     fn truncation_notice_for_write_tools_keeps_write_continuation_guidance() {
-        let notice = build_truncation_recovery_notice("Write");
+        let notice = build_tool_call_truncation_recovery_notice("Write");
 
         assert!(notice.contains("file may have been written with partial content"));
         assert!(notice.contains("latest Read result"));

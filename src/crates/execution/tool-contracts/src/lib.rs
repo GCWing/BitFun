@@ -68,11 +68,12 @@ pub use framework::{
 };
 pub use input_validator::InputValidator;
 pub use tool_execution_presentation::{
-    build_invalid_tool_call_error_message, build_tool_execution_error_presentation,
-    build_user_steering_interrupted_presentation, render_tool_result_for_assistant,
-    truncate_raw_tool_arguments_preview, truncate_raw_tool_arguments_preview_to,
-    truncate_tool_arguments_preview, ToolExecutionErrorPresentation,
-    TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES, USER_STEERING_INTERRUPTED_MESSAGE,
+    build_invalid_tool_call_error_message, build_tool_call_truncation_recovery_notice,
+    build_tool_execution_error_presentation, build_user_steering_interrupted_presentation,
+    is_write_like_tool_name, render_tool_result_for_assistant, truncate_raw_tool_arguments_preview,
+    truncate_raw_tool_arguments_preview_to, truncate_tool_arguments_preview,
+    ToolExecutionErrorPresentation, TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES,
+    USER_STEERING_INTERRUPTED_MESSAGE,
 };
 pub use tool_result_storage::{
     build_persisted_tool_output_message, count_tool_result_lines, generate_tool_result_preview,
