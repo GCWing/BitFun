@@ -59,6 +59,7 @@ const LATEST_END_ANCHOR_STABILIZATION_MIN_ATTEMPTS = 12;
 const LATEST_END_ANCHOR_STABLE_VISIBLE_FRAMES = 8;
 const LATEST_END_ANCHOR_VISIBILITY_MARGIN_PX = 4;
 const LATEST_END_ANCHOR_STABLE_EPSILON_PX = 1;
+const LATEST_END_ANCHOR_STATIC_FAST_PATH_TOLERANCE_PX = 96;
 const VIRTUOSO_FIRST_ITEM_INDEX_BASE = 1_000_000;
 const PARTIAL_HISTORY_INITIAL_TAIL_TURN_BUDGET = 16;
 const PARTIAL_HISTORY_FULL_PROJECTION_TOP_THRESHOLD_PX = 1200;
@@ -2348,24 +2349,35 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
       scrollerRect.bottom - inputOverlayInsetPx - LATEST_END_ANCHOR_VISIBILITY_MARGIN_PX,
     );
 
-    const isTargetVisible = () => {
-      const currentTargetElement = getRenderedVirtualItemElement(targetIndex);
+    const readTargetEndState = (currentTargetElement: HTMLElement | null) => {
       if (!currentTargetElement) {
-        return false;
+        return null;
       }
       const rect = currentTargetElement.getBoundingClientRect();
-      return rect.bottom > visibleTop && rect.top < visibleBottom;
+      const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+      const endDeltaPx = rect.bottom - visibleBottom;
+      const endAnchored =
+        Math.abs(endDeltaPx) <= LATEST_END_ANCHOR_STABLE_EPSILON_PX ||
+        (endDeltaPx > 0 && Math.abs(maxScrollTop - scroller.scrollTop) <= LATEST_END_ANCHOR_STABLE_EPSILON_PX) ||
+        (endDeltaPx < 0 && scroller.scrollTop <= LATEST_END_ANCHOR_STABLE_EPSILON_PX);
+      return {
+        endAnchored,
+        endDeltaPx,
+        maxScrollTop,
+        rect,
+        visible: rect.bottom > visibleTop && rect.top < visibleBottom,
+      };
     };
 
-    const settleIfStableVisible = () => {
+    const settleIfStableEndAnchored = () => {
       const currentTargetElement = getRenderedVirtualItemElement(targetIndex);
-      if (!currentTargetElement) {
+      const state = readTargetEndState(currentTargetElement);
+      if (!state?.visible || !state.endAnchored) {
         request.visibleFrames = 0;
         request.stableVisibleFrames = 0;
         return false;
       }
 
-      const targetRect = currentTargetElement.getBoundingClientRect();
       const scrollHeight = scroller.scrollHeight;
       const scrollTop = scroller.scrollTop;
       const geometryStable = (
@@ -2375,14 +2387,14 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
         request.lastTargetBottom !== null &&
         Math.abs(scrollHeight - request.lastScrollHeight) <= LATEST_END_ANCHOR_STABLE_EPSILON_PX &&
         Math.abs(scrollTop - request.lastScrollTop) <= LATEST_END_ANCHOR_STABLE_EPSILON_PX &&
-        Math.abs(targetRect.top - request.lastTargetTop) <= LATEST_END_ANCHOR_STABLE_EPSILON_PX &&
-        Math.abs(targetRect.bottom - request.lastTargetBottom) <= LATEST_END_ANCHOR_STABLE_EPSILON_PX
+        Math.abs(state.rect.top - request.lastTargetTop) <= LATEST_END_ANCHOR_STABLE_EPSILON_PX &&
+        Math.abs(state.rect.bottom - request.lastTargetBottom) <= LATEST_END_ANCHOR_STABLE_EPSILON_PX
       );
 
       request.lastScrollHeight = scrollHeight;
       request.lastScrollTop = scrollTop;
-      request.lastTargetTop = targetRect.top;
-      request.lastTargetBottom = targetRect.bottom;
+      request.lastTargetTop = state.rect.top;
+      request.lastTargetBottom = state.rect.bottom;
       request.visibleFrames += 1;
       request.stableVisibleFrames = geometryStable ? request.stableVisibleFrames + 1 : 1;
 
@@ -2406,8 +2418,8 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
       return true;
     };
 
-    if (isTargetVisible()) {
-      return settleIfStableVisible();
+    if (settleIfStableEndAnchored()) {
+      return true;
     }
 
     request.visibleFrames = 0;
@@ -2418,15 +2430,14 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     request.lastTargetBottom = null;
 
     if (targetElement) {
-      const targetRect = targetElement.getBoundingClientRect();
-      const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+      const state = readTargetEndState(targetElement);
       let nextScrollTop = scroller.scrollTop;
-      if (targetRect.bottom > visibleBottom) {
-        nextScrollTop += targetRect.bottom - visibleBottom;
-      } else if (targetRect.top < visibleTop) {
-        nextScrollTop -= visibleTop - targetRect.top;
+      if (state) {
+        nextScrollTop = Math.max(
+          0,
+          Math.min(state.maxScrollTop, scroller.scrollTop + state.endDeltaPx),
+        );
       }
-      nextScrollTop = Math.max(0, Math.min(maxScrollTop, nextScrollTop));
 
       if (Math.abs(nextScrollTop - scroller.scrollTop) > COMPENSATION_EPSILON_PX) {
         scroller.scrollTop = nextScrollTop;
@@ -2461,8 +2472,8 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
       }
     }
 
-    if (isTargetVisible()) {
-      return settleIfStableVisible();
+    if (settleIfStableEndAnchored()) {
+      return true;
     }
 
     if (request.attempts >= LATEST_END_ANCHOR_STABILIZATION_MAX_ATTEMPTS) {
@@ -3188,39 +3199,77 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
         });
       }
 
-      const scrollerRect = scroller.getBoundingClientRect();
-      const targetRect = targetElement.getBoundingClientRect();
-      const inputOverlayInsetPx = Math.max(
-        0,
-        inputStackFooterPxRef.current - FLOWCHAT_MESSAGE_TAIL_CLEARANCE_PX,
-      );
-      const visibleTop = scrollerRect.top + LATEST_END_ANCHOR_VISIBILITY_MARGIN_PX;
-      const visibleBottom = Math.max(
-        visibleTop + 1,
-        scrollerRect.bottom - inputOverlayInsetPx - LATEST_END_ANCHOR_VISIBILITY_MARGIN_PX,
-      );
-      const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-      let nextScrollTop = scroller.scrollTop;
-      if (targetRect.bottom > visibleBottom) {
-        nextScrollTop += targetRect.bottom - visibleBottom;
-      } else if (targetRect.top < visibleTop) {
-        nextScrollTop -= visibleTop - targetRect.top;
+      const readStaticTargetEndState = () => {
+        const rect = targetElement.getBoundingClientRect();
+        const scrollerRect = scroller.getBoundingClientRect();
+        const inputOverlayInsetPx = Math.max(
+          0,
+          inputStackFooterPxRef.current - FLOWCHAT_MESSAGE_TAIL_CLEARANCE_PX,
+        );
+        const visibleTop = scrollerRect.top + LATEST_END_ANCHOR_VISIBILITY_MARGIN_PX;
+        const visibleBottom = Math.max(
+          visibleTop + 1,
+          scrollerRect.bottom - inputOverlayInsetPx - LATEST_END_ANCHOR_VISIBILITY_MARGIN_PX,
+        );
+        return {
+          endDeltaPx: rect.bottom - visibleBottom,
+          maxScrollTop: Math.max(0, scroller.scrollHeight - scroller.clientHeight),
+          rect,
+          visible: rect.bottom > visibleTop && rect.top < visibleBottom,
+          visibleHeight: visibleBottom - visibleTop,
+        };
+      };
+      const canUseStaticFastPath = (state: ReturnType<typeof readStaticTargetEndState>) => {
+        const distanceFromBottom = Math.max(0, state.maxScrollTop - scroller.scrollTop);
+        return (
+          state.visible &&
+          state.rect.height <= state.visibleHeight + LATEST_END_ANCHOR_STATIC_FAST_PATH_TOLERANCE_PX &&
+          Math.abs(state.endDeltaPx) <= LATEST_END_ANCHOR_STATIC_FAST_PATH_TOLERANCE_PX &&
+          distanceFromBottom <= LATEST_END_ANCHOR_STATIC_FAST_PATH_TOLERANCE_PX
+        );
+      };
+      let staticState = readStaticTargetEndState();
+      if (!canUseStaticFastPath(staticState)) {
+        const nextScrollTop = Math.max(
+          0,
+          Math.min(staticState.maxScrollTop, scroller.scrollTop + staticState.endDeltaPx),
+        );
+        if (Math.abs(nextScrollTop - scroller.scrollTop) > COMPENSATION_EPSILON_PX) {
+          scroller.scrollTop = nextScrollTop;
+          previousScrollTopRef.current = nextScrollTop;
+          previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller);
+          staticState = readStaticTargetEndState();
+        }
       }
-      nextScrollTop = Math.max(0, Math.min(maxScrollTop, nextScrollTop));
-
-      if (Math.abs(nextScrollTop - scroller.scrollTop) > COMPENSATION_EPSILON_PX) {
-        scroller.scrollTop = nextScrollTop;
-        previousScrollTopRef.current = nextScrollTop;
-        previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller);
+      if (canUseStaticFastPath(staticState)) {
+        startupTrace.markPhase('flowchat_latest_end_anchor_request', {
+          targetIndex,
+          turnId,
+          virtualItemCount: virtualItems.length,
+          mode: 'static-initial-history-fast-path',
+        });
+        scheduleVisibleTurnMeasure(1);
+        return true;
       }
 
+      latestEndAnchorRequestRef.current = {
+        turnId,
+        targetIndex,
+        attempts: 0,
+        visibleFrames: 0,
+        stableVisibleFrames: 0,
+        lastScrollHeight: null,
+        lastScrollTop: null,
+        lastTargetTop: null,
+        lastTargetBottom: null,
+      };
       startupTrace.markPhase('flowchat_latest_end_anchor_request', {
         targetIndex,
         turnId,
         virtualItemCount: virtualItems.length,
         mode: 'static-initial-history',
       });
-      scheduleVisibleTurnMeasure(1);
+      resolveLatestEndAnchorStabilization('raf');
       return true;
     }
 

@@ -25,6 +25,7 @@ const LONG_SESSION_VIEWPORT_MAX_BOTTOM_BLANK_PX = 64;
 const LONG_SESSION_VIEWPORT_MAX_BLANK_GAP_PX = 64;
 const LONG_SESSION_LATEST_VISIBLE_MAX_BOTTOM_BLANK_PX = 96;
 const LONG_SESSION_LATEST_VISIBLE_MAX_BLANK_GAP_PX = 96;
+const LONG_SESSION_LATEST_TAIL_BOTTOM_TOLERANCE_PX = 96;
 const LONG_SESSION_INPUT_MIN_TOP_RATIO = 0.65;
 const LONG_SESSION_INPUT_BOTTOM_TOLERANCE_PX = 96;
 const LONG_SESSION_MAX_LATEST_TEXT_DELAY_AFTER_VISIBLE_MS = 120;
@@ -2588,6 +2589,37 @@ function isLongSessionLatestVisibleViewportPositioned(viewport: LongSessionViewp
   );
 }
 
+function isLongSessionLatestTailAnchored(viewport: LongSessionViewportState): boolean {
+  if (
+    !viewport.latestTurnId ||
+    viewport.scrollTop === null ||
+    viewport.scrollHeight === null ||
+    viewport.clientHeight === null ||
+    viewport.scrollerTop === null ||
+    viewport.effectiveScrollerBottom === null
+  ) {
+    return false;
+  }
+
+  const distanceFromBottom = viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop;
+  if (distanceFromBottom > LONG_SESSION_LATEST_TAIL_BOTTOM_TOLERANCE_PX) {
+    return false;
+  }
+
+  const latestVisibleItems = viewport.visibleItemSummaries
+    .filter(item => item.turnId === viewport.latestTurnId);
+  const latestTailItem = latestVisibleItems[latestVisibleItems.length - 1];
+  if (!latestTailItem) {
+    return false;
+  }
+
+  const effectiveBottomInScroller = viewport.effectiveScrollerBottom - viewport.scrollerTop;
+  return (
+    latestTailItem.bottom <= effectiveBottomInScroller + LONG_SESSION_LATEST_TAIL_BOTTOM_TOLERANCE_PX &&
+    latestTailItem.bottom >= effectiveBottomInScroller - LONG_SESSION_LATEST_TAIL_BOTTOM_TOLERANCE_PX
+  );
+}
+
 async function maybeSavePerfScreenshot(name: string): Promise<string | null> {
   if (process.env.BITFUN_E2E_PERF_SCREENSHOTS !== '1') {
     return null;
@@ -3848,9 +3880,11 @@ function expectLongSessionMeasurementUsable(
   expect(measurement.latestVisibleViewport.latestModelRoundVisible).toBe(true);
   expect(measurement.latestVisibleViewport.latestTurnId).toBe(measurement.expectedLatestTurnId);
   expect(isLongSessionLatestVisibleViewportPositioned(measurement.latestVisibleViewport)).toBe(true);
+  expect(isLongSessionLatestTailAnchored(measurement.latestVisibleViewport)).toBe(true);
   expect(measurement.latestAnswerTextVisibleViewport.latestModelRoundVisible).toBe(true);
   expect(measurement.latestAnswerTextVisibleViewport.latestModelRoundTextLength).toBeGreaterThan(0);
   expect(isLongSessionViewportUsable(measurement.latestAnswerTextVisibleViewport)).toBe(true);
+  expect(isLongSessionLatestTailAnchored(measurement.latestAnswerTextVisibleViewport)).toBe(true);
   if (measurement.viewportTimelineSummary.latestTextDelayAfterContentVisuallyVisibleMs !== null) {
     expect(measurement.viewportTimelineSummary.latestTextDelayAfterContentVisuallyVisibleMs)
       .toBeLessThanOrEqual(LONG_SESSION_MAX_LATEST_TEXT_DELAY_AFTER_VISIBLE_MS);
@@ -3904,6 +3938,7 @@ function expectLongSessionMeasurementUsable(
   expect(isLongSessionInputAnchoredNearBottom(measurement.latestVisibleViewport)).toBe(true);
   expect(isLongSessionViewportUsable(measurement.viewport)).toBe(true);
   expect(isLongSessionInputAnchoredNearBottom(measurement.viewport)).toBe(true);
+  expect(isLongSessionLatestTailAnchored(measurement.viewport)).toBe(true);
   if (
     maxLatestFrameMs !== undefined &&
     measurement.sessionOpen.latestFrameSinceHydrateMs !== undefined
