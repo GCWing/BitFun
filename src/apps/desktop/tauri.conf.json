@@ -20,13 +20,45 @@
     "resources": {
       "../../mobile-web/dist": "mobile-web/dist",
       "resources/worker_host.js": "resources/worker_host.js"
+    },
+    "linux": {
+      "deb": {
+        "depends": [
+          "libwebkit2gtk-4.1-0",
+          "libgtk-3-0"
+        ],
+        "files": {
+          "/usr/share/icons/hicolor/16x16/apps/bitfun-desktop.png": "icons/hicolor/16x16/apps/bitfun-desktop.png",
+          "/usr/share/icons/hicolor/32x32/apps/bitfun-desktop.png": "icons/hicolor/32x32/apps/bitfun-desktop.png",
+          "/usr/share/icons/hicolor/48x48/apps/bitfun-desktop.png": "icons/hicolor/48x48/apps/bitfun-desktop.png",
+          "/usr/share/icons/hicolor/64x64/apps/bitfun-desktop.png": "icons/hicolor/64x64/apps/bitfun-desktop.png",
+          "/usr/share/icons/hicolor/96x96/apps/bitfun-desktop.png": "icons/hicolor/96x96/apps/bitfun-desktop.png",
+          "/usr/share/icons/hicolor/128x128/apps/bitfun-desktop.png": "icons/hicolor/128x128/apps/bitfun-desktop.png",
+          "/usr/share/icons/hicolor/256x256/apps/bitfun-desktop.png": "icons/hicolor/256x256/apps/bitfun-desktop.png",
+          "/usr/share/icons/hicolor/512x512/apps/bitfun-desktop.png": "icons/hicolor/512x512/apps/bitfun-desktop.png"
+        },
+        "postInstallScript": "scripts/post-install-icons.sh"
+      },
+      "appimage": {
+        "bundleMediaFramework": false
+      }
     }
   },
   "app": {
-    "windows": [],
+    "windows": [{
+      "title": "BitFun",
+      "width": 800,
+      "height": 600
+    }],
     "security": {
       "csp": null
     },
     "withGlobalTauri": true
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [],
+      "pubkey": ""
+    }
   }
 }
