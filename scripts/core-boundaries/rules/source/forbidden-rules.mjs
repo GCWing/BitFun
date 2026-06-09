@@ -82,6 +82,76 @@ export const forbiddenContentRules = [
     ],
   },
   {
+    path: 'src/crates/assembly/core/src/agentic/deep_review/task_adapter.rs',
+    patterns: [
+      {
+        regex: /\bfn string_for_any_key\b/,
+        message:
+          'core DeepReview task adapter must not re-own manifest key normalization; use bitfun-agent-runtime::deep_review::task_execution',
+      },
+      {
+        regex: /\bfn deep_review_packet_id_for_cache\b/,
+        message:
+          'core DeepReview task adapter must not re-own packet id inference; use bitfun-agent-runtime::deep_review::task_execution',
+      },
+      {
+        regex: /\bfn ensure_deep_review_retry_coverage\b/,
+        message:
+          'core DeepReview task adapter must not re-own retry coverage validation; use bitfun-agent-runtime::deep_review::task_execution',
+      },
+      {
+        regex: /\bfn provider_capacity_queue_wait_seconds_for_attempt\b/,
+        message:
+          'core DeepReview task adapter must not re-own provider capacity backoff; use bitfun-agent-runtime::deep_review::task_execution',
+      },
+      {
+        regex: /\bfn prompt_with_deep_review_retry_scope\b/,
+        message:
+          'core DeepReview task adapter must not re-own retry prompt shaping; use bitfun-agent-runtime::deep_review::task_execution',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/agents/prompt_builder/prompt_builder_impl.rs',
+    patterns: [
+      {
+        regex: /\bComputer use \/ `key_chord`\b/,
+        message:
+          'core prompt builder must not re-own ComputerUse environment guidance; use bitfun-agent-runtime::prompt',
+      },
+      {
+        regex: /\bfn computer_use_key_chord_guidance\b/,
+        message:
+          'core prompt builder must not re-own prompt environment guidance helpers; use bitfun-agent-runtime::prompt',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/agents/citation_renumber.rs',
+    patterns: [
+      {
+        regex: /\bfn parse_registry_status\b/,
+        message:
+          'core DeepResearch citation hook must not re-own registry parsing; use bitfun-agent-runtime::deep_research',
+      },
+      {
+        regex: /\bfn renumber_body\b/,
+        message:
+          'core DeepResearch citation hook must not re-own body renumbering; use bitfun-agent-runtime::deep_research',
+      },
+      {
+        regex: /\bfn renumber_index_section\b/,
+        message:
+          'core DeepResearch citation hook must not re-own Citation Index rewriting; use bitfun-agent-runtime::deep_research',
+      },
+      {
+        regex: /\bstatic CIT_ID_RE\b/,
+        message:
+          'core DeepResearch citation hook must not re-own citation regex parsing; use bitfun-agent-runtime::deep_research',
+      },
+    ],
+  },
+  {
     path: 'src/crates/assembly/core/src/function_agents/runtime_services.rs',
     patterns: [
       {

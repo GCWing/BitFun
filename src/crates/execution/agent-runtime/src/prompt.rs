@@ -12,6 +12,53 @@ After reading the returned spec, call the real tool directly by its own name.
 If a tool spec is already available in the current conversation, do not call `GetToolSpec` for it again."#;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PromptEnvironmentFacts<'a> {
+    pub host_os: &'a str,
+    pub host_family: &'a str,
+    pub host_arch: &'a str,
+    pub remote_execution_active: bool,
+}
+
+pub fn render_prompt_environment_info(facts: PromptEnvironmentFacts<'_>) -> String {
+    let computer_use_keys = computer_use_key_chord_guidance(facts.host_os);
+
+    if facts.remote_execution_active {
+        format!(
+            r#"# Environment Information
+<environment_details>
+- Local BitFun client OS: {} ({}) — applies to Computer use / UI automation on this machine only.
+- Local client architecture: {}
+- {}
+</environment_details>
+
+"#,
+            facts.host_os, facts.host_family, facts.host_arch, computer_use_keys
+        )
+    } else {
+        format!(
+            r#"# Environment Information
+<environment_details>
+- Operating System: {} ({})
+- Architecture: {}
+- {}
+</environment_details>
+
+"#,
+            facts.host_os, facts.host_family, facts.host_arch, computer_use_keys
+        )
+    }
+}
+
+fn computer_use_key_chord_guidance(host_os: &str) -> &'static str {
+    match host_os {
+        "macos" => "Computer use / `key_chord`: the **local BitFun desktop** is **macOS** — use `command`, `option`, `control`, `shift` (not Win/Linux modifier names). **ACTION PRIORITY:** 1) Terminal/CLI/system commands (use ExecCommand for `osascript`, AppleScript, shell scripts) 2) Keyboard shortcuts: command+a/c/x/v (clipboard), command+space (Spotlight), command+tab (switch app) 3) UI control (AX/OCR/mouse) only when above fail.",
+        "windows" => "Computer use / `key_chord`: the **local BitFun desktop** is **Windows** — use `meta`/`super` for Windows key, `alt`, `control`, `shift`. **ACTION PRIORITY:** 1) Terminal/CLI/system commands (use ExecCommand for PowerShell, cmd, scripts) 2) Keyboard shortcuts: control+a/c/x/v (clipboard), meta (Start menu), Alt+Tab (switch) 3) UI control only when above fail.",
+        "linux" => "Computer use / `key_chord`: the **local BitFun desktop** is **Linux** — typically `control`, `alt`, `shift`, and sometimes `meta`/`super`. **ACTION PRIORITY:** 1) Terminal/CLI/system commands (use ExecCommand for shell scripts and system commands) 2) Keyboard shortcuts: control+a/c/x/v (clipboard) 3) UI control (AX/OCR/mouse) only when above fail.",
+        _ => "Computer use / `key_chord`: match modifier names to the **local BitFun desktop** OS below. **ACTION PRIORITY:** 1) Terminal/CLI/system commands first 2) Keyboard shortcuts second 3) UI control (mouse/OCR) last resort.",
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UserContextSection {
     WorkspaceContext,
     WorkspaceInstructions,

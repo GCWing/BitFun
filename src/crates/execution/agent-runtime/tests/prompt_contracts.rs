@@ -1,5 +1,6 @@
 use bitfun_agent_runtime::prompt::{
-    PrependedPromptReminders, ToolListingSections, UserContextPolicy, UserContextSection,
+    render_prompt_environment_info, PrependedPromptReminders, PromptEnvironmentFacts,
+    ToolListingSections, UserContextPolicy, UserContextSection,
 };
 
 #[test]
@@ -69,4 +70,27 @@ fn prepended_prompt_reminders_keep_runtime_injection_order() {
     assert!(PrependedPromptReminders::default()
         .ordered_reminders()
         .is_empty());
+}
+
+#[test]
+fn prompt_environment_info_preserves_local_and_remote_guidance() {
+    let local = render_prompt_environment_info(PromptEnvironmentFacts {
+        host_os: "windows",
+        host_family: "windows",
+        host_arch: "x86_64",
+        remote_execution_active: false,
+    });
+    assert!(local.contains("- Operating System: windows (windows)"));
+    assert!(local.contains("Computer use / `key_chord`"));
+    assert!(local.contains("PowerShell"));
+
+    let remote = render_prompt_environment_info(PromptEnvironmentFacts {
+        host_os: "linux",
+        host_family: "unix",
+        host_arch: "aarch64",
+        remote_execution_active: true,
+    });
+    assert!(remote.contains("- Local BitFun client OS: linux (unix)"));
+    assert!(remote.contains("applies to Computer use / UI automation"));
+    assert!(remote.contains("Local client architecture: aarch64"));
 }

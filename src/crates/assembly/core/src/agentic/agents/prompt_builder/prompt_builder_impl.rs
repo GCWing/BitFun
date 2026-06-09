@@ -17,7 +17,8 @@ use crate::service::workspace::get_global_workspace_service;
 use crate::service::workspace::RelatedPath;
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_agent_runtime::prompt::{
-    PrependedPromptReminders, ToolListingSections, UserContextPolicy, UserContextSection,
+    render_prompt_environment_info, PrependedPromptReminders, PromptEnvironmentFacts,
+    ToolListingSections, UserContextPolicy, UserContextSection,
 };
 use log::{debug, warn};
 use std::path::Path;
@@ -212,42 +213,12 @@ impl PromptBuilder {
 
     /// Provide complete environment information
     pub fn get_env_info(&self) -> String {
-        let host_os = std::env::consts::OS;
-        let host_family = std::env::consts::FAMILY;
-        let host_arch = std::env::consts::ARCH;
-
-        let computer_use_keys = match host_os {
-            "macos" => "Computer use / `key_chord`: the **local BitFun desktop** is **macOS** — use `command`, `option`, `control`, `shift` (not Win/Linux modifier names). **ACTION PRIORITY:** 1) Terminal/CLI/system commands (use ExecCommand for `osascript`, AppleScript, shell scripts) 2) Keyboard shortcuts: command+a/c/x/v (clipboard), command+space (Spotlight), command+tab (switch app) 3) UI control (AX/OCR/mouse) only when above fail.",
-            "windows" => "Computer use / `key_chord`: the **local BitFun desktop** is **Windows** — use `meta`/`super` for Windows key, `alt`, `control`, `shift`. **ACTION PRIORITY:** 1) Terminal/CLI/system commands (use ExecCommand for PowerShell, cmd, scripts) 2) Keyboard shortcuts: control+a/c/x/v (clipboard), meta (Start menu), Alt+Tab (switch) 3) UI control only when above fail.",
-            "linux" => "Computer use / `key_chord`: the **local BitFun desktop** is **Linux** — typically `control`, `alt`, `shift`, and sometimes `meta`/`super`. **ACTION PRIORITY:** 1) Terminal/CLI/system commands (use ExecCommand for shell scripts and system commands) 2) Keyboard shortcuts: control+a/c/x/v (clipboard) 3) UI control (AX/OCR/mouse) only when above fail.",
-            _ => "Computer use / `key_chord`: match modifier names to the **local BitFun desktop** OS below. **ACTION PRIORITY:** 1) Terminal/CLI/system commands first 2) Keyboard shortcuts second 3) UI control (mouse/OCR) last resort.",
-        };
-
-        if self.context.remote_execution.is_some() {
-            format!(
-                r#"# Environment Information
-<environment_details>
-- Local BitFun client OS: {} ({}) — applies to Computer use / UI automation on this machine only.
-- Local client architecture: {}
-- {}
-</environment_details>
-
-"#,
-                host_os, host_family, host_arch, computer_use_keys
-            )
-        } else {
-            format!(
-                r#"# Environment Information
-<environment_details>
-- Operating System: {} ({})
-- Architecture: {}
-- {}
-</environment_details>
-
-"#,
-                host_os, host_family, host_arch, computer_use_keys
-            )
-        }
+        render_prompt_environment_info(PromptEnvironmentFacts {
+            host_os: std::env::consts::OS,
+            host_family: std::env::consts::FAMILY,
+            host_arch: std::env::consts::ARCH,
+            remote_execution_active: self.context.remote_execution.is_some(),
+        })
     }
 
     /// Get workspace context that is intentionally injected outside the system prompt cache.

@@ -15,6 +15,7 @@ pub mod queue;
 pub mod report;
 mod runtime_state;
 pub mod shared_context;
+pub mod task_execution;
 pub mod team_definition;
 pub mod tool_context;
 
@@ -43,6 +44,7 @@ pub use runtime_state::*;
 pub use shared_context::{
     DeepReviewSharedContextDuplicate, DeepReviewSharedContextMeasurementSnapshot,
 };
+pub use task_execution::{DeepReviewLaunchBatchInfo, DeepReviewQueueWaitSkipReason};
 pub use team_definition::{
     default_review_team_definition, ReviewStrategyManifestProfile, ReviewTeamDefinition,
     ReviewTeamExecutionPolicyDefinition, ReviewTeamRoleDefinition,
