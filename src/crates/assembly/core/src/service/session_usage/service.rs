@@ -4,7 +4,7 @@ use crate::service::session::{
 };
 use crate::service::session_usage::classifier::classify_tool_usage;
 use crate::service::session_usage::redaction::{
-    display_workspace_relative_path, redact_usage_label,
+    display_workspace_relative_path, redact_usage_input_summary, redact_usage_label,
 };
 use crate::service::session_usage::types::*;
 use crate::service::snapshot::get_snapshot_manager_for_workspace;
@@ -106,17 +106,20 @@ pub fn build_session_usage_report_from_sources(
     report.workspace = build_workspace(&request);
     report.scope = build_scope(turns, request.include_hidden_subagents);
     report.coverage = build_coverage(&request, turns, token_records, snapshot_facts);
-    report.time = build_time_breakdown(turns);
+    report.time = build_time_breakdown(turns, generated_at);
     report.tokens = build_token_breakdown(token_records);
     report.models = build_model_breakdown(turns, token_records);
     report.tools = build_tool_breakdown(turns);
     report.files = build_file_breakdown(request.workspace_path.as_deref(), turns, snapshot_facts);
     report.compression = build_compression_breakdown(turns);
     report.errors = build_error_breakdown(turns);
-    report.slowest = build_slowest_spans(turns);
+    report.slowest = build_slowest_spans(turns, token_records);
     report.privacy = UsagePrivacy {
         prompt_content_included: false,
-        tool_inputs_included: false,
+        tool_inputs_included: report
+            .slowest
+            .iter()
+            .any(|span| span.input_summary.is_some()),
         command_outputs_included: false,
         file_contents_included: false,
         redacted_fields: collect_redacted_fields(&report),
@@ -199,7 +202,7 @@ fn build_coverage(
     snapshot_facts: &UsageSnapshotFacts,
 ) -> UsageCoverage {
     let mut available = vec![UsageCoverageKey::WorkspaceIdentity];
-    if !token_records.is_empty() {
+    if request.include_hidden_subagents {
         available.push(UsageCoverageKey::SubagentScope);
     }
     if turns
@@ -233,6 +236,7 @@ fn build_coverage(
         UsageCoverageKey::CachedTokens,
         UsageCoverageKey::TokenDetailBreakdown,
         UsageCoverageKey::FileLineStats,
+        UsageCoverageKey::SubagentScope,
     ];
     if !available.contains(&UsageCoverageKey::ModelRoundTiming) {
         missing.push(UsageCoverageKey::ModelRoundTiming);
@@ -264,6 +268,9 @@ fn build_coverage(
                 .to_string(),
         );
     }
+    if missing.contains(&UsageCoverageKey::SubagentScope) {
+        notes.push("Subagent rows are excluded from this report scope.".to_string());
+    }
     if snapshot_facts.source_available {
         notes.push(
             "File line stats use cached snapshot operation summaries and do not read file bodies."
@@ -284,7 +291,7 @@ fn build_coverage(
     }
 }
 
-fn build_time_breakdown(turns: &[DialogTurnData]) -> UsageTimeBreakdown {
+fn build_time_breakdown(turns: &[DialogTurnData], generated_at: i64) -> UsageTimeBreakdown {
     if turns.is_empty() {
         return UsageTimeBreakdown {
             accounting: UsageTimeAccounting::Unavailable,
@@ -301,15 +308,20 @@ fn build_time_breakdown(turns: &[DialogTurnData]) -> UsageTimeBreakdown {
     // session/turn/model-round boundaries, not pure provider streaming
     // throughput such as first-token latency or tokens per second.
     let start = turns.iter().map(|turn| turn.start_time).min().unwrap_or(0);
+    let generated_at_ms = u64::try_from(generated_at).ok();
     let end = turns
         .iter()
-        .map(|turn| turn.end_time.unwrap_or(turn.start_time))
+        .filter_map(|turn| effective_turn_end_time(turn, generated_at_ms))
         .max()
         .unwrap_or(start);
     let wall_time_ms = end.saturating_sub(start);
     let active_intervals = turns
         .iter()
-        .filter_map(|turn| turn.end_time.map(|end| (turn.start_time, end)))
+        .filter_map(|turn| {
+            effective_turn_end_time(turn, generated_at_ms)
+                .filter(|end| *end > turn.start_time)
+                .map(|end| (turn.start_time, end))
+        })
         .collect::<Vec<_>>();
     let active_turn_ms = (!active_intervals.is_empty())
         .then(|| duration_union_ms(&active_intervals))
@@ -385,6 +397,45 @@ where
     Some(cached_sum as f64 / input_sum as f64)
 }
 
+fn effective_turn_end_time(turn: &DialogTurnData, generated_at_ms: Option<u64>) -> Option<u64> {
+    let mut end = span_end_time(turn.start_time, turn.end_time, turn.duration_ms);
+
+    for round in &turn.model_rounds {
+        end = max_optional_end(
+            end,
+            span_end_time(round.start_time, round.end_time, round.duration_ms),
+        );
+        for tool in &round.tool_items {
+            end = max_optional_end(
+                end,
+                span_end_time(tool.start_time, tool.end_time, tool_duration_ms(tool)),
+            );
+        }
+    }
+
+    if end.is_none() && turn.status == TurnStatus::InProgress {
+        end = generated_at_ms.filter(|generated_at| *generated_at > turn.start_time);
+    }
+
+    end.filter(|end| *end >= turn.start_time)
+}
+
+fn span_end_time(start_time: u64, end_time: Option<u64>, duration_ms: Option<u64>) -> Option<u64> {
+    max_optional_end(
+        end_time,
+        duration_ms.map(|duration| start_time.saturating_add(duration)),
+    )
+}
+
+fn max_optional_end(left: Option<u64>, right: Option<u64>) -> Option<u64> {
+    match (left, right) {
+        (Some(left), Some(right)) => Some(left.max(right)),
+        (Some(left), None) => Some(left),
+        (None, Some(right)) => Some(right),
+        (None, None) => None,
+    }
+}
+
 fn build_token_breakdown(token_records: &[TokenUsageRecord]) -> UsageTokenBreakdown {
     if token_records.is_empty() {
         return UsageTokenBreakdown {
@@ -455,6 +506,7 @@ fn build_model_breakdown(
         .iter()
         .map(|turn| (turn.turn_id.as_str(), turn.turn_index))
         .collect();
+    let token_model_ids_by_turn = build_token_model_ids_by_turn(token_records);
     for record in token_records {
         let row = by_model
             .entry(record.model_id.clone())
@@ -492,7 +544,7 @@ fn build_model_breakdown(
             let Some(duration_ms) = model_round_duration_ms(round) else {
                 continue;
             };
-            let model_id = model_round_label(round);
+            let model_id = report_model_id_for_round(round, &token_model_ids_by_turn);
             let row = by_model
                 .entry(model_id.clone())
                 .or_insert_with(|| UsageModelBreakdown {
@@ -544,6 +596,45 @@ fn build_model_breakdown(
     let mut rows: Vec<_> = by_model.into_values().collect();
     rows.sort_by(|a, b| a.model_id.cmp(&b.model_id));
     rows
+}
+
+fn build_token_model_ids_by_turn(
+    token_records: &[TokenUsageRecord],
+) -> HashMap<String, BTreeSet<String>> {
+    let mut by_turn: HashMap<String, BTreeSet<String>> = HashMap::new();
+    for record in token_records {
+        by_turn
+            .entry(record.turn_id.clone())
+            .or_default()
+            .insert(record.model_id.clone());
+    }
+    by_turn
+}
+
+fn report_model_id_for_round(
+    round: &ModelRoundData,
+    token_model_ids_by_turn: &HashMap<String, BTreeSet<String>>,
+) -> String {
+    let label = model_round_label(round);
+    if is_legacy_model_identity(&label) {
+        if let Some(token_models) = token_model_ids_by_turn.get(&round.turn_id) {
+            if token_models.len() == 1 {
+                if let Some(model_id) = token_models.iter().next() {
+                    return model_id.clone();
+                }
+            }
+        }
+    }
+    label
+}
+
+fn is_legacy_model_identity(model_id: &str) -> bool {
+    let normalized = model_id.trim().to_ascii_lowercase();
+    normalized == "unknown_model"
+        || (normalized.starts_with("model round ")
+            && normalized["model round ".len()..]
+                .chars()
+                .all(|value| value.is_ascii_digit()))
 }
 
 fn build_tool_breakdown(turns: &[DialogTurnData]) -> Vec<UsageToolBreakdown> {
@@ -871,13 +962,16 @@ fn build_error_breakdown(turns: &[DialogTurnData]) -> UsageErrorBreakdown {
     }
 }
 
-fn build_slowest_spans(turns: &[DialogTurnData]) -> Vec<UsageSlowSpan> {
+fn build_slowest_spans(
+    turns: &[DialogTurnData],
+    token_records: &[TokenUsageRecord],
+) -> Vec<UsageSlowSpan> {
     let mut spans = Vec::new();
+    let token_model_ids_by_turn = build_token_model_ids_by_turn(token_records);
 
     for turn in turns {
-        if let Some(duration_ms) = turn
-            .duration_ms
-            .or_else(|| turn.end_time.map(|end| end.saturating_sub(turn.start_time)))
+        if let Some(duration_ms) =
+            effective_turn_end_time(turn, None).map(|end| end.saturating_sub(turn.start_time))
         {
             spans.push(UsageSlowSpan {
                 label: format!("turn {}", turn.turn_index),
@@ -886,18 +980,40 @@ fn build_slowest_spans(turns: &[DialogTurnData]) -> Vec<UsageSlowSpan> {
                 redacted: false,
                 turn_id: Some(turn.turn_id.clone()),
                 turn_index: Some(turn.turn_index),
+                item_id: None,
+                input_summary: None,
+                status: None,
+                timeout_seconds: None,
+                exit_code: None,
+                timed_out: None,
+                error_summary: None,
+                queue_wait_ms: None,
+                preflight_ms: None,
+                confirmation_wait_ms: None,
+                execution_ms: None,
             });
         }
 
         for round in &turn.model_rounds {
             if let Some(duration_ms) = model_round_duration_ms(round) {
                 spans.push(UsageSlowSpan {
-                    label: model_round_label(round),
+                    label: report_model_id_for_round(round, &token_model_ids_by_turn),
                     kind: UsageSlowSpanKind::Model,
                     duration_ms,
                     redacted: false,
                     turn_id: Some(turn.turn_id.clone()),
                     turn_index: Some(turn.turn_index),
+                    item_id: None,
+                    input_summary: None,
+                    status: None,
+                    timeout_seconds: None,
+                    exit_code: None,
+                    timed_out: None,
+                    error_summary: None,
+                    queue_wait_ms: None,
+                    preflight_ms: None,
+                    confirmation_wait_ms: None,
+                    execution_ms: None,
                 });
             }
         }
@@ -912,6 +1028,17 @@ fn build_slowest_spans(turns: &[DialogTurnData]) -> Vec<UsageSlowSpan> {
                     redacted: label.redacted,
                     turn_id: Some(turn.turn_id.clone()),
                     turn_index: Some(turn.turn_index),
+                    item_id: Some(tool.id.clone()),
+                    input_summary: tool_input_summary(tool),
+                    status: tool_status_summary(tool),
+                    timeout_seconds: tool_timeout_seconds(tool),
+                    exit_code: tool_exit_code(tool),
+                    timed_out: tool_timed_out(tool),
+                    error_summary: tool_error_summary(tool),
+                    queue_wait_ms: tool.queue_wait_ms,
+                    preflight_ms: tool.preflight_ms,
+                    confirmation_wait_ms: tool.confirmation_wait_ms,
+                    execution_ms: tool.execution_ms,
                 });
             }
         }
@@ -932,6 +1059,14 @@ fn collect_redacted_fields(report: &SessionUsageReport) -> Vec<String> {
     }
     if report.slowest.iter().any(|span| span.redacted) {
         fields.insert("slowest.label".to_string());
+    }
+    if report
+        .slowest
+        .iter()
+        .filter_map(|span| span.input_summary.as_deref())
+        .any(|summary| summary.contains("[redacted]"))
+    {
+        fields.insert("slowest.inputSummary".to_string());
     }
 
     let mut fields: Vec<_> = fields.into_iter().collect();
@@ -990,6 +1125,83 @@ fn tool_duration_ms(tool: &ToolItemData) -> Option<u64> {
                 .and_then(|result| result.duration_ms)
         })
         .or_else(|| tool.end_time.map(|end| end.saturating_sub(tool.start_time)))
+}
+
+fn tool_input_summary(tool: &ToolItemData) -> Option<String> {
+    let input = tool.tool_call.input.as_object()?;
+    let command = input
+        .get("command")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    if let Some(command) = command {
+        return Some(redact_usage_input_summary(command, 180).value);
+    }
+
+    let url = ["url", "request_url", "endpoint"]
+        .into_iter()
+        .find_map(|field| input.get(field).and_then(|value| value.as_str()))
+        .map(str::trim)
+        .filter(|value| !value.is_empty())?;
+    let method = input
+        .get("method")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let summary = method
+        .map(|method| format!("{method} {url}"))
+        .unwrap_or_else(|| url.to_string());
+    Some(redact_usage_input_summary(&summary, 180).value)
+}
+
+fn tool_timeout_seconds(tool: &ToolItemData) -> Option<u64> {
+    let input = tool.tool_call.input.as_object()?;
+    input
+        .get("timeout_seconds")
+        .and_then(|value| value.as_u64())
+        .or_else(|| {
+            input
+                .get("timeout_ms")
+                .and_then(|value| value.as_u64())
+                .map(|ms| ms.div_ceil(1000))
+        })
+}
+
+fn tool_status_summary(tool: &ToolItemData) -> Option<String> {
+    if let Some(success) = tool.tool_result.as_ref().map(|result| result.success) {
+        return Some(if success { "succeeded" } else { "failed" }.to_string());
+    }
+
+    tool.status.as_deref().map(|status| match status {
+        "completed" | "success" | "succeeded" => "succeeded".to_string(),
+        "failed" | "error" => "failed".to_string(),
+        "cancelled" | "canceled" => "cancelled".to_string(),
+        other => redact_usage_label(other, 80).value,
+    })
+}
+
+fn tool_exit_code(tool: &ToolItemData) -> Option<i64> {
+    tool.tool_result
+        .as_ref()
+        .and_then(|result| result.result.get("exit_code"))
+        .and_then(|value| value.as_i64())
+}
+
+fn tool_timed_out(tool: &ToolItemData) -> Option<bool> {
+    tool.tool_result
+        .as_ref()
+        .and_then(|result| result.result.get("timed_out"))
+        .and_then(|value| value.as_bool())
+}
+
+fn tool_error_summary(tool: &ToolItemData) -> Option<String> {
+    let error = tool
+        .tool_result
+        .as_ref()
+        .and_then(|result| result.error.as_deref())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())?;
+    Some(redact_usage_label(error, 180).value)
 }
 
 fn add_optional_duration(total: &mut Option<u64>, value: Option<u64>) {
@@ -1206,6 +1418,51 @@ mod tests {
     }
 
     #[test]
+    fn report_active_runtime_includes_incomplete_turn_child_spans() {
+        let request = test_request(None);
+        let mut completed = test_turn("turn-1", 0, DialogTurnKind::UserDialog);
+        completed.start_time = 1_000;
+        completed.end_time = Some(61_000);
+        completed.duration_ms = Some(60_000);
+        completed.model_rounds[0].start_time = 2_000;
+        completed.model_rounds[0].end_time = Some(12_000);
+        completed.model_rounds[0].duration_ms = Some(10_000);
+        completed.model_rounds[0].tool_items.clear();
+
+        let mut incomplete = test_turn("turn-2", 1, DialogTurnKind::UserDialog);
+        incomplete.start_time = 121_000;
+        incomplete.end_time = None;
+        incomplete.duration_ms = None;
+        incomplete.model_rounds[0].start_time = 122_000;
+        incomplete.model_rounds[0].end_time = Some(181_000);
+        incomplete.model_rounds[0].duration_ms = Some(59_000);
+        incomplete.model_rounds[0].tool_items = vec![test_tool_item_with_input(
+            "slow-bash",
+            "Bash",
+            Some(true),
+            120_000,
+            serde_json::json!({
+                "command": "pnpm install",
+                "timeout_seconds": 300
+            }),
+        )];
+        incomplete.model_rounds[0].tool_items[0].start_time = 181_000;
+        incomplete.model_rounds[0].tool_items[0].end_time = Some(301_000);
+
+        let report = build_session_usage_report_from_turns(
+            request,
+            &[completed, incomplete],
+            &[],
+            1_778_347_200_000,
+        );
+
+        assert_eq!(report.time.accounting, UsageTimeAccounting::Approximate);
+        assert_eq!(report.time.wall_time_ms, Some(300_000));
+        assert_eq!(report.time.active_turn_ms, Some(240_000));
+        assert_eq!(report.time.tool_ms, Some(120_000));
+    }
+
+    #[test]
     fn report_excludes_local_command_turns_from_usage_metrics() {
         let request = test_request(None);
         let mut user_turn = test_turn("turn-1", 0, DialogTurnKind::UserDialog);
@@ -1278,6 +1535,42 @@ mod tests {
             span.kind == UsageSlowSpanKind::Model
                 && span.label == "model-b"
                 && span.duration_ms == 140
+        }));
+    }
+
+    #[test]
+    fn report_merges_legacy_model_timing_into_token_model_row_for_same_turn() {
+        let request = test_request(None);
+        let mut turn = test_turn("turn-1", 0, DialogTurnKind::UserDialog);
+        turn.model_rounds[0].model_id = None;
+        turn.model_rounds[0].model_alias = None;
+        turn.model_rounds[0].duration_ms = Some(180);
+        let token_record = test_token_record("gpt-5.4", 120, 30, 0);
+
+        let report = build_session_usage_report_from_turns(
+            request,
+            &[turn],
+            &[token_record],
+            1_778_347_200_000,
+        );
+
+        assert_eq!(
+            report
+                .models
+                .iter()
+                .map(|model| (
+                    model.model_id.as_str(),
+                    model.call_count,
+                    model.duration_ms,
+                    model.total_tokens
+                ))
+                .collect::<Vec<_>>(),
+            vec![("gpt-5.4", 1, Some(180), Some(150))]
+        );
+        assert!(report.slowest.iter().any(|span| {
+            span.kind == UsageSlowSpanKind::Model
+                && span.label == "gpt-5.4"
+                && span.duration_ms == 180
         }));
     }
 
@@ -1557,6 +1850,145 @@ mod tests {
             .coverage
             .missing
             .contains(&UsageCoverageKey::ToolPhaseTiming));
+    }
+
+    #[test]
+    fn report_slowest_tool_spans_include_diagnostic_fields() {
+        let request = test_request(None);
+        let mut slow = test_tool_item_with_input(
+            "tool-slow",
+            "Bash",
+            Some(false),
+            95_000,
+            serde_json::json!({
+                "command": "curl https://api.example.test/slow",
+                "timeout_seconds": 90
+            }),
+        );
+        slow.queue_wait_ms = Some(5);
+        slow.preflight_ms = Some(10);
+        slow.confirmation_wait_ms = Some(15);
+        slow.execution_ms = Some(94_970);
+        slow.tool_result = Some(ToolResultData {
+            result: serde_json::json!({
+                "exit_code": 28,
+                "timed_out": true,
+                "stderr": "operation timed out"
+            }),
+            success: false,
+            result_for_assistant: None,
+            error: Some("operation timed out".to_string()),
+            duration_ms: Some(95_000),
+        });
+        let turn = test_turn_with_tools("turn-1", 0, DialogTurnKind::UserDialog, vec![slow]);
+
+        let report =
+            build_session_usage_report_from_turns(request, &[turn], &[], 1_778_347_200_000);
+        let span = report
+            .slowest
+            .iter()
+            .find(|span| span.kind == UsageSlowSpanKind::Tool)
+            .expect("slow tool span");
+
+        assert_eq!(span.item_id.as_deref(), Some("tool-slow"));
+        assert_eq!(
+            span.input_summary.as_deref(),
+            Some("curl https://api.example.test/slow")
+        );
+        assert_eq!(span.status.as_deref(), Some("failed"));
+        assert_eq!(span.exit_code, Some(28));
+        assert_eq!(span.timed_out, Some(true));
+        assert_eq!(span.error_summary.as_deref(), Some("operation timed out"));
+        assert_eq!(span.execution_ms, Some(94_970));
+    }
+
+    #[test]
+    fn report_slowest_tool_spans_summarize_url_inputs() {
+        let request = test_request(None);
+        let slow = test_tool_item_with_input(
+            "tool-slow-url",
+            "web_fetch",
+            Some(true),
+            95_000,
+            serde_json::json!({
+                "method": "GET",
+                "url": "https://api.example.test/slow"
+            }),
+        );
+        let turn = test_turn_with_tools("turn-1", 0, DialogTurnKind::UserDialog, vec![slow]);
+
+        let report =
+            build_session_usage_report_from_turns(request, &[turn], &[], 1_778_347_200_000);
+        let span = report
+            .slowest
+            .iter()
+            .find(|span| span.item_id.as_deref() == Some("tool-slow-url"))
+            .expect("slow URL tool span");
+
+        assert_eq!(
+            span.input_summary.as_deref(),
+            Some("GET https://api.example.test/slow")
+        );
+    }
+
+    #[test]
+    fn report_slowest_tool_input_summary_redacts_common_secrets() {
+        let request = test_request(None);
+        let slow_command = test_tool_item_with_input(
+            "tool-secret-command",
+            "Bash",
+            Some(true),
+            95_000,
+            serde_json::json!({
+                "command": "curl -H 'Authorization: Bearer sk-secret' https://api.example.test --api-key abc123"
+            }),
+        );
+        let slow_url = test_tool_item_with_input(
+            "tool-secret-url",
+            "web_fetch",
+            Some(true),
+            94_000,
+            serde_json::json!({
+                "method": "GET",
+                "url": "https://api.example.test/slow?token=secret-token&x=1"
+            }),
+        );
+        let turn = test_turn_with_tools(
+            "turn-1",
+            0,
+            DialogTurnKind::UserDialog,
+            vec![slow_command, slow_url],
+        );
+
+        let report =
+            build_session_usage_report_from_turns(request, &[turn], &[], 1_778_347_200_000);
+        let command_span = report
+            .slowest
+            .iter()
+            .find(|span| span.item_id.as_deref() == Some("tool-secret-command"))
+            .expect("slow command span");
+        let url_span = report
+            .slowest
+            .iter()
+            .find(|span| span.item_id.as_deref() == Some("tool-secret-url"))
+            .expect("slow URL span");
+
+        let command_summary = command_span
+            .input_summary
+            .as_deref()
+            .expect("command summary");
+        assert!(command_summary.contains("Authorization: Bearer [redacted]"));
+        assert!(command_summary.contains("--api-key [redacted]"));
+        assert!(!command_summary.contains("sk-secret"));
+        assert!(!command_summary.contains("abc123"));
+        assert_eq!(
+            url_span.input_summary.as_deref(),
+            Some("GET https://api.example.test/slow?token=[redacted]&x=1")
+        );
+        assert!(report
+            .privacy
+            .redacted_fields
+            .contains(&"slowest.inputSummary".to_string()));
     }
 
     #[test]

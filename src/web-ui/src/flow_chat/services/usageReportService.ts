@@ -57,6 +57,7 @@ export async function runUsageReportCommand(
       workspacePath: params.session.workspacePath,
       remoteConnectionId: params.session.remoteConnectionId,
       remoteSshHost: params.session.remoteSshHost,
+      includeHiddenSubagents: true,
     });
     const report = enrichUsageReportModelIdentity(rawReport, params.session);
     const markdown = renderUsageReportMarkdown(report);
@@ -242,10 +243,10 @@ export function renderUsageReportMarkdown(report: SessionUsageReport): string {
     lines.push(
       '## Slowest Spans',
       '',
-      '| Label | Kind | Duration |',
-      '| --- | --- | --- |',
+      '| Label | Kind | Duration | Details |',
+      '| --- | --- | --- | --- |',
       ...report.slowest.map(span =>
-        `| ${span.redacted ? 'redacted' : escapeMarkdown(formatUsageMarkdownLabel(span.label, span.modelIdSource))} | ${span.kind} | ${formatDuration(span.durationMs)} |`
+        `| ${span.redacted ? 'redacted' : escapeMarkdown(formatUsageMarkdownLabel(span.label, span.modelIdSource))} | ${span.kind} | ${formatDuration(span.durationMs)} | ${escapeMarkdown(formatSlowSpanDetails(span))} |`
       ),
       '',
     );
@@ -263,10 +264,10 @@ export function renderUsageReportMarkdown(report: SessionUsageReport): string {
   lines.push(
     '## Privacy',
     '',
-    '- Prompt content included: no',
-    '- Tool inputs included: no',
-    '- Command outputs included: no',
-    '- File contents included: no',
+    `- Prompt content included: ${yesNo(report.privacy.promptContentIncluded)}`,
+    `- Tool inputs included: ${yesNo(report.privacy.toolInputsIncluded)}`,
+    `- Command outputs included: ${yesNo(report.privacy.commandOutputsIncluded)}`,
+    `- File contents included: ${yesNo(report.privacy.fileContentsIncluded)}`,
   );
 
   return lines.join('\n');
@@ -318,6 +319,40 @@ function formatDuration(value: number | undefined): string {
   return remainingMinutes === 0 ? `${hours}h` : `${hours}h ${remainingMinutes}m`;
 }
 
+function yesNo(value: boolean): string {
+  return value ? 'yes' : 'no';
+}
+
+function formatSlowSpanDetails(span: SessionUsageReport['slowest'][number]): string {
+  if (span.redacted) {
+    return '';
+  }
+
+  const parts: string[] = [];
+  if (span.inputSummary) {
+    parts.push(`input: ${span.inputSummary}`);
+  }
+  if (span.status) {
+    parts.push(`status: ${span.status}`);
+  }
+  if (typeof span.timeoutSeconds === 'number') {
+    parts.push(`timeout: ${span.timeoutSeconds}s`);
+  }
+  if (typeof span.exitCode === 'number') {
+    parts.push(`exit code: ${span.exitCode}`);
+  }
+  if (span.timedOut === true) {
+    parts.push('timed out');
+  }
+  if (typeof span.executionMs === 'number') {
+    parts.push(`execution: ${formatDuration(span.executionMs)}`);
+  }
+  if (span.errorSummary) {
+    parts.push(`error: ${span.errorSummary}`);
+  }
+  return parts.join('; ');
+}
+
 function getInferableSessionModelId(session: Session): string | undefined {
   const modelId = session.config.modelName?.trim();
   if (!modelId || isMissingModelId(modelId)) {
@@ -338,7 +373,8 @@ function getInferableSessionModelId(session: Session): string | undefined {
 
 function isOpaqueModelIdentifier(modelId: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(modelId) ||
-    /^[0-9a-f]{32}$/i.test(modelId);
+    /^[0-9a-f]{32}$/i.test(modelId) ||
+    /^model_\d+(?:_\d+)+$/i.test(modelId);
 }
 
 function resolveModelIdentity(

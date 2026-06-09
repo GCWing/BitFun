@@ -123,6 +123,7 @@ describe('usageReportUtils', () => {
   it('does not calculate timing shares when model time is missing', () => {
     expect(calculateShare(undefined, 8_000)).toBeUndefined();
     expect(calculateShare(4_000, 8_000)).toBe(50);
+    expect(calculateShare(12_000, 8_000)).toBe(150);
   });
 
   it('labels empty file activity as no file changes', () => {
@@ -154,6 +155,8 @@ describe('usageReportUtils', () => {
     expect(getModelLabel('gpt-5.4', t, 'inferred_session_model')).toBe('gpt-5.4 (inferred)');
     expect(getModelLabel('019e0c07-c7bc-73f1-b1d6-5260ed215fe0', t, 'inferred_session_model'))
       .toBe('Legacy model not tracked');
+    expect(getModelLabel('model_1780555920188_0', t, 'inferred_session_model'))
+      .toBe('Legacy model not tracked');
     expect(getSlowSpanLabel({
       label: 'gpt-5.4',
       kind: 'model',
@@ -167,6 +170,8 @@ describe('usageReportUtils', () => {
   it('returns model identity tooltip copy when the source is inferred or legacy', () => {
     expect(getModelHelp('inferred_session_model', t)).toBe('Inferred from the session model setting.');
     expect(getModelHelp('inferred_session_model', t, '019e0c07-c7bc-73f1-b1d6-5260ed215fe0'))
+      .toBe('Older sessions did not store per-round model names.');
+    expect(getModelHelp('inferred_session_model', t, 'model_1780555920188_0'))
       .toBe('Older sessions did not store per-round model names.');
     expect(getModelHelp('legacy_missing', t)).toBe('Older sessions did not store per-round model names.');
     expect(getModelHelp(undefined, t, 'model round 0')).toBe('Older sessions did not store per-round model names.');

@@ -109,7 +109,8 @@
       "modelNotRecorded": "未記錄模型名稱",
       "legacyModel": "舊會話模型未統計",
       "inferredModel": "{{model}}（推測）",
-      "p95SampleInsufficient": "樣本不足"
+      "p95SampleInsufficient": "樣本不足",
+      "timedOut": "逾時"
     },
     "cacheCoverage": {
       "available": "已回報",
@@ -232,6 +233,16 @@
       "modelCall": "第 {{turn}} 回合模型呼叫",
       "modelCallUnknown": "模型呼叫"
     },
+    "slowest": {
+      "details": {
+        "input": "輸入",
+        "status": "狀態",
+        "exitCode": "退出碼",
+        "timedOut": "逾時",
+        "execution": "執行",
+        "error": "錯誤"
+      }
+    },
     "help": {
       "wall": "從第一回合開始到最後一回合結束的記錄跨度，可能包含回合之間的閒置間隔。",
       "active": "產生可統計活動的回合記錄時間段聯集，可能包含回合內的編排或等待時間。",
@@ -259,7 +270,8 @@
       "errorExampleRow": "模型/執行期錯誤或失敗工具類型的安全分組標籤。",
       "errorExampleCount": "目前報告範圍內符合該標籤的錯誤次數。",
       "slowestSpans": "慢耗時來自已記錄的回合、模型呼叫與工具時間戳，用於定位耗時來源，不代表精確服務商延遲。",
-      "slowestModelCall": "該列是目前回合內的一次模型呼叫。模型：{{model}}。"
+      "slowestModelCall": "該列是目前回合內的一次模型呼叫。模型：{{model}}。",
+      "slowestToolCall": "工具呼叫詳情用於區分耗時來自排隊、確認還是實際執行。"
     },
     "meta": {
       "generatedAt": "產生時間",

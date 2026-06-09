@@ -109,7 +109,8 @@
       "modelNotRecorded": "未记录模型名称",
       "legacyModel": "旧会话模型未统计",
       "inferredModel": "{{model}}（推测）",
-      "p95SampleInsufficient": "样本不足"
+      "p95SampleInsufficient": "样本不足",
+      "timedOut": "超时"
     },
     "cacheCoverage": {
       "available": "已上报",
@@ -232,6 +233,16 @@
       "modelCall": "第 {{turn}} 轮模型调用",
       "modelCallUnknown": "模型调用"
     },
+    "slowest": {
+      "details": {
+        "input": "输入",
+        "status": "状态",
+        "exitCode": "退出码",
+        "timedOut": "超时",
+        "execution": "执行",
+        "error": "错误"
+      }
+    },
     "help": {
       "wall": "从第一轮开始到最后一轮结束的记录跨度，可能包含轮次之间的空闲间隔。",
       "active": "产生可统计活动的轮次记录时间段并集，可能包含轮次内的编排或等待时间。",
@@ -259,7 +270,8 @@
       "errorExampleRow": "模型/运行时错误或失败工具类型的安全分组标签。",
       "errorExampleCount": "当前报告范围内匹配该标签的错误次数。",
       "slowestSpans": "慢耗时来自已记录的轮次、模型调用与工具时间戳，用于定位耗时来源，不代表精确服务商延迟。",
-      "slowestModelCall": "该行是当前轮次内的一次模型调用。模型：{{model}}。"
+      "slowestModelCall": "该行是当前轮次内的一次模型调用。模型：{{model}}。",
+      "slowestToolCall": "工具调用详情用于区分耗时来自排队、确认还是实际执行。"
     },
     "meta": {
       "generatedAt": "生成时间",

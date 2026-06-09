@@ -544,6 +544,38 @@
     }
   }
 
+  &__slow-span {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  &__slow-span-details {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 3px 8px;
+    margin: 0;
+    color: var(--color-text-muted);
+    font-size: var(--flowchat-font-size-xs);
+    line-height: var(--flowchat-compact-line-height, 1.32);
+
+    > div {
+      display: contents;
+    }
+
+    dt {
+      color: var(--color-text-secondary);
+      white-space: nowrap;
+    }
+
+    dd {
+      min-width: 0;
+      margin: 0;
+      overflow-wrap: anywhere;
+    }
+  }
+
   &__turn-indexes {
     display: inline-flex;
     align-items: center;

@@ -79,15 +79,21 @@ pub fn render_usage_report_terminal(report: &SessionUsageReport) -> String {
     if !report.slowest.is_empty() {
         out.push("Slowest spans:".to_string());
         for span in &report.slowest {
+            let details = slow_span_details(span);
             out.push(format!(
-                "- {} [{}]: {}",
+                "- {} [{}]: {}{}",
                 if span.redacted {
                     "redacted"
                 } else {
                     &span.label
                 },
                 slow_span_kind_label(&span.kind),
-                format_duration(span.duration_ms)
+                format_duration(span.duration_ms),
+                if details.is_empty() {
+                    String::new()
+                } else {
+                    format!(" ({})", details)
+                }
             ));
         }
     }
@@ -281,17 +287,18 @@ pub fn render_usage_report_markdown(report: &SessionUsageReport) -> String {
 
     if !report.slowest.is_empty() {
         out.push_str("## Slowest Spans\n\n");
-        out.push_str("| Label | Kind | Duration |\n| --- | --- | --- |\n");
+        out.push_str("| Label | Kind | Duration | Details |\n| --- | --- | --- | --- |\n");
         for span in &report.slowest {
             out.push_str(&format!(
-                "| {} | {} | {} |\n",
+                "| {} | {} | {} | {} |\n",
                 if span.redacted {
                     "redacted".to_string()
                 } else {
                     escape_markdown(&span.label)
                 },
                 slow_span_kind_label(&span.kind),
-                format_duration(span.duration_ms)
+                format_duration(span.duration_ms),
+                escape_markdown(&slow_span_details(span))
             ));
         }
         out.push('\n');
@@ -306,12 +313,62 @@ pub fn render_usage_report_markdown(report: &SessionUsageReport) -> String {
     }
 
     out.push_str("## Privacy\n\n");
-    out.push_str("- Prompt content included: no\n");
-    out.push_str("- Tool inputs included: no\n");
-    out.push_str("- Command outputs included: no\n");
-    out.push_str("- File contents included: no\n");
+    out.push_str(&format!(
+        "- Prompt content included: {}\n",
+        yes_no(report.privacy.prompt_content_included)
+    ));
+    out.push_str(&format!(
+        "- Tool inputs included: {}\n",
+        yes_no(report.privacy.tool_inputs_included)
+    ));
+    out.push_str(&format!(
+        "- Command outputs included: {}\n",
+        yes_no(report.privacy.command_outputs_included)
+    ));
+    out.push_str(&format!(
+        "- File contents included: {}\n",
+        yes_no(report.privacy.file_contents_included)
+    ));
 
     out
+}
+
+fn yes_no(value: bool) -> &'static str {
+    if value {
+        "yes"
+    } else {
+        "no"
+    }
+}
+
+fn slow_span_details(span: &UsageSlowSpan) -> String {
+    if span.redacted {
+        return String::new();
+    }
+
+    let mut parts = Vec::new();
+    if let Some(input) = span.input_summary.as_deref() {
+        parts.push(format!("input: {}", input));
+    }
+    if let Some(status) = span.status.as_deref() {
+        parts.push(format!("status: {}", status));
+    }
+    if let Some(timeout_seconds) = span.timeout_seconds {
+        parts.push(format!("timeout: {}s", timeout_seconds));
+    }
+    if let Some(exit_code) = span.exit_code {
+        parts.push(format!("exit code: {}", exit_code));
+    }
+    if span.timed_out == Some(true) {
+        parts.push("timed out".to_string());
+    }
+    if let Some(execution_ms) = span.execution_ms {
+        parts.push(format!("execution: {}", format_duration(execution_ms)));
+    }
+    if let Some(error) = span.error_summary.as_deref() {
+        parts.push(format!("error: {}", error));
+    }
+    parts.join("; ")
 }
 
 fn format_optional_number(value: Option<u64>) -> String {
@@ -475,6 +532,17 @@ mod tests {
             redacted: true,
             turn_id: None,
             turn_index: None,
+            item_id: None,
+            input_summary: None,
+            status: None,
+            timeout_seconds: None,
+            exit_code: None,
+            timed_out: None,
+            error_summary: None,
+            queue_wait_ms: None,
+            preflight_ms: None,
+            confirmation_wait_ms: None,
+            execution_ms: None,
         });
 
         let rendered = render_usage_report_markdown(&report);

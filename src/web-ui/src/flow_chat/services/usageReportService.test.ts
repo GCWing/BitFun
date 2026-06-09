@@ -156,6 +156,13 @@ describe('runUsageReportCommand', () => {
       reportId: 'usage-report-1',
       usageReportStatus: 'completed',
     });
+    expect(sessionApiMocks.getSessionUsageReport).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      workspacePath: 'D:/workspace/BitFun',
+      remoteConnectionId: undefined,
+      remoteSshHost: undefined,
+      includeHiddenSubagents: true,
+    });
     expect(sessionApiMocks.saveSessionTurn).toHaveBeenCalledTimes(1);
   });
 
@@ -214,52 +221,57 @@ describe('runUsageReportCommand', () => {
   });
 
   it('does not infer legacy model rows from opaque session model identifiers', async () => {
-    const opaqueModelId = '019e0c07-c7bc-73f1-b1d6-5260ed215fe0';
-    const session = createSession({
-      config: { agentType: 'agentic', modelName: opaqueModelId },
-    });
-    flowChatStore.setState((): FlowChatState => ({
-      sessions: new Map([['session-1', session]]),
-      activeSessionId: 'session-1',
-    }));
-    sessionApiMocks.getSessionUsageReport.mockResolvedValue(usageReport({
-      models: [{
-        modelId: 'unknown_model',
-        callCount: 1,
-        durationMs: 120,
-      }],
-      slowest: [{
-        label: 'unknown_model',
-        kind: 'model',
-        durationMs: 120,
-        redacted: false,
-      }],
-    }));
     const { runUsageReportCommand } = await import('./usageReportService');
 
-    const result = await runUsageReportCommand({
-      session,
-      isProcessing: false,
-      busyMessage: 'busy',
-      noWorkspaceMessage: 'missing workspace',
-      failedTitle: 'failed',
-      unknownErrorMessage: 'unknown',
-      loadingMarkdown: 'Generating usage report...',
-    });
+    for (const opaqueModelId of [
+      '019e0c07-c7bc-73f1-b1d6-5260ed215fe0',
+      'model_1780555920188_0',
+    ]) {
+      const session = createSession({
+        config: { agentType: 'agentic', modelName: opaqueModelId },
+      });
+      flowChatStore.setState((): FlowChatState => ({
+        sessions: new Map([['session-1', session]]),
+        activeSessionId: 'session-1',
+      }));
+      sessionApiMocks.getSessionUsageReport.mockResolvedValueOnce(usageReport({
+        models: [{
+          modelId: 'unknown_model',
+          callCount: 1,
+          durationMs: 120,
+        }],
+        slowest: [{
+          label: 'unknown_model',
+          kind: 'model',
+          durationMs: 120,
+          redacted: false,
+        }],
+      }));
 
-    expect(result.report?.models[0]).toMatchObject({
-      modelId: 'unknown_model',
-      modelIdSource: 'legacy_missing',
-    });
-    expect(result.report?.slowest[0]).toMatchObject({
-      label: 'unknown_model',
-      modelIdSource: 'legacy_missing',
-    });
+      const result = await runUsageReportCommand({
+        session,
+        isProcessing: false,
+        busyMessage: 'busy',
+        noWorkspaceMessage: 'missing workspace',
+        failedTitle: 'failed',
+        unknownErrorMessage: 'unknown',
+        loadingMarkdown: 'Generating usage report...',
+      });
 
-    const finalTurn = flowChatStore.getState().sessions.get('session-1')?.dialogTurns[0];
-    expect(finalTurn?.userMessage.content).toContain('Legacy model not tracked');
-    expect(finalTurn?.userMessage.content).not.toContain(opaqueModelId);
-    expect(finalTurn?.userMessage.content).not.toContain('(inferred)');
+      expect(result.report?.models[0]).toMatchObject({
+        modelId: 'unknown_model',
+        modelIdSource: 'legacy_missing',
+      });
+      expect(result.report?.slowest[0]).toMatchObject({
+        label: 'unknown_model',
+        modelIdSource: 'legacy_missing',
+      });
+
+      const finalTurn = flowChatStore.getState().sessions.get('session-1')?.dialogTurns[0];
+      expect(finalTurn?.userMessage.content).toContain('Legacy model not tracked');
+      expect(finalTurn?.userMessage.content).not.toContain(opaqueModelId);
+      expect(finalTurn?.userMessage.content).not.toContain('(inferred)');
+    }
   });
 
   it('treats legacy model round placeholders as missing model identity', async () => {

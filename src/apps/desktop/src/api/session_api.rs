@@ -132,6 +132,12 @@ pub struct GetSessionUsageReportRequest {
     pub remote_connection_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote_ssh_host: Option<String>,
+    #[serde(default = "default_include_hidden_subagents")]
+    pub include_hidden_subagents: bool,
+}
+
+fn default_include_hidden_subagents() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -305,7 +311,7 @@ pub async fn get_session_usage_report(
             workspace_path: Some(storage_workspace_path.to_string_lossy().to_string()),
             remote_connection_id: request.remote_connection_id.clone(),
             remote_ssh_host: request.remote_ssh_host.clone(),
-            include_hidden_subagents: true,
+            include_hidden_subagents: request.include_hidden_subagents,
         },
     )
     .await

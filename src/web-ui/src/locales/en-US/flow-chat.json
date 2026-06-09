@@ -109,7 +109,8 @@
       "modelNotRecorded": "Model not recorded",
       "legacyModel": "Legacy model not tracked",
       "inferredModel": "{{model}} (inferred)",
-      "p95SampleInsufficient": "Not enough samples"
+      "p95SampleInsufficient": "Not enough samples",
+      "timedOut": "Timed out"
     },
     "cacheCoverage": {
       "available": "Reported",
@@ -189,7 +190,8 @@
       "errorExampleRow": "Safe grouped label for a model/runtime error or failing tool type.",
       "errorExampleCount": "Number of matching errors in this report scope.",
       "slowestSpans": "Slow spans are derived from recorded turn, model-call, and tool timestamps. They help identify time sinks, not exact provider latency.",
-      "slowestModelCall": "Model call in this turn. Model: {{model}}."
+      "slowestModelCall": "Model call in this turn. Model: {{model}}.",
+      "slowestToolCall": "Tool call details identify whether time was spent waiting, confirming, or executing."
     },
     "meta": {
       "generatedAt": "Generated",
@@ -265,6 +267,16 @@
     "slowestLabels": {
       "modelCall": "Turn {{turn}} model call",
       "modelCallUnknown": "Model call"
+    },
+    "slowest": {
+      "details": {
+        "input": "Input",
+        "status": "Status",
+        "exitCode": "Exit code",
+        "timedOut": "Timed out",
+        "execution": "Execution",
+        "error": "Error"
+      }
     }
   },
   "threadGoal": {

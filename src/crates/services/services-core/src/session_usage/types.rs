@@ -314,6 +314,28 @@ pub struct UsageSlowSpan {
     pub turn_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub turn_index: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub item_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_summary: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timeout_seconds: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exit_code: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timed_out: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error_summary: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub queue_wait_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preflight_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confirmation_wait_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
