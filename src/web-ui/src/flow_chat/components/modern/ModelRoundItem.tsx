@@ -396,13 +396,13 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
               return null;
           }
         })}
-
+        
         {hasDeferredLaterGroups && (
           <div className="model-round-item__history-loader">
             {t('modelRound.loadingMoreHistory')}
           </div>
         )}
-
+        
         {isTurnComplete && isLastRound && hasContent && (
           <div className="model-round-item__footer">
             <span className="model-round-item__ai-disclaimer">
