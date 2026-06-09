@@ -91,6 +91,14 @@ export const requiredContentRules = [
         regex: /\bpub struct PrependedPromptReminders\b/,
         message: 'missing agent-runtime prepended-reminder contract',
       },
+      {
+        regex: /\bpub struct PromptEnvironmentFacts\b/,
+        message: 'missing agent-runtime prompt environment facts contract',
+      },
+      {
+        regex: /\bpub fn render_prompt_environment_info\b/,
+        message: 'missing agent-runtime prompt environment renderer',
+      },
     ],
   },
   {
@@ -138,12 +146,43 @@ export const requiredContentRules = [
         message: 'missing DeepReview report owner module',
       },
       {
+        regex: /\bpub mod task_execution\b/,
+        message: 'missing DeepReview task execution owner module',
+      },
+      {
         regex: /\bpub use runtime_state::\*/,
         message: 'missing DeepReview runtime state exports',
       },
       {
         regex: /\bDeepReviewCacheUpdate\b/,
         message: 'missing DeepReview report cache update export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/src/deep_review/task_execution.rs',
+    reason:
+      'agent-runtime DeepReview task execution owner must keep provider-neutral packet matching, retry validation, capacity timing, and capacity-skipped presentation out of core',
+    patterns: [
+      {
+        regex: /\bpub fn deep_review_packet_id_for_cache\b/,
+        message: 'missing DeepReview packet id cache owner function',
+      },
+      {
+        regex: /\bpub fn ensure_deep_review_retry_coverage\b/,
+        message: 'missing DeepReview bounded retry coverage owner function',
+      },
+      {
+        regex: /\bpub fn provider_capacity_queue_wait_seconds_for_attempt\b/,
+        message: 'missing DeepReview provider capacity backoff owner function',
+      },
+      {
+        regex: /\bpub fn capacity_skip_result_for_local_queue_outcome\b/,
+        message: 'missing DeepReview local capacity-skipped presentation owner function',
+      },
+      {
+        regex: /\bpub fn capacity_skip_result_for_provider_queue_outcome\b/,
+        message: 'missing DeepReview provider capacity-skipped presentation owner function',
       },
     ],
   },
@@ -182,6 +221,10 @@ export const requiredContentRules = [
       {
         regex: /\bdeep_review_report_owner_enriches_packet_reliability_and_cache_facts\b/,
         message: 'missing DeepReview report/cache owner regression',
+      },
+      {
+        regex: /\bdeep_review_task_execution_owner_preserves_packet_retry_and_queue_contracts\b/,
+        message: 'missing DeepReview task execution owner regression',
       },
     ],
   },
@@ -1081,6 +1124,63 @@ export const requiredContentRules = [
       {
         regex: /\bload_default_deep_review_policy\b/,
         message: 'missing DeepReview product config loading bridge',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/deep_review/task_adapter.rs',
+    reason:
+      'core DeepReview task adapter must delegate provider-neutral packet, retry, backoff, and skipped-result shaping to agent-runtime while retaining core-only event/state side effects',
+    patterns: [
+      {
+        regex: /runtime_task_execution::capacity_skip_result_for_local_queue_outcome/,
+        message: 'missing DeepReview local capacity-skip runtime delegation',
+      },
+      {
+        regex: /runtime_task_execution::capacity_skip_result_for_provider_queue_outcome/,
+        message: 'missing DeepReview provider capacity-skip runtime delegation',
+      },
+      {
+        regex: /provider_capacity_queue_wait_seconds_for_attempt/,
+        message: 'missing DeepReview provider capacity wait owner re-export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/src/deep_research.rs',
+    reason:
+      'agent-runtime must own provider-neutral DeepResearch citation renumbering without core session or filesystem IO dependencies',
+    patterns: [
+      {
+        regex: /\bpub fn renumber_research_report\b/,
+        message: 'missing DeepResearch citation renumber runtime owner',
+      },
+      {
+        regex: /\bpub struct ResearchCitationRenumberOutput\b/,
+        message: 'missing DeepResearch citation renumber output contract',
+      },
+      {
+        regex: /\bpub struct ResearchCitationDisplayMapEntry\b/,
+        message: 'missing DeepResearch display-map entry contract',
+      },
+      {
+        regex: /\brejected_index_rows_dropped\b/,
+        message: 'missing rejected citation index cleanup telemetry',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/tests/deep_research_contracts.rs',
+    reason:
+      'agent-runtime must keep behavior-equivalence contracts for DeepResearch citation renumbering',
+    patterns: [
+      {
+        regex: /\bdeep_research_citation_renumber_owner_preserves_report_and_display_map_contracts\b/,
+        message: 'missing DeepResearch citation renumber behavior contract',
+      },
+      {
+        regex: /\bdeep_research_citation_renumber_owner_is_idempotent_without_citations\b/,
+        message: 'missing DeepResearch citation renumber idempotence contract',
       },
     ],
   },
@@ -4236,7 +4336,7 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/core/src/agentic/agents/citation_renumber.rs',
     reason:
-      'core DeepResearch runtime must continue owning citation renumber post-processing until agent-runtime migration is reviewed',
+      'core DeepResearch citation hook must delegate deterministic renumbering to agent-runtime while retaining filesystem IO and sidecar persistence',
     patterns: [
       {
         regex: /\bpub async fn run_for_session_workspace\b/,
@@ -4244,7 +4344,11 @@ export const requiredContentRules = [
       },
       {
         regex: /\bpub async fn try_renumber_research_report\b/,
-        message: 'missing deterministic citation renumber implementation',
+        message: 'missing DeepResearch citation storage adapter entry point',
+      },
+      {
+        regex: /\brenumber_research_report\b/,
+        message: 'missing DeepResearch citation runtime owner delegation',
       },
       {
         regex: /display_map\.json/,

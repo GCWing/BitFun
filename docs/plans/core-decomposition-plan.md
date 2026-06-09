@@ -23,7 +23,7 @@
 - Desktop / CLI / ACP 仍通过 `bitfun-core/product-full` 获取完整能力；Server / Web / Mobile Web 不直接依赖 core，但尚未完成按交付形态裁剪最小 feature / dependency。
 - `runtime-services` 已有 typed builder、capability availability 和 core product runtime provider adapter，但不少 concrete provider 仍在 core 创建或持有。
 - remote-connect command routing、wire response assembly、workspace/session/poll/file/dialog/cancel/interaction helper 和 state tracker contract 已归入 `services-integrations`；core 保留 host adapter、加密入口和全局 tracker 接线。
-- `tool-contracts` 已承接 provider-neutral tool manifest、admission、catalog、result policy、tool execution presentation 和截断恢复提示等纯策略；`tool-execution` 已承接低层 IO/search helper、Bash shell 可复用策略、结果渲染、tool pipeline batching plan 与 retry policy；`services-integrations` 已承接本地 indexed workspace search service owner、crate-private flashgrep protocol internals、remote SSH search 纯策略与 remote workspace search concrete owner；`agent-runtime` 已承接 tool confirmation plan/failure/wait-result 和 light checkpoint summary policy。terminal lifecycle / PTY、permission UI channel side effect、tool pipeline concrete state/cancellation/scheduler glue 和完整 execution pipeline owner 仍未完全迁移。
+- `tool-contracts` 已承接 provider-neutral tool manifest、admission、catalog、result policy、tool execution presentation 和截断恢复提示等纯策略；`tool-execution` 已承接低层 IO/search helper、Bash shell 可复用策略、结果渲染、tool pipeline batching plan 与 retry policy；`services-integrations` 已承接本地 indexed workspace search service owner、crate-private flashgrep protocol internals、remote SSH search 纯策略与 remote workspace search concrete owner；`agent-runtime` 已承接 tool confirmation plan/failure/wait-result、light checkpoint summary policy、prompt environment facts、DeepReview task-execution provider-neutral shaping 和 DeepResearch citation renumber 纯重排。terminal lifecycle / PTY、permission UI channel side effect、tool pipeline concrete state/cancellation/scheduler glue 和完整 execution pipeline owner 仍未完全迁移。
 - `agent-stream` 已承接统一 stream DTO、tool-call 累积和 replay 契约；provider SSE / 响应解析测试归属 `ai-adapters`。
 - `harness` 当前主要承接 descriptor / route plan / registry contract；Deep Review、DeepResearch、MiniApp 的 concrete workflow execution 仍在 core 或产品路径。
 - `product-domains` 已承接 MiniApp / function-agent 的部分纯领域逻辑；worker、host side effect、AI acquisition、marker IO 等 concrete path 仍未完成 owner 迁移。
@@ -42,15 +42,14 @@
 
 ## 4. 后续执行节奏
 
-M6 Service / Adapter owner 深迁移、M7 Bash shell execution helper owner 迁移、M8 本地 indexed workspace search / tool presentation 纯策略收口，以及 M9 remote search / checkpoint / confirmation / pipeline policy 收口已完成事实归档到
+M6 Service / Adapter owner 深迁移、M7 Bash shell execution helper owner 迁移、M8 本地 indexed workspace search / tool presentation 纯策略收口、M9 remote search / checkpoint / confirmation / pipeline policy 收口，以及 M10 Harness / Agent runtime provider-neutral 收口已完成事实归档到
 [`core-decomposition-completed.md`](core-decomposition-completed.md)。后续计划从
-terminal lifecycle、concrete workflow execution、scheduler/session side effect、feature trimming 和 core facade 收口继续推进，避免再把已完成的 service/adapter、Bash helper、search owner 或 pipeline policy 收口项重复拆成小 PR。
+terminal lifecycle、concrete workflow execution、scheduler/session side effect、feature trimming 和 core facade 收口继续推进，避免再把已完成的 service/adapter、Bash helper、search owner、pipeline policy 或 provider-neutral runtime owner 项重复拆成小 PR。
 
 | 阶段 | 目标 | 准出标准 |
 |---|---|---|
-| M10 Harness / Agent runtime 收口 | 在 DeepReview provider-neutral policy/report/cache owner 已迁出基础上，继续将 DeepReview concrete task execution、DeepResearch / MiniApp workflow concrete execution、scheduler lifecycle、event delivery、prompt assembly 和 session side effect 从 core 收敛到 owner 边界 | workflow route 与 side effect 有 focused tests；agent runtime 不依赖 service/app concrete impl |
-| M11 Terminal / product shape / feature trimming | 收敛 terminal lifecycle / PTY、remote shell/terminal concrete impl，并基于 capability matrix 裁剪 no-default/product-full 和不同交付形态依赖 | cargo metadata / cargo tree 有对比数据；terminal、remote 与各产品形态关键入口验证通过 |
-| M12 Core facade 收口 | 将 `bitfun-core` 限定为 compatibility facade、product-full assembly 和少量迁移期 adapter | core 不再是事实 runtime owner；边界脚本阻止 owner 逻辑回流 |
+| M11 Concrete workflow / scheduler / terminal owner 深迁移 | 将 DeepReview launch/provider wait/report persistence、DeepResearch concrete workflow/storage IO、MiniApp worker/host/seed/marker IO、scheduler/event/session side effect、terminal lifecycle / PTY 和 remote shell/terminal concrete impl 分阶段迁出 core | 每个 concrete owner 有 focused behavior tests；不改变权限、事件、session、remote、MiniApp 或 terminal 可见行为；owner crate 不依赖 app/service concrete impl |
+| M12 Product shape / feature trimming / Core facade 收口 | 基于 capability matrix 裁剪 no-default/product-full 和不同交付形态依赖，并将 `bitfun-core` 限定为 compatibility facade、product-full assembly 与少量迁移期 adapter | cargo metadata / cargo tree 有对比数据；各产品形态关键入口验证通过；边界脚本阻止 owner 逻辑回流 |
 
 ## 5. 固定执行流程
 

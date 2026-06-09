@@ -2,12 +2,19 @@ use bitfun_agent_runtime::deep_review::report::{
     deep_review_cache_from_completed_reviewers, fill_deep_review_packet_metadata,
     fill_deep_review_reliability_signals,
 };
+use bitfun_agent_runtime::deep_review::task_execution::{
+    capacity_skip_result_for_local_queue_outcome, deep_review_launch_batch_for_task,
+    deep_review_packet_id_for_cache, ensure_deep_review_retry_coverage,
+    prompt_with_deep_review_retry_scope, provider_capacity_queue_wait_seconds_for_attempt,
+};
 use bitfun_agent_runtime::deep_review::{
     append_tool_use_context_data, apply_deep_review_queue_control,
     deep_review_queue_control_snapshot, record_deep_review_shared_context_tool_use,
-    ChangeRiskFactors, DeepReviewBudgetTracker, DeepReviewExecutionPolicy,
-    DeepReviewQueueControlAction, DeepReviewRunManifestGate, DeepReviewStrategyLevel,
-    DeepReviewSubagentRole, DeepReviewToolParentContext, REVIEWER_SECURITY_AGENT_TYPE,
+    ChangeRiskFactors, DeepReviewBudgetTracker, DeepReviewCapacityQueueDecision,
+    DeepReviewCapacityQueueReason, DeepReviewConcurrencyPolicy, DeepReviewExecutionPolicy,
+    DeepReviewQueueControlAction, DeepReviewQueueWaitSkipReason, DeepReviewRunManifestGate,
+    DeepReviewStrategyLevel, DeepReviewSubagentRole, DeepReviewToolParentContext,
+    REVIEWER_SECURITY_AGENT_TYPE,
 };
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -211,4 +218,102 @@ fn deep_review_report_owner_enriches_packet_reliability_and_cache_facts() {
         .value
         .pointer("/packets/reviewer:ReviewSecurity")
         .is_some());
+}
+
+#[test]
+fn deep_review_task_execution_owner_preserves_packet_retry_and_queue_contracts() {
+    let manifest = json!({
+        "reviewMode": "deep",
+        "workPackets": [
+            {
+                "packetId": "security-a",
+                "subagentId": "ReviewSecurity",
+                "launchBatch": 2,
+                "timeoutSeconds": 1200,
+                "assignedScope": {
+                    "files": ["src/auth.rs", "src/session.rs", "src/token.rs"]
+                }
+            },
+            {
+                "packetId": "architecture-a",
+                "subagentId": "ReviewArchitecture",
+                "assignedScope": {
+                    "files": ["src/lib.rs"]
+                }
+            }
+        ]
+    });
+
+    assert_eq!(
+        deep_review_packet_id_for_cache(
+            "ReviewSecurity",
+            Some("Review [packet security-a]"),
+            Some(&manifest)
+        ),
+        Some("security-a".to_string())
+    );
+    assert_eq!(
+        deep_review_launch_batch_for_task("ReviewSecurity", None, Some(&manifest))
+            .expect("launch batch")
+            .launch_batch,
+        2
+    );
+
+    let retry_input = json!({
+        "timeout_seconds": 600,
+        "retry_coverage": {
+            "source_packet_id": "security-a",
+            "source_status": "partial_timeout",
+            "covered_files": ["src/auth.rs"],
+            "retry_scope_files": ["src/session.rs", "src/token.rs"]
+        }
+    });
+    let retry_scope =
+        ensure_deep_review_retry_coverage(&retry_input, "ReviewSecurity", Some(&manifest))
+            .expect("bounded retry coverage");
+    assert_eq!(retry_scope, vec!["src/session.rs", "src/token.rs"]);
+    assert!(
+        prompt_with_deep_review_retry_scope("Review only the retry scope.", &retry_scope)
+            .contains("<deep_review_retry_scope>")
+    );
+
+    let wait_seconds = provider_capacity_queue_wait_seconds_for_attempt(
+        &DeepReviewCapacityQueueDecision::queueable(
+            DeepReviewCapacityQueueReason::ProviderConcurrencyLimit,
+            None,
+        ),
+        &DeepReviewConcurrencyPolicy {
+            max_parallel_instances: 2,
+            stagger_seconds: 0,
+            max_queue_wait_seconds: 30,
+            batch_extras_separately: true,
+            allow_bounded_auto_retry: false,
+            auto_retry_elapsed_guard_seconds: 180,
+        },
+        2,
+    );
+    assert_eq!(wait_seconds, Some(270));
+
+    let (payload, message) = capacity_skip_result_for_local_queue_outcome(
+        "ReviewSecurity",
+        &DeepReviewConcurrencyPolicy {
+            max_parallel_instances: 2,
+            stagger_seconds: 0,
+            max_queue_wait_seconds: 30,
+            batch_extras_separately: true,
+            allow_bounded_auto_retry: false,
+            auto_retry_elapsed_guard_seconds: 180,
+        },
+        DeepReviewCapacityQueueReason::LaunchBatchBlocked,
+        DeepReviewQueueWaitSkipReason::QueueExpired,
+        30_000,
+        42,
+        2,
+    );
+    assert_eq!(payload["status"].as_str(), Some("capacity_skipped"));
+    assert_eq!(
+        payload["capacity_reason"].as_str(),
+        Some("launch_batch_blocked")
+    );
+    assert!(message.contains("previous launch batch did not finish"));
 }

@@ -1736,7 +1736,15 @@ export function runManifestParserSelfTest({
     },
     {
       path: 'src/crates/assembly/core/src/agentic/agents/citation_renumber.rs',
-      contracts: ['run_for_session_workspace', 'try_renumber_research_report', 'display_map', 'REJECTED'],
+      contracts: ['run_for_session_workspace', 'try_renumber_research_report', 'renumber_research_report', 'display_map', 'REJECTED'],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/src/deep_research.rs',
+      contracts: ['renumber_research_report', 'ResearchCitationRenumberOutput', 'ResearchCitationDisplayMapEntry', 'rejected_index_rows_dropped'],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/tests/deep_research_contracts.rs',
+      contracts: ['deep_research_citation_renumber_owner_preserves_report_and_display_map_contracts', 'deep_research_citation_renumber_owner_is_idempotent_without_citations'],
     },
     {
       path: 'src/crates/assembly/core/src/service/workspace/service.rs',
