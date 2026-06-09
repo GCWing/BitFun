@@ -105,16 +105,23 @@ pub fn create_command<S: AsRef<std::ffi::OsStr>>(program: S) -> Command {
 
 /// Create Tokio async Command (Windows automatically adds CREATE_NO_WINDOW)
 pub fn create_tokio_command<S: AsRef<std::ffi::OsStr>>(program: S) -> TokioCommand {
-    let mut cmd = TokioCommand::new(program.as_ref());
+    let cmd = TokioCommand::new(program.as_ref());
 
     #[cfg(target_os = "macos")]
-    apply_cached_macos_path(&mut cmd);
+    {
+        let mut cmd = cmd;
+        apply_cached_macos_path(&mut cmd);
+        cmd
+    }
 
     #[cfg(windows)]
     {
+        let mut cmd = cmd;
         cmd.creation_flags(CREATE_NO_WINDOW);
+        cmd
     }
 
+    #[cfg(not(any(target_os = "macos", windows)))]
     cmd
 }
 

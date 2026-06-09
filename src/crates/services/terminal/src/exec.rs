@@ -1129,8 +1129,6 @@ async fn spawn_pipe_process(request: &ExecCommandRequest) -> TerminalResult<Exec
 
 #[cfg(unix)]
 fn configure_pipe_process_group(command: &mut Command) {
-    use std::os::unix::process::CommandExt;
-
     unsafe {
         command.pre_exec(|| {
             if libc::setsid() == -1 {
