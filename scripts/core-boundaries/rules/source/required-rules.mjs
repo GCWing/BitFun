@@ -1767,7 +1767,7 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/core/src/service/remote_ssh/mod.rs',
     reason:
-      'core remote SSH runtime must keep concrete SSH dependencies behind the ssh-remote feature while preserving lightweight workspace identity helpers',
+      'core remote SSH compatibility facade must keep service-backed SSH surfaces behind the ssh-remote feature while preserving lightweight workspace identity helpers',
     patterns: [
       {
         regex: /#\[cfg\(not\(feature = "ssh-remote"\)\)\]\s*mod disabled\b/s,
@@ -1811,6 +1811,109 @@ export const requiredContentRules = [
       {
         regex: /\bpub struct RemoteTerminalManager\b/,
         message: 'missing disabled remote terminal compatibility surface',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-integrations/src/remote_ssh/mod.rs',
+    reason:
+      'services-integrations remote_ssh must own concrete SSH/SFTP/PTY runtime behind the remote-ssh-concrete feature while keeping lightweight path/type contracts separate',
+    patterns: [
+      {
+        regex: /#\[cfg\(feature = "remote-ssh-concrete"\)\]\s*pub mod manager\b/s,
+        message: 'missing concrete SSH manager owner module',
+      },
+      {
+        regex: /#\[cfg\(feature = "remote-ssh-concrete"\)\]\s*mod remote_exec\b/s,
+        message: 'missing concrete remote exec owner module',
+      },
+      {
+        regex: /#\[cfg\(feature = "remote-ssh-concrete"\)\]\s*pub mod remote_fs\b/s,
+        message: 'missing concrete remote filesystem owner module',
+      },
+      {
+        regex: /#\[cfg\(feature = "remote-ssh-concrete"\)\]\s*pub mod remote_terminal\b/s,
+        message: 'missing concrete remote terminal owner module',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-integrations/src/remote_ssh/manager.rs',
+    reason:
+      'services-integrations remote_ssh manager owns russh connection, known-host, saved connection, SFTP, PTY channel, and port-forward concrete behavior',
+    patterns: [
+      {
+        regex: /\bpub struct SSHConnectionManager\b/,
+        message: 'missing SSH connection manager owner',
+      },
+      {
+        regex: /\brussh::client::connect_stream\b/,
+        message: 'missing russh connection owner path',
+      },
+      {
+        regex: /\bSftpSession\b/,
+        message: 'missing SFTP session owner path',
+      },
+      {
+        regex: /\bprunes_password_connection_without_vault_entry\b/,
+        message: 'missing saved credential pruning regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-integrations/src/remote_ssh/remote_exec.rs',
+    reason:
+      'services-integrations remote_ssh remote_exec owns model-facing remote shell process lifecycle and stdin/control semantics',
+    patterns: [
+      {
+        regex: /\bpub struct RemoteExecProcessManager\b/,
+        message: 'missing remote exec process manager owner',
+      },
+      {
+        regex: /\bGLOBAL_REMOTE_EXEC_MANAGER\b/,
+        message: 'missing global remote exec manager compatibility owner',
+      },
+      {
+        regex: /\bremote_exec_session_ids_match_local_test_baseline\b/,
+        message: 'missing remote exec session-id compatibility regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-integrations/src/remote_ssh/remote_fs.rs',
+    reason:
+      'services-integrations remote_ssh remote_fs owns SFTP-backed remote filesystem operations',
+    patterns: [
+      {
+        regex: /\bpub struct RemoteFileService\b/,
+        message: 'missing remote filesystem service owner',
+      },
+      {
+        regex: /\bsftp_read\b/,
+        message: 'missing SFTP read owner path',
+      },
+      {
+        regex: /\bsftp_write\b/,
+        message: 'missing SFTP write owner path',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-integrations/src/remote_ssh/remote_terminal.rs',
+    reason:
+      'services-integrations remote_ssh remote_terminal owns remote PTY lifecycle, output broadcast, write, resize, and close behavior',
+    patterns: [
+      {
+        regex: /\bpub struct RemoteTerminalManager\b/,
+        message: 'missing remote terminal manager owner',
+      },
+      {
+        regex: /\benum PtyCommand\b/,
+        message: 'missing remote PTY command owner',
+      },
+      {
+        regex: /\bchannel\.window_change\b/,
+        message: 'missing remote PTY resize owner path',
       },
     ],
   },
@@ -4336,19 +4439,42 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/core/src/agentic/agents/citation_renumber.rs',
     reason:
-      'core DeepResearch citation hook must delegate deterministic renumbering to agent-runtime while retaining filesystem IO and sidecar persistence',
+      'core DeepResearch citation hook must stay a compatibility adapter over the integrations owner',
     patterns: [
       {
         regex: /\bpub async fn run_for_session_workspace\b/,
         message: 'missing DeepResearch citation hook entry point',
       },
       {
+        regex: /\bbitfun_services_integrations::deep_research::run_for_session_workspace\b/,
+        message: 'missing DeepResearch citation integrations owner delegation',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-integrations/src/deep_research.rs',
+    reason:
+      'services-integrations DeepResearch owner must retain report filesystem IO, sidecar persistence, and runtime renumbering delegation',
+    patterns: [
+      {
+        regex: /\bpub async fn run_for_session_workspace\b/,
+        message: 'missing DeepResearch session workspace report hook entry point',
+      },
+      {
         regex: /\bpub async fn try_renumber_research_report\b/,
-        message: 'missing DeepResearch citation storage adapter entry point',
+        message: 'missing DeepResearch report IO owner entry point',
       },
       {
         regex: /\brenumber_research_report\b/,
         message: 'missing DeepResearch citation runtime owner delegation',
+      },
+      {
+        regex: /\breport\.md\b/,
+        message: 'missing DeepResearch report filename contract',
+      },
+      {
+        regex: /\bcitations\.md\b/,
+        message: 'missing DeepResearch citation registry filename contract',
       },
       {
         regex: /display_map\.json/,
@@ -4769,8 +4895,28 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/core/src/miniapp/storage.rs',
     reason:
-      'core must continue owning MiniApp storage runtime adapter until storage IO migration is reviewed',
+      'core MiniApp storage path must stay a compatibility facade over the integrations owner',
     patterns: [
+      {
+        regex: /\bServiceMiniAppStorage\b/,
+        message: 'missing services-owned MiniApp storage delegation',
+      },
+      {
+        regex: /\bmap_storage_error\b/,
+        message: 'missing MiniApp storage error compatibility mapping',
+      },
+      {
+        regex: /\bMiniAppImportBundleRequest\b/,
+        message: 'missing MiniApp import bundle IO compatibility request',
+      },
+      {
+        regex: /\bread_import_meta_json\b/,
+        message: 'missing MiniApp import metadata IO compatibility delegation',
+      },
+      {
+        regex: /\bwrite_import_bundle\b/,
+        message: 'missing MiniApp import bundle IO compatibility delegation',
+      },
       {
         regex: /\bimpl MiniAppStoragePort for MiniAppStorage\b/,
         message: 'missing MiniApp storage port adapter owner',
@@ -4778,9 +4924,64 @@ export const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/services/services-integrations/src/miniapp/storage.rs',
+    reason:
+      'services-integrations must own MiniApp filesystem storage, draft, customization, and version IO behind the miniapp-runtime feature',
+    patterns: [
+      {
+        regex: /\bpub struct MiniAppStorage\b/,
+        message: 'missing services-owned MiniApp storage owner',
+      },
+      {
+        regex: /\bMiniAppStorageError\b/,
+        message: 'missing MiniApp storage integration error type',
+      },
+      {
+        regex: /\bMiniAppImportBundleRequest\b/,
+        message: 'missing services-owned MiniApp import bundle request',
+      },
+      {
+        regex: /\bread_import_meta_json\b/,
+        message: 'missing services-owned MiniApp import metadata read',
+      },
+      {
+        regex: /\bwrite_import_bundle\b/,
+        message: 'missing services-owned MiniApp import bundle IO',
+      },
+      {
+        regex: /\btokio::fs::read_to_string\b/,
+        message: 'missing services-owned MiniApp storage file reads',
+      },
+      {
+        regex: /\btokio::fs::write\b/,
+        message: 'missing services-owned MiniApp storage file writes',
+      },
+      {
+        regex: /\btokio::fs::remove_dir_all\b/,
+        message: 'missing services-owned MiniApp storage cleanup',
+      },
+      {
+        regex: /\bMiniAppStorageLayout\b/,
+        message: 'missing product-domain MiniApp storage layout use',
+      },
+      {
+        regex: /\bimpl MiniAppStoragePort for MiniAppStorage\b/,
+        message: 'missing MiniApp storage port implementation in integrations owner',
+      },
+      {
+        regex: /\bstorage_port_adapter_preserves_existing_file_lifecycle\b/,
+        message: 'missing MiniApp storage port behavior regression test',
+      },
+      {
+        regex: /\bimport_bundle_io_preserves_copy_and_fallback_contract\b/,
+        message: 'missing MiniApp import bundle IO regression test',
+      },
+    ],
+  },
+  {
     path: 'src/crates/assembly/core/src/miniapp/builtin/mod.rs',
     reason:
-      'core must continue owning built-in MiniApp seeding IO, marker writes, and recompilation while product-domains owns bundle assets',
+      'core must coordinate built-in MiniApp seed decisions and recompilation while services-integrations owns seed filesystem IO',
     patterns: [
       {
         regex: /\bBUILTIN_APPS\b/,
@@ -4803,36 +5004,24 @@ export const requiredContentRules = [
         message: 'missing product-domain built-in MiniApp seed action use',
       },
       {
-        regex: /\bbuiltin_source_files\b/,
-        message: 'missing product-domain built-in MiniApp source payload use',
-      },
-      {
-        regex: /\bbuild_builtin_seed_meta\b/,
-        message: 'missing product-domain built-in MiniApp seed meta helper use',
-      },
-      {
-        regex: /\bpreserved_builtin_created_at\b/,
-        message: 'missing product-domain built-in MiniApp timestamp preservation helper use',
-      },
-      {
-        regex: /\bBUILTIN_PLACEHOLDER_COMPILED_HTML\b/,
-        message: 'missing product-domain built-in MiniApp placeholder payload use',
+        regex: /\bminiapp_builtin_io::prepare_builtin_seed_bundle_files\b/,
+        message: 'missing services-owned built-in MiniApp seed file IO delegation',
       },
       {
         regex: /\bread_builtin_install_marker\b/,
-        message: 'missing core-owned built-in MiniApp marker read IO',
+        message: 'missing built-in MiniApp marker read compatibility wrapper',
       },
       {
-        regex: /\bparse_builtin_install_marker\b/,
-        message: 'missing product-domain built-in MiniApp marker parse helper use',
+        regex: /\bminiapp_builtin_io::read_builtin_install_marker\b/,
+        message: 'missing services-owned built-in MiniApp marker read delegation',
       },
       {
         regex: /\bwrite_builtin_install_marker\b/,
-        message: 'missing core-owned built-in MiniApp marker write IO',
+        message: 'missing built-in MiniApp marker write compatibility wrapper',
       },
       {
-        regex: /\bserialize_builtin_install_marker\b/,
-        message: 'missing product-domain built-in MiniApp marker serialization helper use',
+        regex: /\bminiapp_builtin_io::write_builtin_install_marker\b/,
+        message: 'missing services-owned built-in MiniApp marker write delegation',
       },
       {
         regex: /\brecompile\b/,
@@ -4851,11 +5040,77 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/core/src/miniapp/host_dispatch.rs',
     reason:
-      'core must continue owning MiniApp host-dispatch execution until host/runtime migration is reviewed',
+      'core MiniApp host-dispatch path must stay a compatibility adapter over the integrations owner',
     patterns: [
       {
         regex: /\bpub async fn dispatch_host\b/,
         message: 'missing MiniApp host dispatch entry',
+      },
+      {
+        regex: /\bbitfun_services_integrations::miniapp::host_dispatch::dispatch_host\b/,
+        message: 'missing MiniApp host dispatch integrations owner delegation',
+      },
+      {
+        regex: /\bmap_host_dispatch_error\b/,
+        message: 'missing MiniApp host dispatch error compatibility mapping',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-integrations/src/miniapp/builtin_io.rs',
+    reason:
+      'services-integrations must own built-in MiniApp seed files, marker IO, and storage-preservation writes behind the miniapp-runtime feature',
+    patterns: [
+      {
+        regex: /\bpub async fn read_builtin_install_marker\b/,
+        message: 'missing built-in MiniApp marker read IO owner',
+      },
+      {
+        regex: /\bparse_builtin_install_marker\b/,
+        message: 'missing product-domain built-in MiniApp marker parse helper use',
+      },
+      {
+        regex: /\bpub async fn write_builtin_install_marker\b/,
+        message: 'missing built-in MiniApp marker write IO owner',
+      },
+      {
+        regex: /\bserialize_builtin_install_marker\b/,
+        message: 'missing product-domain built-in MiniApp marker serialization helper use',
+      },
+      {
+        regex: /\bpub async fn prepare_builtin_seed_bundle_files\b/,
+        message: 'missing built-in MiniApp seed bundle file IO owner',
+      },
+      {
+        regex: /\bbuiltin_source_files\b/,
+        message: 'missing product-domain built-in MiniApp source payload use',
+      },
+      {
+        regex: /\bbuild_builtin_seed_meta\b/,
+        message: 'missing product-domain built-in MiniApp seed meta helper use',
+      },
+      {
+        regex: /\bpreserved_builtin_created_at\b/,
+        message: 'missing product-domain built-in MiniApp timestamp preservation helper use',
+      },
+      {
+        regex: /\bBUILTIN_PLACEHOLDER_COMPILED_HTML\b/,
+        message: 'missing product-domain built-in MiniApp placeholder payload use',
+      },
+      {
+        regex: /\bstorage\.json\b/,
+        message: 'missing built-in MiniApp storage preservation file contract',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-integrations/src/miniapp/host_dispatch.rs',
+    reason:
+      'services-integrations must own MiniApp host-dispatch fs/shell/net/os execution behind the miniapp-runtime feature',
+    patterns: [
+      {
+        regex: /\bpub async fn dispatch_host\b/,
+        message: 'missing MiniApp host dispatch owner entry',
       },
       {
         regex: /\bsplit_host_method\b/,
@@ -4863,7 +5118,7 @@ export const requiredContentRules = [
       },
       {
         regex: /\basync fn dispatch_fs\b/,
-        message: 'missing MiniApp fs host dispatch',
+        message: 'missing MiniApp fs host dispatch owner',
       },
       {
         regex: /\bplan_fs_legacy_path_check\b/,
@@ -4901,6 +5156,10 @@ export const requiredContentRules = [
         regex: /\bhost_allowed_by_allowlist\b/,
         message: 'missing MiniApp net allowlist policy use',
       },
+      {
+        regex: /\bprocess_manager::create_tokio_command\b/,
+        message: 'missing shared process-manager command creation for shell dispatch',
+      },
     ],
   },
   {
@@ -4937,7 +5196,7 @@ export const requiredContentRules = [
   {
     path: 'src/crates/contracts/product-domains/src/miniapp/storage.rs',
     reason:
-      'product-domains owns MiniApp storage shape contracts while core/adapters keep filesystem IO',
+      'product-domains owns MiniApp storage shape contracts while services-integrations keeps filesystem IO',
     patterns: [
       {
         regex: /\bpub struct MiniAppStorageLayout\b/,
@@ -4988,7 +5247,7 @@ export const requiredContentRules = [
   {
     path: 'src/crates/contracts/product-domains/src/miniapp/lifecycle.rs',
     reason:
-      'product-domains owns pure MiniApp lifecycle state transitions while core keeps compile, storage IO, and runtime execution',
+      'product-domains owns pure MiniApp lifecycle state transitions while core keeps compile/manager workflow and services-integrations keeps storage/runtime IO',
     patterns: [
       {
         regex: /\bpub fn mark_deps_installed_state\b/,
@@ -5055,7 +5314,7 @@ export const requiredContentRules = [
   {
     path: 'src/crates/contracts/product-domains/src/miniapp/draft.rs',
     reason:
-      'product-domains owns MiniApp draft DTO and response shape while core keeps draft filesystem IO',
+      'product-domains owns MiniApp draft DTO and response shape while services-integrations keeps draft filesystem IO',
     patterns: [
       {
         regex: /\bpub struct MiniAppDraftManifest\b/,
@@ -5125,7 +5384,7 @@ export const requiredContentRules = [
   {
     path: 'src/crates/contracts/product-domains/src/miniapp/worker.rs',
     reason:
-      'product-domains owns MiniApp worker pool policy and install-deps planning while core keeps worker process execution',
+      'product-domains owns MiniApp worker pool policy and install-deps planning while services-integrations owns worker process execution',
     patterns: [
       {
         regex: /\bpub enum InstallDepsPlan\b/,
@@ -5344,7 +5603,7 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/core/src/miniapp/manager.rs',
     reason:
-      'core MiniApp manager must use product-domain policy/facade helpers while retaining compile, storage IO, and built-in source-hash lookup',
+      'core MiniApp manager must use product-domain policy/facade helpers while retaining compile workflow and built-in source-hash lookup',
     patterns: [
       {
         regex: /\bapply_draft_customization_metadata\b/,
@@ -5391,12 +5650,8 @@ export const requiredContentRules = [
         message: 'missing core-owned MiniApp compile orchestration',
       },
       {
-        regex: /\bREQUIRED_SOURCE_FILES\b/,
-        message: 'missing product-domain MiniApp import file-shape contract use',
-      },
-      {
-        regex: /\bMiniAppImportLayout\b/,
-        message: 'missing product-domain MiniApp import layout helper use',
+        regex: /\bread_import_meta_json\b/,
+        message: 'missing services-owned MiniApp import metadata IO delegation',
       },
       {
         regex: /\bbuild_import_fallbacks\b/,
@@ -5407,12 +5662,16 @@ export const requiredContentRules = [
         message: 'missing product-domain MiniApp imported metadata helper use',
       },
       {
+        regex: /\bwrite_import_bundle\b/,
+        message: 'missing services-owned MiniApp import bundle IO delegation',
+      },
+      {
         regex: /\bpersist_import_runtime_state\b/,
         message: 'missing product-domain MiniApp import runtime-state facade delegation',
       },
       {
         regex: /\bstorage\.load_customization_metadata\b/,
-        message: 'missing core-owned customization metadata storage IO',
+        message: 'missing customization metadata compatibility call path',
       },
       {
         regex: /\bruntime_preflight_preserves_recompile_sync_rollback_and_deps_state\b/,
@@ -5427,7 +5686,7 @@ export const requiredContentRules = [
   {
     path: 'src/crates/contracts/product-domains/src/miniapp/ports.rs',
     reason:
-      'product-domains owns MiniApp runtime-state port facade while core keeps concrete storage IO, compile, worker, and host execution',
+      'product-domains owns MiniApp runtime-state port facade while services-integrations keeps concrete storage/worker/host IO and core keeps compile workflow',
     patterns: [
       {
         regex: /\bpub struct MiniAppRuntimeFacade\b/,
@@ -5837,15 +6096,84 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/core/src/miniapp/js_worker_pool.rs',
     reason:
-      'core must continue owning MiniApp worker runtime adapter until process/runtime migration is reviewed',
+      'core MiniApp worker pool path must stay a compatibility facade over the integrations owner',
     patterns: [
       {
-        regex: /\bplan_install_deps\b/,
-        message: 'missing product-domain install-deps plan use',
+        regex: /\bServiceJsWorkerPool\b/,
+        message: 'missing services-owned MiniApp worker pool delegation',
       },
       {
-        regex: /\bworker_is_idle\b/,
-        message: 'missing product-domain worker idle policy use',
+        regex: /\bCoreMiniAppWorkerEventSink\b/,
+        message: 'missing core MiniApp worker event compatibility sink',
+      },
+      {
+        regex: /\bemit_global_event\b/,
+        message: 'missing MiniApp worker event bridge to existing core event bus',
+      },
+      {
+        regex: /\bmap_worker_pool_error\b/,
+        message: 'missing MiniApp worker pool error compatibility mapping',
+      },
+      {
+        regex: /\bimpl MiniAppRuntimePort for JsWorkerPool\b/,
+        message: 'missing MiniApp runtime port adapter owner',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/miniapp/js_worker.rs',
+    reason:
+      'core MiniApp JS worker path must stay a compatibility re-export over the integrations owner',
+    patterns: [
+      {
+        regex: /\bpub use bitfun_services_integrations::miniapp::worker::\{/,
+        message: 'missing services-owned MiniApp JS worker facade re-export',
+      },
+      {
+        regex: /\bMiniAppWorkerEventSink\b/,
+        message: 'missing MiniApp worker event sink facade export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-integrations/src/miniapp/worker.rs',
+    reason:
+      'services-integrations must own MiniApp JS worker process spawning and RPC routing behind the miniapp-runtime feature',
+    patterns: [
+      {
+        regex: /\bpub struct JsWorker\b/,
+        message: 'missing services-owned MiniApp JS worker process owner',
+      },
+      {
+        regex: /\bpub trait MiniAppWorkerEventSink\b/,
+        message: 'missing MiniApp worker event sink contract',
+      },
+      {
+        regex: /\bprocess_manager::create_tokio_command\b/,
+        message: 'missing services-owned MiniApp JS worker process spawning',
+      },
+      {
+        regex: /\bPendingResponseMap\b/,
+        message: 'missing MiniApp worker JSON-RPC pending-response routing owner',
+      },
+      {
+        regex: /\buuid::Uuid::new_v4\b/,
+        message: 'missing MiniApp worker RPC id generation owner',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-integrations/src/miniapp/worker_pool.rs',
+    reason:
+      'services-integrations must own MiniApp JS worker pool lifecycle, install-deps execution, and runtime port implementation behind the miniapp-runtime feature',
+    patterns: [
+      {
+        regex: /\bpub struct JsWorkerPool\b/,
+        message: 'missing services-owned MiniApp JS worker pool owner',
+      },
+      {
+        regex: /\bMiniAppWorkerPoolError\b/,
+        message: 'missing MiniApp worker pool integration error type',
       },
       {
         regex: /\bworker_pool_at_capacity\b/,
@@ -5856,8 +6184,16 @@ export const requiredContentRules = [
         message: 'missing product-domain worker LRU policy use',
       },
       {
+        regex: /\bplan_install_deps\b/,
+        message: 'missing product-domain install-deps plan use',
+      },
+      {
+        regex: /\bprocess_manager::create_tokio_command\b/,
+        message: 'missing services-owned MiniApp install-deps process execution',
+      },
+      {
         regex: /\bimpl MiniAppRuntimePort for JsWorkerPool\b/,
-        message: 'missing MiniApp runtime port adapter owner',
+        message: 'missing MiniApp runtime port implementation in integrations owner',
       },
     ],
   },

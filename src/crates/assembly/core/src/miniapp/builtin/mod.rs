@@ -8,15 +8,13 @@
 use crate::miniapp::manager::MiniAppManager;
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_product_domains::miniapp::builtin::{
-    build_builtin_package_json, build_builtin_seed_meta, builtin_source_files,
-    parse_builtin_install_marker, preserved_builtin_created_at, resolve_builtin_seed_action,
-    resolve_builtin_seed_check, serialize_builtin_install_marker, BuiltinInstallMarker,
-    BuiltinSeedAction, BuiltinSeedCheck, BUILTIN_INSTALL_MARKER, BUILTIN_PLACEHOLDER_COMPILED_HTML,
-    LEGACY_BUILTIN_VERSION_MARKER,
+    resolve_builtin_seed_action, resolve_builtin_seed_check, BuiltinInstallMarker,
+    BuiltinSeedAction, BuiltinSeedCheck, BUILTIN_INSTALL_MARKER,
 };
 pub use bitfun_product_domains::miniapp::builtin::{
     BuiltinMiniAppBundle as BuiltinApp, BUILTIN_APPS,
 };
+use bitfun_services_integrations::miniapp::builtin_io as miniapp_builtin_io;
 use chrono::Utc;
 use std::path::Path;
 use std::sync::Arc;
@@ -63,11 +61,7 @@ async fn seed_one(manager: &Arc<MiniAppManager>, app: &BuiltinApp) -> BitFunResu
                 .mark_builtin_update_available(app.id, app.version, &artifacts.content_hash, now)
                 .await?;
             write_builtin_install_marker(&marker_path, &artifacts.marker).await?;
-            write_file(
-                app_dir.join(LEGACY_BUILTIN_VERSION_MARKER),
-                &artifacts.legacy_version,
-            )
-            .await?;
+            write_legacy_builtin_version_marker(&app_dir, &artifacts.legacy_version).await?;
             if recorded {
                 log::info!(
                     "preserved customized builtin miniapp '{}' and recorded bundled update v{}",
@@ -96,59 +90,16 @@ async fn seed_builtin_bundle(
     now: i64,
 ) -> BitFunResult<()> {
     let app_dir = manager.path_manager().miniapp_dir(app.id);
-    let source_dir = app_dir.join("source");
-    tokio::fs::create_dir_all(&source_dir)
+    miniapp_builtin_io::prepare_builtin_seed_bundle_files(&app_dir, app, now)
         .await
-        .map_err(|e| BitFunError::io(format!("create dir failed: {}", e)))?;
-
-    // meta.json — parse bundled meta, then set id/timestamps. Preserve created_at if present.
-    let meta_path = app_dir.join("meta.json");
-    let existing_meta_json = tokio::fs::read_to_string(&meta_path).await.ok();
-    let meta = build_builtin_seed_meta(
-        app,
-        preserved_builtin_created_at(existing_meta_json.as_deref()),
-        now,
-    )
-    .map_err(|e| BitFunError::parse(format!("invalid bundled meta.json: {}", e)))?;
-
-    let meta_json = serde_json::to_string_pretty(&meta).map_err(BitFunError::from)?;
-    tokio::fs::write(&meta_path, meta_json)
-        .await
-        .map_err(|e| BitFunError::io(format!("write meta.json failed: {}", e)))?;
-
-    // Source files (always overwrite).
-    for (file_name, content) in builtin_source_files(app) {
-        write_file(source_dir.join(file_name), content).await?;
-    }
-
-    // package.json — overwrite with empty deps; built-in apps must not require npm install.
-    let pkg = build_builtin_package_json(app.id);
-    let pkg_json = serde_json::to_string_pretty(&pkg).map_err(BitFunError::from)?;
-    write_file(app_dir.join("package.json"), &pkg_json).await?;
-
-    // Preserve user's storage.json if present, otherwise initialize to "{}".
-    let storage_path = app_dir.join("storage.json");
-    if !storage_path.exists() {
-        write_file(storage_path, "{}").await?;
-    }
-
-    // Placeholder compiled.html so storage::load() doesn't fail before recompile.
-    write_file(
-        app_dir.join("compiled.html"),
-        BUILTIN_PLACEHOLDER_COMPILED_HTML,
-    )
-    .await?;
+        .map_err(map_builtin_io_error)?;
 
     // Recompile to assemble the final compiled.html with bridge + theme + import map.
     manager.recompile(app.id, "dark", None).await?;
 
     let marker_path = app_dir.join(BUILTIN_INSTALL_MARKER);
     write_builtin_install_marker(&marker_path, &artifacts.marker).await?;
-    write_file(
-        app_dir.join(LEGACY_BUILTIN_VERSION_MARKER),
-        &artifacts.legacy_version,
-    )
-    .await?;
+    write_legacy_builtin_version_marker(&app_dir, &artifacts.legacy_version).await?;
     log::info!(
         "seeded builtin miniapp '{}' (v{}, {})",
         app.id,
@@ -159,43 +110,40 @@ async fn seed_builtin_bundle(
 }
 
 async fn read_builtin_install_marker(path: &Path) -> BitFunResult<Option<BuiltinInstallMarker>> {
-    let content = match tokio::fs::read_to_string(path).await {
-        Ok(content) => content,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => {
-            return Err(BitFunError::io(format!(
-                "read builtin marker {} failed: {}",
-                path.display(),
-                error
-            )));
-        }
-    };
-
-    match parse_builtin_install_marker(&content) {
-        Ok(marker) => Ok(Some(marker)),
-        Err(error) => {
-            log::warn!(
-                "ignore invalid builtin miniapp marker {}: {}",
-                path.display(),
-                error
-            );
-            Ok(None)
-        }
-    }
+    miniapp_builtin_io::read_builtin_install_marker(path)
+        .await
+        .map_err(map_builtin_io_error)
 }
 
 async fn write_builtin_install_marker(
     path: &Path,
     marker: &BuiltinInstallMarker,
 ) -> BitFunResult<()> {
-    let content = serialize_builtin_install_marker(marker).map_err(BitFunError::from)?;
-    write_file(path, &content).await
+    miniapp_builtin_io::write_builtin_install_marker(path, marker)
+        .await
+        .map_err(map_builtin_io_error)
 }
 
-async fn write_file<P: AsRef<std::path::Path>>(path: P, content: &str) -> BitFunResult<()> {
-    tokio::fs::write(path.as_ref(), content)
+async fn write_legacy_builtin_version_marker(path: &Path, content: &str) -> BitFunResult<()> {
+    miniapp_builtin_io::write_legacy_builtin_version_marker(path, content)
         .await
-        .map_err(|e| BitFunError::io(format!("write {} failed: {}", path.as_ref().display(), e)))
+        .map_err(map_builtin_io_error)
+}
+
+fn map_builtin_io_error(err: miniapp_builtin_io::MiniAppBuiltinIoError) -> BitFunError {
+    match err {
+        err @ miniapp_builtin_io::MiniAppBuiltinIoError::Io { .. } => {
+            BitFunError::io(err.to_string())
+        }
+        miniapp_builtin_io::MiniAppBuiltinIoError::InvalidBundledMeta(source) => {
+            BitFunError::parse(format!("invalid bundled meta.json: {}", source))
+        }
+        miniapp_builtin_io::MiniAppBuiltinIoError::MarkerSerialization(source)
+        | miniapp_builtin_io::MiniAppBuiltinIoError::MetaSerialization(source)
+        | miniapp_builtin_io::MiniAppBuiltinIoError::PackageSerialization(source) => {
+            BitFunError::from(source)
+        }
+    }
 }
 
 #[cfg(test)]

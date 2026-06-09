@@ -149,6 +149,126 @@ export const forbiddenContentRules = [
         message:
           'core DeepResearch citation hook must not re-own citation regex parsing; use bitfun-agent-runtime::deep_research',
       },
+      {
+        regex: /\btokio::fs\b/,
+        message:
+          'core DeepResearch citation hook must not own report filesystem IO; use bitfun-services-integrations::deep_research',
+      },
+      {
+        regex: /\bdisplay_map\.json\b/,
+        message:
+          'core DeepResearch citation hook must not own display-map sidecar persistence; use bitfun-services-integrations::deep_research',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/miniapp/host_dispatch.rs',
+    patterns: [
+      {
+        regex: /\btokio::fs\b/,
+        message:
+          'core MiniApp host-dispatch adapter must not own filesystem execution; use bitfun-services-integrations::miniapp::host_dispatch',
+      },
+      {
+        regex: /\bprocess_manager::create_tokio_command\b/,
+        message:
+          'core MiniApp host-dispatch adapter must not own shell process execution; use bitfun-services-integrations::miniapp::host_dispatch',
+      },
+      {
+        regex: /\breqwest::Client\b/,
+        message:
+          'core MiniApp host-dispatch adapter must not own net.fetch execution; use bitfun-services-integrations::miniapp::host_dispatch',
+      },
+      {
+        regex: /\basync fn dispatch_fs\b/,
+        message:
+          'core MiniApp host-dispatch adapter must not re-own fs dispatch helpers',
+      },
+      {
+        regex: /\basync fn dispatch_shell\b/,
+        message:
+          'core MiniApp host-dispatch adapter must not re-own shell dispatch helpers',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/miniapp/js_worker.rs',
+    patterns: [
+      {
+        regex: /\btokio::process\b/,
+        message:
+          'core MiniApp JS worker facade must not own worker process types; use bitfun-services-integrations::miniapp::worker',
+      },
+      {
+        regex: /\bprocess_manager::create_tokio_command\b/,
+        message:
+          'core MiniApp JS worker facade must not spawn worker processes; use bitfun-services-integrations::miniapp::worker',
+      },
+      {
+        regex: /\bPendingResponseMap\b/,
+        message:
+          'core MiniApp JS worker facade must not own JSON-RPC response routing; use bitfun-services-integrations::miniapp::worker',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/miniapp/js_worker_pool.rs',
+    patterns: [
+      {
+        regex: /\bworker_pool_at_capacity\b/,
+        message:
+          'core MiniApp worker pool facade must not own pool policy; use bitfun-services-integrations::miniapp::worker_pool',
+      },
+      {
+        regex: /\bselect_lru_worker\b/,
+        message:
+          'core MiniApp worker pool facade must not own LRU policy; use bitfun-services-integrations::miniapp::worker_pool',
+      },
+      {
+        regex: /\bplan_install_deps\b/,
+        message:
+          'core MiniApp worker pool facade must not own install-deps planning; use bitfun-services-integrations::miniapp::worker_pool',
+      },
+      {
+        regex: /\bprocess_manager::create_tokio_command\b/,
+        message:
+          'core MiniApp worker pool facade must not execute install-deps processes; use bitfun-services-integrations::miniapp::worker_pool',
+      },
+      {
+        regex: /\bHashMap<String, WorkerEntry>\b/,
+        message:
+          'core MiniApp worker pool facade must not own worker pool state; use bitfun-services-integrations::miniapp::worker_pool',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/miniapp/storage.rs',
+    patterns: [
+      {
+        regex: /\btokio::fs\b/,
+        message:
+          'core MiniApp storage facade must not own filesystem IO; use bitfun-services-integrations::miniapp::storage',
+      },
+      {
+        regex: /\bMiniAppStorageLayout\b/,
+        message:
+          'core MiniApp storage facade must not own storage layout logic; use bitfun-services-integrations::miniapp::storage',
+      },
+      {
+        regex: /\bbuild_package_json\b/,
+        message:
+          'core MiniApp storage facade must not own package-json storage assembly; use bitfun-services-integrations::miniapp::storage',
+      },
+      {
+        regex: /\bparse_npm_dependencies\b/,
+        message:
+          'core MiniApp storage facade must not own package-json dependency parsing; use bitfun-services-integrations::miniapp::storage',
+      },
+      {
+        regex: /\bDRAFTS_CLEANUP_MARKER\b/,
+        message:
+          'core MiniApp storage facade must not own draft cleanup marker IO; use bitfun-services-integrations::miniapp::storage',
+      },
     ],
   },
   {
@@ -2145,7 +2265,7 @@ export const forbiddenContentUnderRules = [
       {
         regex: /\btokio::fs::/,
         message:
-          'product-domains must not own async storage IO; storage runtime remains in core/adapters',
+          'product-domains must not own async storage IO; storage runtime belongs in services-integrations',
       },
       {
         regex: /\bGitService::/,

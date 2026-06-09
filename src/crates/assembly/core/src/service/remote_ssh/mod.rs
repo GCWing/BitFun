@@ -9,16 +9,25 @@ mod disabled;
 #[cfg(feature = "ssh-remote")]
 pub mod manager;
 #[cfg(feature = "ssh-remote")]
-mod password_vault;
-#[cfg(feature = "ssh-remote")]
-mod remote_exec;
-#[cfg(feature = "ssh-remote")]
 pub mod remote_fs;
 #[cfg(feature = "ssh-remote")]
 pub mod remote_terminal;
 pub mod types;
 pub mod workspace_state;
 
+#[cfg(feature = "ssh-remote")]
+pub use bitfun_services_integrations::remote_ssh::{
+    get_global_remote_exec_process_manager, RemoteExecCommandRequest, RemoteExecCommandResponse,
+    RemoteExecControlAction, RemoteExecControlOrigin, RemoteExecControlRequest, RemoteExecError,
+    RemoteExecProcessLifecycleEvent, RemoteExecProcessLifecycleStatus, RemoteExecProcessManager,
+    RemoteExecResult, RemoteExecSessionCompletion, RemoteExecSessionCompletionSource,
+    RemoteExecSessionCompletionStatus, RemoteSendStdinRequest, RemoteWriteStdinRequest,
+};
+#[cfg(feature = "ssh-remote")]
+pub use bitfun_services_integrations::remote_ssh::{
+    KnownHostEntry, PTYSession, PortForward, PortForwardDirection, PortForwardManager,
+    SSHConnectionManager,
+};
 #[cfg(not(feature = "ssh-remote"))]
 pub use disabled::{
     get_global_remote_exec_process_manager, KnownHostEntry, PTYSession, PortForward,
@@ -29,19 +38,6 @@ pub use disabled::{
     RemoteExecSessionCompletionStatus, RemoteFileService, RemoteSendStdinRequest,
     RemoteTerminalManager, RemoteTerminalSession, RemoteWriteStdinRequest, SSHConnectionManager,
     SessionStatus,
-};
-#[cfg(feature = "ssh-remote")]
-pub use manager::{
-    KnownHostEntry, PTYSession, PortForward, PortForwardDirection, PortForwardManager,
-    SSHConnectionManager,
-};
-#[cfg(feature = "ssh-remote")]
-pub use remote_exec::{
-    get_global_remote_exec_process_manager, RemoteExecCommandRequest, RemoteExecCommandResponse,
-    RemoteExecControlAction, RemoteExecControlOrigin, RemoteExecControlRequest, RemoteExecError,
-    RemoteExecProcessLifecycleEvent, RemoteExecProcessLifecycleStatus, RemoteExecProcessManager,
-    RemoteExecResult, RemoteExecSessionCompletion, RemoteExecSessionCompletionSource,
-    RemoteExecSessionCompletionStatus, RemoteSendStdinRequest, RemoteWriteStdinRequest,
 };
 #[cfg(feature = "ssh-remote")]
 pub use remote_fs::RemoteFileService;

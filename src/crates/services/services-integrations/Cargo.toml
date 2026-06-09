@@ -14,6 +14,7 @@ tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }
+bitfun-agent-runtime = { path = "../../execution/agent-runtime", optional = true }
 bitfun-events = { path = "../../contracts/events" }
 bitfun-product-domains = { path = "../../contracts/product-domains", default-features = false, optional = true }
 bitfun-runtime-ports = { path = "../../contracts/runtime-ports", optional = true }
@@ -36,6 +37,13 @@ thiserror = { workspace = true, optional = true }
 tokio-util = { workspace = true, optional = true }
 uuid = { workspace = true, optional = true }
 which = { workspace = true, optional = true }
+dirs = { workspace = true, optional = true }
+russh = { workspace = true, optional = true }
+russh-sftp = { workspace = true, optional = true }
+russh-keys = { workspace = true, optional = true }
+shellexpand = { workspace = true, optional = true }
+ssh_config = { workspace = true, optional = true }
+terminal-core = { path = "../terminal", optional = true }
 
 [target.'cfg(not(windows))'.dependencies]
 git2 = { workspace = true, features = ["vendored-openssl"], optional = true }
@@ -43,6 +51,7 @@ git2 = { workspace = true, features = ["vendored-openssl"], optional = true }
 [features]
 default = []
 announcement = []
+deep-research = ["bitfun-agent-runtime"]
 git = ["bitfun-services-core", "chrono", "git2", "thiserror"]
 file-watch = ["notify"]
 function-agents = [
@@ -63,8 +72,36 @@ mcp = [
     "rmcp/transport-streamable-http-client-reqwest",
     "sse-stream",
 ]
+miniapp-runtime = [
+    "base64",
+    "bitfun-product-domains/miniapp",
+    "bitfun-services-core",
+    "dep:bitfun-product-domains",
+    "dirs",
+    "reqwest",
+    "uuid",
+    "which",
+]
 remote-connect = ["async-trait", "base64", "bitfun-runtime-ports", "uuid"]
 remote-ssh = ["dunce", "sha2", "tokio-util"]
+remote-ssh-concrete = [
+    "remote-ssh",
+    "aes-gcm",
+    "anyhow",
+    "async-trait",
+    "base64",
+    "chrono",
+    "dirs",
+    "rand",
+    "russh",
+    "russh-sftp",
+    "russh-keys",
+    "shellexpand",
+    "ssh_config",
+    "terminal-core",
+    "thiserror",
+    "uuid",
+]
 workspace-search = [
     "async-trait",
     "bitfun-services-core",
@@ -74,11 +111,15 @@ workspace-search = [
 ]
 product-full = [
     "announcement",
+    "deep-research",
     "file-watch",
     "function-agents",
     "git",
+    "miniapp-runtime",
     "mcp",
     "remote-connect",
     "remote-ssh",
+    "remote-ssh-concrete",
     "workspace-search",
 ]
+ssh_config = ["dep:ssh_config"]

@@ -8,6 +8,7 @@ mod registry;
 // Utility hooks used by specific agents (not themselves an agent definition):
 // citation_renumber finalizes a DeepResearch report's cit_XXX references into
 // consecutive `[N]` display IDs after the dialog turn completes.
+#[cfg(feature = "product-full")]
 pub(crate) mod citation_renumber;
 
 use crate::agentic::session::{SystemPromptCacheIdentity, UserContextCacheIdentity};

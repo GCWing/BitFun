@@ -22,8 +22,8 @@ ports；具体 runtime 行为不属于本 crate。
   seed-plan facts、marker wire format、host primitive call plan 和窄 port。
 - `function-agents` 可以拥有 function-agent DTO、prompt/domain policy、response parsing/repair rule、file-shape analysis
   和 Git/AI port trait。
-- Core 仍拥有 filesystem writes、marker IO、worker/host side effect、compile orchestration、`PathManager` integration、
-  concrete Git/AI service、provider acquisition 和 transport error mapping。
+- 具体 filesystem writes、marker IO、host dispatch、worker side effect、compile orchestration、`PathManager` integration、
+  concrete Git/AI service、provider acquisition 和 transport error mapping 均属于本 crate 外部。
 
 ## 验证
 

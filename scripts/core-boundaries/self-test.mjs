@@ -186,8 +186,8 @@ export function runManifestParserSelfTest({
     ']',
     'service-integrations = ["dep:git2", "dep:rmcp"]',
     'ssh-remote = [',
+    '    "bitfun-services-integrations/remote-ssh-concrete",',
     '    "russh",',
-    '    "russh-sftp",',
     ']',
     '[dependencies]',
     'git2 = { workspace = true, optional = true }',
@@ -201,7 +201,7 @@ export function runManifestParserSelfTest({
   if (!parsedFeatures.get('service-integrations')?.refs.includes('dep:rmcp')) {
     throw new Error('feature parser must detect inline dependency feature references');
   }
-  if (!parsedFeatures.get('ssh-remote')?.refs.includes('russh-sftp')) {
+  if (!parsedFeatures.get('ssh-remote')?.refs.includes('russh')) {
     throw new Error('feature parser must detect implicit optional dependency feature references');
   }
 
@@ -1736,7 +1736,11 @@ export function runManifestParserSelfTest({
     },
     {
       path: 'src/crates/assembly/core/src/agentic/agents/citation_renumber.rs',
-      contracts: ['run_for_session_workspace', 'try_renumber_research_report', 'renumber_research_report', 'display_map', 'REJECTED'],
+      contracts: ['run_for_session_workspace', 'bitfun_services_integrations::deep_research'],
+    },
+    {
+      path: 'src/crates/services/services-integrations/src/deep_research.rs',
+      contracts: ['run_for_session_workspace', 'try_renumber_research_report', 'renumber_research_report', 'report.md', 'citations.md', 'display_map', 'REJECTED'],
     },
     {
       path: 'src/crates/execution/agent-runtime/src/deep_research.rs',
@@ -1889,7 +1893,31 @@ export function runManifestParserSelfTest({
     },
     {
       path: 'src/crates/assembly/core/src/miniapp/storage.rs',
-      contracts: ['MiniAppStoragePort'],
+      contracts: [
+        'ServiceMiniAppStorage',
+        'map_storage_error',
+        'MiniAppImportBundleRequest',
+        'read_import_meta_json',
+        'write_import_bundle',
+        'MiniAppStoragePort',
+      ],
+    },
+    {
+      path: 'src/crates/services/services-integrations/src/miniapp/storage.rs',
+      contracts: [
+        'pub struct MiniAppStorage',
+        'MiniAppStorageError',
+        'MiniAppImportBundleRequest',
+        'read_import_meta_json',
+        'write_import_bundle',
+        'tokio::fs::read_to_string',
+        'tokio::fs::write',
+        'tokio::fs::remove_dir_all',
+        'MiniAppStorageLayout',
+        'MiniAppStoragePort',
+        'storage_port_adapter_preserves_existing_file_lifecycle',
+        'import_bundle_io_preserves_copy_and_fallback_contract',
+      ],
     },
     {
       path: 'src/crates/assembly/core/src/miniapp/builtin/mod.rs',
@@ -1899,17 +1927,29 @@ export function runManifestParserSelfTest({
         'should_seed_builtin_app',
         'resolve_builtin_seed_check',
         'resolve_builtin_seed_action',
-        'builtin_source_files',
-        'build_builtin_seed_meta',
-        'preserved_builtin_created_at',
-        'BUILTIN_PLACEHOLDER_COMPILED_HTML',
+        'miniapp_builtin_io::prepare_builtin_seed_bundle_files',
+        'read_builtin_install_marker',
+        'miniapp_builtin_io::read_builtin_install_marker',
+        'write_builtin_install_marker',
+        'miniapp_builtin_io::write_builtin_install_marker',
+        'recompile',
+        'load_customization_metadata',
+        'available_builtin_update',
+      ],
+    },
+    {
+      path: 'src/crates/services/services-integrations/src/miniapp/builtin_io.rs',
+      contracts: [
         'read_builtin_install_marker',
         'parse_builtin_install_marker',
         'write_builtin_install_marker',
         'serialize_builtin_install_marker',
-        'recompile',
-        'load_customization_metadata',
-        'available_builtin_update',
+        'prepare_builtin_seed_bundle_files',
+        'builtin_source_files',
+        'build_builtin_seed_meta',
+        'preserved_builtin_created_at',
+        'BUILTIN_PLACEHOLDER_COMPILED_HTML',
+        'storage.json',
       ],
     },
     {
@@ -1940,6 +1980,14 @@ export function runManifestParserSelfTest({
       path: 'src/crates/assembly/core/src/miniapp/host_dispatch.rs',
       contracts: [
         'dispatch_host',
+        'bitfun_services_integrations::miniapp::host_dispatch::dispatch_host',
+        'map_host_dispatch_error',
+      ],
+    },
+    {
+      path: 'src/crates/services/services-integrations/src/miniapp/host_dispatch.rs',
+      contracts: [
+        'dispatch_host',
         'split_host_method',
         'dispatch_fs',
         'plan_fs_legacy_path_check',
@@ -1951,16 +1999,46 @@ export function runManifestParserSelfTest({
         'shell_exec_default_env',
         'command_basename_allowed',
         'host_allowed_by_allowlist',
+        'process_manager::create_tokio_command',
       ],
     },
     {
       path: 'src/crates/assembly/core/src/miniapp/js_worker_pool.rs',
       contracts: [
         'MiniAppRuntimePort',
-        'plan_install_deps',
-        'worker_is_idle',
+        'ServiceJsWorkerPool',
+        'CoreMiniAppWorkerEventSink',
+        'emit_global_event',
+        'map_worker_pool_error',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/miniapp/js_worker.rs',
+      contracts: [
+        'pub use bitfun_services_integrations::miniapp::worker::{',
+        'MiniAppWorkerEventSink',
+      ],
+    },
+    {
+      path: 'src/crates/services/services-integrations/src/miniapp/worker.rs',
+      contracts: [
+        'pub struct JsWorker',
+        'pub trait MiniAppWorkerEventSink',
+        'process_manager::create_tokio_command',
+        'PendingResponseMap',
+        'uuid::Uuid::new_v4',
+      ],
+    },
+    {
+      path: 'src/crates/services/services-integrations/src/miniapp/worker_pool.rs',
+      contracts: [
+        'pub struct JsWorkerPool',
+        'MiniAppWorkerPoolError',
         'worker_pool_at_capacity',
         'select_lru_worker',
+        'plan_install_deps',
+        'process_manager::create_tokio_command',
+        'MiniAppRuntimePort',
       ],
     },
     {
@@ -2006,6 +2084,26 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/assembly/core/src/service/remote_ssh/disabled.rs',
       contracts: ['Remote SSH support is disabled', 'SSHConnectionManager', 'RemoteFileService', 'RemoteTerminalManager'],
+    },
+    {
+      path: 'src/crates/services/services-integrations/src/remote_ssh/mod.rs',
+      contracts: ['remote-ssh-concrete', 'pub mod manager', 'mod remote_exec', 'pub mod remote_fs', 'pub mod remote_terminal'],
+    },
+    {
+      path: 'src/crates/services/services-integrations/src/remote_ssh/manager.rs',
+      contracts: ['SSHConnectionManager', 'russh::client::connect_stream', 'SftpSession', 'prunes_password_connection_without_vault_entry'],
+    },
+    {
+      path: 'src/crates/services/services-integrations/src/remote_ssh/remote_exec.rs',
+      contracts: ['RemoteExecProcessManager', 'GLOBAL_REMOTE_EXEC_MANAGER', 'remote_exec_session_ids_match_local_test_baseline'],
+    },
+    {
+      path: 'src/crates/services/services-integrations/src/remote_ssh/remote_fs.rs',
+      contracts: ['RemoteFileService', 'sftp_read', 'sftp_write'],
+    },
+    {
+      path: 'src/crates/services/services-integrations/src/remote_ssh/remote_terminal.rs',
+      contracts: ['RemoteTerminalManager', 'PtyCommand', 'channel.window_change'],
     },
     {
       path: 'src/crates/services/services-integrations/src/remote_ssh/paths.rs',
@@ -2152,10 +2250,10 @@ export function runManifestParserSelfTest({
         'apply_draft_to_active',
         'persist_sync_from_fs_result_for_app',
         'compile_source',
-        'REQUIRED_SOURCE_FILES',
-        'MiniAppImportLayout',
+        'read_import_meta_json',
         'build_import_fallbacks',
         'prepare_imported_meta',
+        'write_import_bundle',
         'persist_import_runtime_state',
         'runtime_preflight_preserves_recompile_sync_rollback_and_deps_state',
         'import_from_path_preserves_fallback_files_recompile_and_runtime_state',

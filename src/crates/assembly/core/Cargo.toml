@@ -131,10 +131,6 @@ tokio-tungstenite = { workspace = true, optional = true }
 
 # SSH - Remote SSH support (optional feature)
 russh = { workspace = true, optional = true }
-russh-sftp = { workspace = true, optional = true }
-russh-keys = { workspace = true, optional = true }
-shellexpand = { workspace = true, optional = true }
-ssh_config = { workspace = true, optional = true }
 
 # Relay server shared library (embedded relay reuses standalone relay logic)
 bitfun-relay-server = { path = "../../../apps/relay-server", optional = true }
@@ -211,14 +207,9 @@ service-integrations = [
 tool-packs = ["dep:bitfun-tool-packs", "bitfun-tool-packs/product-full"]
 tauri-support = ["tauri"]  # Optional tauri support
 ssh-remote = [
-    "dep:aes-gcm",
-    "dep:rand",
+    "bitfun-services-integrations/remote-ssh-concrete",
     "russh",
-    "russh-sftp",
-    "russh-keys",
-    "shellexpand",
-    "ssh_config",
-]  # russh-keys pure-Rust crypto backend (no openssl)
+]
 
 [build-dependencies]
 sha2 = { workspace = true }

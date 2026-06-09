@@ -4,20 +4,21 @@
 
 This layer owns reusable concrete implementations that touch local systems or
 runtime infrastructure: filesystem, git, file watch, terminal, MCP, remote
-connectivity, process lifecycle, and similar OS/network capabilities.
+connectivity, process lifecycle, MiniApp concrete runtime IO, and similar
+OS/network capabilities.
 
 ## Modules
 
 | Crate | Responsibility | Local doc |
 |---|---|---|
 | `services-core` | Reusable local service primitives without product assembly decisions | [AGENTS.md](services-core/AGENTS.md) |
-| `services-integrations` | Concrete MCP, git, remote, file-watch, and product-domain port implementations | [AGENTS.md](services-integrations/AGENTS.md) |
+| `services-integrations` | Concrete MCP, git, remote, file-watch, MiniApp runtime, and product-domain port implementations | [AGENTS.md](services-integrations/AGENTS.md) |
 | `terminal` | PTY, shell integration, and terminal session infrastructure | [AGENTS.md](terminal/AGENTS.md) |
 
 ## Placement Rules
 
 - Put concrete OS, process, filesystem, git, terminal, MCP, remote SSH,
-  file-watch, and network service implementations here.
+  file-watch, MiniApp runtime IO, and network service implementations here.
 - Implement `contracts`, `execution`, or `contracts/product-domains` ports here
   when the implementation needs concrete dependencies.
 - Keep protocol/transport projection in `adapters`, and keep product capability

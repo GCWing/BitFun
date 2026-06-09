@@ -23,10 +23,10 @@
 - Desktop / CLI / ACP 仍通过 `bitfun-core/product-full` 获取完整能力；Server / Web / Mobile Web 不直接依赖 core，但尚未完成按交付形态裁剪最小 feature / dependency。
 - `runtime-services` 已有 typed builder、capability availability 和 core product runtime provider adapter，但不少 concrete provider 仍在 core 创建或持有。
 - remote-connect command routing、wire response assembly、workspace/session/poll/file/dialog/cancel/interaction helper 和 state tracker contract 已归入 `services-integrations`；core 保留 host adapter、加密入口和全局 tracker 接线。
-- `tool-contracts` 已承接 provider-neutral tool manifest、admission、catalog、result policy、tool execution presentation 和截断恢复提示等纯策略；`tool-execution` 已承接低层 IO/search helper、Bash shell 可复用策略、结果渲染、tool pipeline batching plan 与 retry policy；`services-integrations` 已承接本地 indexed workspace search service owner、crate-private flashgrep protocol internals、remote SSH search 纯策略与 remote workspace search concrete owner；`agent-runtime` 已承接 tool confirmation plan/failure/wait-result、light checkpoint summary policy、prompt environment facts、DeepReview task-execution provider-neutral shaping 和 DeepResearch citation renumber 纯重排。terminal lifecycle / PTY、permission UI channel side effect、tool pipeline concrete state/cancellation/scheduler glue 和完整 execution pipeline owner 仍未完全迁移。
+- `tool-contracts` 已承接 provider-neutral tool manifest、admission、catalog、result policy、tool execution presentation 和截断恢复提示等纯策略；`tool-execution` 已承接低层 IO/search helper、Bash shell 可复用策略、结果渲染、tool pipeline batching plan 与 retry policy；`services-integrations` 已承接本地 indexed workspace search service owner、crate-private flashgrep protocol internals、remote SSH search 纯策略、remote workspace search concrete owner、remote SSH/SFTP/PTY concrete owner、DeepResearch report IO、MiniApp host dispatch、built-in seed/marker IO、MiniApp JS worker process/pool owner、MiniApp storage filesystem IO 和 MiniApp import bundle IO；`agent-runtime` 已承接 tool confirmation plan/failure/wait-result、light checkpoint summary policy、prompt environment facts、DeepReview task-execution provider-neutral shaping 和 DeepResearch citation renumber 纯重排。permission UI channel side effect、tool pipeline concrete state/cancellation/scheduler glue、DeepReview concrete launch/provider wait/report persistence 和完整 execution pipeline owner 仍未完全迁移。
 - `agent-stream` 已承接统一 stream DTO、tool-call 累积和 replay 契约；provider SSE / 响应解析测试归属 `ai-adapters`。
 - `harness` 当前主要承接 descriptor / route plan / registry contract；Deep Review、DeepResearch、MiniApp 的 concrete workflow execution 仍在 core 或产品路径。
-- `product-domains` 已承接 MiniApp / function-agent 的部分纯领域逻辑；worker、host side effect、AI acquisition、marker IO 等 concrete path 仍未完成 owner 迁移。
+- `product-domains` 已承接 MiniApp / function-agent 的部分纯领域逻辑；MiniApp storage shape、host call plan、seed-plan facts、marker wire format、worker capacity / idle / LRU policy 已保持纯领域归属。AI acquisition、manager 编排、concrete workflow execution 等 concrete path 仍未完成 owner 迁移。
 
 ## 3. PR 准出门禁
 
@@ -48,7 +48,7 @@ terminal lifecycle、concrete workflow execution、scheduler/session side effect
 
 | 阶段 | 目标 | 准出标准 |
 |---|---|---|
-| M11 Concrete workflow / scheduler / terminal owner 深迁移 | 将 DeepReview launch/provider wait/report persistence、DeepResearch concrete workflow/storage IO、MiniApp worker/host/seed/marker IO、scheduler/event/session side effect、terminal lifecycle / PTY 和 remote shell/terminal concrete impl 分阶段迁出 core | 每个 concrete owner 有 focused behavior tests；不改变权限、事件、session、remote、MiniApp 或 terminal 可见行为；owner crate 不依赖 app/service concrete impl |
+| M11 Concrete owner 深迁移收口 | 已迁出 remote SSH/SFTP/PTY concrete owner、DeepResearch report IO、MiniApp host dispatch、built-in seed/marker IO、MiniApp JS worker process/pool owner、MiniApp storage filesystem IO 和 MiniApp import bundle IO；剩余只保留需要单独接口设计的 DeepReview launch/provider wait/report persistence、scheduler/event/session side effect、tool pipeline concrete state/cancellation/scheduler glue 和 MiniApp manager concrete workflow execution | 每个已迁 concrete owner 有 focused behavior tests 和 boundary anchors；不改变权限、事件、session、remote、MiniApp 或 terminal 可见行为；剩余高风险项不得无设计确认硬迁 |
 | M12 Product shape / feature trimming / Core facade 收口 | 基于 capability matrix 裁剪 no-default/product-full 和不同交付形态依赖，并将 `bitfun-core` 限定为 compatibility facade、product-full assembly 与少量迁移期 adapter | cargo metadata / cargo tree 有对比数据；各产品形态关键入口验证通过；边界脚本阻止 owner 逻辑回流 |
 
 ## 5. 固定执行流程

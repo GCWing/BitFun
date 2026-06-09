@@ -4,7 +4,7 @@
 //! workspaces while keeping tool-owned command sessions separate from UI
 //! terminal sessions.
 
-use crate::service::remote_ssh::SSHConnectionManager;
+use crate::remote_ssh::SSHConnectionManager;
 use anyhow::{anyhow, Context};
 use rand::Rng;
 use russh::client::Msg;

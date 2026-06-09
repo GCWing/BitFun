@@ -22,7 +22,7 @@ BitFun 是一个由 Rust workspace 与 React 前端组成的项目。
 | 1 | 接口与入口层 | `src/apps/*`, `src/web-ui`, `src/mobile-web`, `BitFun-Installer`, `tests/e2e`, `src/crates/interfaces` | 产品宿主、命令、UI 入口、协议接口和跨形态测试 | desktop、CLI、server、relay、Web UI、mobile web、installer、E2E、`acp` | 最近的本地 `AGENTS.md`；[interfaces](src/crates/interfaces/AGENTS.md) |
 | 2 | 产品组装层 | `src/crates/assembly` | 兼容导出、产品能力选择、product-full 接线和 adapter/service 注册 | `core`, `product-capabilities` | [AGENTS.md](src/crates/assembly/AGENTS.md) |
 | 3 | 适配层 | `src/crates/adapters` | AI/API/transport/WebDriver 协议 adapter 和外部 provider 转换 | `ai-adapters`, `api-layer`, `transport`, `webdriver` | [AGENTS.md](src/crates/adapters/AGENTS.md) |
-| 4 | 服务实现层 | `src/crates/services` | 可复用 OS、filesystem、terminal、MCP、remote、git、watch、process 和 network 实现 | `services-core`, `services-integrations`, `terminal` | [AGENTS.md](src/crates/services/AGENTS.md) |
+| 4 | 服务实现层 | `src/crates/services` | 可复用 OS、filesystem、terminal、MCP、remote、git、watch、process、network 和 MiniApp runtime IO 实现 | `services-core`, `services-integrations`, `terminal` | [AGENTS.md](src/crates/services/AGENTS.md) |
 | 5 | 执行原语层 | `src/crates/execution` | 可移植 agent、harness、stream、DeepReview policy/report、typed-service、tool-contract、tool-group 和 tool-execution 构件 | `agent-runtime`, `agent-stream`, `tool-contracts`, `harness`, `runtime-services`, `tool-provider-groups`, `tool-execution` | [AGENTS.md](src/crates/execution/AGENTS.md) |
 | 6 | 稳定契约与产品领域层 | `src/crates/contracts` | 跨层共享 DTO、事件形状、runtime port、产品领域契约和策略 | `core-types`, `events`, `runtime-ports`, `product-domains` | [AGENTS.md](src/crates/contracts/AGENTS.md) |
 
@@ -31,7 +31,7 @@ BitFun 是一个由 Rust workspace 与 React 前端组成的项目。
 - 接口与入口层暴露选定产品行为；可复用行为应下移。
 - 组装层只接线下层并选择产品能力事实，不实现具体 adapter、OS 或 service 细节。
 - 适配层翻译协议和外部系统，不拥有产品能力选择或可复用 OS service 行为。
-- 服务实现层负责可复用的 OS、process、terminal、MCP、remote、git 和 filesystem 能力。
+- 服务实现层负责可复用的 OS、process、terminal、MCP、remote、git、filesystem 和 MiniApp runtime IO 能力。
 - 执行原语层只放可移植运行时构件，不拥有宿主或交付形态。
 - 契约层保持轻行为，不得向上依赖。
 

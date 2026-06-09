@@ -6,6 +6,9 @@
 #[cfg(feature = "announcement")]
 pub mod announcement;
 
+#[cfg(feature = "deep-research")]
+pub mod deep_research;
+
 #[cfg(feature = "file-watch")]
 pub mod file_watch;
 
@@ -17,6 +20,9 @@ pub mod git;
 
 #[cfg(feature = "mcp")]
 pub mod mcp;
+
+#[cfg(feature = "miniapp-runtime")]
+pub mod miniapp;
 
 #[cfg(feature = "remote-connect")]
 pub mod remote_connect;

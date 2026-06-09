@@ -31,9 +31,10 @@ policies, and narrow ports; concrete runtime behavior belongs outside this crate
   facts, marker wire formats, host primitive call plans, and narrow ports.
 - `function-agents` may own function-agent DTOs, prompt/domain policies,
   response parsing and repair rules, file-shape analysis, and Git/AI port traits.
-- Core still owns filesystem writes, marker IO, worker/host side effects,
+- Concrete filesystem writes, marker IO, host dispatch, worker side effects,
   compile orchestration, `PathManager` integration, concrete Git/AI services,
-  provider acquisition, and transport error mapping.
+  provider acquisition, and transport error mapping must stay outside
+  `product-domains`.
 
 ## Verification
 

@@ -26,16 +26,20 @@ slices that are outside pure product logic but still platform-neutral.
   concrete scheduler/session restore, terminal pre-warm adapters, and product
   execution remain core-owned unless a reviewed port/provider moves them with
   equivalence tests.
-- Remote-SSH path/session identity helpers may live here; SSH channels, SFTP,
-  remote FS, remote terminal, and manager assembly remain core-owned unless a
-  reviewed port/provider move proves equivalence.
+- Remote-SSH path/session identity helpers, SSH channels, SFTP, remote FS,
+  remote terminal, and manager assembly live here behind explicit remote SSH
+  features.
 - Workspace search owns the local flashgrep daemon/session lifecycle and
   indexed-search result conversion behind `workspace-search`; product config
   and workspace bootstrap stay in the core facade as injected hooks.
 - Remote SSH workspace-search owns path/scope/probe/bundle/retry strategy plus
-  flashgrep session/context lifecycle behind a provider boundary. SSH channels
-  and manager assembly remain outside this crate until a reviewed provider
-  boundary moves them with equivalence tests.
+  flashgrep session/context lifecycle behind a provider boundary.
+- MiniApp runtime here may own host primitive dispatch, built-in seed file
+  writes, marker IO, storage/import bundle filesystem IO, and JS worker process/pool
+  lifecycle. Manager workflow orchestration remains outside this crate until
+  reviewed owner migration.
+- DeepResearch report IO here may own report/citation sidecar filesystem work;
+  provider-neutral citation numbering stays in `bitfun-agent-runtime`.
 
 ## Verification
 

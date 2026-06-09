@@ -42,6 +42,21 @@ export const facadeOnlyFiles = [
     reason: 'core remote SSH types facade must only re-export the integrations owner crate',
   },
   {
+    path: 'src/crates/assembly/core/src/service/remote_ssh/manager.rs',
+    importPrefix: 'bitfun_services_integrations::remote_ssh::manager',
+    reason: 'core remote SSH manager facade must only re-export the integrations owner crate',
+  },
+  {
+    path: 'src/crates/assembly/core/src/service/remote_ssh/remote_fs.rs',
+    importPrefix: 'bitfun_services_integrations::remote_ssh::remote_fs',
+    reason: 'core remote SSH filesystem facade must only re-export the integrations owner crate',
+  },
+  {
+    path: 'src/crates/assembly/core/src/service/remote_ssh/remote_terminal.rs',
+    importPrefix: 'bitfun_services_integrations::remote_ssh::remote_terminal',
+    reason: 'core remote SSH terminal facade must only re-export the integrations owner crate',
+  },
+  {
     path: 'src/crates/assembly/core/src/service/mcp/tool_info.rs',
     importPrefix: 'bitfun_services_integrations::mcp',
     reason: 'core MCP tool info facade must only re-export the integrations owner crate',

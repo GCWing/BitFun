@@ -1,8 +1,8 @@
-//! MiniApp manager — CRUD, version management, compile on save (V2: no permission guard, policy for Worker).
+//! MiniApp manager: CRUD, version management, compile on save.
 
 use crate::miniapp::compiler::compile;
 use crate::miniapp::permission_policy::resolve_policy;
-use crate::miniapp::storage::MiniAppStorage;
+use crate::miniapp::storage::{MiniAppImportBundleRequest, MiniAppStorage};
 use crate::miniapp::types::{
     MiniApp, MiniAppAiContext, MiniAppMeta, MiniAppPermissions, MiniAppSource,
 };
@@ -27,10 +27,7 @@ use bitfun_product_domains::miniapp::lifecycle::{
 use bitfun_product_domains::miniapp::ports::{
     MiniAppPortError, MiniAppPortErrorKind, MiniAppRuntimeFacade,
 };
-use bitfun_product_domains::miniapp::storage::{
-    build_import_fallbacks, MiniAppImportLayout, COMPILED_HTML, ESM_DEPS_JSON, META_JSON,
-    PACKAGE_JSON, REQUIRED_SOURCE_FILES, SOURCE_DIR, STORAGE_JSON,
-};
+use bitfun_product_domains::miniapp::storage::build_import_fallbacks;
 use chrono::Utc;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -691,44 +688,8 @@ impl MiniAppManager {
         source_path: PathBuf,
         workspace_root: Option<&Path>,
     ) -> BitFunResult<MiniApp> {
-        use crate::util::errors::BitFunError;
-
         let src = source_path.as_path();
-        if !src.is_dir() {
-            return Err(BitFunError::validation(format!(
-                "Not a directory: {}",
-                src.display()
-            )));
-        }
-
-        let import_layout = MiniAppImportLayout::new(src);
-        let meta_path = import_layout.meta_path();
-        let source_dir = import_layout.source_dir();
-        if !meta_path.exists() {
-            return Err(BitFunError::validation(format!(
-                "Missing meta.json in {}",
-                src.display()
-            )));
-        }
-        if !source_dir.is_dir() {
-            return Err(BitFunError::validation(format!(
-                "Missing source/ directory in {}",
-                src.display()
-            )));
-        }
-        for (required, path) in import_layout.required_source_file_paths() {
-            if !path.exists() {
-                return Err(BitFunError::validation(format!(
-                    "Missing source/{} in {}",
-                    required,
-                    src.display()
-                )));
-            }
-        }
-
-        let meta_content = tokio::fs::read_to_string(&meta_path)
-            .await
-            .map_err(|e| BitFunError::io(format!("Failed to read meta.json: {}", e)))?;
+        let meta_content = self.storage.read_import_meta_json(src).await?;
         let mut meta: MiniAppMeta = serde_json::from_str(&meta_content)
             .map_err(|e| BitFunError::parse(format!("Invalid meta.json: {}", e)))?;
 
@@ -737,70 +698,20 @@ impl MiniAppManager {
         prepare_imported_meta(&mut meta, &id, now);
 
         let fallbacks = build_import_fallbacks(&id);
-        let dest_dir = self.path_manager.miniapp_dir(&id);
-        let dest_source = dest_dir.join(SOURCE_DIR);
-        tokio::fs::create_dir_all(&dest_source)
-            .await
-            .map_err(|e| BitFunError::io(format!("Failed to create app dir: {}", e)))?;
-
         let meta_json = serde_json::to_string_pretty(&meta).map_err(BitFunError::from)?;
-        tokio::fs::write(dest_dir.join(META_JSON), meta_json)
-            .await
-            .map_err(|e| BitFunError::io(format!("Failed to write meta.json: {}", e)))?;
-
-        for name in REQUIRED_SOURCE_FILES {
-            let from = source_dir.join(name);
-            let to = dest_source.join(name);
-            if from.exists() {
-                tokio::fs::copy(&from, &to)
-                    .await
-                    .map_err(|e| BitFunError::io(format!("Failed to copy {}: {}", name, e)))?;
-            }
-        }
-        let esm_path = import_layout.esm_dependencies_path();
-        if esm_path.exists() {
-            tokio::fs::copy(&esm_path, dest_source.join(ESM_DEPS_JSON))
-                .await
-                .map_err(|e| {
-                    BitFunError::io(format!("Failed to copy esm_dependencies.json: {}", e))
-                })?;
-        } else {
-            tokio::fs::write(
-                dest_source.join(ESM_DEPS_JSON),
-                fallbacks.esm_dependencies_json,
-            )
-            .await
-            .map_err(|_e| BitFunError::io("Failed to write esm_dependencies.json"))?;
-        }
-
-        let pkg_src = import_layout.package_json_path();
-        if pkg_src.exists() {
-            tokio::fs::copy(&pkg_src, dest_dir.join(PACKAGE_JSON))
-                .await
-                .map_err(|e| BitFunError::io(format!("Failed to copy package.json: {}", e)))?;
-        } else {
-            tokio::fs::write(
-                dest_dir.join(PACKAGE_JSON),
-                serde_json::to_string_pretty(&fallbacks.package_json).map_err(BitFunError::from)?,
-            )
-            .await
-            .map_err(|_e| BitFunError::io("Failed to write package.json"))?;
-        }
-
-        let storage_src = import_layout.storage_json_path();
-        if storage_src.exists() {
-            tokio::fs::copy(&storage_src, dest_dir.join(STORAGE_JSON))
-                .await
-                .map_err(|e| BitFunError::io(format!("Failed to copy storage.json: {}", e)))?;
-        } else {
-            tokio::fs::write(dest_dir.join(STORAGE_JSON), fallbacks.storage_json)
-                .await
-                .map_err(|_e| BitFunError::io("Failed to write storage.json"))?;
-        }
-
-        tokio::fs::write(dest_dir.join(COMPILED_HTML), fallbacks.compiled_html)
-            .await
-            .map_err(|_e| BitFunError::io("Failed to write placeholder compiled.html"))?;
+        let package_json =
+            serde_json::to_string_pretty(&fallbacks.package_json).map_err(BitFunError::from)?;
+        self.storage
+            .write_import_bundle(MiniAppImportBundleRequest {
+                source_path,
+                app_id: id.clone(),
+                meta_json,
+                esm_dependencies_json: fallbacks.esm_dependencies_json.to_string(),
+                package_json,
+                storage_json: fallbacks.storage_json.to_string(),
+                compiled_html: fallbacks.compiled_html.to_string(),
+            })
+            .await?;
 
         let app = self.recompile(&id, "dark", workspace_root).await?;
         self.runtime_facade()
@@ -850,8 +761,8 @@ mod tests {
         FsPermissions, MiniAppMeta, MiniAppPermissions, MiniAppSource, NpmDep,
     };
     use bitfun_product_domains::miniapp::storage::{
-        COMPILED_HTML, ESM_DEPS_JSON, INDEX_HTML, PACKAGE_JSON, SOURCE_DIR, STORAGE_JSON,
-        STYLE_CSS, UI_JS, WORKER_JS,
+        COMPILED_HTML, ESM_DEPS_JSON, INDEX_HTML, META_JSON, PACKAGE_JSON, SOURCE_DIR,
+        STORAGE_JSON, STYLE_CSS, UI_JS, WORKER_JS,
     };
 
     fn test_manager() -> MiniAppManager {

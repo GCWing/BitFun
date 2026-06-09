@@ -3,6 +3,7 @@
 pub mod builtin;
 pub mod compiler;
 pub mod exporter;
+#[cfg(feature = "product-full")]
 pub mod host_dispatch;
 pub mod js_worker;
 pub mod js_worker_pool;
@@ -18,6 +19,7 @@ pub use bitfun_product_domains::miniapp::{bridge_builder, permission_policy, typ
 
 pub use builtin::{seed_builtin_miniapps, BuiltinApp, BUILTIN_APPS};
 pub use exporter::{ExportCheckResult, ExportOptions, ExportResult, ExportTarget, MiniAppExporter};
+#[cfg(feature = "product-full")]
 pub use host_dispatch::{dispatch_host, is_host_primitive};
 pub use js_worker_pool::{InstallResult, JsWorkerPool};
 pub use manager::{

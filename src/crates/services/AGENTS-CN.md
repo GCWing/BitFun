@@ -2,19 +2,19 @@
 
 # 服务实现层
 
-本层负责接触本地系统或 runtime infrastructure 的可复用具体实现：filesystem、git、file watch、terminal、MCP、remote connectivity、process lifecycle 以及类似 OS/network 能力。
+本层负责接触本地系统或 runtime infrastructure 的可复用具体实现：filesystem、git、file watch、terminal、MCP、remote connectivity、process lifecycle、MiniApp runtime/import IO 以及类似 OS/network 能力。
 
 ## 模块
 
 | Crate | 职责 | 本地文档 |
 |---|---|---|
 | `services-core` | 不包含产品组装决策的本地 service primitive | [AGENTS.md](services-core/AGENTS.md) |
-| `services-integrations` | MCP、git、remote、file watch 与产品领域 port 的具体实现 | [AGENTS.md](services-integrations/AGENTS.md) |
+| `services-integrations` | MCP、git、remote、file watch、MiniApp runtime 与产品领域 port 的具体实现 | [AGENTS.md](services-integrations/AGENTS.md) |
 | `terminal` | PTY、shell integration 与 terminal session infrastructure | [AGENTS.md](terminal/AGENTS.md) |
 
 ## 放置规则
 
-- 具体 OS、process、filesystem、git、terminal、MCP、remote SSH、file watch 和 network service 实现放在这里。
+- 具体 OS、process、filesystem、git、terminal、MCP、remote SSH、file watch、MiniApp runtime IO 和 network service 实现放在这里。
 - 需要具体依赖的 `contracts`、`execution` 或 `contracts/product-domains` port 实现在这里。
 - 协议/transport projection 放在 `adapters`，产品能力选择放在 `assembly`。
 
