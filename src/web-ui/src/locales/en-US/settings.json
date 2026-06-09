@@ -1,12 +1,18 @@
 {
-  "title": "Settings",
   "configCenter": {
-    "title": "Settings",
     "selectConfig": "Select Configuration",
     "searchPlaceholder": "Search settings…",
     "searchNoResults": "No matching settings",
     "searchClear": "Clear search",
     "beta": "Beta",
+    "searchAliases": {
+      "archivedSessions": [],
+      "keyboard": [],
+      "sessionPersonalization": [],
+      "sessionPermissions": [],
+      "quickActions": [],
+      "review": []
+    },
     "tabDescriptions": {
       "basics": "Logging, terminal shell, notifications, and launch at login.",
       "appearance": "Language, theme, and UI font size.",
@@ -19,7 +25,8 @@
       "acpAgents": "External ACP agents such as opencode, Claude Code, and Codex.",
       "editor": "Editor font, display, and formatting.",
       "lsp": "Language servers and code intelligence.",
-      "keyboard": "Shortcuts and key bindings."
+      "keyboard": "Shortcuts and key bindings.",
+      "archivedSessions": "View, restore, or permanently delete archived sessions."
     },
     "categories": {
       "general": "General",
@@ -40,7 +47,8 @@
       "agents": "Agents",
       "editor": "Editor",
       "lsp": "LSP",
-      "keyboard": "Keyboard"
+      "keyboard": "Keyboard",
+      "archivedSessions": "Archived Sessions"
     }
   },
   "general": {
@@ -135,7 +143,6 @@
     }
   },
   "workspace": {
-    "title": "Workspace",
     "files": {
       "title": "Files",
       "exclude": "Exclude Files",

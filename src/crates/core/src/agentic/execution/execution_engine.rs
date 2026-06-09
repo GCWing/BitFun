@@ -5,8 +5,8 @@
 use super::round_executor::RoundExecutor;
 use super::types::{ExecutionContext, ExecutionResult, RoundContext, RoundResult};
 use crate::agentic::agents::{
-    get_agent_registry, PromptBuilder, PromptBuilderContext, RemoteExecutionHints,
-    RequestContextToolSections,
+    get_agent_registry, PrependedPromptReminders, PromptBuilder, PromptBuilderContext,
+    RemoteExecutionHints, ToolListingSections,
 };
 use crate::agentic::context_profile::{ContextProfilePolicy, ModelCapabilityProfile};
 use crate::agentic::core::{
@@ -20,11 +20,9 @@ use crate::agentic::image_analysis::{
     ImageLimits,
 };
 use crate::agentic::round_preempt::RoundInjectionKind;
-use crate::agentic::session::{CompressionTailPolicy, ContextCompressor, SessionManager};
+use crate::agentic::session::{CompressionMode, ContextCompressor, SessionManager};
 use crate::agentic::tools::implementations::{GetToolSpecTool, SkillTool, TaskTool};
-use crate::agentic::tools::{
-    resolve_tool_manifest, tool_context_runtime, ResolvedToolManifest, SubagentParentInfo,
-};
+use crate::agentic::tools::{resolve_tool_manifest, tool_context_runtime, ResolvedToolManifest};
 use crate::agentic::util::build_remote_workspace_layout_preview;
 use crate::agentic::{WorkspaceBackend, WorkspaceBinding};
 use crate::infrastructure::ai::get_global_ai_client_factory;
@@ -73,6 +71,15 @@ pub struct ContextCompactionOutcome {
     pub has_summary: bool,
     pub summary_source: String,
     pub applied: bool,
+}
+
+struct CompressionRuntimeScaffold {
+    ai_client: Arc<crate::infrastructure::ai::AIClient>,
+    tool_definitions: Option<Vec<ToolDefinition>>,
+    system_prompt_message: Message,
+    prepended_prompt_reminders: PrependedPromptReminders,
+    primary_supports_image_understanding: bool,
+    compression_contract_limit: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -305,6 +312,16 @@ impl ExecutionEngine {
         )
     }
 
+    /// Whether a partial stream recovery should trigger a continuation round
+    /// instead of treating truncated assistant text as the final answer.
+    ///
+    /// User-initiated cancellation is excluded; all other partial recoveries
+    /// (idle timeout, watchdog timeout, mid-stream errors) may continue.
+    fn should_continue_after_partial_response(reason: &str) -> bool {
+        let lower = reason.to_ascii_lowercase();
+        !lower.contains("cancelled")
+    }
+
     /// Detect periodic tool-signature loops in the trailing window.
     ///
     /// Returns `true` when the last `2 * threshold` rounds contain at most
@@ -522,10 +539,6 @@ impl ExecutionEngine {
             .unwrap_or_else(|| "auto".to_string())
     }
 
-    fn should_use_fast_auto_model(turn_index: usize, original_user_input: &str) -> bool {
-        turn_index == 0 && original_user_input.chars().count() <= 10
-    }
-
     fn collect_unlocked_collapsed_tools(
         messages: &[Message],
         collapsed_tools: &[String],
@@ -558,10 +571,10 @@ impl ExecutionEngine {
         )
     }
 
-    async fn build_request_context_tool_sections(
+    async fn build_tool_listing_sections(
         manifest: &ResolvedToolManifest,
         tool_context: &crate::agentic::tools::framework::ToolUseContext,
-    ) -> RequestContextToolSections {
+    ) -> ToolListingSections {
         let has_tool_definition = |tool_name: &str| {
             manifest
                 .tool_definitions
@@ -569,18 +582,18 @@ impl ExecutionEngine {
                 .any(|definition| definition.name == tool_name)
         };
 
-        RequestContextToolSections {
-            available_skills: if has_tool_definition("Skill") {
+        ToolListingSections {
+            skill_listing: if has_tool_definition("Skill") {
                 SkillTool::build_available_skills_context_section(Some(tool_context)).await
             } else {
                 None
             },
-            available_agents: if has_tool_definition("Task") {
+            agent_listing: if has_tool_definition("Task") {
                 TaskTool::build_available_agents_context_section(Some(tool_context)).await
             } else {
                 None
             },
-            collapsed_tools: if has_tool_definition("GetToolSpec") {
+            collapsed_tool_listing: if has_tool_definition("GetToolSpec") {
                 GetToolSpecTool::build_collapsed_tools_context_section(
                     &manifest.collapsed_tool_summaries,
                 )
@@ -594,7 +607,7 @@ impl ExecutionEngine {
         context: &ExecutionContext,
         model_name: &str,
         supports_image_understanding: bool,
-        request_context_tools: RequestContextToolSections,
+        tool_listing_sections: ToolListingSections,
     ) -> Option<PromptBuilderContext> {
         let workspace_path = context
             .workspace
@@ -626,7 +639,7 @@ impl ExecutionEngine {
         )
         .with_related_paths(related_paths)
         .with_supports_image_understanding(supports_image_understanding)
-        .with_request_context_tools(request_context_tools);
+        .with_tool_listing_sections(tool_listing_sections);
 
         let Some(workspace) = context.workspace.as_ref() else {
             return Some(base);
@@ -686,6 +699,91 @@ impl ExecutionEngine {
         ))
     }
 
+    async fn build_cached_prepended_prompt_reminders(
+        &self,
+        session_id: &str,
+        current_agent: &dyn crate::agentic::agents::Agent,
+        prompt_context: Option<&PromptBuilderContext>,
+    ) -> PrependedPromptReminders {
+        let Some(prompt_context) = prompt_context.cloned() else {
+            return PrependedPromptReminders::default();
+        };
+
+        let prompt_builder = PromptBuilder::new(prompt_context);
+        let user_context_identity = current_agent.user_context_cache_identity();
+        let user_context = if let Some(cached_user_context) = self
+            .session_manager
+            .cached_user_context(session_id, &user_context_identity)
+            .await
+        {
+            debug!(
+                "User context cache hit: session_id={}, scope_key={}",
+                session_id, user_context_identity.scope_key
+            );
+            Some(cached_user_context)
+        } else {
+            debug!(
+                "User context cache miss: session_id={}, scope_key={}",
+                session_id, user_context_identity.scope_key
+            );
+            let built_user_context = prompt_builder
+                .build_user_context_reminder(&current_agent.user_context_policy())
+                .await;
+            if let Some(ref user_context) = built_user_context {
+                self.session_manager
+                    .remember_user_context(
+                        session_id,
+                        user_context_identity.clone(),
+                        user_context.clone(),
+                    )
+                    .await;
+            }
+            built_user_context
+        };
+
+        PrependedPromptReminders {
+            skill_listing: prompt_builder.build_skill_listing_reminder(),
+            agent_listing: prompt_builder.build_agent_listing_reminder(),
+            collapsed_tool_listing: prompt_builder.build_collapsed_tool_listing_reminder(),
+            user_context,
+        }
+    }
+
+    async fn resolve_cached_system_prompt(
+        &self,
+        session_id: &str,
+        current_agent: &dyn crate::agentic::agents::Agent,
+        prompt_context: Option<&PromptBuilderContext>,
+    ) -> BitFunResult<String> {
+        let identity = prompt_context
+            .map(|context| {
+                current_agent.system_prompt_cache_identity(context.model_name.as_deref())
+            })
+            .unwrap_or_else(|| current_agent.system_prompt_cache_identity(None));
+
+        if let Some(cached_system_prompt) = self
+            .session_manager
+            .cached_system_prompt(session_id, &identity)
+            .await
+        {
+            debug!(
+                "System prompt cache hit: session_id={}, scope_key={}",
+                session_id, identity.scope_key
+            );
+            return Ok(cached_system_prompt);
+        }
+
+        debug!(
+            "System prompt cache miss: session_id={}, scope_key={}",
+            session_id, identity.scope_key
+        );
+        let system_prompt = current_agent.get_system_prompt(prompt_context).await?;
+        self.session_manager
+            .remember_system_prompt(session_id, identity, system_prompt.clone())
+            .await;
+        Ok(system_prompt)
+    }
+
     pub(crate) async fn resolve_model_id_for_turn(
         &self,
         session: &Session,
@@ -720,9 +818,11 @@ impl ExecutionEngine {
         let resolved_configured_model_id =
             Self::resolve_configured_model_id(&ai_config, &configured_model_id);
 
-        let model_id = if configured_model_id == "auto" || resolved_configured_model_id == "auto" {
-            let use_fast_model = Self::should_use_fast_auto_model(turn_index, original_user_input);
-            let fallback_model = if use_fast_model { "fast" } else { "primary" };
+        let model_id = if configured_model_id == "auto"
+            || configured_model_id == "default"
+            || resolved_configured_model_id == "auto"
+        {
+            let fallback_model = "primary";
             let resolved_model_id = ai_config.resolve_model_selection(fallback_model);
 
             if let Some(resolved_model_id) = resolved_model_id {
@@ -806,7 +906,7 @@ impl ExecutionEngine {
         round_number: usize,
         execution_context_vars: &HashMap<String, String>,
         primary_supports_image_understanding: bool,
-        request_context_reminder: Option<&str>,
+        prepended_reminders: &[&str],
         messages: &[Message],
         reminder_text: &str,
         context_window: usize,
@@ -820,7 +920,7 @@ impl ExecutionEngine {
                 .map(|workspace| workspace.root_path()),
             &context.dialog_turn_id,
             primary_supports_image_understanding,
-            request_context_reminder,
+            prepended_reminders,
         )
         .await?;
         final_ai_messages.push(AIMessage::user(reminder_text.to_string()));
@@ -839,6 +939,7 @@ impl ExecutionEngine {
             model_name: ai_client.config.model.clone(),
             agent_type,
             context_vars: execution_context_vars.clone(),
+            delegation_policy: context.delegation_policy,
             runtime_tool_restrictions: context.runtime_tool_restrictions.clone(),
             steering_interrupt: None,
             cancellation_token: CancellationToken::new(),
@@ -864,23 +965,19 @@ impl ExecutionEngine {
         workspace_path: Option<&Path>,
         current_turn_id: &str,
         attach_images: bool,
-        prepended_user_context: Option<&str>,
+        prepended_reminders: &[&str],
     ) -> BitFunResult<Vec<AIMessage>> {
         /// Only the last this many **messages** that contain images keep their images for the API.
         const MAX_IMAGE_BEARING_MESSAGE_ROUNDS: usize = 2;
 
         let limits = ImageLimits::for_provider(provider);
 
-        let trimmed_user_context = prepended_user_context.and_then(|text| {
-            let trimmed = text.trim();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(trimmed)
-            }
-        });
-        let mut result =
-            Vec::with_capacity(messages.len() + usize::from(trimmed_user_context.is_some()));
+        let trimmed_reminders = prepended_reminders
+            .iter()
+            .map(|text| text.trim())
+            .filter(|text| !text.is_empty())
+            .collect::<Vec<_>>();
+        let mut result = Vec::with_capacity(messages.len() + trimmed_reminders.len());
         let mut attached_image_count = 0usize;
         let first_non_system_index = messages
             .iter()
@@ -896,8 +993,8 @@ impl ExecutionEngine {
 
         for (msg_idx, msg) in messages.iter().enumerate() {
             if !user_context_injected && msg_idx == first_non_system_index {
-                if let Some(user_context) = trimmed_user_context {
-                    result.push(AIMessage::user(render_system_reminder(user_context)));
+                for reminder in &trimmed_reminders {
+                    result.push(AIMessage::user(render_system_reminder(reminder)));
                 }
                 user_context_injected = true;
             }
@@ -1023,8 +1120,8 @@ impl ExecutionEngine {
         }
 
         if !user_context_injected {
-            if let Some(user_context) = trimmed_user_context {
-                result.push(AIMessage::user(render_system_reminder(user_context)));
+            for reminder in trimmed_reminders {
+                result.push(AIMessage::user(render_system_reminder(reminder)));
             }
         }
 
@@ -1062,20 +1159,347 @@ impl ExecutionEngine {
         content
     }
 
+    async fn build_compression_request_messages(
+        &self,
+        runtime_messages: &[Message],
+        dialog_turn_id: &str,
+        workspace_path: Option<&Path>,
+        provider: &str,
+        attach_images: bool,
+        prepended_prompt_reminders: &PrependedPromptReminders,
+        contract: Option<&crate::agentic::core::CompressionContract>,
+    ) -> BitFunResult<Vec<AIMessage>> {
+        let prepended_reminders = prepended_prompt_reminders.ordered_reminders();
+        let mut compression_messages = Self::build_ai_messages_for_send(
+            runtime_messages,
+            provider,
+            workspace_path,
+            dialog_turn_id,
+            attach_images,
+            &prepended_reminders,
+        )
+        .await?;
+        compression_messages.push(AIMessage::user(
+            self.context_compressor.build_compact_prompt(contract),
+        ));
+        Ok(compression_messages)
+    }
+
+    async fn request_compression_summary_with_retry(
+        &self,
+        ai_client: Arc<crate::infrastructure::ai::AIClient>,
+        request_messages: Vec<AIMessage>,
+        tool_definitions: Option<Vec<ToolDefinition>>,
+        max_tries: usize,
+    ) -> BitFunResult<String> {
+        let mut last_error = None;
+        let base_wait_time_ms = 500;
+
+        for attempt in 0..max_tries {
+            let result = ai_client
+                .send_message(request_messages.clone(), tool_definitions.clone())
+                .await;
+
+            match result {
+                Ok(response) => {
+                    if response.tool_calls.is_some() {
+                        return Err(BitFunError::AIClient(
+                            "Compression request returned tool calls instead of a summary"
+                                .to_string(),
+                        ));
+                    }
+                    if attempt > 0 {
+                        debug!(
+                            "Compression summary generation succeeded (attempt {}/{})",
+                            attempt + 1,
+                            max_tries
+                        );
+                    }
+                    return Ok(response.text);
+                }
+                Err(err) => {
+                    warn!(
+                        "Compression summary generation failed (attempt {}/{}): {}",
+                        attempt + 1,
+                        max_tries,
+                        err
+                    );
+                    last_error = Some(err);
+
+                    if attempt < max_tries - 1 {
+                        let delay_ms = base_wait_time_ms * (1 << attempt.min(3));
+                        debug!(
+                            "Waiting {}ms before compression summary retry {}...",
+                            delay_ms,
+                            attempt + 2
+                        );
+                        tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+                    }
+                }
+            }
+        }
+
+        Err(BitFunError::AIClient(format!(
+            "Compression summary generation failed after {} attempts: {}",
+            max_tries,
+            last_error
+                .map(|err| err.to_string())
+                .unwrap_or_else(|| "Unknown error".to_string())
+        )))
+    }
+
+    async fn generate_compression_model_summary(
+        &self,
+        ai_client: Arc<crate::infrastructure::ai::AIClient>,
+        runtime_messages: &[Message],
+        dialog_turn_id: &str,
+        workspace_path: Option<&Path>,
+        tool_definitions: &Option<Vec<ToolDefinition>>,
+        prepended_prompt_reminders: &PrependedPromptReminders,
+        primary_supports_image_understanding: bool,
+        contract: Option<&crate::agentic::core::CompressionContract>,
+    ) -> BitFunResult<Option<String>> {
+        let request_messages = self
+            .build_compression_request_messages(
+                runtime_messages,
+                dialog_turn_id,
+                workspace_path,
+                &ai_client.config.format,
+                primary_supports_image_understanding,
+                prepended_prompt_reminders,
+                contract,
+            )
+            .await?;
+
+        let raw_summary = self
+            .request_compression_summary_with_retry(
+                ai_client,
+                request_messages,
+                tool_definitions.clone(),
+                2,
+            )
+            .await?;
+        let summary =
+            ContextCompressor::normalize_model_summary_output(&raw_summary).ok_or_else(|| {
+                BitFunError::AIClient(
+                    "Model-based compression returned <analysis> without a usable <summary>"
+                        .to_string(),
+                )
+            })?;
+        Ok(Some(summary))
+    }
+
+    async fn resolve_compression_runtime_scaffold(
+        &self,
+        session: &Session,
+        context: &ExecutionContext,
+    ) -> BitFunResult<CompressionRuntimeScaffold> {
+        let agent_registry = get_agent_registry();
+        if let Some(workspace) = context.workspace.as_ref() {
+            agent_registry
+                .load_custom_subagents(workspace.root_path())
+                .await;
+        }
+
+        let current_agent = agent_registry
+            .get_agent(
+                &context.agent_type,
+                context
+                    .workspace
+                    .as_ref()
+                    .map(|workspace| workspace.root_path()),
+            )
+            .ok_or_else(|| {
+                BitFunError::NotFound(format!("Agent not found: {}", context.agent_type))
+            })?;
+
+        let original_user_input = context
+            .context
+            .get("original_user_input")
+            .cloned()
+            .unwrap_or_default();
+        let model_id = self
+            .resolve_model_id_for_turn(
+                session,
+                &context.agent_type,
+                context.workspace.as_ref(),
+                &original_user_input,
+                context.turn_index,
+            )
+            .await?;
+
+        let ai_client_factory = get_global_ai_client_factory().await.map_err(|e| {
+            BitFunError::AIClient(format!("Failed to get AI client factory: {}", e))
+        })?;
+        let ai_client = ai_client_factory
+            .get_client_resolved(&model_id)
+            .await
+            .map_err(|e| {
+                BitFunError::AIClient(format!(
+                    "Failed to get AI client (model_id={}): {}",
+                    model_id, e
+                ))
+            })?;
+
+        let (resolved_primary_model_id, primary_supports_image_understanding, write_tool_mode) = {
+            let config_service = get_global_config_service().await.ok();
+            if let Some(service) = config_service {
+                let ai_config: crate::service::config::types::AIConfig =
+                    service.get_config(Some("ai")).await.unwrap_or_default();
+
+                let resolved_id = Self::resolve_configured_model_id(&ai_config, &model_id);
+                let model_cfg = ai_config
+                    .models
+                    .iter()
+                    .find(|m| m.id == resolved_id)
+                    .or_else(|| ai_config.models.iter().find(|m| m.name == resolved_id))
+                    .or_else(|| {
+                        ai_config
+                            .models
+                            .iter()
+                            .find(|m| m.model_name == resolved_id)
+                    })
+                    .or_else(|| {
+                        ai_config.models.iter().find(|m| {
+                            m.model_name == ai_client.config.model
+                                && m.provider == ai_client.config.format
+                        })
+                    });
+
+                let supports = model_cfg.is_some_and(|m| {
+                    m.capabilities
+                        .iter()
+                        .any(|cap| matches!(cap, ModelCapability::ImageUnderstanding))
+                        || matches!(m.category, ModelCategory::Multimodal)
+                });
+
+                (resolved_id, supports, ai_config.write_tool_mode)
+            } else {
+                warn!(
+                    "Config service unavailable, assuming compression model is text-only for image input gating"
+                );
+                (model_id.clone(), false, WriteToolMode::default())
+            }
+        };
+
+        let model_capability_profile = ModelCapabilityProfile::from_resolved_model(
+            &resolved_primary_model_id,
+            &ai_client.config.model,
+        );
+        let is_review_subagent = agent_registry
+            .get_subagent_is_review(&context.agent_type)
+            .unwrap_or(false);
+        let context_profile_policy = ContextProfilePolicy::for_agent_context(
+            &context.agent_type,
+            is_review_subagent,
+            model_capability_profile,
+        );
+
+        let tool_policy = agent_registry
+            .get_agent_tool_policy(
+                &context.agent_type,
+                context
+                    .workspace
+                    .as_ref()
+                    .map(|workspace| workspace.root_path()),
+            )
+            .await;
+        let allowed_tools = tool_policy.allowed_tools.clone();
+        let enable_tools = context
+            .context
+            .get("enable_tools")
+            .and_then(|value| value.parse::<bool>().ok())
+            .unwrap_or(true);
+        let write_tool_mode = if context
+            .context
+            .get("acp_transport")
+            .is_some_and(|value| value == "true")
+        {
+            WriteToolMode::InlineContent
+        } else {
+            write_tool_mode
+        };
+
+        let mut tool_manifest_context_vars = context.context.clone();
+        tool_manifest_context_vars.insert(
+            "write_tool_mode".to_string(),
+            write_tool_mode.as_str().to_string(),
+        );
+
+        let tool_description_context = tool_context_runtime::build_tool_description_context(
+            &context.agent_type,
+            context.workspace.as_ref(),
+            context.workspace_services.as_ref(),
+            primary_supports_image_understanding,
+            &tool_manifest_context_vars,
+        );
+        let tool_manifest = if enable_tools {
+            Some(
+                resolve_tool_manifest(
+                    &allowed_tools,
+                    &tool_policy.exposure_overrides,
+                    &tool_description_context,
+                )
+                .await,
+            )
+        } else {
+            None
+        };
+        let tool_listing_sections = if let Some(manifest) = tool_manifest.as_ref() {
+            Self::build_tool_listing_sections(manifest, &tool_description_context).await
+        } else {
+            ToolListingSections::default()
+        };
+        let tool_definitions = tool_manifest.map(|manifest| manifest.tool_definitions);
+
+        let prompt_context = Self::build_prompt_context(
+            context,
+            &ai_client.config.model,
+            primary_supports_image_understanding,
+            tool_listing_sections,
+        )
+        .await;
+        let prepended_prompt_reminders = self
+            .build_cached_prepended_prompt_reminders(
+                &context.session_id,
+                current_agent.as_ref(),
+                prompt_context.as_ref(),
+            )
+            .await;
+        let system_prompt = self
+            .resolve_cached_system_prompt(
+                &context.session_id,
+                current_agent.as_ref(),
+                prompt_context.as_ref(),
+            )
+            .await?;
+
+        Ok(CompressionRuntimeScaffold {
+            ai_client,
+            tool_definitions,
+            system_prompt_message: Message::system(system_prompt),
+            prepended_prompt_reminders,
+            primary_supports_image_understanding,
+            compression_contract_limit: context_profile_policy.compression_contract_limit,
+        })
+    }
+
     /// Compress context, will emit compression events (Started, Completed, and Failed)
     #[allow(clippy::too_many_arguments)]
     pub async fn compress_messages(
         &self,
         session_id: &str,
         dialog_turn_id: &str,
-        _subagent_parent_info: Option<SubagentParentInfo>,
-        messages: Vec<Message>,
+        runtime_messages: Vec<Message>,
         current_tokens: usize,
         context_window: usize,
+        ai_client: Arc<crate::infrastructure::ai::AIClient>,
         tool_definitions: &Option<Vec<ToolDefinition>>,
         system_prompt_message: Message,
+        prepended_prompt_reminders: &PrependedPromptReminders,
+        primary_supports_image_understanding: bool,
         compression_contract_limit: usize,
-        tail_policy: CompressionTailPolicy,
+        workspace_path: Option<&Path>,
     ) -> BitFunResult<Option<(usize, Vec<Message>)>> {
         let mut session = self
             .session_manager
@@ -1085,13 +1509,11 @@ impl ExecutionEngine {
         // Record start time
         let start_time = std::time::Instant::now();
 
-        let old_messages_len = messages.len();
-        // Preprocess turns
-        let (turn_index_to_keep, turns) = self
+        let old_messages_len = runtime_messages.len();
+        let turns = self
             .context_compressor
-            .preprocess_turns(session_id, context_window, messages)
-            .await?;
-        if turn_index_to_keep == 0 {
+            .collect_turns_for_auto_compression(session_id, runtime_messages.clone())?;
+        if turns.is_empty() {
             return Ok(None);
         }
 
@@ -1117,21 +1539,46 @@ impl ExecutionEngine {
         let compression_contract = self
             .session_manager
             .compression_contract_for_session(session_id, compression_contract_limit);
-        match self
-            .context_compressor
-            .compress_turns_with_contract(
-                session_id,
-                context_window,
-                turn_index_to_keep,
-                turns,
-                tail_policy,
-                compression_contract,
+        let model_summary = match self
+            .generate_compression_model_summary(
+                ai_client,
+                &runtime_messages,
+                dialog_turn_id,
+                workspace_path,
+                tool_definitions,
+                prepended_prompt_reminders,
+                primary_supports_image_understanding,
+                compression_contract.as_ref(),
             )
             .await
         {
+            Ok(summary) => summary,
+            Err(err) => {
+                warn!(
+                    "Model-based compression failed, falling back to structured local compression: {}",
+                    err
+                );
+                None
+            }
+        };
+        match self.context_compressor.compress_turns_with_contract(
+            session_id,
+            context_window,
+            turns,
+            CompressionMode::Auto,
+            compression_contract,
+            model_summary,
+        ) {
             Ok(compression_result) => {
                 self.session_manager
                     .replace_context_messages(session_id, compression_result.messages.clone())
+                    .await;
+                self.session_manager
+                    .invalidate_prompt_cache(
+                        session_id,
+                        crate::agentic::session::PromptCacheScope::All,
+                        "context_compression_applied",
+                    )
                     .await;
                 let mut new_messages = vec![system_prompt_message];
                 new_messages.extend(compression_result.messages);
@@ -1214,20 +1661,24 @@ impl ExecutionEngine {
     #[allow(clippy::too_many_arguments)]
     pub async fn compact_session_context(
         &self,
-        session_id: &str,
-        dialog_turn_id: &str,
+        session_id: String,
+        dialog_turn_id: String,
+        context: ExecutionContext,
         messages: Vec<Message>,
         current_tokens: usize,
-        context_window: usize,
         trigger: &str,
-        tail_policy: CompressionTailPolicy,
     ) -> BitFunResult<ContextCompactionOutcome> {
         let mut session = self
             .session_manager
-            .get_session(session_id)
+            .get_session(&session_id)
             .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?;
         let start_time = std::time::Instant::now();
         let compression_id = format!("compression_{}", uuid::Uuid::new_v4());
+        let scaffold = self
+            .resolve_compression_runtime_scaffold(&session, &context)
+            .await?;
+        let context_window = (scaffold.ai_client.config.context_window as usize)
+            .min(session.config.max_context_tokens);
 
         self.emit_event(
             AgenticEvent::ContextCompressionStarted {
@@ -1245,7 +1696,7 @@ impl ExecutionEngine {
 
         let turns = self
             .context_compressor
-            .collect_all_turns_for_manual_compaction(session_id, messages)?;
+            .collect_all_turns_for_manual_compaction(&session_id, messages.clone())?;
 
         if turns.is_empty() {
             let duration_ms = elapsed_ms_u64(start_time);
@@ -1286,43 +1737,62 @@ impl ExecutionEngine {
             });
         }
 
-        let is_review_subagent = get_agent_registry()
-            .get_subagent_is_review(&session.agent_type)
-            .unwrap_or(false);
-        let model_id = session.config.model_id.as_deref().unwrap_or_default();
-        let context_profile_policy = ContextProfilePolicy::for_agent_context_and_model(
-            &session.agent_type,
-            is_review_subagent,
-            model_id,
-            model_id,
-        );
-        let compression_contract = self.session_manager.compression_contract_for_session(
-            session_id,
-            context_profile_policy.compression_contract_limit,
-        );
-        match self
-            .context_compressor
-            .compress_turns_with_contract(
-                session_id,
-                context_window,
-                turns.len(),
-                turns,
-                tail_policy,
-                compression_contract,
+        let mut runtime_messages = vec![scaffold.system_prompt_message.clone()];
+        runtime_messages.extend(messages);
+        let compression_contract = self
+            .session_manager
+            .compression_contract_for_session(&session_id, scaffold.compression_contract_limit);
+        let model_summary = match self
+            .generate_compression_model_summary(
+                scaffold.ai_client.clone(),
+                &runtime_messages,
+                &dialog_turn_id,
+                context
+                    .workspace
+                    .as_ref()
+                    .map(|workspace| workspace.root_path()),
+                &scaffold.tool_definitions,
+                &scaffold.prepended_prompt_reminders,
+                scaffold.primary_supports_image_understanding,
+                compression_contract.as_ref(),
             )
             .await
         {
+            Ok(summary) => summary,
+            Err(err) => {
+                warn!(
+                    "Model-based manual compaction failed, falling back to structured local compression: {}",
+                    err
+                );
+                None
+            }
+        };
+        match self.context_compressor.compress_turns_with_contract(
+            &session_id,
+            context_window,
+            turns,
+            CompressionMode::Manual,
+            compression_contract,
+            model_summary,
+        ) {
             Ok(compression_result) => {
                 let mut compressed_messages = compression_result.messages;
                 self.session_manager
-                    .replace_context_messages(session_id, compressed_messages.clone())
+                    .replace_context_messages(&session_id, compressed_messages.clone())
+                    .await;
+                self.session_manager
+                    .invalidate_prompt_cache(
+                        &session_id,
+                        crate::agentic::session::PromptCacheScope::All,
+                        "manual_context_compaction_applied",
+                    )
                     .await;
 
                 session.compression_state.increment_compression_count();
                 let compression_count = session.compression_state.compression_count;
                 let _ = self
                     .session_manager
-                    .update_compression_state(session_id, session.compression_state.clone())
+                    .update_compression_state(&session_id, session.compression_state.clone())
                     .await;
 
                 let duration_ms = elapsed_ms_u64(start_time);
@@ -1652,10 +2122,10 @@ impl ExecutionEngine {
             .as_ref()
             .map(|manifest| manifest.collapsed_tool_names.clone())
             .unwrap_or_default();
-        let request_context_tools = if let Some(manifest) = tool_manifest.as_ref() {
-            Self::build_request_context_tool_sections(manifest, &tool_description_context).await
+        let tool_listing_sections = if let Some(manifest) = tool_manifest.as_ref() {
+            Self::build_tool_listing_sections(manifest, &tool_description_context).await
         } else {
-            RequestContextToolSections::default()
+            ToolListingSections::default()
         };
         let (available_tools, tool_definitions) = if let Some(manifest) = tool_manifest {
             (manifest.allowed_tool_names, Some(manifest.tool_definitions))
@@ -1673,23 +2143,44 @@ impl ExecutionEngine {
             &context,
             &ai_client.config.model,
             primary_supports_image_understanding,
-            request_context_tools,
+            tool_listing_sections,
         )
         .await;
-        let request_context_reminder = if let Some(prompt_context) = prompt_context.as_ref() {
-            PromptBuilder::new(prompt_context.clone())
-                .build_request_context_reminder(&current_agent.request_context_policy())
-                .await
-        } else {
-            None
-        };
-        let system_prompt = current_agent
-            .get_system_prompt(prompt_context.as_ref())
+        let prepended_prompt_reminders = self
+            .build_cached_prepended_prompt_reminders(
+                &context.session_id,
+                current_agent.as_ref(),
+                prompt_context.as_ref(),
+            )
+            .await;
+        let prepended_reminders = prepended_prompt_reminders.ordered_reminders();
+        let system_prompt = self
+            .resolve_cached_system_prompt(
+                &context.session_id,
+                current_agent.as_ref(),
+                prompt_context.as_ref(),
+            )
             .await?;
         debug!("System prompt built, length: {} bytes", system_prompt.len());
         debug!(
-            "Request context reminder built, length: {} bytes",
-            request_context_reminder
+            "Prepended reminders built: skill_listing_len={} agent_listing_len={} collapsed_tool_listing_len={} user_context_len={}",
+            prepended_prompt_reminders
+                .skill_listing
+                .as_ref()
+                .map(|text| text.len())
+                .unwrap_or(0),
+            prepended_prompt_reminders
+                .agent_listing
+                .as_ref()
+                .map(|text| text.len())
+                .unwrap_or(0),
+            prepended_prompt_reminders
+                .collapsed_tool_listing
+                .as_ref()
+                .map(|text| text.len())
+                .unwrap_or(0),
+            prepended_prompt_reminders
+                .user_context
                 .as_ref()
                 .map(|text| text.len())
                 .unwrap_or(0)
@@ -1713,6 +2204,7 @@ impl ExecutionEngine {
         let mut loop_detected = false;
         let mut loop_recovery_attempts: usize = 0;
         const MAX_LOOP_RECOVERY_ATTEMPTS: usize = 3;
+        const MAX_PARTIAL_CONTINUATION_ATTEMPTS: usize = 3;
         let mut full_compression_count = 0usize;
         let mut compression_failure_count = 0u32;
 
@@ -1722,6 +2214,7 @@ impl ExecutionEngine {
         // Track thinking-only rescue reminders for observability. This counter
         // is not a stop condition.
         let mut thinking_only_rescue_attempts: usize = 0;
+        let mut partial_continuation_attempts: usize = 0;
 
         // Add detailed logging showing the execution context messages.
         debug!(
@@ -1860,14 +2353,19 @@ impl ExecutionEngine {
                     .compress_messages(
                         &context.session_id,
                         &context.dialog_turn_id,
-                        context.subagent_parent_info.clone(),
                         messages.clone(),
                         current_tokens,
                         context_window,
+                        ai_client.clone(),
                         &tool_definitions,
                         system_prompt_message.clone(),
+                        &prepended_prompt_reminders,
+                        primary_supports_image_understanding,
                         context_profile_policy.compression_contract_limit,
-                        CompressionTailPolicy::PreserveLiveFrontier,
+                        context
+                            .workspace
+                            .as_ref()
+                            .map(|workspace| workspace.root_path()),
                     )
                     .await
                 {
@@ -1886,7 +2384,7 @@ impl ExecutionEngine {
                         consecutive_compression_failures = 0;
                     }
                     Ok(None) => {
-                        debug!("All turns need to be kept, no compression performed");
+                        debug!("No eligible multi-turn context available for compression");
                         consecutive_compression_failures = 0;
                     }
                     Err(e) => {
@@ -1962,6 +2460,7 @@ impl ExecutionEngine {
                 model_name: ai_client.config.model.clone(),
                 agent_type: agent_type.clone(),
                 context_vars: round_context_vars,
+                delegation_policy: context.delegation_policy,
                 runtime_tool_restrictions: context.runtime_tool_restrictions.clone(),
                 steering_interrupt: context.round_injection.as_ref().map(|source| {
                     crate::agentic::round_preempt::DialogRoundInjectionInterrupt::new(
@@ -1991,7 +2490,7 @@ impl ExecutionEngine {
                     .map(|workspace| workspace.root_path()),
                 &context.dialog_turn_id,
                 primary_supports_image_understanding,
-                request_context_reminder.as_deref(),
+                &prepended_reminders,
             )
             .await?;
 
@@ -2259,7 +2758,9 @@ impl ExecutionEngine {
             // Otherwise, if the round produced any tool_call, we already continue via
             // `has_more_rounds = true`. The interesting case is `has_more_rounds == false`:
             //
-            // - Model emitted user-visible text  -> final answer, end the turn.
+            // - Model emitted user-visible text  -> final answer, end the turn, unless
+            //   the stream was partially recovered (timeout / interruption) in which
+            //   case inject a continuation reminder and keep going.
             // - Model emitted thinking only      -> stalled mid-reasoning. Inject a
             //   system_reminder asking it to either act (call a tool) or finish
             //   (write the answer), and continue.
@@ -2269,11 +2770,53 @@ impl ExecutionEngine {
                 // fall through to next round so the model can respond to the steering
             } else if !round_result.has_more_rounds {
                 if round_result.had_assistant_text {
-                    debug!(
-                        "Model round {} ended with final answer, reason: {:?}",
-                        round_index, round_result.finish_reason
-                    );
-                    break;
+                    if let Some(ref reason) = round_result.partial_recovery_reason {
+                        if Self::should_continue_after_partial_response(reason) {
+                            partial_continuation_attempts += 1;
+                            if partial_continuation_attempts <= MAX_PARTIAL_CONTINUATION_ATTEMPTS {
+                                let reminder = format!(
+                                    "<system_reminder>Your previous assistant response was interrupted mid-stream ({reason}). Continue writing from exactly where you stopped. Do not repeat content that was already delivered; pick up seamlessly and complete the answer.</system_reminder>"
+                                );
+                                let user_msg = Message::user(reminder.clone());
+                                messages.push(user_msg.clone());
+                                if let Err(e) = self
+                                    .session_manager
+                                    .add_message(&context.session_id, user_msg)
+                                    .await
+                                {
+                                    warn!("Failed to persist partial continuation reminder: {}", e);
+                                }
+                                warn!(
+                                    "Partial stream recovery with assistant text; injecting continuation reminder #{}/{}: turn={}, round={}, reason={}",
+                                    partial_continuation_attempts,
+                                    MAX_PARTIAL_CONTINUATION_ATTEMPTS,
+                                    context.dialog_turn_id,
+                                    round_index,
+                                    reason
+                                );
+                                // Continue into the next round so the model can finish.
+                            } else {
+                                warn!(
+                                    "Partial stream continuation attempts exhausted; accepting truncated answer: turn={}, round={}, reason={}",
+                                    context.dialog_turn_id, round_index, reason
+                                );
+                                finalization_reason = Some("partial_truncated");
+                                break;
+                            }
+                        } else {
+                            debug!(
+                                "Model round {} ended with partial answer after cancellation, reason: {:?}",
+                                round_index, round_result.finish_reason
+                            );
+                            break;
+                        }
+                    } else {
+                        debug!(
+                            "Model round {} ended with final answer, reason: {:?}",
+                            round_index, round_result.finish_reason
+                        );
+                        break;
+                    }
                 } else if round_result.had_thinking_content {
                     thinking_only_rescue_attempts += 1;
                     let reminder = "<system_reminder>The previous round produced internal reasoning only — no tool call and no user-visible response. You MUST now either: (1) call the single tool that best advances the user's task, or (2) write your final answer to the user. Do not produce another round of reasoning without taking action.</system_reminder>".to_string();
@@ -2388,7 +2931,7 @@ impl ExecutionEngine {
                         completed_rounds,
                         &execution_context_vars,
                         primary_supports_image_understanding,
-                        request_context_reminder.as_deref(),
+                        &prepended_reminders,
                         &messages,
                         Self::FINALIZE_AFTER_TOOL_USE_REMINDER,
                         context_window,
@@ -2419,7 +2962,7 @@ impl ExecutionEngine {
                             completed_rounds,
                             &execution_context_vars,
                             primary_supports_image_understanding,
-                            request_context_reminder.as_deref(),
+                            &prepended_reminders,
                             &messages,
                             Self::FORCE_TEXT_ONLY_REMINDER,
                             context_window,
@@ -2625,25 +3168,6 @@ mod tests {
     }
 
     #[test]
-    fn auto_model_uses_fast_for_short_first_message() {
-        assert!(ExecutionEngine::should_use_fast_auto_model(0, "你好"));
-        assert!(ExecutionEngine::should_use_fast_auto_model(0, "1234567890"));
-    }
-
-    #[test]
-    fn auto_model_uses_primary_for_long_first_message() {
-        assert!(!ExecutionEngine::should_use_fast_auto_model(
-            0,
-            "12345678901"
-        ));
-    }
-
-    #[test]
-    fn auto_model_uses_primary_after_first_turn() {
-        assert!(!ExecutionEngine::should_use_fast_auto_model(1, "短消息"));
-    }
-
-    #[test]
     fn resolve_configured_fast_model_falls_back_to_primary_when_fast_is_stale() {
         let mut ai_config = AIConfig::default();
         ai_config.models = vec![build_model("model-primary", "Primary", "claude-sonnet-4.5")];
@@ -2696,6 +3220,26 @@ mod tests {
         let summary = ExecutionEngine::tool_signature_args_summary(args);
 
         assert_eq!(summary, args);
+    }
+
+    #[test]
+    fn partial_continuation_allowed_for_stream_stall_reasons() {
+        assert!(ExecutionEngine::should_continue_after_partial_response(
+            "Stream processor watchdog timeout (no data received for 45 seconds)"
+        ));
+        assert!(ExecutionEngine::should_continue_after_partial_response(
+            "Stream processing error: SSE stream error"
+        ));
+    }
+
+    #[test]
+    fn partial_continuation_skipped_for_user_cancellation() {
+        assert!(!ExecutionEngine::should_continue_after_partial_response(
+            "Stream processing cancelled after partial output"
+        ));
+        assert!(!ExecutionEngine::should_continue_after_partial_response(
+            "Stream processing cancelled"
+        ));
     }
 
     #[test]

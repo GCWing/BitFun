@@ -41,7 +41,8 @@ vi.mock('@/shared/utils/tabUtils', () => ({
   createDiffEditorTab: tabUtilsMocks.createDiffEditorTab,
 }));
 
-vi.mock('react-i18next', () => ({
+vi.mock('react-i18next', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('react-i18next')>()),
   useTranslation: () => ({
     t: (key: string, options?: Record<string, unknown>) => {
       const labels: Record<string, string> = {
@@ -213,20 +214,37 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('@/component-library', () => ({
-  IconButton: ({
+  IconButton: React.forwardRef<
+    HTMLButtonElement,
+    React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: string; size?: string }
+  >(function MockIconButton({
     children,
     variant: _variant,
     size: _size,
     ...props
-  }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: string; size?: string }) => (
-    <button type="button" {...props}>
-      {children}
-    </button>
-  ),
+  }, ref) {
+    return (
+      <button ref={ref} type="button" {...props}>
+        {children}
+      </button>
+    );
+  }),
   MarkdownRenderer: ({ content }: { content: string }) => <div data-testid="markdown">{content}</div>,
-  Tooltip: ({ children, content }: { children: React.ReactNode; content?: React.ReactNode }) => (
-    <span data-tooltip={typeof content === 'string' ? content : undefined}>{children}</span>
-  ),
+  Tooltip: ({ children, content }: { children: React.ReactNode; content?: React.ReactNode }) => {
+    const tooltipContent = typeof content === 'string' ? content : undefined;
+    let trigger = children;
+    if (React.isValidElement(children)) {
+      trigger = React.cloneElement(
+        children as React.ReactElement<{
+          ref?: React.Ref<HTMLElement>;
+        }>,
+        {
+          ref: () => undefined,
+        }
+      );
+    }
+    return <span data-tooltip={tooltipContent}>{trigger}</span>;
+  },
   ToolProcessingDots: ({ className }: { className?: string }) => <span className={className}>...</span>,
 }));
 
@@ -659,6 +677,7 @@ describe('Session usage report UI components', () => {
 
   it('keeps chat card file names visible and labels model tokens', () => {
     dom.window.localStorage.setItem(USAGE_EXPORT_REDACT_PATHS_STORAGE_KEY, 'false');
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const longPath = 'src/features/session-usage/reports/components/very/deeply/nested/UsageReportCardFilePathThatWouldNormallyOverflow.tsx';
     const fileName = 'UsageReportCardFilePathThatWouldNormallyOverflow.tsx';
     const report = usageReport({
@@ -689,12 +708,20 @@ describe('Session usage report UI components', () => {
       },
     });
 
-    render(
-      <SessionUsageReportCard
-        report={report}
-        markdown="## Session Usage"
-      />
-    );
+    let refWarnings: unknown[][] = [];
+    try {
+      render(
+        <SessionUsageReportCard
+          report={report}
+          markdown="## Session Usage"
+        />
+      );
+      refWarnings = consoleError.mock.calls.filter(([message]) =>
+        String(message).includes('Function components cannot be given refs')
+      );
+    } finally {
+      consoleError.mockRestore();
+    }
 
     const fileNameLabel = container.querySelector('.session-usage-report-card__mini-list-file-name');
     expect(fileNameLabel?.textContent).toBe(fileName);
@@ -702,6 +729,7 @@ describe('Session usage report UI components', () => {
     expect(container.textContent).not.toContain('/.../');
     expect(container.querySelector(`[data-tooltip="${longPath}"]`)).not.toBeNull();
     expect(container.textContent).toContain('1,500 tokens');
+    expect(refWarnings).toEqual([]);
   });
 
   it('syncs path redaction between the chat card and detail panel', () => {

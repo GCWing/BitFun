@@ -92,21 +92,26 @@ impl ConfigManager {
     /// Loads or creates the configuration file.
     async fn load_or_create_config(&mut self) -> BitFunResult<()> {
         if self.config_file.exists() {
-            self.load_and_migrate_config().await?;
+            self.load_existing_config().await?;
         } else {
-            self.config = self.providers.get_default_config();
-            Self::add_default_agent_models_config(&mut self.config.ai.agent_models);
-            Self::add_default_func_agent_models_config(&mut self.config.ai.func_agent_models);
-            self.config.version = env!("CARGO_PKG_VERSION").to_string();
-            self.save_config().await?;
-            debug!("Created default config file");
+            self.create_default_config().await?;
         }
 
         Ok(())
     }
 
-    /// Loads and migrates configuration.
-    async fn load_and_migrate_config(&mut self) -> BitFunResult<()> {
+    /// Creates the first config file using the already initialized defaults.
+    async fn create_default_config(&mut self) -> BitFunResult<()> {
+        Self::add_default_agent_models_config(&mut self.config.ai.agent_models);
+        Self::add_default_func_agent_models_config(&mut self.config.ai.func_agent_models);
+        self.config.version = env!("CARGO_PKG_VERSION").to_string();
+        self.save_config().await?;
+        debug!("Created default config file");
+        Ok(())
+    }
+
+    /// Loads an existing config file and migrates it if needed.
+    async fn load_existing_config(&mut self) -> BitFunResult<()> {
         let content = fs::read_to_string(&self.config_file)
             .await
             .map_err(|e| BitFunError::config(format!("Failed to read config file: {}", e)))?;

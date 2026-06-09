@@ -12,6 +12,10 @@ import { ToolCardStatusSlot } from './ToolCardStatusSlot';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import { hasAcpPermissionOptions } from './AcpPermissionActions.utils';
 import { AcpPermissionActions } from './AcpPermissionActions';
+import {
+  formatSessionViewPreviewText,
+  isOnlySessionViewPreviewText,
+} from '../utils/sessionViewPreview';
 import './DefaultToolCard.scss';
 
 const MAX_PREVIEW_CHARS = 4000;
@@ -40,12 +44,12 @@ function hasVisibleValue(value: any): boolean {
 function stringifyValue(value: any): string {
   try {
     if (typeof value === 'string') {
-      return value;
+      return formatSessionViewPreviewText(value);
     }
 
-    return JSON.stringify(value, null, 2);
+    return formatSessionViewPreviewText(JSON.stringify(value, null, 2));
   } catch {
-    return String(value);
+    return formatSessionViewPreviewText(String(value));
   }
 }
 
@@ -60,6 +64,7 @@ function getInlinePreview(value: any): string | null {
   if (typeof value === 'string') {
     const normalized = value.replace(/\s+/g, ' ').trim();
     if (!normalized) return null;
+    if (isOnlySessionViewPreviewText(normalized)) return null;
     return normalized.length > 72 ? `${normalized.slice(0, 72)}...` : normalized;
   }
 

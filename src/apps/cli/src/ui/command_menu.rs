@@ -84,7 +84,8 @@ impl CommandMenuState {
             return;
         }
         let selected = self.list_state.selected().unwrap_or(0);
-        let next = selected.saturating_sub(1);
+        let len = self.items.len();
+        let next = (selected + len - 1) % len;
         self.list_state.select(Some(next));
     }
 
@@ -93,7 +94,7 @@ impl CommandMenuState {
             return;
         }
         let selected = self.list_state.selected().unwrap_or(0);
-        let next = (selected + 1).min(self.items.len().saturating_sub(1));
+        let next = (selected + 1) % self.items.len();
         self.list_state.select(Some(next));
     }
 

@@ -23,8 +23,8 @@ use bitfun_core::service::session::{DialogTurnData, SessionRelationship};
 
 const SESSION_VIEW_TOOL_RESULT_TOTAL_CHAR_BUDGET: usize = 512 * 1024;
 const SESSION_VIEW_TOOL_RESULT_STRING_CHAR_LIMIT: usize = 16 * 1024;
-const SESSION_VIEW_TRUNCATED_MARKER: &str = "\n...[truncated for session view]";
-const SESSION_VIEW_OMITTED_MARKER: &str = "[truncated for session view]";
+const SESSION_VIEW_TRUNCATED_MARKER: &str = "\n... Output truncated for session preview";
+const SESSION_VIEW_OMITTED_MARKER: &str = "Output omitted from session preview";
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -168,6 +168,17 @@ pub struct EnsureAssistantBootstrapRequest {
     pub workspace_path: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RunInitAgentsMdRequest {
+    pub session_id: String,
+    pub workspace_path: Option<String>,
+    #[serde(default)]
+    pub remote_connection_id: Option<String>,
+    #[serde(default)]
+    pub remote_ssh_host: Option<String>,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EnsureAssistantBootstrapResponse {
@@ -189,7 +200,12 @@ pub struct GetSessionRequest {
 pub struct SessionResponse {
     pub session_id: String,
     pub session_name: String,
+    /// Current/default mode selection for the next dialog turn.
     pub agent_type: String,
+    /// Mode of the last surviving user dialog turn in session history.
+    pub last_user_dialog_agent_type: Option<String>,
+    /// Mode of the most recent user submission accepted by the scheduler.
+    pub last_submitted_agent_type: Option<String>,
     pub state: String,
     pub turn_count: usize,
     pub created_at: u64,
@@ -208,6 +224,9 @@ pub struct RestoreSessionViewResponse {
     pub session: SessionResponse,
     pub turns: Vec<DialogTurnData>,
     pub context_restore_state: String,
+    pub is_partial: bool,
+    pub loaded_turn_count: usize,
+    pub total_turn_count: usize,
 }
 
 #[derive(Debug, Default)]
@@ -502,6 +521,8 @@ pub struct RestoreSessionRequest {
     pub include_internal: bool,
     #[serde(default)]
     pub trace_id: Option<String>,
+    #[serde(default)]
+    pub tail_turn_count: Option<usize>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -720,13 +741,13 @@ pub async fn ensure_coordinator_session(
     )
     .await;
     let restore_result = if request.include_internal {
-        coordinator.restore_internal_session(&effective, session_id).await
+        coordinator
+            .restore_internal_session(&effective, session_id)
+            .await
     } else {
         coordinator.restore_session(&effective, session_id).await
     };
-    restore_result
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+    restore_result.map(|_| ()).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -897,6 +918,66 @@ pub async fn ensure_assistant_bootstrap(
         .map_err(|e| format!("Failed to ensure assistant bootstrap: {}", e))?;
 
     Ok(assistant_bootstrap_outcome_to_response(outcome))
+}
+
+#[tauri::command]
+pub async fn run_init_agents_md(
+    coordinator: State<'_, Arc<ConversationCoordinator>>,
+    scheduler: State<'_, Arc<DialogScheduler>>,
+    app_state: State<'_, AppState>,
+    request: RunInitAgentsMdRequest,
+) -> Result<StartDialogTurnResponse, String> {
+    let session_id = request.session_id.trim();
+    if session_id.is_empty() {
+        return Err("session_id is required".to_string());
+    }
+
+    if coordinator
+        .get_session_manager()
+        .get_session(session_id)
+        .is_none()
+    {
+        let workspace_path = request
+            .workspace_path
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| {
+                "workspace_path is required when the session is not loaded".to_string()
+            })?;
+        let effective = desktop_effective_session_storage_path(
+            &app_state,
+            workspace_path,
+            request.remote_connection_id.as_deref(),
+            request.remote_ssh_host.as_deref(),
+        )
+        .await;
+        coordinator
+            .restore_session(&effective, session_id)
+            .await
+            .map_err(|e| format!("Failed to restore session before running /init: {e}"))?;
+    }
+
+    let workspace_path = request
+        .workspace_path
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+
+    scheduler
+        .submit_init_agents_md(
+            session_id.to_string(),
+            workspace_path,
+            DialogSubmissionPolicy::for_source(DialogTriggerSource::DesktopUi),
+        )
+        .await
+        .map_err(|e| format!("Failed to run /init: {e}"))?;
+
+    Ok(StartDialogTurnResponse {
+        success: true,
+        message: "Init dialog turn started".to_string(),
+    })
 }
 
 fn is_blank_text(value: Option<&String>) -> bool {
@@ -1245,16 +1326,42 @@ pub async fn restore_session_view(
         path_started_at.elapsed().as_millis()
     );
 
-    let (session, mut turns) = if request.include_internal {
+    let tail_turn_count = request.tail_turn_count.filter(|count| *count > 0);
+    let (session, mut turns, total_turn_count) = if let Some(tail_turn_count) = tail_turn_count {
+        let tail_turn_count = tail_turn_count.min(16);
+        if request.include_internal {
+            coordinator
+                .restore_internal_session_view_tail(
+                    &effective_path,
+                    &request.session_id,
+                    tail_turn_count,
+                )
+                .await
+        } else {
+            coordinator
+                .restore_session_view_tail(&effective_path, &request.session_id, tail_turn_count)
+                .await
+        }
+    } else if request.include_internal {
         coordinator
             .restore_internal_session_view(&effective_path, &request.session_id)
             .await
+            .map(|(session, turns)| {
+                let total_turn_count = turns.len();
+                (session, turns, total_turn_count)
+            })
     } else {
         coordinator
             .restore_session_view(&effective_path, &request.session_id)
             .await
+            .map(|(session, turns)| {
+                let total_turn_count = turns.len();
+                (session, turns, total_turn_count)
+            })
     }
     .map_err(|e| format!("Failed to restore session view: {}", e))?;
+    let loaded_turn_count = turns.len();
+    let is_partial = loaded_turn_count < total_turn_count;
 
     if log::log_enabled!(log::Level::Debug) {
         let payload_stats = restore_turn_payload_stats(&turns);
@@ -1262,10 +1369,12 @@ pub async fn restore_session_view(
             || payload_stats.result_for_assistant_chars >= 1024 * 1024
         {
             debug!(
-                "restore_session_view payload diagnostics: trace_id={}, session_id={}, turn_count={}, tool_result_count={}, raw_result_string_chars={}, result_for_assistant_chars={}, largest_raw_result_chars={}, largest_raw_result_path={}, top_raw_results={}",
+                "restore_session_view payload diagnostics: trace_id={}, session_id={}, turn_count={}, total_turn_count={}, is_partial={}, tool_result_count={}, raw_result_string_chars={}, result_for_assistant_chars={}, largest_raw_result_chars={}, largest_raw_result_path={}, top_raw_results={}",
                 trace_id,
                 request.session_id,
                 turns.len(),
+                total_turn_count,
+                is_partial,
                 payload_stats.tool_result_count,
                 payload_stats.raw_result_string_chars,
                 payload_stats.result_for_assistant_chars,
@@ -1279,10 +1388,12 @@ pub async fn restore_session_view(
     compact_tool_results_for_session_view(&mut turns);
 
     debug!(
-        "restore_session_view completed: trace_id={}, session_id={}, turn_count={}, context_restore_state=pending, duration_ms={}",
+        "restore_session_view completed: trace_id={}, session_id={}, turn_count={}, total_turn_count={}, is_partial={}, context_restore_state=pending, duration_ms={}",
         trace_id,
         request.session_id,
         turns.len(),
+        total_turn_count,
+        is_partial,
         started_at.elapsed().as_millis()
     );
 
@@ -1290,6 +1401,9 @@ pub async fn restore_session_view(
         session: session_to_response(session),
         turns,
         context_restore_state: "pending".to_string(),
+        is_partial,
+        loaded_turn_count,
+        total_turn_count,
     })
 }
 
@@ -1388,6 +1502,8 @@ pub async fn list_sessions(
             session_id: summary.session_id,
             session_name: summary.session_name,
             agent_type: summary.agent_type,
+            last_user_dialog_agent_type: summary.last_user_dialog_agent_type,
+            last_submitted_agent_type: summary.last_submitted_agent_type,
             state: format!("{:?}", summary.state),
             turn_count: summary.turn_count,
             created_at: system_time_to_unix_secs(summary.created_at),
@@ -1444,13 +1560,23 @@ pub async fn get_available_modes(state: State<'_, AppState>) -> Result<Vec<ModeI
 
     let dtos: Vec<ModeInfoDTO> = mode_infos
         .into_iter()
-        .map(|info| ModeInfoDTO {
-            id: info.id,
-            name: info.name,
-            description: info.description,
-            is_readonly: info.is_readonly,
-            tool_count: info.tool_count,
-            default_tools: info.default_tools,
+        .map(|info| {
+            let config_profile_id = info
+                .config_profile_id
+                .clone()
+                .unwrap_or_else(|| info.id.clone());
+            ModeInfoDTO {
+                id: info.id,
+                name: info.name,
+                description: info.description,
+                is_readonly: info.is_readonly,
+                tool_count: info.tool_count,
+                default_tools: info.default_tools,
+                prompt_cache_scope_key: info.prompt_cache_scope_key,
+                config_profile_id,
+                config_profile_label: info.config_profile_label,
+                config_profile_member_mode_ids: info.config_profile_member_mode_ids,
+            }
         })
         .collect();
 
@@ -1471,6 +1597,12 @@ pub struct ModeInfoDTO {
     pub is_readonly: bool,
     pub tool_count: usize,
     pub default_tools: Vec<String>,
+    pub prompt_cache_scope_key: String,
+    pub config_profile_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub config_profile_label: Option<String>,
+    #[serde(default)]
+    pub config_profile_member_mode_ids: Vec<String>,
 }
 
 fn assistant_bootstrap_outcome_to_response(
@@ -1529,6 +1661,8 @@ fn session_to_response(session: Session) -> SessionResponse {
         session_id: session.session_id,
         session_name: session.session_name,
         agent_type: session.agent_type,
+        last_user_dialog_agent_type: session.last_user_dialog_agent_type,
+        last_submitted_agent_type: session.last_submitted_agent_type,
         state: format!("{:?}", session.state),
         turn_count: session.dialog_turn_ids.len(),
         created_at: system_time_to_unix_secs(session.created_at),
@@ -1767,8 +1901,34 @@ mod tests {
             .as_str()
             .expect("output should remain a visible string preview");
         assert!(output.len() < 80 * 1024);
-        assert!(output.contains("truncated for session view"));
+        assert!(!output.contains("[truncated for session view]"));
+        assert!(output.contains("Output truncated for session preview"));
         assert_eq!(tool_result.result["exit_code"], 0);
         assert_eq!(tool_result.result_for_assistant, None);
+    }
+
+    #[test]
+    fn deserializes_set_subagent_timeout_disable_without_payload_field() {
+        let request: SetSubagentTimeoutRequest =
+            serde_json::from_str(r#"{"sessionId":"subagent-session","action":{"type":"Disable"}}"#)
+                .expect("disable action without payload should deserialize");
+        assert_eq!(request.session_id, "subagent-session");
+        assert!(matches!(
+            request.action,
+            SetSubagentTimeoutActionDTO::Disable
+        ));
+    }
+
+    #[test]
+    fn deserializes_set_subagent_timeout_disable_with_null_payload() {
+        let request: SetSubagentTimeoutRequest = serde_json::from_str(
+            r#"{"sessionId":"subagent-session","action":{"type":"Disable","payload":null}}"#,
+        )
+        .expect("disable action with null payload should deserialize");
+        assert_eq!(request.session_id, "subagent-session");
+        assert!(matches!(
+            request.action,
+            SetSubagentTimeoutActionDTO::Disable
+        ));
     }
 }

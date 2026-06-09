@@ -1,0 +1,50 @@
+{
+  "product": {
+    "name": "BitFun",
+    "remote": "BitFun Remote"
+  },
+  "features": {
+    "remoteControl": "Remote Control",
+    "codeAgent": "Code Agent",
+    "deepReview": "Deep Review",
+    "settings": "Settings",
+    "workspace": "Workspace"
+  },
+  "modes": {
+    "agentic": "Agentic Mode",
+    "assistant": "Assistant Mode",
+    "expert": "Expert Mode",
+    "review": "Review Mode"
+  },
+  "agents": {
+    "code": "Code Session",
+    "cowork": "Cowork Session",
+    "claw": "Claw",
+    "default": "Default Assistant"
+  },
+  "tools": {
+    "explore": "Explore",
+    "read": "Read",
+    "write": "Write",
+    "shell": "Shell",
+    "search": "Search",
+    "edit": "Edit",
+    "todo": "Todo"
+  },
+  "connectionMethods": {
+    "lan": "LAN",
+    "ngrok": "Ngrok",
+    "bitfunServer": "BitFun Server",
+    "customServer": "Custom Server",
+    "botFeishu": "Feishu Bot",
+    "botTelegram": "Telegram Bot",
+    "botWeixin": "WeChat Bot"
+  },
+  "statuses": {
+    "loading": "Loading",
+    "running": "Running",
+    "done": "Done",
+    "failed": "Failed",
+    "cancelled": "Cancelled"
+  }
+}

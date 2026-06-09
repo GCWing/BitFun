@@ -4,9 +4,9 @@
 
 export interface InputState {
   value: string;
-  /** Expanded to full height */
+  /** Kept for compatibility; not actively used in the new two-mode layout */
   isExpanded: boolean;
-  /** Active state when expanding from collapsed */
+  /** Always true in the new two-mode layout (capsule ↔ multi-line) */
   isActive: boolean;
 }
 
@@ -42,10 +42,7 @@ export function inputReducer(state: InputState, action: InputAction): InputState
       return { ...state, isActive: true };
       
     case 'DEACTIVATE':
-      // Only allow deactivation when input is empty
-      if (state.value.trim() === '') {
-        return { ...state, isActive: false, isExpanded: false };
-      }
+      // No-op: the input is always active in the new two-mode design.
       return state;
       
     default:

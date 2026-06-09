@@ -1,6 +1,5 @@
 {
   "app": {
-    "name": "BitFun",
     "version": "版本",
     "loading": "加载中...",
     "welcome": "欢迎使用 BitFun"
@@ -53,7 +52,6 @@
     "showChatPanel": "显示聊天面板",
     "hideChatPanel": "隐藏聊天面板",
     "switchToToolbar": "悬浮窗模式",
-    "remoteConnect": "远程控制",
     "modeSwitchAriaLabel": "视图模式切换",
     "modeCowork": "Cowork",
     "modeCoder": "Coder",
@@ -64,7 +62,8 @@
     "switchWorkspace": "切换工作区",
     "recentWorkspaces": "最近工作区",
     "noRecentWorkspaces": "暂无最近工作区",
-    "noWorkspaceOpen": "选择工作区"
+    "noWorkspaceOpen": "选择工作区",
+    "remoteConnectRequiresWorkspace": "请先打开工作区再使用远程控制。"
   },
   "nav": {
     "aria": {
@@ -95,7 +94,6 @@
       "addWorkspace": "添加工作区"
     },
     "sections": {
-      "workspace": "工作区",
       "extensions": "定制",
       "shell": "Shell",
       "assistantSessions": "助理会话"
@@ -174,6 +172,7 @@
       "delete": "删除",
       "confirmEdit": "确认",
       "cancelEdit": "取消",
+      "loading": "加载中...",
       "showMore": "还有 {{count}} 个会话",
       "showAll": "还有 {{count}} 个（展开全部）",
       "showLess": "收起",
@@ -190,7 +189,32 @@
       "needsToolConfirm": "等待确认",
       "badgeNeedsInput": "等待中",
       "badgeNeedsConfirm": "待确认",
-      "needProjectWorkspaceForSession": "请先打开或添加项目工作区。编码与工作（Cowork）会话不能在助理区域创建。"
+      "needProjectWorkspaceForSession": "请先打开或添加项目工作区。编码与工作（Cowork）会话不能在助理区域创建。",
+      "archive": "归档",
+      "archiveAll": "归档所有会话",
+      "archiveConfirmTitle": "归档会话",
+      "archiveConfirmMessage": "确定要归档此会话吗？它将从会话列表中隐藏，可在设置中恢复。",
+      "archiveAllConfirmTitle": "归档所有会话",
+      "archiveAllConfirmMessage": "确定要归档此工作区中的所有会话吗？它们将从会话列表中隐藏，可在设置中恢复。",
+      "unarchive": "恢复",
+      "unarchiveConfirmTitle": "恢复会话",
+      "unarchiveConfirmMessage": "确定要恢复此会话吗？它将重新出现在会话列表中。",
+      "deleteArchived": "删除",
+      "deleteArchivedConfirmTitle": "删除已归档会话",
+      "deleteArchivedConfirmMessage": "确定要永久删除此已归档会话吗？此操作无法撤销。",
+      "deleteAllArchived": "删除全部已归档",
+      "deleteAllArchivedConfirmTitle": "删除全部已归档会话",
+      "deleteAllArchivedConfirmMessage": "确定要永久删除所有已归档会话吗？此操作无法撤销。",
+      "archivedSessions": "已归档会话",
+      "noArchivedSessions": "暂无已归档会话",
+      "archivedSessionsDescription": "查看、恢复或永久删除已归档的会话。",
+      "untitled": "未命名会话",
+      "restore": "恢复",
+      "archivedAll": "已归档 {{count}} 个会话",
+      "restoreFailed": "恢复会话失败",
+      "deleteArchivedFailed": "删除会话失败",
+      "deleteAllArchivedFailed": "删除全部已归档会话失败",
+      "archiveAllFailed": "归档会话失败"
     },
     "scheduledJobs": {
       "title": "定时任务",
@@ -415,7 +439,6 @@
     "errorCreateFailed": "创建工作区失败"
   },
   "remoteConnect": {
-    "title": "远程控制",
     "tabLan": "局域网",
     "tabBitfunServer": "BitFun服务器",
     "tabNgrok": "内网穿透",
@@ -840,11 +863,11 @@
     "fixPreview": "修复预览",
     "gitDiff": "Git Diff",
     "gitSettings": "Git 设置",
+    "pullRequests": "Pull Requests",
     "taskPlanner": "任务规划器",
     "fileBrowser": "文件浏览器",
     "editor": "编辑器",
     "markdown": "Markdown",
-    "settings": "设置",
     "settingsWithSection": "设置 - {{section}}"
   },
   "welcome": {
@@ -878,7 +901,6 @@
     "aiAgent": "会话",
     "terminal": "终端",
     "git": "Git",
-    "settings": "设置",
     "fileViewer": "文件查看",
     "projectContext": "项目概况",
     "agents": "智能体",
@@ -891,7 +913,8 @@
     "panelView": "面板视图"
   },
   "loading": {
-    "scenes": "正在加载场景"
+    "scenes": "正在加载场景",
+    "workspace": "正在加载工作区..."
   },
   "welcomeScene": {
     "tabLabel": "欢迎使用",
@@ -1086,5 +1109,8 @@
     "quit": "退出程序",
     "minimizeToTray": "最小化到托盘"
   },
-  "bashCommandFailedHint": "命令执行失败，如需完整环境，请前往应用市场下载 DevBox，然后重启 BitFun"
+  "bashCommandFailedHint": "命令执行失败，如需完整环境，请前往应用市场下载 DevBox，然后重启 BitFun",
+  "collapse": "折叠",
+  "expand": "展开",
+  "retry": "重试"
 }

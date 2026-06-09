@@ -83,6 +83,7 @@ pub struct ToolCallDeltaOutcome {
 #[derive(Debug, Clone, Default)]
 pub struct PendingToolCalls {
     pending: BTreeMap<ToolCallStreamKey, PendingToolCall>,
+    strip_write_inline_content: bool,
 }
 
 /// Tools where executing a truncated tool call is **safe and meaningful** —
@@ -90,8 +91,50 @@ pub struct PendingToolCalls {
 /// useful than a hard failure. For everything else (Bash, Edit, Task, ...) we
 /// surface the truncation as an error: a partial shell command or a partial
 /// `old_string`/`new_string` for Edit can change semantics destructively.
-fn is_truncation_safe_to_recover(tool_name: &str) -> bool {
+pub fn is_write_like_tool_name(tool_name: &str) -> bool {
     matches!(tool_name, "Write" | "file_write" | "write_notebook")
+}
+
+fn is_truncation_safe_to_recover(tool_name: &str) -> bool {
+    is_write_like_tool_name(tool_name)
+        || matches!(
+            tool_name,
+            "AskUserQuestion" | "TodoWrite"
+        )
+}
+
+/// Remove inline body fields that PlaintextFollowup Write must not carry in
+/// tool-call JSON. File content is generated in a separate follow-up request.
+pub fn strip_write_inline_content_fields(arguments: &mut Value) {
+    if let Some(object) = arguments.as_object_mut() {
+        object.remove("content");
+        object.remove("contents");
+    }
+}
+
+pub fn write_plaintext_followup_arguments_json(arguments: &Value) -> Option<String> {
+    let file_path = arguments.get("file_path")?;
+    serde_json::to_string(&json!({ "file_path": file_path })).ok()
+}
+
+fn write_plaintext_followup_params_snapshot(raw_arguments: &str) -> Option<String> {
+    let mut arguments = serde_json::from_str::<Value>(raw_arguments).ok()?;
+    strip_write_inline_content_fields(&mut arguments);
+    write_plaintext_followup_arguments_json(&arguments)
+}
+
+fn sanitize_write_plaintext_followup_finalized(
+    tool_name: &str,
+    strip_write_inline_content: bool,
+    raw_arguments: &str,
+    arguments: &mut Value,
+) -> String {
+    if !(strip_write_inline_content && is_write_like_tool_name(tool_name)) {
+        return raw_arguments.to_string();
+    }
+
+    strip_write_inline_content_fields(arguments);
+    write_plaintext_followup_arguments_json(arguments).unwrap_or_else(|| raw_arguments.to_string())
 }
 
 /// Attempt to repair a JSON document that was truncated mid-stream (typically
@@ -222,7 +265,11 @@ impl PendingToolCall {
         self.raw_arguments.push_str(arguments_snapshot);
     }
 
-    pub fn finalize(&mut self, boundary: ToolCallBoundary) -> Option<FinalizedToolCall> {
+    pub fn raw_arguments(&self) -> &str {
+        &self.raw_arguments
+    }
+
+    pub fn finalize(&mut self, boundary: ToolCallBoundary, strip_write_inline_content: bool) -> Option<FinalizedToolCall> {
         if !self.has_pending() {
             return None;
         }
@@ -241,7 +288,7 @@ impl PendingToolCall {
         self.early_detected_emitted = false;
         let parsed_arguments = Self::parse_arguments(&tool_name, &raw_arguments);
 
-        let (arguments, is_error, recovered_from_truncation) = match parsed_arguments {
+        let (mut arguments, is_error, recovered_from_truncation) = match parsed_arguments {
             Ok(value) => (value, false, false),
             Err(parse_err) => {
                 let repaired = repair_truncated_json(&raw_arguments)
@@ -285,6 +332,13 @@ impl PendingToolCall {
             }
         };
 
+        let raw_arguments = sanitize_write_plaintext_followup_finalized(
+            &tool_name,
+            strip_write_inline_content,
+            &raw_arguments,
+            &mut arguments,
+        );
+
         Some(FinalizedToolCall {
             tool_id,
             tool_name,
@@ -297,6 +351,13 @@ impl PendingToolCall {
 }
 
 impl PendingToolCalls {
+    pub fn new(strip_write_inline_content: bool) -> Self {
+        Self {
+            pending: BTreeMap::new(),
+            strip_write_inline_content,
+        }
+    }
+
     pub fn apply_delta(
         &mut self,
         key: ToolCallStreamKey,
@@ -323,7 +384,8 @@ impl PendingToolCalls {
         if let Some(tool_id) = tool_id.filter(|tool_id| !tool_id.is_empty()) {
             let is_new_tool = pending.tool_id() != tool_id;
             if is_new_tool {
-                outcome.finalized_previous = pending.finalize(ToolCallBoundary::NewTool);
+                outcome.finalized_previous =
+                    pending.finalize(ToolCallBoundary::NewTool, self.strip_write_inline_content);
                 pending.start_new(tool_id, tool_name.clone());
             } else {
                 pending.update_tool_name_if_missing(tool_name.clone());
@@ -353,11 +415,22 @@ impl PendingToolCalls {
                 } else {
                     pending.append_arguments(&arguments);
                 }
-                outcome.params_partial = Some(ToolCallParamsChunk {
-                    tool_id: pending.tool_id().to_string(),
-                    tool_name: pending.tool_name().to_string(),
-                    params_chunk: arguments,
-                });
+                let tool_name = pending.tool_name().to_string();
+                let params_chunk = if self.strip_write_inline_content
+                    && is_write_like_tool_name(&tool_name)
+                {
+                    write_plaintext_followup_params_snapshot(pending.raw_arguments())
+                        .unwrap_or_default()
+                } else {
+                    arguments
+                };
+                if !params_chunk.is_empty() {
+                    outcome.params_partial = Some(ToolCallParamsChunk {
+                        tool_id: pending.tool_id().to_string(),
+                        tool_name,
+                        params_chunk,
+                    });
+                }
             }
         }
 
@@ -370,7 +443,7 @@ impl PendingToolCalls {
         boundary: ToolCallBoundary,
     ) -> Option<FinalizedToolCall> {
         let mut pending = self.pending.remove(key)?;
-        pending.finalize(boundary)
+        pending.finalize(boundary, self.strip_write_inline_content)
     }
 
     pub fn finalize_all(&mut self, boundary: ToolCallBoundary) -> Vec<FinalizedToolCall> {
@@ -396,7 +469,7 @@ mod tests {
         pending.append_arguments("{\"a\":1}");
 
         let finalized = pending
-            .finalize(ToolCallBoundary::FinishReason)
+            .finalize(ToolCallBoundary::FinishReason, false)
             .expect("finalized tool");
 
         assert_eq!(finalized.tool_id, "call_1");
@@ -413,7 +486,7 @@ mod tests {
         pending.append_arguments("{\"a\":");
 
         let finalized = pending
-            .finalize(ToolCallBoundary::StreamEnd)
+            .finalize(ToolCallBoundary::StreamEnd, false)
             .expect("finalized tool");
 
         assert_eq!(finalized.arguments, json!({}));
@@ -427,7 +500,7 @@ mod tests {
         pending.append_arguments("git status");
 
         let finalized = pending
-            .finalize(ToolCallBoundary::FinishReason)
+            .finalize(ToolCallBoundary::FinishReason, false)
             .expect("finalized tool");
 
         assert_eq!(finalized.raw_arguments, "git status");
@@ -442,7 +515,7 @@ mod tests {
         pending.append_arguments("\"git diff --staged\"");
 
         let finalized = pending
-            .finalize(ToolCallBoundary::FinishReason)
+            .finalize(ToolCallBoundary::FinishReason, false)
             .expect("finalized tool");
 
         assert_eq!(finalized.arguments, json!("git diff --staged"));
@@ -456,7 +529,7 @@ mod tests {
         pending.append_arguments("{\"args\": \"--since=\\\"2026-05-02\\\" --oneline\"}");
 
         let finalized = pending
-            .finalize(ToolCallBoundary::FinishReason)
+            .finalize(ToolCallBoundary::FinishReason, false)
             .expect("finalized tool");
 
         assert_eq!(
@@ -473,7 +546,7 @@ mod tests {
         pending.append_arguments("{\"args\": \"log --oneline -10\"}");
 
         let finalized = pending
-            .finalize(ToolCallBoundary::FinishReason)
+            .finalize(ToolCallBoundary::FinishReason, false)
             .expect("finalized tool");
 
         assert_eq!(finalized.arguments, json!({"args": "log --oneline -10"}));
@@ -487,7 +560,7 @@ mod tests {
         pending.append_arguments("{\"args\": \"--stat\"}");
 
         let finalized = pending
-            .finalize(ToolCallBoundary::FinishReason)
+            .finalize(ToolCallBoundary::FinishReason, false)
             .expect("finalized tool");
 
         assert_eq!(finalized.arguments, json!({"args": "--stat"}));
@@ -516,7 +589,7 @@ mod tests {
             pending.append_arguments(raw_arguments);
 
             let finalized = pending
-                .finalize(ToolCallBoundary::FinishReason)
+                .finalize(ToolCallBoundary::FinishReason, false)
                 .expect("finalized tool");
 
             assert_eq!(finalized.arguments, json!({}), "tool={tool_name}");
@@ -533,7 +606,7 @@ mod tests {
         );
 
         let finalized = pending
-            .finalize(ToolCallBoundary::FinishReason)
+            .finalize(ToolCallBoundary::FinishReason, false)
             .expect("finalized tool");
 
         assert_eq!(finalized.arguments, json!({}));
@@ -547,7 +620,7 @@ mod tests {
         pending.append_arguments("{\"command\": ");
 
         let finalized = pending
-            .finalize(ToolCallBoundary::FinishReason)
+            .finalize(ToolCallBoundary::FinishReason, false)
             .expect("finalized tool");
 
         assert_eq!(finalized.arguments, json!({}));
@@ -563,7 +636,7 @@ mod tests {
         );
 
         let finalized = pending
-            .finalize(ToolCallBoundary::FinishReason)
+            .finalize(ToolCallBoundary::FinishReason, false)
             .expect("finalized tool");
 
         assert_eq!(finalized.arguments, json!({}));
@@ -577,7 +650,7 @@ mod tests {
         pending.append_arguments("{");
 
         let finalized = pending
-            .finalize(ToolCallBoundary::FinishReason)
+            .finalize(ToolCallBoundary::FinishReason, false)
             .expect("finalized tool");
 
         assert_eq!(finalized.arguments, json!({}));
@@ -591,7 +664,7 @@ mod tests {
         pending.append_arguments("{\"command\": \"git log --since=\\\"2026-05-02\\\" --on");
 
         let finalized = pending
-            .finalize(ToolCallBoundary::FinishReason)
+            .finalize(ToolCallBoundary::FinishReason, false)
             .expect("finalized tool");
 
         assert_eq!(finalized.arguments, json!({}));
@@ -605,7 +678,7 @@ mod tests {
         pending.append_arguments("\"git status\"");
 
         let finalized = pending
-            .finalize(ToolCallBoundary::FinishReason)
+            .finalize(ToolCallBoundary::FinishReason, false)
             .expect("finalized tool");
 
         assert_eq!(finalized.arguments, json!("git status"));
@@ -619,7 +692,7 @@ mod tests {
         pending.append_arguments("```bash\npnpm run lint:web\n```");
 
         let finalized = pending
-            .finalize(ToolCallBoundary::FinishReason)
+            .finalize(ToolCallBoundary::FinishReason, false)
             .expect("finalized tool");
 
         assert_eq!(finalized.arguments, json!({}));
@@ -633,7 +706,7 @@ mod tests {
         pending.append_arguments("src/main.rs");
 
         let finalized = pending
-            .finalize(ToolCallBoundary::FinishReason)
+            .finalize(ToolCallBoundary::FinishReason, false)
             .expect("finalized tool");
 
         assert_eq!(finalized.arguments, json!({}));
@@ -647,7 +720,7 @@ mod tests {
         pending.append_arguments("{\"a\":1}}");
 
         let finalized = pending
-            .finalize(ToolCallBoundary::FinishReason)
+            .finalize(ToolCallBoundary::FinishReason, false)
             .expect("finalized tool");
 
         assert_eq!(finalized.raw_arguments, "{\"a\":1}}");
@@ -662,7 +735,7 @@ mod tests {
         pending.append_arguments("{\"a\":1,\"b\":\"x\"}");
 
         let finalized = pending
-            .finalize(ToolCallBoundary::EndOfAggregation)
+            .finalize(ToolCallBoundary::EndOfAggregation, false)
             .expect("finalized tool");
 
         assert_eq!(finalized.arguments["a"], json!(1));
@@ -677,7 +750,7 @@ mod tests {
         pending.replace_arguments("{\"city\":\"Beijing\"}");
 
         let finalized = pending
-            .finalize(ToolCallBoundary::FinishReason)
+            .finalize(ToolCallBoundary::FinishReason, false)
             .expect("finalized tool");
 
         assert_eq!(finalized.arguments, json!({"city": "Beijing"}));
@@ -836,6 +909,76 @@ mod tests {
     // ------------------------------------------------------------------
 
     #[test]
+    fn write_inline_content_is_stripped_when_strip_mode_enabled() {
+        let mut pending = PendingToolCalls::new(true);
+        pending.apply_delta(
+            ToolCallStreamKey::Indexed(0),
+            Some("call_1".to_string()),
+            Some("Write".to_string()),
+            Some(r#"{"file_path":"notes.md","content":"inline body"}"#.to_string()),
+            false,
+        );
+
+        let finalized = pending.finalize_all(ToolCallBoundary::FinishReason);
+        assert_eq!(finalized.len(), 1);
+        assert_eq!(finalized[0].arguments, json!({ "file_path": "notes.md" }));
+        assert_eq!(finalized[0].raw_arguments, r#"{"file_path":"notes.md"}"#);
+    }
+
+    #[test]
+    fn write_params_partial_emits_file_path_only_snapshot_when_strip_mode_enabled() {
+        let mut pending = PendingToolCalls::new(true);
+        pending.apply_delta(
+            ToolCallStreamKey::Indexed(0),
+            Some("call_1".to_string()),
+            Some("Write".to_string()),
+            None,
+            false,
+        );
+
+        let payload = pending.apply_delta(
+            ToolCallStreamKey::Indexed(0),
+            None,
+            None,
+            Some(r#"{"file_path":"notes.md","content":"inline body"}"#.to_string()),
+            false,
+        );
+
+        assert_eq!(
+            payload.params_partial,
+            Some(ToolCallParamsChunk {
+                tool_id: "call_1".to_string(),
+                tool_name: "Write".to_string(),
+                params_chunk: r#"{"file_path":"notes.md"}"#.to_string(),
+            })
+        );
+    }
+
+    #[test]
+    fn write_truncated_mid_content_string_is_recovered_without_inline_content_when_strip_enabled(
+    ) {
+        let raw = "{\"file_path\": \"/tmp/report.md\", \"content\": \"# Report\\n\\nA long body that was cut";
+        let mut pending = PendingToolCall::default();
+        pending.start_new("call_1".to_string(), Some("Write".to_string()));
+        pending.append_arguments(raw);
+
+        let finalized = pending
+            .finalize(ToolCallBoundary::FinishReason, true)
+            .expect("finalized tool");
+
+        assert!(!finalized.is_error, "Write recovery should succeed");
+        assert!(finalized.recovered_from_truncation);
+        assert_eq!(
+            finalized.arguments,
+            json!({ "file_path": "/tmp/report.md" })
+        );
+        assert_eq!(
+            finalized.raw_arguments,
+            serde_json::to_string(&json!({ "file_path": "/tmp/report.md" })).unwrap()
+        );
+    }
+
+    #[test]
     fn write_truncated_mid_content_string_is_recovered() {
         // Reproduces the deep-research dump: the model hit max_tokens while
         // streaming `content`, so the JSON ends inside the string literal
@@ -846,7 +989,7 @@ mod tests {
         pending.append_arguments(raw);
 
         let finalized = pending
-            .finalize(ToolCallBoundary::FinishReason)
+            .finalize(ToolCallBoundary::FinishReason, false)
             .expect("finalized tool");
 
         assert!(!finalized.is_error, "Write recovery should succeed");
@@ -868,7 +1011,7 @@ mod tests {
         pending.append_arguments(raw);
 
         let finalized = pending
-            .finalize(ToolCallBoundary::FinishReason)
+            .finalize(ToolCallBoundary::FinishReason, false)
             .expect("finalized tool");
 
         assert!(!finalized.is_error);
@@ -887,7 +1030,7 @@ mod tests {
         pending.append_arguments(raw);
 
         let finalized = pending
-            .finalize(ToolCallBoundary::FinishReason)
+            .finalize(ToolCallBoundary::FinishReason, false)
             .expect("finalized tool");
 
         // We never execute a partial shell command.
@@ -935,5 +1078,58 @@ mod tests {
             parsed["content"].as_str(),
             Some("she said \"hello\" and then")
         );
+    }
+
+    #[test]
+    fn ask_user_question_truncated_mid_chinese_string_is_recovered() {
+        let raw = r#"{"questions": [{"header": "重试场景", "multiSelect": true, "options": [{"description": "当消息发送后后端返回失败（消息气泡显示为红色失败状态，有 model rounds 但 status='error'），在失败气泡旁增加重试按钮，点击后重新发送该消息", "label": "失败消息气泡上加重试按钮"}]}]}"#;
+        // Truncate mid-Chinese-string, after a colon that opened the value
+        let truncated = &raw[..raw.find("消息气泡显示为红色失败状态").unwrap() + "消息气泡显示为红色失败状态".len()];
+        let mut pending = PendingToolCall::default();
+        pending.start_new("call_1".to_string(), Some("AskUserQuestion".to_string()));
+        pending.append_arguments(truncated);
+
+        let finalized = pending
+            .finalize(ToolCallBoundary::FinishReason, false)
+            .expect("finalized tool");
+
+        assert!(!finalized.is_error);
+        assert!(finalized.recovered_from_truncation);
+    }
+
+    #[test]
+    fn ask_user_question_truncated_mid_options_is_recovered() {
+        // Truncation right after a completed description value's closing quote + comma
+        let raw = r#"{"questions": [{"header": "场景", "multiSelect": true, "options": [{"description": "第一条描述", "label": "选项一"}, {"description": "第二条描"#;
+        let mut pending = PendingToolCall::default();
+        pending.start_new("call_1".to_string(), Some("AskUserQuestion".to_string()));
+        pending.append_arguments(raw);
+
+        let finalized = pending
+            .finalize(ToolCallBoundary::FinishReason, false)
+            .expect("finalized tool");
+
+        assert!(!finalized.is_error);
+        assert!(finalized.recovered_from_truncation);
+        let questions = finalized.arguments["questions"].as_array().unwrap();
+        assert_eq!(questions.len(), 1);
+        assert_eq!(questions[0]["options"].as_array().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn todo_write_truncated_mid_content_is_recovered() {
+        let raw = r#"{"todos": [{"id": "1", "content": "完成重构并优化性能", "status": "in_progress"}, {"id": "2", "content": "编写单元测"#;
+        let mut pending = PendingToolCall::default();
+        pending.start_new("call_1".to_string(), Some("TodoWrite".to_string()));
+        pending.append_arguments(raw);
+
+        let finalized = pending
+            .finalize(ToolCallBoundary::FinishReason, false)
+            .expect("finalized tool");
+
+        assert!(!finalized.is_error);
+        assert!(finalized.recovered_from_truncation);
+        let todos = finalized.arguments["todos"].as_array().unwrap();
+        assert_eq!(todos.len(), 2);
     }
 }

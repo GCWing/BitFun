@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import LanguageToggleButton from '../components/LanguageToggleButton';
 import { useI18n } from '../i18n';
-import { RemoteSessionManager, type RecentWorkspaceEntry } from '../services/RemoteSessionManager';
+import { RemoteSessionManager, type RecentWorkspaceEntry, type SessionInfo } from '../services/RemoteSessionManager';
 import { useMobileStore } from '../services/store';
 import { useTheme } from '../theme';
 import logoIcon from '../assets/Logo-ICON.png';
@@ -14,6 +14,7 @@ interface SessionListPageProps {
   sessionMgr: RemoteSessionManager;
   onSelectSession: (sessionId: string, sessionName?: string, isNew?: boolean) => void;
   onOpenWorkspace: () => void;
+  onDisconnect: () => void;
 }
 
 function formatTime(unixStr: string, language: string, t: (key: string, params?: Record<string, string | number>) => string): string {
@@ -42,7 +43,7 @@ function agentLabel(agentType: string, t: (key: string) => string): string {
       return t('sessions.agentCowork');
     case 'claw':
     case 'Claw':
-      return t('sessions.agentClaw');
+      return t('shared.agents.claw');
     default:
       return agentType || t('sessions.agentDefault');
   }
@@ -137,7 +138,7 @@ const ThemeToggleIcon: React.FC<{ isDark: boolean }> = ({ isDark }) => (
   </svg>
 );
 
-const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectSession, onOpenWorkspace }) => {
+const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectSession, onOpenWorkspace, onDisconnect }) => {
   const { t, language } = useI18n();
   const {
     sessions,
@@ -150,6 +151,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
     setCurrentAssistant,
     setPairedDisplayMode,
     authenticatedUserId,
+    connectionHealth,
   } = useMobileStore();
   const { isDark, toggleTheme } = useTheme();
   const [creating, setCreating] = useState(false);
@@ -167,10 +169,118 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
   const [workspaceList, setWorkspaceList] = useState<Array<{ path: string; name: string; last_opened: string }>>([]);
   const [showWorkspacePicker, setShowWorkspacePicker] = useState(false);
 
+  // Search, rename & delete state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [menuSession, setMenuSession] = useState<SessionInfo | null>(null);
+  const [renameTarget, setRenameTarget] = useState<SessionInfo | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<SessionInfo | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [actionToast, setActionToast] = useState<string | null>(null);
+
+  const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
+
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const longPressPosRef = useRef({ x: 0, y: 0 });
+  const longPressTriggeredRef = useRef(false);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  const hasSearchQuery = searchQuery.trim().length > 0;
+
+  // ── Long-press context menu ─────────────────────────────────────
+  const clearLongPressTimer = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = undefined;
+    }
+  };
+
+  const handleSessionTouchStart = useCallback((s: SessionInfo, e: React.TouchEvent) => {
+    if (deleting || renaming) return;
+    clearLongPressTimer();
+    longPressTriggeredRef.current = false;
+    longPressPosRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    longPressTimerRef.current = setTimeout(() => {
+      longPressTriggeredRef.current = true;
+      setMenuSession(s);
+      longPressTimerRef.current = undefined;
+    }, 500);
+  }, [deleting, renaming]);
+
+  const handleSessionTouchMove = useCallback((e: React.TouchEvent) => {
+    const dx = Math.abs(e.touches[0].clientX - longPressPosRef.current.x);
+    const dy = Math.abs(e.touches[0].clientY - longPressPosRef.current.y);
+    if (dx > 10 || dy > 10) {
+      clearLongPressTimer();
+    }
+  }, []);
+
+  const handleSessionTouchEnd = useCallback(() => {
+    clearLongPressTimer();
+  }, []);
+
+  const handleSessionClick = useCallback((s: SessionInfo, e: React.MouseEvent) => {
+    if (longPressTriggeredRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      longPressTriggeredRef.current = false;
+      return;
+    }
+    onSelectSession(s.session_id, s.name);
+  }, [onSelectSession]);
+
+  // ── Session actions ─────────────────────────────────────────────
+  const showToast = useCallback((msg: string) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setActionToast(msg);
+    toastTimerRef.current = setTimeout(() => setActionToast(null), 2500);
+  }, []);
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      clearLongPressTimer();
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
+
+  const handleRename = useCallback(async () => {
+    if (!renameTarget || !renameValue.trim()) return;
+    setRenaming(true);
+    try {
+      await sessionMgr.renameSession(renameTarget.session_id, renameValue.trim());
+      useMobileStore.getState().updateSessionName(renameTarget.session_id, renameValue.trim());
+      setRenameTarget(null);
+      setMenuSession(null);
+    } catch (e: any) {
+      showToast(e.message || t('sessions.renameFailed'));
+    } finally {
+      setRenaming(false);
+    }
+  }, [renameTarget, renameValue, sessionMgr, showToast, t]);
+
+  const handleDelete = useCallback(async () => {
+    if (!deleteConfirmTarget) return;
+    setDeleting(true);
+    try {
+      await sessionMgr.deleteSession(deleteConfirmTarget.session_id);
+      useMobileStore.getState().removeSession(deleteConfirmTarget.session_id);
+      setDeleteConfirmTarget(null);
+      setMenuSession(null);
+      showToast(t('sessions.deleted'));
+    } catch (e: any) {
+      showToast(e.message || t('sessions.deleteFailed'));
+    } finally {
+      setDeleting(false);
+    }
+  }, [deleteConfirmTarget, sessionMgr, showToast, t]);
+
   const [pullDistance, setPullDistance] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const offsetRef = useRef(0);
   const listRef = useRef<HTMLDivElement>(null);
+  const listRequestSeqRef = useRef(0);
   const touchStartY = useRef(0);
   const isPulling = useRef(false);
 
@@ -192,18 +302,23 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
     }
   }, [sessionMgr, currentAssistant, setCurrentAssistant, setError]);
 
-  const loadFirstPage = useCallback(async (workspacePath: string | undefined) => {
+  const loadFirstPage = useCallback(async (workspacePath: string | undefined, query = '') => {
+    const requestSeq = ++listRequestSeqRef.current;
     setLoading(true);
     offsetRef.current = 0;
     try {
-      const resp = await sessionMgr.listSessions(workspacePath, PAGE_SIZE, 0);
+      const resp = await sessionMgr.listSessions(workspacePath, PAGE_SIZE, 0, query);
+      if (requestSeq !== listRequestSeqRef.current) return;
       setSessions(resp.sessions);
       setHasMore(resp.has_more);
       offsetRef.current = resp.sessions.length;
     } catch (e: any) {
+      if (requestSeq !== listRequestSeqRef.current) return;
       setError(e.message);
     } finally {
-      setLoading(false);
+      if (requestSeq === listRequestSeqRef.current) {
+        setLoading(false);
+      }
     }
   }, [sessionMgr, setSessions, setError]);
 
@@ -227,14 +342,14 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
           project_name: result.project_name || workspace.name,
         });
         setShowWorkspacePicker(false);
-        loadFirstPage(workspace.path);
+        loadFirstPage(workspace.path, searchQuery);
       } else {
         setError(result.error || 'Failed to set workspace');
       }
     } catch (e: any) {
       setError(e.message);
     }
-  }, [sessionMgr, setCurrentWorkspace, setError, loadFirstPage]);
+  }, [sessionMgr, setCurrentWorkspace, setError, loadFirstPage, searchQuery]);
 
   const trySelectFirstProWorkspace = useCallback(async (): Promise<boolean> => {
     try {
@@ -248,7 +363,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
           path: result.path || candidate.path,
           project_name: result.project_name || candidate.name,
         });
-        await loadFirstPage(result.path || candidate.path);
+        await loadFirstPage(result.path || candidate.path, searchQuery);
         return true;
       }
       setError(result.error || t('workspace.failedToSetWorkspace'));
@@ -257,17 +372,20 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
       setError(e.message);
       return false;
     }
-  }, [sessionMgr, setCurrentWorkspace, setError, loadFirstPage, t]);
+  }, [sessionMgr, setCurrentWorkspace, setError, loadFirstPage, searchQuery, t]);
 
-  const loadNextPage = useCallback(async (workspacePath: string | undefined) => {
+  const loadNextPage = useCallback(async (workspacePath: string | undefined, query = '') => {
     if (loadingMore || !hasMore) return;
+    const requestSeq = listRequestSeqRef.current;
     setLoadingMore(true);
     try {
-      const resp = await sessionMgr.listSessions(workspacePath, PAGE_SIZE, offsetRef.current);
+      const resp = await sessionMgr.listSessions(workspacePath, PAGE_SIZE, offsetRef.current, query);
+      if (requestSeq !== listRequestSeqRef.current) return;
       appendSessions(resp.sessions);
       setHasMore(resp.has_more);
       offsetRef.current += resp.sessions.length;
     } catch (e: any) {
+      if (requestSeq !== listRequestSeqRef.current) return;
       setError(e.message);
     } finally {
       setLoadingMore(false);
@@ -310,6 +428,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
   }, []);
 
   const refreshData = useCallback(async () => {
+    const requestSeq = ++listRequestSeqRef.current;
     try {
       if (displayMode === 'pro') {
         const info = await sessionMgr.getWorkspaceInfo();
@@ -322,24 +441,35 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
         }
         const ws = info.has_workspace ? info : null;
         setCurrentWorkspace(ws);
-        const resp = await sessionMgr.listSessions(ws?.path, PAGE_SIZE, 0);
+        const resp = await sessionMgr.listSessions(ws?.path, PAGE_SIZE, 0, searchQuery);
+        if (requestSeq !== listRequestSeqRef.current) return;
         setSessions(resp.sessions);
         setHasMore(resp.has_more);
         offsetRef.current = resp.sessions.length;
       } else {
         // Assistant mode: use currentAssistant path
-        const resp = await sessionMgr.listSessions(currentAssistant?.path, PAGE_SIZE, 0);
+        const resp = await sessionMgr.listSessions(currentAssistant?.path, PAGE_SIZE, 0, searchQuery);
+        if (requestSeq !== listRequestSeqRef.current) return;
         setSessions(resp.sessions);
         setHasMore(resp.has_more);
         offsetRef.current = resp.sessions.length;
       }
     } catch { /* ignore */ }
-  }, [sessionMgr, setSessions, setCurrentWorkspace, currentAssistant?.path, displayMode]);
+  }, [sessionMgr, setSessions, setCurrentWorkspace, currentAssistant?.path, displayMode, searchQuery]);
 
   useEffect(() => {
     const poll = setInterval(refreshData, 10000);
     return () => clearInterval(poll);
   }, [refreshData]);
+
+  useEffect(() => {
+    const workspacePath = displayMode === 'assistant' ? currentAssistant?.path : currentWorkspace?.path;
+    if (!workspacePath) return;
+    const timer = setTimeout(() => {
+      loadFirstPage(workspacePath, searchQuery);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [currentAssistant?.path, currentWorkspace?.path, displayMode, loadFirstPage, searchQuery]);
 
   const PULL_THRESHOLD = 60;
 
@@ -377,9 +507,9 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
     const el = e.currentTarget;
     if (el.scrollHeight - el.scrollTop - el.clientHeight < 150) {
       const workspacePath = displayMode === 'assistant' ? currentAssistant?.path : currentWorkspace?.path;
-      loadNextPage(workspacePath);
+      loadNextPage(workspacePath, searchQuery);
     }
-  }, [displayMode, currentAssistant?.path, currentWorkspace?.path, loadNextPage]);
+  }, [displayMode, currentAssistant?.path, currentWorkspace?.path, loadNextPage, searchQuery]);
 
   const handleCreate = useCallback(async (agentType: string) => {
     if (creating) return;
@@ -389,7 +519,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
       // For pro mode (Code/Cowork), use currentWorkspace.path
       const workspacePath = displayMode === 'assistant' ? currentAssistant?.path : currentWorkspace?.path;
       const id = await sessionMgr.createSession(agentType, undefined, workspacePath);
-      await loadFirstPage(workspacePath);
+      await loadFirstPage(workspacePath, searchQuery);
       const label = isClawAgent(agentType)
         ? t('sessions.remoteClawSession')
         : isCoworkAgent(agentType)
@@ -401,33 +531,33 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
     } finally {
       setCreating(false);
     }
-  }, [creating, currentWorkspace?.path, currentAssistant?.path, displayMode, loadFirstPage, onSelectSession, sessionMgr, setError, t]);
+  }, [creating, currentWorkspace?.path, currentAssistant?.path, displayMode, loadFirstPage, onSelectSession, searchQuery, sessionMgr, setError, t]);
 
   const handleSelectMode = useCallback(async (mode: DisplayMode) => {
     setDisplayMode(mode);
     setShowAssistantPicker(false);
     if (mode === 'assistant') {
       const assistantPath = await loadAssistantList();
-      loadFirstPage(assistantPath);
+      loadFirstPage(assistantPath, searchQuery);
     } else {
       if (currentWorkspace?.path) {
-        await loadFirstPage(currentWorkspace.path);
+        await loadFirstPage(currentWorkspace.path, searchQuery);
       } else {
         await trySelectFirstProWorkspace();
       }
     }
-  }, [currentWorkspace?.path, loadFirstPage, loadAssistantList, trySelectFirstProWorkspace]);
+  }, [currentWorkspace?.path, loadFirstPage, loadAssistantList, searchQuery, trySelectFirstProWorkspace]);
 
   const handleSelectAssistant = useCallback(async (assistant: { path: string; name: string; assistant_id?: string }) => {
     try {
       await sessionMgr.setAssistant(assistant.path);
       setCurrentAssistant(assistant);
       setShowAssistantPicker(false);
-      loadFirstPage(assistant.path);
+      loadFirstPage(assistant.path, searchQuery);
     } catch (e: any) {
       setError(e.message);
     }
-  }, [sessionMgr, setCurrentAssistant, setError, loadFirstPage]);
+  }, [sessionMgr, setCurrentAssistant, setError, loadFirstPage, searchQuery]);
 
   const workspaceDisplayName = currentWorkspace?.project_name || t('sessions.noWorkspaceSelected');
   const assistantDisplayName = currentAssistant?.name || t('sessions.defaultAssistant');
@@ -439,9 +569,12 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
         <div className="session-list__header-brand">
           <img src={logoIcon} alt="BitFun" className="session-list__logo" />
           <div className="session-list__header-copy">
-            <h1>{t('common.appName')}</h1>
+            <h1>{t('shared.product.remote')}</h1>
             {authenticatedUserId && (
-              <span className="session-list__header-user-id">{authenticatedUserId}</span>
+              <span className="session-list__header-user-id">
+                <span className={`session-list__health-dot session-list__health-dot--${connectionHealth}`} title={(() => { switch (connectionHealth) { case 'connected': return t('sessions.connectionConnected'); case 'checking': return t('sessions.connectionChecking'); case 'unreachable': return t('sessions.connectionUnreachable'); default: return t('sessions.connectionUnpaired'); } })()} />
+                {authenticatedUserId}
+              </span>
             )}
           </div>
         </div>
@@ -449,6 +582,13 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
           <LanguageToggleButton />
           <button className="session-list__theme-btn" onClick={toggleTheme} aria-label={t('common.toggleTheme')}>
             <ThemeToggleIcon isDark={isDark} />
+          </button>
+          <button className="session-list__disconnect-btn" onClick={() => setShowDisconnectConfirm(true)} aria-label={t('sessions.disconnect')} title={t('sessions.disconnect')}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
           </button>
         </div>
       </div>
@@ -508,7 +648,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
                 <WorkspaceIcon />
               </span>
               <div className="session-list__workspace-copy">
-                <span className="session-list__workspace-label">{t('sessions.workspace')}</span>
+                <span className="session-list__workspace-label">{t('shared.features.workspace')}</span>
                 <span className="session-list__workspace-name" title={workspaceDisplayName}>{truncateMiddle(workspaceDisplayName, 24)}</span>
               </div>
               {currentWorkspace?.git_branch && (
@@ -652,7 +792,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
                         <SessionTypeIcon agentType="cowork" />
                       </div>
                       <div className="session-list__create-copy">
-                        <span className="session-list__create-title">{t('sessions.coworkSession')}</span>
+                        <span className="session-list__create-title">{t('shared.agents.cowork')}</span>
                         <span className="session-list__create-desc">{t('sessions.coworkSessionDesc')}</span>
                       </div>
                       <span className="session-list__create-arrow">
@@ -694,19 +834,48 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
                 <div className="session-list__section-meta">{t('common.itemCount', { count: sessions.length })}</div>
               </div>
 
+              {/* Search */}
+              <div className="session-list__search">
+                <svg className="session-list__search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <input
+                  className="session-list__search-input"
+                  type="search"
+                  placeholder={t('sessions.searchSessions')}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  enterKeyHint="search"
+                />
+                {searchQuery && (
+                  <button className="session-list__search-clear" onClick={() => setSearchQuery('')} aria-label="Clear">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                )}
+              </div>
+
               {loading && sessions.length === 0 && (
                 <div className="session-list__empty">{t('sessions.loadingSessions')}</div>
               )}
-              {!loading && sessions.length === 0 && (
+              {!loading && sessions.length === 0 && !hasSearchQuery && (
                 <div className="session-list__empty">{t('sessions.noSessions')}</div>
+              )}
+              {!loading && sessions.length === 0 && hasSearchQuery && (
+                <div className="session-list__empty">{t('sessions.emptySearch')}</div>
               )}
 
               <div className="session-list__cards">
                 {sessions.map((s) => (
                   <div
                     key={s.session_id}
-                    className="session-list__item"
-                    onClick={() => onSelectSession(s.session_id, s.name)}
+                    className={`session-list__item${menuSession?.session_id === s.session_id ? ' session-list__item--active' : ''}`}
+                    onClick={(e) => handleSessionClick(s, e)}
+                    onTouchStart={(e) => handleSessionTouchStart(s, e)}
+                    onTouchMove={handleSessionTouchMove}
+                    onTouchEnd={handleSessionTouchEnd}
+                    onTouchCancel={handleSessionTouchEnd}
+                    onContextMenu={(e) => { e.preventDefault(); setMenuSession(s); }}
                   >
                     <div className={`session-list__item-icon session-list__item-icon--${s.agent_type}`}>
                       <SessionTypeIcon agentType={s.agent_type} />
@@ -729,6 +898,171 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
               )}
             </section>
       </div>
+
+      {/* Context Menu Bottom Sheet */}
+      {menuSession && !renameTarget && !deleteConfirmTarget && (
+        <div className="session-list__menu-overlay" onClick={() => setMenuSession(null)}>
+          <div className="session-list__menu-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="session-list__menu-handle" />
+            <div className="session-list__menu-title">
+              {menuSession.name || t('sessions.untitledSession')}
+            </div>
+            <div className="session-list__menu-actions">
+              <button
+                className="session-list__menu-btn"
+                onClick={() => {
+                  setRenameTarget(menuSession);
+                  setRenameValue(menuSession.name || '');
+                }}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
+                <span>{t('sessions.renameSession')}</span>
+              </button>
+              <button
+                className="session-list__menu-btn session-list__menu-btn--danger"
+                onClick={() => setDeleteConfirmTarget(menuSession)}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                </svg>
+                <span>{t('sessions.deleteSession')}</span>
+              </button>
+            </div>
+            <button className="session-list__menu-cancel" onClick={() => setMenuSession(null)}>
+              {t('sessions.cancel')}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Rename Modal */}
+      {renameTarget && (
+        <div className="session-list__picker-overlay" onClick={() => !renaming && setRenameTarget(null)}>
+          <div className="session-list__rename-modal" onClick={(e) => e.stopPropagation()}>
+            <h3 className="session-list__rename-title">{t('sessions.renameTitle')}</h3>
+            <input
+              className="session-list__rename-input"
+              type="text"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              placeholder={t('sessions.sessionNamePlaceholder')}
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleRename();
+                if (e.key === 'Escape') setRenameTarget(null);
+              }}
+            />
+            <div className="session-list__rename-actions">
+              <button
+                className="session-list__rename-btn session-list__rename-btn--cancel"
+                onClick={() => setRenameTarget(null)}
+                disabled={renaming}
+              >
+                {t('sessions.cancel')}
+              </button>
+              <button
+                className="session-list__rename-btn session-list__rename-btn--save"
+                onClick={handleRename}
+                disabled={renaming || !renameValue.trim()}
+              >
+                {renaming ? '...' : t('sessions.save')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation */}
+      {deleteConfirmTarget && (
+        <div className="session-list__picker-overlay" onClick={() => !deleting && setDeleteConfirmTarget(null)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setDeleteConfirmTarget(null);
+            if (e.key === 'Enter' && !deleting) handleDelete();
+          }}>
+          <div className="session-list__confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="session-list__confirm-icon">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+            </div>
+            <h3 className="session-list__confirm-title">{t('sessions.confirmDelete')}</h3>
+            <p className="session-list__confirm-desc">
+              "{deleteConfirmTarget.name || t('sessions.untitledSession')}"
+              <br />
+              {t('sessions.confirmDeleteDesc')}
+            </p>
+            <div className="session-list__confirm-actions">
+              <button
+                className="session-list__confirm-btn session-list__confirm-btn--cancel"
+                onClick={() => setDeleteConfirmTarget(null)}
+                disabled={deleting}
+              >
+                {t('sessions.cancel')}
+              </button>
+              <button
+                className="session-list__confirm-btn session-list__confirm-btn--danger"
+                onClick={handleDelete}
+                disabled={deleting}
+              >
+                {deleting ? '...' : t('sessions.deleteSession')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Disconnect Confirmation */}
+      {showDisconnectConfirm && (
+        <div
+          className="session-list__picker-overlay"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="disconnect-confirm-title"
+          aria-describedby="disconnect-confirm-desc"
+          onClick={() => setShowDisconnectConfirm(false)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setShowDisconnectConfirm(false);
+          }}
+        >
+          <div className="session-list__confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="session-list__confirm-icon">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+            </div>
+            <h3 id="disconnect-confirm-title" className="session-list__confirm-title">{t('sessions.disconnect')}</h3>
+            <p id="disconnect-confirm-desc" className="session-list__confirm-desc">{t('sessions.disconnectConfirm')}</p>
+            <div className="session-list__confirm-actions">
+              <button
+                className="session-list__confirm-btn session-list__confirm-btn--cancel"
+                onClick={() => setShowDisconnectConfirm(false)}
+                autoFocus
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                className="session-list__confirm-btn session-list__confirm-btn--danger"
+                onClick={() => { setShowDisconnectConfirm(false); onDisconnect(); }}
+              >
+                {t('sessions.disconnect')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Action Toast */}
+      {actionToast && (
+        <div className="session-list__toast" role="alert" aria-live="assertive">{actionToast}</div>
+      )}
     </div>
   );
 };

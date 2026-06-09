@@ -54,6 +54,7 @@ import {
   displayFileToolGuidanceMessage,
   isFileToolGuidanceMessage,
 } from './fileToolGuidance';
+import { i18nService } from '@/infrastructure/i18n';
 import './FileOperationToolCard.scss';
 
 const log = createLogger('FileOperationToolCard');
@@ -210,7 +211,7 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   const writeContentStatusText = useMemo(() => {
     if (toolItem.toolName !== 'Write' || writeContentCharCount <= 0) return null;
 
-    const formattedCount = writeContentCharCount.toLocaleString();
+    const formattedCount = i18nService.formatNumber(writeContentCharCount);
     if (status === 'completed') {
       return `${formattedCount} chars written`;
     }

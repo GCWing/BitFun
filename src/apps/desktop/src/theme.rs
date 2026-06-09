@@ -269,11 +269,15 @@ impl ThemeConfig {
         let theme_type = if self.is_light { "light" } else { "dark" };
         let startup_trace_id_json = serde_json::to_string(startup_trace_id)
             .unwrap_or_else(|_| "\"desktop-unknown\"".to_string());
+        let perf_trace_enabled = cfg!(debug_assertions)
+            || ((cfg!(feature = "devtools") || std::env::var_os("BITFUN_PERF_TRACE").is_some())
+                && std::env::var_os("BITFUN_WEBDRIVER_PORT").is_some());
 
         format!(
             r#"
             (function() {{
                 window.__BITFUN_STARTUP_TRACE_ID__ = {startup_trace_id_json};
+                window.__BITFUN_PERF_TRACE_ENABLED__ = {perf_trace_enabled};
                 function applyTheme() {{
                     var root = document.documentElement;
                     if (!root) return false;
@@ -288,6 +292,7 @@ impl ThemeConfig {
                     root.style.setProperty('--color-bg-flowchat', '{bg_scene}');
                     root.style.setProperty('--color-bg-scene', '{bg_scene}');
                     root.style.setProperty('--color-text-primary', '{text_primary}');
+                    root.style.setProperty('--bitfun-startup-bg', '{bg_primary}');
                     
                     root.style.backgroundColor = '{bg_primary}';
                     
@@ -316,6 +321,7 @@ impl ThemeConfig {
             bg_scene = self.bg_scene,
             text_primary = self.text_primary,
             startup_trace_id_json = startup_trace_id_json,
+            perf_trace_enabled = perf_trace_enabled,
         )
     }
 
@@ -414,8 +420,7 @@ pub fn create_main_window(app_handle: &tauri::AppHandle, startup_trace_id: &str)
                 }
             }
 
-            #[cfg(not(any(debug_assertions, feature = "devtools")))]
-            let _ = window;
+            show_main_window_for_startup(&window, total_started_at);
         }
         Err(e) => {
             error!(
@@ -424,6 +429,49 @@ pub fn create_main_window(app_handle: &tauri::AppHandle, startup_trace_id: &str)
                 total_started_at.elapsed().as_millis()
             );
         }
+    }
+}
+
+fn show_main_window_for_startup(window: &tauri::WebviewWindow, total_started_at: Instant) {
+    #[cfg(target_os = "windows")]
+    {
+        let step_started_at = Instant::now();
+        if let Err(error) = window.maximize() {
+            warn!("Failed to maximize main window during startup: {}", error);
+        } else {
+            debug!(
+                "Main window startup show step completed: step=maximize duration_ms={} since_create_start_ms={}",
+                step_started_at.elapsed().as_millis(),
+                total_started_at.elapsed().as_millis()
+            );
+        }
+        std::thread::sleep(std::time::Duration::from_millis(150));
+    }
+
+    #[cfg(not(target_env = "ohos"))]
+    {
+        let show_started_at = Instant::now();
+        if let Err(error) = window.show() {
+            warn!("Failed to show main window during startup: {}", error);
+            return;
+        }
+        debug!(
+        "Main window startup show step completed: step=show duration_ms={} since_create_start_ms={}",
+        show_started_at.elapsed().as_millis(),
+        total_started_at.elapsed().as_millis()
+    );
+
+        let focus_started_at = Instant::now();
+        if let Err(error) = window.set_focus() {
+            warn!("Failed to focus main window during startup: {}", error);
+            return;
+        }
+        debug!(
+        "Main window startup show step completed: step=focus duration_ms={} since_create_start_ms={}",
+        focus_started_at.elapsed().as_millis(),
+        total_started_at.elapsed().as_millis()
+    );
+
     }
 }
 

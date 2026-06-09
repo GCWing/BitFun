@@ -931,6 +931,7 @@ fn workspace_selection_view(
         .with_body(body.trim_end().to_string())
         .with_items(items)
         .with_footer(s.footer_reply_workspace)
+        .without_plain_text_items()
 }
 
 fn assistant_selection_view(
@@ -954,6 +955,7 @@ fn assistant_selection_view(
         .with_body(body.trim_end().to_string())
         .with_items(items)
         .with_footer(s.footer_reply_assistant)
+        .without_plain_text_items()
 }
 
 fn session_selection_view(
@@ -987,6 +989,7 @@ fn session_selection_view(
         .with_body(body.trim_end().to_string())
         .with_items(items)
         .with_footer(footer)
+        .without_plain_text_items()
 }
 
 async fn select_workspace(

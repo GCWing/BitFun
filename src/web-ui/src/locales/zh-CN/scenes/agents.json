@@ -111,6 +111,9 @@
     "save": "保存",
     "skillToggleFailed": "Skill 切换失败",
     "subagentToggleFailed": "Sub-Agent 切换失败",
+    "sharedProfileLabel": "共享配置",
+    "sharedProfileDefaultLabel": "共享编码配置",
+    "sharedProfileDescription": "这里的改动也会同时应用到：{{modes}}。",
     "skillShadowed": "该 Skill 被同名且优先级更高的 Skill 遮蔽，运行时不会生效",
     "noSkills": "未启用任何 Skill",
     "skillGroups": {
@@ -153,7 +156,9 @@
       "cancel": "取消",
       "submit": "创建",
       "createSuccess": "已创建 Agent「{{name}}」",
-      "createFailed": "创建失败："
+      "createFailed": "创建失败：",
+      "review": "评审",
+      "reviewToolsHint": "评审子代理只能使用只读工具。"
     }
   },
   "reviewTeams": {
@@ -344,7 +349,7 @@
     "GenerateDoc": "文档生成智能体：自动生成代码文档和说明",
     "Init": "初始化智能体：帮助设置项目结构和初始配置",
     "ReviewFixer": "审查修复智能体：根据审查结果自动修复代码问题",
-    "Multitask": "多任务模式：将工作拆为正交分支或 DAG，并在合适时并行使用子智能体推进",
+    "Multitask": "多任务模式：将工作拆为正交分支，并在合适时并行使用子智能体推进",
     "Plan": "规划模式：制定详细的任务计划和执行步骤",
     "Debug": "调试模式：系统性地诊断和修复代码中的错误",
     "Claw": "抓取模式：从外部源提取和整合信息",

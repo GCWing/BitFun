@@ -12,14 +12,25 @@ pub struct Session {
     pub session_id: String,
     pub session_name: String,
     /// Current/default mode selection for the session.
-    /// This reflects what the next turn should run with by default, not
-    /// necessarily what the last surviving history turn used.
+    ///
+    /// This is the mode the next dialog turn should run with by default. It is
+    /// not required to match either the last surviving history turn or the last
+    /// message submission accepted by the scheduler.
     pub agent_type: String,
     /// Cached mode of the last surviving user dialog turn in history.
-    /// `previous_agent_type` reminders should read this instead of `agent_type`
-    /// so rollback-to-empty can still be treated as a fresh mode entry.
+    ///
+    /// Reminder builders use this value for `previous_agent_type` so
+    /// first-entry vs ongoing mode prompts follow the surviving transcript
+    /// after rollbacks or turn truncation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_user_dialog_agent_type: Option<String>,
+    /// Mode of the most recent user submission accepted by the scheduler.
+    ///
+    /// Unlike `last_user_dialog_agent_type`, this value is not rewound by
+    /// history rollback. It tracks session-level prompt-cache compatibility for
+    /// the next accepted submission.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_submitted_agent_type: Option<String>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -80,6 +91,7 @@ impl Session {
             session_name,
             agent_type,
             last_user_dialog_agent_type: None,
+            last_submitted_agent_type: None,
             created_by: None,
             kind: SessionKind::Standard,
             snapshot_session_id: None,
@@ -105,6 +117,7 @@ impl Session {
             session_name,
             agent_type,
             last_user_dialog_agent_type: None,
+            last_submitted_agent_type: None,
             created_by: None,
             kind: SessionKind::Standard,
             snapshot_session_id: None,
@@ -175,7 +188,14 @@ impl Default for SessionConfig {
 pub struct SessionSummary {
     pub session_id: String,
     pub session_name: String,
+    /// Current/default mode selection for the session.
     pub agent_type: String,
+    /// Mode of the last surviving user dialog turn in the session history.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_user_dialog_agent_type: Option<String>,
+    /// Mode of the most recent user submission accepted by the scheduler.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_submitted_agent_type: Option<String>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",

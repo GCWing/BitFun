@@ -643,7 +643,8 @@ fn compute_days_covered(range: &DateRange) -> u32 {
 /// and `new_end_line - start_line + 1` as lines added, falling back to counting
 /// newlines in `old_string`/`new_string`.
 ///
-/// For Write tool: counts newlines in the written content as lines added.
+/// For Write tool: uses `lines_written`, falling back to counting newlines in
+/// the tool input for older persisted sessions.
 ///
 /// Per session, each distinct file path touched by Edit/Write contributes once to `languages_by_files`
 /// according to [`language_name_for_path`].
@@ -701,8 +702,13 @@ fn accumulate_code_stats_from_turns(base_stats: &mut BaseStats, turns: &[DialogT
                             modified_files.insert(fp.to_string());
                         }
 
-                        let input = &ti.tool_call.input;
-                        if let Some(content) = input.get("content").and_then(|v| v.as_str()) {
+                        if let Some(lines_written) =
+                            result.get("lines_written").and_then(|v| v.as_u64())
+                        {
+                            base_stats.total_lines_added += lines_written as usize;
+                        } else if let Some(content) =
+                            ti.tool_call.input.get("content").and_then(|v| v.as_str())
+                        {
                             base_stats.total_lines_added += content.lines().count().max(1);
                         }
                     }

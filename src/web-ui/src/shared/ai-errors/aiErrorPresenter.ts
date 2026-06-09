@@ -1,3 +1,5 @@
+import providerMessageMatchers from './providerMessageMatchers.json';
+
 export type AiErrorCategory =
   | 'network'
   | 'auth'
@@ -209,15 +211,13 @@ function normalizeCategory(
       'not enough balance',
       'exceeded_current_quota',
       'exceeded current quota',
-      '余额不足',
-      '无可用资源包',
-      '账户已欠费',
+      ...providerMessageMatchers.providerQuota,
     ])
   ) {
     return 'provider_quota';
   }
 
-  if (includesAny(`${code} ${message}`, ['billing', 'membership expired', 'subscription expired', '套餐已到期', '1309'])) {
+  if (includesAny(`${code} ${message}`, ['billing', 'membership expired', 'subscription expired', ...providerMessageMatchers.providerBilling, '1309'])) {
     return 'provider_billing';
   }
 

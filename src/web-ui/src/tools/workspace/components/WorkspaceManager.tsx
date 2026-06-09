@@ -225,7 +225,11 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({
                   </div>
                   <div className="stat-item">
                     <span className="stat-label">Lines:</span>
-                    <span className="stat-value">{currentWorkspace.statistics.totalLines?.toLocaleString()}</span>
+                    <span className="stat-value">
+                      {currentWorkspace.statistics.totalLines == null
+                        ? ''
+                        : i18nService.formatNumber(currentWorkspace.statistics.totalLines)}
+                    </span>
                   </div>
                   <div className="stat-item">
                     <span className="stat-label">Total Size:</span>

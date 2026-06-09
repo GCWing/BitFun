@@ -6,13 +6,13 @@
 //! The user's `storage.json` is preserved across upgrades.
 
 use crate::miniapp::manager::MiniAppManager;
-use crate::miniapp::types::MiniAppMeta;
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_product_domains::miniapp::builtin::{
-    build_builtin_package_json, builtin_source_files, parse_builtin_install_marker,
-    resolve_builtin_seed_action, resolve_builtin_seed_check, serialize_builtin_install_marker,
-    BuiltinInstallMarker, BuiltinMiniAppBundle, BuiltinSeedAction, BuiltinSeedCheck,
-    BUILTIN_INSTALL_MARKER, BUILTIN_PLACEHOLDER_COMPILED_HTML, LEGACY_BUILTIN_VERSION_MARKER,
+    build_builtin_package_json, build_builtin_seed_meta, builtin_source_files,
+    parse_builtin_install_marker, preserved_builtin_created_at, resolve_builtin_seed_action,
+    resolve_builtin_seed_check, serialize_builtin_install_marker, BuiltinInstallMarker,
+    BuiltinMiniAppBundle, BuiltinSeedAction, BuiltinSeedCheck, BUILTIN_INSTALL_MARKER,
+    BUILTIN_PLACEHOLDER_COMPILED_HTML, LEGACY_BUILTIN_VERSION_MARKER,
 };
 use chrono::Utc;
 use std::path::Path;
@@ -156,20 +156,14 @@ async fn seed_builtin_bundle(
         .map_err(|e| BitFunError::io(format!("create dir failed: {}", e)))?;
 
     // meta.json — parse bundled meta, then set id/timestamps. Preserve created_at if present.
-    let mut meta: MiniAppMeta = serde_json::from_str(app.meta_json)
-        .map_err(|e| BitFunError::parse(format!("invalid bundled meta.json: {}", e)))?;
-    meta.id = app.id.to_string();
-
     let meta_path = app_dir.join("meta.json");
-    let preserved_created_at = match tokio::fs::read_to_string(&meta_path).await {
-        Ok(existing) => serde_json::from_str::<MiniAppMeta>(&existing)
-            .ok()
-            .map(|m| m.created_at)
-            .unwrap_or(now),
-        Err(_) => now,
-    };
-    meta.created_at = preserved_created_at;
-    meta.updated_at = now;
+    let existing_meta_json = tokio::fs::read_to_string(&meta_path).await.ok();
+    let meta = build_builtin_seed_meta(
+        app,
+        preserved_builtin_created_at(existing_meta_json.as_deref()),
+        now,
+    )
+    .map_err(|e| BitFunError::parse(format!("invalid bundled meta.json: {}", e)))?;
 
     let meta_json = serde_json::to_string_pretty(&meta).map_err(BitFunError::from)?;
     tokio::fs::write(&meta_path, meta_json)

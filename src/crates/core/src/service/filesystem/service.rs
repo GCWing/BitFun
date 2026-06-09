@@ -1,11 +1,12 @@
 use crate::infrastructure::{
-    FileContentSearchOptions, FileInfo, FileNameSearchOptions, FileOperationOptions,
-    FileOperationService, FileReadResult, FileSearchOutcome, FileSearchProgressSink,
-    FileSearchResult, FileTreeNode, FileTreeService, FileWriteResult,
+    FileInfo, FileOperationOptions, FileReadResult, FileSearchOutcome, FileSearchProgressSink,
+    FileSearchResult, FileTreeNode, FileTreeStatistics, FileWriteResult,
 };
 use crate::util::elapsed_ms_u64;
 use crate::util::errors::*;
+use bitfun_services_core::filesystem::FileSystemService as BaseFileSystemService;
 use log::debug;
+use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
@@ -13,21 +14,55 @@ use super::types::{DirectoryScanResult, DirectoryStats, FileSearchOptions, FileS
 
 const SLOW_FILESYSTEM_OPERATION_LOG_MS: u64 = 500;
 
+fn map_filesystem_error(error: impl std::fmt::Display) -> BitFunError {
+    BitFunError::service(error.to_string())
+}
+
+async fn read_remote_directory_contents(
+    path: &str,
+    preferred_remote_connection_id: Option<&str>,
+) -> Option<BitFunResult<Vec<FileTreeNode>>> {
+    let entry = crate::service::remote_ssh::workspace_state::lookup_remote_connection_with_hint(
+        path,
+        preferred_remote_connection_id,
+    )
+    .await?;
+
+    let manager = crate::service::remote_ssh::workspace_state::get_remote_workspace_manager()?;
+    let file_service = manager.get_file_service().await?;
+
+    Some(
+        match file_service.read_dir(&entry.connection_id, path).await {
+            Ok(entries) => Ok(entries
+                .into_iter()
+                .filter(|entry| entry.name != "." && entry.name != "..")
+                .map(|entry| {
+                    FileTreeNode::new(
+                        entry.path.clone(),
+                        entry.name.clone(),
+                        entry.path,
+                        entry.is_dir,
+                    )
+                })
+                .collect()),
+            Err(error) => Err(BitFunError::service(format!(
+                "Failed to read remote directory: {}",
+                error
+            ))),
+        },
+    )
+}
+
 /// Unified file system service
 pub struct FileSystemService {
-    file_tree_service: Arc<FileTreeService>,
-    file_operation_service: Arc<FileOperationService>,
+    inner: BaseFileSystemService,
 }
 
 impl FileSystemService {
     /// Creates a new file system service.
     pub fn new(config: FileSystemConfig) -> Self {
-        let file_tree_service = Arc::new(FileTreeService::new(config.tree_options));
-        let file_operation_service = Arc::new(FileOperationService::new(config.operation_options));
-
         Self {
-            file_tree_service,
-            file_operation_service,
+            inner: BaseFileSystemService::new(config),
         }
     }
 
@@ -49,11 +84,15 @@ impl FileSystemService {
         preferred_remote_connection_id: Option<&str>,
     ) -> BitFunResult<Vec<FileTreeNode>> {
         let started_at = std::time::Instant::now();
-        let tree = self
-            .file_tree_service
-            .build_tree_with_remote_hint(root_path, preferred_remote_connection_id)
-            .await
-            .map_err(BitFunError::service)?;
+        let tree = if crate::service::remote_ssh::workspace_state::is_remote_path(root_path).await {
+            self.get_directory_contents_with_remote_hint(root_path, preferred_remote_connection_id)
+                .await?
+        } else {
+            self.inner
+                .build_file_tree_with_remote_hint(root_path, preferred_remote_connection_id)
+                .await
+                .map_err(map_filesystem_error)?
+        };
         let duration_ms = elapsed_ms_u64(started_at);
 
         if duration_ms >= SLOW_FILESYSTEM_OPERATION_LOG_MS {
@@ -73,10 +112,30 @@ impl FileSystemService {
     pub async fn scan_directory(&self, root_path: &str) -> BitFunResult<DirectoryScanResult> {
         let start_time = std::time::Instant::now();
 
-        let (files, statistics) = self
-            .file_tree_service
-            .build_tree_with_stats(root_path)
-            .await?;
+        let (files, statistics) =
+            if crate::service::remote_ssh::workspace_state::is_remote_path(root_path).await {
+                let nodes = self
+                    .get_directory_contents_with_remote_hint(root_path, None)
+                    .await?;
+                let stats = FileTreeStatistics {
+                    total_files: nodes.iter().filter(|node| !node.is_directory).count(),
+                    total_directories: nodes.iter().filter(|node| node.is_directory).count(),
+                    total_size_bytes: 0,
+                    max_depth_reached: 0,
+                    file_type_counts: HashMap::new(),
+                    large_files: Vec::new(),
+                    symlinks_count: 0,
+                    hidden_files_count: 0,
+                };
+                (nodes, stats)
+            } else {
+                let scan_result = self
+                    .inner
+                    .scan_directory(root_path)
+                    .await
+                    .map_err(map_filesystem_error)?;
+                (scan_result.files, scan_result.statistics)
+            };
 
         let scan_time_ms = elapsed_ms_u64(start_time);
 
@@ -109,10 +168,16 @@ impl FileSystemService {
         path: &str,
         preferred_remote_connection_id: Option<&str>,
     ) -> BitFunResult<Vec<FileTreeNode>> {
-        self.file_tree_service
+        if let Some(result) =
+            read_remote_directory_contents(path, preferred_remote_connection_id).await
+        {
+            return result;
+        }
+
+        self.inner
             .get_directory_contents_with_remote_hint(path, preferred_remote_connection_id)
             .await
-            .map_err(BitFunError::service)
+            .map_err(map_filesystem_error)
     }
 
     /// Searches files.
@@ -122,38 +187,10 @@ impl FileSystemService {
         pattern: &str,
         options: FileSearchOptions,
     ) -> BitFunResult<Vec<FileSearchResult>> {
-        let mut results = self
-            .file_tree_service
-            .search_files_with_options(
-                root_path,
-                pattern,
-                options.include_content,
-                options.case_sensitive,
-                options.use_regex,
-                options.whole_word,
-            )
-            .await?;
-
-        if let Some(extensions) = &options.file_extensions {
-            results.retain(|result| {
-                if result.is_directory {
-                    true
-                } else {
-                    let path = std::path::Path::new(&result.path);
-                    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                        extensions.contains(&ext.to_lowercase())
-                    } else {
-                        false
-                    }
-                }
-            });
-        }
-
-        if let Some(max_results) = options.max_results {
-            results.truncate(max_results);
-        }
-
-        Ok(results)
+        self.inner
+            .search_files(root_path, pattern, options)
+            .await
+            .map_err(map_filesystem_error)
     }
 
     pub async fn search_file_names(
@@ -175,43 +212,16 @@ impl FileSystemService {
         cancel_flag: Option<Arc<AtomicBool>>,
         progress_sink: Option<Arc<dyn FileSearchProgressSink>>,
     ) -> BitFunResult<FileSearchOutcome> {
-        let mut outcome = self
-            .file_tree_service
+        self.inner
             .search_file_names_with_progress(
                 root_path,
                 pattern,
-                FileNameSearchOptions {
-                    case_sensitive: options.case_sensitive,
-                    use_regex: options.use_regex,
-                    whole_word: options.whole_word,
-                    max_results: options.max_results.unwrap_or(10_000),
-                    include_directories: options.include_directories,
-                    cancel_flag,
-                },
+                options,
+                cancel_flag,
                 progress_sink,
             )
-            .await?;
-
-        if let Some(extensions) = &options.file_extensions {
-            outcome.results.retain(|result| {
-                if result.is_directory {
-                    true
-                } else {
-                    let path = std::path::Path::new(&result.path);
-                    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                        extensions.contains(&ext.to_lowercase())
-                    } else {
-                        false
-                    }
-                }
-            });
-        }
-
-        if let Some(max_results) = options.max_results {
-            outcome.results.truncate(max_results);
-        }
-
-        Ok(outcome)
+            .await
+            .map_err(map_filesystem_error)
     }
 
     pub async fn search_file_contents(
@@ -233,44 +243,24 @@ impl FileSystemService {
         cancel_flag: Option<Arc<AtomicBool>>,
         progress_sink: Option<Arc<dyn FileSearchProgressSink>>,
     ) -> BitFunResult<FileSearchOutcome> {
-        let mut outcome = self
-            .file_tree_service
+        self.inner
             .search_file_contents_with_progress(
                 root_path,
                 pattern,
-                FileContentSearchOptions {
-                    case_sensitive: options.case_sensitive,
-                    use_regex: options.use_regex,
-                    whole_word: options.whole_word,
-                    max_results: options.max_results.unwrap_or(10_000),
-                    max_file_size_bytes: 10 * 1024 * 1024,
-                    cancel_flag,
-                },
+                options,
+                cancel_flag,
                 progress_sink,
             )
-            .await?;
-
-        if let Some(extensions) = &options.file_extensions {
-            outcome.results.retain(|result| {
-                let path = std::path::Path::new(&result.path);
-                if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                    extensions.contains(&ext.to_lowercase())
-                } else {
-                    false
-                }
-            });
-        }
-
-        if let Some(max_results) = options.max_results {
-            outcome.results.truncate(max_results);
-        }
-
-        Ok(outcome)
+            .await
+            .map_err(map_filesystem_error)
     }
 
     /// Reads a file.
     pub async fn read_file(&self, file_path: &str) -> BitFunResult<FileReadResult> {
-        self.file_operation_service.read_file(file_path).await
+        self.inner
+            .read_file(file_path)
+            .await
+            .map_err(map_filesystem_error)
     }
 
     /// Writes a file.
@@ -279,10 +269,10 @@ impl FileSystemService {
         file_path: &str,
         content: &str,
     ) -> BitFunResult<FileWriteResult> {
-        let options = FileOperationOptions::default();
-        self.file_operation_service
-            .write_file(file_path, content, options)
+        self.inner
+            .write_file(file_path, content)
             .await
+            .map_err(map_filesystem_error)
     }
 
     /// Writes a file with options.
@@ -292,79 +282,97 @@ impl FileSystemService {
         content: &str,
         options: FileOperationOptions,
     ) -> BitFunResult<FileWriteResult> {
-        self.file_operation_service
-            .write_file(file_path, content, options)
+        self.inner
+            .write_file_with_options(file_path, content, options)
             .await
+            .map_err(map_filesystem_error)
     }
 
     /// Copies a file.
     pub async fn copy_file(&self, from: &str, to: &str) -> BitFunResult<u64> {
-        self.file_operation_service.copy_file(from, to).await
+        self.inner
+            .copy_file(from, to)
+            .await
+            .map_err(map_filesystem_error)
     }
 
     /// Moves a file.
     pub async fn move_file(&self, from: &str, to: &str) -> BitFunResult<()> {
-        self.file_operation_service.move_file(from, to).await
+        self.inner
+            .move_file(from, to)
+            .await
+            .map_err(map_filesystem_error)
     }
 
     /// Deletes a file.
     pub async fn delete_file(&self, file_path: &str) -> BitFunResult<()> {
-        self.file_operation_service.delete_file(file_path).await
+        self.inner
+            .delete_file(file_path)
+            .await
+            .map_err(map_filesystem_error)
     }
 
     /// Gets file info.
     pub async fn get_file_info(&self, file_path: &str) -> BitFunResult<FileInfo> {
-        self.file_operation_service.get_file_info(file_path).await
+        self.inner
+            .get_file_info(file_path)
+            .await
+            .map_err(map_filesystem_error)
     }
 
     /// Creates a directory.
     pub async fn create_directory(&self, dir_path: &str) -> BitFunResult<()> {
-        self.file_operation_service.create_directory(dir_path).await
+        self.inner
+            .create_directory(dir_path)
+            .await
+            .map_err(map_filesystem_error)
     }
 
     /// Deletes a directory.
     pub async fn delete_directory(&self, dir_path: &str, recursive: bool) -> BitFunResult<()> {
-        self.file_operation_service
+        self.inner
             .delete_directory(dir_path, recursive)
             .await
+            .map_err(map_filesystem_error)
     }
 
     /// Checks whether the path exists.
     pub async fn exists(&self, path: &str) -> bool {
-        std::path::Path::new(path).exists()
+        self.inner.exists(path).await
     }
 
     /// Checks whether the path is a directory.
     pub async fn is_directory(&self, path: &str) -> bool {
-        std::path::Path::new(path).is_dir()
+        self.inner.is_directory(path).await
     }
 
     /// Checks whether the path is a file.
     pub async fn is_file(&self, path: &str) -> bool {
-        std::path::Path::new(path).is_file()
+        self.inner.is_file(path).await
     }
 
     /// Gets the file size.
     pub async fn get_file_size(&self, file_path: &str) -> BitFunResult<u64> {
-        let info = self.get_file_info(file_path).await?;
-        Ok(info.size)
+        self.inner
+            .get_file_size(file_path)
+            .await
+            .map_err(map_filesystem_error)
     }
 
     /// Reads a text file quickly.
     pub async fn read_text_file(&self, file_path: &str) -> BitFunResult<String> {
-        let result = self.read_file(file_path).await?;
-        if result.is_binary {
-            Err(BitFunError::service(
-                "File is binary, cannot read as text".to_string(),
-            ))
-        } else {
-            Ok(result.content)
-        }
+        self.inner
+            .read_text_file(file_path)
+            .await
+            .map_err(map_filesystem_error)
     }
 
     /// Writes a text file quickly.
     pub async fn write_text_file(&self, file_path: &str, content: &str) -> BitFunResult<()> {
-        self.write_file(file_path, content).await.map(|_| ())
+        self.inner
+            .write_text_file(file_path, content)
+            .await
+            .map_err(map_filesystem_error)
     }
 
     /// Lists all files in a directory (recursive).
@@ -437,13 +445,13 @@ impl FileSystemService {
 
     /// SHA-256 hex of on-disk content after editor-sync normalization (see `FileOperationService`).
     pub async fn editor_sync_content_sha256_hex(&self, file_path: &str) -> BitFunResult<String> {
-        self.file_operation_service
+        self.inner
             .editor_sync_content_sha256_hex(file_path)
             .await
+            .map_err(map_filesystem_error)
     }
 
     pub fn editor_sync_sha256_hex_from_raw_bytes(&self, bytes: &[u8]) -> String {
-        self.file_operation_service
-            .editor_sync_sha256_hex_from_raw_bytes(bytes)
+        self.inner.editor_sync_sha256_hex_from_raw_bytes(bytes)
     }
 }

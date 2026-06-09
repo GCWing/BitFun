@@ -205,6 +205,7 @@ const AgentsHomeView: React.FC = () => {
     filteredAgents,
     loading,
     availableTools,
+    getModeProfile,
     getModeSkills,
     getModeManageableSubagents,
     counts,
@@ -306,6 +307,10 @@ const AgentsHomeView: React.FC = () => {
     () => (selectedAgent?.agentKind === 'mode' ? getModeConfig(selectedAgent.id) : null),
     [getModeConfig, selectedAgent],
   );
+  const selectedAgentModeProfile = useMemo(
+    () => (selectedAgent?.agentKind === 'mode' ? getModeProfile(selectedAgent.id) : null),
+    [getModeProfile, selectedAgent],
+  );
   const selectedAgentModeSkills = useMemo(
     () => (selectedAgent?.agentKind === 'mode' ? getModeSkills(selectedAgent.id) : []),
     [getModeSkills, selectedAgent],
@@ -359,6 +364,16 @@ const AgentsHomeView: React.FC = () => {
     () => buildDuplicateSkillNameSet(selectedAgentModeSkills),
     [selectedAgentModeSkills],
   );
+  const selectedAgentProfileMemberNames = useMemo(() => {
+    if (!selectedAgentModeProfile) {
+      return [];
+    }
+
+    return selectedAgentModeProfile.memberModeIds.map((memberId) => (
+      allAgents.find((agent) => agent.agentKind === 'mode' && agent.id === memberId)?.name ?? memberId
+    ));
+  }, [allAgents, selectedAgentModeProfile]);
+  const selectedAgentUsesSharedProfile = (selectedAgentModeProfile?.memberModeIds.length ?? 0) > 1;
   const getDisplayedToolCount = useCallback((agent: AgentWithCapabilities): number => {
     if (agent.agentKind === 'mode') {
       return getModeConfig(agent.id)?.enabled_tools?.length
@@ -835,6 +850,26 @@ const AgentsHomeView: React.FC = () => {
                 </div>
               ))}
             </div>
+
+            {selectedAgent.agentKind === 'mode' && selectedAgentUsesSharedProfile ? (
+              <div className="agent-card__section">
+                <div className="agent-card__section-head">
+                  <div className="agent-card__section-title">
+                    <span>{t('agentsOverview.sharedProfileLabel')}</span>
+                  </div>
+                </div>
+                <div className="agent-card__chip-grid">
+                  <span className="agent-card__chip">
+                    {selectedAgentModeProfile?.profileLabel ?? t('agentsOverview.sharedProfileDefaultLabel')}
+                  </span>
+                </div>
+                <p className="agent-card__section-note">
+                  {t('agentsOverview.sharedProfileDescription', {
+                    modes: selectedAgentProfileMemberNames.join(', '),
+                  })}
+                </p>
+              </div>
+            ) : null}
 
             {selectedAgentCapabilityTabs.length > 0 ? (
               <div className="agent-card__section">

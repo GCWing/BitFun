@@ -1,6 +1,6 @@
  
 
-import * as monaco from 'monaco-editor';
+import type * as Monaco from 'monaco-editor';
 import { ThemeConfig } from '../types';
 import { BitFunDarkTheme } from '@/tools/editor/themes/bitfun-dark.theme';
 import { createLogger } from '@/shared/utils/logger';
@@ -10,7 +10,7 @@ const log = createLogger('MonacoThemeSync');
 
 const SEMANTIC_HIGHLIGHTING_RULES = BitFunDarkTheme.rules;
 
-function getBitfunLightMonacoTheme(): monaco.editor.IStandaloneThemeData {
+function getBitfunLightMonacoTheme(): Monaco.editor.IStandaloneThemeData {
   return {
     base: 'vs',
     inherit: true,
@@ -73,56 +73,92 @@ function convertColorsToHex(colors: Record<string, string>): Record<string, stri
 export class MonacoThemeSync {
   private initialized = false;
   private currentThemeId: string | null = null;
+  private monacoInstance: typeof Monaco | null = null;
+  private pendingTheme: ThemeConfig | null = null;
+  private pendingRegisteredThemes = new Map<string, ThemeConfig>();
   
-   
   async initialize(): Promise<void> {
     if (this.initialized) {
       return;
     }
-    
-    
-    try {
-      monaco.editor.defineTheme('bitfun-dark', BitFunDarkTheme);
-      log.debug('BitFun Dark theme registered');
-      this.initialized = true;
-    } catch (error) {
-      log.warn('Monaco Editor not loaded yet, will retry later', error);
+
+    this.initialized = true;
+    if (this.monacoInstance) {
+      this.ensureBuiltinThemes(this.monacoInstance);
     }
   }
   
-   
-  syncTheme(theme: ThemeConfig): void {
+  syncTheme(theme: ThemeConfig): string {
+    this.pendingTheme = theme;
+    const targetThemeId = this.getTargetMonacoThemeId(theme);
+
+    if (!this.monacoInstance) {
+      log.debug('Monaco runtime not loaded; theme sync deferred', { themeId: targetThemeId });
+      return targetThemeId;
+    }
+
+    this.applyTheme(this.monacoInstance, theme, targetThemeId);
+    return targetThemeId;
+  }
+
+  attachMonaco(monacoInstance: typeof Monaco, theme?: ThemeConfig): string {
+    this.monacoInstance = monacoInstance;
+    this.initialized = true;
+    this.ensureBuiltinThemes(monacoInstance);
+    this.flushPendingRegisteredThemes(monacoInstance);
+
+    const activeTheme = theme ?? this.pendingTheme;
+    if (!activeTheme) {
+      return this.currentThemeId ?? 'bitfun-dark';
+    }
+
+    const targetThemeId = this.getTargetMonacoThemeId(activeTheme);
+    this.applyTheme(monacoInstance, activeTheme, targetThemeId);
+    return targetThemeId;
+  }
+
+  private ensureBuiltinThemes(monacoInstance: typeof Monaco): void {
     try {
-      let targetThemeId: string;
+      monacoInstance.editor.defineTheme('bitfun-dark', BitFunDarkTheme);
+      monacoInstance.editor.defineTheme('bitfun-light', getBitfunLightMonacoTheme());
+      log.debug('BitFun Monaco themes registered');
+    } catch (error) {
+      log.warn('Failed to register BitFun Monaco themes', error);
+    }
+  }
 
-      if (theme.monaco) {
-        targetThemeId = theme.id;
-      } else {
-        if (theme.type === 'dark') {
-          targetThemeId = 'bitfun-dark';
-        } else {
-          targetThemeId = 'bitfun-light';
-        }
-      }
+  private flushPendingRegisteredThemes(monacoInstance: typeof Monaco): void {
+    if (this.pendingRegisteredThemes.size === 0) {
+      return;
+    }
 
+    for (const [themeId, theme] of this.pendingRegisteredThemes) {
+      this.defineTheme(monacoInstance, themeId, theme);
+    }
+    this.pendingRegisteredThemes.clear();
+  }
+
+  private applyTheme(
+    monacoInstance: typeof Monaco,
+    theme: ThemeConfig,
+    targetThemeId: string,
+  ): void {
+    try {
       if (this.currentThemeId === targetThemeId) {
         return;
       }
 
       if (theme.monaco) {
         const monacoTheme = this.convertToMonacoTheme(theme);
-        monaco.editor.defineTheme(theme.id, monacoTheme);
+        monacoInstance.editor.defineTheme(theme.id, monacoTheme);
         log.debug('Custom theme registered', { themeId: theme.id, themeName: theme.name });
       } else {
-        if (theme.type === 'light') {
-          monaco.editor.defineTheme('bitfun-light', getBitfunLightMonacoTheme());
-        }
         log.debug('Using builtin theme', { themeId: targetThemeId });
       }
 
-      monaco.editor.setTheme(targetThemeId);
+      monacoInstance.editor.setTheme(targetThemeId);
 
-      const editors = monaco.editor.getEditors();
+      const editors = monacoInstance.editor.getEditors();
       if (editors && editors.length > 0) {
         log.debug('Refreshing editor instances', { count: editors.length });
         editors.forEach((editor, index) => {
@@ -137,9 +173,11 @@ export class MonacoThemeSync {
       this.currentThemeId = targetThemeId;
       log.info('Theme switched successfully', { themeName: theme.name, themeId: targetThemeId });
 
-      window.dispatchEvent(new CustomEvent('monaco-theme-changed', {
-        detail: { themeId: targetThemeId, theme }
-      }));
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('monaco-theme-changed', {
+          detail: { themeId: targetThemeId, theme }
+        }));
+      }
     } catch (error) {
       log.error('Failed to sync theme', error);
     }
@@ -166,16 +204,9 @@ export class MonacoThemeSync {
    * Use from the Monaco React wrapper `beforeMount` hook so themes exist on the loader's Monaco
    * before the editor is created (avoids falling back to the default light theme).
    */
-  registerThemesForEditorInstance(monacoInstance: typeof monaco, theme: ThemeConfig): string {
+  registerThemesForEditorInstance(monacoInstance: typeof Monaco, theme: ThemeConfig): string {
     try {
-      monacoInstance.editor.defineTheme('bitfun-dark', BitFunDarkTheme);
-      monacoInstance.editor.defineTheme('bitfun-light', getBitfunLightMonacoTheme());
-
-      if (theme.monaco) {
-        monacoInstance.editor.defineTheme(theme.id, this.convertToMonacoTheme(theme));
-        return theme.id;
-      }
-      return this.getTargetMonacoThemeId(theme);
+      return this.attachMonaco(monacoInstance, theme);
     } catch (error) {
       log.error('registerThemesForEditorInstance failed', error);
       return 'bitfun-dark';
@@ -183,7 +214,7 @@ export class MonacoThemeSync {
   }
   
    
-  private convertToMonacoTheme(theme: ThemeConfig): monaco.editor.IStandaloneThemeData {
+  private convertToMonacoTheme(theme: ThemeConfig): Monaco.editor.IStandaloneThemeData {
     const { monaco: monacoConfig, colors } = theme;
     if (!monacoConfig) {
       
@@ -214,7 +245,7 @@ export class MonacoThemeSync {
       : SEMANTIC_HIGHLIGHTING_RULES;
     
     
-    const themeData: monaco.editor.IStandaloneThemeData = {
+    const themeData: Monaco.editor.IStandaloneThemeData = {
       base: monacoConfig.base,
       inherit: monacoConfig.inherit,
       rules: themeRules,
@@ -333,12 +364,21 @@ export class MonacoThemeSync {
    
   registerTheme(themeId: string, theme: ThemeConfig): void {
     try {
-      const monacoTheme = this.convertToMonacoTheme(theme);
-      monaco.editor.defineTheme(themeId, monacoTheme);
-      log.debug('Theme registered', { themeId });
+      if (!this.monacoInstance) {
+        this.pendingRegisteredThemes.set(themeId, theme);
+        log.debug('Monaco runtime not loaded; custom theme registration deferred', { themeId });
+        return;
+      }
+      this.defineTheme(this.monacoInstance, themeId, theme);
     } catch (error) {
       log.error('Failed to register theme', { themeId, error });
     }
+  }
+
+  private defineTheme(monacoInstance: typeof Monaco, themeId: string, theme: ThemeConfig): void {
+    const monacoTheme = this.convertToMonacoTheme(theme);
+    monacoInstance.editor.defineTheme(themeId, monacoTheme);
+    log.debug('Theme registered', { themeId });
   }
 }
 

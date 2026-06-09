@@ -918,7 +918,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
       <Modal
         isOpen={isOpen}
         onClose={onClose}
-        title={t('remoteConnect.title')}
+        title={t('shared:features.remoteControl')}
         titleExtra={(
           <span className="bitfun-remote-connect__title-extra">
             <button

@@ -262,8 +262,8 @@ mod tests {
         resolve_product_tool_manifest, ProductToolCatalogProvider, ProductToolRuntime,
     };
     use crate::agentic::agents::AgentToolPolicyOverrides;
-    use crate::agentic::tools::framework::ToolUseContext;
     use crate::agentic::tools::registry::create_tool_registry;
+    use crate::agentic::tools::tool_context_runtime::ToolUseContext;
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use bitfun_agent_tools::{GetToolSpecCatalogProvider, ToolCatalogSnapshotProvider, ToolResult};
     use serde_json::json;

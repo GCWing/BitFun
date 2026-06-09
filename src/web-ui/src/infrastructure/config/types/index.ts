@@ -179,8 +179,7 @@ export interface AIConfig {
   default_models: DefaultModelsConfig;
   agent_models: Record<string, string>;
   func_agent_models: Record<string, string>;
-  mode_configs: Record<string, StoredModeConfigItem>;
-  agent_subagent_overrides: AgentSubagentOverrideConfig;
+  agent_profiles: Record<string, StoredAgentProfileConfigItem>;
   proxy: ProxyConfig;
   debug_mode_config: DebugModeConfig;
   request_timeout: number;
@@ -191,6 +190,7 @@ export interface AIConfig {
   auto_save_conversations: boolean;
   conversation_history_limit: number;
   stream_idle_timeout_secs?: number | null;
+  stream_ttft_timeout_secs?: number | null;
   tool_execution_timeout_secs?: number | null;
   tool_confirmation_timeout_secs?: number | null;
   skip_tool_confirmation?: boolean;
@@ -198,16 +198,17 @@ export interface AIConfig {
   browser_control_preferred_browser?: string;
 }
 
-export interface StoredModeConfigItem {
-  mode_id: string;
+export interface StoredAgentProfileConfigItem {
+  profile_id: string;
   added_tools: string[];
   removed_tools: string[];
   disabled_user_skills?: string[];
   enabled_user_skills?: string[];
+  subagent_overrides?: ParentSubagentOverrideConfig;
 }
 
-export interface ModeConfigItem {
-  mode_id: string;
+export interface AgentProfileConfigItem {
+  profile_id: string;
   enabled_tools: string[];
   default_tools: string[];
   disabled_user_skills?: string[];
@@ -216,7 +217,6 @@ export interface ModeConfigItem {
 
 export type AgentSubagentOverrideState = 'enabled' | 'disabled';
 export type ParentSubagentOverrideConfig = Record<string, AgentSubagentOverrideState>;
-export type AgentSubagentOverrideConfig = Record<string, ParentSubagentOverrideConfig>;
 
 export type SkillLevel = 'user' | 'project';
 
@@ -559,6 +559,19 @@ export interface RuntimeLoggingInfo {
   aiLogPath: string;
   flashgrepLogPath: string;
   webviewLogPath: string;
+  previousUnexpectedExit?: UnexpectedExitInfo | null;
+}
+
+export interface UnexpectedExitInfo {
+  detected: boolean;
+  startedAt?: string;
+  sessionLogDir?: string;
+  crashReportPath?: string;
+  reason: string;
+}
+
+export interface DiagnosticsBundleInfo {
+  bundlePath: string;
 }
 
 export interface DefaultModels {

@@ -1,9 +1,11 @@
 use crate::agentic::agents::Agent;
-use crate::agentic::agents::{PromptBuilder, PromptBuilderContext, RequestContextPolicy};
+use crate::agentic::agents::{PromptBuilder, PromptBuilderContext, UserContextPolicy};
+use crate::agentic::session::SystemPromptCacheIdentity;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::FrontMatterMarkdown;
 use async_trait::async_trait;
 use serde_yaml::Value;
+use sha2::{Digest, Sha256};
 
 /// Subagent type: project-level or user-level
 #[derive(Debug, Clone, Copy)]
@@ -49,6 +51,11 @@ impl Agent for CustomSubagent {
         ""
     }
 
+    fn system_prompt_cache_identity(&self, _model_name: Option<&str>) -> SystemPromptCacheIdentity {
+        let prompt_hash = hex::encode(Sha256::digest(self.prompt.as_bytes()));
+        SystemPromptCacheIdentity::new(format!("custom_prompt_sha256:{prompt_hash}"))
+    }
+
     async fn build_prompt(&self, context: &PromptBuilderContext) -> BitFunResult<String> {
         let prompt_builder = PromptBuilder::new(context.clone());
 
@@ -63,8 +70,8 @@ impl Agent for CustomSubagent {
         self.tools.clone()
     }
 
-    fn request_context_policy(&self) -> RequestContextPolicy {
-        RequestContextPolicy::empty()
+    fn user_context_policy(&self) -> UserContextPolicy {
+        UserContextPolicy::empty()
             .with_workspace_context()
             .with_workspace_instructions()
             .with_project_layout()

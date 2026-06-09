@@ -525,8 +525,7 @@ async fn run_interactive(
 
 // ======================== Main ========================
 
-#[tokio::main]
-async fn main() -> Result<()> {
+async fn run_cli() -> Result<()> {
     let cli = Cli::parse();
 
     let is_tui_mode = matches!(cli.command, None | Some(Commands::Chat { .. }));
@@ -764,5 +763,30 @@ async fn run_interactive_with_session(config: CliConfig, session_id: String) -> 
 
     run_result?;
     Ok(())
+}
+
+fn main() {
+    let worker = std::thread::Builder::new()
+        .stack_size(16 * 1024 * 1024)
+        .spawn(|| {
+            let runtime = tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+                .expect("failed to build tokio runtime");
+            runtime.block_on(run_cli())
+        })
+        .expect("failed to spawn bitfun-cli worker thread");
+
+    match worker.join() {
+        Ok(Ok(())) => {}
+        Ok(Err(err)) => {
+            eprintln!("Error: {err}");
+            std::process::exit(1);
+        }
+        Err(_) => {
+            eprintln!("Error: bitfun-cli worker thread panicked");
+            std::process::exit(1);
+        }
+    }
 }
 

@@ -72,6 +72,11 @@ pub struct MenuView {
     /// Optional footer hint shown below items (telegram/feishu silently
     /// drop this; weixin shows it as the last text line).
     pub footer_hint: Option<String>,
+    /// Whether text-only renderers should append `items` as numbered lines.
+    /// Some selection prompts include richer numbered lines in `body` while
+    /// still keeping `items` for native buttons; appending both duplicates the
+    /// option list on plain-text platforms.
+    pub render_items_in_plain_text: bool,
 }
 
 impl MenuView {
@@ -81,6 +86,7 @@ impl MenuView {
             body: None,
             items: Vec::new(),
             footer_hint: None,
+            render_items_in_plain_text: true,
         }
     }
 
@@ -96,6 +102,11 @@ impl MenuView {
 
     pub fn with_footer(mut self, hint: impl Into<String>) -> Self {
         self.footer_hint = Some(hint.into());
+        self
+    }
+
+    pub fn without_plain_text_items(mut self) -> Self {
+        self.render_items_in_plain_text = false;
         self
     }
 
@@ -124,7 +135,7 @@ impl MenuView {
                 out.push_str(body);
             }
         }
-        if !self.items.is_empty() {
+        if self.render_items_in_plain_text && !self.items.is_empty() {
             if !out.is_empty() {
                 out.push_str("\n\n");
             }

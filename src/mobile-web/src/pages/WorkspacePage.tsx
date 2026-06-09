@@ -83,7 +83,7 @@ const WorkspacePage: React.FC<WorkspacePageProps> = ({ sessionMgr, onReady }) =>
   return (
     <div className="workspace-page">
       <div className="workspace-page__header">
-        <h1>{t('workspace.title')}</h1>
+        <h1>{t('shared.features.workspace')}</h1>
         <LanguageToggleButton />
       </div>
 

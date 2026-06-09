@@ -26,6 +26,14 @@ interface ShellNavEntryItemProps {
   ) => void;
 }
 
+function getDisplayCwd(entry: ShellEntry): string | null {
+  const cwd = entry.workingDirectory ?? entry.cwd;
+  if (!cwd || cwd.trim().length === 0) {
+    return null;
+  }
+  return cwd;
+}
+
 const ShellNavEntryItem: React.FC<ShellNavEntryItemProps> = ({
   entry,
   isActive,
@@ -37,6 +45,8 @@ const ShellNavEntryItem: React.FC<ShellNavEntryItemProps> = ({
   onOpen,
   onOpenContextMenu,
 }) => {
+  const displayCwd = getDisplayCwd(entry);
+
   return (
     <div
       role="button"
@@ -44,6 +54,7 @@ const ShellNavEntryItem: React.FC<ShellNavEntryItemProps> = ({
       className={[
         'bitfun-shell-nav__terminal-item',
         isActive && 'is-active',
+        displayCwd && 'has-cwd',
       ].filter(Boolean).join(' ')}
       onClick={() => { void onOpen(entry); }}
       onKeyDown={(event) => {
@@ -60,40 +71,48 @@ const ShellNavEntryItem: React.FC<ShellNavEntryItemProps> = ({
         onOpenContextMenu(event, menuItems, { entry });
       }}
     >
-      <Tooltip content={entry.name} placement="right">
-        <span className="bitfun-shell-nav__terminal-item-main">
-          {showSavedBadge ? (
-            <Bookmark size={14} className="bitfun-shell-nav__terminal-icon bitfun-shell-nav__terminal-icon--saved" />
-          ) : (
-            <SquareTerminal size={14} className="bitfun-shell-nav__terminal-icon" />
-          )}
+      <div className="bitfun-shell-nav__terminal-item-row">
+        <Tooltip content={entry.name} placement="right">
+          <span className="bitfun-shell-nav__terminal-item-main">
+            {showSavedBadge ? (
+              <Bookmark size={14} className="bitfun-shell-nav__terminal-icon bitfun-shell-nav__terminal-icon--saved" />
+            ) : (
+              <SquareTerminal size={14} className="bitfun-shell-nav__terminal-icon" />
+            )}
 
-          <span className="bitfun-shell-nav__terminal-label">{entry.name}</span>
+            <span className="bitfun-shell-nav__terminal-label">{entry.name}</span>
 
-          {showSavedBadge ? (
-            <span className="bitfun-shell-nav__saved-indicator">{savedBadgeLabel}</span>
-          ) : null}
+            {showSavedBadge ? (
+              <span className="bitfun-shell-nav__saved-indicator">{savedBadgeLabel}</span>
+            ) : null}
 
-          {entry.startupCommand ? (
-            <span className="bitfun-shell-nav__cmd-indicator">{startupCommandBadgeLabel}</span>
-          ) : null}
+            {entry.startupCommand ? (
+              <span className="bitfun-shell-nav__cmd-indicator">{startupCommandBadgeLabel}</span>
+            ) : null}
 
-          <span className={`bitfun-shell-nav__terminal-dot${entry.isRunning ? ' is-running' : ' is-stopped'}`} />
+            <span className={`bitfun-shell-nav__terminal-dot${entry.isRunning ? ' is-running' : ' is-stopped'}`} />
+          </span>
+        </Tooltip>
+
+        <Tooltip content={quickAction.title} placement="right">
+          <button
+            type="button"
+            className="bitfun-shell-nav__terminal-close"
+            onClick={(event) => {
+              event.stopPropagation();
+              quickAction.onClick();
+            }}
+          >
+            {quickAction.icon}
+          </button>
+        </Tooltip>
+      </div>
+
+      {displayCwd ? (
+        <span className="bitfun-shell-nav__terminal-cwd" title={displayCwd}>
+          {displayCwd}
         </span>
-      </Tooltip>
-
-      <Tooltip content={quickAction.title} placement="right">
-        <button
-          type="button"
-          className="bitfun-shell-nav__terminal-close"
-          onClick={(event) => {
-            event.stopPropagation();
-            quickAction.onClick();
-          }}
-        >
-          {quickAction.icon}
-        </button>
-      </Tooltip>
+      ) : null}
     </div>
   );
 };

@@ -5,9 +5,13 @@
 //! project override is applied?
 
 use super::catalog::{builtin_skill_spec, BuiltinSkillGroup, BuiltinSkillId, BuiltinSkillSpec};
+use crate::agentic::agents::{
+    resolve_mode_config_profile_id, SHARED_CODING_MODE_CONFIG_PROFILE_ID,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SkillModeId {
+    CodingShared,
     Agentic,
     Multitask,
     Cowork,
@@ -23,6 +27,7 @@ pub enum SkillModeId {
 impl SkillModeId {
     pub fn parse(mode_id: &str) -> Self {
         match mode_id.trim() {
+            SHARED_CODING_MODE_CONFIG_PROFILE_ID => Self::CodingShared,
             "agentic" => Self::Agentic,
             "Multitask" => Self::Multitask,
             "Cowork" => Self::Cowork,
@@ -120,7 +125,9 @@ const TEAM_POLICY: ModeSkillPolicy = ModeSkillPolicy {
 };
 
 pub fn policy_for_mode(mode_id: &str) -> ModeSkillPolicy {
-    match SkillModeId::parse(mode_id) {
+    let policy_scope = resolve_mode_config_profile_id(mode_id);
+    match SkillModeId::parse(policy_scope.as_ref()) {
+        SkillModeId::CodingShared => AGENTIC_POLICY,
         SkillModeId::Plan => PLAN_POLICY,
         SkillModeId::Debug => DEBUG_POLICY,
         SkillModeId::Agentic | SkillModeId::Multitask | SkillModeId::Claw => AGENTIC_POLICY,
@@ -167,6 +174,10 @@ mod tests {
     #[test]
     fn builtin_defaults_follow_mode_policies() {
         assert_eq!(SkillModeId::parse("agentic"), SkillModeId::Agentic);
+        assert_eq!(
+            SkillModeId::parse("coding_shared"),
+            SkillModeId::CodingShared
+        );
         assert_eq!(SkillModeId::parse("debug"), SkillModeId::Debug);
         assert_eq!(SkillModeId::parse("something-else"), SkillModeId::Other);
 
@@ -201,6 +212,14 @@ mod tests {
             Some(true)
         );
         assert_eq!(resolve_builtin_default_enabled("pdf", "Claw"), Some(false));
+        assert_eq!(
+            resolve_builtin_default_enabled("agent-browser", "coding_shared"),
+            Some(true)
+        );
+        assert_eq!(
+            resolve_builtin_default_enabled("pdf", "coding_shared"),
+            Some(false)
+        );
         assert_eq!(resolve_builtin_default_enabled("pdf", "Other"), Some(false));
     }
 

@@ -3,6 +3,8 @@
 use std::io;
 use std::process::Command;
 use std::sync::LazyLock;
+#[cfg(target_os = "macos")]
+use std::sync::OnceLock;
 use tokio::process::{Child, Command as TokioCommand};
 #[cfg(unix)]
 use tokio::time::timeout;
@@ -103,17 +105,58 @@ pub fn create_command<S: AsRef<std::ffi::OsStr>>(program: S) -> Command {
 
 /// Create Tokio async Command (Windows automatically adds CREATE_NO_WINDOW)
 pub fn create_tokio_command<S: AsRef<std::ffi::OsStr>>(program: S) -> TokioCommand {
-    let cmd = TokioCommand::new(program.as_ref());
+    let mut cmd = TokioCommand::new(program.as_ref());
+
+    #[cfg(target_os = "macos")]
+    apply_cached_macos_path(&mut cmd);
 
     #[cfg(windows)]
     {
-        let mut cmd = cmd;
         cmd.creation_flags(CREATE_NO_WINDOW);
-        cmd
     }
 
-    #[cfg(not(windows))]
     cmd
+}
+
+#[cfg(target_os = "macos")]
+fn apply_cached_macos_path(cmd: &mut TokioCommand) {
+    if let Some(path) = cached_macos_path_env() {
+        cmd.env("PATH", path);
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn cached_macos_path_env() -> Option<&'static std::ffi::OsString> {
+    static MACOS_PATH_ENV: OnceLock<Option<std::ffi::OsString>> = OnceLock::new();
+    MACOS_PATH_ENV.get_or_init(build_macos_path_env).as_ref()
+}
+
+#[cfg(target_os = "macos")]
+fn build_macos_path_env() -> Option<std::ffi::OsString> {
+    let existing_path = std::env::var_os("PATH");
+    let mut entries = Vec::new();
+    if let Some(path) = existing_path {
+        entries.extend(std::env::split_paths(&path));
+    }
+    entries.extend(crate::system::platform_path_entries());
+
+    if entries.is_empty() {
+        return None;
+    }
+
+    let mut merged = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for path in entries {
+        if path.as_os_str().is_empty() {
+            continue;
+        }
+        let key = path.to_string_lossy().to_string();
+        if seen.insert(key) {
+            merged.push(path);
+        }
+    }
+
+    std::env::join_paths(merged).ok()
 }
 
 #[cfg(unix)]

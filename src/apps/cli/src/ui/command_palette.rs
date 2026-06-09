@@ -342,7 +342,8 @@ impl CommandPaletteState {
         if self.selectable_items.is_empty() {
             return;
         }
-        self.selected_index = self.selected_index.saturating_sub(1);
+        let len = self.selectable_items.len();
+        self.selected_index = (self.selected_index + len - 1) % len;
         self.ensure_selected_visible();
     }
 
@@ -350,7 +351,7 @@ impl CommandPaletteState {
         if self.selectable_items.is_empty() {
             return;
         }
-        self.selected_index = (self.selected_index + 1).min(self.selectable_items.len() - 1);
+        self.selected_index = (self.selected_index + 1) % self.selectable_items.len();
         self.ensure_selected_visible();
     }
 

@@ -26,7 +26,6 @@ import SessionsSection from './sections/sessions/SessionsSection';
 import { useSceneStore } from '../../stores/sceneStore';
 import { useMyAgentStore } from '../../scenes/my-agent/myAgentStore';
 import { useMiniAppCatalogSync } from '../../scenes/miniapps/hooks/useMiniAppCatalogSync';
-import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
 import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
@@ -62,8 +61,6 @@ const MainNav: React.FC<MainNavProps> = ({
   isDeparting: _isDeparting = false,
   anchorNavSceneId: _anchorNavSceneId = null,
 }) => {
-  useMiniAppCatalogSync();
-
   const sshRemote = useSSHRemoteContext();
   const [isSSHConnectionDialogOpen, setIsSSHConnectionDialogOpen] = useState(false);
 
@@ -80,6 +77,7 @@ const MainNav: React.FC<MainNavProps> = ({
   const { t } = useI18n('common');
   const {
     currentWorkspace,
+    loading: workspaceLoading,
     recentWorkspaces,
     openedWorkspacesList,
     assistantWorkspacesList,
@@ -87,6 +85,11 @@ const MainNav: React.FC<MainNavProps> = ({
     switchWorkspace,
     setActiveWorkspace,
   } = useWorkspaceContext();
+
+  useMiniAppCatalogSync({
+    enabled: !workspaceLoading,
+    initialLoad: 'idle',
+  });
 
   const activeMiniAppId = useMemo(
     () => (typeof activeTabId === 'string' && activeTabId.startsWith('miniapp:') ? activeTabId.slice('miniapp:'.length) : null),
@@ -171,26 +174,6 @@ const MainNav: React.FC<MainNavProps> = ({
     () => assistantWorkspacesList.find(w => !w.assistantId) ?? assistantWorkspacesList[0] ?? null,
     [assistantWorkspacesList]
   );
-
-  useEffect(() => {
-    openedWorkspacesList.forEach(workspace => {
-      if (workspace.workspaceKind === WorkspaceKind.Remote) {
-        void flowChatStore.initializeFromDisk(
-          workspace.rootPath,
-          workspace.connectionId ?? undefined,
-          workspace.sshHost ?? undefined,
-          'main_nav_opened_remote_workspace'
-        );
-      } else {
-        void flowChatStore.initializeFromDisk(
-          workspace.rootPath,
-          undefined,
-          undefined,
-          'main_nav_opened_local_workspace'
-        );
-      }
-    });
-  }, [openedWorkspacesList]);
 
   const toggleNavSearch = useCallback(() => {
     setSearchOpen((v) => !v);
@@ -632,6 +615,7 @@ const MainNav: React.FC<MainNavProps> = ({
                       remoteConnectionId={isRemoteWorkspace(workspace) ? workspace.connectionId : null}
                       isActiveWorkspace={workspace.id === currentWorkspace?.id}
                       assistantLabel={assistantDisplayName}
+                      isVisible={expandedSections.has('assistant-sessions')}
                     />
                   );
                 })}
@@ -643,7 +627,7 @@ const MainNav: React.FC<MainNavProps> = ({
         {/* Workspace */}
         <div className="bitfun-nav-panel__section">
           <SectionHeader
-            label={t('nav.sections.workspace')}
+            label={t('shared:features.workspace')}
             collapsible
             isOpen={expandedSections.has('workspace')}
             onToggle={() => toggleSection('workspace')}

@@ -1,0 +1,267 @@
+name: CLI Package
+
+on:
+  release:
+    types:
+      - published
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Tag name to build (e.g. v0.2.7). Leave empty to build from HEAD."
+        required: false
+        type: string
+      upload_to_release:
+        description: "Upload built artifacts to the release specified by tag_name."
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cli-package-${{ github.event.release.tag_name || inputs.tag_name || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Resolve version info (mirrors desktop-package.yml) ─────────────
+  prepare:
+    name: Prepare
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      release_tag: ${{ steps.meta.outputs.release_tag }}
+      upload_to_release: ${{ steps.meta.outputs.upload_to_release }}
+      checkout_ref: ${{ steps.meta.outputs.checkout_ref }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version metadata
+        id: meta
+        shell: bash
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_SHA: ${{ github.sha }}
+          RELEASE_TAG_NAME: ${{ github.event.release.tag_name }}
+          INPUT_TAG_NAME: ${{ inputs.tag_name }}
+          INPUT_UPLOAD_TO_RELEASE: ${{ inputs.upload_to_release }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${GITHUB_EVENT_NAME}" == "release" ]]; then
+            TAG="${RELEASE_TAG_NAME}"
+            VERSION="${TAG#v}"
+            UPLOAD="true"
+            CHECKOUT_REF="${TAG}"
+          elif [[ -n "${INPUT_TAG_NAME}" ]]; then
+            TAG="${INPUT_TAG_NAME}"
+            VERSION="${TAG#v}"
+            CHECKOUT_REF="${TAG}"
+            if [[ "${INPUT_UPLOAD_TO_RELEASE}" == "true" ]]; then
+              UPLOAD="true"
+            else
+              UPLOAD="false"
+            fi
+          else
+            VERSION="$(jq -r '.version' package.json)"
+            TAG="v${VERSION}"
+            UPLOAD="false"
+            CHECKOUT_REF="${GITHUB_SHA}"
+          fi
+
+          echo "version=$VERSION"            >> "$GITHUB_OUTPUT"
+          echo "release_tag=$TAG"            >> "$GITHUB_OUTPUT"
+          echo "upload_to_release=$UPLOAD"   >> "$GITHUB_OUTPUT"
+          echo "checkout_ref=$CHECKOUT_REF"  >> "$GITHUB_OUTPUT"
+
+  # ── Build the CLI per (os, target) ─────────────────────────────────
+  build:
+    name: Build (${{ matrix.platform.name }})
+    runs-on: ${{ matrix.platform.os }}
+    needs: prepare
+
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - os: macos-15
+            name: macos-arm64
+            target: aarch64-apple-darwin
+            can_smoke_test: true
+          - os: macos-15-intel
+            name: macos-x64
+            target: x86_64-apple-darwin
+            can_smoke_test: true
+          - os: ubuntu-latest
+            name: linux-x64
+            target: x86_64-unknown-linux-gnu
+            can_smoke_test: true
+          - os: ubuntu-24.04-arm
+            name: linux-arm64
+            target: aarch64-unknown-linux-gnu
+            can_smoke_test: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.checkout_ref }}
+
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config \
+            build-essential \
+            libssl-dev \
+            libxcb1-dev \
+            libxcb-render0-dev \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform.target }}
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          shared-key: "cli-v1-${{ matrix.platform.name }}"
+          cache-bin: false
+
+      - name: Build bitfun-cli
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --release \
+            --target ${{ matrix.platform.target }} \
+            -p bitfun-cli
+
+      - name: Smoke test (--version)
+        if: matrix.platform.can_smoke_test == true
+        shell: bash
+        run: |
+          set -euo pipefail
+          BIN="target/${{ matrix.platform.target }}/release/bitfun-cli"
+          "$BIN" --version
+          "$BIN" --help > /dev/null
+
+      - name: Stage tarball
+        id: stage
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          TARGET: ${{ matrix.platform.target }}
+        run: |
+          set -euo pipefail
+
+          STAGE_DIR="$(pwd)/dist-cli/bitfun-cli-${VERSION}-${TARGET}"
+          mkdir -p "$STAGE_DIR"
+
+          cp "target/${TARGET}/release/bitfun-cli" "$STAGE_DIR/"
+          cp LICENSE "$STAGE_DIR/" || true
+          cp README.md "$STAGE_DIR/" || true
+
+          # Optional: bundle prompts and themes shipped alongside the CLI source
+          if [[ -d "src/apps/cli/themes" ]]; then
+            cp -R "src/apps/cli/themes" "$STAGE_DIR/themes"
+          fi
+          if [[ -d "src/apps/cli/prompts" ]]; then
+            cp -R "src/apps/cli/prompts" "$STAGE_DIR/prompts"
+          fi
+
+          ARCHIVE="bitfun-cli-${VERSION}-${TARGET}.tar.gz"
+          tar -C "$(dirname "$STAGE_DIR")" -czf "$ARCHIVE" "$(basename "$STAGE_DIR")"
+
+          # SHA256 (portable: shasum on macOS, sha256sum on Linux)
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "$ARCHIVE" > "${ARCHIVE}.sha256"
+          else
+            shasum -a 256 "$ARCHIVE" > "${ARCHIVE}.sha256"
+          fi
+
+          echo "archive=$ARCHIVE"            >> "$GITHUB_OUTPUT"
+          echo "checksum=${ARCHIVE}.sha256"  >> "$GITHUB_OUTPUT"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bitfun-cli-${{ needs.prepare.outputs.release_tag }}-${{ matrix.platform.name }}
+          if-no-files-found: error
+          path: |
+            ${{ steps.stage.outputs.archive }}
+            ${{ steps.stage.outputs.checksum }}
+
+  # ── Aggregate and upload to GitHub Release ─────────────────────────
+  upload-release-assets:
+    name: Upload Release Assets
+    needs: [prepare, build]
+    if: needs.prepare.outputs.upload_to_release == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download CLI artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: bitfun-cli-${{ needs.prepare.outputs.release_tag }}-*
+          path: cli-release-assets
+          merge-multiple: true
+
+      - name: List release assets
+        run: |
+          echo "CLI release assets:"
+          find cli-release-assets -type f | sort
+
+      - name: Generate combined SHA256SUMS
+        working-directory: cli-release-assets
+        run: |
+          set -euo pipefail
+          # Sort for reproducibility; only the tarballs go into the combined file
+          (
+            for f in $(ls bitfun-cli-*.tar.gz | sort); do
+              if command -v sha256sum >/dev/null 2>&1; then
+                sha256sum "$f"
+              else
+                shasum -a 256 "$f"
+              fi
+            done
+          ) > SHA256SUMS
+
+          echo "---- SHA256SUMS ----"
+          cat SHA256SUMS
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare.outputs.release_tag }}
+          files: |
+            cli-release-assets/bitfun-cli-*.tar.gz
+            cli-release-assets/bitfun-cli-*.tar.gz.sha256
+            cli-release-assets/SHA256SUMS
+          fail_on_unmatched_files: true
+
+      # Tell GCWing/homebrew-tap to bump the bitfun-cli formula now that
+      # the tarballs are live on the release.  Safe no-op if the secret
+      # has not been configured (e.g. on forks or before the tap exists).
+      - name: Notify homebrew-tap
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_DISPATCH_TOKEN }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${GH_TOKEN}" ]]; then
+            echo "HOMEBREW_TAP_DISPATCH_TOKEN not set; skipping tap dispatch."
+            exit 0
+          fi
+
+          echo "Dispatching bitfun-release-published for ${RELEASE_TAG} to GCWing/homebrew-tap"
+          curl -fsSL -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/GCWing/homebrew-tap/dispatches \
+            -d "{\"event_type\":\"bitfun-release-published\",\"client_payload\":{\"tag_name\":\"${RELEASE_TAG}\"}}"

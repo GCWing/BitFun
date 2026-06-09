@@ -339,3 +339,120 @@
   from { transform: translateY(-20px); opacity: 0; }
   to   { transform: translateY(0);     opacity: 1; }
 }
+
+// ── Message context menu (bottom sheet) ───────────────────────────
+.chat-msg--menu-active {
+  opacity: 0.7;
+}
+
+.chat-msg__menu-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 1000;
+  animation: menuFadeIn var(--motion-fast) var(--easing-standard);
+}
+
+.chat-msg__menu-sheet {
+  width: 100%;
+  max-width: 440px;
+  background: var(--color-bg-elevated);
+  border-radius: 20px 20px 0 0;
+  padding: var(--size-gap-2) var(--size-gap-4) var(--size-gap-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-gap-3);
+  animation: menuSlideUp var(--motion-base) var(--easing-decelerate);
+}
+
+.chat-msg__menu-handle {
+  width: 36px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border-subtle);
+  margin: 0 auto;
+}
+
+.chat-msg__menu-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.chat-msg__menu-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  border: none;
+  border-radius: 16px;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  text-align: left;
+
+  svg {
+    flex-shrink: 0;
+  }
+
+  &:active:not(:disabled) {
+    background: var(--element-bg-subtle);
+    transform: scale(0.99);
+  }
+
+  &:disabled {
+    opacity: var(--opacity-disabled);
+    cursor: not-allowed;
+  }
+
+  &--danger {
+    color: var(--color-error);
+    background: var(--color-error-bg);
+
+    &:active:not(:disabled) {
+      background: var(--color-error-border);
+    }
+  }
+}
+
+.chat-msg__menu-cancel {
+  width: 100%;
+  padding: 14px;
+  border: none;
+  border-radius: 14px;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+
+  &:active {
+    background: var(--element-bg-subtle);
+  }
+}
+
+@keyframes menuFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes menuSlideUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-msg__menu-sheet,
+  .chat-msg__menu-overlay {
+    animation: none;
+  }
+}

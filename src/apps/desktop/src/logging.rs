@@ -37,7 +37,8 @@ pub struct LogConfig {
 }
 
 fn is_embedded_webdriver_mode() -> bool {
-    cfg!(debug_assertions) && std::env::var_os("BITFUN_WEBDRIVER_PORT").is_some()
+    (cfg!(debug_assertions) || cfg!(feature = "devtools"))
+        && std::env::var_os("BITFUN_WEBDRIVER_PORT").is_some()
 }
 
 fn resolve_logs_root() -> PathBuf {
@@ -178,6 +179,7 @@ pub struct RuntimeLoggingInfo {
     pub ai_log_path: String,
     pub flashgrep_log_path: String,
     pub webview_log_path: String,
+    pub previous_unexpected_exit: Option<crate::crash_diagnostics::UnexpectedExitInfo>,
 }
 
 pub fn get_runtime_logging_info() -> RuntimeLoggingInfo {
@@ -197,6 +199,7 @@ pub fn get_runtime_logging_info() -> RuntimeLoggingInfo {
             .join("webview.log")
             .to_string_lossy()
             .to_string(),
+        previous_unexpected_exit: crate::crash_diagnostics::previous_unexpected_exit(),
     }
 }
 

@@ -28,6 +28,9 @@ use bitfun_core::agentic::tools::implementations::skills::{
 };
 use bitfun_core::agentic::workspace::RemoteWorkspaceFs;
 use bitfun_core::infrastructure::get_path_manager_arc;
+use bitfun_core::service::config::agent_profile_project_store::{
+    deserialize_project_agent_profiles_document, serialize_project_agent_profiles_document,
+};
 use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
 use bitfun_core::service::remote_ssh::{get_remote_workspace_manager, RemoteWorkspaceEntry};
 use bitfun_core::service::runtime::RuntimeManager;
@@ -263,7 +266,7 @@ async fn persist_user_mode_skill_selection(
         }
     }
 
-    bitfun_core::service::config::mode_config_canonicalizer::persist_mode_config_from_value(
+    bitfun_core::service::config::mode_config_canonicalizer::persist_agent_profile_from_value(
         mode_id,
         serde_json::json!({
             "disabled_user_skills": normalize_skill_key_list(disabled_user_skills),
@@ -324,10 +327,10 @@ async fn persist_project_mode_skill_selection_remote(
             .map_err(|e| format!("Failed to read remote project skill overrides: {}", e))?;
         let content = String::from_utf8(content)
             .map_err(|e| format!("Remote project skill overrides are not valid UTF-8: {}", e))?;
-        serde_json::from_str::<Value>(&content)
+        deserialize_project_agent_profiles_document(&content)
             .map_err(|e| format!("Invalid remote project skill overrides JSON: {}", e))?
     } else {
-        serde_json::json!({})
+        Default::default()
     };
 
     set_disabled_mode_skills_in_document(&mut document, mode_id, disabled_project_skills)
@@ -351,7 +354,7 @@ async fn persist_project_mode_skill_selection_remote(
         .write_file(
             &entry.connection_id,
             &config_path,
-            serde_json::to_vec_pretty(&document)
+            serialize_project_agent_profiles_document(&document)
                 .map_err(|e| format!("Failed to serialize remote project skill overrides: {}", e))?
                 .as_slice(),
         )
@@ -365,7 +368,7 @@ async fn clear_project_mode_skill_selection_local(
     mode_id: &str,
     workspace_root: &Path,
 ) -> Result<(), String> {
-    let path = get_path_manager_arc().project_mode_skills_file(workspace_root);
+    let path = get_path_manager_arc().project_agent_profiles_file(workspace_root);
     let exists = tokio::fs::try_exists(&path)
         .await
         .map_err(|e| format!("Failed to check project mode skills file: {}", e))?;
@@ -379,10 +382,7 @@ async fn clear_project_mode_skill_selection_local(
     set_disabled_mode_skills_in_document(&mut document, mode_id, Vec::new())
         .map_err(|e| format!("Failed to clear project skill overrides: {}", e))?;
 
-    let document_is_empty = document
-        .as_object()
-        .map(|obj| obj.is_empty())
-        .unwrap_or(true);
+    let document_is_empty = document.is_empty();
 
     if document_is_empty {
         match tokio::fs::remove_file(&path).await {
@@ -425,16 +425,13 @@ async fn clear_project_mode_skill_selection_remote(
         .map_err(|e| format!("Failed to read remote project skill overrides: {}", e))?;
     let content = String::from_utf8(content)
         .map_err(|e| format!("Remote project skill overrides are not valid UTF-8: {}", e))?;
-    let mut document = serde_json::from_str::<Value>(&content)
+    let mut document = deserialize_project_agent_profiles_document(&content)
         .map_err(|e| format!("Invalid remote project skill overrides JSON: {}", e))?;
 
     set_disabled_mode_skills_in_document(&mut document, mode_id, Vec::new())
         .map_err(|e| format!("Failed to clear remote project skill overrides: {}", e))?;
 
-    let document_is_empty = document
-        .as_object()
-        .map(|obj| obj.is_empty())
-        .unwrap_or(true);
+    let document_is_empty = document.is_empty();
 
     if document_is_empty {
         remote_fs
@@ -446,7 +443,7 @@ async fn clear_project_mode_skill_selection_remote(
             .write_file(
                 &entry.connection_id,
                 &config_path,
-                serde_json::to_vec_pretty(&document)
+                serialize_project_agent_profiles_document(&document)
                     .map_err(|e| {
                         format!("Failed to serialize remote project skill overrides: {}", e)
                     })?
@@ -580,10 +577,10 @@ pub async fn set_mode_skill_disabled(
             let content = String::from_utf8(content).map_err(|e| {
                 format!("Remote project skill overrides are not valid UTF-8: {}", e)
             })?;
-            serde_json::from_str::<Value>(&content)
+            deserialize_project_agent_profiles_document(&content)
                 .map_err(|e| format!("Invalid remote project skill overrides JSON: {}", e))?
         } else {
-            serde_json::json!({})
+            Default::default()
         };
 
         set_mode_skill_disabled_in_document(&mut document, &mode_id, &skill_key, disabled)
@@ -607,7 +604,7 @@ pub async fn set_mode_skill_disabled(
             .write_file(
                 &entry.connection_id,
                 &config_path,
-                serde_json::to_vec_pretty(&document)
+                serialize_project_agent_profiles_document(&document)
                     .map_err(|e| {
                         format!("Failed to serialize remote project skill overrides: {}", e)
                     })?

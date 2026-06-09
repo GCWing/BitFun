@@ -19,7 +19,7 @@ pub(crate) fn default_model_id_for_builtin_agent(agent_type: &str) -> &'static s
         | "ReviewFrontend"
         | "ReviewJudge"
         | "ReviewFixer" => "fast",
-        "Explore" | "FileFinder" | "CodeReview" | "GenerateDoc" | "Init" => "primary",
+        "Explore" | "FileFinder" | "CodeReview" | "GenerateDoc" => "primary",
         "GeneralPurpose" => "fast",
         _ => "fast",
     }

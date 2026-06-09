@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus, vs } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { useI18n } from '../i18n';
+import { messages } from '../i18n/messages';
 import {
   RemoteSessionManager,
   SessionPoller,
@@ -33,12 +34,23 @@ function formatDuration(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
+function getEnglishPluralSuffix(language: string, count: number): string {
+  return language === 'en-US' && count !== 1 ? 's' : '';
+}
+
 function truncateMiddle(str: string, maxLen: number): string {
   if (!str || str.length <= maxLen) return str;
   const keep = maxLen - 3;
   const head = Math.ceil(keep * 0.6);
   const tail = keep - head;
   return str.slice(0, head) + '...' + str.slice(-tail);
+}
+
+function sanitizeMessageText(content: string): string {
+  return content
+    .replace(/#img:\S+\s*/g, '')
+    .replace(/\[Image:.*?\]\n(?:Path:.*?\n|Image ID:.*?\n)?/g, '')
+    .trim();
 }
 
 function copyToClipboard(text: string): Promise<void> {
@@ -144,7 +156,7 @@ function normalizeFileLikeHref(rawHref: string): string {
     }
   }
 
-  // Normalize URI-like Windows absolute paths such as `/C:/Users/...`.
+  // Normalize URI-like Windows absolute paths with a leading slash before the drive letter.
   if (/^\/[A-Za-z]:[\\/]/.test(filePath)) {
     filePath = filePath.slice(1);
   }
@@ -467,7 +479,7 @@ const MarkdownContent: React.FC<MarkdownContentProps> = ({ content, onFileDownlo
       // Fallback: render as plain text for computer:// links without handler,
       // or as a regular link for http(s) links.
       if (typeof href === 'string') {
-        // 所有外部链接都在新标签页打开
+        // Open all external links in a new tab.
         const isExternalLink = href.startsWith('http://') || href.startsWith('https://');
         if (isExternalLink) {
           return (
@@ -607,20 +619,20 @@ const ThinkingBlock: React.FC<{
 // ─── Tool Card ──────────────────────────────────────────────────────────────
 
 const TOOL_TYPE_MAP: Record<string, string> = {
-  explore: 'tools.explore',
-  read_file: 'tools.read',
-  write_file: 'tools.write',
+  explore: 'shared.tools.explore',
+  read_file: 'shared.tools.read',
+  write_file: 'shared.tools.write',
   list_directory: 'tools.ls',
   bash: 'tools.shell',
   glob: 'tools.glob',
   grep: 'tools.grep',
-  create_file: 'tools.write',
+  create_file: 'shared.tools.write',
   delete_file: 'tools.delete',
   Task: 'tools.task',
-  search: 'tools.search',
-  edit_file: 'tools.edit',
+  search: 'shared.tools.search',
+  edit_file: 'shared.tools.edit',
   web_search: 'tools.web',
-  TodoWrite: 'tools.todo',
+  TodoWrite: 'shared.tools.todo',
 };
 
 // ─── TodoWrite card ─────────────────────────────────────────────────────────
@@ -738,7 +750,7 @@ const TaskToolCard: React.FC<{
   subItems?: ChatMessageItem[];
   onCancelTool?: (toolId: string) => void;
 }> = ({ tool, now, subItems = [], onCancelTool }) => {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const scrollRef = useRef<HTMLDivElement>(null);
   const prevCountRef = useRef(0);
   const [stepsExpanded, setStepsExpanded] = useState(false);
@@ -811,7 +823,7 @@ const TaskToolCard: React.FC<{
         <>
           <div className="chat-task-card__summary" onClick={() => setStepsExpanded(e => !e)}>
             <span className="chat-task-card__stat">
-              {t('chat.toolCalls', { count: subTools.length, suffix: subTools.length === 1 ? '' : 's' })}
+              {t('chat.toolCalls', { count: subTools.length, suffix: getEnglishPluralSuffix(language, subTools.length) })}
             </span>
             <span className="chat-task-card__stat-right">
               <span className="chat-task-card__stat--done">{t('chat.done', { count: subToolsDone })}</span>
@@ -1074,7 +1086,7 @@ const ToolList: React.FC<{
   now: number;
   onCancelTool?: (toolId: string) => void;
 }> = ({ tools, now, onCancelTool }) => {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const scrollRef = useRef<HTMLDivElement>(null);
   const prevCountRef = useRef(0);
   const [expanded, setExpanded] = useState(false);
@@ -1104,7 +1116,7 @@ const ToolList: React.FC<{
   return (
     <div className="chat-tool-list chat-tool-list--collapsed">
       <div className="chat-tool-list__header" onClick={() => setExpanded(e => !e)}>
-        <span className="chat-tool-list__count">{t('chat.toolCalls', { count: tools.length, suffix: tools.length === 1 ? '' : 's' })}</span>
+        <span className="chat-tool-list__count">{t('chat.toolCalls', { count: tools.length, suffix: getEnglishPluralSuffix(language, tools.length) })}</span>
         <span className="chat-tool-list__stats">
           {doneCount > 0 && <span className="chat-tool-list__stat chat-tool-list__stat--done">{t('chat.done', { count: doneCount })}</span>}
           {runningCount > 0 && <span className="chat-tool-list__stat chat-tool-list__stat--running">{t('chat.running', { count: runningCount })}</span>}
@@ -1217,13 +1229,35 @@ const isPendingAskUserQuestion = (tool?: RemoteToolStatus | null) => {
   return !['completed', 'failed', 'cancelled', 'rejected'].includes(tool.status);
 };
 
-const isOtherQuestionOption = (label?: string) => {
+function getMessageByPath(source: unknown, path: string): string | null {
+  const segments = path.split('.');
+  let current: unknown = source;
+
+  for (const segment of segments) {
+    if (!current || typeof current !== 'object' || !(segment in current)) {
+      return null;
+    }
+    current = (current as Record<string, unknown>)[segment];
+  }
+
+  return typeof current === 'string' ? current : null;
+}
+
+const OTHER_QUESTION_OPTION_LABELS = new Set([
+  'other',
+  ...Object.values(messages)
+    .map((localeMessages) => getMessageByPath(localeMessages, 'common.other'))
+    .filter((label): label is string => !!label)
+    .map((label) => label.trim().toLowerCase()),
+]);
+
+const isOtherQuestionOption = (label: string | undefined) => {
   const normalized = (label || '').trim().toLowerCase();
-  return normalized === 'other' || normalized === '其他';
+  return OTHER_QUESTION_OPTION_LABELS.has(normalized);
 };
 
 const AskQuestionCard: React.FC<AskQuestionCardProps> = ({ tool, onAnswer }) => {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const questions: any[] = tool.tool_input?.questions || [];
   const [selected, setSelected] = useState<Record<number, string | string[]>>({});
   const [customTexts, setCustomTexts] = useState<Record<number, string>>({});
@@ -1288,7 +1322,7 @@ const AskQuestionCard: React.FC<AskQuestionCardProps> = ({ tool, onAnswer }) => 
   return (
     <div className="chat-ask-card">
       <div className="chat-ask-card__header">
-        <span className="chat-ask-card__count">{t('chat.askQuestionCount', { count: questions.length, suffix: questions.length > 1 ? 's' : '' })}</span>
+        <span className="chat-ask-card__count">{t('chat.askQuestionCount', { count: questions.length, suffix: getEnglishPluralSuffix(language, questions.length) })}</span>
         {!submitted && !submitting && (
           <span className="chat-ask-card__waiting">{t('chat.waiting')}</span>
         )}
@@ -2002,6 +2036,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
   const [expandedMsgIds, setExpandedMsgIds] = useState<Set<string>>(new Set());
   const [infoToast, setInfoToast] = useState<string | null>(null);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const [menuMessage, setMenuMessage] = useState<ChatMessage | null>(null);
+  const [actionToast, setActionToast] = useState<string | null>(null);
+  const [deletingMsg, setDeletingMsg] = useState(false);
+  const msgLongPressTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const msgLongPressPosRef = useRef({ x: 0, y: 0 });
+  const msgToastTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   const isStreaming = activeTurn != null && activeTurn.status === 'active';
 
@@ -2136,6 +2176,96 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
       setIsLoadingMore(false);
     }
   }, [sessionMgr, sessionId, setMessages, setError, getMessages]);
+
+  // ── Message long-press context menu ──────────────────────────────
+  const clearMsgLongPressTimer = () => {
+    if (msgLongPressTimerRef.current) {
+      clearTimeout(msgLongPressTimerRef.current);
+      msgLongPressTimerRef.current = undefined;
+    }
+  };
+
+  const handleMsgTouchStart = useCallback((m: ChatMessage, e: React.TouchEvent) => {
+    if (deletingMsg) return;
+    clearMsgLongPressTimer();
+    msgLongPressPosRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    msgLongPressTimerRef.current = setTimeout(() => {
+      setMenuMessage(m);
+      msgLongPressTimerRef.current = undefined;
+    }, 500);
+  }, [deletingMsg]);
+
+  const handleMsgTouchMove = useCallback((e: React.TouchEvent) => {
+    const dx = Math.abs(e.touches[0].clientX - msgLongPressPosRef.current.x);
+    const dy = Math.abs(e.touches[0].clientY - msgLongPressPosRef.current.y);
+    if (dx > 10 || dy > 10) clearMsgLongPressTimer();
+  }, []);
+
+  const handleMsgTouchEnd = useCallback(() => {
+    clearMsgLongPressTimer();
+  }, []);
+
+  const showMsgToast = useCallback((msg: string) => {
+    if (msgToastTimerRef.current) clearTimeout(msgToastTimerRef.current);
+    setActionToast(msg);
+    msgToastTimerRef.current = setTimeout(() => setActionToast(null), 2000);
+  }, []);
+
+  const handleCopyMessage = useCallback(async () => {
+    if (!menuMessage) return;
+    const text = sanitizeMessageText(menuMessage.content);
+    try {
+      await copyToClipboard(text);
+      showMsgToast(t('chat.messageCopied'));
+    } catch {
+      showMsgToast(t('chat.copyFailed'));
+    }
+    setMenuMessage(null);
+  }, [menuMessage, showMsgToast, t]);
+
+  const handleResendMessage = useCallback(async () => {
+    if (!menuMessage || menuMessage.role !== 'user') return;
+    const text = sanitizeMessageText(menuMessage.content);
+    if (!text) return;
+    setMenuMessage(null);
+    const imageContexts = menuMessage.images?.length
+      ? menuMessage.images.map((img, idx) => {
+          const mimeType = img.data_url.split(';')[0]?.replace('data:', '') || 'image/png';
+          return {
+            id: `mobile_resend_${Date.now()}_${idx}`,
+            data_url: img.data_url,
+            mime_type: mimeType,
+            metadata: { name: img.name, source: 'remote' },
+          };
+        })
+      : undefined;
+    try {
+      await sessionMgr.sendMessage(sessionId, text, agentMode, imageContexts);
+      pollerRef.current?.nudge();
+    } catch (e: any) {
+      setError(e.message);
+    }
+  }, [menuMessage, sessionMgr, sessionId, agentMode, setError]);
+
+  const handleDeleteMessage = useCallback(async () => {
+    if (!menuMessage) return;
+    setDeletingMsg(true);
+    try {
+      useMobileStore.getState().deleteMessage(sessionId, menuMessage.id);
+      showMsgToast(t('chat.messageDeleted'));
+    } finally {
+      setDeletingMsg(false);
+      setMenuMessage(null);
+    }
+  }, [menuMessage, sessionId, showMsgToast, t]);
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      clearMsgLongPressTimer();
+      if (msgToastTimerRef.current) clearTimeout(msgToastTimerRef.current);
+    };
+  }, []);
 
   const isNearBottomRef = useRef(true);
   const programmaticScrollRef = useRef(false);
@@ -2510,12 +2640,17 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
             if (m.role === 'system' || m.role === 'tool') return null;
 
             if (m.role === 'user') {
-              const userText = m.content
-                .replace(/#img:\S+\s*/g, '')
-                .replace(/\[Image:.*?\]\n(?:Path:.*?\n|Image ID:.*?\n)?/g, '')
-                .trim();
+              const userText = sanitizeMessageText(m.content);
               return (
-                <div key={m.id} className="chat-msg chat-msg--user">
+                <div
+                    key={m.id}
+                    className={`chat-msg chat-msg--user${menuMessage?.id === m.id ? ' chat-msg--menu-active' : ''}`}
+                    onTouchStart={(e) => handleMsgTouchStart(m, e)}
+                    onTouchMove={handleMsgTouchMove}
+                    onTouchEnd={handleMsgTouchEnd}
+                    onTouchCancel={handleMsgTouchEnd}
+                    onContextMenu={(e) => { e.preventDefault(); setMenuMessage(m); }}
+                  >
                   <div className="chat-msg__user-card">
                     <div className="chat-msg__user-avatar">U</div>
                     <div className="chat-msg__user-content">
@@ -2547,7 +2682,15 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
 
             if (isOldResponse && !isExpanded) {
               return (
-                <div key={m.id} className="chat-msg chat-msg--assistant chat-msg--collapsed">
+                <div
+                    key={m.id}
+                    className={`chat-msg chat-msg--assistant chat-msg--collapsed${menuMessage?.id === m.id ? ' chat-msg--menu-active' : ''}`}
+                    onTouchStart={(e) => handleMsgTouchStart(m, e)}
+                    onTouchMove={handleMsgTouchMove}
+                    onTouchEnd={handleMsgTouchEnd}
+                    onTouchCancel={handleMsgTouchEnd}
+                    onContextMenu={(e) => { e.preventDefault(); setMenuMessage(m); }}
+                  >
                   <button
                     className="chat-msg__response-toggle"
                     onClick={() => setExpandedMsgIds(prev => {
@@ -2568,7 +2711,15 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
             }
 
             return (
-              <div key={m.id} className="chat-msg chat-msg--assistant">
+              <div
+                key={m.id}
+                className={`chat-msg chat-msg--assistant${menuMessage?.id === m.id ? ' chat-msg--menu-active' : ''}`}
+                onTouchStart={(e) => handleMsgTouchStart(m, e)}
+                onTouchMove={handleMsgTouchMove}
+                onTouchEnd={handleMsgTouchEnd}
+                onTouchCancel={handleMsgTouchEnd}
+                onContextMenu={(e) => { e.preventDefault(); setMenuMessage(m); }}
+              >
                 {isOldResponse && isExpanded && (
                   <button
                     className="chat-msg__response-toggle"
@@ -2732,6 +2883,52 @@ const ChatPage: React.FC<ChatPageProps> = ({ sessionMgr, sessionId, sessionName,
             <polyline points="6 9 12 15 18 9" />
           </svg>
         </button>
+      )}
+
+      {/* Message Context Menu */}
+      {menuMessage && (
+        <div className="chat-msg__menu-overlay" onClick={() => setMenuMessage(null)}>
+          <div className="chat-msg__menu-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="chat-msg__menu-handle" />
+            <div className="chat-msg__menu-actions">
+              <button className="chat-msg__menu-btn" onClick={handleCopyMessage}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+                <span>{t('chat.copyMessage')}</span>
+              </button>
+              {menuMessage.role === 'user' && (
+                <button className="chat-msg__menu-btn" onClick={handleResendMessage}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="23 4 23 10 17 10" />
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                  </svg>
+                  <span>{t('chat.resendMessage')}</span>
+                </button>
+              )}
+              <button
+                className="chat-msg__menu-btn chat-msg__menu-btn--danger"
+                onClick={handleDeleteMessage}
+                disabled={deletingMsg}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                </svg>
+                <span>{deletingMsg ? '...' : t('chat.deleteMessage')}</span>
+              </button>
+            </div>
+            <button className="chat-msg__menu-cancel" onClick={() => setMenuMessage(null)}>
+              {t('common.cancel')}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Action Toast */}
+      {actionToast && (
+        <div className="chat-page__toast" role="alert" aria-live="assertive">{actionToast}</div>
       )}
 
       {/* Floating Input Bar — two-stage (matches desktop ChatInput) */}

@@ -219,12 +219,21 @@
   },
   "streamIdleTimeout": {
     "title": "流式超時",
-    "label": "空閒超時（秒）",
-    "hint": "全局控制流式響應在兩次 chunk 之間的最大等待時間。留空表示無限等待。",
+    "label": "Chunk 空閒超時（秒）",
+    "hint": "流式響應開始後，兩次 chunk 之間的最大等待時間。留空表示無限等待。",
     "placeholder": "留空表示不設超時",
     "invalid": "請輸入正整數秒數，或留空。",
     "save": "保存流式超時",
     "saveSuccess": "流式超時已保存"
+  },
+  "streamTtftTimeout": {
+    "title": "首 Token 超時",
+    "label": "TTFT 超時（秒）",
+    "hint": "請求發出後，等待模型開始流式輸出的最長時間。留空表示無限等待。",
+    "placeholder": "留空表示不設超時",
+    "invalid": "請輸入正整數秒數，或留空。",
+    "save": "保存首 Token 超時",
+    "saveSuccess": "首 Token 超時已保存"
   },
   "capabilities": {
     "text_chat": "對話",

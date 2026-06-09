@@ -163,7 +163,7 @@ impl CdpClient {
         debug!("CDP send id={} method={}", id, method);
         {
             let mut sink = self.sink.lock().await;
-            sink.send(Message::Text(msg.to_string()))
+            sink.send(Message::Text(msg.to_string().into()))
                 .await
                 .map_err(|e| BitFunError::tool(format!("CDP send failed: {}", e)))?;
         }

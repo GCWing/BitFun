@@ -4,7 +4,8 @@
 //! reviewed owner migration. Generic contracts live in `bitfun-agent-tools`;
 //! this module only projects core-owned `Tool` behavior into those contracts.
 
-use crate::agentic::tools::framework::{DynamicToolInfo, Tool, ToolExposure, ToolUseContext};
+use crate::agentic::tools::framework::{DynamicToolInfo, Tool, ToolExposure};
+use crate::agentic::tools::tool_context_runtime::ToolUseContext;
 use bitfun_agent_tools::{ContextualToolManifestItem, ToolRegistryItem};
 use serde_json::Value;
 

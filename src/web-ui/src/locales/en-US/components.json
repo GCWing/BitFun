@@ -117,7 +117,8 @@
       "result": "Task Result",
       "processing": "AI is processing task...",
       "defaultType": "AI Task",
-      "unspecifiedTask": "Unspecified task"
+      "unspecifiedTask": "Unspecified task",
+      "taskResult": "Task Result"
     },
     "searchCard": {
       "grepTitle": "Text Search",
@@ -632,5 +633,10 @@
     "fallback": {
       "noCodeContent": "No code content available"
     }
-  }
+  },
+  "header": {
+    "selectProjectDirectory": "Select a project directory to open"
+  },
+  "hide": "Hide",
+  "show": "Show"
 }

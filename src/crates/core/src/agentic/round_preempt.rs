@@ -9,14 +9,11 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::SystemTime;
 
-/// Observes whether the current dialog turn should end after the latest model round
-/// (so a queued user message can start as a new turn).
-pub trait DialogRoundPreemptSource: Send + Sync {
-    fn should_yield_after_round(&self, session_id: &str) -> bool;
-    fn clear_yield_after_round(&self, session_id: &str);
-}
+pub use bitfun_runtime_ports::{
+    DialogRoundInjectionSource, DialogRoundPreemptSource, RoundInjection, RoundInjectionKind,
+    RoundInjectionTarget,
+};
 
 /// Used when no scheduler is wired (e.g. tests, isolated execution).
 pub struct NoopDialogRoundPreemptSource;
@@ -66,50 +63,6 @@ impl DialogRoundPreemptSource for SessionRoundYieldFlags {
 }
 
 // ── Round-boundary injection ────────────────────────────────────────────────
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RoundInjectionKind {
-    UserSteering,
-    BackgroundResult,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RoundInjectionTarget {
-    /// Only inject into the exact targeted running turn. If that turn already
-    /// finished, the injection is ignored.
-    ExactTurn(String),
-    /// Inject into whichever turn is currently running for the session.
-    CurrentRunningTurn,
-}
-
-/// A message to inject into the currently running dialog turn at the next
-/// model-round boundary. Produced by the scheduler/coordinator and consumed by
-/// [`ExecutionEngine`](super::execution::ExecutionEngine) before each new round.
-#[derive(Debug, Clone)]
-pub struct RoundInjection {
-    pub id: String,
-    pub kind: RoundInjectionKind,
-    /// Injection target routing policy.
-    pub target: RoundInjectionTarget,
-    pub content: String,
-    /// Original (pre-rendering) text from the user, for UI display when the rendered
-    /// `content` differs (e.g. when wrapped with a system reminder envelope).
-    pub display_content: String,
-    pub created_at: SystemTime,
-}
-
-/// Observes whether any round injections are pending for a given (session, turn).
-pub trait DialogRoundInjectionSource: Send + Sync {
-    /// Check whether the given running turn has pending injections without
-    /// consuming it. This lets tool execution stop at a safe boundary while the
-    /// execution engine remains responsible for draining and injecting the
-    /// messages into the next model round.
-    fn has_pending(&self, session_id: &str, turn_id: &str) -> bool;
-
-    /// Drain all pending injections targeted at the given dialog turn.
-    /// Implementations must be safe to call concurrently from multiple round boundaries.
-    fn take_pending(&self, session_id: &str, turn_id: &str) -> Vec<RoundInjection>;
-}
 
 /// Used when no scheduler is wired (e.g. tests, isolated execution).
 pub struct NoopDialogRoundInjectionSource;
@@ -230,6 +183,7 @@ impl DialogRoundInjectionSource for SessionRoundInjectionBuffer {
 #[cfg(test)]
 mod steering_tests {
     use super::*;
+    use std::time::SystemTime;
 
     fn exact_turn_msg(turn_id: &str, content: &str) -> RoundInjection {
         RoundInjection {

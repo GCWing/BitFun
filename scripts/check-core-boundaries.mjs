@@ -13,7 +13,9 @@ const noCoreDependencyCrates = [
   'events',
   'ai-adapters',
   'agent-stream',
+  'agent-runtime',
   'runtime-ports',
+  'runtime-services',
   'services-core',
   'services-integrations',
   'agent-tools',
@@ -71,6 +73,59 @@ const lightweightBoundaryRules = [
       'bitfun-transport',
       'terminal-core',
       'tool-runtime',
+      'tauri',
+      'reqwest',
+      'git2',
+      'rmcp',
+      'image',
+      'tokio-tungstenite',
+      'bitfun-cli',
+      'ratatui',
+      'crossterm',
+      'arboard',
+      'syntect-tui',
+    ],
+  },
+  {
+    crateName: 'runtime-services',
+    reason: 'runtime-services must stay a typed service assembly contract without concrete runtime implementations',
+    forbiddenDeps: [
+      'bitfun-core',
+      'bitfun-ai-adapters',
+      'bitfun-agent-stream',
+      'bitfun-services-core',
+      'bitfun-services-integrations',
+      'bitfun-agent-tools',
+      'bitfun-tool-packs',
+      'bitfun-product-domains',
+      'bitfun-transport',
+      'terminal-core',
+      'tool-runtime',
+      'tauri',
+      'reqwest',
+      'git2',
+      'rmcp',
+      'image',
+      'tokio-tungstenite',
+      'bitfun-cli',
+      'ratatui',
+      'crossterm',
+      'arboard',
+      'syntect-tui',
+    ],
+  },
+  {
+    crateName: 'agent-runtime',
+    reason: 'agent-runtime must own portable runtime decisions without concrete service or product implementations',
+    forbiddenDeps: [
+      'bitfun-core',
+      'bitfun-ai-adapters',
+      'bitfun-services-core',
+      'bitfun-services-integrations',
+      'bitfun-tool-packs',
+      'bitfun-product-domains',
+      'bitfun-transport',
+      'terminal-core',
       'tauri',
       'reqwest',
       'git2',
@@ -216,6 +271,61 @@ const dependencyProfileRules = [
     ],
   },
   {
+    crateName: 'runtime-services',
+    profileName: 'default runtime service assembly profile',
+    reason: 'runtime-services default profile must not compile concrete service or product runtime implementations',
+    forbiddenNonOptionalDeps: [
+      'bitfun-core',
+      'bitfun-ai-adapters',
+      'bitfun-agent-stream',
+      'bitfun-services-core',
+      'bitfun-services-integrations',
+      'bitfun-agent-tools',
+      'bitfun-tool-packs',
+      'bitfun-product-domains',
+      'bitfun-transport',
+      'terminal-core',
+      'tool-runtime',
+      'tauri',
+      'reqwest',
+      'git2',
+      'rmcp',
+      'image',
+      'tokio-tungstenite',
+      'bitfun-cli',
+      'ratatui',
+      'crossterm',
+      'arboard',
+      'syntect-tui',
+    ],
+  },
+  {
+    crateName: 'agent-runtime',
+    profileName: 'default agent runtime decision profile',
+    reason: 'agent-runtime default profile must not compile concrete services or product surfaces',
+    forbiddenNonOptionalDeps: [
+      'bitfun-core',
+      'bitfun-ai-adapters',
+      'bitfun-services-core',
+      'bitfun-services-integrations',
+      'bitfun-tool-packs',
+      'bitfun-product-domains',
+      'bitfun-transport',
+      'terminal-core',
+      'tauri',
+      'reqwest',
+      'git2',
+      'rmcp',
+      'image',
+      'tokio-tungstenite',
+      'bitfun-cli',
+      'ratatui',
+      'crossterm',
+      'arboard',
+      'syntect-tui',
+    ],
+  },
+  {
     crateName: 'agent-tools',
     profileName: 'tool contract-only profile',
     reason: 'agent-tools must stay a lightweight tool contract crate',
@@ -240,6 +350,9 @@ const dependencyProfileRules = [
     reason: 'product-domains default profile must not compile runtime/platform helpers',
     forbiddenNonOptionalDeps: [
       'dirs',
+      'log',
+      'sha2',
+      'which',
       'reqwest',
       'git2',
       'rmcp',
@@ -277,6 +390,7 @@ const dependencyProfileRules = [
       'thiserror',
       'tokio-util',
       'tokio-tungstenite',
+      'uuid',
       'bitfun-relay-server',
     ],
   },
@@ -325,6 +439,43 @@ const optionalDependencyFeatureOwnerRules = [
       { depName: 'x25519-dalek', ownerFeatures: ['service-integrations'] },
     ],
   },
+  {
+    crateName: 'services-integrations',
+    reason:
+      'services-integrations optional runtime dependencies must stay owned by explicit integration features',
+    dependencies: [
+      { depName: 'aes-gcm', ownerFeatures: ['mcp'] },
+      { depName: 'anyhow', ownerFeatures: ['mcp'] },
+      { depName: 'async-trait', ownerFeatures: ['mcp', 'remote-connect'] },
+      { depName: 'base64', ownerFeatures: ['mcp', 'remote-connect'] },
+      { depName: 'bitfun-runtime-ports', ownerFeatures: ['remote-connect'] },
+      { depName: 'bitfun-services-core', ownerFeatures: ['git', 'mcp'] },
+      { depName: 'chrono', ownerFeatures: ['git'] },
+      { depName: 'dunce', ownerFeatures: ['remote-ssh'] },
+      { depName: 'futures', ownerFeatures: ['mcp'] },
+      { depName: 'git2', ownerFeatures: ['git'] },
+      { depName: 'notify', ownerFeatures: ['file-watch'] },
+      { depName: 'rand', ownerFeatures: ['mcp'] },
+      { depName: 'reqwest', ownerFeatures: ['mcp'] },
+      { depName: 'rmcp', ownerFeatures: ['mcp'] },
+      { depName: 'sha2', ownerFeatures: ['remote-ssh'] },
+      { depName: 'sse-stream', ownerFeatures: ['mcp'] },
+      { depName: 'thiserror', ownerFeatures: ['git'] },
+      { depName: 'tokio-util', ownerFeatures: ['remote-ssh'] },
+      { depName: 'uuid', ownerFeatures: ['remote-connect'] },
+    ],
+  },
+  {
+    crateName: 'product-domains',
+    reason:
+      'product-domains optional runtime dependencies must stay owned by explicit product-domain features',
+    dependencies: [
+      { depName: 'dirs', ownerFeatures: ['miniapp'] },
+      { depName: 'log', ownerFeatures: ['function-agents'] },
+      { depName: 'sha2', ownerFeatures: ['miniapp'] },
+      { depName: 'which', ownerFeatures: ['miniapp'] },
+    ],
+  },
 ];
 
 const productCoreFeatureAssemblyRules = [
@@ -349,6 +500,13 @@ const productCoreFeatureAssemblyRules = [
 ];
 
 const productCoreFeatureAssemblyScanRoots = ['src/apps', 'src/crates/acp'];
+
+const coreProductFullFeatureAssemblyRule = {
+  manifestPath: 'src/crates/core/Cargo.toml',
+  featureName: 'product-full',
+  requiredFeatureRefs: ['ssh-remote', 'product-domains', 'service-integrations', 'tool-packs'],
+  reason: 'bitfun-core product-full must explicitly assemble current owner feature groups',
+};
 
 const ownerCrateFeatureAssemblyRules = [
   {
@@ -385,6 +543,21 @@ const ownerCrateFeatureAssemblyRules = [
 ];
 
 const facadeOnlyFiles = [
+  {
+    path: 'src/crates/core/src/infrastructure/filesystem/mod.rs',
+    importPrefix: 'bitfun_services_core::filesystem',
+    reason: 'core filesystem infrastructure facade must only re-export the services-core owner crate',
+  },
+  {
+    path: 'src/crates/core/src/service/filesystem/listing.rs',
+    importPrefix: 'bitfun_services_core::filesystem',
+    reason: 'core filesystem listing facade must only re-export the services-core owner crate',
+  },
+  {
+    path: 'src/crates/core/src/service/filesystem/types.rs',
+    importPrefix: 'bitfun_services_core::filesystem',
+    reason: 'core filesystem DTO facade must only re-export the services-core owner crate',
+  },
   {
     path: 'src/crates/core/src/service/git/git_service.rs',
     importPrefix: 'bitfun_services_integrations::git',
@@ -464,6 +637,61 @@ const facadeOnlyFiles = [
 
 const forbiddenContentRules = [
   {
+    path: 'src/crates/core/src/service/filesystem/service.rs',
+    patterns: [
+      {
+        regex: /\btokio::fs::/,
+        message:
+          'core filesystem service must not own async local filesystem IO; use bitfun-services-core filesystem primitives',
+      },
+      {
+        regex: /\bstd::fs::/,
+        message:
+          'core filesystem service must not own sync local filesystem IO; use bitfun-services-core filesystem primitives',
+      },
+      {
+        regex: /\bignore::WalkBuilder\b/,
+        message:
+          'core filesystem service must not own local file walking/search implementation; use bitfun-services-core filesystem primitives',
+      },
+      {
+        regex: /\bsha2::/,
+        message:
+          'core filesystem service must not own editor-sync hashing implementation; use bitfun-services-core filesystem primitives',
+      },
+      {
+        regex: /\bbase64::/,
+        message:
+          'core filesystem service must not own binary file encoding implementation; use bitfun-services-core filesystem primitives',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/miniapp/runtime_detect.rs',
+    patterns: [
+      {
+        regex: /\bCoreMiniAppRuntimeProbe\b/,
+        message:
+          'core MiniApp runtime_detect must remain a compatibility facade; concrete probe owner is product-domains',
+      },
+      {
+        regex: /\bwhich::which\b/,
+        message:
+          'core MiniApp runtime_detect must not own PATH lookup; use product-domain runtime detection',
+      },
+      {
+        regex: /\bcreate_command\b/,
+        message:
+          'core MiniApp runtime_detect must not own version process execution; use product-domain runtime detection',
+      },
+      {
+        regex: /\bstd::fs::read_dir\b/,
+        message:
+          'core MiniApp runtime_detect must not own version-manager directory scanning; use product-domain runtime detection',
+      },
+    ],
+  },
+  {
     path: 'src/crates/core/src/agentic/tools/framework.rs',
     patterns: [
       {
@@ -495,6 +723,21 @@ const forbiddenContentRules = [
         message: 'core tool framework must not redefine ToolWorkspaceKind; use bitfun-agent-tools',
       },
       {
+        regex: /\bpub struct ToolUseContext\b/,
+        message:
+          'core tool framework must not own ToolUseContext; re-export it from tool_context_runtime',
+      },
+      {
+        regex: /\bcall_with_tool_runtime_hooks\b/,
+        message:
+          'core tool framework must not wire runtime hooks directly; delegate through tool_context_runtime',
+      },
+      {
+        regex: /\bdeep_review_shared_context_measurement_snapshot\b/,
+        message:
+          'core tool framework must not own runtime hook regressions; keep them in tool_context_runtime',
+      },
+      {
         regex: /\bget_global_coordinator\b/,
         message:
           'core tool framework must not own runtime checkpoint coordination; keep it in tool_context_runtime',
@@ -523,6 +766,283 @@ const forbiddenContentRules = [
         regex: /\bpost_call_hooks::record_successful_tool_call\b/,
         message:
           'core tool framework must not own post-call runtime hooks; keep them in tool_context_runtime',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/pipeline/tool_pipeline.rs',
+    patterns: [
+      {
+        regex: /framework::(?:\{[^}]*\bToolUseContext\b[^}]*\}|\bToolUseContext\b)/,
+        message:
+          'tool pipeline must import ToolUseContext from tool_context_runtime, not the framework re-export',
+      },
+      {
+        regex: /\bfn serialize_result_for_assistant\b/,
+        message:
+          'core tool pipeline must not own provider-neutral assistant result rendering; use bitfun-agent-tools',
+      },
+      {
+        regex: /\bconst TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES\b/,
+        message:
+          'core tool pipeline must not own tool error argument preview limits; use bitfun-agent-tools',
+      },
+      {
+        regex: /\bfn truncate_arguments_preview\b/,
+        message:
+          'core tool pipeline must not own tool error argument preview rendering; use bitfun-agent-tools',
+      },
+      {
+        regex: /\bfn truncate_raw_arguments_preview\b/,
+        message:
+          'core tool pipeline must not own raw tool argument preview rendering; use bitfun-agent-tools',
+      },
+      {
+        regex: /\bconst USER_STEERING_INTERRUPTED_MESSAGE\b/,
+        message:
+          'core tool pipeline must not own steering-interrupted result presentation; use bitfun-agent-tools',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/subagent_runtime/mod.rs',
+    patterns: [
+      {
+        regex: /\bstruct\s+DelegationPolicy\b/,
+        message:
+          'core subagent runtime must not redefine DelegationPolicy; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\benum\s+SubagentContextMode\b/,
+        message:
+          'core subagent runtime must not redefine SubagentContextMode; use bitfun-runtime-ports',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/coordination/coordinator.rs',
+    patterns: [
+      {
+        regex: /\benum\s+DialogTriggerSource\b/,
+        message:
+          'core coordinator must not redefine DialogTriggerSource; use bitfun-runtime-ports',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/coordination/scheduler.rs',
+    patterns: [
+      {
+        regex: /\benum\s+DialogQueuePriority\b/,
+        message:
+          'core scheduler must not redefine DialogQueuePriority; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\bstruct\s+DialogSubmissionPolicy\b/,
+        message:
+          'core scheduler must not redefine DialogSubmissionPolicy; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\benum\s+DialogSubmitOutcome\b/,
+        message:
+          'core scheduler must not redefine DialogSubmitOutcome; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\bstruct\s+AgentSessionReplyRoute\b/,
+        message:
+          'core scheduler must not redefine AgentSessionReplyRoute; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\benum\s+DialogSteerOutcome\b/,
+        message:
+          'core scheduler must not redefine DialogSteerOutcome; use bitfun-runtime-ports',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/round_preempt.rs',
+    patterns: [
+      {
+        regex: /\btrait\s+DialogRoundPreemptSource\b/,
+        message:
+          'core round preempt runtime must not redefine DialogRoundPreemptSource; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\bstruct\s+RoundInjection\b/,
+        message:
+          'core round preempt runtime must not redefine RoundInjection; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\btrait\s+DialogRoundInjectionSource\b/,
+        message:
+          'core round preempt runtime must not redefine DialogRoundInjectionSource; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\benum\s+RoundInjectionKind\b/,
+        message:
+          'core round preempt runtime must not redefine RoundInjectionKind; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\benum\s+RoundInjectionTarget\b/,
+        message:
+          'core round preempt runtime must not redefine RoundInjectionTarget; use bitfun-runtime-ports',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/goal_mode/types.rs',
+    patterns: [
+      {
+        regex: /\bconst\s+GOAL_MODE_METADATA_KEY\b/,
+        message: 'core goal mode types must not redefine GOAL_MODE_METADATA_KEY; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\bconst\s+MAX_GOAL_CONTINUATIONS\b/,
+        message: 'core goal mode types must not redefine MAX_GOAL_CONTINUATIONS; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\bconst\s+MAX_CONTEXT_SUMMARY_CHARS\b/,
+        message: 'core goal mode types must not redefine MAX_CONTEXT_SUMMARY_CHARS; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\bstruct\s+GoalModeInitialGoal\b/,
+        message: 'core goal mode types must not redefine GoalModeInitialGoal; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\bstruct\s+GoalModeState\b/,
+        message: 'core goal mode types must not redefine GoalModeState; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\bstruct\s+GoalGenerationResult\b/,
+        message: 'core goal mode types must not redefine GoalGenerationResult; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\bstruct\s+GoalVerificationResult\b/,
+        message: 'core goal mode types must not redefine GoalVerificationResult; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\bstruct\s+GoalActivationResult\b/,
+        message: 'core goal mode types must not redefine GoalActivationResult; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\bstruct\s+GoalContinuationPlan\b/,
+        message: 'core goal mode types must not redefine GoalContinuationPlan; use bitfun-runtime-ports',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/core/message.rs',
+    patterns: [
+      {
+        regex: /\bstruct\s+CompressionContract\b/,
+        message: 'core message model must not redefine CompressionContract; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\bstruct\s+CompressionContractItem\b/,
+        message: 'core message model must not redefine CompressionContractItem; use bitfun-runtime-ports',
+      },
+      {
+        regex: /\bfn\s+render_contract_items\b/,
+        message: 'core message model must not own compression contract rendering; use bitfun-runtime-ports',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/workspace/manager.rs',
+    patterns: [
+      {
+        regex: /\bstruct\s+RelatedPath\b/,
+        message: 'core workspace manager must not redefine RelatedPath; use bitfun-runtime-ports',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/file_read_state_runtime.rs',
+    patterns: [
+      {
+        regex: /framework::(?:\{[^}]*\bToolUseContext\b[^}]*\}|\bToolUseContext\b)/,
+        message:
+          'file read-state runtime must import ToolUseContext from tool_context_runtime, not the framework re-export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/tool_result_storage.rs',
+    patterns: [
+      {
+        regex: /framework::(?:\{[^}]*\bToolUseContext\b[^}]*\}|\bToolUseContext\b)/,
+        message:
+          'tool-result storage runtime must import ToolUseContext from tool_context_runtime, not the framework re-export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/post_call_hooks.rs',
+    patterns: [
+      {
+        regex: /framework::(?:\{[^}]*\bToolUseContext\b[^}]*\}|\bToolUseContext\b)/,
+        message:
+          'post-call hooks must import ToolUseContext from tool_context_runtime, not the framework re-export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/tool_adapter.rs',
+    patterns: [
+      {
+        regex: /framework::(?:\{[^}]*\bToolUseContext\b[^}]*\}|\bToolUseContext\b)/,
+        message:
+          'tool adapter must import ToolUseContext from tool_context_runtime, not the framework re-export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/product_runtime.rs',
+    patterns: [
+      {
+        regex: /framework::(?:\{[^}]*\bToolUseContext\b[^}]*\}|\bToolUseContext\b)/,
+        message:
+          'product tool runtime must import ToolUseContext from tool_context_runtime, not the framework re-export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/manifest_resolver.rs',
+    patterns: [
+      {
+        regex: /framework::(?:\{[^}]*\bToolUseContext\b[^}]*\}|\bToolUseContext\b)/,
+        message:
+          'manifest resolver must import ToolUseContext from tool_context_runtime, not the framework re-export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/miniapp/manager.rs',
+    patterns: [
+      {
+        regex: /\bbuild_runtime_state\b/,
+        message:
+          'core MiniApp manager must not build runtime state directly; use product-domain lifecycle helpers',
+      },
+      {
+        regex: /\bbuild_source_revision\b/,
+        message:
+          'core MiniApp manager must not build source revisions directly; use product-domain lifecycle helpers',
+      },
+      {
+        regex: /\bbuild_deps_revision\b/,
+        message:
+          'core MiniApp manager must not build dependency revisions directly; use product-domain lifecycle helpers',
+      },
+      {
+        regex: /\bapp\.version\s*\+=\s*1\b/,
+        message:
+          'core MiniApp manager must not own version increments for lifecycle transitions; use product-domain lifecycle helpers',
+      },
+      {
+        regex: /\bapp\.runtime\s*=/,
+        message:
+          'core MiniApp manager must not own runtime-state replacement for lifecycle transitions; use product-domain lifecycle helpers',
       },
     ],
   },
@@ -591,6 +1111,41 @@ const forbiddenContentRules = [
         regex: /\bdynamic_tools\s*:\s*IndexMap\b/,
         message:
           'core tool registry must not own the dynamic tool map; use bitfun-agent-tools ToolRegistry',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/file_read_state_runtime.rs',
+    patterns: [
+      {
+        regex: /\bnormalize_string\b/,
+        message:
+          'core file read-state runtime must delegate pure freshness normalization to bitfun-agent-tools',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/tool_result_storage.rs',
+    patterns: [
+      {
+        regex: /\bfn\s+generate_preview\b/,
+        message:
+          'core tool result storage must delegate pure preview generation to bitfun-agent-tools',
+      },
+      {
+        regex: /\bfn\s+build_persisted_output_message\b/,
+        message:
+          'core tool result storage must delegate persisted-output rendering to bitfun-agent-tools',
+      },
+      {
+        regex: /\bfn\s+select_candidates_to_persist\b/,
+        message:
+          'core tool result storage must delegate round-budget selection to bitfun-agent-tools',
+      },
+      {
+        regex: /\bstruct\s+ToolResultStoragePolicy\b/,
+        message:
+          'core tool result storage must use the provider-neutral storage policy from bitfun-agent-tools',
       },
     ],
   },
@@ -1043,6 +1598,61 @@ const forbiddenContentRules = [
     path: 'src/crates/core/src/service/remote_connect/remote_server.rs',
     patterns: [
       {
+        regex: /\bpub\(crate\) struct CoreRemoteDialogRuntimeHost\b/,
+        message:
+          'remote_server must not own concrete remote dialog runtime host; keep it in service_agent_runtime',
+      },
+      {
+        regex: /\bpub\(crate\) struct CoreRemoteCancelRuntimeHost\b/,
+        message:
+          'remote_server must not own concrete remote cancel runtime host; keep it in service_agent_runtime',
+      },
+      {
+        regex: /\bpub\(crate\) struct CoreRemoteWorkspaceFileRuntimeHost\b/,
+        message:
+          'remote_server must not own concrete remote workspace file runtime host; keep it in service_agent_runtime',
+      },
+      {
+        regex: /\bstruct CoreRemoteSessionTrackerHost\b/,
+        message:
+          'remote_server must not own concrete remote tracker host; keep it in service_agent_runtime',
+      },
+      {
+        regex: /\basync fn resolve_session_model_id\b/,
+        message:
+          'remote_server must not own remote session model resolution; keep it in service_agent_runtime',
+      },
+      {
+        regex: /\basync fn load_remote_model_catalog\b/,
+        message:
+          'remote_server must not own remote model catalog loading; keep it in service_agent_runtime',
+      },
+      {
+        regex: /\bget_global_config_service\b/,
+        message:
+          'remote_server must not own remote model config access; route it through service_agent_runtime',
+      },
+      {
+        regex: /\bfn compress_data_url_for_mobile\b/,
+        message:
+          'remote_server must not own remote chat thumbnail compression; keep it in service_agent_runtime',
+      },
+      {
+        regex: /\bfn turns_to_chat_messages\b/,
+        message:
+          'remote_server must not own persisted turn to remote chat conversion; keep it in service_agent_runtime',
+      },
+      {
+        regex: /\basync fn load_chat_messages_from_conversation_persistence\b/,
+        message:
+          'remote_server must not own remote chat history persistence loading; keep it in service_agent_runtime',
+      },
+      {
+        regex: /\bfn strip_user_input_tags\b/,
+        message:
+          'remote_server must not own remote user input display cleanup; keep it in service_agent_runtime',
+      },
+      {
         regex: /\bpub struct ImageAttachment\b/,
         message: 'core remote-connect server must not redefine image attachment wire DTOs; use the integrations contract',
       },
@@ -1127,6 +1737,18 @@ const forbiddenContentRules = [
         message: 'core remote-connect server must not own cancel decision types; use the integrations contract',
       },
       {
+        regex: /\bstruct RemoteCancelTaskRequest\b/,
+        message: 'core remote-connect server must not own cancel task request contracts; use the integrations contract',
+      },
+      {
+        regex: /\btrait RemoteCancelRuntimeHost\b/,
+        message: 'core remote-connect server must not own cancel runtime host contracts; use the integrations contract',
+      },
+      {
+        regex: /\bfn cancel_remote_task\b/,
+        message: 'core remote-connect server must not own cancel orchestration; use the integrations helper',
+      },
+      {
         regex: /\bfn remote_session_restore_target\b/,
         message: 'core remote-connect server must not own restore-target policy; use the integrations helper',
       },
@@ -1173,6 +1795,90 @@ const forbiddenContentRules = [
       {
         regex: /\bfn read_remote_workspace_file_info\b/,
         message: 'core remote-connect server must not redefine remote workspace file-info readers; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_file_content_response\b/,
+        message: 'core remote-connect server must not own remote file content response assembly; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_file_chunk_response\b/,
+        message: 'core remote-connect server must not own remote file chunk response assembly; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_file_info_response\b/,
+        message: 'core remote-connect server must not own remote file-info response assembly; use the integrations helper',
+      },
+      {
+        regex: /\bfn handle_remote_workspace_file_command\b/,
+        message: 'core remote-connect server must not own remote file command orchestration; use the integrations helper',
+      },
+      {
+        regex: /general_purpose::STANDARD\.encode/,
+        message: 'core remote-connect server must not own remote response base64 wrapping; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_dialog_submit_response\b/,
+        message: 'core remote-connect server must not own remote dialog response assembly; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_task_cancel_response\b/,
+        message: 'core remote-connect server must not own remote cancel response assembly; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_interaction_accepted_response\b/,
+        message: 'core remote-connect server must not own remote interaction response assembly; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_answer_question_response\b/,
+        message: 'core remote-connect server must not own remote answer response assembly; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_workspace_info_response\b/,
+        message: 'core remote-connect server must not own workspace-info response assembly; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_recent_workspaces_response\b/,
+        message: 'core remote-connect server must not own recent-workspaces response assembly; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_assistant_list_response\b/,
+        message: 'core remote-connect server must not own assistant-list response assembly; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_workspace_updated_response\b/,
+        message: 'core remote-connect server must not own workspace-updated response assembly; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_assistant_updated_response\b/,
+        message: 'core remote-connect server must not own assistant-updated response assembly; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_session_info\b/,
+        message: 'core remote-connect server must not own session response facts assembly; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_session_list_response\b/,
+        message: 'core remote-connect server must not own session-list response assembly; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_initial_sync_response\b/,
+        message: 'core remote-connect server must not own initial-sync response assembly; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_session_created_response\b/,
+        message: 'core remote-connect server must not own session-created response assembly; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_session_model_updated_response\b/,
+        message: 'core remote-connect server must not own session-model response assembly; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_messages_response\b/,
+        message: 'core remote-connect server must not own remote messages response assembly; use the integrations helper',
+      },
+      {
+        regex: /\bfn remote_session_deleted_response\b/,
+        message: 'core remote-connect server must not own session-deleted response assembly; use the integrations helper',
       },
       {
         regex: /\bfn should_send_remote_model_catalog\b/,
@@ -1238,13 +1944,28 @@ const forbiddenContentRules = [
 
 const forbiddenContentUnderRules = [
   {
+    path: 'src/crates/core/src',
+    reason:
+      'core must use runtime-ports as the owner path for portable subagent contracts',
+    patterns: [
+      {
+        regex:
+          /crate::agentic::subagent_runtime(?:::|\s*::|::\{)(?:[^;\n]*\b(?:DelegationPolicy|SubagentContextMode)\b)/,
+        message:
+          'DelegationPolicy and SubagentContextMode must be imported from bitfun-runtime-ports, not the core compatibility re-export',
+      },
+    ],
+  },
+  {
     path: 'src/crates/product-domains/src',
     reason:
       'product-domains must not own IO/process/Git/AI/platform runtime behavior without an approved port/provider migration',
     patterns: [
       {
         regex: /\bCommand::new\(/,
-        message: 'product-domains must not spawn processes; keep process execution in core/adapters',
+        allowPaths: ['src/crates/product-domains/src/miniapp/runtime.rs'],
+        message:
+          'product-domains must not spawn processes outside the reviewed MiniApp runtime detector owner',
       },
       {
         regex: /\bprocess_manager::/,
@@ -1351,6 +2072,174 @@ const forbiddenContentUnderRules = [
 ];
 
 const requiredContentRules = [
+  {
+    path: 'src/crates/services-core/src/filesystem/mod.rs',
+    reason:
+      'services-core filesystem owner must expose local filesystem primitives behind a single module boundary',
+    patterns: [
+      {
+        regex: /mod error;/,
+        message: 'filesystem owner must expose its error boundary',
+      },
+      {
+        regex: /mod operations;/,
+        message: 'filesystem owner must expose local file operation primitives',
+      },
+      {
+        regex: /mod tree;/,
+        message: 'filesystem owner must expose local file tree/search primitives',
+      },
+      {
+        regex: /pub use error::\{FileSystemError, FileSystemResult\};/,
+        message: 'filesystem owner must re-export the unified filesystem error type',
+      },
+      {
+        regex: /pub use service::FileSystemService;/,
+        message: 'filesystem owner must keep the consolidated service facade',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/filesystem/service.rs',
+    reason:
+      'core filesystem service may keep remote-workspace overlay and BitFunError compatibility, but local filesystem owner must remain services-core',
+    patterns: [
+      {
+        regex: /lookup_remote_connection_with_hint/,
+        message: 'core filesystem wrapper must preserve remote workspace connection disambiguation',
+      },
+      {
+        regex: /get_remote_workspace_manager/,
+        message: 'core filesystem wrapper must preserve existing remote file service lookup',
+      },
+      {
+        regex: /map_filesystem_error/,
+        message: 'core filesystem wrapper must map services-core errors at the compatibility boundary',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/session/session_manager.rs',
+    reason:
+      'core session manager must keep forked Task prompt-cache and existing-context turn baselines until session branch ownership migrates',
+    patterns: [
+      {
+        regex: /\bpub async fn clone_prompt_cache\b/,
+        message: 'missing prompt cache clone runtime entry point',
+      },
+      {
+        regex: /\bpub async fn start_dialog_turn_with_existing_context\b/,
+        message: 'missing existing-context dialog turn entry point',
+      },
+      {
+        regex: /\bstart_dialog_turn_with_existing_context_persists_turn_and_snapshot\b/,
+        message: 'missing existing-context dialog turn persistence regression',
+      },
+      {
+        regex: /\bclone_prompt_cache_copies_runtime_and_persisted_entries\b/,
+        message: 'missing prompt cache clone runtime/disk regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/pipeline/tool_pipeline.rs',
+    reason:
+      'core tool pipeline must keep latest-main truncation and per-tool denial behavior until tool runtime ownership migrates',
+    patterns: [
+      {
+        regex: /\bfn build_truncation_recovery_notice\b/,
+        message: 'missing tool-call truncation recovery notice helper',
+      },
+      {
+        regex: /\btruncation_notice_for_interactive_tools_does_not_claim_file_write\b/,
+        message: 'missing interactive-tool truncation recovery regression',
+      },
+      {
+        regex: /\btruncation_notice_for_write_tools_keeps_write_continuation_guidance\b/,
+        message: 'missing write-tool truncation recovery regression',
+      },
+      {
+        regex: /\bdenied_tool_messages\b/,
+        message: 'missing per-tool denial message propagation',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/restrictions.rs',
+    reason:
+      'core tool restrictions facade must preserve per-tool denial messages while runtime restrictions live in agent-tools',
+    patterns: [
+      {
+        regex: /\bdenied_tool_messages\b/,
+        message: 'missing per-tool denial message field propagation',
+      },
+      {
+        regex: /\bcustom_deny_message_overrides_generic_runtime_error\b/,
+        message: 'missing custom deny message regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/tool_result_storage.rs',
+    reason:
+      'core tool-result storage must keep explicit file flush until runtime artifact ownership migrates',
+    patterns: [
+      {
+        regex: /\basync fn write_once\b/,
+        message: 'missing single-write persistence helper',
+      },
+      {
+        regex: /file\.flush\(\)\.await/,
+        message: 'missing explicit persisted tool-result flush',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services-integrations/src/mcp/server/connection.rs',
+    reason:
+      'services-integrations MCP connection must keep initialize-scoped timeout and channel-close cleanup until MCP owner migration is reviewed',
+    patterns: [
+      {
+        regex: /\bsend_request_with_id\b/,
+        message: 'missing stable local JSON-RPC request id path',
+      },
+      {
+        regex: /\binitialize_timeout\b/,
+        message: 'missing initialize-scoped timeout',
+      },
+      {
+        regex: /notifications\/initialized/,
+        message: 'missing MCP initialized notification',
+      },
+      {
+        regex: /\bpending\.clear\(\)/,
+        message: 'missing pending request waiter drain on channel close',
+      },
+      {
+        regex: /\blocal_tool_calls_do_not_inherit_initialize_timeout\b/,
+        message: 'missing local tool request timeout-scope regression',
+      },
+      {
+        regex: /\blocal_initialize_uses_initialize_timeout\b/,
+        message: 'missing local initialize timeout regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services-integrations/src/mcp/protocol/transport.rs',
+    reason:
+      'services-integrations MCP local transport must keep explicit request ids and stdin flush semantics',
+    patterns: [
+      {
+        regex: /\bpub async fn send_request_with_id\b/,
+        message: 'missing explicit JSON-RPC request id send path',
+      },
+      {
+        regex: /\.flush\(\)\s*\.await/,
+        message: 'missing local MCP stdin flush',
+      },
+    ],
+  },
   {
     path: 'src/crates/core/Cargo.toml',
     reason:
@@ -1539,7 +2428,7 @@ const requiredContentRules = [
   {
     path: 'src/crates/runtime-ports/src/lib.rs',
     reason:
-      'runtime-ports must keep remote runtime boundary contracts DTO/trait-only',
+      'runtime-ports must keep remote and subagent runtime boundary contracts DTO/trait-only',
     patterns: [
       {
         regex: /\bpub trait AgentTurnCancellationPort\b/,
@@ -1556,6 +2445,201 @@ const requiredContentRules = [
       {
         regex: /\bpub fn remote_image\b/,
         message: 'missing remote image attachment helper contract',
+      },
+      {
+        regex: /\bpub type DialogTriggerSource = AgentSubmissionSource\b/,
+        message: 'missing dialog trigger source compatibility contract',
+      },
+      {
+        regex: /\bdialog_trigger_source_reuses_agent_submission_source_contract\b/,
+        message: 'missing dialog trigger source alias regression',
+      },
+      {
+        regex: /\bpub enum DialogQueuePriority\b/,
+        message: 'missing dialog queue priority contract',
+      },
+      {
+        regex: /\bpub struct DialogSubmissionPolicy\b/,
+        message: 'missing dialog submission policy contract',
+      },
+      {
+        regex: /\bdialog_submission_policy_preserves_current_surface_queue_defaults\b/,
+        message: 'missing dialog submission policy regression',
+      },
+      {
+        regex: /\bpub enum DialogSubmitOutcome\b/,
+        message: 'missing dialog submit outcome contract',
+      },
+      {
+        regex: /\bdialog_submit_outcome_preserves_started_and_queued_fields\b/,
+        message: 'missing dialog submit outcome regression',
+      },
+      {
+        regex: /\bpub enum DialogSessionStateFact\b/,
+        message: 'missing dialog session state fact contract',
+      },
+      {
+        regex: /\bpub struct DialogSubmitQueueFacts\b/,
+        message: 'missing dialog submit queue facts contract',
+      },
+      {
+        regex: /\bpub enum DialogSubmitQueueAction\b/,
+        message: 'missing dialog submit queue action contract',
+      },
+      {
+        regex: /\bpub const fn dialog_policy_may_preempt\b/,
+        message: 'missing dialog preempt policy contract',
+      },
+      {
+        regex: /\bpub const fn resolve_dialog_submit_queue_action\b/,
+        message: 'missing dialog submit queue action resolver',
+      },
+      {
+        regex: /\bdialog_submit_queue_action_preserves_current_scheduler_routing_policy\b/,
+        message: 'missing dialog submit queue action regression',
+      },
+      {
+        regex: /\bpub fn should_suppress_agent_session_cancelled_reply\b/,
+        message: 'missing agent-session cancel suppression contract',
+      },
+      {
+        regex: /\bpub enum DialogTurnOutcomeKind\b/,
+        message: 'missing dialog turn outcome kind contract',
+      },
+      {
+        regex: /\bpub const fn should_skip_agent_session_reply\b/,
+        message: 'missing agent-session reply skip contract',
+      },
+      {
+        regex: /\bagent_session_reply_decisions_preserve_cancel_suppression_boundary\b/,
+        message: 'missing agent-session reply decision regression',
+      },
+      {
+        regex: /\bpub struct AgentSessionReplyRoute\b/,
+        message: 'missing agent session reply route contract',
+      },
+      {
+        regex: /\bagent_session_reply_route_keeps_requester_fields\b/,
+        message: 'missing agent session reply route regression',
+      },
+      {
+        regex: /\bpub enum DialogSteerOutcome\b/,
+        message: 'missing dialog steer outcome contract',
+      },
+      {
+        regex: /\bdialog_steer_outcome_preserves_buffered_fields\b/,
+        message: 'missing dialog steer outcome regression',
+      },
+      {
+        regex: /\bpub enum RoundInjectionKind\b/,
+        message: 'missing round injection kind contract',
+      },
+      {
+        regex: /\bpub enum RoundInjectionTarget\b/,
+        message: 'missing round injection target contract',
+      },
+      {
+        regex: /\bpub struct RoundInjection\b/,
+        message: 'missing round injection message contract',
+      },
+      {
+        regex: /\bpub trait DialogRoundPreemptSource\b/,
+        message: 'missing dialog round preempt source contract',
+      },
+      {
+        regex: /\bpub trait DialogRoundInjectionSource\b/,
+        message: 'missing dialog round injection source contract',
+      },
+      {
+        regex: /\bround_injection_contract_keeps_kind_and_target_identity\b/,
+        message: 'missing round injection contract regression',
+      },
+      {
+        regex: /\bround_injection_source_contract_drains_portable_injections\b/,
+        message: 'missing round injection source contract regression',
+      },
+      {
+        regex: /\bpub struct GoalModeInitialGoal\b/,
+        message: 'missing goal mode initial goal contract',
+      },
+      {
+        regex: /\bpub struct GoalModeState\b/,
+        message: 'missing goal mode state contract',
+      },
+      {
+        regex: /\bpub struct GoalGenerationResult\b/,
+        message: 'missing goal generation result contract',
+      },
+      {
+        regex: /\bpub struct GoalVerificationResult\b/,
+        message: 'missing goal verification result contract',
+      },
+      {
+        regex: /\bpub struct GoalActivationResult\b/,
+        message: 'missing goal activation result contract',
+      },
+      {
+        regex: /\bpub struct GoalContinuationPlan\b/,
+        message: 'missing goal continuation plan contract',
+      },
+      {
+        regex: /\bgoal_mode_state_requires_active_non_empty_goal\b/,
+        message: 'missing goal mode state contract regression',
+      },
+      {
+        regex: /\bgoal_verification_result_serializes_current_wire_shape\b/,
+        message: 'missing goal verification wire-shape regression',
+      },
+      {
+        regex: /\bpub struct CompressionContract\b/,
+        message: 'missing compression contract',
+      },
+      {
+        regex: /\bpub struct CompressionContractItem\b/,
+        message: 'missing compression contract item',
+      },
+      {
+        regex: /\bcompression_contract_renders_model_visible_fields\b/,
+        message: 'missing compression contract rendering regression',
+      },
+      {
+        regex: /\bpub struct RelatedPath\b/,
+        message: 'missing related path request-context contract',
+      },
+      {
+        regex: /\brelated_path_serializes_as_request_context_fact\b/,
+        message: 'missing related path serialization regression',
+      },
+      {
+        regex: /\bpub struct DelegationPolicy\b/,
+        message: 'missing delegation policy contract',
+      },
+      {
+        regex: /\bpub enum SubagentContextMode\b/,
+        message: 'missing subagent context mode contract',
+      },
+      {
+        regex: /\bdelegation_policy_child_blocks_recursive_spawn_without_losing_depth\b/,
+        message: 'missing delegation policy contract regression',
+      },
+      {
+        regex: /\bsubagent_context_mode_preserves_fork_wire_value\b/,
+        message: 'missing subagent context mode contract regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/subagent_runtime/mod.rs',
+    reason:
+      'core subagent runtime must preserve legacy import path while runtime-ports owns portable subagent contracts',
+    patterns: [
+      {
+        regex: /pub\(crate\) use bitfun_runtime_ports::\{DelegationPolicy, SubagentContextMode\};/,
+        message: 'missing core compatibility re-export for subagent runtime contracts',
+      },
+      {
+        regex: /pub\(crate\) mod queue_timing;/,
+        message: 'queue timing must remain core-owned until it has a reviewed non-DTO owner',
       },
     ],
   },
@@ -1757,6 +2841,30 @@ const requiredContentRules = [
         message: 'missing collapsed-tool execution gate policy',
       },
       {
+        regex: /\bpub fn is_tool_path_allowed_by_resolved_roots\b/,
+        message: 'missing provider-neutral path policy root matcher',
+      },
+      {
+        regex: /\bpub fn build_tool_path_policy_denial_message\b/,
+        message: 'missing provider-neutral path policy denial message',
+      },
+      {
+        regex: /\bpub fn resolve_tool_path_with_context\b/,
+        message: 'missing provider-neutral tool path resolution owner',
+      },
+      {
+        regex: /\bpub fn tool_path_is_effectively_absolute\b/,
+        message: 'missing provider-neutral tool path absolute check',
+      },
+      {
+        regex: /\bpub fn build_tool_runtime_artifact_reference\b/,
+        message: 'missing provider-neutral runtime artifact reference builder',
+      },
+      {
+        regex: /\bpub fn build_tool_session_runtime_artifact_reference\b/,
+        message: 'missing provider-neutral session runtime artifact reference builder',
+      },
+      {
         regex: /\bpub fn sort_tool_manifest_definitions\b/,
         message: 'missing prompt-visible manifest ordering helper',
       },
@@ -1803,6 +2911,132 @@ const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/agent-tools/src/file_guidance.rs',
+    reason: 'agent-tools owns provider-neutral file tool guidance marker contracts',
+    patterns: [
+      {
+        regex: /\bpub const FILE_TOOL_GUIDANCE_PREFIX\b/,
+        message: 'missing file tool guidance marker prefix',
+      },
+      {
+        regex: /\bpub fn file_tool_guidance_message\b/,
+        message: 'missing file tool guidance message helper',
+      },
+      {
+        regex: /\bpub fn is_file_tool_guidance_message\b/,
+        message: 'missing file tool guidance classifier',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/agent-tools/src/file_read_freshness.rs',
+    reason: 'agent-tools owns pure file-read freshness policy for Read/Edit/Write guardrails',
+    patterns: [
+      {
+        regex: /\bpub struct FileReadFreshnessFacts\b/,
+        message: 'missing file-read freshness facts contract',
+      },
+      {
+        regex: /\bpub fn normalize_tool_file_content\b/,
+        message: 'missing provider-neutral file content normalization helper',
+      },
+      {
+        regex: /\bpub fn file_read_facts_content_matches\b/,
+        message: 'missing file-read content equivalence helper',
+      },
+      {
+        regex: /\bpub fn file_read_facts_are_fresh\b/,
+        message: 'missing file-read freshness policy helper',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/agent-tools/src/tool_result_storage.rs',
+    reason:
+      'agent-tools owns pure oversized tool-result storage policy and rendering without session IO',
+    patterns: [
+      {
+        regex: /\bpub struct ToolResultStoragePolicy\b/,
+        message: 'missing provider-neutral tool result storage policy',
+      },
+      {
+        regex: /\bpub struct PersistedToolOutput\b/,
+        message: 'missing persisted tool output render contract',
+      },
+      {
+        regex: /\bpub struct ToolResultPersistenceCandidate\b/,
+        message: 'missing provider-neutral persistence candidate contract',
+      },
+      {
+        regex: /\bpub fn select_tool_result_indices_for_persistence\b/,
+        message: 'missing round-budget persistence candidate selector',
+      },
+      {
+        regex: /\bpub fn sanitize_tool_result_file_component\b/,
+        message: 'missing tool-result file component sanitizer',
+      },
+      {
+        regex: /\bpub fn generate_tool_result_preview\b/,
+        message: 'missing tool-result preview generator',
+      },
+      {
+        regex: /\bpub fn count_tool_result_lines\b/,
+        message: 'missing tool-result line counter',
+      },
+      {
+        regex: /\bpub fn build_persisted_tool_output_message\b/,
+        message: 'missing persisted-output message renderer',
+      },
+      {
+        regex: /\bpub fn tool_result_is_persisted_output\b/,
+        message: 'missing persisted-output classifier',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/agent-tools/src/tool_execution_presentation.rs',
+    reason:
+      'agent-tools owns provider-neutral tool execution result and error presentation helpers',
+    patterns: [
+      {
+        regex: /\bpub const TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES\b/,
+        message: 'missing tool error argument preview limit contract',
+      },
+      {
+        regex: /\bpub const USER_STEERING_INTERRUPTED_MESSAGE\b/,
+        message: 'missing steering-interrupted assistant message contract',
+      },
+      {
+        regex: /\bpub struct ToolExecutionErrorPresentation\b/,
+        message: 'missing tool execution error presentation DTO',
+      },
+      {
+        regex: /\bpub fn render_tool_result_for_assistant\b/,
+        message: 'missing tool result assistant rendering helper',
+      },
+      {
+        regex: /\bpub fn truncate_tool_arguments_preview\b/,
+        message: 'missing structured tool argument preview helper',
+      },
+      {
+        regex: /\bpub fn truncate_raw_tool_arguments_preview\b/,
+        message: 'missing raw tool argument preview helper',
+      },
+      {
+        regex: /\bpub fn build_tool_execution_error_presentation\b/,
+        message: 'missing tool execution error presentation helper',
+      },
+      {
+        regex: /\bpub fn build_user_steering_interrupted_presentation\b/,
+        message: 'missing steering-interrupted presentation helper',
+      },
+      {
+        regex: /\bpub fn build_invalid_tool_call_error_message\b/,
+        message: 'missing invalid tool call error message helper',
+      },
+    ],
+  },
+  {
     path: 'src/crates/core/src/agentic/coordination/coordinator.rs',
     reason:
       'core must keep current coordinator port adapters and attachment guard until remote runtime migration is reviewed',
@@ -1827,6 +3061,86 @@ const requiredContentRules = [
         regex: /agent submission port does not yet accept generic attachments/,
         message: 'missing generic attachment guard on agent submission port',
       },
+      {
+        regex: /pub use bitfun_runtime_ports::DialogTriggerSource;/,
+        message: 'missing dialog trigger source compatibility re-export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/coordination/scheduler.rs',
+    reason:
+      'core scheduler must preserve legacy submission policy import path while runtime-ports owns portable dialog policy contracts',
+    patterns: [
+      {
+        regex:
+          /pub use bitfun_runtime_ports::\{[\s\S]*AgentSessionReplyRoute[\s\S]*DialogQueuePriority[\s\S]*DialogSteerOutcome[\s\S]*DialogSubmissionPolicy[\s\S]*DialogSubmitOutcome[\s\S]*\};/,
+        message: 'missing dialog submission policy compatibility re-export',
+      },
+      {
+        regex:
+          /use bitfun_runtime_ports::\{(?=[\s\S]*DialogSessionStateFact)(?=[\s\S]*DialogSubmitQueueAction)(?=[\s\S]*DialogSubmitQueueFacts)(?=[\s\S]*DialogTurnOutcomeKind)(?=[\s\S]*resolve_dialog_submit_queue_action)(?=[\s\S]*should_skip_agent_session_reply_contract)(?=[\s\S]*should_suppress_agent_session_cancelled_reply_contract)[\s\S]*\};/,
+        message: 'missing dialog scheduler decision contract import',
+      },
+      {
+        regex:
+          /use bitfun_agent_runtime::scheduler::\{(?=[\s\S]*BackgroundDeliveryAction)(?=[\s\S]*BackgroundDeliveryFacts)(?=[\s\S]*resolve_background_delivery_action)[\s\S]*\};/,
+        message: 'missing agent-runtime background delivery decision import',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/round_preempt.rs',
+    reason:
+      'core round preempt runtime must preserve legacy injection import path while runtime-ports owns portable injection contracts',
+    patterns: [
+      {
+        regex:
+          /pub use bitfun_runtime_ports::\{[\s\S]*DialogRoundInjectionSource[\s\S]*DialogRoundPreemptSource[\s\S]*RoundInjection[\s\S]*RoundInjectionKind[\s\S]*RoundInjectionTarget[\s\S]*\};/,
+        message: 'missing round injection compatibility re-export',
+      },
+      {
+        regex: /\bpub struct SessionRoundInjectionBuffer\b/,
+        message: 'round injection buffer must remain core-owned until concrete runtime migration',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/goal_mode/types.rs',
+    reason:
+      'core goal mode types must preserve legacy import path while runtime-ports owns portable goal contracts',
+    patterns: [
+      {
+        regex:
+          /pub use bitfun_runtime_ports::\{[\s\S]*GoalActivationResult[\s\S]*GoalContinuationPlan[\s\S]*GoalGenerationResult[\s\S]*GoalModeInitialGoal[\s\S]*GoalModeState[\s\S]*GoalVerificationResult[\s\S]*GOAL_MODE_METADATA_KEY[\s\S]*MAX_CONTEXT_SUMMARY_CHARS[\s\S]*MAX_GOAL_CONTINUATIONS[\s\S]*\};/,
+        message: 'missing goal mode compatibility re-export',
+      },
+      {
+        regex: /\bpub const GOAL_MODE_FUNC_AGENT\b/,
+        message: 'goal mode function-agent marker must remain core-owned',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/core/message.rs',
+    reason:
+      'core message model must preserve legacy compression contract import path while runtime-ports owns portable compaction facts',
+    patterns: [
+      {
+        regex: /pub use bitfun_runtime_ports::\{CompressionContract, CompressionContractItem\};/,
+        message: 'missing compression contract compatibility re-export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/service/workspace/manager.rs',
+    reason:
+      'core workspace manager must preserve legacy related-path import path while runtime-ports owns portable request-context facts',
+    patterns: [
+      {
+        regex: /pub use bitfun_runtime_ports::RelatedPath;/,
+        message: 'missing related path compatibility re-export',
+      },
     ],
   },
   {
@@ -1843,20 +3157,132 @@ const requiredContentRules = [
         message: 'missing remote dialog host owner factory',
       },
       {
+        regex: /\bfn remote_cancel_host\b/,
+        message: 'missing remote cancel host owner factory',
+      },
+      {
         regex: /\bfn remote_image_context\b/,
         message: 'missing remote image context owner adapter',
+      },
+      {
+        regex: /\bfn load_remote_model_catalog\b/,
+        message: 'missing remote model catalog owner adapter',
+      },
+      {
+        regex: /\bRemoteModelCatalogFacts\b/,
+        message: 'missing remote model catalog fact projection',
+      },
+      {
+        regex: /\bRemoteModelCapabilityFact\b/,
+        message: 'missing remote model capability fact projection',
+      },
+      {
+        regex: /\bRemoteReasoningModeFact\b/,
+        message: 'missing remote reasoning mode fact projection',
+      },
+      {
+        regex: /\bbuild_remote_model_catalog\b/,
+        message: 'missing remote model catalog assembly delegation',
+      },
+      {
+        regex: /\bfn update_remote_session_model\b/,
+        message: 'missing remote session model update owner adapter',
+      },
+      {
+        regex: /\bfn normalize_remote_session_model_id\b/,
+        message: 'missing remote session model id normalization regression hook',
+      },
+      {
+        regex: /\bnormalize_remote_session_model_id_contract\b/,
+        message: 'missing remote session model id owner delegation',
+      },
+      {
+        regex: /\bfn normalize_remote_model_selection\b/,
+        message: 'missing remote model selection normalization regression hook',
+      },
+      {
+        regex: /\bnormalize_remote_model_selection_contract\b/,
+        message: 'missing remote model selection owner delegation',
+      },
+      {
+        regex: /\bfn remote_chat_messages_from_turns\b/,
+        message: 'missing remote chat history conversion owner adapter',
+      },
+      {
+        regex: /\bRemoteDialogSchedulerOutcomeFact\b/,
+        message: 'missing remote dialog scheduler outcome fact projection',
+      },
+      {
+        regex: /\bremote_dialog_submit_outcome_from_scheduler\b/,
+        message: 'missing remote dialog submit outcome assembly delegation',
+      },
+      {
+        regex: /\bRemoteChatHistoryTurn\b/,
+        message: 'missing remote chat history owner DTO projection',
+      },
+      {
+        regex: /\bbuild_remote_chat_messages\b/,
+        message: 'missing remote chat history assembly delegation',
+      },
+      {
+        regex: /\bfn strip_remote_user_input_tags\b/,
+        message: 'missing remote user input display cleanup owner adapter',
+      },
+      {
+        regex: /\bfn compress_remote_chat_data_url_for_mobile\b/,
+        message: 'missing remote chat thumbnail compression owner adapter',
+      },
+      {
+        regex: /\bfn load_remote_chat_messages\b/,
+        message: 'missing remote chat history persistence owner adapter',
       },
       {
         regex: /\bfn agent_submission_port\b/,
         message: 'missing agent submission port owner binding',
       },
       {
+        regex: /\bfn agent_turn_cancellation_port\b/,
+        message: 'missing agent turn cancellation port owner binding',
+      },
+      {
+        regex: /\bfn remote_control_state_port\b/,
+        message: 'missing remote control state port owner binding',
+      },
+      {
         regex: /\bCoreRemoteDialogRuntimeHost\b/,
         message: 'missing core remote dialog host binding',
       },
       {
+        regex: /\bCoreRemoteCancelRuntimeHost\b/,
+        message: 'missing core remote cancel host binding',
+      },
+      {
+        regex: /\bCoreRemoteWorkspaceFileRuntimeHost\b/,
+        message: 'missing core remote workspace file host binding',
+      },
+      {
+        regex: /\bCoreRemoteSessionTrackerHost\b/,
+        message: 'missing core remote session tracker host binding',
+      },
+      {
         regex: /\bRemoteExecutionDispatcher\b/,
         message: 'missing remote execution dispatcher binding',
+      },
+      {
+        regex: /\bimpl RemoteDialogRuntimeHost for CoreRemoteDialogRuntimeHost\b/,
+        message: 'missing remote dialog host adapter implementation in runtime owner',
+      },
+      {
+        regex: /\bimpl RemoteCancelRuntimeHost for CoreRemoteCancelRuntimeHost\b/,
+        message: 'missing remote cancel host adapter implementation in runtime owner',
+      },
+      {
+        regex: /\bimpl RemoteWorkspaceFileRuntimeHost for CoreRemoteWorkspaceFileRuntimeHost\b/,
+        message: 'missing remote workspace file host adapter implementation in runtime owner',
+      },
+      {
+        regex: /\bimpl RemoteSessionTrackerHost for CoreRemoteSessionTrackerHost\b/,
+        message: 'missing remote tracker host adapter implementation in runtime owner',
       },
       {
         regex: /\bImageContextData\b/,
@@ -1886,12 +3312,28 @@ const requiredContentRules = [
         regex: /\bcore_service_agent_runtime_owner_keeps_coordinator_port_contracts\b/,
         message: 'missing coordinator runtime port contract regression',
       },
+      {
+        regex: /\bcore_service_agent_runtime_owner_normalizes_remote_session_model_ids\b/,
+        message: 'missing remote session model id normalization regression',
+      },
+      {
+        regex: /\bcore_service_agent_runtime_owner_normalizes_remote_model_selection_aliases\b/,
+        message: 'missing remote model selection alias regression',
+      },
+      {
+        regex: /\bcore_service_agent_runtime_owner_preserves_remote_chat_history_shape\b/,
+        message: 'missing remote chat history conversion regression',
+      },
+      {
+        regex: /\bcore_service_agent_runtime_owner_skips_in_progress_remote_assistant_history\b/,
+        message: 'missing in-progress remote assistant history regression',
+      },
     ],
   },
   {
     path: 'src/crates/services-integrations/src/remote_connect.rs',
     reason:
-      'services-integrations must own remote-connect wire, tracker, dialog, file, and image adapter contracts',
+      'services-integrations must own remote-connect wire/response assembly and preserve remote owner compatibility re-exports',
     patterns: [
       {
         regex: /\bpub struct RemoteSessionStateTracker\b/,
@@ -1950,12 +3392,40 @@ const requiredContentRules = [
         message: 'missing remote cancel decision resolver',
       },
       {
+        regex: /\bpub struct RemoteCancelTaskRequest\b/,
+        message: 'missing remote cancel task request contract',
+      },
+      {
+        regex: /\bpub trait RemoteCancelRuntimeHost\b/,
+        message: 'missing remote cancel runtime host port',
+      },
+      {
+        regex: /\bpub async fn cancel_remote_task\b/,
+        message: 'missing remote cancel orchestration owner',
+      },
+      {
         regex: /\bpub trait RemoteDialogRuntimeHost\b/,
         message: 'missing remote dialog runtime host port',
       },
       {
         regex: /\bpub async fn submit_remote_dialog\b/,
         message: 'missing remote dialog orchestration owner',
+      },
+      {
+        regex: /\bpub struct RemoteChatHistoryTurn\b/,
+        message: 'missing remote chat history turn DTO',
+      },
+      {
+        regex: /\bpub struct RemoteChatHistoryRound\b/,
+        message: 'missing remote chat history round DTO',
+      },
+      {
+        regex: /\bpub struct RemoteChatHistoryToolItem\b/,
+        message: 'missing remote chat history tool item DTO',
+      },
+      {
+        regex: /\bpub fn build_remote_chat_messages\b/,
+        message: 'missing remote chat history assembly owner',
       },
       {
         regex: /\bpub const REMOTE_FILE_MAX_READ_BYTES\b/,
@@ -1994,6 +3464,78 @@ const requiredContentRules = [
         message: 'missing remote workspace file-info reader',
       },
       {
+        regex: /\bRemoteWorkspaceFileRuntimeHost\b/,
+        message: 'missing remote workspace file runtime host contract',
+      },
+      {
+        regex: /\bpub async fn handle_remote_workspace_file_command\b/,
+        message: 'missing remote workspace file command owner handler',
+      },
+      {
+        regex: /\bpub fn remote_file_content_response\b/,
+        message: 'missing remote file content response assembly helper',
+      },
+      {
+        regex: /\bpub fn remote_file_chunk_response\b/,
+        message: 'missing remote file chunk response assembly helper',
+      },
+      {
+        regex: /\bpub fn remote_file_info_response\b/,
+        message: 'missing remote file-info response assembly helper',
+      },
+      {
+        regex: /\bpub fn remote_dialog_submit_response\b/,
+        message: 'missing remote dialog response assembly helper',
+      },
+      {
+        regex: /\bpub fn remote_task_cancel_response\b/,
+        message: 'missing remote task cancel response assembly helper',
+      },
+      {
+        regex: /\bpub fn remote_interaction_accepted_response\b/,
+        message: 'missing remote interaction response assembly helper',
+      },
+      {
+        regex: /\bpub fn remote_answer_question_response\b/,
+        message: 'missing remote answer response assembly helper',
+      },
+      {
+        regex: /\bRemoteWorkspaceFacts\b/,
+        message: 'missing remote workspace response facts DTO',
+      },
+      {
+        regex: /\bRemoteSessionMetadata\b/,
+        message: 'missing remote session response metadata DTO',
+      },
+      {
+        regex: /\bpub fn remote_workspace_info_response\b/,
+        message: 'missing remote workspace-info response assembly helper',
+      },
+      {
+        regex: /\bpub fn remote_recent_workspaces_response\b/,
+        message: 'missing remote recent-workspaces response assembly helper',
+      },
+      {
+        regex: /\bpub fn remote_assistant_list_response\b/,
+        message: 'missing remote assistant-list response assembly helper',
+      },
+      {
+        regex: /\bpub fn remote_session_info\b/,
+        message: 'missing remote session response facts helper',
+      },
+      {
+        regex: /\bpub fn remote_session_list_response\b/,
+        message: 'missing remote session-list response assembly helper',
+      },
+      {
+        regex: /\bpub fn remote_initial_sync_response\b/,
+        message: 'missing remote initial-sync response assembly helper',
+      },
+      {
+        regex: /\bpub fn remote_messages_response\b/,
+        message: 'missing remote messages response assembly helper',
+      },
+      {
         regex: /\bpub struct RemoteDefaultModelsConfig\b/,
         message: 'missing remote model default DTO',
       },
@@ -2006,12 +3548,52 @@ const requiredContentRules = [
         message: 'missing remote model catalog DTO',
       },
       {
+        regex: /\bpub enum RemoteModelCapabilityFact\b/,
+        message: 'missing remote model capability owner fact',
+      },
+      {
+        regex: /\bpub enum RemoteReasoningModeFact\b/,
+        message: 'missing remote reasoning mode owner fact',
+      },
+      {
+        regex: /\bpub struct RemoteModelFacts\b/,
+        message: 'missing remote model owner facts',
+      },
+      {
+        regex: /\bpub struct RemoteModelCatalogFacts\b/,
+        message: 'missing remote model catalog owner facts',
+      },
+      {
+        regex: /\bpub fn build_remote_model_catalog\b/,
+        message: 'missing remote model catalog assembly owner',
+      },
+      {
         regex: /\bpub struct RemoteModelCatalogPollDelta\b/,
         message: 'missing remote model catalog poll delta',
       },
       {
+        regex: /\bpub fn normalize_remote_session_model_id\b/,
+        message: 'missing remote session model normalization policy',
+      },
+      {
+        regex: /\bpub fn normalize_remote_model_selection\b/,
+        message: 'missing remote model selection policy',
+      },
+      {
+        regex: /\bpub fn remote_model_selection_needs_config\b/,
+        message: 'missing remote model selection config-gate policy',
+      },
+      {
         regex: /\bpub enum RemoteCommand\b/,
         message: 'missing remote command wire contract',
+      },
+      {
+        regex: /\bpub enum RemoteDialogSchedulerOutcomeFact\b/,
+        message: 'missing remote dialog scheduler outcome fact',
+      },
+      {
+        regex: /\bpub fn remote_dialog_submit_outcome_from_scheduler\b/,
+        message: 'missing remote dialog submit outcome assembly owner',
       },
       {
         regex: /\bpub enum RemoteResponse\b/,
@@ -2056,6 +3638,14 @@ const requiredContentRules = [
         message: 'missing remote model catalog delta contract test',
       },
       {
+        regex: /\bremote_connect_model_catalog_builder_preserves_config_shape\b/,
+        message: 'missing remote model catalog builder contract test',
+      },
+      {
+        regex: /\bremote_connect_model_selection_policy_owns_alias_and_config_reference_rules\b/,
+        message: 'missing remote model selection policy contract test',
+      },
+      {
         regex: /\bremote_connect_poll_helpers_preserve_delta_and_completion_policy\b/,
         message: 'missing remote poll helper contract test',
       },
@@ -2084,8 +3674,20 @@ const requiredContentRules = [
         message: 'missing dialog explicit-turn test',
       },
       {
+        regex: /\bremote_connect_dialog_submit_outcome_builder_preserves_scheduler_shape\b/,
+        message: 'missing remote dialog outcome builder contract test',
+      },
+      {
         regex: /\bremote_connect_dialog_runtime_keeps_legacy_restore_failure_tolerance\b/,
         message: 'missing restore failure tolerance test',
+      },
+      {
+        regex: /\bremote_chat_history_assembly_preserves_message_shape_and_item_order\b/,
+        message: 'missing remote chat history assembly shape/order test',
+      },
+      {
+        regex: /\bremote_chat_history_assembly_skips_in_progress_assistant_history\b/,
+        message: 'missing remote chat history in-progress guard test',
       },
       {
         regex: /\bremote_connect_file_transfer_policy_preserves_limits_and_chunk_ranges\b/,
@@ -2108,6 +3710,18 @@ const requiredContentRules = [
         message: 'missing remote chunk/info helper test',
       },
       {
+        regex: /\bremote_connect_file_response_assembly_owns_base64_wire_shape\b/,
+        message: 'missing remote file response assembly contract test',
+      },
+      {
+        regex: /\bremote_connect_file_command_handler_owns_owner_flow_and_uses_host_root\b/,
+        message: 'missing remote file command handler owner-flow test',
+      },
+      {
+        regex: /\bremote_connect_execution_response_helpers_preserve_wire_shape\b/,
+        message: 'missing remote execution response helper contract test',
+      },
+      {
         regex: /\bremote_connect_tracker_keeps_finished_turn_snapshot_until_persistence_finalizes\b/,
         message: 'missing tracker completion contract test',
       },
@@ -2123,6 +3737,26 @@ const requiredContentRules = [
         regex: /\bremote_connect_tool_preview_slimming_keeps_short_fields_and_drops_large_strings\b/,
         message: 'missing remote tool preview slimming test',
       },
+      {
+        regex: /\bremote_connect_cancel_runtime_restores_missing_session_before_cancel\b/,
+        message: 'missing remote cancel restore/order regression',
+      },
+      {
+        regex: /\bremote_connect_cancel_runtime_preserves_stale_and_idle_errors_without_restore\b/,
+        message: 'missing remote cancel stale/idle regression',
+      },
+      {
+        regex: /\bremote_connect_cancel_runtime_preserves_restore_failure_error\b/,
+        message: 'missing remote cancel restore failure regression',
+      },
+      {
+        regex: /\bremote_connect_workspace_response_helpers_own_wire_shape\b/,
+        message: 'missing remote workspace response assembly regression',
+      },
+      {
+        regex: /\bremote_connect_session_response_helpers_own_pagination_and_timestamps\b/,
+        message: 'missing remote session response assembly regression',
+      },
     ],
   },
   {
@@ -2135,28 +3769,48 @@ const requiredContentRules = [
         message: 'missing core service/agent runtime owner routing',
       },
       {
-        regex: /\bstruct CoreRemoteDialogRuntimeHost\b/,
-        message: 'missing core remote dialog runtime adapter',
-      },
-      {
-        regex: /\bimpl RemoteDialogRuntimeHost for CoreRemoteDialogRuntimeHost\b/,
-        message: 'missing integrations dialog host adapter implementation',
-      },
-      {
         regex: /\bsubmit_remote_dialog\b/,
         message: 'missing remote dialog owner orchestration delegation',
       },
       {
-        regex: /\bread_remote_workspace_file\b/,
-        message: 'missing remote file full-read helper delegation',
+        regex: /\bcancel_remote_task\b/,
+        message: 'missing remote cancel owner orchestration delegation',
       },
       {
-        regex: /\bread_remote_workspace_file_chunk\b/,
-        message: 'missing remote file chunk helper delegation',
+        regex: /\bhandle_remote_workspace_file_command\b/,
+        message: 'missing remote file command owner delegation',
       },
       {
-        regex: /\bread_remote_workspace_file_info\b/,
-        message: 'missing remote file info helper delegation',
+        regex: /\bremote_dialog_submit_response\b/,
+        message: 'missing remote dialog response assembly delegation',
+      },
+      {
+        regex: /\bremote_task_cancel_response\b/,
+        message: 'missing remote cancel response assembly delegation',
+      },
+      {
+        regex: /\bhandle_remote_interaction_command\b/,
+        message: 'missing remote interaction command owner orchestration delegation',
+      },
+      {
+        regex: /\bgenerate_remote_initial_sync\b/,
+        message: 'missing remote initial-sync owner orchestration delegation',
+      },
+      {
+        regex: /\bhandle_remote_workspace_command\b/,
+        message: 'missing remote workspace command owner orchestration delegation',
+      },
+      {
+        regex: /\bhandle_remote_session_command\b/,
+        message: 'missing remote session command owner orchestration delegation',
+      },
+      {
+        regex: /\bhandle_remote_poll_command\b/,
+        message: 'missing remote poll command owner orchestration delegation',
+      },
+      {
+        regex: /\bhandle_remote_interaction_command\b/,
+        message: 'missing remote interaction command owner orchestration delegation',
       },
       {
         regex: /\bremote_image_context\b/,
@@ -2549,8 +4203,8 @@ const requiredContentRules = [
         message: 'missing core GetToolSpec execution error mapping boundary',
       },
       {
-        regex: /\bbuild_product_get_tool_spec_catalog_description\b/,
-        message: 'missing core product GetToolSpec catalog facade delegation',
+        regex: /\bbuild_collapsed_tools_context_section\b/,
+        message: 'missing core collapsed-tool request-context section renderer',
       },
       {
         regex: /\bproduct_get_tool_spec_runtime\b/,
@@ -2565,12 +4219,23 @@ const requiredContentRules = [
   {
     path: 'src/crates/core/src/agentic/tools/framework.rs',
     reason:
-      'core must continue owning ToolUseContext while re-exporting pure exposure contracts until a portable context port is reviewed',
+      'core tool framework must keep compatibility re-exports while ToolUseContext is owned by tool_context_runtime',
     patterns: [
       {
         regex: /\bToolExposure\b/,
         message: 'missing ToolExposure compatibility re-export',
       },
+      {
+        regex: /\bpub use crate::agentic::tools::tool_context_runtime::ToolUseContext\b/,
+        message: 'missing ToolUseContext compatibility re-export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/agentic/tools/tool_context_runtime.rs',
+    reason:
+      'core must keep ToolUseContext runtime/service bindings centralized while ToolUseContext and concrete tools remain core-owned',
+    patterns: [
       {
         regex: /\bpub struct ToolUseContext\b/,
         message: 'missing ToolUseContext owner type',
@@ -2578,6 +4243,10 @@ const requiredContentRules = [
       {
         regex: /\bto_tool_context_facts\b/,
         message: 'missing portable ToolUseContext facts projection',
+      },
+      {
+        regex: /\bimpl PortableToolContextProvider for ToolUseContext\b/,
+        message: 'missing portable ToolUseContext facts provider impl',
       },
       {
         regex: /\btool_context_facts_omit_runtime_owner_fields_even_when_context_is_populated\b/,
@@ -2595,13 +4264,6 @@ const requiredContentRules = [
         regex: /\bunlocked_collapsed_tools\b/,
         message: 'missing collapsed-tool unlock state',
       },
-    ],
-  },
-  {
-    path: 'src/crates/core/src/agentic/tools/tool_context_runtime.rs',
-    reason:
-      'core must keep ToolUseContext runtime/service bindings centralized while ToolUseContext and concrete tools remain core-owned',
-    patterns: [
       {
         regex: /\bimpl ToolUseContext\b/,
         message: 'missing ToolUseContext runtime binding owner impl',
@@ -2613,6 +4275,14 @@ const requiredContentRules = [
       {
         regex: /\bcall_with_tool_runtime_hooks\b/,
         message: 'missing tool-call cancellation/post-call hook binding',
+      },
+      {
+        regex: /\bcall_tool_with_runtime_hooks\b/,
+        message: 'missing unified Tool::call runtime hook facade',
+      },
+      {
+        regex: /\bcall_records_deep_review_read_file_measurement_without_touching_result\b/,
+        message: 'missing Deep Review post-call hook regression in runtime owner',
       },
       {
         regex: /\bbuild_tool_use_context_for_task\b/,
@@ -2637,6 +4307,30 @@ const requiredContentRules = [
       {
         regex: /\benforce_path_operation\b/,
         message: 'missing runtime path policy binding',
+      },
+      {
+        regex: /\bis_tool_path_allowed_by_resolved_roots\b/,
+        message: 'missing path policy owner delegation to agent-tools',
+      },
+      {
+        regex: /\bbuild_tool_path_policy_denial_message\b/,
+        message: 'missing shared path policy denial contract',
+      },
+      {
+        regex: /\bresolve_tool_path_with_context\b/,
+        message: 'missing shared tool path resolution owner delegation',
+      },
+      {
+        regex: /\btool_path_is_effectively_absolute\b/,
+        message: 'missing shared tool path absolute owner delegation',
+      },
+      {
+        regex: /\bbuild_tool_runtime_artifact_reference\b/,
+        message: 'missing runtime artifact reference owner delegation',
+      },
+      {
+        regex: /\bbuild_tool_session_runtime_artifact_reference\b/,
+        message: 'missing session runtime artifact reference owner delegation',
       },
       {
         regex: /\bworkspace_path_resolution_rejects_absolute_paths_outside_remote_workspace\b/,
@@ -2688,6 +4382,22 @@ const requiredContentRules = [
       {
         regex: /\bGetToolSpec\b/,
         message: 'missing GetToolSpec gating contract',
+      },
+      {
+        regex: /\brender_tool_result_for_assistant\b/,
+        message: 'missing tool result presentation owner delegation',
+      },
+      {
+        regex: /\bbuild_tool_execution_error_presentation\b/,
+        message: 'missing tool execution error presentation owner delegation',
+      },
+      {
+        regex: /\bbuild_user_steering_interrupted_presentation\b/,
+        message: 'missing steering-interrupted presentation owner delegation',
+      },
+      {
+        regex: /\bbuild_invalid_tool_call_error_message\b/,
+        message: 'missing invalid tool call presentation owner delegation',
       },
     ],
   },
@@ -2820,8 +4530,20 @@ const requiredContentRules = [
   {
     path: 'src/crates/core/src/agentic/tools/implementations/task_tool.rs',
     reason:
-      'core Task tool must continue owning background subagent launch semantics until a reviewed agent-runtime port preserves delivery behavior',
+      'core Task tool must continue owning fork-aware background subagent launch semantics until a reviewed agent-runtime port preserves delivery behavior',
     patterns: [
+      {
+        regex: /\bfork_context\b/,
+        message: 'missing Task fork_context schema and validation surface',
+      },
+      {
+        regex: /\bSubagentContextMode::Fork\b/,
+        message: 'missing forked subagent context mode path',
+      },
+      {
+        regex: /delegation_policy\(\)\.spawn_child\(\)/,
+        message: 'missing child delegation policy propagation',
+      },
       {
         regex: /"run_in_background"/,
         message: 'missing Task run_in_background schema flag',
@@ -2835,8 +4557,16 @@ const requiredContentRules = [
         message: 'missing background task id result contract',
       },
       {
-        regex: /Background subagent/,
-        message: 'missing assistant-visible background subagent acknowledgement',
+        regex: /Background \{\} started successfully/,
+        message: 'missing assistant-visible background start acknowledgement',
+      },
+      {
+        regex: /<background_task status=\\"started\\"/,
+        message: 'missing structured background task start acknowledgement',
+      },
+      {
+        regex: /\bbackground_subagent_start_acknowledgement_keeps_structured_task_marker\b/,
+        message: 'missing background task start acknowledgement regression',
       },
     ],
   },
@@ -3272,6 +5002,14 @@ const requiredContentRules = [
         message: 'missing product-domain built-in MiniApp source payload use',
       },
       {
+        regex: /\bbuild_builtin_seed_meta\b/,
+        message: 'missing product-domain built-in MiniApp seed meta helper use',
+      },
+      {
+        regex: /\bpreserved_builtin_created_at\b/,
+        message: 'missing product-domain built-in MiniApp timestamp preservation helper use',
+      },
+      {
         regex: /\bBUILTIN_PLACEHOLDER_COMPILED_HTML\b/,
         message: 'missing product-domain built-in MiniApp placeholder payload use',
       },
@@ -3315,12 +5053,48 @@ const requiredContentRules = [
         message: 'missing MiniApp host dispatch entry',
       },
       {
+        regex: /\bsplit_host_method\b/,
+        message: 'missing product-domain MiniApp host method split use',
+      },
+      {
         regex: /\basync fn dispatch_fs\b/,
         message: 'missing MiniApp fs host dispatch',
       },
       {
+        regex: /\bfs_method_access_mode\b/,
+        message: 'missing product-domain MiniApp fs access-mode policy use',
+      },
+      {
+        regex: /\bfs_policy_scopes\b/,
+        message: 'missing product-domain MiniApp fs scope extraction policy use',
+      },
+      {
+        regex: /\bfs_resolved_path_allowed\b/,
+        message: 'missing product-domain MiniApp fs resolved path policy use',
+      },
+      {
         regex: /\basync fn dispatch_shell\b/,
         message: 'missing MiniApp shell host dispatch',
+      },
+      {
+        regex: /\bshell_exec_first_token\b/,
+        message: 'missing product-domain MiniApp shell token policy use',
+      },
+      {
+        regex: /\bshell_exec_input_is_empty\b/,
+        message: 'missing product-domain MiniApp shell empty-input policy use',
+      },
+      {
+        regex: /\bshell_exec_cwd\b/,
+        message: 'missing product-domain MiniApp shell cwd policy use',
+      },
+      {
+        regex: /\bshell_exec_timeout_ms\b/,
+        message: 'missing product-domain MiniApp shell timeout policy use',
+      },
+      {
+        regex: /\bshell_exec_default_env\b/,
+        message: 'missing product-domain MiniApp shell env policy use',
       },
       {
         regex: /\bcommand_basename_allowed\b/,
@@ -3424,6 +5198,38 @@ const requiredContentRules = [
         message: 'missing MiniApp deps-installed state helper',
       },
       {
+        regex: /\bpub struct MiniAppCreateInput\b/,
+        message: 'missing MiniApp create input contract',
+      },
+      {
+        regex: /\bpub struct MiniAppUpdatePatch\b/,
+        message: 'missing MiniApp update patch contract',
+      },
+      {
+        regex: /\bpub fn build_created_app\b/,
+        message: 'missing MiniApp create state helper',
+      },
+      {
+        regex: /\bpub fn apply_update_patch\b/,
+        message: 'missing MiniApp update state helper',
+      },
+      {
+        regex: /\bpub fn prepare_draft_app\b/,
+        message: 'missing MiniApp draft prepare state helper',
+      },
+      {
+        regex: /\bpub fn apply_draft_source_sync_result\b/,
+        message: 'missing MiniApp draft source-sync state helper',
+      },
+      {
+        regex: /\bpub fn apply_draft_permission_update_result\b/,
+        message: 'missing MiniApp draft permission-update state helper',
+      },
+      {
+        regex: /\bpub fn apply_draft_to_active\b/,
+        message: 'missing MiniApp draft apply state helper',
+      },
+      {
         regex: /\bpub fn clear_worker_restart_required_state\b/,
         message: 'missing MiniApp worker-restart clear state helper',
       },
@@ -3442,6 +5248,10 @@ const requiredContentRules = [
       {
         regex: /\bpub fn apply_import_runtime_state\b/,
         message: 'missing MiniApp import runtime state helper',
+      },
+      {
+        regex: /\bpub fn prepare_imported_meta\b/,
+        message: 'missing MiniApp imported metadata identity/timestamp helper',
       },
     ],
   },
@@ -3471,11 +5281,39 @@ const requiredContentRules = [
   {
     path: 'src/crates/product-domains/src/miniapp/runtime.rs',
     reason:
-      'product-domains owns MiniApp runtime search-plan contracts while core keeps executable lookup and version process execution',
+      'product-domains owns MiniApp runtime detection, including the reviewed concrete PATH/fs/version probe',
     patterns: [
+      {
+        regex: /\bpub fn detect_runtime\b/,
+        message: 'missing MiniApp concrete runtime detector',
+      },
+      {
+        regex: /\bstruct DefaultMiniAppRuntimeProbe\b/,
+        message: 'missing MiniApp default runtime probe owner',
+      },
+      {
+        regex: /\bwhich::which\b/,
+        message: 'missing MiniApp PATH lookup owner',
+      },
+      {
+        regex: /\bstd::fs::read_dir\b/,
+        message: 'missing MiniApp version-manager directory scan owner',
+      },
+      {
+        regex: /\bcreate_version_command\b/,
+        message: 'missing MiniApp version process command owner',
+      },
       {
         regex: /\bpub fn runtime_lookup_order\b/,
         message: 'missing MiniApp runtime lookup order contract',
+      },
+      {
+        regex: /\bpub trait MiniAppRuntimeProbe\b/,
+        message: 'missing MiniApp runtime probe contract',
+      },
+      {
+        regex: /\bpub fn detect_runtime_with_probe\b/,
+        message: 'missing MiniApp runtime detector facade',
       },
       {
         regex: /\bpub fn candidate_executable_path\b/,
@@ -3488,10 +5326,69 @@ const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/product-domains/src/miniapp/worker.rs',
+    reason:
+      'product-domains owns MiniApp worker pool policy and install-deps planning while core keeps worker process execution',
+    patterns: [
+      {
+        regex: /\bpub enum InstallDepsPlan\b/,
+        message: 'missing MiniApp install-deps plan contract',
+      },
+      {
+        regex: /\bpub fn plan_install_deps\b/,
+        message: 'missing MiniApp install-deps planning helper',
+      },
+      {
+        regex: /\bpub fn worker_pool_capacity\b/,
+        message: 'missing MiniApp worker pool capacity policy helper',
+      },
+      {
+        regex: /\bpub fn worker_idle_timeout_ms\b/,
+        message: 'missing MiniApp worker idle timeout policy helper',
+      },
+      {
+        regex: /\bpub fn worker_is_idle\b/,
+        message: 'missing MiniApp worker idle policy helper',
+      },
+      {
+        regex: /\bpub fn select_lru_worker\b/,
+        message: 'missing MiniApp worker LRU selection helper',
+      },
+      {
+        regex: /\binstall_deps_plan_preserves_no_package_noop_and_runtime_commands\b/,
+        message: 'missing MiniApp install-deps planning regression test',
+      },
+      {
+        regex: /\bworker_pool_policy_keeps_existing_capacity_and_idle_timeout_contract\b/,
+        message: 'missing MiniApp worker pool policy regression test',
+      },
+    ],
+  },
+  {
     path: 'src/crates/product-domains/src/miniapp/host_routing.rs',
     reason:
-      'product-domains owns MiniApp host-routing and allowlist string policy while core keeps host execution',
+      'product-domains owns MiniApp host-routing and allowlist decision policy while core keeps host execution',
     patterns: [
+      {
+        regex: /\bpub fn split_host_method\b/,
+        message: 'missing MiniApp host method split helper',
+      },
+      {
+        regex: /\bpub enum FsAccessMode\b/,
+        message: 'missing MiniApp fs access mode contract',
+      },
+      {
+        regex: /\bpub fn fs_method_access_mode\b/,
+        message: 'missing MiniApp fs access mode helper',
+      },
+      {
+        regex: /\bpub fn fs_policy_scopes\b/,
+        message: 'missing MiniApp fs policy scope helper',
+      },
+      {
+        regex: /\bpub fn fs_resolved_path_allowed\b/,
+        message: 'missing MiniApp fs resolved path helper',
+      },
       {
         regex: /\bpub fn command_basename_for_allowlist\b/,
         message: 'missing MiniApp command basename allowlist helper',
@@ -3503,6 +5400,80 @@ const requiredContentRules = [
       {
         regex: /\bpub fn host_allowed_by_allowlist\b/,
         message: 'missing MiniApp host allowlist policy helper',
+      },
+      {
+        regex: /\bpub fn shell_exec_first_token\b/,
+        message: 'missing MiniApp shell first-token policy helper',
+      },
+      {
+        regex: /\bpub fn shell_exec_input_is_empty\b/,
+        message: 'missing MiniApp shell empty-input policy helper',
+      },
+      {
+        regex: /\bpub fn shell_exec_cwd\b/,
+        message: 'missing MiniApp shell cwd policy helper',
+      },
+      {
+        regex: /\bpub fn shell_exec_timeout_ms\b/,
+        message: 'missing MiniApp shell timeout policy helper',
+      },
+      {
+        regex: /\bpub fn shell_exec_default_env\b/,
+        message: 'missing MiniApp shell env policy helper',
+      },
+      {
+        regex: /\bfs_method_access_mode_preserves_access_bypass_and_default_read_contract\b/,
+        message: 'missing MiniApp fs access mode regression test',
+      },
+      {
+        regex: /\bfs_policy_scopes_and_resolved_prefix_check_preserve_path_boundary\b/,
+        message: 'missing MiniApp fs path policy regression test',
+      },
+      {
+        regex: /\bshell_exec_first_token_prefers_argv_over_shell_command_text\b/,
+        message: 'missing MiniApp shell first-token regression test',
+      },
+      {
+        regex: /\bshell_exec_plan_helpers_preserve_defaults_and_precedence\b/,
+        message: 'missing MiniApp shell plan regression test',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/product-domains/src/miniapp/exporter.rs',
+    reason:
+      'product-domains owns MiniApp export check result policy while core keeps runtime detection',
+    patterns: [
+      {
+        regex: /\bpub const MISSING_JS_RUNTIME_MESSAGE\b/,
+        message: 'missing MiniApp export missing-runtime message contract',
+      },
+      {
+        regex: /\bpub fn export_runtime_label\b/,
+        message: 'missing MiniApp export runtime label helper',
+      },
+      {
+        regex: /\bpub fn build_export_check_result\b/,
+        message: 'missing MiniApp export check result helper',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/core/src/miniapp/exporter.rs',
+    reason:
+      'core MiniApp exporter must delegate export check result policy while retaining runtime detection and export skeleton',
+    patterns: [
+      {
+        regex: /\bdetect_runtime\b/,
+        message: 'missing core-owned MiniApp export runtime detection',
+      },
+      {
+        regex: /\bbuild_export_check_result\b/,
+        message: 'missing product-domain MiniApp export check helper use',
+      },
+      {
+        regex: /Export not yet implemented \(skeleton\)/,
+        message: 'missing core-owned MiniApp export skeleton behavior',
       },
     ],
   },
@@ -3567,6 +5538,22 @@ const requiredContentRules = [
         message: 'missing product-domain MiniApp runtime-state facade use',
       },
       {
+        regex: /\bbuild_created_app\b/,
+        message: 'missing product-domain MiniApp create lifecycle helper use',
+      },
+      {
+        regex: /\bapply_update_patch\b/,
+        message: 'missing product-domain MiniApp update lifecycle helper use',
+      },
+      {
+        regex: /\bprepare_draft_app\b/,
+        message: 'missing product-domain MiniApp draft prepare lifecycle helper use',
+      },
+      {
+        regex: /\bapply_draft_to_active\b/,
+        message: 'missing product-domain MiniApp draft apply lifecycle helper use',
+      },
+      {
         regex: /\bCoreProductDomainRuntime\b/,
         message: 'missing core-owned product-domain runtime owner delegation',
       },
@@ -3591,8 +5578,12 @@ const requiredContentRules = [
         message: 'missing product-domain MiniApp import fallback helper use',
       },
       {
-        regex: /\bapply_import_runtime_state\b/,
-        message: 'missing product-domain MiniApp import runtime state helper use',
+        regex: /\bprepare_imported_meta\b/,
+        message: 'missing product-domain MiniApp imported metadata helper use',
+      },
+      {
+        regex: /\bpersist_import_runtime_state\b/,
+        message: 'missing product-domain MiniApp import runtime-state facade delegation',
       },
       {
         regex: /\bstorage\.load_customization_metadata\b/,
@@ -3624,6 +5615,10 @@ const requiredContentRules = [
       {
         regex: /\bpersist_sync_from_fs_result_for_app\b/,
         message: 'missing MiniApp sync-from-fs preloaded snapshot facade path',
+      },
+      {
+        regex: /\bpersist_import_runtime_state\b/,
+        message: 'missing MiniApp import runtime-state facade path',
       },
     ],
   },
@@ -3768,6 +5763,14 @@ const requiredContentRules = [
       {
         regex: /\bpub fn build_builtin_package_json\b/,
         message: 'missing built-in MiniApp package payload helper',
+      },
+      {
+        regex: /\bpub fn preserved_builtin_created_at\b/,
+        message: 'missing built-in MiniApp created-at preservation helper',
+      },
+      {
+        regex: /\bpub fn build_builtin_seed_meta\b/,
+        message: 'missing built-in MiniApp seed meta helper',
       },
     ],
   },
@@ -3917,23 +5920,15 @@ const requiredContentRules = [
   {
     path: 'src/crates/core/src/miniapp/runtime_detect.rs',
     reason:
-      'core MiniApp runtime detection must use product-domain search-plan helpers while retaining process-backed executable/version checks',
+      'core MiniApp runtime detection must be a compatibility facade over product-domain runtime detection',
     patterns: [
       {
-        regex: /\bruntime_lookup_order\b/,
-        message: 'missing product-domain runtime lookup order use',
+        regex: /\bpub use bitfun_product_domains::miniapp::runtime::\{/,
+        message: 'missing product-domain MiniApp runtime facade re-export',
       },
       {
-        regex: /\bcandidate_executable_path\b/,
-        message: 'missing product-domain candidate executable helper use',
-      },
-      {
-        regex: /\bversioned_executable_candidate\b/,
-        message: 'missing product-domain version-manager executable helper use',
-      },
-      {
-        regex: /\bget_version\b/,
-        message: 'missing core-owned version process execution',
+        regex: /\bdetect_runtime\b/,
+        message: 'missing product-domain detect_runtime facade export',
       },
     ],
   },
@@ -3942,6 +5937,22 @@ const requiredContentRules = [
     reason:
       'core must continue owning MiniApp worker runtime adapter until process/runtime migration is reviewed',
     patterns: [
+      {
+        regex: /\bplan_install_deps\b/,
+        message: 'missing product-domain install-deps plan use',
+      },
+      {
+        regex: /\bworker_is_idle\b/,
+        message: 'missing product-domain worker idle policy use',
+      },
+      {
+        regex: /\bworker_pool_at_capacity\b/,
+        message: 'missing product-domain worker capacity policy use',
+      },
+      {
+        regex: /\bselect_lru_worker\b/,
+        message: 'missing product-domain worker LRU policy use',
+      },
       {
         regex: /\bimpl MiniAppRuntimePort for JsWorkerPool\b/,
         message: 'missing MiniApp runtime port adapter owner',
@@ -4376,6 +6387,11 @@ function runManifestParserSelfTest() {
       throw new Error(`${rule.manifestPath} must require bitfun-core product-full`);
     }
   }
+  for (const featureName of ['ssh-remote', 'product-domains', 'service-integrations', 'tool-packs']) {
+    if (!coreProductFullFeatureAssemblyRule.requiredFeatureRefs.includes(featureName)) {
+      throw new Error(`core product-full assembly rule must require ${featureName}`);
+    }
+  }
   const discoveredProductCoreManifests = collectProductCoreDependencyManifestPaths([
     {
       manifestPath: 'src/apps/desktop/Cargo.toml',
@@ -4404,6 +6420,15 @@ function runManifestParserSelfTest() {
   ]) {
     if (!ownerFeatureRulePaths.has(manifestPath)) {
       throw new Error(`owner crate feature assembly rule must cover ${manifestPath}`);
+    }
+  }
+  for (const rule of ownerCrateFeatureAssemblyRules) {
+    const declaredFeatures = new Set(rule.requiredProductFullFeatures);
+    if (declaredFeatures.size !== rule.requiredProductFullFeatures.length) {
+      throw new Error(`${rule.manifestPath} product-full guard must not duplicate feature groups`);
+    }
+    if (rule.requiredProductFullFeatures.some((featureName) => featureName.startsWith('dep:'))) {
+      throw new Error(`${rule.manifestPath} product-full guard must track owner feature groups only`);
     }
   }
 
@@ -4528,6 +6553,28 @@ function runManifestParserSelfTest() {
       throw new Error(`core tool restrictions boundary rule must forbid contract: ${contract}`);
     }
   }
+  const agentToolsFrameworkRule = requiredContentRules.find(
+    (rule) => rule.path === 'src/crates/agent-tools/src/framework.rs',
+  );
+  if (!agentToolsFrameworkRule) {
+    throw new Error('missing agent-tools framework boundary rule');
+  }
+  const agentToolsFrameworkContracts = [
+    'is_tool_path_allowed_by_resolved_roots',
+    'build_tool_path_policy_denial_message',
+    'resolve_tool_path_with_context',
+    'tool_path_is_effectively_absolute',
+    'build_tool_runtime_artifact_reference',
+    'build_tool_session_runtime_artifact_reference',
+  ];
+  const agentToolsFrameworkRuleText = agentToolsFrameworkRule.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n');
+  for (const contract of agentToolsFrameworkContracts) {
+    if (!agentToolsFrameworkRuleText.includes(contract)) {
+      throw new Error(`agent-tools framework boundary rule must require contract: ${contract}`);
+    }
+  }
   const coreWorkspacePathRule = forbiddenContentRules.find(
     (rule) => rule.path === 'src/crates/core/src/agentic/tools/workspace_paths.rs',
   );
@@ -4567,12 +6614,151 @@ function runManifestParserSelfTest() {
       throw new Error(`core tool registry boundary rule must forbid contract: ${contract}`);
     }
   }
+  const coreSubagentRuntimeRule = forbiddenContentRules.find(
+    (rule) => rule.path === 'src/crates/core/src/agentic/subagent_runtime/mod.rs',
+  );
+  if (!coreSubagentRuntimeRule) {
+    throw new Error('missing core subagent runtime boundary rule');
+  }
+  const coreSubagentRuntimeRuleText = coreSubagentRuntimeRule.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n');
+  for (const contract of ['DelegationPolicy', 'SubagentContextMode']) {
+    if (!coreSubagentRuntimeRuleText.includes(contract)) {
+      throw new Error(`core subagent runtime boundary rule must forbid contract: ${contract}`);
+    }
+  }
+  const coreCoordinatorRule = forbiddenContentRules.find(
+    (rule) => rule.path === 'src/crates/core/src/agentic/coordination/coordinator.rs',
+  );
+  if (!coreCoordinatorRule) {
+    throw new Error('missing core coordinator boundary rule');
+  }
+  const coreCoordinatorRuleText = coreCoordinatorRule.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n');
+  if (!coreCoordinatorRuleText.includes('DialogTriggerSource')) {
+    throw new Error('core coordinator boundary rule must forbid DialogTriggerSource redefinition');
+  }
+  const coreSchedulerRule = forbiddenContentRules.find(
+    (rule) => rule.path === 'src/crates/core/src/agentic/coordination/scheduler.rs',
+  );
+  if (!coreSchedulerRule) {
+    throw new Error('missing core scheduler boundary rule');
+  }
+  const coreSchedulerRuleText = coreSchedulerRule.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n');
+  for (const contract of [
+    'DialogQueuePriority',
+    'DialogSubmissionPolicy',
+    'DialogSubmitOutcome',
+    'AgentSessionReplyRoute',
+    'DialogSteerOutcome',
+  ]) {
+    if (!coreSchedulerRuleText.includes(contract)) {
+      throw new Error(`core scheduler boundary rule must forbid contract: ${contract}`);
+    }
+  }
+  const coreRoundPreemptRule = forbiddenContentRules.find(
+    (rule) => rule.path === 'src/crates/core/src/agentic/round_preempt.rs',
+  );
+  if (!coreRoundPreemptRule) {
+    throw new Error('missing core round preempt boundary rule');
+  }
+  const coreRoundPreemptRuleText = coreRoundPreemptRule.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n');
+  for (const contract of [
+    'DialogRoundPreemptSource',
+    'RoundInjection',
+    'DialogRoundInjectionSource',
+    'RoundInjectionKind',
+    'RoundInjectionTarget',
+  ]) {
+    if (!coreRoundPreemptRuleText.includes(contract)) {
+      throw new Error(`core round preempt boundary rule must forbid contract: ${contract}`);
+    }
+  }
+  const coreGoalModeTypesRule = forbiddenContentRules.find(
+    (rule) => rule.path === 'src/crates/core/src/agentic/goal_mode/types.rs',
+  );
+  if (!coreGoalModeTypesRule) {
+    throw new Error('missing core goal mode types boundary rule');
+  }
+  const coreGoalModeTypesRuleText = coreGoalModeTypesRule.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n');
+  for (const contract of [
+    'GoalModeState',
+    'GoalModeInitialGoal',
+    'GoalGenerationResult',
+    'GoalVerificationResult',
+    'GoalActivationResult',
+    'GoalContinuationPlan',
+  ]) {
+    if (!coreGoalModeTypesRuleText.includes(contract)) {
+      throw new Error(`core goal mode types boundary rule must forbid contract: ${contract}`);
+    }
+  }
+  const coreMessageRule = forbiddenContentRules.find(
+    (rule) => rule.path === 'src/crates/core/src/agentic/core/message.rs',
+  );
+  if (!coreMessageRule) {
+    throw new Error('missing core message boundary rule');
+  }
+  const coreMessageRuleText = coreMessageRule.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n');
+  for (const contract of ['CompressionContract', 'CompressionContractItem']) {
+    if (!coreMessageRuleText.includes(contract)) {
+      throw new Error(`core message boundary rule must forbid contract: ${contract}`);
+    }
+  }
+  const coreWorkspaceRule = forbiddenContentRules.find(
+    (rule) => rule.path === 'src/crates/core/src/service/workspace/manager.rs',
+  );
+  if (!coreWorkspaceRule) {
+    throw new Error('missing core workspace manager boundary rule');
+  }
+  if (
+    !coreWorkspaceRule.patterns
+      .map((pattern) => pattern.regex.source)
+      .join('\n')
+      .includes('RelatedPath')
+  ) {
+    throw new Error('core workspace manager boundary rule must forbid contract: RelatedPath');
+  }
+  const coreSubagentRuntimeOwnerPathRule = forbiddenContentUnderRules.find(
+    (rule) => rule.path === 'src/crates/core/src',
+  );
+  if (!coreSubagentRuntimeOwnerPathRule) {
+    throw new Error('missing core subagent runtime owner-path boundary rule');
+  }
+  const coreSubagentRuntimeOwnerPathRuleText = coreSubagentRuntimeOwnerPathRule.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n');
+  for (const contract of ['DelegationPolicy', 'SubagentContextMode']) {
+    if (!coreSubagentRuntimeOwnerPathRuleText.includes(contract)) {
+      throw new Error(
+        `core subagent runtime owner-path rule must forbid compatibility import: ${contract}`,
+      );
+    }
+  }
 
   const productDomainProfile = dependencyProfileRules.find(
     (rule) => rule.crateName === 'product-domains',
   );
-  if (!productDomainProfile?.forbiddenNonOptionalDeps.includes('dirs')) {
-    throw new Error('product-domains default profile must forbid non-optional dirs');
+  for (const dep of ['dirs', 'log', 'sha2', 'which']) {
+    if (!productDomainProfile?.forbiddenNonOptionalDeps.includes(dep)) {
+      throw new Error(`product-domains default profile must forbid non-optional ${dep}`);
+    }
+  }
+  const servicesIntegrationsDefaultProfile = dependencyProfileRules.find(
+    (rule) => rule.crateName === 'services-integrations',
+  );
+  if (!servicesIntegrationsDefaultProfile?.forbiddenNonOptionalDeps.includes('uuid')) {
+    throw new Error('services-integrations default profile must forbid non-optional uuid');
   }
   const coreProfile = dependencyProfileRules.find((rule) => rule.crateName === 'core');
   for (const dep of ['git2', 'rmcp', 'image', 'tool-runtime', 'bitfun-relay-server']) {
@@ -4583,8 +6769,16 @@ function runManifestParserSelfTest() {
   const coreOptionalOwnerRule = optionalDependencyFeatureOwnerRules.find(
     (rule) => rule.crateName === 'core',
   );
+  const coreOptionalOwnerDeps = new Set(
+    coreOptionalOwnerRule?.dependencies.map((dependency) => dependency.depName) ?? [],
+  );
+  for (const dep of coreProfile?.forbiddenNonOptionalDeps ?? []) {
+    if (!coreOptionalOwnerDeps.has(dep)) {
+      throw new Error(`core optional dependency owner rule must cover forbidden dependency ${dep}`);
+    }
+  }
   for (const dep of ['git2', 'rmcp', 'image', 'tool-runtime', 'bitfun-relay-server']) {
-    if (!coreOptionalOwnerRule?.dependencies.some((dependency) => dependency.depName === dep)) {
+    if (!coreOptionalOwnerDeps.has(dep)) {
       throw new Error(`core optional dependency owner rule must cover ${dep}`);
     }
   }
@@ -4593,6 +6787,22 @@ function runManifestParserSelfTest() {
   );
   if (!coreGit2Owner?.ownerFeatures.includes('service-integrations')) {
     throw new Error('core optional dependency owner rule must keep git2 under service-integrations');
+  }
+  const servicesOptionalOwnerRule = optionalDependencyFeatureOwnerRules.find(
+    (rule) => rule.crateName === 'services-integrations',
+  );
+  for (const dep of ['bitfun-runtime-ports', 'git2', 'notify', 'rmcp']) {
+    if (!servicesOptionalOwnerRule?.dependencies.some((dependency) => dependency.depName === dep)) {
+      throw new Error(`services-integrations optional dependency owner rule must cover ${dep}`);
+    }
+  }
+  const productDomainsOptionalOwnerRule = optionalDependencyFeatureOwnerRules.find(
+    (rule) => rule.crateName === 'product-domains',
+  );
+  for (const dep of ['dirs', 'log', 'sha2']) {
+    if (!productDomainsOptionalOwnerRule?.dependencies.some((dependency) => dependency.depName === dep)) {
+      throw new Error(`product-domains optional dependency owner rule must cover ${dep}`);
+    }
   }
   const productDomainRuntimeRule = forbiddenContentUnderRules.find(
     (rule) => rule.path === 'src/crates/product-domains/src',
@@ -4615,6 +6825,16 @@ function runManifestParserSelfTest() {
       throw new Error(`product-domains runtime boundary rule must forbid: ${contract}`);
     }
   }
+  const productDomainCommandRule = productDomainRuntimeRule.patterns.find((pattern) =>
+    pattern.regex.source.includes('Command::new'),
+  );
+  if (
+    !productDomainCommandRule?.allowPaths?.includes(
+      'src/crates/product-domains/src/miniapp/runtime.rs',
+    )
+  ) {
+    throw new Error('product-domains Command::new exception must stay scoped to MiniApp runtime detection');
+  }
   const coreTypesProfile = dependencyProfileRules.find((rule) => rule.crateName === 'core-types');
   if (!coreTypesProfile?.forbiddenNonOptionalDeps.includes('bitfun-ai-adapters')) {
     throw new Error('core-types dependency profile must forbid ai-adapter dependencies');
@@ -4624,6 +6844,36 @@ function runManifestParserSelfTest() {
   );
   if (!runtimePortsProfile?.forbiddenNonOptionalDeps.includes('bitfun-services-core')) {
     throw new Error('runtime-ports dependency profile must forbid service implementations');
+  }
+  const runtimeServicesRule = lightweightBoundaryRules.find(
+    (rule) => rule.crateName === 'runtime-services',
+  );
+  if (!runtimeServicesRule?.forbiddenDeps.includes('bitfun-core')) {
+    throw new Error('runtime-services lightweight boundary must forbid bitfun-core');
+  }
+  if (!runtimeServicesRule?.forbiddenDeps.includes('bitfun-services-integrations')) {
+    throw new Error('runtime-services lightweight boundary must forbid concrete service integrations');
+  }
+  const runtimeServicesProfile = dependencyProfileRules.find(
+    (rule) => rule.crateName === 'runtime-services',
+  );
+  if (!runtimeServicesProfile?.forbiddenNonOptionalDeps.includes('tool-runtime')) {
+    throw new Error('runtime-services dependency profile must forbid tool runtime implementations');
+  }
+  const agentRuntimeRule = lightweightBoundaryRules.find(
+    (rule) => rule.crateName === 'agent-runtime',
+  );
+  if (!agentRuntimeRule?.forbiddenDeps.includes('bitfun-core')) {
+    throw new Error('agent-runtime lightweight boundary must forbid bitfun-core');
+  }
+  if (!agentRuntimeRule?.forbiddenDeps.includes('bitfun-services-integrations')) {
+    throw new Error('agent-runtime lightweight boundary must forbid concrete service integrations');
+  }
+  const agentRuntimeProfile = dependencyProfileRules.find(
+    (rule) => rule.crateName === 'agent-runtime',
+  );
+  if (!agentRuntimeProfile?.forbiddenNonOptionalDeps.includes('tauri')) {
+    throw new Error('agent-runtime dependency profile must forbid product surface dependencies');
   }
   const agentToolsManifestRule = forbiddenContentUnderRules.find(
     (rule) => rule.path === 'src/crates/agent-tools/src',
@@ -4674,8 +6924,154 @@ function runManifestParserSelfTest() {
         'AgentTurnCancellationPort',
         'RemoteControlStatePort',
         'RuntimeEventSink',
+        'RemoteWorkspaceFacts',
+        'RemoteWorkspaceRuntimeHost',
+        'RemoteWorkspacePort',
+        'RemoteWorkspaceFileRuntimeHost',
+        'RemoteProjectionPort',
+        'RemoteInitialSyncRuntimeHost',
+        'remote_workspace_contracts_preserve_workspace_and_session_facts',
+        'remote_projection_contract_preserves_file_chunk_identity',
         'remote_image',
+        'DialogTriggerSource',
+        'dialog_trigger_source_reuses_agent_submission_source_contract',
+        'DialogQueuePriority',
+        'DialogSubmissionPolicy',
+        'dialog_submission_policy_preserves_current_surface_queue_defaults',
+        'DialogSubmitOutcome',
+        'dialog_submit_outcome_preserves_started_and_queued_fields',
+        'DialogSessionStateFact',
+        'DialogSubmitQueueFacts',
+        'DialogSubmitQueueAction',
+        'dialog_policy_may_preempt',
+        'resolve_dialog_submit_queue_action',
+        'dialog_submit_queue_action_preserves_current_scheduler_routing_policy',
+        'should_suppress_agent_session_cancelled_reply',
+        'DialogTurnOutcomeKind',
+        'should_skip_agent_session_reply',
+        'agent_session_reply_decisions_preserve_cancel_suppression_boundary',
+        'AgentSessionReplyRoute',
+        'agent_session_reply_route_keeps_requester_fields',
+        'DialogSteerOutcome',
+        'dialog_steer_outcome_preserves_buffered_fields',
+        'RoundInjectionKind',
+        'RoundInjectionTarget',
+        'RoundInjection',
+        'DialogRoundPreemptSource',
+        'DialogRoundInjectionSource',
+        'round_injection_contract_keeps_kind_and_target_identity',
+        'round_injection_source_contract_drains_portable_injections',
+        'GoalModeState',
+        'GoalModeInitialGoal',
+        'GoalGenerationResult',
+        'GoalVerificationResult',
+        'GoalActivationResult',
+        'GoalContinuationPlan',
+        'goal_mode_state_requires_active_non_empty_goal',
+        'goal_verification_result_serializes_current_wire_shape',
+        'CompressionContract',
+        'CompressionContractItem',
+        'compression_contract_renders_model_visible_fields',
+        'RelatedPath',
+        'related_path_serializes_as_request_context_fact',
+        'DelegationPolicy',
+        'SubagentContextMode',
+        'delegation_policy_child_blocks_recursive_spawn_without_losing_depth',
+        'subagent_context_mode_preserves_fork_wire_value',
       ],
+    },
+    {
+      path: 'src/crates/runtime-services/src/lib.rs',
+      contracts: [
+        'RuntimeServices',
+        'RuntimeServicesBuilder',
+        'CapabilityAvailability',
+        'RuntimeServicesProvider',
+        'RuntimeServicesRegistry',
+        'CapabilityMismatch',
+        'require_capability',
+      ],
+    },
+    {
+      path: 'src/crates/runtime-services/tests/runtime_services_contracts.rs',
+      contracts: [
+        'builder_requires_mandatory_runtime_services',
+        'fake_provider_registers_required_and_remote_services_through_registry',
+        'missing_optional_capability_returns_typed_unsupported_error',
+        'capability_availability_reports_optional_service_status_without_side_effects',
+        'builder_rejects_port_registered_under_the_wrong_capability',
+        'registered_remote_ports_expose_owner_contract_methods',
+      ],
+    },
+    {
+      path: 'src/crates/agent-runtime/src/scheduler.rs',
+      contracts: [
+        'BackgroundDeliveryFacts',
+        'BackgroundDeliveryAction',
+        'resolve_background_delivery_action',
+        'follow_up_submission_policy',
+        'SubmitAgentSessionFollowUp',
+        'InjectIntoRunningTurn',
+      ],
+    },
+    {
+      path: 'src/crates/agent-runtime/tests/scheduler_contracts.rs',
+      contracts: [
+        'background_delivery_injects_when_session_is_processing',
+        'background_delivery_starts_agent_session_follow_up_when_session_is_not_processing',
+        'background_delivery_follow_up_uses_agent_session_source_semantics',
+        'background_delivery_injection_does_not_expose_follow_up_policy',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/agentic/subagent_runtime/mod.rs',
+      contracts: [
+        'bitfun_runtime_ports',
+        'DelegationPolicy',
+        'SubagentContextMode',
+        'queue_timing',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/agentic/session/session_manager.rs',
+      contracts: [
+        'clone_prompt_cache',
+        'start_dialog_turn_with_existing_context',
+        'start_dialog_turn_with_existing_context_persists_turn_and_snapshot',
+        'clone_prompt_cache_copies_runtime_and_persisted_entries',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/agentic/tools/pipeline/tool_pipeline.rs',
+      contracts: [
+        'build_truncation_recovery_notice',
+        'truncation_notice_for_interactive_tools_does_not_claim_file_write',
+        'truncation_notice_for_write_tools_keeps_write_continuation_guidance',
+        'denied_tool_messages',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/agentic/tools/restrictions.rs',
+      contracts: ['denied_tool_messages', 'custom_deny_message_overrides_generic_runtime_error'],
+    },
+    {
+      path: 'src/crates/core/src/agentic/tools/tool_result_storage.rs',
+      contracts: ['write_once', 'file\\.flush\\(\\)\\.await'],
+    },
+    {
+      path: 'src/crates/services-integrations/src/mcp/server/connection.rs',
+      contracts: [
+        'send_request_with_id',
+        'initialize_timeout',
+        'notifications/initialized',
+        'pending\\.clear\\(\\)',
+        'local_tool_calls_do_not_inherit_initialize_timeout',
+        'local_initialize_uses_initialize_timeout',
+      ],
+    },
+    {
+      path: 'src/crates/services-integrations/src/mcp/protocol/transport.rs',
+      contracts: ['send_request_with_id', '\\.flush\\(\\)\\s*\\.await'],
     },
     {
       path: 'src/crates/agent-tools/src/framework.rs',
@@ -4734,6 +7130,51 @@ function runManifestParserSelfTest() {
       ],
     },
     {
+      path: 'src/crates/agent-tools/src/file_guidance.rs',
+      contracts: [
+        'FILE_TOOL_GUIDANCE_PREFIX',
+        'file_tool_guidance_message',
+        'is_file_tool_guidance_message',
+      ],
+    },
+    {
+      path: 'src/crates/agent-tools/src/file_read_freshness.rs',
+      contracts: [
+        'FileReadFreshnessFacts',
+        'normalize_tool_file_content',
+        'file_read_facts_content_matches',
+        'file_read_facts_are_fresh',
+      ],
+    },
+    {
+      path: 'src/crates/agent-tools/src/tool_result_storage.rs',
+      contracts: [
+        'ToolResultStoragePolicy',
+        'PersistedToolOutput',
+        'ToolResultPersistenceCandidate',
+        'select_tool_result_indices_for_persistence',
+        'sanitize_tool_result_file_component',
+        'generate_tool_result_preview',
+        'count_tool_result_lines',
+        'tool_result_is_persisted_output',
+        'build_persisted_tool_output_message',
+      ],
+    },
+    {
+      path: 'src/crates/agent-tools/src/tool_execution_presentation.rs',
+      contracts: [
+        'TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES',
+        'USER_STEERING_INTERRUPTED_MESSAGE',
+        'ToolExecutionErrorPresentation',
+        'render_tool_result_for_assistant',
+        'truncate_tool_arguments_preview',
+        'truncate_raw_tool_arguments_preview',
+        'build_tool_execution_error_presentation',
+        'build_user_steering_interrupted_presentation',
+        'build_invalid_tool_call_error_message',
+      ],
+    },
+    {
       path: 'src/crates/core/src/agentic/coordination/coordinator.rs',
       contracts: [
         'AgentSubmissionPort',
@@ -4741,16 +7182,96 @@ function runManifestParserSelfTest() {
         'AgentTurnCancellationPort',
         'RemoteControlStatePort',
         'generic attachments',
+        'DialogTriggerSource',
       ],
+    },
+    {
+      path: 'src/crates/core/src/agentic/coordination/scheduler.rs',
+      contracts: [
+        'AgentSessionReplyRoute',
+        'DialogQueuePriority',
+        'DialogSessionStateFact',
+        'DialogSteerOutcome',
+        'DialogSubmissionPolicy',
+        'DialogSubmitOutcome',
+        'DialogSubmitQueueAction',
+        'DialogSubmitQueueFacts',
+        'DialogTurnOutcomeKind',
+        'dialog_policy_may_preempt',
+        'resolve_dialog_submit_queue_action',
+        'should_skip_agent_session_reply_contract',
+        'should_suppress_agent_session_cancelled_reply_contract',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/agentic/round_preempt.rs',
+      contracts: [
+        'bitfun_runtime_ports',
+        'DialogRoundInjectionSource',
+        'DialogRoundPreemptSource',
+        'RoundInjection',
+        'RoundInjectionKind',
+        'RoundInjectionTarget',
+        'SessionRoundInjectionBuffer',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/agentic/goal_mode/types.rs',
+      contracts: [
+        'bitfun_runtime_ports',
+        'GoalActivationResult',
+        'GoalContinuationPlan',
+        'GoalGenerationResult',
+        'GoalModeInitialGoal',
+        'GoalModeState',
+        'GoalVerificationResult',
+        'GOAL_MODE_FUNC_AGENT',
+      ],
+    },
+    {
+      path: 'src/crates/core/src/agentic/core/message.rs',
+      contracts: ['bitfun_runtime_ports', 'CompressionContract', 'CompressionContractItem'],
+    },
+    {
+      path: 'src/crates/core/src/service/workspace/manager.rs',
+      contracts: ['bitfun_runtime_ports', 'RelatedPath'],
     },
     {
       path: 'src/crates/core/src/service_agent_runtime.rs',
       contracts: [
         'CoreServiceAgentRuntime',
         'remote_dialog_host',
+        'remote_cancel_host',
         'remote_image_context',
+        'load_remote_model_catalog',
+        'RemoteModelCatalogFacts',
+        'RemoteModelCapabilityFact',
+        'RemoteReasoningModeFact',
+        'build_remote_model_catalog',
+        'update_remote_session_model',
+        'normalize_remote_session_model_id',
+        'normalize_remote_session_model_id_contract',
+        'normalize_remote_model_selection',
+        'normalize_remote_model_selection_contract',
+        'remote_chat_messages_from_turns',
+        'RemoteDialogSchedulerOutcomeFact',
+        'remote_dialog_submit_outcome_from_scheduler',
+        'RemoteChatHistoryTurn',
+        'build_remote_chat_messages',
+        'strip_remote_user_input_tags',
+        'compress_remote_chat_data_url_for_mobile',
+        'load_remote_chat_messages',
         'agent_submission_port',
+        'agent_turn_cancellation_port',
+        'remote_control_state_port',
         'CoreRemoteDialogRuntimeHost',
+        'CoreRemoteCancelRuntimeHost',
+        'CoreRemoteWorkspaceFileRuntimeHost',
+        'CoreRemoteWorkspaceRuntimeHost',
+        'CoreRemoteSessionRuntimeHost',
+        'CoreRemotePollRuntimeHost',
+        'CoreRemoteInteractionRuntimeHost',
+        'CoreRemoteSessionTrackerHost',
         'RemoteExecutionDispatcher',
         'ImageContextData',
         'RemoteImageContextAdapter',
@@ -4759,6 +7280,10 @@ function runManifestParserSelfTest() {
         'RemoteControlStatePort',
         'SessionTranscriptReader',
         'core_service_agent_runtime_owner_keeps_coordinator_port_contracts',
+        'core_service_agent_runtime_owner_normalizes_remote_session_model_ids',
+        'core_service_agent_runtime_owner_normalizes_remote_model_selection_aliases',
+        'core_service_agent_runtime_owner_preserves_remote_chat_history_shape',
+        'core_service_agent_runtime_owner_skips_in_progress_remote_assistant_history',
       ],
     },
     {
@@ -4777,14 +7302,55 @@ function runManifestParserSelfTest() {
         'remote_session_restore_target',
         'RemoteCancelDecision',
         'resolve_remote_cancel_decision',
+        'RemoteCancelTaskRequest',
+        'RemoteCancelRuntimeHost',
+        'cancel_remote_task',
+        'RemoteChatHistoryTurn',
+        'RemoteChatHistoryRound',
+        'RemoteChatHistoryToolItem',
+        'build_remote_chat_messages',
         'REMOTE_FILE_MAX_READ_BYTES',
         'REMOTE_FILE_MAX_CHUNK_BYTES',
         'resolve_remote_file_chunk_range',
         'remote_file_display_name',
+        'RemoteWorkspaceFacts',
+        'RemoteSessionMetadata',
+        'remote_workspace_info_response',
+        'remote_recent_workspaces_response',
+        'remote_assistant_list_response',
+        'RemoteWorkspaceRuntimeHost',
+        'handle_remote_workspace_command',
+        'remote_workspace_handler_preserves_response_shapes',
+        'RemoteInitialSyncRuntimeHost',
+        'generate_remote_initial_sync',
+        'remote_session_info',
+        'remote_session_list_response',
+        'remote_initial_sync_response',
+        'remote_messages_response',
+        'RemoteSessionRuntimeHost',
+        'handle_remote_session_command',
+        'remote_session_handler_preserves_list_and_create_policy',
+        'remote_session_handler_removes_tracker_after_delete_success',
+        'RemotePollRuntimeHost',
+        'handle_remote_poll_command',
+        'remote_poll_handler_preserves_missing_workspace_error',
+        'RemoteInteractionRuntimeHost',
+        'handle_remote_interaction_command',
+        'remote_interaction_handler_preserves_default_reject_reason',
         'RemoteDefaultModelsConfig',
         'RemoteModelConfig',
         'RemoteModelCatalog',
+        'RemoteModelCapabilityFact',
+        'RemoteReasoningModeFact',
+        'RemoteModelFacts',
+        'RemoteModelCatalogFacts',
+        'build_remote_model_catalog',
         'RemoteModelCatalogPollDelta',
+        'normalize_remote_session_model_id',
+        'normalize_remote_model_selection',
+        'remote_model_selection_needs_config',
+        'RemoteDialogSchedulerOutcomeFact',
+        'remote_dialog_submit_outcome_from_scheduler',
         'RemoteCommand',
         'RemoteResponse',
         'should_send_remote_model_catalog',
@@ -4800,16 +7366,23 @@ function runManifestParserSelfTest() {
         'remote_connect_command_wire_shape_lives_in_owner_contract',
         'remote_connect_response_wire_shape_lives_in_owner_contract',
         'remote_connect_model_catalog_delta_preserves_poll_invalidation_policy',
+        'remote_connect_model_catalog_builder_preserves_config_shape',
+        'remote_connect_model_selection_policy_owns_alias_and_config_reference_rules',
         'remote_connect_poll_helpers_preserve_delta_and_completion_policy',
         'remote_connect_image_context_policy_preserves_legacy_fallback_shape',
         'remote_connect_image_context_policy_prefers_explicit_contexts',
         'remote_connect_cancel_and_restore_policy_preserve_runtime_decisions',
+        'remote_connect_dialog_submit_outcome_builder_preserves_scheduler_shape',
+        'remote_chat_history_assembly_preserves_message_shape_and_item_order',
+        'remote_chat_history_assembly_skips_in_progress_assistant_history',
         'remote_connect_file_transfer_policy_preserves_limits_and_chunk_ranges',
         'remote_connect_file_transfer_policy_preserves_name_fallback',
         'remote_connect_tracker_keeps_finished_turn_snapshot_until_persistence_finalizes',
         'remote_connect_tracker_registry_owns_lifecycle_without_core_state',
         'remote_connect_tracker_ignores_unrelated_direct_session_events',
         'remote_connect_tool_preview_slimming_keeps_short_fields_and_drops_large_strings',
+        'remote_connect_workspace_response_helpers_own_wire_shape',
+        'remote_connect_session_response_helpers_own_pagination_and_timestamps',
       ],
     },
     {
@@ -4817,6 +7390,11 @@ function runManifestParserSelfTest() {
       contracts: [
         'CoreServiceAgentRuntime',
         'remote_image_context',
+        'handle_remote_workspace_command',
+        'handle_remote_session_command',
+        'generate_remote_initial_sync',
+        'handle_remote_poll_command',
+        'handle_remote_interaction_command',
         'core_service_agent_runtime_owner_maps_remote_image_context',
         'remote_execution_prefers_unified_image_contexts_over_legacy_images',
         'remote_cancel_decision_preserves_current_turn_boundaries',
@@ -4931,7 +7509,7 @@ function runManifestParserSelfTest() {
       path: 'src/crates/core/src/agentic/tools/implementations/get_tool_spec_tool.rs',
       contracts: [
         'GetToolSpecTool',
-        'build_product_get_tool_spec_catalog_description',
+        'build_collapsed_tools_context_section',
         'product_get_tool_spec_runtime',
         'with_runtime',
         'resolve_product_get_tool_spec_results',
@@ -4943,19 +7521,24 @@ function runManifestParserSelfTest() {
       contracts: [
         'ToolExposure',
         'ToolUseContext',
-        'to_tool_context_facts',
-        'tool_context_facts_omit_runtime_owner_fields_even_when_context_is_populated',
-        'customData',
-        'cancellationToken',
-        'unlocked_collapsed_tools',
+        'pub use crate::agentic::tools::tool_context_runtime::ToolUseContext',
       ],
     },
     {
       path: 'src/crates/core/src/agentic/tools/tool_context_runtime.rs',
       contracts: [
+        'pub struct ToolUseContext',
+        'to_tool_context_facts',
+        'impl PortableToolContextProvider for ToolUseContext',
+        'tool_context_facts_omit_runtime_owner_fields_even_when_context_is_populated',
+        'customData',
+        'cancellationToken',
+        'unlocked_collapsed_tools',
         'impl ToolUseContext',
         'record_light_checkpoint',
         'call_with_tool_runtime_hooks',
+        'call_tool_with_runtime_hooks',
+        'call_records_deep_review_read_file_measurement_without_touching_result',
         'build_tool_use_context_for_task',
         'build_tool_description_context',
         'build_write_preflight_context',
@@ -4973,7 +7556,15 @@ function runManifestParserSelfTest() {
     },
     {
       path: 'src/crates/core/src/agentic/tools/pipeline/tool_pipeline.rs',
-      contracts: ['validate_collapsed_tool_usage', 'unlocked_collapsed_tools', 'GetToolSpec'],
+      contracts: [
+        'validate_collapsed_tool_usage',
+        'unlocked_collapsed_tools',
+        'GetToolSpec',
+        'render_tool_result_for_assistant',
+        'build_tool_execution_error_presentation',
+        'build_user_steering_interrupted_presentation',
+        'build_invalid_tool_call_error_message',
+      ],
     },
     {
       path: 'src/crates/core/src/agentic/execution/execution_engine.rs',
@@ -5007,7 +7598,17 @@ function runManifestParserSelfTest() {
     },
     {
       path: 'src/crates/core/src/agentic/tools/implementations/task_tool.rs',
-      contracts: ['run_in_background', 'start_background_subagent', 'background_task_id', 'Background subagent'],
+      contracts: [
+        'fork_context',
+        'SubagentContextMode::Fork',
+        'delegation_policy\\(\\)\\.spawn_child\\(\\)',
+        'run_in_background',
+        'start_background_subagent',
+        'background_task_id',
+        'Background \\{\\} started successfully',
+        '<background_task status=\\\\"started\\\\"',
+        'background_subagent_start_acknowledgement_keeps_structured_task_marker',
+      ],
     },
     {
       path: 'src/crates/core/src/agentic/coordination/scheduler.rs',
@@ -5169,6 +7770,8 @@ function runManifestParserSelfTest() {
         'resolve_builtin_seed_check',
         'resolve_builtin_seed_action',
         'builtin_source_files',
+        'build_builtin_seed_meta',
+        'preserved_builtin_created_at',
         'BUILTIN_PLACEHOLDER_COMPILED_HTML',
         'read_builtin_install_marker',
         'parse_builtin_install_marker',
@@ -5197,21 +7800,38 @@ function runManifestParserSelfTest() {
         'builtin_source_files',
         'BUILTIN_PLACEHOLDER_COMPILED_HTML',
         'build_builtin_package_json',
+        'preserved_builtin_created_at',
+        'build_builtin_seed_meta',
       ],
     },
     {
       path: 'src/crates/core/src/miniapp/host_dispatch.rs',
       contracts: [
         'dispatch_host',
+        'split_host_method',
         'dispatch_fs',
+        'fs_method_access_mode',
+        'fs_policy_scopes',
+        'fs_resolved_path_allowed',
         'dispatch_shell',
+        'shell_exec_first_token',
+        'shell_exec_input_is_empty',
+        'shell_exec_cwd',
+        'shell_exec_timeout_ms',
+        'shell_exec_default_env',
         'command_basename_allowed',
         'host_allowed_by_allowlist',
       ],
     },
     {
       path: 'src/crates/core/src/miniapp/js_worker_pool.rs',
-      contracts: ['MiniAppRuntimePort'],
+      contracts: [
+        'MiniAppRuntimePort',
+        'plan_install_deps',
+        'worker_is_idle',
+        'worker_pool_at_capacity',
+        'select_lru_worker',
+      ],
     },
     {
       path: 'src/crates/core/src/function_agents/port_adapters.rs',
@@ -5273,6 +7893,7 @@ function runManifestParserSelfTest() {
         'MiniAppRuntimeFacade',
         'mark_deps_installed_state',
         'persist_sync_from_fs_result_for_app',
+        'persist_import_runtime_state',
       ],
     },
     {
@@ -5294,12 +7915,21 @@ function runManifestParserSelfTest() {
     {
       path: 'src/crates/product-domains/src/miniapp/lifecycle.rs',
       contracts: [
+        'MiniAppCreateInput',
+        'MiniAppUpdatePatch',
+        'build_created_app',
+        'apply_update_patch',
+        'prepare_draft_app',
+        'apply_draft_source_sync_result',
+        'apply_draft_permission_update_result',
+        'apply_draft_to_active',
         'mark_deps_installed_state',
         'clear_worker_restart_required_state',
         'prepare_rollback_app',
         'apply_recompile_result',
         'apply_sync_from_fs_result',
         'apply_import_runtime_state',
+        'prepare_imported_meta',
       ],
     },
     {
@@ -5308,15 +7938,55 @@ function runManifestParserSelfTest() {
     },
     {
       path: 'src/crates/product-domains/src/miniapp/runtime.rs',
-      contracts: ['runtime_lookup_order', 'candidate_executable_path', 'versioned_executable_candidate'],
+      contracts: [
+        'runtime_lookup_order',
+        'detect_runtime',
+        'DefaultMiniAppRuntimeProbe',
+        'MiniAppRuntimeProbe',
+        'detect_runtime_with_probe',
+        'which::which',
+        'std::fs::read_dir',
+        'create_version_command',
+        'candidate_executable_path',
+        'versioned_executable_candidate',
+      ],
+    },
+    {
+      path: 'src/crates/product-domains/src/miniapp/worker.rs',
+      contracts: [
+        'InstallDepsPlan',
+        'plan_install_deps',
+        'worker_pool_capacity',
+        'worker_idle_timeout_ms',
+        'worker_is_idle',
+        'select_lru_worker',
+      ],
     },
     {
       path: 'src/crates/product-domains/src/miniapp/host_routing.rs',
       contracts: [
+        'split_host_method',
+        'FsAccessMode',
+        'fs_method_access_mode',
+        'fs_policy_scopes',
+        'fs_resolved_path_allowed',
         'command_basename_for_allowlist',
         'command_basename_allowed',
         'host_allowed_by_allowlist',
+        'shell_exec_first_token',
+        'shell_exec_input_is_empty',
+        'shell_exec_cwd',
+        'shell_exec_timeout_ms',
+        'shell_exec_default_env',
       ],
+    },
+    {
+      path: 'src/crates/product-domains/src/miniapp/exporter.rs',
+      contracts: ['MISSING_JS_RUNTIME_MESSAGE', 'export_runtime_label', 'build_export_check_result'],
+    },
+    {
+      path: 'src/crates/core/src/miniapp/exporter.rs',
+      contracts: ['detect_runtime', 'build_export_check_result', 'Export not yet implemented'],
     },
     {
       path: 'src/crates/product-domains/src/miniapp/customization.rs',
@@ -5340,12 +8010,17 @@ function runManifestParserSelfTest() {
         'storage.load_customization_metadata',
         'CoreProductDomainRuntime',
         'MiniAppRuntimeFacade',
+        'build_created_app',
+        'apply_update_patch',
+        'prepare_draft_app',
+        'apply_draft_to_active',
         'persist_sync_from_fs_result_for_app',
         'compile_source',
         'REQUIRED_SOURCE_FILES',
         'MiniAppImportLayout',
         'build_import_fallbacks',
-        'apply_import_runtime_state',
+        'prepare_imported_meta',
+        'persist_import_runtime_state',
         'runtime_preflight_preserves_recompile_sync_rollback_and_deps_state',
         'import_from_path_preserves_fallback_files_recompile_and_runtime_state',
       ],
@@ -5428,7 +8103,7 @@ function runManifestParserSelfTest() {
     },
     {
       path: 'src/crates/core/src/miniapp/runtime_detect.rs',
-      contracts: ['runtime_lookup_order', 'candidate_executable_path', 'versioned_executable_candidate', 'get_version'],
+      contracts: ['pub use bitfun_product_domains::miniapp::runtime::{', 'detect_runtime'],
     },
   ];
   for (const { path, contracts } of requiredContentContracts) {
@@ -5784,6 +8459,9 @@ function runManifestParserSelfTest() {
     'match mobile_type',
     'RemoteCancelDecision',
     'resolve_remote_cancel_decision',
+    'RemoteCancelTaskRequest',
+    'RemoteCancelRuntimeHost',
+    'cancel_remote_task',
     'remote_session_restore_target',
     'resolve_remote_execution_image_contexts',
     'RemoteImageContextAdapter',
@@ -5796,6 +8474,27 @@ function runManifestParserSelfTest() {
     'read_remote_workspace_file',
     'read_remote_workspace_file_chunk',
     'read_remote_workspace_file_info',
+    'remote_file_content_response',
+    'remote_file_chunk_response',
+    'remote_file_info_response',
+    'handle_remote_workspace_file_command',
+    'general_purpose::STANDARD\\.encode',
+    'remote_dialog_submit_response',
+    'remote_task_cancel_response',
+    'remote_interaction_accepted_response',
+    'remote_answer_question_response',
+    'remote_workspace_info_response',
+    'remote_recent_workspaces_response',
+    'remote_assistant_list_response',
+    'remote_workspace_updated_response',
+    'remote_assistant_updated_response',
+    'remote_session_info',
+    'remote_session_list_response',
+    'remote_initial_sync_response',
+    'remote_session_created_response',
+    'remote_session_model_updated_response',
+    'remote_messages_response',
+    'remote_session_deleted_response',
     'should_send_remote_model_catalog',
     'remote_model_catalog_poll_delta',
     'remote_no_change_poll_response',
@@ -5883,6 +8582,7 @@ function checkOptionalDependencyFeatureOwners(crateDir, rule) {
   const deps = parseManifestDependencies(lines);
   const depsByName = new Map(deps.map((dep) => [dep.name, dep]));
   const features = parseManifestFeatures(lines);
+  const declaredOwnerDeps = new Set(rule.dependencies.map((dependency) => dependency.depName));
 
   for (const dependency of rule.dependencies) {
     const dep = depsByName.get(dependency.depName);
@@ -5903,14 +8603,41 @@ function checkOptionalDependencyFeatureOwners(crateDir, rule) {
     }
     for (const featureName of dependency.ownerFeatures) {
       const feature = features.get(featureName);
+      if (!feature) {
+        failures.push({
+          path: manifestPath,
+          line: dep?.line ?? 1,
+          message: `${rule.reason}; missing owner feature ${featureName} for ${dependency.depName}`,
+        });
+        continue;
+      }
       if (!featureReferencesDependency(feature, dependency.depName)) {
         failures.push({
           path: manifestPath,
-          line: feature?.line ?? dep.line,
+          line: feature.line,
           message: `${rule.reason}; ${featureName} must explicitly enable ${dependency.depName}`,
         });
       }
     }
+  }
+
+  const profileRule = dependencyProfileRules.find((profile) => profile.crateName === rule.crateName);
+  const depsRequiringOwner = new Set(profileRule?.forbiddenNonOptionalDeps ?? []);
+  const uncoveredDeps = new Map();
+  for (const dep of deps) {
+    if (!dep.optional || !depsRequiringOwner.has(dep.name) || declaredOwnerDeps.has(dep.name)) {
+      continue;
+    }
+    if (!uncoveredDeps.has(dep.name)) {
+      uncoveredDeps.set(dep.name, dep);
+    }
+  }
+  for (const [depName, dep] of uncoveredDeps.entries()) {
+    failures.push({
+      path: manifestPath,
+      line: dep.line,
+      message: `${rule.reason}; optional runtime dependency must declare owner feature coverage: ${depName}`,
+    });
   }
 }
 
@@ -5974,9 +8701,33 @@ function checkCoreDefaultProductFullFeature() {
   }
 }
 
+function checkCoreProductFullFeatureAssembly(rule) {
+  const manifestPath = join(ROOT, ...rule.manifestPath.split('/'));
+  const features = parseManifestFeatures(readText(manifestPath).split(/\r?\n/));
+  const productFull = features.get(rule.featureName);
+  if (!productFull) {
+    failures.push({
+      path: manifestPath,
+      line: 1,
+      message: `${rule.reason}; missing ${rule.featureName} feature declaration`,
+    });
+    return;
+  }
+  for (const featureName of rule.requiredFeatureRefs) {
+    if (!featureReferencesFeature(productFull, featureName)) {
+      failures.push({
+        path: manifestPath,
+        line: productFull.line,
+        message: `${rule.reason}; ${rule.featureName} must explicitly enable ${featureName}`,
+      });
+    }
+  }
+}
+
 function checkOwnerCrateFeatureAssembly(rule) {
   const manifestPath = join(ROOT, ...rule.manifestPath.split('/'));
   const features = parseManifestFeatures(readText(manifestPath).split(/\r?\n/));
+  const allowedProductFullFeatures = new Set(rule.requiredProductFullFeatures);
   const defaultFeature = features.get('default');
   if (!defaultFeature) {
     failures.push({
@@ -6008,6 +8759,15 @@ function checkOwnerCrateFeatureAssembly(rule) {
         path: manifestPath,
         line: productFull.line,
         message: `${rule.reason}; product-full must explicitly enable ${featureName}`,
+      });
+    }
+  }
+  for (const featureName of productFull.refs) {
+    if (!allowedProductFullFeatures.has(featureName)) {
+      failures.push({
+        path: manifestPath,
+        line: productFull.line,
+        message: `${rule.reason}; product-full must not include undeclared feature group ${featureName}`,
       });
     }
   }
@@ -6183,9 +8943,13 @@ function checkForbiddenContentUnder(repoDir, patterns, reason) {
     if (!path.endsWith('.rs')) {
       return;
     }
+    const repoPath = toRepoPath(path);
     const lines = readText(path).split(/\r?\n/);
     lines.forEach((line, index) => {
       for (const pattern of patterns) {
+        if (pattern.allowPaths?.includes(repoPath)) {
+          continue;
+        }
         if (pattern.regex.test(line)) {
           failures.push({
             path,
@@ -6234,6 +8998,7 @@ for (const rule of productCoreFeatureAssemblyRules) {
 }
 checkProductCoreFeatureAssemblyCoverage();
 checkCoreDefaultProductFullFeature();
+checkCoreProductFullFeatureAssembly(coreProductFullFeatureAssemblyRule);
 for (const rule of ownerCrateFeatureAssemblyRules) {
   checkOwnerCrateFeatureAssembly(rule);
 }

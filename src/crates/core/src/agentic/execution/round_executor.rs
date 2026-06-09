@@ -4,6 +4,9 @@
 
 use super::stream_processor::{StreamProcessOptions, StreamProcessor, StreamResult};
 use super::types::{FinishReason, RoundContext, RoundResult};
+use super::write_content_sanitizer::{
+    contains_tool_invocation_artifacts, strip_tool_invocation_artifacts,
+};
 use crate::agentic::core::{Message, ToolCall};
 use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue, ToolEventData};
 use crate::agentic::tools::computer_use_host::ComputerUseHostRef;
@@ -23,8 +26,10 @@ use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::Message as AIMessage;
 use crate::util::types::ToolDefinition;
+use bitfun_ai_adapters::types::ReasoningMode;
 use dashmap::DashMap;
 use log::{debug, error, info, warn};
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio_util::sync::CancellationToken;
@@ -40,8 +45,10 @@ pub struct RoundExecutor {
 
 impl RoundExecutor {
     const MAX_STREAM_ATTEMPTS: usize = 10;
+    const MAX_WRITE_CONTENT_QUALITY_ATTEMPTS: usize = 2;
     const RETRY_BASE_DELAY_MS: u64 = 500;
-    const WRITE_CONTENT_STREAM_IDLE_TIMEOUT_SECS: u64 = 60;
+    const WRITE_CONTENT_STREAM_IDLE_TIMEOUT_SECS: u64 = 45;
+    const AUTO_READ_AFTER_WRITE_MARKER: &'static str = "__read_after_write";
 
     fn has_user_visible_assistant_text(text: &str) -> bool {
         !text.trim().is_empty()
@@ -160,10 +167,27 @@ impl RoundExecutor {
                 Err(e) => {
                     error!("AI request failed: {}", e);
                     let err_msg = e.to_string();
+                    if Self::is_transient_network_error(&err_msg)
+                        && attempt_index < max_attempts - 1
+                    {
+                        let delay_ms = Self::retry_delay_ms(attempt_index);
+                        warn!(
+                            "Retrying AI request after connection failure: session_id={}, round_id={}, attempt={}/{}, delay_ms={}, error={}",
+                            context.session_id,
+                            round_id,
+                            attempt_index + 1,
+                            max_attempts,
+                            delay_ms,
+                            err_msg
+                        );
+                        tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                        attempt_index += 1;
+                        continue;
+                    }
                     if Self::is_transient_network_error(&err_msg) {
                         return Err(BitFunError::AIClient(format!(
-                            "AI stream connection retry budget exhausted: {}",
-                            err_msg
+                            "Stream retry budget exhausted after {} attempts: {}",
+                            max_attempts, err_msg
                         )));
                     }
                     return Err(BitFunError::AIClient(err_msg));
@@ -205,6 +229,10 @@ impl RoundExecutor {
                     &cancel_token,
                     StreamProcessOptions {
                         recover_partial_on_cancel: context.recover_partial_on_cancel,
+                        strip_write_inline_content: matches!(
+                            Self::write_tool_mode(&context),
+                            WriteToolMode::PlaintextFollowup
+                        ),
                     },
                 )
                 .await
@@ -566,7 +594,13 @@ impl RoundExecutor {
         // plain text wrapped in <bitfun_contents> tags. This avoids having the
         // model emit large file contents inside JSON tool-call arguments, which
         // is a major source of JSON parse failures.
-        let tool_calls = stream_result.tool_calls.clone();
+        let mut tool_calls = stream_result.tool_calls.clone();
+        if matches!(
+            Self::write_tool_mode(&context),
+            WriteToolMode::PlaintextFollowup
+        ) {
+            FileWriteTool::strip_plaintext_followup_inline_content_from_tool_calls(&mut tool_calls);
+        }
         let tool_calls = if matches!(
             Self::write_tool_mode(&context),
             WriteToolMode::PlaintextFollowup
@@ -583,6 +617,14 @@ impl RoundExecutor {
         } else {
             tool_calls
         };
+        let assistant_tool_calls = if matches!(
+            Self::write_tool_mode(&context),
+            WriteToolMode::PlaintextFollowup
+        ) {
+            Self::strip_plaintext_followup_write_content_for_history(tool_calls.clone())
+        } else {
+            tool_calls.clone()
+        };
 
         // Execute tool calls
         debug!(
@@ -593,6 +635,8 @@ impl RoundExecutor {
         let tool_phase_started_at = Instant::now();
         let tool_results = if let Some(tool_pipeline) = &self.tool_pipeline {
             // Create tool execution context
+            let allowed_tools =
+                Self::allowed_tools_for_execution(&context.available_tools, &tool_calls);
             let tool_context = ToolExecutionContext {
                 session_id: context.session_id.clone(),
                 dialog_turn_id: context.dialog_turn_id.clone(),
@@ -601,9 +645,10 @@ impl RoundExecutor {
                 workspace: context.workspace.clone(),
                 context_vars: context.context_vars.clone(),
                 subagent_parent_info,
+                delegation_policy: context.delegation_policy,
                 collapsed_tools: context.collapsed_tools.clone(),
                 unlocked_collapsed_tools: context.unlocked_collapsed_tools.clone(),
-                allowed_tools: context.available_tools.clone(),
+                allowed_tools,
                 runtime_tool_restrictions: context.runtime_tool_restrictions.clone(),
                 steering_interrupt: context.steering_interrupt.clone(),
                 workspace_services: context.workspace_services.clone(),
@@ -735,7 +780,7 @@ impl RoundExecutor {
         let assistant_message = Message::assistant_with_reasoning(
             reasoning,
             stream_result.full_text.clone(),
-            tool_calls.clone(),
+            assistant_tool_calls.clone(),
         )
         .with_turn_id(context.dialog_turn_id.clone())
         .with_round_id(round_id.clone())
@@ -791,7 +836,7 @@ impl RoundExecutor {
 
         Ok(RoundResult {
             assistant_message,
-            tool_calls: tool_calls.clone(),
+            tool_calls: assistant_tool_calls,
             tool_result_messages,
             has_more_rounds,
             finish_reason: if has_more_rounds {
@@ -864,7 +909,9 @@ impl RoundExecutor {
     /// separate AI request with the full session history and a directive to
     /// output the file content as plain text inside `<bitfun_contents>` tags.
     /// The extracted content is then injected into the tool call arguments so
-    /// the downstream Write tool execution proceeds as normal.
+    /// the downstream Write tool execution proceeds as normal. A synthetic Read
+    /// call is added after each generated Write so the next model round sees
+    /// the written file through the normal file-reading contract.
     async fn generate_write_tool_contents(
         &self,
         ai_client: Arc<AIClient>,
@@ -894,10 +941,16 @@ impl RoundExecutor {
             return Ok(tool_calls);
         }
 
+        // PlaintextFollowup injects a synthetic Read after each generated Write.
+        // Fail fast before the slow content-generation requests if Read cannot run.
+        Self::ensure_auto_read_after_write_executable(context).await?;
+
         info!(
             "Generating content for {} Write tool call(s) via separate AI request",
             write_indices.len()
         );
+
+        let mut generated_write_reads: Vec<(String, String)> = Vec::new();
 
         for idx in &write_indices {
             if cancel_token.is_cancelled() {
@@ -913,8 +966,7 @@ impl RoundExecutor {
                 .to_string();
             let tool_id = tc.tool_id.clone();
 
-            if let Some(error) = Self::write_content_preflight_error(context, &file_path).await
-            {
+            if let Some(error) = Self::write_content_preflight_error(context, &file_path).await {
                 debug!(
                     "Skipping Write content generation after preflight failure: file_path={}, error={}",
                     file_path, error
@@ -973,122 +1025,129 @@ impl RoundExecutor {
                  5. Do NOT output anything outside the <bitfun_contents> tags — no explanations, no commentary, \
                  no thinking blocks, no markdown fences (```), no extra XML wrapper tags.\n\
                  6. The text between the tags must be EXACTLY what gets written to disk — raw file content only.\n\
-                 7. Do NOT output any tool_call XML, JSON tool invocations, or agent framework syntax inside the tags. \
-                 You are not calling a tool here — you are outputting raw file content.\n\
-                 <bitfun_contents>\n",
+                 7. Do NOT call any tools in this turn. Do NOT output tool_call XML, DSML syntax \
+                 (including `<｜｜DSML｜｜tool_calls>` / `<invoke>` markers), JSON tool invocations, \
+                 function_call blocks, or agent framework syntax inside or outside the tags. \
+                 You are not calling a tool here — you are outputting raw file content only.\n\
+                 8. Do NOT repeat, summarize, or narrate prior tool calls (Read, Bash, Edit, etc.). Start writing the actual file body immediately.\n\
+                 9. Do NOT output `[called tools:` markers, tool parameter JSON, or `<bitfun_contents>` / `</bitfun_contents>` tags — the opening tag is already provided via prefill. Begin with the first byte of the file content immediately after that opening tag.",
                 file_path = file_path
             );
 
-            // Strip tool_calls and tool results from history to prevent weak models
-            // from imitating tool-call format inside the generated file content.
-            let mut content_messages: Vec<AIMessage> = ai_messages
-                .iter()
-                .filter_map(|m| {
-                    if m.role == "tool" {
-                        // Drop tool result messages entirely
-                        None
-                    } else if m.tool_calls.is_some() {
-                        // Replace assistant tool-call messages with a plain-text summary
-                        let names = m
-                            .tool_calls
-                            .as_ref()
-                            .unwrap()
-                            .iter()
-                            .map(|tc| tc.name.as_str())
-                            .collect::<Vec<_>>()
-                            .join(", ");
-                        Some(AIMessage::assistant(format!("[called tools: {names}]")))
-                    } else {
-                        Some(m.clone())
-                    }
-                })
-                .collect();
-            // Add an assistant prefill to prime the model to output content directly
-            // inside the tags, reducing the chance of preamble text.
-            content_messages.push(AIMessage::user(content_prompt));
-            content_messages.push(AIMessage::assistant("<bitfun_contents>\n".to_string()));
+            let content_messages = Self::build_write_content_messages(ai_messages, &content_prompt);
+            let write_client = ai_client.with_reasoning_mode(ReasoningMode::Disabled);
 
-            // Send the content-generation request (no tools, pure text output)
-            let full_text = match ai_client.send_message_stream(content_messages, None).await {
-                Ok(response) => {
-                    let mut text = String::new();
-                    let mut stream = response.stream;
-                    let watchdog_timeout =
-                        StreamProcessor::derive_watchdog_timeout(ai_client.stream_idle_timeout())
-                            .unwrap_or_else(|| {
-                                Duration::from_secs(Self::WRITE_CONTENT_STREAM_IDLE_TIMEOUT_SECS)
-                            });
-                    use futures::StreamExt;
-                    loop {
-                        if cancel_token.is_cancelled() {
-                            return Err(BitFunError::Cancelled("Execution cancelled".to_string()));
+            let content = {
+                let mut content_attempt = 0usize;
+                loop {
+                    let full_text = self
+                        .stream_write_tool_content(
+                            &write_client,
+                            content_messages.clone(),
+                            &file_path,
+                            &tool_id,
+                            context,
+                            round_id,
+                            cancel_token,
+                        )
+                        .await?;
+
+                    let extracted = extract_bitfun_contents_with_options(&full_text, true);
+                    if extracted.is_empty() {
+                        let raw_preview = Self::truncate_for_log(&full_text, 1024);
+                        warn!(
+                            "Write content extraction empty: file_path={}, raw_text_len={}, raw_preview={:?}",
+                            file_path,
+                            full_text.len(),
+                            raw_preview
+                        );
+                        if content_attempt + 1 >= Self::MAX_WRITE_CONTENT_QUALITY_ATTEMPTS {
+                            let error = format!(
+                                "Write content generation produced no file content for {} after {} attempts. \
+                                 The follow-up request returned an empty <bitfun_contents> body \
+                                 (raw_text_len={}, all visible text was reasoning/tool-call artifacts that got stripped). \
+                                 Retry the Write tool call (file_path only, no inline content).",
+                                file_path,
+                                Self::MAX_WRITE_CONTENT_QUALITY_ATTEMPTS,
+                                full_text.len()
+                            );
+                            warn!("{}", error);
+                            self.emit_event(
+                                AgenticEvent::ToolEvent {
+                                    session_id: context.session_id.clone(),
+                                    turn_id: context.dialog_turn_id.clone(),
+                                    round_id: round_id.to_string(),
+                                    tool_event: ToolEventData::Failed {
+                                        tool_id: tool_id.clone(),
+                                        tool_name: "Write".to_string(),
+                                        error,
+                                        duration_ms: None,
+                                        queue_wait_ms: None,
+                                        preflight_ms: None,
+                                        confirmation_wait_ms: None,
+                                        execution_ms: None,
+                                    },
+                                },
+                                EventPriority::High,
+                            )
+                            .await;
+                            break String::new();
                         }
 
-                        let chunk = match tokio::time::timeout(watchdog_timeout, stream.next())
-                            .await
-                        {
-                            Ok(Some(chunk)) => chunk,
-                            Ok(None) => break,
-                            Err(_) => {
-                                return Err(BitFunError::Timeout(format!(
-                                    "Write content generation timed out for {} after {} seconds without stream progress",
-                                    file_path,
-                                    watchdog_timeout.as_secs()
-                                )));
-                            }
-                        };
-
-                        match chunk {
-                            Ok(resp) => {
-                                let chunk_text = resp.text.unwrap_or_default();
-                                if !chunk_text.is_empty() {
-                                    text.push_str(&chunk_text);
-
-                                    // Emit streaming ParamsPartial so the UI
-                                    // shows a live content preview
-                                    let params = serde_json::json!({
-                                        "file_path": &file_path,
-                                        "content": &text,
-                                    });
-                                    self.emit_event(
-                                        AgenticEvent::ToolEvent {
-                                            session_id: context.session_id.clone(),
-                                            turn_id: context.dialog_turn_id.clone(),
-                                            round_id: round_id.to_string(),
-                                            tool_event: ToolEventData::ParamsPartial {
-                                                tool_id: tool_id.clone(),
-                                                tool_name: "Write".to_string(),
-                                                params: params.to_string(),
-                                            },
-                                        },
-                                        EventPriority::Normal,
-                                    )
-                                    .await;
-                                }
-                            }
-                            Err(e) => {
-                                error!("Error in Write content generation stream: {}", e);
-                                break;
-                            }
+                        warn!(
+                            "Write content generation returned empty content for file_path={}, retrying ({}/{})",
+                            file_path,
+                            content_attempt + 1,
+                            Self::MAX_WRITE_CONTENT_QUALITY_ATTEMPTS
+                        );
+                        content_attempt += 1;
+                        continue;
+                    } else if contains_tool_invocation_artifacts(&extracted) {
+                        if content_attempt + 1 >= Self::MAX_WRITE_CONTENT_QUALITY_ATTEMPTS {
+                            let error = format!(
+                                "Write content generation returned tool-invocation syntax instead of file content for {}. \
+                                 Retry Write after reviewing the target file requirements.",
+                                file_path
+                            );
+                            warn!("{}", error);
+                            self.emit_event(
+                                AgenticEvent::ToolEvent {
+                                    session_id: context.session_id.clone(),
+                                    turn_id: context.dialog_turn_id.clone(),
+                                    round_id: round_id.to_string(),
+                                    tool_event: ToolEventData::Failed {
+                                        tool_id: tool_id.clone(),
+                                        tool_name: "Write".to_string(),
+                                        error,
+                                        duration_ms: None,
+                                        queue_wait_ms: None,
+                                        preflight_ms: None,
+                                        confirmation_wait_ms: None,
+                                        execution_ms: None,
+                                    },
+                                },
+                                EventPriority::High,
+                            )
+                            .await;
+                            break String::new();
                         }
+
+                        warn!(
+                            "Write content generation returned tool-invocation syntax for file_path={}, retrying ({}/{})",
+                            file_path,
+                            content_attempt + 1,
+                            Self::MAX_WRITE_CONTENT_QUALITY_ATTEMPTS
+                        );
+                        content_attempt += 1;
+                        continue;
                     }
-                    text
-                }
-                Err(e) => {
-                    error!("Write content generation request failed: {}", e);
-                    return Err(BitFunError::AIClient(format!(
-                        "Write content generation failed for {}: {}",
-                        file_path, e
-                    )));
+
+                    break extracted;
                 }
             };
 
-            let content = extract_bitfun_contents(&full_text);
             if content.is_empty() {
-                warn!(
-                    "Write content generation returned empty content for file_path={}",
-                    file_path
-                );
+                continue;
             }
 
             // Detect strong "omission marker" phrases that indicate the model
@@ -1129,6 +1188,7 @@ impl RoundExecutor {
                 .as_object_mut()
                 .expect("Write tool arguments must be a JSON object")
                 .insert("content".to_string(), serde_json::Value::String(content));
+            generated_write_reads.push((tool_id.clone(), file_path.clone()));
 
             debug!(
                 "Write content generated: file_path={}, content_len={}",
@@ -1142,7 +1202,319 @@ impl RoundExecutor {
             );
         }
 
+        if !generated_write_reads.is_empty() {
+            tool_calls = Self::insert_auto_read_calls_after_generated_writes(
+                tool_calls,
+                &generated_write_reads,
+            );
+        }
+
         Ok(tool_calls)
+    }
+
+    async fn ensure_auto_read_after_write_executable(context: &RoundContext) -> BitFunResult<()> {
+        context
+            .runtime_tool_restrictions
+            .ensure_tool_allowed("Read")
+            .map_err(BitFunError::from)?;
+
+        let registry = get_global_tool_registry();
+        let tool_registry = registry.read().await;
+        if tool_registry.get_tool("Read").is_none() {
+            return Err(BitFunError::tool(
+                "PlaintextFollowup Write requires the Read tool to be registered so the system can inspect the file after writing.".to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+
+    fn allowed_tools_for_execution(
+        available_tools: &[String],
+        tool_calls: &[ToolCall],
+    ) -> Vec<String> {
+        let mut allowed_tools = available_tools.to_vec();
+        if allowed_tools.is_empty()
+            || !Self::contains_auto_read_after_write(tool_calls)
+            || allowed_tools.iter().any(|tool| tool == "Read")
+        {
+            return allowed_tools;
+        }
+
+        // The post-Write Read is injected by the runtime, not selected by the
+        // model from the visible manifest. Permit that synthetic Read through
+        // the execution allow-list while keeping runtime restrictions enforced.
+        allowed_tools.push("Read".to_string());
+        allowed_tools
+    }
+
+    fn contains_auto_read_after_write(tool_calls: &[ToolCall]) -> bool {
+        tool_calls.iter().any(|tool_call| {
+            tool_call.tool_name == "Read"
+                && tool_call
+                    .tool_id
+                    .contains(Self::AUTO_READ_AFTER_WRITE_MARKER)
+        })
+    }
+
+    fn insert_auto_read_calls_after_generated_writes(
+        tool_calls: Vec<ToolCall>,
+        generated_write_reads: &[(String, String)],
+    ) -> Vec<ToolCall> {
+        if generated_write_reads.is_empty() {
+            return tool_calls;
+        }
+
+        let generated_by_tool_id: HashMap<String, String> =
+            generated_write_reads.iter().cloned().collect();
+        let mut existing_ids: HashSet<String> = tool_calls
+            .iter()
+            .map(|tool_call| tool_call.tool_id.clone())
+            .collect();
+        let original_tool_calls = tool_calls.clone();
+        let mut expanded =
+            Vec::with_capacity(tool_calls.len().saturating_add(generated_write_reads.len()));
+
+        for tool_call in tool_calls {
+            let write_tool_id = tool_call.tool_id.clone();
+            let read_file_path = generated_by_tool_id.get(&write_tool_id).cloned();
+            expanded.push(tool_call);
+
+            let Some(file_path) = read_file_path else {
+                continue;
+            };
+
+            if Self::has_later_read_for_file(&original_tool_calls, &write_tool_id, &file_path) {
+                continue;
+            }
+
+            let read_tool_id = Self::unique_auto_read_tool_id(&write_tool_id, &mut existing_ids);
+            expanded.push(ToolCall {
+                tool_id: read_tool_id,
+                tool_name: "Read".to_string(),
+                arguments: serde_json::json!({ "file_path": file_path }),
+                raw_arguments: None,
+                is_error: false,
+                recovered_from_truncation: false,
+            });
+        }
+
+        expanded
+    }
+
+    fn has_later_read_for_file(
+        tool_calls: &[ToolCall],
+        write_tool_id: &str,
+        file_path: &str,
+    ) -> bool {
+        let mut after_write = false;
+        for tool_call in tool_calls {
+            if after_write
+                && tool_call.tool_name == "Read"
+                && tool_call
+                    .arguments
+                    .get("file_path")
+                    .and_then(|value| value.as_str())
+                    == Some(file_path)
+            {
+                return true;
+            }
+            if tool_call.tool_id == write_tool_id {
+                after_write = true;
+            }
+        }
+        false
+    }
+
+    fn unique_auto_read_tool_id(write_tool_id: &str, existing_ids: &mut HashSet<String>) -> String {
+        let base = format!("{write_tool_id}{}", Self::AUTO_READ_AFTER_WRITE_MARKER);
+        let mut candidate = base.clone();
+        let mut suffix = 2usize;
+        while !existing_ids.insert(candidate.clone()) {
+            candidate = format!("{base}_{suffix}");
+            suffix += 1;
+        }
+        candidate
+    }
+
+    fn strip_plaintext_followup_write_content_for_history(
+        mut tool_calls: Vec<ToolCall>,
+    ) -> Vec<ToolCall> {
+        FileWriteTool::strip_plaintext_followup_inline_content_from_tool_calls(&mut tool_calls);
+        tool_calls
+    }
+
+    /// Build the message list for Write content generation.
+    ///
+    /// Reuses the exact conversation prefix that was sent to the model for this
+    /// round so tool results, prior assistant tool-call turns, and other
+    /// context stay aligned (including provider-side prefix/KV reuse). Only
+    /// appends the write-content directive and an assistant prefill.
+    fn build_write_content_messages(
+        ai_messages: &[AIMessage],
+        content_prompt: &str,
+    ) -> Vec<AIMessage> {
+        let mut content_messages = ai_messages.to_vec();
+        content_messages.push(AIMessage::user(content_prompt.to_string()));
+        content_messages.push(AIMessage::assistant("<bitfun_contents>".to_string()));
+        content_messages
+    }
+
+    async fn stream_write_tool_content(
+        &self,
+        ai_client: &AIClient,
+        content_messages: Vec<AIMessage>,
+        file_path: &str,
+        tool_id: &str,
+        context: &RoundContext,
+        round_id: &str,
+        cancel_token: &CancellationToken,
+    ) -> BitFunResult<String> {
+        let mut attempt_index = 0usize;
+        loop {
+            if cancel_token.is_cancelled() {
+                return Err(BitFunError::Cancelled("Execution cancelled".to_string()));
+            }
+
+            let stream_response = match ai_client
+                .send_message_stream_with_extra_body(
+                    content_messages.clone(),
+                    None,
+                    ai_client.write_content_generation_extra_body(),
+                )
+                .await
+            {
+                Ok(response) => response,
+                Err(e) => {
+                    let err_msg = e.to_string();
+                    if Self::is_transient_network_error(&err_msg)
+                        && attempt_index < Self::MAX_STREAM_ATTEMPTS - 1
+                    {
+                        let delay_ms = Self::retry_delay_ms(attempt_index);
+                        warn!(
+                            "Retrying Write content generation after transient error: file_path={}, attempt={}/{}, delay_ms={}, error={}",
+                            file_path,
+                            attempt_index + 1,
+                            Self::MAX_STREAM_ATTEMPTS,
+                            delay_ms,
+                            err_msg
+                        );
+                        tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                        attempt_index += 1;
+                        continue;
+                    }
+                    error!("Write content generation request failed: {}", err_msg);
+                    return Err(BitFunError::AIClient(format!(
+                        "Write content generation failed for {}: {}",
+                        file_path, err_msg
+                    )));
+                }
+            };
+
+            let mut text = String::new();
+            let mut reasoning_chars: usize = 0;
+            let mut stream = stream_response.stream;
+            let watchdog_timeout =
+                StreamProcessor::derive_watchdog_timeout(ai_client.stream_idle_timeout())
+                    .unwrap_or_else(|| {
+                        Duration::from_secs(Self::WRITE_CONTENT_STREAM_IDLE_TIMEOUT_SECS)
+                    });
+            use futures::StreamExt;
+            let mut stream_natural_end = false;
+            loop {
+                if cancel_token.is_cancelled() {
+                    return Err(BitFunError::Cancelled("Execution cancelled".to_string()));
+                }
+
+                let chunk = match tokio::time::timeout(watchdog_timeout, stream.next()).await {
+                    Ok(Some(chunk)) => chunk,
+                    Ok(None) => {
+                        stream_natural_end = true;
+                        break;
+                    }
+                    Err(_) => {
+                        return Err(BitFunError::Timeout(format!(
+                            "Write content generation timed out for {} after {} seconds without stream progress",
+                            file_path,
+                            watchdog_timeout.as_secs()
+                        )));
+                    }
+                };
+
+                match chunk {
+                    Ok(resp) => {
+                        if let Some(reasoning) = resp.reasoning_content.as_ref() {
+                            reasoning_chars = reasoning_chars.saturating_add(reasoning.len());
+                        }
+                        let chunk_text = resp.text.unwrap_or_default();
+                        if chunk_text.is_empty() {
+                            continue;
+                        }
+                        text.push_str(&chunk_text);
+
+                        let preview_content = extract_bitfun_contents_with_options(&text, true);
+                        let params = serde_json::json!({
+                            "file_path": file_path,
+                            "content": &preview_content,
+                        });
+                        self.emit_event(
+                            AgenticEvent::ToolEvent {
+                                session_id: context.session_id.clone(),
+                                turn_id: context.dialog_turn_id.clone(),
+                                round_id: round_id.to_string(),
+                                tool_event: ToolEventData::ParamsPartial {
+                                    tool_id: tool_id.to_string(),
+                                    tool_name: "Write".to_string(),
+                                    params: params.to_string(),
+                                },
+                            },
+                            EventPriority::Normal,
+                        )
+                        .await;
+                    }
+                    Err(e) => {
+                        error!("Error in Write content generation stream: {}", e);
+                        break;
+                    }
+                }
+            }
+
+            if !text.trim().is_empty() {
+                return Ok(text);
+            }
+
+            if attempt_index < Self::MAX_STREAM_ATTEMPTS - 1 {
+                let delay_ms = Self::retry_delay_ms(attempt_index);
+                warn!(
+                    "Retrying Write content generation after empty stream: file_path={}, attempt={}/{}, delay_ms={}, natural_end={}, reasoning_chars={}",
+                    file_path,
+                    attempt_index + 1,
+                    Self::MAX_STREAM_ATTEMPTS,
+                    delay_ms,
+                    stream_natural_end,
+                    reasoning_chars
+                );
+                tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                attempt_index += 1;
+                continue;
+            }
+
+            warn!(
+                "Write content generation exhausted stream retries with empty visible text: file_path={}, natural_end={}, reasoning_chars={}",
+                file_path, stream_natural_end, reasoning_chars
+            );
+            return Ok(text);
+        }
+    }
+
+    /// Truncate a string for diagnostic logging while keeping it valid UTF-8.
+    fn truncate_for_log(text: &str, max_chars: usize) -> String {
+        if text.chars().count() <= max_chars {
+            return text.to_string();
+        }
+        let mut out: String = text.chars().take(max_chars).collect();
+        out.push_str("...[truncated]");
+        out
     }
 
     async fn write_content_preflight_error(
@@ -1349,24 +1721,31 @@ fn token_details_from_usage(
 
 /// Extract content from `<bitfun_contents>...</bitfun_contents>` tags.
 ///
-/// If the tags are present, returns the text between them (trimmed).
-/// If the tags are not present, returns the full text trimmed (fallback for
-/// models that ignore the tag instruction).
+/// When `prefill_open_tag` is true, the assistant prefill already opened the tag
+/// and streamed tokens are inner file content even if the opening tag is absent.
+#[cfg(test)]
 fn extract_bitfun_contents(text: &str) -> String {
+    extract_bitfun_contents_with_options(text, false)
+}
+
+fn extract_bitfun_contents_with_options(text: &str, prefill_open_tag: bool) -> String {
     const OPEN_TAG: &str = "<bitfun_contents>";
     const CLOSE_TAG: &str = "</bitfun_contents>";
 
-    let raw = if let Some(start) = text.find(OPEN_TAG) {
+    let raw = if let Some(start) = text.rfind(OPEN_TAG) {
         let content_start = start + OPEN_TAG.len();
         if let Some(end) = text[content_start..].find(CLOSE_TAG) {
             &text[content_start..content_start + end]
         } else {
-            // Opening tag found but no closing tag — take everything after the
-            // opening tag (the model may still be streaming or forgot to close).
             &text[content_start..]
         }
+    } else if prefill_open_tag {
+        if let Some(end) = text.find(CLOSE_TAG) {
+            &text[..end]
+        } else {
+            text
+        }
     } else {
-        // No tags at all — return the full text as a fallback
         text
     };
 
@@ -1378,6 +1757,10 @@ fn extract_bitfun_contents(text: &str) -> String {
 fn sanitize_write_content(content: &str) -> String {
     let mut s = content.to_string();
 
+    s = strip_called_tools_artifacts(&s);
+    s = strip_tool_invocation_artifacts(&s);
+    s = strip_bitfun_content_tags(&s);
+
     // Strip multi-line thinking/reasoning XML blocks (e.g. <think ...>..</think >)
     // These are very common with reasoning models.
     s = strip_thinking_blocks(&s);
@@ -1386,8 +1769,41 @@ fn sanitize_write_content(content: &str) -> String {
     // that some models wrap around file content.
     s = strip_markdown_fences(&s);
 
-    // Trim leading/trailing whitespace left after stripping blocks
     s.trim().to_string()
+}
+
+fn strip_bitfun_content_tags(content: &str) -> String {
+    content
+        .replace("<bitfun_contents>", "")
+        .replace("</bitfun_contents>", "")
+}
+
+fn strip_called_tools_artifacts(content: &str) -> String {
+    let mut result = content.to_string();
+    while let Some(start) = result.find("[called tools:") {
+        let Some(end) = find_called_tools_block_end(&result[start..]) else {
+            break;
+        };
+        result = format!("{}{}", &result[..start], &result[start + end..]);
+    }
+    result
+}
+
+fn find_called_tools_block_end(block: &str) -> Option<usize> {
+    let mut depth = 0usize;
+    for (index, ch) in block.char_indices() {
+        match ch {
+            '[' => depth += 1,
+            ']' => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    return Some(index + ch.len_utf8());
+                }
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 /// Strip thinking-style XML blocks from content. Handles multi-line blocks
@@ -1559,7 +1975,10 @@ fn detect_placeholder_patterns(content: &str) -> Option<&'static str> {
 
 #[cfg(test)]
 mod tests {
-    use super::{extract_bitfun_contents, RoundExecutor, StreamProcessor};
+    use super::{
+        extract_bitfun_contents, extract_bitfun_contents_with_options, RoundExecutor,
+        StreamProcessor,
+    };
     use crate::agentic::events::{EventQueue, EventQueueConfig};
     use crate::agentic::execution::types::RoundContext;
     use crate::agentic::tools::ToolRuntimeRestrictions;
@@ -1595,6 +2014,7 @@ mod tests {
             model_name: "test-model".to_string(),
             agent_type: "test-agent".to_string(),
             context_vars: HashMap::new(),
+            delegation_policy: bitfun_runtime_ports::DelegationPolicy::top_level(),
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
             steering_interrupt: None,
             cancellation_token: CancellationToken::new(),
@@ -1773,6 +2193,206 @@ mod tests {
     }
 
     #[test]
+    fn write_content_messages_preserve_full_conversation_prefix() {
+        use crate::util::types::Message as CoreAIMessage;
+        use bitfun_ai_adapters::types::{Message as AIMessage, ToolCall};
+
+        let ai_messages = vec![
+            CoreAIMessage::user("Create the benchmark doc".to_string()),
+            CoreAIMessage::assistant_with_tools(vec![ToolCall {
+                id: "write-1".to_string(),
+                name: "Write".to_string(),
+                arguments: serde_json::json!({ "file_path": "notes.md" }),
+                raw_arguments: None,
+            }]),
+            AIMessage {
+                role: "tool".to_string(),
+                content: Some("file body from Read".to_string()),
+                reasoning_content: None,
+                thinking_signature: None,
+                tool_calls: None,
+                tool_call_id: Some("read-1".to_string()),
+                name: Some("Read".to_string()),
+                is_error: None,
+                tool_image_attachments: None,
+            },
+        ];
+
+        let messages =
+            RoundExecutor::build_write_content_messages(&ai_messages, "Write the full file.");
+
+        assert_eq!(messages.len(), 5);
+        assert!(messages[1].tool_calls.is_some());
+        assert_eq!(messages[2].role, "tool");
+        assert_eq!(messages[3].role, "user");
+        assert_eq!(messages[4].role, "assistant");
+        assert_eq!(messages[4].content.as_deref(), Some("<bitfun_contents>"));
+        assert!(messages[4]
+            .content
+            .as_deref()
+            .is_some_and(|content| !content.ends_with(char::is_whitespace)));
+    }
+
+    #[test]
+    fn generated_write_gets_followup_read_call() {
+        let tool_calls = vec![
+            crate::agentic::core::ToolCall {
+                tool_id: "write-1".to_string(),
+                tool_name: "Write".to_string(),
+                arguments: serde_json::json!({
+                    "file_path": "notes.md",
+                    "content": "hello"
+                }),
+                raw_arguments: None,
+                is_error: false,
+                recovered_from_truncation: false,
+            },
+            crate::agentic::core::ToolCall {
+                tool_id: "bash-1".to_string(),
+                tool_name: "Bash".to_string(),
+                arguments: serde_json::json!({ "command": "pwd" }),
+                raw_arguments: None,
+                is_error: false,
+                recovered_from_truncation: false,
+            },
+        ];
+
+        let expanded = RoundExecutor::insert_auto_read_calls_after_generated_writes(
+            tool_calls,
+            &[("write-1".to_string(), "notes.md".to_string())],
+        );
+
+        assert_eq!(
+            expanded
+                .iter()
+                .map(|tool_call| tool_call.tool_name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Write", "Read", "Bash"]
+        );
+        assert_eq!(expanded[1].tool_id, "write-1__read_after_write".to_string());
+        assert_eq!(
+            expanded[1].arguments,
+            serde_json::json!({ "file_path": "notes.md" })
+        );
+    }
+
+    #[test]
+    fn generated_write_does_not_duplicate_existing_later_read() {
+        let tool_calls = vec![
+            crate::agentic::core::ToolCall {
+                tool_id: "write-1".to_string(),
+                tool_name: "Write".to_string(),
+                arguments: serde_json::json!({
+                    "file_path": "notes.md",
+                    "content": "hello"
+                }),
+                raw_arguments: None,
+                is_error: false,
+                recovered_from_truncation: false,
+            },
+            crate::agentic::core::ToolCall {
+                tool_id: "read-1".to_string(),
+                tool_name: "Read".to_string(),
+                arguments: serde_json::json!({ "file_path": "notes.md" }),
+                raw_arguments: None,
+                is_error: false,
+                recovered_from_truncation: false,
+            },
+        ];
+
+        let expanded = RoundExecutor::insert_auto_read_calls_after_generated_writes(
+            tool_calls,
+            &[("write-1".to_string(), "notes.md".to_string())],
+        );
+
+        assert_eq!(expanded.len(), 2);
+        assert_eq!(expanded[1].tool_id, "read-1");
+    }
+
+    #[test]
+    fn synthetic_post_write_read_is_allowed_for_execution_when_hidden_from_model() {
+        let tool_calls = vec![
+            crate::agentic::core::ToolCall {
+                tool_id: "write-1".to_string(),
+                tool_name: "Write".to_string(),
+                arguments: serde_json::json!({
+                    "file_path": "notes.md",
+                    "content": "hello"
+                }),
+                raw_arguments: None,
+                is_error: false,
+                recovered_from_truncation: false,
+            },
+            crate::agentic::core::ToolCall {
+                tool_id: "write-1__read_after_write".to_string(),
+                tool_name: "Read".to_string(),
+                arguments: serde_json::json!({ "file_path": "notes.md" }),
+                raw_arguments: None,
+                is_error: false,
+                recovered_from_truncation: false,
+            },
+        ];
+
+        let allowed =
+            RoundExecutor::allowed_tools_for_execution(&["Write".to_string()], &tool_calls);
+
+        assert_eq!(allowed, vec!["Write".to_string(), "Read".to_string()]);
+    }
+
+    #[test]
+    fn regular_read_is_not_added_to_execution_allow_list() {
+        let tool_calls = vec![crate::agentic::core::ToolCall {
+            tool_id: "read-1".to_string(),
+            tool_name: "Read".to_string(),
+            arguments: serde_json::json!({ "file_path": "notes.md" }),
+            raw_arguments: None,
+            is_error: false,
+            recovered_from_truncation: false,
+        }];
+
+        let allowed =
+            RoundExecutor::allowed_tools_for_execution(&["Write".to_string()], &tool_calls);
+
+        assert_eq!(allowed, vec!["Write".to_string()]);
+    }
+
+    #[test]
+    fn plaintext_followup_history_strips_generated_write_content() {
+        let tool_calls = vec![
+            crate::agentic::core::ToolCall {
+                tool_id: "write-1".to_string(),
+                tool_name: "Write".to_string(),
+                arguments: serde_json::json!({
+                    "file_path": "notes.md",
+                    "content": "system generated body"
+                }),
+                raw_arguments: None,
+                is_error: false,
+                recovered_from_truncation: false,
+            },
+            crate::agentic::core::ToolCall {
+                tool_id: "write-1__read_after_write".to_string(),
+                tool_name: "Read".to_string(),
+                arguments: serde_json::json!({ "file_path": "notes.md" }),
+                raw_arguments: None,
+                is_error: false,
+                recovered_from_truncation: false,
+            },
+        ];
+
+        let history = RoundExecutor::strip_plaintext_followup_write_content_for_history(tool_calls);
+
+        assert_eq!(
+            history[0].arguments,
+            serde_json::json!({ "file_path": "notes.md" })
+        );
+        assert_eq!(
+            history[1].arguments,
+            serde_json::json!({ "file_path": "notes.md" })
+        );
+    }
+
+    #[test]
     fn extract_bitfun_contents_with_tags() {
         let text =
             "Some preamble\n<bitfun_contents>\nfn main() {}\n</bitfun_contents>\nSome trailing";
@@ -1795,6 +2415,47 @@ mod tests {
     fn extract_bitfun_contents_empty() {
         let text = "<bitfun_contents></bitfun_contents>";
         assert_eq!(extract_bitfun_contents(text), "");
+    }
+
+    #[test]
+    fn extract_bitfun_contents_prefilled_stream_without_open_tag() {
+        let text = "# Title\n\nBody paragraph.\n";
+        assert_eq!(
+            extract_bitfun_contents_with_options(text, true),
+            "# Title\n\nBody paragraph."
+        );
+    }
+
+    #[test]
+    fn extract_bitfun_contents_prefilled_stream_strips_called_tools_preamble() {
+        let text = concat!(
+            "[called tools: Read with params: {\"file_path\":\"docs/plan.md\"}]",
+            "[called tools: Bash with params: {\"command\":\"cat docs/plan.md\"}]",
+            "<bitfun_contents>\n# Plan\n\n## Section\n"
+        );
+        assert_eq!(
+            extract_bitfun_contents_with_options(text, true),
+            "# Plan\n\n## Section"
+        );
+    }
+
+    #[test]
+    fn extract_bitfun_contents_prefilled_stream_uses_last_open_tag() {
+        let text = concat!(
+            "[called tools: Read with params: {\"file_path\":\"a.md\"}]",
+            "<bitfun_contents>\n# Wrong\n",
+            "<bitfun_contents>\n# Correct\n"
+        );
+        assert_eq!(
+            extract_bitfun_contents_with_options(text, true),
+            "# Correct"
+        );
+    }
+
+    #[test]
+    fn sanitize_strips_called_tools_blocks_without_tags() {
+        let text = "[called tools: Write with params: {\"file_path\":\"a.md\"}]fn main() {}";
+        assert_eq!(extract_bitfun_contents(text), "fn main() {}");
     }
 
     // --- Sanitization tests ---
@@ -1834,6 +2495,18 @@ mod tests {
     fn sanitization_strips_reasoning_block() {
         let text = "<bitfun_contents>\n<reasoning>\nAnalyzing code...\n</reasoning>\nfn main() {}\n</bitfun_contents>";
         assert_eq!(extract_bitfun_contents(text), "fn main() {}");
+    }
+
+    #[test]
+    fn sanitization_strips_dsml_tool_invocation_blocks() {
+        let text = concat!(
+            "<｜｜DSML｜｜tool_calls>\n",
+            "<｜｜DSML｜｜invoke name=\"Write\">\n",
+            "<｜｜DSML｜｜parameter name=\"file_path\" string=\"true\">a.ts</｜｜DSML｜｜parameter>\n",
+            "</｜｜DSML｜｜invoke>\n",
+            "</｜｜DSML｜｜tool_calls>"
+        );
+        assert_eq!(extract_bitfun_contents(text), "");
     }
 
     #[test]

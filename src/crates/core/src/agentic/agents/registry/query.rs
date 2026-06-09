@@ -6,7 +6,8 @@ use super::support::{
 use super::AgentRegistry;
 use crate::agentic::agents::registry::types::{is_review_agent_entry, AgentEntry};
 use crate::agentic::agents::{
-    AgentCategory, AgentInfo, AgentToolPolicy, SubagentListScope, SubagentQueryContext,
+    resolve_mode_config_profile_id, AgentCategory, AgentInfo, AgentToolPolicy, SubagentListScope,
+    SubagentQueryContext,
 };
 use crate::agentic::tools::get_all_registered_tool_names;
 use crate::service::config::mode_config_canonicalizer::resolve_effective_tools;
@@ -56,9 +57,10 @@ impl AgentRegistry {
                 let mode_configs = get_mode_configs().await;
                 let registered_tool_names = get_all_registered_tool_names().await;
                 let valid_tools: HashSet<String> = registered_tool_names.iter().cloned().collect();
+                let profile_id = resolve_mode_config_profile_id(agent_type);
                 let resolved_tools = resolve_effective_tools(
                     &entry.agent.default_tools(),
-                    mode_configs.get(agent_type),
+                    mode_configs.get(profile_id.as_ref()),
                     &valid_tools,
                 );
                 let allowed_tools = merge_dynamic_mcp_tools(resolved_tools, &registered_tool_names);
@@ -115,10 +117,10 @@ impl AgentRegistry {
             let order = |id: &str| -> u8 {
                 match id {
                     "agentic" => 0,
-                    "Multitask" => 1,
-                    "Cowork" => 2,
-                    "Plan" => 3,
-                    "debug" => 4,
+                    "Cowork" => 1,
+                    "Plan" => 2,
+                    "debug" => 3,
+                    "Multitask" => 4,
                     "DeepResearch" => 5,
                     "Team" => 6,
                     _ => 99,

@@ -1,6 +1,7 @@
 pub mod ai_config;
 pub mod commands;
 pub mod extract;
+pub mod generated_locale_contract;
 pub mod types;
 
 /// Windows main binary file name — must match `src/apps/desktop` `[[bin]]` and Tauri NSIS output.

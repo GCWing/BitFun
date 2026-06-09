@@ -5,7 +5,7 @@
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FolderOpen, ChevronDown, Check, GitBranch } from 'lucide-react';
+import {FolderOpen, ChevronDown, Check, GitBranch, FolderPlus} from 'lucide-react';
 import { gitAPI ,workspaceAPI} from '../../infrastructure/api';
 import type { GitWorkState } from '../../infrastructure/api/service-api/StartchatAgentAPI';
 import { useApp } from '../../app/hooks/useApp';
@@ -32,6 +32,7 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
   workspacePath = '',
 }) => {
   const { t } = useTranslation('flow-chat');
+  const { t: tCommon } = useTranslation('common');
   const [gitState, setGitState] = useState<GitWorkState | null>(null);
   const [workspaceDropdownOpen, setWorkspaceDropdownOpen] = useState(false);
   const [isSelectingWorkspace, setIsSelectingWorkspace] = useState(false);
@@ -161,6 +162,11 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
     }
   }, [openWorkspace]);
 
+  const handleCreateWorkspace = useCallback(() => {
+    setWorkspaceDropdownOpen(false);
+    window.dispatchEvent(new Event('nav:new-project'));
+  }, []);
+
   const handleQuickActionClick = useCallback((cmd: string) => {
     onQuickAction?.(cmd);
   }, [onQuickAction]);
@@ -222,7 +228,7 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
                         title={currentWorkspace?.rootPath}
                       >
                         <FolderOpen size={13} className="welcome-panel__inline-icon" />
-                        {currentWorkspace?.name || t('welcome.workspace')}
+                        {currentWorkspace?.name || t('shared:features.workspace')}
                         <ChevronDown
                           size={11}
                           className={`welcome-panel__inline-chevron${workspaceDropdownOpen ? ' welcome-panel__inline-chevron--open' : ''}`}
@@ -230,6 +236,15 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
                       </button>
                       {workspaceDropdownOpen && (
                         <div className="welcome-panel__dropdown">
+                          <button
+                            type="button"
+                            className="welcome-panel__dropdown-item welcome-panel__dropdown-item--accent"
+                            onClick={() => { void handleCreateWorkspace(); }}
+                          >
+                            <FolderPlus size={12} />
+                            <span className="welcome-panel__dropdown-name">{tCommon('header.newProject')}</span>
+                          </button>
+                          {(hasWorkspace || otherWorkspaces.length > 0) && <div className="welcome-panel__dropdown-sep" />}
                           {hasWorkspace && currentWorkspace && (
                             <div className="welcome-panel__dropdown-current">
                               <Check size={11} />
@@ -239,7 +254,7 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
                           )}
                           {otherWorkspaces.length > 0 && (
                             <>
-                              {hasWorkspace && <div className="welcome-panel__dropdown-sep" />}
+                              {hasWorkspace && currentWorkspace && <div className="welcome-panel__dropdown-sep" />}
                               {otherWorkspaces.map(ws => (
                                 <button
                                   key={ws.id}

@@ -1,4 +1,4 @@
-use crate::agentic::agents::{Agent, AgentToolPolicyOverrides, RequestContextPolicy};
+use crate::agentic::agents::{Agent, AgentToolPolicyOverrides, UserContextPolicy};
 use crate::agentic::tools::framework::ToolExposure;
 use async_trait::async_trait;
 
@@ -62,8 +62,8 @@ impl Agent for ReviewFixerAgent {
         self.default_tools.clone()
     }
 
-    fn request_context_policy(&self) -> RequestContextPolicy {
-        RequestContextPolicy::empty().with_workspace_instructions()
+    fn user_context_policy(&self) -> UserContextPolicy {
+        UserContextPolicy::empty().with_workspace_instructions()
     }
 
     fn tool_exposure_overrides(&self) -> &AgentToolPolicyOverrides {
@@ -78,7 +78,7 @@ impl Agent for ReviewFixerAgent {
 #[cfg(test)]
 mod tests {
     use super::{Agent, ReviewFixerAgent};
-    use crate::agentic::agents::RequestContextPolicy;
+    use crate::agentic::agents::UserContextPolicy;
 
     #[test]
     fn review_fixer_agent_has_edit_and_verify_tools() {
@@ -86,8 +86,8 @@ mod tests {
         let tools = agent.default_tools();
 
         assert_eq!(
-            agent.request_context_policy(),
-            RequestContextPolicy::empty().with_workspace_instructions()
+            agent.user_context_policy(),
+            UserContextPolicy::empty().with_workspace_instructions()
         );
         assert!(tools.contains(&"Edit".to_string()));
         assert!(tools.contains(&"Write".to_string()));

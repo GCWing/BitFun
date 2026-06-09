@@ -23,7 +23,7 @@ impl MCPTransport {
         }
     }
 
-    async fn next_request_id(&self) -> u64 {
+    pub async fn next_request_id(&self) -> u64 {
         let mut id = self.request_id.lock().await;
         *id += 1;
         *id
@@ -38,6 +38,16 @@ impl MCPTransport {
         let request = MCPRequest::new(Value::Number(id.into()), method, params);
         self.send_message(MCPMessage::Request(request)).await?;
         Ok(id)
+    }
+
+    pub async fn send_request_with_id(
+        &self,
+        id: u64,
+        method: String,
+        params: Option<Value>,
+    ) -> MCPRuntimeResult<()> {
+        let request = MCPRequest::new(Value::Number(id.into()), method, params);
+        self.send_message(MCPMessage::Request(request)).await
     }
 
     pub async fn send_notification(

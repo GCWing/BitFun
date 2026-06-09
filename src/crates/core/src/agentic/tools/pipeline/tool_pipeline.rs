@@ -8,14 +8,19 @@ use super::types::*;
 use crate::agentic::core::{ToolCall, ToolExecutionState, ToolResult as ModelToolResult};
 use crate::agentic::events::types::ToolEventData;
 use crate::agentic::tools::computer_use_host::ComputerUseHostRef;
-use crate::agentic::tools::framework::{ToolResult as FrameworkToolResult, ToolUseContext};
+use crate::agentic::tools::framework::ToolResult as FrameworkToolResult;
 use crate::agentic::tools::registry::ToolRegistry;
 use crate::agentic::tools::tool_context_runtime;
+use crate::agentic::tools::tool_context_runtime::ToolUseContext;
 use crate::agentic::tools::tool_result_storage;
 use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_agent_tools::{
+    build_invalid_tool_call_error_message, build_tool_execution_error_presentation,
+    build_user_steering_interrupted_presentation, render_tool_result_for_assistant,
+    truncate_raw_tool_arguments_preview, truncate_tool_arguments_preview,
     validate_collapsed_tool_usage, validate_tool_allowed_by_list, GET_TOOL_SPEC_TOOL_NAME,
+    USER_STEERING_INTERRUPTED_MESSAGE,
 };
 use dashmap::DashMap;
 use futures::future::join_all;
@@ -50,6 +55,22 @@ struct RecentToolCall {
     arguments: serde_json::Value,
 }
 
+fn is_write_like_tool_name(tool_name: &str) -> bool {
+    matches!(tool_name, "Write" | "file_write" | "write_notebook")
+}
+
+fn build_truncation_recovery_notice(tool_name: &str) -> String {
+    if is_write_like_tool_name(tool_name) {
+        return format!(
+            "[Your previous {tool_name} call was truncated mid-stream by max_tokens and was auto-repaired before execution; the file may have been written with partial content. Use the latest Read result for that file (or call Read once if no current Read result is available) to inspect what is on disk. To finish it, issue ONE Edit call where `old_string` is a final unique substring from the current file and `new_string` is that same substring plus the continuation. If you do not have a concrete plan for the continuation, stop tool-calling and tell the user the output was truncated (suggest raising max_tokens). Do NOT rewrite the whole file with Write.]\n\nOriginal tool result follows.\n\n"
+        );
+    }
+
+    format!(
+        "[Your previous {tool_name} call was truncated mid-stream by max_tokens and was auto-repaired before execution. The tool ran with the repaired, potentially incomplete arguments. Review the tool result and continue normally; if important information is missing, issue a fresh complete {tool_name} call rather than trying to continue a file write.]\n\nOriginal tool result follows.\n\n"
+    )
+}
+
 /// Convert framework::ToolResult to core::ToolResult
 ///
 /// Ensure always has result_for_assistant, avoid tool message content being empty
@@ -68,8 +89,8 @@ fn convert_tool_result(
             // structured result through to the model. Summaries like
             // "completed successfully" can hide fields the model needs for the
             // next decision.
-            let assistant_text =
-                result_for_assistant.or_else(|| serialize_result_for_assistant(tool_name, &data));
+            let assistant_text = result_for_assistant
+                .or_else(|| Some(render_tool_result_for_assistant(tool_name, &data)));
 
             ModelToolResult {
                 tool_id: tool_id.to_string(),
@@ -82,7 +103,7 @@ fn convert_tool_result(
             }
         }
         FrameworkToolResult::Progress { content, .. } => {
-            let assistant_text = serialize_result_for_assistant(tool_name, &content);
+            let assistant_text = Some(render_tool_result_for_assistant(tool_name, &content));
 
             ModelToolResult {
                 tool_id: tool_id.to_string(),
@@ -95,7 +116,7 @@ fn convert_tool_result(
             }
         }
         FrameworkToolResult::StreamChunk { data, .. } => {
-            let assistant_text = serialize_result_for_assistant(tool_name, &data);
+            let assistant_text = Some(render_tool_result_for_assistant(tool_name, &data));
 
             ModelToolResult {
                 tool_id: tool_id.to_string(),
@@ -108,19 +129,6 @@ fn convert_tool_result(
             }
         }
     }
-}
-
-fn serialize_result_for_assistant(tool_name: &str, data: &serde_json::Value) -> Option<String> {
-    serde_json::to_string_pretty(data)
-        .or_else(|_| serde_json::to_string(data))
-        .ok()
-        .filter(|text| !text.trim().is_empty())
-        .or_else(|| {
-            Some(format!(
-                "Tool {} returned no serializable result.",
-                tool_name
-            ))
-        })
 }
 
 /// Convert core::ToolResult to framework::ToolResult
@@ -136,37 +144,6 @@ fn elapsed_ms_since(time: SystemTime) -> u64 {
     time.elapsed()
         .map(|duration| duration.as_millis().min(u128::from(u64::MAX)) as u64)
         .unwrap_or(0)
-}
-
-/// Maximum length of `provided_arguments` echoed back to the model in a tool
-/// error result. Larger payloads are truncated with an ellipsis marker so the
-/// signal remains actionable without bloating the prompt.
-const TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES: usize = 1024;
-
-const USER_STEERING_INTERRUPTED_MESSAGE: &str = "Tool execution skipped because the user sent a new steering message for the running turn. Stop the remaining old tool plan and handle the new user message next.";
-
-fn truncate_arguments_preview(value: &serde_json::Value) -> String {
-    let raw = serde_json::to_string(value).unwrap_or_default();
-    if raw.len() <= TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES {
-        return raw;
-    }
-    // Truncate at a UTF-8 char boundary then append an ellipsis marker.
-    let mut cut = TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES;
-    while cut > 0 && !raw.is_char_boundary(cut) {
-        cut -= 1;
-    }
-    format!("{}…[truncated, total {} bytes]", &raw[..cut], raw.len())
-}
-
-fn truncate_raw_arguments_preview(raw: &str) -> String {
-    if raw.len() <= TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES {
-        return raw.to_string();
-    }
-    let mut cut = TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES;
-    while cut > 0 && !raw.is_char_boundary(cut) {
-        cut -= 1;
-    }
-    format!("{}…[truncated, total {} bytes]", &raw[..cut], raw.len())
 }
 
 fn classify_tool_error(error: &BitFunError) -> &'static str {
@@ -189,8 +166,8 @@ fn build_error_execution_result(
             .tool_call
             .raw_arguments
             .as_deref()
-            .map(truncate_raw_arguments_preview)
-            .unwrap_or_else(|| truncate_arguments_preview(&task.tool_call.arguments));
+            .map(truncate_raw_tool_arguments_preview)
+            .unwrap_or_else(|| truncate_tool_arguments_preview(&task.tool_call.arguments));
         (
             task.tool_call.tool_id,
             task.tool_call.tool_name,
@@ -203,28 +180,12 @@ fn build_error_execution_result(
     };
     let error_message = error.to_string();
     let category = classify_tool_error(error);
-
-    let mut result_json = serde_json::json!({
-        "error": error_message,
-        "category": category,
-        "tool_name": tool_name,
-        "message": format!("Tool '{}' failed ({}): {}", tool_name, category, error_message),
-    });
-    if let Some(args_preview) = provided_arguments.as_ref() {
-        result_json["provided_arguments"] = serde_json::Value::String(args_preview.clone());
-    }
-
-    let assistant_text = if let Some(args_preview) = provided_arguments.as_ref() {
-        format!(
-            "Tool '{}' failed ({}): {}\nProvided arguments: {}",
-            tool_name, category, error_message, args_preview
-        )
-    } else {
-        format!(
-            "Tool '{}' failed ({}): {}",
-            tool_name, category, error_message
-        )
-    };
+    let presentation = build_tool_execution_error_presentation(
+        &tool_name,
+        category,
+        &error_message,
+        provided_arguments,
+    );
 
     ToolExecutionResult {
         tool_id: tool_id.clone(),
@@ -232,8 +193,8 @@ fn build_error_execution_result(
         result: ModelToolResult {
             tool_id,
             tool_name,
-            result: result_json,
-            result_for_assistant: Some(assistant_text),
+            result: presentation.result_json,
+            result_for_assistant: Some(presentation.result_for_assistant),
             is_error: true,
             duration_ms: Some(execution_time_ms),
             image_attachments: None,
@@ -260,19 +221,16 @@ fn build_user_steering_interrupted_result(
         (task_id.to_string(), "unknown".to_string(), 0)
     };
 
+    let presentation = build_user_steering_interrupted_presentation(&tool_name);
+
     ToolExecutionResult {
         tool_id: tool_id.clone(),
         tool_name: tool_name.clone(),
         result: ModelToolResult {
             tool_id,
-            tool_name: tool_name.clone(),
-            result: serde_json::json!({
-                "status": "skipped",
-                "category": "user_steering_interrupted",
-                "tool_name": tool_name,
-                "message": USER_STEERING_INTERRUPTED_MESSAGE,
-            }),
-            result_for_assistant: Some(USER_STEERING_INTERRUPTED_MESSAGE.to_string()),
+            tool_name,
+            result: presentation.result_json,
+            result_for_assistant: Some(presentation.result_for_assistant),
             is_error: true,
             duration_ms: Some(execution_time_ms),
             image_attachments: None,
@@ -669,24 +627,13 @@ impl ToolPipeline {
                 .tool_call
                 .raw_arguments
                 .as_deref()
-                .map(truncate_raw_arguments_preview);
-            let error_msg = if tool_name.is_empty() && tool_is_error {
-                "Missing valid tool name and arguments are invalid JSON.".to_string()
-            } else if tool_name.is_empty() {
-                "Missing valid tool name.".to_string()
-            } else if recovered_from_truncation {
-                format!(
-                    "Tool arguments were truncated by the model (likely hit max_tokens). Refusing to execute a partial '{}' call. Increase max_tokens, split the work into smaller calls, or retry.",
-                    tool_name
-                )
-            } else {
-                "Arguments are invalid JSON.".to_string()
-            };
-            let error_msg = if let Some(raw_arguments_preview) = raw_arguments_preview {
-                format!("{error_msg} Raw arguments: {raw_arguments_preview}")
-            } else {
-                error_msg
-            };
+                .map(truncate_raw_tool_arguments_preview);
+            let error_msg = build_invalid_tool_call_error_message(
+                &tool_name,
+                tool_is_error,
+                recovered_from_truncation,
+                raw_arguments_preview,
+            );
 
             self.state_manager
                 .update_state(
@@ -711,7 +658,7 @@ impl ToolPipeline {
         // identical call within the per-session sliding window.
         if self.check_and_record_tool_call(&task.context.session_id, &tool_name, &tool_args) {
             let error_msg = format!(
-                "Tool-call loop blocked: '{}' was already called {} times in a row in this session with identical arguments. Refusing to execute this {}th identical call. Issue a different tool call, or stop tool-calling and respond to the user. If you wrote a file recently and want to continue it, its full content is already visible in your earlier tool_use message — use Edit with `old_string` taken from the end of that content; do not Read the file again.",
+                "Tool-call loop blocked: '{}' was already called {} times in a row in this session with identical arguments. Refusing to execute this {}th identical call. Issue a different tool call, or stop tool-calling and respond to the user. If you wrote a file recently and want to continue or modify it, do not call Write again for the same path; use the latest Read result for that file, or call Read once if no current Read result is available, then use Edit with `old_string` taken from the current file content.",
                 tool_name,
                 TOOL_CALL_LOOP_THRESHOLD,
                 TOOL_CALL_LOOP_THRESHOLD + 1
@@ -1053,14 +1000,11 @@ impl ToolPipeline {
 
                 // The tool call succeeded with arguments that we patched
                 // because the model's output was truncated mid-stream. Tell
-                // the model so it can decide whether the partial write needs
+                // the model so it can decide whether the partial call needs
                 // to be continued or regenerated.
                 if recovered_from_truncation {
                     let original = tool_result.result_for_assistant.unwrap_or_default();
-                    let notice = format!(
-                        "[Your previous {} call was truncated mid-stream by max_tokens and was auto-repaired before execution; the file was written with the partial content. The full truncated content — including the exact stopping point — is visible in the `input` of your previous tool_use message, so you do NOT need to read the file again. To finish it, issue ONE Edit call where `old_string` is the final unique substring of your truncated content and `new_string` is that same substring plus the continuation. If you do not have a concrete plan for the continuation, stop tool-calling and tell the user the output was truncated (suggest raising max_tokens). Do NOT call Read on this file and do NOT rewrite the whole file with Write.]\n\nOriginal tool result follows.\n\n",
-                        tool_name
-                    );
+                    let notice = build_truncation_recovery_notice(&tool_name);
                     tool_result.result_for_assistant = Some(if original.is_empty() {
                         notice.trim_end().to_string()
                     } else {
@@ -1228,7 +1172,13 @@ impl ToolPipeline {
 
         let execution_future = tool.call(&task.tool_call.arguments, &tool_context);
 
-        let tool_results = match task.options.timeout_secs {
+        let pipeline_timeout_secs = if tool.manages_own_execution_timeout() {
+            None
+        } else {
+            task.options.timeout_secs
+        };
+
+        let tool_results = match pipeline_timeout_secs {
             Some(timeout_secs) => {
                 let timeout_duration = Duration::from_secs(timeout_secs);
                 let result = timeout(timeout_duration, execution_future)
@@ -1507,6 +1457,8 @@ impl ToolPipeline {
 mod tests {
     use super::*;
     use crate::agentic::events::{EventQueue, EventQueueConfig};
+    use crate::agentic::tools::framework::Tool;
+    use crate::agentic::tools::implementations::task_tool::TaskTool;
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use serde_json::json;
     use std::collections::HashMap;
@@ -1536,6 +1488,7 @@ mod tests {
                 workspace: None,
                 context_vars: HashMap::new(),
                 subagent_parent_info: None,
+                delegation_policy: bitfun_runtime_ports::DelegationPolicy::top_level(),
                 collapsed_tools: Vec::new(),
                 unlocked_collapsed_tools: Vec::new(),
                 allowed_tools: Vec::new(),
@@ -1614,6 +1567,25 @@ mod tests {
     }
 
     #[test]
+    fn truncation_notice_for_interactive_tools_does_not_claim_file_write() {
+        let notice = build_truncation_recovery_notice("AskUserQuestion");
+
+        assert!(notice.contains("AskUserQuestion call was truncated"));
+        assert!(notice.contains("fresh complete AskUserQuestion call"));
+        assert!(!notice.contains("file was written"));
+        assert!(!notice.contains("issue ONE Edit call"));
+    }
+
+    #[test]
+    fn truncation_notice_for_write_tools_keeps_write_continuation_guidance() {
+        let notice = build_truncation_recovery_notice("Write");
+
+        assert!(notice.contains("file may have been written with partial content"));
+        assert!(notice.contains("latest Read result"));
+        assert!(notice.contains("issue ONE Edit call"));
+    }
+
+    #[test]
     fn pipeline_preserves_core_owned_tool_context_without_portable_runtime_leak() {
         let pipeline = test_tool_pipeline();
         let mut task = test_tool_task("tool_context_1", "WebFetch");
@@ -1638,6 +1610,7 @@ mod tests {
         task.context.runtime_tool_restrictions = ToolRuntimeRestrictions {
             allowed_tool_names: ["WebFetch"].into_iter().map(str::to_string).collect(),
             denied_tool_names: ["Bash"].into_iter().map(str::to_string).collect(),
+            denied_tool_messages: Default::default(),
             path_policy: Default::default(),
         };
 
@@ -1703,5 +1676,11 @@ mod tests {
             result.is_ok(),
             "GetToolSpec duplicate-load validation moved into GetToolSpec itself"
         );
+    }
+
+    #[test]
+    fn task_tool_manages_its_own_execution_timeout() {
+        let task_tool = TaskTool::new();
+        assert!(task_tool.manages_own_execution_timeout());
     }
 }

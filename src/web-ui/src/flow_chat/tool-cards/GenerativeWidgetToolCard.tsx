@@ -11,7 +11,7 @@ import GenerativeWidgetFrame, {
 import GenerativeWidgetStaticRenderer from '@/tools/generative-widget/GenerativeWidgetStaticRenderer';
 import { handleWidgetBridgeEvent } from '@/tools/generative-widget/widgetInteraction';
 import { useGenerativeWidgetPromptMenu } from '@/tools/generative-widget/useGenerativeWidgetPromptMenu';
-import { useContextMenuStore } from '@/shared/context-menu-system';
+import { useContextMenuStore } from '@/shared/context-menu-system/store/ContextMenuStore';
 import { captureElementToDownloadsPng } from '../utils/captureElementToDownloadsPng';
 import { createLogger } from '@/shared/utils/logger';
 import { notificationService } from '@/shared/notification-system';

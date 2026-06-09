@@ -542,6 +542,7 @@ mod tests {
         assert_eq!(
             registry.get_collapsed_tool_names(),
             vec![
+                "CreatePlan",
                 "GetFileDiff",
                 "Log",
                 "TerminalControl",

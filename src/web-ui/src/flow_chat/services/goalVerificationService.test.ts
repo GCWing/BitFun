@@ -58,4 +58,22 @@ describe('goalVerificationService', () => {
 
     expect(flowChatStore.getState().sessions.get(session.sessionId)?.dialogTurns).toHaveLength(0);
   });
+
+  it('clears goal mode active flag when the session goal is achieved', () => {
+    const session = createSession({ goalModeActive: true });
+    flowChatStore.setState(() => ({
+      sessions: new Map([[session.sessionId, session]]),
+      activeSessionId: session.sessionId,
+    }));
+
+    handleGoalVerificationFinished(
+      { sessionId: session.sessionId, sourceTurnId: 'turn-1', outcome: 'achieved' },
+      {
+        achievedTitle: 'Session goal achieved',
+        failedMessage: 'Goal verification failed',
+      },
+    );
+
+    expect(flowChatStore.getState().sessions.get(session.sessionId)?.goalModeActive).toBe(false);
+  });
 });

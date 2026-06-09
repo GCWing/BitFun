@@ -1,10 +1,11 @@
 {
   "name": "bitfun-mobile-web",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "type-check": "tsc --noEmit",
     "build": "vite build",
     "preview": "vite preview"
   },

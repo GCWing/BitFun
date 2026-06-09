@@ -2,15 +2,18 @@
 //!
 //! This module intentionally keeps service handles, workspace runtime lookup,
 //! path enforcement, cancellation/post-call hooks, and checkpoint recording in
-//! core. The portable facts projection stays in `framework.rs` and
-//! `bitfun-agent-tools`.
+//! core. The portable facts projection uses `bitfun-agent-tools` DTOs while the
+//! runtime owner type stays here.
 
 use crate::agentic::coordination::get_global_coordinator;
 use crate::agentic::deep_review::tool_context;
 use crate::agentic::session::EvidenceLedgerCheckpoint;
 use crate::agentic::tools::computer_use_host::ComputerUseHostRef;
 use crate::agentic::tools::framework::{
-    ToolPathBackend, ToolPathResolution, ToolResult, ToolUseContext,
+    build_tool_path_policy_denial_message, build_tool_runtime_artifact_reference,
+    build_tool_session_runtime_artifact_reference, is_tool_path_allowed_by_resolved_roots,
+    resolve_tool_path_with_context, tool_path_is_effectively_absolute, Tool, ToolPathBackend,
+    ToolPathResolution, ToolResult,
 };
 use crate::agentic::tools::pipeline::{ToolExecutionContext, ToolTask};
 use crate::agentic::tools::post_call_hooks;
@@ -19,7 +22,6 @@ use crate::agentic::tools::restrictions::{
 };
 use crate::agentic::tools::workspace_paths::{
     build_bitfun_runtime_uri, is_bitfun_runtime_uri, normalize_runtime_relative_path,
-    parse_bitfun_runtime_uri,
 };
 use crate::agentic::tools::ToolRuntimeRestrictions;
 use crate::agentic::workspace::WorkspaceServices;
@@ -29,6 +31,8 @@ use crate::service::git::{GitDiffParams, GitService};
 use crate::service::remote_ssh::workspace_state::remote_workspace_runtime_root;
 use crate::service::{get_workspace_runtime_service_arc, WorkspaceRuntimeContext};
 use crate::util::errors::{BitFunError, BitFunResult};
+use bitfun_agent_tools::{PortableToolContextProvider, ToolContextFacts, ToolWorkspaceKind};
+use bitfun_runtime_ports::DelegationPolicy;
 use log::warn;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -36,6 +40,99 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use tokio_util::sync::CancellationToken;
+
+/// Core-owned tool use context.
+#[derive(Debug, Clone)]
+pub struct ToolUseContext {
+    pub tool_call_id: Option<String>,
+    pub agent_type: Option<String>,
+    pub session_id: Option<String>,
+    pub dialog_turn_id: Option<String>,
+    pub workspace: Option<WorkspaceBinding>,
+    pub unlocked_collapsed_tools: Vec<String>,
+    /// Extended context data passed from execution layer to tools.
+    pub custom_data: HashMap<String, Value>,
+    /// Desktop automation (Computer use); only set in BitFun desktop.
+    pub computer_use_host: Option<crate::agentic::tools::computer_use_host::ComputerUseHostRef>,
+    // Cancel tool execution more timely, especially for tools like TaskTool that need to run for a long time
+    pub cancellation_token: Option<CancellationToken>,
+    pub runtime_tool_restrictions: ToolRuntimeRestrictions,
+    /// Workspace I/O services (filesystem + shell) - use these instead of
+    /// checking `get_remote_workspace_manager()` inside individual tools.
+    pub workspace_services: Option<WorkspaceServices>,
+}
+
+impl ToolUseContext {
+    pub(crate) fn delegation_policy(&self) -> DelegationPolicy {
+        let allow_subagent_spawn = self
+            .custom_data
+            .get("delegation_allow_subagent_spawn")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(true);
+        let nesting_depth = self
+            .custom_data
+            .get("delegation_nesting_depth")
+            .and_then(|value| value.as_u64())
+            .and_then(|value| u8::try_from(value).ok())
+            .unwrap_or(0);
+
+        DelegationPolicy {
+            allow_subagent_spawn,
+            nesting_depth,
+        }
+    }
+
+    pub fn workspace_root(&self) -> Option<&Path> {
+        self.workspace.as_ref().map(|binding| binding.root_path())
+    }
+
+    pub fn is_remote(&self) -> bool {
+        self.workspace
+            .as_ref()
+            .map(|ws| ws.is_remote())
+            .unwrap_or(false)
+    }
+
+    pub fn to_tool_context_facts(&self) -> ToolContextFacts {
+        let workspace_kind = self.workspace.as_ref().map(|workspace| {
+            if workspace.is_remote() {
+                ToolWorkspaceKind::Remote
+            } else {
+                ToolWorkspaceKind::Local
+            }
+        });
+
+        ToolContextFacts {
+            tool_call_id: self.tool_call_id.clone(),
+            agent_type: self.agent_type.clone(),
+            session_id: self.session_id.clone(),
+            dialog_turn_id: self.dialog_turn_id.clone(),
+            workspace_kind,
+            workspace_root: self.workspace.as_ref().map(|workspace| {
+                workspace
+                    .session_identity
+                    .logical_workspace_path()
+                    .to_string()
+            }),
+            runtime_tool_restrictions: self.runtime_tool_restrictions.clone(),
+        }
+    }
+
+    /// Whether the session primary model accepts image inputs (from tool-definition / pipeline context).
+    /// Defaults to **true** when unset (e.g. API listings without model metadata).
+    pub fn primary_model_supports_image_understanding(&self) -> bool {
+        self.custom_data
+            .get("primary_model_supports_image_understanding")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true)
+    }
+}
+
+impl PortableToolContextProvider for ToolUseContext {
+    fn tool_context_facts(&self) -> ToolContextFacts {
+        self.to_tool_context_facts()
+    }
+}
 
 pub(crate) async fn call_with_tool_runtime_hooks(
     tool_name: &str,
@@ -62,6 +159,14 @@ pub(crate) async fn call_with_tool_runtime_hooks(
     }
 
     result
+}
+
+pub(crate) async fn call_tool_with_runtime_hooks<T: Tool + ?Sized>(
+    tool: &T,
+    input: &Value,
+    context: &ToolUseContext,
+) -> BitFunResult<Vec<ToolResult>> {
+    call_with_tool_runtime_hooks(tool.name(), input, context, tool.call_impl(input, context)).await
 }
 
 pub(crate) fn build_tool_use_context_for_task(
@@ -155,6 +260,15 @@ pub(crate) fn build_write_preflight_context(
 
 fn build_tool_context_custom_data(context: &ToolExecutionContext) -> HashMap<String, Value> {
     let mut map = HashMap::new();
+
+    map.insert(
+        "delegation_allow_subagent_spawn".to_string(),
+        serde_json::json!(context.delegation_policy.allow_subagent_spawn),
+    );
+    map.insert(
+        "delegation_nesting_depth".to_string(),
+        serde_json::json!(context.delegation_policy.nesting_depth),
+    );
 
     if let Some(turn_index) = context.context_vars.get("turn_index") {
         if let Ok(n) = turn_index.parse::<u64>() {
@@ -345,38 +459,34 @@ impl ToolUseContext {
             resolved_roots.push(self.resolve_tool_path(root)?);
         }
 
-        let mut is_allowed = false;
-        for root in &resolved_roots {
-            if root.backend != resolution.backend {
-                continue;
-            }
-
-            let matches_root = match resolution.backend {
-                ToolPathBackend::Local => is_local_path_within_root(
-                    Path::new(&resolution.resolved_path),
-                    Path::new(&root.resolved_path),
-                )?,
-                ToolPathBackend::RemoteWorkspace => {
-                    is_remote_posix_path_within_root(&resolution.resolved_path, &root.resolved_path)
+        let is_allowed = is_tool_path_allowed_by_resolved_roots(
+            resolution,
+            &resolved_roots,
+            |resolution, root| -> BitFunResult<bool> {
+                match resolution.backend {
+                    ToolPathBackend::Local => is_local_path_within_root(
+                        Path::new(&resolution.resolved_path),
+                        Path::new(&root.resolved_path),
+                    ),
+                    ToolPathBackend::RemoteWorkspace => Ok(is_remote_posix_path_within_root(
+                        &resolution.resolved_path,
+                        &root.resolved_path,
+                    )),
                 }
-            };
-
-            if matches_root {
-                is_allowed = true;
-                break;
-            }
-        }
+            },
+        )?;
 
         if is_allowed {
             return Ok(());
         }
 
-        Err(BitFunError::validation(format!(
-            "Path '{}' is not allowed for {}. Allowed roots: {}",
-            resolution.logical_path,
-            operation.verb(),
-            allowed_roots.join(", ")
-        )))
+        Err(BitFunError::validation(
+            build_tool_path_policy_denial_message(
+                &resolution.logical_path,
+                operation,
+                allowed_roots,
+            ),
+        ))
     }
 
     /// Resolve a user or model-supplied path for file/shell tools. Uses POSIX semantics when the
@@ -459,17 +569,18 @@ impl ToolUseContext {
     }
 
     pub fn build_runtime_artifact_reference(&self, relative_path: &str) -> BitFunResult<String> {
-        let normalized_relative_path = normalize_runtime_relative_path(relative_path)?;
-        if self.should_emit_runtime_uri() {
-            return self.build_runtime_uri(&normalized_relative_path);
-        }
-
-        let mut resolved_path = self.current_workspace_runtime_root()?;
-        for segment in normalized_relative_path.split('/') {
-            resolved_path.push(segment);
-        }
-
-        Ok(resolved_path.to_string_lossy().to_string())
+        let runtime_root = if self.should_emit_runtime_uri() {
+            None
+        } else {
+            Some(self.current_workspace_runtime_root()?)
+        };
+        build_tool_runtime_artifact_reference(
+            relative_path,
+            runtime_root.as_deref(),
+            self.current_workspace_scope().as_deref(),
+            self.should_emit_runtime_uri(),
+        )
+        .map_err(|error| BitFunError::tool(error.to_string()))
     }
 
     pub fn build_session_runtime_artifact_reference(
@@ -477,11 +588,19 @@ impl ToolUseContext {
         session_id: &str,
         relative_path: &str,
     ) -> BitFunResult<String> {
-        let normalized_relative_path = normalize_runtime_relative_path(relative_path)?;
-        self.build_runtime_artifact_reference(&format!(
-            "sessions/{}/{}",
-            session_id, normalized_relative_path
-        ))
+        let runtime_root = if self.should_emit_runtime_uri() {
+            None
+        } else {
+            Some(self.current_workspace_runtime_root()?)
+        };
+        build_tool_session_runtime_artifact_reference(
+            session_id,
+            relative_path,
+            runtime_root.as_deref(),
+            self.current_workspace_scope().as_deref(),
+            self.should_emit_runtime_uri(),
+        )
+        .map_err(|error| BitFunError::tool(error.to_string()))
     }
 
     pub fn current_workspace_session_dir(&self, session_id: &str) -> BitFunResult<PathBuf> {
@@ -512,61 +631,46 @@ impl ToolUseContext {
 
     pub fn resolve_tool_path(&self, path: &str) -> BitFunResult<ToolPathResolution> {
         if is_bitfun_runtime_uri(path) {
-            let parsed = parse_bitfun_runtime_uri(path)?;
             let workspace_scope = self.current_workspace_scope();
-            let scope_matches = parsed.workspace_scope == "current"
-                || workspace_scope.as_deref() == Some(parsed.workspace_scope.as_str());
-            if !scope_matches {
-                return Err(BitFunError::tool(format!(
-                    "Runtime URI scope '{}' does not match the current workspace",
-                    parsed.workspace_scope
-                )));
-            }
-
-            let runtime_root = self.current_workspace_runtime_root()?;
-            let mut resolved_path = runtime_root.clone();
-            for segment in parsed.relative_path.split('/') {
-                resolved_path.push(segment);
-            }
-
-            let effective_scope = workspace_scope.unwrap_or_else(|| parsed.workspace_scope.clone());
-            let logical_path = build_bitfun_runtime_uri(&effective_scope, &parsed.relative_path)?;
-
-            return Ok(ToolPathResolution {
-                requested_path: path.to_string(),
-                logical_path,
-                resolved_path: resolved_path.to_string_lossy().to_string(),
-                backend: ToolPathBackend::Local,
-                runtime_scope: Some(effective_scope),
-                runtime_root: Some(runtime_root),
-            });
+            let runtime_root = if self.workspace.is_some() {
+                Some(self.current_workspace_runtime_root()?)
+            } else {
+                None
+            };
+            return resolve_tool_path_with_context(
+                path,
+                None,
+                self.is_remote(),
+                workspace_scope.as_deref(),
+                runtime_root,
+            )
+            .map_err(|error| BitFunError::tool(error.to_string()));
         }
 
-        let resolved_path = self.resolve_workspace_tool_path(path)?;
-        Ok(ToolPathResolution {
-            requested_path: path.to_string(),
-            logical_path: resolved_path.clone(),
-            resolved_path,
-            backend: if self.is_remote() {
-                ToolPathBackend::RemoteWorkspace
-            } else {
-                ToolPathBackend::Local
-            },
-            runtime_scope: None,
-            runtime_root: None,
-        })
+        let workspace_root_owned = self
+            .workspace
+            .as_ref()
+            .map(|w| w.root_path_string())
+            .ok_or_else(|| {
+                BitFunError::tool(format!(
+                    "A workspace path is required to resolve tool path: {}",
+                    path
+                ))
+            })?;
+
+        resolve_tool_path_with_context(
+            path,
+            Some(workspace_root_owned.as_str()),
+            self.is_remote(),
+            self.current_workspace_scope().as_deref(),
+            None,
+        )
+        .map_err(|error| BitFunError::tool(error.to_string()))
     }
 
     /// Whether `path` is absolute for the active workspace (POSIX `/` for remote SSH).
     pub fn workspace_path_is_effectively_absolute(&self, path: &str) -> bool {
-        if is_bitfun_runtime_uri(path) {
-            return true;
-        }
-        if self.is_remote() {
-            crate::agentic::tools::workspace_paths::posix_style_path_is_absolute(path)
-        } else {
-            Path::new(path).is_absolute()
-        }
+        tool_path_is_effectively_absolute(path, self.is_remote())
     }
 }
 
@@ -586,8 +690,183 @@ fn git_relative_path(workspace_root: &Path, path: &str) -> Option<String> {
 }
 
 #[cfg(test)]
+mod context_facts_tests {
+    use super::ToolUseContext;
+    use crate::agentic::tools::{
+        PortableToolContextProvider, ToolRuntimeRestrictions, ToolWorkspaceKind,
+    };
+    use crate::agentic::WorkspaceBinding;
+    use crate::service::remote_ssh::workspace_state::workspace_session_identity;
+    use std::collections::{BTreeSet, HashMap};
+    use std::path::PathBuf;
+
+    fn local_context(root: &str) -> ToolUseContext {
+        ToolUseContext {
+            tool_call_id: None,
+            agent_type: None,
+            session_id: None,
+            dialog_turn_id: None,
+            workspace: Some(WorkspaceBinding::new(None, PathBuf::from(root))),
+            unlocked_collapsed_tools: Vec::new(),
+            custom_data: HashMap::new(),
+            computer_use_host: None,
+            cancellation_token: None,
+            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+            workspace_services: None,
+        }
+    }
+
+    #[test]
+    fn tool_context_facts_preserve_portable_fields_without_runtime_handles() {
+        let context = ToolUseContext {
+            tool_call_id: Some("call-1".to_string()),
+            agent_type: Some("Agentic".to_string()),
+            session_id: Some("session-1".to_string()),
+            dialog_turn_id: Some("turn-1".to_string()),
+            workspace: Some(WorkspaceBinding::new(None, PathBuf::from("/repo/project"))),
+            unlocked_collapsed_tools: vec!["WebFetch".to_string()],
+            custom_data: HashMap::new(),
+            computer_use_host: None,
+            cancellation_token: None,
+            runtime_tool_restrictions: ToolRuntimeRestrictions {
+                allowed_tool_names: BTreeSet::from(["Read".to_string()]),
+                denied_tool_names: BTreeSet::from(["Bash".to_string()]),
+                denied_tool_messages: Default::default(),
+                path_policy: Default::default(),
+            },
+            workspace_services: None,
+        };
+
+        let facts = context.to_tool_context_facts();
+
+        assert_eq!(facts.tool_call_id.as_deref(), Some("call-1"));
+        assert_eq!(facts.agent_type.as_deref(), Some("Agentic"));
+        assert_eq!(facts.session_id.as_deref(), Some("session-1"));
+        assert_eq!(facts.dialog_turn_id.as_deref(), Some("turn-1"));
+        assert_eq!(facts.workspace_kind, Some(ToolWorkspaceKind::Local));
+        assert_eq!(facts.workspace_root.as_deref(), Some("/repo/project"));
+        assert!(facts.runtime_tool_restrictions.is_tool_allowed("Read"));
+        assert!(!facts.runtime_tool_restrictions.is_tool_allowed("Bash"));
+
+        let value = serde_json::to_value(&facts).expect("serialize context facts");
+        assert!(value.get("unlockedCollapsedTools").is_none());
+        assert!(value.get("computer_use_host").is_none());
+        assert!(value.get("workspace_services").is_none());
+        assert!(value.get("cancellation_token").is_none());
+    }
+
+    #[test]
+    fn tool_context_facts_omit_runtime_owner_fields_even_when_context_is_populated() {
+        let mut custom_data = HashMap::new();
+        custom_data.insert(
+            "checkpoint".to_string(),
+            serde_json::json!({ "kind": "runtime-only" }),
+        );
+
+        let context = ToolUseContext {
+            tool_call_id: Some("call-runtime".to_string()),
+            agent_type: Some("Agentic".to_string()),
+            session_id: Some("session-runtime".to_string()),
+            dialog_turn_id: Some("turn-runtime".to_string()),
+            workspace: Some(WorkspaceBinding::new(None, PathBuf::from("/repo/runtime"))),
+            unlocked_collapsed_tools: vec!["WebFetch".to_string(), "Git".to_string()],
+            custom_data,
+            computer_use_host: None,
+            cancellation_token: Some(tokio_util::sync::CancellationToken::new()),
+            runtime_tool_restrictions: ToolRuntimeRestrictions {
+                allowed_tool_names: BTreeSet::from(["Read".to_string(), "GetToolSpec".to_string()]),
+                denied_tool_names: BTreeSet::from(["Bash".to_string()]),
+                denied_tool_messages: Default::default(),
+                path_policy: Default::default(),
+            },
+            workspace_services: None,
+        };
+
+        let facts = PortableToolContextProvider::tool_context_facts(&context);
+
+        assert_eq!(facts.tool_call_id.as_deref(), Some("call-runtime"));
+        assert_eq!(facts.workspace_kind, Some(ToolWorkspaceKind::Local));
+        assert_eq!(facts.workspace_root.as_deref(), Some("/repo/runtime"));
+        assert!(facts.runtime_tool_restrictions.is_tool_allowed("Read"));
+        assert!(facts
+            .runtime_tool_restrictions
+            .is_tool_allowed("GetToolSpec"));
+        assert!(!facts.runtime_tool_restrictions.is_tool_allowed("Bash"));
+
+        let value = serde_json::to_value(&facts).expect("serialize runtime context facts");
+        for runtime_only_field in [
+            "unlockedCollapsedTools",
+            "customData",
+            "computerUseHost",
+            "cancellationToken",
+            "workspaceServices",
+        ] {
+            assert!(
+                value.get(runtime_only_field).is_none(),
+                "{runtime_only_field} must remain outside portable facts"
+            );
+        }
+    }
+
+    #[test]
+    fn tool_context_facts_use_normalized_remote_workspace_identity() {
+        let session_identity = workspace_session_identity(
+            "/home/wsp//projects/test/",
+            Some("conn-1"),
+            Some("ssh.dev"),
+        )
+        .expect("remote identity");
+        let context = ToolUseContext {
+            tool_call_id: None,
+            agent_type: None,
+            session_id: Some("session-remote".to_string()),
+            dialog_turn_id: None,
+            workspace: Some(WorkspaceBinding::new_remote(
+                Some("workspace-remote".to_string()),
+                PathBuf::from("/home/wsp//projects/test/"),
+                "conn-1".to_string(),
+                "Dev SSH".to_string(),
+                session_identity,
+            )),
+            unlocked_collapsed_tools: Vec::new(),
+            custom_data: HashMap::new(),
+            computer_use_host: None,
+            cancellation_token: None,
+            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+            workspace_services: None,
+        };
+
+        let facts = context.to_tool_context_facts();
+
+        assert_eq!(facts.workspace_kind, Some(ToolWorkspaceKind::Remote));
+        assert_eq!(
+            facts.workspace_root.as_deref(),
+            Some("/home/wsp/projects/test")
+        );
+
+        let value = serde_json::to_value(&facts).expect("serialize remote context facts");
+        assert!(value.get("connectionId").is_none());
+        assert!(value.get("connectionName").is_none());
+        assert!(value.get("workspace_services").is_none());
+    }
+
+    #[test]
+    fn tool_use_context_implements_portable_context_provider() {
+        fn assert_provider<T: PortableToolContextProvider>() {}
+        assert_provider::<ToolUseContext>();
+
+        let context = local_context("/repo/project");
+
+        let facts = PortableToolContextProvider::tool_context_facts(&context);
+
+        assert_eq!(facts.workspace_kind, Some(ToolWorkspaceKind::Local));
+        assert_eq!(facts.workspace_root.as_deref(), Some("/repo/project"));
+    }
+}
+
+#[cfg(test)]
 mod path_resolution_tests {
-    use crate::agentic::tools::framework::ToolUseContext;
+    use super::ToolUseContext;
     use crate::agentic::tools::{ToolPathOperation, ToolPathPolicy, ToolRuntimeRestrictions};
     use crate::agentic::WorkspaceBinding;
     use crate::service::remote_ssh::workspace_state::workspace_session_identity;
@@ -735,6 +1014,19 @@ mod path_resolution_tests {
     }
 
     #[test]
+    fn runtime_uri_scope_error_takes_precedence_without_workspace() {
+        let context = context_without_workspace();
+
+        let err = context
+            .resolve_tool_path("bitfun://runtime/workspace-456/plans/demo.plan.md")
+            .expect_err("runtime URI scope should be validated before runtime root lookup");
+
+        assert!(err
+            .to_string()
+            .contains("does not match the current workspace"));
+    }
+
+    #[test]
     fn workspace_absolute_detection_uses_remote_posix_semantics() {
         let context = remote_context("/home/wsp/projects/test", None);
 
@@ -785,14 +1077,57 @@ mod path_resolution_tests {
 
 #[cfg(test)]
 mod call_runtime_tests {
+    use super::call_tool_with_runtime_hooks;
     use super::call_with_tool_runtime_hooks;
-    use crate::agentic::tools::framework::{ToolResult, ToolUseContext};
+    use super::ToolUseContext;
+    use crate::agentic::deep_review_policy::deep_review_shared_context_measurement_snapshot;
+    use crate::agentic::tools::framework::Tool;
+    use crate::agentic::tools::framework::ToolResult;
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::util::errors::{BitFunError, BitFunResult};
+    use async_trait::async_trait;
     use serde_json::json;
+    use serde_json::Value;
     use std::collections::HashMap;
     use tokio::time::{sleep, Duration};
     use tokio_util::sync::CancellationToken;
+
+    struct MeasurementReadTool;
+
+    #[async_trait]
+    impl Tool for MeasurementReadTool {
+        fn name(&self) -> &str {
+            "Read"
+        }
+
+        async fn description(&self) -> BitFunResult<String> {
+            Ok("Read file".to_string())
+        }
+
+        fn short_description(&self) -> String {
+            "Read file".to_string()
+        }
+
+        fn input_schema(&self) -> Value {
+            json!({
+                "type": "object",
+                "properties": {
+                    "file_path": { "type": "string" }
+                }
+            })
+        }
+
+        async fn call_impl(
+            &self,
+            _input: &Value,
+            _context: &ToolUseContext,
+        ) -> BitFunResult<Vec<ToolResult>> {
+            Ok(vec![ToolResult::ok(
+                json!({ "ok": true }),
+                Some("ok".to_string()),
+            )])
+        }
+    }
 
     fn context_with_cancellation(cancellation_token: CancellationToken) -> ToolUseContext {
         ToolUseContext {
@@ -856,6 +1191,53 @@ mod call_runtime_tests {
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].content()["ok"], true);
     }
+
+    #[tokio::test]
+    async fn call_records_deep_review_read_file_measurement_without_touching_result() {
+        let parent_turn_id = format!("turn-runtime-measure-{}", uuid::Uuid::new_v4());
+        let mut custom_data = HashMap::new();
+        custom_data.insert(
+            "deep_review_parent_dialog_turn_id".to_string(),
+            json!(parent_turn_id.clone()),
+        );
+        custom_data.insert("deep_review_subagent_role".to_string(), json!("reviewer"));
+        custom_data.insert(
+            "deep_review_subagent_type".to_string(),
+            json!("ReviewSecurity"),
+        );
+        let context = ToolUseContext {
+            tool_call_id: Some("tool-read".to_string()),
+            agent_type: Some("ReviewSecurity".to_string()),
+            session_id: Some("subagent-session".to_string()),
+            dialog_turn_id: Some("subagent-turn".to_string()),
+            workspace: None,
+            unlocked_collapsed_tools: Vec::new(),
+            custom_data,
+            computer_use_host: None,
+            cancellation_token: None,
+            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+            workspace_services: None,
+        };
+        let tool = MeasurementReadTool;
+
+        let result = call_tool_with_runtime_hooks(
+            &tool,
+            &json!({ "file_path": ".\\src\\lib.rs" }),
+            &context,
+        )
+        .await
+        .expect("read tool call should succeed");
+        call_tool_with_runtime_hooks(&tool, &json!({ "file_path": "src/lib.rs" }), &context)
+            .await
+            .expect("read tool call should succeed");
+
+        assert_eq!(result.len(), 1);
+        let snapshot = deep_review_shared_context_measurement_snapshot(&parent_turn_id);
+        assert_eq!(snapshot.total_calls, 2);
+        assert_eq!(snapshot.duplicate_calls, 1);
+        assert_eq!(snapshot.repeated_contexts[0].tool_name, "Read");
+        assert_eq!(snapshot.repeated_contexts[0].file_path, "src/lib.rs");
+    }
 }
 
 #[cfg(test)]
@@ -900,6 +1282,7 @@ mod context_builder_tests {
         let restrictions = ToolRuntimeRestrictions {
             allowed_tool_names: BTreeSet::from(["Write".to_string()]),
             denied_tool_names: BTreeSet::from(["Delete".to_string()]),
+            denied_tool_messages: Default::default(),
             path_policy: Default::default(),
         };
 
@@ -934,6 +1317,7 @@ mod task_context_tests {
         SubagentParentInfo, ToolExecutionContext, ToolExecutionOptions, ToolTask,
     };
     use crate::agentic::tools::ToolRuntimeRestrictions;
+    use bitfun_runtime_ports::DelegationPolicy;
     use serde_json::json;
     use std::collections::{BTreeSet, HashMap};
     use tokio_util::sync::CancellationToken;
@@ -982,12 +1366,14 @@ mod task_context_tests {
                     session_id: "parent_session".to_string(),
                     dialog_turn_id: "parent_turn".to_string(),
                 }),
+                delegation_policy: DelegationPolicy::top_level().spawn_child(),
                 collapsed_tools: vec!["WebFetch".to_string()],
                 unlocked_collapsed_tools: vec!["WebFetch".to_string()],
                 allowed_tools: vec!["WebFetch".to_string()],
                 runtime_tool_restrictions: ToolRuntimeRestrictions {
                     allowed_tool_names: BTreeSet::from(["WebFetch".to_string()]),
                     denied_tool_names: BTreeSet::from(["Bash".to_string()]),
+                    denied_tool_messages: Default::default(),
                     path_policy: Default::default(),
                 },
                 steering_interrupt: None,

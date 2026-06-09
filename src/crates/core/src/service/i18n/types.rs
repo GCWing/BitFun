@@ -1,14 +1,16 @@
 //! Internationalization (i18n) type definitions
 
-use super::locale_registry::{locale_entry, locale_entry_from_code, LOCALE_REGISTRY};
+use super::generated_locale_contract::{
+    generated_locale_entry, generated_locale_entry_from_code, GENERATED_DEFAULT_LOCALE,
+    GENERATED_FALLBACK_LOCALE, GENERATED_LOCALE_CONTRACT,
+};
 use serde::{Deserialize, Serialize};
 
 /// Locale identifier.
 /// Add new variants here when a backend-supported locale is introduced.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum LocaleId {
     #[serde(rename = "zh-CN")]
-    #[default]
     ZhCN,
     #[serde(rename = "zh-TW")]
     ZhTW,
@@ -19,28 +21,42 @@ pub enum LocaleId {
 impl LocaleId {
     /// Returns the locale identifier string.
     pub fn as_str(&self) -> &'static str {
-        locale_entry(*self).code
+        generated_locale_entry(*self).code
     }
 
     /// Parses a locale identifier from a string.
     #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
-        locale_entry_from_code(s).map(|entry| entry.id)
+        generated_locale_entry_from_code(s).map(|entry| entry.id)
     }
 
     /// Returns all supported locales.
     pub fn all() -> Vec<LocaleId> {
-        LOCALE_REGISTRY.iter().map(|entry| entry.id).collect()
+        GENERATED_LOCALE_CONTRACT
+            .iter()
+            .map(|entry| entry.id)
+            .collect()
     }
 
     /// Returns the English language name used in model-facing instructions.
     pub fn model_language_name(&self) -> &'static str {
-        locale_entry(*self).model_language_name
+        generated_locale_entry(*self).model_language_name
     }
 
     /// Returns the short imperative language instruction for small model prompts.
     pub fn short_model_instruction(&self) -> &'static str {
-        locale_entry(*self).short_model_instruction
+        generated_locale_entry(*self).short_model_instruction
+    }
+
+    /// Returns the contract fallback chain for locale-owned content.
+    pub fn content_fallbacks(&self) -> &'static [LocaleId] {
+        generated_locale_entry(*self).content_fallbacks
+    }
+}
+
+impl Default for LocaleId {
+    fn default() -> Self {
+        GENERATED_DEFAULT_LOCALE
     }
 }
 
@@ -68,7 +84,7 @@ pub struct LocaleMetadata {
 impl LocaleMetadata {
     /// Returns metadata for all locales.
     pub fn all() -> Vec<LocaleMetadata> {
-        LOCALE_REGISTRY
+        GENERATED_LOCALE_CONTRACT
             .iter()
             .map(|entry| LocaleMetadata {
                 id: entry.id,
@@ -107,6 +123,15 @@ mod tests {
 
         assert_eq!(metadata_ids, ids);
     }
+
+    #[test]
+    fn locale_defaults_and_fallbacks_come_from_contract() {
+        assert_eq!(LocaleId::default(), GENERATED_DEFAULT_LOCALE);
+        assert_eq!(
+            LocaleId::ZhTW.content_fallbacks(),
+            &[LocaleId::ZhCN, LocaleId::EnUS]
+        );
+    }
 }
 
 /// I18n configuration
@@ -126,8 +151,8 @@ pub struct I18nConfig {
 impl Default for I18nConfig {
     fn default() -> Self {
         Self {
-            current_language: LocaleId::ZhCN,
-            fallback_language: LocaleId::EnUS,
+            current_language: GENERATED_DEFAULT_LOCALE,
+            fallback_language: GENERATED_FALLBACK_LOCALE,
             auto_detect: false,
         }
     }

@@ -345,16 +345,28 @@ pub(crate) fn attach_tools(
     tools: Option<Vec<serde_json::Value>>,
     target: &str,
 ) {
-    if let Some(tools) = tools {
-        let tool_names = tools.iter().map(extract_tool_name).collect::<Vec<_>>();
-        shared::log_tool_names(target, tool_names);
-        if !tools.is_empty() {
+    match tools {
+        Some(tools) if !tools.is_empty() => {
+            let tool_names = tools.iter().map(extract_tool_name).collect::<Vec<_>>();
+            shared::log_tool_names(target, tool_names);
             request_body["tools"] = serde_json::Value::Array(tools);
             let has_tool_choice = request_body
                 .get("tool_choice")
                 .is_some_and(|value| !value.is_null());
             if !has_tool_choice {
                 request_body["tool_choice"] = serde_json::Value::String("auto".to_string());
+            }
+        }
+        _ => {
+            if request_body
+                .as_object_mut()
+                .and_then(|object| object.remove("tool_choice"))
+                .is_some()
+            {
+                log::debug!(
+                    target: target,
+                    "Removed tool_choice from OpenAI request because no tools are attached"
+                );
             }
         }
     }
@@ -376,4 +388,69 @@ pub(crate) fn convert_tools_flat(
             })
             .collect()
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::attach_tools;
+    use serde_json::json;
+
+    #[test]
+    fn attach_tools_removes_tool_choice_without_tools() {
+        let mut request_body = json!({
+            "model": "test-model",
+            "messages": [],
+            "stream": true,
+            "tool_choice": "none"
+        });
+
+        attach_tools(&mut request_body, None, "test");
+
+        assert!(request_body.get("tools").is_none());
+        assert!(request_body.get("tool_choice").is_none());
+    }
+
+    #[test]
+    fn attach_tools_removes_tool_choice_for_empty_tools() {
+        let mut request_body = json!({
+            "model": "test-model",
+            "messages": [],
+            "stream": true,
+            "tool_choice": "none"
+        });
+
+        attach_tools(&mut request_body, Some(vec![]), "test");
+
+        assert!(request_body.get("tools").is_none());
+        assert!(request_body.get("tool_choice").is_none());
+    }
+
+    #[test]
+    fn attach_tools_preserves_explicit_tool_choice_with_tools() {
+        let mut request_body = json!({
+            "model": "test-model",
+            "messages": [],
+            "stream": true,
+            "tool_choice": "none"
+        });
+
+        attach_tools(
+            &mut request_body,
+            Some(vec![json!({
+                "type": "function",
+                "function": {
+                    "name": "example",
+                    "description": "Example tool",
+                    "parameters": { "type": "object" }
+                }
+            })]),
+            "test",
+        );
+
+        assert_eq!(request_body["tool_choice"], json!("none"));
+        assert_eq!(
+            request_body["tools"][0]["function"]["name"],
+            json!("example")
+        );
+    }
 }

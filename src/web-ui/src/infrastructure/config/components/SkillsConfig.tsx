@@ -606,7 +606,7 @@ const SkillsConfig: React.FC = () => {
 
         <ConfigPageSection
           title={t('filters.user', { defaultValue: 'User Skills' })}
-          description={t('section.user.description', { defaultValue: 'Skills installed for current user.' })}
+          description={t('section.user.description')}
           extra={makeAddExtra('user')}
         >
           {renderAddForm('user')}
@@ -622,7 +622,7 @@ const SkillsConfig: React.FC = () => {
 
         <ConfigPageSection
           title={t('filters.project', { defaultValue: 'Project Skills' })}
-          description={t('section.project.description', { defaultValue: 'Project-level Skills in current workspace.' })}
+          description={t('section.project.description')}
           extra={makeAddExtra('project')}
         >
           {renderAddForm('project')}

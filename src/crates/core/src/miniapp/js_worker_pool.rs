@@ -8,15 +8,14 @@ use bitfun_product_domains::miniapp::ports::{
     MiniAppInstallDepsRequest, MiniAppPortError, MiniAppPortErrorKind, MiniAppPortFuture,
     MiniAppRuntimePort,
 };
-use bitfun_product_domains::miniapp::worker::install_command_for_runtime;
 pub use bitfun_product_domains::miniapp::worker::InstallResult;
+use bitfun_product_domains::miniapp::worker::{
+    plan_install_deps, select_lru_worker, worker_is_idle, worker_pool_at_capacity, InstallDepsPlan,
+};
 use serde_json::Value;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-
-const MAX_WORKERS: usize = 5;
-const IDLE_TIMEOUT_MS: i64 = 3 * 60 * 1000; // 3 minutes
 
 struct WorkerEntry {
     revision: String,
@@ -58,7 +57,7 @@ impl JsWorkerPool {
                     .iter()
                     .filter(|(_, entry)| {
                         if let Ok(worker) = entry.worker.try_lock() {
-                            now - worker.last_activity_ms() > IDLE_TIMEOUT_MS
+                            worker_is_idle(now, worker.last_activity_ms())
                         } else {
                             false
                         }
@@ -128,7 +127,7 @@ impl JsWorkerPool {
             stale.kill().await;
         }
 
-        if guard.len() >= MAX_WORKERS {
+        if worker_pool_at_capacity(guard.len()) {
             self.evict_lru(&mut guard).await;
         }
 
@@ -171,7 +170,7 @@ impl JsWorkerPool {
             .filter(|(_, entry)| {
                 let w = entry.worker.try_lock();
                 if let Ok(worker) = w {
-                    now - worker.last_activity_ms() > IDLE_TIMEOUT_MS
+                    worker_is_idle(now, worker.last_activity_ms())
                 } else {
                     false
                 }
@@ -187,18 +186,15 @@ impl JsWorkerPool {
     }
 
     async fn evict_lru(&self, guard: &mut std::collections::HashMap<String, WorkerEntry>) {
-        let (oldest_id, _) = guard
-            .iter()
-            .map(|(id, entry)| {
-                let activity = entry
-                    .worker
-                    .try_lock()
-                    .map(|worker| worker.last_activity_ms())
-                    .unwrap_or(0);
-                (id.clone(), activity)
-            })
-            .min_by_key(|(_, a)| *a)
-            .unwrap_or((String::new(), 0));
+        let oldest_id = select_lru_worker(guard.iter().map(|(id, entry)| {
+            let activity = entry
+                .worker
+                .try_lock()
+                .map(|worker| worker.last_activity_ms())
+                .unwrap_or(0);
+            (id.as_str(), activity)
+        }))
+        .unwrap_or_default();
         if !oldest_id.is_empty() {
             if let Some(entry) = guard.remove(&oldest_id) {
                 let mut w = entry.worker.lock().await;
@@ -313,15 +309,20 @@ impl JsWorkerPool {
         _deps: &[NpmDep],
     ) -> BitFunResult<InstallResult> {
         let package_json = app_dir.join("package.json");
-        if !package_json.exists() {
-            return Ok(InstallResult {
-                success: true,
-                stdout: String::new(),
-                stderr: String::new(),
-            });
-        }
-
-        let command = install_command_for_runtime(&self.runtime.kind, which::which("pnpm").is_ok());
+        let command = match plan_install_deps(
+            package_json.exists(),
+            &self.runtime.kind,
+            which::which("pnpm").is_ok(),
+        ) {
+            InstallDepsPlan::SkipMissingPackageJson => {
+                return Ok(InstallResult {
+                    success: true,
+                    stdout: String::new(),
+                    stderr: String::new(),
+                });
+            }
+            InstallDepsPlan::Run(command) => command,
+        };
 
         let output = crate::util::process_manager::create_tokio_command(command.program)
             .args(command.args)

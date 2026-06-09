@@ -2,7 +2,7 @@
 //!
 //! Used to create and store plan files during the planning phase
 
-use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
+use crate::agentic::tools::framework::{Tool, ToolExposure, ToolResult, ToolUseContext};
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use serde::Serialize;
@@ -83,7 +83,11 @@ Additional guidelines:
     }
 
     fn short_description(&self) -> String {
-        "Create and store a concise implementation plan.".to_string()
+        "Create and store a concise implementation plan; only for Plan mode.".to_string()
+    }
+
+    fn default_exposure(&self) -> ToolExposure {
+        ToolExposure::Collapsed
     }
 
     fn input_schema(&self) -> Value {
@@ -298,4 +302,21 @@ fn generate_plan_file_content(
     let yaml = serde_yaml::to_string(&frontmatter).unwrap_or_default();
 
     format!("---\n{}---\n\n{}", yaml, plan)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::CreatePlanTool;
+    use crate::agentic::tools::framework::{Tool, ToolExposure};
+
+    #[test]
+    fn create_plan_is_collapsed_and_plan_mode_specific() {
+        let tool = CreatePlanTool::new();
+
+        assert_eq!(tool.default_exposure(), ToolExposure::Collapsed);
+        assert_eq!(
+            tool.short_description(),
+            "Create and store a concise implementation plan; only for Plan mode."
+        );
+    }
 }

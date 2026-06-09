@@ -1,8 +1,12 @@
+use crate::agentic::core::ToolCall;
+use crate::agentic::execution::write_content_sanitizer::{
+    contains_tool_invocation_artifacts, strip_tool_invocation_artifacts,
+};
 use crate::agentic::tools::file_read_state_runtime::{
-    assert_file_not_unexpectedly_modified, file_mutation_timestamp_ms,
-    get_stored_file_read_state, local_file_modification_time_ms, read_current_file_content,
-    read_state_tracking_enabled, update_file_read_state_after_mutation,
-    validate_existing_file_read_before_write, FILE_UNEXPECTEDLY_MODIFIED_ERROR,
+    assert_file_not_unexpectedly_modified, file_mutation_timestamp_ms, get_stored_file_read_state,
+    local_file_modification_time_ms, read_current_file_content, read_state_tracking_enabled,
+    update_file_read_state_after_mutation, validate_existing_file_read_before_write,
+    FILE_UNEXPECTEDLY_MODIFIED_ERROR,
 };
 use crate::agentic::tools::file_tool_guidance::{
     file_tool_guidance_message, is_file_tool_guidance_message,
@@ -14,6 +18,7 @@ use crate::agentic::tools::ToolPathOperation;
 use crate::service::config::types::WriteToolMode;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
+use bitfun_ai_adapters::tool_call_accumulator::strip_write_inline_content_fields;
 use serde_json::{json, Value};
 use std::path::Path;
 use tokio::fs;
@@ -120,7 +125,9 @@ impl FileWriteTool {
         let current_mtime_ms = if resolved.uses_remote_workspace_backend() {
             None
         } else {
-            Some(local_file_modification_time_ms(Path::new(&resolved.resolved_path)))
+            Some(local_file_modification_time_ms(Path::new(
+                &resolved.resolved_path,
+            )))
         };
 
         assert_file_not_unexpectedly_modified(
@@ -151,8 +158,7 @@ impl FileWriteTool {
             return None;
         }
 
-        if let Some(message) = validate_existing_file_read_before_write(context, resolved).await
-        {
+        if let Some(message) = validate_existing_file_read_before_write(context, resolved).await {
             return Some(Self::write_guidance_message(message));
         }
 
@@ -180,6 +186,7 @@ impl FileWriteTool {
     fn write_success_result(
         logical_path: &str,
         bytes_written: usize,
+        lines_written: usize,
         status: &str,
         assistant_message: String,
     ) -> ToolResult {
@@ -187,12 +194,21 @@ impl FileWriteTool {
             data: json!({
                 "file_path": logical_path,
                 "bytes_written": bytes_written,
+                "lines_written": lines_written,
                 "success": true,
                 "status": status,
                 "message": assistant_message,
             }),
             result_for_assistant: Some(assistant_message),
             image_attachments: None,
+        }
+    }
+
+    fn count_written_lines(content: &str) -> usize {
+        if content.is_empty() {
+            0
+        } else {
+            content.lines().count().max(1)
         }
     }
 
@@ -234,6 +250,30 @@ impl FileWriteTool {
         })
     }
 
+    fn model_input_schema(context: Option<&ToolUseContext>) -> Value {
+        match Self::write_tool_mode(context) {
+            WriteToolMode::InlineContent => Self::schema_with_content(),
+            WriteToolMode::PlaintextFollowup => Self::schema_without_content(),
+        }
+    }
+
+    /// PlaintextFollowup exposes only `file_path` to the model. Strip any inline
+    /// content the model hallucinates so the follow-up content generation path
+    /// remains the single source of file body text.
+    pub(crate) fn strip_plaintext_followup_inline_content(arguments: &mut Value) {
+        strip_write_inline_content_fields(arguments);
+    }
+
+    pub(crate) fn strip_plaintext_followup_inline_content_from_tool_calls(
+        tool_calls: &mut [ToolCall],
+    ) {
+        for tool_call in tool_calls.iter_mut() {
+            if tool_call.tool_name == "Write" {
+                Self::strip_plaintext_followup_inline_content(&mut tool_call.arguments);
+            }
+        }
+    }
+
     fn inline_description() -> String {
         r#"Writes a file to the local filesystem.
 
@@ -244,6 +284,7 @@ Usage:
 - ALWAYS prefer editing existing files in the codebase. NEVER write new files unless explicitly required.
 - Keep writes focused. The 200-line / 20KB guideline is a soft reliability threshold, not a hard cap. If a task genuinely needs more content, preserve correctness and use a staged plan instead of truncating.
 - For existing files, prefer Read + targeted Edit calls. For large new files or rewrites, write the stable scaffold first, then fill or revise sections with focused Edit calls. Do not replace an entire existing file just to change a few sections.
+- After a successful Write, do not call Write again for the same path to continue, refine, or patch the file. Use Read + Edit instead.
 - NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
 - Only use emojis if the user explicitly requests it. Avoid writing emojis to files unless asked.
 - Include the complete file content in the `content` argument."#
@@ -260,9 +301,11 @@ Usage:
 - The file_path parameter must be workspace-relative, an absolute path inside the current workspace, or an exact `bitfun://runtime/...` URI returned by another tool.
 - ALWAYS prefer editing existing files in the codebase. NEVER write new files unless explicitly required.
 - Keep writes focused. For existing files, prefer Read + targeted Edit calls. Use Write only when you need to replace the entire file or create a new one.
+- After a successful Write, the system reads the file back. Use that post-write Read result for any follow-up Edit. Do not call Write again for the same path to continue, refine, or patch the file.
 - NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
 - Only use emojis if the user explicitly requests it. Avoid writing emojis to files unless asked.
-- Do NOT include the file content in the tool call arguments. Only provide file_path. The system will prompt you separately to output the file content as plain text."#
+- IMPORTANT — two-step protocol: This tool's schema accepts ONLY `file_path`. Do NOT include a `content` field; any inline content will be discarded. After your tool call, the system automatically issues a separate follow-up request that asks you to output the complete file body inside `<bitfun_contents>` tags, and that text is then written to disk.
+- If the system returns an error saying the content-generation step produced no content, retry the same Write tool call with the same `file_path`. Still do not provide `content` inline."#
             .to_string()
     }
 
@@ -290,6 +333,19 @@ Usage:
             .get("content")
             .and_then(|v| v.as_str())
             .ok_or_else(|| BitFunError::tool("content is required".to_string()))?;
+        let content = strip_tool_invocation_artifacts(content);
+        if content.is_empty() {
+            return Err(BitFunError::tool(Self::write_guidance_message(
+                "Write content is empty after removing tool-invocation syntax. \
+                 Provide the raw file body in the `content` field.",
+            )));
+        }
+        if contains_tool_invocation_artifacts(&content) {
+            return Err(BitFunError::tool(Self::write_guidance_message(
+                "Write content still contains tool-invocation syntax after sanitization. \
+                 Provide raw file content only.",
+            )));
+        }
 
         Self::assert_atomic_write_freshness_if_exists(context, &resolved).await?;
 
@@ -307,7 +363,7 @@ Usage:
                     .await
                     .map_err(|e| BitFunError::tool(format!("Failed to create directory: {}", e)))?;
             }
-            fs::write(&resolved.resolved_path, content)
+            fs::write(&resolved.resolved_path, &content)
                 .await
                 .map_err(|e| {
                     BitFunError::tool(format!(
@@ -318,7 +374,7 @@ Usage:
         }
 
         let timestamp_ms = file_mutation_timestamp_ms(context, &resolved).await;
-        update_file_read_state_after_mutation(context, &resolved, content, timestamp_ms);
+        update_file_read_state_after_mutation(context, &resolved, &content, timestamp_ms);
 
         let result = ToolResult::Result {
             data: json!({
@@ -338,6 +394,9 @@ Usage:
         input: &Value,
         context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
+        // PlaintextFollowup injects `content` in `generate_write_tool_contents` before
+        // pipeline execution. Inline model content is stripped earlier (stream +
+        // round_executor); do not strip again here or system-generated content is lost.
         let file_path = input
             .get("file_path")
             .and_then(|v| v.as_str())
@@ -356,7 +415,16 @@ Usage:
         let content = input
             .get("content")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| BitFunError::tool("content is required".to_string()))?;
+            .ok_or_else(|| {
+                BitFunError::tool(Self::write_guidance_message(
+                    "The system's Write content-generation follow-up step did not produce \
+                     any file content. The Write tool uses a two-step protocol: the model \
+                     supplies only `file_path`, and the system generates the file body in a \
+                     separate follow-up request. Please retry the Write tool call with the \
+                     same `file_path`. Do NOT include a `content` argument — the schema \
+                     does not accept it; the system will generate the content again.",
+                ))
+            })?;
 
         let file_already_exists = Self::file_exists(context, &resolved).await;
         if file_already_exists
@@ -364,6 +432,7 @@ Usage:
         {
             let result = Self::write_success_result(
                 &resolved.logical_path,
+                0,
                 0,
                 "already_exists_same_content",
                 format!(
@@ -426,6 +495,7 @@ Usage:
         let result = Self::write_success_result(
             &resolved.logical_path,
             content.len(),
+            Self::count_written_lines(content),
             status,
             assistant_message,
         );
@@ -437,6 +507,7 @@ Usage:
 #[cfg(test)]
 mod tests {
     use super::{FileWriteTool, WRITE_TOOL_MODE_CONTEXT_KEY};
+    use crate::agentic::core::ToolCall;
     use crate::agentic::tools::file_tool_guidance::FILE_TOOL_GUIDANCE_PREFIX;
     use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
     use crate::agentic::tools::ToolRuntimeRestrictions;
@@ -511,8 +582,8 @@ mod tests {
         let root = std::env::temp_dir().join(format!("bitfun-write-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&root).expect("create temp workspace");
 
-        let error = FileWriteTool::preflight_write_error(&local_context(root.clone()), "new.txt")
-            .await;
+        let error =
+            FileWriteTool::preflight_write_error(&local_context(root.clone()), "new.txt").await;
 
         let _ = std::fs::remove_dir_all(&root);
 
@@ -560,11 +631,17 @@ mod tests {
         };
         assert_eq!(data["success"], true);
         assert_eq!(data["bytes_written"], 0);
+        assert_eq!(data["lines_written"], 0);
         assert_eq!(data["status"], "already_exists_same_content");
         assert!(result_for_assistant
             .as_deref()
             .unwrap_or_default()
             .contains("identical content"));
+        assert!(!data.as_object().unwrap().contains_key("content"));
+        assert!(!result_for_assistant
+            .as_deref()
+            .unwrap_or_default()
+            .contains("<bitfun_contents>"));
     }
 
     #[tokio::test]
@@ -591,6 +668,9 @@ mod tests {
             panic!("expected result");
         };
         assert_eq!(data["status"], "overwritten");
+        assert_eq!(data["bytes_written"], "new content".len());
+        assert_eq!(data["lines_written"], 1);
+        assert!(!data.as_object().unwrap().contains_key("content"));
     }
 
     #[tokio::test]
@@ -628,6 +708,59 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn input_schema_for_model_without_context_omits_content() {
+        let tool = FileWriteTool::new();
+
+        let schema = tool.input_schema_for_model().await;
+
+        assert_eq!(schema["required"], serde_json::json!(["file_path"]));
+        assert!(schema["properties"].get("content").is_none());
+    }
+
+    #[test]
+    fn strip_plaintext_followup_inline_content_removes_inline_body_fields() {
+        let mut arguments = json!({
+            "file_path": "notes.md",
+            "content": "inline body",
+            "contents": "legacy body"
+        });
+
+        FileWriteTool::strip_plaintext_followup_inline_content(&mut arguments);
+
+        assert_eq!(arguments, json!({ "file_path": "notes.md" }));
+    }
+
+    #[test]
+    fn strip_plaintext_followup_inline_content_from_tool_calls_keeps_non_write_calls() {
+        let mut tool_calls = vec![
+            ToolCall {
+                tool_id: "write-1".to_string(),
+                tool_name: "Write".to_string(),
+                arguments: json!({
+                    "file_path": "notes.md",
+                    "content": "inline body"
+                }),
+                raw_arguments: None,
+                is_error: false,
+                recovered_from_truncation: false,
+            },
+            ToolCall {
+                tool_id: "read-1".to_string(),
+                tool_name: "Read".to_string(),
+                arguments: json!({ "file_path": "notes.md" }),
+                raw_arguments: None,
+                is_error: false,
+                recovered_from_truncation: false,
+            },
+        ];
+
+        FileWriteTool::strip_plaintext_followup_inline_content_from_tool_calls(&mut tool_calls);
+
+        assert_eq!(tool_calls[0].arguments, json!({ "file_path": "notes.md" }));
+        assert_eq!(tool_calls[1].arguments, json!({ "file_path": "notes.md" }));
+    }
+
+    #[tokio::test]
     async fn inline_mode_schema_requires_content() {
         let tool = FileWriteTool::new();
         let mut custom_data = HashMap::new();
@@ -645,6 +778,33 @@ mod tests {
             schema["required"],
             serde_json::json!(["file_path", "content"])
         );
+    }
+
+    #[tokio::test]
+    async fn inline_mode_rejects_tool_invocation_content() {
+        let tool = FileWriteTool::new();
+        let mut custom_data = HashMap::new();
+        custom_data.insert(
+            WRITE_TOOL_MODE_CONTEXT_KEY.to_string(),
+            serde_json::Value::String("inline_content".to_string()),
+        );
+        let context = context_with_custom_data(custom_data);
+
+        let validation = tool
+            .validate_input(
+                &json!({
+                    "file_path": "notes.md",
+                    "content": "<tool_calls><invoke name=\"Write\"></invoke></tool_calls>"
+                }),
+                Some(&context),
+            )
+            .await;
+
+        assert!(!validation.result);
+        assert!(validation
+            .message
+            .as_deref()
+            .is_some_and(|message| message.contains("tool-invocation syntax")));
     }
 
     #[tokio::test]
@@ -690,6 +850,76 @@ mod tests {
 
         assert_eq!(written, "new content");
     }
+
+    #[tokio::test]
+    async fn plaintext_followup_missing_content_returns_two_step_guidance() {
+        let root = std::env::temp_dir().join(format!("bitfun-write-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&root).expect("create temp workspace");
+
+        let tool = FileWriteTool::new();
+        let error = tool
+            .call(
+                &json!({ "file_path": "generated.txt" }),
+                &local_context(root.clone()),
+            )
+            .await
+            .expect_err("missing content in plaintext-followup mode must error");
+
+        let _ = std::fs::remove_dir_all(&root);
+
+        let message = error.to_string();
+        assert!(
+            !message.contains("content is required"),
+            "should not surface the contradictory 'content is required' message: {message}"
+        );
+        assert!(
+            message.contains("two-step protocol")
+                || message.contains("follow-up")
+                || message.contains("did not produce"),
+            "should explain the two-step Write protocol: {message}"
+        );
+        assert!(
+            message.contains(FILE_TOOL_GUIDANCE_PREFIX),
+            "should be wrapped in file-tool guidance prefix: {message}"
+        );
+    }
+
+    #[tokio::test]
+    async fn plaintext_followup_executes_system_injected_content() {
+        let root = std::env::temp_dir().join(format!("bitfun-write-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&root).expect("create temp workspace");
+
+        let tool = FileWriteTool::new();
+        let body = "system generated body";
+        let results = tool
+            .call(
+                &json!({ "file_path": "generated.txt", "content": body }),
+                &local_context(root.clone()),
+            )
+            .await
+            .expect("plaintext followup should write system-injected content");
+
+        let written =
+            std::fs::read_to_string(root.join("generated.txt")).expect("read generated file");
+        let _ = std::fs::remove_dir_all(&root);
+
+        assert_eq!(written, body);
+        let ToolResult::Result {
+            data,
+            result_for_assistant,
+            ..
+        } = &results[0]
+        else {
+            panic!("expected result");
+        };
+        assert_eq!(data["bytes_written"], body.len());
+        assert_eq!(data["lines_written"], 1);
+        assert!(!data.as_object().unwrap().contains_key("content"));
+        assert!(!result_for_assistant
+            .as_deref()
+            .unwrap_or_default()
+            .contains("<bitfun_contents>"));
+    }
 }
 
 #[async_trait]
@@ -720,11 +950,12 @@ impl Tool for FileWriteTool {
         Self::schema_without_content()
     }
 
+    async fn input_schema_for_model(&self) -> Value {
+        Self::model_input_schema(None)
+    }
+
     async fn input_schema_for_model_with_context(&self, context: Option<&ToolUseContext>) -> Value {
-        match Self::write_tool_mode(context) {
-            WriteToolMode::InlineContent => Self::schema_with_content(),
-            WriteToolMode::PlaintextFollowup => self.input_schema(),
-        }
+        Self::model_input_schema(context)
     }
 
     fn is_readonly(&self) -> bool {
@@ -764,6 +995,22 @@ impl Tool for FileWriteTool {
                 error_code: Some(400),
                 meta: None,
             };
+        }
+
+        if matches!(mode, WriteToolMode::InlineContent) {
+            if let Some(content) = input.get("content").and_then(|v| v.as_str()) {
+                if contains_tool_invocation_artifacts(content) {
+                    return ValidationResult {
+                        result: false,
+                        message: Some(Self::write_guidance_message(
+                            "Write content looks like tool-invocation syntax instead of raw file content. \
+                             Output the file body directly in the `content` field without nested tool calls.",
+                        )),
+                        error_code: Some(400),
+                        meta: Some(json!({ "failure_kind": "guidance" })),
+                    };
+                }
+            }
         }
 
         let large_write_warning = if matches!(mode, WriteToolMode::InlineContent) {

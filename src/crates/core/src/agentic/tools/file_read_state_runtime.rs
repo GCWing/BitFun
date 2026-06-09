@@ -2,13 +2,16 @@
 
 use crate::agentic::coordination::get_global_coordinator;
 use crate::agentic::session::FileReadState;
-use crate::agentic::tools::framework::{ToolPathResolution, ToolUseContext};
+use crate::agentic::tools::framework::ToolPathResolution;
+use crate::agentic::tools::tool_context_runtime::ToolUseContext;
 use crate::util::errors::BitFunResult;
+use bitfun_agent_tools::{
+    file_read_facts_are_fresh, file_read_facts_content_matches, FileReadFreshnessFacts,
+};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tool_runtime::fs::read_file::ReadFileResult;
 use tool_runtime::util::read_line_prefix::read_tool_output_to_file_content;
-use tool_runtime::util::string::normalize_string;
 
 pub const FILE_UNEXPECTEDLY_MODIFIED_ERROR: &str =
     "File has been unexpectedly modified. Read it again before attempting to write it.";
@@ -90,8 +93,7 @@ pub fn content_unchanged_since_full_read(
     read_state: &FileReadState,
     current_content: &str,
 ) -> bool {
-    read_state.is_full_file_read()
-        && normalize_string(current_content) == normalize_string(&read_state.content)
+    file_read_facts_content_matches(file_read_freshness_facts(read_state), current_content)
 }
 
 pub fn assert_file_not_unexpectedly_modified(
@@ -103,19 +105,11 @@ pub fn assert_file_not_unexpectedly_modified(
         return Err(FILE_UNEXPECTEDLY_MODIFIED_ERROR.to_string());
     };
 
-    if let Some(current_mtime_ms) = current_mtime_ms {
-        if current_mtime_ms > read_state.timestamp_ms {
-            if content_unchanged_since_full_read(read_state, current_content) {
-                return Ok(());
-            }
-            return Err(FILE_UNEXPECTEDLY_MODIFIED_ERROR.to_string());
-        }
-        return Ok(());
-    }
-
-    if read_state.is_full_file_read()
-        && normalize_string(current_content) != normalize_string(&read_state.content)
-    {
+    if !file_read_facts_are_fresh(
+        file_read_freshness_facts(read_state),
+        current_content,
+        current_mtime_ms,
+    ) {
         return Err(FILE_UNEXPECTEDLY_MODIFIED_ERROR.to_string());
     }
 
@@ -168,9 +162,11 @@ pub async fn validate_write_against_read_state(
     }
 
     let current_content = read_current_file_content(context, resolved).await.ok()?;
-    if read_state.is_full_file_read()
-        && normalize_string(&current_content) != normalize_string(&read_state.content)
-    {
+    if !file_read_facts_are_fresh(
+        file_read_freshness_facts(&read_state),
+        &current_content,
+        None,
+    ) {
         return Some(format!(
             "The file {} no longer matches the last Read result. Use Read again, then retry Write.",
             resolved.logical_path
@@ -197,29 +193,33 @@ fn validate_edit_content_freshness_against_read_state(
     current_content: &str,
     current_mtime_ms: Option<u64>,
 ) -> Option<String> {
-    if let Some(current_mtime_ms) = current_mtime_ms {
-        if current_mtime_ms > read_state.timestamp_ms {
-            if read_state.is_full_file_read()
-                && normalize_string(current_content) == normalize_string(&read_state.content)
-            {
-                return None;
-            }
+    if file_read_facts_are_fresh(
+        file_read_freshness_facts(read_state),
+        current_content,
+        current_mtime_ms,
+    ) {
+        return None;
+    }
 
-            return Some(format!(
-                "The file {} changed after it was last read. Use Read again, then retry Edit.",
-                logical_path
-            ));
-        }
-    } else if read_state.is_full_file_read()
-        && normalize_string(current_content) != normalize_string(&read_state.content)
-    {
+    if current_mtime_ms.is_some() {
         return Some(format!(
-            "The file {} no longer matches the last Read result. Use Read again, then retry Edit.",
+            "The file {} changed after it was last read. Use Read again, then retry Edit.",
             logical_path
         ));
     }
 
-    None
+    Some(format!(
+        "The file {} no longer matches the last Read result. Use Read again, then retry Edit.",
+        logical_path
+    ))
+}
+
+fn file_read_freshness_facts(read_state: &FileReadState) -> FileReadFreshnessFacts<'_> {
+    FileReadFreshnessFacts {
+        content: &read_state.content,
+        timestamp_ms: read_state.timestamp_ms,
+        is_full_file_read: read_state.is_full_file_read(),
+    }
 }
 
 pub fn validate_edit_has_prior_read(
@@ -357,7 +357,8 @@ pub fn local_file_modification_time_ms(path: &Path) -> u64 {
 mod tests {
     use super::*;
     use crate::agentic::session::FileReadState;
-    use crate::agentic::tools::framework::{ToolPathBackend, ToolUseContext};
+    use crate::agentic::tools::framework::ToolPathBackend;
+    use crate::agentic::tools::tool_context_runtime::ToolUseContext;
     use crate::agentic::WorkspaceBinding;
     use std::collections::HashMap;
     use std::path::PathBuf;

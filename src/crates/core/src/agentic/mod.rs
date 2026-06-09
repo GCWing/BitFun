@@ -38,6 +38,7 @@ pub mod side_question;
 
 // Session goal mode (/goal command)
 pub mod goal_mode;
+pub(crate) mod init_agents_md;
 pub mod system;
 
 // Agents module

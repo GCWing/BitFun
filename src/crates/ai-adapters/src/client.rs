@@ -33,11 +33,23 @@ pub struct StreamResponse {
     pub raw_sse_rx: Option<mpsc::UnboundedReceiver<String>>,
 }
 
+/// Default time to wait for the first response headers / stream body to start.
+pub const DEFAULT_STREAM_TTFT_TIMEOUT_SECS: u64 = 30;
+
+/// Default idle time between streamed chunks once the stream has started.
+pub const DEFAULT_STREAM_IDLE_TIMEOUT_SECS: u64 = 45;
+
+/// Minimum TTFT for models with explicit reasoning enabled.
+pub const REASONING_STREAM_TTFT_TIMEOUT_SECS: u64 = 45;
+
 /// Runtime stream behavior shared across provider implementations.
 #[derive(Debug, Clone, Default)]
 pub struct StreamOptions {
     /// Maximum idle time between streamed chunks. `None` means wait indefinitely.
     pub idle_timeout: Option<Duration>,
+    /// Maximum time to wait for HTTP response headers when opening a stream.
+    /// `None` means wait indefinitely.
+    pub ttft_timeout: Option<Duration>,
 }
 
 #[derive(Debug, Clone)]
@@ -84,6 +96,36 @@ impl AIClient {
         self.stream_options.idle_timeout
     }
 
+    /// Returns the configured time-to-first-token timeout for opening a stream, if any.
+    pub fn stream_ttft_timeout(&self) -> Option<Duration> {
+        self.stream_options.ttft_timeout
+    }
+
+    /// Clone this client with a different reasoning mode while reusing the HTTP client.
+    pub fn with_reasoning_mode(&self, reasoning_mode: crate::types::ReasoningMode) -> Self {
+        let mut config = self.config.clone();
+        config.reasoning_mode = reasoning_mode;
+        Self {
+            client: self.client.clone(),
+            config,
+            stream_options: self.stream_options.clone(),
+        }
+    }
+
+    /// Provider-specific request overrides for PlaintextFollowup Write content generation.
+    ///
+    /// OpenAI-compatible APIs accept `tool_choice: "none"` to suppress tool calls when
+    /// history still contains prior tool turns. Anthropic/Gemini reject that field.
+    pub fn write_content_generation_extra_body(&self) -> Option<serde_json::Value> {
+        match ApiFormat::parse(&self.config.format) {
+            Ok(ApiFormat::OpenAIChat | ApiFormat::OpenAIResponses) => {
+                Some(serde_json::json!({ "tool_choice": "none" }))
+            }
+            Ok(ApiFormat::Anthropic | ApiFormat::Gemini | ApiFormat::GeminiCodeAssist) => None,
+            Err(_) => None,
+        }
+    }
+
     pub async fn send_message_stream(
         &self,
         messages: Vec<Message>,
@@ -100,7 +142,7 @@ impl AIClient {
         tools: Option<Vec<ToolDefinition>>,
         extra_body: Option<serde_json::Value>,
     ) -> Result<StreamResponse> {
-        let max_tries = 10;
+        let max_tries = SEND_MESSAGE_STREAM_ATTEMPTS;
         match ApiFormat::parse(&self.config.format)? {
             ApiFormat::OpenAIChat => {
                 openai::chat::send_stream(self, messages, tools, extra_body, max_tries).await
@@ -730,6 +772,157 @@ mod tests {
     }
 
     #[test]
+    fn build_anthropic_request_body_maps_enabled_to_adaptive_for_adaptive_models() {
+        let client = AIClient::new(AIConfig {
+            name: "anthropic".to_string(),
+            base_url: "https://api.anthropic.com".to_string(),
+            request_url: "https://api.anthropic.com/v1/messages".to_string(),
+            api_key: "test-key".to_string(),
+            model: "claude-sonnet-4-6".to_string(),
+            format: "anthropic".to_string(),
+            context_window: 200000,
+            max_tokens: Some(8192),
+            temperature: None,
+            top_p: None,
+            reasoning_mode: ReasoningMode::Enabled,
+            inline_think_in_text: false,
+            custom_headers: None,
+            custom_headers_mode: None,
+            skip_ssl_verify: false,
+            reasoning_effort: None,
+            thinking_budget_tokens: None,
+            custom_request_body: None,
+            custom_request_body_mode: None,
+        });
+
+        let request_body = anthropic::request::build_request_body(
+            &client,
+            &client.config.request_url,
+            None,
+            vec![json!({ "role": "user", "content": [{ "type": "text", "text": "hello" }] })],
+            None,
+            None,
+        );
+
+        assert_eq!(request_body["thinking"]["type"], "adaptive");
+        assert!(request_body["thinking"].get("budget_tokens").is_none());
+        assert_eq!(request_body["output_config"]["effort"], "medium");
+    }
+
+    #[test]
+    fn build_anthropic_request_body_keeps_manual_thinking_for_pre_adaptive_models() {
+        let client = AIClient::new(AIConfig {
+            name: "anthropic".to_string(),
+            base_url: "https://api.anthropic.com".to_string(),
+            request_url: "https://api.anthropic.com/v1/messages".to_string(),
+            api_key: "test-key".to_string(),
+            model: "claude-sonnet-4-5".to_string(),
+            format: "anthropic".to_string(),
+            context_window: 200000,
+            max_tokens: Some(8192),
+            temperature: None,
+            top_p: None,
+            reasoning_mode: ReasoningMode::Enabled,
+            inline_think_in_text: false,
+            custom_headers: None,
+            custom_headers_mode: None,
+            skip_ssl_verify: false,
+            reasoning_effort: Some("high".to_string()),
+            thinking_budget_tokens: None,
+            custom_request_body: None,
+            custom_request_body_mode: None,
+        });
+
+        let request_body = anthropic::request::build_request_body(
+            &client,
+            &client.config.request_url,
+            None,
+            vec![json!({ "role": "user", "content": [{ "type": "text", "text": "hello" }] })],
+            None,
+            None,
+        );
+
+        assert_eq!(request_body["thinking"]["type"], "enabled");
+        assert_eq!(request_body["thinking"]["budget_tokens"], 6144);
+        assert!(request_body.get("output_config").is_none());
+    }
+
+    #[test]
+    fn build_anthropic_request_body_uses_adaptive_for_opus_4_7_and_newer() {
+        let client = AIClient::new(AIConfig {
+            name: "anthropic".to_string(),
+            base_url: "https://api.anthropic.com".to_string(),
+            request_url: "https://api.anthropic.com/v1/messages".to_string(),
+            api_key: "test-key".to_string(),
+            model: "claude-opus-4-8".to_string(),
+            format: "anthropic".to_string(),
+            context_window: 200000,
+            max_tokens: Some(8192),
+            temperature: None,
+            top_p: None,
+            reasoning_mode: ReasoningMode::Enabled,
+            inline_think_in_text: false,
+            custom_headers: None,
+            custom_headers_mode: None,
+            skip_ssl_verify: false,
+            reasoning_effort: Some("high".to_string()),
+            thinking_budget_tokens: Some(2048),
+            custom_request_body: None,
+            custom_request_body_mode: None,
+        });
+
+        let request_body = anthropic::request::build_request_body(
+            &client,
+            &client.config.request_url,
+            None,
+            vec![json!({ "role": "user", "content": [{ "type": "text", "text": "hello" }] })],
+            None,
+            None,
+        );
+
+        assert_eq!(request_body["thinking"]["type"], "adaptive");
+        assert!(request_body["thinking"].get("budget_tokens").is_none());
+        assert_eq!(request_body["output_config"]["effort"], "high");
+    }
+
+    #[test]
+    fn build_anthropic_request_body_omits_disabled_for_mythos() {
+        let client = AIClient::new(AIConfig {
+            name: "anthropic".to_string(),
+            base_url: "https://api.anthropic.com".to_string(),
+            request_url: "https://api.anthropic.com/v1/messages".to_string(),
+            api_key: "test-key".to_string(),
+            model: "claude-mythos-preview".to_string(),
+            format: "anthropic".to_string(),
+            context_window: 200000,
+            max_tokens: Some(8192),
+            temperature: None,
+            top_p: None,
+            reasoning_mode: ReasoningMode::Disabled,
+            inline_think_in_text: false,
+            custom_headers: None,
+            custom_headers_mode: None,
+            skip_ssl_verify: false,
+            reasoning_effort: None,
+            thinking_budget_tokens: None,
+            custom_request_body: None,
+            custom_request_body_mode: None,
+        });
+
+        let request_body = anthropic::request::build_request_body(
+            &client,
+            &client.config.request_url,
+            None,
+            vec![json!({ "role": "user", "content": [{ "type": "text", "text": "hello" }] })],
+            None,
+            None,
+        );
+
+        assert!(request_body.get("thinking").is_none());
+        assert!(request_body.get("output_config").is_none());
+    }
+
+    #[test]
     fn build_anthropic_request_body_adds_deepseek_reasoning_effort() {
         let client = AIClient::new(AIConfig {
             name: "deepseek".to_string(),
@@ -763,7 +956,45 @@ mod tests {
         );
 
         assert_eq!(request_body["thinking"]["type"], "enabled");
+        assert_eq!(request_body["thinking"]["budget_tokens"], 6144);
         assert_eq!(request_body["output_config"]["effort"], "max");
+    }
+
+    #[test]
+    fn build_anthropic_request_body_enabled_reasoning_always_has_budget_tokens() {
+        let client = AIClient::new(AIConfig {
+            name: "anthropic-proxy".to_string(),
+            base_url: "https://proxy.example.com/anthropic".to_string(),
+            request_url: "https://proxy.example.com/anthropic/v1/messages".to_string(),
+            api_key: "test-key".to_string(),
+            model: "vendor-model-alias".to_string(),
+            format: "anthropic".to_string(),
+            context_window: 200000,
+            max_tokens: Some(4000),
+            temperature: None,
+            top_p: None,
+            reasoning_mode: ReasoningMode::Enabled,
+            inline_think_in_text: false,
+            custom_headers: None,
+            custom_headers_mode: None,
+            skip_ssl_verify: false,
+            reasoning_effort: None,
+            thinking_budget_tokens: None,
+            custom_request_body: None,
+            custom_request_body_mode: None,
+        });
+
+        let request_body = anthropic::request::build_request_body(
+            &client,
+            &client.config.request_url,
+            None,
+            vec![json!({ "role": "user", "content": [{ "type": "text", "text": "hello" }] })],
+            None,
+            None,
+        );
+
+        assert_eq!(request_body["thinking"]["type"], "enabled");
+        assert_eq!(request_body["thinking"]["budget_tokens"], 3000);
     }
 
     #[test]
@@ -969,5 +1200,20 @@ mod tests {
                 "expected permanent stream error: {msg}"
             );
         }
+    }
+
+    #[test]
+    fn write_content_generation_extra_body_is_openai_only() {
+        let openai = make_test_client("openai", None);
+        assert_eq!(
+            openai.write_content_generation_extra_body(),
+            Some(json!({ "tool_choice": "none" }))
+        );
+
+        let anthropic = make_test_client("anthropic", None);
+        assert_eq!(anthropic.write_content_generation_extra_body(), None);
+
+        let gemini = make_test_client("gemini", None);
+        assert_eq!(gemini.write_content_generation_extra_body(), None);
     }
 }

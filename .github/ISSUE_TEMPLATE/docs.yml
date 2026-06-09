@@ -1,0 +1,19 @@
+name: Documentation issue
+description: Report missing, outdated, confusing, or incorrect documentation.
+title: "[Docs]: "
+body:
+  - type: textarea
+    id: location
+    attributes:
+      label: Documentation location
+      description: Link the page or file path if known.
+      placeholder: README.md, CONTRIBUTING.md, docs/..., website page, etc.
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or suggested update
+      description: What is missing, outdated, confusing, or incorrect? Include suggested wording if you have it.
+    validations:
+      required: true

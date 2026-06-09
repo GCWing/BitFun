@@ -117,7 +117,8 @@
       "result": "任务结果",
       "processing": "AI正在处理任务...",
       "defaultType": "AI任务",
-      "unspecifiedTask": "未指定任务"
+      "unspecifiedTask": "未指定任务",
+      "taskResult": "任务结果"
     },
     "searchCard": {
       "grepTitle": "文本搜索",
@@ -632,5 +633,10 @@
     "fallback": {
       "noCodeContent": "无代码内容"
     }
-  }
+  },
+  "header": {
+    "selectProjectDirectory": "选择要打开的项目目录"
+  },
+  "hide": "隐藏",
+  "show": "显示"
 }

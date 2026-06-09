@@ -110,8 +110,10 @@ export class FlowChatManager {
         }
       );
 
-      await this.context.flowChatStore.initializeFromDisk(
+      const initialMetadataPage = await this.context.flowChatStore.loadSessionMetadataPage(
         workspacePath,
+        5,
+        undefined,
         remoteConnectionId,
         remoteSshHost,
         'flow_chat_manager'
@@ -135,9 +137,35 @@ export class FlowChatManager {
         );
       };
 
-      const state = this.context.flowChatStore.getState();
-      const workspaceSessions = Array.from(state.sessions.values()).filter(sessionMatchesWorkspace);
-      const hasHistoricalSessions = workspaceSessions.length > 0;
+      let state = this.context.flowChatStore.getState();
+      let workspaceSessions = Array.from(state.sessions.values()).filter(sessionMatchesWorkspace);
+      if (
+        preferredMode &&
+        initialMetadataPage.hasMore &&
+        !workspaceSessions.some(session => session.mode === preferredMode)
+      ) {
+        let nextCursor = initialMetadataPage.nextCursor;
+        while (nextCursor) {
+          const nextPage = await this.context.flowChatStore.loadSessionMetadataPage(
+            workspacePath,
+            5,
+            nextCursor,
+            remoteConnectionId,
+            remoteSshHost,
+            'flow_chat_manager_preferred_mode'
+          );
+          state = this.context.flowChatStore.getState();
+          workspaceSessions = Array.from(state.sessions.values()).filter(sessionMatchesWorkspace);
+          if (workspaceSessions.some(session => session.mode === preferredMode) || !nextPage.hasMore) {
+            break;
+          }
+          nextCursor = nextPage.nextCursor;
+        }
+      }
+      const hasHistoricalSessions =
+        workspaceSessions.length > 0 ||
+        initialMetadataPage.totalTopLevelCount > 0 ||
+        initialMetadataPage.sessions.length > 0;
       const activeSession = state.activeSessionId
         ? state.sessions.get(state.activeSessionId) ?? null
         : null;
@@ -272,6 +300,29 @@ export class FlowChatManager {
       cleanupSessionBuffers(this.context, id);
     });
     return removedSessionIds;
+  }
+
+  public discardLocalSessionsForWorkspace(
+    workspace: Pick<WorkspaceInfo, 'id' | 'rootPath' | 'connectionId' | 'sshHost'>
+  ): string[] {
+    const removedSessionIds = this.context.flowChatStore.removeSessionsForWorkspace(workspace);
+    removedSessionIds.forEach(id => {
+      stateMachineManager.delete(id);
+      this.context.processingManager.clearSessionStatus(id);
+      cleanupSaveState(this.context, id);
+      cleanupSessionBuffers(this.context, id);
+    });
+    return removedSessionIds;
+  }
+
+  async refreshWorkspaceSessions(
+    workspace: Pick<WorkspaceInfo, 'rootPath' | 'connectionId' | 'sshHost'>
+  ): Promise<void> {
+    await this.context.flowChatStore.refreshWorkspaceFromDisk(
+      workspace.rootPath,
+      workspace.connectionId,
+      workspace.sshHost
+    );
   }
 
   async renameChatSessionTitle(sessionId: string, title: string): Promise<string> {

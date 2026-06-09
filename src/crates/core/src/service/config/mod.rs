@@ -2,6 +2,8 @@
 //!
 //! A complete configuration management system based on the Provider mechanism.
 
+#[cfg(feature = "product-full")]
+pub mod agent_profile_project_store;
 pub mod app_language;
 pub mod factory;
 pub mod global;
@@ -23,7 +25,8 @@ pub use global::{
 pub use manager::{ConfigManager, ConfigManagerSettings, ConfigStatistics};
 #[cfg(feature = "product-full")]
 pub use mode_config_canonicalizer::{
-    canonicalize_mode_configs, ModeConfigCanonicalizationReport, ModeConfigUpdateInfo,
+    canonicalize_agent_profile_configs, AgentProfileConfigCanonicalizationReport,
+    AgentProfileConfigUpdateInfo,
 };
 pub use providers::ConfigProviderRegistry;
 pub use service::{ConfigExport, ConfigHealthStatus, ConfigImportResult, ConfigService};

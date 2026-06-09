@@ -203,7 +203,8 @@ impl ProviderSelectorState {
         if self.selectable_row_indices.is_empty() {
             return;
         }
-        self.selected = self.selected.saturating_sub(1);
+        let len = self.selectable_row_indices.len();
+        self.selected = (self.selected + len - 1) % len;
         self.ensure_selected_visible();
     }
 
@@ -211,7 +212,7 @@ impl ProviderSelectorState {
         if self.selectable_row_indices.is_empty() {
             return;
         }
-        self.selected = (self.selected + 1).min(self.selectable_row_indices.len() - 1);
+        self.selected = (self.selected + 1) % self.selectable_row_indices.len();
         self.ensure_selected_visible();
     }
 

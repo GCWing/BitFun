@@ -28,6 +28,9 @@ SessionManager → Session → DialogTurn → ModelRound
 - Avoid host-specific APIs such as `tauri::AppHandle`
 - Use shared abstractions such as `bitfun_events::EventEmitter`
 - Desktop-only integrations belong in `src/apps/desktop`, then flow through transport/API layers
+- Backend locale ids, aliases, and fallback rules must stay aligned with
+  `src/shared/i18n/contract/locales.json`; run `pnpm run i18n:generate` when
+  changing supported locales.
 - During core decomposition, `bitfun-core` is a compatibility facade and full
   product runtime assembly point. New modules should prefer the extracted owner
   crate listed in `docs/architecture/core-decomposition.md`.
@@ -51,12 +54,16 @@ SessionManager → Session → DialogTurn → ModelRound
   reviewed port/provider plan and equivalence tests exist. `ToolContextFacts`
   / `PortableToolContextProvider` are only portable projections; they must not
   carry runtime handles, workspace services, or cancellation tokens.
-- Keep `ToolUseContext` runtime/service bindings centralized in
-  `src/agentic/tools/tool_context_runtime.rs`. `framework.rs` should define the
-  context shape, portable facts projection, and tool trait, not own workspace
+- Keep `ToolUseContext` owner type, portable facts projection, and
+  runtime/service bindings centralized in
+  `src/agentic/tools/tool_context_runtime.rs`. `framework.rs` should only keep
+  the tool trait and compatibility re-export, not own context shape, workspace
   runtime lookup, path enforcement, pipeline/description/preflight context
   materialization, cancellation wrapping, post-call hooks, or checkpoint
   collection.
+- Core runtime/adapter modules that need `ToolUseContext` should import it from
+  `tool_context_runtime`; the `framework.rs` re-export is only for legacy path
+  compatibility.
 - Host path normalization, runtime artifact URI parsing/building, and remote
   POSIX path containment are portable `bitfun-agent-tools` contracts. Core
   keeps compatibility wrappers for `BitFunError`, workspace runtime-root
@@ -79,24 +86,48 @@ SessionManager → Session → DialogTurn → ModelRound
   prompt templates, JSON extraction/repair, domain error mapping, and domain
   JSON parsing policy may live in `bitfun-product-domains`.
 - MiniApp built-in bundle/hash/marker seed-plan and marker wire helpers may
-  live in `bitfun-product-domains`; keep bundled asset includes, filesystem
-  writes, marker IO, customization metadata IO, recompile orchestration, worker
-  process runtime, and host dispatch execution core-owned until a reviewed
-  migration proves equivalence.
-- Remote-connect wire/tracker/dialog orchestration and portable file/image
-  contracts may live in `bitfun-services-integrations`; keep workspace-root
-  source selection, response wrapping, concrete scheduler/session restore,
-  terminal pre-warm adapters, and product execution core-owned until a reviewed
-  migration proves equivalence. Core service/agent runtime bindings are
-  centralized in `src/crates/core/src/service_agent_runtime.rs`.
+  live in `bitfun-product-domains`. MiniApp create/update/draft/apply pure state
+  transitions, imported metadata stamping, import runtime-state persistence
+  facade, and built-in seed meta timestamp policy may also live there; keep
+  bundled asset includes, filesystem writes, marker IO, customization metadata
+  IO, source reads, compile orchestration, worker process runtime, and host dispatch
+  execution core-owned until a reviewed migration proves equivalence.
+- Remote-connect wire/tracker/dialog and cancel orchestration plus response
+  assembly helpers may live in `bitfun-services-integrations`; remote workspace
+  facts, session metadata, file projection DTOs, and remote workspace/projection
+  host traits belong in `bitfun-runtime-ports` with old-path re-exports from
+  `remote_connect`. Keep workspace-root source selection, persistence/workspace
+  service reads, concrete scheduler/session restore, terminal pre-warm adapters,
+  and product execution core-owned until a reviewed migration proves equivalence.
+  Core remote dialog/cancel/file/tracker adapters, remote model catalog/session-model
+  selection adapters, remote chat history persistence/message conversion
+  adapters, and service/agent runtime bindings are centralized in
+  `src/crates/core/src/service_agent_runtime.rs`.
 - Keep concrete remote SSH runtime code behind `ssh-remote`. No-default builds
   may keep workspace identity helpers and explicit unsupported stubs, but must
   not compile russh-backed SSH/SFTP/terminal/search runtime modules.
+- Generic local filesystem operations, tree/search, listing, and filesystem DTOs
+  live in `bitfun-services-core::filesystem`. Core may keep compatibility
+  re-exports, remote workspace overlay, `BitFunError` mapping, MiniApp
+  filesystem IO, tool-result persistence, `PathManager` binding, and product
+  runtime wiring.
 - Keep no-default `bitfun-core` as a runtime-surface-light facade, not a
   claimed dependency-light build. Full product runtime modules such as agentic,
   MiniApp/function-agent, Git/MCP, remote-connect, review-platform, snapshot,
   token usage, and mode canonicalization stay behind `product-full` or their
   owner feature group.
+- Provider-neutral tool path resolution, effective absolute-path checks,
+  runtime artifact reference assembly, path policy root matching, and denial
+  text may live in `bitfun-agent-tools`; file guidance markers, file-read
+  freshness comparison policy, and oversized tool-result preview/rendering
+  policy may also live there as pure contracts. Provider-neutral tool result
+  assistant fallback text, error argument preview, invalid-call messages, and
+  steering-interrupted presentation may live there too. Keep workspace/runtime root lookup,
+  allowed-root resolution, local canonicalization, remote POSIX containment
+  callbacks, session file-read state storage, tool-result filesystem writes,
+  `BitFunError` category mapping, and `ToolUseContext`
+  runtime/service bindings in core unless a separate migration proves
+  equivalence.
 - Product/runtime dependencies that are only used behind those feature gates
   should stay optional in `bitfun-core` and be enabled by `product-full`,
   `service-integrations`, or `ssh-remote`; do not treat that as permission to
@@ -110,9 +141,16 @@ SessionManager → Session → DialogTurn → ModelRound
   dependencies and requires matching assembly rules.
 - Keep `default = ["product-full"]` until a separate product matrix review
   explicitly changes default capability selection.
+- Keep `bitfun-core/product-full` explicitly wired to the current owner feature
+  groups: `ssh-remote`, `product-domains`, `service-integrations`, and
+  `tool-packs`.
 - Owner crate feature graph guards keep `tool-packs`, `services-integrations`,
   and `product-domains` default-light while allowing `product-full` to
-  explicitly aggregate current owner feature groups.
+  explicitly aggregate current owner feature groups. When adding an owner
+  feature group, update `scripts/check-core-boundaries.mjs`; `product-full`
+  must not include undeclared feature groups or dependency shortcuts. Optional
+  runtime/domain dependencies in owner crates must stay owned by explicit
+  feature groups.
 - `service-integrations` is not a standalone product shape in core yet; MCP,
   remote-connect, and review-platform still depend on agentic/product runtime
   owners through `product-full`.

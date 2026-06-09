@@ -54,6 +54,43 @@ interface PhaseRecord {
   [key: string]: unknown;
 }
 
+export interface StartupTraceApiSummary {
+  totalCount: number;
+  successCount: number;
+  failureCount: number;
+  cacheHitCount: number;
+  cacheMissCount: number;
+  cacheUnknownCount: number;
+  remoteCount: number;
+  requestBytes: number;
+  responseBytes: number;
+  payloadEstimateDurationMs: number;
+  byCommand: CommandAggregate[];
+}
+
+export interface StartupTraceSnapshot {
+  traceId: string;
+  phases: {
+    count: number;
+    events: PhaseRecord[];
+  };
+  api: StartupTraceApiSummary;
+}
+
+export interface StartupTraceDiagnostics {
+  snapshot: () => StartupTraceSnapshot;
+  flushSummary: (reason: string) => void;
+}
+
+declare global {
+  // E2E and manual performance collection read this sanitized diagnostic surface.
+  // It intentionally exposes no raw request payloads or workspace paths.
+  // eslint-disable-next-line no-var
+  var __BITFUN_STARTUP_TRACE__: StartupTraceDiagnostics | undefined;
+  // eslint-disable-next-line no-var
+  var __BITFUN_PERF_TRACE_ENABLED__: boolean | undefined;
+}
+
 const DEFAULT_MAX_ESTIMATED_BYTES = 64 * 1024;
 const SENSITIVE_KEY_PATTERN =
   /(api[-_]?key|authorization|bearer|token|secret|password|credential|payload|request|response|args|remoteconnectionid|remote[_-]?connection[_-]?id|remotesshhost|remote[_-]?ssh[_-]?host|sshhost|ssh[_-]?host|workspacepath|workspace[_-]?path)/i;
@@ -264,7 +301,7 @@ export class StartupTrace {
     this.logger = options.logger ?? createLogger('StartupTrace');
     this.traceId = options.traceId ?? createTraceId();
     this.now = options.now ?? (() => globalThis.performance?.now?.() ?? Date.now());
-    this.maxPhaseEvents = options.maxPhaseEvents ?? 80;
+    this.maxPhaseEvents = options.maxPhaseEvents ?? 160;
   }
 
   markPhase(phase: string, data?: TraceData): void {
@@ -332,11 +369,7 @@ export class StartupTrace {
     this.commandAggregates.set(call.command, existing);
   }
 
-  flushSummary(reason: string): void {
-    if (!this.enabled) {
-      return;
-    }
-
+  private buildApiSummary(): StartupTraceApiSummary {
     const byCommand = Array.from(this.commandAggregates.values())
       .sort((left, right) => right.totalDurationMs - left.totalDurationMs)
       .map(item => ({
@@ -345,25 +378,44 @@ export class StartupTrace {
         maxDurationMs: roundDurationMs(item.maxDurationMs),
       }));
 
-    this.logger.info('Startup trace summary', {
+    return {
+      totalCount: this.totalApiCount,
+      successCount: this.successfulApiCount,
+      failureCount: this.failedApiCount,
+      cacheHitCount: this.cacheHitCount,
+      cacheMissCount: this.cacheMissCount,
+      cacheUnknownCount: this.cacheUnknownCount,
+      remoteCount: this.remoteApiCount,
+      requestBytes: this.requestBytes,
+      responseBytes: this.responseBytes,
+      payloadEstimateDurationMs: roundDurationMs(this.payloadEstimateDurationMs),
+      byCommand,
+    };
+  }
+
+  getSnapshot(): StartupTraceSnapshot {
+    return {
       traceId: this.traceId,
-      reason,
       phases: {
         count: this.phaseEvents,
-        events: this.phaseRecords,
+        events: this.phaseRecords.map(record => ({ ...record })),
       },
+      api: this.buildApiSummary(),
+    };
+  }
+
+  flushSummary(reason: string): void {
+    if (!this.enabled) {
+      return;
+    }
+
+    const snapshot = this.getSnapshot();
+    this.logger.info('Startup trace summary', {
+      traceId: snapshot.traceId,
+      reason,
+      phases: snapshot.phases,
       api: {
-        totalCount: this.totalApiCount,
-        successCount: this.successfulApiCount,
-        failureCount: this.failedApiCount,
-        cacheHitCount: this.cacheHitCount,
-        cacheMissCount: this.cacheMissCount,
-        cacheUnknownCount: this.cacheUnknownCount,
-        remoteCount: this.remoteApiCount,
-        requestBytes: this.requestBytes,
-        responseBytes: this.responseBytes,
-        payloadEstimateDurationMs: roundDurationMs(this.payloadEstimateDurationMs),
-        byCommand,
+        ...snapshot.api,
       },
     });
   }
@@ -374,6 +426,13 @@ export function createStartupTrace(options: StartupTraceOptions = {}): StartupTr
 }
 
 export const startupTrace = createStartupTrace();
+
+if (import.meta.env.DEV || globalThis.__BITFUN_PERF_TRACE_ENABLED__ === true) {
+  globalThis.__BITFUN_STARTUP_TRACE__ = {
+    snapshot: () => startupTrace.getSnapshot(),
+    flushSummary: (reason: string) => startupTrace.flushSummary(reason),
+  };
+}
 
 export function markPhaseAfterAnimationFrames(
   trace: StartupTrace,

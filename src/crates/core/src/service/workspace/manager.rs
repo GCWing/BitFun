@@ -15,6 +15,8 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tokio::fs;
 
+pub use bitfun_runtime_ports::RelatedPath;
+
 /// Workspace type.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum WorkspaceType {
@@ -73,15 +75,6 @@ pub struct WorkspaceWorktreeInfo {
     pub branch: Option<String>,
     pub main_repo_path: String,
     pub is_main: bool,
-}
-
-/// User-managed related directory reference for the current workspace context.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct RelatedPath {
-    pub path: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]

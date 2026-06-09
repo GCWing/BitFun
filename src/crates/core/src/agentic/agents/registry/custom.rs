@@ -12,6 +12,7 @@ use crate::agentic::agents::registry::visibility::SubagentVisibilityPolicy;
 use crate::agentic::agents::{Agent, AgentCategory, CustomSubagentConfig, SubAgentSource};
 use crate::agentic::tools::{get_all_registered_tool_names, get_readonly_registered_tool_names};
 use crate::service::config::global::GlobalConfigManager;
+use crate::service::config::mode_config_canonicalizer::persist_agent_profile_from_value;
 use crate::service::config::types::AgentSubagentOverrideState;
 use crate::util::errors::{BitFunError, BitFunResult};
 use log::{debug, warn};
@@ -624,21 +625,23 @@ impl AgentRegistry {
                 Ok(())
             }
             Some(SubAgentSource::Builtin) | Some(SubAgentSource::User) => {
-                let config_service = GlobalConfigManager::get_service().await?;
                 let mut user_overrides = get_subagent_overrides().await;
+                let profile_id =
+                    crate::agentic::agents::resolve_mode_config_profile_id(parent_agent_type)
+                        .into_owned();
+                let mut profile_overrides = user_overrides.remove(&profile_id).unwrap_or_default();
                 if enabled == default_enabled {
-                    prune_override_config(&mut user_overrides, parent_agent_type, &subagent_key);
+                    profile_overrides.remove(&subagent_key);
                 } else {
-                    set_override_state(
-                        &mut user_overrides,
-                        parent_agent_type,
-                        &subagent_key,
-                        state,
-                    );
+                    profile_overrides.insert(subagent_key.clone(), state);
                 }
-                config_service
-                    .set_config("ai.agent_subagent_overrides", &user_overrides)
-                    .await?;
+                persist_agent_profile_from_value(
+                    parent_agent_type,
+                    serde_json::json!({
+                        "subagent_overrides": profile_overrides,
+                    }),
+                )
+                .await?;
                 Ok(())
             }
             None => Err(BitFunError::agent(format!(

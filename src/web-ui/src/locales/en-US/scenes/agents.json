@@ -111,6 +111,9 @@
     "save": "Save",
     "skillToggleFailed": "Failed to toggle skill",
     "subagentToggleFailed": "Failed to toggle sub-agent",
+    "sharedProfileLabel": "Shared profile",
+    "sharedProfileDefaultLabel": "Shared coding profile",
+    "sharedProfileDescription": "Changes here also apply to: {{modes}}.",
     "skillShadowed": "shadowed by a higher-priority skill with the same name",
     "noSkills": "No skills enabled",
     "skillGroups": {
@@ -153,7 +156,9 @@
       "cancel": "Cancel",
       "submit": "Create",
       "createSuccess": "Created agent \"{{name}}\"",
-      "createFailed": "Create failed: "
+      "createFailed": "Create failed: ",
+      "review": "Review",
+      "reviewToolsHint": "Review Sub-Agents can only use read-only tools."
     }
   },
   "reviewTeams": {
@@ -344,7 +349,7 @@
     "GenerateDoc": "Documentation agent: automatically generate code documentation and explanations",
     "Init": "Init agent: help set up project structure and initial configuration",
     "ReviewFixer": "Review fixer agent: automatically fix code issues based on review results",
-    "Multitask": "Multitask mode: decompose work into orthogonal branches or a DAG and use subagents in parallel when beneficial",
+    "Multitask": "Multitask mode: decompose work into orthogonal branches and use subagents in parallel when beneficial",
     "Plan": "Plan mode: create detailed task plans and execution steps",
     "Debug": "Debug mode: systematically diagnose and fix errors in code",
     "Claw": "Claw mode: extract and integrate information from external sources",

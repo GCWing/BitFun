@@ -127,7 +127,8 @@ impl SubagentSelectorState {
             return;
         }
         let selected = self.list_state.selected().unwrap_or(0);
-        let next = selected.saturating_sub(1);
+        let len = self.len();
+        let next = (selected + len - 1) % len;
         self.list_state.select(Some(next));
     }
 
@@ -136,7 +137,7 @@ impl SubagentSelectorState {
             return;
         }
         let selected = self.list_state.selected().unwrap_or(0);
-        let next = (selected + 1).min(self.len().saturating_sub(1));
+        let next = (selected + 1) % self.len();
         self.list_state.select(Some(next));
     }
 

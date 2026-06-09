@@ -1,25 +1,44 @@
 #![cfg(feature = "remote-connect")]
 
 use bitfun_events::{AgenticEvent, ToolEventData};
-use bitfun_runtime_ports::AgentSubmissionSource;
+use bitfun_runtime_ports::{
+    AgentSubmissionSource, RemoteControlSessionState, RemoteControlStateSnapshot,
+};
 use bitfun_services_integrations::remote_connect::{
-    build_remote_image_attachment, build_remote_image_contexts,
-    build_remote_image_submission_request, build_remote_session_create_request,
-    build_remote_submission_request, make_slim_tool_params, read_remote_workspace_file,
-    read_remote_workspace_file_chunk, read_remote_workspace_file_info, remote_file_display_name,
-    remote_model_catalog_poll_delta, remote_no_change_poll_response,
-    remote_persisted_poll_response, remote_session_restore_target, remote_snapshot_poll_response,
-    resolve_remote_agent_type, resolve_remote_cancel_decision,
+    ActiveTurnSnapshot, ChatImageAttachment, ChatMessage, ChatMessageItem, ImageAttachment,
+    REMOTE_FILE_MAX_CHUNK_BYTES, REMOTE_FILE_MAX_READ_BYTES, RemoteAssistantWorkspaceFacts,
+    RemoteCancelDecision, RemoteCancelRuntimeHost, RemoteCancelTaskRequest, RemoteChatHistoryRound,
+    RemoteChatHistoryTextItem, RemoteChatHistoryThinkingItem, RemoteChatHistoryToolCall,
+    RemoteChatHistoryToolItem, RemoteChatHistoryTurn, RemoteCommand, RemoteConnectSubmissionSource,
+    RemoteDefaultModelsConfig, RemoteDialogQueuePriority, RemoteDialogResolvedSubmission,
+    RemoteDialogRuntimeHost, RemoteDialogSchedulerOutcomeFact, RemoteDialogSubmissionPolicy,
+    RemoteDialogSubmissionRequest, RemoteDialogSubmitOutcome, RemoteImageContext,
+    RemoteImageContextAdapter, RemoteModelCapabilityFact, RemoteModelCatalog,
+    RemoteModelCatalogFacts, RemoteModelConfig, RemoteModelFacts, RemoteReasoningModeFact,
+    RemoteRecentWorkspaceFacts, RemoteResponse, RemoteSessionMetadata, RemoteSessionStateTracker,
+    RemoteSessionTrackerHost, RemoteSessionTrackerRegistry, RemoteTerminalPrewarmRequest,
+    RemoteToolStatus, RemoteWorkspaceFacts, RemoteWorkspaceFileChunk, RemoteWorkspaceFileContent,
+    RemoteWorkspaceFileInfo, RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind,
+    RemoteWorkspaceUpdate, TrackerEvent, build_remote_chat_messages, build_remote_image_attachment,
+    build_remote_image_contexts, build_remote_image_submission_request, build_remote_model_catalog,
+    build_remote_session_create_request, build_remote_submission_request, cancel_remote_task,
+    handle_remote_workspace_file_command, make_slim_tool_params, normalize_remote_model_selection,
+    normalize_remote_session_model_id, read_remote_workspace_file,
+    read_remote_workspace_file_chunk, read_remote_workspace_file_info,
+    remote_answer_question_response, remote_assistant_list_response,
+    remote_assistant_updated_response, remote_dialog_submit_outcome_from_scheduler,
+    remote_dialog_submit_response, remote_file_chunk_response, remote_file_content_response,
+    remote_file_display_name, remote_file_info_response, remote_initial_sync_response,
+    remote_interaction_accepted_response, remote_messages_response,
+    remote_model_catalog_poll_delta, remote_model_selection_needs_config,
+    remote_no_change_poll_response, remote_persisted_poll_response,
+    remote_recent_workspaces_response, remote_session_created_response,
+    remote_session_deleted_response, remote_session_info, remote_session_list_response,
+    remote_session_model_updated_response, remote_session_restore_target,
+    remote_snapshot_poll_response, remote_task_cancel_response, remote_workspace_info_response,
+    remote_workspace_updated_response, resolve_remote_agent_type, resolve_remote_cancel_decision,
     resolve_remote_execution_image_contexts, resolve_remote_file_chunk_range,
     resolve_remote_workspace_path, should_send_remote_model_catalog, submit_remote_dialog,
-    ActiveTurnSnapshot, ChatImageAttachment, ChatMessage, ChatMessageItem, ImageAttachment,
-    RemoteCancelDecision, RemoteCommand, RemoteConnectSubmissionSource, RemoteDefaultModelsConfig,
-    RemoteDialogQueuePriority, RemoteDialogResolvedSubmission, RemoteDialogRuntimeHost,
-    RemoteDialogSubmissionPolicy, RemoteDialogSubmissionRequest, RemoteDialogSubmitOutcome,
-    RemoteImageContext, RemoteImageContextAdapter, RemoteModelCatalog, RemoteModelConfig,
-    RemoteResponse, RemoteSessionStateTracker, RemoteSessionTrackerHost,
-    RemoteSessionTrackerRegistry, RemoteTerminalPrewarmRequest, RemoteToolStatus, TrackerEvent,
-    REMOTE_FILE_MAX_CHUNK_BYTES, REMOTE_FILE_MAX_READ_BYTES,
 };
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -195,6 +214,56 @@ fn remote_connect_image_context_adapter_owns_portable_conversion_shape() {
 }
 
 #[test]
+fn remote_chat_history_assembly_preserves_message_shape_and_item_order() {
+    let turn = remote_history_contract_turn(false);
+
+    let messages = build_remote_chat_messages(vec![turn]);
+
+    assert_eq!(messages.len(), 2);
+    assert_eq!(messages[0].id, "user-1");
+    assert_eq!(messages[0].role, "user");
+    assert_eq!(messages[0].content, "original question");
+    assert_eq!(messages[0].timestamp, "1");
+    assert_eq!(
+        messages[0].images.as_ref().unwrap()[0],
+        ChatImageAttachment {
+            name: "screenshot.png".to_string(),
+            data_url: "data:image/png;base64,abcd".to_string(),
+        }
+    );
+
+    assert_eq!(messages[1].id, "turn-1_assistant");
+    assert_eq!(messages[1].role, "assistant");
+    assert_eq!(messages[1].content, "visible text");
+    assert_eq!(messages[1].timestamp, "1");
+    assert_eq!(messages[1].thinking.as_deref(), Some("visible thought"));
+    let items = messages[1].items.as_ref().expect("assistant items");
+    assert_eq!(items.len(), 3);
+    assert_eq!(items[0].item_type, "thinking");
+    assert_eq!(items[1].item_type, "text");
+    assert_eq!(items[2].item_type, "tool");
+    let tool = items[2].tool.as_ref().expect("tool item");
+    assert_eq!(tool.name, "AskUserQuestion");
+    assert_eq!(tool.status, "running");
+    assert_eq!(tool.duration_ms, Some(25));
+    assert_eq!(
+        tool.input_preview.as_deref(),
+        Some(r#"{"question":"confirm?"}"#)
+    );
+    assert_eq!(tool.tool_input.as_ref().unwrap()["question"], "confirm?");
+}
+
+#[test]
+fn remote_chat_history_assembly_skips_in_progress_assistant_history() {
+    let turn = remote_history_contract_turn(true);
+
+    let messages = build_remote_chat_messages(vec![turn]);
+
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0].role, "user");
+}
+
+#[test]
 fn remote_connect_cancel_and_restore_policy_preserve_runtime_decisions() {
     assert_eq!(
         remote_session_restore_target(false, Some("D:/workspace/project")),
@@ -226,6 +295,56 @@ fn remote_connect_cancel_and_restore_policy_preserve_runtime_decisions() {
         resolve_remote_cancel_decision(None, None),
         RemoteCancelDecision::NoRunningTask
     );
+}
+
+fn remote_history_contract_turn(is_in_progress: bool) -> RemoteChatHistoryTurn {
+    RemoteChatHistoryTurn {
+        turn_id: "turn-1".to_string(),
+        user_message_id: "user-1".to_string(),
+        user_display_content: "original question".to_string(),
+        user_timestamp_ms: 1_000,
+        user_images: vec![ChatImageAttachment {
+            name: "screenshot.png".to_string(),
+            data_url: "data:image/png;base64,abcd".to_string(),
+        }],
+        is_in_progress,
+        start_time_ms: 1_000,
+        rounds: vec![RemoteChatHistoryRound {
+            start_time_ms: 1_100,
+            end_time_ms: Some(1_200),
+            text_items: vec![
+                RemoteChatHistoryTextItem {
+                    content: "hidden text".to_string(),
+                    order_index: Some(1),
+                    is_subagent: true,
+                },
+                RemoteChatHistoryTextItem {
+                    content: "visible text".to_string(),
+                    order_index: Some(1),
+                    is_subagent: false,
+                },
+            ],
+            thinking_items: vec![RemoteChatHistoryThinkingItem {
+                content: "visible thought".to_string(),
+                order_index: Some(0),
+                is_subagent: false,
+            }],
+            tool_items: vec![RemoteChatHistoryToolItem {
+                id: "tool-1".to_string(),
+                name: "AskUserQuestion".to_string(),
+                call: RemoteChatHistoryToolCall {
+                    id: "call-1".to_string(),
+                    input: serde_json::json!({ "question": "confirm?" }),
+                },
+                has_result: false,
+                status: Some("running".to_string()),
+                duration_ms: Some(25),
+                start_ms: 1_130,
+                order_index: Some(2),
+                is_subagent: false,
+            }],
+        }],
+    }
 }
 
 struct RecordingDialogHost {
@@ -349,6 +468,115 @@ impl RemoteDialogRuntimeHost for RecordingDialogHost {
     }
 }
 
+struct RecordingCancelHost {
+    initial_state: Mutex<Option<RemoteControlStateSnapshot>>,
+    restored_state: Mutex<Option<RemoteControlStateSnapshot>>,
+    state_reads: Mutex<usize>,
+    restore_workspace: Option<String>,
+    restore_error: bool,
+    cancel_error: Option<String>,
+    events: Mutex<Vec<String>>,
+}
+
+impl RecordingCancelHost {
+    fn new(
+        initial_state: Option<RemoteControlStateSnapshot>,
+        restored_state: Option<RemoteControlStateSnapshot>,
+        restore_workspace: Option<&str>,
+    ) -> Self {
+        Self {
+            initial_state: Mutex::new(initial_state),
+            restored_state: Mutex::new(restored_state),
+            state_reads: Mutex::new(0),
+            restore_workspace: restore_workspace.map(ToOwned::to_owned),
+            restore_error: false,
+            cancel_error: None,
+            events: Mutex::new(Vec::new()),
+        }
+    }
+
+    fn with_restore_error(mut self) -> Self {
+        self.restore_error = true;
+        self
+    }
+
+    fn events(&self) -> Vec<String> {
+        self.events.lock().unwrap().clone()
+    }
+}
+
+fn remote_state(
+    session_id: &str,
+    state: RemoteControlSessionState,
+    active_turn_id: Option<&str>,
+) -> RemoteControlStateSnapshot {
+    RemoteControlStateSnapshot {
+        session_id: session_id.to_string(),
+        state,
+        active_turn_id: active_turn_id.map(ToOwned::to_owned),
+        queue_depth: 0,
+        metadata: serde_json::Map::new(),
+    }
+}
+
+#[async_trait::async_trait]
+impl RemoteCancelRuntimeHost for RecordingCancelHost {
+    async fn resolve_restore_workspace(&self, session_id: &str) -> Option<String> {
+        self.events
+            .lock()
+            .unwrap()
+            .push(format!("resolve_workspace:{session_id}"));
+        self.restore_workspace.clone()
+    }
+
+    async fn remote_control_state(
+        &self,
+        session_id: &str,
+    ) -> Result<Option<RemoteControlStateSnapshot>, String> {
+        self.events
+            .lock()
+            .unwrap()
+            .push(format!("read_state:{session_id}"));
+        let mut reads = self.state_reads.lock().unwrap();
+        let read_index = *reads;
+        *reads += 1;
+        drop(reads);
+
+        if read_index == 0 {
+            return Ok(self.initial_state.lock().unwrap().clone());
+        }
+        Ok(self.restored_state.lock().unwrap().clone())
+    }
+
+    async fn restore_remote_session(
+        &self,
+        session_id: &str,
+        workspace_path: &str,
+    ) -> Result<(), String> {
+        self.events
+            .lock()
+            .unwrap()
+            .push(format!("restore:{session_id}:{workspace_path}"));
+        if self.restore_error {
+            Err("restore failed".to_string())
+        } else {
+            Ok(())
+        }
+    }
+
+    async fn cancel_remote_turn(&self, session_id: &str, turn_id: &str) -> Result<(), String> {
+        self.events
+            .lock()
+            .unwrap()
+            .push(format!("cancel:{session_id}:{turn_id}"));
+        if let Some(error) = &self.cancel_error {
+            Err(error.clone())
+        } else {
+            Ok(())
+        }
+    }
+}
+
 #[tokio::test]
 async fn remote_connect_dialog_runtime_owns_restore_prewarm_and_submit_order() {
     let host = RecordingDialogHost::new(false, Some("D:/workspace/project"));
@@ -455,6 +683,30 @@ async fn remote_connect_dialog_runtime_preserves_explicit_turn_without_restore()
     assert_eq!(submitted.policy.source, RemoteConnectSubmissionSource::Bot);
 }
 
+#[test]
+fn remote_connect_dialog_submit_outcome_builder_preserves_scheduler_shape() {
+    assert_eq!(
+        remote_dialog_submit_outcome_from_scheduler(RemoteDialogSchedulerOutcomeFact::Started {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-1".to_string(),
+        }),
+        RemoteDialogSubmitOutcome::Started {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-1".to_string(),
+        }
+    );
+    assert_eq!(
+        remote_dialog_submit_outcome_from_scheduler(RemoteDialogSchedulerOutcomeFact::Queued {
+            session_id: "session-2".to_string(),
+            turn_id: "turn-2".to_string(),
+        }),
+        RemoteDialogSubmitOutcome::Queued {
+            session_id: "session-2".to_string(),
+            turn_id: "turn-2".to_string(),
+        }
+    );
+}
+
 #[tokio::test]
 async fn remote_connect_dialog_runtime_keeps_legacy_restore_failure_tolerance() {
     let host = RecordingDialogHost::new(false, Some("D:/workspace/project")).with_restore_error();
@@ -485,6 +737,111 @@ async fn remote_connect_dialog_runtime_keeps_legacy_restore_failure_tolerance() 
         ]
     );
     assert_eq!(host.submitted().turn_id, "turn-1");
+}
+
+#[tokio::test]
+async fn remote_connect_cancel_runtime_restores_missing_session_before_cancel() {
+    let host = RecordingCancelHost::new(
+        None,
+        Some(remote_state(
+            "session-1",
+            RemoteControlSessionState::Processing,
+            Some("turn-current"),
+        )),
+        Some("D:/workspace/project"),
+    );
+
+    cancel_remote_task(
+        &host,
+        RemoteCancelTaskRequest {
+            session_id: "session-1".to_string(),
+            requested_turn_id: None,
+        },
+    )
+    .await
+    .expect("cancel succeeds after restore");
+
+    assert_eq!(
+        host.events(),
+        vec![
+            "read_state:session-1",
+            "resolve_workspace:session-1",
+            "restore:session-1:D:/workspace/project",
+            "read_state:session-1",
+            "cancel:session-1:turn-current",
+        ]
+    );
+}
+
+#[tokio::test]
+async fn remote_connect_cancel_runtime_preserves_stale_and_idle_errors_without_restore() {
+    let stale_host = RecordingCancelHost::new(
+        Some(remote_state(
+            "session-1",
+            RemoteControlSessionState::Processing,
+            Some("turn-current"),
+        )),
+        None,
+        Some("D:/workspace/project"),
+    );
+    let err = cancel_remote_task(
+        &stale_host,
+        RemoteCancelTaskRequest {
+            session_id: "session-1".to_string(),
+            requested_turn_id: Some("turn-stale".to_string()),
+        },
+    )
+    .await
+    .expect_err("stale turn is rejected");
+    assert_eq!(err, "This task is no longer running.");
+    assert_eq!(stale_host.events(), vec!["read_state:session-1"]);
+
+    let idle_host = RecordingCancelHost::new(
+        Some(remote_state(
+            "session-2",
+            RemoteControlSessionState::Idle,
+            None,
+        )),
+        None,
+        Some("D:/workspace/project"),
+    );
+    let err = cancel_remote_task(
+        &idle_host,
+        RemoteCancelTaskRequest {
+            session_id: "session-2".to_string(),
+            requested_turn_id: None,
+        },
+    )
+    .await
+    .expect_err("idle session has no running turn");
+    assert_eq!(err, "No running task to cancel for session: session-2");
+    assert_eq!(idle_host.events(), vec!["read_state:session-2"]);
+}
+
+#[tokio::test]
+async fn remote_connect_cancel_runtime_preserves_restore_failure_error() {
+    let host =
+        RecordingCancelHost::new(None, None, Some("D:/workspace/project")).with_restore_error();
+
+    let err = cancel_remote_task(
+        &host,
+        RemoteCancelTaskRequest {
+            session_id: "session-1".to_string(),
+            requested_turn_id: Some("turn-current".to_string()),
+        },
+    )
+    .await
+    .expect_err("restore error is propagated with legacy prefix");
+
+    assert_eq!(err, "Session not found: restore failed");
+    assert_eq!(
+        host.events(),
+        vec![
+            "read_state:session-1",
+            "resolve_workspace:session-1",
+            "restore:session-1:D:/workspace/project",
+        ]
+    );
 }
 
 #[test]
@@ -595,6 +952,345 @@ async fn remote_connect_file_chunk_and_info_helpers_preserve_response_facts() {
     assert_eq!(info.mime_type, "text/markdown");
 
     std::fs::remove_dir_all(base).expect("cleanup remote workspace");
+}
+
+#[test]
+fn remote_connect_file_response_assembly_owns_base64_wire_shape() {
+    let content_response = remote_file_content_response(Ok(RemoteWorkspaceFileContent {
+        name: "report.md".to_string(),
+        bytes: b"hello remote file".to_vec(),
+        mime_type: "text/markdown",
+        size: 17,
+    }));
+    let content_json = serde_json::to_value(content_response).expect("serialize file content");
+
+    assert_eq!(content_json["resp"], "file_content");
+    assert_eq!(content_json["name"], "report.md");
+    assert_eq!(content_json["content_base64"], "aGVsbG8gcmVtb3RlIGZpbGU=");
+    assert_eq!(content_json["mime_type"], "text/markdown");
+    assert_eq!(content_json["size"], 17);
+
+    let chunk_response = remote_file_chunk_response(Ok(RemoteWorkspaceFileChunk {
+        name: "report.md".to_string(),
+        bytes: b"remote file".to_vec(),
+        offset: 6,
+        chunk_size: 11,
+        total_size: 17,
+        mime_type: "text/markdown",
+    }));
+    let chunk_json = serde_json::to_value(chunk_response).expect("serialize file chunk");
+
+    assert_eq!(chunk_json["resp"], "file_chunk");
+    assert_eq!(chunk_json["chunk_base64"], "cmVtb3RlIGZpbGU=");
+    assert_eq!(chunk_json["offset"], 6);
+    assert_eq!(chunk_json["chunk_size"], 11);
+    assert_eq!(chunk_json["total_size"], 17);
+
+    let info_response = remote_file_info_response(Ok(RemoteWorkspaceFileInfo {
+        name: "report.md".to_string(),
+        size: 17,
+        mime_type: "text/markdown",
+    }));
+    let info_json = serde_json::to_value(info_response).expect("serialize file info");
+
+    assert_eq!(info_json["resp"], "file_info");
+    assert_eq!(info_json["name"], "report.md");
+    assert_eq!(info_json["mime_type"], "text/markdown");
+
+    let err_json = serde_json::to_value(remote_file_info_response(Err("missing file".to_string())))
+        .expect("serialize file error");
+    assert_eq!(err_json["resp"], "error");
+    assert_eq!(err_json["message"], "missing file");
+}
+
+#[derive(Default)]
+struct RecordingFileHost {
+    workspace_root: PathBuf,
+    seen_sessions: Mutex<Vec<Option<String>>>,
+}
+
+#[async_trait::async_trait]
+impl RemoteWorkspaceFileRuntimeHost for RecordingFileHost {
+    async fn resolve_remote_file_workspace_root(
+        &self,
+        session_id: Option<&str>,
+    ) -> Option<PathBuf> {
+        self.seen_sessions
+            .lock()
+            .unwrap()
+            .push(session_id.map(ToOwned::to_owned));
+        Some(self.workspace_root.clone())
+    }
+}
+
+#[tokio::test]
+async fn remote_connect_file_command_handler_owns_owner_flow_and_uses_host_root() {
+    let (base, workspace, _report) = make_temp_remote_workspace();
+    let host = RecordingFileHost {
+        workspace_root: workspace,
+        seen_sessions: Mutex::new(Vec::new()),
+    };
+
+    let response = handle_remote_workspace_file_command(
+        &host,
+        &RemoteCommand::ReadFile {
+            path: "computer://artifacts/report.md".to_string(),
+            session_id: Some("session-1".to_string()),
+        },
+    )
+    .await;
+    let json = serde_json::to_value(response).expect("serialize read response");
+
+    assert_eq!(json["resp"], "file_content");
+    assert_eq!(json["content_base64"], "aGVsbG8gcmVtb3RlIGZpbGU=");
+    assert_eq!(
+        host.seen_sessions.lock().unwrap().as_slice(),
+        &[Some("session-1".to_string())]
+    );
+
+    let error = handle_remote_workspace_file_command(&host, &RemoteCommand::Ping).await;
+    assert_eq!(
+        error,
+        RemoteResponse::Error {
+            message: "Unsupported remote workspace file command".to_string()
+        }
+    );
+
+    std::fs::remove_dir_all(base).expect("cleanup remote workspace");
+}
+
+#[test]
+fn remote_connect_execution_response_helpers_preserve_wire_shape() {
+    let started = remote_dialog_submit_response(Ok(RemoteDialogSubmitOutcome::Started {
+        session_id: "session-1".to_string(),
+        turn_id: "turn-1".to_string(),
+    }));
+    assert_eq!(
+        started,
+        RemoteResponse::MessageSent {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-1".to_string(),
+        }
+    );
+
+    let queued = remote_dialog_submit_response(Ok(RemoteDialogSubmitOutcome::Queued {
+        session_id: "session-1".to_string(),
+        turn_id: "turn-2".to_string(),
+    }));
+    assert_eq!(
+        queued,
+        RemoteResponse::MessageSent {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-2".to_string(),
+        }
+    );
+
+    assert_eq!(
+        remote_task_cancel_response("session-1", Ok(())),
+        RemoteResponse::TaskCancelled {
+            session_id: "session-1".to_string(),
+        }
+    );
+    assert_eq!(
+        remote_interaction_accepted_response("confirm_tool", "tool-1", Ok(())),
+        RemoteResponse::InteractionAccepted {
+            action: "confirm_tool".to_string(),
+            target_id: "tool-1".to_string(),
+        }
+    );
+    assert_eq!(
+        remote_answer_question_response(Ok(())),
+        RemoteResponse::AnswerAccepted
+    );
+    assert_eq!(
+        remote_answer_question_response(Err("question closed".to_string())),
+        RemoteResponse::Error {
+            message: "question closed".to_string(),
+        }
+    );
+}
+
+#[test]
+fn remote_connect_workspace_response_helpers_own_wire_shape() {
+    let workspace = RemoteWorkspaceFacts {
+        path: "D:/workspace/project".to_string(),
+        name: "project".to_string(),
+        git_branch: Some("main".to_string()),
+        kind: RemoteWorkspaceKind::Remote,
+        assistant_id: Some("assistant-1".to_string()),
+    };
+
+    let info_json = serde_json::to_value(remote_workspace_info_response(Some(workspace.clone())))
+        .expect("serialize workspace info");
+    assert_eq!(info_json["resp"], "workspace_info");
+    assert_eq!(info_json["has_workspace"], true);
+    assert_eq!(info_json["path"], "D:/workspace/project");
+    assert_eq!(info_json["project_name"], "project");
+    assert_eq!(info_json["git_branch"], "main");
+    assert_eq!(info_json["workspace_kind"], "remote");
+    assert_eq!(info_json["assistant_id"], "assistant-1");
+
+    let empty_json =
+        serde_json::to_value(remote_workspace_info_response(None)).expect("serialize empty info");
+    assert_eq!(empty_json["resp"], "workspace_info");
+    assert_eq!(empty_json["has_workspace"], false);
+    assert!(empty_json.get("workspace_kind").is_none());
+
+    let recent_json = serde_json::to_value(remote_recent_workspaces_response(vec![
+        RemoteRecentWorkspaceFacts {
+            path: workspace.path.clone(),
+            name: workspace.name.clone(),
+            last_opened: "2026-05-25T00:00:00Z".to_string(),
+            kind: workspace.kind,
+        },
+    ]))
+    .expect("serialize recent workspaces");
+    assert_eq!(recent_json["resp"], "recent_workspaces");
+    assert_eq!(recent_json["workspaces"][0]["workspace_kind"], "remote");
+    assert_eq!(
+        recent_json["workspaces"][0]["last_opened"],
+        "2026-05-25T00:00:00Z"
+    );
+
+    let assistant_json = serde_json::to_value(remote_assistant_list_response(vec![
+        RemoteAssistantWorkspaceFacts {
+            path: "D:/workspace/assistant".to_string(),
+            name: "assistant".to_string(),
+            assistant_id: Some("assistant-2".to_string()),
+        },
+    ]))
+    .expect("serialize assistant list");
+    assert_eq!(assistant_json["resp"], "assistant_list");
+    assert_eq!(
+        assistant_json["assistants"][0]["assistant_id"],
+        "assistant-2"
+    );
+
+    assert_eq!(
+        remote_workspace_updated_response(Ok(RemoteWorkspaceUpdate {
+            path: "D:/workspace/project".to_string(),
+            name: "project".to_string(),
+        })),
+        RemoteResponse::WorkspaceUpdated {
+            success: true,
+            path: Some("D:/workspace/project".to_string()),
+            project_name: Some("project".to_string()),
+            error: None,
+        }
+    );
+    assert_eq!(
+        remote_assistant_updated_response(Err("open failed".to_string())),
+        RemoteResponse::AssistantUpdated {
+            success: false,
+            path: None,
+            name: None,
+            error: Some("open failed".to_string()),
+        }
+    );
+}
+
+#[test]
+fn remote_connect_session_response_helpers_own_pagination_and_timestamps() {
+    let metadata = vec![
+        RemoteSessionMetadata {
+            session_id: "session-1".to_string(),
+            name: "first".to_string(),
+            agent_type: "agentic".to_string(),
+            created_at_ms: 1_700_000_000_000,
+            last_active_at_ms: 1_700_000_001_000,
+            turn_count: 3,
+        },
+        RemoteSessionMetadata {
+            session_id: "session-2".to_string(),
+            name: "second".to_string(),
+            agent_type: "Cowork".to_string(),
+            created_at_ms: 1_700_000_002_000,
+            last_active_at_ms: 1_700_000_003_000,
+            turn_count: 5,
+        },
+        RemoteSessionMetadata {
+            session_id: "session-3".to_string(),
+            name: "third".to_string(),
+            agent_type: "Plan".to_string(),
+            created_at_ms: 1_700_000_004_000,
+            last_active_at_ms: 1_700_000_005_000,
+            turn_count: 8,
+        },
+    ];
+
+    let session = remote_session_info(&metadata[0], Some("D:/workspace/project"), Some("project"));
+    assert_eq!(session.session_id, "session-1");
+    assert_eq!(session.created_at, "1700000000");
+    assert_eq!(session.updated_at, "1700000001");
+    assert_eq!(session.message_count, 3);
+    assert_eq!(
+        session.workspace_path.as_deref(),
+        Some("D:/workspace/project")
+    );
+    assert_eq!(session.workspace_name.as_deref(), Some("project"));
+
+    let list = remote_session_list_response(
+        metadata.clone(),
+        Some("D:/workspace/project"),
+        Some("project"),
+        1,
+        1,
+    );
+    let list_json = serde_json::to_value(list).expect("serialize session list");
+    assert_eq!(list_json["resp"], "session_list");
+    assert_eq!(list_json["has_more"], true);
+    assert_eq!(list_json["sessions"].as_array().unwrap().len(), 1);
+    assert_eq!(list_json["sessions"][0]["session_id"], "session-2");
+    assert_eq!(list_json["sessions"][0]["created_at"], "1700000002");
+
+    let initial = remote_initial_sync_response(
+        Some(RemoteWorkspaceFacts {
+            path: "D:/workspace/project".to_string(),
+            name: "project".to_string(),
+            git_branch: Some("main".to_string()),
+            kind: RemoteWorkspaceKind::Normal,
+            assistant_id: None,
+        }),
+        metadata,
+        Some("project"),
+        true,
+        Some("user-1".to_string()),
+    );
+    let initial_json = serde_json::to_value(initial).expect("serialize initial sync");
+    assert_eq!(initial_json["resp"], "initial_sync");
+    assert_eq!(initial_json["has_workspace"], true);
+    assert_eq!(initial_json["workspace_kind"], "normal");
+    assert_eq!(initial_json["has_more_sessions"], true);
+    assert_eq!(initial_json["sessions"].as_array().unwrap().len(), 3);
+    assert_eq!(initial_json["authenticated_user_id"], "user-1");
+
+    assert_eq!(
+        remote_session_created_response("session-new"),
+        RemoteResponse::SessionCreated {
+            session_id: "session-new".to_string(),
+        }
+    );
+    assert_eq!(
+        remote_session_model_updated_response("session-1", "model-1"),
+        RemoteResponse::SessionModelUpdated {
+            session_id: "session-1".to_string(),
+            model_id: "model-1".to_string(),
+        }
+    );
+    assert_eq!(
+        remote_messages_response("session-1", vec![], false),
+        RemoteResponse::Messages {
+            session_id: "session-1".to_string(),
+            messages: vec![],
+            has_more: false,
+        }
+    );
+    assert_eq!(
+        remote_session_deleted_response("session-1"),
+        RemoteResponse::SessionDeleted {
+            session_id: "session-1".to_string(),
+        }
+    );
 }
 
 #[test]
@@ -711,6 +1407,24 @@ fn remote_connect_command_wire_shape_lives_in_owner_contract() {
     assert_eq!(cancel["cmd"], "cancel_task");
     assert_eq!(cancel["turn_id"], "turn-1");
 
+    let list = serde_json::to_value(RemoteCommand::ListSessions {
+        workspace_path: Some("/workspace/project".to_string()),
+        limit: Some(30),
+        offset: Some(0),
+        query: Some("alpha".to_string()),
+    })
+    .expect("serialize list command");
+    assert_eq!(list["cmd"], "list_sessions");
+    assert_eq!(list["query"], "alpha");
+
+    let rename = serde_json::to_value(RemoteCommand::UpdateSessionTitle {
+        session_id: "session-1".to_string(),
+        title: "Renamed session".to_string(),
+    })
+    .expect("serialize rename command");
+    assert_eq!(rename["cmd"], "update_session_title");
+    assert_eq!(rename["title"], "Renamed session");
+
     let poll = serde_json::to_value(RemoteCommand::PollSession {
         session_id: "session-1".to_string(),
         since_version: 7,
@@ -782,6 +1496,14 @@ fn remote_connect_response_wire_shape_lives_in_owner_contract() {
     .expect("serialize sent response");
     assert_eq!(sent["resp"], "message_sent");
     assert_eq!(sent["turn_id"], "turn-1");
+
+    let title_updated = serde_json::to_value(RemoteResponse::SessionTitleUpdated {
+        session_id: "session-1".to_string(),
+        title: "Renamed session".to_string(),
+    })
+    .expect("serialize title response");
+    assert_eq!(title_updated["resp"], "session_title_updated");
+    assert_eq!(title_updated["title"], "Renamed session");
 }
 
 fn sample_remote_model_catalog(version: u64) -> RemoteModelCatalog {
@@ -807,6 +1529,57 @@ fn sample_remote_model_catalog(version: u64) -> RemoteModelCatalog {
         },
         session_model_id: Some("model-1".to_string()),
     }
+}
+
+#[test]
+fn remote_connect_model_catalog_builder_preserves_config_shape() {
+    let catalog = build_remote_model_catalog(RemoteModelCatalogFacts {
+        last_modified_ms: -7,
+        models: vec![RemoteModelFacts {
+            id: "model-1".to_string(),
+            name: "Model One".to_string(),
+            provider: "openai".to_string(),
+            base_url: "https://api.example.com".to_string(),
+            model_name: "gpt-test".to_string(),
+            context_window: Some(128_000),
+            enabled: true,
+            capabilities: vec![
+                RemoteModelCapabilityFact::TextChat,
+                RemoteModelCapabilityFact::ImageUnderstanding,
+                RemoteModelCapabilityFact::FunctionCalling,
+            ],
+            enable_thinking_process: true,
+            reasoning_mode: Some(RemoteReasoningModeFact::Adaptive),
+            reasoning_effort: Some("medium".to_string()),
+            thinking_budget_tokens: Some(4096),
+        }],
+        default_models: RemoteDefaultModelsConfig {
+            primary: Some("model-1".to_string()),
+            fast: Some("fast-model".to_string()),
+            search: Some("search-model".to_string()),
+            ..RemoteDefaultModelsConfig::default()
+        },
+        session_model_id: Some("session-model".to_string()),
+    });
+
+    assert_eq!(catalog.version, 0);
+    assert_eq!(catalog.session_model_id.as_deref(), Some("session-model"));
+    assert_eq!(catalog.default_models.fast.as_deref(), Some("fast-model"));
+    let model = catalog.models.first().expect("model config");
+    assert_eq!(model.id, "model-1");
+    assert_eq!(model.context_window, Some(128_000));
+    assert_eq!(
+        model.capabilities,
+        vec![
+            "text_chat".to_string(),
+            "image_understanding".to_string(),
+            "function_calling".to_string(),
+        ]
+    );
+    assert!(model.enable_thinking_process);
+    assert_eq!(model.reasoning_mode.as_deref(), Some("adaptive"));
+    assert_eq!(model.reasoning_effort.as_deref(), Some("medium"));
+    assert_eq!(model.thinking_budget_tokens, Some(4096));
 }
 
 #[derive(Default)]
@@ -1071,6 +1844,52 @@ fn remote_connect_model_catalog_delta_preserves_poll_invalidation_policy() {
     let unavailable_initial = remote_model_catalog_poll_delta(None, None);
     assert!(!unavailable_initial.changed);
     assert!(unavailable_initial.catalog.is_none());
+}
+
+#[test]
+fn remote_connect_model_selection_policy_owns_alias_and_config_reference_rules() {
+    assert_eq!(
+        normalize_remote_session_model_id(None),
+        Some("auto".to_string())
+    );
+    assert_eq!(
+        normalize_remote_session_model_id(Some("  default  ")),
+        Some("auto".to_string())
+    );
+    assert_eq!(
+        normalize_remote_session_model_id(Some(" model-1 ")),
+        Some("model-1".to_string())
+    );
+
+    assert!(!remote_model_selection_needs_config("auto"));
+    assert!(!remote_model_selection_needs_config("default"));
+    assert!(!remote_model_selection_needs_config("primary"));
+    assert!(!remote_model_selection_needs_config("fast"));
+    assert!(remote_model_selection_needs_config("custom-alias"));
+
+    assert_eq!(
+        normalize_remote_model_selection("default", |_| None).unwrap(),
+        "auto"
+    );
+    assert_eq!(
+        normalize_remote_model_selection("primary", |_| None).unwrap(),
+        "primary"
+    );
+    assert_eq!(
+        normalize_remote_model_selection("custom-alias", |id| {
+            (id == "custom-alias").then(|| "model-1".to_string())
+        })
+        .unwrap(),
+        "model-1"
+    );
+    assert_eq!(
+        normalize_remote_model_selection("unknown", |_| None).unwrap_err(),
+        "Unknown model selection: unknown"
+    );
+    assert_eq!(
+        normalize_remote_model_selection("   ", |_| None).unwrap_err(),
+        "model_id is required"
+    );
 }
 
 #[test]

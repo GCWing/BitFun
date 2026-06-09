@@ -112,6 +112,7 @@ fn embed_agents_prompt_data() -> Result<(), Box<dyn std::error::Error>> {
     use std::path::Path;
 
     println!("cargo:rerun-if-changed=src/agentic/agents/prompts");
+    println!("cargo:rerun-if-changed=src/agentic/prompts");
 
     // Get CARGO_MANIFEST_DIR (i.e. crates/core directory)
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")?;
@@ -132,6 +133,21 @@ fn embed_agents_prompt_data() -> Result<(), Box<dyn std::error::Error>> {
         eprintln!(
             "Warning: agentic prompts directory not found at {:?}",
             agentic_prompt_path
+        );
+    }
+
+    let shared_prompt_path = Path::new(&manifest_dir)
+        .join("src")
+        .join("agentic")
+        .join("prompts");
+
+    if shared_prompt_path.exists() {
+        println!("Embedding shared prompts from: {:?}", shared_prompt_path);
+        read_prompts_recursive(&shared_prompt_path, &shared_prompt_path, &mut prompts)?;
+    } else {
+        eprintln!(
+            "Warning: shared prompts directory not found at {:?}",
+            shared_prompt_path
         );
     }
 

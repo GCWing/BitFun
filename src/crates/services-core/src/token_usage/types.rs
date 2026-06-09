@@ -17,6 +17,11 @@ pub struct TokenUsageRecord {
     /// Whether cached token count was explicitly reported by the provider/event.
     #[serde(default)]
     pub cached_tokens_available: bool,
+    /// Cache WRITE tokens (Anthropic only: `cache_creation_input_tokens`).
+    /// These are tokens written into the cache this call (billed at write price).
+    /// Extracted from `token_details.cacheCreationTokenCount` when present.
+    #[serde(default)]
+    pub cache_write_tokens: u32,
     pub total_tokens: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub token_details: Option<serde_json::Value>,
@@ -31,7 +36,15 @@ pub struct ModelTokenStats {
     pub model_id: String,
     pub total_input: u64,
     pub total_output: u64,
+    /// Cumulative cache HIT tokens (served from cache, charged at cache-read price).
     pub total_cached: u64,
+    /// Cumulative cache WRITE tokens (Anthropic only; charged at cache-write price).
+    #[serde(default)]
+    pub total_cache_write: u64,
+    /// Prompt input tokens from requests where the provider explicitly reported
+    /// cache hit telemetry. Used as the cache hit ratio denominator.
+    #[serde(default)]
+    pub cache_reported_input_tokens: u64,
     pub total_tokens: u64,
     /// Number of distinct sessions that used this model
     pub session_count: u32,
@@ -44,6 +57,27 @@ pub struct ModelTokenStats {
     pub last_used: Option<DateTime<Utc>>,
 }
 
+impl ModelTokenStats {
+    /// Fraction of prompt tokens served from cache (0.0–1.0).
+    /// Returns `None` when no prompt tokens have been recorded or when the
+    /// provider never reported cache token counts.
+    pub fn cache_hit_ratio(&self) -> Option<f64> {
+        if self.cache_reported_input_tokens == 0 {
+            return None;
+        }
+        Some(self.total_cached as f64 / self.cache_reported_input_tokens as f64)
+    }
+
+    /// Estimated cost-savings ratio attributed to prefix-cache hits.
+    ///
+    /// Uses DeepSeek / Anthropic cache pricing where a cache-read costs about 10%
+    /// of a full prompt token. The returned value represents the fraction of prompt
+    /// spend that was avoided. Returns `None` when `cache_hit_ratio` is `None`.
+    pub fn estimated_cache_savings_ratio(&self) -> Option<f64> {
+        self.cache_hit_ratio().map(|r| r * 0.90)
+    }
+}
+
 /// Token statistics for a specific session
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionTokenStats {
@@ -51,11 +85,35 @@ pub struct SessionTokenStats {
     pub model_id: String,
     pub total_input: u32,
     pub total_output: u32,
+    /// Cumulative cache HIT tokens for this session.
     pub total_cached: u32,
+    /// Cumulative cache WRITE tokens for this session (Anthropic only).
+    #[serde(default)]
+    pub total_cache_write: u32,
+    /// Prompt input tokens from requests where the provider explicitly reported
+    /// cache hit telemetry. Used as the cache hit ratio denominator.
+    #[serde(default)]
+    pub cache_reported_input_tokens: u32,
     pub total_tokens: u32,
     pub request_count: u32,
     pub created_at: DateTime<Utc>,
     pub last_updated: DateTime<Utc>,
+}
+
+impl SessionTokenStats {
+    /// Fraction of prompt tokens served from cache (0.0–1.0).
+    /// Returns `None` when no prompt tokens recorded or provider never reported cache counts.
+    pub fn cache_hit_ratio(&self) -> Option<f64> {
+        if self.cache_reported_input_tokens == 0 {
+            return None;
+        }
+        Some(self.total_cached as f64 / self.cache_reported_input_tokens as f64)
+    }
+
+    /// Estimated cost-savings ratio from prefix-cache hits (cache read about 10% of full price).
+    pub fn estimated_cache_savings_ratio(&self) -> Option<f64> {
+        self.cache_hit_ratio().map(|r| r * 0.90)
+    }
 }
 
 /// Time range for querying statistics
@@ -89,7 +147,14 @@ pub struct TokenUsageQuery {
 pub struct TokenUsageSummary {
     pub total_input: u64,
     pub total_output: u64,
+    /// Aggregate cache HIT tokens across all records in the query.
     pub total_cached: u64,
+    /// Aggregate cache WRITE tokens across all records in the query (Anthropic only).
+    #[serde(default)]
+    pub total_cache_write: u64,
+    /// Aggregate prompt input tokens from requests where cache hit telemetry was reported.
+    #[serde(default)]
+    pub cache_reported_input_tokens: u64,
     pub total_tokens: u64,
     pub by_model: HashMap<String, ModelTokenStats>,
     pub by_session: HashMap<String, SessionTokenStats>,

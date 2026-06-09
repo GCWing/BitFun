@@ -47,6 +47,14 @@ impl ConfigProvider for AIConfigProvider {
                 }
             }
 
+            if let Some(stream_ttft_timeout_secs) = ai_config.stream_ttft_timeout_secs {
+                if stream_ttft_timeout_secs == 0 {
+                    return Err(BitFunError::validation(
+                        "AI stream_ttft_timeout_secs must be greater than 0".to_string(),
+                    ));
+                }
+            }
+
             for (index, model) in ai_config.models.iter().enumerate() {
                 if model.name.trim().is_empty() {
                     return Err(BitFunError::validation(format!(
@@ -562,51 +570,7 @@ impl ConfigProviderRegistry {
 
     /// Builds the default configuration.
     pub fn get_default_config(&self) -> GlobalConfig {
-        let mut config = GlobalConfig::default();
-
-        if let Some(provider) = self.get_provider("app") {
-            if let Ok(app_config) = serde_json::from_value(provider.get_default_config()) {
-                config.app = app_config;
-            }
-        }
-
-        if let Some(provider) = self.get_provider("theme") {
-            if let Ok(theme_config) = serde_json::from_value(provider.get_default_config()) {
-                config.theme = theme_config;
-            }
-        }
-
-        if let Some(provider) = self.get_provider("themes") {
-            if let Ok(themes_config) = serde_json::from_value(provider.get_default_config()) {
-                config.themes = Some(themes_config);
-            }
-        }
-
-        if let Some(provider) = self.get_provider("editor") {
-            if let Ok(editor_config) = serde_json::from_value(provider.get_default_config()) {
-                config.editor = editor_config;
-            }
-        }
-
-        if let Some(provider) = self.get_provider("terminal") {
-            if let Ok(terminal_config) = serde_json::from_value(provider.get_default_config()) {
-                config.terminal = terminal_config;
-            }
-        }
-
-        if let Some(provider) = self.get_provider("workspace") {
-            if let Ok(workspace_config) = serde_json::from_value(provider.get_default_config()) {
-                config.workspace = workspace_config;
-            }
-        }
-
-        if let Some(provider) = self.get_provider("ai") {
-            if let Ok(ai_config) = serde_json::from_value(provider.get_default_config()) {
-                config.ai = ai_config;
-            }
-        }
-
-        config
+        GlobalConfig::default()
     }
 
     /// Validates the full configuration.

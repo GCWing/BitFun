@@ -30,7 +30,7 @@ pub fn get_repository_root<P: AsRef<Path>>(path: P) -> Result<String, GitError> 
 pub fn get_current_branch(repo: &Repository) -> Result<String, GitError> {
     match repo.head() {
         Ok(head) => {
-            if let Some(branch_name) = head.shorthand() {
+            if let Ok(branch_name) = head.shorthand() {
                 Ok(branch_name.to_string())
             } else {
                 Ok("HEAD".to_string())
@@ -120,7 +120,7 @@ fn collect_statuses(
     let mut result = Vec::new();
 
     for entry in statuses.iter() {
-        if let Some(path) = entry.path() {
+        if let Ok(path) = entry.path() {
             let status = entry.status();
             let status_str = status_to_string(status);
 
