@@ -82,8 +82,7 @@
 /* ========== Fix scrollbar visibility on card hover ========== */
 .base-tool-card-wrapper.terminal-tool-card:hover {
   .terminal-execution-output,
-  .terminal-result-output,
-  .xterm-viewport {
+  .terminal-result-output {
     &::-webkit-scrollbar-thumb {
       background: var(--scrollbar-thumb, rgba(255, 255, 255, 0.12));
     }
@@ -414,8 +413,6 @@
   background: transparent;
   border: none;
   overflow: hidden;
-  max-height: 300px;
-  overflow-y: auto;
 
   &.terminal-waiting {
     display: flex;
@@ -532,7 +529,7 @@
     padding: 0;
 
     .xterm-viewport {
-      overflow-y: auto !important;
+      overflow: hidden !important;
     }
 
     &:not(.allow-transparency) {
@@ -554,6 +551,13 @@
   
   .xterm {
     height: 100%;
+  }
+
+  &.terminal-output-renderer--no-scroll {
+    .xterm .scrollbar.vertical {
+      display: none !important;
+      pointer-events: none !important;
+    }
   }
 }
 

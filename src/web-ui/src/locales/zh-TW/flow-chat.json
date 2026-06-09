@@ -1331,7 +1331,10 @@
       "sessionNotFound": "未找到會話 #{{id}}",
       "copyPrimary": "複製",
       "primaryCopied": "已複製",
-      "copyPrimaryFailed": "複製失敗"
+      "copyPrimaryFailed": "複製失敗",
+      "copyOutput": "複製輸出",
+      "outputCopied": "已複製輸出",
+      "copyOutputFailed": "複製輸出失敗"
     },
     "plan": {
       "loadingPlan": "正在載入計劃...",

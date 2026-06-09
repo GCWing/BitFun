@@ -30,6 +30,7 @@ interface ToolCardCopyActionProps {
   ariaLabel?: string;
   className?: string;
   disabled?: boolean;
+  showSuccessNotification?: boolean;
 }
 
 export const ToolCardCopyAction: React.FC<ToolCardCopyActionProps> = ({
@@ -41,11 +42,13 @@ export const ToolCardCopyAction: React.FC<ToolCardCopyActionProps> = ({
   ariaLabel,
   className,
   disabled,
+  showSuccessNotification,
 }) => {
   const { copied, copy } = useCopyTextAction({
     getText,
     successMessage,
     failureMessage,
+    showSuccessNotification,
   });
 
   return (

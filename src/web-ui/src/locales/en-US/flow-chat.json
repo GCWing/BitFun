@@ -1331,7 +1331,10 @@
       "sessionNotFound": "Session #{{id}} was not found",
       "copyPrimary": "Copy",
       "primaryCopied": "Copied",
-      "copyPrimaryFailed": "Failed to copy"
+      "copyPrimaryFailed": "Failed to copy",
+      "copyOutput": "Copy output",
+      "outputCopied": "Output copied",
+      "copyOutputFailed": "Failed to copy output"
     },
     "plan": {
       "loadingPlan": "Loading plan...",

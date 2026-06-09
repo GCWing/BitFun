@@ -8,6 +8,7 @@ interface UseCopyTextActionOptions {
   successMessage: string;
   failureMessage: string;
   resetMs?: number;
+  showSuccessNotification?: boolean;
 }
 
 export function useCopyTextAction({
@@ -15,6 +16,7 @@ export function useCopyTextAction({
   successMessage,
   failureMessage,
   resetMs = 1600,
+  showSuccessNotification = true,
 }: UseCopyTextActionOptions) {
   const [copied, setCopied] = useState(false);
   const resetTimerRef = useRef<number | null>(null);
@@ -42,7 +44,9 @@ export function useCopyTextAction({
     }
 
     setCopied(true);
-    notificationService.success(successMessage, { duration: resetMs });
+    if (showSuccessNotification) {
+      notificationService.success(successMessage, { duration: resetMs });
+    }
 
     if (resetTimerRef.current !== null) {
       window.clearTimeout(resetTimerRef.current);
@@ -51,7 +55,7 @@ export function useCopyTextAction({
       setCopied(false);
       resetTimerRef.current = null;
     }, resetMs);
-  }, [failureMessage, getText, resetMs, successMessage]);
+  }, [failureMessage, getText, resetMs, showSuccessNotification, successMessage]);
 
   return { copied, copy };
 }

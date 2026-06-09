@@ -1,6 +1,37 @@
 @use './TerminalToolCard.scss';
 
 .exec-process-tool-card {
+  .exec-process-output-copy-region {
+    position: relative;
+  }
+
+  .exec-process-output-copy-actions {
+    position: absolute;
+    top: 0.25rem;
+    right: 0.25rem;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.16s ease;
+  }
+
+  .exec-process-output-copy-region:hover .exec-process-output-copy-actions,
+  .exec-process-output-copy-actions:focus-within {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .exec-process-copy-output-btn {
+    background: var(--color-bg-scene);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.16);
+
+    &:hover:not(:disabled) {
+      background: var(--element-bg-subtle, rgba(255, 255, 255, 0.1));
+    }
+  }
+
   .exec-process-empty-output {
     color: var(--color-text-muted);
   }

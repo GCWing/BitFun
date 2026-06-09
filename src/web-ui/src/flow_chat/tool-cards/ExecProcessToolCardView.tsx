@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next';
 import { Terminal } from 'lucide-react';
 import type { FlowToolItem } from '../types/flow-chat';
-import { TerminalOutputRenderer } from '@/tools/terminal/components';
+import { TerminalOutputRenderer, type TerminalOutputRendererHandle } from '@/tools/terminal/components';
 import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
 import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
 import { ToolCardStatusSlot } from './ToolCardStatusSlot';
@@ -15,8 +15,8 @@ import { formatSessionViewPreviewText } from '../utils/sessionViewPreview';
 import './ExecProcessToolCard.scss';
 
 const EXEC_COLLAPSED_STATUSES = new Set(['completed', 'cancelled', 'error', 'rejected']);
-const EXEC_OUTPUT_STREAMING_MAX_HEIGHT = 4 * 18 + 16;
-const EXEC_OUTPUT_EXPANDED_MAX_HEIGHT = 15 * 18 + 16;
+const EXEC_OUTPUT_STREAMING_MAX_ROWS = 4;
+const EXEC_OUTPUT_EXPANDED_MAX_ROWS = 15;
 
 export interface ExecProcessCardModel {
   kind: 'command' | 'stdin';
@@ -146,13 +146,14 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
     return typeof progressMessage === 'string' ? progressMessage : '';
   }, [progressLogs, toolItem]);
   const isRunning = status === 'preparing' || status === 'streaming' || status === 'running' || status === 'receiving';
-  const maxHeight = isRunning ? EXEC_OUTPUT_STREAMING_MAX_HEIGHT : EXEC_OUTPUT_EXPANDED_MAX_HEIGHT;
+  const maxRows = isRunning ? EXEC_OUTPUT_STREAMING_MAX_ROWS : EXEC_OUTPUT_EXPANDED_MAX_ROWS;
   const toolId = toolItem.id ?? toolItem.toolCall?.id;
   const icon = <Terminal size={16} className="terminal-card-icon" />;
 
   const [isExpanded, setIsExpandedState] = useState(() => getInitialExpandedState(status));
   const previousStatusRef = useRef(status);
   const commandRef = useRef<HTMLElement | null>(null);
+  const outputRendererRef = useRef<TerminalOutputRendererHandle | null>(null);
   const [isPrimaryTextTruncated, setIsPrimaryTextTruncated] = useState(false);
   const { cardRootRef, applyExpandedState } = useToolCardHeightContract({
     toolId,
@@ -263,7 +264,59 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
       successMessage={t('toolCards.execProcess.primaryCopied')}
       failureMessage={t('toolCards.execProcess.copyPrimaryFailed')}
       ariaLabel={t('toolCards.execProcess.copyPrimary')}
+      showSuccessNotification={false}
     />
+  );
+
+  const getOutputText = useCallback(() => {
+    if (status === 'completed') {
+      return formatSessionViewPreviewText(model.resultOutput);
+    }
+
+    if (status === 'cancelled') {
+      return liveOutput;
+    }
+
+    if (liveOutput && isRunning) {
+      return liveOutput;
+    }
+
+    return '';
+  }, [isRunning, liveOutput, model.resultOutput, status]);
+
+  const getVisibleOutputText = useCallback(() => {
+    return outputRendererRef.current?.getVisibleText() ?? getOutputText();
+  }, [getOutputText]);
+
+  const renderCopyOutputButton = () => (
+    <ToolCardCopyAction
+      className="terminal-action-btn copy-command-btn exec-process-copy-output-btn"
+      getText={getVisibleOutputText}
+      disabled={!getOutputText().trim()}
+      tooltip={t('toolCards.execProcess.copyOutput')}
+      copiedTooltip={t('toolCards.execProcess.outputCopied')}
+      successMessage={t('toolCards.execProcess.outputCopied')}
+      failureMessage={t('toolCards.execProcess.copyOutputFailed')}
+      ariaLabel={t('toolCards.execProcess.copyOutput')}
+      showSuccessNotification={false}
+    />
+  );
+
+  const renderOutputWithCopyAction = (
+    output: string,
+    options?: { formatSessionPreview?: boolean },
+  ) => (
+    <div className="exec-process-output-copy-region">
+      <div className="exec-process-output-copy-actions">
+        {renderCopyOutputButton()}
+      </div>
+      <TerminalOutputRenderer
+        ref={outputRendererRef}
+        content={options?.formatSessionPreview ? formatSessionViewPreviewText(output) : output}
+        className="terminal-xterm-output"
+        maxRows={maxRows}
+      />
+    </div>
   );
 
   const renderTimeoutIndicator = () => (
@@ -306,11 +359,7 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
         <div className="terminal-result-container">
           {model.resultOutput ? (
             <div className="terminal-result-output">
-              <TerminalOutputRenderer
-                content={formatSessionViewPreviewText(model.resultOutput)}
-                className="terminal-xterm-output"
-                maxHeight={maxHeight}
-              />
+              {renderOutputWithCopyAction(model.resultOutput, { formatSessionPreview: true })}
             </div>
           ) : model.resultNoticeText ? (
             <div className="terminal-execution-output terminal-waiting exec-process-result-notice">
@@ -330,11 +379,7 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
       return (
         <div className="terminal-result-container cancelled">
           <div className="terminal-result-output">
-            <TerminalOutputRenderer
-              content={liveOutput}
-              className="terminal-xterm-output"
-              maxHeight={maxHeight}
-            />
+            {renderOutputWithCopyAction(liveOutput)}
           </div>
           <div className="terminal-result-footer">
             <span className="terminal-cancelled-text">{t('toolCards.terminal.commandInterrupted')}</span>
@@ -346,11 +391,7 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
     if (liveOutput && isRunning) {
       return (
         <div className="terminal-execution-output">
-          <TerminalOutputRenderer
-            content={liveOutput}
-            className="terminal-xterm-output"
-            maxHeight={maxHeight}
-          />
+          {renderOutputWithCopyAction(liveOutput)}
         </div>
       );
     }
