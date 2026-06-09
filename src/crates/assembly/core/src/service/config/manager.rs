@@ -76,9 +76,12 @@ impl ConfigManager {
         };
 
         manager.load_or_create_config().await?;
-        bitfun_ai_adapters::diagnostics::set_include_sensitive_diagnostics(
-            manager.config.app.logging.include_sensitive_diagnostics,
-        );
+        #[cfg(feature = "ai-adapter-runtime")]
+        {
+            bitfun_ai_adapters::diagnostics::set_include_sensitive_diagnostics(
+                manager.config.app.logging.include_sensitive_diagnostics,
+            );
+        }
 
         debug!("ConfigManager initialized at {:?}", manager.config_file);
         Ok(manager)
@@ -596,7 +599,10 @@ impl ConfigManager {
                 old_include, new_include
             );
 
-            bitfun_ai_adapters::diagnostics::set_include_sensitive_diagnostics(new_include);
+            #[cfg(feature = "ai-adapter-runtime")]
+            {
+                bitfun_ai_adapters::diagnostics::set_include_sensitive_diagnostics(new_include);
+            }
 
             use super::global::{ConfigUpdateEvent, GlobalConfigManager};
             GlobalConfigManager::broadcast_update(

@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+pub use bitfun_core_types::{ConnectionTestMessageCode, ConnectionTestResult, RemoteModelInfo};
+
 /// Gemini API response
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GeminiResponse {
@@ -61,42 +63,6 @@ impl From<GeminiUsage> for bitfun_agent_stream::UnifiedTokenUsage {
             cache_creation_token_count: usage.cache_creation_token_count,
         }
     }
-}
-
-/// Structured message codes for localized connection test messaging.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ConnectionTestMessageCode {
-    ToolCallsNotDetected,
-    ImageInputCheckFailed,
-}
-
-/// AI connection test result
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ConnectionTestResult {
-    /// Whether the test succeeded
-    pub success: bool,
-    /// Response time (ms)
-    pub response_time_ms: u64,
-    /// Model response content (if successful)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub model_response: Option<String>,
-    /// Structured message code for localized frontend messaging
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub message_code: Option<ConnectionTestMessageCode>,
-    /// Raw error or diagnostic details
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error_details: Option<String>,
-}
-
-/// Remote model info discovered from a provider API.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RemoteModelInfo {
-    /// Provider model identifier (used as the actual model_name).
-    pub id: String,
-    /// Optional human-readable display name returned by the provider.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub display_name: Option<String>,
 }
 
 #[cfg(test)]

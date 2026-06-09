@@ -1630,9 +1630,34 @@ export const requiredContentRules = [
       },
       {
         regex:
-          /bitfun-services-integrations = \{ path = "\.\.\/\.\.\/services\/services-integrations", default-features = false, features = \["remote-ssh", "workspace-search"\] \}/,
+          /bitfun-services-integrations = \{ path = "\.\.\/\.\.\/services\/services-integrations", default-features = false, features = \["remote-ssh"\] \}/,
         message:
-          'bitfun-services-integrations dependency may keep remote workspace identity and workspace-search owner helpers but must not force product-full outside the core feature graph',
+          'bitfun-services-integrations dependency may keep remote workspace identity but must not force workspace-search or product-full outside the core feature graph',
+      },
+      {
+        regex:
+          /bitfun-ai-adapters = \{ path = "\.\.\/\.\.\/adapters\/ai-adapters", optional = true \}/,
+        message: 'bitfun-ai-adapters dependency must stay optional for no-default core builds',
+      },
+      {
+        regex: /"dep:bitfun-ai-adapters"/,
+        message: 'core ai-adapter-runtime feature must explicitly enable the optional dependency',
+      },
+      {
+        regex: /product-full = \[[^\]]*"ai-adapter-runtime"[^\]]*\]/,
+        message: 'core product-full assembly must explicitly opt into AI adapter runtime',
+      },
+      {
+        regex: /product-domains = \[[^\]]*"ai-adapter-runtime"[^\]]*\]/,
+        message: 'core product-domain facade must explicitly opt into AI adapter runtime while concrete AI adapters remain optional',
+      },
+      {
+        regex: /product-domains = \[[^\]]*"bitfun-services-integrations\/function-agents"[^\]]*\]/,
+        message: 'core product-domain facade must enable the function-agent service owner feature it imports',
+      },
+      {
+        regex: /product-domains = \[[^\]]*"bitfun-services-integrations\/miniapp-runtime"[^\]]*\]/,
+        message: 'core product-domain facade must enable the MiniApp service owner feature it imports',
       },
       {
         regex:
@@ -1697,6 +1722,38 @@ export const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/assembly/core/src/infrastructure/mod.rs',
+    reason: 'concrete AI adapter runtime and debug ingest HTTP server must stay out of no-default core builds',
+    patterns: [
+      {
+        regex: /#\[cfg\(feature = "ai-adapter-runtime"\)\]\s*pub mod ai\b/s,
+        message: 'AI client runtime must stay behind ai-adapter-runtime',
+      },
+      {
+        regex: /#\[cfg\(feature = "ai-adapter-runtime"\)\]\s*pub mod cli_credentials\b/s,
+        message: 'AI CLI credential runtime must stay behind ai-adapter-runtime',
+      },
+      {
+        regex: /#\[cfg\(feature = "product-full"\)\]\s*pub mod debug_log\b/s,
+        message: 'debug ingest HTTP server must stay behind product-full',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/util/types/ai.rs',
+    reason: 'legacy AI implementation DTO re-exports must not force AI adapters into no-default core builds',
+    patterns: [
+      {
+        regex: /pub use bitfun_core_types::\{ConnectionTestMessageCode, ConnectionTestResult, RemoteModelInfo\};/s,
+        message: 'stable AI DTOs must be re-exported from core-types',
+      },
+      {
+        regex: /#\[cfg\(feature = "ai-adapter-runtime"\)\]\s*pub use bitfun_ai_adapters::types::\{GeminiResponse, GeminiUsage\};/s,
+        message: 'legacy Gemini implementation DTOs must stay behind ai-adapter-runtime',
+      },
+    ],
+  },
+  {
     path: 'src/crates/assembly/core/src/service/mod.rs',
     reason:
       'service integration and agent-runtime surfaces must not compile in no-default core builds',
@@ -1716,6 +1773,14 @@ export const requiredContentRules = [
       {
         regex: /#\[cfg\(feature = "service-integrations"\)\]\s*pub mod review_platform\b/s,
         message: 'review platform facade must stay behind service-integrations',
+      },
+      {
+        regex: /#\[cfg\(feature = "product-full"\)\]\s*pub mod search\b/s,
+        message: 'workspace search facade must stay behind product-full',
+      },
+      {
+        regex: /#\[cfg\(feature = "product-full"\)\]\s*pub use search::/s,
+        message: 'workspace search exports must stay behind product-full',
       },
       {
         regex: /#\[cfg\(feature = "product-full"\)\]\s*pub mod snapshot\b/s,

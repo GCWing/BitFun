@@ -48,6 +48,7 @@
 - execution 下 tool 相关目录已按职责命名：`tool-contracts`、`tool-provider-groups`、`tool-execution`。Cargo package / lib 名保持兼容。
 - `agent-stream` 已成为统一 stream DTO、tool-call 累积和 replay 契约 owner；provider stream 解析测试归属 `ai-adapters`。
 - AGENTS、README、DeepReview path classifier、core boundary rules 和 Cargo workspace path 已同步到当前分层。
+- `bitfun-core --no-default-features` 已裁掉 workspace-search owner、debug ingest HTTP server、AI provider adapter runtime 和 `reqwest` direct dependency；workspace search 旧路径、debug ingest、CLI credential acquisition 和 AI client runtime 只在显式 product feature 下组装，边界脚本覆盖关键 feature gate。
 
 ## 2. 已建立的保护
 
@@ -67,4 +68,4 @@
 - 产品入口仍主要通过 `bitfun-core/product-full` 获取完整能力；Product Assembly 已可表达当前完整能力集合，但尚未真正按交付形态裁剪 default feature / dependency。
 - concrete session manager、scheduler lifecycle、event delivery、permission UI/channel wait、prompt assembly、session persistence IO、AI client factory / provider acquisition 仍在 core。
 - Bash tool orchestration 的可复用 shell helper、本地 indexed workspace search owner、remote workspace search concrete owner、remote SSH/SFTP/PTY concrete owner、tool confirmation/checkpoint 纯策略、tool pipeline batching/retry policy、DeepReview provider-neutral policy/report/cache/task-execution shaping、DeepResearch citation renumber 纯重排 / report IO、MiniApp host dispatch、MiniApp built-in seed/marker IO、MiniApp JS worker process/pool lifecycle、MiniApp storage filesystem IO、MiniApp import bundle IO 和 prompt environment facts 已迁出；permission UI/channel side effect、tool pipeline concrete state/cancellation/scheduler glue、DeepReview concrete launch/provider wait/report persistence、MiniApp manager concrete workflow execution 仍未完成 owner 迁移。
-- no-default 与 product-full 的依赖边界已有数据基线，但 no-default 仍包含较大 concrete 依赖；不能声称各交付形态已达到最小依赖。
+- no-default 与 product-full 的依赖边界已有数据基线，且 no-default 已不再携带 workspace-search owner、debug ingest HTTP server、AI provider adapter runtime 或 `reqwest` direct dependency；remote-ssh 基础 workspace identity 仍是兼容期依赖，不能声称各交付形态已达到最小依赖。

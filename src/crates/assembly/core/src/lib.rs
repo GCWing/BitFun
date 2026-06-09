@@ -24,6 +24,7 @@ pub(crate) mod service_agent_runtime;
 pub mod util; // General types, errors, helper functions
 
 // Re-export debug_log from infrastructure for backward compatibility.
+#[cfg(feature = "product-full")]
 pub use infrastructure::debug_log as debug;
 
 // Export main types
@@ -38,7 +39,9 @@ pub use service::{
 };
 
 // Export infrastructure components
-pub use infrastructure::{ai::AIClient, events::BackendEventManager};
+#[cfg(feature = "ai-adapter-runtime")]
+pub use infrastructure::ai::AIClient;
+pub use infrastructure::events::BackendEventManager;
 
 // Export Agentic service core types
 #[cfg(feature = "product-full")]

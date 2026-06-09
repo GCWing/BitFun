@@ -464,7 +464,7 @@ pub enum ModelCategory {
     SpeechRecognition,
 }
 
-pub use bitfun_ai_adapters::types::ReasoningMode;
+pub use bitfun_core_types::ReasoningMode;
 
 /// Default model configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1217,7 +1217,7 @@ impl AIModelConfig {
     }
 }
 
-pub use bitfun_ai_adapters::types::ProxyConfig;
+pub use bitfun_core_types::ProxyConfig;
 
 /// Configuration provider interface.
 #[async_trait]

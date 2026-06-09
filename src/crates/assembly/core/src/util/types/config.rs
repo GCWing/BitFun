@@ -1,7 +1,69 @@
 use crate::service::config::types::AIModelConfig;
-pub use bitfun_ai_adapters::types::resolve_request_url;
-pub use bitfun_ai_adapters::types::AIConfig;
+pub use bitfun_core_types::AIConfig;
 use log::warn;
+
+fn append_endpoint(base_url: &str, endpoint: &str) -> String {
+    let base = base_url.trim();
+    if base.is_empty() {
+        return endpoint.to_string();
+    }
+    if base.ends_with(endpoint) {
+        return base.to_string();
+    }
+    format!("{}/{}", base.trim_end_matches('/'), endpoint)
+}
+
+fn gemini_base_url(url: &str) -> &str {
+    let mut u = url;
+    if let Some(pos) = u.find("/v1beta") {
+        u = &u[..pos];
+    }
+    if let Some(pos) = u.find("/models/") {
+        u = &u[..pos];
+    }
+    u.trim_end_matches('/')
+}
+
+fn resolve_gemini_request_url(base_url: &str, model_name: &str) -> String {
+    let trimmed = base_url.trim().trim_end_matches('/');
+    if trimmed.is_empty() {
+        return String::new();
+    }
+
+    if let Some(stripped) = trimmed.strip_suffix('#') {
+        return stripped.trim_end_matches('/').to_string();
+    }
+
+    let model = model_name.trim();
+    if model.is_empty() {
+        return trimmed.to_string();
+    }
+
+    let base = gemini_base_url(trimmed);
+    format!(
+        "{}/v1beta/models/{}:streamGenerateContent?alt=sse",
+        base, model
+    )
+}
+
+pub fn resolve_request_url(base_url: &str, provider: &str, model_name: &str) -> String {
+    let trimmed = base_url.trim().trim_end_matches('/').to_string();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+
+    if let Some(stripped) = trimmed.strip_suffix('#') {
+        return stripped.trim_end_matches('/').to_string();
+    }
+
+    match provider.trim().to_ascii_lowercase().as_str() {
+        "openai" | "nvidia" | "openrouter" => append_endpoint(&trimmed, "chat/completions"),
+        "response" | "responses" => append_endpoint(&trimmed, "responses"),
+        "anthropic" => append_endpoint(&trimmed, "v1/messages"),
+        "gemini" | "google" => resolve_gemini_request_url(&trimmed, model_name),
+        _ => trimmed,
+    }
+}
 
 impl TryFrom<AIModelConfig> for AIConfig {
     type Error = String;

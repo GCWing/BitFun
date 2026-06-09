@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+pub use bitfun_core_types::{AIConfig, ProxyConfig, ReasoningMode};
 
 fn append_endpoint(base_url: &str, endpoint: &str) -> String {
     let base = base_url.trim();
@@ -61,49 +61,6 @@ pub fn resolve_request_url(base_url: &str, provider: &str, model_name: &str) -> 
         "gemini" | "google" => resolve_gemini_request_url(&trimmed, model_name),
         _ => trimmed,
     }
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum ReasoningMode {
-    #[default]
-    Default,
-    Enabled,
-    Disabled,
-    Adaptive,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(default)]
-pub struct ProxyConfig {
-    pub enabled: bool,
-    pub url: String,
-    pub username: Option<String>,
-    pub password: Option<String>,
-}
-
-/// AI client configuration shared across runtime contexts.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AIConfig {
-    pub name: String,
-    pub base_url: String,
-    pub request_url: String,
-    pub api_key: String,
-    pub model: String,
-    pub format: String,
-    pub context_window: u32,
-    pub max_tokens: Option<u32>,
-    pub temperature: Option<f64>,
-    pub top_p: Option<f64>,
-    pub reasoning_mode: ReasoningMode,
-    pub inline_think_in_text: bool,
-    pub custom_headers: Option<std::collections::HashMap<String, String>>,
-    pub custom_headers_mode: Option<String>,
-    pub skip_ssl_verify: bool,
-    pub reasoning_effort: Option<String>,
-    pub thinking_budget_tokens: Option<u32>,
-    pub custom_request_body: Option<serde_json::Value>,
-    pub custom_request_body_mode: Option<String>,
 }
 
 #[cfg(test)]

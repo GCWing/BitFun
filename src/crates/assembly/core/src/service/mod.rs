@@ -25,6 +25,7 @@ pub mod remote_ssh; // Remote SSH (desktop → server)
 #[cfg(feature = "service-integrations")]
 pub mod review_platform; // Pull request review platform adapters
 pub mod runtime; // Managed runtime and capability management
+#[cfg(feature = "product-full")]
 pub mod search; // Workspace search via managed flashgrep daemon
 pub mod session; // Session persistence
 #[cfg(feature = "product-full")]
@@ -79,6 +80,7 @@ pub use review_platform::{
     ReviewPlatformWorkspaceSnapshot,
 };
 pub use runtime::{ResolvedCommand, RuntimeCommandCapability, RuntimeManager, RuntimeSource};
+#[cfg(feature = "product-full")]
 pub use search::{
     get_global_workspace_search_service, set_global_workspace_search_service, ContentSearchRequest,
     ContentSearchResult, GlobSearchRequest, GlobSearchResult, IndexTaskHandle,

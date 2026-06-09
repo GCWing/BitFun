@@ -1,1 +1,1 @@
-pub use bitfun_ai_adapters::types::Message;
+pub use bitfun_core_types::Message;

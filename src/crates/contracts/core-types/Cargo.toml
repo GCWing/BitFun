@@ -10,6 +10,4 @@ crate-type = ["rlib"]
 
 [dependencies]
 serde = { workspace = true }
-
-[dev-dependencies]
 serde_json = { workspace = true }

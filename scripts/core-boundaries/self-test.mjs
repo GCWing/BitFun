@@ -549,6 +549,14 @@ export function runManifestParserSelfTest({
   if (!coreTypesProfile?.forbiddenNonOptionalDeps.includes('bitfun-ai-adapters')) {
     throw new Error('core-types dependency profile must forbid ai-adapter dependencies');
   }
+  const coreTypesAiRuleText = forbiddenRuleTextForPath(
+    'src/crates/contracts/core-types/src/ai.rs',
+  );
+  for (const contract of ['resolve_request_url', 'chat\\/completions', 'v1\\/messages']) {
+    if (!coreTypesAiRuleText.includes(contract)) {
+      throw new Error(`core-types AI DTO boundary rule must forbid: ${contract}`);
+    }
+  }
   const runtimePortsProfile = dependencyProfileRules.find(
     (rule) => rule.crateName === 'runtime-ports',
   );
@@ -1800,9 +1808,14 @@ export function runManifestParserSelfTest({
       path: 'src/crates/assembly/core/Cargo.toml',
       contracts: [
         'bitfun-product-capabilities = \\{ path = "\\.\\.\\/product-capabilities", default-features = false, optional = true \\}',
+        'bitfun-ai-adapters = \\{ path = "\\.\\.\\/\\.\\.\\/adapters\\/ai-adapters", optional = true \\}',
         'bitfun-tool-packs = \\{ path = "\\.\\.\\/\\.\\.\\/execution\\/tool-provider-groups", default-features = false, optional = true \\}',
-        'bitfun-services-integrations = \\{ path = "\\.\\.\\/\\.\\.\\/services\\/services-integrations", default-features = false, features = \\["remote-ssh", "workspace-search"\\] \\}',
+        'bitfun-services-integrations = \\{ path = "\\.\\.\\/\\.\\.\\/services\\/services-integrations", default-features = false, features = \\["remote-ssh"\\] \\}',
         'bitfun-product-domains = \\{ path = "\\.\\.\\/\\.\\.\\/contracts\\/product-domains", default-features = false, optional = true \\}',
+        'dep:bitfun-ai-adapters',
+        'ai-adapter-runtime',
+        'bitfun-services-integrations\\/function-agents',
+        'bitfun-services-integrations\\/miniapp-runtime',
         'dep:bitfun-product-capabilities',
         'dep:bitfun-tool-packs',
         'bitfun-tool-packs\\/product-full',
@@ -1824,6 +1837,25 @@ export function runManifestParserSelfTest({
       ],
     },
     {
+      path: 'src/crates/assembly/core/src/infrastructure/mod.rs',
+      contracts: [
+        'feature = "ai-adapter-runtime"',
+        'pub mod ai',
+        'pub mod cli_credentials',
+        'feature = "product-full"',
+        'pub mod debug_log',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/util/types/ai.rs',
+      contracts: [
+        'bitfun_core_types',
+        'feature = "ai-adapter-runtime"',
+        'GeminiResponse',
+        'GeminiUsage',
+      ],
+    },
+    {
       path: 'src/crates/assembly/core/src/service/mod.rs',
       contracts: [
         'feature = "service-integrations"',
@@ -1832,6 +1864,7 @@ export function runManifestParserSelfTest({
         'pub mod remote_connect',
         'pub mod review_platform',
         'feature = "product-full"',
+        'pub mod search',
         'pub mod snapshot',
       ],
     },

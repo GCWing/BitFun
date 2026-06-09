@@ -2,6 +2,21 @@
 
 export const forbiddenContentRules = [
   {
+    path: 'src/crates/contracts/core-types/src/ai.rs',
+    patterns: [
+      {
+        regex: /\bresolve_request_url\b/,
+        message:
+          'core-types may own AI DTOs, but provider URL resolution belongs in adapter or assembly compatibility owners',
+      },
+      {
+        regex: /\b(?:chat\/completions|v1\/messages|streamGenerateContent)\b/,
+        message:
+          'core-types must not encode provider endpoint paths; keep protocol URL behavior above contracts',
+      },
+    ],
+  },
+  {
     path: 'src/crates/assembly/core/src/product_assembly.rs',
     patterns: [
       {

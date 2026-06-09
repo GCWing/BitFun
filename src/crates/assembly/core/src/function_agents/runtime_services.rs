@@ -211,7 +211,7 @@ impl CoreWorkStateAiAnalysisService {
 
 #[cfg(test)]
 mod tests {
-    use bitfun_ai_adapters::types::ReasoningMode;
+    use bitfun_core_types::ReasoningMode;
 
     use super::*;
     use crate::function_agents::common::AgentErrorType;

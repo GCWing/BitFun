@@ -39,11 +39,11 @@ hex = { workspace = true }
 dashmap = { workspace = true, optional = true }
 indexmap = { workspace = true, optional = true }
 
-reqwest = { workspace = true }
+reqwest = { workspace = true, optional = true }
 
 # Debug Log HTTP Server
-axum = { workspace = true }
-tower-http = { workspace = true }
+axum = { workspace = true, optional = true }
+tower-http = { workspace = true, optional = true }
 
 glob = { workspace = true, optional = true }
 notify = { workspace = true }
@@ -73,7 +73,7 @@ rmcp = { workspace = true, features = [
 sse-stream = { workspace = true, optional = true }
 
 # Shared AI protocol adapters
-bitfun-ai-adapters = { path = "../../adapters/ai-adapters" }
+bitfun-ai-adapters = { path = "../../adapters/ai-adapters", optional = true }
 
 # Lightweight agent stream processing
 bitfun-agent-stream = { path = "../../execution/agent-stream" }
@@ -97,7 +97,7 @@ bitfun-tool-packs = { path = "../../execution/tool-provider-groups", default-fea
 bitfun-services-core = { path = "../../services/services-core" }
 
 # Integration service owner crate
-bitfun-services-integrations = { path = "../../services/services-integrations", default-features = false, features = ["remote-ssh", "workspace-search"] }
+bitfun-services-integrations = { path = "../../services/services-integrations", default-features = false, features = ["remote-ssh"] }
 
 # Product domain owner crate
 bitfun-product-domains = { path = "../../contracts/product-domains", default-features = false, optional = true }
@@ -162,6 +162,7 @@ schannel = "0.1"
 # explicitly before `bitfun-core` default features are made lighter.
 default = ["product-full"]
 product-full = [
+    "ai-adapter-runtime",
     "dep:chrono-tz",
     "dep:cron",
     "dep:dashmap",
@@ -183,12 +184,20 @@ product-full = [
     "service-integrations",
     "tool-packs",
 ]
+ai-adapter-runtime = ["dep:bitfun-ai-adapters", "dep:reqwest"]
 product-capabilities = ["dep:bitfun-product-capabilities"]
-product-domains = ["dep:bitfun-product-domains", "bitfun-product-domains/product-full"]
+product-domains = [
+    "ai-adapter-runtime",
+    "dep:bitfun-product-domains",
+    "bitfun-services-integrations/function-agents",
+    "bitfun-services-integrations/miniapp-runtime",
+    "bitfun-product-domains/product-full",
+]
 runtime-services = ["dep:bitfun-runtime-services"]
 service-integrations = [
     "dep:aes",
     "dep:aes-gcm",
+    "dep:axum",
     "dep:bitfun-relay-server",
     "dep:git2",
     "dep:hostname",
@@ -198,9 +207,11 @@ service-integrations = [
     "dep:md5",
     "dep:qrcode",
     "dep:rand",
+    "dep:reqwest",
     "dep:rmcp",
     "dep:sse-stream",
     "dep:tokio-tungstenite",
+    "dep:tower-http",
     "dep:x25519-dalek",
     "bitfun-services-integrations/product-full",
 ]
