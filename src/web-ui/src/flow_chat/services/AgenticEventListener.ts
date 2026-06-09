@@ -162,6 +162,7 @@ export class AgenticEventListener {
       }
 
       if (callbacks.onDialogTurnCompleted) {
+        debugger
         const unlisten = agentAPI.onDialogTurnCompleted((event) => {
           logger.debug('Dialog turn completed:', event);
           callbacks.onDialogTurnCompleted?.(event);

@@ -12,7 +12,7 @@ import { DotMatrixLoader } from '@/component-library';
 import type { MarkdownTraceContext } from '@/component-library';
 import type { FlowTextItem } from '../types/flow-chat';
 import { useFlowChatContext } from './modern/FlowChatContext';
-import { useTypewriter } from '../hooks/useTypewriter';
+import { useTypewriter } from '@/flow_chat/hooks';
 import { isStartupRenderTraceEnabled } from '@/shared/utils/startupTrace';
 import './FlowTextBlock.scss';
 

@@ -1674,7 +1674,7 @@ impl ExecutionEngine {
         let compression_contract = self
             .session_manager
             .compression_contract_for_session(&session_id, scaffold.compression_contract_limit);
-        let model_summary = match self
+        let model_summary = self
             .generate_compression_model_summary(
                 scaffold.ai_client.clone(),
                 &runtime_messages,
@@ -1688,17 +1688,13 @@ impl ExecutionEngine {
                 scaffold.primary_supports_image_understanding,
                 compression_contract.as_ref(),
             )
-            .await
-        {
-            Ok(summary) => summary,
-            Err(err) => {
-                warn!(
+            .await.unwrap_or_else(|err| {
+            warn!(
                     "Model-based manual compaction failed, falling back to structured local compression: {}",
                     err
                 );
-                None
-            }
-        };
+            None
+        });
         match self.context_compressor.compress_turns_with_contract(
             &session_id,
             context_window,
@@ -2862,10 +2858,7 @@ impl ExecutionEngine {
         // P1-6: Track the actual termination reason for downstream reporting.
         // Defaults to "complete" (model produced a final answer naturally) and
         // is overridden by finalize / fallback paths below.
-        let mut effective_finish_reason: &'static str = match finalization_reason {
-            Some(r) => r,
-            None => "complete",
-        };
+        let mut effective_finish_reason: &'static str = finalization_reason.unwrap_or_else(|| "complete");
         let mut finalize_fallback_text_used = false;
 
         if let Some(reason) = finalization_reason {
