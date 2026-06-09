@@ -4,6 +4,7 @@
 /// Consumes core events directly from EventQueue.
 use anyhow::Result;
 use clap::ValueEnum;
+use serde::Serialize;
 use serde_json::json;
 use std::collections::HashMap;
 use std::io::Write;
@@ -20,6 +21,62 @@ use crate::config::CliConfig;
 use crate::diagnostics::{emit_exit_diagnostic, ExitContext, ExitKind};
 
 const TOOL_START_INPUT_PREVIEW_CHARS: usize = 4_000;
+
+/// Patch verification gate. Activates when `--output-patch` is set and the
+/// detector finds a runnable verifier in the workspace (Makefile/justfile target,
+/// go.mod, Cargo.toml, tsconfig.json, package.json script, or a parse-only
+/// fallback over changed files). On verification failure, the agent is re-prompted
+/// with the captured output and given another chance to finalize.
+///
+/// Tuning knobs come from env vars:
+/// - `BITFUN_PATCH_VERIFY_CMD` — explicit command override (skips detection).
+/// - `BITFUN_PATCH_VERIFY_TIMEOUT_SEC` — default 900s. Should be wide enough to
+///   cover a real cold workspace build; treat exceeding it as "scope too broad",
+///   not as "verifier means the patch is broken".
+/// - `BITFUN_PATCH_VERIFY_MAX_RETRIES` — default 1. Each retry is a full new
+///   agent turn, so two-plus retries can double token spend; default low.
+#[derive(Debug, Clone)]
+struct VerifyConfig {
+    timeout: Duration,
+    max_retries: u32,
+}
+
+impl VerifyConfig {
+    fn from_env() -> Self {
+        let timeout = std::env::var("BITFUN_PATCH_VERIFY_TIMEOUT_SEC")
+            .ok()
+            .and_then(|s| s.trim().parse::<u64>().ok())
+            .map(Duration::from_secs)
+            .unwrap_or_else(|| Duration::from_secs(900));
+        let max_retries = std::env::var("BITFUN_PATCH_VERIFY_MAX_RETRIES")
+            .ok()
+            .and_then(|s| s.trim().parse::<u32>().ok())
+            .unwrap_or(1);
+        Self {
+            timeout,
+            max_retries,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+enum VerifyStatus {
+    Passed,
+    Failed,
+    TimedOut,
+    SpawnError,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct VerifyOutcome {
+    status: VerifyStatus,
+    command: String,
+    exit_code: Option<i32>,
+    duration_ms: u64,
+    stderr_tail: String,
+    retries_used: u32,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
 pub enum ExecOutputFormat {
@@ -203,9 +260,22 @@ impl ExecMode {
             println!("Thinking...");
         });
 
+        let verify_cfg = VerifyConfig::from_env();
+        let verify_workspace = self
+            .workspace_path
+            .clone()
+            .or_else(|| std::env::current_dir().ok())
+            .unwrap_or_else(|| PathBuf::from("."));
+        let verify_enabled = self.output_patch.is_some();
+        let mut current_message = self.message.clone();
+        let mut retries_used: u32 = 0;
+        let mut total_tool_calls = 0usize;
+        let mut subagent_parent_sessions: HashMap<String, String> = HashMap::new();
+
+        let final_outcome: Result<()> = 'retry: loop {
         let turn_id = self
             .agent
-            .send_message(self.message.clone(), &self.agent_type)
+            .send_message(current_message.clone(), &self.agent_type)
             .await
             .map_err(|e| {
                 emit_exit_diagnostic(
@@ -217,9 +287,7 @@ impl ExecMode {
             })?;
         tracing::info!(session_id = %session_id, turn_id = %turn_id, "Message sent");
 
-        // Consume events from EventQueue until turn completes
-        let mut total_tool_calls = 0usize;
-        let mut subagent_parent_sessions: HashMap<String, String> = HashMap::new();
+        // Per-turn loop state.
         let mut terminal_outcome: Option<Result<()>> = None;
         let mut observed_turn_activity = false;
 
@@ -570,8 +638,135 @@ impl ExecMode {
         }
 
         self.wait_for_turn_settlement(&session_id, &turn_id).await;
+
+        let outcome = terminal_outcome.unwrap_or(Ok(()));
+
+        // Patch verification gate. Only runs when --output-patch is set,
+        // the agent's turn settled cleanly, and the workspace exposes a
+        // verifier we can detect. Failure to verify triggers up to
+        // verify_cfg.max_retries additional turns, each fed the verifier's
+        // output (or a scope-narrowing hint, for timeouts) as a system
+        // reminder. Passes / skips fall straight through to emit the patch.
+        if verify_enabled && outcome.is_ok() {
+            if let Some(command) = detect_verify_command(&verify_workspace) {
+                let result = self
+                    .verify_patch(&command, &verify_cfg, retries_used)
+                    .await;
+                let passed = result.status == VerifyStatus::Passed;
+                if !passed {
+                    self.emit(json!({
+                        "type": "verify_failed",
+                        "session_id": session_id,
+                        "attempt": retries_used + 1,
+                        "command": &result.command,
+                        "status": result.status,
+                        "exit_code": result.exit_code,
+                        "duration_ms": result.duration_ms,
+                        "stderr_tail": result.stderr_tail,
+                    }))?;
+                    if retries_used < verify_cfg.max_retries {
+                        self.print_text(|| {
+                            eprintln!(
+                                "\nVerification failed (attempt {}, exit {:?}): {} — asking the agent to fix and retry",
+                                retries_used + 1,
+                                result.exit_code,
+                                result.command,
+                            );
+                        });
+                        current_message = build_retry_message(&result);
+                        retries_used += 1;
+                        continue 'retry;
+                    }
+                    self.print_text(|| {
+                        eprintln!(
+                            "\nVerification still failing after {} attempt(s); emitting patch unverified ({})",
+                            retries_used + 1,
+                            result.command,
+                        );
+                    });
+                }
+            }
+        }
+
+        break outcome;
+        };
+
         self.output_patch_if_needed();
-        terminal_outcome.unwrap_or(Ok(()))
+        final_outcome
+    }
+
+    async fn verify_patch(
+        &self,
+        command: &str,
+        cfg: &VerifyConfig,
+        retries_used: u32,
+    ) -> VerifyOutcome {
+        let cwd = self
+            .workspace_path
+            .clone()
+            .or_else(|| std::env::current_dir().ok())
+            .unwrap_or_else(|| PathBuf::from("."));
+
+        let mut cmd = if cfg!(windows) {
+            let mut c = tokio::process::Command::new("cmd");
+            c.arg("/C").arg(command);
+            c
+        } else {
+            let mut c = tokio::process::Command::new("sh");
+            c.arg("-c").arg(command);
+            c
+        };
+        cmd.current_dir(&cwd);
+        cmd.kill_on_drop(true);
+
+        let start = Instant::now();
+        let result = tokio::time::timeout(cfg.timeout, cmd.output()).await;
+        let duration_ms = start.elapsed().as_millis() as u64;
+
+        match result {
+            Ok(Ok(output)) => {
+                let exit_code = output.status.code();
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let combined = if stderr.trim().is_empty() {
+                    stdout.to_string()
+                } else if stdout.trim().is_empty() {
+                    stderr.to_string()
+                } else {
+                    format!("{}\n--- stdout ---\n{}", stderr, stdout)
+                };
+                let stderr_tail = tail_chars(&combined, 4000);
+                let status = if output.status.success() {
+                    VerifyStatus::Passed
+                } else {
+                    VerifyStatus::Failed
+                };
+                VerifyOutcome {
+                    status,
+                    command: command.to_string(),
+                    exit_code,
+                    duration_ms,
+                    stderr_tail,
+                    retries_used,
+                }
+            }
+            Ok(Err(io_err)) => VerifyOutcome {
+                status: VerifyStatus::SpawnError,
+                command: command.to_string(),
+                exit_code: None,
+                duration_ms,
+                stderr_tail: format!("spawn error: {}", io_err),
+                retries_used,
+            },
+            Err(_) => VerifyOutcome {
+                status: VerifyStatus::TimedOut,
+                command: command.to_string(),
+                exit_code: None,
+                duration_ms,
+                stderr_tail: format!("timed out after {}s", cfg.timeout.as_secs()),
+                retries_used,
+            },
+        }
     }
 
     async fn record_resolved_model_id(&self, session_id: &str, model_id: &str) {
@@ -787,6 +982,204 @@ impl ExecMode {
             sleep(Duration::from_millis(50)).await;
         }
     }
+}
+
+fn tail_chars(s: &str, max: usize) -> String {
+    let total = s.chars().count();
+    if total <= max {
+        s.to_string()
+    } else {
+        s.chars().skip(total - max).collect()
+    }
+}
+
+fn build_retry_message(outcome: &VerifyOutcome) -> String {
+    match outcome.status {
+        VerifyStatus::TimedOut => format!(
+            "<system-reminder>\n\
+The verifier we ran for you timed out — it did not return a pass/fail signal:\n\
+\n\
+$ {command}\n\
+(timed out after {ms}ms)\n\
+\n\
+Timeout means the command was too broad/slow, not that your changes are necessarily broken. Do one of:\n\
+  - Narrow the verification scope to the package(s) you actually touched. For Go use `go build ./path/to/changed/pkg/...` not `go build ./...`; for Cargo use `cargo check -p <crate>` not `--workspace`; for tsc add a smaller `-p` project.\n\
+  - If you believe your changes are correct, finalize without further verification.\n\
+Then re-emit your final answer. Do not just re-run the same broad command.\n\
+</system-reminder>",
+            command = outcome.command,
+            ms = outcome.duration_ms,
+        ),
+        VerifyStatus::SpawnError => format!(
+            "<system-reminder>\n\
+The verifier we tried to run could not start:\n\
+\n\
+$ {command}\n\
+{tail}\n\
+\n\
+The toolchain may be missing in this environment. Run a verification command you can actually invoke (e.g. just parse changed files) and finalize.\n\
+</system-reminder>",
+            command = outcome.command,
+            tail = outcome.stderr_tail,
+        ),
+        VerifyStatus::Failed => format!(
+            "<system-reminder>\n\
+Your previous changes did not pass external verification. The verification command exited with code {code:?}:\n\
+\n\
+$ {command}\n\
+\n\
+Last output (truncated to 4000 chars):\n\
+{tail}\n\
+\n\
+This is your next signal — diagnose what is still wrong, fix it, and run the verification command yourself to confirm it exits 0 before declaring the task done. Do not finish until the command succeeds or you have a concrete justification that the remaining failure is unrelated to your change.\n\
+</system-reminder>",
+            command = outcome.command,
+            code = outcome.exit_code,
+            tail = outcome.stderr_tail,
+        ),
+        VerifyStatus::Passed => String::from(
+            "<system-reminder>\nInternal note: build_retry_message called on a Passed outcome. This is a harness bug; ignore.\n</system-reminder>",
+        ),
+    }
+}
+
+/// Resolves the verification command for `workspace`. Priority:
+///   1. `BITFUN_PATCH_VERIFY_CMD` env override (escape hatch for harnesses).
+///   2. Project-defined targets: `make`/`just` `check|test|ci`.
+///   3. Language manifests: `go.mod` → `go build`, `Cargo.toml` → `cargo check`,
+///      `tsconfig.json` → `tsc --noEmit`, `package.json` scripts → `npm/pnpm/yarn`.
+///   4. Parse-only fallback over changed files (.py, .js/.mjs/.cjs, .go).
+/// Returns None if nothing applies — verification silently skips in that case.
+fn detect_verify_command(workspace: &std::path::Path) -> Option<String> {
+    if let Ok(cmd) = std::env::var("BITFUN_PATCH_VERIFY_CMD") {
+        let trimmed = cmd.trim();
+        if !trimmed.is_empty() {
+            return Some(trimmed.to_string());
+        }
+    }
+
+    const TARGETS: &[&str] = &["check", "test", "ci"];
+
+    if let Some(target) = detect_make_or_just_target(workspace, "Makefile", TARGETS) {
+        return Some(format!("make {}", target));
+    }
+    if let Some(target) = detect_make_or_just_target(workspace, "justfile", TARGETS) {
+        return Some(format!("just {}", target));
+    }
+    if let Some(target) = detect_make_or_just_target(workspace, ".justfile", TARGETS) {
+        return Some(format!("just {}", target));
+    }
+
+    if workspace.join("go.mod").exists() {
+        return Some("go build ./...".to_string());
+    }
+    if workspace.join("Cargo.toml").exists() {
+        return Some("cargo check --workspace --message-format=short".to_string());
+    }
+    if workspace.join("tsconfig.json").exists() {
+        return Some("npx --no-install tsc --noEmit -p .".to_string());
+    }
+    if let Some(cmd) = detect_package_json_command(workspace) {
+        return Some(cmd);
+    }
+
+    let changed = changed_files(workspace);
+    if !changed.is_empty() {
+        if let Some(cmd) = build_parse_only_command(&changed) {
+            return Some(cmd);
+        }
+    }
+
+    None
+}
+
+fn detect_make_or_just_target(
+    workspace: &std::path::Path,
+    file: &str,
+    candidates: &[&str],
+) -> Option<String> {
+    let content = std::fs::read_to_string(workspace.join(file)).ok()?;
+    candidates.iter().find_map(|target| {
+        let head = format!("{}:", target);
+        let mid = format!("\n{}:", target);
+        if content.starts_with(&head) || content.contains(&mid) {
+            Some(target.to_string())
+        } else {
+            None
+        }
+    })
+}
+
+fn detect_package_json_command(workspace: &std::path::Path) -> Option<String> {
+    let content = std::fs::read_to_string(workspace.join("package.json")).ok()?;
+    let json: serde_json::Value = serde_json::from_str(&content).ok()?;
+    let scripts = json.get("scripts")?.as_object()?;
+
+    let pm = if workspace.join("pnpm-lock.yaml").exists() {
+        "pnpm"
+    } else if workspace.join("yarn.lock").exists() {
+        "yarn"
+    } else {
+        "npm"
+    };
+
+    for candidate in ["typecheck", "check", "build"] {
+        if scripts.contains_key(candidate) {
+            return Some(match pm {
+                "npm" => format!("npm run {}", candidate),
+                other => format!("{} {}", other, candidate),
+            });
+        }
+    }
+    None
+}
+
+fn changed_files(workspace: &std::path::Path) -> Vec<String> {
+    let output = bitfun_core::util::process_manager::create_command("git")
+        .args(["diff", "--name-only", "--diff-filter=AM"])
+        .current_dir(workspace)
+        .output()
+        .ok();
+    let output = match output {
+        Some(o) if o.status.success() => o,
+        _ => return Vec::new(),
+    };
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(|line| line.trim().to_string())
+        .filter(|line| !line.is_empty())
+        .collect()
+}
+
+fn build_parse_only_command(files: &[String]) -> Option<String> {
+    let mut checks: Vec<String> = Vec::new();
+    for file in files {
+        let quoted = shell_single_quote(file);
+        let lower = file.to_ascii_lowercase();
+        if lower.ends_with(".py") {
+            checks.push(format!(
+                "python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read())' {}",
+                quoted
+            ));
+        } else if lower.ends_with(".js")
+            || lower.ends_with(".mjs")
+            || lower.ends_with(".cjs")
+            || lower.ends_with(".jsx")
+        {
+            checks.push(format!("node --check {}", quoted));
+        } else if lower.ends_with(".go") {
+            checks.push(format!("gofmt -e {} > /dev/null", quoted));
+        }
+    }
+    if checks.is_empty() {
+        None
+    } else {
+        Some(checks.join(" && "))
+    }
+}
+
+fn shell_single_quote(s: &str) -> String {
+    format!("'{}'", s.replace('\'', r"'\''"))
 }
 
 pub(crate) fn write_patch_to_path(output_target: &str, patch: &str) -> std::io::Result<()> {
