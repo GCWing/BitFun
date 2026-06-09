@@ -177,6 +177,22 @@ export const requiredContentRules = [
         message: 'missing DeepReview provider capacity backoff owner function',
       },
       {
+        regex: /\bpub fn capacity_decision_for_provider_error_facts\b/,
+        message: 'missing DeepReview provider capacity error decision owner function',
+      },
+      {
+        regex: /\bpub fn local_reviewer_capacity_queue_decision\b/,
+        message: 'missing DeepReview local reviewer capacity decision owner function',
+      },
+      {
+        regex: /\bpub fn decide_provider_capacity_queue_step\b/,
+        message: 'missing DeepReview provider capacity queue step owner function',
+      },
+      {
+        regex: /\bpub fn decide_blocked_reviewer_admission_queue_step\b/,
+        message: 'missing DeepReview reviewer admission queue step owner function',
+      },
+      {
         regex: /\bpub fn capacity_skip_result_for_local_queue_outcome\b/,
         message: 'missing DeepReview local capacity-skipped presentation owner function',
       },
@@ -225,6 +241,18 @@ export const requiredContentRules = [
       {
         regex: /\bdeep_review_task_execution_owner_preserves_packet_retry_and_queue_contracts\b/,
         message: 'missing DeepReview task execution owner regression',
+      },
+      {
+        regex: /\bcapacity_decision_for_provider_error_facts\b/,
+        message: 'missing DeepReview provider capacity error decision regression',
+      },
+      {
+        regex: /\bdecide_provider_capacity_queue_step\b/,
+        message: 'missing DeepReview provider queue step decision regression',
+      },
+      {
+        regex: /\bdecide_blocked_reviewer_admission_queue_step\b/,
+        message: 'missing DeepReview blocked admission queue decision regression',
       },
     ],
   },
@@ -1143,6 +1171,22 @@ export const requiredContentRules = [
       {
         regex: /provider_capacity_queue_wait_seconds_for_attempt/,
         message: 'missing DeepReview provider capacity wait owner re-export',
+      },
+      {
+        regex: /runtime_task_execution::capacity_decision_for_provider_error_facts/,
+        message: 'missing DeepReview provider capacity error decision delegation',
+      },
+      {
+        regex: /runtime_task_execution::local_reviewer_capacity_queue_decision/,
+        message: 'missing DeepReview local reviewer capacity decision delegation',
+      },
+      {
+        regex: /runtime_task_execution::decide_provider_capacity_queue_step/,
+        message: 'missing DeepReview provider capacity queue decision delegation',
+      },
+      {
+        regex: /runtime_task_execution::decide_blocked_reviewer_admission_queue_step/,
+        message: 'missing DeepReview reviewer admission queue decision delegation',
       },
     ],
   },

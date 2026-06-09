@@ -9,19 +9,18 @@
 use crate::agentic::coordination::get_global_coordinator;
 use crate::agentic::deep_review::queue::extract_retry_after_seconds;
 use crate::agentic::deep_review_policy::{
-    classify_deep_review_capacity_error, clear_deep_review_queue_control_for_tool,
-    deep_review_active_reviewer_count, deep_review_effective_concurrency_snapshot,
-    deep_review_effective_parallel_instances, deep_review_max_retries_per_role,
-    deep_review_queue_control_snapshot, record_deep_review_capacity_skip_for_reason,
+    clear_deep_review_queue_control_for_tool, deep_review_active_reviewer_count,
+    deep_review_effective_concurrency_snapshot, deep_review_effective_parallel_instances,
+    deep_review_max_retries_per_role, deep_review_queue_control_snapshot,
+    record_deep_review_capacity_skip_for_reason,
     record_deep_review_effective_concurrency_capacity_error,
     record_deep_review_runtime_provider_capacity_queue,
     record_deep_review_runtime_provider_capacity_retry,
     record_deep_review_runtime_provider_capacity_retry_success,
     record_deep_review_runtime_queue_wait, try_begin_deep_review_active_reviewer,
     try_begin_deep_review_active_reviewer_for_launch_batch, DeepReviewActiveReviewerGuard,
-    DeepReviewCapacityFailFastReason, DeepReviewCapacityQueueDecision,
-    DeepReviewCapacityQueueReason, DeepReviewConcurrencyPolicy, DeepReviewExecutionPolicy,
-    DeepReviewPolicyViolation,
+    DeepReviewCapacityQueueDecision, DeepReviewCapacityQueueReason, DeepReviewConcurrencyPolicy,
+    DeepReviewExecutionPolicy, DeepReviewPolicyViolation,
 };
 use crate::agentic::events::{
     DeepReviewQueueReason, DeepReviewQueueState, DeepReviewQueueStatus, ErrorCategory,
@@ -111,35 +110,22 @@ pub(crate) fn capacity_decision_for_provider_error(
         .provider_message
         .as_deref()
         .unwrap_or(error_message.as_str());
-    let decision = classify_deep_review_capacity_error(
-        code,
-        message,
-        extract_retry_after_seconds(&error_message),
-    );
-    if decision.queueable
-        || decision.fail_fast_reason
-            != Some(DeepReviewCapacityFailFastReason::DeterministicProviderError)
-    {
-        return decision;
-    }
-
-    match detail.category {
-        ErrorCategory::RateLimit => DeepReviewCapacityQueueDecision::queueable(
-            DeepReviewCapacityQueueReason::ProviderRateLimit,
-            decision.retry_after_seconds,
-        ),
-        ErrorCategory::ProviderUnavailable => DeepReviewCapacityQueueDecision::queueable(
-            DeepReviewCapacityQueueReason::TemporaryOverload,
-            decision.retry_after_seconds,
-        ),
-        _ => decision,
-    }
-}
-
-fn provider_capacity_wait_can_wake_on_active_reviewer_release(
-    reason: DeepReviewCapacityQueueReason,
-) -> bool {
-    runtime_task_execution::provider_capacity_wait_can_wake_on_active_reviewer_release(reason)
+    runtime_task_execution::capacity_decision_for_provider_error_facts(
+        runtime_task_execution::DeepReviewProviderCapacityErrorFacts {
+            provider_code: code,
+            provider_message: message,
+            retry_after_seconds: extract_retry_after_seconds(&error_message),
+            category: match detail.category {
+                ErrorCategory::RateLimit => {
+                    runtime_task_execution::DeepReviewProviderCapacityErrorCategory::RateLimit
+                }
+                ErrorCategory::ProviderUnavailable => {
+                    runtime_task_execution::DeepReviewProviderCapacityErrorCategory::ProviderUnavailable
+                }
+                _ => runtime_task_execution::DeepReviewProviderCapacityErrorCategory::Other,
+            },
+        },
+    )
 }
 
 pub(crate) fn capacity_skip_result_for_provider_reason(
@@ -267,8 +253,6 @@ pub(crate) async fn wait_for_provider_capacity_retry(
     let max_wait = Duration::from_secs(max_wait_seconds);
     let optional_reviewer_count = is_optional_reviewer.then_some(1);
     let initial_active_reviewers = deep_review_active_reviewer_count(dialog_turn_id);
-    let can_wake_on_active_reviewer_release =
-        provider_capacity_wait_can_wake_on_active_reviewer_release(reason);
 
     record_deep_review_runtime_provider_capacity_queue(dialog_turn_id, reason);
 
@@ -283,127 +267,111 @@ pub(crate) async fn wait_for_provider_capacity_retry(
             conc_policy.max_parallel_instances,
         );
         let control_snapshot = deep_review_queue_control_snapshot(dialog_turn_id, tool_id);
+        let queue_decision = runtime_task_execution::decide_provider_capacity_queue_step(
+            runtime_task_execution::DeepReviewProviderCapacityQueueStepFacts {
+                reason,
+                queue_expired: queue_snapshot.is_expired(max_wait),
+                initial_active_reviewer_count: initial_active_reviewers,
+                active_reviewer_count: active_reviewers,
+                control_snapshot,
+                is_optional_reviewer,
+            },
+        );
 
-        if control_snapshot.cancelled || (is_optional_reviewer && control_snapshot.skip_optional) {
-            record_deep_review_runtime_queue_wait(dialog_turn_id, queue_elapsed_ms);
-            clear_deep_review_queue_control_for_tool(dialog_turn_id, tool_id);
-            emit_queue_state(
-                session_id,
-                dialog_turn_id,
-                tool_id,
-                subagent_type,
-                DeepReviewQueueStatus::CapacitySkipped,
-                Some(reason),
-                0,
-                active_reviewers,
-                optional_reviewer_count,
-                Some(effective_parallel_instances),
-                queue_elapsed_ms,
-                max_wait_seconds,
-            )
-            .await;
-            return DeepReviewProviderQueueWaitOutcome::Skipped {
-                queue_elapsed_ms,
-                skip_reason: if control_snapshot.cancelled {
-                    DeepReviewQueueWaitSkipReason::UserCancelled
-                } else {
-                    DeepReviewQueueWaitSkipReason::OptionalSkipped
-                },
-            };
+        match queue_decision {
+            runtime_task_execution::DeepReviewProviderCapacityQueueStepDecision::Skipped {
+                skip_reason,
+            } => {
+                record_deep_review_runtime_queue_wait(dialog_turn_id, queue_elapsed_ms);
+                clear_deep_review_queue_control_for_tool(dialog_turn_id, tool_id);
+                emit_queue_state(
+                    session_id,
+                    dialog_turn_id,
+                    tool_id,
+                    subagent_type,
+                    DeepReviewQueueStatus::CapacitySkipped,
+                    Some(reason),
+                    0,
+                    active_reviewers,
+                    optional_reviewer_count,
+                    Some(effective_parallel_instances),
+                    queue_elapsed_ms,
+                    max_wait_seconds,
+                )
+                .await;
+                return DeepReviewProviderQueueWaitOutcome::Skipped {
+                    queue_elapsed_ms,
+                    skip_reason,
+                };
+            }
+            runtime_task_execution::DeepReviewProviderCapacityQueueStepDecision::Paused => {
+                queue_timer.pause(now);
+                emit_queue_state(
+                    session_id,
+                    dialog_turn_id,
+                    tool_id,
+                    subagent_type,
+                    DeepReviewQueueStatus::PausedByUser,
+                    Some(reason),
+                    1,
+                    active_reviewers,
+                    optional_reviewer_count,
+                    Some(effective_parallel_instances),
+                    queue_elapsed_ms,
+                    max_wait_seconds,
+                )
+                .await;
+                sleep(DEEP_REVIEW_QUEUE_POLL_INTERVAL).await;
+                continue;
+            }
+            runtime_task_execution::DeepReviewProviderCapacityQueueStepDecision::ReadyToRetry {
+                early_capacity_probe,
+            } => {
+                queue_timer.continue_now(now);
+                record_deep_review_runtime_queue_wait(dialog_turn_id, queue_elapsed_ms);
+                clear_deep_review_queue_control_for_tool(dialog_turn_id, tool_id);
+                emit_queue_state(
+                    session_id,
+                    dialog_turn_id,
+                    tool_id,
+                    subagent_type,
+                    DeepReviewQueueStatus::Running,
+                    Some(reason),
+                    0,
+                    active_reviewers,
+                    optional_reviewer_count,
+                    Some(effective_parallel_instances),
+                    queue_elapsed_ms,
+                    max_wait_seconds,
+                )
+                .await;
+                return DeepReviewProviderQueueWaitOutcome::ReadyToRetry {
+                    queue_elapsed_ms,
+                    early_capacity_probe,
+                };
+            }
+            runtime_task_execution::DeepReviewProviderCapacityQueueStepDecision::Queued => {
+                queue_timer.continue_now(now);
+                emit_queue_state(
+                    session_id,
+                    dialog_turn_id,
+                    tool_id,
+                    subagent_type,
+                    DeepReviewQueueStatus::QueuedForCapacity,
+                    Some(reason),
+                    1,
+                    active_reviewers,
+                    optional_reviewer_count,
+                    Some(effective_parallel_instances),
+                    queue_elapsed_ms,
+                    max_wait_seconds,
+                )
+                .await;
+
+                let remaining = max_wait.saturating_sub(queue_elapsed);
+                sleep(DEEP_REVIEW_QUEUE_POLL_INTERVAL.min(remaining)).await;
+            }
         }
-
-        if control_snapshot.paused {
-            queue_timer.pause(now);
-            emit_queue_state(
-                session_id,
-                dialog_turn_id,
-                tool_id,
-                subagent_type,
-                DeepReviewQueueStatus::PausedByUser,
-                Some(reason),
-                1,
-                active_reviewers,
-                optional_reviewer_count,
-                Some(effective_parallel_instances),
-                queue_elapsed_ms,
-                max_wait_seconds,
-            )
-            .await;
-            sleep(DEEP_REVIEW_QUEUE_POLL_INTERVAL).await;
-            continue;
-        }
-
-        queue_timer.continue_now(now);
-
-        if queue_snapshot.is_expired(max_wait) {
-            record_deep_review_runtime_queue_wait(dialog_turn_id, queue_elapsed_ms);
-            clear_deep_review_queue_control_for_tool(dialog_turn_id, tool_id);
-            emit_queue_state(
-                session_id,
-                dialog_turn_id,
-                tool_id,
-                subagent_type,
-                DeepReviewQueueStatus::Running,
-                Some(reason),
-                0,
-                active_reviewers,
-                optional_reviewer_count,
-                Some(effective_parallel_instances),
-                queue_elapsed_ms,
-                max_wait_seconds,
-            )
-            .await;
-            return DeepReviewProviderQueueWaitOutcome::ReadyToRetry {
-                queue_elapsed_ms,
-                early_capacity_probe: false,
-            };
-        }
-
-        if can_wake_on_active_reviewer_release
-            && initial_active_reviewers > 0
-            && active_reviewers < initial_active_reviewers
-        {
-            record_deep_review_runtime_queue_wait(dialog_turn_id, queue_elapsed_ms);
-            clear_deep_review_queue_control_for_tool(dialog_turn_id, tool_id);
-            emit_queue_state(
-                session_id,
-                dialog_turn_id,
-                tool_id,
-                subagent_type,
-                DeepReviewQueueStatus::Running,
-                Some(reason),
-                0,
-                active_reviewers,
-                optional_reviewer_count,
-                Some(effective_parallel_instances),
-                queue_elapsed_ms,
-                max_wait_seconds,
-            )
-            .await;
-            return DeepReviewProviderQueueWaitOutcome::ReadyToRetry {
-                queue_elapsed_ms,
-                early_capacity_probe: true,
-            };
-        }
-
-        emit_queue_state(
-            session_id,
-            dialog_turn_id,
-            tool_id,
-            subagent_type,
-            DeepReviewQueueStatus::QueuedForCapacity,
-            Some(reason),
-            1,
-            active_reviewers,
-            optional_reviewer_count,
-            Some(effective_parallel_instances),
-            queue_elapsed_ms,
-            max_wait_seconds,
-        )
-        .await;
-
-        let remaining = max_wait.saturating_sub(queue_elapsed);
-        sleep(DEEP_REVIEW_QUEUE_POLL_INTERVAL.min(remaining)).await;
     }
 }
 
@@ -449,11 +417,7 @@ pub(crate) async fn wait_for_reviewer_admission(
     is_optional_reviewer: bool,
     launch_batch_info: Option<&DeepReviewLaunchBatchInfo>,
 ) -> BitFunResult<DeepReviewQueueWaitOutcome> {
-    let decision = classify_deep_review_capacity_error(
-        "deep_review_concurrency_cap_reached",
-        "Maximum parallel reviewer instances reached",
-        None,
-    );
+    let decision = runtime_task_execution::local_reviewer_capacity_queue_decision();
     let local_capacity_reason = decision
         .reason
         .unwrap_or(DeepReviewCapacityQueueReason::LocalConcurrencyCap);
@@ -475,55 +439,56 @@ pub(crate) async fn wait_for_reviewer_admission(
         let mut current_reason = last_wait_reason;
 
         let control_snapshot = deep_review_queue_control_snapshot(dialog_turn_id, tool_id);
-        if control_snapshot.cancelled || (is_optional_reviewer && control_snapshot.skip_optional) {
-            record_deep_review_runtime_queue_wait(dialog_turn_id, queue_elapsed_ms);
-            record_deep_review_capacity_skip_for_reason(dialog_turn_id, current_reason);
-            clear_deep_review_queue_control_for_tool(dialog_turn_id, tool_id);
-            emit_queue_state(
-                session_id,
-                dialog_turn_id,
-                tool_id,
-                subagent_type,
-                DeepReviewQueueStatus::CapacitySkipped,
-                Some(current_reason),
-                0,
-                active_reviewers,
-                optional_reviewer_count,
-                Some(effective_parallel_instances),
-                queue_elapsed_ms,
-                conc_policy.max_queue_wait_seconds,
-            )
-            .await;
-            return Ok(DeepReviewQueueWaitOutcome::Skipped {
-                queue_elapsed_ms,
-                skip_reason: if control_snapshot.cancelled {
-                    DeepReviewQueueWaitSkipReason::UserCancelled
-                } else {
-                    DeepReviewQueueWaitSkipReason::OptionalSkipped
-                },
-                capacity_reason: current_reason,
-            });
-        }
-
-        if control_snapshot.paused {
-            queue_timer.pause(now);
-            emit_queue_state(
-                session_id,
-                dialog_turn_id,
-                tool_id,
-                subagent_type,
-                DeepReviewQueueStatus::PausedByUser,
-                Some(current_reason),
-                1,
-                active_reviewers,
-                optional_reviewer_count,
-                Some(effective_parallel_instances),
-                queue_elapsed_ms,
-                conc_policy.max_queue_wait_seconds,
-            )
-            .await;
-            sleep(DEEP_REVIEW_QUEUE_POLL_INTERVAL).await;
-            continue;
+        match runtime_task_execution::decide_queue_control_step(
+            &control_snapshot,
+            is_optional_reviewer,
+        ) {
+            runtime_task_execution::DeepReviewQueueControlStepDecision::Skipped { skip_reason } => {
+                record_deep_review_runtime_queue_wait(dialog_turn_id, queue_elapsed_ms);
+                record_deep_review_capacity_skip_for_reason(dialog_turn_id, current_reason);
+                clear_deep_review_queue_control_for_tool(dialog_turn_id, tool_id);
+                emit_queue_state(
+                    session_id,
+                    dialog_turn_id,
+                    tool_id,
+                    subagent_type,
+                    DeepReviewQueueStatus::CapacitySkipped,
+                    Some(current_reason),
+                    0,
+                    active_reviewers,
+                    optional_reviewer_count,
+                    Some(effective_parallel_instances),
+                    queue_elapsed_ms,
+                    conc_policy.max_queue_wait_seconds,
+                )
+                .await;
+                return Ok(DeepReviewQueueWaitOutcome::Skipped {
+                    queue_elapsed_ms,
+                    skip_reason,
+                    capacity_reason: current_reason,
+                });
+            }
+            runtime_task_execution::DeepReviewQueueControlStepDecision::Paused => {
+                queue_timer.pause(now);
+                emit_queue_state(
+                    session_id,
+                    dialog_turn_id,
+                    tool_id,
+                    subagent_type,
+                    DeepReviewQueueStatus::PausedByUser,
+                    Some(current_reason),
+                    1,
+                    active_reviewers,
+                    optional_reviewer_count,
+                    Some(effective_parallel_instances),
+                    queue_elapsed_ms,
+                    conc_policy.max_queue_wait_seconds,
+                )
+                .await;
+                sleep(DEEP_REVIEW_QUEUE_POLL_INTERVAL).await;
+                continue;
+            }
+            runtime_task_execution::DeepReviewQueueControlStepDecision::Continue => {}
         }
 
         queue_timer.continue_now(now);
@@ -569,62 +534,70 @@ pub(crate) async fn wait_for_reviewer_admission(
         }
         last_wait_reason = current_reason;
 
-        let queue_expired_without_active_reviewer =
-            queue_snapshot.is_expired(max_wait) && active_reviewers == 0;
-
-        if queue_expired_without_active_reviewer {
-            let effective_parallel_instances =
-                if current_reason == DeepReviewCapacityQueueReason::LaunchBatchBlocked {
-                    effective_parallel_instances
-                } else {
-                    record_deep_review_effective_concurrency_capacity_error(
-                        dialog_turn_id,
-                        conc_policy.max_parallel_instances,
-                        current_reason,
-                        decision.retry_after_seconds.map(Duration::from_secs),
-                    )
-                    .effective_parallel_instances
-                };
-            record_deep_review_runtime_queue_wait(dialog_turn_id, queue_elapsed_ms);
-            record_deep_review_capacity_skip_for_reason(dialog_turn_id, current_reason);
-            clear_deep_review_queue_control_for_tool(dialog_turn_id, tool_id);
-            emit_queue_state(
-                session_id,
-                dialog_turn_id,
-                tool_id,
-                subagent_type,
-                DeepReviewQueueStatus::CapacitySkipped,
-                Some(current_reason),
-                0,
-                active_reviewers,
-                optional_reviewer_count,
-                Some(effective_parallel_instances),
-                queue_elapsed_ms,
-                conc_policy.max_queue_wait_seconds,
-            )
-            .await;
-            return Ok(DeepReviewQueueWaitOutcome::Skipped {
-                queue_elapsed_ms,
-                skip_reason: DeepReviewQueueWaitSkipReason::QueueExpired,
+        match runtime_task_execution::decide_blocked_reviewer_admission_queue_step(
+            runtime_task_execution::DeepReviewBlockedReviewerAdmissionQueueStepFacts {
                 capacity_reason: current_reason,
-            });
+                queue_expired: queue_snapshot.is_expired(max_wait),
+                active_reviewer_count: active_reviewers,
+            },
+        ) {
+            runtime_task_execution::DeepReviewBlockedReviewerAdmissionQueueStepDecision::CapacityExpired { capacity_reason } => {
+                let effective_parallel_instances =
+                    if capacity_reason == DeepReviewCapacityQueueReason::LaunchBatchBlocked {
+                        effective_parallel_instances
+                    } else {
+                        record_deep_review_effective_concurrency_capacity_error(
+                            dialog_turn_id,
+                            conc_policy.max_parallel_instances,
+                            capacity_reason,
+                            decision.retry_after_seconds.map(Duration::from_secs),
+                        )
+                        .effective_parallel_instances
+                    };
+                record_deep_review_runtime_queue_wait(dialog_turn_id, queue_elapsed_ms);
+                record_deep_review_capacity_skip_for_reason(dialog_turn_id, capacity_reason);
+                clear_deep_review_queue_control_for_tool(dialog_turn_id, tool_id);
+                emit_queue_state(
+                    session_id,
+                    dialog_turn_id,
+                    tool_id,
+                    subagent_type,
+                    DeepReviewQueueStatus::CapacitySkipped,
+                    Some(capacity_reason),
+                    0,
+                    active_reviewers,
+                    optional_reviewer_count,
+                    Some(effective_parallel_instances),
+                    queue_elapsed_ms,
+                    conc_policy.max_queue_wait_seconds,
+                )
+                .await;
+                return Ok(DeepReviewQueueWaitOutcome::Skipped {
+                    queue_elapsed_ms,
+                    skip_reason: DeepReviewQueueWaitSkipReason::QueueExpired,
+                    capacity_reason,
+                });
+            }
+            runtime_task_execution::DeepReviewBlockedReviewerAdmissionQueueStepDecision::Queued {
+                capacity_reason,
+            } => {
+                emit_queue_state(
+                    session_id,
+                    dialog_turn_id,
+                    tool_id,
+                    subagent_type,
+                    DeepReviewQueueStatus::QueuedForCapacity,
+                    Some(capacity_reason),
+                    1,
+                    active_reviewers,
+                    optional_reviewer_count,
+                    Some(effective_parallel_instances),
+                    queue_elapsed_ms,
+                    conc_policy.max_queue_wait_seconds,
+                )
+                .await;
+            }
         }
-
-        emit_queue_state(
-            session_id,
-            dialog_turn_id,
-            tool_id,
-            subagent_type,
-            DeepReviewQueueStatus::QueuedForCapacity,
-            Some(current_reason),
-            1,
-            active_reviewers,
-            optional_reviewer_count,
-            Some(effective_parallel_instances),
-            queue_elapsed_ms,
-            conc_policy.max_queue_wait_seconds,
-        )
-        .await;
 
         let sleep_duration = if queue_snapshot.is_expired(max_wait) {
             DEEP_REVIEW_QUEUE_POLL_INTERVAL

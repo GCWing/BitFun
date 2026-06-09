@@ -3,18 +3,24 @@ use bitfun_agent_runtime::deep_review::report::{
     fill_deep_review_reliability_signals,
 };
 use bitfun_agent_runtime::deep_review::task_execution::{
-    capacity_skip_result_for_local_queue_outcome, deep_review_launch_batch_for_task,
-    deep_review_packet_id_for_cache, ensure_deep_review_retry_coverage,
+    capacity_decision_for_provider_error_facts, capacity_skip_result_for_local_queue_outcome,
+    decide_blocked_reviewer_admission_queue_step, decide_provider_capacity_queue_step,
+    deep_review_launch_batch_for_task, deep_review_packet_id_for_cache,
+    ensure_deep_review_retry_coverage, local_reviewer_capacity_queue_decision,
     prompt_with_deep_review_retry_scope, provider_capacity_queue_wait_seconds_for_attempt,
+    DeepReviewBlockedReviewerAdmissionQueueStepDecision,
+    DeepReviewBlockedReviewerAdmissionQueueStepFacts, DeepReviewProviderCapacityErrorCategory,
+    DeepReviewProviderCapacityErrorFacts, DeepReviewProviderCapacityQueueStepDecision,
+    DeepReviewProviderCapacityQueueStepFacts,
 };
 use bitfun_agent_runtime::deep_review::{
     append_tool_use_context_data, apply_deep_review_queue_control,
     deep_review_queue_control_snapshot, record_deep_review_shared_context_tool_use,
     ChangeRiskFactors, DeepReviewBudgetTracker, DeepReviewCapacityQueueDecision,
     DeepReviewCapacityQueueReason, DeepReviewConcurrencyPolicy, DeepReviewExecutionPolicy,
-    DeepReviewQueueControlAction, DeepReviewQueueWaitSkipReason, DeepReviewRunManifestGate,
-    DeepReviewStrategyLevel, DeepReviewSubagentRole, DeepReviewToolParentContext,
-    REVIEWER_SECURITY_AGENT_TYPE,
+    DeepReviewQueueControlAction, DeepReviewQueueControlSnapshot, DeepReviewQueueWaitSkipReason,
+    DeepReviewRunManifestGate, DeepReviewStrategyLevel, DeepReviewSubagentRole,
+    DeepReviewToolParentContext, REVIEWER_SECURITY_AGENT_TYPE,
 };
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -293,6 +299,57 @@ fn deep_review_task_execution_owner_preserves_packet_retry_and_queue_contracts()
         2,
     );
     assert_eq!(wait_seconds, Some(270));
+
+    let provider_error_decision =
+        capacity_decision_for_provider_error_facts(DeepReviewProviderCapacityErrorFacts {
+            provider_code: "provider_specific",
+            provider_message: "unmapped upstream response",
+            retry_after_seconds: None,
+            category: DeepReviewProviderCapacityErrorCategory::RateLimit,
+        });
+    assert_eq!(
+        provider_error_decision.reason,
+        Some(DeepReviewCapacityQueueReason::ProviderRateLimit)
+    );
+
+    assert_eq!(
+        local_reviewer_capacity_queue_decision().reason,
+        Some(DeepReviewCapacityQueueReason::LocalConcurrencyCap)
+    );
+
+    let provider_step =
+        decide_provider_capacity_queue_step(DeepReviewProviderCapacityQueueStepFacts {
+            reason: DeepReviewCapacityQueueReason::ProviderConcurrencyLimit,
+            queue_expired: false,
+            initial_active_reviewer_count: 2,
+            active_reviewer_count: 1,
+            control_snapshot: DeepReviewQueueControlSnapshot {
+                paused: false,
+                cancelled: false,
+                skip_optional: false,
+            },
+            is_optional_reviewer: false,
+        });
+    assert_eq!(
+        provider_step,
+        DeepReviewProviderCapacityQueueStepDecision::ReadyToRetry {
+            early_capacity_probe: true
+        }
+    );
+
+    let admission_step = decide_blocked_reviewer_admission_queue_step(
+        DeepReviewBlockedReviewerAdmissionQueueStepFacts {
+            capacity_reason: DeepReviewCapacityQueueReason::LaunchBatchBlocked,
+            queue_expired: true,
+            active_reviewer_count: 0,
+        },
+    );
+    assert_eq!(
+        admission_step,
+        DeepReviewBlockedReviewerAdmissionQueueStepDecision::CapacityExpired {
+            capacity_reason: DeepReviewCapacityQueueReason::LaunchBatchBlocked
+        }
+    );
 
     let (payload, message) = capacity_skip_result_for_local_queue_outcome(
         "ReviewSecurity",

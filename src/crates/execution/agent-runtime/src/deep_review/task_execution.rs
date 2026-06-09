@@ -1,13 +1,14 @@
 //! Provider-neutral Deep Review task execution decisions.
 //!
 //! This module owns manifest packet matching, bounded retry validation,
-//! provider-capacity retry timing, and capacity-skipped presentation facts.
-//! Product assembly/core keeps concrete task launch, event emission, queue
-//! sleeping, and runtime state mutation.
+//! provider-capacity retry timing, provider queue step decisions, and
+//! capacity-skipped presentation facts. Product assembly/core keeps concrete
+//! task launch, event emission, queue sleeping, and runtime state mutation.
 
 use super::{
+    classify_deep_review_capacity_error, DeepReviewCapacityFailFastReason,
     DeepReviewCapacityQueueDecision, DeepReviewCapacityQueueReason, DeepReviewConcurrencyPolicy,
-    DeepReviewPolicyViolation,
+    DeepReviewPolicyViolation, DeepReviewQueueControlSnapshot,
 };
 use serde_json::{json, Value};
 use std::collections::HashSet;
@@ -27,6 +28,69 @@ pub enum DeepReviewQueueWaitSkipReason {
 pub struct DeepReviewLaunchBatchInfo {
     pub packet_id: Option<String>,
     pub launch_batch: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeepReviewProviderCapacityErrorCategory {
+    RateLimit,
+    ProviderUnavailable,
+    Other,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DeepReviewProviderCapacityErrorFacts<'a> {
+    pub provider_code: &'a str,
+    pub provider_message: &'a str,
+    pub retry_after_seconds: Option<u64>,
+    pub category: DeepReviewProviderCapacityErrorCategory,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeepReviewProviderCapacityQueueStepFacts {
+    pub reason: DeepReviewCapacityQueueReason,
+    pub queue_expired: bool,
+    pub initial_active_reviewer_count: usize,
+    pub active_reviewer_count: usize,
+    pub control_snapshot: DeepReviewQueueControlSnapshot,
+    pub is_optional_reviewer: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeepReviewQueueControlStepDecision {
+    Skipped {
+        skip_reason: DeepReviewQueueWaitSkipReason,
+    },
+    Paused,
+    Continue,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeepReviewProviderCapacityQueueStepDecision {
+    Skipped {
+        skip_reason: DeepReviewQueueWaitSkipReason,
+    },
+    Paused,
+    ReadyToRetry {
+        early_capacity_probe: bool,
+    },
+    Queued,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DeepReviewBlockedReviewerAdmissionQueueStepFacts {
+    pub capacity_reason: DeepReviewCapacityQueueReason,
+    pub queue_expired: bool,
+    pub active_reviewer_count: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeepReviewBlockedReviewerAdmissionQueueStepDecision {
+    CapacityExpired {
+        capacity_reason: DeepReviewCapacityQueueReason,
+    },
+    Queued {
+        capacity_reason: DeepReviewCapacityQueueReason,
+    },
 }
 
 fn string_for_any_key<'a>(value: &'a Value, keys: &[&str]) -> Option<&'a str> {
@@ -430,6 +494,112 @@ pub fn provider_capacity_wait_can_wake_on_active_reviewer_release(
     )
 }
 
+pub fn local_reviewer_capacity_queue_decision() -> DeepReviewCapacityQueueDecision {
+    classify_deep_review_capacity_error(
+        "deep_review_concurrency_cap_reached",
+        "Maximum parallel reviewer instances reached",
+        None,
+    )
+}
+
+pub fn capacity_decision_for_provider_error_facts(
+    facts: DeepReviewProviderCapacityErrorFacts<'_>,
+) -> DeepReviewCapacityQueueDecision {
+    let decision = classify_deep_review_capacity_error(
+        facts.provider_code,
+        facts.provider_message,
+        facts.retry_after_seconds,
+    );
+    if decision.queueable
+        || decision.fail_fast_reason
+            != Some(DeepReviewCapacityFailFastReason::DeterministicProviderError)
+    {
+        return decision;
+    }
+
+    match facts.category {
+        DeepReviewProviderCapacityErrorCategory::RateLimit => {
+            DeepReviewCapacityQueueDecision::queueable(
+                DeepReviewCapacityQueueReason::ProviderRateLimit,
+                decision.retry_after_seconds,
+            )
+        }
+        DeepReviewProviderCapacityErrorCategory::ProviderUnavailable => {
+            DeepReviewCapacityQueueDecision::queueable(
+                DeepReviewCapacityQueueReason::TemporaryOverload,
+                decision.retry_after_seconds,
+            )
+        }
+        DeepReviewProviderCapacityErrorCategory::Other => decision,
+    }
+}
+
+pub fn decide_queue_control_step(
+    control_snapshot: &DeepReviewQueueControlSnapshot,
+    is_optional_reviewer: bool,
+) -> DeepReviewQueueControlStepDecision {
+    if control_snapshot.cancelled || (is_optional_reviewer && control_snapshot.skip_optional) {
+        return DeepReviewQueueControlStepDecision::Skipped {
+            skip_reason: if control_snapshot.cancelled {
+                DeepReviewQueueWaitSkipReason::UserCancelled
+            } else {
+                DeepReviewQueueWaitSkipReason::OptionalSkipped
+            },
+        };
+    }
+
+    if control_snapshot.paused {
+        return DeepReviewQueueControlStepDecision::Paused;
+    }
+
+    DeepReviewQueueControlStepDecision::Continue
+}
+
+pub fn decide_provider_capacity_queue_step(
+    facts: DeepReviewProviderCapacityQueueStepFacts,
+) -> DeepReviewProviderCapacityQueueStepDecision {
+    match decide_queue_control_step(&facts.control_snapshot, facts.is_optional_reviewer) {
+        DeepReviewQueueControlStepDecision::Skipped { skip_reason } => {
+            return DeepReviewProviderCapacityQueueStepDecision::Skipped { skip_reason };
+        }
+        DeepReviewQueueControlStepDecision::Paused => {
+            return DeepReviewProviderCapacityQueueStepDecision::Paused;
+        }
+        DeepReviewQueueControlStepDecision::Continue => {}
+    }
+
+    if facts.queue_expired {
+        return DeepReviewProviderCapacityQueueStepDecision::ReadyToRetry {
+            early_capacity_probe: false,
+        };
+    }
+
+    if provider_capacity_wait_can_wake_on_active_reviewer_release(facts.reason)
+        && facts.initial_active_reviewer_count > 0
+        && facts.active_reviewer_count < facts.initial_active_reviewer_count
+    {
+        return DeepReviewProviderCapacityQueueStepDecision::ReadyToRetry {
+            early_capacity_probe: true,
+        };
+    }
+
+    DeepReviewProviderCapacityQueueStepDecision::Queued
+}
+
+pub fn decide_blocked_reviewer_admission_queue_step(
+    facts: DeepReviewBlockedReviewerAdmissionQueueStepFacts,
+) -> DeepReviewBlockedReviewerAdmissionQueueStepDecision {
+    if facts.queue_expired && facts.active_reviewer_count == 0 {
+        return DeepReviewBlockedReviewerAdmissionQueueStepDecision::CapacityExpired {
+            capacity_reason: facts.capacity_reason,
+        };
+    }
+
+    DeepReviewBlockedReviewerAdmissionQueueStepDecision::Queued {
+        capacity_reason: facts.capacity_reason,
+    }
+}
+
 pub fn capacity_skip_result_for_local_queue_outcome(
     subagent_type: &str,
     conc_policy: &DeepReviewConcurrencyPolicy,
@@ -538,4 +708,239 @@ pub fn capacity_skip_result_for_provider_queue_outcome(
     });
 
     (data, assistant_message)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn control_snapshot(
+        paused: bool,
+        cancelled: bool,
+        skip_optional: bool,
+    ) -> DeepReviewQueueControlSnapshot {
+        DeepReviewQueueControlSnapshot {
+            paused,
+            cancelled,
+            skip_optional,
+        }
+    }
+
+    fn provider_queue_facts(
+        reason: DeepReviewCapacityQueueReason,
+    ) -> DeepReviewProviderCapacityQueueStepFacts {
+        DeepReviewProviderCapacityQueueStepFacts {
+            reason,
+            queue_expired: false,
+            initial_active_reviewer_count: 2,
+            active_reviewer_count: 2,
+            control_snapshot: control_snapshot(false, false, false),
+            is_optional_reviewer: false,
+        }
+    }
+
+    #[test]
+    fn provider_error_decision_uses_structured_category_fallback() {
+        let rate_limited =
+            capacity_decision_for_provider_error_facts(DeepReviewProviderCapacityErrorFacts {
+                provider_code: "provider_specific_code",
+                provider_message: "provider returned an unmapped error",
+                retry_after_seconds: None,
+                category: DeepReviewProviderCapacityErrorCategory::RateLimit,
+            });
+        assert_eq!(
+            rate_limited.reason,
+            Some(DeepReviewCapacityQueueReason::ProviderRateLimit)
+        );
+
+        let unavailable =
+            capacity_decision_for_provider_error_facts(DeepReviewProviderCapacityErrorFacts {
+                provider_code: "unknown",
+                provider_message: "upstream failed",
+                retry_after_seconds: None,
+                category: DeepReviewProviderCapacityErrorCategory::ProviderUnavailable,
+            });
+        assert_eq!(
+            unavailable.reason,
+            Some(DeepReviewCapacityQueueReason::TemporaryOverload)
+        );
+    }
+
+    #[test]
+    fn provider_error_decision_keeps_quota_fail_fast() {
+        let decision =
+            capacity_decision_for_provider_error_facts(DeepReviewProviderCapacityErrorFacts {
+                provider_code: "1113",
+                provider_message: "insufficient quota",
+                retry_after_seconds: None,
+                category: DeepReviewProviderCapacityErrorCategory::RateLimit,
+            });
+
+        assert!(!decision.queueable);
+        assert_eq!(
+            decision.fail_fast_reason,
+            Some(DeepReviewCapacityFailFastReason::BillingOrQuota)
+        );
+    }
+
+    #[test]
+    fn local_reviewer_capacity_decision_stays_queueable() {
+        let decision = local_reviewer_capacity_queue_decision();
+        assert_eq!(
+            decision.reason,
+            Some(DeepReviewCapacityQueueReason::LocalConcurrencyCap)
+        );
+        assert!(decision.queueable);
+    }
+
+    #[test]
+    fn provider_queue_decision_cancel_skips_before_other_states() {
+        let mut facts =
+            provider_queue_facts(DeepReviewCapacityQueueReason::ProviderConcurrencyLimit);
+        facts.queue_expired = true;
+        facts.active_reviewer_count = 1;
+        facts.control_snapshot = control_snapshot(true, true, false);
+
+        assert_eq!(
+            decide_provider_capacity_queue_step(facts),
+            DeepReviewProviderCapacityQueueStepDecision::Skipped {
+                skip_reason: DeepReviewQueueWaitSkipReason::UserCancelled
+            }
+        );
+    }
+
+    #[test]
+    fn queue_control_decision_prefers_cancel_before_pause() {
+        assert_eq!(
+            decide_queue_control_step(&control_snapshot(true, true, true), true),
+            DeepReviewQueueControlStepDecision::Skipped {
+                skip_reason: DeepReviewQueueWaitSkipReason::UserCancelled
+            }
+        );
+    }
+
+    #[test]
+    fn provider_queue_decision_optional_skip_only_applies_to_optional_reviewers() {
+        let mut mandatory =
+            provider_queue_facts(DeepReviewCapacityQueueReason::ProviderConcurrencyLimit);
+        mandatory.control_snapshot = control_snapshot(false, false, true);
+        assert_eq!(
+            decide_provider_capacity_queue_step(mandatory),
+            DeepReviewProviderCapacityQueueStepDecision::Queued
+        );
+
+        let mut optional =
+            provider_queue_facts(DeepReviewCapacityQueueReason::ProviderConcurrencyLimit);
+        optional.control_snapshot = control_snapshot(false, false, true);
+        optional.is_optional_reviewer = true;
+        assert_eq!(
+            decide_provider_capacity_queue_step(optional),
+            DeepReviewProviderCapacityQueueStepDecision::Skipped {
+                skip_reason: DeepReviewQueueWaitSkipReason::OptionalSkipped
+            }
+        );
+    }
+
+    #[test]
+    fn queue_control_decision_pause_applies_after_skip_checks() {
+        assert_eq!(
+            decide_queue_control_step(&control_snapshot(true, false, true), false),
+            DeepReviewQueueControlStepDecision::Paused
+        );
+    }
+
+    #[test]
+    fn provider_queue_decision_pause_wins_over_expiry_and_active_release() {
+        let mut facts =
+            provider_queue_facts(DeepReviewCapacityQueueReason::ProviderConcurrencyLimit);
+        facts.queue_expired = true;
+        facts.active_reviewer_count = 1;
+        facts.control_snapshot = control_snapshot(true, false, false);
+
+        assert_eq!(
+            decide_provider_capacity_queue_step(facts),
+            DeepReviewProviderCapacityQueueStepDecision::Paused
+        );
+    }
+
+    #[test]
+    fn provider_queue_decision_expiry_retries_without_early_probe() {
+        let mut facts =
+            provider_queue_facts(DeepReviewCapacityQueueReason::ProviderConcurrencyLimit);
+        facts.queue_expired = true;
+        facts.active_reviewer_count = 2;
+
+        assert_eq!(
+            decide_provider_capacity_queue_step(facts),
+            DeepReviewProviderCapacityQueueStepDecision::ReadyToRetry {
+                early_capacity_probe: false
+            }
+        );
+    }
+
+    #[test]
+    fn provider_queue_decision_wakes_when_provider_capacity_can_free() {
+        let mut facts =
+            provider_queue_facts(DeepReviewCapacityQueueReason::ProviderConcurrencyLimit);
+        facts.active_reviewer_count = 1;
+
+        assert_eq!(
+            decide_provider_capacity_queue_step(facts),
+            DeepReviewProviderCapacityQueueStepDecision::ReadyToRetry {
+                early_capacity_probe: true
+            }
+        );
+    }
+
+    #[test]
+    fn reviewer_admission_queue_expires_only_without_active_reviewers() {
+        assert_eq!(
+            decide_blocked_reviewer_admission_queue_step(
+                DeepReviewBlockedReviewerAdmissionQueueStepFacts {
+                    capacity_reason: DeepReviewCapacityQueueReason::LocalConcurrencyCap,
+                    queue_expired: true,
+                    active_reviewer_count: 0,
+                },
+            ),
+            DeepReviewBlockedReviewerAdmissionQueueStepDecision::CapacityExpired {
+                capacity_reason: DeepReviewCapacityQueueReason::LocalConcurrencyCap
+            }
+        );
+
+        assert_eq!(
+            decide_blocked_reviewer_admission_queue_step(
+                DeepReviewBlockedReviewerAdmissionQueueStepFacts {
+                    capacity_reason: DeepReviewCapacityQueueReason::LaunchBatchBlocked,
+                    queue_expired: true,
+                    active_reviewer_count: 1,
+                },
+            ),
+            DeepReviewBlockedReviewerAdmissionQueueStepDecision::Queued {
+                capacity_reason: DeepReviewCapacityQueueReason::LaunchBatchBlocked
+            }
+        );
+    }
+
+    #[test]
+    fn provider_queue_decision_does_not_wake_retry_after_on_reviewer_release() {
+        let mut facts = provider_queue_facts(DeepReviewCapacityQueueReason::RetryAfter);
+        facts.active_reviewer_count = 1;
+
+        assert_eq!(
+            decide_provider_capacity_queue_step(facts),
+            DeepReviewProviderCapacityQueueStepDecision::Queued
+        );
+    }
+
+    #[test]
+    fn provider_queue_decision_requires_existing_active_reviewer_before_wake() {
+        let mut facts = provider_queue_facts(DeepReviewCapacityQueueReason::TemporaryOverload);
+        facts.initial_active_reviewer_count = 0;
+        facts.active_reviewer_count = 0;
+
+        assert_eq!(
+            decide_provider_capacity_queue_step(facts),
+            DeepReviewProviderCapacityQueueStepDecision::Queued
+        );
+    }
 }

@@ -120,6 +120,31 @@ export const forbiddenContentRules = [
           'core DeepReview task adapter must not re-own provider capacity backoff; use bitfun-agent-runtime::deep_review::task_execution',
       },
       {
+        regex: /\bclassify_deep_review_capacity_error\b/,
+        message:
+          'core DeepReview task adapter must not directly classify provider or local capacity errors; use bitfun-agent-runtime::deep_review::task_execution',
+      },
+      {
+        regex: /\bDeepReviewCapacityFailFastReason::DeterministicProviderError\b/,
+        message:
+          'core DeepReview task adapter must not re-own provider capacity category fallback; use bitfun-agent-runtime::deep_review::task_execution',
+      },
+      {
+        regex: /\bfn provider_capacity_wait_can_wake_on_active_reviewer_release\b/,
+        message:
+          'core DeepReview task adapter must not re-own provider capacity queue wake policy; use bitfun-agent-runtime::deep_review::task_execution',
+      },
+      {
+        regex: /\bqueue_expired_without_active_reviewer\b/,
+        message:
+          'core DeepReview task adapter must not re-own reviewer admission queue expiry policy; use bitfun-agent-runtime::deep_review::task_execution',
+      },
+      {
+        regex: /\bcontrol_snapshot\.(?:cancelled|paused|skip_optional)\b/,
+        message:
+          'core DeepReview task adapter must not re-own queue control decision priority; use bitfun-agent-runtime::deep_review::task_execution',
+      },
+      {
         regex: /\bfn prompt_with_deep_review_retry_scope\b/,
         message:
           'core DeepReview task adapter must not re-own retry prompt shaping; use bitfun-agent-runtime::deep_review::task_execution',
