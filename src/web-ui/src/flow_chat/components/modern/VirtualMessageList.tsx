@@ -1763,15 +1763,26 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
     previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scrollerElement);
     previousScrollTopRef.current = scrollerElement.scrollTop;
 
+    // Batch observer-triggered work into a single rAF per frame
+    let observerBatchPending = false;
+    const scheduleObserverBatch = () => {
+      if (observerBatchPending) return;
+      observerBatchPending = true;
+      requestAnimationFrame(() => {
+        observerBatchPending = false;
+        scheduleHeightMeasure(2);
+        scheduleVisibleTurnMeasure(2);
+        schedulePinReservationReconcile(2);
+        scheduleTransientTurnPinStabilization(2);
+        scheduleFollowToLatestWithViewportState('observer');
+        scheduleHistoryProjectionHandoffRelease(1);
+      });
+    };
+
     resizeObserverRef.current?.disconnect();
     resizeObserverRef.current = new ResizeObserver(() => {
       resolveLatestEndAnchorStabilizationRef.current?.('resize-observer');
-      scheduleHeightMeasure();
-      scheduleVisibleTurnMeasure(2);
-      schedulePinReservationReconcile(2);
-      scheduleTransientTurnPinStabilization(2);
-      scheduleFollowToLatestWithViewportState('resize-observer');
-      scheduleHistoryProjectionHandoffRelease(1);
+      scheduleObserverBatch();
     });
     resizeObserverRef.current.observe(resizeTarget);
 
@@ -1794,12 +1805,7 @@ export const VirtualMessageList = forwardRef<VirtualMessageListRef>((_, ref) => 
       mutationPending = true;
       requestAnimationFrame(() => {
         mutationPending = false;
-        scheduleHeightMeasure(2);
-        scheduleVisibleTurnMeasure(2);
-        schedulePinReservationReconcile(2);
-        scheduleTransientTurnPinStabilization(2);
-        scheduleFollowToLatestWithViewportState('mutation-observer');
-        scheduleHistoryProjectionHandoffRelease(1);
+        scheduleObserverBatch();
       });
     });
     mutationObserverRef.current.observe(scrollerElement, {

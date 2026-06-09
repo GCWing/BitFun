@@ -89,7 +89,7 @@ type BackgroundCommandSummary = {
 };
 
 const LATEST_TURN_AUTO_PIN_MAX_ATTEMPTS = 8;
-const HISTORY_INITIAL_CONTENT_PAINT_MAX_ATTEMPTS = 120;
+const HISTORY_INITIAL_CONTENT_PAINT_MAX_ATTEMPTS = 30;
 const MOCK_BACKGROUND_ACTIVITIES_STORAGE_KEY = 'bitfun.flowChat.mockBackgroundActivities';
 
 const MOCK_BACKGROUND_SUBAGENTS: BackgroundSubagentSummary[] = [
