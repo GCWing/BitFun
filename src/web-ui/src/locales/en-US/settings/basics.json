@@ -167,7 +167,8 @@
     "controls": {
       "refreshTooltip": "Refresh available terminals",
       "autoDetect": "Auto Detect (Recommended)",
-      "description": "Default shell type for new terminals",
+      "description": "Default shell type for new terminals and for agent command execution in local workspaces.",
+      "cmdFallbackMessage": "Agent commands actually use PowerShell.",
       "placeholder": "Select default terminal",
       "noShells": "No available terminals detected"
     },

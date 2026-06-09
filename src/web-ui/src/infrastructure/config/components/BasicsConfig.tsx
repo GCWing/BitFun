@@ -558,6 +558,7 @@ function BasicsTerminalSection() {
     ],
     [t],
   );
+  const shouldShowCmdFallbackNotice = defaultShell === 'Cmd';
 
   if (loading) {
     return <ConfigPageLoading text={t('terminal.messages.loading')} />;
@@ -572,6 +573,12 @@ function BasicsTerminalSection() {
           title={t('terminal.sections.terminal')}
           description={t('terminal.sections.terminalHint')}
         >
+          {shouldShowCmdFallbackNotice && (
+            <Alert
+              type="info"
+              message={t('terminal.controls.cmdFallbackMessage')}
+            />
+          )}
           <ConfigPageRow
             label={t('terminal.sections.defaultTerminal')}
             description={t('terminal.controls.description')}

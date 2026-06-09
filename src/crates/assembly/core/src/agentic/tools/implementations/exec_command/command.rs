@@ -3,6 +3,7 @@ use super::background_command_output::{
     StartBackgroundCommandOutputCapture,
 };
 use super::env_snapshot::{remote_env_snapshot_for, RemoteEnvSnapshot};
+use super::local_shell::{resolve_local_exec_shell, ResolvedLocalExecShell};
 use super::progress::ExecOutputProgressBridge;
 use super::rendering::render_exec_response_for_assistant;
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
@@ -24,7 +25,7 @@ use std::path::{Path, PathBuf};
 use terminal_core::{
     get_global_exec_process_manager, ExecProcessLifecycleEvent, ExecProcessLifecycleStatus,
     LocalExecCommandRequest, LocalExecSessionCompletion, LocalExecSessionCompletionSource,
-    LocalExecSessionCompletionStatus, ShellDetector, ShellType,
+    LocalExecSessionCompletionStatus, ShellType,
 };
 use tokio::sync::mpsc;
 
@@ -312,10 +313,13 @@ exit "$__bitfun_status""#
         }
     }
 
-    fn detected_shell_for_model() -> (String, PathBuf, ShellType, String) {
-        let shell = ShellDetector::get_default_shell();
-        let invocation = Self::shell_invocation_for_model(&shell.path, &shell.shell_type);
-        (shell.display_name, shell.path, shell.shell_type, invocation)
+    fn shell_metadata_value(shell: &ResolvedLocalExecShell) -> Value {
+        json!({
+            "name": shell.display_name,
+            "type": shell.shell_type.to_string(),
+            "path": shell.path.to_string_lossy(),
+            "invocation": Self::shell_invocation_for_model(&shell.path, &shell.shell_type),
+        })
     }
 
     fn response_for_assistant(data: &Value) -> String {
@@ -874,8 +878,8 @@ impl Tool for ExecCommandTool {
     }
 
     async fn description(&self) -> BitFunResult<String> {
-        let (shell_name, shell_path, _shell_type, shell_invocation) =
-            Self::detected_shell_for_model();
+        let shell = resolve_local_exec_shell().await;
+        let shell_invocation = Self::shell_invocation_for_model(&shell.path, &shell.shell_type);
         Ok(format!(
             r#"Runs a shell command.
 
@@ -885,7 +889,8 @@ yield_time_ms waits for output until the process exits or the deadline is reache
 If the process is still running, the result includes a numeric session_id. Use WriteStdin to poll or send input, and ExecControl to interrupt or kill it.
 Output is only what was produced during this tool call's wait window. 
 With tty=false, stdout and stderr ordering is not guaranteed; use tty=true or redirect stderr with 2>&1 when terminal ordering matters."#,
-            shell_path = shell_path.display(),
+            shell_name = shell.display_name,
+            shell_path = shell.path.display(),
         ))
     }
 
@@ -994,7 +999,7 @@ With tty=false, stdout and stderr ordering is not guaranteed; use tty=true or re
             .ok_or_else(|| BitFunError::tool("cmd is required for ExecCommand".to_string()))?;
         let workdir = Self::resolve_workdir(input, context)?;
         let tty = input.get("tty").and_then(Value::as_bool).unwrap_or(false);
-        let shell = ShellDetector::get_default_shell();
+        let shell = resolve_local_exec_shell().await;
         let yield_time_ms = input.get("yield_time_ms").and_then(Value::as_u64);
         let max_output_chars = input
             .get("max_output_chars")
@@ -1080,12 +1085,7 @@ With tty=false, stdout and stderr ordering is not guaranteed; use tty=true or re
             "completion": response.completion.map(Self::local_completion_value),
             "workdir": workdir.to_string_lossy(),
             "tty": tty,
-            "shell": {
-                "name": shell.display_name,
-                "type": shell.shell_type.to_string(),
-                "path": shell.path.to_string_lossy(),
-                "invocation": Self::shell_invocation_for_model(&shell.path, &shell.shell_type),
-            },
+            "shell": Self::shell_metadata_value(&shell),
         });
         let result_for_assistant = Self::response_for_assistant(&data);
 

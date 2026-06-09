@@ -153,7 +153,8 @@
     "controls": {
       "refreshTooltip": "重新整理可用終端列表",
       "autoDetect": "自動檢測 (推薦)",
-      "description": "新增終端時使用的默認 Shell 類型",
+      "description": "新增終端以及本地工作區中 agent 執行命令時使用的默認 Shell 類型。",
+      "cmdFallbackMessage": "Agent 執行命令時實際使用 PowerShell。",
       "placeholder": "選擇默認終端",
       "noShells": "未檢測到可用的終端"
     },

@@ -167,7 +167,8 @@
     "controls": {
       "refreshTooltip": "刷新可用终端列表",
       "autoDetect": "自动检测 (推荐)",
-      "description": "新建终端时使用的默认 Shell 类型",
+      "description": "新建终端以及本地工作区中 agent 执行命令时使用的默认 Shell 类型。",
+      "cmdFallbackMessage": "Agent 执行命令时实际使用 PowerShell。",
       "placeholder": "选择默认终端",
       "noShells": "未检测到可用的终端"
     },

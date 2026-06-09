@@ -3,6 +3,7 @@ mod command;
 mod control;
 mod env_snapshot;
 mod input;
+mod local_shell;
 mod progress;
 mod rendering;
 mod stdin;
