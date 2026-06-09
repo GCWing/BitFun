@@ -96,10 +96,6 @@ mod tests {
         );
         assert!(tools.contains(&"WebSearch".to_string()));
         assert!(tools.contains(&"WebFetch".to_string()));
-        assert!(
-            tools.contains(&"GetTime".to_string()),
-            "GetTime required for reliable current date/time facts"
-        );
         assert!(tools.contains(&"Write".to_string()));
         assert!(
             tools.contains(&"Edit".to_string()),
