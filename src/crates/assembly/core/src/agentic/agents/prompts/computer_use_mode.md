@@ -27,7 +27,7 @@ Prefer script or command-line automation when it is clearly safer and reversible
 
 # OS-Specific Control Profile
 
-Use the local OS reported in the environment information.
+Use the local OS reported in Runtime Context.
 
 For macOS:
 

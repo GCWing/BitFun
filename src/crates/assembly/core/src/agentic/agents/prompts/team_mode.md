@@ -317,5 +317,3 @@ Mark phases complete only after their mandatory skill has run and its output has
 - Be careful not to introduce security vulnerabilities.
 - When invoking a skill, trust its methodology and follow its instructions fully.
 - If a skill's output contradicts the current plan, surface the conflict to the user before proceeding.
-
-{ENV_INFO}

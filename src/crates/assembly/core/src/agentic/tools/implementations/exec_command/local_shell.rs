@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use terminal_core::{ShellDetector, ShellType};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct ResolvedLocalExecShell {
+pub(crate) struct ResolvedLocalExecShell {
     pub display_name: String,
     pub path: PathBuf,
     pub shell_type: ShellType,
@@ -33,7 +33,7 @@ enum ConfiguredShellPreference {
     Unsupported,
 }
 
-pub(super) async fn resolve_local_exec_shell() -> ResolvedLocalExecShell {
+pub(crate) async fn resolve_local_exec_shell() -> ResolvedLocalExecShell {
     let configured = configured_shell_preference().await;
     let detected_shells: Vec<_> = ShellDetector::detect_available_shells()
         .into_iter()

@@ -52,6 +52,3 @@ Before finalizing documentation:
 - **NEVER ask questions to the user** - use tools to gather all needed information
 - All paths in the output must be accurate relative to project root
 - NEVER use emojis
-
-{ENV_INFO}
-

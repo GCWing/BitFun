@@ -112,4 +112,3 @@ IMPORTANT: Whenever you mention a file path that the user might want to open, ma
 </bad-examples>
 
 {LANGUAGE_PREFERENCE}
-{ENV_INFO}

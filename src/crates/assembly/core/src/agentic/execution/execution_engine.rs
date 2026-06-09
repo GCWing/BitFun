@@ -6,7 +6,7 @@ use super::round_executor::RoundExecutor;
 use super::types::{ExecutionContext, ExecutionResult, RoundContext, RoundResult};
 use crate::agentic::agents::{
     build_prompt_context_for_workspace, get_agent_registry, PrependedPromptReminders,
-    PromptBuilder, PromptBuilderContext, ToolListingSections,
+    PromptBuilder, PromptBuilderContext, RuntimeContextNeeds, ToolListingSections,
 };
 use crate::agentic::context_profile::{ContextProfilePolicy, ModelCapabilityProfile};
 use crate::agentic::core::{
@@ -577,6 +577,7 @@ impl ExecutionEngine {
         model_name: &str,
         supports_image_understanding: bool,
         tool_listing_sections: ToolListingSections,
+        runtime_context_needs: RuntimeContextNeeds,
     ) -> Option<PromptBuilderContext> {
         let workspace = context.workspace.as_ref()?;
         let remote_file_delivery_channel = context
@@ -592,6 +593,7 @@ impl ExecutionEngine {
             Some(model_name.to_string()),
             Some(supports_image_understanding),
             tool_listing_sections,
+            runtime_context_needs,
         )
         .await
         .map(|prompt_context| {
@@ -660,15 +662,17 @@ impl ExecutionEngine {
             }
             built_user_context
         };
+        let runtime_context = prompt_builder.build_runtime_context_reminder().await;
 
         PrependedPromptReminders {
+            collapsed_tool_listing: prompt_builder.build_collapsed_tool_listing_reminder(),
             skill_listing: baseline_tool_sections
                 .as_ref()
                 .and_then(|sections| sections.render_skill_listing_reminder()),
             agent_listing: baseline_tool_sections
                 .as_ref()
                 .and_then(|sections| sections.render_agent_listing_reminder()),
-            collapsed_tool_listing: prompt_builder.build_collapsed_tool_listing_reminder(),
+            runtime_context,
             user_context,
         }
     }
@@ -907,7 +911,7 @@ impl ExecutionEngine {
             .iter()
             .position(|msg| msg.role != crate::agentic::core::MessageRole::System)
             .unwrap_or(messages.len());
-        let mut user_context_injected = false;
+        let mut prepended_reminders_injected = false;
 
         let keep_image_messages = if attach_images {
             Self::image_bearing_indices_to_keep(messages, MAX_IMAGE_BEARING_MESSAGE_ROUNDS)
@@ -916,11 +920,11 @@ impl ExecutionEngine {
         };
 
         for (msg_idx, msg) in messages.iter().enumerate() {
-            if !user_context_injected && msg_idx == first_non_system_index {
+            if !prepended_reminders_injected && msg_idx == first_non_system_index {
                 for reminder in &trimmed_reminders {
                     result.push(AIMessage::user(render_system_reminder(reminder)));
                 }
-                user_context_injected = true;
+                prepended_reminders_injected = true;
             }
 
             if Self::skip_message_for_model_send(msg) {
@@ -1043,7 +1047,7 @@ impl ExecutionEngine {
             }
         }
 
-        if !user_context_injected {
+        if !prepended_reminders_injected {
             for reminder in trimmed_reminders {
                 result.push(AIMessage::user(render_system_reminder(reminder)));
             }
@@ -1360,6 +1364,12 @@ impl ExecutionEngine {
         } else {
             ToolListingSections::default()
         };
+        let runtime_context_needs = tool_manifest
+            .as_ref()
+            .map(|manifest| {
+                RuntimeContextNeeds::from_tool_names(manifest.allowed_tool_names.iter())
+            })
+            .unwrap_or_default();
         let tool_definitions = tool_manifest.map(|manifest| manifest.tool_definitions);
 
         let prompt_context = Self::build_prompt_context(
@@ -1367,6 +1377,7 @@ impl ExecutionEngine {
             &ai_client.config.model,
             primary_supports_image_understanding,
             tool_listing_sections,
+            runtime_context_needs,
         )
         .await;
         let prepended_prompt_reminders = self
@@ -2040,6 +2051,12 @@ impl ExecutionEngine {
         } else {
             ToolListingSections::default()
         };
+        let runtime_context_needs = tool_manifest
+            .as_ref()
+            .map(|manifest| {
+                RuntimeContextNeeds::from_tool_names(manifest.allowed_tool_names.iter())
+            })
+            .unwrap_or_default();
         let (available_tools, tool_definitions) = if let Some(manifest) = tool_manifest {
             (manifest.allowed_tool_names, Some(manifest.tool_definitions))
         } else {
@@ -2057,6 +2074,7 @@ impl ExecutionEngine {
             &ai_client.config.model,
             primary_supports_image_understanding,
             tool_listing_sections,
+            runtime_context_needs,
         )
         .await;
         let prepended_prompt_reminders = self
@@ -2077,7 +2095,7 @@ impl ExecutionEngine {
             .await?;
         debug!("System prompt built, length: {} bytes", system_prompt.len());
         debug!(
-            "Prepended reminders built: skill_listing_len={} agent_listing_len={} collapsed_tool_listing_len={} user_context_len={}",
+            "Prepended reminders built: skill_listing_len={} agent_listing_len={} collapsed_tool_listing_len={} user_context_len={} runtime_context_len={}",
             prepended_prompt_reminders
                 .skill_listing
                 .as_ref()
@@ -2095,6 +2113,11 @@ impl ExecutionEngine {
                 .unwrap_or(0),
             prepended_prompt_reminders
                 .user_context
+                .as_ref()
+                .map(|text| text.len())
+                .unwrap_or(0),
+            prepended_prompt_reminders
+                .runtime_context
                 .as_ref()
                 .map(|text| text.len())
                 .unwrap_or(0)

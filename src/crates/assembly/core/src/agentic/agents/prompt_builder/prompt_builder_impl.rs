@@ -1,5 +1,6 @@
 //! System prompts module providing main dialogue and agent dialogue prompts
 use crate::agentic::remote_file_delivery::user_workspace_relative_file_link;
+use crate::agentic::tools::implementations::ExecCommandTool;
 use crate::agentic::util::remote_workspace_layout::build_remote_workspace_layout_preview;
 use crate::agentic::workspace::WorkspaceBackend;
 use crate::agentic::WorkspaceBinding;
@@ -17,15 +18,13 @@ use crate::service::workspace::get_global_workspace_service;
 use crate::service::workspace::RelatedPath;
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_agent_runtime::prompt::{
-    render_prompt_environment_info, PrependedPromptReminders, PromptEnvironmentFacts,
-    ToolListingSections, UserContextPolicy, UserContextSection,
+    PrependedPromptReminders, ToolListingSections, UserContextPolicy, UserContextSection,
 };
 use log::{debug, warn};
 use std::path::Path;
 
 /// Placeholder constants
 const PLACEHOLDER_PERSONA: &str = "{PERSONA}";
-const PLACEHOLDER_ENV_INFO: &str = "{ENV_INFO}";
 const PLACEHOLDER_LANGUAGE_PREFERENCE: &str = "{LANGUAGE_PREFERENCE}";
 const PLACEHOLDER_AGENT_MEMORY: &str = "{AGENT_MEMORY}";
 const PLACEHOLDER_CLAW_WORKSPACE: &str = "{CLAW_WORKSPACE}";
@@ -42,6 +41,44 @@ pub struct RemoteExecutionHints {
     pub hostname: String,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RuntimeContextNeeds {
+    pub workspace_tools: bool,
+    pub exec_command: bool,
+    pub computer_use: bool,
+}
+
+impl RuntimeContextNeeds {
+    pub fn from_tool_names<T, I>(tool_names: I) -> Self
+    where
+        T: AsRef<str>,
+        I: IntoIterator<Item = T>,
+    {
+        let mut needs = Self::default();
+        for tool_name in tool_names {
+            let tool_name = tool_name.as_ref();
+            match tool_name {
+                "Read" | "Write" | "Edit" | "Delete" | "LS" | "Grep" | "Glob" | "ExecCommand"
+                | "WriteStdin" | "ExecControl" => {
+                    needs.workspace_tools = true;
+                    if tool_name == "ExecCommand" {
+                        needs.exec_command = true;
+                    }
+                }
+                "ComputerUse" | "ControlHub" => {
+                    needs.computer_use = true;
+                }
+                _ => {}
+            }
+        }
+        needs
+    }
+
+    fn is_empty(self) -> bool {
+        !self.workspace_tools && !self.exec_command && !self.computer_use
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct PromptBuilderContext {
     pub workspace_path: String,
@@ -56,6 +93,8 @@ pub struct PromptBuilderContext {
     pub supports_image_understanding: Option<bool>,
     /// Dynamic tool listings injected outside tool descriptions for cache stability.
     pub tool_listing_sections: ToolListingSections,
+    /// Runtime facts needed by the current model-visible tool set.
+    pub runtime_context_needs: RuntimeContextNeeds,
     /// Remote mobile/bot turns need `computer://` links for file delivery.
     pub remote_file_delivery_channel: bool,
 }
@@ -75,6 +114,7 @@ impl PromptBuilderContext {
             remote_project_layout: None,
             supports_image_understanding: None,
             tool_listing_sections: ToolListingSections::default(),
+            runtime_context_needs: RuntimeContextNeeds::default(),
             remote_file_delivery_channel: false,
         }
     }
@@ -86,6 +126,11 @@ impl PromptBuilderContext {
 
     pub fn with_tool_listing_sections(mut self, sections: ToolListingSections) -> Self {
         self.tool_listing_sections = sections;
+        self
+    }
+
+    pub fn with_runtime_context_needs(mut self, needs: RuntimeContextNeeds) -> Self {
+        self.runtime_context_needs = needs;
         self
     }
 
@@ -117,6 +162,7 @@ pub async fn build_prompt_context_for_workspace(
     model_name: Option<String>,
     supports_image_understanding: Option<bool>,
     tool_listing_sections: ToolListingSections,
+    runtime_context_needs: RuntimeContextNeeds,
 ) -> Option<PromptBuilderContext> {
     let workspace_path = workspace.root_path_string();
 
@@ -140,7 +186,8 @@ pub async fn build_prompt_context_for_workspace(
         model_name,
     )
     .with_related_paths(related_paths)
-    .with_tool_listing_sections(tool_listing_sections);
+    .with_tool_listing_sections(tool_listing_sections)
+    .with_runtime_context_needs(runtime_context_needs);
     if let Some(supports_image_understanding) = supports_image_understanding {
         base = base.with_supports_image_understanding(supports_image_understanding);
     }
@@ -211,14 +258,80 @@ impl PromptBuilder {
         }
     }
 
-    /// Provide complete environment information
-    pub fn get_env_info(&self) -> String {
-        render_prompt_environment_info(PromptEnvironmentFacts {
-            host_os: std::env::consts::OS,
-            host_family: std::env::consts::FAMILY,
-            host_arch: std::env::consts::ARCH,
-            remote_execution_active: self.context.remote_execution.is_some(),
-        })
+    /// Build runtime facts that may change independently from the agent's system prompt.
+    pub async fn build_runtime_context_reminder(&self) -> Option<String> {
+        let needs = self.context.runtime_context_needs;
+        if needs.is_empty() {
+            return None;
+        }
+
+        let host_os = std::env::consts::OS;
+        let host_family = std::env::consts::FAMILY;
+        let host_arch = std::env::consts::ARCH;
+
+        let computer_use_keys = match host_os {
+            "macos" => "- Computer use / `key_chord`: the local BitFun desktop is macOS. Use `command`, `option`, `control`, and `shift` modifier names.",
+            "windows" => "- Computer use / `key_chord`: the local BitFun desktop is Windows. Use `meta`/`super` for the Windows key, plus `alt`, `control`, and `shift`.",
+            "linux" => "- Computer use / `key_chord`: the local BitFun desktop is Linux. Use `control`, `alt`, `shift`, and `meta`/`super` as appropriate for the desktop environment.",
+            _ => "- Computer use / `key_chord`: match modifier names to the local BitFun desktop OS.",
+        };
+
+        let mut lines = vec![
+            "# Runtime Context".to_string(),
+            "<runtime_context>".to_string(),
+        ];
+
+        if needs.computer_use {
+            lines.push(format!(
+                "- Local BitFun client OS: {host_os} ({host_family})"
+            ));
+            lines.push(format!("- Local client architecture: {host_arch}"));
+            lines.push(computer_use_keys.to_string());
+        }
+
+        if needs.workspace_tools {
+            if let Some(remote) = &self.context.remote_execution {
+                lines.push(format!(
+                    "- Workspace file and shell tools operate on remote SSH connection \"{}\".",
+                    remote.connection_display_name.replace('"', "'")
+                ));
+                lines.push(format!(
+                    "- Remote host: {} (uname/kernel: {})",
+                    remote.hostname.replace('"', "'"),
+                    remote.kernel_name.replace('"', "'")
+                ));
+                if needs.computer_use {
+                    lines.push(
+                        "- Computer use and UI automation operate on the local BitFun desktop."
+                            .to_string(),
+                    );
+                }
+                lines.push("- Path conventions for workspace operations: POSIX paths with forward slashes and Unix shell syntax. Do not use PowerShell, `cmd.exe`, or Windows-style paths for remote workspace operations.".to_string());
+                if needs.exec_command {
+                    lines.push("- ExecCommand shell: the remote user's default POSIX shell, invoked as `<shell> -lc <cmd>`.".to_string());
+                }
+            } else {
+                lines.push(
+                    "- Workspace file and shell tools operate on the local filesystem.".to_string(),
+                );
+                if needs.exec_command {
+                    let shell = ExecCommandTool::local_shell_prompt_info().await;
+                    lines.push(format!(
+                        "- ExecCommand shell: {} ({}) at `{}` invoked as {}.",
+                        shell.display_name, shell.shell_type, shell.path, shell.invocation
+                    ));
+                }
+            }
+        } else if needs.exec_command {
+            let shell = ExecCommandTool::local_shell_prompt_info().await;
+            lines.push(format!(
+                "- ExecCommand shell: {} ({}) at `{}` invoked as {}.",
+                shell.display_name, shell.shell_type, shell.path, shell.invocation
+            ));
+        }
+
+        lines.push("</runtime_context>".to_string());
+        Some(lines.join("\n"))
     }
 
     /// Get workspace context that is intentionally injected outside the system prompt cache.
@@ -255,7 +368,6 @@ impl PromptBuilder {
 {}
 - Execution environment: **Remote SSH** — connection "{}".
 - Remote host: {} (uname/kernel: {})
-- **Paths and shell:** POSIX on the remote server — use forward slashes and Unix shell syntax (bash/sh). Do **not** use PowerShell, `cmd.exe`, or Windows-style paths for workspace operations.
 </workspace_context>
 "#,
                 self.context.workspace_path,
@@ -393,9 +505,10 @@ impl PromptBuilder {
         user_context_policy: &UserContextPolicy,
     ) -> PrependedPromptReminders {
         PrependedPromptReminders {
+            collapsed_tool_listing: self.build_collapsed_tool_listing_reminder(),
             skill_listing: self.build_skill_listing_reminder(),
             agent_listing: self.build_agent_listing_reminder(),
-            collapsed_tool_listing: self.build_collapsed_tool_listing_reminder(),
+            runtime_context: self.build_runtime_context_reminder().await,
             user_context: self.build_user_context_reminder(user_context_policy).await,
         }
     }
@@ -463,7 +576,6 @@ Do not read from, modify, create, move, or delete files outside this workspace u
     /// Supported placeholders:
     /// - `{PERSONA}` - Workspace persona files (BOOTSTRAP.md, SOUL.md, USER.md, IDENTITY.md)
     /// - `{LANGUAGE_PREFERENCE}` - User language preference (read from global config)
-    /// - `{ENV_INFO}` - Environment information
     /// - `{AGENT_MEMORY}` - Agent memory instructions + auto-loaded memory index
     /// - `{CLAW_WORKSPACE}` - Claw-specific workspace ownership and boundary rules
     /// - `{VISUAL_MODE}` - Visual mode instruction (Mermaid diagrams, read from global config)
@@ -504,12 +616,6 @@ Do not read from, modify, create, move, or delete files outside this workspace u
         if result.contains(PLACEHOLDER_CLAW_WORKSPACE) {
             let claw_workspace = self.get_claw_workspace_instruction();
             result = result.replace(PLACEHOLDER_CLAW_WORKSPACE, &claw_workspace);
-        }
-
-        // Replace {ENV_INFO}
-        if result.contains(PLACEHOLDER_ENV_INFO) {
-            let env_info = self.get_env_info();
-            result = result.replace(PLACEHOLDER_ENV_INFO, &env_info);
         }
 
         // Replace {AGENT_MEMORY}
@@ -583,9 +689,10 @@ The configured **primary model does not accept image inputs**. When using **`Com
 
 #[cfg(test)]
 mod tests {
-    use super::PrependedPromptReminders;
     use super::PromptBuilder;
     use super::PromptBuilderContext;
+    use super::RemoteExecutionHints;
+    use super::RuntimeContextNeeds;
     use super::ToolListingSections;
     use super::USER_CONTEXT_PROMPT;
     use crate::agentic::agents::UserContextPolicy;
@@ -602,7 +709,8 @@ mod tests {
             ),
         };
         let context = PromptBuilderContext::new(r"workspace\root", None, None)
-            .with_tool_listing_sections(tool_sections);
+            .with_tool_listing_sections(tool_sections)
+            .with_runtime_context_needs(RuntimeContextNeeds::from_tool_names(["Read"]));
         let reminders = PromptBuilder::new(context)
             .build_prepended_reminders(
                 &UserContextPolicy::empty()
@@ -623,6 +731,9 @@ mod tests {
             .collapsed_tool_listing
             .expect("collapsed tool listing reminder should build");
         let user_context = reminders.user_context.expect("user context should build");
+        let runtime_context = reminders
+            .runtime_context
+            .expect("runtime context should build");
 
         assert!(skill_listing.contains("# Skill Listing"));
         assert!(skill_listing.contains("<available_skills>"));
@@ -635,25 +746,110 @@ mod tests {
         assert!(user_context.contains("# User Context"));
         assert!(user_context.contains(USER_CONTEXT_PROMPT));
         assert!(user_context.contains("Current Working Directory: workspace/root"));
+        assert!(runtime_context.contains("# Runtime Context"));
+        assert!(runtime_context
+            .contains("Workspace file and shell tools operate on the local filesystem"));
+        assert!(!runtime_context.contains("Workspace execution target:"));
+        assert!(!runtime_context.contains("Workspace root:"));
+        assert!(!runtime_context.contains("ExecCommand shell:"));
         assert_eq!(
             ordered_reminders,
             vec![
                 collapsed_tool_listing.as_str(),
                 skill_listing.as_str(),
                 agent_listing.as_str(),
+                runtime_context.as_str(),
                 user_context.as_str(),
             ]
         );
     }
 
     #[tokio::test]
-    async fn omits_prepended_reminders_when_policy_and_sections_are_empty() {
+    async fn prepended_reminders_omit_runtime_context_without_runtime_tool_needs() {
         let context = PromptBuilderContext::new(r"workspace\root", None, None);
         let reminders = PromptBuilder::new(context)
             .build_prepended_reminders(&UserContextPolicy::empty())
             .await;
 
-        assert_eq!(reminders, PrependedPromptReminders::default());
+        assert_eq!(reminders.skill_listing, None);
+        assert_eq!(reminders.agent_listing, None);
+        assert_eq!(reminders.collapsed_tool_listing, None);
+        assert_eq!(reminders.user_context, None);
+        assert_eq!(reminders.runtime_context, None);
+    }
+
+    #[tokio::test]
+    async fn runtime_context_includes_workspace_info_for_workspace_tools() {
+        let context = PromptBuilderContext::new(r"workspace\root", None, None)
+            .with_runtime_context_needs(RuntimeContextNeeds::from_tool_names(["Read"]));
+        let runtime_context = PromptBuilder::new(context)
+            .build_runtime_context_reminder()
+            .await
+            .expect("runtime context should build");
+
+        assert!(runtime_context.contains("# Runtime Context"));
+        assert!(runtime_context
+            .contains("Workspace file and shell tools operate on the local filesystem"));
+        assert!(!runtime_context.contains("Workspace execution target:"));
+        assert!(!runtime_context.contains("Local BitFun client OS:"));
+        assert!(!runtime_context.contains("ExecCommand shell:"));
+    }
+
+    #[tokio::test]
+    async fn runtime_context_includes_shell_info_when_exec_command_is_available() {
+        let context = PromptBuilderContext::new(r"workspace\root", None, None)
+            .with_runtime_context_needs(RuntimeContextNeeds::from_tool_names(["ExecCommand"]));
+        let runtime_context = PromptBuilder::new(context)
+            .build_runtime_context_reminder()
+            .await
+            .expect("runtime context should build");
+
+        assert!(runtime_context.contains("# Runtime Context"));
+        assert!(runtime_context.contains("ExecCommand shell:"));
+        assert!(runtime_context.contains("invoked as `"));
+    }
+
+    #[tokio::test]
+    async fn runtime_context_includes_computer_use_info_only_when_needed() {
+        let context = PromptBuilderContext::new(r"workspace\root", None, None)
+            .with_runtime_context_needs(RuntimeContextNeeds::from_tool_names(["ComputerUse"]));
+        let runtime_context = PromptBuilder::new(context)
+            .build_runtime_context_reminder()
+            .await
+            .expect("runtime context should build");
+
+        assert!(runtime_context.contains("Local BitFun client OS:"));
+        assert!(runtime_context.contains("Computer use / `key_chord`"));
+        assert!(!runtime_context.contains("Workspace execution target:"));
+        assert!(!runtime_context.contains("ExecCommand shell:"));
+    }
+
+    #[tokio::test]
+    async fn runtime_context_omits_workspace_root_for_remote_execution() {
+        let context = PromptBuilderContext::new("/workspace/project", None, None)
+            .with_runtime_context_needs(RuntimeContextNeeds::from_tool_names([
+                "Read",
+                "ExecCommand",
+                "ComputerUse",
+            ]))
+            .with_remote_prompt_overlay(
+                RemoteExecutionHints {
+                    connection_display_name: "dev-server".to_string(),
+                    kernel_name: "Linux".to_string(),
+                    hostname: "devbox".to_string(),
+                },
+                None,
+            );
+        let runtime_context = PromptBuilder::new(context)
+            .build_runtime_context_reminder()
+            .await
+            .expect("runtime context should build");
+
+        assert!(runtime_context
+            .contains("Workspace file and shell tools operate on remote SSH connection"));
+        assert!(runtime_context.contains("Local BitFun client OS:"));
+        assert!(!runtime_context.contains("Workspace root:"));
+        assert!(runtime_context.contains("ExecCommand shell:"));
     }
 
     #[tokio::test]

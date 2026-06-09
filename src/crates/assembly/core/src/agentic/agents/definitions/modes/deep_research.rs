@@ -26,7 +26,6 @@ impl DeepResearchMode {
                 "Read".to_string(),
                 "Grep".to_string(),
                 "Glob".to_string(),
-                "LS".to_string(),
                 "Write".to_string(),
                 "Edit".to_string(),
                 "ExecCommand".to_string(),
@@ -97,6 +96,10 @@ mod tests {
         );
         assert!(tools.contains(&"WebSearch".to_string()));
         assert!(tools.contains(&"WebFetch".to_string()));
+        assert!(
+            tools.contains(&"GetTime".to_string()),
+            "GetTime required for reliable current date/time facts"
+        );
         assert!(tools.contains(&"Write".to_string()));
         assert!(
             tools.contains(&"Edit".to_string()),

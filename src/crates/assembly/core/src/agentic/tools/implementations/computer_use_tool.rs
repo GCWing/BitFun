@@ -451,7 +451,7 @@ The **primary model cannot consume images** in tool results — **do not** use *
             "macos" => "On this host use command/option/control/shift in key_chord (not Win/Linux names). **System clipboard (prefer over type_text when pasting):** command+a select all, command+c copy, command+x cut, command+v paste — combine with focus/selection shortcuts as needed.",
             "windows" => "On this host use meta (Windows key), alt, control, shift in key_chord. **System clipboard:** control+a/c/x/v for select all, copy, cut, paste.",
             "linux" => "On this host use control, alt, shift, and meta/super as appropriate for the desktop. **System clipboard:** typically control+a/c/x/v (match the app and DE).",
-            _ => "Match key_chord modifiers to the host OS in the system prompt Environment Information. Prefer standard clipboard chords (select all, copy, cut, paste) before long type_text.",
+            _ => "Match key_chord modifiers to the host OS in Runtime Context. Prefer standard clipboard chords (select all, copy, cut, paste) before long type_text.",
         }
     }
 

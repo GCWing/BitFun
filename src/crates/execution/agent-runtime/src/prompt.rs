@@ -196,9 +196,10 @@ impl ToolListingSections {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PrependedPromptReminders {
+    pub collapsed_tool_listing: Option<String>,
     pub skill_listing: Option<String>,
     pub agent_listing: Option<String>,
-    pub collapsed_tool_listing: Option<String>,
+    pub runtime_context: Option<String>,
     pub user_context: Option<String>,
 }
 
@@ -213,6 +214,9 @@ impl PrependedPromptReminders {
         }
         if let Some(agent_listing) = self.agent_listing.as_deref() {
             reminders.push(agent_listing);
+        }
+        if let Some(runtime_context) = self.runtime_context.as_deref() {
+            reminders.push(runtime_context);
         }
         if let Some(user_context) = self.user_context.as_deref() {
             reminders.push(user_context);

@@ -41,6 +41,14 @@ struct RemoteShell {
     shell_type: ShellType,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ExecCommandShellPromptInfo {
+    pub display_name: String,
+    pub shell_type: String,
+    pub path: String,
+    pub invocation: String,
+}
+
 pub struct ExecCommandTool;
 
 impl Default for ExecCommandTool {
@@ -52,6 +60,16 @@ impl Default for ExecCommandTool {
 impl ExecCommandTool {
     pub fn new() -> Self {
         Self
+    }
+
+    pub(crate) async fn local_shell_prompt_info() -> ExecCommandShellPromptInfo {
+        let shell = resolve_local_exec_shell().await;
+        ExecCommandShellPromptInfo {
+            display_name: shell.display_name,
+            shell_type: shell.shell_type.to_string(),
+            path: shell.path.to_string_lossy().to_string(),
+            invocation: Self::shell_invocation_for_model(&shell.path, &shell.shell_type),
+        }
     }
 
     fn command_env() -> HashMap<String, String> {
@@ -748,129 +766,6 @@ fn remote_shell_login_args() -> &'static [&'static str] {
     &["-lc"]
 }
 
-#[cfg(test)]
-mod tests {
-    use super::super::env_snapshot::RemoteEnvSnapshot;
-    use super::{parse_remote_shell_probe_output, RemoteShell};
-    use super::{ExecCommandTool, POWERSHELL_UTF8_OUTPUT_PREFIX};
-    use std::collections::HashMap;
-    use std::path::Path;
-    use terminal_core::ShellType;
-
-    #[test]
-    fn powershell_commands_force_utf8_output() {
-        let argv = ExecCommandTool::argv_for_shell(
-            Path::new("pwsh"),
-            &ShellType::PowerShellCore,
-            "Get-Content README.md",
-        );
-
-        assert_eq!(argv[1], "-Command");
-        assert!(argv[2].starts_with(POWERSHELL_UTF8_OUTPUT_PREFIX));
-        assert!(argv[2].contains("Get-Content README.md"));
-    }
-
-    #[test]
-    fn powershell_utf8_output_prefix_is_not_duplicated() {
-        let script = format!("{POWERSHELL_UTF8_OUTPUT_PREFIX}Write-Output ok");
-        let argv =
-            ExecCommandTool::argv_for_shell(Path::new("pwsh"), &ShellType::PowerShellCore, &script);
-
-        assert_eq!(argv[2], script);
-    }
-
-    #[test]
-    fn remote_login_shell_command_wraps_workdir_env_shell_and_user_command() {
-        let shell = RemoteShell {
-            path: "/bin/bash".to_string(),
-            shell_type: ShellType::Bash,
-        };
-        let command = ExecCommandTool::remote_login_shell_command(
-            "/home/me/project",
-            "printf 'hi'",
-            &shell,
-            None,
-        );
-
-        assert!(command.starts_with("cd '/home/me/project' && env "));
-        assert!(command.contains("'BITFUN_NONINTERACTIVE=1'"));
-        assert!(command.ends_with(" '/bin/bash' -lc 'printf '\\''hi'\\'''"));
-    }
-
-    #[test]
-    fn remote_login_shell_command_injects_snapshot_before_tool_env() {
-        let shell = RemoteShell {
-            path: "/bin/bash".to_string(),
-            shell_type: ShellType::Bash,
-        };
-        let snapshot = RemoteEnvSnapshot {
-            env: HashMap::from([
-                ("PATH".to_string(), "/home/me/.nvm/bin:/usr/bin".to_string()),
-                ("TERM".to_string(), "xterm-256color".to_string()),
-            ]),
-        };
-        let command = ExecCommandTool::remote_login_shell_command(
-            "/home/me/project",
-            "node --version",
-            &shell,
-            Some(&snapshot),
-        );
-
-        assert!(command.contains("'PATH=/home/me/.nvm/bin:/usr/bin'"));
-        assert!(command.contains("'TERM=dumb'"));
-        assert!(!command.contains("'TERM=xterm-256color'"));
-    }
-
-    #[test]
-    fn remote_login_shell_command_uses_snapshot_without_interactive_startup() {
-        let shell = RemoteShell {
-            path: "/bin/bash".to_string(),
-            shell_type: ShellType::Bash,
-        };
-        let snapshot = RemoteEnvSnapshot {
-            env: HashMap::from([("PATH".to_string(), "/home/me/.nvm/bin:/usr/bin".to_string())]),
-        };
-        let command = ExecCommandTool::remote_login_shell_command(
-            "/home/me/project",
-            "node --version",
-            &shell,
-            Some(&snapshot),
-        );
-
-        assert!(command.contains("'PATH=/home/me/.nvm/bin:/usr/bin'"));
-        assert!(command.ends_with(" '/bin/bash' -lc 'node --version'"));
-        assert!(!command.contains(" -lic "));
-    }
-
-    #[test]
-    fn remote_non_tty_control_wrapper_cleans_process_group_after_interrupt_grace() {
-        let wrapper =
-            ExecCommandTool::remote_non_tty_control_wrapper("python3 -c 'print(1)'", "/bin/bash");
-
-        assert!(wrapper.contains("setsid \"$__bitfun_shell\" -lc \"$__bitfun_cmd\" &"));
-        assert!(wrapper.contains("trap '__bitfun_stop INT 130 2' INT"));
-        assert!(wrapper.contains("trap '__bitfun_stop KILL 137 0' TERM"));
-        assert!(wrapper.contains("__bitfun_grace=${3:-2}"));
-        assert!(wrapper.contains("sleep \"$__bitfun_grace\""));
-        assert!(wrapper.contains("kill -KILL \"-$__bitfun_pgid\""));
-        assert!(wrapper.contains("__bitfun_cmd='python3 -c '\\''print(1)'\\'''"));
-    }
-
-    #[test]
-    fn remote_shell_probe_prefers_first_plausible_shell_path() {
-        let shell = parse_remote_shell_probe_output("\n/bin/zsh\n/usr/bin/bash\n")
-            .expect("shell should parse");
-
-        assert_eq!(shell.path, "/bin/zsh");
-        assert_eq!(shell.shell_type, ShellType::Zsh);
-    }
-
-    #[test]
-    fn remote_shell_login_args_use_login_without_interactive_startup() {
-        assert_eq!(super::remote_shell_login_args(), &["-lc"]);
-    }
-}
-
 #[async_trait]
 impl Tool for ExecCommandTool {
     fn name(&self) -> &str {
@@ -878,37 +773,21 @@ impl Tool for ExecCommandTool {
     }
 
     async fn description(&self) -> BitFunResult<String> {
-        let shell = resolve_local_exec_shell().await;
-        let shell_invocation = Self::shell_invocation_for_model(&shell.path, &shell.shell_type);
-        Ok(format!(
-            r#"Runs a shell command.
+        Ok(r#"Runs a shell command.
 
-Each call starts a separate process. Commands currently run through {shell_name} at `{shell_path}` as {shell_invocation}.
+Each call starts a separate process.
 Use tty=true only for commands that need interactive stdin; otherwise leave tty=false.
 yield_time_ms waits for output until the process exits or the deadline is reached. It does not stop the process.
-If the process is still running, the result includes a numeric session_id. Use WriteStdin to poll or send input, and ExecControl to interrupt or kill it.
-Output is only what was produced during this tool call's wait window. 
-With tty=false, stdout and stderr ordering is not guaranteed; use tty=true or redirect stderr with 2>&1 when terminal ordering matters."#,
-            shell_name = shell.display_name,
-            shell_path = shell.path.display(),
-        ))
+If the process is still running, the result includes a numeric session_id. Use WriteStdin to poll for more output or send input to tty=true sessions, and ExecControl to interrupt or kill it.
+Output is only what was produced during this tool call's wait window.
+With tty=false, stdout and stderr ordering is not guaranteed; use tty=true or redirect stderr with 2>&1 when terminal ordering matters."#
+            .to_string())
     }
 
     async fn description_with_context(
         &self,
-        context: Option<&ToolUseContext>,
+        _context: Option<&ToolUseContext>,
     ) -> BitFunResult<String> {
-        if context.is_some_and(ToolUseContext::is_remote) {
-            return Ok(r#"Runs a shell command in the current remote workspace.
-
-Each call starts a separate remote SSH process. Remote commands run through the remote user's default shell with login semantics and, when available, a cached environment snapshot captured from a tool-owned interactive PTY so terminal PATH customizations such as nvm can load without running the user command through interactive shell startup. Remote tty=false runs as SSH exec; remote tty=true runs the same command inside a tool-owned remote PTY.
-yield_time_ms waits for output until the process exits or the deadline is reached. It does not stop the process.
-If the process is still running, the result includes a numeric session_id. Use WriteStdin to poll for more output or send input to tty=true sessions, and ExecControl to interrupt or kill it.
-Output is only what was produced during this tool call's wait window. 
-With tty=false, stdout and stderr ordering is not guaranteed; use tty=true or redirect stderr with 2>&1 when terminal ordering matters."#
-                .to_string());
-        }
-
         self.description().await
     }
 
@@ -1094,5 +973,167 @@ With tty=false, stdout and stderr ordering is not guaranteed; use tty=true or re
             result_for_assistant: Some(result_for_assistant),
             image_attachments: None,
         }])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::env_snapshot::RemoteEnvSnapshot;
+    use super::{parse_remote_shell_probe_output, RemoteShell};
+    use super::{ExecCommandTool, POWERSHELL_UTF8_OUTPUT_PREFIX};
+    use crate::agentic::tools::framework::{Tool, ToolUseContext};
+    use crate::agentic::tools::ToolRuntimeRestrictions;
+    use crate::agentic::workspace::WorkspaceBinding;
+    use crate::service::remote_ssh::workspace_state::workspace_session_identity;
+    use std::collections::HashMap;
+    use std::path::Path;
+    use std::path::PathBuf;
+    use terminal_core::ShellType;
+
+    #[test]
+    fn powershell_commands_force_utf8_output() {
+        let argv = ExecCommandTool::argv_for_shell(
+            Path::new("pwsh"),
+            &ShellType::PowerShellCore,
+            "Get-Content README.md",
+        );
+
+        assert_eq!(argv[1], "-Command");
+        assert!(argv[2].starts_with(POWERSHELL_UTF8_OUTPUT_PREFIX));
+        assert!(argv[2].contains("Get-Content README.md"));
+    }
+
+    #[test]
+    fn powershell_utf8_output_prefix_is_not_duplicated() {
+        let script = format!("{POWERSHELL_UTF8_OUTPUT_PREFIX}Write-Output ok");
+        let argv =
+            ExecCommandTool::argv_for_shell(Path::new("pwsh"), &ShellType::PowerShellCore, &script);
+
+        assert_eq!(argv[2], script);
+    }
+
+    #[test]
+    fn remote_login_shell_command_wraps_workdir_env_shell_and_user_command() {
+        let shell = RemoteShell {
+            path: "/bin/bash".to_string(),
+            shell_type: ShellType::Bash,
+        };
+        let command = ExecCommandTool::remote_login_shell_command(
+            "/home/me/project",
+            "printf 'hi'",
+            &shell,
+            None,
+        );
+
+        assert!(command.starts_with("cd '/home/me/project' && env "));
+        assert!(command.contains("'BITFUN_NONINTERACTIVE=1'"));
+        assert!(command.ends_with(" '/bin/bash' -lc 'printf '\\''hi'\\'''"));
+    }
+
+    #[test]
+    fn remote_login_shell_command_injects_snapshot_before_tool_env() {
+        let shell = RemoteShell {
+            path: "/bin/bash".to_string(),
+            shell_type: ShellType::Bash,
+        };
+        let snapshot = RemoteEnvSnapshot {
+            env: HashMap::from([
+                ("PATH".to_string(), "/home/me/.nvm/bin:/usr/bin".to_string()),
+                ("TERM".to_string(), "xterm-256color".to_string()),
+            ]),
+        };
+        let command = ExecCommandTool::remote_login_shell_command(
+            "/home/me/project",
+            "node --version",
+            &shell,
+            Some(&snapshot),
+        );
+
+        assert!(command.contains("'PATH=/home/me/.nvm/bin:/usr/bin'"));
+        assert!(command.contains("'TERM=dumb'"));
+        assert!(!command.contains("'TERM=xterm-256color'"));
+    }
+
+    #[test]
+    fn remote_login_shell_command_uses_snapshot_without_interactive_startup() {
+        let shell = RemoteShell {
+            path: "/bin/bash".to_string(),
+            shell_type: ShellType::Bash,
+        };
+        let snapshot = RemoteEnvSnapshot {
+            env: HashMap::from([("PATH".to_string(), "/home/me/.nvm/bin:/usr/bin".to_string())]),
+        };
+        let command = ExecCommandTool::remote_login_shell_command(
+            "/home/me/project",
+            "node --version",
+            &shell,
+            Some(&snapshot),
+        );
+
+        assert!(command.contains("'PATH=/home/me/.nvm/bin:/usr/bin'"));
+        assert!(command.ends_with(" '/bin/bash' -lc 'node --version'"));
+        assert!(!command.contains(" -lic "));
+    }
+
+    #[test]
+    fn remote_non_tty_control_wrapper_cleans_process_group_after_interrupt_grace() {
+        let wrapper =
+            ExecCommandTool::remote_non_tty_control_wrapper("python3 -c 'print(1)'", "/bin/bash");
+
+        assert!(wrapper.contains("setsid \"$__bitfun_shell\" -lc \"$__bitfun_cmd\" &"));
+        assert!(wrapper.contains("trap '__bitfun_stop INT 130 2' INT"));
+        assert!(wrapper.contains("trap '__bitfun_stop KILL 137 0' TERM"));
+        assert!(wrapper.contains("__bitfun_grace=${3:-2}"));
+        assert!(wrapper.contains("sleep \"$__bitfun_grace\""));
+        assert!(wrapper.contains("kill -KILL \"-$__bitfun_pgid\""));
+        assert!(wrapper.contains("__bitfun_cmd='python3 -c '\\''print(1)'\\'''"));
+    }
+
+    #[test]
+    fn remote_shell_probe_prefers_first_plausible_shell_path() {
+        let shell = parse_remote_shell_probe_output("\n/bin/zsh\n/usr/bin/bash\n")
+            .expect("shell should parse");
+
+        assert_eq!(shell.path, "/bin/zsh");
+        assert_eq!(shell.shell_type, ShellType::Zsh);
+    }
+
+    #[test]
+    fn remote_shell_login_args_use_login_without_interactive_startup() {
+        assert_eq!(super::remote_shell_login_args(), &["-lc"]);
+    }
+
+    #[tokio::test]
+    async fn description_with_context_stays_stable_for_local_and_remote_workspaces() {
+        let tool = ExecCommandTool::new();
+        let base = tool.description().await.expect("description should build");
+        let session_identity =
+            workspace_session_identity("/home/me/project", Some("conn-1"), Some("remote-host"))
+                .expect("remote session identity should build");
+        let remote_context = ToolUseContext {
+            tool_call_id: None,
+            agent_type: Some("agentic".to_string()),
+            session_id: None,
+            dialog_turn_id: None,
+            workspace: Some(WorkspaceBinding::new_remote(
+                None,
+                PathBuf::from("/home/me/project"),
+                "conn-1".to_string(),
+                "Remote Host".to_string(),
+                session_identity,
+            )),
+            unlocked_collapsed_tools: Vec::new(),
+            custom_data: HashMap::new(),
+            computer_use_host: None,
+            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
+        };
+
+        assert_eq!(
+            base,
+            tool.description_with_context(Some(&remote_context))
+                .await
+                .expect("contextual description should build")
+        );
     }
 }

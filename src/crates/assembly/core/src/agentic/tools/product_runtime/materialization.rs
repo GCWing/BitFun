@@ -26,6 +26,7 @@ impl StaticToolProviderFactory<dyn Tool> for ProductConcreteToolFactory {
             "ExecCommand" => Some(Arc::new(ExecCommandTool::new())),
             "WriteStdin" => Some(Arc::new(WriteStdinTool::new())),
             "ExecControl" => Some(Arc::new(ExecControlTool::new())),
+            "GetTime" => Some(Arc::new(GetTimeTool::new())),
             "Task" => Some(Arc::new(TaskTool::new())),
             "Skill" => Some(Arc::new(SkillTool::new())),
             "AskUserQuestion" => Some(Arc::new(AskUserQuestionTool::new())),

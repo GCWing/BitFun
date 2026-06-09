@@ -57,15 +57,22 @@ fn tool_listing_sections_render_only_present_sections() {
 #[test]
 fn prepended_prompt_reminders_keep_runtime_injection_order() {
     let reminders = PrependedPromptReminders {
+        collapsed_tool_listing: Some("collapsed-tools".to_string()),
         skill_listing: Some("skills".to_string()),
         agent_listing: Some("agents".to_string()),
-        collapsed_tool_listing: Some("collapsed-tools".to_string()),
+        runtime_context: Some("runtime-context".to_string()),
         user_context: Some("user-context".to_string()),
     };
 
     assert_eq!(
         reminders.ordered_reminders(),
-        vec!["collapsed-tools", "skills", "agents", "user-context"]
+        vec![
+            "collapsed-tools",
+            "skills",
+            "agents",
+            "runtime-context",
+            "user-context"
+        ]
     );
     assert!(PrependedPromptReminders::default()
         .ordered_reminders()

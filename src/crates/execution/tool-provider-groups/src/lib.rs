@@ -125,6 +125,7 @@ const PRODUCT_TOOL_PROVIDER_GROUP_PLAN: &[ToolProviderGroupPlan] = &[
             "ExecCommand",
             "WriteStdin",
             "ExecControl",
+            "GetTime",
         ],
     },
     ToolProviderGroupPlan {
@@ -335,6 +336,7 @@ mod tests {
                 "ExecCommand",
                 "WriteStdin",
                 "ExecControl",
+                "GetTime",
                 "Task",
                 "Skill",
                 "AskUserQuestion",

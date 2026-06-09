@@ -19,6 +19,7 @@ Notes:
 | `ExecCommand` | Expanded | None | - |
 | `WriteStdin` | Expanded | None | - |
 | `ExecControl` | Expanded | None | - |
+| `GetTime` | Expanded | None | - |
 | `Task` | Expanded | None | - |
 | `Skill` | Expanded | None | - |
 | `AskUserQuestion` | Expanded | None | - |

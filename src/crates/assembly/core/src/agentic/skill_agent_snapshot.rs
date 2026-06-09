@@ -433,6 +433,7 @@ pub async fn build_embedded_user_context_reminder(
         None,
         None,
         ToolListingSections::default(),
+        Default::default(),
     )
     .await?;
     PromptBuilder::new(context)
