@@ -172,7 +172,7 @@ impl RemoteWorkspaceSearchProvider for CoreRemoteWorkspaceSearchProvider {
     ) -> Result<(), String> {
         let channel = self
             .ssh_manager
-            .open_exec_channel(connection_id, command)
+            .open_isolated_exec_channel(connection_id, command)
             .await
             .map_err(|error| format!("Failed to start remote flashgrep stdio daemon: {error}"))?;
         spawn_remote_stdio_owner(connection_id.to_string(), channel, write_rx, protocol);

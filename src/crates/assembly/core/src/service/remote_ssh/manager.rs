@@ -27,6 +27,7 @@ use tokio::time::{Duration, Instant};
 
 const SSH_COMMAND_WAIT_POLL_INTERVAL: Duration = Duration::from_millis(100);
 const SSH_COMMAND_INTERRUPT_DRAIN_GRACE: Duration = Duration::from_millis(500);
+const ISOLATED_EXEC_CONNECT_TIMEOUT_SECS: u64 = 30;
 
 /// OpenSSH keyword matching is case-insensitive, but `ssh_config` stores keys as written in the file
 /// (e.g. `HostName` vs `Hostname`). Resolve by ASCII case-insensitive compare.
@@ -1676,6 +1677,50 @@ impl SSHConnectionManager {
         }))
     }
 
+    async fn resolve_config_for_new_transport(
+        &self,
+        connection_id: &str,
+    ) -> anyhow::Result<SSHConnectionConfig> {
+        let mut config = if let Some(saved_config) = self
+            .load_connection_config_from_saved(connection_id)
+            .await?
+        {
+            saved_config
+        } else {
+            let guard = self.connections.read().await;
+            guard
+                .get(connection_id)
+                .map(|conn| conn.config.clone())
+                .ok_or_else(|| {
+                    anyhow!(
+                        "Connection {} not found and no saved SSH profile is available",
+                        connection_id
+                    )
+                })?
+        };
+
+        if let SSHAuthMethod::Password { ref password } = config.auth {
+            if password.is_empty() {
+                match self.password_vault.load(connection_id).await {
+                    Ok(Some(pwd)) => {
+                        config.auth = SSHAuthMethod::Password { password: pwd };
+                    }
+                    Ok(None) => {
+                        return Err(anyhow!(
+                            "SSH connection {} requires a password, but no stored password is available",
+                            connection_id
+                        ));
+                    }
+                    Err(e) => {
+                        return Err(anyhow!("Failed to load stored SSH password: {}", e));
+                    }
+                }
+            }
+        }
+
+        Ok(config)
+    }
+
     /// Ensure the connection is alive; if it was torn down (network blip,
     /// server-side timeout), transparently reconnect using the saved config
     /// and (for password auth) the encrypted password vault.
@@ -1908,6 +1953,36 @@ impl SSHConnectionManager {
         Ok(channel)
     }
 
+    /// Open a long-lived exec channel on a fresh SSH transport.
+    ///
+    /// Remote workspace search keeps a stdio daemon open while the repo is
+    /// active. Running that daemon on the primary workspace transport consumes
+    /// one of the server's per-connection session slots (`MaxSessions`) and can
+    /// starve short-lived reads/execs. Use a separate transport for such
+    /// long-lived protocol owners so regular workspace operations keep their
+    /// own channel budget.
+    pub async fn open_isolated_exec_channel(
+        &self,
+        connection_id: &str,
+        command: &str,
+    ) -> anyhow::Result<russh::Channel<Msg>> {
+        let config = self.resolve_config_for_new_transport(connection_id).await?;
+        let (handle, _alive, _server_info) = self
+            .establish_session(&config, ISOLATED_EXEC_CONNECT_TIMEOUT_SECS)
+            .await
+            .map_err(|e| anyhow!("Failed to open isolated SSH transport: {}", e))?;
+
+        let channel = handle
+            .channel_open_session()
+            .await
+            .map_err(|e| anyhow!("Failed to open isolated SSH exec channel: {}", e))?;
+        channel
+            .exec(true, command)
+            .await
+            .map_err(|e| anyhow!("Failed to start isolated remote command: {}", e))?;
+        Ok(channel)
+    }
+
     /// Open a long-lived exec channel with a PTY attached.
     ///
     /// This gives the command TTY semantics without starting an interactive shell
@@ -2049,25 +2124,28 @@ impl SSHConnectionManager {
     pub async fn get_sftp(&self, connection_id: &str) -> anyhow::Result<Arc<SftpSession>> {
         self.ensure_alive_or_reconnect(connection_id).await?;
 
-        // First check if we have an existing SFTP session
-        {
-            let guard = self.connections.read().await;
-            if let Some(conn) = guard.get(connection_id) {
-                let sftp_guard = conn.sftp_session.read().await;
-                if let Some(ref sftp) = *sftp_guard {
-                    return Ok(sftp.clone());
-                }
-            }
-        }
-
-        // Get handle (clone the Arc)
-        let handle: Arc<Handle<SSHHandler>> = {
+        let (handle, sftp_session): (
+            Arc<Handle<SSHHandler>>,
+            Arc<tokio::sync::RwLock<Option<Arc<SftpSession>>>>,
+        ) = {
             let guard = self.connections.read().await;
             let conn = guard
                 .get(connection_id)
                 .ok_or_else(|| anyhow!("Connection {} not found", connection_id))?;
-            conn.handle.clone()
+            (conn.handle.clone(), conn.sftp_session.clone())
         };
+
+        {
+            let sftp_guard = sftp_session.read().await;
+            if let Some(ref sftp) = *sftp_guard {
+                return Ok(sftp.clone());
+            }
+        }
+
+        let mut sftp_guard = sftp_session.write().await;
+        if let Some(ref sftp) = *sftp_guard {
+            return Ok(sftp.clone());
+        }
 
         // Open a channel and request SFTP subsystem
         let channel = handle
@@ -2085,14 +2163,7 @@ impl SSHConnectionManager {
 
         let sftp = Arc::new(sftp);
 
-        // Store the SFTP session
-        {
-            let mut guard = self.connections.write().await;
-            if let Some(conn) = guard.get_mut(connection_id) {
-                let mut sftp_guard = conn.sftp_session.write().await;
-                *sftp_guard = Some(sftp.clone());
-            }
-        }
+        *sftp_guard = Some(sftp.clone());
 
         Ok(sftp)
     }
