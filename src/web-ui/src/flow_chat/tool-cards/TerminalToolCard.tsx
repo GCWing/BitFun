@@ -13,7 +13,7 @@
  * - Clicking "Open Terminal in right panel" opens the full Terminal tab
  */
 
-import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useLayoutEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
 import { Terminal, Play, X, ExternalLink, Square } from 'lucide-react';
@@ -301,7 +301,7 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
     }
   }, [status]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const prevStatus = previousStatusRef.current;
     previousStatusRef.current = status;
 

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Terminal } from 'lucide-react';
 import type { FlowToolItem } from '../types/flow-chat';
@@ -178,7 +178,7 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
     applyExecExpandedState(!isExpanded, { reason: 'manual' });
   }, [applyExecExpandedState, isExpanded]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const prevStatus = previousStatusRef.current;
     previousStatusRef.current = status;
     if (prevStatus === status) {
