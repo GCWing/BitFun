@@ -94,6 +94,16 @@ export const forbiddenContentRules = [
         message:
           'core DeepReview report must not re-own cache update DTO; use bitfun-agent-runtime::deep_review::report',
       },
+      {
+        regex: /"kind": "concurrency_limited"/,
+        message:
+          'core DeepReview report must not re-own runtime tracker reliability signal shaping; use bitfun-agent-runtime::deep_review::report',
+      },
+      {
+        regex: /DeepReview runtime diagnostics:/,
+        message:
+          'core DeepReview report must not re-own runtime diagnostics log formatting; use bitfun-agent-runtime::deep_review::diagnostics',
+      },
     ],
   },
   {
@@ -140,6 +150,21 @@ export const forbiddenContentRules = [
           'core DeepReview task adapter must not re-own reviewer admission queue expiry policy; use bitfun-agent-runtime::deep_review::task_execution',
       },
       {
+        regex: /\bstruct QueueWaitTimer\b/,
+        message:
+          'core DeepReview task adapter must not re-own queue wait timing; use bitfun-agent-runtime::deep_review::task_execution',
+      },
+      {
+        regex: /runtime_task_execution::decide_provider_capacity_queue_step/,
+        message:
+          'core DeepReview task adapter must use the runtime provider queue state machine instead of direct step decisions',
+      },
+      {
+        regex: /runtime_task_execution::decide_blocked_reviewer_admission_queue_step/,
+        message:
+          'core DeepReview task adapter must use the runtime reviewer admission state machine instead of direct step decisions',
+      },
+      {
         regex: /\bcontrol_snapshot\.(?:cancelled|paused|skip_optional)\b/,
         message:
           'core DeepReview task adapter must not re-own queue control decision priority; use bitfun-agent-runtime::deep_review::task_execution',
@@ -148,6 +173,101 @@ export const forbiddenContentRules = [
         regex: /\bfn prompt_with_deep_review_retry_scope\b/,
         message:
           'core DeepReview task adapter must not re-own retry prompt shaping; use bitfun-agent-runtime::deep_review::task_execution',
+      },
+      {
+        regex: /<partial_result status=/,
+        message:
+          'core DeepReview task adapter must not re-own task completion result presentation; use bitfun-agent-runtime::deep_review::task_execution',
+      },
+      {
+        regex: /completed successfully with result:/,
+        message:
+          'core DeepReview task adapter must not re-own task completion result presentation; use bitfun-agent-runtime::deep_review::task_execution',
+      },
+      {
+        regex: /Retries used:/,
+        message:
+          'core DeepReview task adapter must not re-own retry guidance presentation; use bitfun-agent-runtime::deep_review::task_execution',
+      },
+      {
+        regex: /DeepReview automatic retry elapsed guard exceeded/,
+        message:
+          'core DeepReview task adapter must not re-own auto-retry admission policy; use bitfun-agent-runtime::deep_review::task_execution',
+      },
+      {
+        regex: /cancelled coverage/,
+        message:
+          'core DeepReview task adapter must not re-own cancelled reviewer presentation; use bitfun-agent-runtime::deep_review::task_execution',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/task_tool.rs',
+    patterns: [
+      {
+        regex: /\bDeepReviewIncrementalCache\b/,
+        message:
+          'TaskTool must not directly inspect DeepReview incremental cache internals; use deep_review_task_adapter',
+      },
+      {
+        regex: /deepReviewCache/,
+        message:
+          'TaskTool must not directly parse DeepReview cache payloads; use deep_review_task_adapter',
+      },
+      {
+        regex: /<partial_result status=/,
+        message:
+          'TaskTool must not re-own DeepReview task completion result presentation; use deep_review_task_adapter',
+      },
+      {
+        regex: /completed successfully with result:/,
+        message:
+          'TaskTool must not re-own DeepReview task completion result presentation; use deep_review_task_adapter',
+      },
+      {
+        regex: /Retries used:/,
+        message:
+          'TaskTool must not re-own DeepReview retry guidance presentation; use deep_review_task_adapter',
+      },
+      {
+        regex: /DeepReview automatic retry elapsed guard exceeded/,
+        message:
+          'TaskTool must not re-own DeepReview auto-retry admission policy; use deep_review_task_adapter',
+      },
+      {
+        regex: /cancelled coverage/,
+        message:
+          'TaskTool must not re-own DeepReview cancelled reviewer presentation; use deep_review_task_adapter',
+      },
+      {
+        regex: /\bprovider_capacity_retry_attempts\b/,
+        message:
+          'TaskTool must not re-own DeepReview provider capacity retry attempts; use deep_review_task_adapter',
+      },
+      {
+        regex: /\bprovider_capacity_queue_elapsed_ms\b/,
+        message:
+          'TaskTool must not re-own DeepReview provider capacity queue elapsed aggregation; use deep_review_task_adapter',
+      },
+      {
+        regex: /\bDEEP_REVIEW_PROVIDER_CAPACITY_MAX_RETRY_ATTEMPTS\b/,
+        message:
+          'TaskTool must not re-own DeepReview provider capacity retry limits; use deep_review_task_adapter',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/code_review_tool.rs',
+    patterns: [
+      {
+        regex: /"kind"\s*:\s*"cache_hit"/,
+        message:
+          'CodeReviewTool must not re-own DeepReview cache-hit reliability signal shaping; use deep_review_report',
+      },
+      {
+        regex: /"kind"\s*:\s*"cache_miss"/,
+        message:
+          'CodeReviewTool must not re-own DeepReview cache-miss reliability signal shaping; use deep_review_report',
       },
     ],
   },

@@ -189,8 +189,52 @@ export const requiredContentRules = [
         message: 'missing DeepReview provider capacity queue step owner function',
       },
       {
+        regex: /\bpub struct DeepReviewProviderCapacityQueueRuntime\b/,
+        message: 'missing DeepReview provider capacity queue runtime owner',
+      },
+      {
+        regex: /\bpub struct DeepReviewProviderCapacityRetryRuntime\b/,
+        message: 'missing DeepReview provider capacity retry runtime owner',
+      },
+      {
+        regex: /\bpub enum DeepReviewProviderCapacityRetryDecision\b/,
+        message: 'missing DeepReview provider capacity retry decision owner',
+      },
+      {
         regex: /\bpub fn decide_blocked_reviewer_admission_queue_step\b/,
         message: 'missing DeepReview reviewer admission queue step owner function',
+      },
+      {
+        regex: /\bpub struct DeepReviewReviewerAdmissionQueueRuntime\b/,
+        message: 'missing DeepReview reviewer admission queue runtime owner',
+      },
+      {
+        regex: /\bstruct QueueWaitTimer\b/,
+        message: 'missing DeepReview queue wait timing owner',
+      },
+      {
+        regex: /\bpub fn deep_review_task_completion_result\b/,
+        message: 'missing DeepReview task completion result presentation owner function',
+      },
+      {
+        regex: /\bpub fn deep_review_cancelled_reviewer_result\b/,
+        message: 'missing DeepReview cancelled reviewer result presentation owner function',
+      },
+      {
+        regex: /\bpub fn should_emit_deep_review_retry_guidance\b/,
+        message: 'missing DeepReview retry guidance emission owner function',
+      },
+      {
+        regex: /\bpub fn deep_review_retry_guidance\b/,
+        message: 'missing DeepReview retry guidance presentation owner function',
+      },
+      {
+        regex: /\bpub fn auto_retry_suppression_reason\b/,
+        message: 'missing DeepReview auto-retry suppression reason owner function',
+      },
+      {
+        regex: /\bpub fn ensure_deep_review_auto_retry_allowed\b/,
+        message: 'missing DeepReview auto-retry admission owner function',
       },
       {
         regex: /\bpub fn capacity_skip_result_for_local_queue_outcome\b/,
@@ -199,6 +243,17 @@ export const requiredContentRules = [
       {
         regex: /\bpub fn capacity_skip_result_for_provider_queue_outcome\b/,
         message: 'missing DeepReview provider capacity-skipped presentation owner function',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/src/deep_review/diagnostics.rs',
+    reason:
+      'agent-runtime DeepReview diagnostics owner must keep provider-neutral runtime diagnostics log shaping out of core',
+    patterns: [
+      {
+        regex: /\bpub fn deep_review_runtime_diagnostics_log_line\b/,
+        message: 'missing DeepReview runtime diagnostics log owner function',
       },
     ],
   },
@@ -214,6 +269,14 @@ export const requiredContentRules = [
       {
         regex: /\bpub fn fill_deep_review_reliability_signals\b/,
         message: 'missing DeepReview reliability signal owner function',
+      },
+      {
+        regex: /\bpub fn fill_deep_review_runtime_tracker_signal\b/,
+        message: 'missing DeepReview runtime tracker reliability signal owner function',
+      },
+      {
+        regex: /\bpub fn fill_deep_review_cache_update_signals\b/,
+        message: 'missing DeepReview cache update reliability signal owner function',
       },
       {
         regex: /\bpub fn deep_review_cache_from_completed_reviewers\b/,
@@ -1169,8 +1232,12 @@ export const requiredContentRules = [
         message: 'missing DeepReview provider capacity-skip runtime delegation',
       },
       {
-        regex: /provider_capacity_queue_wait_seconds_for_attempt/,
-        message: 'missing DeepReview provider capacity wait owner re-export',
+        regex: /DeepReviewProviderCapacityRetryRuntime/,
+        message: 'missing DeepReview provider capacity retry runtime re-export',
+      },
+      {
+        regex: /DeepReviewProviderCapacityRetryDecision/,
+        message: 'missing DeepReview provider capacity retry decision re-export',
       },
       {
         regex: /runtime_task_execution::capacity_decision_for_provider_error_facts/,
@@ -1181,12 +1248,75 @@ export const requiredContentRules = [
         message: 'missing DeepReview local reviewer capacity decision delegation',
       },
       {
-        regex: /runtime_task_execution::decide_provider_capacity_queue_step/,
-        message: 'missing DeepReview provider capacity queue decision delegation',
+        regex: /runtime_task_execution::DeepReviewProviderCapacityQueueRuntime::start/,
+        message: 'missing DeepReview provider capacity queue runtime delegation',
       },
       {
-        regex: /runtime_task_execution::decide_blocked_reviewer_admission_queue_step/,
-        message: 'missing DeepReview reviewer admission queue decision delegation',
+        regex: /runtime_task_execution::DeepReviewReviewerAdmissionQueueRuntime::start/,
+        message: 'missing DeepReview reviewer admission queue runtime delegation',
+      },
+      {
+        regex: /runtime_task_execution::deep_review_task_completion_result/,
+        message: 'missing DeepReview task completion result runtime delegation',
+      },
+      {
+        regex: /runtime_task_execution::deep_review_cancelled_reviewer_result/,
+        message: 'missing DeepReview cancelled reviewer result runtime delegation',
+      },
+      {
+        regex: /runtime_task_execution::should_emit_deep_review_retry_guidance/,
+        message: 'missing DeepReview retry guidance emission runtime delegation',
+      },
+      {
+        regex: /runtime_task_execution::deep_review_retry_guidance/,
+        message: 'missing DeepReview retry guidance presentation runtime delegation',
+      },
+      {
+        regex: /runtime_task_execution::auto_retry_suppression_reason/,
+        message: 'missing DeepReview auto-retry suppression reason runtime delegation',
+      },
+      {
+        regex: /runtime_task_execution::ensure_deep_review_auto_retry_allowed/,
+        message: 'missing DeepReview auto-retry admission runtime delegation',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/task_tool.rs',
+    reason:
+      'TaskTool must keep DeepReview retry/result presentation as a facade call instead of re-owning provider-neutral policy text or data shaping',
+    patterns: [
+      {
+        regex: /deep_review_task_adapter::should_emit_deep_review_retry_guidance/,
+        message: 'missing TaskTool DeepReview retry guidance emission facade call',
+      },
+      {
+        regex: /deep_review_task_adapter::deep_review_retry_guidance/,
+        message: 'missing TaskTool DeepReview retry guidance facade call',
+      },
+      {
+        regex: /deep_review_task_adapter::auto_retry_suppression_reason/,
+        message: 'missing TaskTool DeepReview auto-retry suppression facade call',
+      },
+      {
+        regex: /deep_review_task_adapter::ensure_deep_review_auto_retry_allowed/,
+        message: 'missing TaskTool DeepReview auto-retry admission facade call',
+      },
+      {
+        regex: /deep_review_task_adapter::deep_review_task_completion_result/,
+        message: 'missing TaskTool DeepReview completion result facade call',
+      },
+      {
+        regex: /deep_review_task_adapter::deep_review_cancelled_reviewer_result/,
+        message: 'missing TaskTool DeepReview cancelled reviewer result facade call',
+      },
+      {
+        regex: /DeepReviewProviderCapacityRetryRuntime::default/,
+        message: 'missing TaskTool DeepReview provider retry runtime state owner usage',
+      },
+      {
+        regex: /DeepReviewProviderCapacityRetryDecision::WaitForCapacity/,
+        message: 'missing TaskTool DeepReview provider retry runtime wait decision usage',
       },
     ],
   },
@@ -1236,6 +1366,18 @@ export const requiredContentRules = [
       {
         regex: /runtime_report::fill_deep_review_reliability_signals/,
         message: 'missing DeepReview runtime report enrichment delegation',
+      },
+      {
+        regex: /runtime_report::fill_deep_review_runtime_tracker_signal/,
+        message: 'missing DeepReview runtime tracker reliability signal delegation',
+      },
+      {
+        regex: /fill_deep_review_cache_update_signals/,
+        message: 'missing DeepReview cache update reliability signal delegation',
+      },
+      {
+        regex: /runtime_diagnostics::deep_review_runtime_diagnostics_log_line/,
+        message: 'missing DeepReview runtime diagnostics log delegation',
       },
       {
         regex: /deep_review_cache_from_completed_reviewers/,
@@ -2293,10 +2435,6 @@ export const requiredContentRules = [
       {
         regex: /pub\(crate\) use bitfun_runtime_ports::\{DelegationPolicy, SubagentContextMode\};/,
         message: 'missing core compatibility re-export for subagent runtime contracts',
-      },
-      {
-        regex: /pub\(crate\) mod queue_timing;/,
-        message: 'queue timing must remain core-owned until it has a reviewed non-DTO owner',
       },
     ],
   },
