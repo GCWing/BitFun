@@ -36,6 +36,7 @@ pub mod review_platform_tool;
 pub mod session_control_tool;
 pub mod session_history_tool;
 pub mod session_message_tool;
+mod shell_command_safety;
 pub mod skill_tool;
 pub mod skills;
 pub mod task_tool;

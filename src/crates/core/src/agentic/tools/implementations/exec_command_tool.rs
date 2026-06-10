@@ -1,4 +1,5 @@
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
+use crate::agentic::tools::implementations::shell_command_safety;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -235,8 +236,14 @@ Output is only what was produced during this tool call's wait window."#,
         false
     }
 
-    fn is_concurrency_safe(&self, _input: Option<&Value>) -> bool {
-        true
+    fn is_concurrency_safe(&self, input: Option<&Value>) -> bool {
+        let Some(cmd) = input
+            .and_then(|value| value.get("cmd"))
+            .and_then(Value::as_str)
+        else {
+            return false;
+        };
+        shell_command_safety::exec_command_is_concurrency_safe(cmd)
     }
 
     fn needs_permissions(&self, _input: Option<&Value>) -> bool {
@@ -258,6 +265,14 @@ Output is only what was produced during this tool call's wait window."#,
                 result: false,
                 message: Some("cmd is required for ExecCommand".to_string()),
                 error_code: Some(400),
+                meta: None,
+            };
+        }
+        if let Some(message) = shell_command_safety::denial_for_command(cmd) {
+            return ValidationResult {
+                result: false,
+                message: Some(message),
+                error_code: Some(403),
                 meta: None,
             };
         }
