@@ -1,6 +1,3 @@
-use crate::agentic::execution::write_content_sanitizer::{
-    contains_tool_invocation_artifacts, strip_tool_invocation_artifacts,
-};
 use crate::agentic::tools::file_read_state_runtime::{
     assert_file_not_unexpectedly_modified, file_mutation_timestamp_ms, get_stored_file_read_state,
     local_file_modification_time_ms, read_current_file_content, read_state_tracking_enabled,
@@ -19,7 +16,7 @@ use async_trait::async_trait;
 use serde_json::{json, Value};
 use std::path::Path;
 use tokio::fs;
-use tool_runtime::fs::{write_local_file, WriteLocalFileRequest};
+use tool_runtime::fs::{write_local_file, WriteLocalFileMode, WriteLocalFileRequest};
 
 pub struct FileWriteTool;
 
@@ -37,12 +34,21 @@ impl FileWriteTool {
         Self
     }
 
-    fn guidance_failure(message: String) -> ValidationResult {
-        ValidationResult {
-            result: false,
-            message: Some(file_tool_guidance_message(message)),
-            error_code: Some(400),
-            meta: Some(json!({ "failure_kind": "guidance" })),
+    fn parse_mode_value(mode: Option<&str>) -> Result<WriteLocalFileMode, String> {
+        match mode.unwrap_or("w") {
+            "w" => Ok(WriteLocalFileMode::Write),
+            "a" => Ok(WriteLocalFileMode::Append),
+            other => Err(format!(
+                "mode must be either 'w' (overwrite) or 'a' (append), got '{}'",
+                other
+            )),
+        }
+    }
+
+    fn mode_label(mode: WriteLocalFileMode) -> &'static str {
+        match mode {
+            WriteLocalFileMode::Write => "w",
+            WriteLocalFileMode::Append => "a",
         }
     }
 
@@ -171,6 +177,7 @@ impl FileWriteTool {
 
     fn write_success_result(
         logical_path: &str,
+        mode: WriteLocalFileMode,
         bytes_written: usize,
         lines_written: usize,
         status: &str,
@@ -179,6 +186,7 @@ impl FileWriteTool {
         ToolResult::Result {
             data: json!({
                 "file_path": logical_path,
+                "mode": Self::mode_label(mode),
                 "bytes_written": bytes_written,
                 "lines_written": lines_written,
                 "success": true,
@@ -201,6 +209,11 @@ impl FileWriteTool {
                 "content": {
                     "type": "string",
                     "description": "The content to write to the file"
+                },
+                "mode": {
+                    "type": "string",
+                    "enum": ["w", "a"],
+                    "description": "Write mode: 'w' overwrites the file (default), 'a' appends to the file and creates it if missing"
                 }
             },
             "required": ["file_path", "content"],
@@ -212,8 +225,9 @@ impl FileWriteTool {
         r#"Writes a file to the local filesystem.
 
 Usage:
-- This tool will overwrite the existing file if there is one at the provided path.
-- Always emit `file_path` before `content` in the tool input JSON so the path is available while content streams.
+- Always output `file_path` first when calling this tool. Example: `{"file_path": "src/main.rs", "content": "fn main() {}"}`.
+- This tool defaults to `mode=\"w\"`, which overwrites the existing file if there is one at the provided path.
+- Use `mode=\"a\"` to append content; it also creates the file if it does not exist.
 - If this is an existing file, you MUST use the Read tool first to read the file's contents. This tool will fail if you did not read the file first.
 - Prefer the Edit tool for modifying existing files — it only sends the diff. Only use this tool to create new files or for complete rewrites.
 - NEVER create documentation files (*.md) or README files unless explicitly requested by the User.
@@ -351,6 +365,34 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn call_impl_appends_when_mode_is_append() {
+        let root = std::env::temp_dir().join(format!("bitfun-write-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&root).expect("create temp workspace");
+        std::fs::write(root.join("existing.md"), "old").expect("create existing file");
+
+        let tool = FileWriteTool::new();
+        let results = tool
+            .call(
+                &json!({ "file_path": "existing.md", "content": "\nnew", "mode": "a" }),
+                &local_context(root.clone()),
+            )
+            .await
+            .expect("append should succeed");
+
+        let written = std::fs::read_to_string(root.join("existing.md")).expect("read file");
+        let _ = std::fs::remove_dir_all(&root);
+
+        assert_eq!(written, "old\nnew");
+
+        let ToolResult::Result { data, .. } = &results[0] else {
+            panic!("expected result");
+        };
+        assert_eq!(data["status"], "appended");
+        assert_eq!(data["mode"], "a");
+        assert_eq!(data["bytes_written"], "\nnew".len());
+    }
+
+    #[tokio::test]
     async fn schema_requires_file_path_and_content() {
         let tool = FileWriteTool::new();
 
@@ -361,27 +403,10 @@ mod tests {
             serde_json::json!(["file_path", "content"])
         );
         assert!(schema["properties"].get("content").is_some());
-    }
-
-    #[tokio::test]
-    async fn validate_input_rejects_tool_invocation_content() {
-        let tool = FileWriteTool::new();
-
-        let validation = tool
-            .validate_input(
-                &json!({
-                    "file_path": "notes.md",
-                    "content": "<tool_calls><invoke name=\"Write\"></invoke></tool_calls>"
-                }),
-                None,
-            )
-            .await;
-
-        assert!(!validation.result);
-        assert!(validation
-            .message
-            .as_deref()
-            .is_some_and(|message| message.contains("tool-invocation syntax")));
+        assert_eq!(
+            schema["properties"]["mode"]["enum"],
+            serde_json::json!(["w", "a"])
+        );
     }
 
     #[tokio::test]
@@ -394,6 +419,24 @@ mod tests {
 
         assert!(!validation.result);
         assert_eq!(validation.message.as_deref(), Some("content is required"));
+    }
+
+    #[tokio::test]
+    async fn validate_input_rejects_invalid_mode() {
+        let tool = FileWriteTool::new();
+
+        let validation = tool
+            .validate_input(
+                &json!({ "file_path": "new.txt", "content": "hello", "mode": "x" }),
+                None,
+            )
+            .await;
+
+        assert!(!validation.result);
+        assert_eq!(
+            validation.message.as_deref(),
+            Some("mode must be either 'w' (overwrite) or 'a' (append), got 'x'")
+        );
     }
 }
 
@@ -471,14 +514,15 @@ impl Tool for FileWriteTool {
             };
         }
 
-        if let Some(content) = input.get("content").and_then(|v| v.as_str()) {
-            if contains_tool_invocation_artifacts(content) {
-                return Self::guidance_failure(
-                    "Write content looks like tool-invocation syntax instead of raw file content. \
-                     Output the file body directly in the `content` field without nested tool calls."
-                        .to_string(),
-                );
-            }
+        if let Err(message) =
+            Self::parse_mode_value(input.get("mode").and_then(|value| value.as_str()))
+        {
+            return ValidationResult {
+                result: false,
+                message: Some(message),
+                error_code: Some(400),
+                meta: None,
+            };
         }
 
         let large_write_warning =
@@ -531,6 +575,8 @@ impl Tool for FileWriteTool {
     }
 
     fn render_tool_use_message(&self, input: &Value, options: &ToolRenderOptions) -> String {
+        let mode = Self::parse_mode_value(input.get("mode").and_then(|v| v.as_str()))
+            .unwrap_or(WriteLocalFileMode::Write);
         if let Some(file_path) = input.get("file_path").and_then(|v| v.as_str()) {
             if options.verbose {
                 let content_len = input
@@ -538,9 +584,19 @@ impl Tool for FileWriteTool {
                     .and_then(|v| v.as_str())
                     .map(|s| s.len())
                     .unwrap_or(0);
-                format!("Writing {} characters to {}", content_len, file_path)
+                match mode {
+                    WriteLocalFileMode::Write => {
+                        format!("Writing {} characters to {}", content_len, file_path)
+                    }
+                    WriteLocalFileMode::Append => {
+                        format!("Appending {} characters to {}", content_len, file_path)
+                    }
+                }
             } else {
-                format!("Write {}", file_path)
+                match mode {
+                    WriteLocalFileMode::Write => format!("Write {}", file_path),
+                    WriteLocalFileMode::Append => format!("Append {}", file_path),
+                }
             }
         } else {
             "Writing file".to_string()
@@ -571,26 +627,18 @@ impl Tool for FileWriteTool {
             .get("content")
             .and_then(|v| v.as_str())
             .ok_or_else(|| BitFunError::tool("content is required".to_string()))?;
-        let content = strip_tool_invocation_artifacts(content);
-        if content.is_empty() {
-            return Err(BitFunError::tool(file_tool_guidance_message(
-                "Write content is empty after removing tool-invocation syntax. \
-                 Provide the raw file body in the `content` field.",
-            )));
-        }
-        if contains_tool_invocation_artifacts(&content) {
-            return Err(BitFunError::tool(file_tool_guidance_message(
-                "Write content still contains tool-invocation syntax after sanitization. \
-                 Provide raw file content only.",
-            )));
-        }
+        let content = content.to_string();
+        let mode = Self::parse_mode_value(input.get("mode").and_then(|v| v.as_str()))
+            .map_err(BitFunError::tool)?;
 
         let file_already_exists = Self::file_exists(context, &resolved).await;
-        if file_already_exists
+        if mode == WriteLocalFileMode::Write
+            && file_already_exists
             && Self::existing_file_matches_content(context, &resolved, &content).await == Some(true)
         {
             let result = Self::write_success_result(
                 &resolved.logical_path,
+                mode,
                 0,
                 0,
                 "already_exists_same_content",
@@ -603,40 +651,64 @@ impl Tool for FileWriteTool {
         }
 
         Self::assert_atomic_write_freshness_if_exists(context, &resolved).await?;
+        let final_content = match (mode, file_already_exists) {
+            (WriteLocalFileMode::Append, true) => {
+                let mut existing = read_current_file_content(context, &resolved).await?;
+                existing.push_str(&content);
+                existing
+            }
+            _ => content.clone(),
+        };
 
         if resolved.uses_remote_workspace_backend() {
             let ws_fs = context.ws_fs().ok_or_else(|| {
                 BitFunError::tool("Remote workspace file system is unavailable".to_string())
             })?;
             ws_fs
-                .write_file(&resolved.resolved_path, content.as_bytes())
+                .write_file(&resolved.resolved_path, final_content.as_bytes())
                 .await
                 .map_err(|e| BitFunError::tool(format!("Failed to write file: {}", e)))?;
             let timestamp_ms = file_mutation_timestamp_ms(context, &resolved).await;
-            update_file_read_state_after_mutation(context, &resolved, &content, timestamp_ms);
+            update_file_read_state_after_mutation(context, &resolved, &final_content, timestamp_ms);
 
-            let (status, assistant_message) = if file_already_exists {
-                (
+            let (status, assistant_message) = match (mode, file_already_exists) {
+                (WriteLocalFileMode::Write, true) => (
                     "overwritten",
                     format!(
                         "Successfully overwrote {} ({} bytes).",
                         resolved.logical_path,
                         content.len()
                     ),
-                )
-            } else {
-                (
+                ),
+                (WriteLocalFileMode::Write, false) => (
                     "created",
                     format!(
                         "Successfully created {} ({} bytes).",
                         resolved.logical_path,
                         content.len()
                     ),
-                )
+                ),
+                (WriteLocalFileMode::Append, true) => (
+                    "appended",
+                    format!(
+                        "Successfully appended to {} ({} bytes).",
+                        resolved.logical_path,
+                        content.len()
+                    ),
+                ),
+                (WriteLocalFileMode::Append, false) => (
+                    "created",
+                    format!(
+                        "Successfully created {} ({} bytes).",
+                        resolved.logical_path,
+                        content.len()
+                    ),
+                ),
             };
 
             let result = Self::write_success_result(
                 &resolved.logical_path,
+                mode,
                 content.len(),
                 if content.is_empty() {
                     0
@@ -653,6 +725,7 @@ impl Tool for FileWriteTool {
             logical_path: resolved.logical_path.clone(),
             resolved_path: Path::new(&resolved.resolved_path).to_path_buf(),
             content: content.clone(),
+            mode,
         };
         let outcome = tokio::task::spawn_blocking(move || write_local_file(write_request))
             .await
@@ -660,10 +733,11 @@ impl Tool for FileWriteTool {
             .map_err(BitFunError::tool)?;
 
         let timestamp_ms = file_mutation_timestamp_ms(context, &resolved).await;
-        update_file_read_state_after_mutation(context, &resolved, &content, timestamp_ms);
+        update_file_read_state_after_mutation(context, &resolved, &final_content, timestamp_ms);
 
         let result = Self::write_success_result(
             &resolved.logical_path,
+            mode,
             outcome.bytes_written,
             outcome.lines_written,
             outcome.status.as_str(),

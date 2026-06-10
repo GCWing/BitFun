@@ -1,10 +1,12 @@
-use std::fs;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WriteLocalFileStatus {
     Created,
     Overwritten,
+    Appended,
     AlreadyExistsSameContent,
 }
 
@@ -13,9 +15,16 @@ impl WriteLocalFileStatus {
         match self {
             Self::Created => "created",
             Self::Overwritten => "overwritten",
+            Self::Appended => "appended",
             Self::AlreadyExistsSameContent => "already_exists_same_content",
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WriteLocalFileMode {
+    Write,
+    Append,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -23,6 +32,7 @@ pub struct WriteLocalFileRequest {
     pub logical_path: String,
     pub resolved_path: PathBuf,
     pub content: String,
+    pub mode: WriteLocalFileMode,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -43,7 +53,7 @@ fn count_written_lines(content: &str) -> usize {
 
 pub fn write_local_file(request: WriteLocalFileRequest) -> Result<WriteLocalFileOutcome, String> {
     let file_already_exists = request.resolved_path.exists();
-    if file_already_exists {
+    if request.mode == WriteLocalFileMode::Write && file_already_exists {
         let existing = fs::read(&request.resolved_path).map_err(|error| {
             format!(
                 "Failed to read existing file {}: {}",
@@ -68,17 +78,48 @@ pub fn write_local_file(request: WriteLocalFileRequest) -> Result<WriteLocalFile
             .map_err(|error| format!("Failed to create directory: {}", error))?;
     }
 
-    fs::write(&request.resolved_path, &request.content)
-        .map_err(|error| format!("Failed to write file {}: {}", request.logical_path, error))?;
+    let status = match request.mode {
+        WriteLocalFileMode::Write => {
+            fs::write(&request.resolved_path, &request.content).map_err(|error| {
+                format!("Failed to write file {}: {}", request.logical_path, error)
+            })?;
 
-    let status = if file_already_exists {
-        WriteLocalFileStatus::Overwritten
-    } else {
-        WriteLocalFileStatus::Created
+            if file_already_exists {
+                WriteLocalFileStatus::Overwritten
+            } else {
+                WriteLocalFileStatus::Created
+            }
+        }
+        WriteLocalFileMode::Append => {
+            let mut file = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&request.resolved_path)
+                .map_err(|error| {
+                    format!(
+                        "Failed to open file {} for append: {}",
+                        request.logical_path, error
+                    )
+                })?;
+            file.write_all(request.content.as_bytes())
+                .map_err(|error| {
+                    format!(
+                        "Failed to append to file {}: {}",
+                        request.logical_path, error
+                    )
+                })?;
+
+            if file_already_exists {
+                WriteLocalFileStatus::Appended
+            } else {
+                WriteLocalFileStatus::Created
+            }
+        }
     };
     let verb = match status {
         WriteLocalFileStatus::Created => "created",
         WriteLocalFileStatus::Overwritten => "overwrote",
+        WriteLocalFileStatus::Appended => "appended to",
         WriteLocalFileStatus::AlreadyExistsSameContent => unreachable!(),
     };
 
