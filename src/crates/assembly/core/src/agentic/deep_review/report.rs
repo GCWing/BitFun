@@ -10,17 +10,18 @@ use crate::agentic::coordination::get_global_coordinator;
 use crate::agentic::core::CompressionContract;
 use crate::agentic::deep_review_policy::{
     deep_review_capacity_skip_count, deep_review_concurrency_cap_rejection_count,
-    deep_review_runtime_diagnostics_snapshot, DeepReviewRuntimeDiagnostics,
+    deep_review_runtime_diagnostics_snapshot,
 };
 use crate::agentic::tools::framework::ToolUseContext;
 use crate::util::errors::BitFunResult;
+use bitfun_agent_runtime::deep_review::diagnostics as runtime_diagnostics;
 use bitfun_agent_runtime::deep_review::report as runtime_report;
 pub(crate) use bitfun_agent_runtime::deep_review::report::{
-    deep_review_cache_from_completed_reviewers, fill_deep_review_packet_metadata,
-    push_reliability_signal_if_missing, DeepReviewCacheUpdate,
+    deep_review_cache_from_completed_reviewers, fill_deep_review_cache_update_signals,
+    fill_deep_review_packet_metadata,
 };
 use log::debug;
-use serde_json::{json, Value};
+use serde_json::Value;
 
 pub(crate) fn is_deep_review_context(context: Option<&ToolUseContext>) -> bool {
     context
@@ -115,17 +116,7 @@ pub(crate) fn fill_deep_review_runtime_tracker_signals(
     };
     let count = deep_review_concurrency_cap_rejection_count(dialog_turn_id)
         + deep_review_capacity_skip_count(dialog_turn_id);
-    if count > 0 {
-        runtime_report::push_reliability_signal_if_missing(
-            input,
-            json!({
-                "kind": "concurrency_limited",
-                "severity": "warning",
-                "count": count,
-                "source": "runtime"
-            }),
-        );
-    }
+    runtime_report::fill_deep_review_runtime_tracker_signal(input, count);
 }
 
 pub(crate) fn log_deep_review_runtime_diagnostics(dialog_turn_id: Option<&str>) {
@@ -135,74 +126,12 @@ pub(crate) fn log_deep_review_runtime_diagnostics(dialog_turn_id: Option<&str>) 
     else {
         return;
     };
-    let Some(DeepReviewRuntimeDiagnostics {
-        queue_wait_count,
-        queue_wait_total_ms,
-        queue_wait_max_ms,
-        provider_capacity_queue_count,
-        provider_capacity_retry_count,
-        provider_capacity_retry_success_count,
-        capacity_skip_count,
-        provider_capacity_queue_reason_counts,
-        provider_capacity_retry_reason_counts,
-        provider_capacity_retry_success_reason_counts,
-        capacity_skip_reason_counts,
-        effective_parallel_min,
-        effective_parallel_final,
-        manual_queue_action_count,
-        manual_retry_count,
-        auto_retry_count,
-        auto_retry_suppressed_reason_counts,
-        shared_context_total_calls,
-        shared_context_duplicate_calls,
-        shared_context_duplicate_context_count,
-        shared_context_duplicate_savings_candidate_count,
-    }) = deep_review_runtime_diagnostics_snapshot(dialog_turn_id)
-    else {
+    let Some(diagnostics) = deep_review_runtime_diagnostics_snapshot(dialog_turn_id) else {
         return;
     };
-    let auto_retry_suppressed_reason_counts =
-        serde_json::to_string(&auto_retry_suppressed_reason_counts)
-            .unwrap_or_else(|_| "{}".to_string());
-    let provider_capacity_queue_reason_counts =
-        serde_json::to_string(&provider_capacity_queue_reason_counts)
-            .unwrap_or_else(|_| "{}".to_string());
-    let provider_capacity_retry_reason_counts =
-        serde_json::to_string(&provider_capacity_retry_reason_counts)
-            .unwrap_or_else(|_| "{}".to_string());
-    let provider_capacity_retry_success_reason_counts =
-        serde_json::to_string(&provider_capacity_retry_success_reason_counts)
-            .unwrap_or_else(|_| "{}".to_string());
-    let capacity_skip_reason_counts =
-        serde_json::to_string(&capacity_skip_reason_counts).unwrap_or_else(|_| "{}".to_string());
-
     debug!(
-        "DeepReview runtime diagnostics: queue_wait_count={}, queue_wait_total_ms={}, queue_wait_max_ms={}, provider_capacity_queue_count={}, provider_capacity_retry_count={}, provider_capacity_retry_success_count={}, capacity_skip_count={}, provider_capacity_queue_reason_counts={}, provider_capacity_retry_reason_counts={}, provider_capacity_retry_success_reason_counts={}, capacity_skip_reason_counts={}, effective_parallel_min={}, effective_parallel_final={}, manual_queue_action_count={}, manual_retry_count={}, auto_retry_count={}, auto_retry_suppressed_reason_counts={}, shared_context_total_calls={}, shared_context_duplicate_calls={}, shared_context_duplicate_context_count={}, shared_context_duplicate_savings_candidate_count={}",
-        queue_wait_count,
-        queue_wait_total_ms,
-        queue_wait_max_ms,
-        provider_capacity_queue_count,
-        provider_capacity_retry_count,
-        provider_capacity_retry_success_count,
-        capacity_skip_count,
-        provider_capacity_queue_reason_counts,
-        provider_capacity_retry_reason_counts,
-        provider_capacity_retry_success_reason_counts,
-        capacity_skip_reason_counts,
-        effective_parallel_min
-            .map(|value| value.to_string())
-            .unwrap_or_else(|| "none".to_string()),
-        effective_parallel_final
-            .map(|value| value.to_string())
-            .unwrap_or_else(|| "none".to_string()),
-        manual_queue_action_count,
-        manual_retry_count,
-        auto_retry_count,
-        auto_retry_suppressed_reason_counts,
-        shared_context_total_calls,
-        shared_context_duplicate_calls,
-        shared_context_duplicate_context_count,
-        shared_context_duplicate_savings_candidate_count
+        "{}",
+        runtime_diagnostics::deep_review_runtime_diagnostics_log_line(&diagnostics)
     );
 }
 

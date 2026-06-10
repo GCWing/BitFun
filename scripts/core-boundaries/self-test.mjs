@@ -290,6 +290,69 @@ export function runManifestParserSelfTest({
       throw new Error(`core tool restrictions boundary rule must forbid contract: ${contract}`);
     }
   }
+  const coreDeepReviewTaskAdapterRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/deep_review/task_adapter.rs',
+  );
+  if (!coreDeepReviewTaskAdapterRuleText) {
+    throw new Error('missing core DeepReview task adapter boundary rule');
+  }
+  const coreDeepReviewTaskAdapterContracts = [
+    'QueueWaitTimer',
+    'decide_provider_capacity_queue_step',
+    'decide_blocked_reviewer_admission_queue_step',
+    '<partial_result status=',
+    'completed successfully with result:',
+    'Retries used:',
+    'DeepReview automatic retry elapsed guard exceeded',
+    'cancelled coverage',
+  ];
+  for (const contract of coreDeepReviewTaskAdapterContracts) {
+    if (!coreDeepReviewTaskAdapterRuleText.includes(contract)) {
+      throw new Error(`core DeepReview task adapter boundary rule must forbid contract: ${contract}`);
+    }
+  }
+  const coreTaskToolRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/tools/implementations/task_tool.rs',
+  );
+  if (!coreTaskToolRuleText) {
+    throw new Error('missing core TaskTool DeepReview boundary rule');
+  }
+  const coreTaskToolContracts = [
+    '<partial_result status=',
+    'completed successfully with result:',
+    'Retries used:',
+    'DeepReview automatic retry elapsed guard exceeded',
+    'cancelled coverage',
+    'provider_capacity_retry_attempts',
+    'provider_capacity_queue_elapsed_ms',
+    'DEEP_REVIEW_PROVIDER_CAPACITY_MAX_RETRY_ATTEMPTS',
+  ];
+  for (const contract of coreTaskToolContracts) {
+    if (!coreTaskToolRuleText.includes(contract)) {
+      throw new Error(`core TaskTool DeepReview boundary rule must forbid contract: ${contract}`);
+    }
+  }
+  const coreCodeReviewToolRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/tools/implementations/code_review_tool.rs',
+  );
+  if (!coreCodeReviewToolRuleText) {
+    throw new Error('missing core CodeReviewTool DeepReview report boundary rule');
+  }
+  if (!coreCodeReviewToolRuleText.includes('"kind"')) {
+    throw new Error('core CodeReviewTool DeepReview boundary rule must be anchored to kind');
+  }
+  for (const contract of ['"cache_hit"', '"cache_miss"']) {
+    if (!coreCodeReviewToolRuleText.includes(contract)) {
+      throw new Error(
+        `core CodeReviewTool DeepReview boundary rule must forbid contract: ${contract}`,
+      );
+    }
+  }
+  for (const contract of ['DeepReviewIncrementalCache', 'deepReviewCache']) {
+    if (!coreTaskToolRuleText.includes(contract)) {
+      throw new Error(`core TaskTool DeepReview boundary rule must forbid contract: ${contract}`);
+    }
+  }
   const agentToolsFrameworkRule = requiredContentRules.find(
     (rule) => rule.path === 'src/crates/execution/tool-contracts/src/framework.rs',
   );
@@ -1057,7 +1120,6 @@ export function runManifestParserSelfTest({
         'bitfun_runtime_ports',
         'DelegationPolicy',
         'SubagentContextMode',
-        'queue_timing',
       ],
     },
     {
@@ -1745,6 +1807,58 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/assembly/core/src/agentic/agents/citation_renumber.rs',
       contracts: ['run_for_session_workspace', 'bitfun_services_integrations::deep_research'],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/src/deep_review/task_execution.rs',
+      contracts: [
+        'deep_review_task_completion_result',
+        'deep_review_cancelled_reviewer_result',
+        'should_emit_deep_review_retry_guidance',
+        'deep_review_retry_guidance',
+        'auto_retry_suppression_reason',
+        'ensure_deep_review_auto_retry_allowed',
+        'DeepReviewProviderCapacityQueueRuntime',
+        'DeepReviewProviderCapacityRetryRuntime',
+        'DeepReviewProviderCapacityRetryDecision',
+        'DeepReviewReviewerAdmissionQueueRuntime',
+        'QueueWaitTimer',
+      ],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/src/deep_review/report.rs',
+      contracts: ['fill_deep_review_runtime_tracker_signal'],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/src/deep_review/diagnostics.rs',
+      contracts: ['deep_review_runtime_diagnostics_log_line'],
+    },
+    {
+      path: 'src/crates/assembly/core/src/agentic/deep_review/task_adapter.rs',
+      contracts: [
+        'runtime_task_execution::deep_review_task_completion_result',
+        'runtime_task_execution::deep_review_cancelled_reviewer_result',
+        'runtime_task_execution::should_emit_deep_review_retry_guidance',
+        'runtime_task_execution::deep_review_retry_guidance',
+        'runtime_task_execution::auto_retry_suppression_reason',
+        'runtime_task_execution::ensure_deep_review_auto_retry_allowed',
+        'runtime_task_execution::DeepReviewProviderCapacityQueueRuntime::start',
+        'DeepReviewProviderCapacityRetryRuntime',
+        'DeepReviewProviderCapacityRetryDecision',
+        'runtime_task_execution::DeepReviewReviewerAdmissionQueueRuntime::start',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/agentic/tools/implementations/task_tool.rs',
+      contracts: [
+        'deep_review_task_adapter::should_emit_deep_review_retry_guidance',
+        'deep_review_task_adapter::deep_review_retry_guidance',
+        'deep_review_task_adapter::auto_retry_suppression_reason',
+        'deep_review_task_adapter::ensure_deep_review_auto_retry_allowed',
+        'deep_review_task_adapter::deep_review_task_completion_result',
+        'deep_review_task_adapter::deep_review_cancelled_reviewer_result',
+        'DeepReviewProviderCapacityRetryRuntime::default',
+        'DeepReviewProviderCapacityRetryDecision::WaitForCapacity',
+      ],
     },
     {
       path: 'src/crates/services/services-integrations/src/deep_research.rs',

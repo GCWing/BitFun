@@ -4,7 +4,7 @@
 
 use crate::agentic::coordination::get_global_coordinator;
 use crate::agentic::core::CompressionContract;
-use crate::agentic::deep_review::report::{self as deep_review_report, DeepReviewCacheUpdate};
+use crate::agentic::deep_review::report as deep_review_report;
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
 use crate::service::config::get_app_language_code;
 use crate::service::i18n::code_review_copy_for_language;
@@ -455,18 +455,6 @@ impl CodeReviewTool {
         deep_review_report::log_deep_review_runtime_diagnostics(dialog_turn_id);
     }
 
-    fn deep_review_cache_from_completed_reviewers(
-        input: &Value,
-        run_manifest: Option<&Value>,
-        existing_cache: Option<&Value>,
-    ) -> Option<DeepReviewCacheUpdate> {
-        deep_review_report::deep_review_cache_from_completed_reviewers(
-            input,
-            run_manifest,
-            existing_cache,
-        )
-    }
-
     async fn persist_deep_review_cache(
         context: &ToolUseContext,
         cache_value: Value,
@@ -679,33 +667,17 @@ impl Tool for CodeReviewTool {
                 context.dialog_turn_id.as_deref(),
             );
             Self::log_deep_review_runtime_diagnostics(context.dialog_turn_id.as_deref());
-            if let Some(cache_update) = Self::deep_review_cache_from_completed_reviewers(
-                &filled_input,
-                run_manifest.as_ref(),
-                existing_cache.as_ref(),
-            ) {
-                if cache_update.hit_count > 0 {
-                    deep_review_report::push_reliability_signal_if_missing(
-                        &mut filled_input,
-                        json!({
-                            "kind": "cache_hit",
-                            "severity": "info",
-                            "count": cache_update.hit_count,
-                            "source": "runtime"
-                        }),
-                    );
-                }
-                if cache_update.miss_count > 0 {
-                    deep_review_report::push_reliability_signal_if_missing(
-                        &mut filled_input,
-                        json!({
-                            "kind": "cache_miss",
-                            "severity": "info",
-                            "count": cache_update.miss_count,
-                            "source": "runtime"
-                        }),
-                    );
-                }
+            if let Some(cache_update) =
+                deep_review_report::deep_review_cache_from_completed_reviewers(
+                    &filled_input,
+                    run_manifest.as_ref(),
+                    existing_cache.as_ref(),
+                )
+            {
+                deep_review_report::fill_deep_review_cache_update_signals(
+                    &mut filled_input,
+                    &cache_update,
+                );
                 if let Err(error) =
                     Self::persist_deep_review_cache(context, cache_update.value).await
                 {
@@ -1445,192 +1417,5 @@ mod tests {
             1,
             Some(&CompressionContract::default())
         ));
-    }
-
-    #[test]
-    fn deep_review_incremental_cache_stores_completed_reviewers_by_packet_id() {
-        use crate::agentic::deep_review_policy::DeepReviewIncrementalCache;
-
-        let manifest = json!({
-            "incrementalReviewCache": {
-                "fingerprint": "fp-review-v2"
-            },
-            "workPackets": [
-                {
-                    "packetId": "reviewer:ReviewSecurity:group-1-of-1",
-                    "phase": "reviewer",
-                    "subagentId": "ReviewSecurity",
-                    "displayName": "Security Reviewer"
-                },
-                {
-                    "packetId": "reviewer:ReviewPerformance:group-1-of-1",
-                    "phase": "reviewer",
-                    "subagentId": "ReviewPerformance",
-                    "displayName": "Performance Reviewer"
-                }
-            ]
-        });
-        let mut input = json!({
-            "summary": {
-                "overall_assessment": "Review completed",
-                "risk_level": "medium",
-                "recommended_action": "request_changes"
-            },
-            "issues": [],
-            "positive_points": [],
-            "reviewers": [
-                {
-                    "name": "Security Reviewer",
-                    "specialty": "security",
-                    "status": "completed",
-                    "summary": "Found one high-risk issue."
-                },
-                {
-                    "name": "Performance Reviewer",
-                    "specialty": "performance",
-                    "status": "partial_timeout",
-                    "summary": "Timed out before completion.",
-                    "partial_output": "Large render path was still being checked."
-                }
-            ]
-        });
-
-        CodeReviewTool::validate_and_fill_defaults(&mut input, true, Some(&manifest), None);
-        let cache_update = CodeReviewTool::deep_review_cache_from_completed_reviewers(
-            &input,
-            Some(&manifest),
-            None,
-        )
-        .expect("completed reviewer should produce cache value");
-        let cache = DeepReviewIncrementalCache::from_value(&cache_update.value);
-
-        assert_eq!(cache.fingerprint(), "fp-review-v2");
-        assert_eq!(cache_update.hit_count, 0);
-        assert_eq!(cache_update.miss_count, 1);
-        assert!(cache
-            .get_packet("reviewer:ReviewSecurity:group-1-of-1")
-            .is_some_and(|output| output.contains("Found one high-risk issue.")));
-        assert_eq!(
-            cache.get_packet("reviewer:ReviewPerformance:group-1-of-1"),
-            None
-        );
-    }
-
-    #[test]
-    fn deep_review_incremental_cache_replaces_stale_existing_cache() {
-        use crate::agentic::deep_review_policy::DeepReviewIncrementalCache;
-
-        let manifest = json!({
-            "incrementalReviewCache": {
-                "fingerprint": "fp-new"
-            },
-            "workPackets": [
-                {
-                    "packetId": "reviewer:ReviewSecurity",
-                    "phase": "reviewer",
-                    "subagentId": "ReviewSecurity",
-                    "displayName": "Security Reviewer"
-                }
-            ]
-        });
-        let mut stale_cache = DeepReviewIncrementalCache::new("fp-old");
-        stale_cache.store_packet("reviewer:ReviewSecurity", "stale output");
-        let mut input = json!({
-            "summary": {
-                "overall_assessment": "Review completed",
-                "risk_level": "low",
-                "recommended_action": "approve"
-            },
-            "issues": [],
-            "positive_points": [],
-            "reviewers": [
-                {
-                    "name": "Security Reviewer",
-                    "specialty": "security",
-                    "status": "completed",
-                    "summary": "Fresh security output."
-                }
-            ]
-        });
-
-        CodeReviewTool::validate_and_fill_defaults(&mut input, true, Some(&manifest), None);
-        let cache_update = CodeReviewTool::deep_review_cache_from_completed_reviewers(
-            &input,
-            Some(&manifest),
-            Some(&stale_cache.to_value()),
-        )
-        .expect("completed reviewer should replace stale cache");
-        let cache = DeepReviewIncrementalCache::from_value(&cache_update.value);
-
-        assert_eq!(cache.fingerprint(), "fp-new");
-        assert_eq!(cache_update.hit_count, 0);
-        assert_eq!(cache_update.miss_count, 1);
-        assert!(cache
-            .get_packet("reviewer:ReviewSecurity")
-            .is_some_and(|output| output.contains("Fresh security output.")));
-        assert!(!cache
-            .get_packet("reviewer:ReviewSecurity")
-            .is_some_and(|output| output.contains("stale output")));
-    }
-
-    #[test]
-    fn deep_review_incremental_cache_counts_existing_packet_hits() {
-        use crate::agentic::deep_review_policy::DeepReviewIncrementalCache;
-
-        let manifest = json!({
-            "incrementalReviewCache": {
-                "fingerprint": "fp-existing"
-            },
-            "workPackets": [
-                {
-                    "packetId": "reviewer:ReviewSecurity",
-                    "phase": "reviewer",
-                    "subagentId": "ReviewSecurity",
-                    "displayName": "Security Reviewer"
-                },
-                {
-                    "packetId": "reviewer:ReviewPerformance",
-                    "phase": "reviewer",
-                    "subagentId": "ReviewPerformance",
-                    "displayName": "Performance Reviewer"
-                }
-            ]
-        });
-        let mut existing_cache = DeepReviewIncrementalCache::new("fp-existing");
-        existing_cache.store_packet("reviewer:ReviewSecurity", "cached security output");
-        let mut input = json!({
-            "summary": {
-                "overall_assessment": "Review completed",
-                "risk_level": "medium",
-                "recommended_action": "request_changes"
-            },
-            "issues": [],
-            "positive_points": [],
-            "reviewers": [
-                {
-                    "name": "Security Reviewer",
-                    "specialty": "security",
-                    "status": "completed",
-                    "summary": "Reused security output."
-                },
-                {
-                    "name": "Performance Reviewer",
-                    "specialty": "performance",
-                    "status": "completed",
-                    "summary": "Fresh performance output."
-                }
-            ]
-        });
-
-        CodeReviewTool::validate_and_fill_defaults(&mut input, true, Some(&manifest), None);
-        let cache_update = CodeReviewTool::deep_review_cache_from_completed_reviewers(
-            &input,
-            Some(&manifest),
-            Some(&existing_cache.to_value()),
-        )
-        .expect("completed reviewers should update cache");
-
-        assert_eq!(cache_update.hit_count, 1);
-        assert_eq!(cache_update.miss_count, 1);
     }
 }
