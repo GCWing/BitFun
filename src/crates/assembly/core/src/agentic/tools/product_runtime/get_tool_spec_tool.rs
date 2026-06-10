@@ -9,16 +9,11 @@ use crate::agentic::tools::tool_context_runtime::ToolUseContext;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use bitfun_agent_tools::{
-    build_get_tool_spec_collapsed_tool_entry, GetToolSpecCollapsedToolSummary,
-    GetToolSpecExecutionError, GET_TOOL_SPEC_TOOL_NAME,
+    GetToolSpecCollapsedToolSummary, GetToolSpecExecutionError, GET_TOOL_SPEC_TOOL_NAME,
 };
 use serde_json::Value;
 
-const GET_TOOL_SPEC_DESCRIPTION: &str = r#"Read usage instructions for additional tools.
-
-Some tools are collapsed: their names may appear in the tool list, but you must not call them directly until you have loaded their definition with GetToolSpec.
-
-When the current collapsed tool listing includes a <collapsed_tools> section, use the exact tool names from that section. Before using one of those tools, first call GetToolSpec with its exact tool name to read its full description and input schema. After reading the returned definition, call the real tool directly using its own name.
+const GET_TOOL_SPEC_DESCRIPTION: &str = r#"Read full schema before first calling a collapsed tool.
 
 Do not call GetToolSpec again for a tool whose definition is already loaded in the current conversation."#;
 
@@ -38,9 +33,7 @@ impl GetToolSpecTool {
 
         let collapsed_tools_list = collapsed_tools
             .iter()
-            .map(|tool| {
-                build_get_tool_spec_collapsed_tool_entry(&tool.name, &tool.short_description)
-            })
+            .map(|tool| format!("- {}", tool.name))
             .collect::<Vec<_>>()
             .join("\n");
 
@@ -139,7 +132,7 @@ mod tests {
     use std::collections::HashMap;
 
     #[test]
-    fn collapsed_tools_context_uses_explicit_short_description() {
+    fn collapsed_tools_context_lists_names_without_short_descriptions() {
         let tool_name = format!("CatalogDescriptionTestTool_{}", uuid::Uuid::new_v4());
         let description = GetToolSpecTool::build_collapsed_tools_context_section(&[
             bitfun_agent_tools::GetToolSpecCollapsedToolSummary {
@@ -149,8 +142,8 @@ mod tests {
         ])
         .expect("collapsed tools section");
 
-        assert!(description.contains(&format!("- {}: Concise catalog entry.", tool_name)));
-        assert!(!description.contains(&format!("- {}: Verbose description first line.", tool_name)));
+        assert!(description.contains(&format!("- {}", tool_name)));
+        assert!(!description.contains("Concise catalog entry."));
     }
 
     #[tokio::test]

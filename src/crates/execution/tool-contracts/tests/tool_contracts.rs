@@ -1253,18 +1253,13 @@ fn collapsed_tool_stub_definition_preserves_prompt_visible_guardrail() {
     assert!(stub.description.contains("Fetch a URL"));
     assert!(stub
         .description
-        .contains("First call `GetToolSpec` with {\"tool_name\":\"WebFetch\"}"));
+        .contains("Call `GetToolSpec` with {\"tool_name\":\"WebFetch\"} before first use."));
     assert_eq!(
         stub.parameters,
         json!({
             "type": "object",
             "additionalProperties": false,
-            "properties": {
-                "tool_name": {
-                    "type": "string",
-                    "description": "Do not supply WebFetch arguments here while the tool is collapsed. Use GetToolSpec with {\"tool_name\":\"WebFetch\"} first."
-                }
-            }
+            "properties": {}
         })
     );
 }
@@ -1323,7 +1318,7 @@ fn prompt_visible_manifest_builder_preserves_expanded_and_collapsed_contract() {
     );
     assert!(definitions[2]
         .description
-        .contains("First call `GetToolSpec` with {\"tool_name\":\"WebFetch\"}"));
+        .contains("Call `GetToolSpec` with {\"tool_name\":\"WebFetch\"} before first use."));
 }
 
 #[test]
@@ -2199,7 +2194,7 @@ async fn contextual_manifest_resolver_preserves_runtime_visible_manifest_contrac
         .expect("collapsed WebFetch stub");
     assert!(web_fetch
         .description
-        .contains("First call `GetToolSpec` with {\"tool_name\":\"WebFetch\"}"));
+        .contains("Call `GetToolSpec` with {\"tool_name\":\"WebFetch\"} before first use."));
     assert_eq!(web_fetch.parameters["additionalProperties"], false);
 }
 

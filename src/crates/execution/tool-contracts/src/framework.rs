@@ -309,22 +309,13 @@ pub fn build_collapsed_tool_stub_definition(
     ToolManifestDefinition::new(
         tool_name,
         format!(
-            "{} [This tool is collapsed. Do not call `{}` directly yet. First call `GetToolSpec` with {{\"tool_name\":\"{}\"}} to load its full description and input schema, then retry `{}` using the returned schema.]",
-            short_description, tool_name, tool_name, tool_name
+            "{} [This tool is collapsed. Call `GetToolSpec` with {{\"tool_name\":\"{}\"}} before first use.]",
+            short_description, tool_name,
         ),
         serde_json::json!({
             "type": "object",
             "additionalProperties": false,
-            "properties": {
-                "tool_name": {
-                    "type": "string",
-                    "description": format!(
-                        "Do not supply {} arguments here while the tool is collapsed. Use GetToolSpec with {{\"tool_name\":\"{}\"}} first.",
-                        tool_name,
-                        tool_name
-                    )
-                }
-            }
+            "properties": {}
         }),
     )
 }

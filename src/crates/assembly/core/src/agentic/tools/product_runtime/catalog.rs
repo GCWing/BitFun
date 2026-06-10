@@ -562,18 +562,13 @@ mod tests {
                 .unwrap_or_else(|| panic!("{tool_name} stub should exist"));
             assert!(
                 stub.description.contains(&format!(
-                    "First call `GetToolSpec` with {{\"tool_name\":\"{tool_name}\"}}"
+                    "Call `GetToolSpec` with {{\"tool_name\":\"{tool_name}\"}} before first use."
                 )),
                 "collapsed stub must point to the explicit GetToolSpec unlock flow"
             );
             assert_eq!(stub.parameters["type"], json!("object"));
             assert_eq!(stub.parameters["additionalProperties"], json!(false));
-            assert_eq!(
-                stub.parameters["properties"]["tool_name"]["description"],
-                json!(format!(
-                    "Do not supply {tool_name} arguments here while the tool is collapsed. Use GetToolSpec with {{\"tool_name\":\"{tool_name}\"}} first."
-                ))
-            );
+            assert_eq!(stub.parameters["properties"], json!({}));
         }
     }
 

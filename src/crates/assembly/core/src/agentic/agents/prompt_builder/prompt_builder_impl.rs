@@ -751,8 +751,7 @@ mod tests {
             skill_listing: Some("<available_skills>\n- pdf\n</available_skills>".to_string()),
             agent_listing: Some("<available_agents>\n- Explore\n</available_agents>".to_string()),
             collapsed_tool_listing: Some(
-                "<collapsed_tools>\n- WebFetch: Fetch readable web content.\n</collapsed_tools>"
-                    .to_string(),
+                "<collapsed_tools>\n- WebFetch\n</collapsed_tools>".to_string(),
             ),
         };
         let context = PromptBuilderContext::new(r"workspace\root", None, None)
