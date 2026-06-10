@@ -382,7 +382,8 @@ impl Tool for ExecControlTool {
 
 Pass the session_id returned by ExecCommand.
 Use action="interrupt" when a command should stop gracefully, like pressing Ctrl+C. Use action="kill" when the process must be terminated.
-After the action, yield_time_ms waits for output or exit status. Output is only what was produced during this tool call's wait window."#
+After the action, yield_time_ms waits for output or exit status.
+Output is only what was produced during this tool call's wait window."#
             .to_string())
     }
 
@@ -396,7 +397,7 @@ After the action, yield_time_ms waits for output or exit status. Output is only 
             "properties": {
                 "session_id": {
                     "type": "number",
-                    "description": "session_id returned by ExecCommand while a process is still running."
+                    "description": "session_id returned by ExecCommand."
                 },
                 "action": {
                     "type": "string",

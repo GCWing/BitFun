@@ -773,14 +773,21 @@ impl Tool for ExecCommandTool {
     }
 
     async fn description(&self) -> BitFunResult<String> {
-        Ok(r#"Runs a shell command.
+        Ok(r#"Runs a shell command in a separate process.
 
-Each call starts a separate process.
-Use tty=true only for commands that need interactive stdin; otherwise leave tty=false.
-yield_time_ms waits for output until the process exits or the deadline is reached. It does not stop the process.
-If the process is still running, the result includes a numeric session_id. Use WriteStdin to poll for more output or send input to tty=true sessions, and ExecControl to interrupt or kill it.
-Output is only what was produced during this tool call's wait window.
-With tty=false, stdout and stderr ordering is not guaranteed; use tty=true or redirect stderr with 2>&1 when terminal ordering matters."#
+TTY and stdin:
+- tty=true allocates a PTY and gives the command terminal semantics. Use tty=true only for commands that need interactive stdin.
+- tty=false runs without a PTY. Locally this uses pipe-backed stdio; remotely it uses a non-PTY SSH exec channel.
+- With tty=false, no interactive stdin is attached, and input-waiting programs may see EOF instead of a prompt.
+
+Waiting and continuation:
+- yield_time_ms waits for output until the process exits or the deadline is reached. It does not stop the process.
+- If the process is still running after `yield_time_ms`, the result includes a numeric session_id.
+- Use WriteStdin to poll for more output or send input to tty=true sessions, and ExecControl to interrupt or kill it.
+
+Output:
+- Output is only what was produced during this tool call's wait window.
+- With tty=false, stdout and stderr ordering is not guaranteed; use tty=true or redirect stderr with 2>&1 when terminal ordering matters."#
             .to_string())
     }
 
@@ -813,7 +820,7 @@ With tty=false, stdout and stderr ordering is not guaranteed; use tty=true or re
                 },
                 "yield_time_ms": {
                     "type": "number",
-                    "description": "How long to wait for output before yielding. This does not stop the process."
+                    "description": "How long to wait for output before yielding."
                 },
                 "max_output_chars": {
                     "type": "number",
