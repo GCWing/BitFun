@@ -416,6 +416,16 @@ pub async fn quit_app(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(target_env = "ohos")]
+use napi_derive_ohos::napi;
+#[cfg(target_env = "ohos")]
+#[napi]
+pub fn ohos_mark_clean_shutdown() {
+    log::info!("Quit requested via quit_app command");
+    crate::crash_diagnostics::mark_clean_shutdown("quit_app_command");
+    crate::perform_process_exit_cleanup();
+}
+
 /// Hide the main window so it lives only in the system tray (used by the "ask"
 /// dialog when the user chooses to minimize instead of quitting).
 #[tauri::command]

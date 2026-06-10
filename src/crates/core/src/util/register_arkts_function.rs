@@ -41,4 +41,3 @@ pub async fn open_dialog_file() -> Result<String, String> {
         Err(err) => Err(err.to_string()),
     }
 }
-
