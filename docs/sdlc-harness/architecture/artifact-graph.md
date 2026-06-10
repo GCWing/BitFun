@@ -7,11 +7,13 @@
 
 Artifact Graph 是 BitFun 面向目标项目的工程上下文层。它不追求一次覆盖全部 SDLC 对象，而是先把高频、高价值、可验证的 PR 证据链建起来，再逐步扩展到需求变更、发布和 incident 回溯。
 
-P0 最小闭环是：
+P0 最小闭环不要求目标项目已经有可链接的 issue、spec 或完整 review 系统；它只需要能把本地变更、验证和 EvidencePack 放进可失效的关系投影：
 
 ```text
-issue/spec -> diff -> verification -> review -> PR
+diff -> verification -> evidence_pack -> PR
 ```
+
+P1 再把 `issue/spec/review` 链接接入同一图谱，避免为了证明 P0 价值而提前建设完整需求或评审集成。
 
 所有图谱边必须有来源、置信度、新鲜度和确认状态。低置信自动链接不能直接作为审计结论。
 
@@ -128,8 +130,8 @@ collect artifacts and events
 
 | 阶段 | 目标 |
 |---|---|
-| P0 | `issue/spec -> diff -> verification -> review -> PR` 最小图谱 |
-| P1 | required checks、stale review、PR audit view |
+| P0 | `diff -> verification -> evidence_pack -> PR` 最小投影 |
+| P1 | issue/spec/review 链接、required checks、stale review、PR audit view |
 | P2 | requirement impact、release readiness、incident-to-test |
 | P3 | 跨团队质量趋势、知识图谱查询和预测性风险提示 |
 
@@ -146,7 +148,7 @@ collect artifacts and events
 
 ## 9. 成功标准
 
-- 大多数 PR 可生成包含 linked artifacts 的 EvidencePack。
+- 大多数 PR 可生成包含 diff、verification 和 EvidencePack 关系的最小图谱投影。
 - 高风险 PR 能暴露缺失需求、测试、review 或 owner 链接。
 - 用户可以确认、拒绝或覆盖自动链接。
 - stale link 不会被作为 gate pass 的依据。

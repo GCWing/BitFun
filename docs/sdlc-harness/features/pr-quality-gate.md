@@ -65,12 +65,16 @@ P0 采用 lightweight gate：先覆盖目标项目 Project Profile、本地 diff
 ```ts
 interface PrGateResult {
   status: "pass" | "warn" | "fail" | "degraded";
+  mode: "shadow" | "advisory" | "required" | "blocking";
   risk_level: "low" | "medium" | "high" | "unknown";
   confidence: number;
+  policy_version: string;
+  evidence_pack_id: string;
   summary: string;
   required_checks: RequiredCheckResult[];
   evidence: EvidenceReference[];
   open_risks: OpenRisk[];
+  risk_acceptance?: RiskAcceptance;
   budget: {
     deep_review_required: boolean;
     deep_review_profile: "none" | "targeted" | "full";
@@ -83,6 +87,20 @@ interface PrGateResult {
 }
 ```
 
+人工风险接受模型：
+
+```ts
+interface RiskAcceptance {
+  actor: string;
+  reason: string;
+  scope: "current_changeset" | "current_pr" | "release" | "timeboxed";
+  residual_risk: string;
+  evidence: EvidenceReference[];
+  accepted_at: string;
+  expires_at?: string;
+}
+```
+
 状态语义：
 
 | 状态 | 含义 | 行为 |
@@ -90,7 +108,7 @@ interface PrGateResult {
 | `pass` | 必要证据完整且无阻塞风险 | 允许提交或更新 PR |
 | `warn` | 存在非阻塞风险或推荐检查缺失 | 允许继续，但在 PR 文本中显式展示 |
 | `fail` | 必要验证失败或违反阻塞策略 | 阻止自动提交或要求人工 override |
-| `degraded` | 上下文、证据或工具状态不足，无法可靠判断 | 允许人工确认，但必须记录降级原因 |
+| `degraded` | 上下文、证据或工具状态不足，无法可靠判断 | 允许记录人工风险接受，但不得改写为 `pass` |
 
 上线模式：
 
@@ -100,6 +118,13 @@ interface PrGateResult {
 | `advisory` | 在 PR 文本或本地报告中提示风险 | P0/P1 默认 |
 | `required` | 要求展示结果和 skipped/open risks | P1 团队协作 |
 | `blocking` | 对确定性失败或缺失人工风险接受进行阻断 | 仅在误报率、成本和 override 流程稳定后启用 |
+
+状态转换约束：
+
+- `degraded` 不能因为用户确认而变成 `pass`；只能保留 `degraded` 并附加 risk acceptance，或在补齐证据后重新生成 EvidencePack 和 Gate。
+- `fail` 只能由确定性失败、阻塞策略违反或已禁用主动配置仍被引用触发。
+- `warn` 适合非阻塞 skipped check、推荐检查缺失或低风险 open risk。
+- 所有状态都必须引用 `evidence_pack_id`、`policy_version` 和生成该结果的 source events。
 
 主动配置 gate 策略：
 
@@ -182,6 +207,7 @@ Stale review 规则：
 | Gate 假阳性阻塞交付 | 每个 fail 必须有具体 evidence 和 override path |
 | Gate 假阴性放过风险 | critical path 小 diff 不得按行数降级为 low |
 | 缺证据仍 pass | 缺失 evidence store 或检查结果时必须 `degraded` 或 `fail` |
+| 人工确认掩盖缺证据 | risk acceptance 只能记录接受范围和残余风险，不能把 `degraded` 改写成 `pass` |
 | 未信任主动配置影响 gate | 未 trust review 的 hook/plugin/custom tool 只能导致 degraded/open risk，不能提供 pass 证据 |
 | AI review 低精度 finding | finding 必须有生命周期、stale 标记和人工解决状态 |
 | 插件绕过策略 | Gate 只消费 canonical event，不信任插件直接写入 pass 结论 |
@@ -194,3 +220,4 @@ Stale review 规则：
 - PR 描述减少 reviewer 追问验证信息的成本。
 - Deep Review token 与耗时可见、可预算、可降级。
 - 主动配置变化能被 Gate 显式降级、阻断或要求重新确认。
+- Gate result 能通过 `evidence_pack_id`、`policy_version` 和 risk acceptance 追溯判断依据。
