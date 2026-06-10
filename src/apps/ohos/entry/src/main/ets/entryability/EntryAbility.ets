@@ -35,6 +35,7 @@ export default class EntryAbility extends RustAbility {
   }
 
   onDestroy(): void {
+    RustModule.ohosMarkCleanShutdown();
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onDestroy');
   }
 
