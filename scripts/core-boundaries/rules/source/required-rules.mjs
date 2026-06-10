@@ -5344,6 +5344,18 @@ export const requiredContentRules = [
         message: 'missing MiniApp import fallback payload helper',
       },
       {
+        regex: /\bpub struct MiniAppImportBundlePlan\b/,
+        message: 'missing MiniApp import bundle plan shape',
+      },
+      {
+        regex: /\bpub enum MiniAppImportBundlePlanError\b/,
+        message: 'missing MiniApp import bundle plan error classification',
+      },
+      {
+        regex: /\bpub fn build_import_bundle_plan\b/,
+        message: 'missing MiniApp import bundle plan helper',
+      },
+      {
         regex: /\bpub fn draft_dir\b/,
         message: 'missing MiniApp draft directory layout helper',
       },
@@ -5712,39 +5724,43 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/core/src/miniapp/manager.rs',
     reason:
-      'core MiniApp manager must use product-domain policy/facade helpers while retaining compile workflow and built-in source-hash lookup',
+      'core MiniApp manager must delegate manager workflow persistence to product-domain facades while retaining compile workflow, path adaptation, and built-in source-hash lookup',
     patterns: [
-      {
-        regex: /\bapply_draft_customization_metadata\b/,
-        message: 'missing product-domain draft customization helper use',
-      },
-      {
-        regex: /\bmark_builtin_update_available_metadata\b/,
-        message: 'missing product-domain built-in update availability helper use',
-      },
-      {
-        regex: /\bdecline_builtin_update_metadata\b/,
-        message: 'missing product-domain built-in update decline helper use',
-      },
       {
         regex: /\bMiniAppRuntimeFacade\b/,
         message: 'missing product-domain MiniApp runtime-state facade use',
       },
       {
-        regex: /\bbuild_created_app\b/,
-        message: 'missing product-domain MiniApp create lifecycle helper use',
+        regex: /\bcreate_app\b/,
+        message: 'missing product-domain MiniApp create workflow facade delegation',
       },
       {
-        regex: /\bapply_update_patch\b/,
-        message: 'missing product-domain MiniApp update lifecycle helper use',
+        regex: /\bpersist_update_result_for_app\b/,
+        message: 'missing product-domain MiniApp update workflow facade delegation',
       },
       {
-        regex: /\bprepare_draft_app\b/,
-        message: 'missing product-domain MiniApp draft prepare lifecycle helper use',
+        regex: /\bpersist_draft_for_app\b/,
+        message: 'missing product-domain MiniApp create-draft workflow facade delegation',
       },
       {
-        regex: /\bapply_draft_to_active\b/,
-        message: 'missing product-domain MiniApp draft apply lifecycle helper use',
+        regex: /\bpersist_draft_source_sync_result\b/,
+        message: 'missing product-domain MiniApp draft source-sync workflow facade delegation',
+      },
+      {
+        regex: /\bpersist_draft_permission_update_result\b/,
+        message: 'missing product-domain MiniApp draft permission workflow facade delegation',
+      },
+      {
+        regex: /\bapply_draft_app\b/,
+        message: 'missing product-domain MiniApp apply-draft workflow facade delegation',
+      },
+      {
+        regex: /\bmark_builtin_update_available\b/,
+        message: 'missing product-domain MiniApp built-in update workflow facade delegation',
+      },
+      {
+        regex: /\bdecline_builtin_update\b/,
+        message: 'missing product-domain MiniApp built-in update decline workflow facade delegation',
       },
       {
         regex: /\bCoreProductDomainRuntime\b/,
@@ -5763,12 +5779,8 @@ export const requiredContentRules = [
         message: 'missing services-owned MiniApp import metadata IO delegation',
       },
       {
-        regex: /\bbuild_import_fallbacks\b/,
-        message: 'missing product-domain MiniApp import fallback helper use',
-      },
-      {
-        regex: /\bprepare_imported_meta\b/,
-        message: 'missing product-domain MiniApp imported metadata helper use',
+        regex: /\bbuild_import_bundle_plan\b/,
+        message: 'missing product-domain MiniApp import bundle plan helper use',
       },
       {
         regex: /\bwrite_import_bundle\b/,
@@ -5777,10 +5789,6 @@ export const requiredContentRules = [
       {
         regex: /\bpersist_import_runtime_state\b/,
         message: 'missing product-domain MiniApp import runtime-state facade delegation',
-      },
-      {
-        regex: /\bstorage\.load_customization_metadata\b/,
-        message: 'missing customization metadata compatibility call path',
       },
       {
         regex: /\bruntime_preflight_preserves_recompile_sync_rollback_and_deps_state\b/,
@@ -5793,13 +5801,41 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/contracts/product-domains/src/miniapp/ports.rs',
+    path: 'src/crates/contracts/product-domains/src/miniapp/runtime_facade.rs',
     reason:
-      'product-domains owns MiniApp runtime-state port facade while services-integrations keeps concrete storage/worker/host IO and core keeps compile workflow',
+      'product-domains owns MiniApp manager workflow and runtime-state facade while services-integrations keeps concrete storage/worker/host IO and core keeps compile workflow',
     patterns: [
       {
         regex: /\bpub struct MiniAppRuntimeFacade\b/,
         message: 'missing MiniApp runtime-state facade',
+      },
+      {
+        regex: /\bpub async fn create_app\b/,
+        message: 'missing MiniApp create workflow facade owner',
+      },
+      {
+        regex: /\bpub async fn persist_update_result_for_app\b/,
+        message: 'missing MiniApp update workflow facade owner',
+      },
+      {
+        regex: /\bpub async fn persist_draft_for_app\b/,
+        message: 'missing MiniApp draft creation workflow facade owner',
+      },
+      {
+        regex: /\bpub async fn persist_draft_source_sync_result\b/,
+        message: 'missing MiniApp draft source-sync workflow facade owner',
+      },
+      {
+        regex: /\bpub async fn persist_draft_permission_update_result\b/,
+        message: 'missing MiniApp draft permission workflow facade owner',
+      },
+      {
+        regex: /\bpub async fn apply_draft_app\b/,
+        message: 'missing MiniApp apply-draft workflow facade owner',
+      },
+      {
+        regex: /\bpub async fn mark_builtin_update_available\b/,
+        message: 'missing MiniApp built-in update workflow facade owner',
       },
       {
         regex: /\bmark_deps_installed_state\b/,

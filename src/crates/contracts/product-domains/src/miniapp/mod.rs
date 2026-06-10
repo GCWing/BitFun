@@ -11,6 +11,7 @@ pub mod lifecycle;
 pub mod permission_policy;
 pub mod ports;
 pub mod runtime;
+pub mod runtime_facade;
 pub mod storage;
 pub mod types;
 pub mod worker;

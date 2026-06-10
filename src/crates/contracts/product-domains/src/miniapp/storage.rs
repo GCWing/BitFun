@@ -1,6 +1,7 @@
 //! MiniApp storage-shape helpers.
 
-use crate::miniapp::types::NpmDep;
+use crate::miniapp::lifecycle::prepare_imported_meta;
+use crate::miniapp::types::{MiniAppMeta, NpmDep};
 use std::path::{Path, PathBuf};
 
 pub const META_JSON: &str = "meta.json";
@@ -209,4 +210,68 @@ pub fn build_import_fallbacks(app_id: &str) -> MiniAppImportFallbacks {
         compiled_html: PLACEHOLDER_COMPILED_HTML,
         package_json: build_package_json(app_id, &[]),
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MiniAppImportBundlePlan {
+    pub meta_json: String,
+    pub esm_dependencies_json: String,
+    pub package_json: String,
+    pub storage_json: String,
+    pub compiled_html: String,
+}
+
+#[derive(Debug)]
+pub enum MiniAppImportBundlePlanError {
+    InvalidMeta(serde_json::Error),
+    MetaSerialization(serde_json::Error),
+    PackageSerialization(serde_json::Error),
+}
+
+impl std::fmt::Display for MiniAppImportBundlePlanError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InvalidMeta(error) => write!(f, "Invalid meta.json: {error}"),
+            Self::MetaSerialization(error) => {
+                write!(f, "Failed to serialize imported meta.json: {error}")
+            }
+            Self::PackageSerialization(error) => {
+                write!(f, "Failed to serialize import package.json: {error}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for MiniAppImportBundlePlanError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::InvalidMeta(error)
+            | Self::MetaSerialization(error)
+            | Self::PackageSerialization(error) => Some(error),
+        }
+    }
+}
+
+pub fn build_import_bundle_plan(
+    app_id: &str,
+    source_meta_json: &str,
+    now: i64,
+) -> Result<MiniAppImportBundlePlan, MiniAppImportBundlePlanError> {
+    let mut meta: MiniAppMeta = serde_json::from_str(source_meta_json)
+        .map_err(MiniAppImportBundlePlanError::InvalidMeta)?;
+    prepare_imported_meta(&mut meta, app_id, now);
+
+    let fallbacks = build_import_fallbacks(app_id);
+    let meta_json = serde_json::to_string_pretty(&meta)
+        .map_err(MiniAppImportBundlePlanError::MetaSerialization)?;
+    let package_json = serde_json::to_string_pretty(&fallbacks.package_json)
+        .map_err(MiniAppImportBundlePlanError::PackageSerialization)?;
+
+    Ok(MiniAppImportBundlePlan {
+        meta_json,
+        esm_dependencies_json: fallbacks.esm_dependencies_json.to_string(),
+        package_json,
+        storage_json: fallbacks.storage_json.to_string(),
+        compiled_html: fallbacks.compiled_html.to_string(),
+    })
 }

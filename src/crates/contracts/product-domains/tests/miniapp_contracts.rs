@@ -51,11 +51,12 @@ use bitfun_product_domains::miniapp::runtime::{
     version_manager_roots, versioned_executable_candidate, DetectedRuntime, RuntimeKind,
 };
 use bitfun_product_domains::miniapp::storage::{
-    build_import_fallbacks, build_package_json, parse_npm_dependencies, MiniAppImportLayout,
-    MiniAppStorageLayout, COMPILED_HTML, CUSTOMIZATION_JSON, DRAFTS_CLEANUP_MARKER,
-    DRAFTS_CLEANUP_PREFIX, DRAFTS_DIR, DRAFT_JSON, EMPTY_ESM_DEPENDENCIES_JSON, EMPTY_STORAGE_JSON,
-    ESM_DEPS_JSON, INDEX_HTML, META_JSON, PACKAGE_JSON, PLACEHOLDER_COMPILED_HTML,
-    REQUIRED_SOURCE_FILES, SOURCE_DIR, STORAGE_JSON, STYLE_CSS, UI_JS, VERSIONS_DIR, WORKER_JS,
+    build_import_bundle_plan, build_import_fallbacks, build_package_json, parse_npm_dependencies,
+    MiniAppImportBundlePlanError, MiniAppImportLayout, MiniAppStorageLayout, COMPILED_HTML,
+    CUSTOMIZATION_JSON, DRAFTS_CLEANUP_MARKER, DRAFTS_CLEANUP_PREFIX, DRAFTS_DIR, DRAFT_JSON,
+    EMPTY_ESM_DEPENDENCIES_JSON, EMPTY_STORAGE_JSON, ESM_DEPS_JSON, INDEX_HTML, META_JSON,
+    PACKAGE_JSON, PLACEHOLDER_COMPILED_HTML, REQUIRED_SOURCE_FILES, SOURCE_DIR, STORAGE_JSON,
+    STYLE_CSS, UI_JS, VERSIONS_DIR, WORKER_JS,
 };
 use bitfun_product_domains::miniapp::types::{
     FsPermissions, MiniApp, MiniAppAiContext, MiniAppI18n, MiniAppPermissions, MiniAppRuntimeState,
@@ -104,8 +105,11 @@ struct StoragePortStub {
 struct StoragePortStubState {
     current: MiniApp,
     versions: BTreeMap<u32, MiniApp>,
+    drafts: BTreeMap<(String, String), (MiniApp, serde_json::Value)>,
+    customization: BTreeMap<String, MiniAppCustomizationMetadata>,
     save_count: usize,
     saved_version_numbers: Vec<u32>,
+    deleted_drafts: Vec<(String, String)>,
 }
 
 impl StoragePortStub {
@@ -114,8 +118,11 @@ impl StoragePortStub {
             state: Arc::new(Mutex::new(StoragePortStubState {
                 current,
                 versions: BTreeMap::new(),
+                drafts: BTreeMap::new(),
+                customization: BTreeMap::new(),
                 save_count: 0,
                 saved_version_numbers: Vec::new(),
+                deleted_drafts: Vec::new(),
             })),
         }
     }
@@ -130,6 +137,19 @@ impl StoragePortStub {
 
     fn saved_version_numbers(&self) -> Vec<u32> {
         self.state.lock().unwrap().saved_version_numbers.clone()
+    }
+
+    fn customization_metadata(&self, app_id: &str) -> Option<MiniAppCustomizationMetadata> {
+        self.state
+            .lock()
+            .unwrap()
+            .customization
+            .get(app_id)
+            .cloned()
+    }
+
+    fn deleted_drafts(&self) -> Vec<(String, String)> {
+        self.state.lock().unwrap().deleted_drafts.clone()
     }
 }
 
@@ -223,6 +243,98 @@ impl MiniAppStoragePort for StoragePortStub {
         _value: serde_json::Value,
     ) -> MiniAppPortFuture<'_, ()> {
         Box::pin(async { Ok(()) })
+    }
+
+    fn load_draft_app(&self, app_id: String, draft_id: String) -> MiniAppPortFuture<'_, MiniApp> {
+        let result = self
+            .state
+            .lock()
+            .unwrap()
+            .drafts
+            .get(&(app_id.clone(), draft_id.clone()))
+            .map(|(app, _)| app.clone())
+            .ok_or_else(|| {
+                MiniAppPortError::new(
+                    MiniAppPortErrorKind::NotFound,
+                    format!("Draft not found: {app_id}/{draft_id}"),
+                )
+            });
+        Box::pin(async move { result })
+    }
+
+    fn load_draft_manifest(
+        &self,
+        app_id: String,
+        draft_id: String,
+    ) -> MiniAppPortFuture<'_, serde_json::Value> {
+        let result = self
+            .state
+            .lock()
+            .unwrap()
+            .drafts
+            .get(&(app_id.clone(), draft_id.clone()))
+            .map(|(_, manifest)| manifest.clone())
+            .ok_or_else(|| {
+                MiniAppPortError::new(
+                    MiniAppPortErrorKind::NotFound,
+                    format!("Draft not found: {app_id}/{draft_id}"),
+                )
+            });
+        Box::pin(async move { result })
+    }
+
+    fn save_draft(
+        &self,
+        app_id: String,
+        draft_id: String,
+        app: MiniApp,
+        manifest: serde_json::Value,
+    ) -> MiniAppPortFuture<'_, ()> {
+        let state = self.state.clone();
+        Box::pin(async move {
+            state
+                .lock()
+                .unwrap()
+                .drafts
+                .insert((app_id, draft_id), (app, manifest));
+            Ok(())
+        })
+    }
+
+    fn delete_draft(&self, app_id: String, draft_id: String) -> MiniAppPortFuture<'_, ()> {
+        let state = self.state.clone();
+        Box::pin(async move {
+            let mut state = state.lock().unwrap();
+            state.drafts.remove(&(app_id.clone(), draft_id.clone()));
+            state.deleted_drafts.push((app_id, draft_id));
+            Ok(())
+        })
+    }
+
+    fn load_customization_metadata(
+        &self,
+        app_id: String,
+    ) -> MiniAppPortFuture<'_, Option<MiniAppCustomizationMetadata>> {
+        let metadata = self
+            .state
+            .lock()
+            .unwrap()
+            .customization
+            .get(&app_id)
+            .cloned();
+        Box::pin(async move { Ok(metadata) })
+    }
+
+    fn save_customization_metadata(
+        &self,
+        app_id: String,
+        metadata: MiniAppCustomizationMetadata,
+    ) -> MiniAppPortFuture<'_, ()> {
+        let state = self.state.clone();
+        Box::pin(async move {
+            state.lock().unwrap().customization.insert(app_id, metadata);
+            Ok(())
+        })
     }
 
     fn delete(&self, _app_id: String) -> MiniAppPortFuture<'_, ()> {
@@ -1245,6 +1357,52 @@ fn miniapp_storage_import_fallback_contract_remains_stable() {
 }
 
 #[test]
+fn miniapp_import_bundle_plan_rehomes_meta_and_preserves_fallback_wire_shape() {
+    let source_meta_json = serde_json::json!({
+        "id": "template-id",
+        "name": "Imported",
+        "description": "Imported app",
+        "icon": "box",
+        "category": "utility",
+        "tags": ["demo"],
+        "version": 7,
+        "created_at": 11,
+        "updated_at": 12,
+        "permissions": {},
+        "runtime": {}
+    })
+    .to_string();
+
+    let plan = build_import_bundle_plan("new-app", &source_meta_json, 1234).unwrap();
+
+    assert_eq!(plan.esm_dependencies_json, "[]");
+    assert_eq!(plan.storage_json, "{}");
+    assert_eq!(plan.compiled_html, PLACEHOLDER_COMPILED_HTML);
+    let meta: serde_json::Value = serde_json::from_str(&plan.meta_json).unwrap();
+    assert_eq!(meta["id"], "new-app");
+    assert_eq!(meta["name"], "Imported");
+    assert_eq!(meta["version"], 7);
+    assert_eq!(meta["created_at"], 1234);
+    assert_eq!(meta["updated_at"], 1234);
+
+    let package: serde_json::Value = serde_json::from_str(&plan.package_json).unwrap();
+    assert_eq!(package["name"], "miniapp-new-app");
+    assert_eq!(package["private"], true);
+    assert_eq!(package["dependencies"], serde_json::json!({}));
+}
+
+#[test]
+fn miniapp_import_bundle_plan_preserves_invalid_meta_error_classification() {
+    let error = build_import_bundle_plan("new-app", "{", 1234).unwrap_err();
+
+    assert!(matches!(
+        error,
+        MiniAppImportBundlePlanError::InvalidMeta(_)
+    ));
+    assert!(error.to_string().starts_with("Invalid meta.json:"));
+}
+
+#[test]
 fn miniapp_builtin_contract_preserves_seed_marker_and_hash_policy() {
     let app = BuiltinMiniAppBundle {
         id: "builtin-demo",
@@ -1510,6 +1668,107 @@ fn miniapp_runtime_facade_persists_port_backed_lifecycle_transitions() {
     assert_eq!(rolled_back.compiled_html, "<html>fresh</html>");
     assert!(rolled_back.runtime.worker_restart_required);
     assert_eq!(storage.saved_version_numbers(), vec![3, 4]);
+}
+
+#[test]
+fn miniapp_runtime_facade_owns_manager_create_update_draft_and_apply_workflows() {
+    let storage = StoragePortStub::new(sample_miniapp_for_lifecycle(MiniAppSource::default()));
+    let facade = MiniAppRuntimeFacade::new(&storage);
+
+    let created = block_on(facade.create_app(
+        "created".to_string(),
+        MiniAppCreateInput {
+            name: "Created".to_string(),
+            description: "Created app".to_string(),
+            icon: "box".to_string(),
+            category: "utility".to_string(),
+            tags: vec!["created".to_string()],
+            source: MiniAppSource {
+                css: "body { color: black; }".to_string(),
+                ..MiniAppSource::default()
+            },
+            permissions: MiniAppPermissions::default(),
+            ai_context: None,
+        },
+        "<html>created</html>".to_string(),
+        1000,
+    ))
+    .unwrap();
+    assert_eq!(created.id, "created");
+    assert_eq!(created.version, 1);
+    assert_eq!(storage.current().compiled_html, "<html>created</html>");
+
+    let updated = block_on(facade.persist_update_result_for_app(
+        "created".to_string(),
+        created.clone(),
+        MiniAppUpdatePatch {
+            source: Some(MiniAppSource {
+                css: "body { color: red; }".to_string(),
+                ..MiniAppSource::default()
+            }),
+            ..MiniAppUpdatePatch::default()
+        },
+        "<html>updated</html>".to_string(),
+        2000,
+    ))
+    .unwrap();
+    assert_eq!(updated.version, 2);
+    assert_eq!(updated.source.css, "body { color: red; }");
+    assert_eq!(storage.saved_version_numbers(), vec![1]);
+
+    let draft = block_on(facade.persist_draft_for_app(
+        "created".to_string(),
+        "draft-1".to_string(),
+        "/tmp/draft-1".to_string(),
+        updated.clone(),
+        "<html>draft</html>".to_string(),
+        3000,
+    ))
+    .unwrap();
+    assert_eq!(draft.app_id, "created");
+    assert_eq!(draft.source_version, 2);
+    assert_eq!(draft.draft_root, "/tmp/draft-1");
+    assert_eq!(draft.app.compiled_html, "<html>draft</html>");
+
+    let draft = block_on(facade.persist_draft_permission_update_result(
+        draft,
+        MiniAppPermissions {
+            fs: Some(FsPermissions {
+                read: Some(vec!["{workspace}".to_string()]),
+                write: None,
+            }),
+            ..MiniAppPermissions::default()
+        },
+        "<html>permissioned</html>".to_string(),
+        3500,
+    ))
+    .unwrap();
+    assert_eq!(draft.updated_at, 3500);
+    assert_eq!(draft.app.compiled_html, "<html>permissioned</html>");
+
+    let applied = block_on(facade.apply_loaded_draft(
+        updated,
+        draft,
+        "<html>applied</html>".to_string(),
+        MiniAppCustomizationBaseline::UserCreated,
+        4000,
+    ))
+    .unwrap();
+    assert_eq!(applied.version, 3);
+    assert_eq!(applied.compiled_html, "<html>applied</html>");
+    assert_eq!(storage.saved_version_numbers(), vec![1, 2]);
+
+    let metadata = storage
+        .customization_metadata("created")
+        .expect("customization metadata should be saved");
+    assert_eq!(metadata.last_applied_draft_id.as_deref(), Some("draft-1"));
+    assert_eq!(metadata.updated_at, 4000);
+
+    block_on(facade.discard_draft("created".to_string(), "draft-1".to_string())).unwrap();
+    assert_eq!(
+        storage.deleted_drafts(),
+        vec![("created".to_string(), "draft-1".to_string())]
+    );
 }
 
 #[test]

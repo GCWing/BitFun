@@ -1022,6 +1022,71 @@ impl MiniAppStoragePort for MiniAppStorage {
         })
     }
 
+    fn load_draft_app(&self, app_id: String, draft_id: String) -> MiniAppPortFuture<'_, MiniApp> {
+        Box::pin(async move {
+            self.load_draft_app(&app_id, &draft_id)
+                .await
+                .map_err(map_miniapp_port_error)
+        })
+    }
+
+    fn load_draft_manifest(
+        &self,
+        app_id: String,
+        draft_id: String,
+    ) -> MiniAppPortFuture<'_, serde_json::Value> {
+        Box::pin(async move {
+            self.load_draft_manifest(&app_id, &draft_id)
+                .await
+                .map_err(map_miniapp_port_error)
+        })
+    }
+
+    fn save_draft(
+        &self,
+        app_id: String,
+        draft_id: String,
+        app: MiniApp,
+        manifest: serde_json::Value,
+    ) -> MiniAppPortFuture<'_, ()> {
+        Box::pin(async move {
+            self.save_draft(&app_id, &draft_id, &app, &manifest)
+                .await
+                .map_err(map_miniapp_port_error)
+        })
+    }
+
+    fn delete_draft(&self, app_id: String, draft_id: String) -> MiniAppPortFuture<'_, ()> {
+        Box::pin(async move {
+            self.delete_draft(&app_id, &draft_id)
+                .await
+                .map_err(map_miniapp_port_error)
+        })
+    }
+
+    fn load_customization_metadata(
+        &self,
+        app_id: String,
+    ) -> MiniAppPortFuture<'_, Option<MiniAppCustomizationMetadata>> {
+        Box::pin(async move {
+            self.load_customization_metadata(&app_id)
+                .await
+                .map_err(map_miniapp_port_error)
+        })
+    }
+
+    fn save_customization_metadata(
+        &self,
+        app_id: String,
+        metadata: MiniAppCustomizationMetadata,
+    ) -> MiniAppPortFuture<'_, ()> {
+        Box::pin(async move {
+            self.save_customization_metadata(&app_id, &metadata)
+                .await
+                .map_err(map_miniapp_port_error)
+        })
+    }
+
     fn delete(&self, app_id: String) -> MiniAppPortFuture<'_, ()> {
         Box::pin(async move { self.delete(&app_id).await.map_err(map_miniapp_port_error) })
     }
@@ -1046,9 +1111,8 @@ impl MiniAppStoragePort for MiniAppStorage {
 fn map_miniapp_port_error(error: MiniAppStorageError) -> MiniAppPortError {
     let kind = match error.kind() {
         MiniAppStorageErrorKind::NotFound => MiniAppPortErrorKind::NotFound,
-        MiniAppStorageErrorKind::Validation | MiniAppStorageErrorKind::Deserialization => {
-            MiniAppPortErrorKind::InvalidInput
-        }
+        MiniAppStorageErrorKind::Validation => MiniAppPortErrorKind::InvalidInput,
+        MiniAppStorageErrorKind::Deserialization => MiniAppPortErrorKind::Deserialization,
         MiniAppStorageErrorKind::Io => MiniAppPortErrorKind::Io,
         MiniAppStorageErrorKind::Backend => MiniAppPortErrorKind::Backend,
     };

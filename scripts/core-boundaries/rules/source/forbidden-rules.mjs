@@ -1323,6 +1323,61 @@ export const forbiddenContentRules = [
         message:
           'core MiniApp manager must not own runtime-state replacement for lifecycle transitions; use product-domain lifecycle helpers',
       },
+      {
+        regex: /\bbuild_created_app\b/,
+        message:
+          'core MiniApp manager must not own create workflow assembly; use MiniAppRuntimeFacade',
+      },
+      {
+        regex: /\bapply_update_patch\b/,
+        message:
+          'core MiniApp manager must not own update workflow assembly; use MiniAppRuntimeFacade',
+      },
+      {
+        regex: /\bprepare_draft_app\b/,
+        message:
+          'core MiniApp manager must not own draft creation workflow assembly; use MiniAppRuntimeFacade',
+      },
+      {
+        regex: /\bapply_draft_source_sync_result\b/,
+        message:
+          'core MiniApp manager must not own draft source-sync workflow assembly; use MiniAppRuntimeFacade',
+      },
+      {
+        regex: /\bapply_draft_permission_update_result\b/,
+        message:
+          'core MiniApp manager must not own draft permission workflow assembly; use MiniAppRuntimeFacade',
+      },
+      {
+        regex: /\bapply_draft_to_active\b/,
+        message:
+          'core MiniApp manager must not own apply-draft workflow assembly; use MiniAppRuntimeFacade',
+      },
+      {
+        regex: /\bapply_draft_customization_metadata\b/,
+        message:
+          'core MiniApp manager must not own draft customization workflow assembly; use MiniAppRuntimeFacade',
+      },
+      {
+        regex: /\bmark_builtin_update_available_metadata\b/,
+        message:
+          'core MiniApp manager must not own built-in update workflow assembly; use MiniAppRuntimeFacade',
+      },
+      {
+        regex: /\bdecline_builtin_update_metadata\b/,
+        message:
+          'core MiniApp manager must not own built-in update decline workflow assembly; use MiniAppRuntimeFacade',
+      },
+      {
+        regex: /\bprepare_imported_meta\b/,
+        message:
+          'core MiniApp manager must not own import metadata rehome planning; use product-domain import bundle plan',
+      },
+      {
+        regex: /\bbuild_import_fallbacks\b/,
+        message:
+          'core MiniApp manager must not own import fallback planning; use product-domain import bundle plan',
+      },
     ],
   },
   {
