@@ -100,8 +100,8 @@ function parseArgs(argv) {
   if (!options.sessionPrefix.trim()) {
     throw new Error('--session-prefix cannot be empty');
   }
-  if (!['explore-only', 'mixed-visible', 'dense-visible'].includes(options.scenario)) {
-    throw new Error('--scenario must be one of: explore-only, mixed-visible, dense-visible');
+  if (!['explore-only', 'mixed-visible', 'dense-visible', 'user-only-latest'].includes(options.scenario)) {
+    throw new Error('--scenario must be one of: explore-only, mixed-visible, dense-visible, user-only-latest');
   }
   return options;
 }
@@ -122,7 +122,7 @@ Options:
   --tool-items <n>          Tool item count per turn. Default: 2
   --dense-groups <n>        Groups in the latest dense-visible turn. Default: 160
   --session-prefix <text>   Session id prefix. Default: perf-long-session
-  --scenario <name>         Fixture shape: mixed-visible, dense-visible, or explore-only. Default: mixed-visible
+  --scenario <name>         Fixture shape: mixed-visible, dense-visible, explore-only, or user-only-latest. Default: mixed-visible
   --bitfun-home <path>      BitFun home root. Default: BITFUN_HOME or ~/.bitfun
   --cleanup                 Remove generated sessions for the prefix.
 `);
@@ -196,7 +196,7 @@ function makeMetadata({ sessionId, sessionName, workspacePath, createdAt, lastAc
     createdAt,
     lastActiveAt,
     turnCount,
-    messageCount: turnCount * 2,
+    messageCount: scenario === 'user-only-latest' ? (turnCount * 2) - 1 : turnCount * 2,
     toolCallCount: turnCount * toolItems,
     status: 'active',
     terminalSessionId: null,
@@ -415,7 +415,9 @@ function makeTurn({
   const turnId = `${sessionId}-turn-${String(turnIndex).padStart(4, '0')}`;
   const toolItemsData = makeToolItems({ turnId, turnIndex, timestamp, toolResultChars, toolItems });
   const isLatestTurn = turnIndex === totalTurns - 1;
-  const modelRounds = scenario === 'dense-visible' && isLatestTurn
+  const modelRounds = scenario === 'user-only-latest' && isLatestTurn
+    ? []
+    : scenario === 'dense-visible' && isLatestTurn
     ? makeDenseLatestModelRounds({
       turnId,
       turnIndex,

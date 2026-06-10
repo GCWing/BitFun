@@ -54,6 +54,7 @@ export class FlowChatManager {
   private eventListenerInitializationPromise: Promise<void> | null = null;
   private eventListenerCleanup: (() => void) | null = null;
   private initializationRequests = new Map<string, Promise<boolean>>();
+  private latestInitializationRequestKey: string | null = null;
 
   private constructor() {
     this.context = {
@@ -107,12 +108,14 @@ export class FlowChatManager {
       remoteSshHost,
     );
     const existingRequest = this.initializationRequests.get(requestKey);
+    this.latestInitializationRequestKey = requestKey;
     if (existingRequest) {
       return existingRequest;
     }
 
     let request: Promise<boolean>;
     request = this.initializeWorkspace(
+      requestKey,
       workspacePath,
       preferredMode,
       remoteConnectionId,
@@ -141,6 +144,7 @@ export class FlowChatManager {
   }
 
   private async initializeWorkspace(
+    requestKey: string,
     workspacePath: string,
     preferredMode?: string,
     remoteConnectionId?: string,
@@ -214,13 +218,19 @@ export class FlowChatManager {
         workspaceSessions.length > 0 ||
         initialMetadataPage.totalTopLevelCount > 0 ||
         initialMetadataPage.sessions.length > 0;
+      const isCurrentInitializationRequest = () =>
+        this.latestInitializationRequestKey === requestKey;
       const activeSession = state.activeSessionId
         ? state.sessions.get(state.activeSessionId) ?? null
         : null;
       const activeSessionBelongsToWorkspace =
         !!activeSession && sessionMatchesWorkspace(activeSession);
+      const activeSessionIdAtAutoSelectStart = state.activeSessionId;
 
       if (hasHistoricalSessions && !activeSessionBelongsToWorkspace) {
+        if (!isCurrentInitializationRequest()) {
+          return hasHistoricalSessions;
+        }
         const sortedWorkspaceSessions = [...workspaceSessions].sort(compareSessionsForDisplay);
         const latestSession = (preferredMode
           ? sortedWorkspaceSessions.find(session => session.mode === preferredMode)
@@ -242,10 +252,33 @@ export class FlowChatManager {
           );
         }
 
+        if (!isCurrentInitializationRequest()) {
+          return hasHistoricalSessions;
+        }
+
+        const currentState = this.context.flowChatStore.getState();
+        const currentActiveSession = currentState.activeSessionId
+          ? currentState.sessions.get(currentState.activeSessionId) ?? null
+          : null;
+        const currentActiveSessionBelongsToWorkspace =
+          !!currentActiveSession && sessionMatchesWorkspace(currentActiveSession);
+        const activeSessionChangedDuringAutoSelect =
+          currentState.activeSessionId !== activeSessionIdAtAutoSelectStart &&
+          currentState.activeSessionId !== null;
+        if (currentActiveSessionBelongsToWorkspace) {
+          this.context.currentWorkspacePath = workspacePath;
+          return hasHistoricalSessions;
+        }
+        if (activeSessionChangedDuringAutoSelect) {
+          return hasHistoricalSessions;
+        }
+
         this.context.flowChatStore.switchSession(latestSession.sessionId);
       }
 
-      this.context.currentWorkspacePath = workspacePath;
+      if (isCurrentInitializationRequest()) {
+        this.context.currentWorkspacePath = workspacePath;
+      }
 
       return hasHistoricalSessions;
     } catch (error) {

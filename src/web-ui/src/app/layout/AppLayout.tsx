@@ -276,6 +276,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
 
   // Initialize FlowChatManager
   React.useEffect(() => {
+    let cancelled = false;
     const initializeFlowChat = async () => {
       if (!currentWorkspace?.rootPath) return;
 
@@ -305,15 +306,24 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
             ? currentWorkspace.sshHost
             : undefined
         );
+        if (cancelled) {
+          return;
+        }
 
         let sessionId: string | undefined;
         const { flowChatStore } = await import('@/flow_chat/store/FlowChatStore');
+        if (cancelled) {
+          return;
+        }
         if (!hasHistoricalSessions) {
           const initialSessionMode =
             currentWorkspace.workspaceKind === WorkspaceKind.Assistant
               ? 'Claw'
               : explicitPreferredMode || 'agentic';
           sessionId = await flowChatManager.createChatSession({}, initialSessionMode);
+          if (cancelled) {
+            return;
+          }
         }
 
         const activeSessionId = sessionId || flowChatStore.getState().activeSessionId;
@@ -326,6 +336,9 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
           sessionStorage.removeItem('pendingProjectDescription');
 
           setTimeout(async () => {
+            if (cancelled) {
+              return;
+            }
             try {
               const targetSessionId = sessionId || flowChatStore.getState().activeSessionId;
 
@@ -353,6 +366,9 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
         if (pendingSettings) {
           sessionStorage.removeItem('pendingOpenSettings');
           setTimeout(async () => {
+            if (cancelled) {
+              return;
+            }
             try {
               const { quickActions } = await import('@/shared/services/ide-control');
               await quickActions.openSettings(pendingSettings);
@@ -362,6 +378,9 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
           }, 500);
         }
       } catch (error) {
+        if (cancelled) {
+          return;
+        }
         log.error('FlowChatManager initialization failed', error);
         import('@/shared/notification-system').then(({ notificationService }) => {
           notificationService.error(t('appLayout.flowChatInitFailed'), { duration: 5000 });
@@ -370,6 +389,9 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
     };
 
     initializeFlowChat();
+    return () => {
+      cancelled = true;
+    };
   }, [
     currentWorkspace,
     currentWorkspace?.id,

@@ -82,6 +82,10 @@ type LongSessionViewportState = {
   bottomBlankPx: number | null;
 };
 
+type LongSessionViewportUsabilityOptions = {
+  requireLatestModelRound?: boolean;
+};
+
 type LongSessionViewportTimelineSample = {
   atMs: number;
   sinceClickMs: number;
@@ -2562,15 +2566,28 @@ async function waitForLatestLongSessionTurnVisible(timeoutMs: number, expectedLa
   };
 }
 
-function isLongSessionViewportUsable(viewport: LongSessionViewportState): boolean {
+function requiresLatestModelRoundForFixture(fixtureScenario: string | null): boolean {
+  return fixtureScenario !== 'user-only-latest';
+}
+
+function isLongSessionViewportUsable(
+  viewport: LongSessionViewportState,
+  options: LongSessionViewportUsabilityOptions = {},
+): boolean {
+  const requiresLatestModelRound = options.requireLatestModelRound !== false;
   const coverageRatio = viewport.coverageRatio ?? 0;
   const bottomBlankPx = viewport.bottomBlankPx ?? Number.POSITIVE_INFINITY;
   const largestBlankGapPx = viewport.largestBlankGapPx ?? Number.POSITIVE_INFINITY;
   return (
     viewport.latestContentVisible &&
     viewport.latestContentVisuallyVisible &&
-    viewport.latestModelRoundVisible &&
-    viewport.latestModelRoundTextLength > 0 &&
+    (
+      !requiresLatestModelRound ||
+      (
+        viewport.latestModelRoundVisible &&
+        viewport.latestModelRoundTextLength > 0
+      )
+    ) &&
     coverageRatio >= LONG_SESSION_VIEWPORT_MIN_COVERAGE_RATIO &&
     bottomBlankPx <= LONG_SESSION_VIEWPORT_MAX_BOTTOM_BLANK_PX &&
     largestBlankGapPx <= LONG_SESSION_VIEWPORT_MAX_BLANK_GAP_PX
@@ -3386,7 +3403,11 @@ function summarizeLongSessionVisualStateEvents(
   };
 }
 
-async function waitForLatestLongSessionViewportUsable(timeoutMs: number, expectedLatestTurnId?: string | null): Promise<{
+async function waitForLatestLongSessionViewportUsable(
+  timeoutMs: number,
+  expectedLatestTurnId?: string | null,
+  options: LongSessionViewportUsabilityOptions = {},
+): Promise<{
   usableAtMs: number;
   viewport: LongSessionViewportState;
 }> {
@@ -3394,7 +3415,7 @@ async function waitForLatestLongSessionViewportUsable(timeoutMs: number, expecte
   try {
     await browser.waitUntil(async () => {
       viewport = await readLongSessionViewportState(expectedLatestTurnId);
-      return isLongSessionViewportUsable(viewport);
+      return isLongSessionViewportUsable(viewport, options);
     }, {
       timeout: timeoutMs,
       interval: 50,
@@ -3683,6 +3704,7 @@ async function collectLongSessionOpenMeasurement(
     throw new Error(`Could not resolve expected latest turn id for session ${sessionId}`);
   }
   const fixtureScenario = await readLongSessionFixtureScenario(sessionId);
+  const requireLatestModelRound = requiresLatestModelRoundForFixture(fixtureScenario);
 
   const requireFrameTrace = options.requireFrameTrace !== false;
   const afterFrameTimeoutMs = requireFrameTrace ? 20000 : 1000;
@@ -3714,7 +3736,11 @@ async function collectLongSessionOpenMeasurement(
 
   await item.click();
   const latestVisiblePromise = waitForLatestLongSessionTurnVisible(5000, expectedLatestTurnId);
-  const latestUsablePromise = waitForLatestLongSessionViewportUsable(5000, expectedLatestTurnId);
+  const latestUsablePromise = waitForLatestLongSessionViewportUsable(
+    5000,
+    expectedLatestTurnId,
+    { requireLatestModelRound },
+  );
   const postVisibleInteraction = readPostVisibleInteractionOption(options);
   let latestVisible: Awaited<typeof latestVisiblePromise> | null = null;
   let latestUsable: Awaited<typeof latestUsablePromise> | null = null;
@@ -3764,10 +3790,11 @@ async function collectLongSessionOpenMeasurement(
   }
   let finalViewport = await readLongSessionViewportState(expectedLatestTurnId);
   let finalViewportCheckedAtMs = await readPerformanceNow();
-  if (!isLongSessionViewportUsable(finalViewport)) {
+  if (!isLongSessionViewportUsable(finalViewport, { requireLatestModelRound })) {
     const finalUsable = await waitForLatestLongSessionViewportUsable(
       3000,
       expectedLatestTurnId,
+      { requireLatestModelRound },
     );
     finalViewport = finalUsable.viewport;
     finalViewportCheckedAtMs = finalUsable.usableAtMs;
@@ -3856,6 +3883,7 @@ function expectLongSessionMeasurementUsable(
   maxLatestFrameMs?: number,
   options: LongSessionOpenMeasurementOptions = {},
 ): void {
+  const requireLatestModelRound = requiresLatestModelRoundForFixture(measurement.fixtureScenario);
   expect(measurement.clickToLatestVisibleMs).toBeGreaterThan(0);
   expect(measurement.clickToLatestUsableMs).toBeGreaterThan(0);
   if (options.requireFrameTrace !== false && measurement.traceWaitErrors.length === 0) {
@@ -3870,30 +3898,46 @@ function expectLongSessionMeasurementUsable(
   expect(measurement.viewport.latestContentVisible).toBe(true);
   expect(measurement.viewport.latestContentVisuallyVisible).toBe(true);
   expect(measurement.viewport.historyPlaceholderCoversMessages).toBe(false);
-  expect(measurement.viewport.latestModelRoundVisible).toBe(true);
-  expect(measurement.viewport.latestModelRoundTextLength).toBeGreaterThan(0);
+  if (requireLatestModelRound) {
+    expect(measurement.viewport.latestModelRoundVisible).toBe(true);
+    expect(measurement.viewport.latestModelRoundTextLength).toBeGreaterThan(0);
+  } else {
+    expect(measurement.viewport.latestVisible).toBe(true);
+  }
   expect(measurement.viewport.latestTurnId).toBe(measurement.expectedLatestTurnId);
   expect(measurement.latestVisibleViewport.hasScroller).toBe(true);
   expect(measurement.latestVisibleViewport.latestContentVisible).toBe(true);
   expect(measurement.latestVisibleViewport.latestContentVisuallyVisible).toBe(true);
   expect(measurement.latestVisibleViewport.historyPlaceholderCoversMessages).toBe(false);
-  expect(measurement.latestVisibleViewport.latestModelRoundVisible).toBe(true);
+  if (requireLatestModelRound) {
+    expect(measurement.latestVisibleViewport.latestModelRoundVisible).toBe(true);
+  } else {
+    expect(measurement.latestVisibleViewport.latestVisible).toBe(true);
+  }
   expect(measurement.latestVisibleViewport.latestTurnId).toBe(measurement.expectedLatestTurnId);
   expect(isLongSessionLatestVisibleViewportPositioned(measurement.latestVisibleViewport)).toBe(true);
   expect(isLongSessionLatestTailAnchored(measurement.latestVisibleViewport)).toBe(true);
-  expect(measurement.latestAnswerTextVisibleViewport.latestModelRoundVisible).toBe(true);
-  expect(measurement.latestAnswerTextVisibleViewport.latestModelRoundTextLength).toBeGreaterThan(0);
-  expect(isLongSessionViewportUsable(measurement.latestAnswerTextVisibleViewport)).toBe(true);
-  expect(isLongSessionLatestTailAnchored(measurement.latestAnswerTextVisibleViewport)).toBe(true);
-  if (measurement.viewportTimelineSummary.latestTextDelayAfterContentVisuallyVisibleMs !== null) {
-    expect(measurement.viewportTimelineSummary.latestTextDelayAfterContentVisuallyVisibleMs)
-      .toBeLessThanOrEqual(LONG_SESSION_MAX_LATEST_TEXT_DELAY_AFTER_VISIBLE_MS);
+  if (requireLatestModelRound) {
+    expect(measurement.latestAnswerTextVisibleViewport.latestModelRoundVisible).toBe(true);
+    expect(measurement.latestAnswerTextVisibleViewport.latestModelRoundTextLength).toBeGreaterThan(0);
+    expect(isLongSessionViewportUsable(measurement.latestAnswerTextVisibleViewport)).toBe(true);
+    expect(isLongSessionLatestTailAnchored(measurement.latestAnswerTextVisibleViewport)).toBe(true);
+    if (measurement.viewportTimelineSummary.latestTextDelayAfterContentVisuallyVisibleMs !== null) {
+      expect(measurement.viewportTimelineSummary.latestTextDelayAfterContentVisuallyVisibleMs)
+        .toBeLessThanOrEqual(LONG_SESSION_MAX_LATEST_TEXT_DELAY_AFTER_VISIBLE_MS);
+    }
+    expect(measurement.viewportTimelineSummary.preLatestTextVisibleBlankWithoutPlaceholderSampleCount).toBe(0);
+    expect(measurement.viewportTimelineSummary.preLatestTextVisibleUncoveredAfterIntentSampleCount).toBe(0);
+    expect(measurement.viewportTimelineSummary.postLatestTextVisibleBlankSampleCount).toBe(0);
+    expect(measurement.viewportTimelineSummary.postLatestTextVisibleCoveredSampleCount).toBe(0);
+    expect(measurement.viewportTimelineSummary.postLatestTextVisibleLatestContentMissingSampleCount).toBe(0);
+  } else {
+    expect(isLongSessionViewportUsable(
+      measurement.latestAnswerTextVisibleViewport,
+      { requireLatestModelRound: false },
+    )).toBe(true);
+    expect(isLongSessionLatestTailAnchored(measurement.latestAnswerTextVisibleViewport)).toBe(true);
   }
-  expect(measurement.viewportTimelineSummary.preLatestTextVisibleBlankWithoutPlaceholderSampleCount).toBe(0);
-  expect(measurement.viewportTimelineSummary.preLatestTextVisibleUncoveredAfterIntentSampleCount).toBe(0);
-  expect(measurement.viewportTimelineSummary.postLatestTextVisibleBlankSampleCount).toBe(0);
-  expect(measurement.viewportTimelineSummary.postLatestTextVisibleCoveredSampleCount).toBe(0);
-  expect(measurement.viewportTimelineSummary.postLatestTextVisibleLatestContentMissingSampleCount).toBe(0);
   const latestAnchorFailures = measurement.events.filter(event =>
     event.phase === 'historical_session_latest_anchor_failed' &&
     traceEventSessionId(event) === measurement.sessionId
@@ -3910,13 +3954,15 @@ function expectLongSessionMeasurementUsable(
     expect(measurement.visualStateSummary.overlayCountToggleCount).toBe(0);
     expect(measurement.visualStateSummary.placeholderCountToggleCount).toBe(0);
     expect(measurement.visualStateSummary.postFirstVisibleItemLoadingEventCount).toBe(0);
-    expect(measurement.visualStateSummary.postLatestTextVisibleLoadingEventCount).toBe(0);
-    expect(measurement.visualStateSummary.postLatestTextVisibleLoadingSurfacePointEventCount).toBe(0);
-    expect(measurement.visualStateSummary.postLatestTextVisibleBlankSurfacePointEventCount).toBe(0);
-    expect(measurement.visualStateSummary.postLatestTextVisibleTransparentSurfacePointEventCount).toBe(0);
-    expect(measurement.visualStateSummary.postLatestTextVisibleScrollJumpCount).toBe(0);
-    expect(measurement.visualStateSummary.postLatestTextVisibleVirtualItemElementChangeCount).toBe(0);
-    expect(measurement.visualStateSummary.postLatestTextVisibleLayoutShiftScore).toBeLessThanOrEqual(0.005);
+    if (requireLatestModelRound) {
+      expect(measurement.visualStateSummary.postLatestTextVisibleLoadingEventCount).toBe(0);
+      expect(measurement.visualStateSummary.postLatestTextVisibleLoadingSurfacePointEventCount).toBe(0);
+      expect(measurement.visualStateSummary.postLatestTextVisibleBlankSurfacePointEventCount).toBe(0);
+      expect(measurement.visualStateSummary.postLatestTextVisibleTransparentSurfacePointEventCount).toBe(0);
+      expect(measurement.visualStateSummary.postLatestTextVisibleScrollJumpCount).toBe(0);
+      expect(measurement.visualStateSummary.postLatestTextVisibleVirtualItemElementChangeCount).toBe(0);
+      expect(measurement.visualStateSummary.postLatestTextVisibleLayoutShiftScore).toBeLessThanOrEqual(0.005);
+    }
     expect(measurement.visualStateSummary.openIntentBlankSurfacePointEventCount).toBe(0);
     expect(measurement.visualStateSummary.openIntentBlankSurfaceHoldCount).toBe(0);
     expect(measurement.visualStateSummary.postOpenIntentNonTargetContentEventCount).toBe(0);
@@ -3936,7 +3982,7 @@ function expectLongSessionMeasurementUsable(
     expect(measurement.latestVisibleViewport.visibleModelRoundCount).toBeGreaterThan(0);
   }
   expect(isLongSessionInputAnchoredNearBottom(measurement.latestVisibleViewport)).toBe(true);
-  expect(isLongSessionViewportUsable(measurement.viewport)).toBe(true);
+  expect(isLongSessionViewportUsable(measurement.viewport, { requireLatestModelRound })).toBe(true);
   expect(isLongSessionInputAnchoredNearBottom(measurement.viewport)).toBe(true);
   expect(isLongSessionLatestTailAnchored(measurement.viewport)).toBe(true);
   if (
