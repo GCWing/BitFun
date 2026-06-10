@@ -136,6 +136,30 @@ describe('SessionModule historical session coordination', () => {
     expect(flowChatStore.switchSession).toHaveBeenCalledWith('history-1');
   });
 
+  it('defers activity touch until a metadata-only historical session has hydrated and switched', async () => {
+    const load = createDeferred<void>();
+    const { context, flowChatStore } = createContext(createSession());
+    flowChatStore.loadSessionHistory.mockReturnValueOnce(load.promise);
+    persistenceMocks.touchSessionActivity.mockResolvedValueOnce(undefined);
+
+    const switching = switchChatSession(context, 'history-1');
+    await Promise.resolve();
+
+    expect(persistenceMocks.touchSessionActivity).not.toHaveBeenCalled();
+
+    load.resolve();
+    await switching;
+    await Promise.resolve();
+
+    expect(flowChatStore.switchSession).toHaveBeenCalledWith('history-1');
+    expect(persistenceMocks.touchSessionActivity).toHaveBeenCalledWith(
+      'history-1',
+      'D:/workspace/BitFun',
+      undefined,
+      undefined,
+    );
+  });
+
   it('switches immediately when a historical session already has renderable tail content', async () => {
     const load = createDeferred<void>();
     const { context, flowChatStore } = createContext(createSession({

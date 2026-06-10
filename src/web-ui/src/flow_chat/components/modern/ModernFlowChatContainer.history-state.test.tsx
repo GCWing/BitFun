@@ -45,6 +45,9 @@ const searchStateMock = vi.hoisted(() => ({
 const headerPropsMock = vi.hoisted(() => ({
   latest: null as Record<string, unknown> | null,
 }));
+const agentApiMock = vi.hoisted(() => ({
+  listBackgroundCommandActivities: vi.fn(() => Promise.resolve({ activities: [] })),
+}));
 
 vi.mock('react-i18next', () => ({
   initReactI18next: {
@@ -91,6 +94,10 @@ vi.mock('@/infrastructure/contexts/WorkspaceContext', () => ({
   useWorkspaceContext: () => ({
     workspacePath: 'D:/workspace/BitFun',
   }),
+}));
+
+vi.mock('@/infrastructure/api', () => ({
+  agentAPI: agentApiMock,
 }));
 
 vi.mock('../../utils/acpSession', () => ({
@@ -244,6 +251,8 @@ describe('ModernFlowChatContainer historical empty state', () => {
     virtualListMock.pinTurnToTop.mockReturnValue(true);
     virtualListActionClickMock.mockReset();
     startupTraceMock.markPhase.mockReset();
+    agentApiMock.listBackgroundCommandActivities.mockClear();
+    agentApiMock.listBackgroundCommandActivities.mockResolvedValue({ activities: [] });
     searchStateMock.searchQuery = '';
     searchStateMock.onSearchChange.mockReset();
     searchStateMock.matches = [];
@@ -551,6 +560,46 @@ describe('ModernFlowChatContainer historical empty state', () => {
     });
 
     expect(virtualListActionClickMock).toHaveBeenCalledTimes(1);
+    releaseSpy.mockRestore();
+  });
+
+  it('defers background command snapshot until restored latest text is visible', async () => {
+    const releaseSpy = vi
+      .spyOn(flowChatStore, 'releaseSessionHistoryCompletionAfterInitialPaint')
+      .mockReturnValue(true);
+
+    stateMocks.activeSession = createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      contextRestoreState: 'pending',
+      dialogTurns: [
+        createTurn('turn-1', 'Older restored prompt'),
+        createTurn('turn-2', 'Latest restored prompt'),
+      ],
+    } as Partial<Session>);
+    stateMocks.virtualItems = [
+      { type: 'user-message', turnId: 'turn-1', data: { id: 'user-turn-1', content: 'Older restored prompt' } },
+      { type: 'user-message', turnId: 'turn-2', data: { id: 'user-turn-2', content: 'Latest restored prompt' } },
+    ];
+    virtualListMock.isTurnTextRenderedInViewport.mockReturnValue(false);
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    expect(agentApiMock.listBackgroundCommandActivities).not.toHaveBeenCalled();
+
+    virtualListMock.isTurnTextRenderedInViewport.mockReturnValue(true);
+    flushAnimationFrame();
+    flushAnimationFrame();
+    flushAnimationFrame();
+
+    expect(releaseSpy).toHaveBeenCalledWith('session-1');
+    expect(agentApiMock.listBackgroundCommandActivities).toHaveBeenCalledTimes(1);
+    expect(agentApiMock.listBackgroundCommandActivities).toHaveBeenCalledWith({
+      agentSessionId: 'session-1',
+    });
+
     releaseSpy.mockRestore();
   });
 

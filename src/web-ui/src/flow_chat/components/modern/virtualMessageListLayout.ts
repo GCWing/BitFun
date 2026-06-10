@@ -5,6 +5,7 @@ export const LIVE_SESSION_DEFAULT_ITEM_HEIGHT_PX = 200;
 export const HISTORICAL_SESSION_DEFAULT_ITEM_HEIGHT_PX = 72;
 export const HISTORICAL_SESSION_MODEL_ROUND_DEFAULT_ITEM_HEIGHT_PX = 960;
 export const INITIAL_HISTORY_RENDER_MIN_TURN_COUNT = 2;
+const INITIAL_HISTORY_RENDER_USER_ONLY_LATEST_MIN_TURN_COUNT = 3;
 export const INITIAL_HISTORY_RENDER_MIN_ESTIMATED_HEIGHT_PX = 1400;
 const USER_MESSAGE_BASE_HEIGHT_PX = 96;
 const USER_MESSAGE_LINE_HEIGHT_PX = 22;
@@ -163,6 +164,34 @@ function uniqueTurnCount(items: VirtualItem[]): number {
   return turnIds.size;
 }
 
+function getLatestTurnId(items: VirtualItem[]): string | null {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const turnId = items[index]?.turnId;
+    if (turnId) {
+      return turnId;
+    }
+  }
+  return null;
+}
+
+function latestTurnHasModelRound(items: VirtualItem[]): boolean {
+  const latestTurnId = getLatestTurnId(items);
+  if (!latestTurnId) {
+    return true;
+  }
+
+  return items.some(item =>
+    item.turnId === latestTurnId &&
+    item.type === 'model-round'
+  );
+}
+
+function getInitialHistoryRenderMinTurnCount(items: VirtualItem[]): number {
+  return latestTurnHasModelRound(items)
+    ? INITIAL_HISTORY_RENDER_MIN_TURN_COUNT
+    : INITIAL_HISTORY_RENDER_USER_ONLY_LATEST_MIN_TURN_COUNT;
+}
+
 export function selectInitialHistoryRenderWindow(
   items: VirtualItem[],
   options: {
@@ -170,7 +199,7 @@ export function selectInitialHistoryRenderWindow(
     minEstimatedHeightPx?: number;
   } = {},
 ): InitialHistoryRenderWindow {
-  const minTurnCount = Math.max(1, Math.floor(options.minTurnCount ?? INITIAL_HISTORY_RENDER_MIN_TURN_COUNT));
+  const minTurnCount = Math.max(1, Math.floor(options.minTurnCount ?? getInitialHistoryRenderMinTurnCount(items)));
   const minEstimatedHeightPx = Math.max(0, options.minEstimatedHeightPx ?? INITIAL_HISTORY_RENDER_MIN_ESTIMATED_HEIGHT_PX);
   const totalEstimatedHeightPx = items.reduce(
     (total, item) => total + estimateVirtualMessageItemHeight(item),

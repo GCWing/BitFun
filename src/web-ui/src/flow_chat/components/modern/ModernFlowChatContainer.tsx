@@ -585,6 +585,10 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   const shouldBlockHistoryInitialContentInteraction =
     historyInitialContentKey !== null &&
     historyInitialContentReadyKey !== historyInitialContentKey;
+  const shouldDeferBackgroundCommandSnapshot =
+    activeSession?.historyState === 'metadata-only' ||
+    activeSession?.historyState === 'hydrating' ||
+    shouldBlockHistoryInitialContentInteraction;
   const shouldBlockHistoryTransitionInteraction =
     shouldBlockHistoryInitialContentInteraction ||
     showHistoryOpenIntentOverlay;
@@ -1048,7 +1052,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
 
   useEffect(() => {
     const agentSessionId = activeSession?.sessionId;
-    if (!agentSessionId) {
+    if (!agentSessionId || shouldDeferBackgroundCommandSnapshot) {
       return;
     }
 
@@ -1068,7 +1072,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     return () => {
       cancelled = true;
     };
-  }, [activeSession?.sessionId]);
+  }, [activeSession?.sessionId, shouldDeferBackgroundCommandSnapshot]);
 
   const backgroundCommands = useMemo(
     () => visibleBackgroundCommandActivitiesForSession(

@@ -494,14 +494,16 @@ export async function switchChatSession(
       !isRemoteSession &&
       !hasRenderableSessionContent(session);
 
-    touchSessionActivity(
-      sessionId,
-      session?.workspacePath,
-      session?.remoteConnectionId,
-      session?.remoteSshHost
-    ).catch(error => {
-      log.debug('Failed to touch session activity', { sessionId, error });
-    });
+    const touchActiveSessionInBackground = () => {
+      touchSessionActivity(
+        sessionId,
+        session?.workspacePath,
+        session?.remoteConnectionId,
+        session?.remoteSshHost
+      ).catch(error => {
+        log.debug('Failed to touch session activity', { sessionId, error });
+      });
+    };
 
     if (shouldHydrateBeforeSwitch) {
       try {
@@ -524,6 +526,7 @@ export async function switchChatSession(
     // visible content is restored; already-renderable sessions still switch
     // immediately and continue full hydration in the background.
     context.flowChatStore.switchSession(sessionId);
+    touchActiveSessionInBackground();
     startupTrace.markPhase('historical_session_switch', {
       historical: Boolean(session?.isHistorical),
       remote: isRemoteSession,

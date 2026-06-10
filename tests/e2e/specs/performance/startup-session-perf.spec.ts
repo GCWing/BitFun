@@ -722,9 +722,9 @@ async function ensurePerformanceWorkspace(startupPage: StartupPage): Promise<boo
     return ensureWorkspaceOpen(startupPage);
   }
 
-  const opened = await openWorkspace(targetWorkspace);
+  const opened = await openWorkspace(targetWorkspace, { requireWorkspaceLabel: false });
   if (!opened) {
-    return ensureWorkspaceOpen(startupPage);
+    throw new Error(`Performance workspace did not become active: ${targetWorkspace}`);
   }
   return true;
 }
@@ -3503,6 +3503,23 @@ type RapidLongSessionSwitchMeasurement = {
   targetLatestUsableAtMs: number;
   clickToTargetLatestVisibleMs: number;
   clickToTargetLatestUsableMs: number;
+  rapidSwitchBreakdown: {
+    firstClickToTargetClickMs: number;
+    target: {
+      clickedAtMs: number;
+      clickSinceFirstClickMs: number;
+      clickToLatestVisibleMs: number;
+      clickToLatestUsableMs: number;
+      latestVisibleToUsableMs: number;
+    };
+    sessions: Array<{
+      sessionId: string;
+      clickIndex: number;
+      sinceFirstClickMs: number;
+      eventCount: number;
+      sessionOpen: ReturnType<typeof summarizeSessionOpen>;
+    }>;
+  };
   postVisibleObserveMs: number;
   viewport: LongSessionViewportState;
   viewportTimelineSummary: LongSessionViewportTimelineSummary;
@@ -3661,6 +3678,22 @@ async function collectRapidLongSessionSwitchMeasurement(
       event.phase === 'react_render_profile'
     )
   );
+  const targetClickedAtMs =
+    clickPlan.find(entry => entry.sessionId === targetSessionId)?.clickedAtMs ?? clickedAtMs;
+  const sessionBreakdowns = clickPlan.map((entry, index) => {
+    const sessionEvents = events.filter(event =>
+      typeof event.sessionId === 'string' &&
+      event.sessionId === entry.sessionId
+    );
+
+    return {
+      sessionId: entry.sessionId,
+      clickIndex: index,
+      sinceFirstClickMs: entry.clickedAtMs - clickedAtMs,
+      eventCount: sessionEvents.length,
+      sessionOpen: summarizeSessionOpen(sessionEvents, entry.clickedAtMs),
+    };
+  });
   const verboseTimelineReport = process.env.BITFUN_E2E_PERF_VERBOSE_REPORT === '1';
 
   return {
@@ -3675,6 +3708,17 @@ async function collectRapidLongSessionSwitchMeasurement(
     targetLatestUsableAtMs: latestUsable.usableAtMs,
     clickToTargetLatestVisibleMs: latestVisible.visibleAtMs - clickedAtMs,
     clickToTargetLatestUsableMs: latestUsable.usableAtMs - clickedAtMs,
+    rapidSwitchBreakdown: {
+      firstClickToTargetClickMs: targetClickedAtMs - clickedAtMs,
+      target: {
+        clickedAtMs: targetClickedAtMs,
+        clickSinceFirstClickMs: targetClickedAtMs - clickedAtMs,
+        clickToLatestVisibleMs: latestVisible.visibleAtMs - targetClickedAtMs,
+        clickToLatestUsableMs: latestUsable.usableAtMs - targetClickedAtMs,
+        latestVisibleToUsableMs: latestUsable.usableAtMs - latestVisible.visibleAtMs,
+      },
+      sessions: sessionBreakdowns,
+    },
     postVisibleObserveMs,
     viewport,
     viewportTimelineSummary,
@@ -4133,6 +4177,26 @@ describe('Performance telemetry', () => {
       targetSessionId,
       clickToTargetLatestVisibleMs: measurement.clickToTargetLatestVisibleMs,
       clickToTargetLatestUsableMs: measurement.clickToTargetLatestUsableMs,
+      rapidSwitchBreakdown: {
+        firstClickToTargetClickMs: measurement.rapidSwitchBreakdown.firstClickToTargetClickMs,
+        target: {
+          clickSinceFirstClickMs: measurement.rapidSwitchBreakdown.target.clickSinceFirstClickMs,
+          clickToLatestVisibleMs: measurement.rapidSwitchBreakdown.target.clickToLatestVisibleMs,
+          latestVisibleToUsableMs: measurement.rapidSwitchBreakdown.target.latestVisibleToUsableMs,
+          clickToLatestUsableMs: measurement.rapidSwitchBreakdown.target.clickToLatestUsableMs,
+        },
+        sessions: measurement.rapidSwitchBreakdown.sessions.map(session => ({
+          sessionId: session.sessionId,
+          sinceFirstClickMs: session.sinceFirstClickMs,
+          eventCount: session.eventCount,
+          clickToHydrateStartMs: session.sessionOpen.clickToHydrateStartMs,
+          clickToLatestFrameMs: session.sessionOpen.clickToLatestFrameMs,
+          clickToHydrateEndMs: session.sessionOpen.clickToHydrateEndMs,
+          restoreDurationMs: session.sessionOpen.restoreDurationMs,
+          stateCommitDurationMs: session.sessionOpen.stateCommitDurationMs,
+          latestFrameSinceHydrateMs: session.sessionOpen.latestFrameSinceHydrateMs,
+        })),
+      },
       visualStateSummary: {
         postLatestTextVisibleLoadingEventCount:
           measurement.visualStateSummary.postLatestTextVisibleLoadingEventCount,

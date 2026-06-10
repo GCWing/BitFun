@@ -123,6 +123,18 @@ describe('selectInitialHistoryRenderWindow', () => {
     } as VirtualItem;
   }
 
+  function exploreItem(turnIndex: number): VirtualItem {
+    const id = `turn-${turnIndex}`;
+    return {
+      type: 'explore-group',
+      turnId: id,
+      data: {
+        allItems: [{ id: `explore-${id}`, label: `Explore ${turnIndex}` }],
+        timestamp: turnIndex,
+      },
+    } as VirtualItem;
+  }
+
   it('keeps only the latest render window on large partial history tails', () => {
     const items = Array.from({ length: 8 }, (_, index) => [
       userItem(index),
@@ -135,6 +147,24 @@ describe('selectInitialHistoryRenderWindow', () => {
     expect(window.items.length).toBeLessThan(items.length);
     expect(window.items[0]?.turnId).toBe('turn-6');
     expect(window.items.at(-1)?.turnId).toBe('turn-7');
+    expect(window.omittedEstimatedHeightPx).toBeGreaterThan(0);
+  });
+
+  it('keeps an extra previous turn when the latest turn is user-only', () => {
+    const items = [
+      ...Array.from({ length: 7 }, (_, index) => [
+        userItem(index),
+        exploreItem(index),
+        modelItem(index),
+      ]).flat(),
+      userItem(7),
+    ];
+
+    const window = selectInitialHistoryRenderWindow(items);
+    const renderedTurnIds = Array.from(new Set(window.items.map(item => item.turnId)));
+
+    expect(renderedTurnIds).toEqual(['turn-5', 'turn-6', 'turn-7']);
+    expect(window.items[0]?.turnId).toBe('turn-5');
     expect(window.omittedEstimatedHeightPx).toBeGreaterThan(0);
   });
 

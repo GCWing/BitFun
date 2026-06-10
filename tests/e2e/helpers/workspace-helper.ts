@@ -21,6 +21,10 @@ export interface WorkspaceState {
   workspaceLabels: string[];
 }
 
+export interface WorkspaceReadyOptions {
+  requireWorkspaceLabel?: boolean;
+}
+
 /**
  * Open a workspace through the frontend state layer so the UI stays in sync.
  */
@@ -82,18 +86,23 @@ export async function getWorkspaceState(): Promise<WorkspaceState> {
 }
 
 /**
- * Wait until both frontend state and nav DOM reflect the target workspace.
+ * Wait until frontend state reflects the target workspace.
+ * Most flows also require the nav DOM label; perf flows can opt out when the
+ * measurement only needs an active/opened workspace and must not depend on nav
+ * expansion rendering.
  */
 export async function waitForWorkspaceReady(
   workspacePath: string,
   projectName: string = path.basename(workspacePath),
   timeout: number = 15000,
+  options: WorkspaceReadyOptions = {},
 ): Promise<WorkspaceState> {
+  const requireWorkspaceLabel = options.requireWorkspaceLabel ?? true;
   await browser.waitUntil(async () => {
     const state = await getWorkspaceState();
     return state.currentWorkspacePath === workspacePath
       && state.openedWorkspacePaths.includes(workspacePath)
-      && state.workspaceLabels.some(label => label.includes(projectName));
+      && (!requireWorkspaceLabel || state.workspaceLabels.some(label => label.includes(projectName)));
   }, {
     timeout,
     interval: 500,
@@ -108,10 +117,11 @@ export async function waitForWorkspaceReady(
  */
 export async function openWorkspace(
   workspacePath: string = process.env.E2E_TEST_WORKSPACE || process.cwd(),
+  options: WorkspaceReadyOptions = {},
 ): Promise<boolean> {
   try {
     await openWorkspaceThroughFrontend(workspacePath);
-    await waitForWorkspaceReady(workspacePath);
+    await waitForWorkspaceReady(workspacePath, path.basename(workspacePath), 15000, options);
     return true;
   } catch (error) {
     console.error('[WorkspaceHelper] Failed to open workspace through frontend state:', error);
