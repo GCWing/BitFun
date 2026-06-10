@@ -26,9 +26,36 @@ const LONG_SESSION_VIEWPORT_MAX_BLANK_GAP_PX = 64;
 const LONG_SESSION_LATEST_VISIBLE_MAX_BOTTOM_BLANK_PX = 96;
 const LONG_SESSION_LATEST_VISIBLE_MAX_BLANK_GAP_PX = 96;
 const LONG_SESSION_LATEST_TAIL_BOTTOM_TOLERANCE_PX = 96;
+const LONG_SESSION_PHYSICAL_BOTTOM_TOLERANCE_PX = 4;
+const LONG_SESSION_RESIZE_BOTTOM_SETTLE_MAX_MS = 120;
 const LONG_SESSION_INPUT_MIN_TOP_RATIO = 0.65;
 const LONG_SESSION_INPUT_BOTTOM_TOLERANCE_PX = 96;
 const LONG_SESSION_MAX_LATEST_TEXT_DELAY_AFTER_VISIBLE_MS = 120;
+
+type LongSessionPostVisibleInteraction =
+  | 'first-scroll'
+  | 'scroll-down'
+  | 'resize-window'
+  | 'resize-window-width';
+
+type LongSessionWindowRect = {
+  x?: number;
+  y?: number;
+  width: number;
+  height: number;
+};
+
+type LongSessionPostVisibleInteractionResult = {
+  type: LongSessionPostVisibleInteraction;
+  beforeScrollTop: number;
+  afterScrollTop: number;
+  maxScrollTop: number;
+  deltaY: number;
+  beforeClientHeight?: number;
+  afterClientHeight?: number;
+  beforeWindowRect?: LongSessionWindowRect;
+  afterWindowRect?: LongSessionWindowRect;
+};
 
 type LongSessionViewportState = {
   hasRoot: boolean;
@@ -53,6 +80,14 @@ type LongSessionViewportState = {
   inputOverlayTop: number | null;
   inputOverlayBottom: number | null;
   inputOverlayHeight: number | null;
+  staticInitialHistoryWindowed: boolean | null;
+  staticInitialHistorySpacerHeight: number | null;
+  staticItemsTop: number | null;
+  staticItemsBottom: number | null;
+  footerTop: number | null;
+  footerHeight: number | null;
+  lastRenderedItemTop: number | null;
+  lastRenderedItemBottom: number | null;
   latestVisible: boolean;
   visibleTurnIds: string[];
   visibleUserMessageCount: number;
@@ -930,10 +965,20 @@ async function readLongSessionViewportState(expectedLatestTurnId?: string | null
     const scroller = root?.querySelector<HTMLElement>(
       '[data-virtuoso-scroller="true"], [data-virtuoso-scroller]',
     ) ?? null;
+    const staticScroller = root?.querySelector<HTMLElement>('.virtual-message-list__static-scroller') ?? null;
+    const staticItems = root?.querySelector<HTMLElement>('.virtual-message-list__static-items') ?? null;
+    const staticInitialHistorySpacer = root?.querySelector<HTMLElement>(
+      '.virtual-message-list__initial-history-spacer',
+    ) ?? null;
+    const footer = root?.querySelector<HTMLElement>('.message-list-footer') ?? null;
     const userMessages = Array.from(root?.querySelectorAll<HTMLElement>(
       '.virtual-item-wrapper[data-turn-id][data-item-type="user-message"]',
     ) ?? []);
+    const renderedItems = Array.from(root?.querySelectorAll<HTMLElement>(
+      '.virtual-item-wrapper[data-turn-id]',
+    ) ?? []);
     const renderedLatest = userMessages.length > 0 ? userMessages[userMessages.length - 1] : null;
+    const lastRenderedItem = renderedItems.length > 0 ? renderedItems[renderedItems.length - 1] : null;
     const latest = targetTurnId
       ? root?.querySelector<HTMLElement>(
         `.virtual-item-wrapper[data-turn-id="${targetTurnId}"][data-item-type="user-message"]`,
@@ -993,6 +1038,9 @@ async function readLongSessionViewportState(expectedLatestTurnId?: string | null
     const latestModelRoundTextLength = latestModelRoundVisibleSegments
       .reduce((total, element) => total + (element.innerText?.length ?? 0), 0);
     const latestVisible = isVisibleWithinScroller(latestRect, latest);
+    const staticItemsRect = staticItems?.getBoundingClientRect() ?? null;
+    const footerRect = footer?.getBoundingClientRect() ?? null;
+    const lastRenderedItemRect = lastRenderedItem?.getBoundingClientRect() ?? null;
     const latestContentVisible = latestVisible || latestModelRoundVisible;
     const latestContentVisuallyVisible =
       latestContentVisible && !historyPlaceholderCoversMessages;
@@ -1104,6 +1152,16 @@ async function readLongSessionViewportState(expectedLatestTurnId?: string | null
       inputOverlayTop: inputOverlayRect?.top ?? null,
       inputOverlayBottom: inputOverlayRect?.bottom ?? null,
       inputOverlayHeight: inputOverlayRect?.height ?? null,
+      staticInitialHistoryWindowed: staticScroller
+        ? staticScroller.getAttribute('data-initial-history-render-windowed') === 'true'
+        : null,
+      staticInitialHistorySpacerHeight: staticInitialHistorySpacer?.offsetHeight ?? null,
+      staticItemsTop: staticItemsRect?.top ?? null,
+      staticItemsBottom: staticItemsRect?.bottom ?? null,
+      footerTop: footerRect?.top ?? null,
+      footerHeight: footerRect?.height ?? null,
+      lastRenderedItemTop: lastRenderedItemRect?.top ?? null,
+      lastRenderedItemBottom: lastRenderedItemRect?.bottom ?? null,
       latestVisible,
       visibleTurnIds: visibleUserMessages
         .map(element => element.dataset.turnId)
@@ -2637,6 +2695,31 @@ function isLongSessionLatestTailAnchored(viewport: LongSessionViewportState): bo
   );
 }
 
+function getLongSessionPhysicalDistanceFromBottom(viewport: LongSessionViewportState): number | null {
+  if (
+    viewport.scrollTop === null ||
+    viewport.scrollHeight === null ||
+    viewport.clientHeight === null
+  ) {
+    return null;
+  }
+
+  return Math.max(0, viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop);
+}
+
+function getLongSessionScrollTransitionDistanceFromBottom(
+  transition: LongSessionVisualStateSummary['scrollTransitions'][number],
+  side: 'from' | 'to',
+): number | null {
+  const scrollTop = side === 'from' ? transition.fromScrollTop : transition.toScrollTop;
+  const scrollHeight = side === 'from' ? transition.fromScrollHeight : transition.toScrollHeight;
+  const clientHeight = side === 'from' ? transition.fromClientHeight : transition.toClientHeight;
+  if (scrollTop === null || scrollHeight === null || clientHeight === null) {
+    return null;
+  }
+  return Math.max(0, scrollHeight - clientHeight - scrollTop);
+}
+
 async function maybeSavePerfScreenshot(name: string): Promise<string | null> {
   if (process.env.BITFUN_E2E_PERF_SCREENSHOTS !== '1') {
     return null;
@@ -3449,7 +3532,8 @@ type LongSessionOpenMeasurement = {
   sessionId: string;
   fixtureScenario: string | null;
   expectedLatestTurnId: string | null;
-  postVisibleInteraction: 'first-scroll' | null;
+  postVisibleInteraction: LongSessionPostVisibleInteraction | null;
+  postVisibleInteractionResult: LongSessionPostVisibleInteractionResult | null;
   postVisibleObserveMs: number;
   verboseTimelineReport: boolean;
   traceWaitErrors: string[];
@@ -3485,7 +3569,7 @@ type LongSessionOpenMeasurement = {
 type LongSessionOpenMeasurementOptions = {
   requireFrameTrace?: boolean;
   expectNoHistoryLoadingAfterClick?: boolean;
-  postVisibleInteraction?: 'first-scroll';
+  postVisibleInteraction?: LongSessionPostVisibleInteraction;
 };
 
 type RapidLongSessionSwitchMeasurement = {
@@ -3535,20 +3619,170 @@ type RapidLongSessionSwitchMeasurement = {
 
 function readPostVisibleInteractionOption(
   options: LongSessionOpenMeasurementOptions,
-): 'first-scroll' | null {
+): LongSessionPostVisibleInteraction | null {
   const envValue = process.env.BITFUN_E2E_PERF_POST_VISIBLE_INTERACTION;
-  if (envValue === 'first-scroll') {
+  if (
+    envValue === 'first-scroll' ||
+    envValue === 'scroll-down' ||
+    envValue === 'resize-window' ||
+    envValue === 'resize-window-width'
+  ) {
     return envValue;
   }
   return options.postVisibleInteraction ?? null;
 }
 
-async function performLongSessionPostVisibleInteraction(interaction: 'first-scroll'): Promise<void> {
-  if (interaction !== 'first-scroll') {
-    return;
+function isLongSessionResizeInteraction(
+  interaction: LongSessionPostVisibleInteraction | null,
+): boolean {
+  return interaction === 'resize-window' || interaction === 'resize-window-width';
+}
+
+function getWebDriverSessionId(): string {
+  const sessionId = (browser as unknown as { sessionId?: string }).sessionId;
+  if (!sessionId) {
+    throw new Error('WebDriver session id is not available for window resize measurement');
+  }
+  return sessionId;
+}
+
+function webDriverEndpoint(pathname: string): string {
+  const port = Number(process.env.BITFUN_E2E_WEBDRIVER_PORT || 4445);
+  return `http://127.0.0.1:${port}${pathname}`;
+}
+
+async function readWebDriverWindowRect(): Promise<LongSessionWindowRect> {
+  const sessionId = getWebDriverSessionId();
+  const response = await fetch(webDriverEndpoint(`/session/${sessionId}/window/rect`));
+  if (!response.ok) {
+    throw new Error(`Failed to read WebDriver window rect: ${response.status} ${await response.text()}`);
+  }
+  const payload = await response.json() as { value?: Partial<LongSessionWindowRect> };
+  const rect = payload.value;
+  if (
+    !rect ||
+    typeof rect.width !== 'number' ||
+    typeof rect.height !== 'number'
+  ) {
+    throw new Error(`WebDriver window rect response is missing width/height: ${JSON.stringify(payload)}`);
+  }
+  return {
+    x: typeof rect.x === 'number' ? rect.x : undefined,
+    y: typeof rect.y === 'number' ? rect.y : undefined,
+    width: rect.width,
+    height: rect.height,
+  };
+}
+
+async function setWebDriverWindowRect(rect: Partial<LongSessionWindowRect>): Promise<LongSessionWindowRect> {
+  const sessionId = getWebDriverSessionId();
+  const response = await fetch(webDriverEndpoint(`/session/${sessionId}/window/rect`), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(rect),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to set WebDriver window rect: ${response.status} ${await response.text()}`);
+  }
+  return readWebDriverWindowRect();
+}
+
+async function waitForBrowserAnimationFrames(frameCount = 2): Promise<void> {
+  await browser.executeAsync((frames, done) => {
+    let remaining = frames;
+    const waitFrame = () => {
+      remaining -= 1;
+      if (remaining <= 0) {
+        done();
+        return;
+      }
+      requestAnimationFrame(waitFrame);
+    };
+    requestAnimationFrame(waitFrame);
+  }, frameCount);
+}
+
+async function readLongSessionScrollerMetrics(): Promise<{
+  scrollTop: number;
+  maxScrollTop: number;
+  clientHeight: number;
+}> {
+  return browser.execute(() => {
+    const scroller = document.querySelector<HTMLElement>(
+      '.modern-flowchat-container__messages [data-virtuoso-scroller="true"], ' +
+      '.modern-flowchat-container__messages [data-virtuoso-scroller]',
+    );
+    if (!scroller) {
+      throw new Error('Could not find long-session scroller for post-visible interaction');
+    }
+    return {
+      scrollTop: scroller.scrollTop,
+      maxScrollTop: Math.max(0, scroller.scrollHeight - scroller.clientHeight),
+      clientHeight: scroller.clientHeight,
+    };
+  });
+}
+
+async function recordLongSessionPostVisibleInteraction(
+  detail: LongSessionPostVisibleInteractionResult,
+): Promise<void> {
+  await browser.execute((eventDetail) => {
+    window.dispatchEvent(new CustomEvent('bitfun:e2e-long-session-user-interaction', {
+      detail: eventDetail,
+    }));
+  }, detail);
+}
+
+async function performLongSessionPostVisibleInteraction(
+  interaction: LongSessionPostVisibleInteraction,
+): Promise<LongSessionPostVisibleInteractionResult> {
+  if (isLongSessionResizeInteraction(interaction)) {
+    const beforeWindowRect = await readWebDriverWindowRect();
+    const beforeMetrics = await readLongSessionScrollerMetrics();
+    const nextWidth = Math.max(
+      960,
+      Math.round(beforeWindowRect.width - Math.min(420, Math.max(220, beforeWindowRect.width * 0.22))),
+    );
+    const nextHeight = interaction === 'resize-window-width'
+      ? beforeWindowRect.height
+      : Math.max(
+        540,
+        Math.round(beforeWindowRect.height - Math.min(260, Math.max(140, beforeWindowRect.height * 0.22))),
+      );
+    await recordLongSessionPostVisibleInteraction({
+      type: interaction,
+      beforeScrollTop: beforeMetrics.scrollTop,
+      afterScrollTop: beforeMetrics.scrollTop,
+      maxScrollTop: beforeMetrics.maxScrollTop,
+      deltaY: 0,
+      beforeClientHeight: beforeMetrics.clientHeight,
+      beforeWindowRect,
+    });
+    const afterWindowRect = await setWebDriverWindowRect({
+      x: beforeWindowRect.x,
+      y: beforeWindowRect.y,
+      width: interaction === 'resize-window-width' ? nextWidth : beforeWindowRect.width,
+      height: nextHeight,
+    });
+    await waitForBrowserAnimationFrames(3);
+    const afterMetrics = await readLongSessionScrollerMetrics();
+    const result: LongSessionPostVisibleInteractionResult = {
+      type: interaction,
+      beforeScrollTop: beforeMetrics.scrollTop,
+      afterScrollTop: afterMetrics.scrollTop,
+      maxScrollTop: afterMetrics.maxScrollTop,
+      deltaY: 0,
+      beforeClientHeight: beforeMetrics.clientHeight,
+      afterClientHeight: afterMetrics.clientHeight,
+      beforeWindowRect,
+      afterWindowRect,
+    };
+    return result;
   }
 
-  await browser.execute(() => {
+  return browser.execute((interactionType) => {
     const scroller = document.querySelector<HTMLElement>(
       '.modern-flowchat-container__messages [data-virtuoso-scroller="true"], ' +
       '.modern-flowchat-container__messages [data-virtuoso-scroller]',
@@ -3558,24 +3792,44 @@ async function performLongSessionPostVisibleInteraction(interaction: 'first-scro
     }
 
     const beforeScrollTop = scroller.scrollTop;
-    const deltaY = -Math.min(520, Math.max(160, scroller.clientHeight * 0.45));
+    const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+    const direction = interactionType === 'first-scroll' ? -1 : 1;
+    const deltaY = direction * Math.min(520, Math.max(160, scroller.clientHeight * 0.45));
     scroller.dispatchEvent(new WheelEvent('wheel', {
       bubbles: true,
       cancelable: true,
       deltaMode: WheelEvent.DOM_DELTA_PIXEL,
       deltaY,
     }));
-    scroller.scrollTop = Math.max(0, beforeScrollTop + deltaY);
+    scroller.scrollTop = Math.max(0, Math.min(maxScrollTop, beforeScrollTop + deltaY));
     scroller.dispatchEvent(new Event('scroll', { bubbles: true }));
     window.dispatchEvent(new CustomEvent('bitfun:e2e-long-session-user-interaction', {
       detail: {
-        type: 'first-scroll',
+        type: interactionType,
         beforeScrollTop,
         afterScrollTop: scroller.scrollTop,
+        maxScrollTop,
         deltaY,
       },
     }));
-  });
+    return {
+      type: interactionType,
+      beforeScrollTop,
+      afterScrollTop: scroller.scrollTop,
+      maxScrollTop,
+      deltaY,
+    };
+  }, interaction);
+}
+
+async function restoreLongSessionPostVisibleInteraction(
+  result: LongSessionPostVisibleInteractionResult | null,
+): Promise<void> {
+  if (!result?.beforeWindowRect) {
+    return;
+  }
+  await setWebDriverWindowRect(result.beforeWindowRect);
+  await waitForBrowserAnimationFrames(2);
 }
 
 function readRapidSwitchSessionIds(): string[] {
@@ -3786,13 +4040,14 @@ async function collectLongSessionOpenMeasurement(
     { requireLatestModelRound },
   );
   const postVisibleInteraction = readPostVisibleInteractionOption(options);
+  let postVisibleInteractionResult: LongSessionPostVisibleInteractionResult | null = null;
   let latestVisible: Awaited<typeof latestVisiblePromise> | null = null;
   let latestUsable: Awaited<typeof latestUsablePromise> | null = null;
 
   if (postVisibleInteraction) {
     latestVisible = await latestVisiblePromise;
     latestUsable = await latestUsablePromise;
-    await performLongSessionPostVisibleInteraction(postVisibleInteraction);
+    postVisibleInteractionResult = await performLongSessionPostVisibleInteraction(postVisibleInteraction);
   }
 
   const afterFrameSnapshot = requireFrameTrace
@@ -3879,12 +4134,13 @@ async function collectLongSessionOpenMeasurement(
   );
   const screenshotPath = await maybeSavePerfScreenshot(`long-session-${sessionId}`);
 
-  return {
+  const measurement: LongSessionOpenMeasurement = {
     appMode: process.env.BITFUN_E2E_APP_MODE ?? 'auto',
     sessionId,
     fixtureScenario,
     expectedLatestTurnId,
     postVisibleInteraction,
+    postVisibleInteractionResult,
     postVisibleObserveMs,
     verboseTimelineReport,
     traceWaitErrors,
@@ -3920,6 +4176,8 @@ async function collectLongSessionOpenMeasurement(
     api: finalSnapshot.api,
     native: finalSnapshot.native,
   };
+  await restoreLongSessionPostVisibleInteraction(postVisibleInteractionResult);
+  return measurement;
 }
 
 function expectLongSessionMeasurementUsable(
@@ -3982,6 +4240,8 @@ function expectLongSessionMeasurementUsable(
     )).toBe(true);
     expect(isLongSessionLatestTailAnchored(measurement.latestAnswerTextVisibleViewport)).toBe(true);
   }
+  expect(getLongSessionPhysicalDistanceFromBottom(measurement.latestUsableViewport))
+    .toBeLessThanOrEqual(LONG_SESSION_PHYSICAL_BOTTOM_TOLERANCE_PX);
   const latestAnchorFailures = measurement.events.filter(event =>
     event.phase === 'historical_session_latest_anchor_failed' &&
     traceEventSessionId(event) === measurement.sessionId
@@ -4003,9 +4263,11 @@ function expectLongSessionMeasurementUsable(
       expect(measurement.visualStateSummary.postLatestTextVisibleLoadingSurfacePointEventCount).toBe(0);
       expect(measurement.visualStateSummary.postLatestTextVisibleBlankSurfacePointEventCount).toBe(0);
       expect(measurement.visualStateSummary.postLatestTextVisibleTransparentSurfacePointEventCount).toBe(0);
-      expect(measurement.visualStateSummary.postLatestTextVisibleScrollJumpCount).toBe(0);
-      expect(measurement.visualStateSummary.postLatestTextVisibleVirtualItemElementChangeCount).toBe(0);
-      expect(measurement.visualStateSummary.postLatestTextVisibleLayoutShiftScore).toBeLessThanOrEqual(0.005);
+      if (!isLongSessionResizeInteraction(measurement.postVisibleInteraction)) {
+        expect(measurement.visualStateSummary.postLatestTextVisibleScrollJumpCount).toBe(0);
+        expect(measurement.visualStateSummary.postLatestTextVisibleVirtualItemElementChangeCount).toBe(0);
+        expect(measurement.visualStateSummary.postLatestTextVisibleLayoutShiftScore).toBeLessThanOrEqual(0.005);
+      }
     }
     expect(measurement.visualStateSummary.openIntentBlankSurfacePointEventCount).toBe(0);
     expect(measurement.visualStateSummary.openIntentBlankSurfaceHoldCount).toBe(0);
@@ -4021,6 +4283,63 @@ function expectLongSessionMeasurementUsable(
       expect(measurement.visualStateSummary.postUserInteractionBlankSurfacePointEventCount).toBe(0);
       expect(measurement.visualStateSummary.postUserInteractionScrollTransitions).toHaveLength(0);
     }
+    if (measurement.postVisibleInteraction === 'scroll-down') {
+      expect(measurement.postVisibleInteractionResult).not.toBeNull();
+      expect(
+        (measurement.postVisibleInteractionResult?.afterScrollTop ?? 0) -
+        (measurement.postVisibleInteractionResult?.beforeScrollTop ?? 0),
+      ).toBeLessThanOrEqual(LONG_SESSION_PHYSICAL_BOTTOM_TOLERANCE_PX);
+      expect(measurement.visualStateSummary.postUserInteractionScrollJumpCount).toBe(0);
+      expect(measurement.visualStateSummary.postUserInteractionScrollerCollapseCount).toBe(0);
+      expect(measurement.visualStateSummary.postUserInteractionBlankSurfacePointEventCount).toBe(0);
+      expect(measurement.visualStateSummary.postUserInteractionScrollTransitions).toHaveLength(0);
+    }
+    if (isLongSessionResizeInteraction(measurement.postVisibleInteraction)) {
+      expect(measurement.postVisibleInteractionResult).not.toBeNull();
+      if (measurement.postVisibleInteraction === 'resize-window-width') {
+        expect(measurement.postVisibleInteractionResult?.beforeWindowRect?.width).toBeGreaterThan(
+          measurement.postVisibleInteractionResult?.afterWindowRect?.width ?? 0,
+        );
+        expect(Math.abs(
+          (measurement.postVisibleInteractionResult?.beforeWindowRect?.height ?? 0) -
+          (measurement.postVisibleInteractionResult?.afterWindowRect?.height ?? 0),
+        )).toBeLessThanOrEqual(2);
+      } else {
+        expect(measurement.postVisibleInteractionResult?.beforeWindowRect?.height).toBeGreaterThan(
+          measurement.postVisibleInteractionResult?.afterWindowRect?.height ?? 0,
+        );
+        expect(measurement.postVisibleInteractionResult?.beforeClientHeight).toBeGreaterThan(
+          measurement.postVisibleInteractionResult?.afterClientHeight ?? 0,
+        );
+      }
+      expect(
+        Math.max(
+          0,
+          (measurement.postVisibleInteractionResult?.maxScrollTop ?? 0) -
+            (measurement.postVisibleInteractionResult?.afterScrollTop ?? 0),
+        ),
+      ).toBeLessThanOrEqual(LONG_SESSION_PHYSICAL_BOTTOM_TOLERANCE_PX);
+      expect(getLongSessionPhysicalDistanceFromBottom(measurement.viewport))
+        .toBeLessThanOrEqual(LONG_SESSION_PHYSICAL_BOTTOM_TOLERANCE_PX);
+      const resizeTransitions = measurement.visualStateSummary.scrollTransitions.filter(transition =>
+        measurement.visualStateSummary.firstUserInteractionAtMs !== null &&
+        transition.sinceClickMs > measurement.visualStateSummary.firstUserInteractionAtMs
+      );
+      for (const transition of resizeTransitions) {
+        const toDistanceFromBottom = getLongSessionScrollTransitionDistanceFromBottom(transition, 'to');
+        if (toDistanceFromBottom === null || toDistanceFromBottom <= LONG_SESSION_PHYSICAL_BOTTOM_TOLERANCE_PX) {
+          continue;
+        }
+        const settledTransition = resizeTransitions.find(candidate =>
+          candidate.sinceClickMs > transition.sinceClickMs &&
+          candidate.sinceClickMs - transition.sinceClickMs <= LONG_SESSION_RESIZE_BOTTOM_SETTLE_MAX_MS &&
+          (getLongSessionScrollTransitionDistanceFromBottom(candidate, 'to') ?? Number.POSITIVE_INFINITY) <=
+            LONG_SESSION_PHYSICAL_BOTTOM_TOLERANCE_PX
+        );
+        expect(settledTransition).toBeDefined();
+      }
+      expect(measurement.visualStateSummary.postUserInteractionBlankSurfacePointEventCount).toBe(0);
+    }
   }
   if (measurement.fixtureScenario === 'mixed-visible') {
     expect(measurement.latestVisibleViewport.visibleModelRoundCount).toBeGreaterThan(0);
@@ -4028,7 +4347,11 @@ function expectLongSessionMeasurementUsable(
   expect(isLongSessionInputAnchoredNearBottom(measurement.latestVisibleViewport)).toBe(true);
   expect(isLongSessionViewportUsable(measurement.viewport, { requireLatestModelRound })).toBe(true);
   expect(isLongSessionInputAnchoredNearBottom(measurement.viewport)).toBe(true);
-  expect(isLongSessionLatestTailAnchored(measurement.viewport)).toBe(true);
+  if (measurement.postVisibleInteraction !== 'first-scroll') {
+    expect(isLongSessionLatestTailAnchored(measurement.viewport)).toBe(true);
+    expect(getLongSessionPhysicalDistanceFromBottom(measurement.viewport))
+      .toBeLessThanOrEqual(LONG_SESSION_PHYSICAL_BOTTOM_TOLERANCE_PX);
+  }
   if (
     maxLatestFrameMs !== undefined &&
     measurement.sessionOpen.latestFrameSinceHydrateMs !== undefined

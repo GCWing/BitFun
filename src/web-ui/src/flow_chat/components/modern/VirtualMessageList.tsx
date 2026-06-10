@@ -162,6 +162,12 @@ interface BottomReservationState {
   pin: PinBottomReservation;
 }
 
+interface ScrollerGeometrySnapshot {
+  scrollTop: number;
+  scrollHeight: number;
+  clientHeight: number;
+}
+
 interface PendingTurnPinState {
   turnId: string;
   behavior: ScrollBehavior;
@@ -364,6 +370,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
   const bottomReservationStateRef = useRef<BottomReservationState>(createInitialBottomReservationState());
   const previousMeasuredHeightRef = useRef<number | null>(null);
   const previousScrollTopRef = useRef(0);
+  const previousScrollerGeometryRef = useRef<ScrollerGeometrySnapshot | null>(null);
   const markedInitialHistoryRenderWindowKeyRef = useRef<string | null>(null);
   const autoScrolledInitialHistoryRenderKeyRef = useRef<string | null>(null);
   const pendingInitialHistoryExpansionRef = useRef<{
@@ -378,6 +385,8 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
   const pinReservationReconcileFrameRef = useRef<number | null>(null);
   const turnPinStabilizationFrameRef = useRef<number | null>(null);
   const latestEndAnchorStabilizationFrameRef = useRef<number | null>(null);
+  const staticInitialHistoryBottomGuardFrameRef = useRef<number | null>(null);
+  const staticInitialHistoryBottomGuardUntilMsRef = useRef(0);
   const latestEndAnchorRequestRef = useRef<LatestEndAnchorRequestState | null>(null);
   const resolveLatestEndAnchorStabilizationRef = useRef<((reason: LatestEndAnchorResolveReason) => boolean) | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
@@ -466,6 +475,116 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     const compensationPx = getTotalBottomCompensationPx(reservationState);
     return Math.max(0, scroller.scrollHeight - compensationPx - inputStackFooterPxRef.current);
   }, [getTotalBottomCompensationPx]);
+
+  const recordScrollerGeometry = useCallback((scroller: HTMLElement) => {
+    previousScrollerGeometryRef.current = {
+      scrollTop: scroller.scrollTop,
+      scrollHeight: scroller.scrollHeight,
+      clientHeight: scroller.clientHeight,
+    };
+  }, []);
+
+  const recordScrollerGeometryIfLayoutStable = useCallback((scroller: HTMLElement) => {
+    const previousGeometry = previousScrollerGeometryRef.current;
+    if (
+      previousGeometry &&
+      (
+        Math.abs(scroller.clientHeight - previousGeometry.clientHeight) > COMPENSATION_EPSILON_PX ||
+        Math.abs(scroller.scrollHeight - previousGeometry.scrollHeight) > COMPENSATION_EPSILON_PX
+      )
+    ) {
+      return;
+    }
+    recordScrollerGeometry(scroller);
+  }, [recordScrollerGeometry]);
+
+  const syncPhysicalBottomAfterViewportResize = useCallback((scroller: HTMLElement): boolean => {
+    const previousGeometry = previousScrollerGeometryRef.current;
+    if (!previousGeometry) {
+      return false;
+    }
+
+    const viewportGeometryChanged =
+      Math.abs(scroller.scrollHeight - previousGeometry.scrollHeight) > COMPENSATION_EPSILON_PX ||
+      Math.abs(scroller.clientHeight - previousGeometry.clientHeight) > COMPENSATION_EPSILON_PX;
+    if (!viewportGeometryChanged || pendingCollapseIntentRef.current.active) {
+      return false;
+    }
+
+    const previousMaxScrollTop = Math.max(0, previousGeometry.scrollHeight - previousGeometry.clientHeight);
+    const wasAtPhysicalBottom =
+      Math.abs(previousMaxScrollTop - previousGeometry.scrollTop) <= LATEST_END_ANCHOR_STABLE_EPSILON_PX;
+    if (!wasAtPhysicalBottom) {
+      return false;
+    }
+
+    const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+    if (Math.abs(maxScrollTop - scroller.scrollTop) > COMPENSATION_EPSILON_PX) {
+      scroller.scrollTop = maxScrollTop;
+    }
+    previousScrollTopRef.current = scroller.scrollTop;
+    previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller);
+    recordScrollerGeometry(scroller);
+    return true;
+  }, [recordScrollerGeometry, snapshotMeasuredContentHeight]);
+
+  const cancelStaticInitialHistoryBottomGuard = useCallback(() => {
+    staticInitialHistoryBottomGuardUntilMsRef.current = 0;
+    if (staticInitialHistoryBottomGuardFrameRef.current !== null) {
+      cancelAnimationFrame(staticInitialHistoryBottomGuardFrameRef.current);
+      staticInitialHistoryBottomGuardFrameRef.current = null;
+    }
+  }, []);
+
+  const startStaticInitialHistoryBottomGuard = useCallback((durationMs = 2500) => {
+    const scroller = scrollerElementRef.current;
+    if (!scroller?.classList.contains('virtual-message-list__static-scroller')) {
+      return;
+    }
+
+    const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+    if (Math.abs(maxScrollTop - scroller.scrollTop) > LATEST_END_ANCHOR_STABLE_EPSILON_PX) {
+      return;
+    }
+
+    staticInitialHistoryBottomGuardUntilMsRef.current = Math.max(
+      staticInitialHistoryBottomGuardUntilMsRef.current,
+      performance.now() + durationMs,
+    );
+    if (staticInitialHistoryBottomGuardFrameRef.current !== null) {
+      return;
+    }
+
+    const tick = () => {
+      staticInitialHistoryBottomGuardFrameRef.current = null;
+      const now = performance.now();
+      if (now > staticInitialHistoryBottomGuardUntilMsRef.current) {
+        return;
+      }
+
+      const currentScroller = scrollerElementRef.current;
+      if (
+        !currentScroller?.classList.contains('virtual-message-list__static-scroller') ||
+        now <= userInitiatedUpwardScrollUntilMsRef.current
+      ) {
+        staticInitialHistoryBottomGuardUntilMsRef.current = 0;
+        return;
+      }
+
+      syncPhysicalBottomAfterViewportResize(currentScroller);
+      const distanceFromBottom = Math.max(
+        0,
+        currentScroller.scrollHeight - currentScroller.clientHeight - currentScroller.scrollTop,
+      );
+      if (distanceFromBottom <= LATEST_END_ANCHOR_STABLE_EPSILON_PX) {
+        recordScrollerGeometry(currentScroller);
+      }
+
+      staticInitialHistoryBottomGuardFrameRef.current = requestAnimationFrame(tick);
+    };
+
+    staticInitialHistoryBottomGuardFrameRef.current = requestAnimationFrame(tick);
+  }, [recordScrollerGeometry, syncPhysicalBottomAfterViewportResize]);
 
   const updateBottomReservationState = useCallback((
     updater: BottomReservationState | ((prev: BottomReservationState) => BottomReservationState),
@@ -658,8 +777,9 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
 
     scroller.scrollTop = targetScrollTop;
     previousScrollTopRef.current = targetScrollTop;
+    recordScrollerGeometry(scroller);
     return true;
-  }, [releaseAnchorLock]);
+  }, [recordScrollerGeometry, releaseAnchorLock]);
 
   const measureHeightChange = useCallback(() => {
     const scroller = scrollerElementRef.current;
@@ -667,6 +787,21 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
 
     const currentScrollTop = scroller.scrollTop;
     const previousScrollTop = previousScrollTopRef.current;
+    const previousScrollerGeometry = previousScrollerGeometryRef.current;
+    const viewportGeometryChanged = Boolean(
+      previousScrollerGeometry &&
+      (
+        Math.abs(scroller.scrollHeight - previousScrollerGeometry.scrollHeight) > COMPENSATION_EPSILON_PX ||
+        Math.abs(scroller.clientHeight - previousScrollerGeometry.clientHeight) > COMPENSATION_EPSILON_PX
+      )
+    );
+    const wasAtPhysicalBottom = Boolean(
+      previousScrollerGeometry &&
+      Math.abs(
+        Math.max(0, previousScrollerGeometry.scrollHeight - previousScrollerGeometry.clientHeight) -
+        previousScrollerGeometry.scrollTop
+      ) <= LATEST_END_ANCHOR_STABLE_EPSILON_PX
+    );
     const currentTotalCompensation = getTotalBottomCompensationPx();
     const effectiveScrollHeight = Math.max(
       0,
@@ -677,12 +812,27 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
 
     if (previousMeasuredHeight === null) {
       previousScrollTopRef.current = currentScrollTop;
+      recordScrollerGeometry(scroller);
       return;
     }
 
     const heightDelta = effectiveScrollHeight - previousMeasuredHeight;
     if (Math.abs(heightDelta) <= COMPENSATION_EPSILON_PX) {
       previousScrollTopRef.current = currentScrollTop;
+      recordScrollerGeometry(scroller);
+      return;
+    }
+
+    if (viewportGeometryChanged && !pendingCollapseIntentRef.current.active) {
+      if (wasAtPhysicalBottom) {
+        const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+        if (Math.abs(maxScrollTop - scroller.scrollTop) > COMPENSATION_EPSILON_PX) {
+          scroller.scrollTop = maxScrollTop;
+        }
+      }
+      previousScrollTopRef.current = scroller.scrollTop;
+      previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller);
+      recordScrollerGeometry(scroller);
       return;
     }
 
@@ -695,12 +845,14 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     if (heightDelta > 0) {
       if (currentTotalCompensation > COMPENSATION_EPSILON_PX && layoutTransitionCountRef.current > 0) {
         previousScrollTopRef.current = currentScrollTop;
+        recordScrollerGeometry(scroller);
         return;
       }
 
       const nextReservationState = consumeBottomCompensation(heightDelta);
       applyFooterCompensationNow(nextReservationState);
       previousScrollTopRef.current = currentScrollTop;
+      recordScrollerGeometry(scroller);
       return;
     }
 
@@ -756,6 +908,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
       // scroll listener restore an older anchor during upward scroll and causes
       // the visible "wall hit" jitter.
       previousScrollTopRef.current = currentScrollTop;
+      recordScrollerGeometry(scroller);
       return;
     }
 
@@ -795,12 +948,15 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     }
 
     previousScrollTopRef.current = currentScrollTop;
+    recordScrollerGeometry(scroller);
   }, [
     activateAnchorLock,
     applyFooterCompensationNow,
     consumeBottomCompensation,
     getTotalBottomCompensationPx,
+    recordScrollerGeometry,
     restoreAnchorLockNow,
+    snapshotMeasuredContentHeight,
     updateBottomReservationState,
   ]);
 
@@ -1540,6 +1696,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
         scroller,
         bottomReservationStateRef.current,
       );
+      recordScrollerGeometry(scroller);
       scheduleVisibleTurnMeasure(2);
       schedulePinReservationReconcile(2);
     };
@@ -1555,6 +1712,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
 
     previousScrollTopRef.current = targetScrollTop;
     previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller, nextReservationState);
+    recordScrollerGeometry(scroller);
 
     const alignedRect = resolvedMetrics.targetElement.getBoundingClientRect();
     const alignedWithinTolerance = Math.abs(alignedRect.top - resolvedMetrics.viewportTop) <= 1.5;
@@ -1575,6 +1733,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     buildPinReservation,
     applyFooterCompensationNow,
     getRenderedUserMessageElement,
+    recordScrollerGeometry,
     resolveTurnPinMetrics,
     schedulePinReservationReconcile,
     scheduleVisibleTurnMeasure,
@@ -1767,6 +1926,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     previousScrollTopRef.current = 0;
     clearTurnPinRequest();
     cancelLatestEndAnchorStabilization();
+    cancelStaticInitialHistoryBottomGuard();
     anchorLockRef.current = {
       active: false,
       targetScrollTop: 0,
@@ -1783,6 +1943,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
       baseTotalCompensationPx: 0,
       cumulativeShrinkPx: 0,
     };
+    previousScrollerGeometryRef.current = null;
     const currentSessionId = activeSession?.sessionId ?? null;
     const activeHandoff = historyProjectionHandoffRef.current;
     if (!activeHandoff || activeHandoff.sessionId !== currentSessionId) {
@@ -1793,7 +1954,14 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
       pendingHistoryProjectionHandoffRef.current = null;
     }
     resetBottomReservations();
-  }, [activeSession?.sessionId, cancelLatestEndAnchorStabilization, clearHistoryProjectionHandoff, clearTurnPinRequest, resetBottomReservations]);
+  }, [
+    activeSession?.sessionId,
+    cancelLatestEndAnchorStabilization,
+    cancelStaticInitialHistoryBottomGuard,
+    clearHistoryProjectionHandoff,
+    clearTurnPinRequest,
+    resetBottomReservations,
+  ]);
 
   useEffect(() => {
     previousIsStreamingOutputRef.current = false;
@@ -1811,16 +1979,19 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
   useEffect(() => {
     return () => {
       cancelLatestEndAnchorStabilization();
+      cancelStaticInitialHistoryBottomGuard();
       if (historyProjectionHandoffReleaseFrameRef.current !== null) {
         cancelAnimationFrame(historyProjectionHandoffReleaseFrameRef.current);
         historyProjectionHandoffReleaseFrameRef.current = null;
       }
     };
-  }, [cancelLatestEndAnchorStabilization]);
+  }, [cancelLatestEndAnchorStabilization, cancelStaticInitialHistoryBottomGuard]);
 
   useEffect(() => {
     if (!scrollerElement) {
       previousMeasuredHeightRef.current = null;
+      previousScrollerGeometryRef.current = null;
+      cancelStaticInitialHistoryBottomGuard();
       return;
     }
 
@@ -1831,6 +2002,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
 
     previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scrollerElement);
     previousScrollTopRef.current = scrollerElement.scrollTop;
+    recordScrollerGeometry(scrollerElement);
 
     // Batch observer-triggered work into a single rAF per frame
     let observerBatchPending = false;
@@ -1850,10 +2022,22 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
 
     resizeObserverRef.current?.disconnect();
     resizeObserverRef.current = new ResizeObserver(() => {
+      syncPhysicalBottomAfterViewportResize(scrollerElement);
       resolveLatestEndAnchorStabilizationRef.current?.('resize-observer');
       scheduleObserverBatch();
     });
     resizeObserverRef.current.observe(resizeTarget);
+    if (resizeTarget !== scrollerElement) {
+      resizeObserverRef.current.observe(scrollerElement);
+    }
+
+    const handleWindowResize = () => {
+      syncPhysicalBottomAfterViewportResize(scrollerElement);
+      resolveLatestEndAnchorStabilizationRef.current?.('resize-observer');
+      scheduleObserverBatch();
+    };
+    window.addEventListener('resize', handleWindowResize);
+    window.visualViewport?.addEventListener('resize', handleWindowResize);
 
     mutationObserverRef.current?.disconnect();
     let mutationPending = false;
@@ -1982,6 +2166,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
           scrollerElement,
           nextReservationState,
         );
+        recordScrollerGeometry(scrollerElement);
         return;
       }
 
@@ -2012,11 +2197,13 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
           if (Math.abs(restoreDelta) > ANCHOR_LOCK_MIN_DEVIATION_PX) {
             scrollerElement.scrollTop = targetScrollTop;
             previousScrollTopRef.current = targetScrollTop;
+            recordScrollerGeometry(scrollerElement);
             return;
           }
         }
       }
       previousScrollTopRef.current = scrollerElement.scrollTop;
+      recordScrollerGeometryIfLayoutStable(scrollerElement);
       scheduleVisibleTurnMeasure();
       followOutputControllerRef.current.handleScroll();
       scheduleFullHistoryProjectionForUserIntent('scroll-near-partial-history-boundary');
@@ -2226,6 +2413,8 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
       window.removeEventListener('pointercancel', endScrollbarPointerInteraction, true);
       window.removeEventListener('tool-card-toggle', handleToolCardToggle);
       window.removeEventListener('flowchat:tool-card-collapse-intent', handleToolCardCollapseIntent as EventListener);
+      window.removeEventListener('resize', handleWindowResize);
+      window.visualViewport?.removeEventListener('resize', handleWindowResize);
       resizeObserverRef.current?.disconnect();
       resizeObserverRef.current = null;
       mutationObserverRef.current?.disconnect();
@@ -2257,18 +2446,22 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
         cancelAnimationFrame(fullHistoryProjectionIntentFrameRef.current);
         fullHistoryProjectionIntentFrameRef.current = null;
       }
+      cancelStaticInitialHistoryBottomGuard();
       pendingFullHistoryProjectionReasonRef.current = null;
     };
   }, [
     activateAnchorLock,
     applyFooterCompensationNow,
     cancelLatestEndAnchorStabilization,
+    cancelStaticInitialHistoryBottomGuard,
     consumeBottomCompensation,
     clearTurnPinRequest,
     getTotalBottomCompensationPx,
     latestTurnId,
     pendingTurnPin?.pinMode,
     pendingTurnPin?.turnId,
+    recordScrollerGeometry,
+    recordScrollerGeometryIfLayoutStable,
     releaseAnchorLock,
     scheduleHeightMeasure,
     scheduleFollowToLatestWithViewportState,
@@ -2280,6 +2473,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     scrollerElement,
     shouldSuspendAutoFollow,
     snapshotMeasuredContentHeight,
+    syncPhysicalBottomAfterViewportResize,
     isProcessing,
     updateBottomReservationState,
   ]);
@@ -2337,6 +2531,9 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     }
 
     request.attempts += 1;
+    const shouldSnapTargetToPhysicalBottom =
+      targetIndex >= virtualItems.length - 1 ||
+      request.turnId === latestTurnId;
     const targetElement = getRenderedVirtualItemElement(targetIndex);
     const scrollerRect = scroller.getBoundingClientRect();
     const inputOverlayInsetPx = Math.max(
@@ -2356,10 +2553,15 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
       const rect = currentTargetElement.getBoundingClientRect();
       const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
       const endDeltaPx = rect.bottom - visibleBottom;
-      const endAnchored =
-        Math.abs(endDeltaPx) <= LATEST_END_ANCHOR_STABLE_EPSILON_PX ||
-        (endDeltaPx > 0 && Math.abs(maxScrollTop - scroller.scrollTop) <= LATEST_END_ANCHOR_STABLE_EPSILON_PX) ||
-        (endDeltaPx < 0 && scroller.scrollTop <= LATEST_END_ANCHOR_STABLE_EPSILON_PX);
+      const physicalBottomAnchored =
+        Math.abs(maxScrollTop - scroller.scrollTop) <= LATEST_END_ANCHOR_STABLE_EPSILON_PX;
+      const endAnchored = shouldSnapTargetToPhysicalBottom
+        ? physicalBottomAnchored
+        : (
+          Math.abs(endDeltaPx) <= LATEST_END_ANCHOR_STABLE_EPSILON_PX ||
+          (endDeltaPx > 0 && physicalBottomAnchored) ||
+          (endDeltaPx < 0 && scroller.scrollTop <= LATEST_END_ANCHOR_STABLE_EPSILON_PX)
+        );
       return {
         endAnchored,
         endDeltaPx,
@@ -2433,16 +2635,19 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
       const state = readTargetEndState(targetElement);
       let nextScrollTop = scroller.scrollTop;
       if (state) {
-        nextScrollTop = Math.max(
-          0,
-          Math.min(state.maxScrollTop, scroller.scrollTop + state.endDeltaPx),
-        );
+        nextScrollTop = shouldSnapTargetToPhysicalBottom
+          ? state.maxScrollTop
+          : Math.max(
+            0,
+            Math.min(state.maxScrollTop, scroller.scrollTop + state.endDeltaPx),
+          );
       }
 
       if (Math.abs(nextScrollTop - scroller.scrollTop) > COMPENSATION_EPSILON_PX) {
         scroller.scrollTop = nextScrollTop;
         previousScrollTopRef.current = nextScrollTop;
         previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller);
+        recordScrollerGeometry(scroller);
       }
     } else if (virtuoso) {
       request.visibleFrames = 0;
@@ -2460,6 +2665,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
           scroller.scrollTop = maxScrollTop;
           previousScrollTopRef.current = maxScrollTop;
           previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller);
+          recordScrollerGeometry(scroller);
         }
       }
     } else {
@@ -2469,6 +2675,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
         scroller.scrollTop = maxScrollTop;
         previousScrollTopRef.current = maxScrollTop;
         previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller);
+        recordScrollerGeometry(scroller);
       }
     }
 
@@ -2495,6 +2702,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     cancelLatestEndAnchorStabilization,
     getRenderedVirtualItemElement,
     latestTurnId,
+    recordScrollerGeometry,
     scheduleVisibleTurnMeasure,
     snapshotMeasuredContentHeight,
     toVirtuosoIndex,
@@ -2627,10 +2835,12 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     if (scroller) {
       previousScrollTopRef.current = scroller.scrollTop;
       previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller, nextReservationState);
+      recordScrollerGeometry(scroller);
     }
   }, [
     applyFooterCompensationNow,
     clearTurnPinRequest,
+    recordScrollerGeometry,
     releaseAnchorLock,
     snapshotMeasuredContentHeight,
     updateBottomReservationState,
@@ -2669,10 +2879,12 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     if (scroller) {
       previousScrollTopRef.current = scroller.scrollTop;
       previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller, nextReservationState);
+      recordScrollerGeometry(scroller);
     }
   }, [
     applyFooterCompensationNow,
     clearTurnPinRequest,
+    recordScrollerGeometry,
     releaseAnchorLock,
     snapshotMeasuredContentHeight,
     updateBottomReservationState,
@@ -3151,12 +3363,16 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     const scroller = scrollerElementRef.current;
     if (scroller) {
       clearAllBottomReservationsForUserNavigation();
+      const nextScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
       scroller.scrollTo({
-        top: Math.max(0, scroller.scrollHeight - scroller.clientHeight),
+        top: nextScrollTop,
         behavior: 'auto',
       });
+      previousScrollTopRef.current = nextScrollTop;
+      previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller);
+      recordScrollerGeometry(scroller);
     }
-  }, [clearAllBottomReservationsForUserNavigation]);
+  }, [clearAllBottomReservationsForUserNavigation, recordScrollerGeometry, snapshotMeasuredContentHeight]);
 
   const scrollToTurnEndAndClearPin = useCallback((turnId: string) => {
     const scroller = scrollerElementRef.current;
@@ -3192,6 +3408,12 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     clearAllBottomReservationsForUserNavigation();
 
     if (!virtuosoRef.current) {
+      const shouldSnapLatestToPhysicalBottom =
+        useStaticInitialHistoryList &&
+        (
+          targetIndex >= virtualItems.length - 1 ||
+          (Boolean(latestTurnId) && turnId === latestTurnId)
+        );
       const targetElement = getRenderedVirtualItemElement(targetIndex);
       if (!targetElement) {
         return reject('missing_static_target_element', {
@@ -3221,23 +3443,29 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
       };
       const canUseStaticFastPath = (state: ReturnType<typeof readStaticTargetEndState>) => {
         const distanceFromBottom = Math.max(0, state.maxScrollTop - scroller.scrollTop);
+        const bottomTolerancePx = shouldSnapLatestToPhysicalBottom
+          ? LATEST_END_ANCHOR_STABLE_EPSILON_PX
+          : LATEST_END_ANCHOR_STATIC_FAST_PATH_TOLERANCE_PX;
         return (
           state.visible &&
           state.rect.height <= state.visibleHeight + LATEST_END_ANCHOR_STATIC_FAST_PATH_TOLERANCE_PX &&
           Math.abs(state.endDeltaPx) <= LATEST_END_ANCHOR_STATIC_FAST_PATH_TOLERANCE_PX &&
-          distanceFromBottom <= LATEST_END_ANCHOR_STATIC_FAST_PATH_TOLERANCE_PX
+          distanceFromBottom <= bottomTolerancePx
         );
       };
       let staticState = readStaticTargetEndState();
       if (!canUseStaticFastPath(staticState)) {
-        const nextScrollTop = Math.max(
-          0,
-          Math.min(staticState.maxScrollTop, scroller.scrollTop + staticState.endDeltaPx),
-        );
+        const nextScrollTop = shouldSnapLatestToPhysicalBottom
+          ? staticState.maxScrollTop
+          : Math.max(
+            0,
+            Math.min(staticState.maxScrollTop, scroller.scrollTop + staticState.endDeltaPx),
+          );
         if (Math.abs(nextScrollTop - scroller.scrollTop) > COMPENSATION_EPSILON_PX) {
           scroller.scrollTop = nextScrollTop;
           previousScrollTopRef.current = nextScrollTop;
           previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller);
+          recordScrollerGeometry(scroller);
           staticState = readStaticTargetEndState();
         }
       }
@@ -3306,6 +3534,8 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     clearAllBottomReservationsForUserNavigation,
     exitFollowOutput,
     getRenderedVirtualItemElement,
+    latestTurnId,
+    recordScrollerGeometry,
     resolveLatestEndAnchorStabilization,
     scheduleVisibleTurnMeasure,
     snapshotMeasuredContentHeight,
@@ -3609,9 +3839,11 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     scroller.scrollTop = nextScrollTop;
     previousScrollTopRef.current = nextScrollTop;
     previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller);
+    recordScrollerGeometry(scroller);
   }, [
     expandedInitialHistoryRenderKey,
     initialHistoryRenderKey,
+    recordScrollerGeometry,
     snapshotMeasuredContentHeight,
   ]);
   useEffect(() => {
@@ -3736,6 +3968,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
   useLayoutEffect(() => {
     if (!useStaticInitialHistoryList) {
       autoScrolledInitialHistoryRenderKeyRef.current = null;
+      cancelStaticInitialHistoryBottomGuard();
       return;
     }
 
@@ -3753,13 +3986,18 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     scroller.scrollTop = nextScrollTop;
     previousScrollTopRef.current = nextScrollTop;
     previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller);
+    recordScrollerGeometry(scroller);
+    startStaticInitialHistoryBottomGuard();
     scheduleVisibleTurnMeasure(1);
   }, [
     activeSessionId,
+    cancelStaticInitialHistoryBottomGuard,
     initialHistoryRenderKey,
     latestTurnId,
+    recordScrollerGeometry,
     scheduleVisibleTurnMeasure,
     snapshotMeasuredContentHeight,
+    startStaticInitialHistoryBottomGuard,
     useStaticInitialHistoryList,
   ]);
   // ── Render ────────────────────────────────────────────────────────────
@@ -3796,6 +4034,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     scroller.scrollTop = nextScrollTop;
     previousScrollTopRef.current = nextScrollTop;
     previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller);
+    recordScrollerGeometry(scroller);
     scheduleHistoryProjectionHandoffRelease(2);
   }, [
     activeSessionId,
@@ -3805,6 +4044,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     historyProjectionHandoff?.anchorOffsetTopPx,
     historyProjectionHandoff?.mode,
     historyProjectionHandoff?.sessionId,
+    recordScrollerGeometry,
     scheduleHistoryProjectionHandoffRelease,
     snapshotMeasuredContentHeight,
     virtualItems,
