@@ -1,3 +1,5 @@
+use crate::agentic::coordination::scheduler::get_global_scheduler;
+use crate::agentic::tools::implementations::shell_command_safety;
 use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
@@ -369,6 +371,15 @@ Usage notes:
                         "Command '{}' is not allowed for security reasons",
                         base_cmd
                     )),
+                    error_code: Some(403),
+                    meta: None,
+                };
+            }
+
+            if let Some(message) = shell_command_safety::denial_for_command(cmd) {
+                return ValidationResult {
+                    result: false,
+                    message: Some(message),
                     error_code: Some(403),
                     meta: None,
                 };
