@@ -5,7 +5,7 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { Bot, ChevronDown, ChevronUp, GitPullRequest, Keyboard, List, MoreHorizontal, Search, Square, Terminal, X } from 'lucide-react';
+import { Activity, Bot, ChevronDown, ChevronUp, GitPullRequest, Keyboard, List, MoreHorizontal, Search, Square, Terminal, X } from 'lucide-react';
 import { Tooltip, IconButton, Input } from '@/component-library';
 import { useTranslation } from 'react-i18next';
 import { SessionFilesBadge } from './SessionFilesBadge';
@@ -459,7 +459,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
             data-testid="flowchat-header-background-activities"
           >
             <span className="flowchat-header__background-activity-nav-button-inner">
-              <Bot size={14} />
+              <Activity size={14} />
               {hasBackgroundActivities ? (
                 <span
                   className="flowchat-header__background-activity-status-dot"
