@@ -1411,6 +1411,29 @@
       "noTitle": "無標題",
       "summaryAvailable": "有搜尋摘要"
     },
+    "webFetch": {
+      "parsingUrl": "解析連結中...",
+      "readTitle": "讀取網頁: \"{{url}}\"",
+      "reading": "正在讀取 \"{{url}}\"...",
+      "preparingRead": "準備讀取 \"{{url}}\"",
+      "clickToOpenLink": "點擊開啟鏈接",
+      "contentAvailable": "有內容可預覽",
+      "contentLength": "{{count}} 個字符",
+      "fetchFailed": "抓取內容失敗",
+      "noContent": "未返回內容"
+    },
+    "getToolSpec": {
+      "title": "工具說明",
+      "readTitle": "讀取工具說明：{{toolName}}",
+      "reading": "正在讀取 {{toolName}} 的工具說明...",
+      "preparingRead": "準備讀取 {{toolName}} 的工具說明",
+      "loaded": "已讀取 {{toolName}} 的說明",
+      "alreadyLoaded": "{{toolName}} 已經載入",
+      "readFailed": "讀取工具說明失敗",
+      "unknownTool": "未知工具",
+      "descriptionLabel": "說明",
+      "schemaLabel": "輸入 Schema"
+    },
     "todoWrite": {
       "tasksCount": "{{count}} 項任務",
       "progress": "({{completed}}/{{total}} 完成)",

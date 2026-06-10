@@ -19,6 +19,8 @@ import { CodeReviewToolCard } from './CodeReviewToolCard';
 import { FileOperationToolCard } from './FileOperationToolCard';
 import { DefaultToolCard } from './DefaultToolCard';
 import { WebSearchCard } from './WebSearchCard'; // Temporary until WebSearchDisplay exists.
+import { WebFetchCard } from './WebFetchCard';
+import { GetToolSpecCard } from './GetToolSpecCard';
 import { ContextCompressionDisplay } from './ContextCompressionDisplay';
 import { MCPToolDisplay } from './MCPToolDisplay';
 import { SkillDisplay } from './SkillDisplay';
@@ -125,7 +127,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
   },
   'WebFetch': {
     toolName: 'WebFetch',
-    displayName: 'Fetch Link',
+    displayName: 'Read Webpage',
     icon: 'WF',
     requiresConfirmation: false,
     resultDisplayType: 'detailed',
@@ -174,6 +176,16 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     description: 'Compress conversation context to reduce tokens',
     displayMode: 'compact',
     primaryColor: '#a855f7'
+  },
+  'GetToolSpec': {
+    toolName: 'GetToolSpec',
+    displayName: 'Read Tool Spec',
+    icon: 'SPEC',
+    requiresConfirmation: false,
+    resultDisplayType: 'detailed',
+    description: 'Read usage instructions and schema for a collapsed tool',
+    displayMode: 'compact',
+    primaryColor: '#14b8a6'
   },
 
   // Skill tool
@@ -353,6 +365,7 @@ export const TOOL_CARD_COMPONENTS = {
   
   // Web tools
   'WebSearch': WebSearchCard,
+  'WebFetch': WebFetchCard,
   
   // Advanced tools
   'Task': TaskToolDisplay,
@@ -362,6 +375,7 @@ export const TOOL_CARD_COMPONENTS = {
   
   // Context compression
   'ContextCompression': ContextCompressionDisplay,
+  'GetToolSpec': GetToolSpecCard,
 
   // Skill tool
   'Skill': SkillDisplay,

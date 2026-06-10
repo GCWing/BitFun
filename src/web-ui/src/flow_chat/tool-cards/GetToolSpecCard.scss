@@ -1,0 +1,30 @@
+.get-tool-spec-card__expanded {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.get-tool-spec-card__section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.get-tool-spec-card__label {
+  color: var(--color-text-muted);
+  font-size: var(--flowchat-font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+
+.get-tool-spec-card__description {
+  color: var(--color-text-secondary);
+  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+  line-height: var(--flowchat-text-line-height, 1.58);
+  white-space: pre-wrap;
+}
+
+.get-tool-spec-card__content pre {
+  margin: 0;
+}

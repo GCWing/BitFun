@@ -1411,6 +1411,29 @@
       "noTitle": "No title",
       "summaryAvailable": "summary available"
     },
+    "webFetch": {
+      "parsingUrl": "Parsing URL...",
+      "readTitle": "Read Webpage: \"{{url}}\"",
+      "reading": "Reading \"{{url}}\"...",
+      "preparingRead": "Preparing to read \"{{url}}\"",
+      "clickToOpenLink": "Click to open link",
+      "contentAvailable": "content available",
+      "contentLength": "{{count}} chars",
+      "fetchFailed": "Failed to fetch content",
+      "noContent": "No content returned"
+    },
+    "getToolSpec": {
+      "title": "Tool Spec",
+      "readTitle": "Read tool spec: {{toolName}}",
+      "reading": "Reading tool spec for {{toolName}}...",
+      "preparingRead": "Preparing to read tool spec for {{toolName}}",
+      "loaded": "Loaded spec for {{toolName}}",
+      "alreadyLoaded": "{{toolName}} is already loaded",
+      "readFailed": "Failed to read tool spec",
+      "unknownTool": "Unknown tool",
+      "descriptionLabel": "Description",
+      "schemaLabel": "Input schema"
+    },
     "todoWrite": {
       "tasksCount": "{{count}} tasks",
       "progress": "({{completed}}/{{total}} completed)",

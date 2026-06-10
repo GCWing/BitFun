@@ -1,0 +1,25 @@
+.compact-tool-card-wrapper.web-fetch-card .compact-tool-card.status-error .tool-card-icon-marks,
+.base-tool-card-wrapper.web-fetch-card .base-tool-card.status-error .tool-card-icon-marks {
+  color: var(--color-text-secondary);
+}
+
+.compact-tool-card-wrapper.web-fetch-card .compact-tool-card.status-error.clickable:hover .tool-card-icon-marks,
+.base-tool-card-wrapper.web-fetch-card:hover .base-tool-card.status-error .tool-card-icon-marks {
+  color: var(--color-error, #f87171);
+  transform: scale(1.05);
+}
+
+.web-fetch-card__expanded {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.web-fetch-card__meta-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.web-fetch-card__content pre {
+  margin: 0;
+}

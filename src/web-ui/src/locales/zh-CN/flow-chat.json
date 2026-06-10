@@ -1411,6 +1411,29 @@
       "noTitle": "无标题",
       "summaryAvailable": "有搜索摘要"
     },
+    "webFetch": {
+      "parsingUrl": "解析链接中...",
+      "readTitle": "读取网页: \"{{url}}\"",
+      "reading": "正在读取 \"{{url}}\"...",
+      "preparingRead": "准备读取 \"{{url}}\"",
+      "clickToOpenLink": "点击打开链接",
+      "contentAvailable": "有内容可预览",
+      "contentLength": "{{count}} 个字符",
+      "fetchFailed": "抓取内容失败",
+      "noContent": "未返回内容"
+    },
+    "getToolSpec": {
+      "title": "工具说明",
+      "readTitle": "读取工具说明：{{toolName}}",
+      "reading": "正在读取 {{toolName}} 的工具说明...",
+      "preparingRead": "准备读取 {{toolName}} 的工具说明",
+      "loaded": "已读取 {{toolName}} 的说明",
+      "alreadyLoaded": "{{toolName}} 已经加载",
+      "readFailed": "读取工具说明失败",
+      "unknownTool": "未知工具",
+      "descriptionLabel": "说明",
+      "schemaLabel": "输入 Schema"
+    },
     "todoWrite": {
       "tasksCount": "{{count}} 项任务",
       "progress": "({{completed}}/{{total}} 完成)",
