@@ -1,19 +1,17 @@
 use bitfun_agent_tools::{
     build_bitfun_runtime_uri, build_collapsed_tool_stub_definition,
-    build_get_tool_spec_assistant_detail, build_get_tool_spec_catalog_description,
-    build_get_tool_spec_catalog_description_from_provider,
-    build_get_tool_spec_collapsed_tool_entry, build_get_tool_spec_description,
-    build_get_tool_spec_detail_result, build_get_tool_spec_duplicate_load_hint,
-    build_get_tool_spec_duplicate_load_result, build_prompt_visible_tool_manifest_definitions,
-    build_tool_path_policy_denial_message, build_tool_runtime_artifact_reference,
-    build_tool_session_runtime_artifact_reference, collect_loaded_collapsed_tool_names,
-    get_tool_spec_input_schema, get_tool_spec_is_concurrency_safe, get_tool_spec_is_readonly,
-    get_tool_spec_needs_permissions, get_tool_spec_short_description, is_bitfun_runtime_uri,
-    is_remote_posix_path_within_root, is_tool_path_allowed_by_resolved_roots, normalize_host_path,
-    normalize_runtime_relative_path, parse_bitfun_runtime_uri, posix_resolve_path_with_workspace,
-    posix_style_path_is_absolute, render_get_tool_spec_tool_use_message,
-    resolve_contextual_tool_manifest, resolve_contextual_tool_manifest_from_provider,
-    resolve_get_tool_spec_detail, resolve_get_tool_spec_detail_from_provider,
+    build_get_tool_spec_assistant_detail, build_get_tool_spec_detail_result,
+    build_get_tool_spec_duplicate_load_hint, build_get_tool_spec_duplicate_load_result,
+    build_prompt_visible_tool_manifest_definitions, build_tool_path_policy_denial_message,
+    build_tool_runtime_artifact_reference, build_tool_session_runtime_artifact_reference,
+    collect_loaded_collapsed_tool_names, get_tool_spec_input_schema,
+    get_tool_spec_is_concurrency_safe, get_tool_spec_is_readonly, get_tool_spec_needs_permissions,
+    get_tool_spec_short_description, is_bitfun_runtime_uri, is_remote_posix_path_within_root,
+    is_tool_path_allowed_by_resolved_roots, normalize_host_path, normalize_runtime_relative_path,
+    parse_bitfun_runtime_uri, posix_resolve_path_with_workspace, posix_style_path_is_absolute,
+    render_get_tool_spec_tool_use_message, resolve_contextual_tool_manifest,
+    resolve_contextual_tool_manifest_from_provider, resolve_get_tool_spec_detail,
+    resolve_get_tool_spec_detail_from_provider,
     resolve_get_tool_spec_execution_result_from_provider, resolve_host_path_with_workspace,
     resolve_readonly_enabled_tools, resolve_tool_manifest_policy, resolve_tool_path_with_context,
     resolve_workspace_tool_path, sort_tool_manifest_definitions,
@@ -1253,7 +1251,7 @@ fn collapsed_tool_stub_definition_preserves_prompt_visible_guardrail() {
     assert!(stub.description.contains("Fetch a URL"));
     assert!(stub
         .description
-        .contains("Call `GetToolSpec` with {\"tool_name\":\"WebFetch\"} before first use."));
+        .contains("THIS TOOL IS COLLAPSED. You MUST call GetToolSpec({\"tool_name\":\"WebFetch\"}) before first calling WebFetch."));
     assert_eq!(
         stub.parameters,
         json!({
@@ -1318,7 +1316,7 @@ fn prompt_visible_manifest_builder_preserves_expanded_and_collapsed_contract() {
     );
     assert!(definitions[2]
         .description
-        .contains("Call `GetToolSpec` with {\"tool_name\":\"WebFetch\"} before first use."));
+        .contains("THIS TOOL IS COLLAPSED. You MUST call GetToolSpec({\"tool_name\":\"WebFetch\"}) before first calling WebFetch."));
 }
 
 #[test]
@@ -1374,42 +1372,6 @@ fn get_tool_spec_contract_preserves_static_metadata_and_use_message() {
         render_get_tool_spec_tool_use_message(&json!({})),
         "Reading tool spec for '?'."
     );
-}
-
-#[test]
-fn get_tool_spec_contract_preserves_collapsed_prompt_description() {
-    let collapsed_tools_list = [
-        build_get_tool_spec_collapsed_tool_entry("Git", "Inspect the repository."),
-        build_get_tool_spec_collapsed_tool_entry("WebFetch", "Fetch readable web content."),
-    ]
-    .join("\n");
-
-    let description = build_get_tool_spec_description(&collapsed_tools_list);
-
-    assert!(description.contains("<collapsed_tools>\n- Git: Inspect the repository."));
-    assert!(description.contains("- WebFetch: Fetch readable web content."));
-    assert!(description.contains("Do not call GetToolSpec again"));
-    assert!(description.contains("call `GetToolSpec` with `{\"tool_name\":\"Git\"}`"));
-}
-
-#[test]
-fn get_tool_spec_catalog_description_uses_summary_entries_and_empty_fallback() {
-    let description = build_get_tool_spec_catalog_description(&[
-        GetToolSpecCollapsedToolSummary {
-            name: "Git".to_string(),
-            short_description: "Inspect the repository.".to_string(),
-        },
-        GetToolSpecCollapsedToolSummary {
-            name: "WebFetch".to_string(),
-            short_description: "Fetch readable web content.".to_string(),
-        },
-    ]);
-
-    assert!(description.contains("- Git: Inspect the repository."));
-    assert!(description.contains("- WebFetch: Fetch readable web content."));
-
-    let empty = build_get_tool_spec_catalog_description(&[]);
-    assert!(empty.contains("No additional tools are available."));
 }
 
 #[test]
@@ -2194,8 +2156,9 @@ async fn contextual_manifest_resolver_preserves_runtime_visible_manifest_contrac
         .expect("collapsed WebFetch stub");
     assert!(web_fetch
         .description
-        .contains("Call `GetToolSpec` with {\"tool_name\":\"WebFetch\"} before first use."));
+        .contains("THIS TOOL IS COLLAPSED. You MUST call GetToolSpec({\"tool_name\":\"WebFetch\"}) before first calling WebFetch."));
     assert_eq!(web_fetch.parameters["additionalProperties"], false);
+    assert_eq!(web_fetch.parameters["properties"], json!({}));
 }
 
 #[tokio::test]
@@ -2433,19 +2396,6 @@ async fn get_tool_spec_catalog_provider_preserves_runtime_catalog_contract() {
     };
     let context = ManifestTestContext { agent: "agentic" };
 
-    let description =
-        build_get_tool_spec_catalog_description_from_provider(&provider, Some(&context)).await;
-    assert!(description.contains("- WebFetch: WebFetch short description"));
-    assert!(
-        !description.contains("- Git: Git short description"),
-        "provider-backed catalog must preserve context-aware availability filtering"
-    );
-
-    let default_description =
-        build_get_tool_spec_catalog_description_from_provider(&provider, None).await;
-    assert!(default_description.contains("- WebFetch: WebFetch short description"));
-    assert!(default_description.contains("- Git: Git short description"));
-
     let detail = resolve_get_tool_spec_detail_from_provider(
         &provider,
         "WebFetch",
@@ -2536,7 +2486,7 @@ async fn get_tool_spec_provider_execution_returns_detail_result_from_provider() 
 }
 
 #[tokio::test]
-async fn get_tool_spec_runtime_facade_owns_catalog_and_execution_paths() {
+async fn get_tool_spec_runtime_facade_owns_execution_path() {
     let provider = ContextualManifestSnapshotProvider {
         tools: vec![contextual_manifest_tool(
             "WebFetch",
@@ -2550,9 +2500,6 @@ async fn get_tool_spec_runtime_facade_owns_catalog_and_execution_paths() {
         &provider,
         GET_TOOL_SPEC_TOOL_NAME,
     );
-
-    let description = runtime.catalog_description(Some(&context)).await;
-    assert!(description.contains("- WebFetch: WebFetch short description"));
 
     let result = runtime
         .execute(&input, &[], &context)

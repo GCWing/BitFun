@@ -309,8 +309,10 @@ pub fn build_collapsed_tool_stub_definition(
     ToolManifestDefinition::new(
         tool_name,
         format!(
-            "{} [This tool is collapsed. Call `GetToolSpec` with {{\"tool_name\":\"{}\"}} before first use.]",
-            short_description, tool_name,
+            "THIS TOOL IS COLLAPSED. You MUST call GetToolSpec({{\"tool_name\":\"{}\"}}) before first calling {}. Any direct call will fail validation. Summary: {}",
+            tool_name,
+            tool_name,
+            short_description,
         ),
         serde_json::json!({
             "type": "object",
@@ -318,13 +320,6 @@ pub fn build_collapsed_tool_stub_definition(
             "properties": {}
         }),
     )
-}
-
-pub fn build_get_tool_spec_collapsed_tool_entry(
-    tool_name: &str,
-    short_description: &str,
-) -> String {
-    format!("- {}: {}", tool_name, short_description)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -348,55 +343,6 @@ impl GetToolSpecDetail {
             "input_schema": self.input_schema.clone(),
         })
     }
-}
-
-pub fn build_get_tool_spec_catalog_description(
-    collapsed_tools: &[GetToolSpecCollapsedToolSummary],
-) -> String {
-    let collapsed_tools_list = if collapsed_tools.is_empty() {
-        "No additional tools are available.".to_string()
-    } else {
-        collapsed_tools
-            .iter()
-            .map(|tool| {
-                build_get_tool_spec_collapsed_tool_entry(&tool.name, &tool.short_description)
-            })
-            .collect::<Vec<_>>()
-            .join("\n")
-    };
-
-    build_get_tool_spec_description(&collapsed_tools_list)
-}
-
-pub fn build_get_tool_spec_description(collapsed_tools_list: &str) -> String {
-    format!(
-        r#"Read usage instructions for additional tools.
-
-You have access to the additional tools listed below. These tools are collapsed:
-their names may appear in the tool list, but you must not call them directly
-until you have loaded their definition with GetToolSpec.
-
-<collapsed_tools>
-{}
-</collapsed_tools>
-
-Before using one of these tools, first call GetToolSpec with its exact tool name
-to read its full description and input schema. If a direct call to a collapsed
-tool fails with a message like "Tool 'Git' is collapsed", make the next tool
-call `GetToolSpec` with `{{"tool_name":"Git"}}`, then retry the real tool after
-reading the returned schema.
-
-After reading the returned definition, call the real tool directly using its own name.
-
-Do not call GetToolSpec again for a tool whose definition is already loaded in the current conversation.
-
-Example:
-- Suppose the catalog includes a tool named `GetWeather` and you need to use it.
-- First call `GetToolSpec` with `{{"tool_name":"GetWeather"}}`
-- Then read the returned schema and call `GetWeather` itself with the appropriate arguments
-"#,
-        collapsed_tools_list
-    )
 }
 
 pub fn get_tool_spec_input_schema() -> Value {
@@ -848,24 +794,6 @@ where
     })
 }
 
-pub async fn build_get_tool_spec_catalog_description_from_provider<Tool, Context, Provider>(
-    provider: &Provider,
-    context: Option<&Context>,
-) -> String
-where
-    Tool: ToolRegistryItem + ?Sized,
-    Context: Sync,
-    Provider: GetToolSpecCatalogProvider<Tool, Context> + ?Sized,
-{
-    let summaries = provider
-        .collapsed_tools_for_get_tool_spec(context)
-        .await
-        .map(|tools| summarize_get_tool_spec_collapsed_tools(&tools))
-        .unwrap_or_default();
-
-    build_get_tool_spec_catalog_description(&summaries)
-}
-
 pub async fn resolve_get_tool_spec_detail_from_provider<Tool, Context, Provider>(
     provider: &Provider,
     tool_name: &str,
@@ -962,17 +890,6 @@ impl<'a, Tool: ?Sized, Context, Provider: ?Sized> GetToolSpecRuntime<'a, Tool, C
 
     pub fn validate_input(&self, input: &Value) -> ValidationResult {
         validate_get_tool_spec_input(input)
-    }
-}
-
-impl<'a, Tool, Context, Provider> GetToolSpecRuntime<'a, Tool, Context, Provider>
-where
-    Tool: ToolRegistryItem + ?Sized,
-    Context: Sync,
-    Provider: GetToolSpecCatalogProvider<Tool, Context> + ?Sized,
-{
-    pub async fn catalog_description(&self, context: Option<&Context>) -> String {
-        build_get_tool_spec_catalog_description_from_provider(self.provider, context).await
     }
 }
 
