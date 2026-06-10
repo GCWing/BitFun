@@ -152,6 +152,17 @@ await api.invoke('your_command', { request: { ... } });
 - 产品表面可以有差异；共享稳定 facts 或 ports，不共享 UI、protocol、lifecycle 或平台实现。
 - 迁移 runtime owner 必须有评审过的 port/provider 设计、旧路径兼容、行为等价测试；如果可能改变行为边界，还需要先确认。
 
+### SDLC Harness 护栏
+
+涉及 SDLC Harness、生命周期证据、门禁、Artifact Graph、Project Profile、
+Deep Review 策略、OpenCode 兼容或目标项目治理的变更，先阅读
+[`docs/sdlc-harness/README.md`](docs/sdlc-harness/README.md)，再阅读
+[`docs/sdlc-harness/design.md`](docs/sdlc-harness/design.md)。如果变更影响模块边界或行为，
+继续参考 `docs/sdlc-harness/architecture/` 或 `docs/sdlc-harness/features/` 下的对应设计。
+
+不要把 BitFun 自身验证假设硬编码成目标项目通用规则；Harness 行为必须保持面向目标项目、
+基于证据、按风险分级、成本可控并可审计。
+
 ## 验证
 
 按触及文件选择最小本地预检。完整构建和大范围测试默认由 CI 保护；只有改动直接影响构建、

@@ -164,6 +164,19 @@ Repository-level decomposition rules:
   compatibility, behavior equivalence tests, and explicit confirmation when a
   behavior boundary could change.
 
+### SDLC Harness guardrails
+
+For SDLC Harness, lifecycle evidence, gates, Artifact Graph, Project Profile,
+Deep Review policy, OpenCode compatibility, or target-project governance
+changes, read [`docs/sdlc-harness/README.md`](docs/sdlc-harness/README.md)
+first, then [`docs/sdlc-harness/design.md`](docs/sdlc-harness/design.md). If
+module boundaries or behavior change, follow the matching design under
+`docs/sdlc-harness/architecture/` or `docs/sdlc-harness/features/`.
+
+Do not hard-code BitFun repository assumptions as target-project rules; keep
+Harness behavior target-aware, evidence-backed, risk-tiered, cost-aware, and
+auditable.
+
 ## Verification
 
 Run the smallest local precheck that matches the touched files. CI is expected to
