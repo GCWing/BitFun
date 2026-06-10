@@ -3,7 +3,7 @@
 //! Manages the complete lifecycle of tools:
 //! confirmation, execution, caching, retries, etc.
 
-use super::state_manager::ToolStateManager;
+use super::state_manager::{tool_task_state_kind, ToolStateManager};
 use super::types::*;
 use crate::agentic::core::{ToolCall, ToolExecutionState, ToolResult as ModelToolResult};
 use crate::agentic::events::types::ToolEventData;
@@ -37,8 +37,8 @@ use tokio::sync::{oneshot, RwLock as TokioRwLock};
 use tokio::time::{timeout, Duration};
 use tokio_util::sync::CancellationToken;
 use tool_runtime::pipeline::{
-    partition_tool_batches, retry_delay_ms, should_retry_tool_attempt, ToolExecutionErrorClass,
-    ToolRetryAttemptFacts,
+    partition_tool_batches, retry_delay_ms, should_cancel_tool_state, should_retry_tool_attempt,
+    summarize_dialog_turn_cancellation, ToolExecutionErrorClass, ToolRetryAttemptFacts,
 };
 
 /// Convert framework::ToolResult to core::ToolResult
@@ -1147,17 +1147,12 @@ impl ToolPipeline {
             return Ok(());
         };
 
-        match &task.state {
-            ToolExecutionState::Completed { .. }
-            | ToolExecutionState::Failed { .. }
-            | ToolExecutionState::Cancelled { .. } => {
-                debug!(
+        if tool_task_state_kind(&task.state).is_terminal() {
+            debug!(
                     "Ignoring duplicate cancel request for tool in terminal state: tool_id={}, state={:?}",
                     tool_id, task.state
                 );
-                return Ok(());
-            }
-            _ => {}
+            return Ok(());
         }
 
         // 1. Trigger cancellation token
@@ -1209,39 +1204,29 @@ impl ToolPipeline {
         let tasks = self.state_manager.get_dialog_turn_tasks(dialog_turn_id);
         debug!("Found {} tool tasks for dialog turn", tasks.len());
 
-        let mut cancelled_count = 0;
-        let mut skipped_count = 0;
+        let summary = summarize_dialog_turn_cancellation(
+            tasks.iter().map(|task| tool_task_state_kind(&task.state)),
+        );
 
         for task in tasks {
-            // Only cancel tasks in cancellable states
-            let can_cancel = matches!(
-                task.state,
-                ToolExecutionState::Queued { .. }
-                    | ToolExecutionState::Waiting { .. }
-                    | ToolExecutionState::Running { .. }
-                    | ToolExecutionState::AwaitingConfirmation { .. }
-            );
-
-            if can_cancel {
+            if should_cancel_tool_state(tool_task_state_kind(&task.state)) {
                 debug!(
                     "Cancelling tool: tool_id={}, state={:?}",
                     task.tool_call.tool_id, task.state
                 );
                 self.cancel_tool(&task.tool_call.tool_id, "Dialog turn cancelled".to_string())
                     .await?;
-                cancelled_count += 1;
             } else {
                 debug!(
                     "Skipping tool (state not cancellable): tool_id={}, state={:?}",
                     task.tool_call.tool_id, task.state
                 );
-                skipped_count += 1;
             }
         }
 
         info!(
             "Tool cancellation completed: cancelled={}, skipped={}",
-            cancelled_count, skipped_count
+            summary.cancelled, summary.skipped
         );
         Ok(())
     }

@@ -1715,7 +1715,7 @@ export const requiredContentRules = [
   {
     path: 'src/crates/execution/tool-execution/src/pipeline.rs',
     reason:
-      'tool-runtime must own provider-neutral tool batching and retry policy while core keeps concrete execution state',
+      'tool-runtime must own provider-neutral tool batching, retry, state counting, and cancellation policy while core keeps concrete execution wiring',
     patterns: [
       {
         regex: /\bpub struct ToolBatch\b/,
@@ -1741,6 +1741,22 @@ export const requiredContentRules = [
         regex: /\bpub fn retry_delay_ms\b/,
         message: 'missing tool retry backoff policy',
       },
+      {
+        regex: /\bpub enum ToolTaskStateKind\b/,
+        message: 'missing provider-neutral tool state kind owner',
+      },
+      {
+        regex: /\bpub fn should_cancel_tool_state\b/,
+        message: 'missing tool cancellation state policy',
+      },
+      {
+        regex: /\bpub fn summarize_dialog_turn_cancellation\b/,
+        message: 'missing dialog-turn cancellation summary policy',
+      },
+      {
+        regex: /\bpub fn count_tool_states\b/,
+        message: 'missing tool state counting policy',
+      },
     ],
   },
   {
@@ -1755,6 +1771,18 @@ export const requiredContentRules = [
       {
         regex: /\bretry_policy_preserves_attempt_limit_and_error_class_contract\b/,
         message: 'missing tool retry policy regression',
+      },
+      {
+        regex: /\bcancellation_policy_preserves_cancellable_and_terminal_state_contract\b/,
+        message: 'missing tool cancellation policy regression',
+      },
+      {
+        regex: /\bdialog_turn_cancellation_summary_counts_cancelled_and_skipped_tasks\b/,
+        message: 'missing dialog-turn cancellation summary regression',
+      },
+      {
+        regex: /\bstate_counts_preserve_pipeline_stats_contract\b/,
+        message: 'missing tool state-count regression',
       },
     ],
   },
@@ -5153,8 +5181,8 @@ export const requiredContentRules = [
         message: 'missing MiniApp storage error compatibility mapping',
       },
       {
-        regex: /\bMiniAppImportBundleRequest\b/,
-        message: 'missing MiniApp import bundle IO compatibility request',
+        regex: /\bMiniAppImportBundleWriteRequest\b/,
+        message: 'missing MiniApp import bundle IO compatibility write request',
       },
       {
         regex: /\bread_import_meta_json\b/,
@@ -5184,8 +5212,8 @@ export const requiredContentRules = [
         message: 'missing MiniApp storage integration error type',
       },
       {
-        regex: /\bMiniAppImportBundleRequest\b/,
-        message: 'missing services-owned MiniApp import bundle request',
+        regex: /\bMiniAppImportBundleWriteRequest\b/,
+        message: 'missing services-owned MiniApp import bundle write request',
       },
       {
         regex: /\bread_import_meta_json\b/,
@@ -5380,6 +5408,14 @@ export const requiredContentRules = [
         message: 'missing product-domain MiniApp fs scope extraction policy use',
       },
       {
+        regex: /\bMiniAppPermissionPolicyRequest::from_paths\b/,
+        message: 'missing product-domain MiniApp permission policy request/path delegation',
+      },
+      {
+        regex: /\bresolve_policy_with_request\b/,
+        message: 'missing product-domain MiniApp permission policy facade delegation',
+      },
+      {
         regex: /\bfs_resolved_path_allowed\b/,
         message: 'missing product-domain MiniApp fs resolved path policy use',
       },
@@ -5484,6 +5520,10 @@ export const requiredContentRules = [
       {
         regex: /\bpub struct MiniAppImportBundlePlan\b/,
         message: 'missing MiniApp import bundle plan shape',
+      },
+      {
+        regex: /\bpub struct MiniAppImportBundleWriteRequest\b/,
+        message: 'missing MiniApp import bundle write request contract',
       },
       {
         regex: /\bpub enum MiniAppImportBundlePlanError\b/,
@@ -5862,7 +5902,7 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/core/src/miniapp/manager.rs',
     reason:
-      'core MiniApp manager must delegate manager workflow persistence to product-domain facades while retaining compile workflow, path adaptation, and built-in source-hash lookup',
+      'core MiniApp manager must delegate manager workflow persistence and compile request/path adaptation to product-domain facades while retaining product orchestration and built-in source-hash lookup',
     patterns: [
       {
         regex: /\bMiniAppRuntimeFacade\b/,
@@ -5910,23 +5950,35 @@ export const requiredContentRules = [
       },
       {
         regex: /\bcompile_source\b/,
-        message: 'missing core-owned MiniApp compile orchestration',
+        message: 'missing core MiniApp compile compatibility entry point',
       },
       {
-        regex: /\bread_import_meta_json\b/,
-        message: 'missing services-owned MiniApp import metadata IO delegation',
+        regex: /\bMiniAppCompileRequest::from_paths\b/,
+        message: 'missing product-domain MiniApp compile request/path delegation',
       },
       {
-        regex: /\bbuild_import_bundle_plan\b/,
-        message: 'missing product-domain MiniApp import bundle plan helper use',
+        regex: /\bcompile_with_request\b/,
+        message: 'missing product-domain MiniApp compile facade delegation',
       },
       {
-        regex: /\bwrite_import_bundle\b/,
-        message: 'missing services-owned MiniApp import bundle IO delegation',
+        regex: /\bMiniAppPermissionPolicyRequest::from_paths\b/,
+        message: 'missing product-domain MiniApp permission policy request/path delegation',
       },
       {
-        regex: /\bpersist_import_runtime_state\b/,
-        message: 'missing product-domain MiniApp import runtime-state facade delegation',
+        regex: /\bresolve_policy_with_request\b/,
+        message: 'missing product-domain MiniApp permission policy facade delegation',
+      },
+      {
+        regex: /\bMiniAppCompilePort\b/,
+        message: 'missing core MiniApp compile port adapter for product-domain import workflow',
+      },
+      {
+        regex: /\bMiniAppImportFromPathRequest\b/,
+        message: 'missing product-domain MiniApp import workflow request delegation',
+      },
+      {
+        regex: /\.import_from_path\s*\(/,
+        message: 'missing product-domain MiniApp import workflow facade delegation',
       },
       {
         regex: /\bruntime_preflight_preserves_recompile_sync_rollback_and_deps_state\b/,
@@ -5935,6 +5987,56 @@ export const requiredContentRules = [
       {
         regex: /\bimport_from_path_preserves_fallback_files_recompile_and_runtime_state\b/,
         message: 'missing MiniApp import runtime preflight regression test',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/contracts/product-domains/src/miniapp/compiler.rs',
+    reason:
+      'product-domains owns MiniApp compile request, path adaptation, and provider-neutral compile assembly while core keeps lifecycle orchestration',
+    patterns: [
+      {
+        regex: /\bpub struct MiniAppCompileRequest\b/,
+        message: 'missing MiniApp compile request owner',
+      },
+      {
+        regex: /\bpub fn from_paths\b/,
+        message: 'missing MiniApp compile path-adaptation helper',
+      },
+      {
+        regex: /\bpub fn compile_with_request\b/,
+        message: 'missing MiniApp compile request facade',
+      },
+      {
+        regex: /\bcompile_request_from_paths_preserves_runtime_paths\b/,
+        message: 'missing MiniApp compile path regression test',
+      },
+      {
+        regex: /\bcompile_with_request_preserves_legacy_compile_output\b/,
+        message: 'missing MiniApp compile request output regression test',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/contracts/product-domains/src/miniapp/permission_policy.rs',
+    reason:
+      'product-domains owns MiniApp permission policy request, path-scope expansion, and granted-path merging while core keeps grant storage',
+    patterns: [
+      {
+        regex: /\bpub struct MiniAppPermissionPolicyRequest\b/,
+        message: 'missing MiniApp permission policy request owner',
+      },
+      {
+        regex: /\bpub fn from_paths\b/,
+        message: 'missing MiniApp permission path request helper',
+      },
+      {
+        regex: /\bpub fn resolve_policy_with_request\b/,
+        message: 'missing MiniApp permission request facade',
+      },
+      {
+        regex: /\bpermission_policy_request_preserves_path_scope_and_granted_paths\b/,
+        message: 'missing MiniApp permission path/grant regression test',
       },
     ],
   },
@@ -5986,6 +6088,26 @@ export const requiredContentRules = [
       {
         regex: /\bpersist_import_runtime_state\b/,
         message: 'missing MiniApp import runtime-state facade path',
+      },
+      {
+        regex: /\bpub async fn import_from_path\b/,
+        message: 'missing MiniApp import workflow facade owner',
+      },
+      {
+        regex: /\bMiniAppImportPort\b/,
+        message: 'missing MiniApp import IO port boundary',
+      },
+      {
+        regex: /\bMiniAppCompilePort\b/,
+        message: 'missing MiniApp compile port boundary',
+      },
+      {
+        regex: /\bMiniAppImportBundleWriteRequest\b/,
+        message: 'missing MiniApp import bundle write request use',
+      },
+      {
+        regex: /\bbuild_import_bundle_plan\b/,
+        message: 'missing MiniApp import bundle plan use inside product-domain facade',
       },
     ],
   },

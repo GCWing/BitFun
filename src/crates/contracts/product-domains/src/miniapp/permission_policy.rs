@@ -2,11 +2,48 @@
 
 use crate::miniapp::types::{MiniAppPermissions, PathScope};
 use serde_json::{Map, Value};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Resolve permission manifest to a JSON policy object passed to the Worker as startup argument.
 /// Path variables {appdata}, {workspace}, {home} are resolved to absolute paths.
 /// `granted_paths` are user-granted paths (e.g. from grant_path) to include in read+write.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MiniAppPermissionPolicyRequest<'a> {
+    pub app_id: &'a str,
+    pub app_data_dir: &'a Path,
+    pub workspace_dir: Option<&'a Path>,
+    pub granted_paths: &'a [PathBuf],
+}
+
+impl<'a> MiniAppPermissionPolicyRequest<'a> {
+    pub fn from_paths(
+        app_id: &'a str,
+        app_data_dir: &'a Path,
+        workspace_dir: Option<&'a Path>,
+        granted_paths: &'a [PathBuf],
+    ) -> Self {
+        Self {
+            app_id,
+            app_data_dir,
+            workspace_dir,
+            granted_paths,
+        }
+    }
+}
+
+pub fn resolve_policy_with_request(
+    perms: &MiniAppPermissions,
+    request: &MiniAppPermissionPolicyRequest<'_>,
+) -> Value {
+    resolve_policy(
+        perms,
+        request.app_id,
+        request.app_data_dir,
+        request.workspace_dir,
+        request.granted_paths,
+    )
+}
+
 pub fn resolve_policy(
     perms: &MiniAppPermissions,
     app_id: &str,
@@ -100,4 +137,42 @@ fn resolve_fs_scopes(
         }
     }
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::miniapp::types::FsPermissions;
+
+    #[test]
+    fn permission_policy_request_preserves_path_scope_and_granted_paths() {
+        let app_data_dir = Path::new("miniapps").join("app-1");
+        let workspace_dir = Path::new("workspace").join("project");
+        let granted_path = Path::new("user").join("selected");
+        let granted_paths = vec![granted_path.clone()];
+        let permissions = MiniAppPermissions {
+            fs: Some(FsPermissions {
+                read: Some(vec!["{appdata}".to_string(), "{workspace}".to_string()]),
+                write: Some(vec!["{appdata}".to_string()]),
+            }),
+            ..MiniAppPermissions::default()
+        };
+
+        let request = MiniAppPermissionPolicyRequest::from_paths(
+            "app-1",
+            &app_data_dir,
+            Some(&workspace_dir),
+            &granted_paths,
+        );
+        let policy = resolve_policy_with_request(&permissions, &request);
+
+        let fs = policy.get("fs").unwrap();
+        let read_paths = fs.get("read").unwrap().as_array().unwrap();
+        let write_paths = fs.get("write").unwrap().as_array().unwrap();
+        assert!(read_paths.contains(&Value::String(app_data_dir.to_string_lossy().to_string())));
+        assert!(read_paths.contains(&Value::String(workspace_dir.to_string_lossy().to_string())));
+        assert!(read_paths.contains(&Value::String(granted_path.to_string_lossy().to_string())));
+        assert!(write_paths.contains(&Value::String(app_data_dir.to_string_lossy().to_string())));
+        assert!(write_paths.contains(&Value::String(granted_path.to_string_lossy().to_string())));
+    }
 }

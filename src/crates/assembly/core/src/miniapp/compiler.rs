@@ -1,6 +1,8 @@
 //! MiniApp compiler compatibility facade.
 
-pub use bitfun_product_domains::miniapp::compiler::{MiniAppCompileError, MiniAppCompileResult};
+pub use bitfun_product_domains::miniapp::compiler::{
+    MiniAppCompileError, MiniAppCompileRequest, MiniAppCompileResult,
+};
 
 use crate::miniapp::types::{MiniAppPermissions, MiniAppSource};
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -23,4 +25,13 @@ pub fn compile(
         theme,
     )
     .map_err(|e| BitFunError::validation(e.to_string()))
+}
+
+pub fn compile_with_request(
+    source: &MiniAppSource,
+    permissions: &MiniAppPermissions,
+    request: &MiniAppCompileRequest,
+) -> BitFunResult<String> {
+    bitfun_product_domains::miniapp::compiler::compile_with_request(source, permissions, request)
+        .map_err(|e| BitFunError::validation(e.to_string()))
 }

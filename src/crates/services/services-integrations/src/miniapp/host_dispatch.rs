@@ -30,7 +30,9 @@ use bitfun_product_domains::miniapp::host_routing::{
     plan_fs_legacy_path_check, plan_shell_host_call, shell_exec_default_env, split_host_method,
     FsAccessMode, MiniAppFsHostCallPlan, MiniAppHostPlanError, MiniAppHostPlanErrorKind,
 };
-use bitfun_product_domains::miniapp::permission_policy::resolve_policy;
+use bitfun_product_domains::miniapp::permission_policy::{
+    resolve_policy_with_request, MiniAppPermissionPolicyRequest,
+};
 use bitfun_product_domains::miniapp::types::MiniAppPermissions;
 use serde_json::{json, Value};
 use std::fmt;
@@ -113,7 +115,13 @@ pub async fn dispatch_host(
     method: &str,
     params: Value,
 ) -> MiniAppHostDispatchResult<Value> {
-    let policy = resolve_policy(perms, app_id, app_data_dir, workspace_dir, granted_paths);
+    let policy_request = MiniAppPermissionPolicyRequest::from_paths(
+        app_id,
+        app_data_dir,
+        workspace_dir,
+        granted_paths,
+    );
+    let policy = resolve_policy_with_request(perms, &policy_request);
     let (ns, name) = split_host_method(method)
         .ok_or_else(|| MiniAppHostDispatchError::parse(format!("invalid method: {}", method)))?;
     match ns {

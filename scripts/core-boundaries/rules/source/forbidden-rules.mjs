@@ -352,6 +352,16 @@ export const forbiddenContentRules = [
     ],
   },
   {
+    path: 'src/crates/services/services-integrations/src/miniapp/host_dispatch.rs',
+    patterns: [
+      {
+        regex: /\bresolve_policy\s*\(/,
+        message:
+          'services MiniApp host-dispatch must use MiniAppPermissionPolicyRequest for permission path adaptation',
+      },
+    ],
+  },
+  {
     path: 'src/crates/assembly/core/src/miniapp/js_worker.rs',
     patterns: [
       {
@@ -1022,9 +1032,24 @@ export const forbiddenContentRules = [
           'core tool pipeline must not own retry backoff policy; use tool-runtime::pipeline',
       },
       {
+        regex: /\blet\s+mut\s+cancelled_count\b/,
+        message:
+          'core tool pipeline must not own dialog-turn cancellation summary policy; use tool-runtime::pipeline',
+      },
+      {
         regex: /ToolConfirmationOutcome::(?:Rejected|ChannelClosed|Timeout)/,
         message:
           'core tool pipeline must not own confirmation wait-result mapping; use bitfun-agent-runtime',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/pipeline/state_manager.rs',
+    patterns: [
+      {
+        regex: /\bstats\.(?:queued|waiting|running|streaming|awaiting_confirmation|completed|failed|cancelled)\s*\+=/,
+        message:
+          'core tool state manager must not own provider-neutral state counting; use tool-runtime::pipeline',
       },
     ],
   },
@@ -1497,6 +1522,31 @@ export const forbiddenContentRules = [
         regex: /\bbuild_import_fallbacks\b/,
         message:
           'core MiniApp manager must not own import fallback planning; use product-domain import bundle plan',
+      },
+      {
+        regex: /\bbuild_import_bundle_plan\b/,
+        message:
+          'core MiniApp manager must not own import bundle planning; use MiniAppRuntimeFacade',
+      },
+      {
+        regex: /\bread_import_meta_json\b/,
+        message:
+          'core MiniApp manager must not own import metadata IO; use MiniAppRuntimeFacade import ports',
+      },
+      {
+        regex: /\bwrite_import_bundle\b/,
+        message:
+          'core MiniApp manager must not own import bundle IO; use MiniAppRuntimeFacade import ports',
+      },
+      {
+        regex: /\bworkspace_dir_string\b/,
+        message:
+          'core MiniApp manager must not own compile workspace path adaptation; use MiniAppCompileRequest',
+      },
+      {
+        regex: /\bresolve_policy\s*\(/,
+        message:
+          'core MiniApp manager must not own permission policy path adaptation; use MiniAppPermissionPolicyRequest',
       },
     ],
   },

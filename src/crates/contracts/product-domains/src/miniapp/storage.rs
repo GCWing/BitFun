@@ -221,6 +221,17 @@ pub struct MiniAppImportBundlePlan {
     pub compiled_html: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MiniAppImportBundleWriteRequest {
+    pub source_path: PathBuf,
+    pub app_id: String,
+    pub meta_json: String,
+    pub esm_dependencies_json: String,
+    pub package_json: String,
+    pub storage_json: String,
+    pub compiled_html: String,
+}
+
 #[derive(Debug)]
 pub enum MiniAppImportBundlePlanError {
     InvalidMeta(serde_json::Error),

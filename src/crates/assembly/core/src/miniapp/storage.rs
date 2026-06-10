@@ -4,9 +4,10 @@ use crate::miniapp::types::{MiniApp, MiniAppMeta, MiniAppSource};
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_product_domains::miniapp::customization::MiniAppCustomizationMetadata;
 use bitfun_product_domains::miniapp::ports::{
-    MiniAppPortError, MiniAppPortErrorKind, MiniAppPortFuture, MiniAppStoragePort,
+    MiniAppImportPort, MiniAppPortError, MiniAppPortErrorKind, MiniAppPortFuture,
+    MiniAppStoragePort,
 };
-pub use bitfun_services_integrations::miniapp::storage::MiniAppImportBundleRequest;
+pub use bitfun_product_domains::miniapp::storage::MiniAppImportBundleWriteRequest;
 use bitfun_services_integrations::miniapp::storage::{
     MiniAppStorage as ServiceMiniAppStorage, MiniAppStorageError, MiniAppStorageErrorKind,
 };
@@ -225,7 +226,7 @@ impl MiniAppStorage {
 
     pub async fn write_import_bundle(
         &self,
-        request: MiniAppImportBundleRequest,
+        request: MiniAppImportBundleWriteRequest,
     ) -> BitFunResult<()> {
         self.inner
             .write_import_bundle(request)
@@ -390,6 +391,27 @@ fn map_storage_error(error: MiniAppStorageError) -> BitFunError {
         MiniAppStorageErrorKind::Deserialization => BitFunError::parse(error.message().to_string()),
         MiniAppStorageErrorKind::Io => BitFunError::io(error.message().to_string()),
         MiniAppStorageErrorKind::Backend => BitFunError::service(error.message().to_string()),
+    }
+}
+
+impl MiniAppImportPort for MiniAppStorage {
+    fn read_import_meta_json(&self, source_path: PathBuf) -> MiniAppPortFuture<'_, String> {
+        Box::pin(async move {
+            self.read_import_meta_json(&source_path)
+                .await
+                .map_err(map_miniapp_port_error)
+        })
+    }
+
+    fn write_import_bundle(
+        &self,
+        request: MiniAppImportBundleWriteRequest,
+    ) -> MiniAppPortFuture<'_, ()> {
+        Box::pin(async move {
+            self.write_import_bundle(request)
+                .await
+                .map_err(map_miniapp_port_error)
+        })
     }
 }
 

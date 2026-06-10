@@ -1,6 +1,7 @@
 use tool_runtime::pipeline::{
-    partition_tool_batches, retry_delay_ms, should_retry_tool_attempt, ToolExecutionErrorClass,
-    ToolRetryAttemptFacts,
+    count_tool_states, partition_tool_batches, retry_delay_ms, should_cancel_tool_state,
+    should_retry_tool_attempt, summarize_dialog_turn_cancellation, ToolExecutionErrorClass,
+    ToolRetryAttemptFacts, ToolTaskStateKind,
 };
 
 #[test]
@@ -60,4 +61,61 @@ fn retry_policy_preserves_attempt_limit_and_error_class_contract() {
         error_class: ToolExecutionErrorClass::Terminal,
     }));
     assert_eq!(retry_delay_ms(2), 200);
+}
+
+#[test]
+fn cancellation_policy_preserves_cancellable_and_terminal_state_contract() {
+    assert!(should_cancel_tool_state(ToolTaskStateKind::Queued));
+    assert!(should_cancel_tool_state(ToolTaskStateKind::Waiting));
+    assert!(should_cancel_tool_state(ToolTaskStateKind::Running));
+    assert!(should_cancel_tool_state(
+        ToolTaskStateKind::AwaitingConfirmation
+    ));
+    assert!(!should_cancel_tool_state(ToolTaskStateKind::Streaming));
+    assert!(!should_cancel_tool_state(ToolTaskStateKind::Completed));
+    assert!(!should_cancel_tool_state(ToolTaskStateKind::Failed));
+    assert!(!should_cancel_tool_state(ToolTaskStateKind::Cancelled));
+
+    assert!(ToolTaskStateKind::Completed.is_terminal());
+    assert!(ToolTaskStateKind::Failed.is_terminal());
+    assert!(ToolTaskStateKind::Cancelled.is_terminal());
+    assert!(!ToolTaskStateKind::Running.is_terminal());
+}
+
+#[test]
+fn dialog_turn_cancellation_summary_counts_cancelled_and_skipped_tasks() {
+    let summary = summarize_dialog_turn_cancellation([
+        ToolTaskStateKind::Queued,
+        ToolTaskStateKind::Running,
+        ToolTaskStateKind::Completed,
+        ToolTaskStateKind::Cancelled,
+    ]);
+
+    assert_eq!(summary.cancelled, 2);
+    assert_eq!(summary.skipped, 2);
+}
+
+#[test]
+fn state_counts_preserve_pipeline_stats_contract() {
+    let counts = count_tool_states([
+        ToolTaskStateKind::Queued,
+        ToolTaskStateKind::Queued,
+        ToolTaskStateKind::Waiting,
+        ToolTaskStateKind::Running,
+        ToolTaskStateKind::Streaming,
+        ToolTaskStateKind::AwaitingConfirmation,
+        ToolTaskStateKind::Completed,
+        ToolTaskStateKind::Failed,
+        ToolTaskStateKind::Cancelled,
+    ]);
+
+    assert_eq!(counts.total, 9);
+    assert_eq!(counts.queued, 2);
+    assert_eq!(counts.waiting, 1);
+    assert_eq!(counts.running, 1);
+    assert_eq!(counts.streaming, 1);
+    assert_eq!(counts.awaiting_confirmation, 1);
+    assert_eq!(counts.completed, 1);
+    assert_eq!(counts.failed, 1);
+    assert_eq!(counts.cancelled, 1);
 }
