@@ -1,4 +1,4 @@
-# BitFun SDLC Harness 子模块设计：Artifact Graph
+# BitFun 生命周期工程子模块设计：Artifact Graph
 
 > 上游文档：[design.md](../design.md)
 > 模块角色：把目标项目中的需求、设计、代码、测试、评审、CI、发布、运行期和复盘资产建模为可追踪交付物图谱。

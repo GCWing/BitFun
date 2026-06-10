@@ -1,7 +1,7 @@
-# BitFun 全软件生命周期 Harness 实施计划
+# BitFun 全软件生命周期工程能力与质量保护实施计划
 
-> 范围：基于完整设计体系，定义 BitFun 面向外部目标项目建设 SDLC Harness 的执行方案、阶段性交付件、成果验收、过程风险、关键里程碑和质量保护方案。
-> 目标：在控制复杂度、token 成本、运行耗时和团队采用成本的前提下，把 Artifact Graph Workbench 与 Lifecycle Harness Platform 分阶段落地。
+> 范围：基于完整设计体系，定义 BitFun 面向外部目标项目建设生命周期工程能力与质量保护闭环的执行方案、阶段性交付件、成果验收、过程风险、关键里程碑和质量保护方案。
+> 目标：在控制复杂度、token 成本、运行耗时和团队采用成本的前提下，把项目画像、证据链、交付物图谱与生命周期质量保护能力分阶段落地。
 
 ## 1. 执行定位
 
@@ -16,7 +16,8 @@
 执行主线固定为：
 
 ```text
-Project Profile
+Architecture runway
+  -> Project Profile
   -> PR EvidencePack
   -> Risk Classifier
   -> lightweight PR Gate
@@ -36,15 +37,32 @@ Project Profile
 | Adapter 边界 | OpenCode 兼容只作为 adapter，不改变 BitFun canonical event、artifact、permission model |
 | 反证驱动 | 每个阶段都定义失败信号，一旦命中就先收缩范围或修正策略 |
 | 本地优先 | 默认本地存储和本地审计，外部导出必须显式配置和可审计 |
+| 架构先导 | contract、event、provider registry、trust model 先稳定，再建设高层产品自动化 |
 
 ## 3. 阶段路线图
 
 | 阶段 | 主题 | 阶段成果 | 进入下一阶段条件 |
 |---|---|---|---|
+| P-1 | 架构准备与边界验证 | 能力分类、canonical event、evidence contract、hook trust model、provider registry 草案 | 能明确哪些能力属于平台支撑、质量保护或受控扩展 |
 | P0 | 目标项目 PR 证据链 MVP | Project Profile、EvidencePack、Risk Classifier、lightweight PR Gate、事件最小集 | 大多数本地改动可生成可解释 gate 结果 |
 | P1 | 团队 PR 质量闭环 | PR gate 集成、finding lifecycle、stale evidence、最小 Artifact Graph | PR review 过程能复用证据链并减少人工补充 |
 | P2 | 需求到发布闭环 | 需求影响分析、release readiness、incident-to-test | 高风险变更能输出影响面、发布风险和回归补充 |
-| P3 | 长期评估与优化 | BitFun Harness Bench、trace replay、A/B、策略校准 | Harness 改动可被量化评估并持续优化 |
+| P3 | 长期评估与优化 | BitFun Engineering Bench、trace replay、A/B、策略校准 | prompt、tool、context、gate 和 policy 改动可被量化评估并持续优化 |
+
+### 3.1 P-1：架构准备与边界验证
+
+P-1 不交付完整用户闭环，只为 P0 降低架构返工风险。
+
+| 交付件 | 内容 | 验收方式 |
+|---|---|---|
+| 能力分类表 | 区分工程理解、交付物组织、质量事实、质量保护、受控扩展和长期评估 | 主设计和子模块命名不再把全部能力统称为 Harness |
+| Canonical event 草案 | `project.profiled`、`file.changed`、`verification.completed`、`risk.classified`、`gate.completed` 等最小事件 | Quality Data Plane 可表达 P0 EvidencePack |
+| Evidence contract 草案 | EvidenceReference、trust tier、privacy、retention、staleness | Gate 结果能引用证据而非复制日志 |
+| Provider registry 草案 | adapter、tool provider、lifecycle policy provider、quality-control capability pack 注册边界 | 不需要改 Agent Runtime kernel 即可接入 P0 能力 |
+| Hook trust model | 项目级 hook/plugin/config 的来源、hash、权限、超时、禁用和审计策略 | 未信任主动配置不得影响执行或 gate |
+| Eval data policy | golden set、holdout、线上回放、数据污染标记和 Eval Card 模板 | P3 不需要重做评估数据治理 |
+
+P-1 的退出条件是：P0 所需对象和事件能够被 schema 描述，且所有高权限或高成本能力都有降级状态。
 
 ## 4. P0：目标项目 PR 证据链 MVP
 
@@ -81,6 +99,7 @@ Project Profile
 | required checks 低价值提示过多 | 使用 override 反馈校准路径矩阵 |
 | gate 对低风险改动产生不必要阻断 | 调整 fail/warn/degraded 语义，先非阻塞运行一段周期 |
 | Deep Review token 成本过高 | P0 只允许 targeted/full review 作为显式风险升级 |
+| P-1 contract 不稳定 | P0 只允许 additive schema 变更；破坏性变更必须同步迁移和文档 |
 
 ### 4.5 质量保护
 
@@ -93,7 +112,7 @@ Project Profile
 
 ### 5.1 阶段目标
 
-将 P0 的本地证据链接入团队 PR 流程，形成 reviewer 可消费、可复跑、可审计的质量闭环。
+将 P0 的本地验证证据链接入团队 PR 流程，形成 reviewer 可消费、可复跑、可审计的质量闭环。
 
 ### 5.2 阶段交付件
 
@@ -171,21 +190,21 @@ Project Profile
 
 ### 7.1 阶段目标
 
-建立长期 Evaluation Harness，让 prompt、tool schema、context policy、hook policy、Deep Review profile 和模型组合的变更可以被量化评估。
+建立长期 Agent Evaluation 体系，让 prompt、tool schema、context policy、hook policy、Deep Review profile 和模型组合的变更可以被量化评估。
 
 ### 7.2 阶段交付件
 
 | 交付件 | 内容 | 依赖 |
 |---|---|---|
-| BitFun Harness Bench | 真实 issue、终端任务、review defect、PR gate、impact analysis 黄金集和 holdout set | Evaluation Harness |
+| BitFun Engineering Bench | 真实 issue、终端任务、review defect、PR gate、impact analysis 黄金集和 holdout set | Agent Evaluation |
 | Trace Replay | 固定输入、工具版本、policy 版本和输出 oracle | Quality Data Plane |
-| Harness A/B | prompt、tool schema、context policy、model、budget 对比 | Evaluation Harness |
+| Policy A/B | prompt、tool schema、context policy、model、budget 对比 | Agent Evaluation |
 | Failure Mining | 失败 trace 聚类，生成 rule、test、skill、policy 建议 | Quality Data Plane |
 | Adaptive Budget | 按风险和历史成功率动态分配模型与 Deep Review 成本 | Risk Classifier |
 
 ### 7.3 验收成果
 
-- 关键 harness 改动可通过固定任务集回放。
+- 关键 prompt、tool schema、context policy、gate policy 改动可通过固定任务集回放。
 - 评测结果同时展示成功率、质量、token、耗时、tool calls 和安全事件。
 - 失败可归因到模型、工具、上下文、策略或产品交互。
 - 线上缺陷、review blocker 和 override 能进入 eval backlog。
@@ -196,7 +215,7 @@ Project Profile
 |---|---|
 | benchmark 过拟合 | 保留 holdout set，记录任务来源和泄漏风险 |
 | 无 oracle 评测泛滥 | 无 oracle 任务只能用于探索，不进入决策 |
-| 只优化模型忽略 harness | model、prompt、tool schema、context、policy 版本分开记录 |
+| 只优化模型忽略上下文、工具和策略 | model、prompt、tool schema、context、policy 版本分开记录 |
 | 成本被成功率掩盖 | 所有评测必须同时报告 token、wall-clock、tool call 和 retry |
 
 ### 7.5 质量保护
@@ -211,6 +230,7 @@ Project Profile
 
 | 里程碑 | 判定标准 |
 |---|---|
+| M0：架构边界可执行 | P0 contract、event、trust model、provider registry 有最小定义，且不要求改 Agent Runtime kernel |
 | M1：Project Profile 与 EvidencePack 可用 | 目标项目本地 diff 可生成结构化 profile/context/change/verification/risk/open risks |
 | M2：Risk Classifier 可解释 | required checks 有触发原因、置信度和 override 反馈 |
 | M3：Lightweight Gate 可用 | Gate 输出 `pass/warn/fail/degraded`，且缺证据不误判 pass |
@@ -240,7 +260,9 @@ Project Profile
 | 交付效率 | PR cycle time、lead time、time-to-first-useful-plan |
 | 验证质量 | required check precision、CI first-pass rate、flaky rate、rerun count |
 | AI 质量 | AI-authored diff 占比、review finding density、post-merge defect rate |
-| Harness 成本 | token per accepted change、Deep Review wall-clock、budget skip rate |
+| 质量保护成本 | token per accepted change、Deep Review wall-clock、budget skip rate |
 | 审计完整性 | EvidencePack coverage、gate degraded rate、risk acceptance audit coverage |
 | 图谱质量 | confirmed link ratio、stale link rate、impact analysis precision/recall |
+| 主动配置治理 | untrusted active config rate、trusted hook re-review rate、plugin deny/degraded rate |
+| 评估治理 | eval card coverage、holdout contamination rate、replay reproducibility rate |
 | 运行闭环 | incident-to-regression-test latency、release rollback readiness |

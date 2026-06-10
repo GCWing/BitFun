@@ -1,6 +1,6 @@
-# BitFun 全软件生命周期 Harness 总览
+# BitFun 全软件生命周期工程能力与质量保护总览
 
-> 范围：BitFun 作为 Harness 产品加载和治理外部软件工程时的目标形态、外部调研、设计体系和实施计划。
+> 范围：BitFun 加载外部软件工程后的目标形态、外部调研、设计体系和实施计划。
 > 用途：作为拆分后的入口文档。设计与计划已分离，避免将战略/架构判断和执行路线混在同一篇报告中。
 
 ## 文档结构
@@ -14,11 +14,11 @@
 
 ## 核心判断
 
-BitFun 的长期产品目标不是只治理自身仓库，而是成为面向外部目标项目的 Agentic Engineering Harness。用户加载一个软件工程后，BitFun 应能够识别项目画像、连接生命周期交付物、收集执行和验证证据、进行风险分级、给出质量门禁，并把评审、发布和运行期反馈回流成可复用资产。
+BitFun 的定位是面向外部目标项目的 Agentic Engineering 工具。用户加载一个软件工程后，BitFun 应能够识别项目画像、连接生命周期交付物、收集执行和验证证据、进行风险分级、给出质量门禁，并把评审、发布和运行期反馈回流成可复用资产。Harness 只作为设计文档中的术语边界，用于指代其中面向质量保护、受控执行、策略控制和持续评估的一组能力；详细定义见 [design.md](design.md) 的“能力分类与术语边界”。
 
-BitFun 自身已有 Agent Runtime、工具调用、Git/终端、MCP/LSP、Deep Review 和本地工程验证基础，这些是产品实现基础，不是主设计的治理对象。主设计围绕“如何让 BitFun 更好承载外部项目的 Harness 需求”展开；BitFun 自身仓库暴露出的文档缺口、模块边界不清或规则不一致问题，应进入独立自身治理文档。
+BitFun 自身已有 Agent Runtime、工具调用、Git/终端、MCP/LSP、Deep Review 和本地工程验证基础，这些是产品实现基础，不是主设计的治理对象。主设计围绕“如何让 BitFun 更好支持外部项目的工程理解、质量保护和风险治理需求”展开；BitFun 自身仓库暴露出的文档缺口、模块边界不清或规则不一致问题，应进入独立自身治理文档。
 
-首个可验证价值点仍应收敛在目标项目的 PR EvidencePack、Risk Classifier 和 lightweight gate 上；Project Profile、Artifact Graph、OpenCode 兼容、需求影响分析和 Evaluation Harness 都围绕这个最小闭环逐步扩展，避免过早扩展设计边界。
+首个可验证价值点仍应收敛在目标项目的 PR EvidencePack、Risk Classifier 和 lightweight gate 上；Project Profile、Artifact Graph、OpenCode 兼容、需求影响分析和 Agent Evaluation 都围绕这个最小闭环逐步扩展，避免过早扩展设计边界。
 
 ## 阅读建议
 

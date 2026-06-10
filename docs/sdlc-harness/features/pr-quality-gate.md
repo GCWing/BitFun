@@ -1,11 +1,11 @@
-# BitFun SDLC Harness 子模块设计：PR Quality Gate
+# BitFun 生命周期工程子模块设计：PR Quality Gate
 
 > 上游文档：[design.md](../design.md)
 > 模块角色：将目标项目的 EvidencePack、Risk Classifier、Deep Review、验证命令、安全信号和人工风险接受整合为 PR 级质量门禁。
 
 ## 1. 模块定位
 
-PR Quality Gate 是全生命周期 Harness 的首个产品级闭环。它不是替代 GitHub Checks、CI、安全扫描、CODEOWNERS 或人工 reviewer，而是在目标项目 PR 提交或更新前，把本地 diff、项目规则、验证证据和风险信号转化为一个简洁、可解释、可审计的 gate 结果。
+PR Quality Gate 是生命周期质量保护的首个产品级闭环。它不是替代 GitHub Checks、CI、安全扫描、CODEOWNERS 或人工 reviewer，而是在目标项目 PR 提交或更新前，把本地 diff、项目规则、验证证据和风险信号转化为一个简洁、可解释、可审计的 gate 结果。
 
 P0 采用 lightweight gate：先覆盖目标项目 Project Profile、本地 diff/PR 的 EvidencePack、required checks、risk classification、PR 描述生成和可选 Deep Review 触发。
 
@@ -56,6 +56,7 @@ P0 采用 lightweight gate：先覆盖目标项目 Project Profile、本地 diff
 | Verification evidence | command、exit code、duration、log summary |
 | Risk classification | Risk Classifier |
 | Hook events | Quality Data Plane |
+| Active config trust | Project Profile + Quality Data Plane |
 | Deep Review result | optional targeted/full review |
 | Artifact links | issue、spec、acceptance criteria、design doc |
 
@@ -100,6 +101,15 @@ interface PrGateResult {
 | `required` | 要求展示结果和 skipped/open risks | P1 团队协作 |
 | `blocking` | 对确定性失败或缺失人工风险接受进行阻断 | 仅在误报率、成本和 override 流程稳定后启用 |
 
+主动配置 gate 策略：
+
+| 情况 | Gate 行为 |
+|---|---|
+| 新增项目级 hook/plugin/custom tool 但未 trust review | `degraded`，展示来源、权限和未确认原因 |
+| 主动配置 hash、权限或执行范围变化 | `degraded` 或 `fail`，取决于是否涉及 shell/network/secret/filesystem |
+| 已禁用主动配置仍被事件引用 | `fail`，必须修正执行链路或移除引用 |
+| 插件产出 recommendation | 只能进入 open risk 或 evidence candidate，不改变 pass/fail |
+
 ## 5. 核心流程
 
 ```text
@@ -135,7 +145,7 @@ Deep Review 预算策略：
 | 风险画像 | 默认策略 |
 |---|---|
 | 低风险 docs 或小范围文案 | 不触发 Deep Review |
-| 中风险 UI 或 adapter | 本地证据不足时触发 targeted review |
+| 中风险 UI 或 adapter | 本地验证证据不足时触发 targeted review |
 | 高风险项目核心逻辑、integration adapter、安全、发布或远程运行边界 | targeted 或 full review |
 | 大规模跨层 PR | 先完成低成本结构化检查，再决定 full review |
 
@@ -172,6 +182,7 @@ Stale review 规则：
 | Gate 假阳性阻塞交付 | 每个 fail 必须有具体 evidence 和 override path |
 | Gate 假阴性放过风险 | critical path 小 diff 不得按行数降级为 low |
 | 缺证据仍 pass | 缺失 evidence store 或检查结果时必须 `degraded` 或 `fail` |
+| 未信任主动配置影响 gate | 未 trust review 的 hook/plugin/custom tool 只能导致 degraded/open risk，不能提供 pass 证据 |
 | AI review 低精度 finding | finding 必须有生命周期、stale 标记和人工解决状态 |
 | 插件绕过策略 | Gate 只消费 canonical event，不信任插件直接写入 pass 结论 |
 
@@ -182,3 +193,4 @@ Stale review 规则：
 - 高风险 PR 能暴露 required checks 和未覆盖风险。
 - PR 描述减少 reviewer 追问验证信息的成本。
 - Deep Review token 与耗时可见、可预算、可降级。
+- 主动配置变化能被 Gate 显式降级、阻断或要求重新确认。

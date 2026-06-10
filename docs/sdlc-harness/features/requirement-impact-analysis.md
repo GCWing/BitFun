@@ -1,4 +1,4 @@
-# BitFun SDLC Harness 子模块设计：Requirement Impact Analysis
+# BitFun 生命周期工程子模块设计：Requirement Impact Analysis
 
 > 上游文档：[design.md](../design.md)
 > 模块角色：在需求、验收标准、API contract 或设计决策变更时，召回受影响的代码、测试、文档、owner、release 和运行指标。
