@@ -5,6 +5,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { VirtualMessageList } from './VirtualMessageList';
+import { activeSessionHistoryProjectionHandoff } from './historyProjectionHandoff';
 import type { Session } from '../../types/flow-chat';
 import type { VirtualItem } from '../../store/modernFlowChatStore';
 
@@ -206,5 +207,27 @@ describe('VirtualMessageList session boundary', () => {
     });
 
     expect(container.querySelector('[data-testid="scroll-to-latest"]')?.getAttribute('data-visible')).toBe('false');
+  });
+
+  it('does not expose stale history projection handoff snapshots across sessions', () => {
+    const snapshot = {
+      sessionId: 'session-a',
+      reason: 'session-open',
+      createdAtMs: 1,
+      items: [createItem('turn-a')],
+      mode: 'bottom-tail',
+      targetTurnId: 'turn-a',
+      anchorKey: null,
+      anchorOffsetTopPx: 0,
+      scrollTop: 0,
+      scrollHeight: 100,
+      clientHeight: 100,
+      footerHeightPx: 0,
+    } as const;
+
+    expect(activeSessionHistoryProjectionHandoff(snapshot, 'session-a')).toBe(snapshot);
+    expect(activeSessionHistoryProjectionHandoff(snapshot, 'session-b')).toBeNull();
+    expect(activeSessionHistoryProjectionHandoff(snapshot, null)).toBeNull();
+    expect(activeSessionHistoryProjectionHandoff(null, 'session-a')).toBeNull();
   });
 });

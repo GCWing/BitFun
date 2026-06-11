@@ -46,6 +46,10 @@ import {
   mapInitialHistoryExpansionScrollTop,
   selectInitialHistoryRenderWindow,
 } from './virtualMessageListLayout';
+import {
+  activeSessionHistoryProjectionHandoff,
+  type HistoryProjectionHandoffSnapshot,
+} from './historyProjectionHandoff';
 import './VirtualMessageList.scss';
 
 const COMPENSATION_EPSILON_PX = 0.5;
@@ -122,21 +126,6 @@ interface LatestEndAnchorRequestState {
   lastScrollTop: number | null;
   lastTargetTop: number | null;
   lastTargetBottom: number | null;
-}
-
-interface HistoryProjectionHandoffSnapshot {
-  sessionId: string;
-  reason: string;
-  createdAtMs: number;
-  items: VirtualItem[];
-  mode: 'scroll-position' | 'bottom-tail';
-  targetTurnId: string | null;
-  anchorKey: string | null;
-  anchorOffsetTopPx: number;
-  scrollTop: number;
-  scrollHeight: number;
-  clientHeight: number;
-  footerHeightPx: number;
 }
 
 type BottomReservationKind = 'collapse' | 'pin';
@@ -3941,7 +3930,9 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
   useLayoutEffect(() => {
     previousActiveSessionIdForOpenHandoffRef.current = activeSessionId;
   }, [activeSessionId]);
-  const activeHistoryProjectionHandoff = historyProjectionHandoff ?? sessionOpenProjectionHandoff;
+  const activeHistoryProjectionHandoff =
+    activeSessionHistoryProjectionHandoff(historyProjectionHandoff, activeSessionId) ??
+    activeSessionHistoryProjectionHandoff(sessionOpenProjectionHandoff, activeSessionId);
   const hasCompactHistoricalProjection = virtualItems.length >= 6 && virtualItems
     .slice(-16)
     .every(item =>
