@@ -191,6 +191,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
   const toastTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   const hasSearchQuery = searchQuery.trim().length > 0;
+  const showResumeCard = !loading && sessions.length > 0 && !hasSearchQuery;
 
   // ── Long-press context menu ─────────────────────────────────────
   const clearLongPressTimer = () => {
@@ -620,6 +621,43 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
           </div>
         )}
 
+        {/* Resume Card — quick continue for the most recent session */}
+        {showResumeCard && (
+          <button
+            type="button"
+            className="session-list__resume-card"
+            onClick={(e) => handleSessionClick(sessions[0], e)}
+            onTouchStart={(e) => handleSessionTouchStart(sessions[0], e)}
+            onTouchMove={handleSessionTouchMove}
+            onTouchEnd={handleSessionTouchEnd}
+            onTouchCancel={handleSessionTouchEnd}
+            onContextMenu={(e) => { e.preventDefault(); setMenuSession(sessions[0]); }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onSelectSession(sessions[0].session_id, sessions[0].name);
+              }
+            }}
+          >
+            <div className={`session-list__item-icon session-list__resume-icon session-list__item-icon--${sessions[0].agent_type}`}>
+              <SessionTypeIcon agentType={sessions[0].agent_type} />
+            </div>
+            <div className="session-list__resume-body">
+              <div className="session-list__resume-label">{t('sessions.continueSession')}</div>
+              <div className="session-list__resume-name">{sessions[0].name || t('sessions.untitledSession')}</div>
+              <div className="session-list__resume-meta">
+                <span className={`session-list__agent-badge session-list__agent-badge--${sessions[0].agent_type}`}>
+                  {agentLabel(sessions[0].agent_type, t)}
+                </span>
+                <span className="session-list__resume-time">{formatTime(sessions[0].updated_at, formatDate, t)}</span>
+              </div>
+            </div>
+            <span className="session-list__resume-arrow">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </span>
+          </button>
+        )}
+
         {/* Mode Toggle - Inline */}
         <div className="session-list__mode-toggle">
           <button
@@ -870,7 +908,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
               )}
 
               <div className="session-list__cards">
-                {sessions.map((s) => (
+                {sessions.slice(showResumeCard ? 1 : 0).map((s) => (
                   <div
                     key={s.session_id}
                     className={`session-list__item${menuSession?.session_id === s.session_id ? ' session-list__item--active' : ''}`}

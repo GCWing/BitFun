@@ -93,6 +93,7 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       connectionChecking: 'Checking connection...',
       connectionConnected: 'Connected',
       connectionUnreachable: 'Connection lost',
+      continueSession: 'Continue where you left off',
     },
     workspace: {
       loadingInfo: 'Loading workspace info...',
@@ -246,6 +247,7 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       connectionChecking: '检测连接中...',
       connectionConnected: '已连接',
       connectionUnreachable: '连接断开',
+      continueSession: '继续上次会话',
     },
     workspace: {
       loadingInfo: '正在加载工作区信息...',
@@ -399,6 +401,7 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       connectionChecking: '檢測連接中...',
       connectionConnected: '已連接',
       connectionUnreachable: '連接斷開',
+      continueSession: '繼續上次會話',
     },
     workspace: {
       loadingInfo: '正在加載工作區信息...',
