@@ -6,6 +6,7 @@ import type { ToolCardProps } from '../types/flow-chat';
 import { systemAPI } from '../../infrastructure/api';
 import { Tooltip } from '@/component-library';
 import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
+import { ToolCardCopyAction, ToolCardHeaderActions } from './ToolCardHeaderActions';
 import { ToolCardStatusSlot } from './ToolCardStatusSlot';
 import { createLogger } from '@/shared/utils/logger';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
@@ -14,6 +15,7 @@ import './WebFetchCard.scss';
 const log = createLogger('WebFetchCard');
 
 interface ParsedWebFetchResult {
+  title: string | null;
   url: string;
   format: string;
   content: string;
@@ -22,6 +24,9 @@ interface ParsedWebFetchResult {
 
 function parseWebFetchResult(toolItem: ToolCardProps['toolItem']): ParsedWebFetchResult | null {
   const result = toolItem.toolResult?.result;
+  const title = typeof result?.title === 'string' && result.title.trim().length > 0
+    ? result.title
+    : null;
   const url = result?.url || toolItem.toolCall?.input?.url || '';
   const format = result?.format || toolItem.toolCall?.input?.format || 'text';
   const contentValue = result?.content ?? toolItem.toolResult?.resultForAssistant ?? '';
@@ -41,6 +46,7 @@ function parseWebFetchResult(toolItem: ToolCardProps['toolItem']): ParsedWebFetc
   }
 
   return {
+    title,
     url,
     format,
     content,
@@ -63,6 +69,7 @@ export const WebFetchCard: React.FC<ToolCardProps> = ({
 
   const parsedResult = useMemo(() => parseWebFetchResult(toolItem), [toolItem]);
   const url = parsedResult?.url || toolCall?.input?.url || t('toolCards.webFetch.parsingUrl');
+  const headerTitle = parsedResult?.title?.trim() || '';
   const errorMessage = toolResult?.error || t('toolCards.webFetch.fetchFailed');
   const hasContent = Boolean(parsedResult?.content?.trim());
   const hasContentLength = parsedResult?.contentLength != null && parsedResult.contentLength > 0;
@@ -90,20 +97,30 @@ export const WebFetchCard: React.FC<ToolCardProps> = ({
     });
   }, [applyExpandedState, isExpandable, isExpanded, onExpand]);
 
+  const getDetails = () => {
+    const details: string[] = [];
+    if (parsedResult?.format) {
+      details.push(parsedResult.format);
+    }
+    if (contentLength != null) {
+      details.push(t('toolCards.webFetch.contentLength', { count: contentLength }));
+    } else if (hasContent) {
+      details.push(t('toolCards.webFetch.contentAvailable'));
+    }
+
+    return details;
+  };
+
   const renderContent = () => {
     if (status === 'completed') {
-      const details: string[] = [];
-      if (parsedResult?.format) {
-        details.push(parsedResult.format);
-      }
-      if (contentLength != null) {
-        details.push(t('toolCards.webFetch.contentLength', { count: contentLength }));
-      } else if (hasContent) {
-        details.push(t('toolCards.webFetch.contentAvailable'));
-      }
-
-      const suffix = details.length > 0 ? ` (${details.join(', ')})` : '';
-      return `${t('toolCards.webFetch.readTitle', { url })}${suffix}`;
+      return (
+        <span
+          className="web-fetch-card__header-url"
+          title={headerTitle || url}
+        >
+          {headerTitle || `"${url}"`}
+        </span>
+      );
     }
 
     if (status === 'error') {
@@ -121,7 +138,15 @@ export const WebFetchCard: React.FC<ToolCardProps> = ({
     return t('toolCards.webFetch.readTitle', { url });
   };
 
+  const renderAction = () => (
+    status === 'completed'
+      ? t('toolCards.webFetch.readLabel')
+      : undefined
+  );
+
   const renderExpandedContent = () => {
+    const details = status === 'completed' ? getDetails() : [];
+
     if (status === 'error') {
       return (
         <div className="compact-result-content web-fetch-card__content">
@@ -146,6 +171,34 @@ export const WebFetchCard: React.FC<ToolCardProps> = ({
                 {parsedResult.url}
               </div>
             </Tooltip>
+          </div>
+        )}
+
+        {(details.length > 0 || hasContent) && (
+          <div className="web-fetch-card__details-row">
+            {details.length > 0 && (
+              <div className="web-fetch-card__details" aria-label="web-fetch-details">
+                {details.map((detail) => (
+                  <span key={detail} className="web-fetch-card__detail-pill">
+                    {detail}
+                  </span>
+                ))}
+              </div>
+            )}
+            {hasContent && (
+              <ToolCardHeaderActions className="web-fetch-card__actions">
+                <ToolCardCopyAction
+                  className="web-fetch-card__copy-action"
+                  getText={() => parsedResult?.content ?? ''}
+                  tooltip={t('toolCards.webFetch.copyResult')}
+                  copiedTooltip={t('toolCards.webFetch.resultCopied')}
+                  successMessage={t('toolCards.webFetch.resultCopied')}
+                  failureMessage={t('toolCards.webFetch.copyResultFailed')}
+                  ariaLabel={t('toolCards.webFetch.copyResult')}
+                  showSuccessNotification={false}
+                />
+              </ToolCardHeaderActions>
+            )}
           </div>
         )}
 
@@ -174,6 +227,7 @@ export const WebFetchCard: React.FC<ToolCardProps> = ({
               />
             )}
             content={renderContent()}
+            action={renderAction()}
           />
         )}
         expandedContent={isExpandable ? renderExpandedContent() : undefined}

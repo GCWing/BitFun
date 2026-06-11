@@ -38,6 +38,9 @@ aes = { workspace = true, optional = true }
 hex = { workspace = true }
 dashmap = { workspace = true, optional = true }
 indexmap = { workspace = true, optional = true }
+htmd = "0.5.4"
+legible = "0.4.2"
+readability-js = "0.1.5"
 
 reqwest = { workspace = true, optional = true }
 

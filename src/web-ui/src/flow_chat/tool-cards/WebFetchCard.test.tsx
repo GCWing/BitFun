@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { JSDOM } from 'jsdom';
 
 import { WebFetchCard } from './WebFetchCard';
+import { copyTextToClipboard } from '@/shared/utils/textSelection';
 import type { FlowToolItem, ToolCardConfig } from '../types/flow-chat';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -21,12 +22,40 @@ vi.mock('react-i18next', async () => {
 });
 
 vi.mock('@/component-library', () => ({
+  IconButton: ({
+    children,
+    tooltip,
+    ...props
+  }: React.ButtonHTMLAttributes<HTMLButtonElement> & { tooltip?: React.ReactNode }) => (
+    <button
+      type="button"
+      aria-label={typeof tooltip === 'string' ? tooltip : undefined}
+      {...props}
+    >
+      {children}
+    </button>
+  ),
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
 vi.mock('../../infrastructure/api', () => ({
   systemAPI: {
     openExternal: openExternalMock,
+  },
+}));
+
+vi.mock('@/shared/utils/textSelection', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/shared/utils/textSelection')>();
+  return {
+    ...actual,
+    copyTextToClipboard: vi.fn(async () => true),
+  };
+});
+
+vi.mock('@/shared/notification-system', () => ({
+  notificationService: {
+    success: vi.fn(),
+    error: vi.fn(),
   },
 }));
 
@@ -58,6 +87,7 @@ function buildCompletedToolItem(): FlowToolItem {
       success: true,
       result: {
         url: 'https://example.com/article',
+        title: 'Example Article Title',
         format: 'text',
         content: 'Fetched body content',
         content_length: 20,
@@ -84,6 +114,7 @@ describe('WebFetchCard', () => {
       observe = vi.fn();
       disconnect = vi.fn();
     });
+    vi.mocked(copyTextToClipboard).mockClear();
 
     container = dom.window.document.getElementById('root') as HTMLDivElement;
     root = createRoot(container);
@@ -108,8 +139,11 @@ describe('WebFetchCard', () => {
       );
     });
 
-    expect(container.textContent).toContain('Read Webpage: "https://example.com/article"');
-    expect(container.textContent).toContain('20 chars');
+    expect(container.textContent).toContain('Read Webpage:');
+    expect(container.textContent).toContain('Example Article Title');
+    expect(container.textContent).not.toContain('"https://example.com/article"');
+    expect(container.textContent).not.toContain('(text, 20 chars)');
+    expect(container.textContent).not.toContain('20 chars');
     expect(container.textContent).not.toContain('Fetched body content');
 
     const card = container.querySelector('.compact-tool-card');
@@ -120,6 +154,13 @@ describe('WebFetchCard', () => {
     });
 
     expect(container.textContent).toContain('Fetched body content');
+    expect(container.textContent).toContain('text');
+    expect(container.textContent).toContain('20 chars');
+    expect(container.querySelector('button[aria-label="Copy result"]')).not.toBeNull();
+
+    const detailPills = Array.from(container.querySelectorAll('.web-fetch-card__detail-pill'))
+      .map((node) => node.textContent?.trim());
+    expect(detailPills).toEqual(expect.arrayContaining(['text', '20 chars']));
   });
 
   it('opens the fetched URL when the expanded link row is clicked', () => {
@@ -145,5 +186,31 @@ describe('WebFetchCard', () => {
     });
 
     expect(openExternalMock).toHaveBeenCalledWith('https://example.com/article');
+  });
+
+  it('copies fetched content from the expanded action area', async () => {
+    act(() => {
+      root.render(
+        <WebFetchCard
+          toolItem={buildCompletedToolItem()}
+          config={config}
+        />,
+      );
+    });
+
+    const card = container.querySelector('.compact-tool-card');
+    act(() => {
+      card?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
+    const copyButton = container.querySelector<HTMLButtonElement>('button[aria-label="Copy result"]');
+    expect(copyButton).not.toBeNull();
+
+    await act(async () => {
+      copyButton?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(copyTextToClipboard).toHaveBeenCalledWith('Fetched body content');
   });
 });

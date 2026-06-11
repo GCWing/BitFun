@@ -20,6 +20,41 @@
   flex-direction: column;
 }
 
+.web-fetch-card__details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.web-fetch-card__details-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.web-fetch-card__detail-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--border-base, rgba(255, 255, 255, 0.12)) 82%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-bg-elevated, rgba(255, 255, 255, 0.06)) 88%, transparent);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.web-fetch-card__actions {
+  margin-left: auto;
+}
+
 .web-fetch-card__content pre {
   margin: 0;
+}
+
+.web-fetch-card__header-url {
+  min-width: 0;
 }

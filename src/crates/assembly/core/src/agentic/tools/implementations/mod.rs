@@ -42,7 +42,7 @@ pub mod terminal_control_tool;
 pub mod thread_goal_tools;
 pub mod todo_write_tool;
 pub mod util;
-pub mod web_tools;
+pub mod web;
 
 #[deprecated(note = "GetToolSpecTool is owned by the product tool runtime boundary")]
 pub use crate::agentic::tools::product_runtime::GetToolSpecTool;
@@ -83,4 +83,4 @@ pub use task_tool::TaskTool;
 pub use terminal_control_tool::TerminalControlTool;
 pub use thread_goal_tools::{CreateGoalTool, GetGoalTool, UpdateGoalTool};
 pub use todo_write_tool::TodoWriteTool;
-pub use web_tools::{WebFetchTool, WebSearchTool};
+pub use web::{WebFetchTool, WebSearchTool};
