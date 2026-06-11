@@ -338,6 +338,7 @@ mod tests {
         let expected_names = vec![
             "LS",
             "Read",
+            "view_image",
             "Glob",
             "Grep",
             "Write",
@@ -570,6 +571,7 @@ mod tests {
             vec![
                 "LS",
                 "Read",
+                "view_image",
                 "Glob",
                 "Grep",
                 "GetTime",

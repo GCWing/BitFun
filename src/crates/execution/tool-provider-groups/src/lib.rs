@@ -117,6 +117,7 @@ const PRODUCT_TOOL_PROVIDER_GROUP_PLAN: &[ToolProviderGroupPlan] = &[
         tool_names: &[
             "LS",
             "Read",
+            "view_image",
             "Glob",
             "Grep",
             "Write",
@@ -328,6 +329,7 @@ mod tests {
             vec![
                 "LS",
                 "Read",
+                "view_image",
                 "Glob",
                 "Grep",
                 "Write",

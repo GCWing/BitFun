@@ -27,6 +27,7 @@ impl CoworkMode {
                 // Discovery + editing
                 "LS".to_string(),
                 "Read".to_string(),
+                "view_image".to_string(),
                 "Grep".to_string(),
                 "Glob".to_string(),
                 "Write".to_string(),

@@ -24,6 +24,7 @@ impl DeepResearchMode {
                 "WebSearch".to_string(),
                 "WebFetch".to_string(),
                 "Read".to_string(),
+                "view_image".to_string(),
                 "Grep".to_string(),
                 "Glob".to_string(),
                 "Write".to_string(),

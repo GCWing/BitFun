@@ -18,6 +18,7 @@ impl ClawMode {
             default_tools: vec![
                 "Task".to_string(),
                 "Read".to_string(),
+                "view_image".to_string(),
                 "Write".to_string(),
                 "Edit".to_string(),
                 "Delete".to_string(),
