@@ -82,7 +82,14 @@ pub(crate) async fn probe_executable(command: &str) -> AcpRequirementProbeItem {
 }
 
 pub(crate) async fn probe_npm_adapter(package: &str, bin: &str) -> AcpRequirementProbeItem {
-    let npm_path = find_executable("npm");
+    probe_npm_adapter_with_path(package, bin, None).await
+}
+
+async fn probe_npm_adapter_with_path(
+    package: &str,
+    bin: &str,
+    configured_path: Option<&OsStr>,
+) -> AcpRequirementProbeItem {
     let mut item = AcpRequirementProbeItem {
         name: package.to_string(),
         installed: false,
@@ -90,8 +97,13 @@ pub(crate) async fn probe_npm_adapter(package: &str, bin: &str) -> AcpRequiremen
         path: None,
         error: None,
     };
+    if find_executable_with_path("npx", configured_path).is_some() {
+        return npx_adapter_probe_item(package);
+    }
+
+    let npm_path = find_executable_with_path("npm", configured_path);
     let Some(npm_path) = npm_path else {
-        item.error = Some("npm is not available on PATH".to_string());
+        item.error = Some("npm and npx are not available on PATH".to_string());
         return item;
     };
 
@@ -144,13 +156,17 @@ pub(crate) async fn probe_npm_adapter(package: &str, bin: &str) -> AcpRequiremen
         }
     }
 
-    if find_executable("npx").is_some() {
-        item.installed = true;
-        item.path = Some("npx auto-install".to_string());
-        item.error = None;
-    }
-
     item
+}
+
+fn npx_adapter_probe_item(package: &str) -> AcpRequirementProbeItem {
+    AcpRequirementProbeItem {
+        name: package.to_string(),
+        installed: true,
+        version: None,
+        path: Some("npx auto-install".to_string()),
+        error: None,
+    }
 }
 
 pub(crate) async fn probe_remote_executable(
@@ -644,6 +660,41 @@ mod tests {
     }
 
     #[test]
+    fn npx_adapter_probe_item_marks_auto_install_available() {
+        let item = npx_adapter_probe_item("@zed-industries/codex-acp");
+
+        assert_eq!(item.name, "@zed-industries/codex-acp");
+        assert!(item.installed);
+        assert_eq!(item.path.as_deref(), Some("npx auto-install"));
+        assert!(item.error.is_none());
+    }
+
+    #[test]
+    fn probe_npm_adapter_skips_npm_probe_when_npx_is_available() {
+        let test_dir = env::temp_dir().join(format!("bitfun-acp-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&test_dir).expect("test dir should be created");
+        let npm_marker = test_dir.join("npm-was-run");
+
+        write_command_stub(&test_dir, "npx", "");
+        write_command_stub(&test_dir, "npm", &npm_probe_marker_script(&npm_marker));
+
+        let runtime = tokio::runtime::Runtime::new().expect("tokio runtime should be created");
+        let item = runtime.block_on(probe_npm_adapter_with_path(
+            "@zed-industries/codex-acp",
+            "codex-acp",
+            Some(test_dir.as_os_str()),
+        ));
+
+        assert!(item.installed);
+        assert_eq!(item.path.as_deref(), Some("npx auto-install"));
+        assert!(
+            !npm_marker.exists(),
+            "npm probe should not run when npx can launch the adapter"
+        );
+        let _ = std::fs::remove_dir_all(&test_dir);
+    }
+
+    #[test]
     fn remote_env_prefix_uses_valid_keys_in_stable_order() {
         let env = HashMap::from([
             ("INVALID-NAME".to_string(), "ignored".to_string()),
@@ -655,5 +706,44 @@ mod tests {
             render_remote_env_prefix(Some(&env)),
             "ACP_HOME='/tmp/acp home' PATH=/remote/bin:/usr/bin "
         );
+    }
+
+    fn write_command_stub(directory: &Path, command: &str, body: &str) -> PathBuf {
+        #[cfg(windows)]
+        let path = directory.join(format!("{command}.cmd"));
+        #[cfg(not(windows))]
+        let path = directory.join(command);
+
+        std::fs::write(&path, body).expect("command stub should be written");
+
+        #[cfg(not(windows))]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut permissions = std::fs::metadata(&path)
+                .expect("command stub metadata should be readable")
+                .permissions();
+            permissions.set_mode(0o755);
+            std::fs::set_permissions(&path, permissions)
+                .expect("command stub should be executable");
+        }
+
+        path
+    }
+
+    fn npm_probe_marker_script(marker_path: &Path) -> String {
+        #[cfg(windows)]
+        {
+            format!(
+                "@echo off\r\necho called > \"{}\"\r\nexit /b 42\r\n",
+                marker_path.display()
+            )
+        }
+        #[cfg(not(windows))]
+        {
+            format!(
+                "#!/bin/sh\necho called > '{}'\nexit 42\n",
+                marker_path.display()
+            )
+        }
     }
 }
