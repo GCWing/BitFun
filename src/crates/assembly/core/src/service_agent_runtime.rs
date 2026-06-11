@@ -5,6 +5,7 @@
 //! session restore, terminal pre-warm, remote image conversion, and runtime-port
 //! implementations until a reviewed port/provider migration proves equivalence.
 
+use bitfun_agent_runtime::runtime::{AgentRuntime, AgentRuntimeBuilder, RuntimeError};
 use bitfun_runtime_ports::{
     AgentSessionCreateRequest, AgentSubmissionPort, AgentSubmissionSource,
     AgentTurnCancellationPort, AgentTurnCancellationRequest, RemoteControlStatePort,
@@ -604,22 +605,29 @@ impl CoreServiceAgentRuntime {
         Ok(normalized_model_id)
     }
 
-    pub(crate) fn agent_submission_port(
-        coordinator: &ConversationCoordinator,
-    ) -> &(dyn AgentSubmissionPort + '_) {
-        coordinator
-    }
-
-    pub(crate) fn agent_turn_cancellation_port(
-        coordinator: &ConversationCoordinator,
-    ) -> &(dyn AgentTurnCancellationPort + '_) {
-        coordinator
-    }
-
     pub(crate) fn remote_control_state_port(
         coordinator: &ConversationCoordinator,
     ) -> &(dyn RemoteControlStatePort + '_) {
         coordinator
+    }
+
+    pub(crate) fn agent_runtime(
+        coordinator: Arc<ConversationCoordinator>,
+    ) -> Result<AgentRuntime, String> {
+        let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
+        let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator;
+        AgentRuntimeBuilder::new()
+            .with_submission_port(submission)
+            .with_cancellation_port(cancellation)
+            .build()
+            .map_err(|error| error.to_string())
+    }
+
+    pub(crate) fn runtime_error_message(error: RuntimeError) -> String {
+        match error {
+            RuntimeError::Port(error) => error.message,
+            other => other.to_string(),
+        }
     }
 }
 
@@ -981,13 +989,12 @@ impl RemoteSessionRuntimeHost for CoreRemoteSessionRuntimeHost {
     }
 
     async fn create_session(&self, request: AgentSessionCreateRequest) -> Result<String, String> {
-        let submission_port =
-            CoreServiceAgentRuntime::agent_submission_port(self.coordinator.as_ref());
-        submission_port
+        let runtime = CoreServiceAgentRuntime::agent_runtime(self.coordinator.clone())?;
+        runtime
             .create_session(request)
             .await
             .map(|session| session.session_id)
-            .map_err(|error| error.message)
+            .map_err(CoreServiceAgentRuntime::runtime_error_message)
     }
 
     async fn load_model_catalog(
@@ -1169,9 +1176,8 @@ impl RemoteCancelRuntimeHost for CoreRemoteCancelRuntimeHost {
     }
 
     async fn cancel_remote_turn(&self, session_id: &str, turn_id: &str) -> Result<(), String> {
-        let cancellation_port =
-            CoreServiceAgentRuntime::agent_turn_cancellation_port(self.coordinator.as_ref());
-        cancellation_port
+        let runtime = CoreServiceAgentRuntime::agent_runtime(self.coordinator.clone())?;
+        runtime
             .cancel_turn(AgentTurnCancellationRequest {
                 session_id: session_id.to_string(),
                 turn_id: Some(turn_id.to_string()),
@@ -1181,7 +1187,7 @@ impl RemoteCancelRuntimeHost for CoreRemoteCancelRuntimeHost {
             })
             .await
             .map(|_| ())
-            .map_err(|error| error.message)
+            .map_err(CoreServiceAgentRuntime::runtime_error_message)
     }
 }
 
@@ -1210,20 +1216,21 @@ mod tests {
     }
 
     #[test]
-    fn core_service_agent_runtime_owner_exposes_remote_control_ports() {
-        fn assert_port_accessors(
-            coordinator: &ConversationCoordinator,
-        ) -> (
-            &(dyn AgentTurnCancellationPort + '_),
-            &(dyn RemoteControlStatePort + '_),
-        ) {
-            (
-                CoreServiceAgentRuntime::agent_turn_cancellation_port(coordinator),
-                CoreServiceAgentRuntime::remote_control_state_port(coordinator),
-            )
+    fn core_service_agent_runtime_owner_exposes_agent_runtime_and_remote_control_port() {
+        fn assert_agent_runtime(
+            coordinator: Arc<ConversationCoordinator>,
+        ) -> Result<AgentRuntime, String> {
+            CoreServiceAgentRuntime::agent_runtime(coordinator)
         }
 
-        let _ = assert_port_accessors;
+        fn assert_remote_control_port(
+            coordinator: &ConversationCoordinator,
+        ) -> &(dyn RemoteControlStatePort + '_) {
+            CoreServiceAgentRuntime::remote_control_state_port(coordinator)
+        }
+
+        let _ = assert_agent_runtime;
+        let _ = assert_remote_control_port;
     }
 
     #[test]

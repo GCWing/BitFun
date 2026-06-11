@@ -6,10 +6,10 @@
 
 use super::util::normalize_path;
 use crate::agentic::coordination::{get_global_coordinator, get_global_scheduler};
-use crate::agentic::core::SessionConfig;
 use crate::agentic::tools::framework::{
     Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
+use crate::service_agent_runtime::CoreServiceAgentRuntime;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use bitfun_agent_runtime::session_control::{
@@ -20,6 +20,9 @@ use bitfun_agent_runtime::session_control::{
     session_control_session_name_or_default, validate_session_control_input, validate_session_id,
     SessionControlAction, SessionControlCancelRoute, SessionControlInput,
     SessionControlValidationContext, SessionControlValidationResult,
+};
+use bitfun_runtime_ports::{
+    AgentSessionCreateRequest, AgentSubmissionSource, AgentTurnCancellationRequest,
 };
 use serde_json::{json, Value};
 use std::path::Path;
@@ -315,20 +318,22 @@ Arguments:
                     session_control_session_name_or_default(params.session_name.as_deref());
                 let agent_type = session_control_agent_type_or_default(params.agent_type.as_ref());
                 let created_by = self.creator_session_marker(context)?;
+                let mut metadata = serde_json::Map::new();
+                metadata.insert("createdBy".to_string(), json!(created_by));
+                let runtime = CoreServiceAgentRuntime::agent_runtime(coordinator.clone())
+                    .map_err(BitFunError::tool)?;
 
-                let session = coordinator
-                    .create_session_with_workspace_and_creator(
-                        None,
+                let session = runtime
+                    .create_session(AgentSessionCreateRequest {
                         session_name,
                         agent_type,
-                        SessionConfig {
-                            workspace_path: Some(workspace.clone()),
-                            ..Default::default()
-                        },
-                        workspace.clone(),
-                        Some(created_by.clone()),
-                    )
-                    .await?;
+                        workspace_path: Some(workspace.clone()),
+                        metadata,
+                    })
+                    .await
+                    .map_err(|error| {
+                        BitFunError::tool(CoreServiceAgentRuntime::runtime_error_message(error))
+                    })?;
                 let created_session_id = session.session_id.clone();
                 let created_session_name = session.session_name.clone();
                 let created_agent_type = session.agent_type.clone();
@@ -399,9 +404,23 @@ Arguments:
                     _ => {
                         // Fallback covers unusual tool contexts and startup states where the
                         // global scheduler is not available; concrete cancellation still works.
-                        coordinator
-                            .cancel_active_turn_for_session(session_id, CANCEL_WAIT_TIMEOUT)
-                            .await?
+                        let runtime = CoreServiceAgentRuntime::agent_runtime(coordinator.clone())
+                            .map_err(BitFunError::tool)?;
+                        runtime
+                            .cancel_turn(AgentTurnCancellationRequest {
+                                session_id: session_id.to_string(),
+                                turn_id: None,
+                                source: Some(AgentSubmissionSource::AgentSession),
+                                reason: None,
+                                wait_timeout_ms: Some(CANCEL_WAIT_TIMEOUT.as_millis() as u64),
+                            })
+                            .await
+                            .map_err(|error| {
+                                BitFunError::tool(CoreServiceAgentRuntime::runtime_error_message(
+                                    error,
+                                ))
+                            })?
+                            .turn_id
                     }
                 };
                 let had_active_turn = cancelled_turn_id.is_some();

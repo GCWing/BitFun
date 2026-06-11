@@ -2428,6 +2428,26 @@ export const forbiddenContentRules = [
     ],
   },
   {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/session_control_tool.rs',
+    patterns: [
+      {
+        regex: /\bcreate_session_with_workspace_and_creator\b/,
+        message:
+          'SessionControl must not bypass the service/agent runtime owner when creating sessions',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/session_message_tool.rs',
+    patterns: [
+      {
+        regex: /\bcreate_session_with_workspace_and_creator\b/,
+        message:
+          'SessionMessage must not bypass the service/agent runtime owner when creating sessions',
+      },
+    ],
+  },
+  {
     path: 'src/crates/assembly/core/src/service/announcement/state_store.rs',
     patterns: [
       {

@@ -3,13 +3,15 @@ use crate::agentic::coordination::{
     get_global_coordinator, get_global_scheduler, AgentSessionReplyRoute, DialogSubmissionPolicy,
     DialogTriggerSource,
 };
-use crate::agentic::core::{InternalReminderKind, Message, SessionConfig};
+use crate::agentic::core::{InternalReminderKind, Message};
 use crate::agentic::tools::framework::{
     Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
 use crate::agentic::tools::workspace_paths::posix_style_path_is_absolute;
+use crate::service_agent_runtime::CoreServiceAgentRuntime;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
+use bitfun_runtime_ports::AgentSessionCreateRequest;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::path::Path;
@@ -516,19 +518,21 @@ Allowed agent types when creating a session:
                     .as_str()
                     .to_string();
                 let created_by = self.creator_session_marker(context)?;
-                let session = coordinator
-                    .create_session_with_workspace_and_creator(
-                        None,
+                let mut metadata = serde_json::Map::new();
+                metadata.insert("createdBy".to_string(), json!(created_by));
+                let runtime = CoreServiceAgentRuntime::agent_runtime(coordinator.clone())
+                    .map_err(BitFunError::tool)?;
+                let session = runtime
+                    .create_session(AgentSessionCreateRequest {
                         session_name,
-                        agent_type.clone(),
-                        SessionConfig {
-                            workspace_path: Some(workspace.clone()),
-                            ..Default::default()
-                        },
-                        workspace.clone(),
-                        Some(created_by),
-                    )
-                    .await?;
+                        agent_type: agent_type.clone(),
+                        workspace_path: Some(workspace.clone()),
+                        metadata,
+                    })
+                    .await
+                    .map_err(|error| {
+                        BitFunError::tool(CoreServiceAgentRuntime::runtime_error_message(error))
+                    })?;
 
                 (
                     session.session_id.clone(),

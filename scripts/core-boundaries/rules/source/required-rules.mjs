@@ -71,6 +71,77 @@ export const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/execution/agent-runtime/src/runtime.rs',
+    reason:
+      'agent-runtime must expose a narrow port-backed SDK facade without depending on core, apps, or concrete service managers',
+    patterns: [
+      {
+        regex: /\bpub struct AgentRuntime\b/,
+        message: 'missing agent runtime facade type',
+      },
+      {
+        regex: /\bpub struct AgentRuntimeBuilder\b/,
+        message: 'missing agent runtime builder',
+      },
+      {
+        regex: /\bAgentSubmissionPort\b/,
+        message: 'missing agent submission port dependency',
+      },
+      {
+        regex: /\bAgentTurnCancellationPort\b/,
+        message: 'missing agent turn cancellation port dependency',
+      },
+      {
+        regex: /\bRuntimeServices\b/,
+        message: 'missing typed runtime services injection',
+      },
+      {
+        regex: /\bRuntimeEventEnvelope\b/,
+        message: 'missing runtime event envelope contract',
+      },
+      {
+        regex: /\bpub struct AgentEventStream\b/,
+        message: 'missing agent runtime event stream contract',
+      },
+      {
+        regex: /\bpub fn with_event_stream\b/,
+        message: 'missing agent runtime event stream builder hook',
+      },
+      {
+        regex: /\bpub enum SessionSelector\b/,
+        message: 'missing session selector contract',
+      },
+      {
+        regex: /\bpub struct AgentRunRequest\b/,
+        message: 'missing agent run request contract',
+      },
+      {
+        regex: /\bpub struct AgentRunHandle\b/,
+        message: 'missing agent run handle contract',
+      },
+      {
+        regex: /\bpub async fn run\b/,
+        message: 'missing agent runtime run entrypoint',
+      },
+      {
+        regex: /\bpub async fn publish_event\b/,
+        message: 'missing explicit runtime event publish entrypoint',
+      },
+      {
+        regex: /\bpublish_event_uses_runtime_services_event_sink\b/,
+        message: 'missing runtime services event sink regression',
+      },
+      {
+        regex: /\brun_handle_exposes_configured_agent_event_stream\b/,
+        message: 'missing agent runtime event stream regression',
+      },
+      {
+        regex: /\bport_errors_remain_typed\b/,
+        message: 'missing typed port error regression',
+      },
+    ],
+  },
+  {
     path: 'src/crates/execution/agent-runtime/src/prompt.rs',
     reason:
       'agent-runtime must own prompt-loop facts that do not require concrete workspace or product IO',
@@ -2214,6 +2285,10 @@ export const requiredContentRules = [
         message: 'missing runtime event sink contract',
       },
       {
+        regex: /\bpub struct AgentSessionCreateResult\b[\s\S]*\bpub session_name: String\b/,
+        message: 'agent session create result must return the persisted session name',
+      },
+      {
         regex: /\bpub struct RemoteWorkspaceFacts\b/,
         message: 'missing remote workspace facts contract',
       },
@@ -3098,12 +3173,12 @@ export const requiredContentRules = [
         message: 'missing remote chat history persistence owner adapter',
       },
       {
-        regex: /\bfn agent_submission_port\b/,
-        message: 'missing agent submission port owner binding',
+        regex: /\bfn agent_runtime\b/,
+        message: 'missing agent runtime owner binding',
       },
       {
-        regex: /\bfn agent_turn_cancellation_port\b/,
-        message: 'missing agent turn cancellation port owner binding',
+        regex: /\bAgentRuntimeBuilder\b/,
+        message: 'missing agent runtime builder binding',
       },
       {
         regex: /\bfn remote_control_state_port\b/,
@@ -3204,6 +3279,52 @@ export const requiredContentRules = [
       {
         regex: /\bcore_service_agent_runtime_owner_skips_in_progress_remote_assistant_history\b/,
         message: 'missing in-progress remote assistant history regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/session_control_tool.rs',
+    reason:
+      'SessionControl must create agent sessions and fallback cancellations through the service/agent runtime owner while preserving tool-level behavior',
+    patterns: [
+      {
+        regex: /\bCoreServiceAgentRuntime::agent_runtime\b/,
+        message: 'missing service/agent runtime owner routing',
+      },
+      {
+        regex: /\bAgentSessionCreateRequest\b/,
+        message: 'missing port-backed agent session creation request',
+      },
+      {
+        regex: /"createdBy"/,
+        message: 'missing creator metadata propagation',
+      },
+      {
+        regex: /\bAgentTurnCancellationRequest\b/,
+        message: 'missing port-backed fallback cancellation request',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/session_message_tool.rs',
+    reason:
+      'SessionMessage must create target agent sessions through the service/agent runtime owner while preserving scheduler submission semantics',
+    patterns: [
+      {
+        regex: /\bCoreServiceAgentRuntime::agent_runtime\b/,
+        message: 'missing service/agent runtime owner routing',
+      },
+      {
+        regex: /\bAgentSessionCreateRequest\b/,
+        message: 'missing port-backed agent session creation request',
+      },
+      {
+        regex: /"createdBy"/,
+        message: 'missing creator metadata propagation',
+      },
+      {
+        regex: /\bsubmit_with_prepended_messages\b/,
+        message: 'missing scheduler submission path preservation',
       },
     ],
   },
@@ -3809,8 +3930,8 @@ export const requiredContentRules = [
         message: 'missing core service/agent runtime owner routing',
       },
       {
-        regex: /\bagent_submission_port\b/,
-        message: 'missing agent submission port owner binding',
+        regex: /\bagent_runtime\b/,
+        message: 'missing agent runtime owner binding',
       },
       {
         regex: /\bbuild_remote_session_create_request\b/,

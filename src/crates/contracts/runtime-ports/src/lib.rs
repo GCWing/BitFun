@@ -585,6 +585,8 @@ pub struct AgentSessionCreateRequest {
 #[serde(rename_all = "camelCase")]
 pub struct AgentSessionCreateResult {
     pub session_id: String,
+    #[serde(default)]
+    pub session_name: String,
     pub agent_type: String,
 }
 

@@ -725,6 +725,8 @@ export function runManifestParserSelfTest({
         'AgentTurnCancellationPort',
         'RemoteControlStatePort',
         'RuntimeEventSink',
+        'AgentSessionCreateResult',
+        'session_name',
         'RemoteWorkspaceFacts',
         'RemoteWorkspaceRuntimeHost',
         'RemoteWorkspacePort',
@@ -808,6 +810,27 @@ export function runManifestParserSelfTest({
         'capability_availability_reports_optional_service_status_without_side_effects',
         'builder_rejects_port_registered_under_the_wrong_capability',
         'registered_remote_ports_expose_owner_contract_methods',
+      ],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/src/runtime.rs',
+      contracts: [
+        'AgentRuntime',
+        'AgentRuntimeBuilder',
+        'AgentSubmissionPort',
+        'AgentTurnCancellationPort',
+        'RuntimeServices',
+        'RuntimeEventEnvelope',
+        'AgentEventStream',
+        'with_event_stream',
+        'SessionSelector',
+        'AgentRunRequest',
+        'AgentRunHandle',
+        'run',
+        'publish_event',
+        'publish_event_uses_runtime_services_event_sink',
+        'run_handle_exposes_configured_agent_event_stream',
+        'port_errors_remain_typed',
       ],
     },
     {
@@ -1391,8 +1414,8 @@ export function runManifestParserSelfTest({
         'strip_remote_user_input_tags',
         'compress_remote_chat_data_url_for_mobile',
         'load_remote_chat_messages',
-        'agent_submission_port',
-        'agent_turn_cancellation_port',
+        'agent_runtime',
+        'AgentRuntimeBuilder',
         'remote_control_state_port',
         'CoreRemoteDialogRuntimeHost',
         'CoreRemoteCancelRuntimeHost',
@@ -1414,6 +1437,24 @@ export function runManifestParserSelfTest({
         'core_service_agent_runtime_owner_normalizes_remote_model_selection_aliases',
         'core_service_agent_runtime_owner_preserves_remote_chat_history_shape',
         'core_service_agent_runtime_owner_skips_in_progress_remote_assistant_history',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/agentic/tools/implementations/session_control_tool.rs',
+      contracts: [
+        'CoreServiceAgentRuntime::agent_runtime',
+        'AgentSessionCreateRequest',
+        '"createdBy"',
+        'AgentTurnCancellationRequest',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/agentic/tools/implementations/session_message_tool.rs',
+      contracts: [
+        'CoreServiceAgentRuntime::agent_runtime',
+        'AgentSessionCreateRequest',
+        '"createdBy"',
+        'submit_with_prepended_messages',
       ],
     },
     {
@@ -2212,7 +2253,7 @@ export function runManifestParserSelfTest({
       path: 'src/crates/assembly/core/src/service/remote_connect/bot/command_router.rs',
       contracts: [
         'CoreServiceAgentRuntime',
-        'agent_submission_port',
+        'agent_runtime',
         'build_remote_session_create_request',
       ],
     },
@@ -2560,6 +2601,20 @@ export function runManifestParserSelfTest({
       if (!regexSourceContainsContract(ruleText, contract)) {
         throw new Error(`owner content anchor rule for ${path} must require: ${contract}`);
       }
+    }
+  }
+
+  for (const path of [
+    'src/crates/assembly/core/src/agentic/tools/implementations/session_control_tool.rs',
+    'src/crates/assembly/core/src/agentic/tools/implementations/session_message_tool.rs',
+  ]) {
+    const rule = forbiddenContentRules.find((rule) => rule.path === path);
+    if (!rule) {
+      throw new Error(`missing session tool old create-path boundary rule for ${path}`);
+    }
+    const ruleText = rule.patterns.map((pattern) => pattern.regex.source).join('\n');
+    if (!ruleText.includes('create_session_with_workspace_and_creator')) {
+      throw new Error(`session tool old create-path boundary rule must cover ${path}`);
     }
   }
 

@@ -12,6 +12,7 @@ pub mod events;
 pub mod post_call_hooks;
 pub mod prompt;
 pub mod prompt_cache;
+pub mod runtime;
 pub mod scheduled_job;
 pub mod scheduler;
 pub mod session_control;

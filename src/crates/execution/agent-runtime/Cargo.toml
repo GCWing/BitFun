@@ -11,8 +11,14 @@ crate-type = ["rlib"]
 
 [dependencies]
 bitfun-runtime-ports = { path = "../../contracts/runtime-ports" }
+bitfun-runtime-services = { path = "../runtime-services" }
 dashmap = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+async-trait = { workspace = true }
+tokio = { workspace = true }

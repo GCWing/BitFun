@@ -2,13 +2,18 @@
 
 Scope: this guide applies to `src/crates/execution/agent-runtime`.
 
-`bitfun-agent-runtime` owns portable agent runtime decisions that can be built
-and tested without `bitfun-core`.
+`bitfun-agent-runtime` owns portable agent runtime decisions and the narrow
+port-backed `AgentRuntime` facade that can be built and tested without
+`bitfun-core`.
 
 ## Guardrails
 
 - Do not depend on `bitfun-core`, app crates, Tauri, ACP protocol, web UI,
   concrete service crates, or product-domain implementations.
+- `AgentRuntime` may depend on stable ports and typed `RuntimeServices`
+  injected by assembly. Product assembly owns concrete registration; this crate
+  must not create concrete managers, app state, filesystem, terminal, MCP,
+  remote, or AI clients.
 - Keep concrete scheduler/session lifecycle execution, session metadata IO,
   event emitter wiring, permission UI / channel waits, and product `Tool`
   adapter execution in `bitfun-core` until a reviewed owner migration proves

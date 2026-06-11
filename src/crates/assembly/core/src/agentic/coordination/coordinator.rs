@@ -5608,6 +5608,17 @@ fn resolve_agent_submission_turn_id(
         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string())
 }
 
+fn resolve_agent_session_create_created_by(
+    metadata: &serde_json::Map<String, serde_json::Value>,
+) -> Option<String> {
+    metadata
+        .get("createdBy")
+        .or_else(|| metadata.get("created_by"))
+        .and_then(|value| value.as_str())
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+}
+
 #[async_trait::async_trait]
 impl bitfun_runtime_ports::AgentSubmissionPort for ConversationCoordinator {
     async fn create_session(
@@ -5622,7 +5633,7 @@ impl bitfun_runtime_ports::AgentSubmissionPort for ConversationCoordinator {
         })?;
 
         let session = self
-            .create_session_with_workspace(
+            .create_session_with_workspace_and_creator(
                 None,
                 request.session_name,
                 request.agent_type,
@@ -5631,6 +5642,7 @@ impl bitfun_runtime_ports::AgentSubmissionPort for ConversationCoordinator {
                     ..Default::default()
                 },
                 workspace_path,
+                resolve_agent_session_create_created_by(&request.metadata),
             )
             .await
             .map_err(|error| {
@@ -5642,6 +5654,7 @@ impl bitfun_runtime_ports::AgentSubmissionPort for ConversationCoordinator {
 
         Ok(bitfun_runtime_ports::AgentSessionCreateResult {
             session_id: session.session_id,
+            session_name: session.session_name,
             agent_type: session.agent_type,
         })
     }
@@ -5871,8 +5884,8 @@ pub fn get_global_coordinator() -> Option<Arc<ConversationCoordinator>> {
 #[cfg(test)]
 mod tests {
     use super::{
-        normalize_subagent_max_concurrency, resolve_agent_submission_turn_id,
-        ConversationCoordinator,
+        normalize_subagent_max_concurrency, resolve_agent_session_create_created_by,
+        resolve_agent_submission_turn_id, ConversationCoordinator,
     };
     use crate::agentic::core::SessionConfig;
     use crate::agentic::events::{EventQueue, EventQueueConfig, EventRouter};
@@ -5891,7 +5904,10 @@ mod tests {
     use crate::agentic::TurnSkillAgentSnapshot;
     use crate::infrastructure::PathManager;
     use crate::service::remote_ssh::workspace_state::init_remote_workspace_manager;
-    use bitfun_runtime_ports::{AgentSubmissionRequest, AgentSubmissionSource};
+    use bitfun_runtime_ports::{
+        AgentSessionCreateRequest, AgentSubmissionPort, AgentSubmissionRequest,
+        AgentSubmissionSource,
+    };
     use std::sync::Arc;
     use std::time::Duration;
     use tokio::sync::RwLock as TokioRwLock;
@@ -6076,6 +6092,70 @@ mod tests {
             resolve_agent_submission_turn_id(&request),
             "legacy_metadata_turn"
         );
+    }
+
+    #[test]
+    fn agent_session_create_created_by_accepts_camel_case_metadata() {
+        let mut metadata = serde_json::Map::new();
+        metadata.insert(
+            "createdBy".to_string(),
+            serde_json::Value::String("session-parent".to_string()),
+        );
+
+        assert_eq!(
+            resolve_agent_session_create_created_by(&metadata).as_deref(),
+            Some("session-parent")
+        );
+    }
+
+    #[test]
+    fn agent_session_create_created_by_accepts_snake_case_metadata() {
+        let mut metadata = serde_json::Map::new();
+        metadata.insert(
+            "created_by".to_string(),
+            serde_json::Value::String("session-parent".to_string()),
+        );
+
+        assert_eq!(
+            resolve_agent_session_create_created_by(&metadata).as_deref(),
+            Some("session-parent")
+        );
+    }
+
+    #[tokio::test]
+    async fn agent_submission_create_session_preserves_creator_metadata() {
+        let (coordinator, session_manager) = test_coordinator();
+        let workspace_path = std::env::temp_dir().join(format!(
+            "bitfun-agent-session-port-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&workspace_path).expect("workspace dir should exist");
+        let mut metadata = serde_json::Map::new();
+        metadata.insert(
+            "createdBy".to_string(),
+            serde_json::Value::String("session-parent".to_string()),
+        );
+
+        let result = AgentSubmissionPort::create_session(
+            &coordinator,
+            AgentSessionCreateRequest {
+                session_name: "Worker".to_string(),
+                agent_type: "agentic".to_string(),
+                workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
+                metadata,
+            },
+        )
+        .await
+        .expect("port-backed session creation should succeed");
+        let created = session_manager
+            .get_session(&result.session_id)
+            .expect("created session should be persisted");
+
+        assert_eq!(result.session_name, "Worker");
+        assert_eq!(result.session_name, created.session_name);
+        assert_eq!(created.created_by.as_deref(), Some("session-parent"));
+
+        let _ = std::fs::remove_dir_all(workspace_path);
     }
 
     #[tokio::test]
