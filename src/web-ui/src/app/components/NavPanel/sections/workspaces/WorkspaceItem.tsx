@@ -1,6 +1,6 @@
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Folder, FolderOpen, MoreHorizontal, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw, Copy, FileText, GitBranch, Bot, Link2, Archive, Loader2, Clock3 } from 'lucide-react';
+import { Folder, FolderOpen, MoreHorizontal, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw, Copy, FileText, GitBranch, Bot, Link2, ListChecks, Loader2, Clock3 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { DotMatrixArrowRightIcon } from './DotMatrixArrowRightIcon';
 import { Button, ConfirmDialog, Modal, Tooltip } from '@/component-library';
@@ -34,8 +34,7 @@ import { SSHContext } from '@/features/ssh-remote/SSHRemoteContext';
 import { useWorkspaceSearchIndex } from '@/tools/file-explorer';
 import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
 import WorkspaceRelatedPathsDialog from './WorkspaceRelatedPathsDialog';
-import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
-import { confirmWarning } from '@/component-library/components/ConfirmDialog/confirmService';
+import WorkspaceSessionBatchModal from './WorkspaceSessionBatchModal';
 import { scheduleAfterStartupSignal } from '@/shared/utils/startupTaskScheduling';
 import { getWorkspaceGitBasicInfoOptions } from './workspaceGitRefreshOptions';
 import ScheduledJobsModal from '@/app/components/scheduled-jobs/ScheduledJobsModal';
@@ -99,6 +98,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   const [sessionsCollapsed, setSessionsCollapsed] = useState(false);
   const [searchIndexModalOpen, setSearchIndexModalOpen] = useState(false);
   const [scheduledJobsModalOpen, setScheduledJobsModalOpen] = useState(false);
+  const [sessionBatchModalOpen, setSessionBatchModalOpen] = useState(false);
   const [workspaceSearchEnabled, setWorkspaceSearchEnabled] = useState(
     () => aiExperienceConfigService.getSettings().enable_workspace_search,
   );
@@ -430,36 +430,10 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     }
   }, [closeWorkspaceById, t, workspace.id]);
 
-  const handleArchiveAllSessions = useCallback(async () => {
+  const handleOpenSessionBatchModal = useCallback(() => {
     setMenuOpen(false);
-    const confirmed = await confirmWarning(
-      t('nav.sessions.archiveAllConfirmTitle'),
-      t('nav.sessions.archiveAllConfirmMessage')
-    );
-    if (!confirmed) return;
-    try {
-      const remoteWorkspace = isRemoteWorkspace(workspace);
-      await sessionAPI.archiveAllSessions(
-        workspace.rootPath,
-        remoteWorkspace ? workspace.connectionId : undefined,
-        remoteWorkspace ? workspace.sshHost : undefined
-      );
-      // Remove all workspace sessions from in-memory state (disk files preserved as archived)
-      flowChatManager.discardLocalSessionsForWorkspace({
-        id: workspace.id,
-        rootPath: workspace.rootPath,
-        connectionId: workspace.connectionId,
-        sshHost: workspace.sshHost,
-      });
-      window.dispatchEvent(new CustomEvent('bitfun:session-archived'));
-      notificationService.success(t('nav.sessions.archivedAll', { count: 0 }), { duration: 3000 });
-    } catch (error) {
-      notificationService.error(
-        error instanceof Error ? error.message : t('nav.sessions.archiveAllFailed'),
-        { duration: 4000 }
-      );
-    }
-  }, [workspace, t]);
+    setSessionBatchModalOpen(true);
+  }, []);
 
   const handleOpenScheduledJobs = useCallback(() => {
     setMenuOpen(false);
@@ -1256,10 +1230,10 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                 <button
                   type="button"
                   className="bitfun-nav-panel__workspace-item-menu-item"
-                  onClick={() => { void handleArchiveAllSessions(); }}
+                  onClick={handleOpenSessionBatchModal}
                 >
-                  <Archive size={13} />
-                  <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.sessions.archiveAll')}</span>
+                  <ListChecks size={13} />
+                  <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.sessions.manage')}</span>
                 </button>
                 <button type="button" className="bitfun-nav-panel__workspace-item-menu-item is-danger" onClick={() => { void handleCloseWorkspace(); }}>
                   <FolderOpen size={13} />
@@ -1307,6 +1281,14 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
         workspace={workspace}
         isOpen={relatedPathsDialogOpen}
         onClose={() => setRelatedPathsDialogOpen(false)}
+      />
+      <WorkspaceSessionBatchModal
+        isOpen={sessionBatchModalOpen}
+        onClose={() => setSessionBatchModalOpen(false)}
+        workspacePath={workspace.rootPath}
+        workspaceLabel={workspaceDisplayName}
+        remoteConnectionId={isRemoteWorkspace(workspace) ? workspace.connectionId : null}
+        remoteSshHost={isRemoteWorkspace(workspace) ? workspace.sshHost : null}
       />
       <ScheduledJobsModal
         isOpen={scheduledJobsModalOpen}

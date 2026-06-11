@@ -53,11 +53,14 @@ import {
   getInitialSessionMetadataLoadMode,
   hasStartupOverlayHandedOff,
 } from './sessionMetadataStartup';
+import {
+  getEffectiveTopLevelSessionCount,
+  getSessionExpandToggleState,
+  SESSIONS_LEVEL_0,
+  SESSIONS_LEVEL_1,
+} from './sessionNavExpand';
 import './SessionsSection.scss';
 
-/** Top-level parent sessions shown at each expand step (children still nest under visible parents). */
-const SESSIONS_LEVEL_0 = 5;
-const SESSIONS_LEVEL_1 = 10;
 const log = createLogger('SessionsSection');
 
 type SessionMode = 'code' | 'cowork' | 'claw';
@@ -86,6 +89,32 @@ const waitForHistoryOpenIntentPaint = (): Promise<void> =>
       window.requestAnimationFrame(() => resolve());
     });
   });
+
+const countTopLevelSessionsInScope = (
+  sessions: Iterable<Session>,
+  workspacePath?: string,
+  remoteConnectionId?: string | null,
+  remoteSshHost?: string | null
+): number => {
+  const scopedSessions = Array.from(sessions).filter((session: Session) => {
+    if (session.isTransient || session.sessionKind === 'subagent') {
+      return false;
+    }
+    if (workspacePath) {
+      return sessionBelongsToWorkspaceNavRow(session, workspacePath, remoteConnectionId, remoteSshHost);
+    }
+    return !session.workspacePath;
+  });
+
+  const knownIds = new Set(scopedSessions.map(session => session.sessionId));
+  return scopedSessions.reduce((count, session) => {
+    const parentSessionId = resolveSessionRelationship(session).parentSessionId;
+    if (parentSessionId && knownIds.has(parentSessionId)) {
+      return count;
+    }
+    return count + 1;
+  }, 0);
+};
 
 const getChildSessionBadge = (kind: Session['sessionKind']): string => {
   const normalizedKind =
@@ -156,11 +185,13 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   const [expandLevel, setExpandLevel] = useState<0 | 1 | 2>(0);
   const [metadataPageState, setMetadataPageState] = useState<{
     totalTopLevelCount: number | null;
+    syncedTopLevelCount: number | null;
     nextCursor?: string;
     hasMore: boolean;
     isLoading: boolean;
   }>({
     totalTopLevelCount: null,
+    syncedTopLevelCount: null,
     nextCursor: undefined,
     hasMore: false,
     isLoading: false,
@@ -230,6 +261,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     setExpandLevel(0);
     setMetadataPageState({
       totalTopLevelCount: null,
+      syncedTopLevelCount: null,
       nextCursor: undefined,
       hasMore: false,
       isLoading: false,
@@ -256,8 +288,15 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           source
         );
         if (metadataLoadRequestIdRef.current === requestId) {
+          const syncedTopLevelCount = countTopLevelSessionsInScope(
+            flowChatStore.getState().sessions.values(),
+            workspacePath,
+            remoteConnectionId,
+            remoteSshHost
+          );
           setMetadataPageState({
             totalTopLevelCount: page.totalTopLevelCount,
+            syncedTopLevelCount,
             nextCursor: page.nextCursor,
             hasMore: page.hasMore,
             isLoading: false,
@@ -376,6 +415,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       setExpandLevel(0);
       setMetadataPageState({
         totalTopLevelCount: null,
+        syncedTopLevelCount: null,
         nextCursor: undefined,
         hasMore: false,
         isLoading: false,
@@ -505,15 +545,37 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     return SESSIONS_LEVEL_0;
   }, [topLevelSessions.length, expandLevel]);
 
-  const totalTopLevelSessionCount = metadataPageState.totalTopLevelCount ?? topLevelSessions.length;
-  const hasMoreUnloadedSessions =
-    metadataPageState.hasMore || topLevelSessions.length < totalTopLevelSessionCount;
-  const expandToggleAction =
-    expandLevel === 0
-      ? 'show-more'
-      : expandLevel === 1 && totalTopLevelSessionCount > SESSIONS_LEVEL_1
-        ? 'show-all'
-        : 'show-less';
+  const totalTopLevelSessionCount = getEffectiveTopLevelSessionCount(
+    metadataPageState.totalTopLevelCount,
+    metadataPageState.syncedTopLevelCount,
+    topLevelSessions.length,
+    metadataPageState.isLoading
+  );
+  const hasMoreUnloadedSessions = topLevelSessions.length < totalTopLevelSessionCount;
+  const expandToggleState = getSessionExpandToggleState(totalTopLevelSessionCount, expandLevel);
+
+  useEffect(() => {
+    if (
+      !isVisible ||
+      !workspacePath ||
+      metadataPageState.isLoading ||
+      metadataPageState.totalTopLevelCount === null ||
+      metadataPageState.syncedTopLevelCount === null ||
+      topLevelSessions.length === metadataPageState.syncedTopLevelCount
+    ) {
+      return;
+    }
+
+    void loadMetadataPage(SESSIONS_LEVEL_0, undefined, 'sessions_nav_live_reconcile');
+  }, [
+    isVisible,
+    loadMetadataPage,
+    metadataPageState.isLoading,
+    metadataPageState.syncedTopLevelCount,
+    metadataPageState.totalTopLevelCount,
+    topLevelSessions.length,
+    workspacePath,
+  ]);
 
   const visibleItems = useMemo(() => {
     const visibleParents = topLevelSessions.slice(0, sessionDisplayLimit);
@@ -1091,12 +1153,12 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           );
         })}
 
-      {(totalTopLevelSessionCount > SESSIONS_LEVEL_0 || hasMoreUnloadedSessions) && (
+      {expandToggleState.shouldRender && (
         <button
           type="button"
           className={`bitfun-nav-panel__inline-toggle${metadataPageState.isLoading ? ' is-loading' : ''}`}
           data-testid="session-nav-show-more"
-          data-session-nav-toggle-action={expandToggleAction}
+          data-session-nav-toggle-action={expandToggleState.action}
           disabled={metadataPageState.isLoading}
           onClick={() => { void handleExpandToggle(); }}
         >
@@ -1109,11 +1171,11 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
               )}
               <span>
                 {t('nav.sessions.showMore', {
-                  count: Math.max(totalTopLevelSessionCount - SESSIONS_LEVEL_0, 0),
+                  count: expandToggleState.collapsedRemainingCount,
                 })}
               </span>
             </>
-          ) : expandLevel === 1 && totalTopLevelSessionCount > SESSIONS_LEVEL_1 ? (
+          ) : expandLevel === 1 && expandToggleState.expandedRemainingCount > 0 ? (
             <>
               {metadataPageState.isLoading ? (
                 <Loader2 size={12} className="bitfun-nav-panel__inline-toggle-spinner" />
@@ -1122,7 +1184,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
               )}
               <span>
                 {t('nav.sessions.showAll', {
-                  count: Math.max(totalTopLevelSessionCount - SESSIONS_LEVEL_1, 0),
+                  count: expandToggleState.expandedRemainingCount,
                 })}
               </span>
             </>

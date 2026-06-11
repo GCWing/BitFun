@@ -1,0 +1,354 @@
+@keyframes workspace-session-batch-modal-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.workspace-session-batch-modal {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  height: min(76vh, 820px);
+  max-height: 100%;
+  padding-block: 2px 4px;
+  color: var(--color-text-primary);
+
+  &__content-shell {
+    overflow: hidden;
+  }
+
+  &__hero {
+    flex-shrink: 0;
+    position: relative;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--border-subtle) 80%, transparent);
+    border-radius: 14px;
+    background:
+      radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--color-accent-500) 16%, transparent), transparent 34%),
+      linear-gradient(180deg, color-mix(in srgb, var(--element-bg-soft) 78%, transparent), color-mix(in srgb, var(--element-bg-subtle) 72%, transparent));
+
+    &::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      border-radius: inherit;
+      box-shadow: inset 0 1px 0 color-mix(in srgb, var(--color-text-primary) 8%, transparent);
+    }
+  }
+
+  &__hero-icon {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: 1px solid color-mix(in srgb, var(--color-accent-500) 24%, transparent);
+    border-radius: 11px;
+    background: color-mix(in srgb, var(--color-accent-500) 10%, var(--element-bg-subtle));
+    color: var(--color-accent-500);
+  }
+
+  &__hero-copy {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  &__workspace {
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.25;
+    color: var(--color-text-primary);
+  }
+
+  &__description {
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--color-text-secondary);
+    max-width: 56ch;
+  }
+
+  &__toolbar {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    padding: 8px 12px;
+    border: 1px solid color-mix(in srgb, var(--border-subtle) 86%, transparent);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--element-bg-subtle) 80%, transparent);
+  }
+
+  &__toolbar-main {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  &__toolbar-summary {
+    min-width: 0;
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding: 6px;
+    padding-bottom: 10px;
+    border: 1px solid color-mix(in srgb, var(--border-subtle) 84%, transparent);
+    border-radius: 14px;
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--element-bg-soft) 78%, transparent), color-mix(in srgb, var(--element-bg-subtle) 74%, transparent));
+  }
+
+  &__state {
+    min-height: 240px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 16px;
+    color: var(--color-text-secondary);
+    text-align: center;
+
+    &.is-error {
+      gap: 14px;
+    }
+  }
+
+  &__spinner {
+    animation: workspace-session-batch-modal-spin 1s linear infinite;
+  }
+
+  &__row {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid color-mix(in srgb, var(--border-subtle) 72%, transparent);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--element-bg-base) 72%, transparent);
+    cursor: pointer;
+    transition:
+      transform 0.16s ease,
+      border-color 0.16s ease,
+      background 0.16s ease,
+      box-shadow 0.16s ease;
+
+    & + & {
+      margin-top: 6px;
+    }
+
+    &:hover {
+      transform: translateY(-1px);
+      border-color: color-mix(in srgb, var(--border-medium) 74%, transparent);
+      background: color-mix(in srgb, var(--element-bg-soft) 74%, transparent);
+      box-shadow: 0 10px 18px color-mix(in srgb, #000 6%, transparent);
+    }
+
+    &.is-selected {
+      border-color: color-mix(in srgb, var(--color-accent-500) 34%, transparent);
+      background:
+        linear-gradient(180deg, color-mix(in srgb, var(--color-accent-500) 9%, var(--element-bg-base)), color-mix(in srgb, var(--color-accent-500) 5%, var(--element-bg-soft)));
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent-500) 12%, transparent);
+    }
+
+    &.is-child {
+      margin-left: 18px;
+      width: calc(100% - 18px);
+    }
+  }
+
+  &__row-check {
+    align-self: start;
+    padding-top: 2px;
+  }
+
+  &__row-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 10px;
+    border: 1px solid color-mix(in srgb, var(--border-subtle) 84%, transparent);
+    background: color-mix(in srgb, var(--element-bg-subtle) 76%, transparent);
+    color: var(--color-text-secondary);
+    flex-shrink: 0;
+
+    &.is-code {
+      color: color-mix(in srgb, var(--color-accent-500) 76%, var(--color-text-primary));
+    }
+
+    &.is-cowork {
+      color: color-mix(in srgb, #0f8f74 80%, var(--color-text-primary));
+    }
+
+    &.is-claw {
+      color: color-mix(in srgb, #d97706 80%, var(--color-text-primary));
+    }
+  }
+
+  &__row-content {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  &__row-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  &__row-title {
+    min-width: 0;
+    font-size: 13px;
+    font-weight: 650;
+    color: var(--color-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    letter-spacing: -0.01em;
+  }
+
+  &__row-updated {
+    flex-shrink: 0;
+    font-size: 10px;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+  }
+
+  &__row-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  &__pill {
+    display: inline-flex;
+    align-items: center;
+    min-height: 18px;
+    padding: 0 7px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--element-bg-subtle) 78%, transparent);
+    color: var(--color-text-secondary);
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1;
+
+    &.is-code {
+      background: color-mix(in srgb, var(--color-accent-500) 10%, transparent);
+      color: color-mix(in srgb, var(--color-accent-500) 78%, var(--color-text-primary));
+    }
+
+    &.is-cowork {
+      background: color-mix(in srgb, #0f8f74 11%, transparent);
+      color: color-mix(in srgb, #0f8f74 82%, var(--color-text-primary));
+    }
+
+    &.is-claw {
+      background: color-mix(in srgb, #d97706 11%, transparent);
+      color: color-mix(in srgb, #d97706 82%, var(--color-text-primary));
+    }
+  }
+
+  &__footer {
+    flex-shrink: 0;
+    position: sticky;
+    bottom: 0;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 8px 0 0;
+    background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--color-bg-base) 92%, transparent) 36%);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+}
+
+@media (max-width: 720px) {
+  .workspace-session-batch-modal {
+    height: min(78vh, 680px);
+
+    &__hero {
+      align-items: start;
+    }
+
+    &__toolbar {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    &__toolbar-main {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    &__toolbar-summary {
+      white-space: normal;
+    }
+
+    &__row {
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: start;
+    }
+
+    &__row-icon {
+      grid-column: 2;
+      margin-top: 2px;
+    }
+
+    &__row-content {
+      grid-column: 2;
+    }
+
+    &__row-check {
+      grid-row: 1 / span 2;
+    }
+
+    &__row-head {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
+    }
+
+    &__footer {
+      flex-direction: column-reverse;
+      align-items: stretch;
+    }
+  }
+}
