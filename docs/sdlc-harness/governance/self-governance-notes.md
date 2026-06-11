@@ -1,52 +1,49 @@
-# BitFun 自身治理与内部验证问题说明
+# BitFun 自身治理说明
 
-> 范围：记录 BitFun 仓库自身在建设生命周期工程能力与质量保护能力过程中暴露出的文档、边界、规则和内部验证问题。
-> 边界：本文不是 BitFun 产品设计主线。产品设计应围绕 BitFun 加载和治理外部目标项目展开。
+> 范围：记录 BitFun 仓库自身在验证自适应工程开发、控制、安全和质量治理能力时暴露出的文档、边界、规则和内部验证问题。
+> 边界：本文只用于内部验证和自我改进，不作为目标项目的默认流程、默认技术栈或默认强质量要求。
 
-## 1. 文档定位
+## 1. 为什么需要独立文档
 
-BitFun 仓库可以作为质量保护能力的首个内部验证项目，但不能被等同于产品目标项目。主设计文档中的“目标项目”应代表任意被用户加载的软件工程，而不是默认拥有 BitFun 仓库的技术栈、模块边界、AGENTS 文档、CI 规则或 fork PR 工作流。
+BitFun 仓库可以作为自适应工程能力的内部验证项目，但不能被等同于产品目标项目。主设计文档中的“目标项目”应代表任意被用户加载的软件工程，而不是默认拥有 BitFun 仓库的技术栈、模块边界、AGENTS 文档、CI 规则或 fork PR 工作流。
 
-本文只承载两类内容：
+因此，BitFun 自身治理问题应单独记录：
 
-1. BitFun 仓库自身为了更好验证质量保护能力需要补齐的问题。
-2. 这些问题对产品设计的反向约束。
+1. BitFun 仓库自身为了更好验证这些能力需要补齐的问题。
+2. 这些问题如何作为样本输入 Project Profile、Risk Classifier、Change Readiness、Security Boundary 和 Evaluation。
+3. 哪些规则只适用于 BitFun 仓库，不能直接上升为产品默认。
 
-## 2. 当前可见问题
+## 2. 当前内部验证问题
 
-| 问题 | 表现 | 影响 | 建议承载位置 |
+| 问题 | 表现 | 影响 | 处理边界 |
 |---|---|---|---|
-| 产品对象与内部验证对象混用 | 文档中同时描述 BitFun 自身代码治理和 BitFun 作为产品治理外部项目 | 读者难以判断设计是在改某个 PR 功能，还是在定义产品级质量保护架构 | 主设计聚焦目标项目；本文承载自身治理问题 |
-| 项目规则示例过于仓库特定 | AGENTS、CONTRIBUTING、模块文档、验证矩阵容易被写成默认前提 | 外部项目可能没有同类文件或规则结构 | 子模块文档改为 `project rules`、`agent rules`、`verification profile` |
-| 路径和风险标签过于 BitFun 化 | `core_runtime`、`src/web-ui`、远程 workspace 等例子容易被误解为产品内置分类 | Risk Classifier 难以适配不同语言和仓库结构 | 风险标签应从 Project Profile 派生，BitFun 标签只作为样例 |
-| 文档层级职责不够清晰 | 总览、设计、计划、精简版、子模块设计之间部分内容重叠 | 后续维护容易出现同一策略多处不一致 | 总览只做入口；主设计只做全局模型；计划只做执行路线；子模块承载细节 |
-| 内部验证结果缺少独立闭环 | BitFun 自身发现的问题可能直接进入主设计，造成范围漂移 | 产品设计被具体仓库问题牵引 | 内部验证 finding 先进入本文，再评估是否抽象为通用产品需求 |
+| 产品对象与内部验证对象混用 | 文档中同时描述 BitFun 自身代码治理和 BitFun 作为产品支持外部项目 | 读者难以判断设计是在改某个 PR 功能，还是在定义产品级体验架构 | 主设计聚焦目标项目；本文承载自身治理问题 |
+| Harness 术语过重 | 容易被误解为 BitFun 产品定位或默认用户流程 | 普通项目会被强治理叙事劝退 | Harness 只作为内部支撑能力术语 |
+| 默认流程偏强质量 | 早期文档把 PR Gate/EvidencePack 作为首个闭环 | 临时工具、demo、个人项目体验过重 | P0 改为 Fast Path + Security Boundary |
+| 项目维度过强 | 容易默认一个项目只有一种质量等级 | 实际上路径、任务、权限、团队配置都可能改变控制强度 | 使用 Adaptive Control Profile |
+| 安全与质量混淆 | 安全风险、质量建议、PR policy 容易放进同一个 Gate | 快速任务可能绕过安全，或安全提示被质量流程噪音淹没 | Security Boundary 独立常开 |
+| BitFun 特定验证路径容易外溢 | 示例命令、fork PR 流程、模块边界可能被当作通用默认 | 目标项目适配性降低 | 作为内部 profile 样本，不写入产品默认 |
 
-## 3. 对产品设计的约束
+## 3. 内部验证项目应如何使用 BitFun 仓库
 
-- BitFun 自身能力只能作为实现基础和验证样本，不能作为目标项目的默认能力假设。
-- 任意项目规则都必须带来源、优先级、置信度和过期状态。
-- Risk Classifier 不应内置固定路径语义；路径矩阵应来自目标项目画像。
-- PR Gate 的示例命令应表达为“项目必跑验证”，而不是绑定具体仓库命令。
-- OpenCode 兼容层只作为 adapter，不能让外部插件语义影响 BitFun canonical event、permission、artifact 和 policy model 的一致性。
-- 内部验证中发现的文档缺失、模块边界不清、验证矩阵不完整，应沉淀为独立 issue 或设计债，而不是直接写成产品架构前提。
+- Project Profile 示例可以读取 BitFun 的 AGENTS.md、CONTRIBUTING、package/cargo scripts、CI 和模块边界。
+- Change Readiness 示例可以使用 BitFun 的 fork PR 流程，但必须标注为项目特定。
+- Risk Classifier 示例可以覆盖 Rust workspace、React frontend、Tauri desktop、remote、AI adapter、Deep Review 等高风险区域。
+- Security Boundary 示例应覆盖 shell、network、secret、MCP、hook、跨目录写、删除、release credential 等安全面。
+- EvidencePack 示例应表达为“任务和变更证据”，不默认要求所有项目生成 full pack。
+- Evaluation 示例需要同时覆盖 Fast Path、误升级、安全提示、PR readiness 和 high-risk review。
 
-## 4. 内部验证使用方式
+## 4. 不应外推的 BitFun 特定规则
 
-BitFun 仓库适合作为以下能力的早期验证样本：
+- 不把 `pnpm`、`cargo`、Tauri、Rust workspace 或 React 前端当作通用默认。
+- 不把 fork PR 到 `GCWing/BitFun` 当作目标项目默认协作模式。
+- 不把 BitFun 的强 review 习惯当作所有项目默认质量要求。
+- 不把 BitFun 的 AGENTS.md 完整度当作目标项目最低要求。
+- 不把 BitFun 的 CI 行为、耗时、flaky 风险当作通用指标阈值。
 
-| 能力 | 内部验证价值 | 注意事项 |
-|---|---|---|
-| Project Profile | 验证复杂 Rust + React + Tauri 工作区的结构画像 | 不把 BitFun 的目录和 crate 边界作为默认模板 |
-| EvidencePack | 验证本地命令、PR 描述、Deep Review 和 CI 证据聚合 | 证据模型必须能容纳其他语言和 CI 系统 |
-| Risk Classifier | 验证路径矩阵、模块规则和 required checks 生成 | 风险标签必须可配置、可替换 |
-| PR Quality Gate | 验证 lightweight gate、stale evidence 和 Deep Review budget | fork PR 工作流只是集成样例之一 |
-| Artifact Graph | 验证 issue/spec/diff/test/review/PR 的最小链路 | 不要求所有项目都有同样完整的文档体系 |
-| Agent Evaluation | 验证真实历史 issue 和工程任务回放 | 评测集需要避免只优化 BitFun 自身模式 |
+## 5. 成功标准
 
-## 5. 后续治理建议
-
-1. 保持主设计文档中“目标项目”与“BitFun 产品”的术语区分。
-2. 新增或修改子模块文档时，先判断内容是通用产品设计还是 BitFun 自身验证细节。
-3. 如果发现 BitFun 仓库自身文档缺失、模块边界不清或验证矩阵错误，优先记录在本文或独立 issue，再决定是否抽象为产品能力。
-4. 内部验证指标应同时观察产品收益和偏置风险：既要证明 BitFun 能治理复杂项目，也要防止产品能力过拟合 BitFun 仓库。
+- BitFun 仓库能作为高复杂度、强协作、强安全样本验证设计。
+- 普通目标项目仍能保持低摩擦 Fast Path。
+- 文档读者能清楚区分产品默认、团队可选强治理和 BitFun 仓库自身规则。
+- 所有从 BitFun 仓库抽象出的能力，都有“哪些场景不适用”的反证说明。

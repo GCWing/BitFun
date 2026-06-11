@@ -1,271 +1,233 @@
-# BitFun 全软件生命周期工程能力与质量保护实施计划
+# BitFun 自适应工程开发与控制体验实施计划
 
-> 范围：基于完整设计体系，定义 BitFun 面向外部目标项目建设生命周期工程能力与质量保护闭环的执行方案、阶段性交付件、成果验收、过程风险、关键里程碑和质量保护方案。
-> 目标：在控制复杂度、token 成本、运行耗时和团队采用成本的前提下，把项目画像、证据链、交付物图谱与生命周期质量保护能力分阶段落地。
+> 范围：基于 [design.md](design.md)，定义 BitFun 面向外部目标项目落地 Fast Path、Adaptive Control、Security Boundary、Team Governance 和复杂生命周期能力的阶段路线。
+> 目标：先证明默认开发体验简洁快速，再逐步增加上下文信心、团队规则、证据链、图谱、评估和强治理能力。
 
 ## 1. 执行定位
 
-本计划不是设计文档索引，也不重新定义架构。设计边界由主设计和子模块设计给出；本计划只回答五个执行问题：
-
-1. 先交付什么。
-2. 每个阶段产出什么可验收成果。
-3. 哪些过程风险会影响落地。
-4. 关键里程碑如何判断是否达成。
-5. 如何用质量保护方案控制平台化建设边界。
-
-执行主线固定为：
+本计划不把“强质量保护”作为默认起点。执行主线改为：
 
 ```text
 Architecture runway
-  -> Project Profile
-  -> PR EvidencePack
-  -> Risk Classifier
-  -> lightweight PR Gate
-  -> Artifact Graph minimal loop
-  -> Requirement / Release / Incident lifecycle
-  -> Evaluation and optimization loop
+  -> Fast Path
+  -> Security Boundary
+  -> Contextual Assurance
+  -> Team Governance
+  -> Lifecycle Context
+  -> Evaluation and optimization
 ```
+
+每个阶段都必须回答两个问题：
+
+1. 这个能力是否让普通开发更快、更清楚、更少中断。
+2. 这个能力是否在复杂项目或高风险场景中提供更强控制，而不是把所有项目默认变重。
 
 ## 2. 执行原则
 
 | 原则 | 执行含义 |
 |---|---|
-| 画像先行 | 目标项目结构、规则、验证能力和未知区域必须先进入 Project Profile |
-| 小闭环优先 | P0/P1 只围绕目标项目 PR 证据链证明价值，不一次性覆盖全 SDLC |
-| 证据优先 | Gate、review、impact analysis、release readiness 都必须能追溯证据 |
-| 成本可见 | Deep Review、模型调用、hook、评测任务必须记录 token、耗时和降级原因 |
-| Adapter 边界 | OpenCode 兼容只作为 adapter，不改变 BitFun canonical event、artifact、permission model |
-| 反证驱动 | 每个阶段都定义失败信号，一旦命中就先收缩范围或修正策略 |
-| 本地优先 | 默认本地存储和本地审计，外部导出必须显式配置和可审计 |
-| 架构先导 | contract、event、provider registry、trust model 先稳定，再建设高层产品自动化 |
+| 快速路径先行 | P0 以用户完成有用任务为核心，不以 Gate 结果为核心 |
+| 安全边界独立 | prompt injection、network、secret、hook/MCP、shell、delete、publish 先落地 |
+| 渐进画像 | Project Profile 先识别可运行入口、规则来源和验证能力，不要求完整建模 |
+| 提示优先 | 默认 advisory；required/blocking 只来自安全、组织策略或用户显式升级 |
+| 配置复用 | 先读取 AGENTS.md、CONTRIBUTING、CI、CODEOWNERS、`.github`、`.coderabbit.yaml`、`.gitlab/duo` |
+| 证据后台化 | EvidencePack 先做内部 contract 和 PR/readiness 投影，不作为默认 UI |
+| 成本可见 | 每个 review/check/escalation 记录耗时、token、用户中断和跳过原因 |
+| 反证驱动 | 一旦提示噪音、误升级、误阻断过高，就收缩策略 |
 
 ## 3. 阶段路线图
 
 | 阶段 | 主题 | 阶段成果 | 进入下一阶段条件 |
 |---|---|---|---|
-| P-1 | 架构准备与边界验证 | 能力分类、canonical event、EvidencePack contract、hook trust model、provider registry、metric spec 草案 | 能明确哪些能力属于平台支撑、质量保护或受控扩展 |
-| P0 | 目标项目 PR 证据链 MVP | Project Profile、EvidencePack、Risk Classifier、lightweight PR Gate、事件最小集 | 大多数本地改动可生成可解释 gate 结果 |
-| P1 | 团队 PR 质量闭环 | PR gate 集成、finding lifecycle、stale evidence、最小 Artifact Graph | PR review 过程能复用证据链并减少人工补充 |
-| P2 | 需求到发布闭环 | 需求影响分析、release readiness、incident-to-test | 高风险变更能输出影响面、发布风险和回归补充 |
-| P3 | 长期评估与优化 | BitFun Engineering Bench、trace replay、A/B、策略校准 | prompt、tool、context、gate 和 policy 改动可被量化评估并持续优化 |
+| P-1 | 架构和产品边界 | Adaptive Control schema、Security Boundary schema、最小事件、配置优先级 | 能明确安全、质量、项目规则、用户 override 的边界 |
+| P0 | Fast Path + Security Boundary | 快速项目打开、轻量项目理解、低噪音安全提示、简洁任务摘要 | 普通任务能低摩擦完成，安全越界不会静默发生 |
+| P1 | Contextual Assurance | 风险触发提示、recommended checks、change readiness、可选 targeted review | 高风险变更能解释为什么升级，低风险变更不被拖慢 |
+| P2 | Team Governance | repo/path/team 配置、review profile、required checks、PR EvidencePack | 团队规则能统一体验且不污染临时任务 |
+| P3 | Lifecycle Context | Artifact Graph、requirement/release/incident linkage、risk acceptance | 复杂项目能追溯需求到发布和事故回流 |
+| P4 | Evaluation and Optimization | trace replay、control metrics、strategy A/B、holdout | 控制策略能用速度、质量、安全和成本联合评估 |
 
-### 3.1 P-1：架构准备与边界验证
-
-P-1 不交付完整用户闭环，只为 P0 降低架构返工风险。
+## 4. P-1：架构和产品边界
 
 | 交付件 | 内容 | 验收方式 |
 |---|---|---|
-| 能力分类表 | 区分工程理解、交付物组织、质量事实、质量保护、受控扩展和长期评估 | 主设计和子模块命名不再把全部能力统称为 Harness |
-| Canonical event 草案 | `project.profiled`、`file.changed`、`verification.completed`、`risk.classified`、`gate.completed` 等最小事件 | Quality Data Plane 可表达 P0 EvidencePack |
-| EvidencePack contract 草案 | EvidenceReference、EvidencePack status、trust tier、privacy、retention、staleness、risk acceptance | Gate 结果能引用证据包和证据引用而非复制日志 |
-| Provider registry 草案 | adapter、tool provider、lifecycle policy provider、quality-control capability pack 注册边界 | 不需要改 Agent Runtime kernel 即可接入 P0 能力 |
-| Hook trust model | 项目级 hook/plugin/config 的来源、hash、权限、超时、禁用和审计策略 | 未信任主动配置不得影响执行或 gate |
-| Eval data policy | golden set、holdout、线上回放、数据污染标记和 Eval Card 模板 | P3 不需要重做评估数据治理 |
-| Metric spec 草案 | 看护指标的公式、分母、窗口、owner 和阶段用途 | 指标可用于阶段评审，而不是事后解释 |
+| Adaptive Control contract | profile、reason、display level、checks、review mode、override option | 能解释每次提示/升级/阻断来源 |
+| Security Boundary contract | permission、sandbox、network、secret、active config trust、break-glass | 安全决策不依赖 Gate 或质量策略 |
+| Configuration precedence | organization deny/managed required、security、confirmed path/team rule、workspace config、task override、user default | 冲突规则有确定优先级，用户 override 不能绕过强策略 |
+| Minimal event registry | `project.opened`、`task.started`、`control.decided`、`security.decided`、`verification.completed` | Fast Path 和安全提示可追踪 |
+| Evidence display tiers | none、summary、evidence_refs、full_pack | EvidencePack 不默认污染 UI |
+| Product metrics spec | time-to-first-useful-action、interruption rate、false escalation、break-glass rate | 阶段验收不只看质量 |
 
-P-1 的退出条件是：P0 所需对象、事件、EvidencePack 和指标能够被 schema 描述，且所有高权限或高成本能力都有降级状态。
+退出条件：可以描述 P0 所需对象和事件，且每个高权限动作都有 allow/ask/deny/break-glass 的明确路径。
 
-## 4. P0：目标项目 PR 证据链 MVP
-
-### 4.1 阶段目标
-
-建立最小可用的 PR 质量控制闭环，让 BitFun 在加载外部目标项目后，能在不改造完整 CI/GitHub App 的前提下，为本地 diff 或 PR 准备阶段生成结构化质量证据。
-
-### 4.2 阶段交付件
-
-| 交付件 | 内容 | 依赖 |
-|---|---|---|
-| `Project Profile v0` | 项目结构、规则来源、验证能力、owner、未知区域和冲突规则 | Project Profile and Integration |
-| `LifecycleEvent` 最小事件集 | project、session、file、tool、verification、risk、gate、review 事件 | Quality Data Plane |
-| `EvidencePack v0` | context、change、verification、risk、skipped checks、open risks、risk acceptance contract | EvidencePack + Quality Data Plane |
-| `Risk Classifier v0` | 基于 Project Profile 的路径/模块规则、risk tags、required checks、Deep Review profile | Risk Classifier |
-| `Lightweight PR Gate` | `pass/warn/fail/degraded`、evidence refs、open risks | PR Quality Gate |
-| PR 质量证据块 | 自动生成 PR description 的质量摘要 | EvidencePack + Gate |
-
-### 4.3 验收成果
-
-- 目标项目本地 diff 可生成 EvidencePack。
-- Project Profile 能展示项目结构、规则来源、验证能力以及未知或冲突区域。
-- Project Profile 能发现主动配置并默认按未信任处理。
-- 风险分类结果包含 reason、confidence、evidence 和 override path。
-- required checks 可解释为什么需要运行。
-- 缺少 evidence store、检查结果过期或上下文不足时输出 `degraded`，不得标记为 `pass`。
-- 低风险 PR 不默认触发 full Deep Review。
-
-### 4.4 过程风险
-
-| 风险 | 处置 |
-|---|---|
-| Project Profile 误判 | inferred 规则先进入 degraded 或人工确认，不参与阻塞性 pass |
-| EvidencePack 需要大量人工修正 | 收缩事件源，优先修正 context provenance 和 verification summary |
-| required checks 低价值提示过多 | 使用 override 反馈校准路径矩阵 |
-| gate 对低风险改动产生不必要阻断 | 调整 fail/warn/degraded 语义，先非阻塞运行一段周期 |
-| Deep Review token 成本过高 | P0 只允许 targeted/full review 作为显式风险升级 |
-| P-1 contract 不稳定 | P0 只允许 additive schema 变更；破坏性变更必须同步迁移和文档 |
-
-### 4.5 质量保护
-
-- 每个 gate result 必须可追溯到 event id 和 evidence ref。
-- PR 文本不得隐藏 skipped checks 和 open risks。
-- Gate 逻辑先 rule-based，模型输出只作为说明或候选。
-- P0 不接入任意第三方插件写 gate 结论。
-
-## 5. P1：团队 PR 质量闭环
+## 5. P0：Fast Path + Security Boundary
 
 ### 5.1 阶段目标
 
-将 P0 的本地验证证据链接入团队 PR 流程，形成 reviewer 可消费、可复跑、可审计的质量闭环。
+让用户打开任意外部项目后，能快速完成一次普通开发任务，并在不理解内部治理术语的情况下获得简洁结果和必要安全保护。
 
-### 5.2 阶段交付件
+### 5.2 交付件
 
-| 交付件 | 内容 | 依赖 |
-|---|---|---|
-| PR Gate 集成 | PR status/comment 或本地 report 到 PR 文本的稳定投影 | P0 Gate |
-| Finding Lifecycle | finding 状态、owner、resolution、stale 标记 | Deep Review + PR Gate |
-| Stale Evidence 检测 | 新 commit、risk tag 或 required check 变化后标记过期 | Quality Data Plane |
-| Artifact Graph minimal loop | `diff -> verification -> evidence_pack -> PR`，并可选连接 issue/spec/review | Artifact Graph |
-| OpenCode Compatibility L0/L1 | 常用 hook/event 映射、只读 plugin 能力和 trust review 持久化 | Hook/Event Bus |
+| 交付件 | 内容 |
+|---|---|
+| Lightweight Project Understanding | 识别语言、包管理器、常用脚本、git 状态、README/AGENTS/CONTRIBUTING/CI 入口 |
+| Fast Task Summary | 展示改动、运行命令、未验证项、下一步建议 |
+| Security Boundary v0 | 工作区写、shell、network、secret、delete、cross-root write 的基础决策 |
+| Active Config Discovery | 发现 hook/plugin/MCP/custom tool/agent rules，默认未信任 |
+| One-shot Break-glass | 单次命令、域名、目录、session 范围的临时放行 |
+| Minimal QDP | 记录任务、工具、验证、安全决策和用户 override |
 
 ### 5.3 验收成果
 
-- PR 能展示 evidence、risk、required checks、Deep Review 状态和 open risks。
-- Finding 可以被解决、失效、复跑和审计。
-- Artifact Graph 只覆盖最小 PR 证据链，但每条边都有 provenance、confidence、staleness。
-- OpenCode 兼容层不影响 BitFun canonical event 和 permission model。
+- 无 git 临时目录可以完成小工具任务，不要求 PR/Gate。
+- 常规项目可以在不配置 `.bitfun` 的情况下识别主要开发命令。
+- 安全敏感动作会提示原因、范围和可选隔离路径。
+- 用户可以一次性放行低/中风险越界，但不能静默持久化。
+- 任务结束时有简洁 confidence summary。
 
 ### 5.4 过程风险
 
 | 风险 | 处置 |
 |---|---|
-| PR cycle time 被拉长 | 将 Deep Review 降级为风险触发，默认优先轻量 gate |
-| Artifact Graph 链接低可信 | 暂停扩展节点类型，优先补 edge evidence 和 confirmation |
-| 兼容层侵入核心 | 强制 adapter 边界，核心模块不得依赖 OpenCode payload |
-| Reviewer 认为 AI finding 精度不足 | 记录 finding precision、dismiss reason 和 human override |
+| 安全提示太频繁 | 先用 sandbox/allowlist 降噪，再提示 |
+| 项目理解不准 | 只把 inferred 结论用于提示，不用于强策略 |
+| 用户跳过太多 | 显示残余风险，但不把普通跳过升级成审计 |
+| 临时项目被误判成团队项目 | 无显式团队配置时保持 `fast` |
 
-### 5.5 质量保护
-
-- 高风险 PR 才允许 full Deep Review 作为推荐或阻塞要求。
-- stale review 不得继续支撑 gate pass。
-- plugin 只能产出 evidence 或 recommendation，不能直接写 pass/fail。
-- 所有人工 override 必须记录 reason 和 residual risk。
-
-## 6. P2：需求到发布闭环
+## 6. P1：Contextual Assurance
 
 ### 6.1 阶段目标
 
-把质量控制从 PR 扩展到需求变更、发布准备和运行期问题回溯，形成左移和右移并重的生命周期闭环。
+当任务出现风险或用户准备 PR 时，BitFun 提供上下文信心：为什么这个变更值得额外检查、建议跑什么、跳过会有什么后果。
 
-### 6.2 阶段交付件
+### 6.2 交付件
 
-| 交付件 | 内容 | 依赖 |
-|---|---|---|
-| Requirement Impact Analysis | 需求/API/设计变更影响候选、置信度、required checks | Artifact Graph |
-| Spec/Acceptance Artifact | 轻量 spec、验收标准、设计决策和关联 PR | Artifact Graph |
-| Release Readiness | CI、review、known risk、rollback、telemetry 汇总 | PR Gate + Quality Data Plane |
-| Incident-to-Test | incident 关联 release/PR/diff/test gap，生成回归补充候选 | Artifact Graph + Evaluation |
-| Test Quality Gate | coverage delta、flaky risk、mutation subset、测试意图 | Quality Data Plane |
+| 交付件 | 内容 |
+|---|---|
+| Adaptive Control Decision | `fast/assist/review/guarded/regulated` 运行态和原因 |
+| Risk Hint v0 | 路径、模块、操作、历史信号和安全敏感标签 |
+| Recommended Checks | 推荐验证命令、替代验证、不可运行原因 |
+| Change Readiness Summary | PR 前摘要：变更、验证、风险、未覆盖项 |
+| Targeted Review Trigger | 仅在 high 或 evidence weak medium 时建议 targeted review |
+| EvidencePack summary mode | 只生成摘要和 evidence refs，不默认 full pack |
 
 ### 6.3 验收成果
 
-- 需求或 API 变更能生成影响候选和人工确认清单。
-- release readiness 能解释为什么可发布、哪些风险被接受、如何回滚。
-- incident 能回溯到 release、PR、diff、需求和测试缺口。
-- 确认/拒绝的影响链接会写回 Artifact Graph。
+- 低风险改动不触发 Deep Review。
+- 高风险改动能解释升级原因。
+- 检查建议有触发原因和取消条件。
+- CI/private env 不可运行时输出替代建议，而不是伪 fail。
+- PR 摘要减少 reviewer 追问，但不默认阻塞。
 
-### 6.4 过程风险
-
-| 风险 | 处置 |
-|---|---|
-| 影响分析低置信候选过多 | 优先 graph-first retrieval，LLM semantic expansion 只做候选补充 |
-| 发布仪表盘只有展示没有决策力 | 每个 readiness item 必须绑定证据和 owner |
-| incident 回溯依赖人工记忆 | 强制 release、PR、gate、telemetry 关联 event id |
-| 测试质量指标过重 | 对关键模块先试点 mutation subset，不全仓铺开 |
-
-### 6.5 质量保护
-
-- 高风险低置信影响项必须人工确认。
-- 需求影响分析不能作为完整事实，只能输出候选、置信度和验证建议。
-- 发布放行必须保留 risk acceptance audit。
-- incident 复盘至少沉淀一个 regression candidate、rule 或 benchmark task。
-
-## 7. P3：评估和持续优化
+## 7. P2：Team Governance
 
 ### 7.1 阶段目标
 
-建立长期 Agent Evaluation 体系，让 prompt、tool schema、context policy、hook policy、Deep Review profile 和模型组合的变更可以被量化评估。
+让团队通过配置文件和现有规则资产统一 BitFun 行为，而不是依赖每个用户手工设置。
 
-### 7.2 阶段交付件
+### 7.2 交付件
 
-| 交付件 | 内容 | 依赖 |
-|---|---|---|
-| BitFun Engineering Bench | 真实 issue、终端任务、review defect、PR gate、impact analysis 黄金集和 holdout set | Agent Evaluation |
-| Trace Replay | 固定输入、工具版本、policy 版本和输出 oracle | Quality Data Plane |
-| Policy A/B | prompt、tool schema、context policy、model、budget 对比 | Agent Evaluation |
-| Failure Mining | 失败 trace 聚类，生成 rule、test、skill、policy 建议 | Quality Data Plane |
-| Adaptive Budget | 按风险和历史成功率动态分配模型与 Deep Review 成本 | Risk Classifier |
+| 交付件 | 内容 |
+|---|---|
+| `.bitfun/quality.yaml` 或 `bitfun.toml` | profile 默认值、路径规则、required checks、review profile、security policy |
+| Existing rules import | AGENTS.md、CONTRIBUTING、CODEOWNERS、CI、`.github/instructions`、`.coderabbit.yaml`、`.gitlab/duo` |
+| Path-scoped policy | 核心模块、安全目录、docs、tests、generated code 分别配置 |
+| PR EvidencePack projection | Team/Guarded 场景生成可追踪 evidence refs |
+| Required checks mode | 只在配置或确定性风险下 required |
+| Risk Acceptance | actor、reason、scope、residual risk、expires_at |
 
 ### 7.3 验收成果
 
-- 关键 prompt、tool schema、context policy、gate policy 改动可通过固定任务集回放。
-- 评测结果同时展示成功率、质量、token、耗时、tool calls 和安全事件。
-- 失败可归因到模型、工具、上下文、策略或产品交互。
-- 线上缺陷、review blocker 和 override 能进入 eval backlog。
+- 团队能用 repo 配置统一体验。
+- 个人临时任务不被团队配置误污染，除非在受管控 workspace 内。
+- 路径规则冲突能显示并要求确认。
+- required/blocking 有明确来源，不由模型单独触发。
 
-### 7.4 过程风险
+## 8. P3：Lifecycle Context
 
-| 风险 | 处置 |
+### 8.1 阶段目标
+
+为复杂项目提供需求、PR、发布、incident、回归资产之间的追溯能力，但只在用户需要解释、发布或复盘时显性化。
+
+### 8.2 交付件
+
+| 交付件 | 内容 |
 |---|---|
-| benchmark 过拟合 | 保留 holdout set，记录任务来源和泄漏风险 |
-| 无 oracle 评测泛滥 | 无 oracle 任务只能用于探索，不进入决策 |
-| 只优化模型忽略上下文、工具和策略 | model、prompt、tool schema、context、policy 版本分开记录 |
-| 成本被成功率掩盖 | 所有评测必须同时报告 token、wall-clock、tool call 和 retry |
+| Artifact Graph minimal loop | `diff -> verification -> evidence_pack -> PR` |
+| Requirement Impact candidates | 高风险需求/API/设计变更影响候选和人工确认 |
+| Release Readiness | CI、review、known risk、rollback、telemetry 汇总 |
+| Incident-to-Test | incident 回溯 release/PR/diff/test gap |
+| Stale Evidence | 新 commit、policy、risk、review scope 变化后失效 |
 
-### 7.5 质量保护
+### 8.3 验收成果
 
-- 每类 eval 必须声明 oracle。
-- 公开 benchmark、内部 golden set 和 holdout set 分开管理。
-- 高风险自动化任务使用隔离环境和最小权限。
-- Evaluation 结论不能直接修改生产策略，必须经过人工批准或灰度。
-- 失败样本进入 rule/test/skill 前需要去重和稳定性检查。
+- 普通任务不需要看到图谱。
+- 复杂 PR 可以解释证据和关系来源。
+- release readiness 能说明可发布、不可发布或已接受风险。
+- incident 能转成回归候选或规则更新。
 
-## 8. 关键里程碑
+## 9. P4：Evaluation and Optimization
 
-| 里程碑 | 判定标准 |
+### 9.1 阶段目标
+
+用真实任务和产品指标优化 agent 行为、控制策略和质量治理，避免只优化 benchmark 或只优化强管控。
+
+### 9.2 交付件
+
+| 交付件 | 内容 |
 |---|---|
-| M0：架构边界可执行 | P0 contract、event、EvidencePack、trust model、provider registry 和 metric spec 有最小定义，且不要求改 Agent Runtime kernel |
-| M1：Project Profile 与 EvidencePack 可用 | 目标项目本地 diff 可生成结构化 profile/context/change/verification/risk/open risks |
-| M2：Risk Classifier 可解释 | required checks 有触发原因、置信度和 override 反馈 |
-| M3：Lightweight Gate 可用 | Gate 输出 `pass/warn/fail/degraded`，且缺证据不误判 pass |
-| M4：PR 质量块可复用 | PR 描述能自动生成并减少 reviewer 追问验证信息 |
-| M5：Artifact Graph 最小闭环 | `diff -> verification -> evidence_pack -> PR` 可查询、可确认、可失效，并可逐步接入 issue/spec/review |
-| M6：Deep Review 成本受控 | token、耗时、scope、skipped context 和 budget 降级可见 |
-| M7：需求影响分析可用 | 高风险需求/API 变更可输出影响候选、required checks 和人工确认项 |
-| M8：Evaluation 回放可用 | 关键策略变更可通过固定任务集比较质量和成本 |
+| Trace replay | 回放任务、命令、验证、提示和 override |
+| Eval Card | 任务集、oracle、模型/context/tool/policy 版本、成本、安全事件 |
+| Control A/B | 比较提示频率、误升级、成功率、用户放行和质量结果 |
+| Holdout | 防泄漏任务集和真实项目回归 |
+| Strategy calibration | post-merge defect、review blocker、CI failure、user feedback 回流 |
 
-## 9. 全程质量保护方案
+### 9.3 验收成果
 
-| 保护面 | 方案 |
-|---|---|
-| 文档与设计一致性 | 每个实现 PR 引用对应设计模块和阶段目标 |
-| 行为等价 | 涉及现有 Agent Runtime、Deep Review、工具权限的变更必须有回归测试或行为对比 |
-| 数据安全 | event、EvidencePack、plugin output 写入前执行 redaction 和 privacy classification |
-| 成本控制 | Deep Review、模型评测、LLM impact analysis 设预算、缓存和降级状态 |
-| 插件安全 | OpenCode compatibility 默认最小权限、超时、审计、禁用未知来源 |
-| PR 治理 | Gate 必须展示 skipped checks、open risks、override reason 和 residual risk |
-| 可回滚性 | 每个阶段能力默认 feature flag 或配置开关，允许降级为只读/只提示 |
-| 评估闭环 | post-merge defect、CI failure、review blocker、incident 回流到 calibration/eval backlog |
-| 指标治理 | 看护指标必须引用 [metrics-spec.md](governance/metrics-spec.md) 的公式、分母、窗口和 owner |
+- 能证明新策略没有让普通任务变慢。
+- 能证明安全提示减少盲目确认。
+- 能证明 high-risk 场景质量更稳定。
+- 能发现哪些 Gate/Review/Evidence 能力没有产品价值，应下线或降级。
 
 ## 10. 看护指标
 
-| 类别 | 指标 |
+详细口径见 [metrics-spec.md](governance/metrics-spec.md)。P0/P1 必须优先看这些指标：
+
+- Time to first useful action。
+- User interruption rate。
+- Security prompt acceptance / dismissal。
+- Break-glass rate and scope。
+- False escalation rate。
+- Low-risk task completion rate。
+- Recommended check follow-through。
+- PR readiness adoption。
+- Required check precision。
+- Post-merge defect / review blocker feedback。
+
+## 11. 发布和 PR 策略
+
+- P0/P1 默认不创建强制 GitHub Check；优先本地 summary 和 PR text block。
+- Team Governance 开启后，才将 readiness 或 Gate 投影到 PR status/comment。
+- blocking 只允许来自 Security Boundary、组织策略、确定性失败或明确 required policy。
+- 每次发布 PR 文档必须说明默认体验是否变重，以及如何避免普通项目被重流程影响。
+
+## 12. 关键里程碑
+
+| 里程碑 | 判定标准 |
 |---|---|
-| 交付效率 | PR cycle time、lead time、time-to-first-useful-plan |
-| 验证质量 | required check precision、CI first-pass rate、flaky rate、rerun count |
-| AI 质量 | AI-authored diff 占比、review finding density、post-merge defect rate |
-| 质量保护成本 | token per accepted change、Deep Review wall-clock、budget skip rate |
-| 审计完整性 | EvidencePack coverage、gate degraded rate、risk acceptance audit coverage |
-| 图谱质量 | confirmed link ratio、stale link rate、impact analysis precision/recall |
-| 主动配置治理 | untrusted active config rate、trusted hook re-review rate、plugin deny/degraded rate |
-| 评估治理 | eval card coverage、holdout contamination rate、replay reproducibility rate |
-| 运行闭环 | incident-to-regression-test latency、release rollback readiness |
+| M0：边界清晰 | Adaptive Control、Security Boundary、Evidence display tiers 和配置优先级稳定 |
+| M1：Fast Path 可用 | 普通项目无需配置即可完成有用开发任务 |
+| M2：安全低噪音 | 高风险动作可控，普通命令不频繁打断 |
+| M3：上下文信心可解释 | 高风险变更有理由、建议检查和跳过后果 |
+| M4：团队规则可复用 | repo/path/team 配置能统一 PR readiness 和 required checks |
+| M5：复杂项目可追溯 | EvidencePack/Graph 支撑 PR/release/incident，但不污染 Fast Path |
+| M6：策略可评估 | 控制策略能用效率、质量、安全和成本联合衡量 |
+
+## 13. 完成标准
+
+这组能力完成时，BitFun 应表现为：
+
+- 普通开发像轻快助手。
+- 高风险动作像可靠安全执行环境。
+- 团队项目像可配置协作系统。
+- 复杂项目像可追溯工程平台。
+- 所有复杂技术都服务于某个清晰体验，而不是为了架构完整性而存在。
