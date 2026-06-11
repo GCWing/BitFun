@@ -26,7 +26,8 @@
       "editor": "Editor font, display, and formatting.",
       "lsp": "Language servers and code intelligence.",
       "keyboard": "Shortcuts and key bindings.",
-      "archivedSessions": "View, restore, or permanently delete archived sessions."
+      "archivedSessions": "View, restore, or permanently delete archived sessions.",
+      "voice": "Voice input (STT) and speech synthesis (TTS) for conversational interaction."
     },
     "categories": {
       "general": "General",
@@ -48,7 +49,8 @@
       "editor": "Editor",
       "lsp": "LSP",
       "keyboard": "Keyboard",
-      "archivedSessions": "Archived Sessions"
+      "archivedSessions": "Archived Sessions",
+      "voice": "Voice"
     }
   },
   "general": {
@@ -531,6 +533,36 @@
       "subtitle": "Customize the app appearance and theme colors",
       "import": "Import Theme",
       "export": "Export Current Theme"
+    }
+  },
+  "voice": {
+    "title": "Voice Settings",
+    "subtitle": "Configure voice input and speech synthesis",
+    "enabled": {
+      "label": "Enable Voice",
+      "description": "Enable voice input and speech synthesis for conversational interaction"
+    },
+    "sections": {
+      "stt": "Speech-to-Text (STT)",
+      "tts": "Text-to-Speech (TTS)"
+    },
+    "stt": {
+      "provider": "STT Provider",
+      "providerDescription": "The speech recognition engine used for voice input",
+      "providers": {
+        "webspeech": "Web Speech API (Browser)",
+        "fasterWhisper": "Faster Whisper (Local, requires GPU)"
+      }
+    },
+    "tts": {
+      "provider": "TTS Provider",
+      "providerDescription": "The speech synthesis engine used for voice output",
+      "providers": {
+        "edge": "Edge TTS (Browser, Free)",
+        "elevenlabs": "ElevenLabs (Cloud, API Key Required)"
+      },
+      "voice": "Voice",
+      "language": "Language"
     }
   }
 }

@@ -70,6 +70,9 @@ pub struct GlobalConfig {
     /// Web UI font size preferences (`get_config` / `set_config` path `font`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub font: Option<FontPreferenceSnapshot>,
+    /// Voice (STT/TTS) configuration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub voice: Option<VoiceConfig>,
     pub version: String,
     #[serde(with = "chrono::serde::ts_milliseconds")]
     pub last_modified: chrono::DateTime<chrono::Utc>,
@@ -531,6 +534,33 @@ fn default_review_team_rate_limit_status() -> serde_json::Value {
     serde_json::Value::Object(serde_json::Map::new())
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+#[serde(rename_all = "camelCase")]
+pub struct VoiceConfig {
+    pub stt_enabled: bool,
+    pub tts_enabled: bool,
+    pub stt_provider: String,
+    pub tts_provider: String,
+    pub language: String,
+    pub tts_voice: String,
+    pub tts_speed: f32,
+}
+
+impl Default for VoiceConfig {
+    fn default() -> Self {
+        Self {
+            stt_enabled: true,
+            tts_enabled: true,
+            stt_provider: "webspeech".to_string(),
+            tts_provider: "edge".to_string(),
+            language: "zh-CN".to_string(),
+            tts_voice: "zh-CN-XiaoxiaoNeural".to_string(),
+            tts_speed: 1.0,
+        }
+    }
+}
+
 /// AI configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -608,6 +638,10 @@ pub struct AIConfig {
     /// Preferred browser for CDP browser control. Empty/default uses the system default browser.
     #[serde(default)]
     pub browser_control_preferred_browser: String,
+
+    /// Voice configuration (STT/TTS).
+    #[serde(default)]
+    pub voice: VoiceConfig,
 
     /// Maximum number of rounds per dialog turn before soft-pausing.
     #[serde(default = "default_max_rounds")]
@@ -1295,6 +1329,7 @@ impl Default for GlobalConfig {
             acp_clients: None,
             themes: Some(ThemesConfig::default()),
             font: None,
+            voice: Some(VoiceConfig::default()),
             version: "1.0.0".to_string(),
             last_modified: chrono::Utc::now(),
         }
@@ -1572,6 +1607,7 @@ impl Default for AIConfig {
             debug_mode_config: DebugModeConfig::default(),
             computer_use_enabled: false,
             browser_control_preferred_browser: String::new(),
+            voice: VoiceConfig::default(),
             max_rounds: default_max_rounds(),
         }
     }

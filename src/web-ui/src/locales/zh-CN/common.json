@@ -2,7 +2,8 @@
   "app": {
     "version": "版本",
     "loading": "加载中...",
-    "welcome": "欢迎使用 BitFun"
+    "welcome": "欢迎使用 BitFun",
+    "ttsWelcome": "你好，主人"
   },
   "agents": {
     "general": {

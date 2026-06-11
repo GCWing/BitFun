@@ -18,7 +18,8 @@ export type ConfigTab =
   | 'acp-agents'
   // | 'lsp' // temporarily hidden from config center
   | 'editor'
-  | 'keyboard';
+  | 'keyboard'
+  | 'voice';
 
 export interface ConfigTabDef {
   id: ConfigTab;
@@ -211,6 +212,21 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
           'claude code',
           'codex',
           'stdio',
+        ],
+      },
+      {
+        id: 'voice',
+        labelKey: 'configCenter.tabs.voice',
+        descriptionKey: 'configCenter.tabDescriptions.voice',
+        keywords: [
+          'voice',
+          'speech',
+          'tts',
+          'stt',
+          'microphone',
+          'audio',
+          'transcription',
+          'synthesis',
         ],
       },
     ],

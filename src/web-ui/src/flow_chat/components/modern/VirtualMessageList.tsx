@@ -13,9 +13,9 @@
 
 import React, { useRef, useState, useCallback, useEffect, useLayoutEffect, forwardRef, useImperativeHandle } from 'react';
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
-import { useActiveSessionState } from '../../hooks/useActiveSessionState';
+import { useActiveSessionState } from '@/flow_chat/hooks';
 import { VirtualItemRenderer } from './VirtualItemRenderer';
-import { ScrollToLatestBar } from '../ScrollToLatestBar';
+import { ScrollToLatestBar } from '@/flow_chat';
 import { ScrollToTurnHeaderButton } from '../ScrollToTurnHeaderButton';
 import { useScrollToTurnHeader } from '../../hooks/useScrollToTurnHeader';
 import { useVisibleTaskInfo } from '../../hooks/useVisibleTaskInfo';

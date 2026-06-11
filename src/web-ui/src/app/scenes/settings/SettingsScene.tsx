@@ -21,6 +21,7 @@ import BasicsConfig from '../../../infrastructure/config/components/BasicsConfig
 import AppearanceConfig from '../../../infrastructure/config/components/AppearanceConfig';
 import ReviewConfig from '../../../infrastructure/config/components/ReviewConfig';
 import QuickActionsConfig from '../../../infrastructure/config/components/QuickActionsConfig';
+import VoiceConfig from '../../../infrastructure/config/components/VoiceConfig';
 import ArchivedSessionsConfig from './components/ArchivedSessionsConfig';
 
 const KeyboardShortcutsTab = lazy(() => import('./components/KeyboardShortcutsTab'));
@@ -65,6 +66,7 @@ const SettingsScene: React.FC = () => {
     case 'mcp-tools':        Content = McpToolsConfig;      break;
     case 'acp-agents':       Content = AcpAgentsConfig;     break;
     case 'editor':           Content = EditorConfig;         break;
+    case 'voice':            Content = VoiceConfig;          break;
   }
 
   return (

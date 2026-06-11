@@ -19,6 +19,7 @@ import { useI18n } from '@/infrastructure/i18n';
 import { scheduleDeferredStartupSystems } from './startup/deferredStartupSystems';
 import { shouldScheduleDeferredStartupSystems } from './startup/deferredStartupGate';
 import { STARTUP_OVERLAY_HIDDEN_EVENT } from './startup/startupSignals';
+import { useWelcomeVoice } from '@/flow_chat/hooks/useWelcomeVoice';
 import {
   getStartupOverlayElapsedMs,
   hideStartupOverlay,
@@ -72,6 +73,9 @@ const MIN_SPLASH_MS = 900;
 
 function App() {
   const { t } = useI18n('settings/basics');
+
+  // Welcome voice on startup
+  useWelcomeVoice();
 
   // Workspace loading state — drives splash exit timing
   const { loading: workspaceLoading } = useWorkspaceContext();

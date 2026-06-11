@@ -19,6 +19,7 @@
       "models": "AI 模型、API 密鑰、供應商與代理。",
       "sessionPersonalization": "會話標題與 Agent 夥伴。",
       "sessionPermissions": "加速工作區搜尋、工具確認與逾時、Computer use、瀏覽器與偵錯。",
+      "quickActions": "程式碼完成後的一鍵 AI 動作，支援內建和自訂指令。",
       "review": "深度審核策略、審核員模型與額外審核 Sub-Agent。",
       "mcpTools": "MCP 伺服器與工具集成。",
       "acpAgents": "opencode、Claude Code、Codex 等外部 ACP Agent。",
@@ -26,7 +27,7 @@
       "lsp": "語言服務與代碼智能。",
       "keyboard": "快捷鍵與鍵位。",
       "archivedSessions": "檢視、恢復或永久刪除已歸檔的會話。",
-      "quickActions": "程式碼完成後的一鍵 AI 動作，支援內建和自訂指令。"
+      "voice": "語音輸入（STT）和語音合成（TTS）的對話互動配置。"
     },
     "categories": {
       "general": "通用",
@@ -48,7 +49,8 @@
       "lsp": "語言服務",
       "keyboard": "快捷鍵",
       "archivedSessions": "已歸檔會話",
-      "quickActions": "快捷動作"
+      "quickActions": "快捷動作",
+      "voice": "語音"
     }
   },
   "general": {
@@ -531,6 +533,36 @@
       "subtitle": "自定義應用的外觀和主題色彩",
       "import": "匯入主題",
       "export": "導出目前主題"
+    }
+  },
+  "voice": {
+    "title": "語音設定",
+    "subtitle": "配置語音輸入和語音合成",
+    "enabled": {
+      "label": "啟用語音",
+      "description": "啟用語音輸入和語音合成以進行對話互動"
+    },
+    "sections": {
+      "stt": "語音轉文字 (STT)",
+      "tts": "文字轉語音 (TTS)"
+    },
+    "stt": {
+      "provider": "STT 提供者",
+      "providerDescription": "用於語音輸入的語音識別引擎",
+      "providers": {
+        "webspeech": "Web Speech API (瀏覽器)",
+        "fasterWhisper": "Faster Whisper (本機，需要 GPU)"
+      }
+    },
+    "tts": {
+      "provider": "TTS 提供者",
+      "providerDescription": "用於語音輸出的語音合成引擎",
+      "providers": {
+        "edge": "Edge TTS (瀏覽器，免費)",
+        "elevenlabs": "ElevenLabs (雲端，需要 API Key)"
+      },
+      "voice": "語音",
+      "language": "語言"
     }
   }
 }

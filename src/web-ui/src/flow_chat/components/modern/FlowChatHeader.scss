@@ -134,12 +134,23 @@
 
   &__search-btn,
   &__review-platform-btn,
-  &__search-close {
+  &__search-close,
+  &__tts-btn {
     flex: 0 0 auto;
 
     &:not(:disabled):hover {
       background: color-mix(in srgb, var(--element-bg-soft) 82%, transparent);
     }
+  }
+
+  &__tts-btn--speaking {
+    color: var(--color-element-active);
+    animation: flowchat-header-tts-pulse 1.2s ease-in-out infinite;
+  }
+
+  @keyframes flowchat-header-tts-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
   }
 
   &__search {

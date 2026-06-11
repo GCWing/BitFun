@@ -2,7 +2,8 @@
   "app": {
     "version": "Version",
     "loading": "Loading...",
-    "welcome": "Welcome to BitFun"
+    "welcome": "Welcome to BitFun",
+    "ttsWelcome": "Hello"
   },
   "agents": {
     "general": {

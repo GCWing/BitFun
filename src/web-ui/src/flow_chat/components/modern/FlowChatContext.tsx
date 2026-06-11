@@ -60,6 +60,11 @@ export interface FlowChatContextValue {
   searchQuery?: string;
   searchMatchIndices?: ReadonlySet<number>;
   searchCurrentMatchVirtualIndex?: number;
+
+  // TTS state
+  speakingTextItemId?: string | null;
+  onSpeakingStart?: (textItemId: string) => void;
+  onSpeakingEnd?: (textItemId: string) => void;
 }
 
 export const FlowChatContext = createContext<FlowChatContextValue>({});

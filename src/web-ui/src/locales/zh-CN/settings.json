@@ -26,7 +26,8 @@
       "editor": "编辑器字体、显示与格式化。",
       "lsp": "语言服务与代码智能。",
       "keyboard": "快捷键与键位。",
-      "archivedSessions": "查看、恢复或永久删除已归档的会话。"
+      "archivedSessions": "查看、恢复或永久删除已归档的会话。",
+      "voice": "语音输入（STT）和语音合成（TTS）的对话交互配置。"
     },
     "categories": {
       "general": "通用",
@@ -48,7 +49,8 @@
       "editor": "编辑器",
       "lsp": "语言服务",
       "keyboard": "快捷键",
-      "archivedSessions": "已归档会话"
+      "archivedSessions": "已归档会话",
+      "voice": "语音"
     }
   },
   "general": {
@@ -531,6 +533,36 @@
       "subtitle": "自定义应用的外观和主题色彩",
       "import": "导入主题",
       "export": "导出当前主题"
+    }
+  },
+  "voice": {
+    "title": "语音设置",
+    "subtitle": "配置语音输入和语音合成",
+    "enabled": {
+      "label": "启用语音",
+      "description": "启用语音输入和语音合成以进行对话交互"
+    },
+    "sections": {
+      "stt": "语音转文字 (STT)",
+      "tts": "文字转语音 (TTS)"
+    },
+    "stt": {
+      "provider": "STT 提供商",
+      "providerDescription": "用于语音输入的语音识别引擎",
+      "providers": {
+        "webspeech": "Web Speech API (浏览器)",
+        "fasterWhisper": "Faster Whisper (本地，需要 GPU)"
+      }
+    },
+    "tts": {
+      "provider": "TTS 提供商",
+      "providerDescription": "用于语音输出的语音合成引擎",
+      "providers": {
+        "edge": "Edge TTS (浏览器，免费)",
+        "elevenlabs": "ElevenLabs (云端，需要 API Key)"
+      },
+      "voice": "语音",
+      "language": "语言"
     }
   }
 }

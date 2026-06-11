@@ -1728,6 +1728,22 @@
   }
 }
 
+.bitfun-chat-input__voice-button {
+  &--listening {
+    color: var(--color-primary);
+    animation: bitfun-voice-pulse 1.5s ease-in-out infinite;
+  }
+}
+
+@keyframes bitfun-voice-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
 @keyframes bitfun-stacked-reveal {
   from {
     opacity: 0;

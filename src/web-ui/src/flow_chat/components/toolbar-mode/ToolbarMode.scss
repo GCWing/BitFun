@@ -460,6 +460,19 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   }
 }
 
+.bitfun-toolbar-mode__companion-pet {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+
+  &-element {
+    pointer-events: none;
+    width: 48px;
+    height: 48px;
+  }
+}
+
 .bitfun-toolbar-mode__tool {
   display: flex;
   align-items: center;

@@ -1,0 +1,97 @@
+<think>Now I have enough context. Let me write the compartments for the four distinct work units:
+
+1. **Compartment 1: Improved AGENTS.md** (messages 2-11) - The agent improved the existing AGENTS.md by adding a "Gotchas and non-obvious facts" section. This was successful improvement work.
+
+2. **Compartment 2: Sub-agent architecture** (messages 12-17) - The user asked how sub-agents are distinguished. The agent explained the three-layer system: AgentCategory (Mode/SubAgent/Hidden), SubAgentSource (Builtin/User/Project), and subagent_id. Key structures: AgentRegistry, TaskTool.
+
+
+3. **Compartment 3: MCP tool naming** (messages 18-26) - The user wanted to understand how MCP tools are listed. The agent walked through the naming convention `mcp__{server_id}__{tool_name}`, tool registration via MCPServerManager, and how MCPToolAdapter loads tools through the MCP protocol.
+
+4. **Compartment 4: Voice bidirectional (brainstorming)** (messages 27-44) - The user is exploring how to add voice input and output to the chat dialog. This is a multi-step design conversation where the agent proposed different technical approaches for speech recognition, and the user selected the bidirectional option.
+
+For the voice brainstorming, I need to capture how this moved through several stages: the initial request for voice features, exploring the codebase, clarifying the direction as bidirectional communication, evaluating technical options, researching OpenHuman's implementation details, and ultimately identifying a reference project to inform the design.</think>
+
+Looking at the four distinct work arcs in messages 1-44:
+
+1. **Improved AGENTS.md** (messages 2-11) — added "Gotchas" section
+2. **Sub-agent architecture** (messages 12-17) — explainer, no code
+3. **MCP tool naming** (messages 18-26) — explainer, no code
+4. **Voice I/O brainstorming** (messages 27-44) — multi-turn design discussion, still in exploration
+
+Compartment 4 (voice) is still open-ended (no implementation decision made), so I'll leave `unprocessed_from` on that one.
+
+```xml
+<output>
+<compartments>
+<compartment start="2" end="11" title="Improved AGENTS.md with Gotchas section" episode_type="docs" importance="45">
+<p1>
+Reviewed the existing AGENTS.md against CI workflow (`ci.yml`), CONTRIBUTING.md, and package.json. Identified that the file was already comprehensive but lacked a "Gotchas and non-obvious facts" section for hard-earned context. Added six items: (1) `pnpm run fmt:rs` calls `scripts/format-changed-rust.mjs` — do not use `cargo fmt` directly; (2) CI path-ignores `**/*.md` and `png/**` — doc-only changes don't trigger builds, use `check:repo-hygiene` and `check:github-config` locally; (3) versions are automated via `release-please` on `main`, do not manually bump; (4) Windows OpenSSL auto-bootstrap, opt-out via `BITFUN_SKIP_OPENSSL_BOOTSTRAP=1`; (5) `bitfun-cli` excluded from CI workspace check — use `--exclude bitfun-cli` locally for CI-equivalent coverage; (6) `postinstall` runs `copy-assets` after `pnpm install`, this is normal.
+</p1>
+<p2>
+Added "Gotchas and non-obvious facts" section to AGENTS.md covering six non-obvious behaviors: fmt script vs cargo fmt, CI ignores docs/images, release-please automation, Windows OpenSSL bootstrap, CLI excluded from workspace check, postinstall asset copy.
+</p2>
+<p3>
+Improved AGENTS.md with a Gotchas section capturing hard-to-infer repo-specific facts from CI config and CONTRIBUTING.md.
+</p3>
+<p4/>
+</compartment>
+
+<compartment start="12" end="17" title="Sub-agent categorization: AgentCategory, SubAgentSource, subagent_id" episode_type="design" importance="35">
+<p1>
+User asked how sub-agents are distinguished in the codebase. Explained the three-layer identification system used across bitfun-core's agentic layer. Agents are typed by `AgentCategory` enum (Mode — shown in frontend mode selector; SubAgent — shown in frontend subagent list, discovered by TaskTool; Hidden — internal-only, not shown in UI). `SubAgentSource` tracks origin (Builtin, User from `~/.bitfun/`, or Project from workspace `.bitfun/`). `subagent_id` is the unique string identifier; `subagent_type` is the parameter passed to TaskTool to spawn a specific subagent. `AgentRegistry` maintains two maps: a global `agents: Map<subagent_id, AgentEntry>` and a per-workspace `project_subagents: Map<PathBuf, Map<subagent_id, AgentEntry>>`. TaskTool resolves `subagent_type` → `AgentEntry` → checks category → launches appropriate session.
+</p1>
+<p2>
+Sub-agents use AgentCategory (Mode/SubAgent/Hidden) + SubAgentSource (Builtin/User/Project) + subagent_id for identification. TaskTool takes subagent_type to look up AgentEntry via AgentRegistry and determine launch behavior.
+</p2>
+<p3>
+Agent registry differentiates sub-agents by category (Mode/SubAgent/Hidden), source (Builtin/User/Project), and id. TaskTool uses subagent_type to route to the correct AgentEntry.
+</p3>
+<p4>AgentCategory SubAgent Hidden; AgentRegistry; subagent_type TaskTool</p4>
+</compartment>
+
+<compartment start="18" end="26" title="MCP tool naming: mcp__{server_id}__{tool_name} format" episode_type="design" importance="25">
+<p1>
+User asked to list MCP tools. Explained the global ToolRegistry approach and naming convention. MCP tool names follow `mcp__{server_id}__{tool_name}` format (e.g. `mcp__filesystem__read_file`), built via `build_mcp_tool_name(server_id, tool_name)`. MCPServerManager calls `register_mcp_tools()` to load tools from an MCP server via the protocol's `tools/list` call; MCPToolAdapter bridges the MCP protocol to the internal ToolRegistry. `ToolRegistry::get_all_tools()` / `get_all_registered_tools()` returns all registered tools including MCP tools. Frontend uses `catalog.rs` refresh/unregister operations to manage the tool lifecycle.
+</p1>
+<p2>
+MCP tools use `mcp__{server_id}__{tool_name}` naming. MCPServerManager loads via `tools/list` protocol call, bridges through MCPToolAdapter into global ToolRegistry. Use `get_all_tools()` to list.
+</p2>
+<p3>
+MCP tool naming: `mcp__{server_id}__{tool_name}`. Registered through MCPServerManager → MCPToolAdapter → global ToolRegistry.
+</p3>
+<p4>mcp__ prefix; MCPServerManager; ToolRegistry::get_all_tools</p4>
+</compartment>
+
+<compartment start="27" end="44" title="Voice bidirectional: brainstorming approaches and OpenHuman reference" episode_type="design" importance="50">
+<p1>
+User wants to add voice input (STT) and voice output (TTS) to BitFun's chat dialog. Explored ChatInput.tsx to understand the existing input mechanism — no voice integration exists yet. Proposed three technical approaches: (A) browser-native Web Speech API, (B) local Whisper + cloud TTS, (C) cloud STT + cloud TTS. User selected option C (bidirectional). Then user asked to reference "hermes" and "openhuman" implementations. Fetched https://github.com/tinyhumansai/openhuman and analyzed its voice architecture. OpenHuman uses: local audio capture + VAD + cloud streaming STT; cloud-hosted TTS with configurable voice; mascot avatar with viseme map lip-sync; advanced Google Meet integration with real-time transcribe + outbound audio playback. Also found Open WebUI as a comparable implementation using OpenAI Whisper, Deepgram, Azure for STT and ElevenLabs, Azure, OpenAI for TTS.
+</p1>
+<p2>
+Bidirectional voice (STT + TTS) is the target. Researched OpenHuman's architecture: local mic + VAD + streaming cloud STT; hosted TTS; viseme-driven avatar lip-sync. Open WebUI uses Whisper/Deepgram/Azure for STT and ElevenLabs/Azure/OpenAI for TTS. Still in design exploration phase — no implementation decision made.
+</p2>
+<p3>
+Voice I/O direction: bidirectional. OpenHuman uses local audio + cloud STT + hosted TTS + viseme lip-sync. Open WebUI uses Whisper + ElevenLabs/Azure TTS. Still exploring.
+</p3>
+<p4/>
+</compartment>
+</compartments>
+<facts>
+</facts>
+<events>
+</events>
+<meta>
+<messages_processed>1-44</messages_processed>
+<unprocessed_from>27</unprocessed_from>
+</meta>
+</output>
+```
+
+**Summary of what I captured:**
+
+- **Compartment 1** (messages 2-11, importance 45): Improved `AGENTS.md` with a "Gotchas and non-obvious facts" section — six high-signal items derived from CI config and CONTRIBUTING.md that agents would likely miss.
+
+- **Compartment 2** (messages 12-17, importance 35): Explained sub-agent differentiation — `AgentCategory`/`SubAgentSource`/`subagent_id` three-layer system plus `AgentRegistry` and `TaskTool` routing.
+
+- **Compartment 3** (messages 18-26, importance 25): Explained MCP tool naming and listing — `mcp__{server_id}__{tool_name}` format, `MCPServerManager` registration, `ToolRegistry` query.
+
+- **Compartment 4** (messages 27-44, importance 50): Voice bidirectional brainstorming — three approaches proposed, user picked bidirectional, OpenHuman researched as reference architecture. Still open-ended (no implementation decision), so marked `unprocessed_from: 27`.
