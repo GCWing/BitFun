@@ -1,17 +1,17 @@
-# BitFun 子模块设计：风险与控制分类器
+# BitFun 子模块设计：风险与策略分类器
 
 > 上游文档：[design.md](../design.md)
-> 模块角色：根据任务意图、操作类型、项目画像、变更内容、路径、历史信号和团队策略，生成风险提示、控制建议、验证建议和审查强度。
+> 模块角色：根据任务意图、操作类型、项目画像、变更内容、路径、历史信号和团队策略，生成风险提示、策略建议、验证建议和审查强度。
 
 ## 1. 模块定位
 
-风险与控制分类器是自适应控制的策略输入层，不是 PR 门禁专属模块，也不是阻塞决策引擎。它回答：
+风险与策略分类器是配置化策略的输入层。它回答：
 
 ```text
 这个任务或变更需要多少额外信心？
 ```
 
-它输出的是可解释建议：建议哪些检查、是否建议定向审查、是否需要证据引用、是否可能进入团队治理。任何阻塞仍必须由确定性证据、安全边界或明确项目/组织策略触发；分类器不能凭模型判断把建议模式变成强制要求/阻断。
+它输出可解释建议：建议哪些检查、是否建议定向审查、是否需要证据引用、是否可能进入团队治理。阻塞由确定性证据、安全边界或明确项目/组织策略触发；分类器负责给出建议、原因和置信度。
 
 安全敏感信号会被识别并传递给 [安全边界](../architecture/security-boundary.md)，但安全允许、拒绝或应急放行不由本模块决定。
 
@@ -22,18 +22,18 @@
 | [GitHub rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets) | 强约束需要可解释、可配置、可审计 |
 | [CodeRabbit 路径指令](https://docs.coderabbit.ai/configuration/path-instructions) | 路径级规则比项目级单一规则更适合复杂仓库 |
 | [Kiro steering](https://kiro.dev/docs/steering/) | 工作区、团队、条件加载能减少无关上下文和误触发 |
-| [Agentless](https://arxiv.org/abs/2407.01489) | 简单可解释流程是强基线，不应过早依赖复杂自治 |
+| [Agentless](https://arxiv.org/abs/2407.01489) | 简单可解释流程是强基线，复杂自治能力应建立在可解释基线之上 |
 | [NIST SP 800-218A](https://csrc.nist.gov/pubs/sp/800/218/a/final) | AI 相关变更需要把模型、数据、工具和供应链纳入风险识别 |
 
 设计约束：
 
 - 输出必须包含原因、证据、信心和覆盖路径。
-- 风险标签不能替代人工责任边界。
+- 风险标签用于提示、检查和审查建议；人工责任边界由团队策略和风险接受记录确定。
 - 规则、模型提示、路径矩阵和团队配置都必须版本化。
 - 校准依赖合入后缺陷、审查阻塞项、CI 失败、覆盖和误升级。
-- 项目画像中 `unknown/conflicting/stale` 的规则不得被当作低风险依据。
+- 项目画像中 `unknown/conflicting/stale` 的规则进入未知或降级路径。
 - 主动配置变化，例如 hook、plugin、自定义工具、MCP server 或智能体规则，必须进入安全敏感风险路径。
-- 不把 BitFun 自身验证路径或某类技术栈硬编码为默认规则。
+- 默认规则保持技术栈无关；BitFun 自身验证路径只作为内部样本。
 
 ## 3. 风险维度
 
@@ -64,7 +64,7 @@
 输出：
 
 ```ts
-interface RiskControlHint {
+interface RiskPolicyHint {
   level: "low" | "medium" | "high" | "unknown";
   tags: RiskTag[];
   axes: {
@@ -81,7 +81,7 @@ interface RiskControlHint {
   required_checks: RequiredCheck[];
   review_profile: "none" | "targeted" | "full";
   evidence_display_hint: "none" | "summary" | "evidence_refs" | "full_pack";
-  control_profile_hint: "fast" | "assist" | "review" | "guarded" | "regulated";
+  policy_profile_hint: "fast" | "assist" | "review" | "guarded" | "regulated";
   override_policy: OverridePolicy;
 }
 ```
@@ -111,7 +111,7 @@ interface RiskControlHint {
   -> 补充历史风险
   -> 生成推荐/强制检查
   -> 生成审查画像和证据展示提示
-  -> 发出 risk.control_hinted 事件
+  -> 发出 risk.policy_hinted 事件
   -> 收集校准反馈
 ```
 
@@ -137,7 +137,7 @@ interface RiskControlHint {
 
 | 阶段 | 目标 |
 |---|---|
-| P0 | 任务/动作/变更风险标签、推荐检查、`risk.control_hinted` 事件 |
+| P0 | 任务/动作/变更风险标签、推荐检查、`risk.policy_hinted` 事件 |
 | P1 | 路径矩阵、项目规则、定向审查触发、误升级反馈 |
 | P2 | 团队策略、强制检查、守护/监管配置 |
 | P3 | 交付物图谱上下文、历史风险和发布/事故信号 |
@@ -157,8 +157,8 @@ interface RiskControlHint {
 
 ## 8. 成功标准
 
-- 自适应控制能用分类结果选择合理模式。
-- 普通低风险任务不被强质量流程打断。
+- 配置化策略能用分类结果选择合理模式。
+- 普通低风险任务保持快速路径和轻量建议。
 - 高风险变更能暴露风险原因、必跑验证和未覆盖风险。
 - 安全敏感动作能被正确转交安全边界。
 - 误升级、漏推荐、无价值检查都可通过反馈量化和修正。

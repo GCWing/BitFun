@@ -5,14 +5,14 @@
 
 ## 1. 模块定位
 
-变更就绪度是产品体验层，PR 门禁是其中的可选强治理投影。默认快速路径不应让用户先理解门禁、证据包或审计模型；它只需要在任务结束时给出简洁的改动、已验证项、未验证项和下一步建议。
+变更就绪度是产品体验层，PR 门禁是其中的可选强治理投影。快速路径输出简洁的改动、已验证项、未验证项和下一步建议；当用户准备 PR、进入受管目录、开启团队策略或使用 `guarded/regulated` 模式时，再投影为更严格的就绪度或门禁结果。
 
-当用户进入 PR、发布、团队受管控目录或 `guarded/regulated` 模式时，本模块才把后台证据包、风险控制提示（Risk Control Hint）、验证证据和风险接受记录组合成更严格的结果。这个结果可以投影到本地报告、PR 描述、GitHub 检查状态或团队强制策略，但不替代 CI、分支保护、安全扫描、CODEOWNERS 或人类审查人。
+在严格场景中，本模块把后台证据包、风险策略提示（Risk Policy Hint）、验证证据和风险接受记录组合成可审查结果。这个结果可以投影到本地报告、PR 描述、GitHub 检查状态或团队强制策略；CI、分支保护、安全扫描、CODEOWNERS 和人类审查人继续作为外部权威信号。
 
 关键边界：
 
-- 安全阻断来自 [安全边界](../architecture/security-boundary.md)，不是本模块的质量判断。
-- 风险等级来自 [风险分类器](risk-classifier.md)，但风险等级不是事实结论。
+- 安全阻断来自 [安全边界](../architecture/security-boundary.md)。
+- 风险等级来自 [风险分类器](risk-classifier.md)，并作为建议、检查和审查强度输入。
 - 证据包只提供证据快照；本模块不修改原始证据。
 - 阻断只能来自确定性失败、组织策略或未被接受的明确残余风险。
 
@@ -20,7 +20,7 @@
 
 | 参照 | 启发 |
 |---|---|
-| [GitHub Copilot 代码审查](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/request-a-code-review/use-code-review) | AI 审查默认以评论形式协助，不天然等同强制要求审批 |
+| [GitHub Copilot 代码审查](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/request-a-code-review/use-code-review) | AI 审查优先以评论形式协助，强制审批由仓库规则配置 |
 | [GitHub Checks API](https://docs.github.com/en/rest/checks) / [rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets) | 强策略需要稳定状态、结论、日志和审计语义 |
 | [GitLab 警告模式](https://docs.gitlab.com/user/application_security/policies/merge_request_approval_policies/) | 新策略应先建议/警告校准，再进入强制/阻断 |
 | [CodeRabbit 审查强度](https://docs.coderabbit.ai/reference/configuration) | 审查强度应可配置，默认减少噪音 |
@@ -42,11 +42,11 @@
 
 | 输入 | 来源 |
 |---|---|
-| 自适应控制决策 | 模式、推荐/强制检查、证据模式、审查模式 |
+| 配置化策略决策 | 模式、推荐/强制检查、证据模式、审查模式 |
 | 安全边界决策 | allow/ask/deny/应急放行、安全残余风险、授权范围 |
 | 变更摘要 | Git diff、文件变更、生成文件、删除/重命名 |
 | 验证证据 | 本地命令、CI 检查、制品引用、不可运行原因 |
-| 风险控制提示 | 风险标签、触发原因、置信度、检查建议 |
+| 风险策略提示 | 风险标签、触发原因、置信度、检查建议 |
 | 证据投影 | 摘要、证据引用或完整证据包 |
 | 人工决策 | 跳过检查、风险接受、应急放行、审查人决策 |
 
@@ -84,17 +84,17 @@ interface PrGateProjection {
 |---|---|---|
 | `ready` / `pass` | 该模式下需要的证据完整，未发现未接受阻塞风险 | 可以 |
 | `attention` / `warn` | 有建议检查、未关闭风险或非阻塞缺口 | 可以，但应展示后果 |
-| `blocked` / `fail` | 确定性失败、安全拒绝、组织强制要求策略未满足 | 不应自动继续 |
+| `blocked` / `fail` | 确定性失败、安全拒绝、组织强制要求策略未满足 | 停止当前自动流程并处理原因 |
 | `degraded` | 上下文、证据、工具、主动配置或外部系统不足以可靠判断 | 可以人工接受残余风险，但不能改写为通过 |
 
 ## 4. 核心流程
 
 ```text
 任务或 PR 意图
-  -> 自适应控制决策
+  -> 配置化策略决策
   -> 安全边界摘要
   -> 收集变更与验证证据
-  -> 应用风险控制提示
+  -> 应用风险策略提示
   -> 选择证据展示层级
   -> 生成变更就绪度摘要
   -> 按需投影 PR 门禁
@@ -115,7 +115,7 @@ PR 文本投影示例：
 ```markdown
 变更就绪度
 
-- 控制模式：review
+- 治理模式：review
 - 状态：attention
 - 已验证：
   - 类型检查通过
@@ -154,7 +154,7 @@ PR 文本投影示例：
 
 - `degraded` 不能因为确认而变成 `pass`；只能保留降级状态并附加风险接受，或补齐证据后重算。
 - 风险接受必须有范围和过期时间；默认不跨 PR 或会话持久化。
-- 应急放行是安全授权，不等同质量风险接受；两者必须分开记录。
+- 应急放行属于安全授权，质量风险接受属于交付决策；两者必须分开记录。
 
 ## 6. 分阶段落地
 
