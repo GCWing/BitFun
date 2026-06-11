@@ -25,6 +25,7 @@ import {
   saveAllInProgressTurns,
   immediateSaveDialogTurn,
   createChatSession as createChatSessionModule,
+  preloadHistoricalSessionForOpen as preloadHistoricalSessionForOpenModule,
   switchChatSession as switchChatSessionModule,
   deleteChatSession as deleteChatSessionModule,
   renameChatSessionTitle as renameChatSessionTitleModule,
@@ -379,6 +380,10 @@ export class FlowChatManager {
 
   async switchChatSession(sessionId: string): Promise<void> {
     return switchChatSessionModule(this.context, sessionId);
+  }
+
+  preloadHistoricalSessionForOpen(sessionId: string): void {
+    preloadHistoricalSessionForOpenModule(this.context, sessionId);
   }
 
   async deleteChatSession(sessionId: string): Promise<void> {

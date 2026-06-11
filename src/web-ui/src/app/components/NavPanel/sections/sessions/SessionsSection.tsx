@@ -64,6 +64,7 @@ import './SessionsSection.scss';
 const log = createLogger('SessionsSection');
 
 type SessionMode = 'code' | 'cowork' | 'claw';
+type HistoryOpenIntentDispatchResult = 'none' | 'dispatched' | 'already-pending';
 
 const escapeRegExp = (value: string): string =>
   value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -77,18 +78,6 @@ const resolveSessionModeType = (session: Session): SessionMode => {
 
 const getTitle = (session: Session): string =>
   resolveSessionTitle(session, (key, options) => i18nService.t(key, options));
-
-const waitForHistoryOpenIntentPaint = (): Promise<void> =>
-  new Promise(resolve => {
-    if (typeof window === 'undefined' || typeof window.requestAnimationFrame !== 'function') {
-      globalThis.setTimeout(resolve, 0);
-      return;
-    }
-
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => resolve());
-    });
-  });
 
 const countTopLevelSessionsInScope = (
   sessions: Iterable<Session>,
@@ -595,13 +584,13 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   const lastHistoryOpenIntentRef = useRef<{ sessionId: string; atMs: number } | null>(null);
 
   const dispatchHistoryOpenIntentForSession = useCallback(
-    (session: Session): boolean => {
+    (session: Session): HistoryOpenIntentDispatchResult => {
       const sessionId = session.sessionId;
       if (
         sessionId === activeSessionId ||
         !shouldShowHistorySessionOpenIntent(session)
       ) {
-        return false;
+        return 'none';
       }
 
       const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
@@ -611,12 +600,12 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         lastIntent.sessionId === sessionId &&
         now - lastIntent.atMs < 250
       ) {
-        return true;
+        return 'already-pending';
       }
 
       lastHistoryOpenIntentRef.current = { sessionId, atMs: now };
       dispatchHistorySessionOpenIntent(sessionId, getTitle(session));
-      return true;
+      return 'dispatched';
     },
     [activeSessionId],
   );
@@ -626,13 +615,11 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       if (editingSessionId) return;
       try {
         const session = flowChatStore.getState().sessions.get(sessionId);
-        const historyOpenIntentDispatched = session
+        const historyOpenIntentDispatch = session
           ? dispatchHistoryOpenIntentForSession(session)
-          : false;
-        if (session) {
-          if (historyOpenIntentDispatched) {
-            await waitForHistoryOpenIntentPaint();
-          }
+          : 'none';
+        if (session && historyOpenIntentDispatch !== 'none') {
+          flowChatManager.preloadHistoricalSessionForOpen(sessionId);
         }
         const relationship = resolveSessionRelationship(session);
         const parentSessionId = relationship.parentSessionId;
@@ -691,13 +678,19 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       if (editingSessionId || session.sessionId === activeSessionId) {
         return;
       }
+      if (event.button !== 0) {
+        return;
+      }
 
       const target = event.target as HTMLElement | null;
       if (target?.closest('.bitfun-nav-panel__inline-item-actions, .bitfun-nav-panel__inline-item-edit')) {
         return;
       }
 
-      dispatchHistoryOpenIntentForSession(session);
+      const historyOpenIntentDispatch = dispatchHistoryOpenIntentForSession(session);
+      if (historyOpenIntentDispatch !== 'none') {
+        flowChatManager.preloadHistoricalSessionForOpen(session.sessionId);
+      }
     },
     [activeSessionId, dispatchHistoryOpenIntentForSession, editingSessionId],
   );

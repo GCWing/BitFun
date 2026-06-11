@@ -4,6 +4,7 @@ import * as fs from 'fs/promises';
 import * as fsSync from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { performance as nodePerformance } from 'node:perf_hooks';
 import {
   readPerformanceNow,
   readStartupTraceSnapshot,
@@ -3581,6 +3582,9 @@ type RapidLongSessionSwitchMeasurement = {
   clickPlan: Array<{
     sessionId: string;
     clickedAtMs: number;
+    findDurationMs: number;
+    clickDurationMs: number;
+    pauseDurationMs?: number;
   }>;
   activeSessionIdAtEnd: string | null;
   targetLatestVisibleAtMs: number;
@@ -3592,6 +3596,9 @@ type RapidLongSessionSwitchMeasurement = {
     target: {
       clickedAtMs: number;
       clickSinceFirstClickMs: number;
+      findDurationMs: number;
+      clickDurationMs: number;
+      pauseBeforeTargetMs: number;
       clickToLatestVisibleMs: number;
       clickToLatestUsableMs: number;
       latestVisibleToUsableMs: number;
@@ -3877,18 +3884,32 @@ async function collectRapidLongSessionSwitchMeasurement(
 
   for (let index = 0; index < sessionIds.length; index += 1) {
     const sessionId = sessionIds[index];
+    const findStartedAtRunnerMs = nodePerformance.now();
     const item = await findSessionItem(sessionId);
+    const findDurationMs = nodePerformance.now() - findStartedAtRunnerMs;
     if (!item) {
       throw new Error(`Rapid switch session disappeared before click: ${sessionId}`);
     }
-    clickPlan.push({
+    const itemClickedAtMs = await readPerformanceNow();
+    const clickPlanEntry: RapidLongSessionSwitchMeasurement['clickPlan'][number] = {
       sessionId,
-      clickedAtMs: await readPerformanceNow(),
+      clickedAtMs: itemClickedAtMs,
+      findDurationMs,
+      clickDurationMs: 0,
+    };
+    clickPlan.push({
+      ...clickPlanEntry,
     });
+    const clickStartedAtRunnerMs = nodePerformance.now();
     await item.click();
+    clickPlanEntry.clickDurationMs = nodePerformance.now() - clickStartedAtRunnerMs;
+    clickPlan[index] = clickPlanEntry;
     if (index < sessionIds.length - 1) {
       const delayMs = numericEnv('BITFUN_E2E_PERF_RAPID_SWITCH_DELAY_MS') ?? 75;
+      const pauseStartedAtRunnerMs = nodePerformance.now();
       await browser.pause(Math.max(0, delayMs));
+      clickPlanEntry.pauseDurationMs = nodePerformance.now() - pauseStartedAtRunnerMs;
+      clickPlan[index] = clickPlanEntry;
     }
   }
 
@@ -3929,11 +3950,20 @@ async function collectRapidLongSessionSwitchMeasurement(
       ) ||
       event.phase.startsWith('flowchat_latest_end_anchor') ||
       event.phase.startsWith('flowchat_initial_history') ||
-      event.phase === 'react_render_profile'
+      event.phase === 'react_render_profile' ||
+      event.phase === 'git_status_request' ||
+      event.phase === 'git_state_refresh'
     )
   );
   const targetClickedAtMs =
     clickPlan.find(entry => entry.sessionId === targetSessionId)?.clickedAtMs ?? clickedAtMs;
+  const targetClickPlanIndex = clickPlan.findIndex(entry => entry.sessionId === targetSessionId);
+  const targetClickPlanEntry = targetClickPlanIndex >= 0
+    ? clickPlan[targetClickPlanIndex]
+    : undefined;
+  const pauseBeforeTargetMs = clickPlan
+    .slice(0, Math.max(0, targetClickPlanIndex))
+    .reduce((total, entry) => total + (entry.pauseDurationMs ?? 0), 0);
   const sessionBreakdowns = clickPlan.map((entry, index) => {
     const sessionEvents = events.filter(event =>
       typeof event.sessionId === 'string' &&
@@ -3967,6 +3997,9 @@ async function collectRapidLongSessionSwitchMeasurement(
       target: {
         clickedAtMs: targetClickedAtMs,
         clickSinceFirstClickMs: targetClickedAtMs - clickedAtMs,
+        findDurationMs: targetClickPlanEntry?.findDurationMs ?? 0,
+        clickDurationMs: targetClickPlanEntry?.clickDurationMs ?? 0,
+        pauseBeforeTargetMs,
         clickToLatestVisibleMs: latestVisible.visibleAtMs - targetClickedAtMs,
         clickToLatestUsableMs: latestUsable.usableAtMs - targetClickedAtMs,
         latestVisibleToUsableMs: latestUsable.usableAtMs - latestVisible.visibleAtMs,
@@ -4129,7 +4162,9 @@ async function collectLongSessionOpenMeasurement(
       ) ||
       event.phase.startsWith('flowchat_latest_end_anchor') ||
       event.phase.startsWith('flowchat_initial_history') ||
-      event.phase === 'react_render_profile'
+      event.phase === 'react_render_profile' ||
+      event.phase === 'git_status_request' ||
+      event.phase === 'git_state_refresh'
     )
   );
   const screenshotPath = await maybeSavePerfScreenshot(`long-session-${sessionId}`);
@@ -4504,6 +4539,9 @@ describe('Performance telemetry', () => {
         firstClickToTargetClickMs: measurement.rapidSwitchBreakdown.firstClickToTargetClickMs,
         target: {
           clickSinceFirstClickMs: measurement.rapidSwitchBreakdown.target.clickSinceFirstClickMs,
+          findDurationMs: measurement.rapidSwitchBreakdown.target.findDurationMs,
+          clickDurationMs: measurement.rapidSwitchBreakdown.target.clickDurationMs,
+          pauseBeforeTargetMs: measurement.rapidSwitchBreakdown.target.pauseBeforeTargetMs,
           clickToLatestVisibleMs: measurement.rapidSwitchBreakdown.target.clickToLatestVisibleMs,
           latestVisibleToUsableMs: measurement.rapidSwitchBreakdown.target.latestVisibleToUsableMs,
           clickToLatestUsableMs: measurement.rapidSwitchBreakdown.target.clickToLatestUsableMs,

@@ -234,6 +234,66 @@ describe('startup performance contract', () => {
     expect(getSource).not.toContain('restore_session');
   });
 
+  it('defers passive historical thread-goal refresh without delaying explicit goal entry', () => {
+    const source = readSource('../../flow_chat/hooks/useThreadGoalController.ts');
+    const passiveRefreshEffectStart = source.indexOf('if (session?.isHistorical)');
+    const openGoalEntryStart = source.indexOf('const openGoalEntry = useCallback');
+
+    expect(passiveRefreshEffectStart).toBeGreaterThan(-1);
+    expect(source).toContain('HISTORICAL_THREAD_GOAL_REFRESH_DELAY_MS');
+    expect(source).toContain('globalThis.setTimeout(() => {');
+    expect(source).toContain('globalThis.clearTimeout(timeoutId)');
+    expect(openGoalEntryStart).toBeGreaterThan(passiveRefreshEffectStart);
+    expect(source.slice(openGoalEntryStart)).toContain('await fetchSessionThreadGoal(session)');
+  });
+
+  it('uses the history open intent as a strict before-hydrate activation gate without adding a second paint wait', () => {
+    const source = readSource('../../app/components/NavPanel/sections/sessions/SessionsSection.tsx');
+    const sessionModuleSource = readSource('../../flow_chat/services/flow-chat-manager/SessionModule.ts');
+    const intentSource = readSource('../../flow_chat/services/sessionOpenIntent.ts');
+    const dispatchResultStart = source.indexOf("type HistoryOpenIntentDispatchResult = 'none' | 'dispatched' | 'already-pending'");
+    const duplicateIntentStart = source.indexOf("return 'already-pending'");
+    const switchStart = source.indexOf('const handleSwitch = useCallback');
+    const pointerDownStart = source.indexOf('const handleSessionOpenPointerDown = useCallback');
+    const beforeHydrateStart = sessionModuleSource.indexOf("activation: 'before-hydrate'");
+    const hydrateBeforeSwitchStart = sessionModuleSource.indexOf('if (shouldHydrateBeforeSwitch)');
+
+    expect(dispatchResultStart).toBeGreaterThan(-1);
+    expect(duplicateIntentStart).toBeGreaterThan(dispatchResultStart);
+    expect(source).toContain("historyOpenIntentDispatch !== 'none'");
+    expect(source).not.toContain('if (historyOpenIntentDispatched)');
+    expect(pointerDownStart).toBeGreaterThan(switchStart);
+    expect(source.slice(pointerDownStart)).toContain('dispatchHistoryOpenIntentForSession(session)');
+    expect(intentSource).toContain('RECENT_HISTORY_OPEN_INTENT_MS');
+    expect(intentSource).toContain('HISTORY_SESSION_OPEN_TRANSITION_MAX_MS');
+    expect(intentSource).toContain('subscribeHistorySessionOpenTransition');
+    expect(sessionModuleSource).toContain('consumeRecentHistorySessionOpenIntent(sessionId)');
+    expect(beforeHydrateStart).toBeGreaterThan(-1);
+    expect(hydrateBeforeSwitchStart).toBeGreaterThan(-1);
+    expect(beforeHydrateStart).toBeLessThan(hydrateBeforeSwitchStart);
+    expect(sessionModuleSource).toContain("shouldHydrateBeforeSwitch ? 'after-hydrate' : 'immediate'");
+  });
+
+  it('keeps passive chat Git refresh out of the history open transition window', () => {
+    const chatInputSource = readSource('../../flow_chat/components/ChatInput.tsx');
+    const fileCardSource = readSource('../../flow_chat/tool-cards/FileOperationToolCard.tsx');
+    const workspaceItemSource = readSource('../../app/components/NavPanel/sections/workspaces/WorkspaceItem.tsx');
+
+    expect(chatInputSource).toContain('useSyncExternalStore');
+    expect(chatInputSource).toContain('getHistorySessionOpenTransitionSnapshot');
+    expect(chatInputSource).toContain('deferChatStripPassiveGitRefresh');
+    expect(chatInputSource).toContain('historySessionOpenTransition !== null');
+    expect(fileCardSource).toContain('getHistorySessionOpenTransitionSnapshot');
+    expect(fileCardSource).toContain('historySessionOpenTransition === null');
+    expect(fileCardSource).toContain("displayContext !== 'subagent-projection'");
+    expect(workspaceItemSource).toContain('getHistorySessionOpenTransitionSnapshot');
+    expect(workspaceItemSource).toContain('suppressWorkspaceGitRefreshOnMountDuringSessionTransition');
+    expect(workspaceItemSource).toContain('subscribeHistorySessionOpenTransition');
+    expect(workspaceItemSource).toContain('WORKSPACE_GIT_PENDING_CANCEL_SOURCES');
+    expect(workspaceItemSource).toContain('cancelPendingRefresh');
+    expect(workspaceItemSource).toContain('historySessionOpenTransition !== null');
+  });
+
   it('keeps non-active workspace session metadata out of the first startup window', () => {
     const source = readSource('../../app/components/NavPanel/sections/sessions/SessionsSection.tsx');
 
@@ -271,6 +331,14 @@ describe('startup performance contract', () => {
     for (const source of sources) {
       expect(source).not.toMatch(/from\s+['"]@\/shared\/context-menu-system['"]/);
     }
+  });
+
+  it('keeps markdown content rendering off the components i18n subscription path', () => {
+    const source = readSource('../../component-library/components/Markdown/Markdown.tsx');
+
+    expect(source).not.toContain("useI18n('components')");
+    expect(source).not.toContain('useI18n("components")');
+    expect(source).toContain("import { i18nService } from '@/infrastructure/i18n'");
   });
 
   it('avoids the infrastructure barrel from startup-visible modules', () => {

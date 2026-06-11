@@ -1,9 +1,15 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ensureBackendSession,
+  preloadHistoricalSessionForOpen,
   retryCreateBackendSession,
+  SESSION_ACTIVITY_TOUCH_DELAY_MS,
   switchChatSession,
 } from './SessionModule';
+import {
+  clearRecentHistorySessionOpenIntent,
+  dispatchHistorySessionOpenIntent,
+} from '../sessionOpenIntent';
 import type { Session } from '../../types/flow-chat';
 import type { ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
 
@@ -114,7 +120,14 @@ function createContext(session: Session) {
 }
 
 describe('SessionModule historical session coordination', () => {
-  afterEach(() => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(async () => {
+    await vi.runOnlyPendingTimersAsync();
+    clearRecentHistorySessionOpenIntent();
+    vi.useRealTimers();
     vi.clearAllMocks();
   });
 
@@ -129,6 +142,45 @@ describe('SessionModule historical session coordination', () => {
 
     expect(flowChatStore.switchSession).not.toHaveBeenCalled();
     expect(flowChatStore.loadSessionHistory).toHaveBeenCalledTimes(1);
+
+    load.resolve();
+    await switching;
+
+    expect(flowChatStore.switchSession).toHaveBeenCalledWith('history-1');
+  });
+
+  it('activates a metadata-only historical session immediately when a recent user open intent exists', async () => {
+    const load = createDeferred<void>();
+    const { context, flowChatStore } = createContext(createSession());
+    flowChatStore.loadSessionHistory.mockReturnValueOnce(load.promise);
+    persistenceMocks.touchSessionActivity.mockResolvedValueOnce(undefined);
+
+    dispatchHistorySessionOpenIntent('history-1', 'Saved session');
+    const switching = switchChatSession(context, 'history-1');
+    await Promise.resolve();
+
+    expect(flowChatStore.switchSession).toHaveBeenCalledWith('history-1');
+    expect(flowChatStore.loadSessionHistory).toHaveBeenCalledTimes(1);
+    expect(persistenceMocks.touchSessionActivity).not.toHaveBeenCalled();
+
+    load.resolve();
+    await switching;
+
+    expect(flowChatStore.switchSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps metadata-only historical sessions out of the active render path until hydrated', async () => {
+    const load = createDeferred<void>();
+    const { context, flowChatStore } = createContext(createSession());
+    context.pendingHistoryLoads.set('history-other', Promise.resolve());
+    flowChatStore.loadSessionHistory.mockReturnValueOnce(load.promise);
+    persistenceMocks.touchSessionActivity.mockResolvedValueOnce(undefined);
+
+    const switching = switchChatSession(context, 'history-1');
+    await Promise.resolve();
+
+    expect(flowChatStore.loadSessionHistory).toHaveBeenCalledTimes(1);
+    expect(flowChatStore.switchSession).not.toHaveBeenCalled();
 
     load.resolve();
     await switching;
@@ -152,6 +204,12 @@ describe('SessionModule historical session coordination', () => {
     await Promise.resolve();
 
     expect(flowChatStore.switchSession).toHaveBeenCalledWith('history-1');
+    expect(persistenceMocks.touchSessionActivity).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(SESSION_ACTIVITY_TOUCH_DELAY_MS - 1);
+    expect(persistenceMocks.touchSessionActivity).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1);
     expect(persistenceMocks.touchSessionActivity).toHaveBeenCalledWith(
       'history-1',
       'D:/workspace/BitFun',
@@ -183,6 +241,62 @@ describe('SessionModule historical session coordination', () => {
     await load.promise;
   });
 
+  it('touches only the latest active session during rapid switches', async () => {
+    const firstSession = createSession({
+      sessionId: 'history-1',
+      historyState: 'ready',
+      dialogTurns: [{ id: 'turn-1', userMessage: { content: 'one' } } as any],
+    });
+    const secondSession = createSession({
+      sessionId: 'history-2',
+      historyState: 'ready',
+      dialogTurns: [{ id: 'turn-2', userMessage: { content: 'two' } } as any],
+    });
+    const { context, flowChatStore } = createContext(firstSession);
+    flowChatStore.setState((prev: any) => ({
+      ...prev,
+      sessions: new Map(prev.sessions).set(secondSession.sessionId, secondSession),
+    }));
+    flowChatStore.loadSessionHistory.mockResolvedValue(undefined);
+    persistenceMocks.touchSessionActivity.mockResolvedValue(undefined);
+
+    await switchChatSession(context, 'history-1');
+    await switchChatSession(context, 'history-2');
+
+    expect(flowChatStore.switchSession).toHaveBeenNthCalledWith(1, 'history-1');
+    expect(flowChatStore.switchSession).toHaveBeenNthCalledWith(2, 'history-2');
+    expect(persistenceMocks.touchSessionActivity).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(SESSION_ACTIVITY_TOUCH_DELAY_MS);
+
+    expect(persistenceMocks.touchSessionActivity).toHaveBeenCalledTimes(1);
+    expect(persistenceMocks.touchSessionActivity).toHaveBeenCalledWith(
+      'history-2',
+      'D:/workspace/BitFun',
+      undefined,
+      undefined,
+    );
+  });
+
+  it('does not touch activity when the delayed session no longer exists', async () => {
+    const session = createSession({
+      historyState: 'ready',
+      dialogTurns: [{ id: 'turn-1', userMessage: { content: 'one' } } as any],
+    });
+    const { context, flowChatStore } = createContext(session);
+    persistenceMocks.touchSessionActivity.mockResolvedValue(undefined);
+
+    await switchChatSession(context, 'history-1');
+    flowChatStore.setState((prev: any) => ({
+      ...prev,
+      sessions: new Map(),
+    }));
+
+    await vi.advanceTimersByTimeAsync(SESSION_ACTIVITY_TOUCH_DELAY_MS);
+
+    expect(persistenceMocks.touchSessionActivity).not.toHaveBeenCalled();
+  });
+
   it('does not block remote metadata-only historical sessions on local pre-hydration before switching', async () => {
     const load = createDeferred<void>();
     const { context, flowChatStore } = createContext(createSession({
@@ -199,6 +313,58 @@ describe('SessionModule historical session coordination', () => {
 
     load.resolve();
     await load.promise;
+  });
+
+  it('preloads a local metadata-only historical session during a competing history load without switching', async () => {
+    const load = createDeferred<void>();
+    const { context, flowChatStore } = createContext(createSession());
+    context.pendingHistoryLoads.set('history-other', Promise.resolve());
+    flowChatStore.loadSessionHistory.mockReturnValueOnce(load.promise);
+
+    preloadHistoricalSessionForOpen(context, 'history-1');
+    await Promise.resolve();
+
+    expect(flowChatStore.loadSessionHistory).toHaveBeenCalledTimes(1);
+    expect(flowChatStore.switchSession).not.toHaveBeenCalled();
+
+    load.resolve();
+    await load.promise;
+  });
+
+  it('does not preload standalone historical opens before the transition shield paints', () => {
+    const { context, flowChatStore } = createContext(createSession());
+
+    preloadHistoricalSessionForOpen(context, 'history-1');
+
+    expect(flowChatStore.loadSessionHistory).not.toHaveBeenCalled();
+  });
+
+  it('does not preload remote or already renderable historical sessions', async () => {
+    const remoteSession = createSession({
+      remoteConnectionId: 'remote-1',
+      remoteSshHost: 'remote-host',
+    });
+    const { context, flowChatStore } = createContext(remoteSession);
+    context.pendingHistoryLoads.set('history-other', Promise.resolve());
+
+    preloadHistoricalSessionForOpen(context, 'history-1');
+
+    expect(flowChatStore.loadSessionHistory).not.toHaveBeenCalled();
+
+    flowChatStore.setState((prev: any) => ({
+      ...prev,
+      sessions: new Map(prev.sessions).set('history-1', createSession({
+        dialogTurns: [{
+          id: 'turn-1',
+          userMessage: { id: 'user-1', content: 'Existing prompt', timestamp: 1 },
+          modelRounds: [],
+        } as any],
+      })),
+    }));
+
+    preloadHistoricalSessionForOpen(context, 'history-1');
+
+    expect(flowChatStore.loadSessionHistory).not.toHaveBeenCalled();
   });
 
   it('reuses pending historical hydration before ensuring the backend session', async () => {

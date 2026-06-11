@@ -13,7 +13,7 @@
  *   instead of relying on `VirtualMessageList` fallback compensation.
  */
 
-import React, { useEffect, useCallback, useMemo, useState, useRef, useLayoutEffect } from 'react';
+import React, { useEffect, useCallback, useMemo, useState, useRef, useLayoutEffect, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import path from 'path-browserify';
 import {
@@ -56,6 +56,11 @@ import {
 } from './fileToolGuidance';
 import { extractFilePathFromJsonBuffer } from '@/shared/utils/partialJsonParser';
 import { i18nService } from '@/infrastructure/i18n';
+import { useFlowChatContext } from '../components/modern/FlowChatContext';
+import {
+  getHistorySessionOpenTransitionSnapshot,
+  subscribeHistorySessionOpenTransition,
+} from '../services/sessionOpenIntent';
 import './FileOperationToolCard.scss';
 
 const log = createLogger('FileOperationToolCard');
@@ -112,6 +117,7 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   onOpenInEditor,
   onConfirm,
   onReject,
+  displayContext,
 }) => {
   const { t } = useTranslation('flow-chat');
   const {
@@ -148,10 +154,28 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   } = useSnapshotState(sessionId);
   const eventBus = SnapshotEventBus.getInstance();
   const { workspace: currentWorkspace } = useOptionalCurrentWorkspace();
+  const { activeSessionOverride } = useFlowChatContext();
+  const historySessionOpenTransition = useSyncExternalStore(
+    subscribeHistorySessionOpenTransition,
+    getHistorySessionOpenTransitionSnapshot,
+    getHistorySessionOpenTransitionSnapshot,
+  );
+  const isHistoricalRestorePending =
+    activeSessionOverride?.sessionId === sessionId &&
+    activeSessionOverride?.isHistorical === true &&
+    activeSessionOverride?.contextRestoreState === 'pending';
+  const allowPassiveGitRefresh =
+    historySessionOpenTransition === null &&
+    displayContext !== 'subagent-projection' &&
+    !isHistoricalRestorePending;
   const { isRepository: workspaceIsGitRepo } = useGitState({
     repositoryPath: currentWorkspace?.rootPath ?? '',
+    isActive: allowPassiveGitRefresh,
     layers: ['basic'],
+    refreshOnMount: allowPassiveGitRefresh,
+    refreshOnActive: false,
     participateInWindowFocusRefresh: false,
+    debugSource: 'file_operation_tool_card',
   });
 
   const getFilePath = useCallback((): string => {

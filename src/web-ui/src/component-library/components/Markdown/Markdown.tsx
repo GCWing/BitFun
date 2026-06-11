@@ -11,7 +11,7 @@ import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import { visit } from 'unist-util-visit';
-import { useI18n } from '@/infrastructure/i18n';
+import { i18nService } from '@/infrastructure/i18n';
 import { MermaidBlock } from './MermaidBlock';
 import { ReproductionStepsBlock } from './ReproductionStepsBlock';
 import { AsyncPrismSyntaxHighlighter } from './AsyncPrismSyntaxHighlighter';
@@ -34,6 +34,8 @@ import './Markdown.scss';
 
 const log = createLogger('Markdown');
 const COMPUTER_LINK_PREFIX = 'computer://';
+const FILE_LINK_PREFIX = 'file://';
+const WORKSPACE_FOLDER_PLACEHOLDER = '{{workspaceFolder}}';
 
 // Module-level cache so that all simultaneously-mounting Markdown instances
 // (e.g. dozens of history blocks after a workspace switch) share a single
@@ -43,6 +45,10 @@ const COMPUTER_LINK_PREFIX = 'computer://';
 let _cachedWorkspacePathResult: string | undefined;
 let _cachedWorkspacePathAt = 0;
 const WORKSPACE_PATH_CACHE_MS = 5000;
+
+function translateMarkdownLabel(key: string, options?: Record<string, unknown>): string {
+  return i18nService.t(`components:${key}`, options);
+}
 
 export interface MarkdownTraceContext {
   turnId?: string;
@@ -96,6 +102,38 @@ async function getWorkspacePathCached(): Promise<string | undefined> {
   return result;
 }
 
+function mayNeedWorkspacePathForMarkdownLinks(content: string): boolean {
+  if (!content) {
+    return false;
+  }
+
+  if (
+    content.includes(COMPUTER_LINK_PREFIX) ||
+    content.includes(FILE_LINK_PREFIX) ||
+    content.includes(WORKSPACE_FOLDER_PLACEHOLDER)
+  ) {
+    return true;
+  }
+
+  const hasMarkdownLinkSyntax = content.includes('](');
+  const hasRawAnchorSyntax = content.includes('<a') || content.includes('<A');
+  if (!hasMarkdownLinkSyntax && !hasRawAnchorSyntax) {
+    return false;
+  }
+
+  // Be conservative: false positives only cost one cached workspace lookup,
+  // while false negatives could make relative local links display poorly.
+  if (
+    hasMarkdownLinkSyntax &&
+    /!?\[[^\]]+\]\(\s*(?!https?:|mailto:|data:|asset:|tauri:|visualization:|tab:|#)[^)]+\)/i.test(content)
+  ) {
+    return true;
+  }
+
+  return hasRawAnchorSyntax &&
+    /<a\s+[^>]*href=["']\s*(?!https?:|mailto:|visualization:|tab:|#)[^"']+["']/i.test(content);
+}
+
 /** Catches render errors from react-markdown/remark-gfm (e.g. RegExp in transformGfmAutolinkLiterals) and shows plain text fallback. */
 class MarkdownErrorBoundary extends Component<
   { children: ReactNode; fallbackContent: string },
@@ -128,8 +166,6 @@ class MarkdownErrorBoundary extends Component<
     return this.props.children;
   }
 }
-const FILE_LINK_PREFIX = 'file://';
-const WORKSPACE_FOLDER_PLACEHOLDER = '{{workspaceFolder}}';
 const LOCAL_IMAGE_PLACEHOLDER =
   'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 const EDITOR_OPENABLE_EXTENSIONS = new Set([
@@ -655,7 +691,6 @@ const CodeBlockFallback: React.FC<FlowCodeBlockFallbackProps> = ({
 };
 
 const CopyButton: React.FC<{ code: string }> = ({ code }) => {
-  const { t } = useI18n('components');
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -672,7 +707,7 @@ const CopyButton: React.FC<{ code: string }> = ({ code }) => {
     <button 
       className={`copy-button${copied ? ' copy-success' : ''}`}
       onClick={handleCopy}
-      title={copied ? t('markdown.copySuccess') : t('markdown.copyCode')}
+      title={copied ? translateMarkdownLabel('markdown.copySuccess') : translateMarkdownLabel('markdown.copyCode')}
     >
       {copied ? (
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -721,7 +756,6 @@ export const Markdown = React.memo<MarkdownProps>(({
   traceContext,
 }) => {
   const { isLight } = useTheme();
-  const { t } = useI18n('components');
   const [currentWorkspacePath, setCurrentWorkspacePath] = useState('');
   
   const syntaxTheme = useMemo(() => buildMarkdownPrismStyle(isLight), [isLight]);
@@ -730,24 +764,6 @@ export const Markdown = React.memo<MarkdownProps>(({
   const renderTraceEnabled = isStartupRenderTraceEnabled();
   const renderTraceStartedAtMs = renderTraceEnabled ? performance.now() : null;
 
-  useEffect(() => {
-    let cancelled = false;
-
-    void getWorkspacePathCached()
-      .then((workspacePath) => {
-        if (!cancelled && workspacePath) {
-          setCurrentWorkspacePath(workspacePath);
-        }
-      })
-      .catch((error) => {
-        log.warn('Failed to resolve workspace path for markdown links', { error });
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-  
   // Fault-tolerant extraction of <reproduction_steps> content
   const { markdownContent, reproductionSteps } = useMemo(() => {
     const regex = /<reproduction_steps>([\s\S]*?)<\/reproduction[\s_]*steps\s*>?/g;
@@ -777,6 +793,33 @@ export const Markdown = React.memo<MarkdownProps>(({
 
     return { markdownContent: body, reproductionSteps: steps };
   }, [contentStr, isStreaming]);
+
+  const needsWorkspacePathForLinks = useMemo(
+    () => mayNeedWorkspacePathForMarkdownLinks(markdownContent),
+    [markdownContent],
+  );
+
+  useEffect(() => {
+    if (!needsWorkspacePathForLinks || currentWorkspacePath) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void getWorkspacePathCached()
+      .then((workspacePath) => {
+        if (!cancelled && workspacePath) {
+          setCurrentWorkspacePath(workspacePath);
+        }
+      })
+      .catch((error) => {
+        log.warn('Failed to resolve workspace path for markdown links', { error });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentWorkspacePath, needsWorkspacePathForLinks]);
 
   const markdownFeatureProfile = useMemo(() => ({
     contentLength: markdownContent.length,
@@ -890,7 +933,7 @@ export const Markdown = React.memo<MarkdownProps>(({
     window.dispatchEvent(new CustomEvent('agent-create-tab', {
       detail: {
         type: 'browser',
-        title: t('markdown.openInBuiltInBrowser'),
+        title: translateMarkdownLabel('markdown.openInBuiltInBrowser'),
         data: { url },
         metadata: {
           duplicateCheckKey: `browser-panel:${url}`,
@@ -900,7 +943,7 @@ export const Markdown = React.memo<MarkdownProps>(({
         replaceExisting: false,
       },
     }));
-  }, [t]);
+  }, []);
 
   const handleLocalFileContextMenu = useCallback((
     event: React.MouseEvent<HTMLElement>,
@@ -910,13 +953,13 @@ export const Markdown = React.memo<MarkdownProps>(({
     const items: MenuItem[] = [
       {
         id: 'markdown-open-in-explorer',
-        label: t('markdown.openInExplorer'),
+        label: translateMarkdownLabel('markdown.openInExplorer'),
         icon: 'FolderOpen',
         onClick: () => handleRevealInExplorer(displayPath || filePath),
       },
       {
         id: 'markdown-copy-file-path',
-        label: t('markdown.copyFilePath'),
+        label: translateMarkdownLabel('markdown.copyFilePath'),
         icon: 'Copy',
         onClick: () => void handleCopyLink(displayPath || filePath),
       },
@@ -926,20 +969,20 @@ export const Markdown = React.memo<MarkdownProps>(({
       filePath,
       displayPath,
     });
-  }, [handleRevealInExplorer, handleCopyLink, showLinkContextMenu, t]);
+  }, [handleRevealInExplorer, handleCopyLink, showLinkContextMenu]);
 
   const handleWebLinkContextMenu = useCallback((event: React.MouseEvent<HTMLElement>, url: string) => {
     const targetElement = event.currentTarget;
     const items: MenuItem[] = [
       {
         id: 'markdown-open-in-browser',
-        label: t('markdown.openInBrowser'),
+        label: translateMarkdownLabel('markdown.openInBrowser'),
         icon: 'ExternalLink',
         onClick: () => void handleOpenExternalLink(url),
       },
       {
         id: 'markdown-copy-link',
-        label: t('markdown.copyLink'),
+        label: translateMarkdownLabel('markdown.copyLink'),
         icon: 'Copy',
         onClick: () => void handleCopyLink(url),
       },
@@ -948,7 +991,7 @@ export const Markdown = React.memo<MarkdownProps>(({
     if (canOpenInBuiltInBrowser(targetElement)) {
       items.splice(1, 0, {
         id: 'markdown-open-in-built-in-browser',
-        label: t('markdown.openInBuiltInBrowser'),
+        label: translateMarkdownLabel('markdown.openInBuiltInBrowser'),
         icon: 'PanelRightOpen',
         onClick: () => handleOpenBuiltInBrowserLink(url),
       });
@@ -961,7 +1004,6 @@ export const Markdown = React.memo<MarkdownProps>(({
     handleOpenBuiltInBrowserLink,
     handleOpenExternalLink,
     showLinkContextMenu,
-    t,
   ]);
   
   const components = useMemo(() => ({

@@ -26,9 +26,9 @@ vi.mock('../../../infrastructure/api', () => ({
 }));
 
 vi.mock('@/infrastructure/i18n', () => ({
-  useI18n: () => ({
+  i18nService: {
     t: (key: string, options?: { defaultValue?: string }) => options?.defaultValue ?? key,
-  }),
+  },
 }));
 
 vi.mock('@/infrastructure/theme', () => ({
@@ -100,6 +100,21 @@ describe('Markdown file links', () => {
     });
     container.remove();
     vi.clearAllMocks();
+  });
+
+  it('does not resolve workspace path for markdown without local file links', async () => {
+    await act(async () => {
+      root.render(
+        <Markdown
+          content={'Plain answer without file links.\n\n```ts\nconst value = 1;\n```'}
+          onFileViewRequest={onFileViewRequest}
+        />,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mocks.getCurrentWorkspacePath).not.toHaveBeenCalled();
   });
 
   it('routes same-label relative, absolute, and computer links independently', async () => {

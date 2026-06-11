@@ -17,7 +17,7 @@ import { ACPClientAPI, type AcpSessionOptions } from '@/infrastructure/api/servi
 import { getProviderDisplayName } from '@/infrastructure/config/services/modelConfigs';
 import { getEffectiveReasoningMode, isReasoningVisiblyEnabled } from '@/infrastructure/config/utils/reasoning';
 import { globalEventBus } from '@/infrastructure/event-bus';
-import type { AIModelConfig } from '@/infrastructure/config/types';
+import type { AIModelConfig, DefaultModelsConfig } from '@/infrastructure/config/types';
 import { Tooltip } from '@/component-library';
 import { FlowChatStore } from '../store/FlowChatStore';
 import { getModelMaxTokens } from '../services/flow-chat-manager/SessionModule';
@@ -156,7 +156,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 }) => {
   const { t } = useTranslation('flow-chat');
   const [allModels, setAllModels] = useState<AIModelConfig[]>([]);
-  const [defaultModels, setDefaultModels] = useState<Record<string, string>>({});
+  const [defaultModels, setDefaultModels] = useState<DefaultModelsConfig>({});
   const [agentModels, setAgentModels] = useState<Record<string, string>>({}); // mode_id -> model_id
   const [acpOptions, setAcpOptions] = useState<AcpSessionOptions | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -179,11 +179,14 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   // Load configuration data.
   const loadConfigData = useCallback(async () => {
     try {
-      const [models, defaultModelsData, agentModelsData] = await Promise.all([
-        configManager.getConfig<AIModelConfig[]>('ai.models') || [],
-        configManager.getConfig<any>('ai.default_models') || {},
-        configManager.getConfig<Record<string, string>>('ai.agent_models') || {}
+      const configData = await configManager.getConfigs([
+        'ai.models',
+        'ai.default_models',
+        'ai.agent_models',
       ]);
+      const models = (configData['ai.models'] as AIModelConfig[] | undefined) || [];
+      const defaultModelsData = (configData['ai.default_models'] as DefaultModelsConfig | undefined) || {};
+      const agentModelsData = (configData['ai.agent_models'] as Record<string, string> | undefined) || {};
 
       setAllModels(models);
       setDefaultModels(defaultModelsData);
@@ -395,7 +398,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       return buildAutoModelInfo(t);
     }
 
-    if (isSpecialModel(modelId)) {
+    if (modelId === 'primary' || modelId === 'fast') {
       const actualModelId = defaultModels[modelId];
       if (!actualModelId) return buildAutoModelInfo(t);
 

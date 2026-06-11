@@ -100,7 +100,7 @@ describe('Deep Review target resolver', () => {
 
     const result = await resolveSlashCommandReviewTarget('', 'D:\\workspace\\repo');
 
-    expect(mockGitGetStatus).toHaveBeenCalledWith('D:\\workspace\\repo');
+    expect(mockGitGetStatus).toHaveBeenCalledWith('D:\\workspace\\repo', 'deep_review_target_resolver');
     expect(result.target.source).toBe('workspace_diff');
     expect(result.changeStats).toEqual({
       fileCount: 2,

@@ -4,7 +4,13 @@ import { createRoot, type Root } from 'react-dom/client';
 import { JSDOM } from 'jsdom';
 
 import { FileOperationToolCard } from './FileOperationToolCard';
-import type { FlowToolItem, ToolCardConfig } from '../types/flow-chat';
+import { FlowChatContext } from '../components/modern/FlowChatContext';
+import type { FlowToolItem, Session, ToolCardConfig } from '../types/flow-chat';
+import {
+  clearHistorySessionOpenTransition,
+  clearRecentHistorySessionOpenIntent,
+  dispatchHistorySessionOpenIntent,
+} from '../services/sessionOpenIntent';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -17,6 +23,9 @@ const mocks = vi.hoisted(() => ({
     originalContent: '',
     modifiedContent: '',
     anchorLine: undefined,
+  })),
+  useGitState: vi.fn(() => ({
+    isRepository: false,
   })),
 }));
 
@@ -102,9 +111,7 @@ vi.mock('@/shared/notification-system', () => ({
 }));
 
 vi.mock('@/tools/git/hooks/useGitState', () => ({
-  useGitState: () => ({
-    isRepository: false,
-  }),
+  useGitState: mocks.useGitState,
 }));
 
 describe('FileOperationToolCard', () => {
@@ -133,6 +140,10 @@ describe('FileOperationToolCard', () => {
     mocks.createDiffEditorTab.mockReset();
     mocks.openFile.mockReset();
     mocks.codePreviewProps = [];
+    mocks.useGitState.mockClear();
+    mocks.useGitState.mockReturnValue({
+      isRepository: false,
+    });
     mocks.getOperationDiff.mockReset();
     mocks.getOperationDiff.mockResolvedValue({
       originalContent: '',
@@ -141,11 +152,171 @@ describe('FileOperationToolCard', () => {
     });
   });
 
+  it('does not trigger passive git refresh while historical restore is pending', async () => {
+    mocks.currentWorkspace = { rootPath: 'D:/workspace/BitFun' };
+    const toolItem: FlowToolItem = {
+      id: 'tool-history',
+      type: 'tool',
+      toolName: 'Write',
+      status: 'completed',
+      toolCall: {
+        id: 'call-history',
+        name: 'Write',
+        input: {
+          file_path: 'src/newFile.ts',
+          content: 'export const value = 1;',
+        },
+      },
+      toolResult: {
+        success: true,
+        result: {
+          file_path: 'src/newFile.ts',
+        },
+      },
+    } as FlowToolItem;
+
+    await act(async () => {
+      root.render(
+        <FlowChatContext.Provider
+          value={{
+            sessionId: 'history-session',
+            activeSessionOverride: {
+              sessionId: 'history-session',
+              isHistorical: true,
+              contextRestoreState: 'pending',
+            } as Session,
+          }}
+        >
+          <FileOperationToolCard
+            toolItem={toolItem}
+            config={{} as ToolCardConfig}
+            sessionId="history-session"
+          />
+        </FlowChatContext.Provider>
+      );
+    });
+
+    expect(mocks.useGitState).toHaveBeenCalledWith(expect.objectContaining({
+      repositoryPath: 'D:/workspace/BitFun',
+      isActive: false,
+      refreshOnMount: false,
+      refreshOnActive: false,
+      participateInWindowFocusRefresh: false,
+      layers: ['basic'],
+    }));
+  });
+
+  it('keeps passive git refresh enabled for normal active sessions', async () => {
+    mocks.currentWorkspace = { rootPath: 'D:/workspace/BitFun' };
+    const toolItem: FlowToolItem = {
+      id: 'tool-active',
+      type: 'tool',
+      toolName: 'Write',
+      status: 'completed',
+      toolCall: {
+        id: 'call-active',
+        name: 'Write',
+        input: {
+          file_path: 'src/newFile.ts',
+          content: 'export const value = 1;',
+        },
+      },
+      toolResult: {
+        success: true,
+        result: {
+          file_path: 'src/newFile.ts',
+        },
+      },
+    } as FlowToolItem;
+
+    await act(async () => {
+      root.render(
+        <FlowChatContext.Provider
+          value={{
+            sessionId: 'active-session',
+            activeSessionOverride: {
+              sessionId: 'active-session',
+              isHistorical: false,
+            } as Session,
+          }}
+        >
+          <FileOperationToolCard
+            toolItem={toolItem}
+            config={{} as ToolCardConfig}
+            sessionId="active-session"
+          />
+        </FlowChatContext.Provider>
+      );
+    });
+
+    expect(mocks.useGitState).toHaveBeenCalledWith(expect.objectContaining({
+      repositoryPath: 'D:/workspace/BitFun',
+      isActive: true,
+      refreshOnMount: true,
+      refreshOnActive: false,
+    }));
+  });
+
   afterEach(() => {
     act(() => {
       root.unmount();
     });
+    clearRecentHistorySessionOpenIntent();
+    clearHistorySessionOpenTransition();
     vi.unstubAllGlobals();
+  });
+
+  it('does not trigger passive git refresh during history open transition', async () => {
+    mocks.currentWorkspace = { rootPath: 'D:/workspace/BitFun' };
+    dispatchHistorySessionOpenIntent('history-session', 'History');
+    const toolItem: FlowToolItem = {
+      id: 'tool-transition',
+      type: 'tool',
+      toolName: 'Write',
+      status: 'completed',
+      toolCall: {
+        id: 'call-transition',
+        name: 'Write',
+        input: {
+          file_path: 'src/newFile.ts',
+          content: 'export const value = 1;',
+        },
+      },
+      toolResult: {
+        success: true,
+        result: {
+          file_path: 'src/newFile.ts',
+        },
+      },
+    } as FlowToolItem;
+
+    await act(async () => {
+      root.render(
+        <FlowChatContext.Provider
+          value={{
+            sessionId: 'history-session',
+            activeSessionOverride: {
+              sessionId: 'history-session',
+              isHistorical: true,
+              contextRestoreState: 'ready',
+            } as Session,
+          }}
+        >
+          <FileOperationToolCard
+            toolItem={toolItem}
+            config={{} as ToolCardConfig}
+            sessionId="history-session"
+          />
+        </FlowChatContext.Provider>
+      );
+    });
+
+    expect(mocks.useGitState).toHaveBeenCalledWith(expect.objectContaining({
+      repositoryPath: 'D:/workspace/BitFun',
+      isActive: false,
+      refreshOnMount: false,
+      refreshOnActive: false,
+    }));
   });
 
   it('renders failed write cards outside WorkspaceProvider', () => {

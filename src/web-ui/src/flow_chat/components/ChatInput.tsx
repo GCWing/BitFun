@@ -3,7 +3,7 @@
  * Separated from bottom bar, supports session-level state awareness
  */
 
-import React, { useRef, useCallback, useEffect, useReducer, useState, useMemo } from 'react';
+import React, { useRef, useCallback, useEffect, useReducer, useState, useMemo, useSyncExternalStore } from 'react';
 import path from 'path-browserify';
 import { useTranslation } from 'react-i18next';
 import { ArrowUp, Image, RotateCcw, Plus, X, Sparkles, Loader2, ChevronRight, Files, MessageSquarePlus } from 'lucide-react';
@@ -41,6 +41,10 @@ import { useInputHistoryStore } from '../store/inputHistoryStore';
 import { startBtwThread } from '../services/BtwThreadService';
 import { runUsageReportCommand } from '../services/usageReportService';
 import { isGoalSlashCommand, parseGoalCommand } from '../services/goalService';
+import {
+  getHistorySessionOpenTransitionSnapshot,
+  subscribeHistorySessionOpenTransition,
+} from '../services/sessionOpenIntent';
 import { useThreadGoalController } from '../hooks/useThreadGoalController';
 import { ThreadGoalDialogs } from './thread-goal/ThreadGoalDialogs';
 import { FlowChatManager } from '@/flow_chat';
@@ -288,6 +292,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const effectiveTargetSession = effectiveTargetSessionId
     ? flowChatState.sessions.get(effectiveTargetSessionId)
     : undefined;
+  const historySessionOpenTransition = useSyncExternalStore(
+    subscribeHistorySessionOpenTransition,
+    getHistorySessionOpenTransitionSnapshot,
+    getHistorySessionOpenTransitionSnapshot,
+  );
   const effectiveTargetRelationship = resolveSessionRelationship(effectiveTargetSession);
   const isBtwSession = effectiveTargetRelationship.displayAsChild;
   const acpSessionForInput = useMemo(
@@ -318,6 +327,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         defaultValue: t('btw.threadLabel'),
       })
     : '';
+  const deferChatStripPassiveGitRefresh =
+    historySessionOpenTransition !== null ||
+    (
+      effectiveTargetSession?.isHistorical === true &&
+      effectiveTargetSession.contextRestoreState === 'pending'
+    );
   
   // Memoize history so keyboard handlers don't see a fresh [] on every render.
   const inputHistory = useMemo(
@@ -3544,6 +3559,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         <ChatInputWorkspaceStrip
           repositoryPath={chatStripRepositoryPath}
           workspaceLabel={chatStripWorkspaceLabel}
+          deferPassiveGitRefresh={deferChatStripPassiveGitRefresh}
           usageReport={
             effectiveTargetSessionId && effectiveTargetSession
               ? { visible: true, onOpen: handleToolbarUsageReport }

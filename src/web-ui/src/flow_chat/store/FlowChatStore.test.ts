@@ -13,13 +13,23 @@ const apiMocks = vi.hoisted(() => ({
   restoreSessionWithTurns: vi.fn(),
 }));
 
-const configManagerMock = vi.hoisted(() => ({
-  getConfig: vi.fn(async (path: string) => {
+const configManagerMock = vi.hoisted(() => {
+  const getConfig = vi.fn(async (path: string) => {
     if (path === 'ai.models') return [];
     if (path === 'ai.default_models') return {};
     return undefined;
-  }),
-}));
+  });
+  return {
+    getConfig,
+    getConfigs: vi.fn(async (paths: string[]) => {
+      const configs: Record<string, unknown> = {};
+      for (const path of paths) {
+        configs[path] = await getConfig(path);
+      }
+      return configs;
+    }),
+  };
+});
 
 const stateMachineManagerMock = vi.hoisted(() => ({
   getOrCreate: vi.fn(),
@@ -381,6 +391,10 @@ describe('FlowChatStore historical session hydration state', () => {
     const configPaths = configManagerMock.getConfig.mock.calls.map(([path]) => path);
     expect(configPaths.filter(path => path === 'ai.models')).toHaveLength(1);
     expect(configPaths.filter(path => path === 'ai.default_models')).toHaveLength(1);
+    expect(configManagerMock.getConfigs).toHaveBeenCalledWith([
+      'ai.models',
+      'ai.default_models',
+    ]);
     expect(flowChatStore.getState().sessions.get('history-1')?.maxContextTokens).toBe(256000);
     expect(flowChatStore.getState().sessions.get('history-2')?.maxContextTokens).toBe(256000);
   });

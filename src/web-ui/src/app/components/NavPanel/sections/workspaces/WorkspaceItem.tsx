@@ -1,4 +1,4 @@
-import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { Folder, FolderOpen, MoreHorizontal, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw, Copy, FileText, GitBranch, Bot, Link2, ListChecks, Loader2, Clock3 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -14,11 +14,16 @@ import {
 import { useNavSceneStore } from '@/app/stores/navSceneStore';
 import { useApp } from '@/app/hooks/useApp';
 import { useGitBasicInfo } from '@/tools/git/hooks/useGitState';
+import { gitStateManager } from '@/tools/git/state/GitStateManager';
 import { workspaceAPI } from '@/infrastructure/api';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import { notificationService } from '@/shared/notification-system';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
 import { openMainSession } from '@/flow_chat/services/openBtwSession';
+import {
+  getHistorySessionOpenTransitionSnapshot,
+  subscribeHistorySessionOpenTransition,
+} from '@/flow_chat/services/sessionOpenIntent';
 import { findReusableEmptySessionId } from '@/app/utils/projectSessionWorkspace';
 import type { AcpClientInfo } from '@/infrastructure/api/service-api/ACPClientAPI';
 import { loadWorkspaceAcpMenuClients } from './workspaceAcpMenuClients';
@@ -36,7 +41,12 @@ import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport
 import WorkspaceRelatedPathsDialog from './WorkspaceRelatedPathsDialog';
 import WorkspaceSessionBatchModal from './WorkspaceSessionBatchModal';
 import { scheduleAfterStartupSignal } from '@/shared/utils/startupTaskScheduling';
-import { getWorkspaceGitBasicInfoOptions } from './workspaceGitRefreshOptions';
+import {
+  getWorkspaceGitBasicInfoOptions,
+  suppressWorkspaceGitRefreshOnMountDuringSessionTransition,
+  WORKSPACE_GIT_PENDING_CANCEL_REASONS,
+  WORKSPACE_GIT_PENDING_CANCEL_SOURCES,
+} from './workspaceGitRefreshOptions';
 import ScheduledJobsModal from '@/app/components/scheduled-jobs/ScheduledJobsModal';
 
 
@@ -77,6 +87,15 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   } = useWorkspaceContext();
   const { switchLeftPanelTab } = useApp();
   const openNavScene = useNavSceneStore(s => s.openNavScene);
+  const historySessionOpenTransition = useSyncExternalStore(
+    subscribeHistorySessionOpenTransition,
+    getHistorySessionOpenTransitionSnapshot,
+    getHistorySessionOpenTransitionSnapshot
+  );
+  const gitBasicInfoOptions = suppressWorkspaceGitRefreshOnMountDuringSessionTransition(
+    getWorkspaceGitBasicInfoOptions(workspace, isActive),
+    historySessionOpenTransition !== null
+  );
   const {
     isRepository,
     isLoading: isGitBasicInfoLoading,
@@ -84,7 +103,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     refreshBasic: refreshGitBasicInfo,
   } = useGitBasicInfo(
     workspace.rootPath,
-    getWorkspaceGitBasicInfoOptions(workspace, isActive)
+    gitBasicInfoOptions
   );
   const [menuOpen, setMenuOpen] = useState(false);
   const [worktreeModalOpen, setWorktreeModalOpen] = useState(false);
@@ -121,6 +140,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
       : workspace.name;
   const isLinkedWorktree = isLinkedWorktreeWorkspace(workspace);
   const relatedPathCount = workspace.relatedPaths?.length ?? 0;
+  const workspaceIsRemote = isRemoteWorkspace(workspace);
   const canShowSearchIndex =
     isActive
     && workspaceSearchEnabled
@@ -130,7 +150,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     );
   const shouldRefreshGitBasicInfoOnMenuOpen =
     !isActive &&
-    !isRemoteWorkspace(workspace) &&
+    !workspaceIsRemote &&
     !gitBasicInfoState &&
     !isGitBasicInfoLoading;
   const isWorktreeActionDisabled = isGitBasicInfoLoading || !isRepository;
@@ -138,6 +158,31 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     workspacePath: canShowSearchIndex ? workspace.rootPath : undefined,
     enabled: canShowSearchIndex,
   });
+
+  useEffect(() => {
+    if (!isActive || workspaceIsRemote) {
+      return;
+    }
+
+    const cancelPendingAutoGitRefresh = () => {
+      if (getHistorySessionOpenTransitionSnapshot() === null) {
+        return;
+      }
+
+      for (const reason of WORKSPACE_GIT_PENDING_CANCEL_REASONS) {
+        for (const source of WORKSPACE_GIT_PENDING_CANCEL_SOURCES) {
+          gitStateManager.cancelPendingRefresh(workspace.rootPath, {
+            layers: ['basic'],
+            reason,
+            source,
+          });
+        }
+      }
+    };
+
+    cancelPendingAutoGitRefresh();
+    return subscribeHistorySessionOpenTransition(cancelPendingAutoGitRefresh);
+  }, [isActive, workspace.rootPath, workspaceIsRemote]);
 
   useEffect(() => {
     let cancelled = false;

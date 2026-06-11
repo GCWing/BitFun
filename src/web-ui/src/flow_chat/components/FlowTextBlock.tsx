@@ -55,7 +55,12 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
   replayStreamingOnMount = true,
   traceContext,
 }) => {
-  const { onFileViewRequest, onTabOpen, onHttpLinkClick, onOpenVisualization } = useFlowChatContext();
+  const {
+    onFileViewRequest,
+    onTabOpen,
+    onHttpLinkClick,
+    onOpenVisualization,
+  } = useFlowChatContext();
 
   // Normalize content to a string.
   const content = typeof textItem.content === 'string'
@@ -69,36 +74,37 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
   });
   
   // Heuristic: if content does not change for a while, streaming is done.
-  const [isContentGrowing, setIsContentGrowing] = useState(true);
+  const [isContentGrowing, setIsContentGrowing] = useState(isStreaming);
   const lastContentRef = useRef(content);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   useEffect(() => {
+    const clearGrowthTimeout = () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
+
+    if (!isStreaming) {
+      lastContentRef.current = content;
+      clearGrowthTimeout();
+      setIsContentGrowing((wasGrowing) => (wasGrowing ? false : wasGrowing));
+      return clearGrowthTimeout;
+    }
+
     if (content !== lastContentRef.current) {
       lastContentRef.current = content;
       setIsContentGrowing(true);
-      
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
+      clearGrowthTimeout();
       
       timeoutRef.current = setTimeout(() => {
         setIsContentGrowing(false);
       }, CONTENT_IDLE_TIMEOUT);
     }
     
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    };
-  }, [content]);
-  
-  useEffect(() => {
-    if (textItem.status === 'completed' || !textItem.isStreaming) {
-      setIsContentGrowing(false);
-    }
-  }, [textItem.status, textItem.isStreaming]);
+    return clearGrowthTimeout;
+  }, [content, isStreaming]);
   
   const isActivelyStreaming = textItem.isStreaming &&
     (textItem.status === 'streaming' || textItem.status === 'running') &&

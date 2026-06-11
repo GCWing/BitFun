@@ -2748,20 +2748,19 @@ export class FlowChatStore {
     let defaultModels: Record<string, string> = {};
     try {
       const { configManager } = await import('@/infrastructure/config/services/ConfigManager');
-      const [modelsResult, defaultModelsResult] = await Promise.allSettled([
-        configManager.getConfig<any[]>('ai.models'),
-        configManager.getConfig<Record<string, string>>('ai.default_models'),
+      const configData = await configManager.getConfigs([
+        'ai.models',
+        'ai.default_models',
       ]);
 
-      if (modelsResult.status === 'fulfilled' && Array.isArray(modelsResult.value)) {
-        models = modelsResult.value;
+      if (Array.isArray(configData['ai.models'])) {
+        models = configData['ai.models'];
       }
       if (
-        defaultModelsResult.status === 'fulfilled' &&
-        defaultModelsResult.value &&
-        typeof defaultModelsResult.value === 'object'
+        configData['ai.default_models'] &&
+        typeof configData['ai.default_models'] === 'object'
       ) {
-        defaultModels = defaultModelsResult.value;
+        defaultModels = configData['ai.default_models'] as Record<string, string>;
       }
     } catch (error) {
       log.warn('Failed to load model config for session metadata, using defaults', { error });
@@ -3120,20 +3119,19 @@ export class FlowChatStore {
       let defaultModels: Record<string, string> = {};
       try {
         const { configManager } = await import('@/infrastructure/config/services/ConfigManager');
-        const [modelsResult, defaultModelsResult] = await Promise.allSettled([
-          configManager.getConfig<any[]>('ai.models'),
-          configManager.getConfig<Record<string, string>>('ai.default_models'),
+        const configData = await configManager.getConfigs([
+          'ai.models',
+          'ai.default_models',
         ]);
 
-        if (modelsResult.status === 'fulfilled' && Array.isArray(modelsResult.value)) {
-          models = modelsResult.value;
+        if (Array.isArray(configData['ai.models'])) {
+          models = configData['ai.models'];
         }
         if (
-          defaultModelsResult.status === 'fulfilled' &&
-          defaultModelsResult.value &&
-          typeof defaultModelsResult.value === 'object'
+          configData['ai.default_models'] &&
+          typeof configData['ai.default_models'] === 'object'
         ) {
-          defaultModels = defaultModelsResult.value;
+          defaultModels = configData['ai.default_models'] as Record<string, string>;
         }
       } catch (error) {
         log.warn('Failed to load model config for session metadata, using defaults', { error });

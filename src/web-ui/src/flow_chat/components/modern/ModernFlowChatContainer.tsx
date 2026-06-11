@@ -46,6 +46,8 @@ import { scheduleAfterStartupPaint } from '@/shared/utils/startupTaskScheduling'
 import { agentAPI } from '@/infrastructure/api';
 import { notificationService } from '@/shared/notification-system';
 import {
+  clearHistorySessionOpenTransition,
+  getHistorySessionOpenTransitionSnapshot,
   HISTORY_SESSION_OPEN_INTENT_EVENT,
   type HistorySessionOpenIntentDetail,
 } from '../../services/sessionOpenIntent';
@@ -339,6 +341,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   const virtualListRef = useRef<VirtualMessageListRef>(null);
   const chatScopeRef = useRef<HTMLDivElement>(null);
   const [historyInitialContentReadyKey, setHistoryInitialContentReadyKey] = useState<string | null>(null);
+  const [historyInitialContentPostPaintKey, setHistoryInitialContentPostPaintKey] = useState<string | null>(null);
   const { workspacePath } = useWorkspaceContext();
   const allowUserMessageRollback = !isAcpFlowSession(activeSession);
   const historyState = activeSession?.historyState;
@@ -352,9 +355,9 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     historyState === 'failed' ||
     hasRestoredTurnsPendingVirtualItems
   );
-  const showHistoryOpenIntentOverlay =
+  const isPendingHistoryOpenActiveSession =
     pendingHistoryOpenSession !== null &&
-    activeSession?.sessionId !== pendingHistoryOpenSession.sessionId;
+    activeSession?.sessionId === pendingHistoryOpenSession.sessionId;
   const {
     exploreGroupStates,
     onExploreGroupToggle: handleExploreGroupToggle,
@@ -432,9 +435,13 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     }
 
     const timeoutId = window.setTimeout(() => {
-      setPendingHistoryOpenSession(current =>
-        current?.sessionId === pendingHistoryOpenSession.sessionId ? null : current
-      );
+      setPendingHistoryOpenSession(current => {
+        if (current?.sessionId === pendingHistoryOpenSession.sessionId) {
+          clearHistorySessionOpenTransition(pendingHistoryOpenSession.sessionId);
+          return null;
+        }
+        return current;
+      });
     }, 4000);
 
     return () => {
@@ -443,13 +450,24 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   }, [pendingHistoryOpenSession]);
 
   useEffect(() => {
-    if (
-      pendingHistoryOpenSession &&
-      activeSession?.sessionId === pendingHistoryOpenSession.sessionId
-    ) {
-      setPendingHistoryOpenSession(null);
+    if (!isPendingHistoryOpenActiveSession) {
+      return;
     }
-  }, [activeSession?.sessionId, pendingHistoryOpenSession]);
+
+    if (showHistoryPlaceholder && historyState !== 'failed') {
+      return;
+    }
+
+    if (historyState === 'failed') {
+      clearHistorySessionOpenTransition(pendingHistoryOpenSession.sessionId);
+    }
+    setPendingHistoryOpenSession(null);
+  }, [
+    historyState,
+    isPendingHistoryOpenActiveSession,
+    pendingHistoryOpenSession?.sessionId,
+    showHistoryPlaceholder,
+  ]);
 
   const contextValue: FlowChatContextValue = useMemo(() => ({
     onFileViewRequest: handleFileViewRequest,
@@ -588,14 +606,26 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   const shouldDeferBackgroundCommandSnapshot =
     activeSession?.historyState === 'metadata-only' ||
     activeSession?.historyState === 'hydrating' ||
-    shouldBlockHistoryInitialContentInteraction;
+    (
+      historyInitialContentKey !== null &&
+      historyInitialContentPostPaintKey !== historyInitialContentKey
+    );
+  const shouldScheduleBackgroundCommandSnapshotAfterPaint =
+    historyInitialContentKey !== null &&
+    historyInitialContentPostPaintKey === historyInitialContentKey;
+  const showFailedHistoryPlaceholder =
+    showHistoryPlaceholder && historyState === 'failed';
+  const showHistoryOpenIntentOverlay =
+    pendingHistoryOpenSession !== null &&
+    (
+      activeSession?.sessionId !== pendingHistoryOpenSession.sessionId ||
+      (isPendingHistoryOpenActiveSession && showHistoryPlaceholder && !showFailedHistoryPlaceholder)
+    );
   const shouldBlockHistoryTransitionInteraction =
     shouldBlockHistoryInitialContentInteraction ||
     showHistoryOpenIntentOverlay;
-  const showFailedHistoryPlaceholder =
-    showHistoryPlaceholder && historyState === 'failed';
   const showHistoryLoadingLayer =
-    !showFailedHistoryPlaceholder && showHistoryPlaceholder;
+    !showHistoryOpenIntentOverlay && !showFailedHistoryPlaceholder && showHistoryPlaceholder;
   const blockHistoryOverlayActivation = useCallback((event: React.SyntheticEvent<HTMLElement>) => {
     if (!showHistoryLoadingLayer && !shouldBlockHistoryTransitionInteraction) {
       return;
@@ -691,6 +721,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
 
   useEffect(() => {
     setHistoryInitialContentReadyKey(null);
+    setHistoryInitialContentPostPaintKey(null);
     setPendingHeaderTurnId(null);
   }, [activeSession?.sessionId]);
 
@@ -883,12 +914,14 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       }
       releasedHistoryCompletionKeyRef.current = releaseKey;
       const released = flowChatStore.releaseSessionHistoryCompletionAfterInitialPaint(sessionId);
+      clearHistorySessionOpenTransition(sessionId);
       startupTrace.markPhase('historical_session_initial_content_painted', {
         sessionId,
         latestTurnId,
         released,
         turnCount: turnSummaries.length,
       });
+      setHistoryInitialContentPostPaintKey(releaseKey);
     };
 
     const checkLatestTextVisibility = () => {
@@ -905,7 +938,9 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
 
       if (attempts >= HISTORY_INITIAL_CONTENT_PAINT_MAX_ATTEMPTS) {
         setHistoryInitialContentReadyKey(releaseKey);
+        setHistoryInitialContentPostPaintKey(releaseKey);
         releasedHistoryCompletionKeyRef.current = releaseKey;
+        clearHistorySessionOpenTransition(sessionId);
         startupTrace.markPhase('historical_session_initial_content_paint_signal_missed', {
           sessionId,
           latestTurnId,
@@ -1020,6 +1055,11 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   }, [activeSession?.sessionId]);
 
   const backgroundSubagentsRef = useRef<string | null>(null);
+  const activeSessionIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    activeSessionIdRef.current = activeSession?.sessionId ?? null;
+  }, [activeSession?.sessionId]);
 
   useEffect(() => {
     const syncBackgroundSubagents = () => {
@@ -1057,22 +1097,50 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     }
 
     let cancelled = false;
-    void agentAPI.listBackgroundCommandActivities({ agentSessionId })
-      .then((response) => {
-        if (!cancelled) {
-          useBackgroundCommandActivityStore
-            .getState()
-            .hydrateActivities(agentSessionId, response.activities);
-        }
-      })
-      .catch(() => {
-        /* Snapshot recovery is best-effort; live events remain authoritative. */
-      });
+    let cancelScheduledSnapshot: (() => void) | null = null;
+    const recoverSnapshot = () => {
+      const pendingHistoryTransition = getHistorySessionOpenTransitionSnapshot();
+      if (
+        cancelled ||
+        activeSessionIdRef.current !== agentSessionId ||
+        (pendingHistoryTransition && pendingHistoryTransition.sessionId !== agentSessionId)
+      ) {
+        return;
+      }
+
+      void agentAPI.listBackgroundCommandActivities({ agentSessionId })
+        .then((response) => {
+          const currentHistoryTransition = getHistorySessionOpenTransitionSnapshot();
+          if (
+            !cancelled &&
+            activeSessionIdRef.current === agentSessionId &&
+            (!currentHistoryTransition || currentHistoryTransition.sessionId === agentSessionId)
+          ) {
+            useBackgroundCommandActivityStore
+              .getState()
+              .hydrateActivities(agentSessionId, response.activities);
+          }
+        })
+        .catch(() => {
+          /* Snapshot recovery is best-effort; live events remain authoritative. */
+        });
+    };
+
+    if (shouldScheduleBackgroundCommandSnapshotAfterPaint) {
+      cancelScheduledSnapshot = scheduleAfterStartupPaint(recoverSnapshot, { frameCount: 2 });
+    } else {
+      recoverSnapshot();
+    }
 
     return () => {
       cancelled = true;
+      cancelScheduledSnapshot?.();
     };
-  }, [activeSession?.sessionId, shouldDeferBackgroundCommandSnapshot]);
+  }, [
+    activeSession?.sessionId,
+    shouldScheduleBackgroundCommandSnapshotAfterPaint,
+    shouldDeferBackgroundCommandSnapshot,
+  ]);
 
   const backgroundCommands = useMemo(
     () => visibleBackgroundCommandActivitiesForSession(
@@ -1367,7 +1435,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
                 onRetry={handleRetryHistoryLoad}
               />
             ) : virtualItems.length === 0 ? (
-              showHistoryLoadingLayer ? null : (
+              showHistoryPlaceholder || showHistoryOpenIntentOverlay ? null : (
                 <WelcomePanel
                   key={activeSession?.sessionId ?? 'welcome'}
                   sessionMode={activeSession?.mode}
