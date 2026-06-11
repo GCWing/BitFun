@@ -1,79 +1,79 @@
 # BitFun 自适应工程体验看护指标规格
 
 > 上游文档：[implementation-plan.md](../implementation-plan.md)
-> 用途：把实施计划中的看护指标转成可采样、可解释、可用于阶段评审的 metric spec，避免指标停留在口号层。
+> 用途：把实施计划中的看护指标转成可采样、可解释、可用于阶段评审的指标规格，避免指标停留在口号层。
 
 ## 1. 指标治理原则
 
-- 每个指标必须有 owner、分母、采样窗口、数据来源和适用阶段。
-- P0/P1 先收集 baseline，不用指标直接阻塞交付。
-- 指标只能用于趋势、校准和阶段退出判断，不能替代具体 evidence。
+- 每个指标必须有负责人、分母、采样窗口、数据来源和适用阶段。
+- P0/P1 先收集基线，不用指标直接阻塞交付。
+- 指标只能用于趋势、校准和阶段退出判断，不能替代具体证据。
 - 体验、安全、质量和成本必须一起看，不能用单个指标证明策略正确。
-- 与质量或安全相关的指标必须能追溯到 EvidencePack、LifecycleEvent、policy version 或 Eval Card。
-- 指标口径变化必须记录 version，并保留兼容读取或重新计算策略。
+- 与质量或安全相关的指标必须能追溯到证据包、LifecycleEvent、策略版本或评测卡。
+- 指标口径变化必须记录版本，并保留兼容读取或重新计算策略。
 
 ## 2. P0/P1 核心体验与安全指标
 
-| 指标 | 公式 | Owner | 数据来源 | 窗口 | 用途 |
+| 指标 | 公式 | 负责人 | 数据来源 | 窗口 | 用途 |
 |---|---|---|---|---|---|
-| Time to first useful action | 项目打开到首次可见有用结果的中位耗时 | Product Experience | `task.started`、`tool.completed`、`task.completed` | 每周 | 判断 Fast Path 是否真实低摩擦 |
-| Low-risk task completion rate | 完成的 low-risk 任务数 / low-risk 任务总数 | Adaptive Control | `control.decided`、`task.completed` | 每周 | 防止低风险场景被强流程拖慢 |
-| User interruption rate | 每个任务的确认、提示、阻断次数 | Product Experience | `security.decided`、`control.decided`、UI event | 每周 | 控制提示噪音 |
-| False escalation rate | 人工或后验判定无必要的 profile 升级数 / profile 升级总数 | Adaptive Control | `control.decided`、override、feedback | 每两周 | 校准自适应控制 |
-| Security prompt acceptance rate | 用户接受安全提示建议的次数 / 安全提示总数 | Security Boundary | `security.decided`、user response | 每周 | 判断提示是否有价值 |
-| Break-glass rate and scope | break-glass 次数按 scope/risk 聚合 / 安全提示总数 | Security Boundary | `security.decided`、`user.override.recorded` | 每周 | 发现安全策略过紧或真实绕行需求 |
-| Active config unresolved rate | 未确认主动配置关联任务数 / 含主动配置任务总数 | Project Profile | active config events、security events | 每周 | 判断 trust review 是否阻塞体验 |
-| Confidence summary coverage | 生成 summary 的完成任务数 / 完成任务总数 | Artifact and Evidence Plane | `confidence.summary.generated` | 每周 | 确保任务结果可解释 |
+| 首次有用动作耗时 | 项目打开到首次可见有用结果的中位耗时 | 产品体验 | `task.started`、`tool.completed`、`task.completed` | 每周 | 判断快速路径是否真实低摩擦 |
+| 低风险任务完成率 | 完成的低风险任务数 / 低风险任务总数 | 自适应控制 | `control.decided`、`task.completed` | 每周 | 防止低风险场景被强流程拖慢 |
+| 用户打断率 | 每个任务的确认、提示、阻断次数 | 产品体验 | `security.decided`、`control.decided`、UI 事件 | 每周 | 控制提示噪音 |
+| 误升级率 | 人工或后验判定无必要的模式升级数 / 模式升级总数 | 自适应控制 | `control.decided`、覆盖、反馈 | 每两周 | 校准自适应控制 |
+| 安全提示接受率 | 用户接受安全提示建议的次数 / 安全提示总数 | 安全边界 | `security.decided`、用户响应 | 每周 | 判断提示是否有价值 |
+| 应急放行率和范围 | 应急放行次数按范围/风险聚合 / 安全提示总数 | 安全边界 | `security.decided`、`user.override.recorded` | 每周 | 发现安全策略过紧或真实绕行需求 |
+| 主动配置未解决率 | 未确认主动配置关联任务数 / 含主动配置任务总数 | 项目画像 | 主动配置事件、安全事件 | 每周 | 判断信任审查是否阻塞体验 |
+| 信心摘要覆盖率 | 生成摘要的完成任务数 / 完成任务总数 | 交付物与证据层 | `confidence.summary.generated` | 每周 | 确保任务结果可解释 |
 
 口径说明：
 
-- low-risk 任务由 Risk and Control Classifier 给出，并需排除已触发安全高风险动作的任务。
-- interruption 必须区分 security prompt、quality suggestion、review suggestion 和 required policy。
-- break-glass 不是失败指标；它用于发现策略和真实工作之间的张力。
-- Active config unresolved rate 上升时，需要区分恶意/未知配置、实现缺口和用户主动禁用。
+- 低风险任务由风险与控制分类器给出，并需排除已触发安全高风险动作的任务。
+- 打断必须区分安全提示、质量建议、审查建议和强制策略。
+- 应急放行不是失败指标；它用于发现策略和真实工作之间的张力。
+- 主动配置未解决率上升时，需要区分恶意/未知配置、实现缺口和用户主动禁用。
 
 ## 3. P1/P2 上下文信心与团队治理指标
 
-| 指标 | 公式 | Owner | 数据来源 | 窗口 | 用途 |
+| 指标 | 公式 | 负责人 | 数据来源 | 窗口 | 用途 |
 |---|---|---|---|---|---|
-| Recommended check follow-through | 被用户执行或 CI 覆盖的 recommended checks / recommended checks 总数 | Risk Classifier | readiness、verification events | 每两周 | 判断建议是否有行动价值 |
-| Required check precision | 人工或后验确认有价值的 required checks / required checks 总数 | Risk Classifier | Gate result、override、review feedback | 每两周 | 校准路径矩阵，减少低价值检查 |
-| Required check missing rate | 后验发现应运行但未推荐的 checks / 后验确认需要的 checks 总数 | Risk Classifier | CI failure、review blocker、post-merge defect | 每两周 | 控制 false ready 风险 |
-| PR readiness adoption | 使用 readiness summary 的 PR 数 / BitFun 准备的 PR 总数 | Change Readiness | `readiness.generated`、PR projection | 每周 | 衡量 PR 体验价值 |
-| Gate degraded rate | `degraded` Gate 数 / Gate projection 总数 | Change Readiness | `gate.projected` | 每周 | 发现 profile、evidence、tool 或 trust model 缺口 |
-| Deep Review value rate | 产生有效 finding 或避免缺陷的 Deep Review 数 / Deep Review 总数 | Review System | review events、feedback | 每两周 | 防止高成本 review 泛化 |
-| Risk acceptance audit coverage | 有 actor/reason/scope/residual risk 的风险接受数 / 风险接受总数 | Change Readiness | risk acceptance events | 每周 | 确保人工放行可追踪 |
+| 推荐检查执行率 | 被用户执行或 CI 覆盖的推荐检查 / 推荐检查总数 | 风险分类器 | 就绪度、验证事件 | 每两周 | 判断建议是否有行动价值 |
+| 强制检查精度 | 人工或后验确认有价值的强制检查 / 强制检查总数 | 风险分类器 | 门禁结果、覆盖、审查反馈 | 每两周 | 校准路径矩阵，减少低价值检查 |
+| 强制检查漏报率 | 后验发现应运行但未推荐的检查 / 后验确认需要的检查总数 | 风险分类器 | CI 失败、审查阻塞项、合入后缺陷 | 每两周 | 控制错误就绪风险 |
+| PR 就绪度采用率 | 使用就绪度摘要的 PR 数 / BitFun 准备的 PR 总数 | 变更就绪度 | `readiness.generated`、PR 投影 | 每周 | 衡量 PR 体验价值 |
+| 门禁降级率 | `degraded` 门禁数 / 门禁投影总数 | 变更就绪度 | `gate.projected` | 每周 | 发现模式、证据、工具或信任模型缺口 |
+| 深度审查价值率 | 产生有效问题或避免缺陷的深度审查数 / 深度审查总数 | 审查系统 | 审查事件、反馈 | 每两周 | 防止高成本审查泛化 |
+| 风险接受审计覆盖率 | 有操作者/原因/范围/残余风险的风险接受数 / 风险接受总数 | 变更就绪度 | 风险接受事件 | 每周 | 确保人工放行可追踪 |
 
 ## 4. P3/P4 复杂生命周期与评测指标
 
-| 指标 | 公式 | Owner | 数据来源 | 窗口 | 用途 |
+| 指标 | 公式 | 负责人 | 数据来源 | 窗口 | 用途 |
 |---|---|---|---|---|---|
-| Confirmed link ratio | confirmed graph edges / non-expired graph edges | Artifact Graph | graph edge state | 每两周 | 衡量图谱是否可信 |
-| Stale link rate | stale graph edges / graph edges | Artifact Graph | graph edge state、file/check/review changes | 每两周 | 判断图谱刷新是否跟上变更 |
-| Impact precision | 被确认有效的 impact candidates / impact candidates 总数 | Requirement Impact Analysis | confirmation queue、review feedback | 每两周 | 降低低价值候选 |
-| Impact recall proxy | 后验发现遗漏影响项 / 后验确认影响项总数 | Requirement Impact Analysis | review blocker、incident、manual add | 每月 | 发现高风险漏报 |
-| Eval card coverage | 有 Eval Card 的决策任务集 / 用于决策的任务集总数 | Agent Evaluation | eval registry | 每月 | 防止无血缘 eval 进入决策 |
-| Holdout contamination rate | 标记污染的 holdout tasks / holdout tasks 总数 | Agent Evaluation | eval lineage、prompt/export logs | 每月 | 防止评测集失效 |
-| Replay reproducibility rate | 可在固定环境复现的 replay runs / replay runs 总数 | Agent Evaluation | trace replay result | 每月 | 判断评估基础设施稳定性 |
-| Incident-to-regression latency | incident 确认到 regression candidate/test/rule 入库的中位耗时 | Lifecycle Context | incident、graph、eval backlog | 每月 | 衡量右移反馈闭环 |
+| 已确认链接占比 | 已确认图谱边 / 未过期图谱边 | 交付物图谱 | 图谱边状态 | 每两周 | 衡量图谱是否可信 |
+| 链接过期率 | 过期图谱边 / 全部图谱边 | 交付物图谱 | 图谱边状态、文件/检查/审查变更 | 每两周 | 判断图谱刷新是否跟上变更 |
+| 影响候选精度 | 被确认有效的影响候选 / 影响候选总数 | 需求影响分析 | 确认队列、审查反馈 | 每两周 | 降低低价值候选 |
+| 影响召回代理指标 | 后验发现遗漏影响项 / 后验确认影响项总数 | 需求影响分析 | 审查阻塞项、事故、人工补充 | 每月 | 发现高风险漏报 |
+| 评测卡覆盖率 | 有评测卡的决策任务集 / 用于决策的任务集总数 | 智能体评测 | 评测注册表 | 每月 | 防止无血缘评测进入决策 |
+| 保留集污染率 | 标记污染的保留集任务 / 保留集任务总数 | 智能体评测 | 评测血缘、prompt/导出日志 | 每月 | 防止评测集失效 |
+| 回放可复现率 | 可在固定环境复现的回放运行数 / 回放运行总数 | 智能体评测 | 轨迹回放结果 | 每月 | 判断评估基础设施稳定性 |
+| 事故到回归延迟 | 事故确认到回归候选/测试/规则入库的中位耗时 | 生命周期上下文 | 事故、图谱、评测待办 | 每月 | 衡量右移反馈闭环 |
 
 ## 5. 阶段退出建议
 
-这些阈值不是硬编码产品策略，只是阶段评审参考。每个目标项目可以在 Project Profile 或 team policy 中覆盖阈值。
+这些阈值不是硬编码产品策略，只是阶段评审参考。每个目标项目可以在项目画像或团队策略中覆盖阈值。
 
 | 阶段 | 建议观察条件 |
 |---|---|
-| P-1 -> P0 | Adaptive Control、Security Boundary、LifecycleEvent、Evidence display tier 和 metric spec 均有 owner 与版本 |
-| P0 -> P1 | Time to first useful action、interruption rate、security prompt response、confidence summary coverage 有 baseline |
-| P1 -> P2 | false escalation 可归类；recommended check follow-through 有样本；PR readiness 被实际使用 |
-| P2 -> P3 | required check precision 有人工反馈；risk acceptance audit 接近完整；active config unresolved 不再由实现缺口主导 |
-| P3 -> P4 | impact precision/recall proxy 可采样；release/incident 证据可回写 graph；Eval Card coverage 接近完整 |
+| P-1 -> P0 | 自适应控制、安全边界、LifecycleEvent、证据展示层级和指标规格均有负责人与版本 |
+| P0 -> P1 | 首次有用动作耗时、打断率、安全提示响应、信心摘要覆盖率有基线 |
+| P1 -> P2 | 误升级可归类；推荐检查执行率有样本；PR 就绪度被实际使用 |
+| P2 -> P3 | 强制检查精度有人工反馈；风险接受审计接近完整；主动配置未解决不再由实现缺口主导 |
+| P3 -> P4 | 影响精度/召回代理指标可采样；发布/事故证据可回写图谱；评测卡覆盖率接近完整 |
 
 ## 6. 不应使用的指标方式
 
-- 不用单次 benchmark 分数证明产品质量。
-- 不用 PR cycle time 单独判断 gate 好坏，必须同时看 false ready/block、review feedback、defect 和用户打断。
+- 不用单次基准测试分数证明产品质量。
+- 不用 PR 周期单独判断门禁好坏，必须同时看错误就绪/错误阻断、审查反馈、缺陷和用户打断。
 - 不用 token 成本单独优化策略，必须和质量、风险等级、用户接受度一起看。
-- 不把模型生成的“风险摘要数量”当作真实 finding density。
-- 不把未确认的 graph edge 计入 confirmed link ratio。
-- 不把 break-glass 直接当作安全失败；必须结合风险等级、范围和后验结果判断。
+- 不把模型生成的“风险摘要数量”当作真实问题密度。
+- 不把未确认的图谱边计入已确认链接占比。
+- 不把应急放行直接当作安全失败；必须结合风险等级、范围和后验结果判断。
