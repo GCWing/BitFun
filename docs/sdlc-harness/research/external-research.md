@@ -1,7 +1,7 @@
 # BitFun 可配置开发体验与工程治理外部调研
 
 > 范围：围绕 AI 编码智能体、仓库指令、权限与沙箱、可选代码审查、hook/plugin、交付物图谱、质量治理和评测体系整理外部产品、论文、标准与趋势信号。
-> 用途：作为设计文档的外部证据池。主设计文档只提炼必要产品判断，本文保留较完整参考资料。
+> 用途：作为产品需求和架构设计的外部证据池。产品需求文档只提炼必要产品判断，本文保留较完整参考资料。
 
 ## 1. 产品趋势
 
@@ -16,7 +16,7 @@
 | [CodeRabbit configuration](https://docs.coderabbit.ai/reference/configuration) / [路径指令](https://docs.coderabbit.ai/configuration/path-instructions) | 审查强度、路径级指令、规则 | 审查强度和路径规则可配置，默认模式降低噪音 |
 | [GitLab Duo 自定义指令](https://docs.gitlab.com/user/gitlab_duo/customize_duo/review_instructions/) / [警告模式](https://docs.gitlab.com/user/application_security/policies/merge_request_approval_policies/) | 审查指令、审批策略、警告模式 | 强策略应先建议模式/警告校准，再进入强制要求/阻断 |
 | [Kiro Specs](https://kiro.dev/docs/specs/) / [Steering](https://kiro.dev/docs/steering/) / [Hooks](https://kiro.dev/docs/hooks/) | spec 驱动开发、工作区/全局/团队 steering、加载范围模式、智能体 hooks | 项目知识需要作用域、优先级和加载时机；复杂上下文按条件加载 |
-| [Jules](https://jules.google/) | 选择 repo/branch、云端计划、diff、用户批准 | 异步编码智能体的高体验入口是计划和 diff 审批 |
+| [Jules](https://jules.google/) | 选择仓库/分支、云端计划、diff、用户批准 | 异步编码智能体的高体验入口是计划和 diff 审批 |
 | [Atlassian Software Collection](https://www.atlassian.com/collections/software) / [Rovo Dev](https://www.atlassian.com/software/rovo-dev) | Jira、Confluence、Bitbucket、Pipelines、PR 审查、acceptance criteria 检查 | 复杂项目需要连接任务、文档、代码、CI 和团队上下文，但应按需显露 |
 | [Harness](https://www.harness.io/) / [Harness AI](https://developer.harness.io/docs/platform/harness-ai/overview) / [Software Delivery Knowledge Graph](https://www.harness.io/blog/knowledge-graphs-for-ai-software-delivery) | CI/CD、测试、AppSec、SRE、成本优化、软件交付知识图谱 | 知识图谱应从最小高价值场景开始，保持新鲜度和可验证价值 |
 | [OpenCode Plugins](https://opencode.ai/docs/plugins/) / [SDK](https://opencode.ai/docs/sdk/) / [Server API](https://opencode.ai/docs/server/) | JS/TS plugin、hook、自定义工具、SSE 事件流 | 可提供兼容层，但底层必须由 BitFun 自己的权限、策略和事件模型约束 |
