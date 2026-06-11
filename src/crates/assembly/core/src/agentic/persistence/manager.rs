@@ -22,11 +22,20 @@ use crate::service::workspace_runtime::WorkspaceRuntimeService;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::timing::elapsed_ms_u64;
 use bitfun_runtime_ports::{SessionTurnLoadRequest, SessionTurnLoadTiming};
+use bitfun_services_core::{
+    json_store::{JsonFileStore, JsonFileStoreError},
+    session::{
+        build_session_index_snapshot, build_session_metadata_page, empty_session_metadata_page,
+        refresh_session_metadata_from_turns, remove_session_index_entry,
+        try_refresh_session_metadata_for_saved_turn, upsert_session_index_entry,
+        SessionStorageLayout,
+    },
+};
 use futures::{stream, StreamExt};
 use log::{debug, info, warn};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
@@ -34,13 +43,12 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::fs;
 use tokio::sync::Mutex;
 
+pub use bitfun_services_core::session::SessionMetadataPage;
+
 const TRANSCRIPT_SCHEMA_VERSION: u32 = 1;
-const JSON_WRITE_MAX_RETRIES: usize = 5;
-const JSON_WRITE_RETRY_BASE_DELAY_MS: u64 = 30;
 const SESSION_TRANSCRIPT_PREVIEW_CHAR_LIMIT: usize = 120;
 const SESSION_TURN_READ_CONCURRENCY: usize = 4;
 
-static JSON_FILE_WRITE_LOCKS: OnceLock<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>> = OnceLock::new();
 static SESSION_INDEX_LOCKS: OnceLock<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>> = OnceLock::new();
 static SESSION_METADATA_UPDATE_LOCKS: OnceLock<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>> =
     OnceLock::new();
@@ -89,23 +97,6 @@ struct StoredTurnContextSnapshotFile {
     session_id: String,
     turn_index: usize,
     messages: Vec<Message>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SessionMetadataPage {
-    pub sessions: Vec<SessionMetadata>,
-    pub total_top_level_count: usize,
-    pub loaded_top_level_count: usize,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub next_cursor: Option<String>,
-    pub has_more: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct SessionMetadataPageCursor {
-    last_active_at: u64,
-    session_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -429,41 +420,35 @@ impl PersistenceManager {
     }
 
     fn session_dir(&self, workspace_path: &Path, session_id: &str) -> PathBuf {
-        self.project_sessions_dir(workspace_path).join(session_id)
+        self.session_layout(workspace_path).session_dir(session_id)
     }
 
     fn metadata_path(&self, workspace_path: &Path, session_id: &str) -> PathBuf {
-        self.session_dir(workspace_path, session_id)
-            .join("metadata.json")
+        self.session_layout(workspace_path)
+            .metadata_path(session_id)
     }
 
     fn state_path(&self, workspace_path: &Path, session_id: &str) -> PathBuf {
-        self.session_dir(workspace_path, session_id)
-            .join("state.json")
+        self.session_layout(workspace_path).state_path(session_id)
     }
 
     fn prompt_cache_path(&self, workspace_path: &Path, session_id: &str) -> PathBuf {
-        self.session_dir(workspace_path, session_id)
-            .join("prompt_cache.json")
+        self.session_layout(workspace_path)
+            .prompt_cache_path(session_id)
     }
 
     fn turns_dir(&self, workspace_path: &Path, session_id: &str) -> PathBuf {
-        self.session_dir(workspace_path, session_id).join("turns")
+        self.session_layout(workspace_path).turns_dir(session_id)
     }
 
     fn snapshots_dir(&self, workspace_path: &Path, session_id: &str) -> PathBuf {
-        self.session_dir(workspace_path, session_id)
-            .join("snapshots")
-    }
-
-    fn artifacts_dir(&self, workspace_path: &Path, session_id: &str) -> PathBuf {
-        self.session_dir(workspace_path, session_id)
-            .join("artifacts")
+        self.session_layout(workspace_path)
+            .snapshots_dir(session_id)
     }
 
     fn turn_path(&self, workspace_path: &Path, session_id: &str, turn_index: usize) -> PathBuf {
-        self.turns_dir(workspace_path, session_id)
-            .join(format!("turn-{:04}.json", turn_index))
+        self.session_layout(workspace_path)
+            .turn_path(session_id, turn_index)
     }
 
     fn context_snapshot_path(
@@ -472,8 +457,8 @@ impl PersistenceManager {
         session_id: &str,
         turn_index: usize,
     ) -> PathBuf {
-        self.snapshots_dir(workspace_path, session_id)
-            .join(format!("context-{:04}.json", turn_index))
+        self.session_layout(workspace_path)
+            .context_snapshot_path(session_id, turn_index)
     }
 
     fn skill_agent_snapshot_path(
@@ -482,8 +467,8 @@ impl PersistenceManager {
         session_id: &str,
         turn_index: usize,
     ) -> PathBuf {
-        self.snapshots_dir(workspace_path, session_id)
-            .join(format!("skill-agent-{:04}.json", turn_index))
+        self.session_layout(workspace_path)
+            .skill_agent_snapshot_path(session_id, turn_index)
     }
 
     fn skill_agent_baseline_override_path(
@@ -491,27 +476,26 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> PathBuf {
-        // Forked subagents need two different "baselines":
-        // - turn-0 skill-agent snapshot remains the child's own diff baseline for later turns
-        // - this override preserves the parent's turn-0 listing baseline so prompt/listing
-        //   reminders can keep the same prefix/cache baseline after forking
-        // Full listing reminder assembly reads this file before falling back to turn 0.
-        self.snapshots_dir(workspace_path, session_id)
-            .join("skill-agent-baseline-override.json")
+        self.session_layout(workspace_path)
+            .skill_agent_baseline_override_path(session_id)
     }
 
     fn transcript_path(&self, workspace_path: &Path, session_id: &str) -> PathBuf {
-        self.artifacts_dir(workspace_path, session_id)
-            .join("transcript.txt")
+        self.session_layout(workspace_path)
+            .transcript_path(session_id)
     }
 
     fn transcript_meta_path(&self, workspace_path: &Path, session_id: &str) -> PathBuf {
-        self.artifacts_dir(workspace_path, session_id)
-            .join("transcript.meta.json")
+        self.session_layout(workspace_path)
+            .transcript_meta_path(session_id)
     }
 
     fn index_path(&self, workspace_path: &Path) -> PathBuf {
-        self.project_sessions_dir(workspace_path).join("index.json")
+        self.session_layout(workspace_path).index_path()
+    }
+
+    fn session_layout(&self, workspace_path: &Path) -> SessionStorageLayout {
+        SessionStorageLayout::new(self.project_sessions_dir(workspace_path))
     }
 
     fn existing_project_sessions_dir(&self, workspace_path: &Path) -> Option<PathBuf> {
@@ -536,11 +520,10 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<PathBuf> {
-        let dir = self.session_dir(workspace_path, session_id);
-        fs::create_dir_all(&dir)
+        self.session_layout(workspace_path)
+            .ensure_session_dir(session_id)
             .await
-            .map_err(|e| BitFunError::io(format!("Failed to create session directory: {}", e)))?;
-        Ok(dir)
+            .map_err(|e| BitFunError::io(format!("Failed to create session directory: {}", e)))
     }
 
     async fn ensure_turns_dir(
@@ -548,11 +531,10 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<PathBuf> {
-        let dir = self.turns_dir(workspace_path, session_id);
-        fs::create_dir_all(&dir)
+        self.session_layout(workspace_path)
+            .ensure_turns_dir(session_id)
             .await
-            .map_err(|e| BitFunError::io(format!("Failed to create turns directory: {}", e)))?;
-        Ok(dir)
+            .map_err(|e| BitFunError::io(format!("Failed to create turns directory: {}", e)))
     }
 
     async fn ensure_snapshots_dir(
@@ -560,11 +542,10 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<PathBuf> {
-        let dir = self.snapshots_dir(workspace_path, session_id);
-        fs::create_dir_all(&dir)
+        self.session_layout(workspace_path)
+            .ensure_snapshots_dir(session_id)
             .await
-            .map_err(|e| BitFunError::io(format!("Failed to create snapshots directory: {}", e)))?;
-        Ok(dir)
+            .map_err(|e| BitFunError::io(format!("Failed to create snapshots directory: {}", e)))
     }
 
     async fn ensure_artifacts_dir(
@@ -572,154 +553,27 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<PathBuf> {
-        let dir = self.artifacts_dir(workspace_path, session_id);
-        fs::create_dir_all(&dir)
+        self.session_layout(workspace_path)
+            .ensure_artifacts_dir(session_id)
             .await
-            .map_err(|e| BitFunError::io(format!("Failed to create artifacts directory: {}", e)))?;
-        Ok(dir)
+            .map_err(|e| BitFunError::io(format!("Failed to create artifacts directory: {}", e)))
     }
 
     async fn read_json_optional<T: DeserializeOwned>(
         &self,
         path: &Path,
     ) -> BitFunResult<Option<T>> {
-        let started_at = Instant::now();
-        let metadata_started_at = Instant::now();
-        let metadata = match fs::metadata(path).await {
-            Ok(metadata) => metadata,
-            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
-            Err(error) => {
-                return Err(BitFunError::io(format!(
-                    "Failed to read JSON metadata {}: {}",
-                    path.display(),
-                    error
-                )));
-            }
-        };
-        let metadata_duration = metadata_started_at.elapsed();
-
-        let read_started_at = Instant::now();
-        let content = fs::read_to_string(path).await.map_err(|e| {
-            BitFunError::io(format!(
-                "Failed to read JSON file {}: {}",
-                path.display(),
-                e
-            ))
-        })?;
-        let read_duration = read_started_at.elapsed();
-
-        let parse_started_at = Instant::now();
-        let value = serde_json::from_str::<T>(&content).map_err(|e| {
-            BitFunError::Deserialization(format!(
-                "Failed to deserialize JSON file {}: {}",
-                path.display(),
-                e
-            ))
-        })?;
-        let parse_duration = parse_started_at.elapsed();
-        let total_duration = started_at.elapsed();
-
-        if total_duration >= Duration::from_millis(80) || metadata.len() >= 1024 * 1024 {
-            debug!(
-                "Read JSON file: path={} type={} size_bytes={} metadata_duration_ms={} read_duration_ms={} parse_duration_ms={} total_duration_ms={}",
-                path.display(),
-                std::any::type_name::<T>(),
-                metadata.len(),
-                metadata_duration.as_millis(),
-                read_duration.as_millis(),
-                parse_duration.as_millis(),
-                total_duration.as_millis()
-            );
-        }
-
-        Ok(Some(value))
+        JsonFileStore::default()
+            .read_optional(path)
+            .await
+            .map_err(Self::json_store_error)
     }
 
     async fn write_json_atomic<T: Serialize>(&self, path: &Path, value: &T) -> BitFunResult<()> {
-        let parent = path.parent().ok_or_else(|| {
-            BitFunError::io(format!(
-                "Target path has no parent directory: {}",
-                path.display()
-            ))
-        })?;
-
-        fs::create_dir_all(parent)
+        JsonFileStore::default()
+            .write_atomic(path, value)
             .await
-            .map_err(|e| BitFunError::io(format!("Failed to create parent directory: {}", e)))?;
-
-        let json = serde_json::to_string_pretty(value)
-            .map_err(|e| BitFunError::serialization(format!("Failed to serialize JSON: {}", e)))?;
-        let lock = Self::get_file_write_lock(path).await;
-        let _lock_guard = lock.lock().await;
-
-        let json_bytes = json.into_bytes();
-        let mut last_replace_error: Option<std::io::Error> = None;
-
-        for attempt in 0..=JSON_WRITE_MAX_RETRIES {
-            let tmp_path = Self::build_temp_json_path(path, attempt)?;
-            if let Err(e) = fs::write(&tmp_path, &json_bytes).await {
-                return Err(BitFunError::io(format!(
-                    "Failed to write temp JSON file: {}",
-                    e
-                )));
-            }
-
-            match Self::replace_file_from_temp(path, &tmp_path).await {
-                Ok(()) => return Ok(()),
-                Err(e) => {
-                    let should_retry =
-                        Self::is_retryable_write_error(&e) && attempt < JSON_WRITE_MAX_RETRIES;
-                    last_replace_error = Some(e);
-                    let _ = fs::remove_file(&tmp_path).await;
-
-                    if should_retry {
-                        tokio::time::sleep(Self::retry_delay(attempt)).await;
-                        continue;
-                    }
-
-                    break;
-                }
-            }
-        }
-
-        if let Some(error) = last_replace_error {
-            // On Windows, external scanners/file indexers may temporarily hold a non-shareable
-            // handle, making delete/rename fail with PermissionDenied. Fallback to direct write
-            // to avoid losing session persistence while keeping best-effort atomic behavior.
-            if error.kind() == ErrorKind::PermissionDenied {
-                warn!(
-                    "Atomic JSON replace permission denied for {}, fallback to direct overwrite",
-                    path.display()
-                );
-                fs::write(path, &json_bytes).await.map_err(|e| {
-                    BitFunError::io(format!(
-                        "Failed fallback JSON overwrite {}: {}",
-                        path.display(),
-                        e
-                    ))
-                })?;
-                return Ok(());
-            }
-
-            return Err(BitFunError::io(format!(
-                "Failed to replace JSON file: {}",
-                error
-            )));
-        }
-
-        Err(BitFunError::io(format!(
-            "Failed to replace JSON file {}: unknown error",
-            path.display()
-        )))
-    }
-
-    async fn get_file_write_lock(path: &Path) -> Arc<Mutex<()>> {
-        let registry = JSON_FILE_WRITE_LOCKS.get_or_init(|| Mutex::new(HashMap::new()));
-        let mut registry_guard = registry.lock().await;
-        registry_guard
-            .entry(path.to_path_buf())
-            .or_insert_with(|| Arc::new(Mutex::new(())))
-            .clone()
+            .map_err(Self::json_store_error)
     }
 
     async fn get_session_index_lock(&self, workspace_path: &Path) -> Arc<Mutex<()>> {
@@ -746,63 +600,14 @@ impl PersistenceManager {
             .clone()
     }
 
-    fn build_temp_json_path(path: &Path, attempt: usize) -> BitFunResult<PathBuf> {
-        let parent = path.parent().ok_or_else(|| {
-            BitFunError::io(format!(
-                "Target path has no parent directory: {}",
-                path.display()
-            ))
-        })?;
-
-        let file_name = path
-            .file_name()
-            .map(|name| name.to_string_lossy().to_string())
-            .unwrap_or_else(|| "data.json".to_string());
-        let nonce = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos();
-        let temp_name = format!(
-            ".{}.{}.{}.{}.tmp",
-            file_name,
-            std::process::id(),
-            nonce,
-            attempt
-        );
-        Ok(parent.join(temp_name))
-    }
-
-    async fn replace_file_from_temp(target_path: &Path, tmp_path: &Path) -> std::io::Result<()> {
-        if let Ok(()) = fs::rename(tmp_path, target_path).await {
-            return Ok(());
+    fn json_store_error(error: JsonFileStoreError) -> BitFunError {
+        if error.is_deserialization() {
+            BitFunError::Deserialization(error.to_string())
+        } else if error.is_serialization() {
+            BitFunError::serialization(error.to_string())
+        } else {
+            BitFunError::io(error.to_string())
         }
-
-        if target_path.exists() {
-            match fs::remove_file(target_path).await {
-                Ok(()) => {}
-                Err(e) if e.kind() == ErrorKind::NotFound => {}
-                Err(e) => return Err(e),
-            }
-        }
-
-        fs::rename(tmp_path, target_path).await
-    }
-
-    fn is_retryable_write_error(error: &std::io::Error) -> bool {
-        matches!(
-            error.kind(),
-            ErrorKind::PermissionDenied
-                | ErrorKind::WouldBlock
-                | ErrorKind::Interrupted
-                | ErrorKind::TimedOut
-                | ErrorKind::AlreadyExists
-                | ErrorKind::Other
-        )
-    }
-
-    fn retry_delay(attempt: usize) -> Duration {
-        let exp = attempt.min(6) as u32;
-        Duration::from_millis(JSON_WRITE_RETRY_BASE_DELAY_MS * (1u64 << exp))
     }
 
     fn system_time_to_unix_ms(time: SystemTime) -> u64 {
@@ -1569,16 +1374,9 @@ impl PersistenceManager {
         workspace_path: &Path,
     ) -> BitFunResult<Vec<SessionMetadata>> {
         let metadata_list = self.scan_session_metadata_dirs(workspace_path).await?;
-        let metadata_file_count = metadata_list.len();
-        let visible_sessions = metadata_list
-            .into_iter()
-            .filter(|metadata| !metadata.should_hide_from_user_lists())
-            .collect::<Vec<_>>();
-
-        let index = StoredSessionIndexFile::with_metadata_file_count(
+        let (index, visible_sessions) = build_session_index_snapshot(
+            metadata_list,
             Self::system_time_to_unix_ms(SystemTime::now()),
-            visible_sessions.clone(),
-            metadata_file_count,
         );
         self.write_json_atomic(&self.index_path(workspace_path), &index)
             .await?;
@@ -1596,35 +1394,18 @@ impl PersistenceManager {
         let existing_index = self
             .read_json_optional::<StoredSessionIndexFile>(&index_path)
             .await?;
-        let had_index = existing_index.is_some();
-        let mut index = match existing_index {
-            Some(index) => index,
-            None => StoredSessionIndexFile {
-                schema_version: SESSION_STORAGE_SCHEMA_VERSION,
-                updated_at: 0,
-                metadata_file_count: self.count_session_metadata_dirs(workspace_path).await?,
-                sessions: Vec::new(),
-            },
-        };
-
-        if let Some(existing) = index
-            .sessions
-            .iter_mut()
-            .find(|value| value.session_id == metadata.session_id)
-        {
-            *existing = metadata.clone();
+        let disk_metadata_file_count = if existing_index.is_some() {
+            0
         } else {
-            index.sessions.push(metadata.clone());
-        }
-
-        index
-            .sessions
-            .sort_by(|a, b| b.last_active_at.cmp(&a.last_active_at));
-        if had_index && metadata_file_created {
-            index.metadata_file_count = index.metadata_file_count.saturating_add(1);
-        }
-        index.updated_at = Self::system_time_to_unix_ms(SystemTime::now());
-        index.schema_version = SESSION_STORAGE_SCHEMA_VERSION;
+            self.count_session_metadata_dirs(workspace_path).await?
+        };
+        let index = upsert_session_index_entry(
+            existing_index,
+            metadata,
+            metadata_file_created,
+            disk_metadata_file_count,
+            Self::system_time_to_unix_ms(SystemTime::now()),
+        );
         self.write_json_atomic(&index_path, &index).await
     }
 
@@ -1635,26 +1416,17 @@ impl PersistenceManager {
         metadata_file_count_delta: isize,
     ) -> BitFunResult<()> {
         let index_path = self.index_path(workspace_path);
-        let Some(mut index) = self
+        let existing_index = self
             .read_json_optional::<StoredSessionIndexFile>(&index_path)
-            .await?
-        else {
+            .await?;
+        let Some(index) = remove_session_index_entry(
+            existing_index,
+            session_id,
+            metadata_file_count_delta,
+            Self::system_time_to_unix_ms(SystemTime::now()),
+        ) else {
             return Ok(());
         };
-
-        index
-            .sessions
-            .retain(|value| value.session_id != session_id);
-        if metadata_file_count_delta > 0 {
-            index.metadata_file_count = index
-                .metadata_file_count
-                .saturating_add(metadata_file_count_delta as usize);
-        } else if metadata_file_count_delta < 0 {
-            index.metadata_file_count = index
-                .metadata_file_count
-                .saturating_sub(metadata_file_count_delta.unsigned_abs());
-        }
-        index.updated_at = Self::system_time_to_unix_ms(SystemTime::now());
         self.write_json_atomic(&index_path, &index).await
     }
 
@@ -1707,139 +1479,6 @@ impl PersistenceManager {
         self.rebuild_index_locked(workspace_path).await
     }
 
-    fn session_parent_id(metadata: &SessionMetadata) -> Option<String> {
-        if let Some(parent_id) = metadata
-            .relationship
-            .as_ref()
-            .and_then(|relationship| relationship.parent_session_id.as_deref())
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-        {
-            return Some(parent_id.to_string());
-        }
-
-        metadata
-            .custom_metadata
-            .as_ref()
-            .and_then(|custom| {
-                custom
-                    .get("parentSessionId")
-                    .or_else(|| custom.get("parent_session_id"))
-            })
-            .and_then(|value| value.as_str())
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(ToOwned::to_owned)
-    }
-
-    fn session_metadata_page_offset(
-        cursor: Option<&str>,
-        top_level_sessions: &[SessionMetadata],
-    ) -> usize {
-        let Some(cursor) = cursor else {
-            return 0;
-        };
-
-        if let Ok(parsed) = serde_json::from_str::<SessionMetadataPageCursor>(cursor) {
-            if let Some(index) = top_level_sessions.iter().position(|metadata| {
-                metadata.session_id == parsed.session_id
-                    && metadata.last_active_at == parsed.last_active_at
-            }) {
-                return index + 1;
-            }
-
-            if let Some(index) = top_level_sessions
-                .iter()
-                .position(|metadata| metadata.session_id == parsed.session_id)
-            {
-                return index + 1;
-            }
-        }
-
-        cursor.parse::<usize>().unwrap_or(0)
-    }
-
-    fn session_metadata_page_cursor(metadata: &SessionMetadata) -> String {
-        serde_json::to_string(&SessionMetadataPageCursor {
-            last_active_at: metadata.last_active_at,
-            session_id: metadata.session_id.clone(),
-        })
-        .unwrap_or_else(|_| metadata.session_id.clone())
-    }
-
-    fn build_session_metadata_page(
-        indexed_sessions: Vec<SessionMetadata>,
-        cursor: Option<&str>,
-        limit: usize,
-    ) -> SessionMetadataPage {
-        let visible_sessions = indexed_sessions
-            .into_iter()
-            .filter(|metadata| {
-                !metadata.should_hide_from_user_lists()
-                    && metadata.status != SessionStatus::Archived
-            })
-            .collect::<Vec<_>>();
-        let visible_ids = visible_sessions
-            .iter()
-            .map(|metadata| metadata.session_id.clone())
-            .collect::<HashSet<_>>();
-
-        let mut top_level_sessions = Vec::new();
-        let mut children_by_parent: HashMap<String, Vec<SessionMetadata>> = HashMap::new();
-        for metadata in visible_sessions {
-            if let Some(parent_id) = Self::session_parent_id(&metadata) {
-                if visible_ids.contains(&parent_id) {
-                    children_by_parent
-                        .entry(parent_id)
-                        .or_default()
-                        .push(metadata);
-                    continue;
-                }
-            }
-
-            top_level_sessions.push(metadata);
-        }
-
-        let total_top_level_count = top_level_sessions.len();
-        let offset = Self::session_metadata_page_offset(cursor, &top_level_sessions);
-        let offset = offset.min(total_top_level_count);
-        let next_offset = offset.saturating_add(limit).min(total_top_level_count);
-        let selected_top_level = top_level_sessions
-            .iter()
-            .skip(offset)
-            .take(limit)
-            .cloned()
-            .collect::<Vec<_>>();
-        let loaded_top_level_count = selected_top_level.len();
-        let has_more = next_offset < total_top_level_count;
-        let next_cursor = has_more
-            .then(|| {
-                selected_top_level
-                    .last()
-                    .map(Self::session_metadata_page_cursor)
-            })
-            .flatten();
-
-        let mut sessions = Vec::new();
-        for metadata in selected_top_level {
-            let session_id = metadata.session_id.clone();
-            sessions.push(metadata);
-
-            if let Some(mut children) = children_by_parent.remove(&session_id) {
-                children.sort_by(|a, b| b.last_active_at.cmp(&a.last_active_at));
-                sessions.extend(children);
-            }
-        }
-
-        SessionMetadataPage {
-            sessions,
-            total_top_level_count,
-            loaded_top_level_count,
-            next_cursor,
-            has_more,
-        }
-    }
-
     pub async fn list_session_metadata_page(
         &self,
         workspace_path: &Path,
@@ -1847,23 +1486,11 @@ impl PersistenceManager {
         limit: usize,
     ) -> BitFunResult<SessionMetadataPage> {
         if !workspace_path.exists() {
-            return Ok(SessionMetadataPage {
-                sessions: Vec::new(),
-                total_top_level_count: 0,
-                loaded_top_level_count: 0,
-                next_cursor: None,
-                has_more: false,
-            });
+            return Ok(empty_session_metadata_page());
         }
 
         if self.existing_project_sessions_dir(workspace_path).is_none() {
-            return Ok(SessionMetadataPage {
-                sessions: Vec::new(),
-                total_top_level_count: 0,
-                loaded_top_level_count: 0,
-                next_cursor: None,
-                has_more: false,
-            });
+            return Ok(empty_session_metadata_page());
         }
 
         let limit = limit.max(1);
@@ -1890,7 +1517,7 @@ impl PersistenceManager {
             self.rebuild_index_locked(workspace_path).await?
         };
 
-        let page = Self::build_session_metadata_page(indexed_sessions, cursor, limit);
+        let page = build_session_metadata_page(indexed_sessions, cursor, limit);
         let has_stale_page_entry = page.sessions.iter().any(|metadata| {
             !self
                 .metadata_path(workspace_path, &metadata.session_id)
@@ -1905,11 +1532,7 @@ impl PersistenceManager {
             index_path.display()
         );
         let rebuilt_sessions = self.rebuild_index_locked(workspace_path).await?;
-        Ok(Self::build_session_metadata_page(
-            rebuilt_sessions,
-            cursor,
-            limit,
-        ))
+        Ok(build_session_metadata_page(rebuilt_sessions, cursor, limit))
     }
 
     pub async fn list_session_metadata_including_internal(
@@ -2730,72 +2353,6 @@ impl PersistenceManager {
         Ok(summaries)
     }
 
-    fn estimate_turn_message_count(turn: &DialogTurnData) -> usize {
-        let assistant_text_count: usize = turn
-            .model_rounds
-            .iter()
-            .map(|round| round.text_items.len())
-            .sum();
-        1 + assistant_text_count
-    }
-
-    fn refresh_metadata_from_turns(
-        metadata: &mut SessionMetadata,
-        workspace_path: &Path,
-        turns: &[DialogTurnData],
-        last_active_at: u64,
-    ) {
-        metadata.turn_count = turns.len();
-        metadata.message_count = turns.iter().map(Self::estimate_turn_message_count).sum();
-        metadata.tool_call_count = turns.iter().map(DialogTurnData::count_tool_calls).sum();
-        metadata.last_active_at = last_active_at;
-        if metadata.workspace_path.is_none() {
-            metadata.workspace_path = Some(workspace_path.to_string_lossy().to_string());
-        }
-    }
-
-    fn try_refresh_metadata_for_saved_turn(
-        metadata: &mut SessionMetadata,
-        workspace_path: &Path,
-        previous_turn: Option<&DialogTurnData>,
-        turn: &DialogTurnData,
-        last_active_at: u64,
-    ) -> bool {
-        let new_message_count = Self::estimate_turn_message_count(turn);
-        let new_tool_call_count = turn.count_tool_calls();
-
-        match previous_turn {
-            Some(previous)
-                if previous.session_id == turn.session_id
-                    && previous.turn_index == turn.turn_index
-                    && turn.turn_index < metadata.turn_count =>
-            {
-                metadata.message_count = metadata
-                    .message_count
-                    .saturating_sub(Self::estimate_turn_message_count(previous))
-                    .saturating_add(new_message_count);
-                metadata.tool_call_count = metadata
-                    .tool_call_count
-                    .saturating_sub(previous.count_tool_calls())
-                    .saturating_add(new_tool_call_count);
-            }
-            None if turn.turn_index == metadata.turn_count => {
-                metadata.turn_count += 1;
-                metadata.message_count = metadata.message_count.saturating_add(new_message_count);
-                metadata.tool_call_count =
-                    metadata.tool_call_count.saturating_add(new_tool_call_count);
-            }
-            _ => return false,
-        }
-
-        metadata.last_active_at = last_active_at;
-        if metadata.workspace_path.is_none() {
-            metadata.workspace_path = Some(workspace_path.to_string_lossy().to_string());
-        }
-
-        true
-    }
-
     pub async fn save_dialog_turn(
         &self,
         workspace_path: &Path,
@@ -2852,10 +2409,11 @@ impl PersistenceManager {
             .end_time
             .unwrap_or_else(|| Self::system_time_to_unix_ms(SystemTime::now()));
         let mut metadata_refresh_mode = "incremental";
+        let workspace_path_text = workspace_path.to_string_lossy();
         if previous_turn_load_failed
-            || !Self::try_refresh_metadata_for_saved_turn(
+            || !try_refresh_session_metadata_for_saved_turn(
                 &mut metadata,
-                workspace_path,
+                workspace_path_text.as_ref(),
                 previous_turn.as_ref(),
                 turn,
                 last_active_at,
@@ -2865,9 +2423,9 @@ impl PersistenceManager {
             let turns = self
                 .load_session_turns(workspace_path, &turn.session_id)
                 .await?;
-            Self::refresh_metadata_from_turns(
+            refresh_session_metadata_from_turns(
                 &mut metadata,
-                workspace_path,
+                workspace_path_text.as_ref(),
                 &turns,
                 last_active_at,
             );
@@ -2914,39 +2472,10 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<Vec<(usize, PathBuf)>> {
-        let turns_dir = self.turns_dir(workspace_path, session_id);
-        if !turns_dir.exists() {
-            return Ok(Vec::new());
-        }
-
-        let mut indexed_paths = Vec::new();
-        let mut entries = fs::read_dir(&turns_dir)
+        self.session_layout(workspace_path)
+            .list_indexed_turn_paths(session_id)
             .await
-            .map_err(|e| BitFunError::io(format!("Failed to read turns directory: {}", e)))?;
-
-        while let Some(entry) = entries
-            .next_entry()
-            .await
-            .map_err(|e| BitFunError::io(format!("Failed to iterate turns directory: {}", e)))?
-        {
-            let path = entry.path();
-            if path.extension().and_then(|value| value.to_str()) != Some("json") {
-                continue;
-            }
-            let Some(stem) = path.file_stem().and_then(|value| value.to_str()) else {
-                continue;
-            };
-            let Some(index_str) = stem.strip_prefix("turn-") else {
-                continue;
-            };
-            let Ok(index) = index_str.parse::<usize>() else {
-                continue;
-            };
-            indexed_paths.push((index, path));
-        }
-
-        indexed_paths.sort_by_key(|(index, _)| *index);
-        Ok(indexed_paths)
+            .map_err(|e| BitFunError::io(format!("Failed to list dialog turn files: {}", e)))
     }
 
     async fn read_turn_paths(
@@ -3152,48 +2681,27 @@ impl PersistenceManager {
         session_id: &str,
         turn_index: usize,
     ) -> BitFunResult<()> {
-        let turns_dir = self.turns_dir(workspace_path, session_id);
-        if !turns_dir.exists() {
+        if !self.turns_dir(workspace_path, session_id).exists() {
             return Ok(());
         }
 
-        let mut entries = fs::read_dir(&turns_dir)
+        self.session_layout(workspace_path)
+            .delete_indexed_turn_paths_from(session_id, turn_index)
             .await
-            .map_err(|e| BitFunError::io(format!("Failed to read turns directory: {}", e)))?;
-        while let Some(entry) = entries
-            .next_entry()
-            .await
-            .map_err(|e| BitFunError::io(format!("Failed to iterate turns directory: {}", e)))?
-        {
-            let path = entry.path();
-            if path.extension().and_then(|value| value.to_str()) != Some("json") {
-                continue;
-            }
-            let Some(stem) = path.file_stem().and_then(|value| value.to_str()) else {
-                continue;
-            };
-            let Some(index_str) = stem.strip_prefix("turn-") else {
-                continue;
-            };
-            let Ok(index) = index_str.parse::<usize>() else {
-                continue;
-            };
-            if index >= turn_index {
-                fs::remove_file(&path).await.map_err(|e| {
-                    BitFunError::io(format!("Failed to delete dialog turn file: {}", e))
-                })?;
-            }
-        }
+            .map_err(|e| BitFunError::io(format!("Failed to delete dialog turn files: {}", e)))?;
 
         if let Some(mut metadata) = self
             .load_session_metadata(workspace_path, session_id)
             .await?
         {
             let turns = self.load_session_turns(workspace_path, session_id).await?;
-            metadata.turn_count = turns.len();
-            metadata.message_count = turns.iter().map(Self::estimate_turn_message_count).sum();
-            metadata.tool_call_count = turns.iter().map(DialogTurnData::count_tool_calls).sum();
-            metadata.last_active_at = Self::system_time_to_unix_ms(SystemTime::now());
+            let workspace_path_text = workspace_path.to_string_lossy();
+            refresh_session_metadata_from_turns(
+                &mut metadata,
+                workspace_path_text.as_ref(),
+                &turns,
+                Self::system_time_to_unix_ms(SystemTime::now()),
+            );
             self.save_session_metadata(workspace_path, &metadata)
                 .await?;
         }
@@ -3431,16 +2939,13 @@ impl PersistenceManager {
             .await?
         {
             let remaining_turns = self.load_session_turns(workspace_path, session_id).await?;
-            metadata.turn_count = remaining_turns.len();
-            metadata.message_count = remaining_turns
-                .iter()
-                .map(Self::estimate_turn_message_count)
-                .sum();
-            metadata.tool_call_count = remaining_turns
-                .iter()
-                .map(DialogTurnData::count_tool_calls)
-                .sum();
-            metadata.last_active_at = Self::system_time_to_unix_ms(SystemTime::now());
+            let workspace_path_text = workspace_path.to_string_lossy();
+            refresh_session_metadata_from_turns(
+                &mut metadata,
+                workspace_path_text.as_ref(),
+                &remaining_turns,
+                Self::system_time_to_unix_ms(SystemTime::now()),
+            );
             self.save_session_metadata(workspace_path, &metadata)
                 .await?;
         }
@@ -3475,16 +2980,13 @@ impl PersistenceManager {
             .await?
         {
             let remaining_turns = self.load_session_turns(workspace_path, session_id).await?;
-            metadata.turn_count = remaining_turns.len();
-            metadata.message_count = remaining_turns
-                .iter()
-                .map(Self::estimate_turn_message_count)
-                .sum();
-            metadata.tool_call_count = remaining_turns
-                .iter()
-                .map(DialogTurnData::count_tool_calls)
-                .sum();
-            metadata.last_active_at = Self::system_time_to_unix_ms(SystemTime::now());
+            let workspace_path_text = workspace_path.to_string_lossy();
+            refresh_session_metadata_from_turns(
+                &mut metadata,
+                workspace_path_text.as_ref(),
+                &remaining_turns,
+                Self::system_time_to_unix_ms(SystemTime::now()),
+            );
             self.save_session_metadata(workspace_path, &metadata)
                 .await?;
         }

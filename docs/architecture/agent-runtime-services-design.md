@@ -6,13 +6,40 @@
 ## 1. 设计目标与边界
 
 - Agent Runtime SDK 可被 Desktop、CLI、Server、Remote、ACP 等产品形态嵌入。
+- Agent Runtime SDK 对外提供稳定、窄口径的 runtime API，而不是暴露 `bitfun-core`、产品命令路径或 concrete manager。
 - Runtime 不感知平台差异、工具实现差异和构建形态差异。
 - Tool 使用通用接口和 provider group 注册，不绑定底层实现。
 - 具体 adapter 与 service 实现由上层 Product Assembly 注入。
 - Harness 可扩展，新增 SDD 等工作流不侵入 runtime kernel。
 - 每个 crate 只依赖最小稳定集合，依赖方向可检查。
 
-### 1.1 crate 划分
+### 1.1 SDK 发布边界
+
+Agent Runtime SDK 的发布边界以调用方能力为准，而不是以物理 crate 命名为准。达到目标状态时，外部调用方
+应能在不依赖 `bitfun-core`、app crate、Tauri 或产品内部 manager 的情况下完成以下动作：
+
+- 构建 runtime：注入 model provider、`RuntimeServices`、tool provider、harness provider、agent definitions、
+  hooks 和 runtime config。
+- 发起执行：创建或恢复 session，提交 turn，取消 turn，消费 provider-neutral event stream。
+- 执行工具：通过稳定 tool manifest、permission request、tool result、artifact ref 和 cancellation contract
+  管理工具调用。
+- 扩展能力：通过 registry 注册 subagent、prompt module、skill、MCP/API tool、harness workflow 和 post-turn
+  processor。
+- 处理运维语义：接收 typed error、usage/cost/cache facts、telemetry event、checkpoint/resume facts 和
+  unsupported capability。
+
+因此，SDK readiness 的最低标准是：
+
+- 公共 façade 只暴露 builder、runner、request/response DTO、event stream、typed error 和 registry API。
+- 所有 DTO 可序列化，所有 runtime handle 通过 typed port 注入，不进入 wire contract。
+- `bitfun-agent-runtime`、Tool primitives、Runtime Services 和 Harness 能通过 fake provider 独立测试。
+- SDK minimal feature 不牵引 Desktop、Tauri、Git provider、MCP client、AI HTTP client、remote SSH 或产品 UI。
+- 完整产品能力只能通过 Product Assembly 或兼容 `bitfun-core/product-full` 组装，不反向污染 SDK API。
+
+只要外部调用方仍必须导入 `bitfun-core`、启用 `product-full`、持有 concrete service manager、读取产品命令
+registry 或依赖全局 mutable state，SDK 发布边界就不成立。
+
+### 1.2 crate 划分
 
 ```text
 bitfun-core-types
@@ -248,6 +275,42 @@ Remote ports 的边界：
 - permission 协调。
 - runtime events。
 - post-turn processor。
+
+公共 façade：
+
+```rust
+pub struct AgentRuntimeBuilder {
+    // typed runtime parts only
+}
+
+pub struct AgentRunRequest {
+    pub session: SessionSelector,
+    pub input: AgentInput,
+    pub cancellation: CancellationToken,
+}
+
+pub struct AgentRunHandle {
+    pub session_id: SessionId,
+    pub turn_id: TurnId,
+    pub events: AgentEventStream,
+}
+
+impl AgentRuntimeBuilder {
+    pub fn with_services(self, services: RuntimeServices) -> Self;
+    pub fn with_tools(self, tools: Arc<ToolRuntime>) -> Self;
+    pub fn with_harnesses(self, harnesses: Arc<HarnessRegistry>) -> Self;
+    pub fn with_agents(self, agents: Arc<dyn AgentDefinitionRegistry>) -> Self;
+    pub fn with_hooks(self, hooks: RuntimeHookRegistry) -> Self;
+    pub fn build(self) -> Result<AgentRuntime, RuntimeBuildError>;
+}
+
+impl AgentRuntime {
+    pub async fn run(&self, request: AgentRunRequest) -> Result<AgentRunHandle, RuntimeError>;
+}
+```
+
+该 façade 是目标 API 形态。它必须只接收已组装的 typed parts，不负责创建
+filesystem、terminal、MCP、AI client、Remote provider 或产品命令。
 
 旧路径兼容约束：
 
@@ -903,6 +966,8 @@ Product 测试：
 ### 5.4 目标态判定口径
 
 - `bitfun-agent-runtime` 能在不依赖 `bitfun-core` 的情况下构建 runtime kernel。
+- Agent Runtime SDK façade 能通过 fake model provider、fake runtime services、fake tool provider 和 fake
+  harness provider 完成最小 session / turn / event stream 流程。
 - `bitfun-runtime-services` 提供 typed service injection，并由 boundary check 保护。
 - `tool-contracts`、`tool-provider-groups` 和 `tool-execution` 分别承担 tool contract、provider group plan 和低层 execution helper；具体 tool 通过 Product Assembly 注册。
 - `bitfun-harness` 支持工作流 provider 扩展。

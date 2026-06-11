@@ -4,8 +4,10 @@ Scope: this guide applies to `src/crates/services/services-core`.
 
 `bitfun-services-core` owns platform-neutral service DTOs and helpers that can
 compile without the full product runtime. It also owns generic local filesystem
-operations/tree/search/listing primitives; product crates may layer remote
-workspace routing or legacy error mapping outside this crate.
+operations/tree/search/listing primitives, session storage layout helpers, turn
+file indexing/deletion, metadata counter/index rules, and reusable JSON file IO;
+product crates may layer remote workspace routing or legacy error mapping outside
+this crate.
 
 ## Guardrails
 

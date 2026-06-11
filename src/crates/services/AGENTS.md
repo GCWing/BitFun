@@ -11,7 +11,7 @@ OS/network capabilities.
 
 | Crate | Responsibility | Local doc |
 |---|---|---|
-| `services-core` | Reusable local service primitives without product assembly decisions | [AGENTS.md](services-core/AGENTS.md) |
+| `services-core` | Reusable local service primitives, filesystem helpers, session storage layout/indexing/deletion, metadata counter/index rules, and JSON file IO without product assembly decisions | [AGENTS.md](services-core/AGENTS.md) |
 | `services-integrations` | Concrete MCP, git, remote, file-watch, MiniApp runtime, and product-domain port implementations | [AGENTS.md](services-integrations/AGENTS.md) |
 | `terminal` | PTY, shell integration, and terminal session infrastructure | [AGENTS.md](terminal/AGENTS.md) |
 

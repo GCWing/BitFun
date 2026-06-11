@@ -363,6 +363,32 @@ pub fn get_tool_spec_short_description() -> String {
     "Discover collapsed tools and read their detailed definitions.".to_string()
 }
 
+pub fn build_get_tool_spec_description() -> String {
+    r#"Read full schema before first calling a collapsed tool.
+
+Do not call GetToolSpec again for a tool whose definition is already loaded in the current conversation."#
+        .to_string()
+}
+
+pub fn build_get_tool_spec_catalog_description(
+    collapsed_tools: &[GetToolSpecCollapsedToolSummary],
+) -> Option<String> {
+    if collapsed_tools.is_empty() {
+        return None;
+    }
+
+    let collapsed_tools_list = collapsed_tools
+        .iter()
+        .map(|tool| format!("- {}", tool.name))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    Some(format!(
+        "<collapsed_tools>\n{}\n</collapsed_tools>",
+        collapsed_tools_list
+    ))
+}
+
 pub fn get_tool_spec_is_readonly() -> bool {
     true
 }
@@ -678,6 +704,20 @@ pub fn summarize_get_tool_spec_collapsed_tools<Tool: ToolRegistryItem + ?Sized>(
             short_description: tool.short_description(),
         })
         .collect()
+}
+
+pub async fn build_get_tool_spec_catalog_description_from_provider<Tool, Context, Provider>(
+    provider: &Provider,
+    context: Option<&Context>,
+) -> Result<Option<String>, String>
+where
+    Tool: ToolRegistryItem + ?Sized,
+    Context: Sync,
+    Provider: GetToolSpecCatalogProvider<Tool, Context> + ?Sized,
+{
+    let collapsed_tools = provider.collapsed_tools_for_get_tool_spec(context).await?;
+    let summaries = summarize_get_tool_spec_collapsed_tools(&collapsed_tools);
+    Ok(build_get_tool_spec_catalog_description(&summaries))
 }
 
 pub async fn resolve_readonly_enabled_tools<Tool: ToolRegistryItem + ?Sized>(
@@ -2106,5 +2146,33 @@ mod tests {
             .tool_definitions
             .iter()
             .any(|definition| definition.name == "Read"));
+    }
+
+    #[test]
+    fn get_tool_spec_description_preserves_prompt_contract() {
+        let description = build_get_tool_spec_description();
+
+        assert!(description.contains("Read full schema"));
+        assert!(description.contains("Do not call GetToolSpec again"));
+    }
+
+    #[test]
+    fn get_tool_spec_catalog_description_lists_names_only() {
+        let description = build_get_tool_spec_catalog_description(&[
+            GetToolSpecCollapsedToolSummary {
+                name: "Git".to_string(),
+                short_description: "Inspect repository state.".to_string(),
+            },
+            GetToolSpecCollapsedToolSummary {
+                name: "WebFetch".to_string(),
+                short_description: "Fetch a URL.".to_string(),
+            },
+        ])
+        .expect("catalog description");
+
+        assert!(description.contains("- Git"));
+        assert!(description.contains("- WebFetch"));
+        assert!(!description.contains("Inspect repository state."));
+        assert!(!description.contains("Fetch a URL."));
     }
 }
