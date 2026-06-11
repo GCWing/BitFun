@@ -1,4 +1,4 @@
-# BitFun 可配置工程开发治理总览
+# BitFun 可配置开发体验与工程治理总览
 
 > 范围：BitFun 加载外部软件工程后的产品体验、上下文理解、执行安全、渐进质量治理和复杂项目支撑能力。
 > 用途：作为拆分后的入口文档。主设计回答产品体验和架构边界，实施计划回答阶段落地，子模块文档回答局部契约。
@@ -8,7 +8,7 @@
 | 文档 | 角色 | 主要内容 |
 |---|---|---|
 | [research/external-research.md](research/external-research.md) | 调研文档 | 外部产品、论文、标准和趋势信号 |
-| [design.md](design.md) | 主设计 | 可配置工程开发治理的目标体验、策略分层、复杂项目来源和架构边界 |
+| [design.md](design.md) | 主设计 | 可配置开发体验、用户画像、策略分层、复杂项目来源和架构边界 |
 | [implementation-plan.md](implementation-plan.md) | 实施计划 | 快速路径、上下文保障、团队治理、复杂生命周期能力的阶段落地 |
 | [architecture/security-boundary.md](architecture/security-boundary.md) | 安全边界 | prompt 注入、hook/MCP/网络/凭据/shell 等执行安全底线和应急放行规则 |
 | [features/configurable-policy-profile.md](features/configurable-policy-profile.md) | 配置化策略 | 任务、操作、环境、项目和团队配置如何共同决定提示、验证、审查和治理强度 |
@@ -18,7 +18,7 @@
 
 ## 核心定位
 
-BitFun 面向任意目标项目提供可配置的智能体开发治理能力。默认体验聚焦快速理解、修改、运行和交付；当任务风险、团队协作、发布链路或合规要求提高时，再按配置显露验证、审查、证据、门禁、风险接受和审计能力。
+BitFun 面向任意目标项目提供可配置的智能体开发体验。默认体验聚焦快速理解、修改、运行和交付；当任务风险、团队协作、发布链路或合规要求提高时，再按配置显露验证、审查、证据、门禁、风险接受和审计能力。
 
 产品主线由四层能力组成：
 
