@@ -1,36 +1,36 @@
-# BitFun 子模块设计：EvidencePack
+# BitFun 子模块设计：证据包
 
 > 上游文档：[design.md](../design.md)
 > 模块角色：把一次任务或变更的上下文、验证、风险、跳过项、人工决策和安全授权整理成可投影、可失效、可回放的证据快照。
 
 ## 1. 模块定位
 
-EvidencePack 是后台证据投影 contract，不是默认用户界面，也不是 Gate 决策。Fast Path 下用户通常只看到 confidence summary；只有准备 PR、团队策略启用、风险升级、release/incident 追溯或 evaluation replay 时，才需要展示 evidence refs 或 full pack。
+证据包是后台证据投影契约，不是默认用户界面，也不是门禁决策。快速路径下用户通常只看到信心摘要；只有准备 PR、团队策略启用、风险升级、发布/事故追溯或评测回放时，才需要展示证据引用或完整证据包。
 
-Quality Data Plane 记录事件和引用，EvidencePack 负责把这些事实整理成一次任务或 changeset 可消费、可审计、可失效的快照。它只能陈述证据是什么、来自哪里、是否过期、哪些检查被跳过、哪些风险被接受；不能自行判断代码是否可合入。
+质量数据面记录事件和引用，证据包负责把这些事实整理成一次任务或变更集可消费、可审计、可失效的快照。它只能陈述证据是什么、来自哪里、是否过期、哪些检查被跳过、哪些风险被接受；不能自行判断代码是否可合入。
 
-外部系统的成熟实践说明了这个边界：[GitHub Checks](https://docs.github.com/rest/checks) 把检查结论和摘要投影到 commit/PR；[SLSA provenance](https://slsa.dev/provenance) 关注 artifact 的 where/when/how；[OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/) 关注跨系统语义稳定。EvidencePack 应吸收这些思想，但保持 BitFun 内部 canonical evidence model。
+外部系统的成熟实践说明了这个边界：[GitHub Checks](https://docs.github.com/rest/checks) 把检查结论和摘要投影到提交（commit）或 PR；[SLSA provenance](https://slsa.dev/provenance) 关注制品的来源、时间和生成方式；[OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/) 关注跨系统语义稳定。证据包应吸收这些思想，但保持 BitFun 内部规范证据模型。
 
 ## 2. 设计约束
 
-- EvidencePack 由 Artifact and Evidence Plane 负责投影和版本化。
-- 原始事实来自 Quality Data Plane 的 `LifecycleEvent` 和 `EvidenceReference`。
-- EvidencePack 不长期保存完整终端日志、prompt、模型上下文或第三方 payload。
-- EvidencePack 必须能表达 `fresh`、`partial`、`stale`、`blocked` 和 `superseded`。
-- EvidencePack 必须支持 display tier，避免 full pack 默认污染 Fast Path。
-- 缺少证据、证据过期或主动配置未确认时，不得把 EvidencePack 标为 complete。
-- PR 文本、Review UI、Gate、release readiness 和 Evaluation replay 都应消费同一 EvidencePack contract。
+- 证据包由交付物与证据层（Artifact and Evidence Plane）负责投影和版本化。
+- 原始事实来自质量数据面的 `LifecycleEvent` 和 `EvidenceReference`。
+- 证据包不长期保存完整终端日志、prompt、模型上下文或第三方载荷。
+- 证据包必须能表达 `fresh`、`partial`、`stale`、`blocked` 和 `superseded`。
+- 证据包必须支持展示层级，避免完整证据包默认污染快速路径。
+- 缺少证据、证据过期或主动配置未确认时，不得把证据包标为完整。
+- PR 文本、审查界面、门禁、发布就绪度和评测回放都应消费同一证据包契约。
 
-## 3. Evidence Display Tiers
+## 3. 证据展示层级
 
-| Tier | 用户可见内容 | 适用场景 |
+| 层级 | 用户可见内容 | 适用场景 |
 |---|---|---|
-| `none` | 不展示证据结构，只保留后台事件 | Fast Path 中间过程 |
-| `summary` | 已做什么、未做什么、信心和下一步 | Fast/assist 任务结束 |
-| `evidence_refs` | 摘要加命令、CI、文件、review、security decision 引用 | PR readiness、review、team advisory |
-| `full_pack` | 完整证据包、策略版本、风险接受、staleness、audit refs | guarded/regulated、release、incident、eval |
+| `none` | 不展示证据结构，只保留后台事件 | 快速路径中间过程 |
+| `summary` | 已做什么、未做什么、信心和下一步 | 快速/辅助任务结束 |
+| `evidence_refs` | 摘要加命令、CI、文件、审查和安全决策引用 | PR 就绪度、审查、团队建议模式 |
+| `full_pack` | 完整证据包、策略版本、风险接受、新鲜度和审计引用 | 守护/监管模式、发布、事故、评测 |
 
-展示层由 [Adaptive Control Profile](../features/adaptive-control-profile.md) 决定。证据是否存在和是否展示是两个独立问题：后台可以生成最小证据摘要，但 Fast Path 不应把它包装成治理流程。
+展示层由 [自适应控制画像](../features/adaptive-control-profile.md) 决定。证据是否存在和是否展示是两个独立问题：后台可以生成最小证据摘要，但快速路径不应把它包装成治理流程。
 
 ## 4. 输入、输出与数据模型
 
@@ -38,14 +38,14 @@ Quality Data Plane 记录事件和引用，EvidencePack 负责把这些事实整
 
 | 输入 | 来源 |
 |---|---|
-| Project Profile snapshot | 项目结构、规则、验证能力、owner、主动配置状态 |
-| Task and changeset summary | 用户意图、Git diff、file change、rename/delete、generated file |
-| Verification evidence | `verification.completed`、CI check、命令摘要、artifact ref |
-| Risk Control Hint | 风险标签、recommended/required checks、review profile |
-| Security decision | allow/ask/deny/break-glass、授权范围、残余风险 |
-| Review evidence | Deep Review finding、human review、stale marker |
-| Active config evidence | hook/plugin/custom tool/MCP/agent rules 的发现、hash、权限和 trust state |
-| Human decision | override、risk acceptance、confirmation、rejection |
+| 项目画像快照 | 项目结构、规则、验证能力、负责人、主动配置状态 |
+| 任务与变更摘要 | 用户意图、Git diff、文件变更、重命名/删除、生成文件 |
+| 验证证据 | `verification.completed`、CI 检查、命令摘要、制品引用 |
+| 风险控制提示 | 风险标签、推荐/强制检查、审查强度 |
+| 安全决策 | allow/ask/deny/应急放行、授权范围、残余风险 |
+| 审查证据 | 深度审查问题、人工审查、过期标记 |
+| 主动配置证据 | hook、plugin、自定义工具、MCP、智能体规则的发现、hash、权限和信任状态 |
+| 人工决策 | 覆盖、风险接受、确认、拒绝 |
 
 输出：
 
@@ -94,9 +94,9 @@ interface EvidencePack {
 
 | 字段 | 语义 |
 |---|---|
-| `source_events` | 生成该包使用的 event id 集合 |
-| `evidence_refs` | 指向日志摘要、报告、CI、截图、trace 或外部系统事实的引用 |
-| `security` | 执行安全决策摘要，不作为质量 pass 依据 |
+| `source_events` | 生成该包使用的事件 id 集合 |
+| `evidence_refs` | 指向日志摘要、报告、CI、截图、轨迹或外部系统事实的引用 |
+| `security` | 执行安全决策摘要，不作为质量通过依据 |
 | `skipped_checks` | 未运行检查的原因、触发规则、可接受条件和残余风险 |
 | `open_risks` | 尚未被证据覆盖或人工接受的风险 |
 | `risk_acceptances` | 质量风险接受记录 |
@@ -105,66 +105,66 @@ interface EvidencePack {
 ## 5. 生命周期
 
 ```text
-source events
-  -> build evidence summary
-  -> attach profile and policy versions
-  -> classify freshness and completeness
-  -> choose display tier
-  -> expose summary / refs / full pack
-  -> mark stale when changeset, profile, policy, verification, review, or active config changes
-  -> supersede with a new EvidencePack version
+源事件
+  -> 构建证据摘要
+  -> 附加画像和策略版本
+  -> 判断新鲜度与完整度
+  -> 选择展示层级
+  -> 显露摘要、引用或完整证据包
+  -> 变更集、画像、策略、验证、审查或主动配置变化时标记过期
+  -> 用新的 EvidencePack 版本取代旧版本
 ```
 
 状态规则：
 
 | 状态 | 触发条件 | 下游行为 |
 |---|---|---|
-| `fresh` | 当前 tier 所需证据完整且 source versions 未变化 | 可支撑 readiness 或 Gate 判断 |
-| `partial` | 推荐证据缺失、非阻塞 skipped check 或低风险 unknown | summary/advisory 展示缺口 |
-| `stale` | diff、Project Profile、policy、required checks、review scope 或 active config 变化 | 不得继续支撑 pass/ready |
-| `blocked` | 必要验证失败、安全拒绝、高权限主动配置未确认或证据不可访问 | 下游应 blocked/fail/degraded |
-| `superseded` | 新版本 EvidencePack 取代旧版本 | 旧包保留审计，不作为当前判断依据 |
+| `fresh` | 当前层级所需证据完整且来源版本未变化 | 可支撑就绪度或门禁判断 |
+| `partial` | 推荐证据缺失、非阻塞跳过项或低风险未知 | 摘要/建议模式展示缺口 |
+| `stale` | diff、项目画像、策略、强制检查、审查范围或主动配置变化 | 不得继续支撑通过/就绪判断 |
+| `blocked` | 必要验证失败、安全拒绝、高权限主动配置未确认或证据不可访问 | 下游应进入阻断、失败或降级状态 |
+| `superseded` | 新版本证据包取代旧版本 | 旧包保留审计，不作为当前判断依据 |
 
 ## 6. 与其他模块的边界
 
 | 模块 | 关系 |
 |---|---|
-| Quality Data Plane | 提供事实事件、信任等级、隐私分类和 evidence refs |
-| Adaptive Control Profile | 决定 evidence display tier 和是否进入 PR/Team/Regulated 投影 |
-| Security Boundary | 产生安全决策，EvidencePack 只记录摘要和授权引用 |
-| Project Profile | 提供 project/profile/rule/active config snapshot |
-| Risk Classifier | 消费 context/change/verification，输出 risk evidence |
-| Change Readiness / PR Gate | 消费 EvidencePack，产出 readiness 或 gate decision |
-| Artifact Graph | 可把 EvidencePack 作为 artifact node，并把 evidence refs 挂到 graph edge |
-| Agent Evaluation | 使用 EvidencePack 和 source events 做 replay 与失败归因 |
+| 质量数据面 | 提供事实事件、信任等级、隐私分类和证据引用 |
+| 自适应控制画像 | 决定证据展示层级和是否进入 PR、团队或监管投影 |
+| 安全边界 | 产生安全决策，证据包只记录摘要和授权引用 |
+| 项目画像 | 提供项目、模式、规则和主动配置快照 |
+| 风险分类器 | 消费上下文、变更和验证信息，输出风险证据 |
+| 变更就绪度 / PR 门禁 | 消费证据包，产出就绪度或门禁决策 |
+| 交付物图谱 | 可把证据包作为交付物节点，并把证据引用挂到图谱边 |
+| 智能体评测 | 使用证据包和源事件做回放与失败归因 |
 
 ## 7. 分阶段落地
 
 | 阶段 | 目标 |
 |---|---|
-| P-1 | 定义 EvidenceReference、EvidencePack schema、status、display tier、staleness 和 risk acceptance contract |
-| P0 | 为 Fast Path 生成 summary tier，记录验证、安全决策和 skipped checks |
-| P1 | 支撑 PR readiness 的 evidence refs、stale evidence 和 targeted review evidence |
-| P2 | 支撑 team/guarded 的 PR Gate projection、risk acceptance 和 active config trust review |
-| P3 | 接入 requirement impact、release readiness、incident backtrace 和外部 attestation 引用 |
-| P4 | 支撑 trace replay、控制策略评估和跨项目 evidence coverage 分析 |
+| P-1 | 定义 EvidenceReference、证据包结构、状态、展示层级、新鲜度和风险接受契约 |
+| P0 | 为快速路径生成摘要层级，记录验证、安全决策和跳过项 |
+| P1 | 支撑 PR 就绪度的证据引用、过期证据和定向审查证据 |
+| P2 | 支撑团队/守护模式的 PR 门禁投影、风险接受和主动配置信任审查 |
+| P3 | 接入需求影响、发布就绪度、事故回溯和外部证明引用 |
+| P4 | 支撑轨迹回放、控制策略评估和跨项目证据覆盖率分析 |
 
 ## 8. 风险与反证
 
 | 风险 | 反证或治理要求 |
 |---|---|
-| EvidencePack 变成用户必须理解的流程 | display tier 默认 summary 或 none，full_pack 只在强场景显露 |
-| EvidencePack 变成日志包 | 只保存摘要和引用，完整日志通过受控 EvidenceReference 访问 |
-| 安全放行和质量接受混淆 | break-glass 与 risk acceptance 分开字段、分开 UI |
-| Gate 与 EvidencePack 状态不一致 | Gate result 必须引用 `evidence_pack_id` 和 `policy_version` |
-| 人工接受掩盖证据缺失 | risk acceptance 不能把 missing evidence 改写成 pass |
-| 证据过期不可见 | changeset/profile/policy/check/review/active config 变化必须标记 stale |
-| 模块重复定义字段 | EvidencePack schema 是唯一证据投影 contract，其他模块只能扩展引用或消费 |
+| 证据包变成用户必须理解的流程 | 展示层级默认摘要或不展示，`full_pack` 只在强场景显露 |
+| 证据包变成日志包 | 只保存摘要和引用，完整日志通过受控 EvidenceReference 访问 |
+| 安全放行和质量接受混淆 | 应急放行与风险接受分开字段、分开 UI |
+| 门禁与证据包状态不一致 | 门禁结果必须引用 `evidence_pack_id` 和 `policy_version` |
+| 人工接受掩盖证据缺失 | 风险接受不能把缺失证据改写成通过 |
+| 证据过期不可见 | 变更集、模式、策略、检查、审查或主动配置变化必须标记过期 |
+| 模块重复定义字段 | 证据包结构是唯一证据投影契约，其他模块只能扩展引用或消费 |
 
 ## 9. 成功标准
 
-- Fast Path 能给出简洁 confidence summary，不暴露完整证据包。
-- PR readiness 可通过 evidence refs 追溯关键证据。
-- skipped checks、open risks、risk acceptances 和 break-glass 不会被隐藏。
-- 证据过期后，旧 EvidencePack 不再支撑 pass/ready。
-- Full EvidencePack 只在团队、发布、审计、复盘或评测场景显性使用。
+- 快速路径能给出简洁信心摘要，不暴露完整证据包。
+- PR 就绪度可通过证据引用追溯关键证据。
+- 跳过项、未关闭风险、风险接受和应急放行不会被隐藏。
+- 证据过期后，旧证据包不再支撑通过/就绪判断。
+- 完整证据包只在团队、发布、审计、复盘或评测场景显性使用。

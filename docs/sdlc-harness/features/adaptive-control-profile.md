@@ -1,49 +1,49 @@
-# BitFun 子模块设计：Adaptive Control Profile
+# BitFun 子模块设计：自适应控制画像
 
 > 上游文档：[design.md](../design.md)
 > 模块角色：根据任务意图、操作风险、执行环境、项目规则和团队策略，动态决定 BitFun 应该保持快速提示、升级验证、请求确认、生成 PR 证据，还是进入强治理路径。
 
 ## 1. 模块定位
 
-Adaptive Control Profile 是 BitFun 的产品体验调度层。它不等同于项目质量等级，也不等同于 PR Gate。它负责回答一个更基础的问题：
+自适应控制画像是 BitFun 的产品体验调度层。它不等同于项目质量等级，也不等同于 PR 门禁。它负责回答一个更基础的问题：
 
 ```text
 当前这一步应该让用户快速前进，还是应该提示、验证、隔离、确认或阻断？
 ```
 
-项目级配置只是输入之一。真实控制强度还取决于用户当前任务、将要执行的工具、目标目录、是否准备 PR、是否触及网络/secret/发布链路、以及团队是否声明了统一规则。
+项目级配置只是输入之一。真实控制强度还取决于用户当前任务、将要执行的工具、目标目录、是否准备 PR、是否触及网络/凭据/发布链路、以及团队是否声明了统一规则。
 
 ## 2. 产品原则
 
-- **默认快**：没有明确信号时，保持 Fast Path，不要求完整画像、证据包或 Gate。
+- **默认快**：没有明确信号时，保持快速路径，不要求完整画像、证据包或门禁。
 - **只在有理由时升级**：每一次提示、验证或确认都必须能说明触发原因。
 - **用户可临时改写体验**：允许用户对当前任务选择更快或更严，但安全边界仍独立生效。
-- **项目配置是默认值，不是唯一事实**：同一项目内的 docs change、hotfix、migration、demo prototype 需要不同控制强度。
-- **强治理可选且可解释**：required checks、Deep Review、risk acceptance、audit 只在 Team/Guarded/Regulated 场景默认显露。
+- **项目配置是默认值，不是唯一事实**：同一项目内的文档变更、热修复、迁移、演示原型需要不同控制强度。
+- **强治理可选且可解释**：强制检查、深度审查、风险接受、审计只在团队/守护/监管场景默认显露。
 
 ## 3. 输入维度
 
 | 维度 | 例子 | 影响 |
 |---|---|---|
-| Task intent | explore、quick_fix、prototype、prepare_pr、release、incident_response | 决定默认摩擦和输出形态 |
-| Operation risk | read、write workspace、shell、network、secret、delete、cross-root write、publish | 决定是否需要安全确认或隔离 |
-| Change risk | docs_only、ui_behavior、adapter、core_logic、migration、security_sensitive | 决定验证和 review 强度 |
-| Environment trust | scratch dir、git worktree、team repo、remote sandbox、production-connected workspace | 决定可自动执行范围 |
-| Project signals | AGENTS.md、CONTRIBUTING、CI、CODEOWNERS、package scripts、custom rules | 决定默认建议和 required checks |
-| Team policy | repo config、organization defaults、managed settings、protected branches | 决定是否能进入 required/blocking |
-| User override | one-shot allow、session profile、task mode、explicit skip | 决定临时降噪或升级 |
+| 任务意图 | 探索、快速修复、原型、准备 PR、发布、事故响应 | 决定默认摩擦和输出形态 |
+| 操作风险 | 读取、写工作区、shell、网络、凭据、删除、跨根目录写入、发布 | 决定是否需要安全确认或隔离 |
+| 变更风险 | 文档、界面行为、适配器、核心逻辑、迁移、安全敏感变更 | 决定验证和审查强度 |
+| 环境信任度 | 临时目录、git worktree、团队仓库、远程沙箱、连接生产环境的工作区 | 决定可自动执行范围 |
+| 项目信号 | AGENTS.md、CONTRIBUTING、CI、CODEOWNERS、包脚本、自定义规则 | 决定默认建议和强制检查 |
+| 团队策略 | 仓库配置、组织默认值、托管设置、受保护分支 | 决定是否能进入强制/阻断 |
+| 用户覆盖 | 单次允许、会话模式、任务模式、显式跳过 | 决定临时降噪或升级 |
 
 ## 4. 控制强度
 
-| Profile | 默认体验 | 典型场景 |
+| 控制模式 | 默认体验 | 典型场景 |
 |---|---|---|
-| `fast` | 低摩擦执行、简短摘要、低成本验证建议，不生成完整 EvidencePack | 临时脚本、demo、文档、小工具、探索性改动 |
-| `assist` | 提示推荐检查、展示未验证项，但不阻塞 | 常规本地开发、小范围 UI/adapter 改动 |
-| `review` | 生成 change readiness、PR 摘要、风险标签、建议 reviewer/checks | 准备 PR、团队协作、跨模块改动 |
-| `guarded` | required checks、targeted review、stale evidence、risk acceptance | 核心路径、安全、权限、迁移、发布相关改动 |
-| `regulated` | 完整 EvidencePack、审计、明确批准、发布/回滚证据 | 合规、金融、医疗、基础设施、企业强管控项目 |
+| `fast` | 低摩擦执行、简短摘要、低成本验证建议，不生成完整证据包 | 临时脚本、演示、文档、小工具、探索性改动 |
+| `assist` | 提示推荐检查、展示未验证项，但不阻塞 | 常规本地开发、小范围 UI/适配器改动 |
+| `review` | 生成变更就绪度、PR 摘要、风险标签、建议审查人/检查 | 准备 PR、团队协作、跨模块改动 |
+| `guarded` | 强制检查、定向审查、过期证据、风险接受 | 核心路径、安全、权限、迁移、发布相关改动 |
+| `regulated` | 完整证据包、审计、明确批准、发布/回滚证据 | 合规、金融、医疗、基础设施、企业强管控项目 |
 
-Profile 是当前任务的运行态，不是永久项目标签。项目可以声明默认 profile，用户可以在当前任务或当前 session 临时覆盖。
+控制模式是当前任务的运行态，不是永久项目标签。项目可以声明默认模式，用户可以在当前任务或当前会话临时覆盖。
 
 ## 5. 决策输出
 
@@ -64,10 +64,10 @@ interface AdaptiveControlDecision {
 
 关键要求：
 
-- `security_actions` 只引用 [security-boundary.md](../architecture/security-boundary.md) 的判定，不被质量 profile 降级。
+- `security_actions` 只引用 [security-boundary.md](../architecture/security-boundary.md) 的判定，不被质量模式降级。
 - `required_checks` 只能来自项目/团队策略、确定性风险或用户显式升级。
 - `override_options` 必须有范围和期限，不能生成无限期全局豁免。
-- 用户 override 只能在策略允许范围内调节体验；不能覆盖组织 deny、受管控路径 required policy 或 Security Boundary。
+- 用户覆盖只能在策略允许范围内调节体验；不能覆盖组织拒绝策略、受管控路径强制策略或安全边界。
 - 决策必须能解释“为什么不是更轻”和“为什么不是更重”。
 
 ## 6. 用户体验形态
@@ -75,41 +75,41 @@ interface AdaptiveControlDecision {
 | 触发 | UI 行为 |
 |---|---|
 | 无高风险信号 | 不弹窗；在任务结束给简短摘要 |
-| 推荐检查缺失 | inline hint 或 collapsible summary |
-| 准备 PR | 可一键生成 change readiness block |
-| 触及高风险路径 | panel summary 展示原因、建议检查和跳过后果 |
-| 触及安全边界 | modal confirm 或 blocked；说明文件、命令、域名、secret、权限范围 |
-| 用户选择快速放行 | 记录 one-shot/session override，继续执行，但显示残余风险 |
-| 团队策略不允许放行 | 阻断并指向项目配置或 owner |
+| 推荐检查缺失 | 行内提示或可折叠摘要 |
+| 准备 PR | 可一键生成变更就绪度块 |
+| 触及高风险路径 | 面板摘要展示原因、建议检查和跳过后果 |
+| 触及安全边界 | 弹窗确认或阻断；说明文件、命令、域名、凭据、权限范围 |
+| 用户选择快速放行 | 记录单次/会话覆盖，继续执行，但显示残余风险 |
+| 团队策略不允许放行 | 阻断并指向项目配置或负责人 |
 
 ## 7. 与其他模块关系
 
 | 模块 | 关系 |
 |---|---|
-| Project Profile | 提供项目规则、验证能力、结构和配置来源，但不单独决定强度 |
-| Security Boundary | 提供不可混同的执行安全判定和 break-glass 限制 |
-| Risk Classifier | 提供变更风险和验证建议 |
-| EvidencePack | 按 `evidence_mode` 决定是否只做摘要、引用或完整证据包 |
-| PR Quality Gate | 只在 `review/guarded/regulated` 且用户进入 PR 或团队流程时显性启用 |
-| Quality Data Plane | 记录决策理由、提示、override、验证和安全事件 |
+| 项目画像 | 提供项目规则、验证能力、结构和配置来源，但不单独决定强度 |
+| 安全边界 | 提供不可混同的执行安全判定和应急放行限制 |
+| 风险分类器 | 提供变更风险和验证建议 |
+| 证据包 | 按 `evidence_mode` 决定是否只做摘要、引用或完整证据包 |
+| PR 门禁 | 只在 `review/guarded/regulated` 且用户进入 PR 或团队流程时显性启用 |
+| 质量数据面 | 记录决策理由、提示、覆盖、验证和安全事件 |
 
 ## 8. 边界场景
 
 | 场景 | 策略 |
 |---|---|
-| 无 git 临时目录 | 默认 `fast`，不要求 PR/Gate；跨目录写和网络仍走安全边界 |
-| 用户要求“赶紧写个小工具” | 保持 `fast`；只在 shell/network/secret/delete 时打断 |
-| monorepo 子目录规则冲突 | 使用最近可信规则；冲突进入提示，不直接升级为阻塞 |
-| generated/lock/binary 大 diff | 默认过滤深 review；只展示范围和风险摘要 |
-| flaky CI 或私有依赖不可运行 | 输出不可验证原因和替代建议，不伪装为 fail |
-| hotfix | 允许跳过部分质量建议；发布/回滚/owner 提示前置 |
-| 用户强制跳过建议 | 若不触及安全底线，可继续；记录 scope 和 residual risk |
-| 组织策略强制 | 用户只能请求 risk acceptance，不能本地静默绕过 |
+| 无 git 临时目录 | 默认 `fast`，不要求 PR/门禁；跨目录写和网络仍走安全边界 |
+| 用户要求“赶紧写个小工具” | 保持 `fast`；只在 shell/网络/凭据/删除时打断 |
+| 单体多项目仓库子目录规则冲突 | 使用最近可信规则；冲突进入提示，不直接升级为阻塞 |
+| 生成文件/lockfile/二进制大 diff | 默认过滤深度审查；只展示范围和风险摘要 |
+| 不稳定 CI 或私有依赖不可运行 | 输出不可验证原因和替代建议，不伪装为失败 |
+| 热修复 | 允许跳过部分质量建议；发布/回滚/负责人提示前置 |
+| 用户强制跳过建议 | 若不触及安全底线，可继续；记录范围和残余风险 |
+| 组织策略强制 | 用户只能请求风险接受，不能本地静默绕过 |
 
 ## 9. 成功标准
 
-- 普通任务不需要理解 Gate/EvidencePack 就能完成。
+- 普通任务不需要理解门禁/证据包就能完成。
 - 高风险任务能解释为什么升级，而不是突然阻断。
 - 用户能临时选择更快或更严，且选择范围清晰。
-- 安全边界不被质量 profile 或用户“快一点”请求绕过。
+- 安全边界不被质量模式或用户“快一点”请求绕过。
 - 团队配置能统一体验，但不会污染个人临时项目。

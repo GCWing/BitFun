@@ -1,56 +1,56 @@
-# BitFun 子模块设计：Agent Evaluation
+# BitFun 子模块设计：智能体评测
 
 > 上游文档：[design.md](../design.md)
-> 模块角色：为 Agent 模式、工具接口、prompt、context、permission、Adaptive Control、Security Boundary、review 和模型组合提供长期评测体系。
+> 模块角色：为智能体模式、工具接口、prompt、上下文、权限、自适应控制、安全边界、审查和模型组合提供长期评测体系。
 
 ## 1. 模块定位
 
-Agent Evaluation 的目标不是只证明模型更会写代码，也不是只证明 Gate 更严格。它要回答：
+智能体评测的目标不是只证明模型更会写代码，也不是只证明门禁更严格。它要回答：
 
 ```text
-某次模型、prompt、tool schema、context policy、permission policy、control strategy 或 review strategy 改动，
+某次模型、prompt、工具结构、上下文策略、权限策略、控制策略或审查策略改动，
 是否真正提升了用户完成任务的速度、信心、安全性、质量和成本效率？
 ```
 
-没有 oracle 的 eval 不能用于决策。BitFun 的评测体系必须区分模型能力、工具接口、上下文选择、策略约束、工作流、UI 打断和团队配置影响，避免把 benchmark 分数误认为产品质量。
+没有判定标准的评测不能用于决策。BitFun 的评测体系必须区分模型能力、工具接口、上下文选择、策略约束、工作流、UI 打断和团队配置影响，避免把基准测试分数误认为产品质量。
 
 ## 2. 行业参照与设计约束
 
 | 参照 | 启发 |
 |---|---|
-| [SWE-bench](https://github.com/swe-bench/SWE-bench) / [SWE-agent](https://arxiv.org/abs/2405.15793) | 真实 issue 与 Agent-Computer Interface 都影响软件工程任务成功率 |
+| [SWE-bench](https://github.com/swe-bench/SWE-bench) / [SWE-agent](https://arxiv.org/abs/2405.15793) | 真实 issue 与智能体-计算机接口都会影响软件工程任务成功率 |
 | [SWE-Bench Pro](https://labs.scale.com/leaderboard/swe_bench_pro_public) | 更真实、更长程、更复杂代码库暴露出评测集泄漏、任务多样性和测试可靠性问题 |
-| [Agentless](https://arxiv.org/abs/2407.01489) | 简单、结构化、可解释 pipeline 是强基线 |
-| [Terminal-Bench](https://arxiv.org/abs/2601.11868) / [Terminal-Bench 3.0](https://www.tbench.ai/) | 长程终端任务需要真实环境、可靠 oracle 和任务泄漏防护 |
-| [OpenAI Agent Improvement Loop](https://developers.openai.com/cookbook/examples/agents_sdk/agent_improvement_loop) | trace、feedback、eval 和策略变更应形成持续改进闭环 |
-| [RovoDev Code Reviewer](https://arxiv.org/html/2601.01129v1) | 在线评估要同时看 resolution、PR cycle time、人类评论负载和错误反馈 |
+| [Agentless](https://arxiv.org/abs/2407.01489) | 简单、结构化、可解释流程是强基线 |
+| [Terminal-Bench](https://arxiv.org/abs/2601.11868) / [Terminal-Bench 3.0](https://www.tbench.ai/) | 长程终端任务需要真实环境、可靠判定标准和任务泄漏防护 |
+| [OpenAI Agent Improvement Loop](https://developers.openai.com/cookbook/examples/agents_sdk/agent_improvement_loop) | 轨迹、反馈、评测和策略变更应形成持续改进闭环 |
+| [RovoDev Code Reviewer](https://arxiv.org/html/2601.01129v1) | 在线评估要同时看处理结果、PR 周期、人类评论负载和错误反馈 |
 
 设计约束：
 
-- 评测必须有明确 oracle。
-- 不能用单一 benchmark 代表产品质量。
-- 必须记录 token、wall-clock、tool calls、失败原因、安全事件和用户打断。
+- 评测必须有明确判定标准。
+- 不能用单一基准测试代表产品质量。
+- 必须记录 token、墙钟耗时、工具调用、失败原因、安全事件和用户打断。
 - 评测集必须防止任务泄漏和过拟合。
-- 公开 benchmark、内部 golden set 和私有 holdout 必须分开管理。
-- 评测必须覆盖 Fast Path、Adaptive Control、Security Boundary、EvidencePack、Readiness、Gate 和 Graph 的协同效果。
-- 每个评测集必须有 Eval Card，记录来源、授权、污染风险、oracle、可复现环境、适用范围和退出条件。
+- 公开基准测试、内部黄金集和私有保留集必须分开管理。
+- 评测必须覆盖快速路径、自适应控制、安全边界、证据包、就绪度、门禁和图谱的协同效果。
+- 每个评测集必须有评测卡，记录来源、授权、污染风险、判定标准、可复现环境、适用范围和退出条件。
 
 ## 3. 范围与非目标
 
 范围：
 
-- 评测 Plan、Debug、Review、Deep Review、Agentic、Mini App、remote、MCP 等模式。
-- 评测 tool interface、context policy、hook policy、approval/security policy。
-- 评测 Adaptive Control 是否误升级、漏提示或过度打断。
-- 评测 Security Boundary 是否降低风险且不制造无意义确认。
-- 支持 replay、A/B、regression、failure taxonomy。
-- 将失败沉淀为 rule、skill、hook、test、benchmark 或 product policy。
+- 评测 Plan、Debug、Review、深度审查、Agentic、Mini App、remote、MCP 等模式。
+- 评测工具接口、上下文策略、hook 策略、审批/安全策略。
+- 评测自适应控制是否误升级、漏提示或过度打断。
+- 评测安全边界是否降低风险且不制造无意义确认。
+- 支持回放、A/B、回归和失败分类。
+- 将失败沉淀为规则、skill、hook、test、基准测试或产品策略。
 
 非目标：
 
 - 不声明通用模型能力排名。
-- 不用离线 benchmark 替代线上产品指标。
-- 不把 human preference 当作唯一 oracle。
+- 不用离线基准测试替代线上产品指标。
+- 不把人工偏好当作唯一判定标准。
 - 不在缺少隔离环境时运行高风险自动化任务。
 - 不用“更严格”天然代表“更好”。
 
@@ -60,14 +60,14 @@ Agent Evaluation 的目标不是只证明模型更会写代码，也不是只证
 
 | 输入 | 示例 |
 |---|---|
-| Task fixture | repo snapshot、issue、expected diff、test command、throwaway tool prompt |
-| Project profile | 规则来源、验证能力、owner、未知区域和冲突状态 |
-| Trace | model calls、tool calls、file edits、approvals、events |
-| Policy version | prompt、tool schema、context policy、control profile、security policy |
-| Oracle | test pass、diff expectation、review rubric、human acceptance、security expectation |
-| Product metrics | time to first useful action、interruption count、prompt acceptance、false escalation |
-| Cost | token、wall-clock、tool time、retry count |
-| Dataset lineage | source issue、snapshot、license、privacy、leakage status、holdout label |
+| 任务夹具 | 仓库快照、issue、预期 diff、测试命令、临时工具 prompt |
+| 项目画像 | 规则来源、验证能力、负责人、未知区域和冲突状态 |
+| 轨迹 | 模型调用、工具调用、文件编辑、审批、事件 |
+| 策略版本 | prompt、工具结构、上下文策略、控制模式、安全策略 |
+| 判定器 | 测试通过、diff 预期、审查规则、人工接受、安全期望 |
+| 产品指标 | 首次有用动作耗时、打断次数、prompt 接受率、误升级 |
+| 成本 | token、墙钟耗时、工具耗时、重试次数 |
+| 数据集血缘 | 来源 issue、快照、许可证、隐私、泄漏状态、保留集标签 |
 
 输出：
 
@@ -90,86 +90,86 @@ interface EvalResult {
 }
 ```
 
-Eval Card 最小字段：
+评测卡最小字段：
 
 | 字段 | 说明 |
 |---|---|
-| task_source | 真实 issue、PR、CI failure、incident、throwaway task、synthetic seed 或公开 benchmark |
+| task_source | 真实 issue、PR、CI 失败、事故、临时任务、合成种子或公开基准测试 |
 | data_rights | 是否可用于内部训练、评测、分享或导出 |
 | leakage_risk | 是否曾进入 prompt、文档、公开榜单或训练数据 |
-| oracle | 测试、diff expectation、review rubric、human acceptance、安全期望或组合 oracle |
-| environment | repo snapshot、依赖缓存、工具版本、系统权限和网络策略 |
-| decision_scope | 可用于 blocking、advisory、regression、control calibration 或 exploration 的范围 |
+| 判定标准 | 测试、diff 预期、审查规则、人工接受、安全期望或组合判定标准 |
+| environment | 仓库快照、依赖缓存、工具版本、系统权限和网络策略 |
+| decision_scope | 可用于阻断、建议模式、回归、控制校准或探索的范围 |
 | retirement_policy | 任务过期、泄漏、不可复现或业务不再相关时的退出规则 |
 
 ## 5. 核心流程
 
 ```text
-select task set
-  -> prepare isolated environment
-  -> run baseline and candidate policy
-  -> collect trace, control decisions, security events and evidence
-  -> evaluate oracle and rubrics
-  -> compare product experience, cost, quality and safety
-  -> classify failures
-  -> promote fixes into policy/test/skill/product changes
+选择任务集
+  -> 准备隔离环境
+  -> 运行基线和候选策略
+  -> 收集轨迹、控制决策、安全事件和证据
+  -> 执行判定器和规则评估
+  -> 比较产品体验、成本、质量和安全
+  -> 归类失败原因
+  -> 将修复沉淀为策略、测试、skill 或产品变更
 ```
 
 任务类型：
 
-| 类型 | Oracle |
+| 类型 | 判定器 |
 |---|---|
-| Fast Path task | 是否快速完成有用动作、是否低打断、是否给出合理 summary |
-| Project profiling | 是否识别正确结构、规则、验证能力和未知区域 |
-| Adaptive Control | 是否选择合理 profile、是否误升级/漏升级 |
-| Security Boundary | 是否拦截高风险动作、是否允许合理 break-glass、是否避免无效弹窗 |
-| Mode compliance | 是否遵守只读、审批、review 约束 |
-| Tool interface | 工具调用是否正确、输出是否被使用 |
-| Real issue repair | 测试通过、diff 符合预期、无回归 |
-| Deep Review | seeded defect coverage、finding precision、judge consistency |
-| Change Readiness / PR Gate | required check precision、false ready/block、degraded handling |
-| Hook policy | 权限、redaction、timeout、blocking semantics |
+| 快速路径任务 | 是否快速完成有用动作、是否低打断、是否给出合理摘要 |
+| 项目画像 | 是否识别正确结构、规则、验证能力和未知区域 |
+| 自适应控制 | 是否选择合理模式、是否误升级/漏升级 |
+| 安全边界 | 是否拦截高风险动作、是否允许合理应急放行、是否避免无效弹窗 |
+| 模式合规 | 是否遵守只读、审批、审查约束 |
+| 工具接口 | 工具调用是否正确、输出是否被使用 |
+| 真实 issue 修复 | 测试通过、diff 符合预期、无回归 |
+| 深度审查 | 种子缺陷覆盖率、问题精度、判定一致性 |
+| 变更就绪度 / PR 门禁 | 强制检查精度、错误就绪/错误阻断、降级处理 |
+| Hook 策略 | 权限、脱敏、超时、阻断语义 |
 
 ## 6. 策略与治理
 
-- **Baseline 优先**：每个复杂 agent flow 都要与简单结构化 pipeline 比较。
-- **体验与质量共同决策**：新策略不能只提高 high-risk 质量，却显著拖慢低风险任务。
-- **Trace replay**：失败可在固定输入、固定工具版本和固定 policy 下回放。
-- **Holdout 管理**：公开 benchmark、内部 golden set、私有 holdout 和线上回放集分开管理。
-- **数据血缘**：每个 task 记录来源、授权、快照、污染状态和适用决策范围。
+- **基线优先**：每个复杂智能体流程都要与简单结构化流程比较。
+- **体验与质量共同决策**：新策略不能只提高高风险质量，却显著拖慢低风险任务。
+- **轨迹回放**：失败可在固定输入、固定工具版本和固定策略下回放。
+- **保留集管理**：公开基准测试、内部黄金集、私有保留集和线上回放集分开管理。
+- **数据血缘**：每个任务记录来源、授权、快照、污染状态和适用决策范围。
 - **成本约束**：报告必须展示 token、耗时、工具调用、重试和提示次数。
-- **安全隔离**：高风险工具、网络、文件系统和插件在 eval 中使用最小权限。
-- **线上反馈回流**：review blocker、post-merge defect、override、break-glass、incident 写入评测 backlog。
+- **安全隔离**：高风险工具、网络、文件系统和插件在评测中使用最小权限。
+- **线上反馈回流**：审查阻塞项、合入后缺陷、覆盖、应急放行、事故写入评测待办。
 
 ## 7. 分阶段落地
 
 | 阶段 | 目标 |
 |---|---|
-| P0 | Fast Path、Security Boundary、Adaptive Control 的小型 golden set |
-| P1 | trace replay、failure taxonomy、成本和打断指标对比 |
-| P2 | Change Readiness、Risk Classifier、Deep Review、team policy eval |
-| P3 | Artifact Graph、requirement impact、release/incident replay |
-| P4 | 模型/策略 A/B、线上反馈回流、regression dashboard 和长期趋势 |
+| P0 | 快速路径、安全边界、自适应控制的小型黄金集 |
+| P1 | 轨迹回放、失败分类、成本和打断指标对比 |
+| P2 | 变更就绪度、风险分类器、深度审查、团队策略评测 |
+| P3 | 交付物图谱、需求影响、发布/事故回放 |
+| P4 | 模型/策略 A/B、线上反馈回流、回归看板和长期趋势 |
 
 ## 8. 风险与反证
 
 | 风险 | 反证或治理要求 |
 |---|---|
-| 无 oracle 评测 | 每个任务必须声明 oracle，否则只能作为探索样本 |
-| benchmark 过拟合 | 保留 holdout set，记录任务来源和泄漏风险 |
-| holdout 被污染 | 进入 prompt、文档、人工调参材料或公开榜单的样本必须降级 |
-| 公开榜单幻觉 | 公开 benchmark 只用于参考，产品决策必须结合目标项目回放和线上指标 |
-| 只看成功率忽略成本 | token、耗时、tool calls、提示次数必须和质量一起比较 |
-| 只看强质量忽略体验 | time to first useful action、interruption rate、false escalation 必须进入决策 |
-| 混淆模型与工程策略贡献 | model、prompt、tool schema、context、security、control 版本必须分开记录 |
-| 人工评分不稳定 | review rubric 需要结构化，并记录 reviewer variance |
-| eval 与真实工作脱节 | 从真实 PR、issue、CI failure、incident 和临时任务中抽样 |
+| 无判定标准评测 | 每个任务必须声明判定标准，否则只能作为探索样本 |
+| 基准测试过拟合 | 保留独立保留集，记录任务来源和泄漏风险 |
+| 保留集被污染 | 进入 prompt、文档、人工调参材料或公开榜单的样本必须降级 |
+| 公开榜单幻觉 | 公开基准测试只用于参考，产品决策必须结合目标项目回放和线上指标 |
+| 只看成功率忽略成本 | token、耗时、工具调用、提示次数必须和质量一起比较 |
+| 只看强质量忽略体验 | 首次有用动作耗时、打断率、误升级必须进入决策 |
+| 混淆模型与工程策略贡献 | 模型、prompt、工具结构、上下文、安全和控制版本必须分开记录 |
+| 人工评分不稳定 | 审查规则需要结构化，并记录审查人差异 |
+| 评测与真实工作脱节 | 从真实 PR、issue、CI 失败、事故和临时任务中抽样 |
 
 ## 9. 成功标准
 
-- 关键 prompt、tool schema、context policy、security policy 或 control profile 改动可用固定任务集回放。
+- 关键 prompt、工具结构、上下文策略、安全策略或控制模式改动可用固定任务集回放。
 - 失败能归类到模型、工具、上下文、策略、安全边界或产品交互问题。
-- Evaluation 能解释质量提升是否伴随 token、耗时或用户打断增加。
-- Fast Path、Security Boundary、Adaptive Control 和 PR readiness 都有专属 eval。
-- 线上缺陷、reviewer blocker、break-glass 和 false escalation 能沉淀为新任务。
-- 每个用于决策的任务集都有 Eval Card、数据血缘和污染状态。
+- 评测能解释质量提升是否伴随 token、耗时或用户打断增加。
+- 快速路径、安全边界、自适应控制和 PR 就绪度都有专属评测。
+- 线上缺陷、审查阻塞项、应急放行和误升级能沉淀为新任务。
+- 每个用于决策的任务集都有评测卡、数据血缘和污染状态。
