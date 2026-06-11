@@ -99,7 +99,7 @@ interface EvalResult {
 | leakage_risk | 是否曾进入 prompt、文档、公开榜单或训练数据 |
 | 判定标准 | 测试、diff 预期、审查规则、人工接受、安全期望或组合判定标准 |
 | environment | 仓库快照、依赖缓存、工具版本、系统权限和网络策略 |
-| decision_scope | 可用于阻断、建议模式、回归、策略校准或探索的范围 |
+| decision_scope | 可用于阻断、建议投影、回归、策略校准或探索的范围 |
 | retirement_policy | 任务过期、泄漏、不可复现或业务不再相关时的退出规则 |
 
 ## 5. 核心流程

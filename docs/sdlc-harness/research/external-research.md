@@ -11,10 +11,10 @@
 | [Codex approvals/security](https://developers.openai.com/codex/agent-approvals-security) / [Codex hooks](https://developers.openai.com/codex/hooks) | 审批模式、沙箱、可信命令、hook 生命周期、信任审查 | 安全边界独立常驻；hook 按主动执行面管理信任状态 |
 | [GitHub Copilot 编码智能体](https://docs.github.com/en/copilot/concepts/agents/cloud-agent/about-cloud-agent) | issue 到 PR、Actions 后台执行、PR 审查、智能体会话 | 异步智能体的核心体验围绕任务、计划、变更和审查组织 |
 | [GitHub Copilot 仓库指令](https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/add-custom-instructions/add-repository-instructions) | 支持仓库指令、路径指令、AGENTS.md | 项目规则应优先读取现有资产，并按路径和上下文渐进加载 |
-| [GitHub Copilot 代码审查](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/request-a-code-review/use-code-review) | AI 审查提供评论和建议 | AI 审查默认应是低摩擦建议模式，不天然等同阻断审批 |
+| [GitHub Copilot 代码审查](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/request-a-code-review/use-code-review) | AI 审查提供评论和建议 | AI 审查默认应是低摩擦建议态，不天然等同阻断审批 |
 | [Claude Code](https://github.com/anthropics/claude-code) / [权限](https://code.claude.com/docs/en/permissions) / [sandboxing](https://www.anthropic.com/engineering/claude-code-sandboxing) | 终端 Agent、权限配置、沙箱、allow/deny 规则 | 产品需要用技术隔离减少弹窗，同时保留用户可理解的放行路径 |
 | [CodeRabbit configuration](https://docs.coderabbit.ai/reference/configuration) / [路径指令](https://docs.coderabbit.ai/configuration/path-instructions) | 审查强度、路径级指令、规则 | 审查强度和路径规则可配置，默认模式降低噪音 |
-| [GitLab Duo 自定义指令](https://docs.gitlab.com/user/gitlab_duo/customize_duo/review_instructions/) / [警告模式](https://docs.gitlab.com/user/application_security/policies/merge_request_approval_policies/) | 审查指令、审批策略、警告模式 | 强策略应先建议模式/警告校准，再进入强制要求/阻断 |
+| [GitLab Duo 自定义指令](https://docs.gitlab.com/user/gitlab_duo/customize_duo/review_instructions/) / [警告模式](https://docs.gitlab.com/user/application_security/policies/merge_request_approval_policies/) | 审查指令、审批策略、警告模式 | 强策略应先建议态/警告校准，再进入强制要求/阻断 |
 | [Kiro Specs](https://kiro.dev/docs/specs/) / [Steering](https://kiro.dev/docs/steering/) / [Hooks](https://kiro.dev/docs/hooks/) | spec 驱动开发、工作区/全局/团队 steering、加载范围模式、智能体 hooks | 项目知识需要作用域、优先级和加载时机；复杂上下文按条件加载 |
 | [Jules](https://jules.google/) | 选择仓库/分支、云端计划、diff、用户批准 | 异步编码智能体的高体验入口是计划和 diff 审批 |
 | [Atlassian Software Collection](https://www.atlassian.com/collections/software) / [Rovo Dev](https://www.atlassian.com/software/rovo-dev) | Jira、Confluence、Bitbucket、Pipelines、PR 审查、acceptance criteria 检查 | 复杂项目需要连接任务、文档、代码、CI 和团队上下文，但应按需显露 |
@@ -55,7 +55,7 @@
 
 1. 默认体验正在走向快速执行、计划、diff、批准和轻量审查。
 2. 项目知识正在产品化为仓库/路径/团队指令、steering、AGENTS.md、hook 和 plugin，但这些主动配置必须经过信任和权限边界。
-3. AI 审查和门禁有价值，但先进产品普遍提供审查强度、评论/建议模式、警告模式或强制要求/阻断分级。
+3. AI 审查和门禁有价值，但先进产品普遍提供审查强度、评论/建议态、警告模式或强制要求/阻断分级。
 4. 安全与质量必须分层：prompt 注入、网络、凭据、MCP、hook、shell、跨目录写和删除风险在快速路径中也需要明确授权和可审计记录。
 5. 复杂项目能力仍然重要，但图谱、证据包、需求影响和发布就绪度应作为按需显露的后台能力。
 6. 基准测试分数无法直接证明产品质量；真实项目的保留集、轨迹回放、判定标准、成本、安全事件和用户打断指标才是可演进能力的核心评估资产。
