@@ -636,7 +636,7 @@ export async function initializeEventListeners(
       handleDialogTurnCancelled(context, event, onTodoWriteResult);
     },
     onTokenUsageUpdated: (event) => {
-      handleTokenUsageUpdate(event);
+      handleTokenUsageUpdate(context, event);
     },
     onAcpContextUsageUpdated: (event) => {
       handleAcpContextUsageUpdate(event);
@@ -1776,8 +1776,13 @@ function handleModelRoundComplete(context: FlowChatContext, event: ModelRoundCom
 /**
  * Handle token usage update event
  */
-function handleTokenUsageUpdate(event: any): void {
-  const { sessionId, inputTokens, outputTokens, totalTokens, maxContextTokens } = event;
+function handleTokenUsageUpdate(context: FlowChatContext, event: any): void {
+  const sessionId = event.sessionId ?? event.session_id;
+  const turnId = event.turnId ?? event.turn_id;
+  const inputTokens = event.inputTokens ?? event.input_tokens;
+  const outputTokens = event.outputTokens ?? event.output_tokens;
+  const totalTokens = event.totalTokens ?? event.total_tokens;
+  const maxContextTokens = event.maxContextTokens ?? event.max_context_tokens;
   
   const store = FlowChatStore.getInstance();
   const session = store.getState().sessions.get(sessionId);
@@ -1786,15 +1791,23 @@ function handleTokenUsageUpdate(event: any): void {
     log.debug('Session not found (token usage update)', { sessionId });
     return;
   }
+  if (typeof inputTokens !== 'number' || typeof totalTokens !== 'number') {
+    log.debug('Dropped invalid token usage update', { event });
+    return;
+  }
 
   store.updateTokenUsage(sessionId, {
     inputTokens,
-    outputTokens,
+    outputTokens: typeof outputTokens === 'number' ? outputTokens : undefined,
     totalTokens
-  });
+  }, turnId);
 
   if (maxContextTokens !== undefined && maxContextTokens !== null) {
     store.updateSessionMaxContextTokens(sessionId, maxContextTokens);
+  }
+
+  if (turnId) {
+    immediateSaveDialogTurn(context, sessionId, turnId);
   }
 }
 

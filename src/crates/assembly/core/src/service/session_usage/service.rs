@@ -2263,6 +2263,7 @@ mod tests {
             start_time: 1_000 + turn_index as u64,
             end_time: Some(1_300 + turn_index as u64),
             duration_ms: Some(300),
+            token_usage: None,
             status: TurnStatus::Completed,
         }
     }

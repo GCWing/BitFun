@@ -10,7 +10,8 @@
 import React, { useMemo, useState, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Copy, Check } from 'lucide-react';
-import type { ModelRound, FlowItem, FlowTextItem, FlowToolItem, FlowThinkingItem } from '../../types/flow-chat';
+import type { ModelRound, FlowItem, FlowTextItem, FlowToolItem, FlowThinkingItem, TokenUsage } from '../../types/flow-chat';
+import { useI18n } from '@/infrastructure/i18n';
 import { FlowTextBlock } from '../FlowTextBlock';
 import { FlowToolCard } from '../FlowToolCard';
 import { ModelThinkingDisplay } from '../../tool-cards/ModelThinkingDisplay';
@@ -43,6 +44,7 @@ import {
 } from '@/shared/utils/startupTrace';
 import { SubagentProjectionView } from '../subagent/SubagentProjectionView';
 import { formatSessionViewPreviewText } from '../../utils/sessionViewPreview';
+import { buildModelRoundUsageMeta } from '../../utils/tokenUsageDisplay';
 import './ModelRoundItem.scss';
 import './SubagentItems.scss';
 
@@ -139,6 +141,10 @@ interface ModelRoundItemProps {
   turnId: string;
   isLastRound?: boolean;
   isTurnComplete?: boolean;
+  turnStartedAt?: number;
+  turnEndedAt?: number;
+  turnDurationMs?: number;
+  turnTokenUsage?: TokenUsage;
 }
 
 function useTaskCollapsed(toolId: string): boolean {
@@ -215,8 +221,18 @@ const TaskWithSubagentWrapper: React.FC<TaskWithSubagentWrapperProps> = React.me
 });
 
 export const ModelRoundItem = React.memo<ModelRoundItemProps>(
-  ({ round, turnId, isLastRound = false, isTurnComplete = false }) => {
+  ({
+    round,
+    turnId,
+    isLastRound = false,
+    isTurnComplete = false,
+    turnStartedAt,
+    turnEndedAt,
+    turnDurationMs,
+    turnTokenUsage,
+  }) => {
     const { t } = useTranslation('flow-chat');
+    const { formatDate, formatNumber } = useI18n('flow-chat');
     const { sessionId } = useFlowChatContext();
     const [copied, setCopied] = useState(false);
     const copyButtonRef = useRef<HTMLButtonElement>(null);
@@ -453,6 +469,29 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
       (item.type === 'text' && (item as FlowTextItem).content.trim()) ||
       (item.type === 'tool' && (item as FlowToolItem).toolCall)
     );
+
+    const completedAt = turnEndedAt ?? round.endTime;
+    const effectiveDurationMs = turnDurationMs ??
+      (typeof turnStartedAt === 'number' && typeof completedAt === 'number'
+        ? Math.max(0, completedAt - turnStartedAt)
+        : round.durationMs);
+    const usageMetaItems = useMemo(() => buildModelRoundUsageMeta({
+      completedAt,
+      durationMs: effectiveDurationMs,
+      tokenUsage: turnTokenUsage,
+      status: round.status,
+      formatTime: timestamp => formatDate(new Date(timestamp), {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      }),
+      formatNumber,
+      t,
+    }), [completedAt, effectiveDurationMs, formatDate, formatNumber, round.status, t, turnTokenUsage]);
+    const shouldRenderFooter = isTurnComplete &&
+      isLastRound &&
+      !round.isStreaming &&
+      (hasContent || usageMetaItems.length > 0);
     
     return (
       <div 
@@ -535,8 +574,22 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
           </div>
         )}
 
-        {isTurnComplete && isLastRound && hasContent && !round.isStreaming && (
+        {shouldRenderFooter && (
           <div className="model-round-item__footer">
+            {usageMetaItems.length > 0 && (
+              <div
+                className="model-round-item__meta"
+                aria-label={t('modelRound.meta.label')}
+              >
+                {usageMetaItems.map(item => (
+                  <span key={item.key} className="model-round-item__meta-item">
+                    <span className="model-round-item__meta-label">{item.label}</span>
+                    <span className="model-round-item__meta-value">{item.value}</span>
+                  </span>
+                ))}
+              </div>
+            )}
+
             <ForkSessionButton sessionId={sessionId} turnId={turnId} />
 
             <Tooltip content={copied ? t('modelRound.copiedDialog') : t('modelRound.copyDialog')} placement="top">
@@ -566,7 +619,11 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
       prev.round.id === next.round.id &&
       prev.round.items === next.round.items &&
       prev.isLastRound === next.isLastRound &&
-      prev.isTurnComplete === next.isTurnComplete
+      prev.isTurnComplete === next.isTurnComplete &&
+      prev.turnStartedAt === next.turnStartedAt &&
+      prev.turnEndedAt === next.turnEndedAt &&
+      prev.turnDurationMs === next.turnDurationMs &&
+      prev.turnTokenUsage === next.turnTokenUsage
     );
   }
 );

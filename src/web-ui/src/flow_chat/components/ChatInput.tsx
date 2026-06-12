@@ -24,7 +24,7 @@ import { useAcpPlan } from '../hooks/useAcpPlan';
 import { filterSlashCommands, useAcpSlashCommands } from '../hooks/useAcpSlashCommands';
 import { acpSessionRef, acpSlashCommandText } from '../utils/acpSession';
 import { AcpPlanPanel } from './AcpPlanPanel';
-import type { FlowChatState, Session } from '../types/flow-chat';
+import type { FlowChatState } from '../types/flow-chat';
 import type { FileContext, DirectoryContext, ImageContext } from '@/types/context.ts';
 import { SmartRecommendations } from './smart-recommendations';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
@@ -75,6 +75,10 @@ import { useSessionReviewActivity } from '../hooks/useSessionReviewActivity';
 import { shouldBlockDeepReviewCommand } from '../utils/deepReviewCommandGuard';
 import { deriveDeepReviewSessionConcurrencyGuard } from '../utils/deepReviewCapacityGuard';
 import { acpAgentTypeFromSession } from '../utils/acpSession';
+import {
+  getSessionContextUsageDisplay,
+  type ContextUsageDisplay,
+} from '../utils/tokenUsageDisplay';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import './ChatInput.scss';
 
@@ -217,24 +221,6 @@ function renderMcpPromptMessages(messages: MCPPromptMessage[]): string {
     })
     .filter(Boolean)
     .join('\n\n');
-}
-
-function getSessionContextUsageDisplay(session?: Session): { current: number; max: number } {
-  if (!session) {
-    return { current: 0, max: 128128 };
-  }
-
-  if (session.currentAcpContextUsage) {
-    return {
-      current: session.currentAcpContextUsage.used,
-      max: session.currentAcpContextUsage.size,
-    };
-  }
-
-  return {
-    current: session.currentTokenUsage?.totalTokens || 0,
-    max: session.maxContextTokens || 128128,
-  };
 }
 
 export const ChatInput: React.FC<ChatInputProps> = ({
@@ -622,7 +608,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     return '';
   }, [workspaceName, chatStripRepositoryPath]);
   
-  const [tokenUsage, setTokenUsage] = React.useState({ current: 0, max: 128128 });
+  const [tokenUsage, setTokenUsage] = React.useState<ContextUsageDisplay>(
+    getSessionContextUsageDisplay()
+  );
   const isAssistantWorkspace = workspace?.workspaceKind === WorkspaceKind.Assistant;
   const currentMode = modeState.current;
   const isModeDropdownOpen = modeState.dropdownOpen;
@@ -727,7 +715,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               `${id}|${s.mode ?? ''}|${s.title ?? ''}|${s.workspacePath ?? ''}|` +
               `${s.remoteConnectionId ?? ''}|${s.remoteSshHost ?? ''}|${s.lastSubmittedMode ?? ''}|` +
               `${s.currentAcpContextUsage?.used ?? ''}|${s.currentAcpContextUsage?.size ?? ''}|` +
-              `${s.currentTokenUsage?.totalTokens ?? ''}|${s.maxContextTokens ?? ''}|` +
+              `${s.currentTokenUsage?.inputTokens ?? ''}|${s.maxContextTokens ?? ''}|` +
               `${s.needsUserAttention ? '1':'0'}`
             );
           }
@@ -3545,6 +3533,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                     sessionId={effectiveTargetSessionId || undefined}
                     currentTokens={tokenUsage.current}
                     maxTokens={tokenUsage.max}
+                    contextUsageSource={tokenUsage.source}
                   />
                 </div>
 

@@ -1164,7 +1164,16 @@
     "feedbackDevVersion": "開發版本暫不提供反饋功能",
     "userLabel": "👤 用戶:",
     "toolCallLabel": "🔧 工具調用: {{name}}",
-    "loadingMoreHistory": "正在載入更多歷史..."
+    "loadingMoreHistory": "正在載入更多歷史...",
+    "meta": {
+      "label": "回應中繼資料",
+      "completed": "完成",
+      "stopped": "已中止",
+      "duration": "耗時",
+      "tokens": "Token",
+      "tokensUnavailable": "不可用",
+      "tokenBreakdown": "共 {{total}}，輸入 {{input}}，輸出 {{output}}"
+    }
   },
   "exploreRegion": {
     "readFiles_one": "讀取了 {{count}} 個檔案",
@@ -1994,7 +2003,12 @@
     "autoModelDesc": "自動路由最優模型",
     "primaryModel": "Primary 模型",
     "fastModel": "Fast 模型",
-    "modelNotConfigured": "未設定"
+    "modelNotConfigured": "未設定",
+    "contextUsage": {
+      "agentPrompt": "上次請求輸入上下文: {{usage}}",
+      "acpContext": "ACP 回報上下文: {{usage}}",
+      "toolNote": "工具輸出在後續請求中可能會被摘要或截斷。"
+    }
   },
   "reasoningEffort": {
     "title": "推理深度",

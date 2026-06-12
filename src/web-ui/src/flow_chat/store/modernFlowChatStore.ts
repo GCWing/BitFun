@@ -7,7 +7,7 @@
 import { create } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 import { immer } from 'zustand/middleware/immer';
-import type { Session, DialogTurn, ModelRound, FlowItem, FlowToolItem, FlowUserSteeringItem, AnyFlowItem } from '../types/flow-chat';
+import type { Session, DialogTurn, ModelRound, FlowItem, FlowToolItem, FlowUserSteeringItem, AnyFlowItem, TokenUsage } from '../types/flow-chat';
 import { isCollapsibleTool, READ_TOOL_NAMES, SEARCH_TOOL_NAMES, COMMAND_TOOL_NAMES } from '../tool-cards';
 import { isCompletedToolInTransientWindow } from '../components/modern/modelRoundItemGrouping';
 import { flowChatStore } from './FlowChatStore';
@@ -60,6 +60,10 @@ export type VirtualItem =
       turnId: string;
       isLastRound: boolean;
       isTurnComplete: boolean;
+      turnStartedAt?: number;
+      turnEndedAt?: number;
+      turnDurationMs?: number;
+      turnTokenUsage?: TokenUsage;
       segmentId?: string;
       segmentIndex?: number;
       segmentCount?: number;
@@ -509,6 +513,12 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
               turnId: turn.id,
               isLastRound: isLastRound && chunkIndex === roundChunks.length - 1,
               isTurnComplete,
+              turnStartedAt: turn.startTime,
+              turnEndedAt: turn.endTime,
+              turnDurationMs: typeof turn.endTime === 'number'
+                ? Math.max(0, turn.endTime - turn.startTime)
+                : undefined,
+              turnTokenUsage: turn.tokenUsage,
               segmentId: chunk.segmentId,
               segmentIndex: chunk.segmentIndex,
               segmentCount: chunk.segmentCount,

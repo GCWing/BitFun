@@ -1636,6 +1636,7 @@ mod tests {
             start_time: 1_000,
             end_time: Some(1_250),
             duration_ms: Some(250),
+            token_usage: None,
             status,
         }
     }

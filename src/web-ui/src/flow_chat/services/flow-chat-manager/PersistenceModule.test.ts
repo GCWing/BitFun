@@ -124,6 +124,25 @@ describe('PersistenceModule', () => {
     expect(persisted.modelRounds[0].textItems.map((item: any) => item.id)).toEqual(['real-text']);
   });
 
+  it('persists dialog turn token usage metadata when available', () => {
+    const turn = createDialogTurn('completed');
+    turn.tokenUsage = {
+      inputTokens: 1200,
+      outputTokens: 320,
+      totalTokens: 1520,
+      timestamp: 2400,
+    };
+
+    const persisted = convertDialogTurnToBackendFormat(turn, 0);
+
+    expect(persisted.tokenUsage).toEqual({
+      inputTokens: 1200,
+      outputTokens: 320,
+      totalTokens: 1520,
+      timestamp: 2400,
+    });
+  });
+
   it('persists ACP permission metadata for pending confirmation tools', () => {
     const turn = createDialogTurn('processing');
     turn.modelRounds[0].items = [

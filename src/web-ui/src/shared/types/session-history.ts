@@ -156,7 +156,15 @@ export interface DialogTurnData {
   startTime: number;
   endTime?: number;
   durationMs?: number;
+  tokenUsage?: DialogTurnTokenUsageData;
   status: TurnStatus;
+}
+
+export interface DialogTurnTokenUsageData {
+  inputTokens: number;
+  outputTokens?: number;
+  totalTokens: number;
+  timestamp: number;
 }
 
 export interface UserMessageData {
