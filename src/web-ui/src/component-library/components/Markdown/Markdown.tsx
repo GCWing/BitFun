@@ -6,8 +6,6 @@
 import React, { useState, useMemo, useCallback, useEffect, useLayoutEffect, Component, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import { visit } from 'unist-util-visit';
@@ -29,13 +27,20 @@ import {
   startupTrace,
 } from '@/shared/utils/startupTrace';
 import path from 'path-browserify';
-import 'katex/dist/katex.min.css';
 import './Markdown.scss';
 
 const log = createLogger('Markdown');
 const COMPUTER_LINK_PREFIX = 'computer://';
 const FILE_LINK_PREFIX = 'file://';
 const WORKSPACE_FOLDER_PLACEHOLDER = '{{workspaceFolder}}';
+let markdownMathRendererPreload: Promise<typeof import('./MarkdownMathRenderer')> | undefined;
+
+export function preloadMarkdownMathRenderer() {
+  markdownMathRendererPreload ??= import('./MarkdownMathRenderer');
+  return markdownMathRendererPreload;
+}
+
+const MarkdownMathRenderer = React.lazy(preloadMarkdownMathRenderer);
 
 // Module-level cache so that all simultaneously-mounting Markdown instances
 // (e.g. dozens of history blocks after a workspace switch) share a single
@@ -132,6 +137,18 @@ function mayNeedWorkspacePathForMarkdownLinks(content: string): boolean {
 
   return hasRawAnchorSyntax &&
     /<a\s+[^>]*href=["']\s*(?!https?:|mailto:|visualization:|tab:|#)[^"']+["']/i.test(content);
+}
+
+function mayContainMarkdownMath(content: string): boolean {
+  if (!content) {
+    return false;
+  }
+
+  if (content.includes('$$') || content.includes('\\(') || content.includes('\\[')) {
+    return true;
+  }
+
+  return /(^|[^\\$])\$[^$\n]{1,240}\$(?!\d)/.test(content);
 }
 
 /** Catches render errors from react-markdown/remark-gfm (e.g. RegExp in transformGfmAutolinkLiterals) and shows plain text fallback. */
@@ -826,6 +843,10 @@ export const Markdown = React.memo<MarkdownProps>(({
     hasCodeBlock: /^[ \t]{0,3}(`{3,}|~{3,})/m.test(markdownContent),
     hasTable: /^[ \t]*\|.+\|[ \t]*$/m.test(markdownContent),
   }), [markdownContent]);
+  const shouldUseMathRenderer = useMemo(
+    () => mayContainMarkdownMath(markdownContent),
+    [markdownContent],
+  );
 
   // Parse line ranges like #L42 / 1-20
   const parseLineRange = useCallback((hash: string): LineRange | undefined => {
@@ -1350,6 +1371,15 @@ export const Markdown = React.memo<MarkdownProps>(({
   ]);
   
   const wrapperClassName = `markdown-renderer ${className}`.trim();
+  const basicMarkdownRenderer = (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm, remarkAutolinkComputerFileLinks]}
+      rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema]]}
+      components={components}
+    >
+      {markdownContent}
+    </ReactMarkdown>
+  );
 
   return (
     <div className={wrapperClassName}>
@@ -1364,13 +1394,16 @@ export const Markdown = React.memo<MarkdownProps>(({
         />
       )}
       <MarkdownErrorBoundary fallbackContent={markdownContent}>
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm, remarkMath, remarkAutolinkComputerFileLinks]}
-          rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema], rehypeKatex]}
-          components={components}
-        >
-          {markdownContent}
-        </ReactMarkdown>
+        {shouldUseMathRenderer ? (
+          <React.Suspense fallback={basicMarkdownRenderer}>
+            <MarkdownMathRenderer
+              markdownContent={markdownContent}
+              components={components}
+              sanitizeSchema={sanitizeSchema}
+              remarkAutolinkComputerFileLinks={remarkAutolinkComputerFileLinks}
+            />
+          </React.Suspense>
+        ) : basicMarkdownRenderer}
       </MarkdownErrorBoundary>
       
       {reproductionSteps && !isStreaming && (

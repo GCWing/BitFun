@@ -5,7 +5,7 @@
  * Owns all data fetching / mutation for chat sessions.
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Pencil, Trash2, Check, X, Bot, Code2, ClipboardList, Panda, MoreHorizontal, Loader2, Archive, Clock3 } from 'lucide-react';
 import { IconButton, Input, Tooltip } from '@/component-library';
@@ -43,7 +43,6 @@ import {
 import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
 import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
 import { confirmWarning } from '@/component-library/components/ConfirmDialog/confirmService';
-import ScheduledJobsModal from '@/app/components/scheduled-jobs/ScheduledJobsModal';
 import { scheduleAfterStartupPaint, scheduleAfterStartupSignal } from '@/shared/utils/startupTaskScheduling';
 import {
   SESSION_METADATA_DEFERRED_FALLBACK_MS,
@@ -62,6 +61,7 @@ import {
 import './SessionsSection.scss';
 
 const log = createLogger('SessionsSection');
+const ScheduledJobsModal = lazy(() => import('@/app/components/scheduled-jobs/ScheduledJobsModal'));
 
 type SessionMode = 'code' | 'cowork' | 'claw';
 type HistoryOpenIntentDispatchResult = 'none' | 'dispatched' | 'already-pending';
@@ -588,7 +588,9 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       const sessionId = session.sessionId;
       if (
         sessionId === activeSessionId ||
-        !shouldShowHistorySessionOpenIntent(session)
+        !shouldShowHistorySessionOpenIntent(session, {
+          isRunning: runningSessionIds.has(sessionId),
+        })
       ) {
         return 'none';
       }
@@ -607,7 +609,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       dispatchHistorySessionOpenIntent(sessionId, getTitle(session));
       return 'dispatched';
     },
-    [activeSessionId],
+    [activeSessionId, runningSessionIds],
   );
 
   const handleSwitch = useCallback(
@@ -1187,20 +1189,24 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         </button>
       )}
 
-      <ScheduledJobsModal
-        isOpen={scheduledJobsSession != null}
-        onClose={() => setScheduledJobsSessionId(null)}
-        workspacePath={scheduledJobsSession?.workspacePath || workspacePath}
-        workspaceId={scheduledJobsSession?.workspaceId || workspaceId}
-        remoteConnectionId={scheduledJobsSession?.remoteConnectionId || remoteConnectionId}
-        remoteSshHost={scheduledJobsSession?.remoteSshHost || remoteSshHost}
-        sessionId={scheduledJobsSession?.sessionId}
-        targetKind="session"
-        lockSessionId
-        title={t('nav.scheduledJobs.title')}
-        targetLabel={scheduledJobsSession ? resolveSessionTitle(scheduledJobsSession) : undefined}
-        targetDescription={scheduledJobsSession?.workspacePath || workspacePath}
-      />
+      {scheduledJobsSession && (
+        <Suspense fallback={null}>
+          <ScheduledJobsModal
+            isOpen={scheduledJobsSession != null}
+            onClose={() => setScheduledJobsSessionId(null)}
+            workspacePath={scheduledJobsSession.workspacePath || workspacePath}
+            workspaceId={scheduledJobsSession.workspaceId || workspaceId}
+            remoteConnectionId={scheduledJobsSession.remoteConnectionId || remoteConnectionId}
+            remoteSshHost={scheduledJobsSession.remoteSshHost || remoteSshHost}
+            sessionId={scheduledJobsSession.sessionId}
+            targetKind="session"
+            lockSessionId
+            title={t('nav.scheduledJobs.title')}
+            targetLabel={resolveSessionTitle(scheduledJobsSession)}
+            targetDescription={scheduledJobsSession.workspacePath || workspacePath}
+          />
+        </Suspense>
+      )}
     </div>
   );
 };

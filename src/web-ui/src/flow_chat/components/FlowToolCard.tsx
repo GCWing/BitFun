@@ -4,7 +4,8 @@
  */
 
 import React from 'react';
-import { getToolCardConfig, getToolCardComponent } from '../tool-cards';
+import { getToolCardComponent } from '../tool-cards';
+import { getToolCardConfig } from '../tool-cards/toolCardMetadata';
 import type { FlowToolItem, ToolCardDisplayContext } from '../types/flow-chat';
 import { createLogger } from '@/shared/utils/logger';
 import { FlowToolCardErrorBoundary } from './FlowToolCardErrorBoundary';

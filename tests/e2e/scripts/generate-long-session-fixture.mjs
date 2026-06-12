@@ -3,14 +3,38 @@ import fs from 'fs/promises';
 import fsSync from 'fs';
 import os from 'os';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 const SESSION_STORAGE_SCHEMA_VERSION = 2;
 const MAX_PROJECT_SLUG_LEN = 120;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+function defaultBitfunHome() {
+  if (process.env.BITFUN_E2E_HOME) {
+    return process.env.BITFUN_E2E_HOME;
+  }
+  if (process.env.BITFUN_E2E_USE_REAL_PROFILE === '1') {
+    return process.env.BITFUN_HOME || path.join(os.homedir(), '.bitfun');
+  }
+  return path.resolve(__dirname, '..', '.bitfun', 'runtime', 'home');
+}
+
+function defaultBitfunUserRoot() {
+  if (process.env.BITFUN_E2E_USER_ROOT) {
+    return process.env.BITFUN_E2E_USER_ROOT;
+  }
+  if (process.env.BITFUN_E2E_USE_REAL_PROFILE === '1') {
+    return null;
+  }
+  return path.resolve(__dirname, '..', '.bitfun', 'runtime', 'user-root');
+}
 
 function parseArgs(argv) {
   const options = {
     workspace: undefined,
-    bitfunHome: process.env.BITFUN_HOME || path.join(os.homedir(), '.bitfun'),
+    bitfunHome: defaultBitfunHome(),
+    bitfunUserRoot: defaultBitfunUserRoot(),
     sessionPrefix: 'perf-long-session',
     scenario: 'mixed-visible',
     sessionCount: 80,
@@ -40,6 +64,9 @@ function parseArgs(argv) {
         break;
       case '--bitfun-home':
         options.bitfunHome = next();
+        break;
+      case '--bitfun-user-root':
+        options.bitfunUserRoot = next();
         break;
       case '--session-prefix':
         options.sessionPrefix = next();
@@ -123,9 +150,24 @@ Options:
   --dense-groups <n>        Groups in the latest dense-visible turn. Default: 160
   --session-prefix <text>   Session id prefix. Default: perf-long-session
   --scenario <name>         Fixture shape: mixed-visible, dense-visible, explore-only, or user-only-latest. Default: mixed-visible
-  --bitfun-home <path>      BitFun home root. Default: BITFUN_HOME or ~/.bitfun
+  --bitfun-home <path>      BitFun home root. Default: BITFUN_E2E_HOME or isolated tests/e2e/.bitfun/runtime/home; BITFUN_HOME is used only with BITFUN_E2E_USE_REAL_PROFILE=1
+  --bitfun-user-root <path> BitFun user config root for seeding active workspace. Default: BITFUN_E2E_USER_ROOT or isolated tests/e2e/.bitfun/runtime/user-root; skipped for real profile unless provided
   --cleanup                 Remove generated sessions for the prefix.
 `);
+}
+
+function stableLocalWorkspaceRoot(workspacePath) {
+  return fsSync.realpathSync(workspacePath).replace(/\\/g, '/');
+}
+
+function localWorkspaceStableStorageId(stableRoot) {
+  const hash = crypto
+    .createHash('sha256')
+    .update('localhost\n')
+    .update(stableRoot)
+    .digest('hex')
+    .slice(0, 32);
+  return `local_${hash}`;
 }
 
 function projectRuntimeSlug(workspacePath) {
@@ -524,6 +566,91 @@ async function writeJson(filePath, value) {
   await fs.writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
 }
 
+async function readJsonOptional(filePath) {
+  try {
+    return JSON.parse(await fs.readFile(filePath, 'utf8'));
+  } catch (error) {
+    if (error && error.code === 'ENOENT') {
+      return null;
+    }
+    throw error;
+  }
+}
+
+async function seedWorkspaceState(options, workspacePath) {
+  if (!options.bitfunUserRoot) {
+    return null;
+  }
+
+  const userRoot = path.resolve(options.bitfunUserRoot);
+  const workspaceDataPath = path.join(userRoot, 'data', 'workspace_data.json');
+  const existing = await readJsonOptional(workspaceDataPath);
+  const workspaces = existing?.workspaces && typeof existing.workspaces === 'object'
+    ? { ...existing.workspaces }
+    : {};
+  const stableRoot = stableLocalWorkspaceRoot(workspacePath);
+  const workspaceId = localWorkspaceStableStorageId(stableRoot);
+  const workspaceName = path.basename(workspacePath) || 'Workspace';
+  const nowIso = new Date().toISOString();
+  const previous = workspaces[workspaceId] && typeof workspaces[workspaceId] === 'object'
+    ? workspaces[workspaceId]
+    : {};
+
+  workspaces[workspaceId] = {
+    ...previous,
+    id: workspaceId,
+    name: previous.name || workspaceName,
+    rootPath: workspacePath,
+    workspaceType: previous.workspaceType || 'Other',
+    workspaceKind: 'normal',
+    status: 'Active',
+    languages: Array.isArray(previous.languages) ? previous.languages : [],
+    openedAt: previous.openedAt || nowIso,
+    lastAccessed: nowIso,
+    description: previous.description ?? null,
+    tags: Array.isArray(previous.tags) ? previous.tags : [],
+    statistics: previous.statistics ?? null,
+    relatedPaths: Array.isArray(previous.relatedPaths) ? previous.relatedPaths : [],
+    metadata: {
+      ...(previous.metadata && typeof previous.metadata === 'object' ? previous.metadata : {}),
+      sshHost: 'localhost',
+    },
+  };
+
+  const openedWorkspaceIds = Array.from(new Set([
+    workspaceId,
+    ...(
+      Array.isArray(existing?.opened_workspace_ids)
+        ? existing.opened_workspace_ids.filter(id => typeof id === 'string' && id !== workspaceId)
+        : []
+    ),
+  ]));
+  const recentWorkspaces = Array.from(new Set([
+    workspaceId,
+    ...(
+      Array.isArray(existing?.recent_workspaces)
+        ? existing.recent_workspaces.filter(id => typeof id === 'string' && id !== workspaceId)
+        : []
+    ),
+  ])).slice(0, 20);
+
+  await writeJson(workspaceDataPath, {
+    workspaces,
+    opened_workspace_ids: openedWorkspaceIds,
+    current_workspace_id: workspaceId,
+    recent_workspaces: recentWorkspaces,
+    recent_assistant_workspaces: Array.isArray(existing?.recent_assistant_workspaces)
+      ? existing.recent_assistant_workspaces.filter(id => typeof id === 'string')
+      : [],
+    saved_at: nowIso,
+  });
+
+  return {
+    workspaceId,
+    workspaceDataPath,
+  };
+}
+
 async function removeGeneratedSessions(sessionsRoot, sessionPrefix) {
   try {
     const entries = await fs.readdir(sessionsRoot, { withFileTypes: true });
@@ -570,8 +697,11 @@ async function generate(options) {
       workspacePath,
       sessionsRoot,
       sessionPrefix: options.sessionPrefix,
+      workspaceStateSeeded: false,
     };
   }
+
+  const seededWorkspaceState = await seedWorkspaceState(options, workspacePath);
 
   const now = Date.now();
   const generatedMetadata = [];
@@ -628,8 +758,11 @@ async function generate(options) {
     action: 'generate',
     workspacePath,
     bitfunHome: options.bitfunHome,
+    bitfunUserRoot: options.bitfunUserRoot,
     sessionsRoot,
     sessionPrefix: options.sessionPrefix,
+    workspaceStateSeeded: Boolean(seededWorkspaceState),
+    workspaceStatePath: seededWorkspaceState?.workspaceDataPath,
     sessionCount: options.sessionCount,
     longSessionId: `${options.sessionPrefix}-${String(options.longSessionIndex).padStart(3, '0')}`,
     scenario: options.scenario,

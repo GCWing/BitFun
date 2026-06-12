@@ -10,7 +10,7 @@ vi.mock('./FlowChatStore', () => ({
   },
 }));
 
-vi.mock('../tool-cards', () => ({
+vi.mock('../tool-cards/toolCardMetadata', () => ({
   isCollapsibleTool: (toolName: string) => ['Read', 'LS', 'Grep', 'Glob', 'WebSearch', 'Bash', 'Git'].includes(toolName),
   READ_TOOL_NAMES: new Set(['Read']),
   SEARCH_TOOL_NAMES: new Set(['Grep', 'Glob', 'WebSearch']),

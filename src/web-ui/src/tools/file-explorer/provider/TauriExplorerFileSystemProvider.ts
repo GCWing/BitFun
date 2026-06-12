@@ -3,7 +3,7 @@ import { workspaceAPI } from '@/infrastructure/api';
 import type { ExplorerNodeDto } from '@/infrastructure/api/service-api/tauri-commands';
 import { createLogger } from '@/shared/utils/logger';
 import type { FileSystemChangeEvent, FileSystemNode, FileSystemOptions } from '@/tools/file-system/types';
-import type { ExplorerChildrenRequest, ExplorerFileSystemProvider } from '../types/explorer';
+import type { ExplorerChildrenRequest, ExplorerFileSystemProvider, ExplorerWatchOptions } from '../types/explorer';
 
 const log = createLogger('TauriExplorerProvider');
 
@@ -74,68 +74,157 @@ function normalizeForCompare(path: string): string {
 interface BackendWatchRef {
   count: number;
   rootPath: string;
-  started: boolean;
+  recursiveCount: number;
+  backendRecursive: boolean | null;
+  syncInProgress: boolean;
+  syncRequested: boolean;
+}
+
+interface BackendWatchLease {
+  key: string;
+  recursive: boolean;
 }
 
 const backendWatchRefs = new Map<string, BackendWatchRef>();
 
-function toBackendWatchKey(path: string): string {
+function normalizeForWatchKey(path: string): string {
   const normalized = normalizeForCompare(path);
   const isWindowsLike = /^[a-zA-Z]:/.test(normalized) || normalized.startsWith('//');
   return isWindowsLike ? normalized.toLowerCase() : normalized;
 }
 
-function retainBackendWatch(rootPath: string): string {
-  const key = toBackendWatchKey(rootPath);
-  const existing = backendWatchRefs.get(key);
-  if (existing) {
-    existing.count += 1;
-    return key;
-  }
-
-  backendWatchRefs.set(key, {
-    count: 1,
-    rootPath,
-    started: false,
-  });
-
-  void workspaceAPI
-    .startFileWatch(rootPath, true)
-    .then(() => {
-      const current = backendWatchRefs.get(key);
-      if (!current) {
-        void workspaceAPI.stopFileWatch(rootPath).catch(() => {});
-        return;
-      }
-
-      current.started = true;
-    })
-    .catch((error) => {
-      log.warn('Failed to register backend file watch', { rootPath, error });
-    });
-
-  return key;
+function toBackendWatchKey(path: string): string {
+  return normalizeForWatchKey(path);
 }
 
-function releaseBackendWatch(key: string): void {
-  const existing = backendWatchRefs.get(key);
+function diagnosticWatchKey(path: string): string {
+  const normalized = normalizeForWatchKey(path);
+  let hash = 0;
+  for (let index = 0; index < normalized.length; index += 1) {
+    hash = ((hash << 5) - hash + normalized.charCodeAt(index)) | 0;
+  }
+  return `watch:${Math.abs(hash).toString(36)}`;
+}
+
+function isSameOrUnderRoot(targetPath: string, normalizedRoot: string): boolean {
+  return targetPath === normalizedRoot || targetPath.startsWith(`${normalizedRoot}/`);
+}
+
+function isSameOrDirectChildOfRoot(targetPath: string, normalizedRoot: string): boolean {
+  if (targetPath === normalizedRoot) {
+    return true;
+  }
+
+  if (!targetPath.startsWith(`${normalizedRoot}/`)) {
+    return false;
+  }
+
+  const relativePath = targetPath.slice(normalizedRoot.length + 1);
+  return relativePath !== '' && !relativePath.includes('/');
+}
+
+function isRelevantWatchEventPath(targetPath: string, normalizedRoot: string, recursive: boolean): boolean {
+  return recursive
+    ? isSameOrUnderRoot(targetPath, normalizedRoot)
+    : isSameOrDirectChildOfRoot(targetPath, normalizedRoot);
+}
+
+function desiredBackendRecursive(ref: BackendWatchRef): boolean | null {
+  if (ref.count <= 0) {
+    return null;
+  }
+  return ref.recursiveCount > 0;
+}
+
+function requestBackendWatchSync(key: string, ref: BackendWatchRef): void {
+  ref.syncRequested = true;
+  if (ref.syncInProgress) {
+    return;
+  }
+
+  ref.syncInProgress = true;
+
+  void (async () => {
+    try {
+      while (ref.syncRequested) {
+        ref.syncRequested = false;
+
+        if (backendWatchRefs.get(key) !== ref) {
+          return;
+        }
+
+        const desiredRecursive = desiredBackendRecursive(ref);
+        if (desiredRecursive === ref.backendRecursive) {
+          if (desiredRecursive === null) {
+            backendWatchRefs.delete(key);
+          }
+          continue;
+        }
+
+        if (desiredRecursive === null) {
+          await workspaceAPI.stopFileWatch(ref.rootPath);
+          ref.backendRecursive = null;
+          if (ref.count <= 0) {
+            backendWatchRefs.delete(key);
+          }
+          continue;
+        }
+
+        await workspaceAPI.startFileWatch(ref.rootPath, desiredRecursive);
+        ref.backendRecursive = desiredRecursive;
+      }
+    } catch (error) {
+      log.warn('Failed to synchronize backend file watch', {
+        watchKey: diagnosticWatchKey(ref.rootPath),
+        error,
+      });
+    } finally {
+      ref.syncInProgress = false;
+      if (ref.syncRequested) {
+        requestBackendWatchSync(key, ref);
+      } else if (ref.count <= 0 && ref.backendRecursive === null) {
+        backendWatchRefs.delete(key);
+      }
+    }
+  })();
+}
+
+function retainBackendWatch(rootPath: string, recursive: boolean): BackendWatchLease {
+  const key = toBackendWatchKey(rootPath);
+  let ref = backendWatchRefs.get(key);
+  if (!ref) {
+    ref = {
+      count: 0,
+      rootPath,
+      recursiveCount: 0,
+      backendRecursive: null,
+      syncInProgress: false,
+      syncRequested: false,
+    };
+    backendWatchRefs.set(key, ref);
+  }
+
+  ref.count += 1;
+  if (recursive) {
+    ref.recursiveCount += 1;
+  }
+  requestBackendWatchSync(key, ref);
+
+  return { key, recursive };
+}
+
+function releaseBackendWatch(lease: BackendWatchLease): void {
+  const existing = backendWatchRefs.get(lease.key);
   if (!existing) {
     return;
   }
 
   existing.count -= 1;
-  if (existing.count > 0) {
-    return;
+  if (lease.recursive) {
+    existing.recursiveCount = Math.max(0, existing.recursiveCount - 1);
   }
 
-  backendWatchRefs.delete(key);
-  if (!existing.started) {
-    return;
-  }
-
-  void workspaceAPI.stopFileWatch(existing.rootPath).catch((error) => {
-    log.warn('Failed to unregister backend file watch', { rootPath: existing.rootPath, error });
-  });
+  requestBackendWatchSync(lease.key, existing);
 }
 
 function mapEventKind(kind: string): FileSystemChangeEvent['type'] {
@@ -163,11 +252,16 @@ export class TauriExplorerFileSystemProvider implements ExplorerFileSystemProvid
     );
   }
 
-  watch(rootPath: string, callback: (event: FileSystemChangeEvent) => void): () => void {
+  watch(
+    rootPath: string,
+    callback: (event: FileSystemChangeEvent) => void,
+    options: ExplorerWatchOptions = {}
+  ): () => void {
     let unlisten: UnlistenFn | null = null;
     let active = true;
+    const recursive = options.recursive ?? true;
     const normalizedRoot = normalizeForCompare(rootPath);
-    const backendWatchKey = retainBackendWatch(rootPath);
+    const backendWatchLease = retainBackendWatch(rootPath, recursive);
 
     const start = async () => {
       try {
@@ -176,15 +270,14 @@ export class TauriExplorerFileSystemProvider implements ExplorerFileSystemProvid
             return;
           }
 
-          const isUnderRoot = (targetPath: string) =>
-            targetPath === normalizedRoot || targetPath.startsWith(`${normalizedRoot}/`);
-
           for (const fileEvent of event.payload) {
             const normalizedPath = normalizeForCompare(fileEvent.path);
             const normalizedFrom = fileEvent.from ? normalizeForCompare(fileEvent.from) : '';
             const relevant =
-              isUnderRoot(normalizedPath) ||
-              (fileEvent.kind === 'rename' && normalizedFrom !== '' && isUnderRoot(normalizedFrom));
+              isRelevantWatchEventPath(normalizedPath, normalizedRoot, recursive) ||
+              (fileEvent.kind === 'rename' &&
+                normalizedFrom !== '' &&
+                isRelevantWatchEventPath(normalizedFrom, normalizedRoot, recursive));
 
             if (!relevant) {
               continue;
@@ -206,11 +299,14 @@ export class TauriExplorerFileSystemProvider implements ExplorerFileSystemProvid
     void start();
 
     return () => {
+      if (!active) {
+        return;
+      }
       active = false;
       if (unlisten) {
         unlisten();
       }
-      releaseBackendWatch(backendWatchKey);
+      releaseBackendWatch(backendWatchLease);
     };
   }
 }

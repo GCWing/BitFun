@@ -22,6 +22,32 @@
 
   &__loading {
     flex: 1;
+    padding: var(--size-gap-6, 24px);
+  }
+
+  &__loading-line,
+  &__loading-block {
+    border-radius: var(--radius-md, 8px);
+    background: var(--color-fill-secondary);
+    opacity: 0.65;
+  }
+
+  &__loading-line {
+    height: 14px;
+    max-width: 360px;
+    margin-bottom: var(--size-gap-3, 12px);
+
+    &--title {
+      height: 20px;
+      max-width: 220px;
+      margin-bottom: var(--size-gap-5, 20px);
+    }
+  }
+
+  &__loading-block {
+    height: 160px;
+    max-width: 720px;
+    margin-top: var(--size-gap-6, 24px);
   }
 
   &__content-wrapper {

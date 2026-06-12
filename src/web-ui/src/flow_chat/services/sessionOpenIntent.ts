@@ -23,6 +23,14 @@ const nowMs = (): number => (
   typeof performance !== 'undefined' ? performance.now() : Date.now()
 );
 
+export function hasRenderableSessionContent(session: Session): boolean {
+  return session.dialogTurns.some(turn =>
+    Boolean(turn.userMessage) ||
+    (turn.status === 'image_analyzing' && turn.modelRounds.length === 0) ||
+    turn.modelRounds.some(round => round.items.length > 0)
+  );
+}
+
 function notifyHistorySessionOpenTransitionListeners(): void {
   for (const listener of transitionListeners) {
     listener();
@@ -36,8 +44,15 @@ function clearHistorySessionOpenTransitionTimer(): void {
   }
 }
 
-export function shouldShowHistorySessionOpenIntent(session: Session | null | undefined): boolean {
+export function shouldShowHistorySessionOpenIntent(
+  session: Session | null | undefined,
+  options?: { isRunning?: boolean }
+): boolean {
   if (!session) {
+    return false;
+  }
+
+  if (options?.isRunning === true || hasRenderableSessionContent(session)) {
     return false;
   }
 

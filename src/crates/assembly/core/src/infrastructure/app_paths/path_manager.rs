@@ -7,6 +7,7 @@ use log::{debug, error};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
+use std::env;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -42,13 +43,47 @@ pub struct PathManager {
 impl PathManager {
     /// Create a new path manager
     pub fn new() -> BitFunResult<Self> {
+        Self::validate_e2e_storage_guard()?;
         let user_root = Self::get_user_config_root()?;
+        let bitfun_home_override = Self::get_bitfun_home_override();
 
         Ok(Self {
             user_root,
-            bitfun_home_override: None,
+            bitfun_home_override,
             project_runtime_slug_cache: Arc::new(Mutex::new(HashMap::new())),
         })
+    }
+
+    fn env_path(name: &str) -> Option<PathBuf> {
+        env::var_os(name)
+            .map(PathBuf::from)
+            .filter(|path| !path.as_os_str().is_empty())
+    }
+
+    fn env_flag_enabled(name: &str) -> bool {
+        matches!(
+            env::var(name).ok().as_deref(),
+            Some("1") | Some("true") | Some("TRUE")
+        )
+    }
+
+    fn validate_e2e_storage_guard() -> BitFunResult<()> {
+        if !Self::env_flag_enabled("BITFUN_E2E_STORAGE_GUARD") {
+            return Ok(());
+        }
+
+        let has_user_root = Self::env_path("BITFUN_USER_ROOT").is_some()
+            || Self::env_path("BITFUN_E2E_USER_ROOT").is_some();
+        let has_home_root =
+            Self::env_path("BITFUN_HOME").is_some() || Self::env_path("BITFUN_E2E_HOME").is_some();
+
+        if has_user_root && has_home_root {
+            return Ok(());
+        }
+
+        Err(BitFunError::config(
+            "BITFUN_E2E_STORAGE_GUARD requires isolated BITFUN_E2E_USER_ROOT and BITFUN_E2E_HOME storage roots",
+        ))
     }
 
     /// Get user config root directory
@@ -57,10 +92,20 @@ impl PathManager {
     /// - macOS: ~/Library/Application Support/BitFun/
     /// - Linux: ~/.config/bitfun/
     fn get_user_config_root() -> BitFunResult<PathBuf> {
+        if let Some(path) =
+            Self::env_path("BITFUN_USER_ROOT").or_else(|| Self::env_path("BITFUN_E2E_USER_ROOT"))
+        {
+            return Ok(path);
+        }
+
         let config_dir = dirs::config_dir()
             .ok_or_else(|| BitFunError::config("Failed to get config directory".to_string()))?;
 
         Ok(config_dir.join("bitfun"))
+    }
+
+    fn get_bitfun_home_override() -> Option<PathBuf> {
+        Self::env_path("BITFUN_HOME").or_else(|| Self::env_path("BITFUN_E2E_HOME"))
     }
 
     /// Get assistant home root directory: ~/.bitfun/
@@ -460,7 +505,7 @@ impl Default for PathManager {
                 );
                 Self {
                     user_root: std::env::temp_dir().join("bitfun"),
-                    bitfun_home_override: None,
+                    bitfun_home_override: Self::get_bitfun_home_override(),
                     project_runtime_slug_cache: Arc::new(Mutex::new(HashMap::new())),
                 }
             }
@@ -528,7 +573,11 @@ pub fn try_get_path_manager_arc() -> BitFunResult<Arc<PathManager>> {
 #[cfg(test)]
 mod tests {
     use super::PathManager;
+    use std::ffi::OsString;
     use std::path::Path;
+    use std::sync::Mutex;
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn assistant_workspace_paths_use_personal_assistant_subdir() {
@@ -596,5 +645,84 @@ mod tests {
 
         assert!(slug.starts_with("e--projects-openbitfun-bitfun"));
         assert_eq!(runtime_root.parent(), Some(pm.projects_root().as_path()));
+    }
+
+    #[test]
+    fn env_overrides_keep_e2e_storage_out_of_real_user_profile() {
+        let _guard = ENV_LOCK.lock().expect("env lock poisoned");
+        let _env_guard = EnvVarGuard::capture([
+            "BITFUN_USER_ROOT",
+            "BITFUN_E2E_USER_ROOT",
+            "BITFUN_HOME",
+            "BITFUN_E2E_HOME",
+            "BITFUN_E2E_STORAGE_GUARD",
+        ]);
+        let temp_root = std::env::temp_dir().join("bitfun-e2e-path-manager-test");
+        let user_root = temp_root.join("user-root");
+        let home_root = temp_root.join("home");
+
+        std::env::remove_var("BITFUN_USER_ROOT");
+        std::env::set_var("BITFUN_E2E_USER_ROOT", &user_root);
+        std::env::remove_var("BITFUN_HOME");
+        std::env::set_var("BITFUN_E2E_HOME", &home_root);
+
+        let pm = PathManager::new().expect("path manager should use env overrides");
+        assert_eq!(pm.user_config_dir(), user_root.join("config"));
+        assert_eq!(pm.user_data_dir(), user_root.join("data"));
+        assert_eq!(pm.bitfun_home_dir(), home_root);
+    }
+
+    #[test]
+    fn e2e_storage_guard_rejects_missing_isolated_roots() {
+        let _guard = ENV_LOCK.lock().expect("env lock poisoned");
+        let _env_guard = EnvVarGuard::capture([
+            "BITFUN_USER_ROOT",
+            "BITFUN_E2E_USER_ROOT",
+            "BITFUN_HOME",
+            "BITFUN_E2E_HOME",
+            "BITFUN_E2E_STORAGE_GUARD",
+        ]);
+
+        std::env::remove_var("BITFUN_USER_ROOT");
+        std::env::remove_var("BITFUN_E2E_USER_ROOT");
+        std::env::remove_var("BITFUN_HOME");
+        std::env::remove_var("BITFUN_E2E_HOME");
+        std::env::set_var("BITFUN_E2E_STORAGE_GUARD", "1");
+
+        let error = PathManager::new().expect_err("guard should reject real-profile storage");
+        let message = error.to_string();
+        assert!(message.contains("BITFUN_E2E_STORAGE_GUARD"));
+        assert!(message.contains("BITFUN_E2E_USER_ROOT"));
+    }
+
+    struct EnvVarGuard {
+        values: Vec<(&'static str, Option<OsString>)>,
+    }
+
+    impl EnvVarGuard {
+        fn capture(names: impl IntoIterator<Item = &'static str>) -> Self {
+            Self {
+                values: names
+                    .into_iter()
+                    .map(|name| (name, std::env::var_os(name)))
+                    .collect(),
+            }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            for (name, value) in self.values.drain(..) {
+                restore_env(name, value);
+            }
+        }
+    }
+
+    fn restore_env(name: &str, value: Option<OsString>) {
+        if let Some(value) = value {
+            std::env::set_var(name, value);
+        } else {
+            std::env::remove_var(name);
+        }
     }
 }

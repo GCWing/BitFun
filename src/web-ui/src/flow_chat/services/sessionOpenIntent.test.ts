@@ -6,8 +6,10 @@ import {
   consumeRecentHistorySessionOpenIntent,
   dispatchHistorySessionOpenIntent,
   getHistorySessionOpenTransitionSnapshot,
+  shouldShowHistorySessionOpenIntent,
   subscribeHistorySessionOpenTransition,
 } from './sessionOpenIntent';
+import type { Session } from '../types/flow-chat';
 
 describe('sessionOpenIntent', () => {
   afterEach(() => {
@@ -82,5 +84,30 @@ describe('sessionOpenIntent', () => {
 
     now.mockReturnValue(4_200);
     expect(getHistorySessionOpenTransitionSnapshot()).toBeNull();
+  });
+
+  it('does not request a transition shield for running or already-renderable history sessions', () => {
+    const metadataOnlySession = {
+      sessionId: 'history-1',
+      isHistorical: true,
+      historyState: 'metadata-only',
+      dialogTurns: [],
+    } as unknown as Session;
+    const renderableSession = {
+      ...metadataOnlySession,
+      historyState: 'ready',
+      dialogTurns: [
+        {
+          id: 'turn-1',
+          userMessage: { id: 'user-1', content: 'visible prompt', timestamp: 1 },
+          modelRounds: [],
+          status: 'processing',
+        },
+      ],
+    } as unknown as Session;
+
+    expect(shouldShowHistorySessionOpenIntent(metadataOnlySession)).toBe(true);
+    expect(shouldShowHistorySessionOpenIntent(metadataOnlySession, { isRunning: true })).toBe(false);
+    expect(shouldShowHistorySessionOpenIntent(renderableSession)).toBe(false);
   });
 });

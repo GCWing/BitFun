@@ -120,8 +120,19 @@ export async function openWorkspace(
   options: WorkspaceReadyOptions = {},
 ): Promise<boolean> {
   try {
+    const initialState = await getWorkspaceState();
+    const projectName = path.basename(workspacePath);
+    const requireWorkspaceLabel = options.requireWorkspaceLabel ?? true;
+    if (
+      initialState.currentWorkspacePath === workspacePath
+      && initialState.openedWorkspacePaths.includes(workspacePath)
+      && (!requireWorkspaceLabel || initialState.workspaceLabels.some(label => label.includes(projectName)))
+    ) {
+      return true;
+    }
+
     await openWorkspaceThroughFrontend(workspacePath);
-    await waitForWorkspaceReady(workspacePath, path.basename(workspacePath), 15000, options);
+    await waitForWorkspaceReady(workspacePath, projectName, 15000, options);
     return true;
   } catch (error) {
     console.error('[WorkspaceHelper] Failed to open workspace through frontend state:', error);

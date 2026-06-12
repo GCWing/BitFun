@@ -8,8 +8,7 @@
  * TitleBar removed; window controls moved to NavBar, dialogs managed here.
  */
 
-import React, { useState, useCallback, useEffect, useMemo, useRef, useContext } from 'react';
-import { open } from '@tauri-apps/plugin-dialog';
+import React, { useState, useCallback, useEffect, useMemo, useRef, useContext, lazy, Suspense } from 'react';
 import { LoaderCircle } from 'lucide-react';
 import { useWorkspaceContext } from '../../infrastructure/contexts/WorkspaceContext';
 import { useWindowControls } from '../hooks/useWindowControls';
@@ -25,7 +24,6 @@ import { FlowChatManager } from '../../flow_chat/services/FlowChatManager';
 import WorkspaceBody from './WorkspaceBody';
 import { ToolbarMode, useToolbarModeContext } from '../../flow_chat/components/toolbar-mode';
 import { FloatingMiniChat } from './FloatingMiniChat';
-import { NewProjectDialog } from '../components/NewProjectDialog';
 import { AboutDialog } from '../components/AboutDialog';
 import { MCPInteractionDialog } from '../components/MCPInteractionDialog/MCPInteractionDialog';
 import { WorkspaceManager } from '../../tools/workspace';
@@ -45,6 +43,9 @@ import './AppLayout.scss';
 
 const log = createLogger('AppLayout');
 const ACP_SESSION_PENDING_TIMEOUT_MS = 75_000;
+const NewProjectDialog = lazy(() =>
+  import('../components/NewProjectDialog').then(module => ({ default: module.NewProjectDialog }))
+);
 
 interface AppLayoutProps {
   className?: string;
@@ -213,6 +214,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
   }>>([]);
   const handleOpenProject = useCallback(async () => {
     try {
+      const { open } = await import('@tauri-apps/plugin-dialog');
       const selected = await open({
         directory: true,
         multiple: false,
@@ -732,12 +734,16 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
       </div>
 
       {/* Dialogs (previously owned by TitleBar) */}
-      <NewProjectDialog
-        isOpen={showNewProjectDialog}
-        onClose={() => setShowNewProjectDialog(false)}
-        onConfirm={handleConfirmNewProject}
-        defaultParentPath={hasWorkspace ? currentWorkspace?.rootPath : undefined}
-      />
+      {showNewProjectDialog && (
+        <Suspense fallback={null}>
+          <NewProjectDialog
+            isOpen={showNewProjectDialog}
+            onClose={() => setShowNewProjectDialog(false)}
+            onConfirm={handleConfirmNewProject}
+            defaultParentPath={hasWorkspace ? currentWorkspace?.rootPath : undefined}
+          />
+        </Suspense>
+      )}
       <AboutDialog
         isOpen={showAboutDialog}
         onClose={() => setShowAboutDialog(false)}

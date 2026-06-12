@@ -1,4 +1,4 @@
-import React, { useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import React, { lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { Folder, FolderOpen, MoreHorizontal, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw, Copy, FileText, GitBranch, Bot, Link2, ListChecks, Loader2, Clock3 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -38,8 +38,6 @@ import {
 import { SSHContext } from '@/features/ssh-remote/SSHRemoteContext';
 import { useWorkspaceSearchIndex } from '@/tools/file-explorer';
 import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
-import WorkspaceRelatedPathsDialog from './WorkspaceRelatedPathsDialog';
-import WorkspaceSessionBatchModal from './WorkspaceSessionBatchModal';
 import { scheduleAfterStartupSignal } from '@/shared/utils/startupTaskScheduling';
 import {
   getWorkspaceGitBasicInfoOptions,
@@ -47,8 +45,10 @@ import {
   WORKSPACE_GIT_PENDING_CANCEL_REASONS,
   WORKSPACE_GIT_PENDING_CANCEL_SOURCES,
 } from './workspaceGitRefreshOptions';
-import ScheduledJobsModal from '@/app/components/scheduled-jobs/ScheduledJobsModal';
 
+const WorkspaceRelatedPathsDialog = lazy(() => import('./WorkspaceRelatedPathsDialog'));
+const WorkspaceSessionBatchModal = lazy(() => import('./WorkspaceSessionBatchModal'));
+const ScheduledJobsModal = lazy(() => import('@/app/components/scheduled-jobs/ScheduledJobsModal'));
 
 interface WorkspaceItemProps {
   workspace: WorkspaceInfo;
@@ -938,19 +938,23 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
           confirmDanger
           preview={`${t('nav.workspaces.resetWorkspaceDialog.pathLabel')}\n${workspace.rootPath}`}
         />
-        <ScheduledJobsModal
-          isOpen={scheduledJobsModalOpen}
-          onClose={() => setScheduledJobsModalOpen(false)}
-          workspacePath={workspace.rootPath}
-          workspaceId={workspace.id}
-          workspaceKind={workspace.workspaceKind}
-          remoteConnectionId={isRemoteWorkspace(workspace) ? workspace.connectionId : null}
-          remoteSshHost={isRemoteWorkspace(workspace) ? workspace.sshHost : null}
-          targetKind="workspace"
-          title={t('nav.scheduledJobs.title')}
-          targetLabel={workspaceDisplayName}
-          targetDescription={workspace.rootPath}
-        />
+        {scheduledJobsModalOpen && (
+          <Suspense fallback={null}>
+            <ScheduledJobsModal
+              isOpen={scheduledJobsModalOpen}
+              onClose={() => setScheduledJobsModalOpen(false)}
+              workspacePath={workspace.rootPath}
+              workspaceId={workspace.id}
+              workspaceKind={workspace.workspaceKind}
+              remoteConnectionId={isRemoteWorkspace(workspace) ? workspace.connectionId : null}
+              remoteSshHost={isRemoteWorkspace(workspace) ? workspace.sshHost : null}
+              targetKind="workspace"
+              title={t('nav.scheduledJobs.title')}
+              targetLabel={workspaceDisplayName}
+              targetDescription={workspace.rootPath}
+            />
+          </Suspense>
+        )}
       </div>
     );
   }
@@ -1322,32 +1326,44 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
         confirmDanger
         preview={`${t('nav.workspaces.deleteWorktreeDialog.pathLabel')}\n${workspace.rootPath}`}
       />
-      <WorkspaceRelatedPathsDialog
-        workspace={workspace}
-        isOpen={relatedPathsDialogOpen}
-        onClose={() => setRelatedPathsDialogOpen(false)}
-      />
-      <WorkspaceSessionBatchModal
-        isOpen={sessionBatchModalOpen}
-        onClose={() => setSessionBatchModalOpen(false)}
-        workspacePath={workspace.rootPath}
-        workspaceLabel={workspaceDisplayName}
-        remoteConnectionId={isRemoteWorkspace(workspace) ? workspace.connectionId : null}
-        remoteSshHost={isRemoteWorkspace(workspace) ? workspace.sshHost : null}
-      />
-      <ScheduledJobsModal
-        isOpen={scheduledJobsModalOpen}
-        onClose={() => setScheduledJobsModalOpen(false)}
-        workspacePath={workspace.rootPath}
-        workspaceId={workspace.id}
-        workspaceKind={workspace.workspaceKind}
-        remoteConnectionId={isRemoteWorkspace(workspace) ? workspace.connectionId : null}
-        remoteSshHost={isRemoteWorkspace(workspace) ? workspace.sshHost : null}
-        targetKind="workspace"
-        title={t('nav.scheduledJobs.title')}
-        targetLabel={workspaceDisplayName}
-        targetDescription={workspace.rootPath}
-      />
+      {relatedPathsDialogOpen && (
+        <Suspense fallback={null}>
+          <WorkspaceRelatedPathsDialog
+            workspace={workspace}
+            isOpen={relatedPathsDialogOpen}
+            onClose={() => setRelatedPathsDialogOpen(false)}
+          />
+        </Suspense>
+      )}
+      {sessionBatchModalOpen && (
+        <Suspense fallback={null}>
+          <WorkspaceSessionBatchModal
+            isOpen={sessionBatchModalOpen}
+            onClose={() => setSessionBatchModalOpen(false)}
+            workspacePath={workspace.rootPath}
+            workspaceLabel={workspaceDisplayName}
+            remoteConnectionId={isRemoteWorkspace(workspace) ? workspace.connectionId : null}
+            remoteSshHost={isRemoteWorkspace(workspace) ? workspace.sshHost : null}
+          />
+        </Suspense>
+      )}
+      {scheduledJobsModalOpen && (
+        <Suspense fallback={null}>
+          <ScheduledJobsModal
+            isOpen={scheduledJobsModalOpen}
+            onClose={() => setScheduledJobsModalOpen(false)}
+            workspacePath={workspace.rootPath}
+            workspaceId={workspace.id}
+            workspaceKind={workspace.workspaceKind}
+            remoteConnectionId={isRemoteWorkspace(workspace) ? workspace.connectionId : null}
+            remoteSshHost={isRemoteWorkspace(workspace) ? workspace.sshHost : null}
+            targetKind="workspace"
+            title={t('nav.scheduledJobs.title')}
+            targetLabel={workspaceDisplayName}
+            targetDescription={workspace.rootPath}
+          />
+        </Suspense>
+      )}
     </div>
   );
 };

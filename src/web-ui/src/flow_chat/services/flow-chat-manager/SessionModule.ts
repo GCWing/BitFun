@@ -24,7 +24,10 @@ import {
   resolveSessionTitle,
 } from '../../utils/sessionTitle';
 import { buildCreateSessionRelationship } from '../../utils/sessionMetadata';
-import { consumeRecentHistorySessionOpenIntent } from '../sessionOpenIntent';
+import {
+  consumeRecentHistorySessionOpenIntent,
+  hasRenderableSessionContent,
+} from '../sessionOpenIntent';
 
 const log = createLogger('SessionModule');
 const pendingSessionCreations = new Map<string, Promise<string>>();
@@ -192,14 +195,6 @@ async function hydrateHistoricalSession(
       context.pendingHistoryLoads.delete(sessionId);
     }
   }
-}
-
-function hasRenderableSessionContent(session: Session): boolean {
-  return session.dialogTurns.some(turn =>
-    Boolean(turn.userMessage) ||
-    (turn.status === 'image_analyzing' && turn.modelRounds.length === 0) ||
-    turn.modelRounds.some(round => round.items.length > 0)
-  );
 }
 
 function shouldHydrateHistoricalSessionBeforeSwitch(session: Session | undefined): session is Session {

@@ -1,5 +1,7 @@
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { createLogger } from '@/shared/utils/logger';
+import { startupTrace } from '@/shared/utils/startupTrace';
+import { elapsedMs, nowMs } from '@/shared/utils/timing';
 import { dirnameAbsolutePath, expandedFoldersContains, pathsEquivalentFs } from '@/shared/utils/pathUtils';
 import type { FileSystemChangeEvent, FileSystemNode } from '@/tools/file-system/types';
 import { ExplorerModel } from '../model/ExplorerModel';
@@ -98,7 +100,7 @@ export class ExplorerController {
     excludePatterns: [],
   };
   private lastAppliedConfig: ExplorerControllerConfig | null = null;
-  private unwatch?: () => void;
+  private watchedPaths = new Map<string, () => void>();
   private pendingRefreshTimer?: ReturnType<typeof setTimeout>;
   private pendingRefreshPaths = new Set<string>();
   private queuedForceRefreshPaths = new Set<string>();
@@ -189,6 +191,7 @@ export class ExplorerController {
 
     this.model.expand(folderPath, nextExpanded);
     this.emit();
+    this.syncWatchers();
 
     if (!nextExpanded) {
       return;
@@ -200,7 +203,9 @@ export class ExplorerController {
       (node.childrenState === 'unresolved' || node.childrenState === 'error' || node.stale);
 
     if (needsResolve) {
-      void this.resolveDirectory(folderPath, true);
+      void this.resolveDirectory(folderPath, true).finally(() => {
+        this.syncWatchers();
+      });
     }
   }
 
@@ -209,12 +214,14 @@ export class ExplorerController {
     if (currentExpanded) {
       this.model.expand(folderPath, false);
       this.emit();
+      this.syncWatchers();
       return;
     }
 
     this.model.expand(folderPath, true);
     this.emit();
     await this.resolveDirectory(folderPath, true);
+    this.syncWatchers();
   }
 
   async expandFolderEnsure(folderPath: string): Promise<void> {
@@ -222,6 +229,7 @@ export class ExplorerController {
     if (!currentExpanded) {
       this.model.expand(folderPath, true);
       this.emit();
+      this.syncWatchers();
     }
 
     const node = this.model.getNode(folderPath);
@@ -232,6 +240,7 @@ export class ExplorerController {
 
     if (needsResolve) {
       await this.resolveDirectory(folderPath, true);
+      this.syncWatchers();
     }
   }
 
@@ -256,7 +265,13 @@ export class ExplorerController {
       return;
     }
 
+    const loadStartedAt = nowMs();
     const expectedGeneration = this.generation;
+    startupTrace.markPhase('file_explorer_root_load_start', {
+      generation: expectedGeneration,
+      autoLoad: this.config.autoLoad ?? true,
+      enableAutoWatch: this.config.enableAutoWatch ?? true,
+    });
     this.model.ensureRoot(rootPath);
     this.model.clearTransientErrors();
     this.model.setLoading(true);
@@ -265,18 +280,41 @@ export class ExplorerController {
     try {
       await this.resolveDirectory(rootPath, true, expectedGeneration, rootPath);
       if (!this.isGenerationCurrent(expectedGeneration, rootPath)) {
+        startupTrace.markPhase('file_explorer_root_load_cancelled', {
+          generation: expectedGeneration,
+          durationMs: elapsedMs(loadStartedAt),
+        });
         return;
       }
       this.model.setLoading(false);
       this.emit();
+      const rootNode = this.model.getNode(rootPath);
+      const durationMs = elapsedMs(loadStartedAt);
+      startupTrace.markPhase('file_explorer_root_load_end', {
+        generation: expectedGeneration,
+        durationMs,
+        childCount: rootNode?.childIds.length ?? 0,
+      });
+      log.debug('File explorer root load completed', {
+        durationMs,
+        childCount: rootNode?.childIds.length ?? 0,
+      });
     } catch (error) {
       if (!this.isGenerationCurrent(expectedGeneration, rootPath)) {
+        startupTrace.markPhase('file_explorer_root_load_cancelled', {
+          generation: expectedGeneration,
+          durationMs: elapsedMs(loadStartedAt),
+        });
         return;
       }
 
       const message = error instanceof Error ? error.message : String(error);
       this.model.setError(message);
       this.emit();
+      startupTrace.markPhase('file_explorer_root_load_failed', {
+        generation: expectedGeneration,
+        durationMs: elapsedMs(loadStartedAt),
+      });
       log.error('Failed to initialize explorer root', { rootPath, error });
     }
   }
@@ -328,6 +366,36 @@ export class ExplorerController {
     return Array.from(directories).sort(comparePathDepth);
   }
 
+  private getVisibleWatchPaths(rootPath: string): string[] {
+    const watchPaths = new Map<string, string>();
+    const addWatchPath = (path: string) => {
+      const normalized = path.replace(/\\/g, '/');
+      const isWindowsLike = /^[a-zA-Z]:/.test(normalized) || normalized.startsWith('//');
+      const key = isWindowsLike ? normalized.toLowerCase() : normalized;
+      watchPaths.set(key, path);
+    };
+
+    addWatchPath(rootPath);
+    for (const expandedPath of this.model.getExpandedFolders()) {
+      if (pathsEquivalentFs(expandedPath, rootPath)) {
+        continue;
+      }
+
+      const node = this.model.getNode(expandedPath);
+      if (node?.kind === 'directory') {
+        addWatchPath(node.path);
+      }
+    }
+
+    return Array.from(watchPaths.values()).sort(comparePathDepth);
+  }
+
+  private getWatchKey(path: string): string {
+    const normalized = path.replace(/\\/g, '/').replace(/\/+$/, '');
+    const isWindowsLike = /^[a-zA-Z]:/.test(normalized) || normalized.startsWith('//');
+    return isWindowsLike ? normalized.toLowerCase() : normalized;
+  }
+
   private async resolveDirectory(
     path: string,
     forceRefresh = false,
@@ -357,6 +425,16 @@ export class ExplorerController {
       return;
     }
 
+    const isRootDirectory = pathsEquivalentFs(canonicalPath, this.config.rootPath ?? '');
+    const resolveStartedAt = isRootDirectory ? nowMs() : 0;
+    if (isRootDirectory) {
+      startupTrace.markPhase('file_explorer_directory_resolve_start', {
+        isRoot: true,
+        generation: expectedGeneration,
+        forceRefresh,
+      });
+    }
+
     this.model.setDirectoryRefreshing(canonicalPath, true);
     this.emit();
 
@@ -368,6 +446,13 @@ export class ExplorerController {
 
       if (!this.isGenerationCurrent(expectedGeneration, expectedRootPath)) {
         this.model.setDirectoryRefreshing(canonicalPath, false);
+        if (isRootDirectory) {
+          startupTrace.markPhase('file_explorer_directory_resolve_cancelled', {
+            isRoot: true,
+            generation: expectedGeneration,
+            durationMs: elapsedMs(resolveStartedAt),
+          });
+        }
         return;
       }
 
@@ -376,9 +461,24 @@ export class ExplorerController {
         sortNodes(children, this.config.sortBy ?? 'name', this.config.sortOrder ?? 'asc')
       );
       this.emit();
+      if (isRootDirectory) {
+        startupTrace.markPhase('file_explorer_directory_resolve_end', {
+          isRoot: true,
+          generation: expectedGeneration,
+          durationMs: elapsedMs(resolveStartedAt),
+          childCount: children.length,
+        });
+      }
     } catch (error) {
       if (!this.isGenerationCurrent(expectedGeneration, expectedRootPath)) {
         this.model.setDirectoryRefreshing(canonicalPath, false);
+        if (isRootDirectory) {
+          startupTrace.markPhase('file_explorer_directory_resolve_cancelled', {
+            isRoot: true,
+            generation: expectedGeneration,
+            durationMs: elapsedMs(resolveStartedAt),
+          });
+        }
         return;
       }
 
@@ -388,6 +488,13 @@ export class ExplorerController {
         this.model.setError(message);
       }
       this.emit();
+      if (isRootDirectory) {
+        startupTrace.markPhase('file_explorer_directory_resolve_failed', {
+          isRoot: true,
+          generation: expectedGeneration,
+          durationMs: elapsedMs(resolveStartedAt),
+        });
+      }
       log.error('Failed to resolve explorer directory', { path: canonicalPath, error });
       throw error;
     } finally {
@@ -499,19 +606,39 @@ export class ExplorerController {
   }
 
   private syncWatchers(): void {
-    this.stopWatchers();
-
     const rootPath = this.config.rootPath;
     if (!rootPath || !this.config.enableAutoWatch) {
+      this.stopWatchers();
       return;
     }
 
-    this.unwatch = this.provider.watch(rootPath, (event) => this.handleFileChange(event));
+    const watchPaths = this.getVisibleWatchPaths(rootPath);
+    const nextKeys = new Set<string>();
+
+    for (const path of watchPaths) {
+      const key = this.getWatchKey(path);
+      nextKeys.add(key);
+      if (this.watchedPaths.has(key)) {
+        continue;
+      }
+      const unwatch = this.provider.watch(path, (event) => this.handleFileChange(event), { recursive: false });
+      this.watchedPaths.set(key, unwatch);
+    }
+
+    for (const [key, unwatch] of this.watchedPaths) {
+      if (nextKeys.has(key)) {
+        continue;
+      }
+      unwatch();
+      this.watchedPaths.delete(key);
+    }
   }
 
   private stopWatchers(): void {
-    this.unwatch?.();
-    this.unwatch = undefined;
+    for (const unwatch of this.watchedPaths.values()) {
+      unwatch();
+    }
+    this.watchedPaths.clear();
   }
 
   private resetForRoot(rootPath?: string): void {

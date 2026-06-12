@@ -5,6 +5,7 @@ import * as fsSync from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { performance as nodePerformance } from 'node:perf_hooks';
+import { fileURLToPath } from 'url';
 import {
   readPerformanceNow,
   readStartupTraceSnapshot,
@@ -21,6 +22,8 @@ import { openWorkspace } from '../../helpers/workspace-helper';
 
 const DEFAULT_PERF_SESSION_ID = 'perf-long-session-000';
 const MAX_PROJECT_SLUG_LEN = 120;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const LONG_SESSION_VIEWPORT_MIN_COVERAGE_RATIO = 0.7;
 const LONG_SESSION_VIEWPORT_MAX_BOTTOM_BLANK_PX = 64;
 const LONG_SESSION_VIEWPORT_MAX_BLANK_GAP_PX = 64;
@@ -38,6 +41,16 @@ type LongSessionPostVisibleInteraction =
   | 'scroll-down'
   | 'resize-window'
   | 'resize-window-width';
+
+function defaultBitfunHome(): string {
+  if (process.env.BITFUN_E2E_HOME) {
+    return process.env.BITFUN_E2E_HOME;
+  }
+  if (process.env.BITFUN_E2E_USE_REAL_PROFILE === '1') {
+    return process.env.BITFUN_HOME || path.join(os.homedir(), '.bitfun');
+  }
+  return path.resolve(__dirname, '..', '..', '.bitfun', 'runtime', 'home');
+}
 
 type LongSessionWindowRect = {
   x?: number;
@@ -758,7 +771,7 @@ async function ensurePerformanceWorkspace(startupPage: StartupPage): Promise<boo
     return ensureWorkspaceOpen(startupPage);
   }
 
-  const opened = await openWorkspace(targetWorkspace, { requireWorkspaceLabel: false });
+  const opened = await openWorkspace(targetWorkspace, { requireWorkspaceLabel: true });
   if (!opened) {
     throw new Error(`Performance workspace did not become active: ${targetWorkspace}`);
   }
@@ -808,7 +821,7 @@ async function readLongSessionMetadata(sessionId: string): Promise<LongSessionMe
 }
 
 async function findLongSessionMetadataPath(sessionId: string): Promise<string | null> {
-  const bitfunHome = process.env.BITFUN_HOME || path.join(os.homedir(), '.bitfun');
+  const bitfunHome = defaultBitfunHome();
   const workspaceCandidates = Array.from(new Set([
     process.env.E2E_TEST_WORKSPACE,
     path.resolve(process.cwd(), '..', '..'),

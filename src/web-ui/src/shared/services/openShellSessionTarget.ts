@@ -2,7 +2,7 @@ import type { SceneTabId } from '@/app/components/SceneBar/types';
 import { useSceneStore } from '@/app/stores/sceneStore';
 import { useTerminalSceneStore } from '@/app/stores/terminalSceneStore';
 import { createTerminalTab } from '@/shared/utils/tabUtils';
-import { getCachedTerminalPanelPosition } from '@/tools/terminal';
+import { getCachedTerminalPanelPosition } from '@/tools/terminal/services/terminalPanelPreferenceService';
 
 interface OpenShellSessionTargetOptions {
   sessionId: string;
