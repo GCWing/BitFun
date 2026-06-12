@@ -997,15 +997,15 @@ fn build_retry_message(outcome: &VerifyOutcome) -> String {
     match outcome.status {
         VerifyStatus::TimedOut => format!(
             "<system-reminder>\n\
-The verifier we ran for you timed out — it did not return a pass/fail signal:\n\
+The verifier we ran timed out — it did not return a pass/fail signal:\n\
 \n\
 $ {command}\n\
 (timed out after {ms}ms)\n\
 \n\
-Timeout means the command was too broad/slow, not that your changes are necessarily broken. Do one of:\n\
-  - Narrow the verification scope to the package(s) you actually touched. For Go use `go build ./path/to/changed/pkg/...` not `go build ./...`; for Cargo use `cargo check -p <crate>` not `--workspace`; for tsc add a smaller `-p` project.\n\
-  - If you believe your changes are correct, finalize without further verification.\n\
-Then re-emit your final answer. Do not just re-run the same broad command.\n\
+Timeout doesn't mean your changes are broken — the command was too slow to finish in the budget. Either:\n\
+  - Run a lighter check yourself: e.g. `go vet` instead of `go build`, a single test file instead of the full package, `tsc --noEmit` on one tsconfig instead of all. If it passes, finalize.\n\
+  - Or, if you believe your changes are correct, finalize without further verification.\n\
+Do not rerun the same command verbatim. Either pick a concretely lighter check or trust your edits.\n\
 </system-reminder>",
             command = outcome.command,
             ms = outcome.duration_ms,
@@ -1046,10 +1046,25 @@ This is your next signal — diagnose what is still wrong, fix it, and run the v
 /// Resolves the verification command for `workspace`. Priority:
 ///   1. `BITFUN_PATCH_VERIFY_CMD` env override (escape hatch for harnesses).
 ///   2. Project-defined targets: `make`/`just` `check|test|ci`.
-///   3. Language manifests: `go.mod` → `go build`, `Cargo.toml` → `cargo check`,
-///      `tsconfig.json` → `tsc --noEmit`, `package.json` scripts → `npm/pnpm/yarn`.
+///   3. Language manifests, **scoped to what `git diff` says actually
+///      changed**, not the whole workspace:
+///        - `go.mod`       → `go build` on the directory of each changed
+///          `.go` file (`go build ./pkg/foo ./pkg/bar`); skip if no `.go`
+///          files changed.
+///        - `Cargo.toml`   → `cargo check -p <crate>` for the crate(s)
+///          owning the changed `.rs` files; skip if no `.rs` files map
+///          to a workspace member.
+///        - `tsconfig.json`→ `tsc --noEmit -p .` (whole-project; scope
+///          per-tsconfig is a follow-up).
+///        - `package.json` → matching script via the lockfile-selected
+///          package manager.
 ///   4. Parse-only fallback over changed files (.py, .js/.mjs/.cjs, .go).
 /// Returns None if nothing applies — verification silently skips in that case.
+///
+/// Scoping is the difference between a 30s targeted build and a 6-minute
+/// whole-repo build. Whole-workspace targets used to be the default; for
+/// SWE-bench-class evaluations they ate the entire agent budget on
+/// monorepos like teleport.
 fn detect_verify_command(workspace: &std::path::Path) -> Option<String> {
     if let Ok(cmd) = std::env::var("BITFUN_PATCH_VERIFY_CMD") {
         let trimmed = cmd.trim();
@@ -1070,11 +1085,33 @@ fn detect_verify_command(workspace: &std::path::Path) -> Option<String> {
         return Some(format!("just {}", target));
     }
 
+    // Compute the change set once; later detectors use it both to scope the
+    // build/check and to power the parse-only fallback.
+    let changed = changed_files(workspace);
+
     if workspace.join("go.mod").exists() {
-        return Some("go build ./...".to_string());
+        let pkgs = scoped_go_packages(&changed);
+        if !pkgs.is_empty() {
+            return Some(format!("go build {}", pkgs.join(" ")));
+        }
+        // go.mod exists but no .go files changed — fall through rather than
+        // building the entire module just to satisfy detection.
     }
     if workspace.join("Cargo.toml").exists() {
-        return Some("cargo check --workspace --message-format=short".to_string());
+        let crates = scoped_cargo_crates(workspace, &changed);
+        if !crates.is_empty() {
+            let flags = crates
+                .iter()
+                .map(|name| format!("-p {}", shell_single_quote(name)))
+                .collect::<Vec<_>>()
+                .join(" ");
+            return Some(format!(
+                "cargo check {} --message-format=short",
+                flags
+            ));
+        }
+        // Cargo.toml present but no .rs files attributable to a workspace
+        // member — fall through.
     }
     if workspace.join("tsconfig.json").exists() {
         return Some("npx --no-install tsc --noEmit -p .".to_string());
@@ -1083,13 +1120,106 @@ fn detect_verify_command(workspace: &std::path::Path) -> Option<String> {
         return Some(cmd);
     }
 
-    let changed = changed_files(workspace);
     if !changed.is_empty() {
         if let Some(cmd) = build_parse_only_command(&changed) {
             return Some(cmd);
         }
     }
 
+    None
+}
+
+/// For each changed `.go` file, return its containing directory as a Go
+/// package target (`./path/to/dir`). De-duplicated and sorted. Empty if no
+/// `.go` files were changed — callers should treat that as "no Go gate".
+fn scoped_go_packages(files: &[String]) -> Vec<String> {
+    use std::collections::BTreeSet;
+    let mut dirs: BTreeSet<String> = BTreeSet::new();
+    for f in files {
+        if !f.to_ascii_lowercase().ends_with(".go") {
+            continue;
+        }
+        let path = std::path::Path::new(f);
+        if let Some(dir) = path.parent() {
+            let s = dir.to_string_lossy();
+            if s.is_empty() {
+                dirs.insert(".".to_string());
+            } else {
+                dirs.insert(format!("./{}", s));
+            }
+        }
+    }
+    dirs.into_iter().collect()
+}
+
+/// For each changed `.rs` file, walk up to the nearest `Cargo.toml` that
+/// declares a `[package].name` and return those crate names, deduplicated
+/// and sorted. Empty if no `.rs` files were changed or no owner could be
+/// resolved (e.g. file lives only under a virtual workspace root).
+fn scoped_cargo_crates(workspace: &std::path::Path, files: &[String]) -> Vec<String> {
+    use std::collections::BTreeSet;
+    let mut crates: BTreeSet<String> = BTreeSet::new();
+    for f in files {
+        if !f.to_ascii_lowercase().ends_with(".rs") {
+            continue;
+        }
+        let abs = workspace.join(f);
+        if let Some(name) = find_owning_crate_name(workspace, &abs) {
+            crates.insert(name);
+        }
+    }
+    crates.into_iter().collect()
+}
+
+fn find_owning_crate_name(
+    workspace: &std::path::Path,
+    file: &std::path::Path,
+) -> Option<String> {
+    let mut current = file.parent()?;
+    loop {
+        let cargo_toml = current.join("Cargo.toml");
+        if cargo_toml.exists() {
+            if let Some(name) = read_cargo_package_name(&cargo_toml) {
+                return Some(name);
+            }
+        }
+        if current == workspace {
+            return None;
+        }
+        current = current.parent()?;
+    }
+}
+
+/// Minimal, no-dep parser: returns the `name` declared under the first
+/// `[package]` table in `toml_path`, or None. Skips a virtual-workspace
+/// root that has only `[workspace]` and no `[package]`.
+fn read_cargo_package_name(toml_path: &std::path::Path) -> Option<String> {
+    let content = std::fs::read_to_string(toml_path).ok()?;
+    let mut in_package = false;
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        if let Some(rest) = trimmed.strip_prefix('[') {
+            in_package = rest.starts_with("package]") || rest == "package]";
+            continue;
+        }
+        if in_package {
+            if let Some(rest) = trimmed.strip_prefix("name") {
+                let rest = rest.trim_start();
+                if let Some(rest) = rest.strip_prefix('=') {
+                    let value = rest.trim();
+                    // Strip an inline comment after the value.
+                    let value = value.split('#').next().unwrap_or(value).trim();
+                    let stripped = value.trim_matches(|c: char| c == '"' || c == '\'');
+                    if !stripped.is_empty() {
+                        return Some(stripped.to_string());
+                    }
+                }
+            }
+        }
+    }
     None
 }
 
