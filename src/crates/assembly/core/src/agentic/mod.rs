@@ -30,7 +30,7 @@ pub(crate) mod subagent_runtime;
 pub mod fork_agent;
 
 pub(crate) mod remote_file_delivery;
-/// Round-boundary yield when user queues a message during an active turn
+/// Round-boundary injection support for steering/background updates
 pub mod round_preempt;
 
 // Image analysis module
@@ -64,9 +64,8 @@ pub use goal_mode::*;
 pub use image_analysis::{ImageAnalyzer, MessageEnhancer};
 pub use persistence::PersistenceManager;
 pub use round_preempt::{
-    DialogRoundInjectionInterrupt, DialogRoundInjectionSource, DialogRoundPreemptSource,
-    NoopDialogRoundInjectionSource, NoopDialogRoundPreemptSource, RoundInjection,
-    RoundInjectionKind, RoundInjectionTarget, SessionRoundInjectionBuffer, SessionRoundYieldFlags,
+    DialogRoundInjectionInterrupt, DialogRoundInjectionSource, NoopDialogRoundInjectionSource,
+    RoundInjection, RoundInjectionKind, RoundInjectionTarget, SessionRoundInjectionBuffer,
 };
 pub use session::*;
 pub use side_question::*;

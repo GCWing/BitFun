@@ -1,9 +1,7 @@
 //! Execution Engine Type Definitions
 
 use crate::agentic::core::Message;
-use crate::agentic::round_preempt::{
-    DialogRoundInjectionInterrupt, DialogRoundInjectionSource, DialogRoundPreemptSource,
-};
+use crate::agentic::round_preempt::{DialogRoundInjectionInterrupt, DialogRoundInjectionSource};
 use crate::agentic::tools::pipeline::SubagentParentInfo;
 use crate::agentic::tools::ToolRuntimeRestrictions;
 use crate::agentic::workspace::WorkspaceServices;
@@ -30,8 +28,6 @@ pub struct ExecutionContext {
     pub runtime_tool_restrictions: ToolRuntimeRestrictions,
     /// Workspace I/O services (filesystem + shell) injected into tools
     pub workspace_services: Option<WorkspaceServices>,
-    /// When set, engine may end the turn after a full model round if a user message was queued.
-    pub round_preempt: Option<Arc<dyn DialogRoundPreemptSource>>,
     /// When set, engine drains pending round injections at each round boundary
     /// and injects them into the dialog history without ending the turn.
     pub round_injection: Option<Arc<dyn DialogRoundInjectionSource>>,

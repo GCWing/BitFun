@@ -19,10 +19,7 @@ use crate::agentic::goal_mode::{
 };
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::init_agents_md::build_init_agents_md_user_input;
-use crate::agentic::round_preempt::{
-    DialogRoundInjectionSource, DialogRoundPreemptSource, SessionRoundInjectionBuffer,
-    SessionRoundYieldFlags,
-};
+use crate::agentic::round_preempt::{DialogRoundInjectionSource, SessionRoundInjectionBuffer};
 use crate::agentic::session::SessionManager;
 use bitfun_runtime_ports::{ThreadGoal, MAX_THREAD_GOAL_AUTO_CONTINUATIONS};
 use log::{debug, info, warn};
@@ -92,8 +89,6 @@ pub struct DialogScheduler {
     goal_continuation_abort: Arc<SessionAbortFlags>,
     /// Cloneable sender given to ConversationCoordinator for turn outcome notifications
     outcome_tx: mpsc::Sender<(String, TurnOutcome)>,
-    /// When a user submits while `Processing`, engine yields after the current model round.
-    round_yield_flags: Arc<SessionRoundYieldFlags>,
     /// Per-session FIFO buffer of round injections drained at round boundaries
     /// by the engine and injected into the running dialog turn.
     round_injection_buffer: Arc<SessionRoundInjectionBuffer>,
@@ -119,7 +114,6 @@ impl DialogScheduler {
             suppressed_cancelled_replies: Arc::new(DialogReplySuppressionSet::default()),
             goal_continuation_abort: Arc::new(SessionAbortFlags::default()),
             outcome_tx,
-            round_yield_flags: Arc::new(SessionRoundYieldFlags::default()),
             round_injection_buffer: Arc::new(SessionRoundInjectionBuffer::default()),
         });
 
@@ -134,11 +128,6 @@ impl DialogScheduler {
     /// Returns a sender to give to ConversationCoordinator for turn outcome notifications.
     pub fn outcome_sender(&self) -> mpsc::Sender<(String, TurnOutcome)> {
         self.outcome_tx.clone()
-    }
-
-    /// Pass to [`ConversationCoordinator::set_round_preempt_source`](super::coordinator::ConversationCoordinator::set_round_preempt_source).
-    pub fn preempt_monitor(&self) -> Arc<dyn DialogRoundPreemptSource> {
-        self.round_yield_flags.clone()
     }
 
     /// Pass to [`ConversationCoordinator::set_round_injection_source`](super::coordinator::ConversationCoordinator::set_round_injection_source).
@@ -424,9 +413,8 @@ impl DialogScheduler {
     ///
     /// - Session idle, queue empty → dispatched immediately.
     /// - Session idle, queue non-empty → enqueued then highest-priority queued message dispatched.
-    /// - Session processing → queued up to the runtime-owned queue limit. For interactive sources
-    ///   (desktop, CLI, bot, …), also requests a yield after the current model round so
-    ///   the queued message can start sooner than a full multi-round turn.
+    /// - Session processing → queued up to the runtime-owned queue limit and dispatched after
+    ///   the current turn completes.
     /// - Session error → queue cleared, dispatched immediately.
     ///
     /// Returns `Err(String)` if the queue is full or the coordinator returns an error.
@@ -579,14 +567,11 @@ impl DialogScheduler {
                 Ok(outcome)
             }
 
-            DialogSubmitQueueAction::EnqueueForActiveTurn { request_yield } => {
+            DialogSubmitQueueAction::EnqueueForActiveTurn => {
                 let accepted_agent_type = queued_turn.agent_type.clone();
                 self.enqueue(&session_id, queued_turn)?;
                 self.record_last_submitted_agent_type(&session_id, &accepted_agent_type)
                     .await;
-                if request_yield {
-                    self.round_yield_flags.request_yield(&session_id);
-                }
                 Ok(DialogSubmitOutcome::Queued {
                     session_id,
                     turn_id: resolved_turn_id,
@@ -896,9 +881,6 @@ impl DialogScheduler {
                 self.active_turns.contains(&session_id),
             );
 
-            if lifecycle_plan.clear_round_yield {
-                self.round_yield_flags.clear(&session_id);
-            }
             // Only drop steering messages targeted at the *finished* turn. We
             // must NOT clear the entire session buffer here: a user might have
             // legitimately submitted steering against a brand-new follow-up
@@ -1429,23 +1411,18 @@ mod tests {
     }
 
     #[test]
-    fn remote_queue_policy_preserves_interactive_preempt_and_confirmation_boundary() {
+    fn remote_queue_policy_preserves_confirmation_boundary() {
         let remote = DialogSubmissionPolicy::for_source(DialogTriggerSource::RemoteRelay);
         assert_eq!(remote.queue_priority, DialogQueuePriority::Normal);
         assert!(remote.skip_tool_confirmation);
-        assert!(bitfun_runtime_ports::dialog_policy_may_preempt(&remote));
 
         let bot = DialogSubmissionPolicy::for_source(DialogTriggerSource::Bot);
         assert_eq!(bot.queue_priority, DialogQueuePriority::Normal);
         assert!(bot.skip_tool_confirmation);
-        assert!(bitfun_runtime_ports::dialog_policy_may_preempt(&bot));
 
         let agent_session = DialogSubmissionPolicy::for_source(DialogTriggerSource::AgentSession);
         assert_eq!(agent_session.queue_priority, DialogQueuePriority::Low);
         assert!(agent_session.skip_tool_confirmation);
-        assert!(!bitfun_runtime_ports::dialog_policy_may_preempt(
-            &agent_session
-        ));
     }
 
     #[test]

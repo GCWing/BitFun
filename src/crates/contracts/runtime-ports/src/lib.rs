@@ -791,18 +791,7 @@ pub enum DialogSubmitQueueAction {
     StartImmediately,
     ClearQueueAndStartImmediately,
     EnqueueThenStartNext,
-    EnqueueForActiveTurn { request_yield: bool },
-}
-
-pub const fn dialog_policy_may_preempt(policy: &DialogSubmissionPolicy) -> bool {
-    matches!(
-        policy.trigger_source,
-        DialogTriggerSource::DesktopUi
-            | DialogTriggerSource::DesktopApi
-            | DialogTriggerSource::Cli
-            | DialogTriggerSource::RemoteRelay
-            | DialogTriggerSource::Bot
-    )
+    EnqueueForActiveTurn,
 }
 
 pub const fn resolve_dialog_submit_queue_action(
@@ -818,9 +807,7 @@ pub const fn resolve_dialog_submit_queue_action(
                 DialogSubmitQueueAction::StartImmediately
             }
         }
-        DialogSessionStateFact::Processing => DialogSubmitQueueAction::EnqueueForActiveTurn {
-            request_yield: dialog_policy_may_preempt(&facts.policy),
-        },
+        DialogSessionStateFact::Processing => DialogSubmitQueueAction::EnqueueForActiveTurn,
     }
 }
 
@@ -893,13 +880,6 @@ pub struct RoundInjection {
     pub content: String,
     pub display_content: String,
     pub created_at: std::time::SystemTime,
-}
-
-/// Observes whether the current dialog turn should end after the latest model
-/// round so a queued user message can start as a new turn.
-pub trait DialogRoundPreemptSource: Send + Sync {
-    fn should_yield_after_round(&self, session_id: &str) -> bool;
-    fn clear_yield_after_round(&self, session_id: &str);
 }
 
 /// Observes round-boundary injections for a given running turn.
@@ -1485,10 +1465,8 @@ mod tests {
     #[test]
     fn dialog_submit_queue_action_preserves_current_scheduler_routing_policy() {
         let remote = DialogSubmissionPolicy::for_source(DialogTriggerSource::RemoteRelay);
-        assert!(dialog_policy_may_preempt(&remote));
 
         let agent_session = DialogSubmissionPolicy::for_source(DialogTriggerSource::AgentSession);
-        assert!(!dialog_policy_may_preempt(&agent_session));
 
         assert_eq!(
             resolve_dialog_submit_queue_action(DialogSubmitQueueFacts {
@@ -1528,9 +1506,7 @@ mod tests {
                 queue_has_items: false,
                 policy: remote,
             }),
-            DialogSubmitQueueAction::EnqueueForActiveTurn {
-                request_yield: true
-            }
+            DialogSubmitQueueAction::EnqueueForActiveTurn
         );
         assert_eq!(
             resolve_dialog_submit_queue_action(DialogSubmitQueueFacts {
@@ -1538,9 +1514,7 @@ mod tests {
                 queue_has_items: false,
                 policy: agent_session,
             }),
-            DialogSubmitQueueAction::EnqueueForActiveTurn {
-                request_yield: false
-            }
+            DialogSubmitQueueAction::EnqueueForActiveTurn
         );
     }
 

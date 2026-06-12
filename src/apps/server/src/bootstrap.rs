@@ -120,7 +120,6 @@ pub async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<ServerA
     let scheduler =
         coordination::DialogScheduler::new(coordinator.clone(), session_manager.clone());
     coordinator.set_scheduler_notifier(scheduler.outcome_sender());
-    coordinator.set_round_preempt_source(scheduler.preempt_monitor());
     coordinator.set_round_injection_source(scheduler.round_injection_monitor());
     coordination::set_global_scheduler(scheduler.clone());
 

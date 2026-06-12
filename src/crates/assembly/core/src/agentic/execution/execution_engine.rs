@@ -3,7 +3,7 @@
 //! Executes complete dialog turns, managing loops of multiple model rounds
 
 use super::round_executor::RoundExecutor;
-use super::types::{ExecutionContext, ExecutionResult, RoundContext, RoundResult};
+use super::types::{ExecutionContext, ExecutionResult, RoundContext};
 use crate::agentic::agents::{
     build_prompt_context_for_workspace, get_agent_registry, PrependedPromptReminders,
     PromptBuilder, PromptBuilderContext, RuntimeContextNeeds, ToolListingSections,
@@ -245,9 +245,6 @@ pub struct ExecutionEngine {
 }
 
 impl ExecutionEngine {
-    const FINALIZE_AFTER_TOOL_USE_REMINDER: &'static str = "Tool execution for this turn has already completed, but the turn is ending at this round boundary. Do not call any more tools. Provide the final response to the user based on the tool results already available.";
-    const FORCE_TEXT_ONLY_REMINDER: &'static str = "STOP. Tool calls are disabled for this final turn. Respond ONLY with a plain-text answer summarizing what you have done and the result for the user. Do not output tool call syntax of any kind.";
-
     pub fn new(
         round_executor: Arc<RoundExecutor>,
         event_queue: Arc<EventQueue>,
@@ -354,26 +351,6 @@ impl ExecutionEngine {
         }
 
         counts.values().all(|&count| count >= 2)
-    }
-
-    fn assistant_has_tool_calls(message: &Message) -> bool {
-        matches!(
-            &message.content,
-            MessageContent::Mixed { tool_calls, .. } if !tool_calls.is_empty()
-        )
-    }
-
-    fn has_tool_result_after_last_assistant(messages: &[Message]) -> bool {
-        let Some(last_assistant_index) = messages
-            .iter()
-            .rposition(|message| message.role == MessageRole::Assistant)
-        else {
-            return false;
-        };
-
-        messages[last_assistant_index + 1..]
-            .iter()
-            .any(|message| matches!(message.content, MessageContent::ToolResult { .. }))
     }
 
     /// Emergency truncation: drop oldest API rounds (assistant+tool pairs)
@@ -845,71 +822,6 @@ impl ExecutionEngine {
             .iter()
             .copied()
             .collect()
-    }
-
-    /// Synthesize one extra finalize round with tools disabled, returning the
-    /// resulting assistant message + metadata. Used by both the
-    /// "summarize tool results" and "force text after thinking-only" paths.
-    #[allow(clippy::too_many_arguments)]
-    async fn run_finalize_round(
-        &self,
-        ai_client: Arc<crate::infrastructure::ai::AIClient>,
-        context: &ExecutionContext,
-        agent_type: String,
-        round_number: usize,
-        execution_context_vars: &HashMap<String, String>,
-        primary_supports_image_understanding: bool,
-        prepended_reminders: &[&str],
-        messages: &[Message],
-        reminder_text: &str,
-        context_window: usize,
-    ) -> BitFunResult<RoundResult> {
-        let mut final_ai_messages = Self::build_ai_messages_for_send(
-            messages,
-            &ai_client.config.format,
-            context
-                .workspace
-                .as_ref()
-                .map(|workspace| workspace.root_path()),
-            &context.dialog_turn_id,
-            primary_supports_image_understanding,
-            prepended_reminders,
-        )
-        .await?;
-        final_ai_messages.push(AIMessage::user(reminder_text.to_string()));
-
-        let round_context = RoundContext {
-            session_id: context.session_id.clone(),
-            subagent_parent_info: context.subagent_parent_info.clone(),
-            dialog_turn_id: context.dialog_turn_id.clone(),
-            turn_index: context.turn_index,
-            round_number,
-            workspace: context.workspace.clone(),
-            messages: messages.to_vec(),
-            available_tools: Vec::new(),
-            collapsed_tools: Vec::new(),
-            unlocked_collapsed_tools: Vec::new(),
-            model_name: ai_client.config.model.clone(),
-            agent_type,
-            context_vars: execution_context_vars.clone(),
-            delegation_policy: context.delegation_policy,
-            runtime_tool_restrictions: context.runtime_tool_restrictions.clone(),
-            steering_interrupt: None,
-            cancellation_token: CancellationToken::new(),
-            workspace_services: context.workspace_services.clone(),
-            recover_partial_on_cancel: context.recover_partial_on_cancel,
-        };
-
-        // Tools are disabled here (None) — model must respond in plain text.
-        self.round_executor
-            .execute_round(
-                ai_client,
-                round_context,
-                final_ai_messages,
-                None,
-                Some(context_window),
-            )
-            .await
     }
 
     async fn build_ai_messages_for_send(
@@ -2710,10 +2622,9 @@ impl ExecutionEngine {
 
             // User-steering messages submitted while this turn is running: drain and inject
             // them as user messages into the working history before starting the next round
-            // (Codex-style mid-turn injection). This does NOT end the current turn, in
-            // contrast with the `round_preempt` path below which finalizes the turn so a
-            // queued *new turn* can take over. If the model wanted to finish but the user
-            // steered, we keep the turn running so the steering message gets a response.
+            // (Codex-style mid-turn injection). This does NOT end the current turn: if the
+            // model wanted to finish but the user steered, we keep the turn running so the
+            // steering message gets a response.
             let mut injection_applied = false;
             if let Some(source) = context.round_injection.as_ref() {
                 let pending = source.take_pending(&context.session_id, &context.dialog_turn_id);
@@ -2878,23 +2789,6 @@ impl ExecutionEngine {
                 }
             }
 
-            // Queued user message while this turn was running: stop after a full model round.
-            // The round output has already been reflected in the in-memory message caches.
-            // No special deferral for tool-confirmation phases: we do not require the user to
-            // finish confirming before this boundary check runs; the check applies as soon as
-            // this `execute_round` completes (same as any other round).
-            if let Some(preempt) = context.round_preempt.as_ref() {
-                if preempt.should_yield_after_round(&context.session_id) {
-                    preempt.clear_yield_after_round(&context.session_id);
-                    info!(
-                        "Yielding dialog turn after model round (queued user message): session_id={}, dialog_turn_id={}, round_index={}",
-                        context.session_id, context.dialog_turn_id, round_index
-                    );
-                    finalization_reason = Some("queued_user_message");
-                    break;
-                }
-            }
-
             // Check if cancellation was requested after each round. Tokens stay
             // registered until final cleanup so early cancellation can be
             // observed by the first round.
@@ -2932,111 +2826,11 @@ impl ExecutionEngine {
         }
 
         // P1-6: Track the actual termination reason for downstream reporting.
-        // Defaults to "complete" (model produced a final answer naturally) and
-        // is overridden by finalize / fallback paths below.
-        let mut effective_finish_reason: &'static str = match finalization_reason {
+        // Defaults to "complete" (model produced a final answer naturally).
+        let effective_finish_reason: &'static str = match finalization_reason {
             Some(r) => r,
             None => "complete",
         };
-        let mut finalize_fallback_text_used = false;
-
-        if let Some(reason) = finalization_reason {
-            // If the turn yielded after tool use, ask the model to summarize
-            // tool results before the next queued user message takes over.
-            let needs_finalize_after_tool_use = reason == "queued_user_message"
-                && messages
-                    .iter()
-                    .rev()
-                    .find(|message| message.role == MessageRole::Assistant)
-                    .is_some_and(Self::assistant_has_tool_calls)
-                && Self::has_tool_result_after_last_assistant(&messages);
-
-            if needs_finalize_after_tool_use {
-                info!(
-                    "Finalizing dialog turn: session_id={}, turn_id={}, reason={}",
-                    context.session_id, context.dialog_turn_id, reason
-                );
-
-                let final_round_result = self
-                    .run_finalize_round(
-                        ai_client.clone(),
-                        &context,
-                        agent_type.clone(),
-                        completed_rounds,
-                        &execution_context_vars,
-                        primary_supports_image_understanding,
-                        &prepended_reminders,
-                        &messages,
-                        Self::FINALIZE_AFTER_TOOL_USE_REMINDER,
-                        context_window,
-                    )
-                    .await?;
-
-                let mut accepted =
-                    !Self::assistant_has_tool_calls(&final_round_result.assistant_message);
-                let mut chosen_assistant_message: Option<Message> = None;
-                let mut chosen_usage: Option<crate::util::types::ai::GeminiUsage> =
-                    final_round_result.usage.clone();
-
-                if accepted {
-                    chosen_assistant_message = Some(final_round_result.assistant_message.clone());
-                } else {
-                    // P1-10: First finalize round still returned tool calls
-                    // (rare; tools were not provided, but model hallucinated).
-                    // One last attempt with a stricter text-only reminder.
-                    warn!(
-                        "Finalize round still returned tool calls; retrying with text-only reminder: session_id={}, turn_id={}",
-                        context.session_id, context.dialog_turn_id
-                    );
-                    let retry_result = self
-                        .run_finalize_round(
-                            ai_client.clone(),
-                            &context,
-                            agent_type.clone(),
-                            completed_rounds,
-                            &execution_context_vars,
-                            primary_supports_image_understanding,
-                            &prepended_reminders,
-                            &messages,
-                            Self::FORCE_TEXT_ONLY_REMINDER,
-                            context_window,
-                        )
-                        .await?;
-                    finalize_fallback_text_used = true;
-                    if Self::assistant_has_tool_calls(&retry_result.assistant_message) {
-                        warn!(
-                            "Text-only retry also returned tool calls; keeping prior messages: session_id={}, turn_id={}",
-                            context.session_id, context.dialog_turn_id
-                        );
-                    } else {
-                        accepted = true;
-                        chosen_usage = retry_result.usage.clone();
-                        chosen_assistant_message = Some(retry_result.assistant_message);
-                    }
-                }
-
-                if let Some(msg) = chosen_assistant_message {
-                    completed_rounds += 1;
-                    if let Some(usage) = chosen_usage {
-                        last_usage = Some(usage);
-                    }
-                    messages.push(msg.clone());
-                    if let Err(e) = self
-                        .session_manager
-                        .add_message(&context.session_id, msg)
-                        .await
-                    {
-                        warn!("Failed to update final assistant message in memory: {}", e);
-                    }
-                }
-
-                if !accepted {
-                    effective_finish_reason = "finalize_failed";
-                } else if finalize_fallback_text_used {
-                    effective_finish_reason = "finalize_text_only_forced";
-                }
-            }
-        }
 
         let duration_ms = elapsed_ms_u64(start_time);
 
@@ -3186,7 +2980,7 @@ impl ExecutionEngine {
 #[cfg(test)]
 mod tests {
     use super::{ContextHealthSnapshot, ExecutionEngine};
-    use crate::agentic::core::{Message, MessageRole, ToolCall, ToolResult};
+    use crate::agentic::core::{Message, MessageRole, ToolResult};
     use crate::service::config::types::AIConfig;
     use crate::service::config::types::AIModelConfig;
     use crate::util::types::ToolDefinition;
@@ -3482,60 +3276,6 @@ mod tests {
         assert_eq!(snapshot.repeated_tool_signature_count, 0);
         assert_eq!(snapshot.consecutive_failed_commands, 2);
         assert_eq!(snapshot.compression_failure_count, 2);
-    }
-
-    #[test]
-    fn assistant_has_tool_calls_detects_mixed_tool_message() {
-        let message = Message::assistant_with_tools(
-            String::new(),
-            vec![ToolCall {
-                tool_id: "tool-1".to_string(),
-                tool_name: "Read".to_string(),
-                arguments: json!({ "path": "README.md" }),
-                raw_arguments: None,
-                is_error: false,
-                recovered_from_truncation: false,
-            }],
-        );
-
-        assert!(ExecutionEngine::assistant_has_tool_calls(&message));
-        assert!(!ExecutionEngine::assistant_has_tool_calls(
-            &Message::assistant("done".to_string())
-        ));
-    }
-
-    #[test]
-    fn detects_tool_result_after_last_assistant() {
-        let assistant = Message::assistant_with_tools(
-            String::new(),
-            vec![ToolCall {
-                tool_id: "tool-1".to_string(),
-                tool_name: "Read".to_string(),
-                arguments: json!({ "path": "README.md" }),
-                raw_arguments: None,
-                is_error: false,
-                recovered_from_truncation: false,
-            }],
-        );
-        let tool_result = Message::tool_result(ToolResult {
-            tool_id: "tool-1".to_string(),
-            tool_name: "Read".to_string(),
-            result: json!({ "content": "hello" }),
-            result_for_assistant: Some("hello".to_string()),
-            is_error: false,
-            duration_ms: Some(1),
-            image_attachments: None,
-        });
-
-        assert!(ExecutionEngine::has_tool_result_after_last_assistant(&[
-            Message::user("read it".to_string()),
-            assistant.clone(),
-            tool_result,
-        ]));
-        assert!(!ExecutionEngine::has_tool_result_after_last_assistant(&[
-            Message::user("read it".to_string()),
-            assistant,
-        ]));
     }
 
     fn command_result(tool_name: &str, success: bool, exit_code: Option<i32>) -> Message {

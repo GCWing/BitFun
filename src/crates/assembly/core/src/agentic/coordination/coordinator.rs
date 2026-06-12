@@ -33,7 +33,7 @@ use crate::agentic::remote_file_delivery::{
     needs_computer_links_for_source, remote_file_delivery_reminder,
     TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY,
 };
-use crate::agentic::round_preempt::{DialogRoundInjectionSource, DialogRoundPreemptSource};
+use crate::agentic::round_preempt::DialogRoundInjectionSource;
 use crate::agentic::session::SessionManager;
 use crate::agentic::side_question::build_btw_user_input;
 use crate::agentic::skill_agent_snapshot::{
@@ -513,8 +513,6 @@ pub struct ConversationCoordinator {
     active_subagent_executions: Arc<DashMap<String, ActiveSubagentExecution>>,
     /// Notifies DialogScheduler of turn outcomes; injected after construction
     scheduler_notify_tx: OnceLock<mpsc::Sender<(String, TurnOutcome)>>,
-    /// Round-boundary yield (same source as scheduler's yield flags); injected after construction
-    round_preempt_source: OnceLock<Arc<dyn DialogRoundPreemptSource>>,
     /// Round-boundary user steering source (mid-turn user message injection); injected after construction
     round_injection_source: OnceLock<Arc<dyn DialogRoundInjectionSource>>,
     /// In-flight dialog turn tracker per session, used to serialize cancel→start
@@ -1035,7 +1033,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             subagent_timeout_registry: Arc::new(RwLock::new(HashMap::new())),
             active_subagent_executions: Arc::new(DashMap::new()),
             scheduler_notify_tx: OnceLock::new(),
-            round_preempt_source: OnceLock::new(),
             round_injection_source: OnceLock::new(),
             active_turns_per_session: Arc::new(DashMap::new()),
             thread_goal_runtime: Arc::new(ThreadGoalRuntime::new()),
@@ -1050,11 +1047,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     /// Called once during app initialization after the scheduler is created.
     pub fn set_scheduler_notifier(&self, tx: mpsc::Sender<(String, TurnOutcome)>) {
         let _ = self.scheduler_notify_tx.set(tx);
-    }
-
-    /// Wire round-boundary preempt (typically the scheduler's [`SessionRoundYieldFlags`](crate::agentic::round_preempt::SessionRoundYieldFlags)).
-    pub fn set_round_preempt_source(&self, source: Arc<dyn DialogRoundPreemptSource>) {
-        let _ = self.round_preempt_source.set(source);
     }
 
     /// Wire round-boundary injection source (typically the scheduler's
@@ -2613,7 +2605,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             skip_tool_confirmation: true,
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
             workspace_services: manual_workspace_services,
-            round_preempt: None,
             round_injection: None,
             recover_partial_on_cancel: false,
         };
@@ -3212,7 +3203,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             skip_tool_confirmation: submission_policy.skip_tool_confirmation,
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
             workspace_services,
-            round_preempt: self.round_preempt_source.get().cloned(),
             round_injection: self.round_injection_source.get().cloned(),
             recover_partial_on_cancel: false,
         };
@@ -4455,7 +4445,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             skip_tool_confirmation: true,
             runtime_tool_restrictions,
             workspace_services: subagent_services,
-            round_preempt: self.round_preempt_source.get().cloned(),
             // Subagents are autonomous; user steering is targeted at top-level
             // dialog turns only. Leave None so we don't intercept buffer entries
             // that belong to a different (parent) session/turn.
