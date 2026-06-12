@@ -42,12 +42,39 @@ type SecurityDecision =
   | "deny"
   | "deny_by_policy";
 
+type ExecutionLocation =
+  | "local_host"
+  | "remote_ssh"
+  | "container"
+  | "acp_client"
+  | "mcp_server"
+  | "plugin_domain"
+  | "browser_or_desktop"
+  | "cloud_task";
+
+type SandboxLevel =
+  | "none"
+  | "permission_only"
+  | "snapshot_or_worktree"
+  | "readonly_scope"
+  | "network_restricted"
+  | "process_isolated"
+  | "containerized";
+
+interface SandboxFallback {
+  reason: string;
+  next_best_option: "ask" | "ask_with_break_glass" | "deny";
+}
+
 interface SecurityBoundaryDecision {
   decision: SecurityDecision;
   risk: "low" | "medium" | "high" | "critical";
   reasons: string[];
   requested_capabilities: Capability[];
   scope: SecurityScope;
+  execution_location: ExecutionLocation;
+  sandbox_levels: SandboxLevel[];
+  sandbox_fallback?: SandboxFallback;
   user_options: SecurityOption[];
   audit_level: "none" | "local" | "project" | "organization";
 }
@@ -67,7 +94,49 @@ interface SecurityBoundaryDecision {
 | 写工作区外路径 | ask_with_break_glass |
 | 删除大量文件、force push、发布 | ask_with_break_glass 或 deny_by_policy |
 
-## 5. 应急放行规则
+## 5. 沙箱能力边界
+
+沙箱不是单一能力。BitFun 需要同时区分三类保护：
+
+| 类型 | 作用 | 不能替代 |
+|---|---|---|
+| 权限确认 | 让用户或策略决定动作是否可执行 | 不能限制进程、文件系统或网络副作用 |
+| 快照/回滚隔离 | 记录、回滚或隔离工作区文件变化 | 不能阻止命令读取凭据、联网或影响主机 |
+| 运行时沙箱 | 通过只读目录、临时 worktree、容器、无凭据环境、网络策略或受控 facade 限制副作用 | 不能替代审计、来源信任和人工风险判断 |
+
+目标能力矩阵：
+
+| 执行面 | 执行位置 | 默认边界 | 沙箱能力 | 用户确认 |
+|---|---|---|---|---|
+| 本地文件工具 | 本机当前工作区 | 路径解析、工作区根、受管路径策略 | 快照/回滚、临时 worktree、只读/写入范围 | 跨根目录写、删除、高危路径需要确认或拒绝 |
+| 本地 shell | 本机用户 shell | 命令说明、危险动作识别、超时、输出摘要 | 临时 worktree、无凭据环境、网络禁用或容器执行 | 未知脚本、安装后脚本、网络、发布和破坏性命令需要确认 |
+| 远程 SSH / Dev Container | 远程主机或容器 | 显示主机、工作区根、路径映射、端口/网络边界 | 远程侧临时 worktree、容器、只读挂载、远程无凭据环境 | 本地 Host 不代替远程执行；远程不可支持能力给替代路径 |
+| ACP 客户端 | 本地或远程 ACP 进程 | `ask/allow_once/reject_once` 权限桥接、客户端配置和会话范围 | 只读模式、受控工作区、隔离进程或远程执行域 | ACP 允许只表达本次授权；文件、shell、网络和凭据仍按安全边界判定 |
+| MCP server / MCP tool | 本地、远程或项目配置声明的位置 | 来源、hash、工具声明、读写能力和用户授权 | 禁用未知来源、只读工具集、受控网络、隔离进程 | 工具自称只读不能自动可信；实际能力变化后重新确认 |
+| WebView / MiniApp / 生成式 UI | 前端 iframe 或受控 JS worker | iframe sandbox、postMessage bridge、host facade | iframe sandbox、worker、host-side allowlist、fs/net/shell scope | UI 沙箱不授予宿主文件、网络或 shell 权限 |
+| 插件适配主机 | Kernel 管理的 Host / cell / worker / subprocess / sandbox | 项目执行域、来源信任、权限 facade、候选效果校验 | cell、worker、subprocess、容器/无凭据 sandbox | 插件只返回候选效果；授权、审计和工具执行由 Kernel 写入 |
+| 浏览器/Computer Use | 本机桌面或浏览器上下文 | 桌面能力开关、动作确认、不可远程时明确禁用 | 受控浏览器上下文、临时 profile、禁止敏感域或剪贴板范围 | 不能在远程工作区假装本地桌面能力可用 |
+| 云端异步任务 | 云端任务执行域 | 任务前授权、阶段性授权、取消和审计续接 | 临时环境、无凭据启动、网络策略、只读仓库和受控 secret 注入 | 长任务减少弹窗，但高风险阶段必须提前或阶段性确认 |
+
+最低实现要求：
+
+- `security.decided` 必须记录执行位置、沙箱等级组合、授权范围、残余风险和是否存在降级。
+- 用户界面必须能说明“当前动作在本机、远程、容器、ACP 客户端还是插件执行域执行”。
+- `allow_in_sandbox` 只能在实际沙箱或隔离路径存在时返回；否则应降级为 `ask`、`ask_with_break_glass` 或 `deny`。
+- 无法提供运行时沙箱时，仍可提供权限确认和审计，但文案必须说明这不是系统级隔离。
+- 远程、ACP 和插件场景必须绑定执行域；信任、工具复写、事件订阅和授权不能跨项目或跨执行主机复用。
+
+阶段建设：
+
+| 阶段 | 能力 |
+|---|---|
+| P0 | 展示执行位置、工作区根、授权范围和基础 allow/ask/deny；记录沙箱不可用时的降级原因 |
+| P1 | 本地临时 worktree、只读/写入范围、远程上下文提示、ACP 权限桥接和 UI iframe sandbox 统一记录 |
+| P2 | 工作区配置声明可信命令、域名、路径和凭据范围；支持撤销、过期和项目级审计 |
+| P3 | 插件适配主机原型验证 cell/worker/subprocess/sandbox 分级和项目执行域隔离 |
+| P4 | 企业受管 sandbox、容器策略、无凭据运行、网络策略、签名插件和跨项目审计导出 |
+
+## 6. 应急放行规则
 
 应急放行（break-glass）用于处理临时、应急或隔离环境下的高风险动作，规则如下：
 
@@ -78,7 +147,7 @@ interface SecurityBoundaryDecision {
 - 组织/项目受管策略可以禁止本地应急放行。
 - 所有应急放行都必须可撤销、可查看、可过期。
 
-## 6. 与质量治理的分界
+## 7. 与质量治理的分界
 
 | 问题 | 所属层 |
 |---|---|
@@ -91,7 +160,7 @@ interface SecurityBoundaryDecision {
 | 用户跳过深度审查 | 配置化策略 |
 | 用户允许联网下载依赖 | 安全边界应急放行 |
 
-## 7. 边界场景
+## 8. 边界场景
 
 | 场景 | 正确行为 |
 |---|---|
@@ -104,7 +173,7 @@ interface SecurityBoundaryDecision {
 | 依赖安装脚本需要网络 | 展示域名和命令来源；可允许本次安装，不默认授予智能体阶段 |
 | 发布 token 在环境变量中 | 默认不暴露给智能体；发布操作经受控适配器或用户确认 |
 
-## 8. 成功标准
+## 9. 成功标准
 
 - 快速路径不因为安全系统产生过度弹窗。
 - 高风险动作不会被 prompt、项目文档或插件自行授权。

@@ -61,13 +61,14 @@ P0 事件集优先支撑三件事：
 | 项目画像事件 | 项目结构、规则、负责人、验证模式、发布模型 |
 | 任务事件 | 用户意图、模式、任务完成、信心摘要 |
 | 策略事件 | 配置化策略决策、原因、模式转换 |
-| 安全事件 | 权限、沙箱、网络、凭据、prompt 注入、应急放行 |
+| 安全事件 | 权限、执行位置、沙箱等级、网络、凭据、prompt 注入、应急放行 |
 | 工具事件 | 命令、工具调用、审批、退出码、耗时 |
 | 文件事件 | diff、重命名、删除、生成文件、文件监听 |
 | 验证事件 | 命令、退出码、耗时、日志摘要、制品引用 |
 | 审查/门禁事件 | 深度审查、问题、就绪度、门禁投影 |
 | 成本事件 | token、模型、墙钟耗时、工具耗时 |
 | 主动配置事件 | hook、plugin、自定义工具信任状态、hash、权限声明、启用范围 |
+| 阶段收益事件 | 阶段用户收益、技术前置、延期边界、质量一致性抽样和验收结果 |
 
 核心输出：
 
@@ -78,6 +79,7 @@ P0 事件集优先支撑三件事：
 - 变更就绪度和 PR 门禁状态。
 - 交付物图谱边证据。
 - 智能体评测回放轨迹。
+- 阶段收益评审和质量一致性抽样。
 - 审计导出和最小指标集。
 
 事件信封：
@@ -117,7 +119,8 @@ interface LifecycleEvent {
 | `project.profiled.light` | 关联轻量项目结构、规则入口和验证候选 |
 | `task.started` / `task.completed` | 关联一次用户任务与结果摘要 |
 | `policy.decided` | 固化模式、触发原因、推荐/强制动作 |
-| `security.decided` | 固化允许/询问/拒绝/应急放行、范围、原因和残余风险 |
+| `security.decided` | 固化允许/询问/拒绝/应急放行、执行位置、沙箱等级组合、范围、原因、降级和残余风险 |
+| `sandbox.capability.evaluated` | 记录当前执行面可用的快照、worktree、只读、网络限制、进程隔离或容器能力 |
 | `user.override.recorded` | 记录跳过、风险接受或临时放行 |
 | `active_config.discovered` | 固化 hook、plugin、自定义工具、MCP、智能体规则的来源、hash、权限声明和未信任状态 |
 | `extension.hook.dispatched` | 记录 Kernel 扩展点被触发、适用范围、deadline 和空实现/候选处理结果 |
@@ -129,6 +132,8 @@ interface LifecycleEvent {
 | `verification.completed` | 形成验证证据 |
 | `confidence.summary.generated` | 固化任务结束的用户可见信心摘要 |
 | `evidence_pack.generated` | 在需要时固化摘要/证据引用/完整证据包 |
+| `stage.outcome.evaluated` | 记录阶段用户收益、必要技术前置、延期边界和验收结果 |
+| `quality.consistency.sampled` | 记录同一任务中需求、开发、验证、审查或发布强度是否匹配 |
 
 P1/P2 再引入：
 
