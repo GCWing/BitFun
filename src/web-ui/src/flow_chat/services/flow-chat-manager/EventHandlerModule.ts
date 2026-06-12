@@ -1360,13 +1360,22 @@ function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
   const session = state.sessions.get(sessionId);
 
   if (!session) {
-    log.warn('DialogTurnStarted: session not in store, creating placeholder', { sessionId, sessionsCount: state.sessions.size });
+    // Hidden MiniApp agent runs (e.g. PPT Live) submit turns with
+    // `surface: 'miniapp_agent'`. Register them as transient miniapp sessions
+    // so they stay out of the session list and the agent companion bubbles.
+    const isMiniAppAgentRun = userMessageMetadata?.surface === 'miniapp_agent';
+    const miniAppId = typeof userMessageMetadata?.appId === 'string'
+      ? userMessageMetadata.appId
+      : undefined;
+    log.warn('DialogTurnStarted: session not in store, creating placeholder', { sessionId, sessionsCount: state.sessions.size, isMiniAppAgentRun });
     store.addExternalSession(
       sessionId,
-      'Remote Session',
+      isMiniAppAgentRun ? (miniAppId ? `MiniApp: ${miniAppId}` : 'MiniApp Agent') : 'Remote Session',
       'agentic',
       resolveExternalSessionWorkspacePath(context, event),
-      undefined,
+      isMiniAppAgentRun
+        ? { sessionKind: 'miniapp', isTransient: true, agentBackedTransient: true }
+        : undefined,
       extractEventRemoteConnectionId(event),
       extractEventRemoteSshHost(event)
     );

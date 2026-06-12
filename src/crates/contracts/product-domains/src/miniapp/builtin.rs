@@ -106,6 +106,16 @@ pub const BUILTIN_APPS: &[BuiltinMiniAppBundle] = &[
         worker_js: include_str!("builtin/assets/pr-review/worker.js"),
         esm_dependencies_json: "[]",
     },
+    BuiltinMiniAppBundle {
+        id: "builtin-ppt-live",
+        version: 150,
+        meta_json: include_str!("builtin/assets/ppt-live/meta.json"),
+        html: include_str!("builtin/assets/ppt-live/index.html"),
+        css: include_str!("builtin/assets/ppt-live/style.css"),
+        ui_js: include_str!("builtin/assets/ppt-live/dist/ui.bundle.js"),
+        worker_js: include_str!("builtin/assets/ppt-live/worker.js"),
+        esm_dependencies_json: include_str!("builtin/assets/ppt-live/esm_dependencies.json"),
+    },
 ];
 
 pub fn builtin_content_hash(app: &BuiltinMiniAppBundle) -> String {
@@ -256,6 +266,7 @@ mod tests {
                 "builtin-regex-playground",
                 "builtin-coding-selfie",
                 "builtin-pr-review",
+                "builtin-ppt-live",
             ]
         );
         assert_eq!(BUILTIN_APPS[0].version, 11);
@@ -272,5 +283,37 @@ mod tests {
             assert!(!app.worker_js.trim().is_empty());
             assert!(builtin_content_hash(app).starts_with("sha256:"));
         }
+    }
+
+    #[test]
+    fn ppt_live_bundle_uses_bitfun_host_capabilities() {
+        let app = BUILTIN_APPS
+            .iter()
+            .find(|app| app.id == "builtin-ppt-live")
+            .expect("PPT Live should be registered");
+        let meta: serde_json::Value =
+            serde_json::from_str(app.meta_json).expect("PPT Live metadata should be valid");
+
+        assert_eq!(meta["permissions"]["node"]["enabled"], false);
+        assert_eq!(meta["permissions"]["ai"]["enabled"], true);
+        assert_eq!(meta["permissions"]["ai"]["allowed_models"][0], "primary");
+        assert_eq!(meta["permissions"]["agent"]["enabled"], true);
+        assert_eq!(meta["permissions"]["net"]["allow"][0], "*");
+        assert!(app.ui_js.contains("Unsupported PPT Live action"));
+        assert!(app
+            .ui_js
+            .contains("presentation design engine embedded in BitFun"));
+        assert!(!app.ui_js.contains("Sparo"));
+        assert!(
+            include_str!("builtin/assets/ppt-live/ui.js").contains("installBitFunBackendAdapter")
+        );
+        assert!(
+            include_str!("builtin/assets/ppt-live/src/bitfun-backend-adapter.js")
+                .contains("app.ai")
+        );
+        assert!(app.html.contains("exportPptx"));
+        assert!(!app.html.contains("src=\"./ui.js\""));
+        assert!(!app.html.contains("href=\"./style.css\""));
+        assert!(app.css.contains("--bitfun-bg"));
     }
 }

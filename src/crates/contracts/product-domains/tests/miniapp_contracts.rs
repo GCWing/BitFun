@@ -541,6 +541,14 @@ fn miniapp_bridge_exposes_host_notification_namespace() {
 }
 
 #[test]
+fn miniapp_bridge_exposes_deck_render_page_namespace() {
+    let bridge = build_bridge_script("app-1", "/tmp/app", "/tmp/workspace", "dark", "win32");
+
+    assert!(bridge.contains("deck:"));
+    assert!(bridge.contains("deck.renderPage"));
+}
+
+#[test]
 fn miniapp_permission_policy_preserves_scope_resolution() {
     let permissions = MiniAppPermissions {
         fs: Some(FsPermissions {

@@ -25,6 +25,7 @@ pub enum BuiltinSkillId {
     GstackReview,
     GstackShip,
     Pdf,
+    PptDesign,
     Pptx,
     WritingSkills,
     Xlsx,
@@ -153,6 +154,11 @@ const BUILTIN_SKILL_SPECS: &[BuiltinSkillSpec] = &[
         group: BuiltinSkillGroup::Office,
     },
     BuiltinSkillSpec {
+        id: BuiltinSkillId::PptDesign,
+        dir_name: "ppt-design",
+        group: BuiltinSkillGroup::Office,
+    },
+    BuiltinSkillSpec {
         id: BuiltinSkillId::Pptx,
         dir_name: "pptx",
         group: BuiltinSkillGroup::Office,
@@ -193,6 +199,7 @@ mod tests {
     fn builtin_skill_groups_match_expected_sets() {
         assert_eq!(builtin_skill_group_key("docx"), Some("office"));
         assert_eq!(builtin_skill_group_key("pdf"), Some("office"));
+        assert_eq!(builtin_skill_group_key("ppt-design"), Some("office"));
         assert_eq!(builtin_skill_group_key("pptx"), Some("office"));
         assert_eq!(builtin_skill_group_key("xlsx"), Some("office"));
         assert_eq!(builtin_skill_group_key("find-skills"), Some("meta"));

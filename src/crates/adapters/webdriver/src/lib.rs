@@ -1,5 +1,5 @@
 mod executor;
-mod platform;
+pub mod platform;
 mod runtime;
 pub mod server;
 pub mod webdriver;

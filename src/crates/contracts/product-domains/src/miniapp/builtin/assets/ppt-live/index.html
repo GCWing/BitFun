@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PPT Live</title>
+</head>
+<body>
+  <div class="ppt-live" data-density="standard">
+    <header class="app-topbar">
+      <div class="topbar-leading">
+        <span class="brand-mark" aria-hidden="true">PL</span>
+        <div class="topbar-title-row">
+          <h1 data-i18n="title">PPT Live</h1>
+          <span class="topbar-divider" aria-hidden="true"></span>
+          <div class="topbar-deck">
+            <strong id="deckTitle">PPT Live</strong>
+            <span id="deckMeta" class="toolbar-meta">0 slides</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="topbar-center">
+        <div id="topProgress" class="top-progress" aria-live="polite">
+          <span id="topProgressDot" class="progress-dot"></span>
+          <span id="topProgressText" data-i18n="ready">Ready.</span>
+          <span id="topProgressMeter" class="progress-meter"><i></i></span>
+        </div>
+      </div>
+
+      <div class="topbar-actions">
+        <div class="topbar-action-group">
+          <button id="toggleHistory" class="btn btn-secondary" type="button" data-i18n="historyTitle">History</button>
+          <button id="cancelGeneration" class="btn btn-secondary generation-stop" type="button" data-i18n="stopGeneration" hidden>Stop</button>
+          <button id="newDeck" class="btn btn-secondary" type="button" data-i18n="newTopic">New topic</button>
+        </div>
+        <button id="exportPptx" class="btn btn-primary" type="button" data-i18n="exportConfirm">Export file</button>
+      </div>
+    </header>
+
+    <main class="studio-shell">
+      <!-- Left: Slide Filmstrip -->
+      <aside id="filmstrip" class="filmstrip" aria-label="Slides">
+        <div class="filmstrip-head">
+          <span data-i18n="slidesPanelTitle">Slides</span>
+        </div>
+        <div id="slideThumbs" class="slide-thumbs"></div>
+      </aside>
+      <div id="filmstripResizer" class="panel-resizer panel-resizer--filmstrip" role="separator" aria-orientation="vertical" aria-label="Resize slides panel"></div>
+
+      <!-- Center: Canvas Stage -->
+      <section class="stage-shell" aria-label="Slide canvas">
+        <section class="canvas-area">
+          <div class="canvas-stage">
+            <article id="slideCanvas" class="slide-canvas" aria-label="Current slide"></article>
+          </div>
+
+          <!-- Floating element toolbar -->
+          <div id="floatingToolbar" class="floating-toolbar" aria-label="Element tools">
+            <div class="floating-toolbar-group">
+              <button class="floating-toolbar-btn" data-tool="bold" title="Bold" aria-label="Bold">B</button>
+              <button class="floating-toolbar-btn" data-tool="italic" title="Italic" aria-label="Italic">I</button>
+              <button class="floating-toolbar-btn" data-tool="underline" title="Underline" aria-label="Underline">U</button>
+            </div>
+            <div class="floating-toolbar-group">
+              <button class="floating-toolbar-btn" data-tool="align-left" title="Align left" aria-label="Align left">≡</button>
+              <button class="floating-toolbar-btn" data-tool="align-center" title="Align center" aria-label="Align center">≡</button>
+              <button class="floating-toolbar-btn" data-tool="align-right" title="Align right" aria-label="Align right">≡</button>
+            </div>
+            <div class="floating-toolbar-group">
+              <button class="floating-toolbar-btn" data-tool="duplicate" title="Duplicate" aria-label="Duplicate">⧉</button>
+              <button class="floating-toolbar-btn" data-tool="delete" title="Delete" aria-label="Delete">🗑</button>
+            </div>
+          </div>
+
+          <!-- AI adaptation toast -->
+          <div id="adaptationToast" class="adaptation-toast">
+            <div class="adaptation-toast__icon">✨</div>
+            <div class="adaptation-toast__text">AI has auto-adapted <strong id="adaptationTemplateName">template</strong></div>
+          </div>
+
+          <!-- Generation overlay -->
+          <div id="generationOverlay" class="generation-overlay" hidden>
+            <div class="generation-overlay-card">
+              <div class="generation-overlay-head">
+                <div class="generation-spinner" aria-hidden="true"></div>
+                <div>
+                  <strong id="generationOverlayTitle" data-i18n="generationAgentWorking">Building deck...</strong>
+                  <p id="generationOverlayProgress" class="generation-overlay-progress" data-i18n="generationProgressPulse">Still generating…</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Canvas zoom bar -->
+        <div class="canvas-zoom-bar" id="canvasZoomBar">
+          <button class="canvas-zoom-btn" id="zoomOut" title="Zoom out" aria-label="Zoom out">−</button>
+          <span class="canvas-zoom-value" id="zoomValue">100%</span>
+          <button class="canvas-zoom-btn" id="zoomIn" title="Zoom in" aria-label="Zoom in">+</button>
+        </div>
+      </section>
+
+      <div id="agentResizer" class="panel-resizer panel-resizer--agent" role="separator" aria-orientation="vertical" aria-label="Resize prompt panel"></div>
+
+      <!-- Right: Agent Sidebar -->
+      <aside id="agentSidebar" class="agent-sidebar" aria-label="PPT Live agent">
+        <section class="agent-card agent-card--prompt">
+          <div class="agent-card__header">
+            <div>
+              <h2 data-i18n="agentCommandTitle">Create or edit by prompt</h2>
+            </div>
+            <span id="aiStatusPill" class="pill" data-i18n="statusPillReady">Ready</span>
+          </div>
+          <label class="onebox-label">
+            <span class="sr-only" data-i18n="topicLabel">Goal</span>
+            <textarea id="topicInput" class="onebox-input" rows="6" data-i18n-placeholder="oneBoxPlaceholder"></textarea>
+          </label>
+          <button id="sendPrompt" class="btn btn-primary onebox-submit" type="button" data-i18n="sendPrompt">Send</button>
+        </section>
+
+        <!-- Collapsible Property Panels -->
+        <section id="propertyPanels" class="agent-card agent-card--properties">
+          <div class="property-section" data-section="style">
+            <div class="property-section__header" role="button" tabindex="0" aria-expanded="true">
+              <span class="property-section__title" data-i18n="propertiesStyle">Style</span>
+              <span class="property-section__toggle" aria-hidden="true">▼</span>
+            </div>
+            <div class="property-section__body">
+              <div class="property-row is-stack">
+                <span class="property-label" data-i18n="propertiesStylePreset">Style preset</span>
+                <select id="stylePresetSelect" data-i18n-aria="propertiesStylePreset"></select>
+              </div>
+              <div class="property-row is-stack">
+                <span class="property-label" data-i18n="propertiesFont">Font</span>
+                <div class="font-toggle" role="group" aria-label="Font family">
+                  <button type="button" class="font-toggle__btn is-active" data-font-family="sans" data-i18n="fontSansSerif">Sans-serif</button>
+                  <button type="button" class="font-toggle__btn" data-font-family="serif" data-i18n="fontSerif">Serif</button>
+                </div>
+              </div>
+              <div class="property-row is-stack">
+                <span class="property-label" data-i18n="propertiesColorMode">Slide colors</span>
+                <div class="font-toggle" role="group" aria-label="Slide color mode">
+                  <button type="button" class="font-toggle__btn is-active" data-color-mode="light" data-i18n="colorModeLight">Light</button>
+                  <button type="button" class="font-toggle__btn" data-color-mode="dark" data-i18n="colorModeDark">Dark</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="property-section" data-section="layout">
+            <div class="property-section__header" role="button" tabindex="0" aria-expanded="true">
+              <span class="property-section__title" data-i18n="propertiesLayout">Layout</span>
+              <span class="property-section__toggle" aria-hidden="true">▼</span>
+            </div>
+            <div class="property-section__body">
+              <div class="property-row is-stack">
+                <span class="property-label" data-i18n="propertiesDensity">Density</span>
+                <div class="density-slider density-slider--triple" id="densitySlider" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="2" aria-valuenow="1" data-index="1" style="--density-index: 1">
+                  <div class="density-slider__track">
+                    <div class="density-slider__rail" aria-hidden="true"></div>
+                    <div class="density-slider__fill" aria-hidden="true"></div>
+                    <div class="density-slider__ticks" aria-hidden="true">
+                      <button type="button" class="density-slider__tick" data-density-index="0" tabindex="-1"></button>
+                      <button type="button" class="density-slider__tick is-active" data-density-index="1" tabindex="-1"></button>
+                      <button type="button" class="density-slider__tick" data-density-index="2" tabindex="-1"></button>
+                    </div>
+                    <div class="density-slider__thumb" aria-hidden="true"></div>
+                  </div>
+                  <div class="density-labels">
+                    <span data-i18n="densitySpacious">Spacious</span>
+                    <span data-i18n="densityStandard">Standard</span>
+                    <span data-i18n="densityCompact">Compact</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="agent-card agent-card--tabs">
+          <div class="sidebar-tabs" role="tablist">
+            <button type="button" class="sidebar-tab is-active" data-sidebar-tab="process" data-i18n="processTitle">Process</button>
+            <button type="button" class="sidebar-tab" data-sidebar-tab="outline" data-i18n="outlineTitle">Outline</button>
+          </div>
+          <div class="sidebar-tab-panel is-active" data-sidebar-panel="process">
+            <ol id="generationSteps" class="generation-steps"></ol>
+          </div>
+          <div class="sidebar-tab-panel" data-sidebar-panel="outline">
+            <ol id="outlineList" class="outline-list"></ol>
+          </div>
+        </section>
+      </aside>
+
+      <aside id="historyDrawer" class="history-drawer" hidden aria-label="History">
+        <div class="history-drawer-head">
+          <h2 data-i18n="historyTitle">History</h2>
+          <button id="closeHistory" class="icon-mini" type="button" aria-label="Close">×</button>
+        </div>
+        <p class="section-subcopy" data-i18n="historySubcopy">Restore a deck session and continue editing.</p>
+        <div id="historyList" class="history-list"></div>
+      </aside>
+
+      <div id="elementInspector" hidden></div>
+      <button id="deleteElement" type="button" tabindex="-1" hidden>Delete element</button>
+      <button id="exportHtml" type="button" tabindex="-1" hidden>HTML</button>
+      <button id="generateOutline" type="button" tabindex="-1" hidden>Outline</button>
+      <button id="generateDeck" type="button" tabindex="-1" hidden>Generate deck</button>
+      <button id="previewDeck" type="button" tabindex="-1" hidden>Preview</button>
+      <button id="addOutlineItem" type="button" tabindex="-1" hidden>Add outline item</button>
+      <button id="syncSlidesFromOutline" type="button" tabindex="-1" hidden>Sync slides</button>
+    </main>
+
+    <footer class="statusbar">
+      <div class="statusbar-left">
+        <span id="statusLine" role="status" data-i18n="ready">Ready.</span>
+        <span class="statusbar-divider" aria-hidden="true"></span>
+        <span id="slidePosition">1 / 1</span>
+      </div>
+      <div class="statusbar-right">
+        <div class="statusbar-zoom">
+          <button class="statusbar-zoom-btn" id="statusZoomOut" title="Zoom out" aria-label="Zoom out">−</button>
+          <span class="statusbar-zoom-value" id="statusZoomValue">100%</span>
+          <button class="statusbar-zoom-btn" id="statusZoomIn" title="Zoom in" aria-label="Zoom in">+</button>
+        </div>
+        <span class="statusbar-divider" aria-hidden="true"></span>
+        <span id="exportStatus" class="statusbar-meta" data-i18n="exportReady">HTML and PPTX export ready after generation.</span>
+      </div>
+    </footer>
+
+    <dialog id="previewDialog" class="preview-dialog">
+      <div class="preview-frame">
+        <button id="closePreview" class="icon-btn close-preview" type="button" aria-label="Close">×</button>
+        <article id="presentSlide" class="present-slide"></article>
+        <footer class="present-controls">
+          <button id="prevPresent" class="btn btn-secondary" type="button" data-i18n="prev">Previous</button>
+          <span id="presentCounter" class="pill">1 / 1</span>
+          <button id="nextPresent" class="btn btn-primary" type="button" data-i18n="next">Next</button>
+        </footer>
+      </div>
+    </dialog>
+
+    <!-- Export Modal -->
+    <div id="exportOverlay" class="export-overlay" aria-hidden="true">
+      <div class="export-modal" role="dialog" aria-modal="true" aria-labelledby="exportTitle">
+        <div class="export-modal__header">
+          <h2 id="exportTitle" class="export-modal__title" data-i18n="exportTitle">Export</h2>
+          <button id="closeExport" class="icon-btn close-preview" type="button" aria-label="Close export">×</button>
+        </div>
+        <div class="export-modal__body">
+          <div class="export-settings export-settings--formats-only">
+            <div class="property-section" data-section="format">
+              <div class="property-section__header" role="button" tabindex="0" aria-expanded="true">
+                <span class="property-section__title" data-i18n="exportFormat">Format</span>
+                <span class="property-section__toggle" aria-hidden="true">▼</span>
+              </div>
+              <div class="property-section__body">
+                <div class="format-grid" id="formatGrid"></div>
+              </div>
+            </div>
+          </div>
+          <div class="export-preview">
+            <div class="export-preview__toolbar">
+              <span class="property-label" id="exportPreviewInfo">PPTX · 6 slides</span>
+              <div class="statusbar-zoom export-preview-nav">
+                <button class="statusbar-zoom-btn export-preview-nav__btn" id="exportPreviewPrev" type="button" data-i18n-aria="exportPreviewPrevAria" aria-label="Previous slide">◀</button>
+                <span class="statusbar-zoom-value" id="exportPreviewCounter">1 / 6</span>
+                <button class="statusbar-zoom-btn export-preview-nav__btn" id="exportPreviewNext" type="button" data-i18n-aria="exportPreviewNextAria" aria-label="Next slide">▶</button>
+              </div>
+            </div>
+            <div class="export-preview__stage">
+              <div class="export-preview__frame" id="exportPreviewFrame">
+                <div class="export-preview__empty">Preview</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="export-modal__footer">
+          <div class="export-modal__feedback" id="exportModalFeedback" hidden>
+            <span class="export-modal__spinner" id="exportModalSpinner" aria-hidden="true"></span>
+            <span id="exportModalFeedbackText"></span>
+          </div>
+          <div class="export-modal__actions">
+            <button class="btn btn-secondary" type="button" id="exportCancel" data-i18n="exportCancel">Cancel</button>
+            <button class="btn btn-primary" type="button" id="exportConfirm" data-i18n="exportConfirm">Export file</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

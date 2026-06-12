@@ -17,6 +17,8 @@ dist-ssr
 *.local
 **/dist
 **/dist-ssr
+!src/crates/contracts/product-domains/src/miniapp/builtin/assets/ppt-live/dist/
+!src/crates/contracts/product-domains/src/miniapp/builtin/assets/ppt-live/dist/ui.bundle.js
 
 # Build outputs - Rust/Tauri
 target/

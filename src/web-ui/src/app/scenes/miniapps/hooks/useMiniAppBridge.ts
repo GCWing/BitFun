@@ -1,7 +1,9 @@
 /**
  * useMiniAppBridge — handles postMessage JSON-RPC from the MiniApp iframe:
  * worker.call → JS Worker, dialog.open/save/message → Tauri dialog,
- * ai.* → Host AI client, clipboard.* → Host navigator.clipboard.
+ * ai.* → Host AI client, agent.* → Host agent bridge (hidden subagent runs),
+ * deck.renderPage → hidden host WebView slide rasterization (export),
+ * clipboard.* → Host navigator.clipboard.
  * Also handles bitfun/request-theme and pushes theme changes to the iframe.
  */
 import { useLayoutEffect, useRef, useEffect, RefObject } from 'react';
@@ -55,10 +57,16 @@ export function useMiniAppBridge(
   // (no worker), and any non-namespaced custom call will fail with a clear error.
   const nodeDisabledRef = useRef(app.permissions?.node?.enabled === false);
   const systemNotificationsAllowedRef = useRef(app.permissions?.notifications?.system === true);
+  const agentEnabledRef = useRef(app.permissions?.agent?.enabled === true);
   useLayoutEffect(() => {
     nodeDisabledRef.current = app.permissions?.node?.enabled === false;
     systemNotificationsAllowedRef.current = app.permissions?.notifications?.system === true;
-  }, [app.id, app.permissions?.node?.enabled, app.permissions?.notifications?.system]);
+    agentEnabledRef.current = app.permissions?.agent?.enabled === true;
+  }, [app.id, app.permissions?.node?.enabled, app.permissions?.notifications?.system, app.permissions?.agent?.enabled]);
+
+  // Hidden agent sessions started by this iframe; used to filter the global
+  // agentic:// event stream before forwarding events into the iframe.
+  const agentSessionIdsRef = useRef<Set<string>>(new Set());
 
   useLayoutEffect(() => {
     const handler = async (event: MessageEvent) => {
@@ -234,6 +242,65 @@ export function useMiniAppBridge(
           return;
         }
 
+        // ── Agent bridge commands ────────────────────────────────────────────
+        if (method.startsWith('agent.')) {
+          if (!agentEnabledRef.current) {
+            replyError(`MiniApp '${appId}' does not have agent permission (permissions.agent.enabled).`);
+            return;
+          }
+          if (method === 'agent.run') {
+            const result = await miniAppAPI.agentRun(
+              appId,
+              (params.prompt as string) ?? '',
+              workspacePathRef.current || undefined,
+              {
+                runId: params.runId as string | undefined,
+                sessionName: params.sessionName as string | undefined,
+              },
+            );
+            agentSessionIdsRef.current.add(result.sessionId);
+            reply(result);
+            return;
+          }
+          if (method === 'agent.cancel') {
+            await miniAppAPI.agentCancel(
+              appId,
+              (params.sessionId as string) ?? '',
+              (params.turnId as string) ?? '',
+            );
+            reply(null);
+            return;
+          }
+          if (method === 'agent.turnText') {
+            const result = await miniAppAPI.agentTurnText(
+              appId,
+              (params.sessionId as string) ?? '',
+              (params.turnId as string) ?? '',
+            );
+            reply(result);
+            return;
+          }
+          if (method === 'agent.cancelStaleRuns') {
+            const result = await miniAppAPI.agentCancelStaleRuns(appId);
+            reply(result);
+            return;
+          }
+          replyError(`Unknown agent method: ${method}`);
+          return;
+        }
+
+        // ── Deck export commands ─────────────────────────────────────────────
+        if (method === 'deck.renderPage') {
+          const result = await miniAppAPI.renderSlidePage(appId, {
+            html: String(params.html ?? ''),
+            format: String(params.format ?? 'png'),
+            width: params.width as number | undefined,
+            height: params.height as number | undefined,
+          });
+          reply(result);
+          return;
+        }
+
         // ── Clipboard commands ───────────────────────────────────────────────
         if (method === 'clipboard.writeText') {
           await navigator.clipboard.writeText((params.text as string) ?? '');
@@ -331,6 +398,46 @@ export function useMiniAppBridge(
       unlisten();
     };
   }, [app.id, iframeRef]);
+
+  // Forward agentic:// events for MiniApp-owned hidden agent sessions into the
+  // iframe as 'agent:event' (consumed via app.agent.onEvent in the SDK).
+  useEffect(() => {
+    if (app.permissions?.agent?.enabled !== true) return;
+
+    const forwardedEvents = [
+      'dialog-turn-started',
+      'model-round-started',
+      'model-round-completed',
+      'text-chunk',
+      'tool-event',
+      'dialog-turn-completed',
+      'dialog-turn-failed',
+      'dialog-turn-cancelled',
+      'token-usage-updated',
+    ];
+
+    const unlisteners = forwardedEvents.map((eventName) =>
+      api.listen<{ sessionId?: string; [key: string]: unknown }>(
+        `agentic://${eventName}`,
+        (payload) => {
+          if (!iframeRef.current?.contentWindow) return;
+          if (!payload?.sessionId || !agentSessionIdsRef.current.has(payload.sessionId)) return;
+          iframeRef.current.contentWindow.postMessage(
+            {
+              type: 'bitfun:event',
+              event: 'agent:event',
+              payload: { sourceEvent: eventName, ...payload },
+            },
+            '*',
+          );
+        },
+      ),
+    );
+
+    return () => {
+      unlisteners.forEach((unlisten) => unlisten());
+    };
+  }, [app.id, app.permissions?.agent?.enabled, iframeRef]);
 
   // Listen for Worker push events and forward them to the iframe.
   useEffect(() => {

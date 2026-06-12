@@ -1,0 +1,79 @@
+{
+  "id": "builtin-ppt-live",
+  "name": "PPT Live",
+  "description": "AI deck studio for PPT generation and editing: create an outline, generate designed slides, refine page content, preview, and export editable PPTX or shareable HTML.",
+  "icon": "Presentation",
+  "category": "productivity",
+  "tags": [
+    "built-in",
+    "presentation",
+    "ppt",
+    "ai"
+  ],
+  "version": 153,
+  "created_at": 0,
+  "updated_at": 0,
+  "permissions": {
+    "fs": {
+      "read": [
+        "{appdata}"
+      ],
+      "write": [
+        "{appdata}"
+      ]
+    },
+    "shell": {
+      "allow": []
+    },
+    "net": {
+      "allow": [
+        "*"
+      ]
+    },
+    "node": {
+      "enabled": false
+    },
+    "ai": {
+      "enabled": true,
+      "allowed_models": [
+        "primary"
+      ],
+      "max_tokens_per_request": 16000,
+      "rate_limit_per_minute": 12
+    },
+    "agent": {
+      "enabled": true,
+      "rate_limit_per_minute": 12
+    }
+  },
+  "permission_rationale": "PPT Live stores only its own deck draft, fetches user-provided URLs only when generating source-grounded decks, runs hidden BitFun agent turns (ppt-design skill plus research tools such as WebSearch/WebFetch) only when the user asks it to generate or refine content, and exports PPTX/PDF/PNG/HTML entirely inside the desktop WebView.",
+  "ai_context": {
+    "original_prompt": "A built-in Live App for AI-assisted PPT generation, preview, and visual editing.",
+    "conversation_id": null,
+    "iteration_history": []
+  },
+  "i18n": {
+    "locales": {
+      "zh-CN": {
+        "name": "PPT 工作台",
+        "description": "AI PPT 工作台：生成大纲、生成设计页面、局部优化、演示预览，并导出可编辑 PPTX 或 HTML 演示稿。",
+        "tags": [
+          "内置",
+          "演示",
+          "PPT",
+          "AI"
+        ]
+      },
+      "en-US": {
+        "name": "PPT Live",
+        "description": "AI deck studio for PPT generation and editing: create an outline, generate designed slides, refine page content, preview, and export editable PPTX or shareable HTML.",
+        "tags": [
+          "built-in",
+          "presentation",
+          "ppt",
+          "ai"
+        ]
+      }
+    }
+  }
+}
