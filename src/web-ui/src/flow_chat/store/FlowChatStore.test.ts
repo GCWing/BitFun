@@ -186,6 +186,101 @@ describe('FlowChatStore metadata persistence callbacks', () => {
   });
 });
 
+describe('FlowChatStore token usage', () => {
+  afterEach(() => {
+    resetStore();
+  });
+
+  it('stores provider token usage on the matching dialog turn', () => {
+    const session = createSession({
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: 'session-1',
+        userMessage: {
+          id: 'user-1',
+          content: 'hello',
+          timestamp: 1000,
+        },
+        modelRounds: [],
+        status: 'completed',
+        startTime: 1000,
+        endTime: 2400,
+      }],
+    });
+
+    flowChatStore.setState(() => ({
+      sessions: new Map([[session.sessionId, session]]),
+      activeSessionId: session.sessionId,
+    }));
+
+    flowChatStore.updateTokenUsage(session.sessionId, {
+      inputTokens: 1200,
+      outputTokens: 320,
+      totalTokens: 1520,
+    }, 'turn-1');
+
+    const stored = flowChatStore.getState().sessions.get(session.sessionId);
+
+    expect(stored?.currentTokenUsage).toMatchObject({
+      inputTokens: 1200,
+      outputTokens: 320,
+      totalTokens: 1520,
+    });
+    expect(stored?.dialogTurns[0].tokenUsage).toMatchObject({
+      inputTokens: 1200,
+      outputTokens: 320,
+      totalTokens: 1520,
+    });
+    expect(stored?.dialogTurns[0].tokenUsage?.timestamp).toEqual(expect.any(Number));
+  });
+
+  it('keeps session context usage as the latest request while accumulating turn usage', () => {
+    const session = createSession({
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: 'session-1',
+        userMessage: {
+          id: 'user-1',
+          content: 'hello',
+          timestamp: 1000,
+        },
+        modelRounds: [],
+        status: 'processing',
+        startTime: 1000,
+      }],
+    });
+
+    flowChatStore.setState(() => ({
+      sessions: new Map([[session.sessionId, session]]),
+      activeSessionId: session.sessionId,
+    }));
+
+    flowChatStore.updateTokenUsage(session.sessionId, {
+      inputTokens: 100,
+      outputTokens: 50,
+      totalTokens: 150,
+    }, 'turn-1');
+    flowChatStore.updateTokenUsage(session.sessionId, {
+      inputTokens: 200,
+      outputTokens: 75,
+      totalTokens: 275,
+    }, 'turn-1');
+
+    const stored = flowChatStore.getState().sessions.get(session.sessionId);
+
+    expect(stored?.currentTokenUsage).toMatchObject({
+      inputTokens: 200,
+      outputTokens: 75,
+      totalTokens: 275,
+    });
+    expect(stored?.dialogTurns[0].tokenUsage).toMatchObject({
+      inputTokens: 300,
+      outputTokens: 125,
+      totalTokens: 425,
+    });
+  });
+});
+
 describe('FlowChatStore local usage reports', () => {
   afterEach(() => {
     resetStore();

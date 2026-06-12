@@ -346,8 +346,36 @@ pub struct DialogTurnData {
     #[serde(skip_serializing_if = "Option::is_none", alias = "duration_ms")]
     pub duration_ms: Option<u64>,
 
+    /// Provider-reported token usage for this dialog turn, when available.
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "token_usage")]
+    pub token_usage: Option<DialogTurnTokenUsageData>,
+
     /// Turn status
     pub status: TurnStatus,
+}
+
+/// Provider-reported token usage attached to a dialog turn.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DialogTurnTokenUsageData {
+    /// Input/prompt tokens for the model request.
+    #[serde(alias = "input_tokens")]
+    pub input_tokens: u64,
+
+    /// Output/completion tokens, when the provider reports them.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "output_tokens"
+    )]
+    pub output_tokens: Option<u64>,
+
+    /// Total tokens reported by the provider for this request.
+    #[serde(alias = "total_tokens")]
+    pub total_tokens: u64,
+
+    /// Frontend event timestamp in milliseconds since epoch.
+    pub timestamp: u64,
 }
 
 /// Persisted dialog turn kind.
@@ -848,6 +876,7 @@ impl DialogTurnData {
             start_time: now,
             end_time: None,
             duration_ms: None,
+            token_usage: None,
             status: TurnStatus::InProgress,
         }
     }
@@ -919,6 +948,45 @@ mod tests {
         );
 
         assert_eq!(turn.kind, DialogTurnKind::UserDialog);
+    }
+
+    #[test]
+    fn dialog_turn_token_usage_round_trips_camel_case_payloads() {
+        let payload = serde_json::json!({
+            "turnId": "turn-1",
+            "turnIndex": 0,
+            "sessionId": "session-1",
+            "timestamp": 1,
+            "userMessage": {
+                "id": "user-1",
+                "content": "hello",
+                "timestamp": 1
+            },
+            "modelRounds": [],
+            "startTime": 1,
+            "durationMs": 10,
+            "tokenUsage": {
+                "inputTokens": 1200,
+                "outputTokens": 320,
+                "totalTokens": 1520,
+                "timestamp": 2
+            },
+            "status": "completed"
+        });
+
+        let turn: DialogTurnData =
+            serde_json::from_value(payload).expect("turn payload should deserialize");
+
+        let token_usage = turn
+            .token_usage
+            .as_ref()
+            .expect("token usage should be preserved");
+        assert_eq!(token_usage.input_tokens, 1200);
+        assert_eq!(token_usage.output_tokens, Some(320));
+        assert_eq!(token_usage.total_tokens, 1520);
+
+        let serialized = serde_json::to_value(&turn).expect("turn should serialize");
+        assert_eq!(serialized["tokenUsage"]["totalTokens"], 1520);
     }
 
     #[test]

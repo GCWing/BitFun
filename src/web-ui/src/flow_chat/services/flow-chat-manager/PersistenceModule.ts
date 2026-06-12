@@ -87,7 +87,8 @@ export function calculateTurnHash(dialogTurn: DialogTurn): string {
         }
       : null,
     error: dialogTurn.error,
-    endTime: dialogTurn.endTime
+    endTime: dialogTurn.endTime,
+    tokenUsage: dialogTurn.tokenUsage,
   });
   
   let hash = 0;
@@ -461,6 +462,14 @@ export function convertDialogTurnToBackendFormat(dialogTurn: DialogTurn, turnInd
     }),
     startTime: dialogTurn.startTime,
     endTime: dialogTurn.endTime,
+    tokenUsage: dialogTurn.tokenUsage
+      ? {
+          inputTokens: dialogTurn.tokenUsage.inputTokens,
+          outputTokens: dialogTurn.tokenUsage.outputTokens,
+          totalTokens: dialogTurn.tokenUsage.totalTokens,
+          timestamp: dialogTurn.tokenUsage.timestamp,
+        }
+      : undefined,
     status: dialogTurn.status === 'completed' ? 'completed' : 
             dialogTurn.status === 'error' ? 'error' : 
             dialogTurn.status === 'cancelled' ? 'cancelled' : 'inprogress',

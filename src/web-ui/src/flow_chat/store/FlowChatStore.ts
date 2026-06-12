@@ -17,6 +17,7 @@ import {
   SessionConfig,
   SessionContextRestoreState,
   SessionHistoryState,
+  TokenUsage,
 } from '../types/flow-chat';
 import { createLogger } from '@/shared/utils/logger';
 import {
@@ -2225,20 +2226,50 @@ export class FlowChatStore {
 
   public updateTokenUsage(
     sessionId: string, 
-    tokenUsage: { inputTokens: number; outputTokens?: number; totalTokens: number }
+    tokenUsage: { inputTokens: number; outputTokens?: number; totalTokens: number },
+    dialogTurnId?: string
   ): void {
     this.setState(prev => {
       const session = prev.sessions.get(sessionId);
       if (!session) return prev;
 
+      const nextTokenUsage = {
+        inputTokens: tokenUsage.inputTokens,
+        outputTokens: tokenUsage.outputTokens,
+        totalTokens: tokenUsage.totalTokens,
+        timestamp: Date.now()
+      };
+      let dialogTurns = session.dialogTurns;
+      if (dialogTurnId) {
+        const turnIndex = session.dialogTurns.findIndex(turn => turn.id === dialogTurnId);
+        if (turnIndex !== -1) {
+          const previousTurnUsage = session.dialogTurns[turnIndex].tokenUsage;
+          const accumulatedOutputTokens = previousTurnUsage
+            ? (
+                typeof previousTurnUsage.outputTokens === 'number' &&
+                typeof nextTokenUsage.outputTokens === 'number'
+                  ? previousTurnUsage.outputTokens + nextTokenUsage.outputTokens
+                  : undefined
+              )
+            : nextTokenUsage.outputTokens;
+          const accumulatedTurnUsage: TokenUsage = {
+            inputTokens: (previousTurnUsage?.inputTokens ?? 0) + nextTokenUsage.inputTokens,
+            outputTokens: accumulatedOutputTokens,
+            totalTokens: (previousTurnUsage?.totalTokens ?? 0) + nextTokenUsage.totalTokens,
+            timestamp: nextTokenUsage.timestamp,
+          };
+          dialogTurns = [...session.dialogTurns];
+          dialogTurns[turnIndex] = {
+            ...dialogTurns[turnIndex],
+            tokenUsage: accumulatedTurnUsage,
+          };
+        }
+      }
+
       const updatedSession = {
         ...session,
-        currentTokenUsage: {
-          inputTokens: tokenUsage.inputTokens,
-          outputTokens: tokenUsage.outputTokens,
-          totalTokens: tokenUsage.totalTokens,
-          timestamp: Date.now()
-        }
+        currentTokenUsage: nextTokenUsage,
+        dialogTurns
       };
 
       const newSessions = new Map(prev.sessions);
@@ -2645,6 +2676,7 @@ export class FlowChatStore {
         startTime: dialogTurn.startTime,
         endTime: dialogTurn.endTime || Date.now(),
         durationMs: (dialogTurn.endTime || Date.now()) - dialogTurn.startTime,
+        tokenUsage: dialogTurn.tokenUsage,
         status: 'cancelled' as const
       };
 
@@ -3680,6 +3712,7 @@ export class FlowChatStore {
         metadata as Record<string, unknown> | undefined
       );
       const normalizedTurnStatus = normalizeRecoveredTurnStatus(turn.status, { error: undefined });
+      const rawTokenUsage = turn.tokenUsage ?? turn.token_usage;
 
       return {
       id: turn.turnId,
@@ -3789,6 +3822,14 @@ export class FlowChatStore {
       status: normalizedTurnStatus,
       startTime: turn.startTime,
       endTime: turn.endTime,
+      tokenUsage: rawTokenUsage
+        ? {
+            inputTokens: rawTokenUsage.inputTokens ?? rawTokenUsage.input_tokens,
+            outputTokens: rawTokenUsage.outputTokens ?? rawTokenUsage.output_tokens,
+            totalTokens: rawTokenUsage.totalTokens ?? rawTokenUsage.total_tokens,
+            timestamp: rawTokenUsage.timestamp,
+          }
+        : undefined,
       backendTurnIndex: turn.turnIndex,
     };
     });

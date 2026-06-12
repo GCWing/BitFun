@@ -165,6 +165,47 @@ describe('sessionToVirtualItems explore grouping', () => {
     expect(items.map(item => item.type)).toEqual(['user-message', 'model-round']);
   });
 
+  it('carries turn timing and token metadata into the model round virtual item', () => {
+    const session = makeSession({
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: 'session-1',
+        userMessage: {
+          id: 'user-1',
+          content: 'Help',
+          timestamp: 900,
+        },
+        modelRounds: [makeRound({
+          id: 'round-with-answer',
+          items: [makeTextItem('text-final', 'Here is the answer.')],
+        })],
+        status: 'completed',
+        startTime: 900,
+        endTime: 2400,
+        tokenUsage: {
+          inputTokens: 1200,
+          outputTokens: 300,
+          totalTokens: 1500,
+          timestamp: 2400,
+        },
+      }],
+    });
+
+    const modelItem = sessionToVirtualItems(session)
+      .find((item): item is ModelRoundVirtualItem => item.type === 'model-round');
+
+    expect(modelItem).toMatchObject({
+      turnStartedAt: 900,
+      turnEndedAt: 2400,
+      turnDurationMs: 1500,
+      turnTokenUsage: {
+        inputTokens: 1200,
+        outputTokens: 300,
+        totalTokens: 1500,
+      },
+    });
+  });
+
   it('does not special-case ACP rounds without explicit render hints', () => {
     const session = makeSession({
       sessionId: 'acp-session',

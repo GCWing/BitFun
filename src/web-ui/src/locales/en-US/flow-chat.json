@@ -1164,7 +1164,16 @@
     "feedbackDevVersion": "Feedback is not available in dev version",
     "userLabel": "👤 User:",
     "toolCallLabel": "🔧 Tool call: {{name}}",
-    "loadingMoreHistory": "Loading more history..."
+    "loadingMoreHistory": "Loading more history...",
+    "meta": {
+      "label": "Response metadata",
+      "completed": "Completed",
+      "stopped": "Stopped",
+      "duration": "Duration",
+      "tokens": "Tokens",
+      "tokensUnavailable": "unavailable",
+      "tokenBreakdown": "{{total}} total, {{input}} in, {{output}} out"
+    }
   },
   "exploreRegion": {
     "readFiles_one": "Read {{count}} file",
@@ -1994,7 +2003,12 @@
     "autoModelDesc": "Automatically Routing",
     "primaryModel": "Primary Model",
     "fastModel": "Fast Model",
-    "modelNotConfigured": "Not Configured"
+    "modelNotConfigured": "Not Configured",
+    "contextUsage": {
+      "agentPrompt": "Last request prompt: {{usage}}",
+      "acpContext": "ACP reported context: {{usage}}",
+      "toolNote": "Tool outputs may be summarized or truncated before later requests."
+    }
   },
   "reasoningEffort": {
     "title": "Reasoning Effort",

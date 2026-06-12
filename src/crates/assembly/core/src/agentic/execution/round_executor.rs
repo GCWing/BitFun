@@ -430,41 +430,23 @@ impl RoundExecutor {
             stream_result.first_visible_output_ms
         );
 
-        // Check cancellation token again after stream processing completes
+        // If stream response contains usage info, record it before the
+        // post-stream cancellation gate. A user can press stop after the
+        // provider returned usage but before this round settles; dropping that
+        // usage makes cancelled turns look unaccounted even though the provider
+        // already supplied authoritative counts.
+        if let Some(ref usage) = stream_result.usage {
+            self.emit_token_usage_update(&context, usage, context_window, is_subagent)
+                .await;
+        }
+
+        // Check cancellation token again after stream processing completes.
         if cancel_token.is_cancelled() {
             debug!(
                 "Cancel token detected after stream processing, stopping execution: session_id={}",
                 context.session_id
             );
             return Err(BitFunError::Cancelled("Execution cancelled".to_string()));
-        }
-
-        // If stream response contains usage info, update token statistics
-        if let Some(ref usage) = stream_result.usage {
-            debug!(
-                "Updating token stats from model response: input={}, output={}, total={}, is_subagent={}",
-                usage.prompt_token_count,
-                usage.candidates_token_count,
-                usage.total_token_count,
-                is_subagent
-            );
-
-            self.emit_event(
-                AgenticEvent::TokenUsageUpdated {
-                    session_id: context.session_id.clone(),
-                    turn_id: context.dialog_turn_id.clone(),
-                    model_id: context.model_name.clone(),
-                    input_tokens: usage.prompt_token_count as usize,
-                    output_tokens: Some(usage.candidates_token_count as usize),
-                    total_tokens: usage.total_token_count as usize,
-                    max_context_tokens: context_window,
-                    is_subagent,
-                    cached_tokens: usage.cached_content_token_count.map(|v| v as usize),
-                    token_details: token_details_from_usage(usage),
-                },
-                EventPriority::Normal,
-            )
-            .await;
         }
 
         // Emit model round completed event
@@ -845,6 +827,39 @@ impl RoundExecutor {
         let _ = self.event_queue.enqueue(event, Some(priority)).await;
     }
 
+    async fn emit_token_usage_update(
+        &self,
+        context: &RoundContext,
+        usage: &crate::util::types::ai::GeminiUsage,
+        context_window: Option<usize>,
+        is_subagent: bool,
+    ) {
+        debug!(
+            "Updating token stats from model response: input={}, output={}, total={}, is_subagent={}",
+            usage.prompt_token_count,
+            usage.candidates_token_count,
+            usage.total_token_count,
+            is_subagent
+        );
+
+        self.emit_event(
+            AgenticEvent::TokenUsageUpdated {
+                session_id: context.session_id.clone(),
+                turn_id: context.dialog_turn_id.clone(),
+                model_id: context.model_name.clone(),
+                input_tokens: usage.prompt_token_count as usize,
+                output_tokens: Some(usage.candidates_token_count as usize),
+                total_tokens: usage.total_token_count as usize,
+                max_context_tokens: context_window,
+                is_subagent,
+                cached_tokens: usage.cached_content_token_count.map(|v| v as usize),
+                token_details: token_details_from_usage(usage),
+            },
+            EventPriority::Normal,
+        )
+        .await;
+    }
+
     async fn emit_failed_partial_tool_calls(
         &self,
         context: &RoundContext,
@@ -1015,8 +1030,13 @@ fn token_details_from_usage(
 #[cfg(test)]
 mod tests {
     use super::{RoundExecutor, StreamProcessor};
+    use crate::agentic::execution::types::RoundContext;
     use crate::agentic::events::{EventQueue, EventQueueConfig};
+    use crate::agentic::tools::ToolRuntimeRestrictions;
+    use crate::util::types::ai::GeminiUsage;
+    use bitfun_runtime_ports::DelegationPolicy;
     use dashmap::DashMap;
+    use std::collections::HashMap;
     use std::sync::Arc;
     use tokio_util::sync::CancellationToken;
 
@@ -1027,6 +1047,30 @@ mod tests {
             tool_pipeline: None,
             event_queue,
             cancellation_tokens: Arc::new(DashMap::new()),
+        }
+    }
+
+    fn test_round_context() -> RoundContext {
+        RoundContext {
+            session_id: "session-1".to_string(),
+            subagent_parent_info: None,
+            dialog_turn_id: "turn-1".to_string(),
+            turn_index: 0,
+            round_number: 0,
+            workspace: None,
+            messages: Vec::new(),
+            available_tools: Vec::new(),
+            collapsed_tools: Vec::new(),
+            unlocked_collapsed_tools: Vec::new(),
+            model_name: "model-1".to_string(),
+            agent_type: "agentic".to_string(),
+            context_vars: HashMap::new(),
+            delegation_policy: DelegationPolicy::top_level(),
+            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+            steering_interrupt: None,
+            cancellation_token: CancellationToken::new(),
+            workspace_services: None,
+            recover_partial_on_cancel: false,
         }
     }
 
@@ -1058,6 +1102,41 @@ mod tests {
         executor.cleanup_dialog_turn("turn-1").await;
         assert!(!executor.has_active_dialog_turn("turn-1"));
         assert!(!executor.is_dialog_turn_cancelled("turn-1"));
+    }
+
+    #[tokio::test]
+    async fn emits_token_usage_before_post_stream_cancel_stops_round() {
+        let executor = test_round_executor();
+        let context = test_round_context();
+        let usage = GeminiUsage {
+            prompt_token_count: 100,
+            candidates_token_count: 20,
+            total_token_count: 120,
+            reasoning_token_count: None,
+            cached_content_token_count: Some(30),
+            cache_creation_token_count: None,
+        };
+
+        executor
+            .emit_token_usage_update(&context, &usage, Some(128_000), false)
+            .await;
+
+        let events = executor.event_queue.dequeue_batch(10).await;
+        assert!(events.iter().any(|envelope| matches!(
+            &envelope.event,
+            crate::agentic::events::AgenticEvent::TokenUsageUpdated {
+                session_id,
+                turn_id,
+                model_id,
+                input_tokens: 100,
+                output_tokens: Some(20),
+                total_tokens: 120,
+                max_context_tokens: Some(128_000),
+                is_subagent: false,
+                cached_tokens: Some(30),
+                ..
+            } if session_id == "session-1" && turn_id == "turn-1" && model_id == "model-1"
+        )));
     }
 
     #[test]

@@ -2208,6 +2208,7 @@ mod tests {
             start_time: 1,
             end_time: Some(2),
             duration_ms: Some(1),
+            token_usage: None,
             status: TurnStatus::Completed,
         };
 
@@ -2285,6 +2286,7 @@ mod tests {
             start_time: 1,
             end_time: Some(2),
             duration_ms: Some(1),
+            token_usage: None,
             status: TurnStatus::Completed,
         }];
 
@@ -2343,6 +2345,7 @@ mod tests {
             start_time: 1,
             end_time: Some(2),
             duration_ms: Some(1),
+            token_usage: None,
             status: TurnStatus::Completed,
         }];
 
