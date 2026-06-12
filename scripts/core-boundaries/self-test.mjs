@@ -717,12 +717,100 @@ export function runManifestParserSelfTest({
       throw new Error(`tool-packs manifest boundary rule must forbid: ${contract}`);
     }
   }
+  const serviceAgentRuntimeRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/service_agent_runtime.rs',
+  );
+  if (!serviceAgentRuntimeRuleText.includes('self\\.scheduler')) {
+    throw new Error('service agent runtime boundary rule must forbid direct scheduler submit');
+  }
+  const sessionMessageRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/tools/implementations/session_message_tool.rs',
+  );
+  if (!sessionMessageRuleText.includes('submit_with_prepended_messages')) {
+    throw new Error('SessionMessage boundary rule must forbid direct scheduler submit');
+  }
+  const sessionMessageLegacySessionAccessContracts = [
+    'resolve_session_workspace_path',
+    'list_sessions',
+  ];
+  for (const contract of sessionMessageLegacySessionAccessContracts) {
+    if (!sessionMessageRuleText.includes(contract)) {
+      throw new Error(`SessionMessage boundary rule must forbid direct coordinator ${contract}`);
+    }
+  }
+  const sessionControlForbiddenRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/tools/implementations/session_control_tool.rs',
+  );
+  if (!sessionControlForbiddenRuleText.includes('cancel_active_turn_for_session_from_requester')) {
+    throw new Error('SessionControl boundary rule must forbid direct scheduler cancellation');
+  }
+  const sessionControlLegacySessionAccessContracts = [
+    'resolve_session_workspace_path',
+    'list_sessions',
+    'delete_session',
+  ];
+  for (const contract of sessionControlLegacySessionAccessContracts) {
+    if (!sessionControlForbiddenRuleText.includes(contract)) {
+      throw new Error(`SessionControl boundary rule must forbid direct coordinator ${contract}`);
+    }
+  }
+  const cronServiceRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/service/cron/service.rs',
+  );
+  if (!cronServiceRuleText.includes('submit_with_prepended_messages')) {
+    throw new Error('cron service boundary rule must forbid direct scheduler submit');
+  }
+  const cronToolRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/tools/implementations/cron_tool.rs',
+  );
+  const cronToolLegacySessionAccessContracts = [
+    'resolve_session_workspace_path',
+    'list_sessions',
+  ];
+  for (const contract of cronToolLegacySessionAccessContracts) {
+    if (!cronToolRuleText.includes(contract)) {
+      throw new Error(`CronTool boundary rule must forbid direct coordinator ${contract}`);
+    }
+  }
+  const bashToolRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/tools/implementations/bash_tool.rs',
+  );
+  if (!bashToolRuleText.includes('scheduler') || !bashToolRuleText.includes('deliver_background_result')) {
+    throw new Error('Bash boundary rule must forbid direct scheduler background delivery');
+  }
+  const coordinatorRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/coordination/coordinator.rs',
+  );
+  if (
+    !coordinatorRuleText.includes('scheduler') ||
+    !coordinatorRuleText.includes('deliver_thread_goal_') ||
+    !coordinatorRuleText.includes('deliver_background_result')
+  ) {
+    throw new Error('Coordinator boundary rule must forbid direct scheduler lifecycle delivery');
+  }
 
   const requiredContentContracts = [
     {
       path: 'src/crates/contracts/runtime-ports/src/lib.rs',
       contracts: [
+        'AgentDialogTurnRequest',
+        'AgentDialogPrependedReminder',
+        'AgentDialogTurnPort',
+        'AgentBackgroundResultRequest',
+        'AgentThreadGoalDeliveryKind',
+        'AgentThreadGoalDeliveryRequest',
+        'AgentLifecycleDeliveryPort',
+        'agent_dialog_turn_request_serializes_lifecycle_contract',
+        'agent_background_result_request_serializes_lifecycle_contract',
+        'agent_thread_goal_delivery_request_serializes_lifecycle_contract',
         'AgentTurnCancellationPort',
+        'requester_session_id',
+        'AgentSessionListRequest',
+        'AgentSessionSummary',
+        'AgentSessionDeleteRequest',
+        'AgentSessionWorkspaceRequest',
+        'AgentSessionManagementPort',
+        'agent_session_management_contracts_serialize_stable_shape',
         'RemoteControlStatePort',
         'RuntimeEventSink',
         'AgentSessionCreateResult',
@@ -818,7 +906,21 @@ export function runManifestParserSelfTest({
         'AgentRuntime',
         'AgentRuntimeBuilder',
         'AgentSubmissionPort',
+        'AgentDialogTurnPort',
+        'with_dialog_turn_port',
+        'submit_dialog_turn',
+        'AgentLifecycleDeliveryPort',
+        'with_lifecycle_delivery_port',
+        'deliver_background_result',
+        'deliver_thread_goal',
         'AgentTurnCancellationPort',
+        'AgentSessionManagementPort',
+        'with_session_management_port',
+        'MissingSessionManagementPort',
+        'list_sessions',
+        'delete_session',
+        'resolve_session_workspace_path',
+        'session_management_delegates_to_registered_port',
         'RuntimeServices',
         'RuntimeEventEnvelope',
         'AgentEventStream',
@@ -1123,6 +1225,20 @@ export function runManifestParserSelfTest({
         'next_wakeup_at_ms',
         'clear_pending_trigger',
         'ScheduledJobEnqueueFailureAction',
+        'CoreServiceAgentRuntime::agent_runtime_with_dialog_turns',
+        'AgentDialogTurnRequest',
+        'AgentDialogPrependedReminder',
+        'submit_dialog_turn',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/agentic/tools/implementations/cron_tool.rs',
+      contracts: [
+        'CoreServiceAgentRuntime::agent_runtime',
+        'AgentSessionListRequest',
+        'AgentSessionWorkspaceRequest',
+        'list_sessions',
+        'resolve_session_workspace_path',
       ],
     },
     {
@@ -1324,6 +1440,9 @@ export function runManifestParserSelfTest({
         'AgentSubmissionPort',
         'SessionTranscriptReader',
         'AgentTurnCancellationPort',
+        'AgentSessionManagementPort',
+        'runtime_session_summary',
+        'AgentSessionSummary',
         'RemoteControlStatePort',
         'generic attachments',
         'DialogTriggerSource',
@@ -1415,13 +1534,24 @@ export function runManifestParserSelfTest({
         'compress_remote_chat_data_url_for_mobile',
         'load_remote_chat_messages',
         'agent_runtime',
+        'agent_runtime_with_dialog_turns',
+        'agent_runtime_with_lifecycle_delivery',
+        'agent_runtime_with_scheduler_ports',
+        'global_agent_runtime_with_lifecycle_delivery',
+        'with_lifecycle_delivery_port',
+        'agent_input_attachment_from_image_context',
+        'AgentDialogTurnRequest',
+        'submit_dialog_turn',
         'AgentRuntimeBuilder',
         'remote_control_state_port',
         'CoreRemoteDialogRuntimeHost',
         'CoreRemoteCancelRuntimeHost',
+        'CoreRemoteCancelRuntimeHost\\s*\\{[\\s\\S]*\\bruntime:\\s*AgentRuntime',
+        'CoreServiceAgentRuntime::agent_runtime_with_scheduler_ports',
         'CoreRemoteWorkspaceFileRuntimeHost',
         'CoreRemoteWorkspaceRuntimeHost',
         'CoreRemoteSessionRuntimeHost',
+        'CoreRemoteSessionRuntimeHost\\s*\\{[\\s\\S]*\\bruntime:\\s*AgentRuntime',
         'CoreRemotePollRuntimeHost',
         'CoreRemoteInteractionRuntimeHost',
         'CoreRemoteSessionTrackerHost',
@@ -1429,7 +1559,10 @@ export function runManifestParserSelfTest({
         'ImageContextData',
         'RemoteImageContextAdapter',
         'AgentSubmissionPort',
+        'AgentDialogTurnPort',
         'AgentTurnCancellationPort',
+        'AgentSessionManagementPort',
+        'with_session_management_port',
         'RemoteControlStatePort',
         'SessionTranscriptReader',
         'core_service_agent_runtime_owner_keeps_coordinator_port_contracts',
@@ -1437,24 +1570,40 @@ export function runManifestParserSelfTest({
         'core_service_agent_runtime_owner_normalizes_remote_model_selection_aliases',
         'core_service_agent_runtime_owner_preserves_remote_chat_history_shape',
         'core_service_agent_runtime_owner_skips_in_progress_remote_assistant_history',
+        'core_service_agent_runtime_owner_maps_image_context_to_lifecycle_attachment',
+        'core_service_agent_runtime_owner_keeps_scheduler_lifecycle_port_contracts',
       ],
     },
     {
       path: 'src/crates/assembly/core/src/agentic/tools/implementations/session_control_tool.rs',
       contracts: [
         'CoreServiceAgentRuntime::agent_runtime',
+        'CoreServiceAgentRuntime::agent_runtime_with_scheduler_ports',
         'AgentSessionCreateRequest',
+        'AgentSessionListRequest',
+        'AgentSessionDeleteRequest',
+        'AgentSessionWorkspaceRequest',
+        'list_sessions',
+        'delete_session',
+        'resolve_session_workspace_path',
         '"createdBy"',
         'AgentTurnCancellationRequest',
+        'requester_session_id',
       ],
     },
     {
       path: 'src/crates/assembly/core/src/agentic/tools/implementations/session_message_tool.rs',
       contracts: [
-        'CoreServiceAgentRuntime::agent_runtime',
+        'CoreServiceAgentRuntime::agent_runtime_with_dialog_turns',
         'AgentSessionCreateRequest',
+        'AgentSessionListRequest',
+        'AgentSessionWorkspaceRequest',
+        'list_sessions',
+        'resolve_session_workspace_path',
         '"createdBy"',
-        'submit_with_prepended_messages',
+        'AgentDialogTurnRequest',
+        'AgentDialogPrependedReminder',
+        'submit_dialog_turn',
       ],
     },
     {
@@ -1576,7 +1725,22 @@ export function runManifestParserSelfTest({
     },
     {
       path: 'src/crates/assembly/core/src/agentic/coordination/scheduler.rs',
-      contracts: ['remote_queue_policy_preserves_interactive_preempt_and_confirmation_boundary'],
+      contracts: [
+        'remote_queue_policy_preserves_interactive_preempt_and_confirmation_boundary',
+        'AgentDialogTurnPort',
+        'AgentLifecycleDeliveryPort',
+        'AgentTurnCancellationPort',
+        'AgentBackgroundResultRequest',
+        'AgentThreadGoalDeliveryRequest',
+        'AgentThreadGoalDeliveryKind::ObjectiveUpdated',
+        'cancel_active_turn_for_session_from_requester',
+        'agent_dialog_turn_image_contexts',
+        'agent_dialog_turn_prepended_messages',
+        'agent_dialog_turn_attachments_preserve_remote_image_context',
+        'agent_dialog_turn_attachments_reject_unknown_kind',
+        'agent_dialog_turn_prepended_reminders_preserve_session_message_kind',
+        'agent_dialog_turn_prepended_reminders_reject_unknown_kind',
+      ],
     },
     {
       path: 'src/crates/assembly/core/src/agentic/tools/registry.rs',
@@ -2604,18 +2768,11 @@ export function runManifestParserSelfTest({
     }
   }
 
-  for (const path of [
+  const sessionControlRuleText = forbiddenRuleTextForPath(
     'src/crates/assembly/core/src/agentic/tools/implementations/session_control_tool.rs',
-    'src/crates/assembly/core/src/agentic/tools/implementations/session_message_tool.rs',
-  ]) {
-    const rule = forbiddenContentRules.find((rule) => rule.path === path);
-    if (!rule) {
-      throw new Error(`missing session tool old create-path boundary rule for ${path}`);
-    }
-    const ruleText = rule.patterns.map((pattern) => pattern.regex.source).join('\n');
-    if (!ruleText.includes('create_session_with_workspace_and_creator')) {
-      throw new Error(`session tool old create-path boundary rule must cover ${path}`);
-    }
+  );
+  if (!sessionControlRuleText.includes('create_session_with_workspace_and_creator')) {
+    throw new Error('SessionControl old create-path boundary rule must cover legacy create path');
   }
 
   const remoteWorkspaceRule = forbiddenContentRules.find(

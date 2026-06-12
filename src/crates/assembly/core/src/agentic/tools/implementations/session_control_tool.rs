@@ -12,6 +12,7 @@ use crate::agentic::tools::framework::{
 use crate::service_agent_runtime::CoreServiceAgentRuntime;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
+use bitfun_agent_runtime::runtime::AgentRuntime;
 use bitfun_agent_runtime::session_control::{
     render_session_control_tool_use_message, resolve_session_control_cancel_route,
     session_control_agent_type_or_default, session_control_cancel_result_message,
@@ -22,11 +23,12 @@ use bitfun_agent_runtime::session_control::{
     SessionControlValidationContext, SessionControlValidationResult,
 };
 use bitfun_runtime_ports::{
-    AgentSessionCreateRequest, AgentSubmissionSource, AgentTurnCancellationRequest,
+    AgentSessionCreateRequest, AgentSessionDeleteRequest, AgentSessionListRequest,
+    AgentSessionSummary, AgentSessionWorkspaceRequest, AgentSubmissionSource,
+    AgentTurnCancellationRequest,
 };
 use serde_json::{json, Value};
-use std::path::Path;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// SessionControl tool - create, cancel, delete, or list persisted sessions
 pub struct SessionControlTool;
@@ -85,17 +87,21 @@ impl SessionControlTool {
         action: SessionControlAction,
         session_id: Option<&str>,
         context: &ToolUseContext,
-        coordinator: &crate::agentic::coordination::ConversationCoordinator,
+        runtime: &AgentRuntime,
     ) -> BitFunResult<String> {
         match action {
             SessionControlAction::Cancel | SessionControlAction::Delete => {
                 let session_id = session_id.ok_or_else(|| {
                     BitFunError::tool(format!("session_id is required for {}", action.as_str()))
                 })?;
-                if let Some(resolved) = coordinator
-                    .resolve_session_workspace_path(session_id)
+                if let Some(resolved) = runtime
+                    .resolve_session_workspace_path(AgentSessionWorkspaceRequest {
+                        session_id: session_id.to_string(),
+                    })
                     .await
-                    .map(|path| path.to_string_lossy().to_string())
+                    .map_err(|error| {
+                        BitFunError::tool(CoreServiceAgentRuntime::runtime_error_message(error))
+                    })?
                 {
                     return Ok(resolved);
                 }
@@ -134,12 +140,18 @@ impl SessionControlTool {
 
     async fn ensure_session_exists(
         &self,
-        coordinator: &crate::agentic::coordination::ConversationCoordinator,
-        workspace_path: &Path,
+        runtime: &AgentRuntime,
         workspace: &str,
         session_id: &str,
     ) -> BitFunResult<()> {
-        let existing_sessions = coordinator.list_sessions(workspace_path).await?;
+        let existing_sessions = runtime
+            .list_sessions(AgentSessionListRequest {
+                workspace_path: workspace.to_string(),
+            })
+            .await
+            .map_err(|error| {
+                BitFunError::tool(CoreServiceAgentRuntime::runtime_error_message(error))
+            })?;
         if existing_sessions
             .iter()
             .any(|session| session.session_id == session_id)
@@ -153,10 +165,14 @@ impl SessionControlTool {
         }
     }
 
+    fn system_time_from_epoch_ms(epoch_ms: u64) -> SystemTime {
+        UNIX_EPOCH + Duration::from_millis(epoch_ms)
+    }
+
     fn build_list_result_for_assistant(
         &self,
         workspace: &str,
-        sessions: &[crate::agentic::core::SessionSummary],
+        sessions: &[AgentSessionSummary],
         current_session_id: Option<&str>,
     ) -> String {
         if sessions.is_empty() {
@@ -183,8 +199,10 @@ impl SessionControlTool {
                 Self::escape_markdown_table_cell(&session.session_id),
                 Self::escape_markdown_table_cell(&session.session_name),
                 Self::escape_markdown_table_cell(&session.agent_type),
-                Self::format_system_time(session.created_at),
-                Self::format_system_time(session.last_activity_at),
+                Self::format_system_time(Self::system_time_from_epoch_ms(session.created_at_ms)),
+                Self::format_system_time(Self::system_time_from_epoch_ms(
+                    session.last_active_at_ms
+                )),
             ));
         }
         lines.join("\n")
@@ -303,6 +321,8 @@ Arguments:
             .map_err(|e| BitFunError::tool(format!("Invalid input: {}", e)))?;
         let coordinator = get_global_coordinator()
             .ok_or_else(|| BitFunError::tool("coordinator not initialized".to_string()))?;
+        let runtime = CoreServiceAgentRuntime::agent_runtime(coordinator.clone())
+            .map_err(BitFunError::tool)?;
 
         match params.action {
             SessionControlAction::Create => {
@@ -311,7 +331,7 @@ Arguments:
                         SessionControlAction::Create,
                         None,
                         context,
-                        &coordinator,
+                        &runtime,
                     )
                     .await?;
                 let session_name =
@@ -320,9 +340,6 @@ Arguments:
                 let created_by = self.creator_session_marker(context)?;
                 let mut metadata = serde_json::Map::new();
                 metadata.insert("createdBy".to_string(), json!(created_by));
-                let runtime = CoreServiceAgentRuntime::agent_runtime(coordinator.clone())
-                    .map_err(BitFunError::tool)?;
-
                 let session = runtime
                     .create_session(AgentSessionCreateRequest {
                         session_name,
@@ -368,17 +385,16 @@ Arguments:
                         SessionControlAction::Cancel,
                         Some(session_id),
                         context,
-                        &coordinator,
+                        &runtime,
                     )
                     .await?;
-                let workspace_path = Path::new(&workspace);
                 if self.current_workspace_session(context, &workspace) == Some(session_id) {
                     return Err(BitFunError::tool(
                         "cannot cancel the current session from SessionControl".to_string(),
                     ));
                 }
 
-                self.ensure_session_exists(&coordinator, workspace_path, &workspace, session_id)
+                self.ensure_session_exists(&runtime, &workspace, session_id)
                     .await?;
 
                 let scheduler = get_global_scheduler();
@@ -386,43 +402,40 @@ Arguments:
                     context.session_id.as_deref(),
                     scheduler.is_some(),
                 );
-                let cancelled_turn_id = match (cancel_route, scheduler) {
+                let (runtime, requester_session_id) = match (cancel_route, scheduler) {
                     (
                         SessionControlCancelRoute::RequesterViaScheduler {
                             requester_session_id,
                         },
                         Some(scheduler),
                     ) => {
-                        scheduler
-                            .cancel_active_turn_for_session_from_requester(
-                                session_id,
-                                &requester_session_id,
-                                CANCEL_WAIT_TIMEOUT,
-                            )
-                            .await?
+                        let runtime = CoreServiceAgentRuntime::agent_runtime_with_scheduler_ports(
+                            coordinator.clone(),
+                            scheduler,
+                        )
+                        .map_err(BitFunError::tool)?;
+                        (runtime, Some(requester_session_id))
                     }
                     _ => {
                         // Fallback covers unusual tool contexts and startup states where the
                         // global scheduler is not available; concrete cancellation still works.
-                        let runtime = CoreServiceAgentRuntime::agent_runtime(coordinator.clone())
-                            .map_err(BitFunError::tool)?;
-                        runtime
-                            .cancel_turn(AgentTurnCancellationRequest {
-                                session_id: session_id.to_string(),
-                                turn_id: None,
-                                source: Some(AgentSubmissionSource::AgentSession),
-                                reason: None,
-                                wait_timeout_ms: Some(CANCEL_WAIT_TIMEOUT.as_millis() as u64),
-                            })
-                            .await
-                            .map_err(|error| {
-                                BitFunError::tool(CoreServiceAgentRuntime::runtime_error_message(
-                                    error,
-                                ))
-                            })?
-                            .turn_id
+                        (runtime.clone(), None)
                     }
                 };
+                let cancelled_turn_id = runtime
+                    .cancel_turn(AgentTurnCancellationRequest {
+                        session_id: session_id.to_string(),
+                        turn_id: None,
+                        source: Some(AgentSubmissionSource::AgentSession),
+                        requester_session_id,
+                        reason: None,
+                        wait_timeout_ms: Some(CANCEL_WAIT_TIMEOUT.as_millis() as u64),
+                    })
+                    .await
+                    .map_err(|error| {
+                        BitFunError::tool(CoreServiceAgentRuntime::runtime_error_message(error))
+                    })?
+                    .turn_id;
                 let had_active_turn = cancelled_turn_id.is_some();
                 let status = session_control_cancel_status(cancelled_turn_id.as_deref());
                 let result_for_assistant = session_control_cancel_result_message(
@@ -455,22 +468,27 @@ Arguments:
                         SessionControlAction::Delete,
                         Some(session_id),
                         context,
-                        &coordinator,
+                        &runtime,
                     )
                     .await?;
-                let workspace_path = Path::new(&workspace);
                 if self.current_workspace_session(context, &workspace) == Some(session_id) {
                     return Err(BitFunError::tool(
                         "cannot delete the current session from SessionControl".to_string(),
                     ));
                 }
 
-                self.ensure_session_exists(&coordinator, workspace_path, &workspace, session_id)
+                self.ensure_session_exists(&runtime, &workspace, session_id)
                     .await?;
 
-                coordinator
-                    .delete_session(workspace_path, session_id)
-                    .await?;
+                runtime
+                    .delete_session(AgentSessionDeleteRequest {
+                        workspace_path: workspace.clone(),
+                        session_id: session_id.to_string(),
+                    })
+                    .await
+                    .map_err(|error| {
+                        BitFunError::tool(CoreServiceAgentRuntime::runtime_error_message(error))
+                    })?;
 
                 Ok(vec![ToolResult::Result {
                     data: json!({
@@ -491,11 +509,17 @@ Arguments:
                         SessionControlAction::List,
                         None,
                         context,
-                        &coordinator,
+                        &runtime,
                     )
                     .await?;
-                let workspace_path = Path::new(&workspace);
-                let sessions = coordinator.list_sessions(workspace_path).await?;
+                let sessions = runtime
+                    .list_sessions(AgentSessionListRequest {
+                        workspace_path: workspace.clone(),
+                    })
+                    .await
+                    .map_err(|error| {
+                        BitFunError::tool(CoreServiceAgentRuntime::runtime_error_message(error))
+                    })?;
                 let current_session_id = self.current_workspace_session(context, &workspace);
                 let result_for_assistant =
                     self.build_list_result_for_assistant(&workspace, &sessions, current_session_id);

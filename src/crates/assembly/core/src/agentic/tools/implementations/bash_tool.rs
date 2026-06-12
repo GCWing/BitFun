@@ -1,4 +1,3 @@
-use crate::agentic::coordination::scheduler::get_global_scheduler;
 use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
@@ -8,10 +7,12 @@ use crate::infrastructure::events::event_system::BackendEvent::{
     ToolExecutionProgress, ToolTerminalReady,
 };
 use crate::service::config::global::get_global_config_service;
+use crate::service_agent_runtime::CoreServiceAgentRuntime;
 use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::event::{ToolExecutionProgressInfo, ToolTerminalReadyInfo};
 use async_trait::async_trait;
+use bitfun_runtime_ports::AgentBackgroundResultRequest;
 use futures::StreamExt;
 use log::{debug, error, info};
 use serde_json::{json, Value};
@@ -40,6 +41,55 @@ struct ResolvedShell {
     shell_type: Option<ShellType>,
     /// Display name for the shell (for tool description)
     display_name: String,
+}
+
+fn json_object_metadata(value: Value) -> serde_json::Map<String, Value> {
+    match value {
+        Value::Object(map) => map,
+        _ => serde_json::Map::new(),
+    }
+}
+
+async fn deliver_background_bash_result(
+    parent_session_id: String,
+    parent_agent_type: String,
+    parent_workspace_path: Option<String>,
+    delivery_text: String,
+    display_text: String,
+    metadata: serde_json::Map<String, Value>,
+    terminal_session_id: String,
+    failure_context: &'static str,
+) {
+    let runtime = match CoreServiceAgentRuntime::global_agent_runtime_with_lifecycle_delivery() {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            error!(
+                "Agent runtime lifecycle delivery is not available; background Bash {} dropped: session_id={}, terminal_session_id={}, error={}",
+                failure_context, parent_session_id, terminal_session_id, error
+            );
+            return;
+        }
+    };
+
+    if let Err(error) = runtime
+        .deliver_background_result(AgentBackgroundResultRequest {
+            session_id: parent_session_id.clone(),
+            agent_type: parent_agent_type,
+            workspace_path: parent_workspace_path,
+            content: delivery_text,
+            display_content: Some(display_text),
+            metadata,
+        })
+        .await
+    {
+        error!(
+            "Failed to deliver background Bash {}: session_id={}, terminal_session_id={}, error={}",
+            failure_context,
+            parent_session_id,
+            terminal_session_id,
+            CoreServiceAgentRuntime::runtime_error_message(error)
+        );
+    }
 }
 
 /// Bash tool
@@ -1176,29 +1226,17 @@ impl BashTool {
                             "outputFile": output_file_reference_for_task.clone(),
                         });
 
-                        if let Some(scheduler) = get_global_scheduler() {
-                            if let Err(error) = scheduler
-                                .deliver_background_result(
-                                    parent_session_id.clone(),
-                                    parent_agent_type.clone(),
-                                    parent_workspace_path.clone(),
-                                    delivery_text,
-                                    Some(display_text),
-                                    Some(metadata),
-                                )
-                                .await
-                            {
-                                error!(
-                                    "Failed to deliver background Bash result: session_id={}, terminal_session_id={}, error={}",
-                                    parent_session_id, terminal_session_id, error
-                                );
-                            }
-                        } else {
-                            error!(
-                                "Scheduler not initialized; background Bash result dropped: session_id={}, terminal_session_id={}",
-                                parent_session_id, terminal_session_id
-                            );
-                        }
+                        deliver_background_bash_result(
+                            parent_session_id.clone(),
+                            parent_agent_type.clone(),
+                            parent_workspace_path.clone(),
+                            delivery_text,
+                            display_text,
+                            json_object_metadata(metadata),
+                            terminal_session_id.clone(),
+                            "result",
+                        )
+                        .await;
                         delivery_sent = true;
                         break;
                     }
@@ -1226,29 +1264,17 @@ impl BashTool {
                             "error": message.clone(),
                         });
 
-                        if let Some(scheduler) = get_global_scheduler() {
-                            if let Err(error) = scheduler
-                                .deliver_background_result(
-                                    parent_session_id.clone(),
-                                    parent_agent_type.clone(),
-                                    parent_workspace_path.clone(),
-                                    delivery_text,
-                                    Some(display_text),
-                                    Some(metadata),
-                                )
-                                .await
-                            {
-                                error!(
-                                    "Failed to deliver background Bash error result: session_id={}, terminal_session_id={}, error={}",
-                                    parent_session_id, terminal_session_id, error
-                                );
-                            }
-                        } else {
-                            error!(
-                                "Scheduler not initialized; background Bash error result dropped: session_id={}, terminal_session_id={}",
-                                parent_session_id, terminal_session_id
-                            );
-                        }
+                        deliver_background_bash_result(
+                            parent_session_id.clone(),
+                            parent_agent_type.clone(),
+                            parent_workspace_path.clone(),
+                            delivery_text,
+                            display_text,
+                            json_object_metadata(metadata),
+                            terminal_session_id.clone(),
+                            "error result",
+                        )
+                        .await;
                         delivery_sent = true;
                         break;
                     }
@@ -1278,29 +1304,17 @@ impl BashTool {
                     "error": "stream_ended_without_completion",
                 });
 
-                if let Some(scheduler) = get_global_scheduler() {
-                    if let Err(error) = scheduler
-                        .deliver_background_result(
-                            parent_session_id.clone(),
-                            parent_agent_type.clone(),
-                            parent_workspace_path.clone(),
-                            delivery_text,
-                            Some(display_text),
-                            Some(metadata),
-                        )
-                        .await
-                    {
-                        error!(
-                            "Failed to deliver background Bash terminal stream-end result: session_id={}, terminal_session_id={}, error={}",
-                            parent_session_id, terminal_session_id, error
-                        );
-                    }
-                } else {
-                    error!(
-                        "Scheduler not initialized; background Bash stream-end result dropped: session_id={}, terminal_session_id={}",
-                        parent_session_id, terminal_session_id
-                    );
-                }
+                deliver_background_bash_result(
+                    parent_session_id.clone(),
+                    parent_agent_type.clone(),
+                    parent_workspace_path.clone(),
+                    delivery_text,
+                    display_text,
+                    json_object_metadata(metadata),
+                    terminal_session_id.clone(),
+                    "stream-end result",
+                )
+                .await;
             }
         });
 

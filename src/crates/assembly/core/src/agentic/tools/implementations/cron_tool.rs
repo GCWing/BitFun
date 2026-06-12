@@ -11,8 +11,11 @@ use crate::service::{
     },
     get_global_cron_service,
 };
+use crate::service_agent_runtime::CoreServiceAgentRuntime;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
+use bitfun_agent_runtime::runtime::AgentRuntime;
+use bitfun_runtime_ports::{AgentSessionListRequest, AgentSessionWorkspaceRequest};
 use chrono::{DateTime, Local, SecondsFormat, TimeZone};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -117,16 +120,34 @@ impl CronTool {
         self.resolve_workspace(workspace.to_string_lossy().as_ref(), Some(context))
     }
 
+    fn agent_runtime_if_available(&self) -> BitFunResult<Option<AgentRuntime>> {
+        let Some(coordinator) = get_global_coordinator() else {
+            return Ok(None);
+        };
+        CoreServiceAgentRuntime::agent_runtime(coordinator)
+            .map(Some)
+            .map_err(BitFunError::tool)
+    }
+
+    fn require_agent_runtime(&self) -> BitFunResult<AgentRuntime> {
+        self.agent_runtime_if_available()?
+            .ok_or_else(|| BitFunError::tool("coordinator not initialized".to_string()))
+    }
+
     async fn resolve_effective_workspace_for_session(
         &self,
         session_id: &str,
         context: &ToolUseContext,
     ) -> BitFunResult<String> {
-        if let Some(coordinator) = get_global_coordinator() {
-            if let Some(resolved) = coordinator
-                .resolve_session_workspace_path(session_id)
+        if let Some(runtime) = self.agent_runtime_if_available()? {
+            if let Some(resolved) = runtime
+                .resolve_session_workspace_path(AgentSessionWorkspaceRequest {
+                    session_id: session_id.to_string(),
+                })
                 .await
-                .map(|path| path.to_string_lossy().to_string())
+                .map_err(|error| {
+                    BitFunError::tool(CoreServiceAgentRuntime::runtime_error_message(error))
+                })?
             {
                 return Ok(resolved);
             }
@@ -162,9 +183,15 @@ impl CronTool {
     }
 
     async fn ensure_session_exists(&self, workspace: &str, session_id: &str) -> BitFunResult<()> {
-        let coordinator = get_global_coordinator()
-            .ok_or_else(|| BitFunError::tool("coordinator not initialized".to_string()))?;
-        let sessions = coordinator.list_sessions(Path::new(workspace)).await?;
+        let runtime = self.require_agent_runtime()?;
+        let sessions = runtime
+            .list_sessions(AgentSessionListRequest {
+                workspace_path: workspace.to_string(),
+            })
+            .await
+            .map_err(|error| {
+                BitFunError::tool(CoreServiceAgentRuntime::runtime_error_message(error))
+            })?;
         if sessions
             .iter()
             .any(|session| session.session_id == session_id)

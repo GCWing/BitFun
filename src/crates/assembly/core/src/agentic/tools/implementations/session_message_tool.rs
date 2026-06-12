@@ -1,9 +1,7 @@
 use super::util::normalize_path;
 use crate::agentic::coordination::{
-    get_global_coordinator, get_global_scheduler, AgentSessionReplyRoute, DialogSubmissionPolicy,
-    DialogTriggerSource,
+    get_global_coordinator, get_global_scheduler, DialogSubmissionPolicy, DialogTriggerSource,
 };
-use crate::agentic::core::{InternalReminderKind, Message};
 use crate::agentic::tools::framework::{
     Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
@@ -11,7 +9,10 @@ use crate::agentic::tools::workspace_paths::posix_style_path_is_absolute;
 use crate::service_agent_runtime::CoreServiceAgentRuntime;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
-use bitfun_runtime_ports::AgentSessionCreateRequest;
+use bitfun_runtime_ports::{
+    AgentDialogPrependedReminder, AgentDialogTurnRequest, AgentSessionCreateRequest,
+    AgentSessionListRequest, AgentSessionReplyRoute, AgentSessionWorkspaceRequest,
+};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::path::Path;
@@ -160,14 +161,17 @@ impl SessionMessageTool {
         Ok(format!("session-{}", creator_session_id))
     }
 
-    fn format_forwarded_message(&self, message: &str) -> (String, Vec<Message>) {
+    fn format_forwarded_message(
+        &self,
+        message: &str,
+    ) -> (String, Vec<AgentDialogPrependedReminder>) {
         (
             message.to_string(),
-            vec![Message::internal_reminder(
-                InternalReminderKind::SessionMessageRequest,
-                "This request was sent by another agent, not human user. Do not use interactive tools for this request. In particular, do not call AskUserQuestion."
+            vec![AgentDialogPrependedReminder {
+                kind: "session_message_request".to_string(),
+                text: "This request was sent by another agent, not human user. Do not use interactive tools for this request. In particular, do not call AskUserQuestion."
                     .to_string(),
-            )],
+            }],
         )
     }
 }
@@ -446,6 +450,11 @@ Allowed agent types when creating a session:
             .ok_or_else(|| BitFunError::tool("coordinator not initialized".to_string()))?;
         let scheduler = get_global_scheduler()
             .ok_or_else(|| BitFunError::tool("scheduler not initialized".to_string()))?;
+        let runtime = CoreServiceAgentRuntime::agent_runtime_with_dialog_turns(
+            coordinator.clone(),
+            scheduler,
+        )
+        .map_err(BitFunError::tool)?;
 
         let (target_session_id, target_agent_type, created_session_id, workspace) =
             if let Some(target_session_id) = params.session_id.clone() {
@@ -458,10 +467,14 @@ Allowed agent types when creating a session:
                 let workspace = if let Some(workspace) = params.workspace.as_deref() {
                     self.resolve_workspace(workspace, context)?
                 } else {
-                    coordinator
-                        .resolve_session_workspace_path(&target_session_id)
+                    runtime
+                        .resolve_session_workspace_path(AgentSessionWorkspaceRequest {
+                            session_id: target_session_id.clone(),
+                        })
                         .await
-                        .map(|path| path.to_string_lossy().to_string())
+                        .map_err(|error| {
+                            BitFunError::tool(CoreServiceAgentRuntime::runtime_error_message(error))
+                        })?
                         .ok_or_else(|| {
                             BitFunError::NotFound(format!(
                                 "Workspace for session '{}' could not be resolved",
@@ -469,8 +482,14 @@ Allowed agent types when creating a session:
                             ))
                         })?
                 };
-                let workspace_path = Path::new(&workspace);
-                let existing_sessions = coordinator.list_sessions(workspace_path).await?;
+                let existing_sessions = runtime
+                    .list_sessions(AgentSessionListRequest {
+                        workspace_path: workspace.clone(),
+                    })
+                    .await
+                    .map_err(|error| {
+                        BitFunError::tool(CoreServiceAgentRuntime::runtime_error_message(error))
+                    })?;
                 let target_session = existing_sessions
                     .iter()
                     .find(|session| session.session_id == target_session_id.as_str())
@@ -520,8 +539,6 @@ Allowed agent types when creating a session:
                 let created_by = self.creator_session_marker(context)?;
                 let mut metadata = serde_json::Map::new();
                 metadata.insert("createdBy".to_string(), json!(created_by));
-                let runtime = CoreServiceAgentRuntime::agent_runtime(coordinator.clone())
-                    .map_err(BitFunError::tool)?;
                 let session = runtime
                     .create_session(AgentSessionCreateRequest {
                         session_name,
@@ -545,25 +562,27 @@ Allowed agent types when creating a session:
         let (forwarded_message, prepended_messages) =
             self.format_forwarded_message(&params.message);
 
-        scheduler
-            .submit_with_prepended_messages(
-                target_session_id.clone(),
-                forwarded_message,
-                Some(params.message.clone()),
-                None,
-                target_agent_type.clone(),
-                Some(workspace.clone()),
-                DialogSubmissionPolicy::for_source(DialogTriggerSource::AgentSession),
-                Some(AgentSessionReplyRoute {
+        runtime
+            .submit_dialog_turn(AgentDialogTurnRequest {
+                session_id: target_session_id.clone(),
+                message: forwarded_message,
+                original_message: Some(params.message.clone()),
+                turn_id: None,
+                agent_type: target_agent_type.clone(),
+                workspace_path: Some(workspace.clone()),
+                policy: DialogSubmissionPolicy::for_source(DialogTriggerSource::AgentSession),
+                reply_route: Some(AgentSessionReplyRoute {
                     source_session_id,
                     source_workspace_path: source_workspace,
                 }),
-                None,
-                prepended_messages,
-                None,
-            )
+                prepended_reminders: prepended_messages,
+                attachments: Vec::new(),
+                metadata: serde_json::Map::new(),
+            })
             .await
-            .map_err(BitFunError::tool)?;
+            .map_err(|error| {
+                BitFunError::tool(CoreServiceAgentRuntime::runtime_error_message(error))
+            })?;
 
         Ok(vec![ToolResult::Result {
             data: json!({

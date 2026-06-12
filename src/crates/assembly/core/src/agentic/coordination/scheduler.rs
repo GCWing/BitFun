@@ -24,8 +24,7 @@ use crate::agentic::round_preempt::{
     SessionRoundYieldFlags,
 };
 use crate::agentic::session::SessionManager;
-use bitfun_runtime_ports::ThreadGoal;
-use bitfun_runtime_ports::MAX_THREAD_GOAL_AUTO_CONTINUATIONS;
+use bitfun_runtime_ports::{ThreadGoal, MAX_THREAD_GOAL_AUTO_CONTINUATIONS};
 use log::{debug, info, warn};
 use std::path::Path;
 use std::sync::Arc;
@@ -46,8 +45,11 @@ use bitfun_agent_runtime::scheduler::{
     TurnOutcomeStatus,
 };
 use bitfun_runtime_ports::{
-    resolve_dialog_submit_queue_action, DialogSessionStateFact, DialogSubmitQueueAction,
-    DialogSubmitQueueFacts,
+    resolve_dialog_submit_queue_action, AgentBackgroundResultRequest, AgentDialogPrependedReminder,
+    AgentDialogTurnPort, AgentDialogTurnRequest, AgentInputAttachment, AgentLifecycleDeliveryPort,
+    AgentThreadGoalDeliveryKind, AgentThreadGoalDeliveryRequest, AgentTurnCancellationPort,
+    AgentTurnCancellationRequest, AgentTurnCancellationResult, DialogSessionStateFact,
+    DialogSubmitQueueAction, DialogSubmitQueueFacts, PortError, PortErrorKind, PortResult,
 };
 pub use bitfun_runtime_ports::{
     AgentSessionReplyRoute, DialogQueuePriority, DialogSteerOutcome, DialogSubmissionPolicy,
@@ -1080,6 +1082,241 @@ impl DialogScheduler {
     }
 }
 
+fn metadata_string(
+    metadata: &serde_json::Map<String, serde_json::Value>,
+    key: &str,
+) -> Option<String> {
+    metadata
+        .get(key)
+        .and_then(|value| value.as_str())
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+fn mime_type_from_data_url(data_url: &str) -> Option<String> {
+    data_url
+        .split_once(',')
+        .and_then(|(header, _)| {
+            header
+                .strip_prefix("data:")
+                .and_then(|rest| rest.split(';').next())
+        })
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+fn image_context_metadata(attachment: &AgentInputAttachment) -> Option<serde_json::Value> {
+    if let Some(metadata) = attachment.metadata.get("metadata").cloned() {
+        return Some(metadata);
+    }
+
+    let mut metadata = serde_json::Map::new();
+    if let Some(name) = metadata_string(&attachment.metadata, "name") {
+        metadata.insert("name".to_string(), serde_json::Value::String(name));
+    }
+    if attachment.metadata.contains_key("dataUrl") {
+        metadata.insert(
+            "source".to_string(),
+            serde_json::Value::String("remote".to_string()),
+        );
+    }
+
+    if metadata.is_empty() {
+        None
+    } else {
+        Some(serde_json::Value::Object(metadata))
+    }
+}
+
+fn agent_dialog_turn_image_contexts(
+    attachments: &[AgentInputAttachment],
+) -> PortResult<Option<Vec<ImageContextData>>> {
+    if attachments.is_empty() {
+        return Ok(None);
+    }
+
+    let mut image_contexts = Vec::with_capacity(attachments.len());
+    for attachment in attachments {
+        if attachment.kind != "remote_image" {
+            return Err(PortError::new(
+                PortErrorKind::InvalidRequest,
+                format!(
+                    "unsupported agent dialog attachment kind: {}",
+                    attachment.kind
+                ),
+            ));
+        }
+
+        let data_url = metadata_string(&attachment.metadata, "dataUrl");
+        let image_path = metadata_string(&attachment.metadata, "imagePath");
+        if data_url.is_none() && image_path.is_none() {
+            return Err(PortError::new(
+                PortErrorKind::InvalidRequest,
+                "remote_image attachment requires dataUrl or imagePath",
+            ));
+        }
+
+        let mime_type = metadata_string(&attachment.metadata, "mimeType")
+            .or_else(|| data_url.as_deref().and_then(mime_type_from_data_url))
+            .unwrap_or_else(|| "image/png".to_string());
+
+        image_contexts.push(ImageContextData {
+            id: attachment.id.clone(),
+            image_path,
+            data_url,
+            mime_type,
+            metadata: image_context_metadata(attachment),
+        });
+    }
+
+    Ok(Some(image_contexts))
+}
+
+fn agent_dialog_turn_prepended_messages(
+    reminders: &[AgentDialogPrependedReminder],
+) -> PortResult<Vec<Message>> {
+    reminders
+        .iter()
+        .map(|reminder| {
+            let kind = match reminder.kind.as_str() {
+                "session_message_request" => InternalReminderKind::SessionMessageRequest,
+                "scheduled_job" => InternalReminderKind::ScheduledJob,
+                other => {
+                    return Err(PortError::new(
+                        PortErrorKind::InvalidRequest,
+                        format!("unsupported agent dialog prepended reminder kind: {other}"),
+                    ));
+                }
+            };
+            Ok(Message::internal_reminder(kind, reminder.text.clone()))
+        })
+        .collect()
+}
+
+#[async_trait::async_trait]
+impl AgentDialogTurnPort for DialogScheduler {
+    async fn submit_dialog_turn(
+        &self,
+        request: AgentDialogTurnRequest,
+    ) -> PortResult<DialogSubmitOutcome> {
+        let image_contexts = agent_dialog_turn_image_contexts(&request.attachments)?;
+        let prepended_messages =
+            agent_dialog_turn_prepended_messages(&request.prepended_reminders)?;
+        let user_message_metadata = if request.metadata.is_empty() {
+            None
+        } else {
+            Some(serde_json::Value::Object(request.metadata))
+        };
+
+        self.submit_with_prepended_messages(
+            request.session_id,
+            request.message,
+            request.original_message,
+            request.turn_id,
+            request.agent_type,
+            request.workspace_path,
+            request.policy,
+            request.reply_route,
+            user_message_metadata,
+            prepended_messages,
+            image_contexts,
+        )
+        .await
+        .map_err(|error| PortError::new(PortErrorKind::Backend, error))
+    }
+}
+
+#[async_trait::async_trait]
+impl AgentLifecycleDeliveryPort for DialogScheduler {
+    async fn deliver_background_result(
+        &self,
+        request: AgentBackgroundResultRequest,
+    ) -> PortResult<()> {
+        let metadata = if request.metadata.is_empty() {
+            None
+        } else {
+            Some(serde_json::Value::Object(request.metadata))
+        };
+
+        DialogScheduler::deliver_background_result(
+            self,
+            request.session_id,
+            request.agent_type,
+            request.workspace_path,
+            request.content,
+            request.display_content,
+            metadata,
+        )
+        .await
+        .map_err(|error| PortError::new(PortErrorKind::Backend, error))
+    }
+
+    async fn deliver_thread_goal(&self, request: AgentThreadGoalDeliveryRequest) -> PortResult<()> {
+        let result = match request.kind {
+            AgentThreadGoalDeliveryKind::Resumed => {
+                DialogScheduler::deliver_thread_goal_resumed(
+                    self,
+                    request.session_id,
+                    request.agent_type,
+                    request.workspace_path,
+                    request.goal,
+                )
+                .await
+            }
+            AgentThreadGoalDeliveryKind::ObjectiveUpdated => {
+                DialogScheduler::deliver_thread_goal_objective_updated(
+                    self,
+                    request.session_id,
+                    request.agent_type,
+                    request.workspace_path,
+                    request.goal,
+                )
+                .await
+            }
+        };
+
+        result.map_err(|error| PortError::new(PortErrorKind::Backend, error))
+    }
+}
+
+#[async_trait::async_trait]
+impl AgentTurnCancellationPort for DialogScheduler {
+    async fn cancel_turn(
+        &self,
+        request: AgentTurnCancellationRequest,
+    ) -> PortResult<AgentTurnCancellationResult> {
+        let session_id = request.session_id;
+        let wait_timeout = Duration::from_millis(request.wait_timeout_ms.unwrap_or(1500));
+
+        let cancelled_turn_id = if let Some(turn_id) = request.turn_id {
+            self.coordinator
+                .cancel_dialog_turn(&session_id, &turn_id)
+                .await
+                .map_err(|error| PortError::new(PortErrorKind::Backend, error.to_string()))?;
+            Some(turn_id)
+        } else if let Some(requester_session_id) = request.requester_session_id {
+            self.cancel_active_turn_for_session_from_requester(
+                &session_id,
+                &requester_session_id,
+                wait_timeout,
+            )
+            .await
+            .map_err(|error| PortError::new(PortErrorKind::Backend, error.to_string()))?
+        } else {
+            self.coordinator
+                .cancel_active_turn_for_session(&session_id, wait_timeout)
+                .await
+                .map_err(|error| PortError::new(PortErrorKind::Backend, error.to_string()))?
+        };
+
+        Ok(AgentTurnCancellationResult {
+            session_id,
+            requested: cancelled_turn_id.is_some(),
+            turn_id: cancelled_turn_id,
+        })
+    }
+}
+
 fn thread_goal_delivery_messages(reminders: Vec<ThreadGoalDeliveryReminder>) -> Vec<Message> {
     reminders
         .into_iter()
@@ -1123,6 +1360,7 @@ pub fn clear_thread_goal_continuation_abort(session_id: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bitfun_runtime_ports::{AgentDialogPrependedReminder, AgentInputAttachment, PortErrorKind};
 
     fn agent_session_active_turn(source_session_id: &str) -> ActiveDialogTurn {
         ActiveDialogTurn::new(
@@ -1208,5 +1446,101 @@ mod tests {
         assert!(!bitfun_runtime_ports::dialog_policy_may_preempt(
             &agent_session
         ));
+    }
+
+    #[test]
+    fn agent_dialog_turn_attachments_preserve_remote_image_context() {
+        let mut metadata = serde_json::Map::new();
+        metadata.insert(
+            "dataUrl".to_string(),
+            serde_json::json!("data:image/jpeg;base64,abc"),
+        );
+        metadata.insert("mimeType".to_string(), serde_json::json!("image/jpeg"));
+        metadata.insert(
+            "metadata".to_string(),
+            serde_json::json!({ "name": "clip.jpg", "source": "remote" }),
+        );
+
+        let contexts = agent_dialog_turn_image_contexts(&[AgentInputAttachment {
+            kind: "remote_image".to_string(),
+            id: "ctx-1".to_string(),
+            metadata,
+        }])
+        .expect("remote image attachment should be supported")
+        .expect("non-empty image contexts");
+
+        assert_eq!(contexts.len(), 1);
+        assert_eq!(contexts[0].id, "ctx-1");
+        assert_eq!(
+            contexts[0].data_url.as_deref(),
+            Some("data:image/jpeg;base64,abc")
+        );
+        assert_eq!(contexts[0].mime_type, "image/jpeg");
+        assert_eq!(
+            contexts[0]
+                .metadata
+                .as_ref()
+                .and_then(|value| value.get("name")),
+            Some(&serde_json::json!("clip.jpg"))
+        );
+    }
+
+    #[test]
+    fn agent_dialog_turn_attachments_reject_unknown_kind() {
+        let err = agent_dialog_turn_image_contexts(&[AgentInputAttachment {
+            kind: "unknown".to_string(),
+            id: "attachment-1".to_string(),
+            metadata: serde_json::Map::new(),
+        }])
+        .expect_err("unsupported attachment kind must be explicit");
+
+        assert_eq!(err.kind, PortErrorKind::InvalidRequest);
+        assert!(err
+            .message
+            .contains("unsupported agent dialog attachment kind"));
+    }
+
+    #[test]
+    fn agent_dialog_turn_prepended_reminders_preserve_session_message_kind() {
+        let messages = agent_dialog_turn_prepended_messages(&[AgentDialogPrependedReminder {
+            kind: "session_message_request".to_string(),
+            text: "sent by another agent".to_string(),
+        }])
+        .expect("session message reminder should be supported");
+
+        assert_eq!(messages.len(), 1);
+        assert_eq!(
+            messages[0].internal_reminder_kind(),
+            Some(InternalReminderKind::SessionMessageRequest)
+        );
+    }
+
+    #[test]
+    fn agent_dialog_turn_prepended_reminders_preserve_scheduled_job_kind() {
+        let messages = agent_dialog_turn_prepended_messages(&[AgentDialogPrependedReminder {
+            kind: "scheduled_job".to_string(),
+            text: "scheduled job trigger".to_string(),
+        }])
+        .expect("scheduled job reminder should be supported");
+
+        assert_eq!(messages.len(), 1);
+        assert_eq!(
+            messages[0].internal_reminder_kind(),
+            Some(InternalReminderKind::ScheduledJob)
+        );
+    }
+
+    #[test]
+    fn agent_dialog_turn_prepended_reminders_reject_unknown_kind() {
+        let err = agent_dialog_turn_prepended_messages(&[AgentDialogPrependedReminder {
+            kind: "unknown".to_string(),
+            text: "unsupported".to_string(),
+        }])
+        .expect_err("unsupported reminder kind must be explicit");
+
+        assert_eq!(err.kind, PortErrorKind::InvalidRequest);
+        assert!(err
+            .message
+            .contains("unsupported agent dialog prepended reminder kind"));
     }
 }

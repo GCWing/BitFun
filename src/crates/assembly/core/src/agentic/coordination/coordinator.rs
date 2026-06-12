@@ -52,9 +52,13 @@ use crate::service::session::{SessionRelationship, SessionRelationshipKind};
 use crate::service::workspace::{
     get_global_workspace_service, WorkspaceCreateOptions, WorkspaceKind,
 };
+use crate::service_agent_runtime::CoreServiceAgentRuntime;
 use crate::util::errors::{BitFunError, BitFunResult};
-use bitfun_runtime_ports::{DelegationPolicy, SubagentContextMode};
-use bitfun_runtime_ports::{ThreadGoal, ThreadGoalContinuationPlan, ThreadGoalStatus};
+use bitfun_runtime_ports::{
+    AgentBackgroundResultRequest, AgentThreadGoalDeliveryKind, AgentThreadGoalDeliveryRequest,
+    DelegationPolicy, SubagentContextMode, ThreadGoal, ThreadGoalContinuationPlan,
+    ThreadGoalStatus,
+};
 use dashmap::DashMap;
 use log::{debug, error, info, warn};
 use std::collections::{HashMap, HashSet};
@@ -2202,13 +2206,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         if !goal.is_active() {
             return;
         }
-        let Some(scheduler) = super::scheduler::get_global_scheduler() else {
-            warn!(
-                "Scheduler not initialized; objective_updated steering skipped: session_id={}",
-                session_id
-            );
-            return;
-        };
         let agent_type = match self.session_manager.get_session(session_id) {
             Some(session) => {
                 let agent_type = session.agent_type.trim();
@@ -2224,18 +2221,31 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .require_main_session_workspace(session_id)
             .ok()
             .map(|path| path.to_string_lossy().to_string());
-        if let Err(error) = scheduler
-            .deliver_thread_goal_objective_updated(
-                session_id.to_string(),
+        let runtime = match CoreServiceAgentRuntime::global_agent_runtime_with_lifecycle_delivery()
+        {
+            Ok(runtime) => runtime,
+            Err(error) => {
+                warn!(
+                    "Agent runtime lifecycle delivery is not available; objective_updated steering skipped: session_id={}, error={}",
+                    session_id, error
+                );
+                return;
+            }
+        };
+        if let Err(error) = runtime
+            .deliver_thread_goal(AgentThreadGoalDeliveryRequest {
+                session_id: session_id.to_string(),
                 agent_type,
                 workspace_path,
-                goal.clone(),
-            )
+                kind: AgentThreadGoalDeliveryKind::ObjectiveUpdated,
+                goal: goal.clone(),
+            })
             .await
         {
             warn!(
                 "Failed to deliver objective_updated steering: session_id={}, error={}",
-                session_id, error
+                session_id,
+                CoreServiceAgentRuntime::runtime_error_message(error)
             );
         }
     }
@@ -2352,13 +2362,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         if !goal.is_active() {
             return;
         }
-        let Some(scheduler) = super::scheduler::get_global_scheduler() else {
-            warn!(
-                "Scheduler not initialized; thread goal resume steering skipped: session_id={}",
-                session_id
-            );
-            return;
-        };
         let agent_type = match self.session_manager.get_session(session_id) {
             Some(session) => {
                 let agent_type = session.agent_type.trim();
@@ -2377,13 +2380,31 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let session_id = session_id.to_string();
         let goal = goal.clone();
         tokio::spawn(async move {
-            if let Err(error) = scheduler
-                .deliver_thread_goal_resumed(session_id.clone(), agent_type, workspace_path, goal)
+            let runtime =
+                match CoreServiceAgentRuntime::global_agent_runtime_with_lifecycle_delivery() {
+                    Ok(runtime) => runtime,
+                    Err(error) => {
+                        warn!(
+                            "Agent runtime lifecycle delivery is not available; thread goal resume steering skipped: session_id={}, error={}",
+                            session_id, error
+                        );
+                        return;
+                    }
+                };
+            if let Err(error) = runtime
+                .deliver_thread_goal(AgentThreadGoalDeliveryRequest {
+                    session_id: session_id.clone(),
+                    agent_type,
+                    workspace_path,
+                    kind: AgentThreadGoalDeliveryKind::Resumed,
+                    goal,
+                })
                 .await
             {
                 warn!(
                     "Failed to deliver thread goal resume steering: session_id={}, error={}",
-                    session_id, error
+                    session_id,
+                    CoreServiceAgentRuntime::runtime_error_message(error)
                 );
             }
         });
@@ -5317,38 +5338,58 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 ),
             };
 
-            let metadata = serde_json::json!({
-                "kind": "background_result",
-                "sourceKind": "subagent",
-                "backgroundTaskId": background_task_id_for_delivery,
-                "subagentType": agent_type,
-                "taskDescription": task_description,
-            });
+            let mut metadata = serde_json::Map::new();
+            metadata.insert(
+                "kind".to_string(),
+                serde_json::Value::String("background_result".to_string()),
+            );
+            metadata.insert(
+                "sourceKind".to_string(),
+                serde_json::Value::String("subagent".to_string()),
+            );
+            metadata.insert(
+                "backgroundTaskId".to_string(),
+                serde_json::Value::String(background_task_id_for_delivery.clone()),
+            );
+            metadata.insert(
+                "subagentType".to_string(),
+                serde_json::Value::String(agent_type),
+            );
+            metadata.insert(
+                "taskDescription".to_string(),
+                serde_json::Value::String(task_description),
+            );
 
-            if let Some(scheduler) = super::scheduler::get_global_scheduler() {
-                if let Err(error) = scheduler
-                    .deliver_background_result(
-                        subagent_parent_info.session_id.clone(),
-                        parent_agent_type,
-                        parent_workspace_path,
-                        delivery_text,
-                        Some(display_text),
-                        Some(metadata),
-                    )
-                    .await
-                {
-                    warn!(
-                        "Failed to deliver background subagent result: background_task_id={}, parent_session_id={}, error={}",
+            let runtime =
+                match CoreServiceAgentRuntime::global_agent_runtime_with_lifecycle_delivery() {
+                    Ok(runtime) => runtime,
+                    Err(error) => {
+                        warn!(
+                        "Agent runtime lifecycle delivery is not available; background subagent result dropped: background_task_id={}, parent_session_id={}, error={}",
                         background_task_id_for_delivery,
                         subagent_parent_info.session_id,
                         error
                     );
-                }
-            } else {
+                        return;
+                    }
+                };
+
+            if let Err(error) = runtime
+                .deliver_background_result(AgentBackgroundResultRequest {
+                    session_id: subagent_parent_info.session_id.clone(),
+                    agent_type: parent_agent_type,
+                    workspace_path: parent_workspace_path,
+                    content: delivery_text,
+                    display_content: Some(display_text),
+                    metadata,
+                })
+                .await
+            {
                 warn!(
-                    "Scheduler not initialized; background subagent result dropped: background_task_id={}, parent_session_id={}",
+                    "Failed to deliver background subagent result: background_task_id={}, parent_session_id={}, error={}",
                     background_task_id_for_delivery,
-                    subagent_parent_info.session_id
+                    subagent_parent_info.session_id,
+                    CoreServiceAgentRuntime::runtime_error_message(error)
                 );
             }
         });
@@ -5721,6 +5762,69 @@ impl bitfun_runtime_ports::AgentSubmissionPort for ConversationCoordinator {
             .get_session_manager()
             .get_session(session_id)
             .map(|session| session.agent_type.clone()))
+    }
+}
+
+fn runtime_session_time_ms(time: std::time::SystemTime) -> u64 {
+    time.duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_millis().min(u128::from(u64::MAX)) as u64)
+        .unwrap_or_default()
+}
+
+fn runtime_session_summary(session: SessionSummary) -> bitfun_runtime_ports::AgentSessionSummary {
+    bitfun_runtime_ports::AgentSessionSummary {
+        session_id: session.session_id,
+        session_name: session.session_name,
+        agent_type: session.agent_type,
+        created_at_ms: runtime_session_time_ms(session.created_at),
+        last_active_at_ms: runtime_session_time_ms(session.last_activity_at),
+    }
+}
+
+#[async_trait::async_trait]
+impl bitfun_runtime_ports::AgentSessionManagementPort for ConversationCoordinator {
+    async fn list_sessions(
+        &self,
+        request: bitfun_runtime_ports::AgentSessionListRequest,
+    ) -> bitfun_runtime_ports::PortResult<Vec<bitfun_runtime_ports::AgentSessionSummary>> {
+        self.list_sessions(Path::new(&request.workspace_path))
+            .await
+            .map(|sessions| {
+                sessions
+                    .into_iter()
+                    .map(runtime_session_summary)
+                    .collect::<Vec<_>>()
+            })
+            .map_err(|error| {
+                bitfun_runtime_ports::PortError::new(
+                    bitfun_runtime_ports::PortErrorKind::Backend,
+                    error.to_string(),
+                )
+            })
+    }
+
+    async fn delete_session(
+        &self,
+        request: bitfun_runtime_ports::AgentSessionDeleteRequest,
+    ) -> bitfun_runtime_ports::PortResult<()> {
+        self.delete_session(Path::new(&request.workspace_path), &request.session_id)
+            .await
+            .map_err(|error| {
+                bitfun_runtime_ports::PortError::new(
+                    bitfun_runtime_ports::PortErrorKind::Backend,
+                    error.to_string(),
+                )
+            })
+    }
+
+    async fn resolve_session_workspace_path(
+        &self,
+        request: bitfun_runtime_ports::AgentSessionWorkspaceRequest,
+    ) -> bitfun_runtime_ports::PortResult<Option<String>> {
+        Ok(self
+            .resolve_session_workspace_path(&request.session_id)
+            .await
+            .map(|path| path.to_string_lossy().into_owned()))
     }
 }
 

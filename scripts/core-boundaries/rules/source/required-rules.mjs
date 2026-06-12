@@ -88,8 +88,64 @@ export const requiredContentRules = [
         message: 'missing agent submission port dependency',
       },
       {
+        regex: /\bAgentDialogTurnPort\b/,
+        message: 'missing agent dialog turn lifecycle port dependency',
+      },
+      {
+        regex: /\bwith_dialog_turn_port\b/,
+        message: 'missing agent dialog turn lifecycle builder hook',
+      },
+      {
+        regex: /\bsubmit_dialog_turn\b/,
+        message: 'missing agent dialog turn lifecycle entrypoint',
+      },
+      {
+        regex: /\bAgentLifecycleDeliveryPort\b/,
+        message: 'missing agent lifecycle delivery port dependency',
+      },
+      {
+        regex: /\bwith_lifecycle_delivery_port\b/,
+        message: 'missing agent lifecycle delivery builder hook',
+      },
+      {
+        regex: /\bdeliver_background_result\b/,
+        message: 'missing background result lifecycle delivery entrypoint',
+      },
+      {
+        regex: /\bdeliver_thread_goal\b/,
+        message: 'missing thread-goal lifecycle delivery entrypoint',
+      },
+      {
         regex: /\bAgentTurnCancellationPort\b/,
         message: 'missing agent turn cancellation port dependency',
+      },
+      {
+        regex: /\bAgentSessionManagementPort\b/,
+        message: 'missing agent session management port dependency',
+      },
+      {
+        regex: /\bwith_session_management_port\b/,
+        message: 'missing agent session management builder hook',
+      },
+      {
+        regex: /\bMissingSessionManagementPort\b/,
+        message: 'missing agent session management missing-port guard',
+      },
+      {
+        regex: /\blist_sessions\b/,
+        message: 'missing agent session list entrypoint',
+      },
+      {
+        regex: /\bdelete_session\b/,
+        message: 'missing agent session delete entrypoint',
+      },
+      {
+        regex: /\bresolve_session_workspace_path\b/,
+        message: 'missing agent session workspace resolution entrypoint',
+      },
+      {
+        regex: /\bsession_management_delegates_to_registered_port\b/,
+        message: 'missing agent session management port delegation regression',
       },
       {
         regex: /\bRuntimeServices\b/,
@@ -1234,7 +1290,7 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/core/src/service/cron/service.rs',
     reason:
-      'core cron service may own concrete storage, schedule parsing, and scheduler dispatch, but scheduled-job lifecycle state transitions must delegate to agent-runtime',
+      'core cron service may own concrete storage and schedule parsing, while scheduled-job state and dialog submission flow through agent-runtime owners',
     patterns: [
       {
         regex: /\bmark_manual_trigger\b/,
@@ -1271,6 +1327,49 @@ export const requiredContentRules = [
       {
         regex: /\bScheduledJobEnqueueFailureAction\b/,
         message: 'missing enqueue failure action owner delegation',
+      },
+      {
+        regex: /\bCoreServiceAgentRuntime::agent_runtime_with_dialog_turns\b/,
+        message: 'missing scheduled-job dialog lifecycle owner binding',
+      },
+      {
+        regex: /\bAgentDialogTurnRequest\b/,
+        message: 'missing scheduled-job dialog lifecycle request',
+      },
+      {
+        regex: /\bAgentDialogPrependedReminder\b/,
+        message: 'missing scheduled-job portable prepended reminder',
+      },
+      {
+        regex: /\bsubmit_dialog_turn\b/,
+        message: 'missing scheduled-job dialog lifecycle submission',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/cron_tool.rs',
+    reason:
+      'CronTool must resolve and validate target agent sessions through the service/agent runtime owner before scheduling jobs',
+    patterns: [
+      {
+        regex: /\bCoreServiceAgentRuntime::agent_runtime\b/,
+        message: 'missing service/agent runtime owner routing',
+      },
+      {
+        regex: /\bAgentSessionListRequest\b/,
+        message: 'missing port-backed cron target session list request',
+      },
+      {
+        regex: /\bAgentSessionWorkspaceRequest\b/,
+        message: 'missing port-backed cron target workspace request',
+      },
+      {
+        regex: /\blist_sessions\b/,
+        message: 'missing port-backed cron target session list call',
+      },
+      {
+        regex: /\bresolve_session_workspace_path\b/,
+        message: 'missing port-backed cron target workspace resolution call',
       },
     ],
   },
@@ -2353,6 +2452,74 @@ export const requiredContentRules = [
         message: 'missing remote image attachment helper contract',
       },
       {
+        regex: /\bpub struct AgentDialogTurnRequest\b/,
+        message: 'missing agent dialog turn lifecycle request contract',
+      },
+      {
+        regex: /\bpub struct AgentDialogPrependedReminder\b/,
+        message: 'missing agent dialog prepended reminder contract',
+      },
+      {
+        regex: /\bpub trait AgentDialogTurnPort\b/,
+        message: 'missing agent dialog turn lifecycle port contract',
+      },
+      {
+        regex: /\bpub struct AgentBackgroundResultRequest\b/,
+        message: 'missing background result lifecycle request contract',
+      },
+      {
+        regex: /\bpub enum AgentThreadGoalDeliveryKind\b/,
+        message: 'missing thread-goal lifecycle delivery kind contract',
+      },
+      {
+        regex: /\bpub struct AgentThreadGoalDeliveryRequest\b/,
+        message: 'missing thread-goal lifecycle delivery request contract',
+      },
+      {
+        regex: /\bpub trait AgentLifecycleDeliveryPort\b/,
+        message: 'missing agent lifecycle delivery port contract',
+      },
+      {
+        regex: /\brequester_session_id\b/,
+        message: 'missing requester-aware turn cancellation contract',
+      },
+      {
+        regex: /\bpub struct AgentSessionListRequest\b/,
+        message: 'missing agent session list request contract',
+      },
+      {
+        regex: /\bpub struct AgentSessionSummary\b/,
+        message: 'missing agent session summary contract',
+      },
+      {
+        regex: /\bpub struct AgentSessionDeleteRequest\b/,
+        message: 'missing agent session delete request contract',
+      },
+      {
+        regex: /\bpub struct AgentSessionWorkspaceRequest\b/,
+        message: 'missing agent session workspace request contract',
+      },
+      {
+        regex: /\bpub trait AgentSessionManagementPort\b/,
+        message: 'missing agent session management port contract',
+      },
+      {
+        regex: /\bagent_session_management_contracts_serialize_stable_shape\b/,
+        message: 'missing agent session management serialization regression',
+      },
+      {
+        regex: /\bagent_dialog_turn_request_serializes_lifecycle_contract\b/,
+        message: 'missing agent dialog turn lifecycle request regression',
+      },
+      {
+        regex: /\bagent_background_result_request_serializes_lifecycle_contract\b/,
+        message: 'missing background result lifecycle request regression',
+      },
+      {
+        regex: /\bagent_thread_goal_delivery_request_serializes_lifecycle_contract\b/,
+        message: 'missing thread-goal lifecycle request regression',
+      },
+      {
         regex: /\bpub type DialogTriggerSource = AgentSubmissionSource\b/,
         message: 'missing dialog trigger source compatibility contract',
       },
@@ -2980,6 +3147,18 @@ export const requiredContentRules = [
         message: 'missing turn cancellation port adapter',
       },
       {
+        regex: /impl bitfun_runtime_ports::AgentSessionManagementPort for ConversationCoordinator/,
+        message: 'missing session management port adapter',
+      },
+      {
+        regex: /\bruntime_session_summary\b/,
+        message: 'missing session summary adapter helper',
+      },
+      {
+        regex: /\bAgentSessionSummary\b/,
+        message: 'missing runtime session summary contract binding',
+      },
+      {
         regex: /impl bitfun_runtime_ports::RemoteControlStatePort for ConversationCoordinator/,
         message: 'missing remote control state port adapter',
       },
@@ -3177,6 +3356,38 @@ export const requiredContentRules = [
         message: 'missing agent runtime owner binding',
       },
       {
+        regex: /\bfn agent_runtime_with_dialog_turns\b/,
+        message: 'missing agent runtime dialog lifecycle owner binding',
+      },
+      {
+        regex: /\bfn agent_runtime_with_lifecycle_delivery\b/,
+        message: 'missing agent runtime lifecycle delivery owner binding',
+      },
+      {
+        regex: /\bfn agent_runtime_with_scheduler_ports\b/,
+        message: 'missing scheduler lifecycle runtime port binding',
+      },
+      {
+        regex: /\bfn global_agent_runtime_with_lifecycle_delivery\b/,
+        message: 'missing global lifecycle delivery runtime binding',
+      },
+      {
+        regex: /\bwith_lifecycle_delivery_port\b/,
+        message: 'missing lifecycle delivery builder registration',
+      },
+      {
+        regex: /\bagent_input_attachment_from_image_context\b/,
+        message: 'missing remote image to lifecycle attachment adapter',
+      },
+      {
+        regex: /\bAgentDialogTurnRequest\b/,
+        message: 'missing dialog lifecycle request binding',
+      },
+      {
+        regex: /\bsubmit_dialog_turn\b/,
+        message: 'missing dialog lifecycle submit delegation',
+      },
+      {
         regex: /\bAgentRuntimeBuilder\b/,
         message: 'missing agent runtime builder binding',
       },
@@ -3193,6 +3404,14 @@ export const requiredContentRules = [
         message: 'missing core remote cancel host binding',
       },
       {
+        regex: /pub\(crate\) struct CoreRemoteCancelRuntimeHost\s*\{[\s\S]*\bruntime:\s*AgentRuntime\b/,
+        message: 'missing remote cancel host runtime field',
+      },
+      {
+        regex: /\bCoreServiceAgentRuntime::agent_runtime_with_scheduler_ports\b/,
+        message: 'missing remote cancel scheduler-backed runtime binding',
+      },
+      {
         regex: /\bCoreRemoteWorkspaceFileRuntimeHost\b/,
         message: 'missing core remote workspace file host binding',
       },
@@ -3207,6 +3426,10 @@ export const requiredContentRules = [
       {
         regex: /\bCoreRemoteSessionRuntimeHost\b/,
         message: 'missing core remote session runtime host binding',
+      },
+      {
+        regex: /pub\(crate\) struct CoreRemoteSessionRuntimeHost\s*\{[\s\S]*\bruntime:\s*AgentRuntime\b/,
+        message: 'missing remote session host runtime field',
       },
       {
         regex: /\bCoreRemotePollRuntimeHost\b/,
@@ -3249,8 +3472,20 @@ export const requiredContentRules = [
         message: 'missing agent submission port binding',
       },
       {
+        regex: /\bAgentDialogTurnPort\b/,
+        message: 'missing agent dialog turn port binding',
+      },
+      {
         regex: /\bAgentTurnCancellationPort\b/,
         message: 'missing agent turn cancellation port contract guard',
+      },
+      {
+        regex: /\bAgentSessionManagementPort\b/,
+        message: 'missing agent session management port contract guard',
+      },
+      {
+        regex: /\bwith_session_management_port\b/,
+        message: 'missing agent session management runtime binding',
       },
       {
         regex: /\bRemoteControlStatePort\b/,
@@ -3280,20 +3515,56 @@ export const requiredContentRules = [
         regex: /\bcore_service_agent_runtime_owner_skips_in_progress_remote_assistant_history\b/,
         message: 'missing in-progress remote assistant history regression',
       },
+      {
+        regex: /\bcore_service_agent_runtime_owner_maps_image_context_to_lifecycle_attachment\b/,
+        message: 'missing remote image lifecycle attachment regression',
+      },
+      {
+        regex: /\bcore_service_agent_runtime_owner_keeps_scheduler_lifecycle_port_contracts\b/,
+        message: 'missing scheduler lifecycle port contract regression',
+      },
     ],
   },
   {
     path: 'src/crates/assembly/core/src/agentic/tools/implementations/session_control_tool.rs',
     reason:
-      'SessionControl must create agent sessions and fallback cancellations through the service/agent runtime owner while preserving tool-level behavior',
+      'SessionControl must route session create, list, delete, workspace resolution, and cancellation through the service/agent runtime owner while preserving existing behavior',
     patterns: [
       {
         regex: /\bCoreServiceAgentRuntime::agent_runtime\b/,
         message: 'missing service/agent runtime owner routing',
       },
       {
+        regex: /\bCoreServiceAgentRuntime::agent_runtime_with_scheduler_ports\b/,
+        message: 'missing scheduler cancellation runtime owner routing',
+      },
+      {
         regex: /\bAgentSessionCreateRequest\b/,
         message: 'missing port-backed agent session creation request',
+      },
+      {
+        regex: /\bAgentSessionListRequest\b/,
+        message: 'missing port-backed agent session list request',
+      },
+      {
+        regex: /\bAgentSessionDeleteRequest\b/,
+        message: 'missing port-backed agent session delete request',
+      },
+      {
+        regex: /\bAgentSessionWorkspaceRequest\b/,
+        message: 'missing port-backed session workspace request',
+      },
+      {
+        regex: /\blist_sessions\b/,
+        message: 'missing port-backed agent session list call',
+      },
+      {
+        regex: /\bdelete_session\b/,
+        message: 'missing port-backed agent session delete call',
+      },
+      {
+        regex: /\bresolve_session_workspace_path\b/,
+        message: 'missing port-backed session workspace resolution call',
       },
       {
         regex: /"createdBy"/,
@@ -3301,30 +3572,58 @@ export const requiredContentRules = [
       },
       {
         regex: /\bAgentTurnCancellationRequest\b/,
-        message: 'missing port-backed fallback cancellation request',
+        message: 'missing port-backed cancellation request',
+      },
+      {
+        regex: /\brequester_session_id\b/,
+        message: 'missing requester-aware cancellation propagation',
       },
     ],
   },
   {
     path: 'src/crates/assembly/core/src/agentic/tools/implementations/session_message_tool.rs',
     reason:
-      'SessionMessage must create target agent sessions through the service/agent runtime owner while preserving scheduler submission semantics',
+      'SessionMessage must create, resolve, validate, and submit target agent sessions through the service/agent runtime lifecycle owner',
     patterns: [
       {
-        regex: /\bCoreServiceAgentRuntime::agent_runtime\b/,
-        message: 'missing service/agent runtime owner routing',
+        regex: /\bCoreServiceAgentRuntime::agent_runtime_with_dialog_turns\b/,
+        message: 'missing service/agent runtime lifecycle owner routing',
       },
       {
         regex: /\bAgentSessionCreateRequest\b/,
         message: 'missing port-backed agent session creation request',
       },
       {
+        regex: /\bAgentSessionListRequest\b/,
+        message: 'missing port-backed target session list request',
+      },
+      {
+        regex: /\bAgentSessionWorkspaceRequest\b/,
+        message: 'missing port-backed target session workspace request',
+      },
+      {
+        regex: /\blist_sessions\b/,
+        message: 'missing port-backed target session list call',
+      },
+      {
+        regex: /\bresolve_session_workspace_path\b/,
+        message: 'missing port-backed target session workspace resolution call',
+      },
+      {
         regex: /"createdBy"/,
         message: 'missing creator metadata propagation',
       },
       {
-        regex: /\bsubmit_with_prepended_messages\b/,
-        message: 'missing scheduler submission path preservation',
+        regex: /\bAgentDialogTurnRequest\b/,
+        message: 'missing port-backed dialog turn request',
+      },
+      {
+        regex: /\bAgentDialogPrependedReminder\b/,
+        message: 'missing portable prepended reminder request',
+      },
+      {
+        regex: /\bsubmit_dialog_turn\b/,
+        message: 'missing dialog lifecycle submission',
       },
     ],
   },
@@ -3947,6 +4246,58 @@ export const requiredContentRules = [
       {
         regex: /\bremote_queue_policy_preserves_interactive_preempt_and_confirmation_boundary\b/,
         message: 'missing remote queue policy regression',
+      },
+      {
+        regex: /\bimpl AgentDialogTurnPort for DialogScheduler\b/,
+        message: 'missing dialog lifecycle port implementation',
+      },
+      {
+        regex: /\bimpl AgentLifecycleDeliveryPort for DialogScheduler\b/,
+        message: 'missing lifecycle delivery port implementation',
+      },
+      {
+        regex: /\bimpl AgentTurnCancellationPort for DialogScheduler\b/,
+        message: 'missing requester-aware cancellation port implementation',
+      },
+      {
+        regex: /\bAgentBackgroundResultRequest\b/,
+        message: 'missing background result lifecycle request adapter',
+      },
+      {
+        regex: /\bAgentThreadGoalDeliveryRequest\b/,
+        message: 'missing thread-goal lifecycle request adapter',
+      },
+      {
+        regex: /\bAgentThreadGoalDeliveryKind::ObjectiveUpdated\b/,
+        message: 'missing thread-goal objective-updated lifecycle adapter',
+      },
+      {
+        regex: /\bcancel_active_turn_for_session_from_requester\b/,
+        message: 'missing requester-aware cancellation adapter',
+      },
+      {
+        regex: /\bagent_dialog_turn_image_contexts\b/,
+        message: 'missing dialog lifecycle image attachment adapter',
+      },
+      {
+        regex: /\bagent_dialog_turn_prepended_messages\b/,
+        message: 'missing dialog lifecycle prepended reminder adapter',
+      },
+      {
+        regex: /\bagent_dialog_turn_attachments_preserve_remote_image_context\b/,
+        message: 'missing dialog lifecycle image attachment preservation regression',
+      },
+      {
+        regex: /\bagent_dialog_turn_attachments_reject_unknown_kind\b/,
+        message: 'missing dialog lifecycle attachment validation regression',
+      },
+      {
+        regex: /\bagent_dialog_turn_prepended_reminders_preserve_session_message_kind\b/,
+        message: 'missing dialog lifecycle prepended reminder preservation regression',
+      },
+      {
+        regex: /\bagent_dialog_turn_prepended_reminders_reject_unknown_kind\b/,
+        message: 'missing dialog lifecycle prepended reminder validation regression',
       },
     ],
   },

@@ -52,6 +52,146 @@ export const forbiddenContentRules = [
     ],
   },
   {
+    path: 'src/crates/assembly/core/src/service_agent_runtime.rs',
+    patterns: [
+      {
+        regex: /\bself\.scheduler\s*\.\s*submit\b/,
+        message:
+          'remote dialog runtime host must submit through AgentRuntime dialog lifecycle port, not direct DialogScheduler',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/session_message_tool.rs',
+    patterns: [
+      {
+        regex: /\bsubmit_with_prepended_messages\b/,
+        message:
+          'SessionMessage must submit through AgentRuntime dialog lifecycle port, not direct DialogScheduler',
+      },
+      {
+        regex: /\bcoordinator\s*\.\s*resolve_session_workspace_path\b/,
+        message:
+          'SessionMessage target workspace resolution must flow through AgentRuntime session-management port, not direct coordinator access',
+      },
+      {
+        regex: /\bresolve_session_workspace_path\s*\(\s*&?target_session_id\b/,
+        message:
+          'SessionMessage target workspace resolution must use AgentSessionWorkspaceRequest, not legacy direct session id calls',
+      },
+      {
+        regex: /\bcoordinator\s*\.\s*list_sessions\b/,
+        message:
+          'SessionMessage target session lookup must flow through AgentRuntime session-management port, not direct coordinator access',
+      },
+      {
+        regex: /\blist_sessions\s*\(\s*(?:Path::new|workspace_path)\b/,
+        message:
+          'SessionMessage target session lookup must use AgentSessionListRequest, not legacy path arguments',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/session_control_tool.rs',
+    patterns: [
+      {
+        regex: /\bcancel_active_turn_for_session_from_requester\b/,
+        message:
+          'SessionControl requester-aware cancellation must flow through AgentRuntime cancellation port, not direct DialogScheduler',
+      },
+      {
+        regex: /\bcoordinator\s*\.\s*resolve_session_workspace_path\b/,
+        message:
+          'SessionControl workspace resolution must flow through AgentRuntime session-management port, not direct coordinator access',
+      },
+      {
+        regex: /\bresolve_session_workspace_path\s*\(\s*session_id\b/,
+        message:
+          'SessionControl workspace resolution must use AgentSessionWorkspaceRequest, not legacy direct session id calls',
+      },
+      {
+        regex: /\bcoordinator\s*\.\s*list_sessions\b/,
+        message:
+          'SessionControl session listing must flow through AgentRuntime session-management port, not direct coordinator access',
+      },
+      {
+        regex: /\blist_sessions\s*\(\s*(?:Path::new|workspace_path)\b/,
+        message:
+          'SessionControl session listing must use AgentSessionListRequest, not legacy path arguments',
+      },
+      {
+        regex: /\bcoordinator\s*\.\s*delete_session\b/,
+        message:
+          'SessionControl session deletion must flow through AgentRuntime session-management port, not direct coordinator access',
+      },
+      {
+        regex: /\bdelete_session\s*\(\s*(?:Path::new|workspace_path)\b/,
+        message:
+          'SessionControl session deletion must use AgentSessionDeleteRequest, not legacy path arguments',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/service/cron/service.rs',
+    patterns: [
+      {
+        regex: /\bsubmit_with_prepended_messages\b/,
+        message:
+          'Cron scheduled jobs must submit through AgentRuntime dialog lifecycle port, not direct DialogScheduler',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/cron_tool.rs',
+    patterns: [
+      {
+        regex: /\bcoordinator\s*\.\s*resolve_session_workspace_path\b/,
+        message:
+          'CronTool target workspace resolution must flow through AgentRuntime session-management port, not direct coordinator access',
+      },
+      {
+        regex: /\bresolve_session_workspace_path\s*\(\s*&?session_id\b/,
+        message:
+          'CronTool target workspace resolution must use AgentSessionWorkspaceRequest, not legacy direct session id calls',
+      },
+      {
+        regex: /\bcoordinator\s*\.\s*list_sessions\b/,
+        message:
+          'CronTool target session lookup must flow through AgentRuntime session-management port, not direct coordinator access',
+      },
+      {
+        regex: /\blist_sessions\s*\(\s*(?:Path::new|workspace_path)\b/,
+        message:
+          'CronTool target session lookup must use AgentSessionListRequest, not legacy path arguments',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/bash_tool.rs',
+    patterns: [
+      {
+        regex: /\bscheduler\s*\.\s*deliver_background_result\b/,
+        message:
+          'Bash background delivery must flow through AgentRuntime lifecycle delivery port, not direct DialogScheduler',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/coordination/coordinator.rs',
+    patterns: [
+      {
+        regex: /\bscheduler\s*\.\s*deliver_thread_goal_(?:resumed|objective_updated)\b/,
+        message:
+          'Coordinator thread-goal delivery must flow through AgentRuntime lifecycle delivery port, not direct DialogScheduler',
+      },
+      {
+        regex: /\bscheduler\s*\.\s*deliver_background_result\b/,
+        message:
+          'Coordinator background result delivery must flow through AgentRuntime lifecycle delivery port, not direct DialogScheduler',
+      },
+    ],
+  },
+  {
     path: 'src/crates/assembly/core/src/agentic/deep_review_policy.rs',
     patterns: [
       {
