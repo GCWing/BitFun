@@ -192,6 +192,10 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
     });
   }, [allSessionIds]);
 
+  const handleInvertSelection = useCallback(() => {
+    setSelectedSessionIds(prev => new Set(allSessionIds.filter(sessionId => !prev.has(sessionId))));
+  }, [allSessionIds]);
+
   const refreshWorkspaceSessions = useCallback(async () => {
     await flowChatManager.refreshWorkspaceSessions({
       rootPath: workspacePath,
@@ -352,6 +356,19 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
               disabled={isBusy || allSessionIds.length === 0}
               label={allSelected ? t('actions.deselectAll') : t('actions.selectAll')}
             />
+            {selectedCount > 0 ? (
+              <div className="workspace-session-batch-modal__toolbar-actions">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="small"
+                  onClick={handleInvertSelection}
+                  disabled={isBusy || allSessionIds.length === 0}
+                >
+                  {t('actions.invertSelection')}
+                </Button>
+              </div>
+            ) : null}
             <div className="workspace-session-batch-modal__toolbar-summary">
               {hasSessions
                 ? t('nav.sessions.batchSelectionSummary', { count: selectedCount, total: sessions.length })

@@ -624,6 +624,7 @@
     "select": "選擇",
     "selectAll": "全選",
     "deselectAll": "取消全選",
+    "invertSelection": "反選",
     "expand": "展開",
     "collapse": "收起",
     "more": "更多",

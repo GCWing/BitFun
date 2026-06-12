@@ -101,11 +101,21 @@
     display: flex;
     align-items: center;
     gap: 10px;
+    width: 100%;
     min-width: 0;
+    min-height: var(--button-height-sm, 32px);
+    flex-wrap: nowrap;
+  }
+
+  &__toolbar-actions {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
   }
 
   &__toolbar-summary {
     min-width: 0;
+    flex: 1 1 180px;
     font-size: 11px;
     color: var(--color-text-secondary);
     white-space: nowrap;
@@ -316,6 +326,8 @@
     &__toolbar-main {
       flex-direction: column;
       align-items: stretch;
+      width: auto;
+      min-height: 0;
     }
 
     &__toolbar-summary {

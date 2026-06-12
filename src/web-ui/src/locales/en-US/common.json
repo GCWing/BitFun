@@ -624,6 +624,7 @@
     "select": "Select",
     "selectAll": "Select All",
     "deselectAll": "Deselect All",
+    "invertSelection": "Invert Selection",
     "expand": "Expand",
     "collapse": "Collapse",
     "more": "More",
