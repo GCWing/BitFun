@@ -4,7 +4,7 @@
 
 use crate::agentic::core::{
     strip_prompt_markup, CompressionState, Message, MessageContent, Session, SessionConfig,
-    SessionKind, SessionState, SessionSummary,
+    SessionState, SessionSummary,
 };
 use crate::agentic::session::{SessionPromptCache, PROMPT_CACHE_SCHEMA_VERSION};
 use crate::agentic::skill_agent_snapshot::TurnSkillAgentSnapshot;
@@ -13,10 +13,9 @@ use crate::service::remote_ssh::workspace_state::{
     resolve_workspace_session_identity, LOCAL_WORKSPACE_SSH_HOST,
 };
 use crate::service::session::{
-    DialogTurnData, SessionMetadata, SessionRelationship, SessionRelationshipKind, SessionStatus,
-    SessionTranscriptExport, SessionTranscriptExportOptions, SessionTranscriptIndexEntry,
-    StoredSessionIndexFile, StoredSessionMetadataFile, ToolItemData, TranscriptLineRange,
-    SESSION_STORAGE_SCHEMA_VERSION,
+    DialogTurnData, SessionMetadata, SessionTranscriptExport, SessionTranscriptExportOptions,
+    SessionTranscriptIndexEntry, StoredSessionIndexFile, StoredSessionMetadataFile, ToolItemData,
+    TranscriptLineRange, SESSION_STORAGE_SCHEMA_VERSION,
 };
 use crate::service::workspace_runtime::WorkspaceRuntimeService;
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -25,10 +24,11 @@ use bitfun_runtime_ports::{SessionTurnLoadRequest, SessionTurnLoadTiming};
 use bitfun_services_core::{
     json_store::{JsonFileStore, JsonFileStoreError},
     session::{
-        build_session_index_snapshot, build_session_metadata_page, empty_session_metadata_page,
+        build_session_index_snapshot, build_session_metadata as build_persisted_session_metadata,
+        build_session_metadata_page, empty_session_metadata_page,
         refresh_session_metadata_from_turns, remove_session_index_entry,
         try_refresh_session_metadata_for_saved_turn, upsert_session_index_entry,
-        SessionStorageLayout,
+        SessionMetadataBuildFacts, SessionStorageLayout,
     },
 };
 use futures::{stream, StreamExt};
@@ -288,98 +288,6 @@ pub struct PersistenceManager {
 }
 
 impl PersistenceManager {
-    fn build_session_relationship(
-        session: &Session,
-        existing: Option<&SessionMetadata>,
-    ) -> Option<SessionRelationship> {
-        let existing_relationship = existing.and_then(|value| value.relationship.clone());
-        let existing_custom_metadata = existing.and_then(|value| value.custom_metadata.as_ref());
-
-        let kind = match session.kind {
-            SessionKind::Subagent => Some(SessionRelationshipKind::Subagent),
-            SessionKind::EphemeralChild => Some(SessionRelationshipKind::Btw),
-            SessionKind::Standard => existing_relationship
-                .as_ref()
-                .and_then(|value| value.kind.clone()),
-        };
-
-        let parent_session_id = existing_relationship
-            .as_ref()
-            .and_then(|value| value.parent_session_id.clone())
-            .or_else(|| {
-                existing_custom_metadata
-                    .and_then(|value| value.get("parentSessionId"))
-                    .and_then(|value| value.as_str())
-                    .map(str::to_string)
-            });
-        let parent_request_id = existing_relationship
-            .as_ref()
-            .and_then(|value| value.parent_request_id.clone())
-            .or_else(|| {
-                existing_custom_metadata
-                    .and_then(|value| value.get("parentRequestId"))
-                    .and_then(|value| value.as_str())
-                    .map(str::to_string)
-            });
-        let parent_dialog_turn_id = existing_relationship
-            .as_ref()
-            .and_then(|value| value.parent_dialog_turn_id.clone())
-            .or_else(|| {
-                existing_custom_metadata
-                    .and_then(|value| value.get("parentDialogTurnId"))
-                    .and_then(|value| value.as_str())
-                    .map(str::to_string)
-            });
-        let parent_turn_index = existing_relationship
-            .as_ref()
-            .and_then(|value| value.parent_turn_index)
-            .or_else(|| {
-                existing_custom_metadata
-                    .and_then(|value| value.get("parentTurnIndex"))
-                    .and_then(|value| value.as_u64())
-                    .map(|value| value as usize)
-            });
-        let parent_tool_call_id = existing_relationship
-            .as_ref()
-            .and_then(|value| value.parent_tool_call_id.clone())
-            .or_else(|| {
-                existing_custom_metadata
-                    .and_then(|value| value.get("parentToolCallId"))
-                    .and_then(|value| value.as_str())
-                    .map(str::to_string)
-            });
-        let subagent_type = existing_relationship
-            .as_ref()
-            .and_then(|value| value.subagent_type.clone())
-            .or_else(|| {
-                existing_custom_metadata
-                    .and_then(|value| value.get("subagentType"))
-                    .and_then(|value| value.as_str())
-                    .map(str::to_string)
-            });
-
-        if kind.is_none()
-            && parent_session_id.is_none()
-            && parent_request_id.is_none()
-            && parent_dialog_turn_id.is_none()
-            && parent_turn_index.is_none()
-            && parent_tool_call_id.is_none()
-            && subagent_type.is_none()
-        {
-            return None;
-        }
-
-        Some(SessionRelationship {
-            kind,
-            parent_session_id,
-            parent_request_id,
-            parent_dialog_turn_id,
-            parent_turn_index,
-            parent_tool_call_id,
-            subagent_type,
-        })
-    }
-
     pub fn new(path_manager: Arc<PathManager>) -> BitFunResult<Self> {
         Ok(Self {
             runtime_service: Arc::new(WorkspaceRuntimeService::new(path_manager.clone())),
@@ -699,16 +607,7 @@ impl PersistenceManager {
         session: &Session,
         existing: Option<&SessionMetadata>,
     ) -> SessionMetadata {
-        let created_at = existing
-            .map(|value| value.created_at)
-            .unwrap_or_else(|| Self::system_time_to_unix_ms(session.created_at));
         let last_active_at = Self::system_time_to_unix_ms(session.last_activity_at);
-        let model_name = session
-            .config
-            .model_id
-            .clone()
-            .or_else(|| existing.map(|value| value.model_name.clone()))
-            .unwrap_or_else(|| "default".to_string());
 
         let resolved_identity =
             if let Some(workspace_root) = session.config.workspace_path.as_deref() {
@@ -740,43 +639,23 @@ impl PersistenceManager {
                 }
             });
 
-        SessionMetadata {
-            session_id: session.session_id.clone(),
-            session_name: session.session_name.clone(),
-            agent_type: session.agent_type.clone(),
-            last_user_dialog_agent_type: session.last_user_dialog_agent_type.clone(),
-            last_submitted_agent_type: session.last_submitted_agent_type.clone(),
-            created_by: session
-                .created_by
-                .clone()
-                .or_else(|| existing.and_then(|value| value.created_by.clone())),
+        build_persisted_session_metadata(SessionMetadataBuildFacts {
+            session_id: &session.session_id,
+            session_name: &session.session_name,
+            agent_type: &session.agent_type,
+            last_user_dialog_agent_type: session.last_user_dialog_agent_type.as_deref(),
+            last_submitted_agent_type: session.last_submitted_agent_type.as_deref(),
+            created_by: session.created_by.as_deref(),
             session_kind: session.kind,
-            model_name,
-            created_at,
-            last_active_at,
+            model_name: session.config.model_id.as_deref(),
+            created_at_ms: Self::system_time_to_unix_ms(session.created_at),
+            last_active_at_ms: last_active_at,
             turn_count: session.dialog_turn_ids.len(),
-            message_count: existing.map(|value| value.message_count).unwrap_or(0),
-            tool_call_count: existing.map(|value| value.tool_call_count).unwrap_or(0),
-            status: existing
-                .map(|value| value.status.clone())
-                .unwrap_or(SessionStatus::Active),
-            terminal_session_id: existing.and_then(|value| value.terminal_session_id.clone()),
-            snapshot_session_id: session
-                .snapshot_session_id
-                .clone()
-                .or_else(|| existing.and_then(|value| value.snapshot_session_id.clone())),
-            tags: existing.map(|value| value.tags.clone()).unwrap_or_default(),
-            custom_metadata: existing.and_then(|value| value.custom_metadata.clone()),
-            relationship: Self::build_session_relationship(session, existing),
-            todos: existing.and_then(|value| value.todos.clone()),
-            deep_review_run_manifest: existing
-                .and_then(|value| value.deep_review_run_manifest.clone()),
-            deep_review_cache: existing.and_then(|value| value.deep_review_cache.clone()),
-            workspace_path: Some(workspace_root),
-            workspace_hostname,
-            unread_completion: existing.and_then(|value| value.unread_completion.clone()),
-            needs_user_attention: existing.and_then(|value| value.needs_user_attention.clone()),
-        }
+            snapshot_session_id: session.snapshot_session_id.as_deref(),
+            workspace_path: &workspace_root,
+            workspace_hostname: workspace_hostname.as_deref(),
+            existing,
+        })
     }
 
     fn turn_status_label(status: &crate::service::session::TurnStatus) -> &'static str {

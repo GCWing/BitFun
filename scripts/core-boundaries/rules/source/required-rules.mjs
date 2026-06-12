@@ -941,10 +941,6 @@ export const requiredContentRules = [
         message: 'missing running-turn injection action variant',
       },
       {
-        regex: /\bpub struct SessionRoundYieldFlags\b/,
-        message: 'missing session round yield flags owner',
-      },
-      {
         regex: /\bpub struct SessionRoundInjectionBuffer\b/,
         message: 'missing session round injection buffer owner',
       },
@@ -961,7 +957,7 @@ export const requiredContentRules = [
   {
     path: 'src/crates/execution/agent-runtime/tests/scheduler_contracts.rs',
     reason:
-      'agent-runtime scheduler owner must keep behavior-equivalence contracts for background delivery, queueing, reply suppression, steering, round interruption, and turn outcomes',
+      'agent-runtime scheduler owner must keep behavior-equivalence contracts for background delivery, queueing, reply suppression, steering, round injection, and turn outcomes',
     patterns: [
       {
         regex: /\bbackground_delivery_injects_when_session_is_processing\b/,
@@ -999,6 +995,11 @@ export const requiredContentRules = [
         regex:
           /\bdialog_turn_queue_rejects_overflow_and_preserves_current_error_shape\b/,
         message: 'missing dialog queue overflow regression',
+      },
+      {
+        regex:
+          /\bdialog_turn_queue_clear_and_requeue_front_preserve_scheduler_recovery_contract\b/,
+        message: 'missing dialog queue clear/requeue recovery regression',
       },
       {
         regex:
@@ -1043,10 +1044,6 @@ export const requiredContentRules = [
       {
         regex: /\bdialog_steering_action_rejects_when_target_turn_is_not_running\b/,
         message: 'missing dialog steering reject regression',
-      },
-      {
-        regex: /\bround_yield_flags_are_session_scoped_and_clearable\b/,
-        message: 'missing round yield flags regression',
       },
       {
         regex: /\bround_injection_buffer_drains_only_messages_for_the_active_turn\b/,
@@ -1692,6 +1689,146 @@ export const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/services/services-core/src/session/mod.rs',
+    reason:
+      'services-core session owner must expose lineage, branch, and metadata mutation rules through the session boundary',
+    patterns: [
+      {
+        regex: /\bmod lineage;/,
+        message: 'missing services-core session lineage module',
+      },
+      {
+        regex: /\bapply_session_lineage\b/,
+        message: 'missing session lineage owner re-export',
+      },
+      {
+        regex: /\bbuild_branched_session_metadata\b/,
+        message: 'missing branch metadata owner re-export',
+      },
+      {
+        regex: /\bSessionBranchRequest\b/,
+        message: 'missing branch request compatibility owner re-export',
+      },
+      {
+        regex: /\bmerge_session_custom_metadata\b/,
+        message: 'missing custom metadata mutation owner re-export',
+      },
+      {
+        regex: /\bbuild_session_metadata\b/,
+        message: 'missing session metadata construction owner re-export',
+      },
+      {
+        regex: /\bSessionMetadataBuildFacts\b/,
+        message: 'missing session metadata construction facts re-export',
+      },
+      {
+        regex: /\bset_deep_review_cache\b/,
+        message: 'missing DeepReview cache metadata mutation owner re-export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-core/src/session/metadata.rs',
+    reason:
+      'services-core session metadata owner must own construction and field mutation rules while core keeps only IO orchestration',
+    patterns: [
+      {
+        regex: /\bpub fn merge_session_custom_metadata\b/,
+        message: 'missing custom metadata merge owner',
+      },
+      {
+        regex: /\bpub struct SessionMetadataBuildFacts\b/,
+        message: 'missing session metadata construction facts owner',
+      },
+      {
+        regex: /\bpub fn build_session_metadata\b/,
+        message: 'missing session metadata construction owner',
+      },
+      {
+        regex: /\bpub fn set_session_relationship\b/,
+        message: 'missing session relationship mutation owner',
+      },
+      {
+        regex: /\bpub fn set_deep_review_run_manifest\b/,
+        message: 'missing DeepReview manifest metadata mutation owner',
+      },
+      {
+        regex: /\bpub fn set_deep_review_cache\b/,
+        message: 'missing DeepReview cache metadata mutation owner',
+      },
+      {
+        regex: /\bmerge_custom_metadata_shallow_merges_object_patch\b/,
+        message: 'missing custom metadata merge regression',
+      },
+      {
+        regex: /\bdeep_review_cache_mutation_preserves_manifest_and_relationship\b/,
+        message: 'missing DeepReview cache mutation regression',
+      },
+      {
+        regex: /\bbuild_session_metadata_preserves_existing_fields_and_legacy_relationship\b/,
+        message: 'missing session metadata construction regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-core/src/session/lineage.rs',
+    reason:
+      'services-core must own provider-neutral session lineage, subagent cascade, and branch metadata shaping rules without core IO',
+    patterns: [
+      {
+        regex: /\bpub struct SessionBranchRequest\b/,
+        message: 'missing session branch request owner type',
+      },
+      {
+        regex: /\bpub struct SessionBranchResult\b/,
+        message: 'missing session branch result owner type',
+      },
+      {
+        regex: /\bpub struct BranchSessionMetadataFacts\b/,
+        message: 'missing branch metadata facts contract',
+      },
+      {
+        regex: /\bpub fn apply_session_lineage\b/,
+        message: 'missing lineage metadata mutation owner',
+      },
+      {
+        regex: /\bpub fn build_branched_session_metadata\b/,
+        message: 'missing branch metadata shaping owner',
+      },
+      {
+        regex: /\bpub fn collect_hidden_subagent_cascade\b/,
+        message: 'missing hidden subagent cascade owner',
+      },
+      {
+        regex: /\bfn extract_subagent_relationship\b/,
+        message: 'missing legacy/structured subagent relationship resolver',
+      },
+      {
+        regex: /\bapply_session_lineage_sets_relationship_and_removes_legacy_projection\b/,
+        message: 'missing lineage cleanup regression',
+      },
+      {
+        regex: /\bbuild_branched_session_metadata_resets_child_state_and_counts_turns\b/,
+        message: 'missing branch metadata shaping regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/persistence/session_branch.rs',
+    reason:
+      'core session branch persistence must keep IO orchestration while services-core owns branch metadata shaping',
+    patterns: [
+      {
+        regex: /\bbuild_branched_session_metadata\b/,
+        message: 'missing services-core branch metadata delegation',
+      },
+      {
+        regex: /\bBranchSessionMetadataFacts\b/,
+        message: 'missing branch metadata facts delegation',
+      },
+    ],
+  },
+  {
     path: 'src/crates/assembly/core/src/agentic/agents/mod.rs',
     reason:
       'core agent mode module must keep old import paths while agent-runtime owns shared mode profile facts',
@@ -1749,10 +1886,45 @@ export const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/assembly/core/src/agentic/persistence/manager.rs',
+    reason:
+      'core persistence manager must keep concrete IO and workspace identity resolution while services-core owns session metadata construction rules',
+    patterns: [
+      {
+        regex: /\bbuild_persisted_session_metadata\s*\(\s*SessionMetadataBuildFacts\s*\{/,
+        message: 'missing services-core session metadata construction delegation',
+      },
+      {
+        regex: /\bresolve_workspace_session_identity\b/,
+        message: 'missing workspace identity resolution before metadata construction',
+      },
+      {
+        regex: /\bLOCAL_WORKSPACE_SSH_HOST\b/,
+        message: 'missing local workspace hostname compatibility fallback',
+      },
+    ],
+  },
+  {
     path: 'src/crates/assembly/core/src/agentic/session/session_manager.rs',
     reason:
-      'core session manager must keep forked Task prompt-cache and existing-context turn baselines until session branch ownership migrates',
+      'core session manager must keep concrete session IO while services-core owns metadata mutation rules and forked Task prompt-cache baselines remain protected',
     patterns: [
+      {
+        regex: /\bapply_session_lineage\(metadata, relationship\)/,
+        message: 'missing services-core session lineage delegation',
+      },
+      {
+        regex: /\bmerge_session_custom_metadata_value\(metadata, patch\)/,
+        message: 'missing services-core custom metadata delegation',
+      },
+      {
+        regex: /\bupdate_persisted_session_metadata\b/,
+        message: 'missing shared session metadata update facade',
+      },
+      {
+        regex: /\bcollect_hidden_subagent_cascade_ids\(/,
+        message: 'missing services-core hidden subagent cascade delegation',
+      },
       {
         regex: /\bpub async fn clone_prompt_cache\b/,
         message: 'missing prompt cache clone runtime entry point',
@@ -2560,10 +2732,6 @@ export const requiredContentRules = [
         message: 'missing dialog submit queue action contract',
       },
       {
-        regex: /\bpub const fn dialog_policy_may_preempt\b/,
-        message: 'missing dialog preempt policy contract',
-      },
-      {
         regex: /\bpub const fn resolve_dialog_submit_queue_action\b/,
         message: 'missing dialog submit queue action resolver',
       },
@@ -2614,10 +2782,6 @@ export const requiredContentRules = [
       {
         regex: /\bpub struct RoundInjection\b/,
         message: 'missing round injection message contract',
-      },
-      {
-        regex: /\bpub trait DialogRoundPreemptSource\b/,
-        message: 'missing dialog round preempt source contract',
       },
       {
         regex: /\bpub trait DialogRoundInjectionSource\b/,
@@ -3188,10 +3352,6 @@ export const requiredContentRules = [
         message: 'missing dialog scheduler decision contract import',
       },
       {
-        regex: /\bdialog_policy_may_preempt\b/,
-        message: 'missing dialog preempt policy owner delegation',
-      },
-      {
         regex:
           /use bitfun_agent_runtime::scheduler::\{(?=[\s\S]*ActiveDialogTurn)(?=[\s\S]*ActiveDialogTurnStore)(?=[\s\S]*AgentSessionReplyAction)(?=[\s\S]*AgentSessionReplyPlan)(?=[\s\S]*BackgroundDeliveryAction)(?=[\s\S]*BackgroundDeliveryFacts)(?=[\s\S]*BackgroundInjectionKind)(?=[\s\S]*DialogReplySuppressionSet)(?=[\s\S]*DialogSteeringAction)(?=[\s\S]*DialogTurnQueue)(?=[\s\S]*SessionAbortFlags)(?=[\s\S]*resolve_agent_session_reply_action)(?=[\s\S]*resolve_background_delivery_action)(?=[\s\S]*resolve_background_delivery_injection)(?=[\s\S]*resolve_dialog_steering_action)[\s\S]*\};/,
         message: 'missing agent-runtime scheduler owner imports',
@@ -3205,16 +3365,16 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/core/src/agentic/round_preempt.rs',
     reason:
-      'core round preempt runtime must preserve legacy import paths while runtime-ports owns portable contracts and agent-runtime owns round-boundary state',
+      'core round-boundary runtime must preserve legacy import paths while runtime-ports owns portable contracts and agent-runtime owns injection state',
     patterns: [
       {
         regex:
-          /pub use bitfun_agent_runtime::scheduler::\{[\s\S]*DialogRoundInjectionInterrupt[\s\S]*SessionRoundInjectionBuffer[\s\S]*SessionRoundYieldFlags[\s\S]*\};/,
+          /pub use bitfun_agent_runtime::scheduler::\{[\s\S]*DialogRoundInjectionInterrupt[\s\S]*SessionRoundInjectionBuffer[\s\S]*\};/,
         message: 'missing agent-runtime round-boundary state compatibility re-export',
       },
       {
         regex:
-          /pub use bitfun_runtime_ports::\{[\s\S]*DialogRoundInjectionSource[\s\S]*DialogRoundPreemptSource[\s\S]*RoundInjection[\s\S]*RoundInjectionKind[\s\S]*RoundInjectionTarget[\s\S]*\};/,
+          /pub use bitfun_runtime_ports::\{[\s\S]*DialogRoundInjectionSource[\s\S]*RoundInjection[\s\S]*RoundInjectionKind[\s\S]*RoundInjectionTarget[\s\S]*\};/,
         message: 'missing round injection compatibility re-export',
       },
     ],
@@ -3633,6 +3793,46 @@ export const requiredContentRules = [
       'services-integrations must own remote-connect wire/response assembly and preserve remote owner compatibility re-exports',
     patterns: [
       {
+        regex: /\bpub mod device\b/,
+        message: 'missing remote-connect device owner module',
+      },
+      {
+        regex: /\bpub mod encryption\b/,
+        message: 'missing remote-connect encryption owner module',
+      },
+      {
+        regex: /\bpub mod pairing\b/,
+        message: 'missing remote-connect pairing owner module',
+      },
+      {
+        regex: /\bpub mod qr_generator\b/,
+        message: 'missing remote-connect QR owner module',
+      },
+      {
+        regex: /\bpub mod relay_client\b/,
+        message: 'missing remote-connect relay client owner module',
+      },
+      {
+        regex: /\bpub use device::DeviceIdentity\b/,
+        message: 'missing remote-connect device compatibility export',
+      },
+      {
+        regex: /\bpub use encryption::\{decrypt_from_base64, encrypt_to_base64, KeyPair\}/,
+        message: 'missing remote-connect encryption compatibility export',
+      },
+      {
+        regex: /pub use pairing::\{[\s\S]*\bPairingChallenge\b[\s\S]*\bPairingProtocol\b[\s\S]*\bPairingResponse\b[\s\S]*\bPairingState\b[\s\S]*\bQrPayload\b[\s\S]*\}/,
+        message: 'missing remote-connect pairing compatibility export',
+      },
+      {
+        regex: /\bpub use qr_generator::QrGenerator\b/,
+        message: 'missing remote-connect QR compatibility export',
+      },
+      {
+        regex: /pub use relay_client::\{[\s\S]*\bConnectionState\b[\s\S]*\bRelayClient\b[\s\S]*\bRelayEvent\b[\s\S]*\bRelayMessage\b[\s\S]*\}/,
+        message: 'missing remote-connect relay compatibility export',
+      },
+      {
         regex: /\bpub struct RemoteSessionStateTracker\b/,
         message: 'missing remote session state tracker owner',
       },
@@ -3991,6 +4191,14 @@ export const requiredContentRules = [
     reason: 'remote-connect owner crate must keep focused behavior contracts',
     patterns: [
       {
+        regex: /\bremote_connect_pairing_primitives_live_in_services_owner\b/,
+        message: 'missing remote-connect pairing/encryption owner contract test',
+      },
+      {
+        regex: /\bremote_connect_qr_and_relay_primitives_live_in_services_owner\b/,
+        message: 'missing remote-connect QR/relay owner contract test',
+      },
+      {
         regex: /\bremote_connect_command_wire_shape_lives_in_owner_contract\b/,
         message: 'missing remote command wire contract test',
       },
@@ -4133,6 +4341,33 @@ export const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/assembly/core/src/service/remote_connect/mod.rs',
+    reason:
+      'core remote-connect root keeps compatibility re-exports while services-integrations owns device, pairing, encryption, QR, and relay primitives',
+    patterns: [
+      {
+        regex: /\bpub mod device\s*\{[\s\S]*bitfun_services_integrations::remote_connect::device::\*/m,
+        message: 'missing device compatibility re-export module',
+      },
+      {
+        regex: /\bpub mod encryption\s*\{[\s\S]*bitfun_services_integrations::remote_connect::encryption::\*/m,
+        message: 'missing encryption compatibility re-export module',
+      },
+      {
+        regex: /\bpub mod pairing\s*\{[\s\S]*bitfun_services_integrations::remote_connect::pairing::\*/m,
+        message: 'missing pairing compatibility re-export module',
+      },
+      {
+        regex: /\bpub mod qr_generator\s*\{[\s\S]*bitfun_services_integrations::remote_connect::qr_generator::\*/m,
+        message: 'missing QR compatibility re-export module',
+      },
+      {
+        regex: /\bpub mod relay_client\s*\{[\s\S]*bitfun_services_integrations::remote_connect::relay_client::\*/m,
+        message: 'missing relay client compatibility re-export module',
+      },
+    ],
+  },
+  {
     path: 'src/crates/assembly/core/src/service/remote_connect/remote_server.rs',
     reason:
       'core remote-connect server must remain a product runtime adapter around integrations-owned contracts',
@@ -4244,7 +4479,7 @@ export const requiredContentRules = [
       'core scheduler keeps remote queue policy semantics until agent-runtime migration is reviewed',
     patterns: [
       {
-        regex: /\bremote_queue_policy_preserves_interactive_preempt_and_confirmation_boundary\b/,
+        regex: /\bremote_queue_policy_preserves_confirmation_boundary\b/,
         message: 'missing remote queue policy regression',
       },
       {

@@ -25,7 +25,7 @@ use crate::service::config::{
 };
 use crate::service::session::{
     DialogTurnData, DialogTurnKind, ModelRoundData, SessionMetadata, SessionRelationship,
-    SessionRelationshipKind, TextItemData, TurnStatus, UserMessageData,
+    TextItemData, TurnStatus, UserMessageData,
 };
 use crate::service::snapshot::ensure_snapshot_manager_for_workspace;
 use crate::service::workspace::get_global_workspace_service;
@@ -36,10 +36,15 @@ pub use bitfun_runtime_ports::SessionViewRestoreTiming;
 use bitfun_runtime_ports::{
     SessionStoragePathRequest, SessionStorePort, SessionViewRestoreRequest,
 };
+use bitfun_services_core::session::{
+    apply_session_lineage, collect_hidden_subagent_cascade as collect_hidden_subagent_cascade_ids,
+    merge_session_custom_metadata as merge_session_custom_metadata_value,
+    set_deep_review_run_manifest, set_session_relationship,
+};
 use dashmap::DashMap;
 use log::{debug, error, info, warn};
 use serde_json::json;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
@@ -2173,10 +2178,7 @@ impl SessionManager {
     /// This method reloads the AI config and updates `max_context_tokens` to the
     /// model's actual configured `context_window`, so subagents with large-context
     /// models are not prematurely capped.
-    pub async fn refresh_session_context_window(
-        &self,
-        session_id: &str,
-    ) -> BitFunResult<()> {
+    pub async fn refresh_session_context_window(&self, session_id: &str) -> BitFunResult<()> {
         if let Some(ai_config) = Self::load_ai_config_for_model_resolution().await {
             if let Some(mut session) = self.sessions.get_mut(session_id) {
                 let previous = session.config.max_context_tokens;
@@ -3100,31 +3102,35 @@ impl SessionManager {
             .await
     }
 
-    pub async fn merge_session_custom_metadata(
-        &self,
-        session_id: &str,
-        patch: serde_json::Value,
-    ) -> BitFunResult<()> {
+    async fn metadata_workspace_path_for_update(&self, session_id: &str) -> BitFunResult<PathBuf> {
         if !self.should_persist_session_id(session_id) {
-            return Ok(());
+            return Err(BitFunError::Validation(format!(
+                "Session persistence is disabled: {}",
+                session_id
+            )));
         }
 
-        let workspace_path = self
-            .effective_session_workspace_path(session_id)
+        self.effective_session_workspace_path(session_id)
             .await
             .ok_or_else(|| {
                 BitFunError::Validation(format!(
                     "Session workspace_path is missing: {}",
                     session_id
                 ))
-            })?;
+            })
+    }
 
-        let mut metadata = match self
+    async fn load_or_persist_session_metadata(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<SessionMetadata> {
+        match self
             .persistence_manager
-            .load_session_metadata(&workspace_path, session_id)
+            .load_session_metadata(workspace_path, session_id)
             .await?
         {
-            Some(metadata) => metadata,
+            Some(metadata) => Ok(metadata),
             None => {
                 let session = self
                     .sessions
@@ -3134,32 +3140,56 @@ impl SessionManager {
                         BitFunError::NotFound(format!("Session not found: {}", session_id))
                     })?;
                 self.persistence_manager
-                    .save_session(&workspace_path, &session)
+                    .save_session(workspace_path, &session)
                     .await?;
                 self.persistence_manager
-                    .load_session_metadata(&workspace_path, session_id)
+                    .load_session_metadata(workspace_path, session_id)
                     .await?
                     .ok_or_else(|| {
                         BitFunError::NotFound(format!("Session not found: {}", session_id))
-                    })?
+                    })
             }
-        };
-        metadata.custom_metadata = Some(match (metadata.custom_metadata.take(), patch) {
-            (
-                Some(serde_json::Value::Object(mut existing)),
-                serde_json::Value::Object(patch_obj),
-            ) => {
-                for (key, value) in patch_obj {
-                    existing.insert(key, value);
-                }
-                serde_json::Value::Object(existing)
-            }
-            (_, value) => value,
-        });
+        }
+    }
 
+    async fn update_session_metadata_at_workspace(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        update: impl FnOnce(&mut SessionMetadata),
+    ) -> BitFunResult<()> {
+        let mut metadata = self
+            .load_or_persist_session_metadata(workspace_path, session_id)
+            .await?;
+        update(&mut metadata);
         self.persistence_manager
-            .save_session_metadata(&workspace_path, &metadata)
+            .save_session_metadata(workspace_path, &metadata)
             .await
+    }
+
+    async fn update_persisted_session_metadata(
+        &self,
+        session_id: &str,
+        update: impl FnOnce(&mut SessionMetadata),
+    ) -> BitFunResult<()> {
+        if !self.should_persist_session_id(session_id) {
+            return Ok(());
+        }
+
+        let workspace_path = self.metadata_workspace_path_for_update(session_id).await?;
+        self.update_session_metadata_at_workspace(&workspace_path, session_id, update)
+            .await
+    }
+
+    pub async fn merge_session_custom_metadata(
+        &self,
+        session_id: &str,
+        patch: serde_json::Value,
+    ) -> BitFunResult<()> {
+        self.update_persisted_session_metadata(session_id, |metadata| {
+            merge_session_custom_metadata_value(metadata, patch)
+        })
+        .await
     }
 
     pub async fn merge_session_relationship(
@@ -3167,50 +3197,10 @@ impl SessionManager {
         session_id: &str,
         relationship: SessionRelationship,
     ) -> BitFunResult<()> {
-        if !self.should_persist_session_id(session_id) {
-            return Ok(());
-        }
-
-        let workspace_path = self
-            .effective_session_workspace_path(session_id)
-            .await
-            .ok_or_else(|| {
-                BitFunError::Validation(format!(
-                    "Session workspace_path is missing: {}",
-                    session_id
-                ))
-            })?;
-
-        let mut metadata = match self
-            .persistence_manager
-            .load_session_metadata(&workspace_path, session_id)
-            .await?
-        {
-            Some(metadata) => metadata,
-            None => {
-                let session = self
-                    .sessions
-                    .get(session_id)
-                    .map(|value| value.clone())
-                    .ok_or_else(|| {
-                        BitFunError::NotFound(format!("Session not found: {}", session_id))
-                    })?;
-                self.persistence_manager
-                    .save_session(&workspace_path, &session)
-                    .await?;
-                self.persistence_manager
-                    .load_session_metadata(&workspace_path, session_id)
-                    .await?
-                    .ok_or_else(|| {
-                        BitFunError::NotFound(format!("Session not found: {}", session_id))
-                    })?
-            }
-        };
-
-        metadata.relationship = Some(relationship);
-        self.persistence_manager
-            .save_session_metadata(&workspace_path, &metadata)
-            .await
+        self.update_persisted_session_metadata(session_id, |metadata| {
+            set_session_relationship(metadata, relationship)
+        })
+        .await
     }
 
     pub async fn persist_session_lineage(
@@ -3218,69 +3208,10 @@ impl SessionManager {
         session_id: &str,
         relationship: SessionRelationship,
     ) -> BitFunResult<()> {
-        if !self.should_persist_session_id(session_id) {
-            return Ok(());
-        }
-
-        let workspace_path = self
-            .effective_session_workspace_path(session_id)
-            .await
-            .ok_or_else(|| {
-                BitFunError::Validation(format!(
-                    "Session workspace_path is missing: {}",
-                    session_id
-                ))
-            })?;
-
-        let mut metadata = match self
-            .persistence_manager
-            .load_session_metadata(&workspace_path, session_id)
-            .await?
-        {
-            Some(metadata) => metadata,
-            None => {
-                let session = self
-                    .sessions
-                    .get(session_id)
-                    .map(|value| value.clone())
-                    .ok_or_else(|| {
-                        BitFunError::NotFound(format!("Session not found: {}", session_id))
-                    })?;
-                self.persistence_manager
-                    .save_session(&workspace_path, &session)
-                    .await?;
-                self.persistence_manager
-                    .load_session_metadata(&workspace_path, session_id)
-                    .await?
-                    .ok_or_else(|| {
-                        BitFunError::NotFound(format!("Session not found: {}", session_id))
-                    })?
-            }
-        };
-
-        metadata.relationship = Some(relationship);
-
-        if let Some(serde_json::Value::Object(mut custom_metadata)) =
-            metadata.custom_metadata.take()
-        {
-            for key in [
-                "kind",
-                "parentSessionId",
-                "parentRequestId",
-                "parentDialogTurnId",
-                "parentTurnIndex",
-                "parentToolCallId",
-                "subagentType",
-            ] {
-                custom_metadata.remove(key);
-            }
-            metadata.custom_metadata =
-                (!custom_metadata.is_empty()).then_some(serde_json::Value::Object(custom_metadata));
-        }
-
-        self.persistence_manager
-            .save_session_metadata(&workspace_path, &metadata)
-            .await
+        self.update_persisted_session_metadata(session_id, |metadata| {
+            apply_session_lineage(metadata, relationship)
+        })
+        .await
     }
 
     pub async fn collect_hidden_subagent_cascade_for_parent_turns(
@@ -3297,70 +3228,11 @@ impl SessionManager {
             .persistence_manager
             .list_session_metadata_including_internal(workspace_path)
             .await?;
-
-        let mut child_session_ids_by_parent: HashMap<String, Vec<String>> = HashMap::new();
-        let mut root_session_ids = Vec::new();
-
-        for metadata in metadata_list {
-            let Some((relationship_kind, relationship_parent_session_id, parent_dialog_turn_id)) =
-                extract_subagent_relationship(&metadata)
-            else {
-                continue;
-            };
-
-            if relationship_kind != SessionRelationshipKind::Subagent {
-                continue;
-            }
-
-            child_session_ids_by_parent
-                .entry(relationship_parent_session_id.clone())
-                .or_default()
-                .push(metadata.session_id.clone());
-
-            if relationship_parent_session_id == parent_session_id
-                && parent_dialog_turn_ids.contains(&parent_dialog_turn_id)
-            {
-                root_session_ids.push(metadata.session_id);
-            }
-        }
-
-        let mut visited = HashSet::new();
-        let mut ordered_session_ids = Vec::new();
-
-        fn visit(
-            session_id: &str,
-            child_session_ids_by_parent: &HashMap<String, Vec<String>>,
-            visited: &mut HashSet<String>,
-            ordered_session_ids: &mut Vec<String>,
-        ) {
-            if !visited.insert(session_id.to_string()) {
-                return;
-            }
-
-            if let Some(child_session_ids) = child_session_ids_by_parent.get(session_id) {
-                for child_session_id in child_session_ids {
-                    visit(
-                        child_session_id,
-                        child_session_ids_by_parent,
-                        visited,
-                        ordered_session_ids,
-                    );
-                }
-            }
-
-            ordered_session_ids.push(session_id.to_string());
-        }
-
-        for root_session_id in root_session_ids {
-            visit(
-                &root_session_id,
-                &child_session_ids_by_parent,
-                &mut visited,
-                &mut ordered_session_ids,
-            );
-        }
-
-        Ok(ordered_session_ids)
+        Ok(collect_hidden_subagent_cascade_ids(
+            metadata_list,
+            parent_session_id,
+            parent_dialog_turn_ids,
+        ))
     }
 
     pub async fn set_session_deep_review_run_manifest(
@@ -3368,50 +3240,10 @@ impl SessionManager {
         session_id: &str,
         deep_review_run_manifest: Option<serde_json::Value>,
     ) -> BitFunResult<()> {
-        if !self.should_persist_session_id(session_id) {
-            return Ok(());
-        }
-
-        let workspace_path = self
-            .effective_session_workspace_path(session_id)
-            .await
-            .ok_or_else(|| {
-                BitFunError::Validation(format!(
-                    "Session workspace_path is missing: {}",
-                    session_id
-                ))
-            })?;
-
-        let mut metadata = match self
-            .persistence_manager
-            .load_session_metadata(&workspace_path, session_id)
-            .await?
-        {
-            Some(metadata) => metadata,
-            None => {
-                let session = self
-                    .sessions
-                    .get(session_id)
-                    .map(|value| value.clone())
-                    .ok_or_else(|| {
-                        BitFunError::NotFound(format!("Session not found: {}", session_id))
-                    })?;
-                self.persistence_manager
-                    .save_session(&workspace_path, &session)
-                    .await?;
-                self.persistence_manager
-                    .load_session_metadata(&workspace_path, session_id)
-                    .await?
-                    .ok_or_else(|| {
-                        BitFunError::NotFound(format!("Session not found: {}", session_id))
-                    })?
-            }
-        };
-
-        metadata.deep_review_run_manifest = deep_review_run_manifest;
-        self.persistence_manager
-            .save_session_metadata(&workspace_path, &metadata)
-            .await
+        self.update_persisted_session_metadata(session_id, |metadata| {
+            set_deep_review_run_manifest(metadata, deep_review_run_manifest)
+        })
+        .await
     }
 
     // ============ Dialog Turn Management ============
@@ -4634,45 +4466,6 @@ impl SessionManager {
 
         debug!("Cleanup task started");
     }
-}
-
-fn extract_subagent_relationship(
-    metadata: &SessionMetadata,
-) -> Option<(SessionRelationshipKind, String, String)> {
-    let relationship = metadata.relationship.as_ref();
-    let custom_metadata = metadata.custom_metadata.as_ref();
-
-    let relationship_kind = relationship
-        .and_then(|value| value.kind.clone())
-        .or_else(|| {
-            custom_metadata
-                .and_then(|value| value.get("kind"))
-                .and_then(|value| value.as_str())
-                .and_then(|value| match value {
-                    "subagent" => Some(SessionRelationshipKind::Subagent),
-                    _ => None,
-                })
-        })?;
-
-    let parent_session_id = relationship
-        .and_then(|value| value.parent_session_id.clone())
-        .or_else(|| {
-            custom_metadata
-                .and_then(|value| value.get("parentSessionId"))
-                .and_then(|value| value.as_str())
-                .map(str::to_string)
-        })?;
-
-    let parent_dialog_turn_id = relationship
-        .and_then(|value| value.parent_dialog_turn_id.clone())
-        .or_else(|| {
-            custom_metadata
-                .and_then(|value| value.get("parentDialogTurnId"))
-                .and_then(|value| value.as_str())
-                .map(str::to_string)
-        })?;
-
-    Some((relationship_kind, parent_session_id, parent_dialog_turn_id))
 }
 
 #[cfg(test)]

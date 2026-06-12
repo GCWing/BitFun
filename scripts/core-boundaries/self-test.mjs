@@ -452,7 +452,6 @@ export function runManifestParserSelfTest({
     throw new Error('missing core round preempt boundary rule');
   }
   for (const contract of [
-    'DialogRoundPreemptSource',
     'RoundInjection',
     'DialogRoundInjectionSource',
     'RoundInjectionKind',
@@ -545,7 +544,11 @@ export function runManifestParserSelfTest({
   const coreOptionalOwnerDeps = new Set(
     coreOptionalOwnerRule?.dependencies.map((dependency) => dependency.depName) ?? [],
   );
+  const coreFullyMigratedDeps = new Set(['hostname', 'mac_address', 'qrcode', 'x25519-dalek']);
   for (const dep of coreProfile?.forbiddenNonOptionalDeps ?? []) {
+    if (coreFullyMigratedDeps.has(dep)) {
+      continue;
+    }
     if (!coreOptionalOwnerDeps.has(dep)) {
       throw new Error(`core optional dependency owner rule must cover forbidden dependency ${dep}`);
     }
@@ -564,7 +567,17 @@ export function runManifestParserSelfTest({
   const servicesOptionalOwnerRule = optionalDependencyFeatureOwnerRules.find(
     (rule) => rule.crateName === 'services-integrations',
   );
-  for (const dep of ['bitfun-runtime-ports', 'git2', 'notify', 'rmcp']) {
+  for (const dep of [
+    'bitfun-runtime-ports',
+    'git2',
+    'hostname',
+    'mac_address',
+    'notify',
+    'qrcode',
+    'rmcp',
+    'tokio-tungstenite',
+    'x25519-dalek',
+  ]) {
     if (!servicesOptionalOwnerRule?.dependencies.some((dependency) => dependency.depName === dep)) {
       throw new Error(`services-integrations optional dependency owner rule must cover ${dep}`);
     }
@@ -834,7 +847,6 @@ export function runManifestParserSelfTest({
         'DialogSessionStateFact',
         'DialogSubmitQueueFacts',
         'DialogSubmitQueueAction',
-        'dialog_policy_may_preempt',
         'resolve_dialog_submit_queue_action',
         'dialog_submit_queue_action_preserves_current_scheduler_routing_policy',
         'should_suppress_agent_session_cancelled_reply',
@@ -848,7 +860,6 @@ export function runManifestParserSelfTest({
         'RoundInjectionKind',
         'RoundInjectionTarget',
         'RoundInjection',
-        'DialogRoundPreemptSource',
         'DialogRoundInjectionSource',
         'round_injection_contract_keeps_kind_and_target_identity',
         'round_injection_source_contract_drains_portable_injections',
@@ -1075,7 +1086,6 @@ export function runManifestParserSelfTest({
         'follow_up_submission_policy',
         'SubmitAgentSessionFollowUp',
         'InjectIntoRunningTurn',
-        'SessionRoundYieldFlags',
         'SessionRoundInjectionBuffer',
         'TurnOutcome',
         'TurnOutcomeQueueAction',
@@ -1092,6 +1102,7 @@ export function runManifestParserSelfTest({
         'background_delivery_injection_builds_background_result_with_display_fallback',
         'dialog_turn_queue_preserves_priority_order_and_fifo_within_priority',
         'dialog_turn_queue_rejects_overflow_and_preserves_current_error_shape',
+        'dialog_turn_queue_clear_and_requeue_front_preserve_scheduler_recovery_contract',
         'dialog_turn_queue_requeued_turn_keeps_original_priority_for_later_ordering',
         'active_dialog_turn_owns_agent_session_reply_suppression_facts',
         'active_dialog_turn_store_owns_suppression_key_resolution_and_removal',
@@ -1102,7 +1113,6 @@ export function runManifestParserSelfTest({
         'agent_session_reply_action_ignores_non_agent_session_turns',
         'dialog_steering_action_buffers_exact_running_turn_with_display_fallback',
         'dialog_steering_action_rejects_when_target_turn_is_not_running',
-        'round_yield_flags_are_session_scoped_and_clearable',
         'round_injection_buffer_drains_only_messages_for_the_active_turn',
         'turn_outcome_status_reply_and_queue_policy_are_portable',
       ],
@@ -1467,7 +1477,6 @@ export function runManifestParserSelfTest({
         'DialogSteeringAction',
         'DialogTurnQueue',
         'SessionAbortFlags',
-        'dialog_policy_may_preempt',
         'resolve_agent_session_reply_action',
         'resolve_background_delivery_injection',
         'resolve_dialog_submit_queue_action',
@@ -1480,12 +1489,10 @@ export function runManifestParserSelfTest({
         'bitfun_agent_runtime',
         'bitfun_runtime_ports',
         'DialogRoundInjectionSource',
-        'DialogRoundPreemptSource',
         'RoundInjection',
         'RoundInjectionKind',
         'RoundInjectionTarget',
         'SessionRoundInjectionBuffer',
-        'SessionRoundYieldFlags',
       ],
     },
     {
@@ -1609,6 +1616,18 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/services/services-integrations/src/remote_connect.rs',
       contracts: [
+        'pub mod device',
+        'pub mod encryption',
+        'pub mod pairing',
+        'pub mod qr_generator',
+        'pub mod relay_client',
+        'pub use device::DeviceIdentity',
+        'pub use encryption::{decrypt_from_base64, encrypt_to_base64, KeyPair}',
+        'PairingProtocol',
+        'QrPayload',
+        'pub use qr_generator::QrGenerator',
+        'RelayClient',
+        'RelayMessage',
         'RemoteSessionStateTracker',
         'TrackerEvent',
         'RemoteSessionTrackerHost',
@@ -1683,6 +1702,8 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/services/services-integrations/tests/remote_connect_contracts.rs',
       contracts: [
+        'remote_connect_pairing_primitives_live_in_services_owner',
+        'remote_connect_qr_and_relay_primitives_live_in_services_owner',
         'remote_connect_command_wire_shape_lives_in_owner_contract',
         'remote_connect_response_wire_shape_lives_in_owner_contract',
         'remote_connect_model_catalog_delta_preserves_poll_invalidation_policy',
@@ -1726,7 +1747,7 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/assembly/core/src/agentic/coordination/scheduler.rs',
       contracts: [
-        'remote_queue_policy_preserves_interactive_preempt_and_confirmation_boundary',
+        'remote_queue_policy_preserves_confirmation_boundary',
         'AgentDialogTurnPort',
         'AgentLifecycleDeliveryPort',
         'AgentTurnCancellationPort',

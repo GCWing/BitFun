@@ -1,75 +1,12 @@
 use super::manager::PersistenceManager;
 use crate::agentic::core::{Session, SessionKind};
-use crate::service::session::{DialogTurnData, SessionStatus};
 use crate::util::errors::{BitFunError, BitFunResult};
-use serde::{Deserialize, Serialize};
-use serde_json::{Map as JsonMap, Value as JsonValue};
+use bitfun_services_core::session::{
+    build_branched_session_metadata, BranchSessionMetadataFacts, SessionBranchRequest,
+    SessionBranchResult,
+};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SessionBranchRequest {
-    pub source_session_id: String,
-    pub source_turn_id: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SessionBranchResult {
-    pub session_id: String,
-    pub session_name: String,
-    pub agent_type: String,
-}
-
-fn estimate_turn_message_count(turn: &DialogTurnData) -> usize {
-    1 + turn
-        .model_rounds
-        .iter()
-        .map(|round| round.text_items.len())
-        .sum::<usize>()
-}
-
-fn strip_child_session_metadata(value: Option<&JsonValue>) -> Option<JsonValue> {
-    let Some(JsonValue::Object(existing)) = value else {
-        return None;
-    };
-
-    let mut next = existing.clone();
-    for key in [
-        "kind",
-        "parentSessionId",
-        "parentRequestId",
-        "parentDialogTurnId",
-        "parentTurnIndex",
-    ] {
-        next.remove(key);
-    }
-    Some(JsonValue::Object(next))
-}
-
-fn build_branch_custom_metadata(
-    source_metadata: Option<&JsonValue>,
-    source_session_id: &str,
-    source_turn_id: &str,
-    source_turn_index: usize,
-) -> Option<JsonValue> {
-    let mut base = match strip_child_session_metadata(source_metadata) {
-        Some(JsonValue::Object(map)) => map,
-        _ => JsonMap::new(),
-    };
-
-    base.insert(
-        "forkOrigin".to_string(),
-        serde_json::json!({
-            "sessionId": source_session_id,
-            "turnId": source_turn_id,
-            "turnIndex": source_turn_index + 1,
-        }),
-    );
-
-    Some(JsonValue::Object(base))
-}
 
 impl PersistenceManager {
     pub async fn branch_session(
@@ -205,45 +142,17 @@ impl PersistenceManager {
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_millis() as u64;
-            let mut branched_metadata = source_metadata.clone();
-            branched_metadata.session_id = target_session_id.clone();
-            branched_metadata.session_name = target_session_name.clone();
-            branched_metadata.agent_type = target_agent_type.clone();
-            branched_metadata.created_by = None;
-            branched_metadata.session_kind = SessionKind::Standard;
-            branched_metadata.created_at = now_ms;
-            branched_metadata.last_active_at = now_ms;
-            branched_metadata.turn_count = branched_turns.len();
-            branched_metadata.message_count =
-                branched_turns.iter().map(estimate_turn_message_count).sum();
-            branched_metadata.tool_call_count = branched_turns
-                .iter()
-                .map(DialogTurnData::count_tool_calls)
-                .sum();
-            branched_metadata.status = SessionStatus::Active;
-            branched_metadata.snapshot_session_id = None;
-            branched_metadata.tags = branched_metadata
-                .tags
-                .into_iter()
-                .filter(|tag| {
-                    tag != "btw"
-                        && tag != "review"
-                        && tag != "deep_review"
-                        && tag != "miniapp"
-                        && tag != "subagent"
-                })
-                .collect();
-            branched_metadata.custom_metadata = build_branch_custom_metadata(
-                source_metadata.custom_metadata.as_ref(),
-                &request.source_session_id,
-                &request.source_turn_id,
+            let branched_metadata = build_branched_session_metadata(BranchSessionMetadataFacts {
+                source_metadata: &source_metadata,
+                target_session_id: target_session_id.clone(),
+                target_session_name: target_session_name.clone(),
+                target_agent_type: target_agent_type.clone(),
+                source_session_id: &request.source_session_id,
+                source_turn_id: &request.source_turn_id,
                 source_turn_index,
-            );
-            branched_metadata.relationship = None;
-            branched_metadata.todos = None;
-            branched_metadata.deep_review_run_manifest = None;
-            branched_metadata.unread_completion = None;
-            branched_metadata.needs_user_attention = None;
+                branched_turns: &branched_turns,
+                now_ms,
+            });
 
             self.save_session_metadata(workspace_path, &branched_metadata)
                 .await?;

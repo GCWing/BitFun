@@ -1,6 +1,153 @@
-//! Session metadata counters and visible-index mutation rules.
+//! Session metadata construction, counters, and visible-index mutation rules.
 
-use super::types::{DialogTurnData, SessionMetadata, StoredSessionIndexFile};
+use super::types::{
+    DialogTurnData, SessionMetadata, SessionRelationship, SessionRelationshipKind,
+    StoredSessionIndexFile,
+};
+use bitfun_core_types::SessionKind;
+use serde_json::Value;
+
+#[derive(Debug, Clone)]
+pub struct SessionMetadataBuildFacts<'a> {
+    pub session_id: &'a str,
+    pub session_name: &'a str,
+    pub agent_type: &'a str,
+    pub last_user_dialog_agent_type: Option<&'a str>,
+    pub last_submitted_agent_type: Option<&'a str>,
+    pub created_by: Option<&'a str>,
+    pub session_kind: SessionKind,
+    pub model_name: Option<&'a str>,
+    pub created_at_ms: u64,
+    pub last_active_at_ms: u64,
+    pub turn_count: usize,
+    pub snapshot_session_id: Option<&'a str>,
+    pub workspace_path: &'a str,
+    pub workspace_hostname: Option<&'a str>,
+    pub existing: Option<&'a SessionMetadata>,
+}
+
+pub fn build_session_metadata(facts: SessionMetadataBuildFacts<'_>) -> SessionMetadata {
+    let existing = facts.existing;
+    let created_at = existing
+        .map(|value| value.created_at)
+        .unwrap_or(facts.created_at_ms);
+    let model_name = facts
+        .model_name
+        .map(str::to_string)
+        .or_else(|| existing.map(|value| value.model_name.clone()))
+        .unwrap_or_else(|| "default".to_string());
+
+    SessionMetadata {
+        session_id: facts.session_id.to_string(),
+        session_name: facts.session_name.to_string(),
+        agent_type: facts.agent_type.to_string(),
+        last_user_dialog_agent_type: facts.last_user_dialog_agent_type.map(str::to_string),
+        last_submitted_agent_type: facts.last_submitted_agent_type.map(str::to_string),
+        created_by: facts
+            .created_by
+            .map(str::to_string)
+            .or_else(|| existing.and_then(|value| value.created_by.clone())),
+        session_kind: facts.session_kind,
+        model_name,
+        created_at,
+        last_active_at: facts.last_active_at_ms,
+        turn_count: facts.turn_count,
+        message_count: existing.map(|value| value.message_count).unwrap_or(0),
+        tool_call_count: existing.map(|value| value.tool_call_count).unwrap_or(0),
+        status: existing
+            .map(|value| value.status.clone())
+            .unwrap_or(super::types::SessionStatus::Active),
+        terminal_session_id: existing.and_then(|value| value.terminal_session_id.clone()),
+        snapshot_session_id: facts
+            .snapshot_session_id
+            .map(str::to_string)
+            .or_else(|| existing.and_then(|value| value.snapshot_session_id.clone())),
+        tags: existing.map(|value| value.tags.clone()).unwrap_or_default(),
+        custom_metadata: existing.and_then(|value| value.custom_metadata.clone()),
+        relationship: build_session_relationship(facts.session_kind, existing),
+        todos: existing.and_then(|value| value.todos.clone()),
+        deep_review_run_manifest: existing.and_then(|value| value.deep_review_run_manifest.clone()),
+        deep_review_cache: existing.and_then(|value| value.deep_review_cache.clone()),
+        workspace_path: Some(facts.workspace_path.to_string()),
+        workspace_hostname: facts.workspace_hostname.map(str::to_string),
+        unread_completion: existing.and_then(|value| value.unread_completion.clone()),
+        needs_user_attention: existing.and_then(|value| value.needs_user_attention.clone()),
+    }
+}
+
+fn build_session_relationship(
+    session_kind: SessionKind,
+    existing: Option<&SessionMetadata>,
+) -> Option<SessionRelationship> {
+    let existing_relationship = existing.and_then(|value| value.relationship.clone());
+    let existing_custom_metadata = existing.and_then(|value| value.custom_metadata.as_ref());
+
+    let kind = match session_kind {
+        SessionKind::Subagent => Some(SessionRelationshipKind::Subagent),
+        SessionKind::EphemeralChild => Some(SessionRelationshipKind::Btw),
+        SessionKind::Standard => existing_relationship
+            .as_ref()
+            .and_then(|value| value.kind.clone()),
+    };
+
+    let parent_session_id = existing_relationship
+        .as_ref()
+        .and_then(|value| value.parent_session_id.clone())
+        .or_else(|| legacy_custom_metadata_string(existing_custom_metadata, "parentSessionId"));
+    let parent_request_id = existing_relationship
+        .as_ref()
+        .and_then(|value| value.parent_request_id.clone())
+        .or_else(|| legacy_custom_metadata_string(existing_custom_metadata, "parentRequestId"));
+    let parent_dialog_turn_id = existing_relationship
+        .as_ref()
+        .and_then(|value| value.parent_dialog_turn_id.clone())
+        .or_else(|| legacy_custom_metadata_string(existing_custom_metadata, "parentDialogTurnId"));
+    let parent_turn_index = existing_relationship
+        .as_ref()
+        .and_then(|value| value.parent_turn_index)
+        .or_else(|| {
+            existing_custom_metadata
+                .and_then(|value| value.get("parentTurnIndex"))
+                .and_then(|value| value.as_u64())
+                .map(|value| value as usize)
+        });
+    let parent_tool_call_id = existing_relationship
+        .as_ref()
+        .and_then(|value| value.parent_tool_call_id.clone())
+        .or_else(|| legacy_custom_metadata_string(existing_custom_metadata, "parentToolCallId"));
+    let subagent_type = existing_relationship
+        .as_ref()
+        .and_then(|value| value.subagent_type.clone())
+        .or_else(|| legacy_custom_metadata_string(existing_custom_metadata, "subagentType"));
+
+    if kind.is_none()
+        && parent_session_id.is_none()
+        && parent_request_id.is_none()
+        && parent_dialog_turn_id.is_none()
+        && parent_turn_index.is_none()
+        && parent_tool_call_id.is_none()
+        && subagent_type.is_none()
+    {
+        return None;
+    }
+
+    Some(SessionRelationship {
+        kind,
+        parent_session_id,
+        parent_request_id,
+        parent_dialog_turn_id,
+        parent_turn_index,
+        parent_tool_call_id,
+        subagent_type,
+    })
+}
+
+fn legacy_custom_metadata_string(value: Option<&Value>, key: &str) -> Option<String> {
+    value
+        .and_then(|value| value.get(key))
+        .and_then(|value| value.as_str())
+        .map(str::to_string)
+}
 
 fn estimate_turn_message_count(turn: &DialogTurnData) -> usize {
     let assistant_text_count: usize = turn
@@ -142,8 +289,209 @@ pub fn remove_session_index_entry(
     Some(index)
 }
 
+pub fn merge_session_custom_metadata(metadata: &mut SessionMetadata, patch: Value) {
+    metadata.custom_metadata = Some(match (metadata.custom_metadata.take(), patch) {
+        (Some(Value::Object(mut existing)), Value::Object(patch_obj)) => {
+            for (key, value) in patch_obj {
+                existing.insert(key, value);
+            }
+            Value::Object(existing)
+        }
+        (_, value) => value,
+    });
+}
+
+pub fn set_session_relationship(metadata: &mut SessionMetadata, relationship: SessionRelationship) {
+    metadata.relationship = Some(relationship);
+}
+
+pub fn set_deep_review_run_manifest(
+    metadata: &mut SessionMetadata,
+    deep_review_run_manifest: Option<Value>,
+) {
+    metadata.deep_review_run_manifest = deep_review_run_manifest;
+}
+
+pub fn set_deep_review_cache(metadata: &mut SessionMetadata, cache: Value) {
+    metadata.deep_review_cache = Some(cache);
+}
+
 fn fill_workspace_path_if_missing(metadata: &mut SessionMetadata, workspace_path: &str) {
     if metadata.workspace_path.is_none() {
         metadata.workspace_path = Some(workspace_path.to_string());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::session::{SessionRelationship, SessionRelationshipKind};
+    use serde_json::json;
+
+    fn metadata() -> SessionMetadata {
+        SessionMetadata::new(
+            "session-1".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            "model".to_string(),
+        )
+    }
+
+    #[test]
+    fn merge_custom_metadata_shallow_merges_object_patch() {
+        let mut metadata = metadata();
+        metadata.custom_metadata = Some(json!({
+            "existing": true,
+            "replace": "old"
+        }));
+
+        merge_session_custom_metadata(
+            &mut metadata,
+            json!({
+                "replace": "new",
+                "added": 1
+            }),
+        );
+
+        assert_eq!(
+            metadata.custom_metadata,
+            Some(json!({
+                "existing": true,
+                "replace": "new",
+                "added": 1
+            }))
+        );
+    }
+
+    #[test]
+    fn merge_custom_metadata_replaces_non_object_patch() {
+        let mut metadata = metadata();
+        metadata.custom_metadata = Some(json!({ "existing": true }));
+
+        merge_session_custom_metadata(&mut metadata, json!("replacement"));
+
+        assert_eq!(metadata.custom_metadata, Some(json!("replacement")));
+    }
+
+    #[test]
+    fn relationship_and_manifest_mutations_preserve_other_metadata() {
+        let mut metadata = metadata();
+        metadata.custom_metadata = Some(json!({ "existing": true }));
+        let relationship = SessionRelationship {
+            kind: Some(SessionRelationshipKind::Subagent),
+            parent_session_id: Some("parent".to_string()),
+            parent_request_id: Some("request".to_string()),
+            parent_dialog_turn_id: Some("turn".to_string()),
+            parent_turn_index: Some(3),
+            parent_tool_call_id: Some("tool".to_string()),
+            subagent_type: Some("ReviewSecurity".to_string()),
+        };
+
+        set_session_relationship(&mut metadata, relationship.clone());
+        set_deep_review_run_manifest(&mut metadata, Some(json!({ "run": "manifest" })));
+
+        assert_eq!(metadata.relationship, Some(relationship));
+        assert_eq!(
+            metadata.deep_review_run_manifest,
+            Some(json!({ "run": "manifest" }))
+        );
+        assert_eq!(metadata.custom_metadata, Some(json!({ "existing": true })));
+    }
+
+    #[test]
+    fn deep_review_cache_mutation_preserves_manifest_and_relationship() {
+        let mut metadata = metadata();
+        metadata.deep_review_run_manifest = Some(json!({ "run": "manifest" }));
+        metadata.relationship = Some(SessionRelationship {
+            kind: Some(SessionRelationshipKind::DeepReview),
+            parent_session_id: Some("parent".to_string()),
+            ..Default::default()
+        });
+
+        set_deep_review_cache(&mut metadata, json!({ "packet": "review output" }));
+
+        assert_eq!(
+            metadata.deep_review_cache,
+            Some(json!({ "packet": "review output" }))
+        );
+        assert_eq!(
+            metadata.deep_review_run_manifest,
+            Some(json!({ "run": "manifest" }))
+        );
+        assert_eq!(
+            metadata
+                .relationship
+                .as_ref()
+                .and_then(|value| value.kind.clone()),
+            Some(SessionRelationshipKind::DeepReview)
+        );
+    }
+
+    #[test]
+    fn build_session_metadata_preserves_existing_fields_and_legacy_relationship() {
+        let mut existing = metadata();
+        existing.created_at = 10;
+        existing.message_count = 7;
+        existing.tool_call_count = 3;
+        existing.custom_metadata = Some(json!({
+            "parentSessionId": "parent-session",
+            "parentRequestId": "parent-request",
+            "parentDialogTurnId": "turn-1",
+            "parentTurnIndex": 2,
+            "parentToolCallId": "tool-1",
+            "subagentType": "review",
+            "preserved": true
+        }));
+        existing.deep_review_run_manifest = Some(json!({ "run": "manifest" }));
+        existing.deep_review_cache = Some(json!({ "cache": true }));
+
+        let built = build_session_metadata(SessionMetadataBuildFacts {
+            session_id: "session-1",
+            session_name: "Updated session",
+            agent_type: "agentic",
+            last_user_dialog_agent_type: Some("plan"),
+            last_submitted_agent_type: Some("code"),
+            created_by: Some("creator"),
+            session_kind: crate::session::SessionKind::Subagent,
+            model_name: Some("gpt-test"),
+            created_at_ms: 100,
+            last_active_at_ms: 200,
+            turn_count: 4,
+            snapshot_session_id: Some("snapshot-1"),
+            workspace_path: "/workspace",
+            workspace_hostname: Some("host"),
+            existing: Some(&existing),
+        });
+
+        assert_eq!(built.created_at, 10);
+        assert_eq!(built.last_active_at, 200);
+        assert_eq!(built.message_count, 7);
+        assert_eq!(built.tool_call_count, 3);
+        assert_eq!(built.turn_count, 4);
+        assert_eq!(built.session_name, "Updated session");
+        assert_eq!(built.last_user_dialog_agent_type.as_deref(), Some("plan"));
+        assert_eq!(built.last_submitted_agent_type.as_deref(), Some("code"));
+        assert_eq!(built.created_by.as_deref(), Some("creator"));
+        assert_eq!(built.snapshot_session_id.as_deref(), Some("snapshot-1"));
+        assert_eq!(built.workspace_path.as_deref(), Some("/workspace"));
+        assert_eq!(built.workspace_hostname.as_deref(), Some("host"));
+        assert_eq!(
+            built.deep_review_run_manifest,
+            Some(json!({ "run": "manifest" }))
+        );
+        assert_eq!(built.deep_review_cache, Some(json!({ "cache": true })));
+        assert_eq!(built.custom_metadata, existing.custom_metadata);
+        assert_eq!(
+            built.relationship,
+            Some(SessionRelationship {
+                kind: Some(SessionRelationshipKind::Subagent),
+                parent_session_id: Some("parent-session".to_string()),
+                parent_request_id: Some("parent-request".to_string()),
+                parent_dialog_turn_id: Some("turn-1".to_string()),
+                parent_turn_index: Some(2),
+                parent_tool_call_id: Some("tool-1".to_string()),
+                subagent_type: Some("review".to_string()),
+            })
+        );
     }
 }

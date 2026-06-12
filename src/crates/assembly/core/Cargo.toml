@@ -116,18 +116,14 @@ fluent-bundle = { workspace = true }
 unic-langid = { workspace = true }
 
 # Encryption (Remote Connect E2E)
-x25519-dalek = { workspace = true, optional = true }
 aes-gcm = { workspace = true, optional = true }
 sha2 = { workspace = true }
 rand = { workspace = true, optional = true }
 
 # Device/Network info (Remote Connect)
-mac_address = { workspace = true, optional = true }
 local-ip-address = { workspace = true, optional = true }
-hostname = { workspace = true, optional = true }
 
 # QR code generation
-qrcode = { workspace = true, optional = true }
 
 # WebSocket client
 tokio-tungstenite = { workspace = true, optional = true }
@@ -203,19 +199,15 @@ service-integrations = [
     "dep:axum",
     "dep:bitfun-relay-server",
     "dep:git2",
-    "dep:hostname",
     "dep:image",
     "dep:local-ip-address",
-    "dep:mac_address",
     "dep:md5",
-    "dep:qrcode",
     "dep:rand",
     "dep:reqwest",
     "dep:rmcp",
     "dep:sse-stream",
     "dep:tokio-tungstenite",
     "dep:tower-http",
-    "dep:x25519-dalek",
     "bitfun-services-integrations/product-full",
 ]
 tool-packs = ["dep:bitfun-tool-packs", "bitfun-tool-packs/product-full"]

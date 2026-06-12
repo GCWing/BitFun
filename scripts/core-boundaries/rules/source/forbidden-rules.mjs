@@ -52,6 +52,71 @@ export const forbiddenContentRules = [
     ],
   },
   {
+    path: 'src/crates/assembly/core/src/agentic/persistence/session_branch.rs',
+    patterns: [
+      {
+        regex: /\bfn\s+estimate_turn_message_count\b/,
+        message:
+          'session branch metadata counting belongs in services-core session lineage owner, not core persistence',
+      },
+      {
+        regex: /\bfn\s+strip_child_session_metadata\b/,
+        message:
+          'branch child-metadata cleanup belongs in services-core session lineage owner, not core persistence',
+      },
+      {
+        regex: /\bfn\s+build_branch_custom_metadata\b/,
+        message:
+          'branch custom metadata shaping belongs in services-core session lineage owner, not core persistence',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/persistence/manager.rs',
+    patterns: [
+      {
+        regex: /\bfn\s+build_session_relationship\b/,
+        message:
+          'session relationship reconstruction belongs in services-core session metadata owner, not core persistence manager',
+      },
+      {
+        regex: /\bSessionMetadata\s*\{\s*session_id\s*:/,
+        message:
+          'session metadata field assembly belongs in services-core session metadata owner, not core persistence manager',
+      },
+      {
+        regex: /\bmetadata\.deep_review_cache\s*=\s*Some\s*\(/,
+        message:
+          'DeepReview cache metadata mutation belongs in services-core session metadata owner, not core persistence manager',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/session/session_manager.rs',
+    patterns: [
+      {
+        regex: /\bfn\s+extract_subagent_relationship\b/,
+        message:
+          'subagent relationship extraction belongs in services-core session lineage owner, not core session manager',
+      },
+      {
+        regex: /\bmetadata\.custom_metadata\s*=\s*Some\s*\(\s*match\b/,
+        message:
+          'session custom-metadata merge rules belong in services-core session metadata owner, not core session manager',
+      },
+      {
+        regex: /\bmetadata\.relationship\s*=\s*Some\s*\(\s*relationship\s*\)/,
+        message:
+          'session relationship mutation belongs in services-core session metadata owner, not core session manager',
+      },
+      {
+        regex: /\bmetadata\.deep_review_run_manifest\s*=\s*deep_review_run_manifest\b/,
+        message:
+          'DeepReview run-manifest metadata mutation belongs in services-core session metadata owner, not core session manager',
+      },
+    ],
+  },
+  {
     path: 'src/crates/assembly/core/src/service_agent_runtime.rs',
     patterns: [
       {
@@ -228,6 +293,11 @@ export const forbiddenContentRules = [
         regex: /\bfn deep_review_cache_from_completed_reviewers\b/,
         message:
           'core DeepReview report must not re-own cache update logic; use bitfun-agent-runtime::deep_review::report',
+      },
+      {
+        regex: /\bmetadata\.deep_review_cache\s*=\s*Some\s*\(/,
+        message:
+          'DeepReview cache metadata mutation belongs in services-core session metadata owner, not core report bridge',
       },
       {
         regex: /\bstruct DeepReviewCacheUpdate\b/,
@@ -1302,39 +1372,29 @@ export const forbiddenContentRules = [
     path: 'src/crates/assembly/core/src/agentic/round_preempt.rs',
     patterns: [
       {
-        regex: /\btrait\s+DialogRoundPreemptSource\b/,
-        message:
-          'core round preempt runtime must not redefine DialogRoundPreemptSource; use bitfun-runtime-ports',
-      },
-      {
         regex: /\bstruct\s+RoundInjection\b/,
         message:
-          'core round preempt runtime must not redefine RoundInjection; use bitfun-runtime-ports',
+          'core round-boundary runtime must not redefine RoundInjection; use bitfun-runtime-ports',
       },
       {
         regex: /\btrait\s+DialogRoundInjectionSource\b/,
         message:
-          'core round preempt runtime must not redefine DialogRoundInjectionSource; use bitfun-runtime-ports',
+          'core round-boundary runtime must not redefine DialogRoundInjectionSource; use bitfun-runtime-ports',
       },
       {
         regex: /\benum\s+RoundInjectionKind\b/,
         message:
-          'core round preempt runtime must not redefine RoundInjectionKind; use bitfun-runtime-ports',
+          'core round-boundary runtime must not redefine RoundInjectionKind; use bitfun-runtime-ports',
       },
       {
         regex: /\benum\s+RoundInjectionTarget\b/,
         message:
-          'core round preempt runtime must not redefine RoundInjectionTarget; use bitfun-runtime-ports',
+          'core round-boundary runtime must not redefine RoundInjectionTarget; use bitfun-runtime-ports',
       },
       {
         regex: /\bpub\s+struct\s+SessionRoundInjectionBuffer\b/,
         message:
-          'core round preempt runtime must not own round injection buffer; use bitfun-agent-runtime',
-      },
-      {
-        regex: /\bpub\s+struct\s+SessionRoundYieldFlags\b/,
-        message:
-          'core round preempt runtime must not own round yield flags; use bitfun-agent-runtime',
+          'core round-boundary runtime must not own round injection buffer; use bitfun-agent-runtime',
       },
     ],
   },
@@ -2235,6 +2295,36 @@ export const forbiddenContentRules = [
       {
         regex: /join\("_unresolved"\)/,
         message: 'core remote SSH workspace runtime must not own unresolved session path layout; use the integrations path helper',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/service/remote_connect/mod.rs',
+    patterns: [
+      {
+        regex: /\bpub\s+mod\s+device\s*;/,
+        message:
+          'core remote-connect root must not own device module implementation; use the services-integrations owner',
+      },
+      {
+        regex: /\bpub\s+mod\s+encryption\s*;/,
+        message:
+          'core remote-connect root must not own encryption module implementation; use the services-integrations owner',
+      },
+      {
+        regex: /\bpub\s+mod\s+pairing\s*;/,
+        message:
+          'core remote-connect root must not own pairing module implementation; use the services-integrations owner',
+      },
+      {
+        regex: /\bpub\s+mod\s+qr_generator\s*;/,
+        message:
+          'core remote-connect root must not own QR module implementation; use the services-integrations owner',
+      },
+      {
+        regex: /\bpub\s+mod\s+relay_client\s*;/,
+        message:
+          'core remote-connect root must not own relay client module implementation; use the services-integrations owner',
       },
     ],
   },

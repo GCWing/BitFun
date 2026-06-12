@@ -4,15 +4,15 @@
 
 This layer owns reusable concrete implementations that touch local systems or
 runtime infrastructure: filesystem, git, file watch, terminal, MCP, remote
-connectivity, process lifecycle, MiniApp concrete runtime IO, and similar
+connectivity, process lifecycle, session persistence primitives, MiniApp concrete runtime IO, and similar
 OS/network capabilities.
 
 ## Modules
 
 | Crate | Responsibility | Local doc |
 |---|---|---|
-| `services-core` | Reusable local service primitives, filesystem helpers, session storage layout/indexing/deletion, metadata counter/index rules, and JSON file IO without product assembly decisions | [AGENTS.md](services-core/AGENTS.md) |
-| `services-integrations` | Concrete MCP, git, remote, file-watch, MiniApp runtime, and product-domain port implementations | [AGENTS.md](services-integrations/AGENTS.md) |
+| `services-core` | Reusable local service primitives, filesystem helpers, session storage layout/indexing/deletion, metadata construction/counter/index/field mutation/lineage rules, and JSON file IO without product assembly decisions | [AGENTS.md](services-core/AGENTS.md) |
+| `services-integrations` | Concrete MCP, git, remote, file-watch, MiniApp runtime, product-domain port implementations, and platform-neutral Remote Connect primitives | [AGENTS.md](services-integrations/AGENTS.md) |
 | `terminal` | PTY, shell integration, and terminal session infrastructure | [AGENTS.md](terminal/AGENTS.md) |
 
 ## Placement Rules
