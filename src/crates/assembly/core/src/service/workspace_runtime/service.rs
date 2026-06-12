@@ -9,14 +9,15 @@ use crate::service::remote_ssh::workspace_state::{
     normalize_remote_workspace_path, remote_root_to_mirror_subpath,
     sanitize_ssh_hostname_for_mirror,
 };
-use crate::service::session::{StoredSessionIndexFile, StoredSessionMetadataFile};
+use crate::service::session::{
+    SessionMetadataStore, SessionMetadataStoreError, StoredSessionMetadataFile,
+};
 use crate::util::errors::{BitFunError, BitFunResult};
 use log::debug;
 use serde::{de::DeserializeOwned, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
-use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::Mutex as AsyncMutex;
 
 #[derive(Debug)]
@@ -508,7 +509,7 @@ impl WorkspaceRuntimeService {
             remove_path_if_exists(&source_path)?;
         }
 
-        self.rebuild_session_index(target).await?;
+        rebuild_session_index(target).await?;
         remove_path_if_exists(&source.join("index.json"))?;
         remove_path_if_exists(source)?;
 
@@ -517,55 +518,6 @@ impl WorkspaceRuntimeService {
             target: target.to_path_buf(),
             strategy: "merge_sessions".to_string(),
         }))
-    }
-
-    async fn rebuild_session_index(&self, sessions_dir: &Path) -> BitFunResult<()> {
-        if !sessions_dir.exists() {
-            return Ok(());
-        }
-
-        let mut sessions = Vec::new();
-        for entry in std::fs::read_dir(sessions_dir).map_err(|e| {
-            BitFunError::service(format!(
-                "Failed to read merged sessions directory {}: {}",
-                sessions_dir.display(),
-                e
-            ))
-        })? {
-            let entry = entry.map_err(|e| {
-                BitFunError::service(format!(
-                    "Failed to inspect merged sessions entry under {}: {}",
-                    sessions_dir.display(),
-                    e
-                ))
-            })?;
-            let path = entry.path();
-            let file_type = entry.file_type().map_err(|e| {
-                BitFunError::service(format!(
-                    "Failed to read file type for {}: {}",
-                    path.display(),
-                    e
-                ))
-            })?;
-            if !file_type.is_dir() {
-                continue;
-            }
-
-            let metadata_path = path.join("metadata.json");
-            let Some(stored) =
-                read_json_optional_sync::<StoredSessionMetadataFile>(&metadata_path)?
-            else {
-                continue;
-            };
-            if stored.metadata.should_hide_from_user_lists() {
-                continue;
-            }
-            sessions.push(stored.metadata);
-        }
-
-        sessions.sort_by(|a, b| b.last_active_at.cmp(&a.last_active_at));
-        let index = StoredSessionIndexFile::new(unix_now_ms(), sessions);
-        write_json_pretty_async(&sessions_dir.join("index.json"), &index).await
     }
 
     async fn remove_dir_if_empty(&self, path: &Path) -> BitFunResult<()> {
@@ -689,6 +641,28 @@ fn merge_session_metadata_file(source: &Path, target: &Path) -> BitFunResult<()>
     Ok(())
 }
 
+async fn rebuild_session_index(sessions_dir: &Path) -> BitFunResult<()> {
+    if !sessions_dir.exists() {
+        return Ok(());
+    }
+
+    SessionMetadataStore::new(sessions_dir)
+        .rebuild_index()
+        .await
+        .map(|_| ())
+        .map_err(session_metadata_store_error)
+}
+
+fn session_metadata_store_error(error: SessionMetadataStoreError) -> BitFunError {
+    if error.is_deserialization() {
+        BitFunError::Deserialization(error.to_string())
+    } else if error.is_serialization() {
+        BitFunError::serialization(error.to_string())
+    } else {
+        BitFunError::service(error.to_string())
+    }
+}
+
 fn replace_target_if_source_newer(source: &Path, target: &Path) -> BitFunResult<()> {
     if source_is_newer(source, target)? {
         remove_path_if_exists(target)?;
@@ -771,36 +745,6 @@ where
         ))
     })?;
     Ok(Some(value))
-}
-
-async fn write_json_pretty_async<T>(path: &Path, value: &T) -> BitFunResult<()>
-where
-    T: Serialize,
-{
-    if let Some(parent) = path.parent() {
-        tokio::fs::create_dir_all(parent).await.map_err(|e| {
-            BitFunError::service(format!(
-                "Failed to create parent directory {}: {}",
-                parent.display(),
-                e
-            ))
-        })?;
-    }
-
-    let bytes = serde_json::to_vec_pretty(value).map_err(|e| {
-        BitFunError::service(format!(
-            "Failed to serialize JSON for {}: {}",
-            path.display(),
-            e
-        ))
-    })?;
-    tokio::fs::write(path, bytes).await.map_err(|e| {
-        BitFunError::service(format!(
-            "Failed to write JSON file {}: {}",
-            path.display(),
-            e
-        ))
-    })
 }
 
 fn write_json_pretty_sync<T>(path: &Path, value: &T) -> BitFunResult<()>
@@ -939,13 +883,6 @@ fn file_name_eq(path: &Path, expected: &str) -> bool {
     path.file_name()
         .and_then(|value| value.to_str())
         .is_some_and(|value| value.eq_ignore_ascii_case(expected))
-}
-
-fn unix_now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64
 }
 
 fn runtime_lock_for(runtime_root: &Path) -> Arc<AsyncMutex<()>> {
@@ -1100,9 +1037,27 @@ mod tests {
             &legacy_sessions_root.join("legacy-session"),
             &legacy_only_metadata,
         );
+        fs::create_dir_all(legacy_sessions_root.join("hidden-session"))
+            .expect("hidden legacy session dir should exist");
+        let mut hidden_metadata = SessionMetadata::new(
+            "hidden-session".to_string(),
+            "Hidden Session".to_string(),
+            "agent".to_string(),
+            "model".to_string(),
+        );
+        hidden_metadata.session_kind = bitfun_core_types::SessionKind::Subagent;
+        hidden_metadata.last_active_at = 250;
+        write_session_metadata(
+            &legacy_sessions_root.join("hidden-session"),
+            &hidden_metadata,
+        );
         write_session_index(
             &legacy_sessions_root.join("index.json"),
-            vec![older_metadata.clone(), legacy_only_metadata.clone()],
+            vec![
+                hidden_metadata.clone(),
+                older_metadata.clone(),
+                legacy_only_metadata.clone(),
+            ],
         );
         write_session_index(
             &context.sessions_dir.join("index.json"),
@@ -1139,6 +1094,11 @@ mod tests {
         )
         .expect("merged session index should deserialize");
         assert_eq!(merged_index.sessions.len(), 2);
+        assert_eq!(merged_index.metadata_file_count, 3);
+        assert!(merged_index
+            .sessions
+            .iter()
+            .all(|metadata| metadata.session_id != "hidden-session"));
         assert!(ensured
             .migrated_entries
             .iter()

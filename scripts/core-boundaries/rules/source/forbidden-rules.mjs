@@ -89,6 +89,41 @@ export const forbiddenContentRules = [
         message:
           'DeepReview cache metadata mutation belongs in services-core session metadata owner, not core persistence manager',
       },
+      {
+        regex: /\bstatic\s+SESSION_INDEX_LOCKS\b/,
+        message:
+          'session metadata index locking belongs in services-core SessionMetadataStore, not core persistence manager',
+      },
+      {
+        regex: /\bfn\s+scan_session_metadata_dirs\b/,
+        message:
+          'session metadata directory scanning belongs in services-core SessionMetadataStore, not core persistence manager',
+      },
+      {
+        regex: /\bfn\s+count_session_metadata_dirs\b/,
+        message:
+          'session metadata directory counting belongs in services-core SessionMetadataStore, not core persistence manager',
+      },
+      {
+        regex: /\bfn\s+rebuild_index_locked\b/,
+        message:
+          'session metadata index rebuilding belongs in services-core SessionMetadataStore, not core persistence manager',
+      },
+      {
+        regex: /\bfn\s+upsert_index_entry_locked\b/,
+        message:
+          'session metadata index upsert belongs in services-core SessionMetadataStore, not core persistence manager',
+      },
+      {
+        regex: /\bfn\s+remove_index_entry_locked\b/,
+        message:
+          'session metadata index removal belongs in services-core SessionMetadataStore, not core persistence manager',
+      },
+      {
+        regex: /\bget_session_index_lock\b/,
+        message:
+          'session metadata index lock access belongs in services-core SessionMetadataStore, not core persistence manager',
+      },
     ],
   },
   {

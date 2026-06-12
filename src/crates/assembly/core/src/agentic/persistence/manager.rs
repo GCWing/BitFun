@@ -14,8 +14,7 @@ use crate::service::remote_ssh::workspace_state::{
 };
 use crate::service::session::{
     DialogTurnData, SessionMetadata, SessionTranscriptExport, SessionTranscriptExportOptions,
-    SessionTranscriptIndexEntry, StoredSessionIndexFile, StoredSessionMetadataFile, ToolItemData,
-    TranscriptLineRange, SESSION_STORAGE_SCHEMA_VERSION,
+    SessionTranscriptIndexEntry, ToolItemData, TranscriptLineRange, SESSION_STORAGE_SCHEMA_VERSION,
 };
 use crate::service::workspace_runtime::WorkspaceRuntimeService;
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -24,11 +23,10 @@ use bitfun_runtime_ports::{SessionTurnLoadRequest, SessionTurnLoadTiming};
 use bitfun_services_core::{
     json_store::{JsonFileStore, JsonFileStoreError},
     session::{
-        build_session_index_snapshot, build_session_metadata as build_persisted_session_metadata,
-        build_session_metadata_page, empty_session_metadata_page,
-        refresh_session_metadata_from_turns, remove_session_index_entry,
-        try_refresh_session_metadata_for_saved_turn, upsert_session_index_entry,
-        SessionMetadataBuildFacts, SessionStorageLayout,
+        build_session_metadata as build_persisted_session_metadata, empty_session_metadata_page,
+        refresh_session_metadata_from_turns, try_refresh_session_metadata_for_saved_turn,
+        SessionMetadataBuildFacts, SessionMetadataStore, SessionMetadataStoreError,
+        SessionStorageLayout,
     },
 };
 use futures::{stream, StreamExt};
@@ -49,7 +47,6 @@ const TRANSCRIPT_SCHEMA_VERSION: u32 = 1;
 const SESSION_TRANSCRIPT_PREVIEW_CHAR_LIMIT: usize = 120;
 const SESSION_TURN_READ_CONCURRENCY: usize = 4;
 
-static SESSION_INDEX_LOCKS: OnceLock<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>> = OnceLock::new();
 static SESSION_METADATA_UPDATE_LOCKS: OnceLock<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>> =
     OnceLock::new();
 
@@ -327,10 +324,6 @@ impl PersistenceManager {
         self.path_manager.project_sessions_dir(workspace_path)
     }
 
-    fn session_dir(&self, workspace_path: &Path, session_id: &str) -> PathBuf {
-        self.session_layout(workspace_path).session_dir(session_id)
-    }
-
     fn metadata_path(&self, workspace_path: &Path, session_id: &str) -> PathBuf {
         self.session_layout(workspace_path)
             .metadata_path(session_id)
@@ -398,12 +391,17 @@ impl PersistenceManager {
             .transcript_meta_path(session_id)
     }
 
+    #[cfg(test)]
     fn index_path(&self, workspace_path: &Path) -> PathBuf {
         self.session_layout(workspace_path).index_path()
     }
 
     fn session_layout(&self, workspace_path: &Path) -> SessionStorageLayout {
         SessionStorageLayout::new(self.project_sessions_dir(workspace_path))
+    }
+
+    fn session_metadata_store(&self, workspace_path: &Path) -> SessionMetadataStore {
+        SessionMetadataStore::new(self.project_sessions_dir(workspace_path))
     }
 
     fn existing_project_sessions_dir(&self, workspace_path: &Path) -> Option<PathBuf> {
@@ -484,16 +482,6 @@ impl PersistenceManager {
             .map_err(Self::json_store_error)
     }
 
-    async fn get_session_index_lock(&self, workspace_path: &Path) -> Arc<Mutex<()>> {
-        let index_path = self.index_path(workspace_path);
-        let registry = SESSION_INDEX_LOCKS.get_or_init(|| Mutex::new(HashMap::new()));
-        let mut registry_guard = registry.lock().await;
-        registry_guard
-            .entry(index_path)
-            .or_insert_with(|| Arc::new(Mutex::new(())))
-            .clone()
-    }
-
     async fn get_session_metadata_update_lock(
         &self,
         workspace_path: &Path,
@@ -509,6 +497,16 @@ impl PersistenceManager {
     }
 
     fn json_store_error(error: JsonFileStoreError) -> BitFunError {
+        if error.is_deserialization() {
+            BitFunError::Deserialization(error.to_string())
+        } else if error.is_serialization() {
+            BitFunError::serialization(error.to_string())
+        } else {
+            BitFunError::io(error.to_string())
+        }
+    }
+
+    fn session_metadata_store_error(error: SessionMetadataStoreError) -> BitFunError {
         if error.is_deserialization() {
             BitFunError::Deserialization(error.to_string())
         } else if error.is_serialization() {
@@ -1175,140 +1173,6 @@ impl PersistenceManager {
         }
     }
 
-    async fn scan_session_metadata_dirs(
-        &self,
-        workspace_path: &Path,
-    ) -> BitFunResult<Vec<SessionMetadata>> {
-        let Some(sessions_root) = self.existing_project_sessions_dir(workspace_path) else {
-            return Ok(Vec::new());
-        };
-        let mut metadata_list = Vec::new();
-        let mut entries = fs::read_dir(&sessions_root)
-            .await
-            .map_err(|e| BitFunError::io(format!("Failed to read sessions root: {}", e)))?;
-
-        while let Some(entry) = entries.next_entry().await.map_err(|e| {
-            BitFunError::io(format!("Failed to read session directory entry: {}", e))
-        })? {
-            let file_type = entry
-                .file_type()
-                .await
-                .map_err(|e| BitFunError::io(format!("Failed to get file type: {}", e)))?;
-            if !file_type.is_dir() {
-                continue;
-            }
-
-            let session_id = entry.file_name().to_string_lossy().to_string();
-            match self
-                .load_session_metadata(workspace_path, &session_id)
-                .await
-            {
-                Ok(Some(metadata)) => metadata_list.push(metadata),
-                Ok(None) => {}
-                Err(e) => {
-                    warn!(
-                        "Failed to rebuild session index entry: session_id={}, error={}",
-                        session_id, e
-                    );
-                }
-            }
-        }
-
-        metadata_list.sort_by(|a, b| b.last_active_at.cmp(&a.last_active_at));
-
-        Ok(metadata_list)
-    }
-
-    async fn count_session_metadata_dirs(&self, workspace_path: &Path) -> BitFunResult<usize> {
-        let Some(sessions_root) = self.existing_project_sessions_dir(workspace_path) else {
-            return Ok(0);
-        };
-        let mut count = 0;
-        let mut entries = fs::read_dir(&sessions_root)
-            .await
-            .map_err(|e| BitFunError::io(format!("Failed to read sessions root: {}", e)))?;
-
-        while let Some(entry) = entries.next_entry().await.map_err(|e| {
-            BitFunError::io(format!("Failed to read session directory entry: {}", e))
-        })? {
-            let file_type = entry
-                .file_type()
-                .await
-                .map_err(|e| BitFunError::io(format!("Failed to get file type: {}", e)))?;
-            if !file_type.is_dir() {
-                continue;
-            }
-
-            let session_id = entry.file_name().to_string_lossy().to_string();
-            if self.metadata_path(workspace_path, &session_id).exists() {
-                count += 1;
-            }
-        }
-
-        Ok(count)
-    }
-
-    async fn rebuild_index_locked(
-        &self,
-        workspace_path: &Path,
-    ) -> BitFunResult<Vec<SessionMetadata>> {
-        let metadata_list = self.scan_session_metadata_dirs(workspace_path).await?;
-        let (index, visible_sessions) = build_session_index_snapshot(
-            metadata_list,
-            Self::system_time_to_unix_ms(SystemTime::now()),
-        );
-        self.write_json_atomic(&self.index_path(workspace_path), &index)
-            .await?;
-
-        Ok(visible_sessions)
-    }
-
-    async fn upsert_index_entry_locked(
-        &self,
-        workspace_path: &Path,
-        metadata: &SessionMetadata,
-        metadata_file_created: bool,
-    ) -> BitFunResult<()> {
-        let index_path = self.index_path(workspace_path);
-        let existing_index = self
-            .read_json_optional::<StoredSessionIndexFile>(&index_path)
-            .await?;
-        let disk_metadata_file_count = if existing_index.is_some() {
-            0
-        } else {
-            self.count_session_metadata_dirs(workspace_path).await?
-        };
-        let index = upsert_session_index_entry(
-            existing_index,
-            metadata,
-            metadata_file_created,
-            disk_metadata_file_count,
-            Self::system_time_to_unix_ms(SystemTime::now()),
-        );
-        self.write_json_atomic(&index_path, &index).await
-    }
-
-    async fn remove_index_entry_locked(
-        &self,
-        workspace_path: &Path,
-        session_id: &str,
-        metadata_file_count_delta: isize,
-    ) -> BitFunResult<()> {
-        let index_path = self.index_path(workspace_path);
-        let existing_index = self
-            .read_json_optional::<StoredSessionIndexFile>(&index_path)
-            .await?;
-        let Some(index) = remove_session_index_entry(
-            existing_index,
-            session_id,
-            metadata_file_count_delta,
-            Self::system_time_to_unix_ms(SystemTime::now()),
-        ) else {
-            return Ok(());
-        };
-        self.write_json_atomic(&index_path, &index).await
-    }
-
     pub async fn list_session_metadata(
         &self,
         workspace_path: &Path,
@@ -1321,41 +1185,10 @@ impl PersistenceManager {
             return Ok(Vec::new());
         }
 
-        let lock = self.get_session_index_lock(workspace_path).await;
-        let _guard = lock.lock().await;
-        let index_path = self.index_path(workspace_path);
-        if let Some(index) = self
-            .read_json_optional::<StoredSessionIndexFile>(&index_path)
-            .await?
-        {
-            let has_stale_entry = index.sessions.iter().any(|metadata| {
-                !self
-                    .metadata_path(workspace_path, &metadata.session_id)
-                    .exists()
-            });
-            if has_stale_entry {
-                warn!(
-                    "Session index contains stale entries, rebuilding: {}",
-                    index_path.display()
-                );
-                return self.rebuild_index_locked(workspace_path).await;
-            }
-
-            let disk_count = self.count_session_metadata_dirs(workspace_path).await?;
-            if index.metadata_file_count != disk_count {
-                warn!(
-                    "Session index incomplete (index: {}, disk: {}), rebuilding: {}",
-                    index.metadata_file_count,
-                    disk_count,
-                    index_path.display()
-                );
-                return self.rebuild_index_locked(workspace_path).await;
-            }
-
-            return Ok(index.sessions);
-        }
-
-        self.rebuild_index_locked(workspace_path).await
+        self.session_metadata_store(workspace_path)
+            .list_metadata()
+            .await
+            .map_err(Self::session_metadata_store_error)
     }
 
     pub async fn list_session_metadata_page(
@@ -1372,46 +1205,10 @@ impl PersistenceManager {
             return Ok(empty_session_metadata_page());
         }
 
-        let limit = limit.max(1);
-
-        let lock = self.get_session_index_lock(workspace_path).await;
-        let _guard = lock.lock().await;
-        let index_path = self.index_path(workspace_path);
-        let indexed_sessions = if let Some(index) = self
-            .read_json_optional::<StoredSessionIndexFile>(&index_path)
-            .await?
-        {
-            if index.metadata_file_count < index.sessions.len() {
-                warn!(
-                    "Session index has invalid metadata count before page read (index: {}, sessions: {}), rebuilding: {}",
-                    index.metadata_file_count,
-                    index.sessions.len(),
-                    index_path.display()
-                );
-                self.rebuild_index_locked(workspace_path).await?
-            } else {
-                index.sessions
-            }
-        } else {
-            self.rebuild_index_locked(workspace_path).await?
-        };
-
-        let page = build_session_metadata_page(indexed_sessions, cursor, limit);
-        let has_stale_page_entry = page.sessions.iter().any(|metadata| {
-            !self
-                .metadata_path(workspace_path, &metadata.session_id)
-                .exists()
-        });
-        if !has_stale_page_entry {
-            return Ok(page);
-        }
-
-        warn!(
-            "Session index page contains stale entries, rebuilding before page read: {}",
-            index_path.display()
-        );
-        let rebuilt_sessions = self.rebuild_index_locked(workspace_path).await?;
-        Ok(build_session_metadata_page(rebuilt_sessions, cursor, limit))
+        self.session_metadata_store(workspace_path)
+            .list_metadata_page(cursor, limit)
+            .await
+            .map_err(Self::session_metadata_store_error)
     }
 
     pub async fn list_session_metadata_including_internal(
@@ -1426,7 +1223,10 @@ impl PersistenceManager {
             return Ok(Vec::new());
         }
 
-        self.scan_session_metadata_dirs(workspace_path).await
+        self.session_metadata_store(workspace_path)
+            .list_metadata_including_internal()
+            .await
+            .map_err(Self::session_metadata_store_error)
     }
 
     pub async fn save_session_metadata(
@@ -1435,26 +1235,10 @@ impl PersistenceManager {
         metadata: &SessionMetadata,
     ) -> BitFunResult<()> {
         self.ensure_runtime_for_write(workspace_path).await?;
-        self.ensure_session_dir(workspace_path, &metadata.session_id)
-            .await?;
-        let metadata_path = self.metadata_path(workspace_path, &metadata.session_id);
-        let file = StoredSessionMetadataFile::new(metadata.clone());
-
-        let lock = self.get_session_index_lock(workspace_path).await;
-        let _guard = lock.lock().await;
-        let metadata_file_created = !metadata_path.exists();
-        self.write_json_atomic(&metadata_path, &file).await?;
-        if !metadata.should_hide_from_user_lists() {
-            self.upsert_index_entry_locked(workspace_path, metadata, metadata_file_created)
-                .await
-        } else {
-            self.remove_index_entry_locked(
-                workspace_path,
-                &metadata.session_id,
-                if metadata_file_created { 1 } else { 0 },
-            )
+        self.session_metadata_store(workspace_path)
+            .save_metadata(metadata)
             .await
-        }
+            .map_err(Self::session_metadata_store_error)
     }
 
     pub async fn load_session_metadata(
@@ -1462,11 +1246,10 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<Option<SessionMetadata>> {
-        let path = self.metadata_path(workspace_path, session_id);
-        Ok(self
-            .read_json_optional::<StoredSessionMetadataFile>(&path)
-            .await?
-            .map(|file| file.metadata))
+        self.session_metadata_store(workspace_path)
+            .load_metadata(session_id)
+            .await
+            .map_err(Self::session_metadata_store_error)
     }
 
     async fn load_stored_session_state(
@@ -2181,22 +1964,10 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<()> {
-        let lock = self.get_session_index_lock(workspace_path).await;
-        let _guard = lock.lock().await;
-        let dir = self.session_dir(workspace_path, session_id);
-        let metadata_file_removed = self.metadata_path(workspace_path, session_id).exists();
-        if dir.exists() {
-            fs::remove_dir_all(&dir).await.map_err(|e| {
-                BitFunError::io(format!("Failed to delete session directory: {}", e))
-            })?;
-        }
-
-        self.remove_index_entry_locked(
-            workspace_path,
-            session_id,
-            if metadata_file_removed { -1 } else { 0 },
-        )
-        .await?;
+        self.session_metadata_store(workspace_path)
+            .delete_session_dir_and_index(session_id)
+            .await
+            .map_err(Self::session_metadata_store_error)?;
         info!("Session deleted: session_id={}", session_id);
         Ok(())
     }

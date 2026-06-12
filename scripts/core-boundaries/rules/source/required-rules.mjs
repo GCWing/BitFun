@@ -1691,11 +1691,15 @@ export const requiredContentRules = [
   {
     path: 'src/crates/services/services-core/src/session/mod.rs',
     reason:
-      'services-core session owner must expose lineage, branch, and metadata mutation rules through the session boundary',
+      'services-core session owner must expose lineage, branch, metadata mutation, and metadata store rules through the session boundary',
     patterns: [
       {
         regex: /\bmod lineage;/,
         message: 'missing services-core session lineage module',
+      },
+      {
+        regex: /\bmod metadata_store;/,
+        message: 'missing services-core session metadata store module',
       },
       {
         regex: /\bapply_session_lineage\b/,
@@ -1722,6 +1726,10 @@ export const requiredContentRules = [
         message: 'missing session metadata construction facts re-export',
       },
       {
+        regex: /\bSessionMetadataStore\b/,
+        message: 'missing session metadata store owner re-export',
+      },
+      {
         regex: /\bset_deep_review_cache\b/,
         message: 'missing DeepReview cache metadata mutation owner re-export',
       },
@@ -1730,7 +1738,7 @@ export const requiredContentRules = [
   {
     path: 'src/crates/services/services-core/src/session/metadata.rs',
     reason:
-      'services-core session metadata owner must own construction and field mutation rules while core keeps only IO orchestration',
+      'services-core session metadata owner must own construction and field mutation rules while metadata_store owns file/index IO',
     patterns: [
       {
         regex: /\bpub fn merge_session_custom_metadata\b/,
@@ -1767,6 +1775,69 @@ export const requiredContentRules = [
       {
         regex: /\bbuild_session_metadata_preserves_existing_fields_and_legacy_relationship\b/,
         message: 'missing session metadata construction regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-core/src/session/metadata_store.rs',
+    reason:
+      'services-core session metadata store must own provider-neutral metadata file and index IO under a resolved sessions root',
+    patterns: [
+      {
+        regex: /\bpub struct SessionMetadataStore\b/,
+        message: 'missing session metadata store owner',
+      },
+      {
+        regex: /\bpub enum SessionMetadataStoreError\b/,
+        message: 'missing session metadata store error boundary',
+      },
+      {
+        regex: /\bSessionStorageLayout\b/,
+        message: 'metadata store must reuse the session storage layout owner',
+      },
+      {
+        regex: /\bpub async fn list_metadata\b/,
+        message: 'missing session metadata list owner entrypoint',
+      },
+      {
+        regex: /\bpub async fn list_metadata_page\b/,
+        message: 'missing session metadata page owner entrypoint',
+      },
+      {
+        regex: /\bpub async fn list_metadata_including_internal\b/,
+        message: 'missing internal session metadata list owner entrypoint',
+      },
+      {
+        regex: /\bpub async fn rebuild_index\b/,
+        message: 'missing session metadata index rebuild owner entrypoint',
+      },
+      {
+        regex: /\bpub async fn save_metadata\b/,
+        message: 'missing session metadata save owner entrypoint',
+      },
+      {
+        regex: /\bpub async fn load_metadata\b/,
+        message: 'missing session metadata load owner entrypoint',
+      },
+      {
+        regex: /\bpub async fn delete_session_dir_and_index\b/,
+        message: 'missing session metadata delete/index owner entrypoint',
+      },
+      {
+        regex: /\bmetadata_store_saves_visible_metadata_and_updates_index\b/,
+        message: 'missing metadata store visible-index regression',
+      },
+      {
+        regex: /\bmetadata_store_rebuilds_stale_index_entries\b/,
+        message: 'missing metadata store stale-index regression',
+      },
+      {
+        regex: /\bmetadata_store_rebuild_index_counts_hidden_metadata_files\b/,
+        message: 'missing metadata store hidden-count rebuild regression',
+      },
+      {
+        regex: /\bmetadata_store_delete_session_updates_visible_index\b/,
+        message: 'missing metadata store delete-index regression',
       },
     ],
   },
@@ -1816,8 +1887,12 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/core/src/agentic/persistence/session_branch.rs',
     reason:
-      'core session branch persistence must keep IO orchestration while services-core owns branch metadata shaping',
+      'core session branch persistence must keep IO orchestration and old import compatibility while services-core owns branch metadata shaping',
     patterns: [
+      {
+        regex: /pub use bitfun_services_core::session::\{SessionBranchRequest,\s*SessionBranchResult\};/,
+        message: 'missing session branch compatibility re-export',
+      },
       {
         regex: /\bbuild_branched_session_metadata\b/,
         message: 'missing services-core branch metadata delegation',
@@ -1888,11 +1963,43 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/core/src/agentic/persistence/manager.rs',
     reason:
-      'core persistence manager must keep concrete IO and workspace identity resolution while services-core owns session metadata construction rules',
+      'core persistence manager must keep workspace identity, runtime preflight, state/turn/prompt-cache IO while services-core owns session metadata store CRUD/index rebuild IO and construction rules',
     patterns: [
       {
         regex: /\bbuild_persisted_session_metadata\s*\(\s*SessionMetadataBuildFacts\s*\{/,
         message: 'missing services-core session metadata construction delegation',
+      },
+      {
+        regex: /\bsession_metadata_store\s*\(\s*&self,\s*workspace_path:\s*&Path\s*\)\s*->\s*SessionMetadataStore\b/,
+        message: 'missing services-core session metadata store adapter',
+      },
+      {
+        regex: /\.list_metadata\(\)/,
+        message: 'missing metadata list delegation to services-core store',
+      },
+      {
+        regex: /\.list_metadata_page\(cursor,\s*limit\)/,
+        message: 'missing metadata page delegation to services-core store',
+      },
+      {
+        regex: /\.list_metadata_including_internal\(\)/,
+        message: 'missing internal metadata list delegation to services-core store',
+      },
+      {
+        regex: /\.save_metadata\(metadata\)/,
+        message: 'missing metadata save delegation to services-core store',
+      },
+      {
+        regex: /\.load_metadata\(session_id\)/,
+        message: 'missing metadata load delegation to services-core store',
+      },
+      {
+        regex: /\.delete_session_dir_and_index\(session_id\)/,
+        message: 'missing metadata delete delegation to services-core store',
+      },
+      {
+        regex: /\bensure_runtime_for_write\(workspace_path\)\.await\?/,
+        message: 'missing runtime preflight before metadata write',
       },
       {
         regex: /\bresolve_workspace_session_identity\b/,
@@ -2373,7 +2480,7 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/core/src/service/workspace_runtime/service.rs',
     reason:
-      'workspace runtime binding helpers may depend on agentic runtime only in full product builds',
+      'workspace runtime binding helpers may depend on agentic runtime only in full product builds and must reuse services-core for session index rebuilds',
     patterns: [
       {
         regex: /#\[cfg\(feature = "product-full"\)\]\s*use crate::agentic::WorkspaceBinding\b/s,
@@ -2382,6 +2489,18 @@ export const requiredContentRules = [
       {
         regex: /#\[cfg\(feature = "product-full"\)\]\s*pub async fn ensure_runtime_for_workspace_binding\b/s,
         message: 'WorkspaceBinding runtime helper must stay behind product-full',
+      },
+      {
+        regex: /\bSessionMetadataStore\b/,
+        message: 'workspace runtime session merge must reuse services-core metadata store',
+      },
+      {
+        regex: /\.rebuild_index\(\)/,
+        message: 'workspace runtime session merge must delegate index rebuild to services-core',
+      },
+      {
+        regex: /\bmetadata_file_count\b/,
+        message: 'workspace runtime merge must preserve metadata-file count semantics',
       },
     ],
   },

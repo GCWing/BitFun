@@ -68,6 +68,8 @@ uuid = { version = "1.0", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde", "clock"] }
 chrono-tz = "0.10.4"
 cron = "0.15.0"
+# Tauri 2.9.2 utilities conflict with time 0.3.48 on current stable Rust.
+time = { version = "=0.3.47", default-features = false }
 regex = "1"
 base64 = "0.22"
 # Keep macOS Tauri's dispatch2/bitflags expansion on the known-good bitflags release.

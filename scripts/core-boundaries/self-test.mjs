@@ -1281,6 +1281,47 @@ export function runManifestParserSelfTest({
       ],
     },
     {
+      path: 'src/crates/assembly/core/src/agentic/persistence/session_branch.rs',
+      contracts: ['SessionBranchRequest', 'SessionBranchResult', 'build_branched_session_metadata'],
+    },
+    {
+      path: 'src/crates/services/services-core/src/session/mod.rs',
+      contracts: ['mod metadata_store', 'SessionMetadataStore'],
+    },
+    {
+      path: 'src/crates/services/services-core/src/session/metadata_store.rs',
+      contracts: [
+        'SessionMetadataStore',
+        'SessionMetadataStoreError',
+        'SessionStorageLayout',
+        'list_metadata',
+        'list_metadata_page',
+        'list_metadata_including_internal',
+        'rebuild_index',
+        'save_metadata',
+        'load_metadata',
+        'delete_session_dir_and_index',
+        'metadata_store_saves_visible_metadata_and_updates_index',
+        'metadata_store_rebuilds_stale_index_entries',
+        'metadata_store_rebuild_index_counts_hidden_metadata_files',
+        'metadata_store_delete_session_updates_visible_index',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/agentic/persistence/manager.rs',
+      contracts: [
+        'SessionMetadataStore',
+        'session_metadata_store',
+        'list_metadata',
+        'list_metadata_page',
+        'list_metadata_including_internal',
+        'save_metadata',
+        'load_metadata',
+        'delete_session_dir_and_index',
+        'ensure_runtime_for_write',
+      ],
+    },
+    {
       path: 'src/crates/assembly/core/src/agentic/tools/pipeline/tool_pipeline.rs',
       contracts: [
         'resolve_tool_confirmation_plan',
@@ -2225,7 +2266,14 @@ export function runManifestParserSelfTest({
     },
     {
       path: 'src/crates/assembly/core/src/service/workspace_runtime/service.rs',
-      contracts: ['feature = "product-full"', 'WorkspaceBinding', 'ensure_runtime_for_workspace_binding'],
+      contracts: [
+        'feature = "product-full"',
+        'WorkspaceBinding',
+        'ensure_runtime_for_workspace_binding',
+        'SessionMetadataStore',
+        'rebuild_index',
+        'metadata_file_count',
+      ],
     },
     {
       path: 'src/crates/interfaces/acp/src/client/manager.rs',

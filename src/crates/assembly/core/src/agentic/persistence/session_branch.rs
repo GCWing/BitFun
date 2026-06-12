@@ -1,10 +1,8 @@
 use super::manager::PersistenceManager;
 use crate::agentic::core::{Session, SessionKind};
 use crate::util::errors::{BitFunError, BitFunResult};
-use bitfun_services_core::session::{
-    build_branched_session_metadata, BranchSessionMetadataFacts, SessionBranchRequest,
-    SessionBranchResult,
-};
+use bitfun_services_core::session::{build_branched_session_metadata, BranchSessionMetadataFacts};
+pub use bitfun_services_core::session::{SessionBranchRequest, SessionBranchResult};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 

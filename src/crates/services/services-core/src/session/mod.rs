@@ -1,6 +1,7 @@
 pub mod layout;
 mod lineage;
 mod metadata;
+mod metadata_store;
 pub mod page;
 pub mod types;
 
@@ -17,5 +18,6 @@ pub use metadata::{
     try_refresh_session_metadata_for_saved_turn, upsert_session_index_entry,
     SessionMetadataBuildFacts,
 };
+pub use metadata_store::{SessionMetadataStore, SessionMetadataStoreError};
 pub use page::{build_session_metadata_page, empty_session_metadata_page, SessionMetadataPage};
 pub use types::*;
