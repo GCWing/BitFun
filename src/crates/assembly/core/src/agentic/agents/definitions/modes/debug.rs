@@ -1,8 +1,15 @@
-//! Debug Mode - Evidence-driven debugging mode
+//! Debug Mode
+//!
+//! Shared coding modes inherit the agentic baseline for
+//! `SHARED_CODING_MODE_PROMPT_TEMPLATE`, `shared_coding_mode_tools()`,
+//! `shared_coding_mode_tool_exposure_overrides()`, and
+//! `shared_coding_mode_user_context_policy()`. Across the four coding modes,
+//! only the reminder content differs.
 
 use crate::agentic::agents::{
-    get_embedded_prompt, shared_coding_mode_tools, shared_coding_mode_user_context_policy, Agent,
-    UserContextPolicy, SHARED_CODING_MODE_PROMPT_TEMPLATE,
+    get_embedded_prompt, shared_coding_mode_tool_exposure_overrides, shared_coding_mode_tools,
+    shared_coding_mode_user_context_policy, Agent, AgentToolPolicyOverrides, UserContextPolicy,
+    SHARED_CODING_MODE_PROMPT_TEMPLATE,
 };
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::config::types::{DebugModeConfig, LanguageDebugTemplate};
@@ -12,7 +19,10 @@ use async_trait::async_trait;
 use log::debug;
 use std::path::Path;
 
-pub struct DebugMode;
+pub struct DebugMode {
+    default_tools: Vec<String>,
+    tool_exposure_overrides: AgentToolPolicyOverrides,
+}
 
 const DEBUG_MODE_FIRST_ENTRY_REMINDER_TEMPLATE: &str = "debug_mode_first_entry_reminder";
 const DEBUG_MODE_ONGOING_REMINDER_TEMPLATE: &str = "debug_mode_ongoing_reminder";
@@ -25,7 +35,10 @@ impl Default for DebugMode {
 
 impl DebugMode {
     pub fn new() -> Self {
-        Self
+        Self {
+            default_tools: shared_coding_mode_tools(),
+            tool_exposure_overrides: shared_coding_mode_tool_exposure_overrides(),
+        }
     }
 
     async fn get_debug_config(&self) -> DebugModeConfig {
@@ -328,6 +341,10 @@ impl Agent for DebugMode {
         shared_coding_mode_user_context_policy()
     }
 
+    fn tool_exposure_overrides(&self) -> &AgentToolPolicyOverrides {
+        &self.tool_exposure_overrides
+    }
+
     async fn get_system_reminder(
         &self,
         previous_agent_type: Option<&str>,
@@ -352,7 +369,7 @@ impl Agent for DebugMode {
     }
 
     fn default_tools(&self) -> Vec<String> {
-        shared_coding_mode_tools()
+        self.default_tools.clone()
     }
 
     fn is_readonly(&self) -> bool {

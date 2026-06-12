@@ -1,10 +1,16 @@
 //! Agentic Mode
+//!
+//! Shared coding modes inherit the agentic baseline for
+//! `SHARED_CODING_MODE_PROMPT_TEMPLATE`, `shared_coding_mode_tools()`,
+//! `shared_coding_mode_tool_exposure_overrides()`, and
+//! `shared_coding_mode_user_context_policy()`. Across the four coding modes,
+//! only the reminder content differs.
 
 use crate::agentic::agents::{
-    get_embedded_prompt, shared_coding_mode_tools, shared_coding_mode_user_context_policy, Agent,
-    AgentToolPolicyOverrides, UserContextPolicy, SHARED_CODING_MODE_PROMPT_TEMPLATE,
+    get_embedded_prompt, shared_coding_mode_tool_exposure_overrides, shared_coding_mode_tools,
+    shared_coding_mode_user_context_policy, Agent, AgentToolPolicyOverrides, UserContextPolicy,
+    SHARED_CODING_MODE_PROMPT_TEMPLATE,
 };
-use crate::agentic::tools::framework::ToolExposure;
 use async_trait::async_trait;
 
 const AGENTIC_MODE_FIRST_ENTRY_REMINDER_TEMPLATE: &str = "agentic_mode_first_entry_reminder";
@@ -22,15 +28,9 @@ impl Default for AgenticMode {
 
 impl AgenticMode {
     pub fn new() -> Self {
-        // Web research is a baseline capability of the full agent mode; keep
-        // WebSearch/WebFetch expanded so models never have to go through the
-        // GetToolSpec unlock round-trip for them.
-        let mut tool_exposure_overrides = AgentToolPolicyOverrides::default();
-        tool_exposure_overrides.insert("WebSearch".to_string(), ToolExposure::Expanded);
-        tool_exposure_overrides.insert("WebFetch".to_string(), ToolExposure::Expanded);
         Self {
             default_tools: shared_coding_mode_tools(),
-            tool_exposure_overrides,
+            tool_exposure_overrides: shared_coding_mode_tool_exposure_overrides(),
         }
     }
 
