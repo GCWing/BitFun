@@ -47,3 +47,7 @@ dirs = { workspace = true }
 
 [dev-dependencies]
 
+[target.'cfg(windows)'.dependencies]
+# Windows process-tree ownership
+win32job = { workspace = true }
+
