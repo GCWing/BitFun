@@ -945,6 +945,7 @@ mod tests {
         let context = ensured.context;
         assert!(context.runtime_root.exists());
         assert!(context.sessions_dir.exists());
+        assert!(context.request_traces_dir.exists());
         assert!(context.snapshot_by_hash_dir.exists());
         assert!(context.snapshot_metadata_dir.exists());
         assert!(context.snapshot_baselines_dir.exists());

@@ -10,6 +10,7 @@ use crate::client::sse::execute_sse_request;
 use crate::client::{AIClient, StreamResponse};
 use crate::providers::shared;
 use crate::stream::handle_gemini_stream;
+use crate::trace::ModelExchangeTraceConfig;
 use crate::types::{Message, RemoteModelInfo, ToolDefinition};
 use anyhow::{anyhow, Result};
 use log::{debug, warn};
@@ -139,6 +140,7 @@ pub(crate) async fn send_stream(
     tools: Option<Vec<ToolDefinition>>,
     extra_body: Option<serde_json::Value>,
     max_tries: usize,
+    trace: Option<ModelExchangeTraceConfig>,
 ) -> Result<StreamResponse> {
     let project = discover_project(client).await?;
 
@@ -178,6 +180,7 @@ pub(crate) async fn send_stream(
         &request_body,
         max_tries,
         ttft_timeout,
+        trace,
         || apply_headers(client, client.client.post(&url)),
         move |response, tx, tx_raw| {
             tokio::spawn(handle_gemini_stream(response, tx, tx_raw, idle_timeout));

@@ -13,6 +13,7 @@ pub(crate) mod sse;
 pub(crate) mod utils;
 
 use crate::providers::{anthropic, gemini, openai};
+use crate::trace::{ModelExchangeRequestTraceHandle, ModelExchangeTraceConfig};
 use crate::types::ProxyConfig;
 use crate::types::*;
 use anyhow::Result;
@@ -31,6 +32,7 @@ pub struct StreamResponse {
         Box<dyn futures::Stream<Item = Result<crate::stream::UnifiedResponse>> + Send>,
     >,
     pub raw_sse_rx: Option<mpsc::UnboundedReceiver<String>>,
+    pub trace_handle: Option<ModelExchangeRequestTraceHandle>,
 }
 
 /// Default time to wait for the first response headers / stream body to start.
@@ -116,9 +118,10 @@ impl AIClient {
         &self,
         messages: Vec<Message>,
         tools: Option<Vec<ToolDefinition>>,
+        trace: Option<ModelExchangeTraceConfig>,
     ) -> Result<StreamResponse> {
         let custom_body = self.config.custom_request_body.clone();
-        self.send_message_stream_with_extra_body(messages, tools, custom_body)
+        self.send_message_stream_with_extra_body(messages, tools, custom_body, trace)
             .await
     }
 
@@ -127,23 +130,30 @@ impl AIClient {
         messages: Vec<Message>,
         tools: Option<Vec<ToolDefinition>>,
         extra_body: Option<serde_json::Value>,
+        trace: Option<ModelExchangeTraceConfig>,
     ) -> Result<StreamResponse> {
         let max_tries = SEND_MESSAGE_STREAM_ATTEMPTS;
         match ApiFormat::parse(&self.config.format)? {
             ApiFormat::OpenAIChat => {
-                openai::chat::send_stream(self, messages, tools, extra_body, max_tries).await
+                openai::chat::send_stream(self, messages, tools, extra_body, max_tries, trace).await
             }
             ApiFormat::OpenAIResponses => {
-                openai::responses::send_stream(self, messages, tools, extra_body, max_tries).await
+                openai::responses::send_stream(self, messages, tools, extra_body, max_tries, trace)
+                    .await
             }
             ApiFormat::Anthropic => {
-                anthropic::request::send_stream(self, messages, tools, extra_body, max_tries).await
+                anthropic::request::send_stream(self, messages, tools, extra_body, max_tries, trace)
+                    .await
             }
             ApiFormat::Gemini => {
-                gemini::request::send_stream(self, messages, tools, extra_body, max_tries).await
+                gemini::request::send_stream(self, messages, tools, extra_body, max_tries, trace)
+                    .await
             }
             ApiFormat::GeminiCodeAssist => {
-                gemini::code_assist::send_stream(self, messages, tools, extra_body, max_tries).await
+                gemini::code_assist::send_stream(
+                    self, messages, tools, extra_body, max_tries, trace,
+                )
+                .await
             }
         }
     }
@@ -170,6 +180,7 @@ impl AIClient {
                     messages.clone(),
                     tools.clone(),
                     extra_body.clone(),
+                    None,
                 )
                 .await?;
 

@@ -1346,7 +1346,7 @@ pub async fn miniapp_ai_complete(
     );
 
     let stream_response = ai_client
-        .send_message_stream(messages, None)
+        .send_message_stream(messages, None, None)
         .await
         .map_err(|e| format!("AI request failed: {}", e))?;
 
@@ -1424,7 +1424,7 @@ pub async fn miniapp_ai_chat(
     let messages = build_messages_for_ai(request.system_prompt.as_deref(), &request.messages);
 
     let stream_response = ai_client
-        .send_message_stream(messages, None)
+        .send_message_stream(messages, None, None)
         .await
         .map_err(|e| format!("AI request failed: {}", e))?;
 

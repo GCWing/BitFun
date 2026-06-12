@@ -1,0 +1,352 @@
+use super::types::RoundContext;
+use crate::infrastructure::ai::AIClient;
+use crate::service::config::GlobalConfigManager;
+use crate::service::workspace_runtime::{
+    get_workspace_runtime_service_arc, WorkspaceRuntimeContext,
+};
+use async_trait::async_trait;
+use bitfun_ai_adapters::{
+    ModelExchangeRequestAttempt, ModelExchangeRequestTraceHandle, ModelExchangeResponseTrace,
+    ModelExchangeTraceConfig, ModelExchangeTraceSink,
+};
+use chrono::{DateTime, Utc};
+use dashmap::DashMap;
+use log::{debug, warn};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, OnceLock};
+use tokio::sync::Mutex;
+use uuid::Uuid;
+
+const TRACE_LAYOUT_VERSION: u32 = 1;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ModelExchangeTraceRecord {
+    version: u32,
+    trace_id: String,
+    sequence: u64,
+    recorded_at: DateTime<Utc>,
+    session_id: String,
+    turn_id: String,
+    round_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    response: Option<ModelExchangeResponseTrace>,
+    request: ModelExchangeTraceRequestRecord,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ModelExchangeTraceRequestRecord {
+    provider: String,
+    api_format: String,
+    model_id: String,
+    request_url: String,
+    body: Value,
+    attempt_number: usize,
+}
+
+#[derive(Debug)]
+struct WorkspaceModelExchangeTraceSink {
+    runtime_context: WorkspaceRuntimeContext,
+    session_id: String,
+    turn_id: String,
+    round_id: String,
+    provider: String,
+    api_format: String,
+    model_id: String,
+    trace_paths: DashMap<String, PathBuf>,
+}
+
+impl WorkspaceModelExchangeTraceSink {
+    fn new(
+        runtime_context: WorkspaceRuntimeContext,
+        session_id: String,
+        turn_id: String,
+        round_id: String,
+        provider: String,
+        api_format: String,
+        model_id: String,
+    ) -> Self {
+        Self {
+            runtime_context,
+            session_id,
+            turn_id,
+            round_id,
+            provider,
+            api_format,
+            model_id,
+            trace_paths: DashMap::new(),
+        }
+    }
+
+    async fn allocate_sequence(&self) -> Result<u64, String> {
+        let session_dir = self
+            .runtime_context
+            .request_trace_session_dir(&self.session_id);
+        let key = session_dir.to_string_lossy().to_string();
+        let allocator = sequence_allocators()
+            .entry(key)
+            .or_insert_with(|| Arc::new(Mutex::new(None)))
+            .clone();
+        let mut guard = allocator.lock().await;
+        let current = match *guard {
+            Some(value) => value,
+            None => {
+                let detected = detect_last_sequence(&session_dir).await?;
+                *guard = Some(detected);
+                detected
+            }
+        };
+        let next = current.saturating_add(1);
+        *guard = Some(next);
+        Ok(next)
+    }
+
+    async fn write_record(
+        &self,
+        path: &Path,
+        record: &ModelExchangeTraceRecord,
+    ) -> Result<(), String> {
+        if let Some(parent) = path.parent() {
+            tokio::fs::create_dir_all(parent)
+                .await
+                .map_err(|error| format!("Failed to create trace directory: {}", error))?;
+        }
+
+        let bytes = serde_json::to_vec_pretty(record)
+            .map_err(|error| format!("Failed to serialize trace record: {}", error))?;
+        tokio::fs::write(path, bytes)
+            .await
+            .map_err(|error| format!("Failed to write trace record: {}", error))
+    }
+
+    async fn read_record(&self, path: &Path) -> Result<ModelExchangeTraceRecord, String> {
+        let bytes = tokio::fs::read(path)
+            .await
+            .map_err(|error| format!("Failed to read trace record: {}", error))?;
+        serde_json::from_slice(&bytes)
+            .map_err(|error| format!("Failed to deserialize trace record: {}", error))
+    }
+
+    async fn update_response(
+        &self,
+        trace_id: &str,
+        response: &ModelExchangeResponseTrace,
+    ) -> Result<(), String> {
+        let Some(path) = self
+            .trace_paths
+            .get(trace_id)
+            .map(|entry| entry.value().clone())
+        else {
+            return Ok(());
+        };
+
+        let mut record = self.read_record(&path).await?;
+        record.response = Some(response.clone());
+        self.write_record(&path, &record).await?;
+        self.trace_paths.remove(trace_id);
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl ModelExchangeTraceSink for WorkspaceModelExchangeTraceSink {
+    async fn request_attempt_started(
+        &self,
+        attempt: &ModelExchangeRequestAttempt,
+    ) -> Option<ModelExchangeRequestTraceHandle> {
+        let sequence = match self.allocate_sequence().await {
+            Ok(value) => value,
+            Err(error) => {
+                warn!(
+                    "Model exchange trace sequence allocation failed: session_id={}, error={}",
+                    self.session_id, error
+                );
+                return None;
+            }
+        };
+
+        let trace_id = Uuid::new_v4().to_string();
+        let path = self
+            .runtime_context
+            .request_trace_path(&self.session_id, sequence);
+        let record = ModelExchangeTraceRecord {
+            version: TRACE_LAYOUT_VERSION,
+            trace_id: trace_id.clone(),
+            sequence,
+            recorded_at: Utc::now(),
+            session_id: self.session_id.clone(),
+            turn_id: self.turn_id.clone(),
+            round_id: self.round_id.clone(),
+            request: ModelExchangeTraceRequestRecord {
+                provider: self.provider.clone(),
+                api_format: self.api_format.clone(),
+                model_id: self.model_id.clone(),
+                request_url: attempt.request_url.clone(),
+                body: attempt.request_body.clone(),
+                attempt_number: attempt.attempt_number,
+            },
+            response: None,
+        };
+
+        if let Err(error) = self.write_record(&path, &record).await {
+            warn!(
+                "Model exchange trace write failed: session_id={}, trace_id={}, error={}",
+                self.session_id, trace_id, error
+            );
+            return None;
+        }
+
+        self.trace_paths.insert(trace_id.clone(), path);
+        Some(ModelExchangeRequestTraceHandle { trace_id })
+    }
+
+    async fn request_attempt_failed(
+        &self,
+        handle: Option<&ModelExchangeRequestTraceHandle>,
+        error: &str,
+    ) {
+        let Some(handle) = handle else {
+            return;
+        };
+
+        if let Err(write_error) = self
+            .update_response(
+                &handle.trace_id,
+                &ModelExchangeResponseTrace {
+                    kind: "error".to_string(),
+                    assistant_text: String::new(),
+                    thinking: None,
+                    tool_calls: None,
+                    usage: None,
+                    provider_metadata: None,
+                    partial_recovery_reason: None,
+                    error: Some(error.to_string()),
+                },
+            )
+            .await
+        {
+            warn!(
+                "Model exchange trace failure update failed: session_id={}, trace_id={}, error={}",
+                self.session_id, handle.trace_id, write_error
+            );
+        }
+    }
+
+    async fn request_attempt_completed(
+        &self,
+        handle: &ModelExchangeRequestTraceHandle,
+        response: &ModelExchangeResponseTrace,
+    ) {
+        if let Err(error) = self.update_response(&handle.trace_id, response).await {
+            warn!(
+                "Model exchange trace completion update failed: session_id={}, trace_id={}, error={}",
+                self.session_id, handle.trace_id, error
+            );
+        }
+    }
+}
+
+pub async fn prepare_model_exchange_trace(
+    context: &RoundContext,
+    round_id: &str,
+    ai_client: &AIClient,
+) -> Option<ModelExchangeTraceConfig> {
+    if !model_exchange_trace_enabled().await {
+        return None;
+    }
+
+    let Some(workspace) = context.workspace.as_ref() else {
+        debug!(
+            "Model exchange trace skipped because round has no workspace: session_id={}, turn_id={}",
+            context.session_id, context.dialog_turn_id
+        );
+        return None;
+    };
+
+    let runtime_context = match get_workspace_runtime_service_arc()
+        .ensure_runtime_for_workspace_binding(workspace)
+        .await
+    {
+        Ok(result) => result.context,
+        Err(error) => {
+            warn!(
+                "Model exchange trace skipped because runtime init failed: session_id={}, error={}",
+                context.session_id, error
+            );
+            return None;
+        }
+    };
+
+    Some(ModelExchangeTraceConfig {
+        sink: Arc::new(WorkspaceModelExchangeTraceSink::new(
+            runtime_context,
+            context.session_id.clone(),
+            context.dialog_turn_id.clone(),
+            round_id.to_string(),
+            ai_client.config.format.clone(),
+            ai_client.config.format.clone(),
+            ai_client.config.model.clone(),
+        )),
+    })
+}
+
+async fn model_exchange_trace_enabled() -> bool {
+    let Ok(config_service) = GlobalConfigManager::get_service().await else {
+        return false;
+    };
+
+    config_service
+        .get_config(Some("app.logging.model_exchange_trace"))
+        .await
+        .unwrap_or(false)
+}
+
+async fn detect_last_sequence(session_dir: &Path) -> Result<u64, String> {
+    let mut last_sequence = 0u64;
+    let mut entries = match tokio::fs::read_dir(session_dir).await {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(0),
+        Err(error) => {
+            return Err(format!(
+                "Failed to inspect trace session directory '{}': {}",
+                session_dir.display(),
+                error
+            ));
+        }
+    };
+
+    loop {
+        let Some(entry) = entries
+            .next_entry()
+            .await
+            .map_err(|error| format!("Failed to iterate trace session directory: {}", error))?
+        else {
+            break;
+        };
+
+        let file_name = entry.file_name();
+        let Some(file_name) = file_name.to_str() else {
+            continue;
+        };
+        let Some(sequence) = parse_trace_sequence(file_name) else {
+            continue;
+        };
+        last_sequence = last_sequence.max(sequence);
+    }
+
+    Ok(last_sequence)
+}
+
+fn parse_trace_sequence(file_name: &str) -> Option<u64> {
+    file_name
+        .strip_prefix("request-")?
+        .strip_suffix(".json")?
+        .parse::<u64>()
+        .ok()
+}
+
+fn sequence_allocators() -> &'static DashMap<String, Arc<Mutex<Option<u64>>>> {
+    static ALLOCATORS: OnceLock<DashMap<String, Arc<Mutex<Option<u64>>>>> = OnceLock::new();
+    ALLOCATORS.get_or_init(DashMap::new)
+}
