@@ -28,6 +28,7 @@ pub struct WorkspaceRuntimeContext {
     pub target: WorkspaceRuntimeTarget,
     pub runtime_root: PathBuf,
     pub sessions_dir: PathBuf,
+    pub request_traces_dir: PathBuf,
     pub snapshots_dir: PathBuf,
     pub snapshot_by_hash_dir: PathBuf,
     pub snapshot_metadata_dir: PathBuf,
@@ -49,6 +50,7 @@ impl WorkspaceRuntimeContext {
         Self {
             target,
             sessions_dir: runtime_root.join("sessions"),
+            request_traces_dir: runtime_root.join("request-traces"),
             snapshot_by_hash_dir: snapshots_dir.join("by_hash"),
             snapshot_metadata_dir: snapshots_dir.join("metadata"),
             snapshot_baselines_dir: snapshots_dir.join("baselines"),
@@ -68,6 +70,7 @@ impl WorkspaceRuntimeContext {
         vec![
             self.runtime_root.as_path(),
             self.sessions_dir.as_path(),
+            self.request_traces_dir.as_path(),
             self.snapshots_dir.as_path(),
             self.snapshot_by_hash_dir.as_path(),
             self.snapshot_metadata_dir.as_path(),
@@ -90,6 +93,15 @@ impl WorkspaceRuntimeContext {
 
     pub fn session_tool_result_path(&self, session_id: &str, file_name: &str) -> PathBuf {
         self.session_tool_results_dir(session_id).join(file_name)
+    }
+
+    pub fn request_trace_session_dir(&self, session_id: &str) -> PathBuf {
+        self.request_traces_dir.join(session_id)
+    }
+
+    pub fn request_trace_path(&self, session_id: &str, sequence: u64) -> PathBuf {
+        self.request_trace_session_dir(session_id)
+            .join(format!("request-{:06}.json", sequence))
     }
 }
 

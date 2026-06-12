@@ -11,6 +11,7 @@ crate-type = ["rlib"]
 
 [dependencies]
 anyhow = { workspace = true }
+async-trait = { workspace = true }
 bitfun-agent-stream = { path = "../../execution/agent-stream" }
 bitfun-core-types = { path = "../../contracts/core-types" }
 chrono = { workspace = true }
@@ -25,7 +26,6 @@ tokio-stream = { workspace = true }
 urlencoding = { workspace = true }
 
 [dev-dependencies]
-async-trait = { workspace = true }
 axum = { workspace = true }
 bitfun-events = { path = "../../contracts/events" }
 tokio-util = { workspace = true }

@@ -134,6 +134,9 @@ pub struct AppLoggingConfig {
     /// Whether diagnostic logs may include sensitive troubleshooting payloads.
     #[serde(default = "default_true")]
     pub include_sensitive_diagnostics: bool,
+    /// Whether to persist per-request AI model exchange traces for developer diagnostics.
+    #[serde(default)]
+    pub model_exchange_trace: bool,
 }
 
 /// Session-related UI preferences.
@@ -1341,6 +1344,7 @@ impl Default for AppLoggingConfig {
             // Set to Debug in early development for easier diagnostics
             level: "debug".to_string(),
             include_sensitive_diagnostics: true,
+            model_exchange_trace: false,
         }
     }
 }
@@ -2068,6 +2072,7 @@ mod tests {
         .expect("logging config without sensitive preference should deserialize");
 
         assert!(config.include_sensitive_diagnostics);
+        assert!(!config.model_exchange_trace);
     }
 
     #[test]
