@@ -51,6 +51,15 @@
     color: var(--color-text-muted, #888);
     font-style: italic;
   }
+
+  &__truncation-notice {
+    padding: 0.25rem 0.625rem;
+    font-size: var(--flowchat-font-size-xs);
+    color: var(--color-text-muted, #888);
+    background: var(--color-bg-tertiary, rgba(255, 255, 255, 0.03));
+    border-bottom: 1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.06));
+    font-style: italic;
+  }
 }
 
 .diff-line {
@@ -187,8 +196,7 @@
     flex: 1;
     padding: 0 8px;
     white-space: pre-wrap;
-    word-break: break-word;
-    overflow: hidden;
+    overflow-wrap: anywhere;
     
     // Strip global and SyntaxHighlighter borders/backgrounds.
     pre, code, span {

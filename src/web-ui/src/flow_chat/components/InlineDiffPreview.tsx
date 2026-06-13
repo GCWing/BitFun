@@ -11,7 +11,7 @@
  * 5. Row virtualization via @tanstack/react-virtual: only visible rows are in the DOM
  */
 
-import React, { useMemo, memo, useRef, useCallback, useState, CSSProperties } from 'react';
+import React, { useMemo, memo, useRef, useCallback, useState, useEffect, CSSProperties } from 'react';
 import Prism from 'prismjs';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { diffLines, Change } from 'diff';
@@ -25,6 +25,61 @@ const log = createLogger('InlineDiffPreview');
 
 /** Estimated row height in px — must match CSS line-height × font-size. */
 const ROW_HEIGHT = 22;
+
+/**
+ * Maximum total lines (original + modified) before content is truncated.
+ * Keeps diffLines() + Prism.tokenize() cost bounded for large files.
+ * The caller may also pre-truncate; this is a safety net inside the component.
+ */
+const MAX_TOTAL_LINES = 500;
+/** Character budget that complements MAX_TOTAL_LINES for very long single lines. */
+const MAX_TOTAL_CHARS = 50_000;
+
+/** Result of truncation: possibly shortened content + metadata. */
+interface TruncationResult {
+  originalContent: string;
+  modifiedContent: string;
+  truncated: boolean;
+  omittedLines: number;
+}
+
+/**
+ * Truncate original/modified content when combined line or char count exceeds
+ * thresholds. Returns head + tail so both ends of the diff remain visible.
+ */
+function truncateForDiff(original: string, modified: string): TruncationResult {
+  const origLines = original ? original.split('\n') : [];
+  const modLines = modified ? modified.split('\n') : [];
+  const totalLines = origLines.length + modLines.length;
+  const totalChars = original.length + modified.length;
+
+  if (totalLines <= MAX_TOTAL_LINES && totalChars <= MAX_TOTAL_CHARS) {
+  return { originalContent: original, modifiedContent: modified, truncated: false, omittedLines: 0 };
+  }
+
+  // Budget per side, per half (head/tail).
+  const perSide = Math.max(50, Math.floor(MAX_TOTAL_LINES / 4));
+
+  const slice = (lines: string[]): { text: string; kept: number; dropped: number } => {
+    if (lines.length <= perSide * 2) return { text: lines.join('\n'), kept: lines.length, dropped: 0 };
+    const head = lines.slice(0, perSide);
+    const tail = lines.slice(lines.length - perSide);
+    return {
+      text: [...head, '', `... truncated ${lines.length - perSide * 2} lines ...`, '', ...tail].join('\n'),
+      kept: perSide * 2,
+      dropped: lines.length - perSide * 2,
+    };
+  };
+
+  const o = slice(origLines);
+  const m = slice(modLines);
+  return {
+    originalContent: o.text,
+    modifiedContent: m.text,
+    truncated: true,
+    omittedLines: o.dropped + m.dropped,
+  };
+}
 
 export interface InlineDiffPreviewProps {
   /** Original content. */
@@ -302,25 +357,31 @@ export const InlineDiffPreview: React.FC<InlineDiffPreviewProps> = memo(({
     return 'text';
   }, [language, filePath]);
 
+  // Truncate very large inputs before diff/tokenization to protect the main thread.
+  const truncated = useMemo(
+    () => truncateForDiff(originalContent, modifiedContent),
+    [originalContent, modifiedContent],
+  );
+
   // Compute diff line list (fast, O(ND))
   const diffLineList = useMemo(() => {
     try {
-      const rawDiff = computeLineDiff(originalContent, modifiedContent);
+      const rawDiff = computeLineDiff(truncated.originalContent, truncated.modifiedContent);
       return applyContextCollapsing(rawDiff, contextLines);
     } catch (error) {
       log.error('Diff computation failed', error);
       return [{ type: 'context-separator' as const, content: 'Diff computation failed; file may be too large.' }];
     }
-  }, [originalContent, modifiedContent, contextLines]);
+  }, [truncated.originalContent, truncated.modifiedContent, contextLines]);
 
   // Tokenize each content once — O(content_length), not O(lines²)
   const originalLineTokens = useMemo(
-    () => tokenizeContent(originalContent, detectedLanguage),
-    [originalContent, detectedLanguage],
+    () => tokenizeContent(truncated.originalContent, detectedLanguage),
+    [truncated.originalContent, detectedLanguage],
   );
   const modifiedLineTokens = useMemo(
-    () => tokenizeContent(modifiedContent, detectedLanguage),
-    [modifiedContent, detectedLanguage],
+    () => tokenizeContent(truncated.modifiedContent, detectedLanguage),
+    [truncated.modifiedContent, detectedLanguage],
   );
 
   // Build stylesheet from prism style for token coloring
@@ -355,13 +416,34 @@ export const InlineDiffPreview: React.FC<InlineDiffPreviewProps> = memo(({
     [originalLineTokens, modifiedLineTokens],
   );
 
-  // Virtualizer
+  // Virtualizer with dynamic measurement so wrapped long lines get correct height.
   const virtualizer = useVirtualizer({
     count: diffLineList.length,
     getScrollElement: () => containerRef.current,
     estimateSize: () => ROW_HEIGHT,
     overscan: 3,
+    measureElement: (el) => el.getBoundingClientRect().height,
   });
+
+  // Re-measure all rows when the container width changes (wrapping may differ).
+  const [containerWidth, setContainerWidth] = useState(0);
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) {
+        const w = Math.round(entry.contentRect.width);
+        setContainerWidth((prev) => (prev === w ? prev : w));
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  // When width changes, invalidate cached measurements so rows re-measure.
+  useEffect(() => {
+    virtualizer.measure();
+  }, [containerWidth]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleLineClick = useCallback(
     (index: number, line: DiffLine) => {
@@ -389,6 +471,11 @@ export const InlineDiffPreview: React.FC<InlineDiffPreviewProps> = memo(({
 
   return (
     <div className={`inline-diff-preview ${className}`}>
+      {truncated.truncated && (
+        <div className="inline-diff-preview__truncation-notice">
+          Content too large; showing first and last portions ({truncated.omittedLines} lines omitted).
+        </div>
+      )}
       <div
         ref={containerRef}
         className="inline-diff-preview__content"
@@ -404,14 +491,15 @@ export const InlineDiffPreview: React.FC<InlineDiffPreviewProps> = memo(({
               return (
                 <div
                   key={virtualRow.key}
+                  ref={virtualizer.measureElement}
                   className="diff-line diff-line--separator"
+                  data-index={virtualRow.index}
                   style={{
                     position: 'absolute',
                     top: 0,
                     left: 0,
                     width: '100%',
                     transform: `translateY(${virtualRow.start}px)`,
-                    height: `${virtualRow.size}px`,
                   }}
                 >
                   <span className="diff-line__gutter diff-line__gutter--separator" />
@@ -436,14 +524,15 @@ export const InlineDiffPreview: React.FC<InlineDiffPreviewProps> = memo(({
             return (
               <div
                 key={virtualRow.key}
+                ref={virtualizer.measureElement}
                 className={lineClass}
+                data-index={virtualRow.index}
                 style={{
                   position: 'absolute',
                   top: 0,
                   left: 0,
                   width: '100%',
                   transform: `translateY(${virtualRow.start}px)`,
-                  height: `${virtualRow.size}px`,
                 }}
                 onClick={() => handleLineClick(virtualRow.index, line)}
               >
