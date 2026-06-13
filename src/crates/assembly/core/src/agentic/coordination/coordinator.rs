@@ -5577,33 +5577,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         &self.session_manager
     }
 
-    /// Persist a completed `/btw` side-question turn into an existing child session.
-    #[allow(clippy::too_many_arguments)]
-    pub async fn persist_btw_turn(
-        &self,
-        workspace_path: &Path,
-        child_session_id: &str,
-        request_id: &str,
-        question: &str,
-        full_text: &str,
-        parent_session_id: &str,
-        parent_dialog_turn_id: Option<&str>,
-        parent_turn_index: Option<usize>,
-    ) -> BitFunResult<()> {
-        self.session_manager
-            .persist_btw_turn(
-                workspace_path,
-                child_session_id,
-                request_id,
-                question,
-                full_text,
-                parent_session_id,
-                parent_dialog_turn_id,
-                parent_turn_index,
-            )
-            .await
-    }
-
     /// Set global coordinator (called during initialization)
     ///
     /// Skips if global coordinator already exists
