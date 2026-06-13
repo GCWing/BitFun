@@ -98,3 +98,20 @@ fn ask_user_question_answered_and_cancelled_results_keep_wire_shape() {
         "User input request was cancelled."
     );
 }
+
+#[test]
+fn ask_user_question_input_defaults_multi_select_to_false_when_omitted() {
+    let input: AskUserQuestionInput = serde_json::from_value(serde_json::json!({
+        "questions": [{
+            "question": "Which path should be used?",
+            "header": "Path",
+            "options": [
+                { "label": "A", "description": "Use A" },
+                { "label": "B", "description": "Use B" }
+            ]
+        }]
+    }))
+    .expect("input without multiSelect should deserialize");
+
+    assert!(!input.questions[0].multi_select);
+}

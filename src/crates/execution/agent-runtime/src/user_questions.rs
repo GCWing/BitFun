@@ -14,7 +14,7 @@ pub struct Question {
     pub question: String,
     pub header: String,
     pub options: Vec<QuestionOption>,
-    #[serde(rename = "multiSelect")]
+    #[serde(rename = "multiSelect", default)]
     pub multi_select: bool,
 }
 
