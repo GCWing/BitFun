@@ -1,4 +1,5 @@
 use super::types::RoundContext;
+use crate::agentic::WorkspaceBinding;
 use crate::infrastructure::ai::AIClient;
 use crate::service::config::{
     GlobalConfigManager, ModelExchangeTracingConfig, ModelExchangeTracingMode,
@@ -31,11 +32,21 @@ struct ModelExchangeTraceRecord {
     recorded_at: DateTime<Utc>,
     session_id: String,
     turn_id: String,
-    round_id: String,
+    operation_kind: String,
+    operation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    operation_trigger: Option<String>,
     capture_mode: ModelExchangeTracingMode,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     response: Option<ModelExchangeResponseTrace>,
     request: ModelExchangeTraceRequestRecord,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ModelExchangeTraceOperation<'a> {
+    pub kind: &'a str,
+    pub id: &'a str,
+    pub trigger: Option<&'a str>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -92,7 +103,9 @@ struct WorkspaceModelExchangeTraceSink {
     policy: ModelExchangeTracePolicy,
     session_id: String,
     turn_id: String,
-    round_id: String,
+    operation_kind: String,
+    operation_id: String,
+    operation_trigger: Option<String>,
     provider: String,
     api_format: String,
     model_id: String,
@@ -105,7 +118,9 @@ impl WorkspaceModelExchangeTraceSink {
         policy: ModelExchangeTracePolicy,
         session_id: String,
         turn_id: String,
-        round_id: String,
+        operation_kind: String,
+        operation_id: String,
+        operation_trigger: Option<String>,
         provider: String,
         api_format: String,
         model_id: String,
@@ -115,7 +130,9 @@ impl WorkspaceModelExchangeTraceSink {
             policy,
             session_id,
             turn_id,
-            round_id,
+            operation_kind,
+            operation_id,
+            operation_trigger,
             provider,
             api_format,
             model_id,
@@ -257,7 +274,9 @@ impl ModelExchangeTraceSink for WorkspaceModelExchangeTraceSink {
             recorded_at: Utc::now(),
             session_id: self.session_id.clone(),
             turn_id: self.turn_id.clone(),
-            round_id: self.round_id.clone(),
+            operation_kind: self.operation_kind.clone(),
+            operation_id: self.operation_id.clone(),
+            operation_trigger: self.operation_trigger.clone(),
             capture_mode: self.policy.mode,
             response: None,
             request: ModelExchangeTraceRequestRecord {
@@ -333,14 +352,35 @@ pub async fn prepare_model_exchange_trace(
     round_id: &str,
     ai_client: &AIClient,
 ) -> Option<ModelExchangeTraceConfig> {
+    prepare_model_exchange_trace_for_workspace(
+        &context.session_id,
+        &context.dialog_turn_id,
+        context.workspace.as_ref(),
+        ModelExchangeTraceOperation {
+            kind: "model_round",
+            id: round_id,
+            trigger: None,
+        },
+        ai_client,
+    )
+    .await
+}
+
+pub async fn prepare_model_exchange_trace_for_workspace(
+    session_id: &str,
+    turn_id: &str,
+    workspace: Option<&WorkspaceBinding>,
+    operation: ModelExchangeTraceOperation<'_>,
+    ai_client: &AIClient,
+) -> Option<ModelExchangeTraceConfig> {
     let Some(policy) = current_model_exchange_trace_policy().await else {
         return None;
     };
 
-    let Some(workspace) = context.workspace.as_ref() else {
+    let Some(workspace) = workspace else {
         debug!(
-            "Model exchange trace skipped because round has no workspace: session_id={}, turn_id={}",
-            context.session_id, context.dialog_turn_id
+            "Model exchange trace skipped because operation has no workspace: session_id={}, turn_id={}, operation_kind={}, operation_id={}",
+            session_id, turn_id, operation.kind, operation.id
         );
         return None;
     };
@@ -352,8 +392,8 @@ pub async fn prepare_model_exchange_trace(
         Ok(result) => result.context,
         Err(error) => {
             warn!(
-                "Model exchange trace skipped because runtime init failed: session_id={}, error={}",
-                context.session_id, error
+                "Model exchange trace skipped because runtime init failed: session_id={}, operation_kind={}, operation_id={}, error={}",
+                session_id, operation.kind, operation.id, error
             );
             return None;
         }
@@ -363,9 +403,11 @@ pub async fn prepare_model_exchange_trace(
         sink: Arc::new(WorkspaceModelExchangeTraceSink::new(
             runtime_context,
             policy,
-            context.session_id.clone(),
-            context.dialog_turn_id.clone(),
-            round_id.to_string(),
+            session_id.to_string(),
+            turn_id.to_string(),
+            operation.kind.to_string(),
+            operation.id.to_string(),
+            operation.trigger.map(str::to_string),
             ai_client.config.format.clone(),
             ai_client.config.format.clone(),
             ai_client.config.model.clone(),

@@ -1072,7 +1072,9 @@
             trace_id: raw.trace_id || "",
             session_id: raw.session_id || "",
             turn_id: raw.turn_id || "",
-            round_id: raw.round_id || "",
+            operation_kind: raw.operation_kind || "",
+            operation_id: raw.operation_id || "",
+            operation_trigger: raw.operation_trigger || "",
             capture_mode: raw.capture_mode || "unknown",
             provider: raw.provider || "unknown",
             api_format: raw.api_format || "",
@@ -1672,6 +1674,8 @@
           <div>${escapeHtml(formatDate(nearest.row.recorded_at))}</div>
           <div>provider: ${escapeHtml(nearest.row.provider || "-")}</div>
           <div>model: ${escapeHtml(nearest.row.model_id || "-")}</div>
+          <div>operation: ${escapeHtml(nearest.row.operation_kind || "-")} / ${escapeHtml(nearest.row.operation_id || "-")}</div>
+          <div>trigger: ${escapeHtml(nearest.row.operation_trigger || "-")}</div>
           <div>kind: ${escapeHtml(nearest.row.response_kind || "-")}</div>
           <div>capture: ${escapeHtml(nearest.row.capture_mode || "-")}</div>
           ${nearest.series.map(item => `

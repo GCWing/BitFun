@@ -2,6 +2,9 @@
 //!
 //! Executes complete dialog turns, managing loops of multiple model rounds
 
+use super::model_exchange_trace::{
+    prepare_model_exchange_trace_for_workspace, ModelExchangeTraceOperation,
+};
 use super::round_executor::RoundExecutor;
 use super::types::{ExecutionContext, ExecutionResult, RoundContext};
 use crate::agentic::agents::{
@@ -37,6 +40,7 @@ use crate::util::token_counter::TokenCounter;
 use crate::util::types::Message as AIMessage;
 use crate::util::types::ToolDefinition;
 use crate::util::{elapsed_ms_u64, truncate_at_char_boundary};
+use bitfun_ai_adapters::ModelExchangeTraceConfig;
 use log::{debug, error, info, trace, warn};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
@@ -1005,7 +1009,7 @@ impl ExecutionEngine {
         &self,
         runtime_messages: &[Message],
         dialog_turn_id: &str,
-        workspace_path: Option<&Path>,
+        workspace: Option<&WorkspaceBinding>,
         provider: &str,
         attach_images: bool,
         prepended_prompt_reminders: &PrependedPromptReminders,
@@ -1015,7 +1019,7 @@ impl ExecutionEngine {
         let mut compression_messages = Self::build_ai_messages_for_send(
             runtime_messages,
             provider,
-            workspace_path,
+            workspace.map(|workspace| workspace.root_path()),
             dialog_turn_id,
             attach_images,
             &prepended_reminders,
@@ -1032,6 +1036,7 @@ impl ExecutionEngine {
         ai_client: Arc<crate::infrastructure::ai::AIClient>,
         request_messages: Vec<AIMessage>,
         tool_definitions: Option<Vec<ToolDefinition>>,
+        trace_config: Option<ModelExchangeTraceConfig>,
         max_tries: usize,
     ) -> BitFunResult<String> {
         let mut last_error = None;
@@ -1039,7 +1044,11 @@ impl ExecutionEngine {
 
         for attempt in 0..max_tries {
             let result = ai_client
-                .send_message(request_messages.clone(), tool_definitions.clone())
+                .send_message_with_trace(
+                    request_messages.clone(),
+                    tool_definitions.clone(),
+                    trace_config.clone(),
+                )
                 .await;
 
             match result {
@@ -1095,17 +1104,18 @@ impl ExecutionEngine {
         ai_client: Arc<crate::infrastructure::ai::AIClient>,
         runtime_messages: &[Message],
         dialog_turn_id: &str,
-        workspace_path: Option<&Path>,
+        workspace: Option<&WorkspaceBinding>,
         tool_definitions: &Option<Vec<ToolDefinition>>,
         prepended_prompt_reminders: &PrependedPromptReminders,
         primary_supports_image_understanding: bool,
         contract: Option<&crate::agentic::core::CompressionContract>,
+        trace_config: Option<ModelExchangeTraceConfig>,
     ) -> BitFunResult<Option<String>> {
         let request_messages = self
             .build_compression_request_messages(
                 runtime_messages,
                 dialog_turn_id,
-                workspace_path,
+                workspace,
                 &ai_client.config.format,
                 primary_supports_image_understanding,
                 prepended_prompt_reminders,
@@ -1118,6 +1128,7 @@ impl ExecutionEngine {
                 ai_client,
                 request_messages,
                 tool_definitions.clone(),
+                trace_config,
                 2,
             )
             .await?;
@@ -1340,7 +1351,7 @@ impl ExecutionEngine {
         prepended_prompt_reminders: &PrependedPromptReminders,
         primary_supports_image_understanding: bool,
         compression_contract_limit: usize,
-        workspace_path: Option<&Path>,
+        workspace: Option<&WorkspaceBinding>,
     ) -> BitFunResult<Option<(usize, Vec<Message>)>> {
         let mut session = self
             .session_manager
@@ -1380,16 +1391,29 @@ impl ExecutionEngine {
         let compression_contract = self
             .session_manager
             .compression_contract_for_session(session_id, compression_contract_limit);
+        let trace_config = prepare_model_exchange_trace_for_workspace(
+            session_id,
+            dialog_turn_id,
+            workspace,
+            ModelExchangeTraceOperation {
+                kind: "context_compression",
+                id: &compression_id,
+                trigger: Some("auto"),
+            },
+            ai_client.as_ref(),
+        )
+        .await;
         let model_summary = match self
             .generate_compression_model_summary(
                 ai_client,
                 &runtime_messages,
                 dialog_turn_id,
-                workspace_path,
+                workspace,
                 tool_definitions,
                 prepended_prompt_reminders,
                 primary_supports_image_understanding,
                 compression_contract.as_ref(),
+                trace_config,
             )
             .await
         {
@@ -1593,19 +1617,29 @@ impl ExecutionEngine {
         let compression_contract = self
             .session_manager
             .compression_contract_for_session(&session_id, scaffold.compression_contract_limit);
+        let trace_config = prepare_model_exchange_trace_for_workspace(
+            &session_id,
+            &dialog_turn_id,
+            context.workspace.as_ref(),
+            ModelExchangeTraceOperation {
+                kind: "context_compression",
+                id: &compression_id,
+                trigger: Some(trigger),
+            },
+            scaffold.ai_client.as_ref(),
+        )
+        .await;
         let model_summary = match self
             .generate_compression_model_summary(
                 scaffold.ai_client.clone(),
                 &runtime_messages,
                 &dialog_turn_id,
-                context
-                    .workspace
-                    .as_ref()
-                    .map(|workspace| workspace.root_path()),
+                context.workspace.as_ref(),
                 &scaffold.tool_definitions,
                 &scaffold.prepended_prompt_reminders,
                 scaffold.primary_supports_image_understanding,
                 compression_contract.as_ref(),
+                trace_config,
             )
             .await
         {
@@ -2227,10 +2261,7 @@ impl ExecutionEngine {
                         &prepended_prompt_reminders,
                         primary_supports_image_understanding,
                         context_profile_policy.compression_contract_limit,
-                        context
-                            .workspace
-                            .as_ref()
-                            .map(|workspace| workspace.root_path()),
+                        context.workspace.as_ref(),
                     )
                     .await
                 {
