@@ -28,11 +28,11 @@
     }
     
     &::-webkit-scrollbar-thumb {
-      background: var(--color-scrollbar-thumb, rgba(255, 255, 255, 0.15));
+      background: var(--scrollbar-thumb, rgba(255, 255, 255, 0.15));
       border-radius: 3px;
-      
+
       &:hover {
-        background: var(--color-scrollbar-thumb-hover, rgba(255, 255, 255, 0.25));
+        background: var(--scrollbar-thumb-hover, rgba(255, 255, 255, 0.25));
       }
     }
   }
@@ -83,27 +83,27 @@
   }
   
   &--added {
-    background: rgba(63, 185, 80, 0.12);
-    
+    background: var(--git-color-staged-bg, rgba(34, 197, 94, 0.1));
+
     .diff-line__gutter {
-      background: rgba(63, 185, 80, 0.18);
+      background: var(--git-color-staged-bg-hover, rgba(34, 197, 94, 0.15));
     }
-    
+
     .diff-line__prefix {
-      color: #3fb950;
+      color: var(--git-color-staged, #34d399);
       font-weight: 500;
     }
   }
-  
+
   &--removed {
-    background: rgba(248, 81, 73, 0.12);
-    
+    background: var(--git-color-deleted-bg, rgba(239, 68, 68, 0.1));
+
     .diff-line__gutter {
-      background: rgba(248, 81, 73, 0.18);
+      background: var(--git-color-deleted-bg-hover, rgba(239, 68, 68, 0.15));
     }
-    
+
     .diff-line__prefix {
-      color: #f85149;
+      color: var(--git-color-deleted, #ef4444);
       font-weight: 500;
     }
     
@@ -114,10 +114,10 @@
   
   // Highlighted row (selected).
   &--highlighted {
-    background: rgba(136, 182, 255, 0.15) !important;
-    
+    background: var(--color-accent-200, rgba(96, 165, 250, 0.15)) !important;
+
     .diff-line__gutter {
-      background: rgba(136, 182, 255, 0.22) !important;
+      background: var(--color-accent-300, rgba(96, 165, 250, 0.22)) !important;
     }
   }
   
@@ -224,48 +224,48 @@
 .light .inline-diff-preview {
   .diff-line {
     &--added {
-      background: rgba(91, 154, 111, 0.12);
-      
+      background: var(--git-color-staged-bg);
+
       .diff-line__gutter {
-        background: rgba(91, 154, 111, 0.18);
+        background: color-mix(in srgb, var(--git-color-staged) 18%, transparent);
       }
-      
+
       .diff-line__prefix {
-        color: #4a8560;
+        color: var(--git-color-staged);
       }
     }
-    
+
     &--removed {
-      background: rgba(194, 101, 101, 0.12);
-      
+      background: var(--git-color-deleted-bg);
+
       .diff-line__gutter {
-        background: rgba(194, 101, 101, 0.18);
+        background: color-mix(in srgb, var(--git-color-deleted) 18%, transparent);
       }
-      
+
       .diff-line__prefix {
-        color: #a85454;
+        color: var(--git-color-deleted);
       }
     }
-    
+
     &--highlighted {
-      background: rgba(90, 123, 178, 0.10) !important;
-      
+      background: var(--color-accent-200) !important;
+
       .diff-line__gutter {
-        background: rgba(90, 123, 178, 0.15) !important;
+        background: var(--color-accent-300) !important;
       }
     }
   }
-  
+
   .diff-line__gutter {
-    background: rgba(0, 0, 0, 0.03);
-    border-right-color: rgba(0, 0, 0, 0.08);
+    background: var(--element-bg-subtle);
+    border-right-color: var(--border-subtle);
   }
 
   .diff-line__num {
-    color: #6e7781;
+    color: var(--color-text-muted);
 
     &--original {
-      border-right-color: rgba(0, 0, 0, 0.1);
+      border-right-color: var(--border-subtle);
     }
   }
 }

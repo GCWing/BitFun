@@ -113,14 +113,14 @@
   }
 
   &__run-dot {
-    background: #34d399;
-    box-shadow: 0 0 6px rgba(52, 211, 153, 0.65);
+    background: var(--color-success, #34d399);
+    box-shadow: 0 0 6px color-mix(in srgb, var(--color-success, #34d399) 65%, transparent);
     animation: pulse 2s ease-in-out infinite;
   }
 
   &__customize-dot {
-    background: #60a5fa;
-    box-shadow: 0 0 6px rgba(96, 165, 250, 0.68);
+    background: var(--color-accent-500, #60a5fa);
+    box-shadow: 0 0 6px color-mix(in srgb, var(--color-accent-500, #60a5fa) 68%, transparent);
   }
 
   // ── Body ──
@@ -263,7 +263,7 @@
 
     &--stop:hover {
       background: rgba(247, 234, 234, 0.6);
-      color: #34d399;
+      color: var(--color-success, #34d399);
     }
   }
 }

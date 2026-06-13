@@ -738,10 +738,10 @@ $_section-header-height: 24px;
         width: 7px;
         height: 7px;
         border-radius: 999px;
-        background: #60a5fa;
+        background: var(--color-accent-500, #60a5fa);
         box-shadow:
           0 0 0 2px var(--color-bg-primary),
-          0 0 8px rgba(96, 165, 250, 0.75);
+          0 0 8px color-mix(in srgb, var(--color-accent-500, #60a5fa) 75%, transparent);
         pointer-events: none;
       }
     }
@@ -847,8 +847,8 @@ $_section-header-height: 24px;
       width: 6px;
       height: 6px;
       border-radius: 999px;
-      background: #60a5fa;
-      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.28), 0 0 7px rgba(96, 165, 250, 0.72);
+      background: var(--color-accent-500, #60a5fa);
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.28), 0 0 7px color-mix(in srgb, var(--color-accent-500, #60a5fa) 72%, transparent);
     }
 
     &--more {
@@ -1489,7 +1489,7 @@ $_section-header-height: 24px;
 
 // Footer notification: yellow only when there are unread messages (BellDot)
 .bitfun-nav-panel__footer .bitfun-notification-btn .bitfun-notification-btn__icon--has-message {
-  color: #ca8a04;
+  color: var(--color-warning, #ca8a04);
 }
 
 .bitfun-nav-panel__footer .bitfun-notification-btn.bitfun-notification-btn--nav-hover-icon:not(.bitfun-notification-btn--has-progress) {

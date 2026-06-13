@@ -128,20 +128,20 @@
   }
 
   &__account--connected {
-    color: color-mix(in srgb, #3fb950 92%, var(--color-text-secondary));
+    color: color-mix(in srgb, var(--color-success, #3fb950) 92%, var(--color-text-secondary));
   }
 
   &__account--not_required {
-    color: color-mix(in srgb, #58a6ff 90%, var(--color-text-secondary));
+    color: color-mix(in srgb, var(--color-accent-500, #58a6ff) 90%, var(--color-text-secondary));
   }
 
   &__account--expired,
   &__account--error {
-    color: #f85149;
+    color: var(--color-error, #f85149);
   }
 
   &__account--unsupported {
-    color: #d29922;
+    color: var(--color-warning, #d29922);
   }
 
   &__icon-button.icon-btn {
@@ -204,9 +204,9 @@
     gap: 12px;
     margin: 10px 12px;
     padding: 12px;
-    border: 1px solid color-mix(in srgb, #d29922 42%, var(--border-base));
+    border: 1px solid color-mix(in srgb, var(--color-warning, #d29922) 42%, var(--border-base));
     border-radius: 10px;
-    background: color-mix(in srgb, #d29922 10%, var(--color-bg-elevated));
+    background: color-mix(in srgb, var(--color-warning, #d29922) 10%, var(--color-bg-elevated));
   }
 
   &__auth-gate--detail {
@@ -221,10 +221,10 @@
     width: 34px;
     height: 34px;
     flex: 0 0 auto;
-    border: 1px solid color-mix(in srgb, #d29922 42%, var(--border-base));
+    border: 1px solid color-mix(in srgb, var(--color-warning, #d29922) 42%, var(--border-base));
     border-radius: 8px;
-    color: #d29922;
-    background: color-mix(in srgb, #d29922 14%, transparent);
+    color: var(--color-warning, #d29922);
+    background: color-mix(in srgb, var(--color-warning, #d29922) 14%, transparent);
   }
 
   &__auth-gate-copy {
@@ -403,7 +403,7 @@
     display: grid;
     justify-items: center;
     gap: 10px;
-    color: #f85149;
+    color: var(--color-error, #f85149);
   }
 
   &__pr-row {
@@ -484,31 +484,31 @@
   }
 
   &__decision--approved {
-    color: #3fb950;
-    background: rgba(63, 185, 80, 0.12);
+    color: var(--color-success, #3fb950);
+    background: var(--color-success-bg, rgba(52, 211, 153, 0.1));
   }
 
   &__decision--changes_requested {
-    color: #f85149;
-    background: rgba(248, 81, 73, 0.12);
+    color: var(--color-error, #f85149);
+    background: var(--color-error-bg, rgba(239, 68, 68, 0.1));
   }
 
   &__decision--commented,
   &__decision--pending {
-    color: #d29922;
-    background: rgba(210, 153, 34, 0.13);
+    color: var(--color-warning, #d29922);
+    background: var(--color-warning-bg, rgba(245, 158, 11, 0.1));
   }
 
   &__state-icon--open {
-    color: #3fb950;
+    color: var(--color-success, #3fb950);
   }
 
   &__state-icon--merged {
-    color: #a371f7;
+    color: var(--color-purple-500, #a371f7);
   }
 
   &__state-icon--closed {
-    color: #f85149;
+    color: var(--color-error, #f85149);
   }
 
   &__detail {
@@ -878,11 +878,11 @@
   }
 
   &__review-session--completed &__review-session-icon {
-    color: #3fb950;
+    color: var(--color-success, #3fb950);
   }
 
   &__review-session--error &__review-session-icon {
-    color: #f85149;
+    color: var(--color-error, #f85149);
   }
 
   &__review-session-icon {
@@ -981,11 +981,11 @@
   }
 
   &__additions {
-    color: #3fb950 !important;
+    color: var(--color-success, #3fb950) !important;
   }
 
   &__deletions {
-    color: #f85149 !important;
+    color: var(--color-error, #f85149) !important;
   }
 
   &__file-list,
@@ -1053,19 +1053,19 @@
   }
 
   &__file-status--added {
-    color: #3fb950;
-    background: rgba(63, 185, 80, 0.12);
+    color: var(--color-success, #3fb950);
+    background: var(--color-success-bg, rgba(52, 211, 153, 0.1));
   }
 
   &__file-status--modified,
   &__file-status--renamed {
-    color: #58a6ff;
-    background: rgba(88, 166, 255, 0.12);
+    color: var(--color-accent-500, #58a6ff);
+    background: var(--color-accent-100, rgba(96, 165, 250, 0.12));
   }
 
   &__file-status--deleted {
-    color: #f85149;
-    background: rgba(248, 81, 73, 0.12);
+    color: var(--color-error, #f85149);
+    background: var(--color-error-bg, rgba(239, 68, 68, 0.1));
   }
 
   &__file-delta {
@@ -1100,22 +1100,22 @@
   }
 
   &__diff-line--hunk {
-    color: #a371f7;
-    background: rgba(163, 113, 247, 0.1);
+    color: var(--color-purple-500, #a371f7);
+    background: var(--color-purple-100, rgba(139, 92, 246, 0.1));
   }
 
   &__diff-line--add {
-    color: #7ee787;
-    background: rgba(63, 185, 80, 0.1);
+    color: var(--color-success, #3fb950);
+    background: var(--color-success-bg, rgba(52, 211, 153, 0.1));
   }
 
   &__diff-line--delete {
-    color: #ffa198;
-    background: rgba(248, 81, 73, 0.1);
+    color: var(--color-error, #f85149);
+    background: var(--color-error-bg, rgba(239, 68, 68, 0.1));
   }
 
   &__diff-line--meta {
-    color: #79c0ff;
+    color: var(--color-accent-500, #79c0ff);
   }
 
   &__diff-empty {
@@ -1130,10 +1130,10 @@
     gap: 8px;
     min-height: 36px;
     padding: 8px 10px;
-    border: 1px solid color-mix(in srgb, #f85149 34%, var(--border-base));
+    border: 1px solid color-mix(in srgb, var(--color-error, #f85149) 34%, var(--border-base));
     border-radius: 7px;
-    background: rgba(248, 81, 73, 0.08);
-    color: #f85149;
+    background: var(--color-error-bg, rgba(239, 68, 68, 0.08));
+    color: var(--color-error, #f85149);
     font-size: 11px;
 
     span {
@@ -1179,18 +1179,18 @@
   }
 
   &__ci-item--passed {
-    border-color: color-mix(in srgb, #3fb950 28%, var(--border-base));
-    background: color-mix(in srgb, #3fb950 8%, var(--color-bg-elevated));
+    border-color: color-mix(in srgb, var(--color-success, #3fb950) 28%, var(--border-base));
+    background: color-mix(in srgb, var(--color-success, #3fb950) 8%, var(--color-bg-elevated));
   }
 
   &__ci-item--failed {
-    border-color: color-mix(in srgb, #f85149 30%, var(--border-base));
-    background: color-mix(in srgb, #f85149 8%, var(--color-bg-elevated));
+    border-color: color-mix(in srgb, var(--color-error, #f85149) 30%, var(--border-base));
+    background: color-mix(in srgb, var(--color-error, #f85149) 8%, var(--color-bg-elevated));
   }
 
   &__ci-item--pending {
-    border-color: color-mix(in srgb, #d29922 24%, var(--border-base));
-    background: color-mix(in srgb, #d29922 7%, var(--color-bg-elevated));
+    border-color: color-mix(in srgb, var(--color-warning, #d29922) 24%, var(--border-base));
+    background: color-mix(in srgb, var(--color-warning, #d29922) 7%, var(--color-bg-elevated));
   }
 
   &__ci-head {
@@ -1268,18 +1268,18 @@
   }
 
   &__ci-status--passed {
-    color: #3fb950;
-    background: rgba(63, 185, 80, 0.12);
+    color: var(--color-success, #3fb950);
+    background: var(--color-success-bg, rgba(52, 211, 153, 0.1));
   }
 
   &__ci-status--failed {
-    color: #f85149;
-    background: rgba(248, 81, 73, 0.12);
+    color: var(--color-error, #f85149);
+    background: var(--color-error-bg, rgba(239, 68, 68, 0.1));
   }
 
   &__ci-status--pending {
-    color: #d29922;
-    background: rgba(210, 153, 34, 0.13);
+    color: var(--color-warning, #d29922);
+    background: var(--color-warning-bg, rgba(245, 158, 11, 0.1));
   }
 
   &__ci-meta {
@@ -1458,15 +1458,15 @@
   }
 
   &__thread-tag--resolved {
-    color: color-mix(in srgb, #3fb950 90%, var(--color-text-secondary));
-    border-color: color-mix(in srgb, #3fb950 24%, var(--border-base));
-    background: color-mix(in srgb, #3fb950 10%, transparent);
+    color: color-mix(in srgb, var(--color-success, #3fb950) 90%, var(--color-text-secondary));
+    border-color: color-mix(in srgb, var(--color-success, #3fb950) 24%, var(--border-base));
+    background: color-mix(in srgb, var(--color-success, #3fb950) 10%, transparent);
   }
 
   &__thread-tag--open {
-    color: color-mix(in srgb, #f1c40f 82%, var(--color-text-secondary));
-    border-color: color-mix(in srgb, #f1c40f 24%, var(--border-base));
-    background: color-mix(in srgb, #f1c40f 10%, transparent);
+    color: color-mix(in srgb, var(--color-warning, #f1c40f) 82%, var(--color-text-secondary));
+    border-color: color-mix(in srgb, var(--color-warning, #f1c40f) 24%, var(--border-base));
+    background: color-mix(in srgb, var(--color-warning, #f1c40f) 10%, transparent);
   }
 
   &__thread-meta {

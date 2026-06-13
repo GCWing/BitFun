@@ -1640,7 +1640,7 @@
     height: 11px;
     padding: 0 3px;
     border-radius: 999px;
-    background: #ef4444;
+    background: var(--color-error, #ef4444);
     color: white;
     display: inline-flex;
     align-items: center;

@@ -124,7 +124,7 @@
   }
 
   &__required {
-    color: #ef4444;
+    color: var(--color-error, #ef4444);
   }
 
   &__input {
@@ -173,7 +173,7 @@
     background: rgba(239, 68, 68, 0.08);
     border: 1px solid rgba(239, 68, 68, 0.25);
     border-radius: $size-radius-sm;
-    color: #ef4444;
+    color: var(--color-error, #ef4444);
     font-size: var(--font-size-xs);
     animation: bitfun-create-branch-dialog-shake 0.4s ease-in-out;
   }

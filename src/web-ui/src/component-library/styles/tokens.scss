@@ -3,20 +3,20 @@
  */
 // ==================== Base color system ====================
 
-$color-bg-primary: #121214;
-$color-bg-secondary: #18181a;
-$color-bg-tertiary: #121214;
-$color-bg-quaternary: #202024;
-$color-bg-elevated: #18181a;
-$color-bg-workbench: #121214;
-$color-bg-flowchat: #121214;
-$color-bg-scene: #16161a;
-$color-bg-tooltip: rgba(30, 30, 32, 0.92);
+$color-bg-primary: #0e0e10;
+$color-bg-secondary: #1c1c1f;
+$color-bg-tertiary: #0e0e10;
+$color-bg-quaternary: #252528;
+$color-bg-elevated: #1c1c1f;
+$color-bg-workbench: #0e0e10;
+$color-bg-flowchat: #0e0e10;
+$color-bg-scene: #1c1c1f;
+$color-bg-tooltip: rgba(28, 28, 31, 0.96);
 
 $color-text-primary: #e8e8e8;
-$color-text-secondary: #e5e5e5;
-$color-text-muted: #a0a0a0;
-$color-text-disabled: #666666;
+$color-text-secondary: #b0b0b0;
+$color-text-muted: #858585;
+$color-text-disabled: #555555;
 
 // ==================== Neutral surface system ====================
 $element-bg-subtle: rgba(255, 255, 255, 0.05);
@@ -48,58 +48,47 @@ $color-purple-600: #7c3aed;
 $color-purple-700: rgba(124, 58, 237, 0.8);
 $color-purple-800: rgba(124, 58, 237, 0.9);
 
-// ==================== Gray system (legacy) ====================
-$color-gray-50: rgba(255, 255, 255, 0.02);
-$color-gray-100: rgba(255, 255, 255, 0.04);
-$color-gray-200: rgba(255, 255, 255, 0.06);
-$color-gray-300: rgba(255, 255, 255, 0.08);
-$color-gray-400: rgba(255, 255, 255, 0.12);
-$color-gray-500: rgba(255, 255, 255, 0.16);
-$color-gray-600: rgba(255, 255, 255, 0.24);
-$color-gray-700: rgba(255, 255, 255, 0.32);
-$color-gray-800: rgba(255, 255, 255, 0.48);
-
 // ==================== Semantic colors ====================
-$color-success: #6eb88c;
-$color-success-bg: rgba(110, 184, 140, 0.1);
-$color-success-border: rgba(110, 184, 140, 0.3);
+$color-success: #34d399;
+$color-success-bg: rgba(52, 211, 153, 0.1);
+$color-success-border: rgba(52, 211, 153, 0.3);
 
-$color-warning: #c9944d;
-$color-warning-bg: rgba(201, 148, 77, 0.1);
-$color-warning-border: rgba(201, 148, 77, 0.3);
+$color-warning: #f59e0b;
+$color-warning-bg: rgba(245, 158, 11, 0.1);
+$color-warning-border: rgba(245, 158, 11, 0.3);
 
-$color-error: #c77070;
-$color-error-bg: rgba(199, 112, 112, 0.1);
-$color-error-border: rgba(199, 112, 112, 0.3);
+$color-error: #ef4444;
+$color-error-bg: rgba(239, 68, 68, 0.1);
+$color-error-border: rgba(239, 68, 68, 0.3);
 
-$color-info: #7096c4;
-$color-info-bg: rgba(112, 150, 196, 0.1);
-$color-info-border: rgba(112, 150, 196, 0.3);
+$color-info: #a1a1aa;
+$color-info-bg: rgba(255, 255, 255, 0.08);
+$color-info-border: rgba(255, 255, 255, 0.22);
 
 // ==================== Git-specific color system ====================
-$git-color-branch: rgb(112, 150, 196);
-$git-color-branch-bg: rgba(112, 150, 196, 0.08);
-$git-color-branch-bg-hover: rgba(112, 150, 196, 0.15);
-$git-color-branch-border: rgba(112, 150, 196, 0.3);
+$git-color-branch: #a1a1aa;
+$git-color-branch-bg: rgba(255, 255, 255, 0.06);
+$git-color-branch-bg-hover: rgba(255, 255, 255, 0.12);
+$git-color-branch-border: rgba(255, 255, 255, 0.18);
 
-$git-color-changes: rgb(201, 148, 77);
-$git-color-changes-bg: rgba(201, 148, 77, 0.1);
-$git-color-changes-bg-hover: rgba(201, 148, 77, 0.15);
-$git-color-changes-border: rgba(201, 148, 77, 0.3);
+$git-color-changes: rgb(245, 158, 11);
+$git-color-changes-bg: rgba(245, 158, 11, 0.1);
+$git-color-changes-bg-hover: rgba(245, 158, 11, 0.15);
+$git-color-changes-border: rgba(245, 158, 11, 0.3);
 
-$git-color-staged: rgb(110, 184, 140);
-$git-color-staged-bg: rgba(110, 184, 140, 0.1);
-$git-color-staged-bg-hover: rgba(110, 184, 140, 0.15);
-$git-color-staged-border: rgba(110, 184, 140, 0.3);
+$git-color-staged: rgb(34, 197, 94);
+$git-color-staged-bg: rgba(34, 197, 94, 0.1);
+$git-color-staged-bg-hover: rgba(34, 197, 94, 0.15);
+$git-color-staged-border: rgba(34, 197, 94, 0.3);
 
 $git-color-added: $git-color-staged;
 $git-color-added-bg: $git-color-staged-bg;
 $git-color-added-bg-hover: $git-color-staged-bg-hover;
 
-$git-color-deleted: rgb(199, 112, 112);
-$git-color-deleted-bg: rgba(199, 112, 112, 0.1);
-$git-color-deleted-bg-hover: rgba(199, 112, 112, 0.15);
-$git-color-deleted-border: rgba(199, 112, 112, 0.3);
+$git-color-deleted: rgb(239, 68, 68);
+$git-color-deleted-bg: rgba(239, 68, 68, 0.1);
+$git-color-deleted-bg-hover: rgba(239, 68, 68, 0.15);
+$git-color-deleted-border: rgba(239, 68, 68, 0.3);
 
 $git-color-pull: $git-color-branch;
 $git-color-pull-bg: $git-color-branch-bg;
@@ -110,11 +99,11 @@ $git-color-push-bg: $git-color-staged-bg;
 $git-color-push-bg-hover: $git-color-staged-bg-hover;
 
 // ==================== Border system ====================
-$border-subtle: rgba(255, 255, 255, 0.10);
-$border-base: rgba(255, 255, 255, 0.14);
-$border-medium: rgba(255, 255, 255, 0.20);
-$border-strong: rgba(255, 255, 255, 0.26);
-$border-prominent: rgba(200, 200, 200, 0.45);
+$border-subtle: rgba(255, 255, 255, 0.12);
+$border-base: rgba(255, 255, 255, 0.18);
+$border-medium: rgba(255, 255, 255, 0.24);
+$border-strong: rgba(255, 255, 255, 0.32);
+$border-prominent: rgba(255, 255, 255, 0.4);
 
 $border-hover: $border-medium;
 $border-focus: $border-strong;
@@ -342,7 +331,6 @@ $button-bg-default: linear-gradient(135deg,
   rgba(255, 255, 255, 0.10) 100%
 );
 $button-border-default: rgba(255, 255, 255, 0.08);
-$button-text-default: #e5e5e5;
 
 $button-bg-hover: linear-gradient(135deg,
   rgba(59, 130, 246, 0.15) 0%,
@@ -779,16 +767,6 @@ $badge-info-text: $color-info;
   --color-purple-600: #{$color-purple-600};
   --color-purple-700: #{$color-purple-700};
   --color-purple-800: #{$color-purple-800};
-  
-  --color-gray-50: #{$color-gray-50};
-  --color-gray-100: #{$color-gray-100};
-  --color-gray-200: #{$color-gray-200};
-  --color-gray-300: #{$color-gray-300};
-  --color-gray-400: #{$color-gray-400};
-  --color-gray-500: #{$color-gray-500};
-  --color-gray-600: #{$color-gray-600};
-  --color-gray-700: #{$color-gray-700};
-  --color-gray-800: #{$color-gray-800};
   
   --color-success: #{$color-success};
   --color-success-bg: #{$color-success-bg};

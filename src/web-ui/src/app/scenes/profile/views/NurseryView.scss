@@ -110,7 +110,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
   }
 
   &:focus-visible {
-    outline: 2px solid #34d399;
+    outline: 2px solid var(--color-success, #34d399);
     outline-offset: 2px;
   }
 
@@ -151,7 +151,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     margin-top: 2px;
     font-size: var(--font-size-xs);
     font-weight: $font-weight-medium;
-    color: #34d399;
+    color: var(--color-success, #34d399);
     opacity: 0.72;
     transition:
       opacity $motion-fast $easing-standard,
@@ -1730,7 +1730,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
   &__error {
     margin: 0;
     font-size: var(--font-size-2xs);
-    color: var(--color-danger-600, #e11d48);
+    color: var(--color-error, #e11d48);
     line-height: $line-height-relaxed;
   }
 
@@ -1933,7 +1933,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     color: var(--color-text-muted);
 
     &--mcp {
-      color: #fb923c;
+      color: var(--color-warning, #fb923c);
       background: rgba(251, 146, 60, 0.1);
       border-color: transparent;
     }
@@ -2212,7 +2212,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     font-weight: $font-weight-semibold;
     text-transform: uppercase;
     letter-spacing: 0.8px;
-    color: #34d399;
+    color: var(--color-success, #34d399);
     opacity: 0.85;
   }
 
@@ -2330,8 +2330,8 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     font-weight: $font-weight-semibold;
     color: var(--color-text-secondary);
 
-    &--warn   { color: #f59e0b; }
-    &--danger { color: #f87171; }
+    &--warn   { color: var(--color-warning, #f59e0b); }
+    &--danger { color: var(--color-error, #f87171); }
   }
 
   // Segmented bar
@@ -2468,7 +2468,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     flex-shrink: 0;
     color: var(--color-text-muted);
 
-    &--mcp { color: #fb923c; }
+    &--mcp { color: var(--color-warning, #fb923c); }
   }
 
   &__name {
@@ -2493,14 +2493,14 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
 
     &--connected,
     &--healthy {
-      color: #34d399;
+      color: var(--color-success, #34d399);
       background: rgba(52, 211, 153, 0.08);
       border-color: rgba(52, 211, 153, 0.22);
     }
 
     &--starting,
     &--reconnecting {
-      color: #f59e0b;
+      color: var(--color-warning, #f59e0b);
       background: rgba(245, 158, 11, 0.08);
       border-color: rgba(245, 158, 11, 0.22);
     }
@@ -2508,7 +2508,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     &--failed,
     &--stopped,
     &--stopping {
-      color: #f87171;
+      color: var(--color-error, #f87171);
       background: rgba(248, 113, 113, 0.08);
       border-color: rgba(248, 113, 113, 0.22);
     }
@@ -2603,7 +2603,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     color: var(--color-text-muted);
 
     &--mcp {
-      color: #fb923c;
+      color: var(--color-warning, #fb923c);
       background: rgba(251, 146, 60, 0.1);
     }
   }
@@ -3370,7 +3370,7 @@ $acp-content-top: clamp(40px, 4.5vh, 52px);
   &__error {
     margin: 0 0 $size-gap-3;
     font-size: var(--font-size-xs);
-    color: var(--color-danger-600, #e11d48);
+    color: var(--color-error, #e11d48);
     line-height: $line-height-relaxed;
   }
 

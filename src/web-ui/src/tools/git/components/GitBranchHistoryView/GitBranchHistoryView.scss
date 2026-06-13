@@ -231,7 +231,7 @@
     height: 24px;
     border-radius: 50%;
     background: rgba(96, 165, 250, 0.15);
-    color: #60a5fa;
+    color: var(--color-accent-500, #60a5fa);
     flex-shrink: 0;
     font-size: 11px;
     font-weight: 600;
@@ -304,7 +304,7 @@
 
     &--copied {
       background: rgba(16, 185, 129, 0.15);
-      color: #10b981;
+      color: var(--color-success, #10b981);
 
       .git-branch-history-view__copy-icon {
         opacity: 1;

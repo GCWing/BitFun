@@ -137,7 +137,7 @@
   }
 
   &__search-index-error-text {
-    color: var(--color-error-600);
+    color: var(--color-error, #ef4444);
   }
 
   &__search-index-actions {

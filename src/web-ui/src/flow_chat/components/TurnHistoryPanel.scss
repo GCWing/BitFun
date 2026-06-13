@@ -4,7 +4,7 @@
   padding: 16px;
   background: var(--color-bg-primary);
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm, 0 2px 4px rgba(0, 0, 0, 0.8));
 
   .turn-history-header {
     display: flex;
@@ -12,19 +12,19 @@
     align-items: center;
     margin-bottom: 16px;
     padding-bottom: 12px;
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 1px solid var(--border-base);
 
     h3 {
       margin: 0;
       font-size: 16px;
       font-weight: 600;
-      color: #111827;
+      color: var(--color-text-primary);
     }
 
     .turn-count {
       font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
-      color: #6b7280;
-      background: #f3f4f6;
+      color: var(--color-text-secondary);
+      background: var(--element-bg-soft);
       padding: 4px 8px;
       border-radius: 4px;
     }
@@ -41,18 +41,18 @@
 
   .turn-history-item {
     padding: 12px;
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--border-base);
     border-radius: 6px;
     transition: all 0.2s ease;
 
     &:hover {
-      border-color: #3b82f6;
-      box-shadow: 0 2px 4px rgba(59, 130, 246, 0.1);
+      border-color: var(--color-accent-600, #3b82f6);
+      box-shadow: 0 2px 4px color-mix(in srgb, var(--color-accent-600, #3b82f6) 10%, transparent);
     }
 
     &.current {
-      background: #f0f9ff;
-      border-color: #3b82f6;
+      background: var(--color-accent-100);
+      border-color: var(--color-accent-600, #3b82f6);
     }
 
     .turn-item-header {
@@ -64,19 +64,19 @@
       .turn-index {
         font-size: 14px;
         font-weight: 600;
-        color: #111827;
+        color: var(--color-text-primary);
       }
     }
 
     .turn-item-files {
       margin: 8px 0;
       padding: 8px;
-      background: #f9fafb;
+      background: var(--element-bg-subtle);
       border-radius: 4px;
 
       .files-label {
         font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
-        color: #6b7280;
+        color: var(--color-text-secondary);
         font-weight: 500;
         display: block;
         margin-bottom: 4px;
@@ -88,14 +88,14 @@
 
         .file-item {
           font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
-          color: #374151;
+          color: var(--color-text-secondary);
           margin: 2px 0;
-          font-family: 'Monaco', 'Consolas', monospace;
+          font-family: var(--font-family-mono, 'JetBrains Mono', 'FiraCode', ui-monospace, monospace);
         }
 
         .file-item-more {
           font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
-          color: #6b7280;
+          color: var(--color-text-muted);
           font-style: italic;
           list-style: none;
           margin-left: -16px;
@@ -105,7 +105,7 @@
 
     .turn-item-time {
       font-size: var(--flowchat-font-size-xs);
-      color: #9ca3af;
+      color: var(--color-text-muted);
       margin-top: 8px;
     }
   }
@@ -114,100 +114,22 @@
 .turn-history-panel-loading {
   padding: 40px;
   text-align: center;
-  color: #6b7280;
+  color: var(--color-text-secondary);
   font-size: 14px;
 }
 
 .turn-history-panel-empty {
   padding: 40px;
   text-align: center;
-  
+
   p {
     margin: 8px 0;
-    color: #6b7280;
+    color: var(--color-text-secondary);
     font-size: 14px;
 
     &.hint {
       font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
-      color: #9ca3af;
+      color: var(--color-text-muted);
     }
   }
 }
-
-// Dark theme
-@media (prefers-color-scheme: dark) {
-  .turn-history-panel {
-    background: #1f2937;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-
-    .turn-history-header {
-      border-bottom-color: #374151;
-
-      h3 {
-        color: #f9fafb;
-      }
-
-      .turn-count {
-        background: #374151;
-        color: #d1d5db;
-      }
-    }
-
-    .turn-history-list {
-    }
-
-    .turn-history-item {
-      border-color: #374151;
-
-      &:hover {
-        border-color: #3b82f6;
-      }
-
-      &.current {
-        background: #1e3a8a;
-        border-color: #3b82f6;
-      }
-
-      .turn-item-header .turn-index {
-        color: #f9fafb;
-      }
-
-      .turn-item-files {
-        background: #111827;
-
-        .files-label {
-          color: #d1d5db;
-        }
-
-        .files-list {
-          .file-item {
-            color: #e5e7eb;
-          }
-
-          .file-item-more {
-            color: #9ca3af;
-          }
-        }
-      }
-
-      .turn-item-time {
-        color: #6b7280;
-      }
-    }
-  }
-
-  .turn-history-panel-loading,
-  .turn-history-panel-empty {
-    color: #9ca3af;
-
-    p {
-      color: #9ca3af;
-
-      &.hint {
-        color: #6b7280;
-      }
-    }
-  }
-}
-
-
