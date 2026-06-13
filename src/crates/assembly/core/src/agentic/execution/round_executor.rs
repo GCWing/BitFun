@@ -45,6 +45,16 @@ impl RoundExecutor {
         !text.trim().is_empty()
     }
 
+    async fn sleep_with_cancellation(
+        delay_ms: u64,
+        cancel_token: &CancellationToken,
+    ) -> BitFunResult<()> {
+        tokio::select! {
+            _ = cancel_token.cancelled() => Err(BitFunError::Cancelled("Execution cancelled".to_string())),
+            _ = tokio::time::sleep(Duration::from_millis(delay_ms)) => Ok(()),
+        }
+    }
+
     pub fn new(
         stream_processor: Arc<StreamProcessor>,
         event_queue: Arc<EventQueue>,
@@ -130,16 +140,19 @@ impl RoundExecutor {
                 attempt_index + 1,
                 max_attempts
             );
-
             // Use dynamically obtained client for call
-            let (stream_response, send_to_stream_ms) = match ai_client
-                .send_message_stream(
-                    ai_messages.clone(),
-                    tool_definitions.clone(),
-                    trace_config.clone(),
-                )
-                .await
-            {
+            let send_future = ai_client.send_message_stream(
+                ai_messages.clone(),
+                tool_definitions.clone(),
+                trace_config.clone(),
+            );
+            let send_result = tokio::select! {
+                _ = cancel_token.cancelled() => {
+                    return Err(BitFunError::Cancelled("Execution cancelled".to_string()));
+                }
+                result = send_future => result,
+            };
+            let (stream_response, send_to_stream_ms) = match send_result {
                 Ok(response) => {
                     let send_to_stream_ms = elapsed_ms_u64(request_started_at);
                     debug!(
@@ -168,7 +181,11 @@ impl RoundExecutor {
                             delay_ms,
                             err_msg
                         );
-                        tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                        if let Err(cancel_err) =
+                            Self::sleep_with_cancellation(delay_ms, &cancel_token).await
+                        {
+                            return Err(cancel_err);
+                        }
                         attempt_index += 1;
                         continue;
                     }
@@ -260,7 +277,11 @@ impl RoundExecutor {
                                     .count(),
                                 err_msg
                             );
-                            tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                            if let Err(cancel_err) =
+                                Self::sleep_with_cancellation(delay_ms, &cancel_token).await
+                            {
+                                return Err(cancel_err);
+                            }
                             attempt_index += 1;
                             continue;
                         }
@@ -347,7 +368,11 @@ impl RoundExecutor {
                             result.tool_calls.len(),
                             partial_recovery_reason
                         );
-                        tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                        if let Err(cancel_err) =
+                            Self::sleep_with_cancellation(delay_ms, &cancel_token).await
+                        {
+                            return Err(cancel_err);
+                        }
                         attempt_index += 1;
                         continue;
                     }
@@ -375,7 +400,11 @@ impl RoundExecutor {
                                 delay_ms,
                                 result.tool_calls.len()
                             );
-                            tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                            if let Err(cancel_err) =
+                                Self::sleep_with_cancellation(delay_ms, &cancel_token).await
+                            {
+                                return Err(cancel_err);
+                            }
                             attempt_index += 1;
                             continue;
                         }
@@ -422,7 +451,11 @@ impl RoundExecutor {
                             max_attempts,
                             delay_ms
                         );
-                        tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                        if let Err(cancel_err) =
+                            Self::sleep_with_cancellation(delay_ms, &cancel_token).await
+                        {
+                            return Err(cancel_err);
+                        }
                         attempt_index += 1;
                         continue;
                     }
@@ -470,7 +503,11 @@ impl RoundExecutor {
                             delay_ms,
                             err_msg
                         );
-                        tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                        if let Err(cancel_err) =
+                            Self::sleep_with_cancellation(delay_ms, &cancel_token).await
+                        {
+                            return Err(cancel_err);
+                        }
                         attempt_index += 1;
                         continue;
                     }
@@ -1217,12 +1254,14 @@ mod tests {
     use crate::agentic::execution::stream_processor::StreamResult;
     use crate::agentic::execution::types::RoundContext;
     use crate::agentic::tools::ToolRuntimeRestrictions;
+    use crate::util::errors::BitFunError;
     use crate::util::types::ai::GeminiUsage;
     use bitfun_runtime_ports::DelegationPolicy;
     use dashmap::DashMap;
     use serde_json::json;
     use std::collections::HashMap;
     use std::sync::Arc;
+    use std::time::Duration;
     use tokio_util::sync::CancellationToken;
 
     fn test_round_executor() -> RoundExecutor {
@@ -1322,6 +1361,31 @@ mod tests {
                 ..
             } if session_id == "session-1" && turn_id == "turn-1" && model_id == "model-1"
         )));
+    }
+
+    #[tokio::test]
+    async fn cancellable_sleep_returns_cancelled_when_token_fires() {
+        let token = CancellationToken::new();
+        let token_for_task = token.clone();
+
+        let waiter = tokio::spawn(async move {
+            RoundExecutor::sleep_with_cancellation(5_000, &token_for_task).await
+        });
+
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        token.cancel();
+
+        let result = waiter.await.expect("sleep task should join");
+        assert!(matches!(result, Err(BitFunError::Cancelled(_))));
+    }
+
+    #[tokio::test]
+    async fn cancellable_sleep_completes_normally_without_cancel() {
+        let token = CancellationToken::new();
+
+        let result = RoundExecutor::sleep_with_cancellation(10, &token).await;
+
+        assert!(result.is_ok());
     }
 
     #[test]
