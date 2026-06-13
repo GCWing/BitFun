@@ -13,7 +13,15 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 
 const BASE_RETRY_DELAY_MS: u64 = 500;
-const MAX_RETRY_AFTER_DELAY_MS: u64 = 10_000;
+/// Maximum delay applied to a `Retry-After` header value.
+///
+/// Some providers (especially TPM-based rate limits on aggregator platforms
+/// like NVIDIA's integrate API) return large `Retry-After` values of 30-60
+/// seconds. Capping at 10s caused tight retry loops that burned through the
+/// user's request budget without actually waiting for the TPM window to reset.
+/// 60s is a reasonable upper bound that respects provider guidance without
+/// locking the user into an interminable stall.
+const MAX_RETRY_AFTER_DELAY_MS: u64 = 60_000;
 
 enum StreamSendOutcome {
     Response(reqwest::Response),
@@ -326,6 +334,14 @@ mod tests {
             retry_after_delay_ms(&headers),
             Some(MAX_RETRY_AFTER_DELAY_MS)
         );
+    }
+
+    #[test]
+    fn retry_after_preserves_sub_cap_values() {
+        let mut headers = HeaderMap::new();
+        headers.insert(RETRY_AFTER, HeaderValue::from_static("45"));
+
+        assert_eq!(retry_after_delay_ms(&headers), Some(45_000));
     }
 
     #[test]

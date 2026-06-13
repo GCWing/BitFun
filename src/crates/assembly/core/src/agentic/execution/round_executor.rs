@@ -178,7 +178,21 @@ impl RoundExecutor {
                             max_attempts, err_msg
                         )));
                     }
-                    return Err(BitFunError::AIClient(err_msg));
+                    // Non-transient errors (429 budget exhausted, context
+                    // overflow, auth, etc.) are returned directly. The error
+                    // message is classified downstream via
+                    // `BitFunError::error_category()` into `ErrorCategory` for
+                    // frontend recovery actions (wait_and_retry, switch_model,
+                    // etc.).
+                    let error = BitFunError::AIClient(err_msg);
+                    warn!(
+                        "AI request terminal failure: session_id={}, round_id={}, category={:?}, error={}",
+                        context.session_id,
+                        round_id,
+                        error.error_category(),
+                        error
+                    );
+                    return Err(error);
                 }
             };
 
@@ -1095,8 +1109,28 @@ impl RoundExecutor {
         Self::RETRY_BASE_DELAY_MS * (1u64 << attempt_index.min(3))
     }
 
+    /// Check whether an error message represents a transient (retryable) condition.
+    ///
+    /// Errors that already exhausted the SSE-layer retry budget (e.g. "failed
+    /// after N attempts:" or "Stream retry budget exhausted") are **not**
+    /// transient from the round-executor perspective — the SSE transport layer
+    /// already retried with exponential backoff and `Retry-After` parsing.
+    /// Re-entering the send loop would multiply attempts (10 × 10 = 100) and
+    /// hold the user in a long silent stall.
     fn is_transient_network_error(error_message: &str) -> bool {
         let msg = error_message.to_lowercase();
+
+        // The SSE layer already exhausted its own retry budget — do not
+        // re-enter another round of attempts from the round executor.
+        // We require BOTH "failed after " and "attempts:" to co-occur,
+        // which uniquely identifies the SSE/round-executor budget-exhausted
+        // format without catching generic errors like "failed after timeout".
+        if msg.contains("failed after ") && msg.contains("attempts:") {
+            return false;
+        }
+        if msg.contains("retry budget exhausted") {
+            return false;
+        }
 
         let non_retryable_keywords = [
             "invalid api key",
@@ -1470,5 +1504,56 @@ mod tests {
         assert!(trace.provider_metadata.is_none());
         assert!(trace.partial_recovery_reason.is_none());
         assert_eq!(trace.error.as_deref(), Some("request failed"));
+    }
+
+    #[test]
+    fn is_transient_error_treats_rate_limit_as_transient() {
+        assert!(RoundExecutor::is_transient_network_error(
+            "OpenAI Streaming API error 429 Too Many Requests"
+        ));
+        assert!(RoundExecutor::is_transient_network_error(
+            "rate limit exceeded"
+        ));
+    }
+
+    #[test]
+    fn is_transient_error_treats_network_errors_as_transient() {
+        assert!(RoundExecutor::is_transient_network_error(
+            "connection reset by peer"
+        ));
+        assert!(RoundExecutor::is_transient_network_error("timeout"));
+    }
+
+    #[test]
+    fn is_transient_error_treats_context_overflow_as_non_transient() {
+        assert!(!RoundExecutor::is_transient_network_error(
+            "prompt is too long"
+        ));
+    }
+
+    #[test]
+    fn is_transient_error_treats_budget_exhausted_as_non_transient() {
+        // After SSE layer exhausts its retry budget, the round executor must
+        // NOT re-enter another round of attempts (would cause 10×10 = 100
+        // retries).
+        assert!(!RoundExecutor::is_transient_network_error(
+            "OpenAI Streaming API failed after 10 attempts: \
+             OpenAI Streaming API error 429 Too Many Requests"
+        ));
+        assert!(!RoundExecutor::is_transient_network_error(
+            "Stream retry budget exhausted after 10 attempts: timeout"
+        ));
+    }
+
+    #[test]
+    fn is_transient_error_does_not_misclassify_failed_after_without_attempts() {
+        // "failed after " without "attempts:" should NOT be treated as budget
+        // exhausted — it may be a legitimately retryable transient error.
+        assert!(RoundExecutor::is_transient_network_error(
+            "stream failed after connection reset"
+        ));
+        assert!(RoundExecutor::is_transient_network_error(
+            "request failed after timeout"
+        ));
     }
 }
