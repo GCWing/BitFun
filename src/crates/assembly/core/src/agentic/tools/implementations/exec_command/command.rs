@@ -29,9 +29,9 @@ use terminal_core::{
 };
 use tokio::sync::mpsc;
 
-const DEFAULT_MAX_OUTPUT_CHARS: u64 = 10_000;
 const REMOTE_SHELL_PROBE_TIMEOUT_MS: u64 = 3_000;
 const REMOTE_NON_TTY_INTERRUPT_GRACE_SECONDS: u64 = 2;
+const DEFAULT_TOOL_YIELD_TIME_MS: u64 = 30_000;
 const POWERSHELL_UTF8_OUTPUT_PREFIX: &str =
     "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8;\n";
 
@@ -615,13 +615,10 @@ exit "$__bitfun_status""#
                     "remote SSH manager is not initialized for ExecCommand".to_string(),
                 )
             })?;
-        let yield_time_ms = input.get("yield_time_ms").and_then(Value::as_u64);
-        let max_output_chars = input
-            .get("max_output_chars")
+        let yield_time_ms = input
+            .get("yield_time_ms")
             .and_then(Value::as_u64)
-            .unwrap_or(DEFAULT_MAX_OUTPUT_CHARS)
-            .try_into()
-            .unwrap_or(usize::MAX);
+            .unwrap_or(DEFAULT_TOOL_YIELD_TIME_MS);
         let shell = Self::resolve_remote_shell(&ssh_manager, &connection_id).await;
         let env_snapshot = remote_env_snapshot_for(
             ssh_manager.clone(),
@@ -663,8 +660,8 @@ exit "$__bitfun_status""#
             connection_id,
             command,
             tty,
-            yield_time_ms,
-            max_output_chars: Some(max_output_chars),
+            yield_time_ms: Some(yield_time_ms),
+            max_output_chars: None,
             lifecycle_tx: Self::start_remote_lifecycle_bridge(context, self.name()),
             output_capture_tx,
         };
@@ -820,11 +817,7 @@ Output:
                 },
                 "yield_time_ms": {
                     "type": "number",
-                    "description": "How long to wait for output before yielding."
-                },
-                "max_output_chars": {
-                    "type": "number",
-                    "description": "Maximum output characters to return. Defaults to 10000; excess output keeps head and tail."
+                    "description": "How long to wait for output before yielding. Defaults to 30000 ms."
                 }
             },
             "required": ["cmd"],
@@ -886,13 +879,10 @@ Output:
         let workdir = Self::resolve_workdir(input, context)?;
         let tty = input.get("tty").and_then(Value::as_bool).unwrap_or(false);
         let shell = resolve_local_exec_shell().await;
-        let yield_time_ms = input.get("yield_time_ms").and_then(Value::as_u64);
-        let max_output_chars = input
-            .get("max_output_chars")
+        let yield_time_ms = input
+            .get("yield_time_ms")
             .and_then(Value::as_u64)
-            .unwrap_or(DEFAULT_MAX_OUTPUT_CHARS)
-            .try_into()
-            .unwrap_or(usize::MAX);
+            .unwrap_or(DEFAULT_TOOL_YIELD_TIME_MS);
         let output_capture_tx = if let Some(capture_id) = context.tool_call_id.as_ref() {
             Some(
                 background_command_output_capture()
@@ -915,8 +905,8 @@ Output:
             cwd: workdir.clone(),
             env: Self::command_env(),
             tty,
-            yield_time_ms,
-            max_output_chars: Some(max_output_chars),
+            yield_time_ms: Some(yield_time_ms),
+            max_output_chars: None,
             lifecycle_tx: Self::start_local_lifecycle_bridge(context, self.name()),
             output_capture_tx,
         };

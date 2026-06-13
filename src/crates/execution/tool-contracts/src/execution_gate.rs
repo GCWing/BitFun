@@ -12,6 +12,11 @@ pub const TOOL_CALL_LOOP_THRESHOLD: usize = 3;
 /// Bounded per-session history window for loop detection.
 pub const TOOL_CALL_HISTORY_WINDOW: usize = 10;
 
+// WriteStdin is commonly used as a pure polling primitive for long-running
+// ExecCommand sessions, so repeated identical calls are a legitimate way to
+// wait for more output rather than evidence of a stuck tool loop.
+const TOOL_CALL_LOOP_EXEMPT_TOOL_NAMES: &[&str] = &["WriteStdin"];
+
 #[derive(Debug, Clone)]
 struct RecentToolCall {
     tool_name: String,
@@ -52,6 +57,7 @@ impl ToolCallLoopDecision {
 
 impl ToolCallLoopHistory {
     pub fn check_and_record(&mut self, tool_name: &str, arguments: &Value) -> ToolCallLoopDecision {
+        let is_exempt = TOOL_CALL_LOOP_EXEMPT_TOOL_NAMES.contains(&tool_name);
         let identical_priors = self
             .entries
             .iter()
@@ -59,7 +65,7 @@ impl ToolCallLoopHistory {
             .take(TOOL_CALL_LOOP_THRESHOLD)
             .take_while(|past| past.tool_name == tool_name && &past.arguments == arguments)
             .count();
-        let is_loop = identical_priors >= TOOL_CALL_LOOP_THRESHOLD;
+        let is_loop = !is_exempt && identical_priors >= TOOL_CALL_LOOP_THRESHOLD;
 
         self.entries.push_back(RecentToolCall {
             tool_name: tool_name.to_string(),

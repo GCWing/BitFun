@@ -928,6 +928,19 @@ fn tool_call_loop_history_blocks_fourth_identical_call_and_keeps_recovery_messag
 }
 
 #[test]
+fn tool_call_loop_history_exempts_write_stdin() {
+    let mut history = ToolCallLoopHistory::default();
+    let args = json!({ "session_id": 123, "chars": "", "append_enter": false });
+
+    for _ in 0..8 {
+        assert!(
+            history.check_and_record("WriteStdin", &args).is_allowed(),
+            "WriteStdin should stay exempt from identical-call loop blocking"
+        );
+    }
+}
+
+#[test]
 fn tool_execution_admission_gate_preserves_pipeline_rejection_order() {
     let mut restrictions = ToolRuntimeRestrictions::default();
     restrictions

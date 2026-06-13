@@ -1515,7 +1515,6 @@ pub async fn control_background_command(
         origin: ExecCommandControlOrigin::OutOfBand,
         remote,
         yield_time_ms: Some(250),
-        max_output_chars: Some(4_096),
     })
     .await
     .map(|response| {

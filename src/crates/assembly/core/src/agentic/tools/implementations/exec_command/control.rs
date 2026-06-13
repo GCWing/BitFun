@@ -14,8 +14,6 @@ use terminal_core::{
     LocalExecSessionCompletionStatus, TerminalError,
 };
 
-const DEFAULT_MAX_OUTPUT_CHARS: u64 = 10_000;
-
 // ExecControl termination semantics by execution surface:
 //
 // Local workspace:
@@ -77,7 +75,6 @@ pub struct ExecCommandControlRequest {
     pub origin: ExecCommandControlOrigin,
     pub remote: bool,
     pub yield_time_ms: Option<u64>,
-    pub max_output_chars: Option<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -112,7 +109,7 @@ pub async fn control_exec_command_session(
                 action: ExecControlTool::remote_action(request.action),
                 origin: ExecControlTool::remote_origin(request.origin),
                 yield_time_ms: request.yield_time_ms,
-                max_output_chars: request.max_output_chars,
+                max_output_chars: None,
             })
             .await
             .map_err(|error| match error {
@@ -143,7 +140,7 @@ pub async fn control_exec_command_session(
             action: ExecControlTool::local_action(request.action),
             origin: ExecControlTool::local_origin(request.origin),
             yield_time_ms: request.yield_time_ms,
-            max_output_chars: request.max_output_chars,
+            max_output_chars: None,
         })
         .await
         .map_err(|error| match error {
@@ -323,20 +320,12 @@ impl ExecControlTool {
             BitFunError::tool("action must be either 'interrupt' or 'kill'".to_string())
         })?;
         let yield_time_ms = input.get("yield_time_ms").and_then(Value::as_u64);
-        let max_output_chars = input
-            .get("max_output_chars")
-            .and_then(Value::as_u64)
-            .unwrap_or(DEFAULT_MAX_OUTPUT_CHARS)
-            .try_into()
-            .unwrap_or(usize::MAX);
-
         let response = match control_exec_command_session(ExecCommandControlRequest {
             session_id,
             action,
             origin: ExecCommandControlOrigin::ModelTool,
             remote: true,
             yield_time_ms,
-            max_output_chars: Some(max_output_chars),
         })
         .await
         {
@@ -406,11 +395,7 @@ Output is only what was produced during this tool call's wait window."#
                 },
                 "yield_time_ms": {
                     "type": "number",
-                    "description": "How long to wait for output after the control action before yielding."
-                },
-                "max_output_chars": {
-                    "type": "number",
-                    "description": "Maximum output characters to return. Defaults to 10000; excess output keeps head and tail."
+                    "description": "How long to wait for output after the control action before yielding. Defaults to 10000 ms."
                 }
             },
             "required": ["session_id", "action"],
@@ -479,20 +464,12 @@ Output is only what was produced during this tool call's wait window."#
             BitFunError::tool("action must be either 'interrupt' or 'kill'".to_string())
         })?;
         let yield_time_ms = input.get("yield_time_ms").and_then(Value::as_u64);
-        let max_output_chars = input
-            .get("max_output_chars")
-            .and_then(Value::as_u64)
-            .unwrap_or(DEFAULT_MAX_OUTPUT_CHARS)
-            .try_into()
-            .unwrap_or(usize::MAX);
-
         let response = match control_exec_command_session(ExecCommandControlRequest {
             session_id,
             action,
             origin: ExecCommandControlOrigin::ModelTool,
             remote: false,
             yield_time_ms,
-            max_output_chars: Some(max_output_chars),
         })
         .await
         {
@@ -574,7 +551,6 @@ mod tests {
             origin: ExecCommandControlOrigin::ModelTool,
             remote: false,
             yield_time_ms: Some(0),
-            max_output_chars: Some(1),
         })
         .await
         .expect_err("missing session should be structured");
