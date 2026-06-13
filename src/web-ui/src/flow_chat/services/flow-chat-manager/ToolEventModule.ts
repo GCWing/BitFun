@@ -637,9 +637,11 @@ export function handleToolExecutionProgress(
           tool_name === 'Bash' ||
           tool_name === 'ExecCommand' ||
           tool_name === 'WriteStdin' ||
+          tool_name === 'ExecControl' ||
           (toolItem as any).toolName === 'Bash' ||
           (toolItem as any).toolName === 'ExecCommand' ||
-          (toolItem as any).toolName === 'WriteStdin';
+          (toolItem as any).toolName === 'WriteStdin' ||
+          (toolItem as any).toolName === 'ExecControl';
         const shouldAppend = typeof progress_message === 'string' && (
           isTerminalLikeProgress
             ? progress_message.length > 0

@@ -580,7 +580,7 @@ mod tests {
                 .unwrap_or_else(|| panic!("{tool_name} stub should exist"));
             assert!(
                 stub.description.contains(&format!(
-                    "THIS TOOL IS COLLAPSED. You MUST call GetToolSpec({{\"tool_name\":\"{tool_name}\"}}) before first calling {tool_name}."
+                    "THIS IS A COLLAPSED TOOL. Before first use, call GetToolSpec({{\"tool_name\":\"{tool_name}\"}}) to load its schema."
                 )),
                 "collapsed stub must point to the explicit GetToolSpec unlock flow"
             );

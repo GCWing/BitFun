@@ -297,6 +297,17 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     primaryColor: '#10b981'
   },
 
+  'ExecControl': {
+    toolName: 'ExecControl',
+    displayName: 'Control Process',
+    icon: 'TERM',
+    requiresConfirmation: false,
+    resultDisplayType: 'detailed',
+    description: 'Interrupt or kill a running command process',
+    displayMode: 'standard',
+    primaryColor: '#ef4444'
+  },
+
   // MiniApp tool
   'InitMiniApp': {
     toolName: 'InitMiniApp',

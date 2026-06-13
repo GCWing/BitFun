@@ -22,7 +22,7 @@ const EXEC_OUTPUT_STREAMING_MAX_ROWS = 4;
 const EXEC_OUTPUT_EXPANDED_MAX_ROWS = 15;
 
 export interface ExecProcessCardModel {
-  kind: 'command' | 'stdin';
+  kind: 'command' | 'stdin' | 'control';
   actionLabel: string;
   primaryText: string;
   emptyText: string;

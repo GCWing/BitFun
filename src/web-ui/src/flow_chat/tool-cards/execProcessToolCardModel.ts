@@ -4,6 +4,7 @@ import type { ExecProcessCardModel } from './ExecProcessToolCardView';
 interface ParsedExecResult {
   output: string;
   status?: string;
+  action?: string;
   workdir?: string;
   sessionId?: number;
   requestedSessionId?: number;
@@ -54,6 +55,7 @@ export function parseExecProcessResult(raw: unknown): ParsedExecResult {
   return {
     output: stringField(record, 'output') ?? '',
     status: stringField(record, 'status'),
+    action: stringField(record, 'action'),
     workdir: stringField(record, 'workdir'),
     sessionId: numberField(record, 'session_id'),
     requestedSessionId: numberField(record, 'requested_session_id'),
@@ -128,6 +130,65 @@ export function buildWriteStdinCardModel(
       ? t('toolCards.execProcess.pollingOutput')
       : t('toolCards.execProcess.waitingForOutput'),
     noOutputText: t('toolCards.execProcess.noOutput'),
+    resultNoticeText,
+    resultOutput: result.output,
+    sessionId: displaySessionId,
+    exitCode: result.exitCode,
+    wallTimeSeconds: result.wallTimeSeconds,
+    remote: result.remote,
+  };
+}
+
+function inputSessionId(input: Record<string, unknown>): number | undefined {
+  const value = input.session_id;
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+
+  return undefined;
+}
+
+export function buildExecControlCardModel(
+  toolItem: FlowToolItem,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): ExecProcessCardModel {
+  const input = toolItem.toolCall?.input ?? {};
+  const result = parseExecProcessResult(toolItem.toolResult?.result);
+  const sessionId = inputSessionId(input);
+  const displaySessionId = sessionId ?? result.sessionId ?? result.requestedSessionId;
+  const action = typeof input.action === 'string'
+    ? input.action
+    : result.action;
+  const isInterrupt = action === 'interrupt';
+  const primaryText = isInterrupt
+    ? t('toolCards.execProcess.interruptSession', { id: displaySessionId ?? '?' })
+    : t('toolCards.execProcess.killSession', { id: displaySessionId ?? '?' });
+  const resultNoticeText = result.status === 'session_not_found'
+    ? t('toolCards.execProcess.sessionNotFound', {
+      id: displaySessionId ?? '?',
+    })
+    : undefined;
+
+  return {
+    kind: 'control',
+    actionLabel: isInterrupt
+      ? t('toolCards.execProcess.interruptProcess')
+      : t('toolCards.execProcess.killProcess'),
+    primaryText,
+    emptyText: primaryText,
+    copyText: primaryText,
+    copyDisabled: displaySessionId == null,
+    waitingText: isInterrupt
+      ? t('toolCards.execProcess.interruptingSession')
+      : t('toolCards.execProcess.killingSession'),
+    noOutputText: isInterrupt
+      ? t('toolCards.execProcess.interruptSentNoOutput')
+      : t('toolCards.execProcess.killSentNoOutput'),
     resultNoticeText,
     resultOutput: result.output,
     sessionId: displaySessionId,

@@ -43,6 +43,7 @@ import { CreatePlanDisplay } from './CreatePlanDisplay';
 import { TerminalToolCard } from './TerminalToolCard';
 import { ExecCommandToolCard } from './ExecCommandToolCard';
 import { WriteStdinToolCard } from './WriteStdinToolCard';
+import { ExecControlToolCard } from './ExecControlToolCard';
 import { TerminalControlDisplay } from './TerminalControlDisplay';
 import { InitMiniAppDisplay } from './MiniAppToolDisplay';
 import { GenerativeWidgetToolCard } from './GenerativeWidgetToolCard';
@@ -107,6 +108,7 @@ export const TOOL_CARD_COMPONENTS = {
   // Exec process tools
   'ExecCommand': ExecCommandToolCard,
   'WriteStdin': WriteStdinToolCard,
+  'ExecControl': ExecControlToolCard,
 
   // MiniApp tool
   'InitMiniApp': InitMiniAppDisplay,
