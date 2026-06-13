@@ -23,7 +23,6 @@ use crate::agentic::remote_file_delivery::TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY;
 use crate::agentic::round_preempt::RoundInjectionKind;
 use crate::agentic::session::{CompressionMode, ContextCompressor, SessionManager};
 use crate::agentic::skill_agent_snapshot::build_skill_agent_tool_listing_sections_from_snapshot;
-use crate::agentic::tools::framework::ToolExposure;
 use crate::agentic::tools::implementations::{SkillTool, TaskTool};
 use crate::agentic::tools::product_runtime::{
     collect_product_unlocked_collapsed_tools, GetToolSpecTool,
@@ -276,6 +275,8 @@ impl ExecutionEngine {
     ///
     /// System prompt and tool definitions are fixed per dialog turn and should not
     /// count against the auto-compression threshold the same way tool results do.
+    /// Keeping them fixed also preserves provider-side prefix/KV cache reuse;
+    /// changing tool definitions mid-turn turns every later round into a cache miss.
     fn estimate_auto_compression_pressure(
         messages: &[Message],
         tools: Option<&[ToolDefinition]>,
@@ -516,30 +517,6 @@ impl ExecutionEngine {
         ai_config
             .resolve_model_selection(trimmed)
             .unwrap_or_else(|| "auto".to_string())
-    }
-
-    /// Replace collapsed stub definitions with their full (expanded) variants
-    /// while preserving the original tool order and tool set.
-    ///
-    /// Tools missing from `expanded_definitions` (e.g. GetToolSpec when every
-    /// collapsed tool got unlocked) keep their original definition; extra tools
-    /// introduced by the re-resolve are ignored.
-    fn merge_unlocked_tool_definitions(
-        base_definitions: &[ToolDefinition],
-        expanded_definitions: Vec<ToolDefinition>,
-    ) -> Vec<ToolDefinition> {
-        let mut expanded_by_name: HashMap<String, ToolDefinition> = expanded_definitions
-            .into_iter()
-            .map(|definition| (definition.name.clone(), definition))
-            .collect();
-        base_definitions
-            .iter()
-            .map(|definition| {
-                expanded_by_name
-                    .remove(&definition.name)
-                    .unwrap_or_else(|| definition.clone())
-            })
-            .collect()
     }
 
     async fn build_tool_listing_sections(
@@ -1307,6 +1284,11 @@ impl ExecutionEngine {
                 RuntimeContextNeeds::from_tool_names(manifest.allowed_tool_names.iter())
             })
             .unwrap_or_default();
+        // Snapshot prompt-visible tool definitions once for this turn. Do not
+        // re-resolve or rewrite them after GetToolSpec unlocks a collapsed tool:
+        // the unlocked detail travels in tool results, while mutating the tool
+        // definitions would change the request prefix and trigger provider
+        // prefix/KV cache misses on subsequent rounds.
         let tool_definitions = tool_manifest.map(|manifest| manifest.tool_definitions);
 
         let prompt_context = Self::build_prompt_context(
@@ -1994,6 +1976,19 @@ impl ExecutionEngine {
                 RuntimeContextNeeds::from_tool_names(manifest.allowed_tool_names.iter())
             })
             .unwrap_or_default();
+        // We do not currently keep a session-level cache of resolved tool
+        // definitions; each turn re-resolves them from the current manifest.
+        // Expected changes therefore come from user-driven configuration or
+        // product-version changes, such as:
+        // - agent_type / mode changes
+        // - the user editing the enabled tool set for the current agent
+        // - MCP tool enablement / settings changes
+        // - a newer product build changing built-in tool definitions
+        //
+        // Outside those cases, tool definitions should remain byte-stable
+        // across the session. Avoid introducing extra turn-to-turn variation:
+        // it changes the request prefix and causes provider prefix/KV cache
+        // misses.
         let (available_tools, tool_definitions) = if let Some(manifest) = tool_manifest {
             (manifest.allowed_tool_names, Some(manifest.tool_definitions))
         } else {
@@ -2149,10 +2144,6 @@ impl ExecutionEngine {
                 msg.metadata.tokens = None;
             }
         }
-
-        // Per-turn cache of tool definitions re-resolved after GetToolSpec
-        // unlocks, keyed by the unlocked tool set of the round it was built for.
-        let mut unlocked_tool_definitions_cache: Option<(Vec<String>, Vec<ToolDefinition>)> = None;
 
         // Loop to execute model rounds
         loop {
@@ -2321,48 +2312,6 @@ impl ExecutionEngine {
             let unlocked_collapsed_tools =
                 collect_product_unlocked_collapsed_tools(&messages, &collapsed_tools);
 
-            // Once GetToolSpec has unlocked a collapsed tool, later rounds must
-            // declare its real input schema. The collapsed stub declares
-            // `properties: {}` with `additionalProperties: false`, so
-            // schema-faithful models/providers can only ever emit empty
-            // arguments for it, which makes the unlocked tool uncallable.
-            let round_tool_definitions = match (
-                &tool_definitions,
-                unlocked_collapsed_tools.is_empty(),
-            ) {
-                (Some(base_definitions), false) => match &unlocked_tool_definitions_cache {
-                    Some((cached_unlocked, cached_definitions))
-                        if *cached_unlocked == unlocked_collapsed_tools =>
-                    {
-                        Some(cached_definitions.clone())
-                    }
-                    _ => {
-                        let mut exposure_overrides = tool_policy.exposure_overrides.clone();
-                        for tool_name in &unlocked_collapsed_tools {
-                            exposure_overrides.insert(tool_name.clone(), ToolExposure::Expanded);
-                        }
-                        let unlocked_manifest = resolve_tool_manifest(
-                            &allowed_tools,
-                            &exposure_overrides,
-                            &tool_description_context,
-                        )
-                        .await;
-                        let merged = Self::merge_unlocked_tool_definitions(
-                            base_definitions,
-                            unlocked_manifest.tool_definitions,
-                        );
-                        debug!(
-                            "Expanded unlocked collapsed tool definitions for round: round_index={}, unlocked_tools={:?}",
-                            round_index, unlocked_collapsed_tools
-                        );
-                        unlocked_tool_definitions_cache =
-                            Some((unlocked_collapsed_tools.clone(), merged.clone()));
-                        Some(merged)
-                    }
-                },
-                _ => tool_definitions.clone(),
-            };
-
             let round_context = RoundContext {
                 session_id: context.session_id.clone(),
                 subagent_parent_info: context.subagent_parent_info.clone(),
@@ -2417,7 +2366,7 @@ impl ExecutionEngine {
                     ai_client.clone(),
                     round_context,
                     ai_messages,
-                    round_tool_definitions,
+                    tool_definitions.clone(),
                     Some(context_window),
                 )
                 .await?;
@@ -2996,66 +2945,6 @@ mod tests {
             enabled: true,
             ..Default::default()
         }
-    }
-
-    #[test]
-    fn merge_unlocked_tool_definitions_swaps_stub_and_preserves_order_and_set() {
-        let stub_schema = json!({
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {}
-        });
-        let full_schema = json!({
-            "type": "object",
-            "properties": { "query": { "type": "string" } },
-            "required": ["query"]
-        });
-        let base = vec![
-            ToolDefinition {
-                name: "Read".to_string(),
-                description: "Read a file".to_string(),
-                parameters: json!({ "type": "object" }),
-            },
-            ToolDefinition {
-                name: "WebSearch".to_string(),
-                description: "THIS TOOL IS COLLAPSED...".to_string(),
-                parameters: stub_schema,
-            },
-            ToolDefinition {
-                name: "GetToolSpec".to_string(),
-                description: "Unlock collapsed tools".to_string(),
-                parameters: json!({ "type": "object" }),
-            },
-        ];
-        // Re-resolved manifest: WebSearch expanded, GetToolSpec dropped
-        // (no collapsed tools remain), plus an unrelated extra tool.
-        let expanded = vec![
-            ToolDefinition {
-                name: "WebSearch".to_string(),
-                description: "Search the web".to_string(),
-                parameters: full_schema.clone(),
-            },
-            ToolDefinition {
-                name: "ExtraTool".to_string(),
-                description: "Should be ignored".to_string(),
-                parameters: json!({ "type": "object" }),
-            },
-        ];
-
-        let merged = ExecutionEngine::merge_unlocked_tool_definitions(&base, expanded);
-
-        assert_eq!(
-            merged
-                .iter()
-                .map(|definition| definition.name.as_str())
-                .collect::<Vec<_>>(),
-            vec!["Read", "WebSearch", "GetToolSpec"]
-        );
-        assert_eq!(merged[1].description, "Search the web");
-        assert_eq!(merged[1].parameters, full_schema);
-        // GetToolSpec keeps its original definition even though the
-        // re-resolved manifest no longer contains it.
-        assert_eq!(merged[2].description, "Unlock collapsed tools");
     }
 
     #[test]

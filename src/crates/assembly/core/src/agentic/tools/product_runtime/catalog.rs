@@ -585,7 +585,7 @@ mod tests {
                 "collapsed stub must point to the explicit GetToolSpec unlock flow"
             );
             assert_eq!(stub.parameters["type"], json!("object"));
-            assert_eq!(stub.parameters["additionalProperties"], json!(false));
+            assert_eq!(stub.parameters["additionalProperties"], json!(true));
             assert_eq!(stub.parameters["properties"], json!({}));
         }
     }

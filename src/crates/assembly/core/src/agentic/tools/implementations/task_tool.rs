@@ -467,8 +467,13 @@ impl Tool for TaskTool {
         Ok(self.render_description())
     }
 
-    async fn is_available_in_context(&self, context: Option<&ToolUseContext>) -> bool {
-        !Self::get_enabled_agents(context).await.is_empty()
+    async fn is_available_in_context(&self, _context: Option<&ToolUseContext>) -> bool {
+        // Keep Task prompt-visible even when no fresh subagents are currently
+        // available. Hiding it based on transient subagent availability makes
+        // the tool manifest drift across turns and causes provider prefix/KV
+        // cache misses. Task also still supports `fork_context=true` in that
+        // state, so removing it from the manifest would be behaviorally wrong.
+        true
     }
 
     fn short_description(&self) -> String {
@@ -1688,6 +1693,14 @@ mod tests {
             .message
             .as_deref()
             .is_some_and(|message| message.contains("subagent_type is required")));
+    }
+
+    #[tokio::test]
+    async fn task_tool_stays_available_without_enabled_subagents() {
+        assert!(
+            TaskTool::new().is_available_in_context(None).await,
+            "Task should remain prompt-visible even when no fresh subagents are currently available"
+        );
     }
 
     #[tokio::test]

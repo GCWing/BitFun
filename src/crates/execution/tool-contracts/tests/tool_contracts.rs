@@ -1256,7 +1256,7 @@ fn collapsed_tool_stub_definition_preserves_prompt_visible_guardrail() {
         stub.parameters,
         json!({
             "type": "object",
-            "additionalProperties": false,
+            "additionalProperties": true,
             "properties": {}
         })
     );
@@ -2157,7 +2157,7 @@ async fn contextual_manifest_resolver_preserves_runtime_visible_manifest_contrac
     assert!(web_fetch
         .description
         .contains("THIS TOOL IS COLLAPSED. You MUST call GetToolSpec({\"tool_name\":\"WebFetch\"}) before first calling WebFetch."));
-    assert_eq!(web_fetch.parameters["additionalProperties"], false);
+    assert_eq!(web_fetch.parameters["additionalProperties"], true);
     assert_eq!(web_fetch.parameters["properties"], json!({}));
 }
 

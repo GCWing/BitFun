@@ -306,17 +306,25 @@ pub fn build_collapsed_tool_stub_definition(
     tool_name: &str,
     short_description: &str,
 ) -> ToolManifestDefinition {
+    // Keep the prompt-visible stub stable for the life of the conversation.
+    // GetToolSpec returns the full schema out-of-band; replacing this stub with
+    // a different tool definition mid-session changes the request prefix and
+    // causes provider-side prefix/KV cache misses on later rounds.
+    // We still need a stub definition in the request because some providers
+    // constrain model tool calls to the exact tool list attached to that
+    // request. Without a prompt-visible stub entry, the model may be unable to
+    // call the collapsed tool at all, even after GetToolSpec has described it.
     ToolManifestDefinition::new(
         tool_name,
         format!(
-            "THIS TOOL IS COLLAPSED. You MUST call GetToolSpec({{\"tool_name\":\"{}\"}}) before first calling {}. Any direct call will fail validation. Summary: {}",
+            "THIS IS A COLLAPSED TOOL. Before first use, call GetToolSpec({{\"tool_name\":\"{}\"}}) to load its schema. After that, you can call {} directly. Any direct call before loading will fail validation.\nSummary: {}",
             tool_name,
             tool_name,
             short_description,
         ),
         serde_json::json!({
             "type": "object",
-            "additionalProperties": false,
+            "additionalProperties": true,
             "properties": {}
         }),
     )
@@ -1091,6 +1099,10 @@ where
         });
     }
 
+    // This prompt-visible tool-definition list is part of the request prefix.
+    // Once a turn starts, enrich collapsed tools through GetToolSpec results
+    // instead of mutating this list, or later rounds will lose prefix-cache
+    // reuse even if the actual tool set is unchanged.
     let tool_definitions = build_prompt_visible_tool_manifest_definitions(&manifest_items);
 
     ContextualToolManifest {
