@@ -396,11 +396,9 @@ export function generateToolEventKey(data: ToolEventData): { key: string; strate
   }
 
   if (eventType === 'ParamsPartial') {
-    const toolName = (toolEvent as any).tool_name || '';
-    const isWriteLike = ['write', 'write_notebook', 'file_write', 'Write'].includes(toolName);
     return {
       key: `tool:params:${sessionId}:${toolUseId}`,
-      strategy: isWriteLike ? 'replace' : 'accumulate'
+      strategy: 'accumulate'
     };
   }
   if (eventType === 'Progress') {

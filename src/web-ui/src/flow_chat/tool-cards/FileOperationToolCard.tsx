@@ -442,6 +442,10 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   }, [sessionId, toolCall?.id, status, isFailed]);
 
   const isLoading = status === 'preparing' || status === 'streaming' || status === 'running';
+  const shouldUseExpandedDiffPreviewHeight =
+    status === 'completed' &&
+    isContentExpanded &&
+    previousStatusRef.current === status;
   const previewVariant = useMemo(() => {
     if (toolItem.toolName === 'Edit') {
       if (status !== 'completed' && newStringContent) {
@@ -835,7 +839,7 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   const renderExpandedContent = () => {
     if (isFailed) return null;
 
-    const previewMaxHeight = status === 'completed'
+    const previewMaxHeight = shouldUseExpandedDiffPreviewHeight
       ? FILE_OPERATION_DIFF_MAX_HEIGHT
       : FILE_OPERATION_STREAMING_MAX_HEIGHT;
 

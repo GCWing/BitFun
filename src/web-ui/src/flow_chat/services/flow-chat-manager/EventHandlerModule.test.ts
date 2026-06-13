@@ -62,6 +62,38 @@ describe('resolveDialogTurnDisplayContent', () => {
   });
 });
 
+describe('mergeParamsPartialEventData', () => {
+  it('appends Write argument deltas within a batch', () => {
+    const merged = __test_only__.mergeParamsPartialEventData(
+      {
+        sessionId: 'session-1',
+        turnId: 'turn-1',
+        roundId: 'round-1',
+        toolEvent: {
+          event_type: 'ParamsPartial',
+          tool_id: 'tool-1',
+          tool_name: 'Write',
+          params: '{"file_path":"src/app.ts","content":"',
+        },
+      },
+      {
+        sessionId: 'session-1',
+        turnId: 'turn-1',
+        roundId: 'round-1',
+        toolEvent: {
+          event_type: 'ParamsPartial',
+          tool_id: 'tool-1',
+          tool_name: 'Write',
+          params: 'hello',
+        },
+      },
+    );
+
+    expect((merged.toolEvent as any).params).toBe('{"file_path":"src/app.ts","content":"hello');
+  });
+
+});
+
 describe('shouldProcessEvent', () => {
   const mockSessionId = 'test-session';
   const mockTurnId = 'test-turn';

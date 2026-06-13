@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   createDiffEditorTab: vi.fn(),
   openFile: vi.fn(),
   codePreviewProps: [] as Array<Record<string, unknown>>,
+  inlineDiffPreviewProps: [] as Array<Record<string, unknown>>,
   getOperationDiff: vi.fn(async () => ({
     originalContent: '',
     modifiedContent: '',
@@ -79,7 +80,10 @@ vi.mock('../components/CodePreview', () => ({
 }));
 
 vi.mock('../components/InlineDiffPreview', () => ({
-  InlineDiffPreview: ({ modifiedContent }: { modifiedContent: string }) => <pre>{modifiedContent}</pre>,
+  InlineDiffPreview: (props: Record<string, unknown>) => {
+    mocks.inlineDiffPreviewProps.push(props);
+    return <pre>{String(props.modifiedContent ?? '')}</pre>;
+  },
 }));
 
 vi.mock('../../shared/utils/tabUtils', () => ({
@@ -140,6 +144,7 @@ describe('FileOperationToolCard', () => {
     mocks.createDiffEditorTab.mockReset();
     mocks.openFile.mockReset();
     mocks.codePreviewProps = [];
+    mocks.inlineDiffPreviewProps = [];
     mocks.useGitState.mockClear();
     mocks.useGitState.mockReturnValue({
       isRepository: false,
@@ -738,5 +743,125 @@ describe('FileOperationToolCard', () => {
       isStreaming: true,
       autoScrollToBottom: false,
     });
+  });
+
+  it('keeps completed write preview compact while auto-collapsing from streaming', async () => {
+    const config: ToolCardConfig = {
+      toolName: 'Write',
+      displayName: 'Write',
+      icon: 'WRITE',
+      requiresConfirmation: false,
+      resultDisplayType: 'detailed',
+      description: 'Write a file',
+      displayMode: 'standard',
+    };
+    const streamingToolItem: FlowToolItem = {
+      id: 'tool-1',
+      type: 'tool',
+      toolName: 'Write',
+      status: 'streaming',
+      isParamsStreaming: true,
+      toolCall: {
+        id: 'call-1',
+        name: 'Write',
+        input: {
+          file_path: 'src/generated.ts',
+          content: 'line 1\nline 2\nline 3\nline 4\nline 5\nline 6',
+        },
+      },
+      partialParams: {
+        file_path: 'src/generated.ts',
+        content: 'line 1\nline 2\nline 3\nline 4\nline 5\nline 6',
+      },
+    } as FlowToolItem;
+    const completedToolItem: FlowToolItem = {
+      ...streamingToolItem,
+      status: 'completed',
+      isParamsStreaming: false,
+      toolResult: {
+        success: true,
+        result: {
+          file_path: 'src/generated.ts',
+        },
+      },
+    } as FlowToolItem;
+
+    await act(async () => {
+      root.render(
+        <FileOperationToolCard
+          toolItem={streamingToolItem}
+          config={config}
+          sessionId="session-1"
+        />
+      );
+    });
+
+    mocks.inlineDiffPreviewProps = [];
+
+    await act(async () => {
+      root.render(
+        <FileOperationToolCard
+          toolItem={completedToolItem}
+          config={config}
+          sessionId="session-1"
+        />
+      );
+    });
+
+    expect(mocks.inlineDiffPreviewProps.length).toBeGreaterThan(0);
+    expect(mocks.inlineDiffPreviewProps.map(props => props.maxHeight)).not.toContain(330);
+    expect(mocks.inlineDiffPreviewProps.map(props => props.maxHeight)).toContain(88);
+  });
+
+  it('uses the larger diff preview height after a completed write card is manually expanded', async () => {
+    const toolItem: FlowToolItem = {
+      id: 'tool-1',
+      type: 'tool',
+      toolName: 'Write',
+      status: 'completed',
+      isParamsStreaming: false,
+      toolCall: {
+        id: 'call-1',
+        name: 'Write',
+        input: {
+          file_path: 'src/generated.ts',
+          content: 'line 1\nline 2\nline 3\nline 4\nline 5\nline 6',
+        },
+      },
+      toolResult: {
+        success: true,
+        result: {
+          file_path: 'src/generated.ts',
+        },
+      },
+    } as FlowToolItem;
+    const config: ToolCardConfig = {
+      toolName: 'Write',
+      displayName: 'Write',
+      icon: 'WRITE',
+      requiresConfirmation: false,
+      resultDisplayType: 'detailed',
+      description: 'Write a file',
+      displayMode: 'standard',
+    };
+
+    await act(async () => {
+      root.render(
+        <FileOperationToolCard
+          toolItem={toolItem}
+          config={config}
+          sessionId="session-1"
+        />
+      );
+    });
+
+    mocks.inlineDiffPreviewProps = [];
+
+    const card = container.querySelector('.base-tool-card') as HTMLDivElement | null;
+    await act(async () => {
+      card?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(mocks.inlineDiffPreviewProps.map(props => props.maxHeight)).toContain(330);
   });
 });

@@ -199,8 +199,7 @@ function applyParamsPartial(
     if (!incomingParams) {
       return;
     }
-    const isWriteFullParamsSnapshot = isWriteTool && incomingParams.trimStart().startsWith('{');
-    const newBuffer = isWriteFullParamsSnapshot ? incomingParams : prevBuffer + incomingParams;
+    const newBuffer = prevBuffer + incomingParams;
     
     let parsedParams: Record<string, any> = {};
     try {

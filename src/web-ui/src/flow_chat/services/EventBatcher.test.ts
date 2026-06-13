@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { setIncludeSensitiveDiagnostics } from '@/shared/utils/logger';
-import { getBatchedEventsLogPayload, summarizeBatchedEventsForLog, type BatchedEvent } from './EventBatcher';
+import {
+  generateToolEventKey,
+  getBatchedEventsLogPayload,
+  summarizeBatchedEventsForLog,
+  type BatchedEvent,
+  type ToolEventData,
+} from './EventBatcher';
 
 describe('summarizeBatchedEventsForLog', () => {
   afterEach(() => {
@@ -63,5 +69,26 @@ describe('summarizeBatchedEventsForLog', () => {
     });
     expect(summaryText).not.toContain('very sensitive content');
     expect(summaryText).not.toContain('src/secret.ts');
+  });
+});
+
+describe('generateToolEventKey', () => {
+  it('accumulates Write params so argument deltas survive batching', () => {
+    const keyInfo = generateToolEventKey({
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      roundId: 'round-1',
+      toolEvent: {
+        event_type: 'ParamsPartial',
+        tool_id: 'tool-1',
+        tool_name: 'Write',
+        params: '{"file_path":"src/app.ts"',
+      },
+    } satisfies ToolEventData);
+
+    expect(keyInfo).toEqual({
+      key: 'tool:params:session-1:tool-1',
+      strategy: 'accumulate',
+    });
   });
 });

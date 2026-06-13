@@ -48,7 +48,7 @@ import {
 const log = createLogger('FlowChatManager');
 
 export class FlowChatManager {
-  private static instance: FlowChatManager;
+  private static instance: FlowChatManager | null = null;
   private context: FlowChatContext;
   private agentService: AgentService;
   private eventListenerInitialized = false;
@@ -56,6 +56,7 @@ export class FlowChatManager {
   private eventListenerCleanup: (() => void) | null = null;
   private initializationRequests = new Map<string, Promise<boolean>>();
   private latestInitializationRequestKey: string | null = null;
+  private disposed = false;
 
   private constructor() {
     this.context = {
@@ -96,12 +97,22 @@ export class FlowChatManager {
     return FlowChatManager.instance;
   }
 
+  public static disposeInstance(): void {
+    FlowChatManager.instance?.destroy();
+    FlowChatManager.instance = null;
+  }
+
   async initialize(
     workspacePath: string,
     preferredMode?: string,
     remoteConnectionId?: string,
     remoteSshHost?: string
   ): Promise<boolean> {
+    if (this.disposed) {
+      log.debug('Ignoring initialize call on disposed FlowChatManager', { workspacePath });
+      return false;
+    }
+
     const requestKey = FlowChatManager.createInitializationRequestKey(
       workspacePath,
       preferredMode,
@@ -153,6 +164,9 @@ export class FlowChatManager {
   ): Promise<boolean> {
     try {
       await this.initializeEventListeners();
+      if (this.disposed) {
+        return false;
+      }
 
       // Register callback to persist unread completion changes to backend
       this.context.flowChatStore.registerPersistUnreadCompletionCallback(
@@ -171,6 +185,9 @@ export class FlowChatManager {
         remoteSshHost,
         'flow_chat_manager'
       );
+      if (this.disposed) {
+        return false;
+      }
 
       const sessionMatchesWorkspace = (session: {
         workspacePath?: string;
@@ -207,6 +224,9 @@ export class FlowChatManager {
             remoteSshHost,
             'flow_chat_manager_preferred_mode'
           );
+          if (this.disposed) {
+            return false;
+          }
           state = this.context.flowChatStore.getState();
           workspaceSessions = Array.from(state.sessions.values()).filter(sessionMatchesWorkspace);
           if (workspaceSessions.some(session => session.mode === preferredMode) || !nextPage.hasMore) {
@@ -251,6 +271,9 @@ export class FlowChatManager {
             latestSession.remoteSshHost,
             { deferFullHistoryUntilActive: true },
           );
+          if (this.disposed) {
+            return false;
+          }
         }
 
         if (!isCurrentInitializationRequest()) {
@@ -289,6 +312,9 @@ export class FlowChatManager {
   }
 
   private async initializeEventListeners(): Promise<void> {
+    if (this.disposed) {
+      return;
+    }
     if (this.eventListenerInitialized) {
       return;
     }
@@ -297,11 +323,17 @@ export class FlowChatManager {
     }
 
     this.eventListenerInitializationPromise = (async () => {
-      this.eventListenerCleanup = await initializeEventListeners(
+      const cleanup = await initializeEventListeners(
         this.context,
         (sessionId, turnId, result) => this.handleTodoWriteResult(sessionId, turnId, result)
       );
 
+      if (this.disposed) {
+        cleanup();
+        return;
+      }
+
+      this.eventListenerCleanup = cleanup;
       this.eventListenerInitialized = true;
     })();
 
@@ -321,7 +353,24 @@ export class FlowChatManager {
     this.eventListenerInitializationPromise = null;
   }
 
+  public destroy(): void {
+    if (this.disposed) {
+      return;
+    }
+
+    this.context.eventBatcher.flushNow();
+    this.disposed = true;
+    this.initializationRequests.clear();
+    this.latestInitializationRequestKey = null;
+    this.cleanupEventListeners();
+    this.context.eventBatcher.destroy();
+  }
+
   private processBatchedEvents(events: Array<{ key: string; payload: any }>): void {
+    if (this.disposed) {
+      return;
+    }
+
     processBatchedEvents(
       this.context,
       events,
@@ -680,5 +729,12 @@ export class FlowChatManager {
     }
   }
 }
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    FlowChatManager.disposeInstance();
+  });
+}
+
 export const flowChatManager = FlowChatManager.getInstance();
 export default flowChatManager;

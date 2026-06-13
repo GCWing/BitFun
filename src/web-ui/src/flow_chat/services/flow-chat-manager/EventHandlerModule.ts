@@ -123,8 +123,29 @@ function resolveDialogTurnDisplayContent(
   return resolveThreadGoalUserMessageDisplay(base, metadata);
 }
 
+function mergeParamsPartialEventData(
+  existing: ToolEventData,
+  incoming: ToolEventData,
+): ToolEventData {
+  const existingToolEvent = existing.toolEvent as ParamsPartialToolEvent;
+  const incomingToolEvent = incoming.toolEvent as ParamsPartialToolEvent;
+  const existingParams = normalizeParamsPartialFragment(existingToolEvent.params);
+  const incomingParams = normalizeParamsPartialFragment(incomingToolEvent.params);
+
+  return {
+    ...existing,
+    ...incoming,
+    toolEvent: {
+      ...existingToolEvent,
+      ...incomingToolEvent,
+      params: existingParams + incomingParams,
+    },
+  };
+}
+
 export const __test_only__ = {
   resolveDialogTurnDisplayContent,
+  mergeParamsPartialEventData,
 };
 
 function shouldMarkUnreadCompletion(sessionId: string): boolean {
@@ -1619,15 +1640,7 @@ function handleToolEvent(
         key,
         eventData,
         'accumulate',
-        (existing, incoming) => ({
-          ...existing,
-          toolEvent: {
-            ...(existing.toolEvent as ParamsPartialToolEvent),
-            params:
-              normalizeParamsPartialFragment((existing.toolEvent as ParamsPartialToolEvent).params) +
-              normalizeParamsPartialFragment((incoming.toolEvent as ParamsPartialToolEvent).params)
-          }
-        })
+        mergeParamsPartialEventData,
       );
     } else {
       context.eventBatcher.add(key, eventData, 'replace');
