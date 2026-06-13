@@ -1,0 +1,1807 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Request Trace Usage Dashboard</title>
+  <style>
+    :root {
+      --bg: #f5efe2;
+      --panel: rgba(255, 251, 243, 0.92);
+      --panel-strong: #fffaf0;
+      --line: rgba(94, 69, 45, 0.12);
+      --text: #2d241c;
+      --muted: #7a6858;
+      --input: #f8f2e7;
+      --accent-prompt: #cc5a2c;
+      --accent-completion: #0d7c66;
+      --accent-cache-hit: #3468c0;
+      --accent-cache-miss: #8b5cf6;
+      --accent-cache-write: #b7791f;
+      --shadow: 0 22px 50px rgba(64, 46, 27, 0.12);
+      --radius: 22px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(204, 90, 44, 0.16), transparent 30%),
+        radial-gradient(circle at top right, rgba(52, 104, 192, 0.16), transparent 28%),
+        linear-gradient(180deg, #f6efe3 0%, #efe6d4 100%);
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(94, 69, 45, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(94, 69, 45, 0.03) 1px, transparent 1px);
+      background-size: 28px 28px;
+      pointer-events: none;
+      mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.8), transparent 92%);
+    }
+
+    main {
+      width: min(1420px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 32px 0 40px;
+    }
+
+    .hero,
+    .panel {
+      position: relative;
+      background: var(--panel);
+      border: 1px solid rgba(255, 255, 255, 0.7);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(12px);
+    }
+
+    .hero {
+      overflow: hidden;
+      padding: 32px;
+      margin-bottom: 20px;
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      right: -80px;
+      top: -100px;
+      width: 280px;
+      height: 280px;
+      background: radial-gradient(circle, rgba(13, 124, 102, 0.2), transparent 70%);
+      pointer-events: none;
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 13px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(30px, 5.6vw, 54px);
+      line-height: 1.02;
+      letter-spacing: -0.04em;
+    }
+
+    .hero p {
+      max-width: 860px;
+      margin: 14px 0 0;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.7;
+    }
+
+    .hero code,
+    .section-note code,
+    .chart-hint code,
+    th code,
+    td code {
+      font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+      background: rgba(45, 36, 28, 0.06);
+      padding: 2px 6px;
+      border-radius: 8px;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 22px;
+    }
+
+    .button,
+    button,
+    select,
+    input {
+      font: inherit;
+    }
+
+    .button,
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 12px 18px;
+      color: white;
+      cursor: pointer;
+      background: linear-gradient(135deg, #2d241c, #5a4735);
+      box-shadow: 0 10px 22px rgba(45, 36, 28, 0.18);
+      transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+    }
+
+    .button:hover,
+    button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 14px 28px rgba(45, 36, 28, 0.22);
+    }
+
+    .button.secondary,
+    button.secondary {
+      background: white;
+      color: var(--text);
+      border: 1px solid rgba(94, 69, 45, 0.14);
+      box-shadow: none;
+    }
+
+    .button input[type="file"] {
+      display: none;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.7);
+      color: var(--muted);
+      border: 1px solid rgba(94, 69, 45, 0.08);
+    }
+
+    .status strong {
+      color: var(--text);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 330px minmax(0, 1fr);
+      gap: 20px;
+    }
+
+    .panel {
+      padding: 20px;
+    }
+
+    .panel h2,
+    .panel h3 {
+      margin: 0;
+      font-size: 18px;
+    }
+
+    .section-note {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .controls {
+      display: grid;
+      gap: 14px;
+    }
+
+    .control-group {
+      padding: 14px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.58);
+      border: 1px solid rgba(94, 69, 45, 0.08);
+    }
+
+    .control-group label {
+      display: block;
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .control-group select,
+    .control-group input[type="number"],
+    .control-group input[type="range"] {
+      width: 100%;
+      border-radius: 14px;
+      border: 1px solid rgba(94, 69, 45, 0.12);
+      background: var(--input);
+      color: var(--text);
+      padding: 10px 12px;
+    }
+
+    .range-grid,
+    .mini-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .checkbox-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .checkbox-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 14px;
+    }
+
+    .checkbox-item input {
+      width: auto;
+      accent-color: var(--text);
+    }
+
+    .swatch {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      margin-right: 8px;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .summary-card {
+      padding: 16px 18px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.7);
+      border: 1px solid rgba(94, 69, 45, 0.08);
+    }
+
+    .summary-card span {
+      display: block;
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+
+    .summary-card strong {
+      font-size: 28px;
+      line-height: 1;
+      letter-spacing: -0.04em;
+    }
+
+    .chart-shell {
+      position: relative;
+      border-radius: 24px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(253, 248, 239, 0.92));
+      border: 1px solid rgba(94, 69, 45, 0.08);
+      padding: 18px 18px 12px;
+      overflow: hidden;
+    }
+
+    .chart-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid rgba(94, 69, 45, 0.08);
+    }
+
+    .chart-wrap {
+      position: relative;
+      width: 100%;
+      height: 540px;
+      cursor: crosshair;
+      user-select: none;
+    }
+
+    svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .chart-tooltip {
+      position: absolute;
+      min-width: 240px;
+      max-width: 360px;
+      padding: 12px 14px;
+      border-radius: 16px;
+      background: rgba(45, 36, 28, 0.92);
+      color: #fff7ea;
+      box-shadow: 0 20px 40px rgba(45, 36, 28, 0.28);
+      pointer-events: none;
+      opacity: 0;
+      transform: translate(-50%, -110%);
+      transition: opacity 120ms ease;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .chart-tooltip strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 14px;
+    }
+
+    .chart-hint {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .panel-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .pagination {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(94, 69, 45, 0.08);
+    }
+
+    .pagination-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .pagination button {
+      padding: 8px 14px;
+      box-shadow: none;
+    }
+
+    .details-grid {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 20px;
+      margin-top: 20px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      padding: 10px 8px;
+      border-bottom: 1px solid rgba(94, 69, 45, 0.08);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .empty {
+      display: grid;
+      place-items: center;
+      min-height: 320px;
+      border: 1px dashed rgba(94, 69, 45, 0.16);
+      border-radius: 20px;
+      color: var(--muted);
+      text-align: center;
+      padding: 24px;
+      background: rgba(255, 255, 255, 0.56);
+    }
+
+    .subtle {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 1200px) {
+      .summary-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 1080px) {
+      .grid,
+      .details-grid,
+      .summary-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 720px) {
+      main {
+        width: min(100% - 18px, 100%);
+        padding-top: 18px;
+      }
+
+      .hero,
+      .panel {
+        border-radius: 20px;
+      }
+
+      .hero {
+        padding: 22px;
+      }
+
+      .chart-wrap {
+        height: 430px;
+      }
+
+      .range-grid,
+      .mini-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <p class="eyebrow">Request Trace Explorer</p>
+      <h1>把每次请求的 token 走势摊开看</h1>
+      <p>
+        这个页面会优先读取当前目录的 <code>usage-summary.csv</code>，也支持手动导入 CSV。
+        它围绕 request trace 的导出字段，重点观察
+        <code>prompt_tokens</code>、<code>completion_tokens</code>、<code>cache_hit_tokens</code>、
+        <code>cache_miss_tokens</code> 和 <code>cache_write_tokens</code> 的趋势、峰值和覆盖情况。
+      </p>
+      <div class="hero-actions">
+        <label class="button secondary">
+          选择 CSV 文件
+          <input id="fileInput" type="file" accept=".csv,text/csv">
+        </label>
+        <button id="reloadButton" class="secondary" type="button">重新读取当前目录 CSV</button>
+        <div class="status" id="loadStatus">
+          <strong>等待数据</strong>
+          <span>优先尝试 <code>usage-summary.csv</code>，失败后可手动导入</span>
+        </div>
+      </div>
+    </section>
+
+    <div class="grid">
+      <aside class="panel">
+        <h2>过滤与视图</h2>
+        <p class="section-note">
+          默认按 <code>sequence</code> 绘制请求顺序。你可以切到时间轴、只看某个 model，
+          或只看 <code>usage</code> 有覆盖的请求段。
+        </p>
+        <div class="controls">
+          <div class="control-group">
+            <label for="providerSelect">Provider</label>
+            <select id="providerSelect"></select>
+          </div>
+          <div class="control-group">
+            <label for="modelSelect">Model</label>
+            <select id="modelSelect"></select>
+          </div>
+          <div class="control-group">
+            <label for="captureModeSelect">Capture Mode</label>
+            <select id="captureModeSelect"></select>
+          </div>
+          <div class="control-group">
+            <label for="responseKindSelect">Response Kind</label>
+            <select id="responseKindSelect"></select>
+          </div>
+          <div class="control-group">
+            <label for="xAxisSelect">X 轴</label>
+            <select id="xAxisSelect">
+              <option value="sequence">sequence</option>
+              <option value="recorded_at">recorded_at</option>
+            </select>
+          </div>
+          <div class="control-group">
+            <label for="sortSelect">请求列表排序</label>
+            <select id="sortSelect">
+              <option value="peak_metric_desc" selected>按峰值指标降序</option>
+              <option value="sequence">按 sequence</option>
+              <option value="recorded_at">按 recorded_at</option>
+            </select>
+          </div>
+          <div class="control-group">
+            <label for="smoothRange">平滑窗口 <span id="smoothLabel">1</span></label>
+            <input id="smoothRange" type="range" min="1" max="50" step="1" value="1">
+          </div>
+          <div class="control-group">
+            <label>Sequence 范围</label>
+            <div class="range-grid">
+              <input id="rangeStart" type="number" value="0" min="0">
+              <input id="rangeEnd" type="number" value="0" min="0">
+            </div>
+          </div>
+          <div class="control-group">
+            <label>覆盖过滤</label>
+            <div class="checkbox-list">
+              <label class="checkbox-item">
+                <span>仅显示有 usage 的请求</span>
+                <input id="usageOnlyToggle" type="checkbox">
+              </label>
+              <label class="checkbox-item">
+                <span>仅显示有 cache hit 数据</span>
+                <input id="cacheReportedOnlyToggle" type="checkbox">
+              </label>
+            </div>
+          </div>
+          <div class="control-group">
+            <label>显示曲线</label>
+            <div class="checkbox-list">
+              <label class="checkbox-item">
+                <span><i class="swatch" style="background: var(--accent-prompt)"></i>prompt_tokens</span>
+                <input id="togglePrompt" type="checkbox" checked>
+              </label>
+              <label class="checkbox-item">
+                <span><i class="swatch" style="background: var(--accent-completion)"></i>completion_tokens</span>
+                <input id="toggleCompletion" type="checkbox" checked>
+              </label>
+              <label class="checkbox-item">
+                <span><i class="swatch" style="background: var(--accent-cache-hit)"></i>cache_hit_tokens</span>
+                <input id="toggleCacheHit" type="checkbox" checked>
+              </label>
+              <label class="checkbox-item">
+                <span><i class="swatch" style="background: var(--accent-cache-miss)"></i>cache_miss_tokens</span>
+                <input id="toggleCacheMiss" type="checkbox" checked>
+              </label>
+              <label class="checkbox-item">
+                <span><i class="swatch" style="background: var(--accent-cache-write)"></i>cache_write_tokens</span>
+                <input id="toggleCacheWrite" type="checkbox">
+              </label>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <section>
+        <div class="summary-grid">
+          <div class="summary-card">
+            <span>请求数</span>
+            <strong id="summaryCount">-</strong>
+          </div>
+          <div class="summary-card">
+            <span>usage 覆盖</span>
+            <strong id="summaryCoverage">-</strong>
+          </div>
+          <div class="summary-card">
+            <span>Prompt 总量</span>
+            <strong id="summaryPrompt">-</strong>
+          </div>
+          <div class="summary-card">
+            <span>Completion 总量</span>
+            <strong id="summaryCompletion">-</strong>
+          </div>
+          <div class="summary-card">
+            <span>Cache Hit 总量</span>
+            <strong id="summaryCacheHit">-</strong>
+          </div>
+          <div class="summary-card">
+            <span>Cache Miss 总量</span>
+            <strong id="summaryCacheMiss">-</strong>
+          </div>
+        </div>
+
+        <div class="panel chart-shell">
+          <div class="chart-meta">
+            <div>
+              <h3>Request Token Curves</h3>
+              <p class="section-note" id="chartSubtitle">等待加载数据…</p>
+            </div>
+            <div class="legend">
+              <span class="legend-item"><i class="swatch" style="background: var(--accent-prompt)"></i>Prompt</span>
+              <span class="legend-item"><i class="swatch" style="background: var(--accent-completion)"></i>Completion</span>
+              <span class="legend-item"><i class="swatch" style="background: var(--accent-cache-hit)"></i>Cache Hit</span>
+              <span class="legend-item"><i class="swatch" style="background: var(--accent-cache-miss)"></i>Cache Miss</span>
+              <span class="legend-item"><i class="swatch" style="background: var(--accent-cache-write)"></i>Cache Write</span>
+              <button id="resetViewportButton" class="secondary" type="button">重置视窗</button>
+            </div>
+          </div>
+
+          <div id="chartEmpty" class="empty">
+            <div>
+              <strong>还没有可视化数据</strong>
+              <p class="subtle">
+                如果你是直接双击打开页面，浏览器大概率不能直接 <code>fetch</code> 本地文件。
+                这时点“选择 CSV 文件”导入同目录的 <code>usage-summary.csv</code> 就可以。
+              </p>
+            </div>
+          </div>
+
+          <div id="chartArea" class="chart-wrap" hidden>
+            <svg id="chartSvg" viewBox="0 0 1000 540" preserveAspectRatio="none" aria-label="request trace usage chart"></svg>
+            <div id="chartTooltip" class="chart-tooltip"></div>
+          </div>
+          <p class="chart-hint">
+            鼠标滚轮缩放 X 轴，按住左键拖动平移，双击图表重置当前视窗。
+            <code>cache_miss_tokens</code> 只有在 CSV 明确给出或能由 prompt/cache_hit 推导时才会显示。
+          </p>
+        </div>
+
+        <div class="details-grid">
+          <div class="panel">
+            <div class="chart-meta">
+              <div>
+                <h3 id="peakPanelTitle">请求列表</h3>
+                <p class="section-note" id="peakPanelNote">
+                  默认按 <code>cache_miss_tokens</code> 排序，方便快速定位没有吃到缓存的请求段。
+                </p>
+              </div>
+              <div class="panel-toolbar">
+                <select id="peakMetricSelect">
+                  <option value="cache_miss_tokens" selected>Cache Miss</option>
+                  <option value="prompt_tokens">Prompt</option>
+                  <option value="completion_tokens">Completion</option>
+                  <option value="cache_hit_tokens">Cache Hit</option>
+                  <option value="cache_write_tokens">Cache Write</option>
+                  <option value="total_tokens">Total</option>
+                </select>
+              </div>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Seq</th>
+                  <th>时间</th>
+                  <th id="peakMetricHeader">Cache Miss</th>
+                  <th id="peakDetailHeader1">Prompt</th>
+                  <th id="peakDetailHeader2">Completion</th>
+                  <th id="peakDetailHeader3">Cache Hit</th>
+                  <th id="peakDetailHeader4">Model</th>
+                </tr>
+              </thead>
+              <tbody id="peakTableBody">
+                <tr><td colspan="7" class="subtle">等待数据…</td></tr>
+              </tbody>
+            </table>
+            <div class="pagination">
+              <span class="subtle" id="peakPaginationInfo">等待数据…</span>
+              <div class="pagination-actions">
+                <button id="peakPrevButton" class="secondary" type="button">上一页</button>
+                <button id="peakNextButton" class="secondary" type="button">下一页</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <h3>最近 8 条记录</h3>
+            <p class="section-note">用于对照导入文件尾部请求，顺便看 usage 是否有缺口。</p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Seq</th>
+                  <th>时间</th>
+                  <th>Kind</th>
+                  <th>Prompt</th>
+                  <th>Coverage</th>
+                </tr>
+              </thead>
+              <tbody id="recentTableBody">
+                <tr><td colspan="5" class="subtle">等待数据…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const DEFAULT_SOURCE_CANDIDATES = [
+      "usage-summary.csv",
+      "usage.csv"
+    ];
+
+    const state = {
+      rows: [],
+      filteredRows: [],
+      chartPoints: [],
+      currentSeries: [],
+      sourceLabel: "",
+      viewport: null,
+      drag: null,
+      peakPage: 1,
+      peakPageSize: 10
+    };
+
+    const elements = {
+      fileInput: document.getElementById("fileInput"),
+      reloadButton: document.getElementById("reloadButton"),
+      loadStatus: document.getElementById("loadStatus"),
+      providerSelect: document.getElementById("providerSelect"),
+      modelSelect: document.getElementById("modelSelect"),
+      captureModeSelect: document.getElementById("captureModeSelect"),
+      responseKindSelect: document.getElementById("responseKindSelect"),
+      xAxisSelect: document.getElementById("xAxisSelect"),
+      sortSelect: document.getElementById("sortSelect"),
+      smoothRange: document.getElementById("smoothRange"),
+      smoothLabel: document.getElementById("smoothLabel"),
+      rangeStart: document.getElementById("rangeStart"),
+      rangeEnd: document.getElementById("rangeEnd"),
+      usageOnlyToggle: document.getElementById("usageOnlyToggle"),
+      cacheReportedOnlyToggle: document.getElementById("cacheReportedOnlyToggle"),
+      togglePrompt: document.getElementById("togglePrompt"),
+      toggleCompletion: document.getElementById("toggleCompletion"),
+      toggleCacheHit: document.getElementById("toggleCacheHit"),
+      toggleCacheMiss: document.getElementById("toggleCacheMiss"),
+      toggleCacheWrite: document.getElementById("toggleCacheWrite"),
+      summaryCount: document.getElementById("summaryCount"),
+      summaryCoverage: document.getElementById("summaryCoverage"),
+      summaryPrompt: document.getElementById("summaryPrompt"),
+      summaryCompletion: document.getElementById("summaryCompletion"),
+      summaryCacheHit: document.getElementById("summaryCacheHit"),
+      summaryCacheMiss: document.getElementById("summaryCacheMiss"),
+      chartSubtitle: document.getElementById("chartSubtitle"),
+      chartSvg: document.getElementById("chartSvg"),
+      chartArea: document.getElementById("chartArea"),
+      chartEmpty: document.getElementById("chartEmpty"),
+      chartTooltip: document.getElementById("chartTooltip"),
+      resetViewportButton: document.getElementById("resetViewportButton"),
+      peakMetricSelect: document.getElementById("peakMetricSelect"),
+      peakPanelTitle: document.getElementById("peakPanelTitle"),
+      peakPanelNote: document.getElementById("peakPanelNote"),
+      peakMetricHeader: document.getElementById("peakMetricHeader"),
+      peakDetailHeader1: document.getElementById("peakDetailHeader1"),
+      peakDetailHeader2: document.getElementById("peakDetailHeader2"),
+      peakDetailHeader3: document.getElementById("peakDetailHeader3"),
+      peakDetailHeader4: document.getElementById("peakDetailHeader4"),
+      peakTableBody: document.getElementById("peakTableBody"),
+      peakPaginationInfo: document.getElementById("peakPaginationInfo"),
+      peakPrevButton: document.getElementById("peakPrevButton"),
+      peakNextButton: document.getElementById("peakNextButton"),
+      recentTableBody: document.getElementById("recentTableBody")
+    };
+
+    const seriesDefs = [
+      {
+        key: "prompt_tokens",
+        label: "Prompt",
+        color: getCssVariable("--accent-prompt"),
+        toggle: () => elements.togglePrompt.checked
+      },
+      {
+        key: "completion_tokens",
+        label: "Completion",
+        color: getCssVariable("--accent-completion"),
+        toggle: () => elements.toggleCompletion.checked
+      },
+      {
+        key: "cache_hit_tokens",
+        label: "Cache Hit",
+        color: getCssVariable("--accent-cache-hit"),
+        toggle: () => elements.toggleCacheHit.checked
+      },
+      {
+        key: "cache_miss_tokens",
+        label: "Cache Miss",
+        color: getCssVariable("--accent-cache-miss"),
+        toggle: () => elements.toggleCacheMiss.checked
+      },
+      {
+        key: "cache_write_tokens",
+        label: "Cache Write",
+        color: getCssVariable("--accent-cache-write"),
+        toggle: () => elements.toggleCacheWrite.checked
+      }
+    ];
+
+    const peakMetricDefs = {
+      cache_miss_tokens: {
+        label: "Cache Miss 请求列表",
+        header: "Cache Miss",
+        note: "按 <code>cache_miss_tokens</code> 排序，优先看哪些请求几乎没有吃到缓存。"
+      },
+      prompt_tokens: {
+        label: "Prompt 请求列表",
+        header: "Prompt",
+        note: "按 <code>prompt_tokens</code> 排序，先看谁把上下文撑大了。"
+      },
+      completion_tokens: {
+        label: "Completion 请求列表",
+        header: "Completion",
+        note: "按 <code>completion_tokens</code> 排序，适合定位长回答、长思考或大 tool output。"
+      },
+      cache_hit_tokens: {
+        label: "Cache Hit 请求列表",
+        header: "Cache Hit",
+        note: "按 <code>cache_hit_tokens</code> 排序，反过来观察哪些请求已经很好地复用了前缀。"
+      },
+      cache_write_tokens: {
+        label: "Cache Write 请求列表",
+        header: "Cache Write",
+        note: "按 <code>cache_write_tokens</code> 排序，适合看 Anthropic 一类 provider 的 cache write 波峰。"
+      },
+      total_tokens: {
+        label: "Total 请求列表",
+        header: "Total",
+        note: "按 <code>total_tokens</code> 排序，快速锁定整体最贵的请求。"
+      }
+    };
+
+    const metricLabels = {
+      prompt_tokens: "Prompt",
+      completion_tokens: "Completion",
+      reasoning_tokens: "Reasoning",
+      total_tokens: "Total",
+      cache_hit_tokens: "Cache Hit",
+      cache_miss_tokens: "Cache Miss",
+      cache_write_tokens: "Cache Write",
+      response_kind: "Kind",
+      model_id: "Model"
+    };
+
+    function getCssVariable(name) {
+      return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    }
+
+    function clamp(value, min, max) {
+      return Math.min(max, Math.max(min, value));
+    }
+
+    function toNumber(value) {
+      const number = Number(value);
+      return Number.isFinite(number) ? number : 0;
+    }
+
+    function toNullableNumber(value) {
+      if (value === null || value === undefined || value === "") {
+        return null;
+      }
+      const number = Number(value);
+      return Number.isFinite(number) ? number : null;
+    }
+
+    function formatNumber(value) {
+      if (value === null || value === undefined || Number.isNaN(value)) {
+        return "-";
+      }
+      return new Intl.NumberFormat("zh-CN").format(Math.round(value));
+    }
+
+    function formatCompact(value) {
+      if (value === null || value === undefined || Number.isNaN(value)) {
+        return "-";
+      }
+      return new Intl.NumberFormat("zh-CN", {
+        notation: "compact",
+        maximumFractionDigits: 1
+      }).format(value);
+    }
+
+    function formatPercent(value) {
+      if (value === null || value === undefined || Number.isNaN(value)) {
+        return "-";
+      }
+      return `${(value * 100).toFixed(1)}%`;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
+    function formatDate(value) {
+      if (!value) {
+        return "-";
+      }
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) {
+        return value;
+      }
+      return new Intl.DateTimeFormat("zh-CN", {
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      }).format(date);
+    }
+
+    function setStatus(title, detail) {
+      elements.loadStatus.innerHTML = `<strong>${escapeHtml(title)}</strong><span>${escapeHtml(detail)}</span>`;
+    }
+
+    function parseCsv(text) {
+      const rows = [];
+      let currentField = "";
+      let currentRow = [];
+      let inQuotes = false;
+
+      for (let index = 0; index < text.length; index += 1) {
+        const character = text[index];
+        const nextCharacter = text[index + 1];
+
+        if (inQuotes) {
+          if (character === '"' && nextCharacter === '"') {
+            currentField += '"';
+            index += 1;
+          } else if (character === '"') {
+            inQuotes = false;
+          } else {
+            currentField += character;
+          }
+          continue;
+        }
+
+        if (character === '"') {
+          inQuotes = true;
+          continue;
+        }
+
+        if (character === ",") {
+          currentRow.push(currentField);
+          currentField = "";
+          continue;
+        }
+
+        if (character === "\n") {
+          currentRow.push(currentField);
+          rows.push(currentRow);
+          currentRow = [];
+          currentField = "";
+          continue;
+        }
+
+        if (character === "\r") {
+          continue;
+        }
+
+        currentField += character;
+      }
+
+      if (currentField.length > 0 || currentRow.length > 0) {
+        currentRow.push(currentField);
+        rows.push(currentRow);
+      }
+
+      if (!rows.length) {
+        return [];
+      }
+
+      const [headerRow, ...bodyRows] = rows;
+      return bodyRows
+        .filter(row => row.some(cell => cell !== ""))
+        .map(row => {
+          const object = {};
+          headerRow.forEach((header, index) => {
+            object[header] = row[index] ?? "";
+          });
+          return object;
+        });
+    }
+
+    function deriveSequence(raw) {
+      const sequence = toNullableNumber(raw.sequence);
+      if (sequence !== null) {
+        return sequence;
+      }
+
+      const match = String(raw.file_name || "").match(/request-(\d+)/);
+      return match ? Number(match[1]) : 0;
+    }
+
+    function deriveCacheMiss(raw, promptTokens, cacheHitTokens) {
+      const explicit = toNullableNumber(raw.cache_miss_tokens);
+      if (explicit !== null) {
+        return explicit;
+      }
+
+      if (promptTokens === null || cacheHitTokens === null) {
+        return null;
+      }
+
+      return Math.max(0, promptTokens - cacheHitTokens);
+    }
+
+    function normalizeRows(rawRows) {
+      return rawRows
+        .map(raw => {
+          const sequence = deriveSequence(raw);
+          const promptTokens = toNullableNumber(raw.prompt_tokens);
+          const completionTokens = toNullableNumber(raw.completion_tokens);
+          const reasoningTokens = toNullableNumber(raw.reasoning_tokens);
+          const totalTokens = toNullableNumber(raw.total_tokens);
+          const cacheHitTokens = toNullableNumber(raw.cache_hit_tokens);
+          const cacheWriteTokens = toNullableNumber(raw.cache_write_tokens);
+          const cacheMissTokens = deriveCacheMiss(raw, promptTokens, cacheHitTokens);
+          const recordedAt = raw.recorded_at || "";
+          const time = recordedAt ? new Date(recordedAt).getTime() : Number.NaN;
+          const hasUsage = [
+            promptTokens,
+            completionTokens,
+            reasoningTokens,
+            totalTokens,
+            cacheHitTokens,
+            cacheWriteTokens
+          ].some(value => value !== null);
+
+          return {
+            file_name: raw.file_name || "",
+            sequence,
+            recorded_at: recordedAt,
+            trace_id: raw.trace_id || "",
+            session_id: raw.session_id || "",
+            turn_id: raw.turn_id || "",
+            round_id: raw.round_id || "",
+            capture_mode: raw.capture_mode || "unknown",
+            provider: raw.provider || "unknown",
+            api_format: raw.api_format || "",
+            model_id: raw.model_id || "unknown",
+            request_url: raw.request_url || "",
+            attempt_number: toNullableNumber(raw.attempt_number),
+            response_kind: raw.response_kind || "unknown",
+            error: raw.error || "",
+            partial_recovery_reason: raw.partial_recovery_reason || "",
+            prompt_tokens: promptTokens,
+            completion_tokens: completionTokens,
+            reasoning_tokens: reasoningTokens,
+            total_tokens: totalTokens,
+            cache_hit_tokens: cacheHitTokens,
+            cache_miss_tokens: cacheMissTokens,
+            cache_write_tokens: cacheWriteTokens,
+            has_usage: hasUsage,
+            has_cache_report: cacheHitTokens !== null,
+            cache_hit_ratio: promptTokens && cacheHitTokens !== null ? cacheHitTokens / promptTokens : null,
+            _time: Number.isFinite(time) ? time : null
+          };
+        })
+        .sort((left, right) => {
+          if (left.sequence !== right.sequence) {
+            return left.sequence - right.sequence;
+          }
+          return left.file_name.localeCompare(right.file_name, undefined, { numeric: true });
+        });
+    }
+
+    function buildOptions(select, values, currentValue) {
+      const uniqueValues = [...new Set(values.filter(Boolean))].sort((left, right) =>
+        String(left).localeCompare(String(right), undefined, { numeric: true })
+      );
+      const options = ["全部", ...uniqueValues];
+      select.innerHTML = options
+        .map(option => `<option value="${escapeHtml(option)}">${escapeHtml(option)}</option>`)
+        .join("");
+
+      select.value = options.includes(currentValue) ? currentValue : "全部";
+    }
+
+    function movingAverage(values, windowSize) {
+      if (windowSize <= 1) {
+        return values.slice();
+      }
+
+      return values.map((_, index) => {
+        let sum = 0;
+        let count = 0;
+        const start = Math.max(0, index - windowSize + 1);
+        for (let cursor = start; cursor <= index; cursor += 1) {
+          const value = values[cursor];
+          if (value !== null && value !== undefined && !Number.isNaN(value)) {
+            sum += value;
+            count += 1;
+          }
+        }
+        return count ? sum / count : 0;
+      });
+    }
+
+    function getChartRows(rows) {
+      return rows.filter(row =>
+        seriesDefs.some(def => def.toggle() && row[def.key] !== null && row[def.key] !== undefined)
+      );
+    }
+
+    function getChartRowCount() {
+      return getChartRows(state.filteredRows).length;
+    }
+
+    function getDefaultViewport(rowCount) {
+      if (!rowCount) {
+        return null;
+      }
+
+      return {
+        start: 0,
+        end: rowCount - 1
+      };
+    }
+
+    function normalizeViewport(viewport, rowCount) {
+      if (!rowCount) {
+        return null;
+      }
+
+      if (!viewport) {
+        return getDefaultViewport(rowCount);
+      }
+
+      const start = clamp(viewport.start, 0, rowCount - 1);
+      const end = clamp(viewport.end, start, rowCount - 1);
+      return { start, end };
+    }
+
+    function ensureViewport() {
+      state.viewport = normalizeViewport(state.viewport, getChartRowCount());
+    }
+
+    function resetViewport() {
+      state.viewport = getDefaultViewport(getChartRowCount());
+      renderChart();
+    }
+
+    function getViewportRows(chartRows) {
+      if (!chartRows.length) {
+        return [];
+      }
+
+      const viewport = normalizeViewport(state.viewport, chartRows.length);
+      state.viewport = viewport;
+      return chartRows.slice(viewport.start, viewport.end + 1);
+    }
+
+    function applyFilters() {
+      const provider = elements.providerSelect.value;
+      const model = elements.modelSelect.value;
+      const captureMode = elements.captureModeSelect.value;
+      const responseKind = elements.responseKindSelect.value;
+      const usageOnly = elements.usageOnlyToggle.checked;
+      const cacheReportedOnly = elements.cacheReportedOnlyToggle.checked;
+
+      const minSequence = state.rows.length ? state.rows[0].sequence : 0;
+      const maxSequence = state.rows.length ? state.rows[state.rows.length - 1].sequence : 0;
+      const start = clamp(toNumber(elements.rangeStart.value), minSequence, maxSequence);
+      const end = clamp(toNumber(elements.rangeEnd.value), start, maxSequence);
+
+      elements.rangeStart.value = String(start);
+      elements.rangeEnd.value = String(end);
+
+      const rows = state.rows.filter(row => {
+        const providerMatch = provider === "全部" || row.provider === provider;
+        const modelMatch = model === "全部" || row.model_id === model;
+        const captureModeMatch = captureMode === "全部" || row.capture_mode === captureMode;
+        const responseKindMatch = responseKind === "全部" || row.response_kind === responseKind;
+        const sequenceMatch = row.sequence >= start && row.sequence <= end;
+        const usageMatch = !usageOnly || row.has_usage;
+        const cacheMatch = !cacheReportedOnly || row.has_cache_report;
+        return providerMatch && modelMatch && captureModeMatch && responseKindMatch && sequenceMatch && usageMatch && cacheMatch;
+      });
+
+      state.filteredRows = rows;
+      state.viewport = getDefaultViewport(getChartRows(rows).length);
+      state.peakPage = 1;
+      renderAll();
+    }
+
+    function updateControlsFromRows() {
+      buildOptions(elements.providerSelect, state.rows.map(row => row.provider), elements.providerSelect.value || "全部");
+
+      const provider = elements.providerSelect.value;
+      const providerScopedRows = state.rows.filter(row => provider === "全部" || row.provider === provider);
+      buildOptions(elements.modelSelect, providerScopedRows.map(row => row.model_id), elements.modelSelect.value || "全部");
+      buildOptions(elements.captureModeSelect, state.rows.map(row => row.capture_mode), elements.captureModeSelect.value || "全部");
+      buildOptions(elements.responseKindSelect, state.rows.map(row => row.response_kind), elements.responseKindSelect.value || "全部");
+
+      const minSequence = state.rows.length ? state.rows[0].sequence : 0;
+      const maxSequence = state.rows.length ? state.rows[state.rows.length - 1].sequence : 0;
+      elements.rangeStart.min = String(minSequence);
+      elements.rangeStart.max = String(maxSequence);
+      elements.rangeEnd.min = String(minSequence);
+      elements.rangeEnd.max = String(maxSequence);
+      elements.rangeStart.value = String(minSequence);
+      elements.rangeEnd.value = String(maxSequence);
+    }
+
+    function renderSummary() {
+      const rows = state.filteredRows;
+      const usageRows = rows.filter(row => row.has_usage);
+      const totalPrompt = rows.reduce((sum, row) => sum + (row.prompt_tokens ?? 0), 0);
+      const totalCompletion = rows.reduce((sum, row) => sum + (row.completion_tokens ?? 0), 0);
+      const totalCacheHit = rows.reduce((sum, row) => sum + (row.cache_hit_tokens ?? 0), 0);
+      const totalCacheMiss = rows.reduce((sum, row) => sum + (row.cache_miss_tokens ?? 0), 0);
+
+      elements.summaryCount.textContent = formatNumber(rows.length);
+      elements.summaryCoverage.textContent = rows.length ? formatPercent(usageRows.length / rows.length) : "-";
+      elements.summaryPrompt.textContent = formatCompact(totalPrompt);
+      elements.summaryCompletion.textContent = formatCompact(totalCompletion);
+      elements.summaryCacheHit.textContent = formatCompact(totalCacheHit);
+      elements.summaryCacheMiss.textContent = formatCompact(totalCacheMiss);
+    }
+
+    function getSortedPeakRows(rows, metricKey) {
+      const sortMode = elements.sortSelect.value;
+      const sortedRows = rows.slice();
+
+      if (sortMode === "peak_metric_desc") {
+        sortedRows.sort((left, right) => {
+          const leftValue = left[metricKey] ?? Number.NEGATIVE_INFINITY;
+          const rightValue = right[metricKey] ?? Number.NEGATIVE_INFINITY;
+          if (rightValue !== leftValue) {
+            return rightValue - leftValue;
+          }
+          return left.sequence - right.sequence;
+        });
+        return sortedRows;
+      }
+
+      if (sortMode === "recorded_at") {
+        sortedRows.sort((left, right) => {
+          const leftTime = left._time ?? Number.POSITIVE_INFINITY;
+          const rightTime = right._time ?? Number.POSITIVE_INFINITY;
+          if (leftTime !== rightTime) {
+            return leftTime - rightTime;
+          }
+          return left.sequence - right.sequence;
+        });
+        return sortedRows;
+      }
+
+      sortedRows.sort((left, right) => left.sequence - right.sequence);
+      return sortedRows;
+    }
+
+    function renderTables() {
+      const rows = state.filteredRows;
+      const peakMetricKey = elements.peakMetricSelect.value || "cache_miss_tokens";
+      const peakMetric = peakMetricDefs[peakMetricKey] || peakMetricDefs.cache_miss_tokens;
+      const detailKeys = [
+        "prompt_tokens",
+        "completion_tokens",
+        "cache_hit_tokens",
+        "total_tokens"
+      ].filter(key => key !== peakMetricKey).slice(0, 3);
+      const sortedRows = getSortedPeakRows(rows, peakMetricKey);
+      const totalPages = Math.max(1, Math.ceil(sortedRows.length / state.peakPageSize));
+      state.peakPage = clamp(state.peakPage, 1, totalPages);
+      const pageStart = (state.peakPage - 1) * state.peakPageSize;
+      const pageRows = sortedRows.slice(pageStart, pageStart + state.peakPageSize);
+      const recent = rows.slice(-8).reverse();
+
+      elements.peakPanelTitle.textContent = peakMetric.label;
+      elements.peakPanelNote.innerHTML = peakMetric.note;
+      elements.peakMetricHeader.textContent = peakMetric.header;
+      elements.peakDetailHeader1.textContent = metricLabels[detailKeys[0]] || "-";
+      elements.peakDetailHeader2.textContent = metricLabels[detailKeys[1]] || "-";
+      elements.peakDetailHeader3.textContent = metricLabels[detailKeys[2]] || "-";
+      elements.peakDetailHeader4.textContent = "Model";
+
+      elements.peakTableBody.innerHTML = pageRows.length
+        ? pageRows.map(row => `
+          <tr>
+            <td>${formatNumber(row.sequence)}</td>
+            <td>${escapeHtml(formatDate(row.recorded_at))}</td>
+            <td>${formatNumber(row[peakMetricKey])}</td>
+            <td>${formatNumber(row[detailKeys[0]])}</td>
+            <td>${formatNumber(row[detailKeys[1]])}</td>
+            <td>${formatNumber(row[detailKeys[2]])}</td>
+            <td>${escapeHtml(row.model_id || "-")}</td>
+          </tr>
+        `).join("")
+        : `<tr><td colspan="7" class="subtle">没有符合当前筛选的数据。</td></tr>`;
+
+      if (sortedRows.length) {
+        const pageEnd = Math.min(pageStart + state.peakPageSize, sortedRows.length);
+        elements.peakPaginationInfo.textContent =
+          `第 ${formatNumber(state.peakPage)} / ${formatNumber(totalPages)} 页，显示 ${formatNumber(pageStart + 1)} - ${formatNumber(pageEnd)} 条，共 ${formatNumber(sortedRows.length)} 条`;
+      } else {
+        elements.peakPaginationInfo.textContent = "没有符合当前筛选的数据。";
+      }
+
+      elements.peakPrevButton.disabled = state.peakPage <= 1 || !sortedRows.length;
+      elements.peakNextButton.disabled = state.peakPage >= totalPages || !sortedRows.length;
+
+      elements.recentTableBody.innerHTML = recent.length
+        ? recent.map(row => `
+          <tr>
+            <td>${formatNumber(row.sequence)}</td>
+            <td>${escapeHtml(formatDate(row.recorded_at))}</td>
+            <td>${escapeHtml(row.response_kind || "-")}</td>
+            <td>${formatNumber(row.prompt_tokens)}</td>
+            <td>${row.has_usage ? "yes" : "no"}</td>
+          </tr>
+        `).join("")
+        : `<tr><td colspan="5" class="subtle">没有符合当前筛选的数据。</td></tr>`;
+    }
+
+    function createSvgNode(tag, attrs = {}) {
+      const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+      Object.entries(attrs).forEach(([key, value]) => {
+        node.setAttribute(key, String(value));
+      });
+      return node;
+    }
+
+    function getVisibleSeries(rows) {
+      const smoothWindow = toNumber(elements.smoothRange.value);
+      return seriesDefs
+        .filter(def => def.toggle())
+        .map(def => {
+          const rawValues = rows.map(row => row[def.key] ?? 0);
+          return {
+            ...def,
+            values: movingAverage(rawValues, smoothWindow)
+          };
+        });
+    }
+
+    function renderChart() {
+      const rows = state.filteredRows;
+      const chartRows = getChartRows(rows);
+      ensureViewport();
+      const viewportRows = getViewportRows(chartRows);
+      const visibleSeries = getVisibleSeries(viewportRows);
+      state.currentSeries = visibleSeries;
+
+      if (!rows.length || !chartRows.length || !viewportRows.length || !visibleSeries.length) {
+        elements.chartArea.hidden = true;
+        elements.chartEmpty.hidden = false;
+        if (!rows.length) {
+          elements.chartSubtitle.textContent = "等待加载数据…";
+        } else if (!visibleSeries.length) {
+          elements.chartSubtitle.textContent = "请至少勾选一条曲线。";
+        } else {
+          elements.chartSubtitle.textContent = "当前筛选下没有可绘制的 token 数据。";
+        }
+        state.chartPoints = [];
+        elements.chartSvg.replaceChildren();
+        return;
+      }
+
+      elements.chartArea.hidden = false;
+      elements.chartEmpty.hidden = true;
+
+      const width = 1000;
+      const height = 540;
+      const padding = { top: 18, right: 20, bottom: 54, left: 72 };
+      const plotWidth = width - padding.left - padding.right;
+      const plotHeight = height - padding.top - padding.bottom;
+      const maxValue = Math.max(1, ...visibleSeries.flatMap(series => series.values));
+      const xMode = elements.xAxisSelect.value;
+      const xValues = viewportRows.map((row, index) => xMode === "recorded_at" ? (row._time ?? index) : row.sequence);
+      const minX = Math.min(...xValues);
+      const maxX = Math.max(...xValues);
+      const xSpan = Math.max(1, maxX - minX);
+      const yTicks = 5;
+
+      const chartPoints = viewportRows.map((row, index) => {
+        const x = padding.left + ((xValues[index] - minX) / xSpan) * plotWidth;
+        return {
+          row,
+          x,
+          localIndex: index,
+          series: visibleSeries.map(series => ({
+            key: series.key,
+            label: series.label,
+            color: series.color,
+            value: series.values[index],
+            y: padding.top + plotHeight - (series.values[index] / maxValue) * plotHeight
+          }))
+        };
+      });
+      state.chartPoints = chartPoints;
+
+      const svg = elements.chartSvg;
+      svg.replaceChildren();
+
+      svg.appendChild(createSvgNode("rect", {
+        x: 0,
+        y: 0,
+        width,
+        height,
+        fill: "transparent"
+      }));
+
+      for (let tick = 0; tick <= yTicks; tick += 1) {
+        const ratio = tick / yTicks;
+        const y = padding.top + plotHeight - ratio * plotHeight;
+        const value = maxValue * ratio;
+
+        svg.appendChild(createSvgNode("line", {
+          x1: padding.left,
+          y1: y,
+          x2: width - padding.right,
+          y2: y,
+          stroke: "rgba(94, 69, 45, 0.12)",
+          "stroke-width": 1
+        }));
+
+        const label = createSvgNode("text", {
+          x: padding.left - 12,
+          y: y + 4,
+          fill: "#7a6858",
+          "font-size": 12,
+          "text-anchor": "end"
+        });
+        label.textContent = formatCompact(value);
+        svg.appendChild(label);
+      }
+
+      const xTickCount = Math.min(6, Math.max(1, viewportRows.length - 1));
+      for (let tick = 0; tick <= xTickCount; tick += 1) {
+        const ratio = xTickCount === 0 ? 0 : tick / xTickCount;
+        const x = padding.left + ratio * plotWidth;
+        svg.appendChild(createSvgNode("line", {
+          x1: x,
+          y1: padding.top,
+          x2: x,
+          y2: padding.top + plotHeight,
+          stroke: "rgba(94, 69, 45, 0.06)",
+          "stroke-width": 1
+        }));
+
+        const dataIndex = Math.min(viewportRows.length - 1, Math.round(ratio * (viewportRows.length - 1)));
+        const row = viewportRows[dataIndex];
+        const label = createSvgNode("text", {
+          x,
+          y: height - 18,
+          fill: "#7a6858",
+          "font-size": 12,
+          "text-anchor": "middle"
+        });
+        label.textContent = xMode === "recorded_at"
+          ? formatDate(row.recorded_at)
+          : formatNumber(row.sequence);
+        svg.appendChild(label);
+      }
+
+      visibleSeries.forEach(series => {
+        const points = chartPoints
+          .map(point => {
+            const seriesPoint = point.series.find(item => item.key === series.key);
+            return `${point.x},${seriesPoint.y}`;
+          })
+          .join(" ");
+
+        svg.appendChild(createSvgNode("polyline", {
+          points,
+          fill: "none",
+          stroke: series.color,
+          "stroke-width": 2.8,
+          "stroke-linejoin": "round",
+          "stroke-linecap": "round"
+        }));
+      });
+
+      svg.appendChild(createSvgNode("line", {
+        x1: padding.left,
+        y1: padding.top + plotHeight,
+        x2: width - padding.right,
+        y2: padding.top + plotHeight,
+        stroke: "rgba(94, 69, 45, 0.3)",
+        "stroke-width": 1.2
+      }));
+
+      svg.appendChild(createSvgNode("line", {
+        x1: padding.left,
+        y1: padding.top,
+        x2: padding.left,
+        y2: padding.top + plotHeight,
+        stroke: "rgba(94, 69, 45, 0.3)",
+        "stroke-width": 1.2
+      }));
+
+      const hoverGroup = createSvgNode("g", { id: "hoverGroup" });
+      hoverGroup.appendChild(createSvgNode("line", {
+        id: "hoverLine",
+        x1: padding.left,
+        y1: padding.top,
+        x2: padding.left,
+        y2: padding.top + plotHeight,
+        stroke: "rgba(45, 36, 28, 0.25)",
+        "stroke-width": 1.1,
+        "stroke-dasharray": "5 5",
+        visibility: "hidden"
+      }));
+      svg.appendChild(hoverGroup);
+
+      const viewport = state.viewport || getDefaultViewport(chartRows.length);
+      const viewportStart = chartRows[viewport.start]?.sequence ?? "-";
+      const viewportEnd = chartRows[viewport.end]?.sequence ?? "-";
+      elements.chartSubtitle.textContent =
+        `${rows.length} 条筛选记录，其中可绘制 ${formatNumber(chartRows.length)} 条；当前视窗 ${formatNumber(viewportRows.length)} 条，请求 ${formatNumber(viewportStart)} - ${formatNumber(viewportEnd)}，来源：${state.sourceLabel || "usage-summary.csv"}，最大值 ${formatNumber(maxValue)} tokens`;
+
+      bindChartInteractions({
+        svg,
+        rows: chartRows,
+        viewportRows,
+        plotWidth,
+        plotHeight,
+        padding,
+        width
+      });
+    }
+
+    function eventToChartX(event, svg) {
+      const rect = svg.getBoundingClientRect();
+      const ratioX = clamp((event.clientX - rect.left) / rect.width, 0, 1);
+      return {
+        rect,
+        x: ratioX * 1000
+      };
+    }
+
+    function zoomViewport(anchorRatio, factor) {
+      const rowCount = getChartRowCount();
+      const current = normalizeViewport(state.viewport, rowCount);
+      if (!current) {
+        return;
+      }
+
+      const currentSize = current.end - current.start + 1;
+      const targetSize = clamp(Math.round(currentSize * factor), 12, rowCount);
+      const anchorIndex = current.start + anchorRatio * (currentSize - 1);
+      let nextStart = Math.round(anchorIndex - anchorRatio * (targetSize - 1));
+      nextStart = clamp(nextStart, 0, Math.max(0, rowCount - targetSize));
+      const nextEnd = nextStart + targetSize - 1;
+
+      state.viewport = {
+        start: nextStart,
+        end: nextEnd
+      };
+      renderChart();
+    }
+
+    function panViewport(deltaRatio) {
+      const rowCount = getChartRowCount();
+      const current = normalizeViewport(state.viewport, rowCount);
+      if (!current) {
+        return;
+      }
+
+      const size = current.end - current.start + 1;
+      const delta = Math.round(deltaRatio * size);
+      const maxStart = Math.max(0, rowCount - size);
+      const nextStart = clamp(current.start - delta, 0, maxStart);
+      state.viewport = {
+        start: nextStart,
+        end: nextStart + size - 1
+      };
+      renderChart();
+    }
+
+    function bindChartInteractions({ svg, viewportRows, plotWidth, plotHeight, padding, width }) {
+      const hoverLine = svg.querySelector("#hoverLine");
+      const tooltip = elements.chartTooltip;
+
+      const hideTooltip = () => {
+        tooltip.style.opacity = "0";
+        hoverLine?.setAttribute("visibility", "hidden");
+      };
+
+      svg.onwheel = event => {
+        if (!getChartRowCount()) {
+          return;
+        }
+        event.preventDefault();
+        const { x } = eventToChartX(event, svg);
+        const insidePlot = x >= padding.left && x <= width - padding.right;
+        if (!insidePlot) {
+          return;
+        }
+        const anchorRatio = clamp((x - padding.left) / plotWidth, 0, 1);
+        const factor = event.deltaY > 0 ? 1.2 : 0.84;
+        zoomViewport(anchorRatio, factor);
+      };
+
+      svg.onmousedown = event => {
+        if (event.button !== 0 || !viewportRows.length) {
+          return;
+        }
+        const { x } = eventToChartX(event, svg);
+        state.drag = { startX: x, currentX: x };
+        svg.style.cursor = "grabbing";
+      };
+
+      svg.onmouseleave = hideTooltip;
+      svg.onmousemove = event => {
+        if (!state.chartPoints.length) {
+          hideTooltip();
+          return;
+        }
+
+        const { rect, x } = eventToChartX(event, svg);
+
+        if (state.drag) {
+          state.drag.currentX = x;
+          hideTooltip();
+          return;
+        }
+
+        const nearest = state.chartPoints.reduce((best, point) =>
+          Math.abs(point.x - x) < Math.abs(best.x - x) ? point : best
+        , state.chartPoints[0]);
+
+        hoverLine?.setAttribute("x1", nearest.x);
+        hoverLine?.setAttribute("x2", nearest.x);
+        hoverLine?.setAttribute("visibility", "visible");
+
+        tooltip.style.opacity = "1";
+        tooltip.style.left = `${(nearest.x / 1000) * rect.width}px`;
+        tooltip.style.top = `${Math.max(100, rect.height * 0.3)}px`;
+        tooltip.innerHTML = `
+          <strong>request-${escapeHtml(nearest.row.sequence)}</strong>
+          <div>${escapeHtml(formatDate(nearest.row.recorded_at))}</div>
+          <div>provider: ${escapeHtml(nearest.row.provider || "-")}</div>
+          <div>model: ${escapeHtml(nearest.row.model_id || "-")}</div>
+          <div>kind: ${escapeHtml(nearest.row.response_kind || "-")}</div>
+          <div>capture: ${escapeHtml(nearest.row.capture_mode || "-")}</div>
+          ${nearest.series.map(item => `
+            <div style="color:${item.color}">${escapeHtml(item.label)}: ${formatNumber(item.value)}</div>
+          `).join("")}
+        `;
+      };
+
+      window.onmouseup = event => {
+        if (!state.drag) {
+          return;
+        }
+
+        const drag = state.drag;
+        state.drag = null;
+        svg.style.cursor = "crosshair";
+        const { x } = eventToChartX(event, svg);
+        const deltaX = x - drag.startX;
+
+        if (Math.abs(deltaX) > 4) {
+          panViewport(deltaX / plotWidth);
+        }
+      };
+
+      svg.ondblclick = () => {
+        resetViewport();
+      };
+    }
+
+    function renderAll() {
+      renderSummary();
+      renderChart();
+      renderTables();
+    }
+
+    function loadRows(rawRows, sourceLabel) {
+      state.rows = normalizeRows(rawRows);
+      state.sourceLabel = sourceLabel;
+      updateControlsFromRows();
+      elements.smoothLabel.textContent = elements.smoothRange.value;
+      state.viewport = getDefaultViewport(getChartRowCount());
+      state.peakPage = 1;
+      applyFilters();
+      setStatus("已加载", `${state.rows.length} 条记录，来源 ${sourceLabel}`);
+    }
+
+    async function fetchSource(candidate) {
+      const response = await fetch(`./${candidate}`, { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      return response.text();
+    }
+
+    async function tryAutoLoad() {
+      setStatus("尝试自动读取", `按顺序读取 ${DEFAULT_SOURCE_CANDIDATES.join(", ")}`);
+
+      for (const candidate of DEFAULT_SOURCE_CANDIDATES) {
+        try {
+          const text = await fetchSource(candidate);
+          loadRows(parseCsv(text), candidate);
+          return;
+        } catch (error) {
+          // Try the next candidate.
+        }
+      }
+
+      setStatus("等待手动导入", "直接双击打开页面时通常无法 fetch 本地 CSV，这是正常现象");
+    }
+
+    elements.fileInput.addEventListener("change", async event => {
+      const [file] = event.target.files || [];
+      if (!file) {
+        return;
+      }
+
+      const text = await file.text();
+      loadRows(parseCsv(text), file.name);
+    });
+
+    elements.reloadButton.addEventListener("click", () => {
+      tryAutoLoad();
+    });
+
+    elements.providerSelect.addEventListener("change", () => {
+      const provider = elements.providerSelect.value;
+      const models = state.rows
+        .filter(row => provider === "全部" || row.provider === provider)
+        .map(row => row.model_id);
+      buildOptions(elements.modelSelect, models, "全部");
+      applyFilters();
+    });
+
+    elements.modelSelect.addEventListener("change", applyFilters);
+    elements.captureModeSelect.addEventListener("change", applyFilters);
+    elements.responseKindSelect.addEventListener("change", applyFilters);
+    elements.xAxisSelect.addEventListener("change", renderAll);
+    elements.sortSelect.addEventListener("change", renderTables);
+    elements.rangeStart.addEventListener("change", applyFilters);
+    elements.rangeEnd.addEventListener("change", applyFilters);
+    elements.usageOnlyToggle.addEventListener("change", applyFilters);
+    elements.cacheReportedOnlyToggle.addEventListener("change", applyFilters);
+    elements.togglePrompt.addEventListener("change", renderAll);
+    elements.toggleCompletion.addEventListener("change", renderAll);
+    elements.toggleCacheHit.addEventListener("change", renderAll);
+    elements.toggleCacheMiss.addEventListener("change", renderAll);
+    elements.toggleCacheWrite.addEventListener("change", renderAll);
+    elements.peakMetricSelect.addEventListener("change", () => {
+      state.peakPage = 1;
+      renderTables();
+    });
+    elements.peakPrevButton.addEventListener("click", () => {
+      state.peakPage = Math.max(1, state.peakPage - 1);
+      renderTables();
+    });
+    elements.peakNextButton.addEventListener("click", () => {
+      state.peakPage += 1;
+      renderTables();
+    });
+    elements.resetViewportButton.addEventListener("click", resetViewport);
+    elements.smoothRange.addEventListener("input", () => {
+      elements.smoothLabel.textContent = elements.smoothRange.value;
+      renderAll();
+    });
+
+    buildOptions(elements.providerSelect, [], "全部");
+    buildOptions(elements.modelSelect, [], "全部");
+    buildOptions(elements.captureModeSelect, [], "全部");
+    buildOptions(elements.responseKindSelect, [], "全部");
+    tryAutoLoad();
+  </script>
+</body>
+</html>
