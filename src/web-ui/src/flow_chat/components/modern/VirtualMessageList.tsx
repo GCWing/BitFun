@@ -380,7 +380,6 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
   const resolveLatestEndAnchorStabilizationRef = useRef<((reason: LatestEndAnchorResolveReason) => boolean) | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const mutationObserverRef = useRef<MutationObserver | null>(null);
-  const layoutTransitionCountRef = useRef(0);
   const touchScrollIntentStartYRef = useRef<number | null>(null);
   const scrollbarPointerInteractionActiveRef = useRef(false);
   // Timestamp until which we treat any upward scroll as user-initiated. Set by
@@ -722,6 +721,40 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
       );
       scroller.scrollTop = Math.min(preClampScrollTop, maxScrollTop);
     }
+
+    // If no streaming is in progress, schedule a consumption pass to drain
+    // the compensation added above. Without streaming, the grow branch of
+    // measureHeightChange never fires, so the residual collapse.px would
+    // persist as permanent footer whitespace (issue #1176).
+    if (!isStreamingOutputRef.current) {
+      requestAnimationFrame(() => {
+        const scrollerNow = scrollerElementRef.current;
+        if (!scrollerNow) return;
+        // Do not drain if a collapse intent is still protecting an ongoing
+        // CSS transition — the intent's own expiry drain will handle it.
+        const intent = pendingCollapseIntentRef.current;
+        if (intent.active && intent.expiresAtMs >= performance.now()) return;
+        const collapsePx = getReservationTotalPx(bottomReservationStateRef.current.collapse);
+        if (collapsePx <= COMPENSATION_EPSILON_PX) return;
+        const distanceFromBottom = Math.max(
+          0,
+          scrollerNow.scrollHeight - scrollerNow.clientHeight - scrollerNow.scrollTop,
+        );
+        if (distanceFromBottom <= COMPENSATION_EPSILON_PX) {
+          // User is at the bottom — safe to drain all collapse compensation.
+          const drained: BottomReservationState = {
+            ...bottomReservationStateRef.current,
+            collapse: {
+              ...bottomReservationStateRef.current.collapse,
+              px: 0,
+              floorPx: 0,
+            },
+          };
+          updateBottomReservationState(drained);
+          applyFooterCompensationNow(drained);
+        }
+      });
+    }
   }, [inputStackFooterPx, updateBottomReservationState, applyFooterCompensationNow]);
 
   const releaseAnchorLock = useCallback((_reason: string) => {
@@ -750,9 +783,13 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     if (!scroller || !lockState.active) return false;
 
     const now = performance.now();
-    if (now > lockState.lockUntilMs && layoutTransitionCountRef.current === 0) {
-      releaseAnchorLock(`expired-before-${reason}`);
-      return false;
+    if (now > lockState.lockUntilMs) {
+      const intent = pendingCollapseIntentRef.current;
+      const intentActive = intent.active && intent.expiresAtMs >= now;
+      if (!intentActive) {
+        releaseAnchorLock(`expired-before-${reason}`);
+        return false;
+      }
     }
 
     const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
@@ -832,7 +869,9 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
 
     // Content grew: consume temporary footer padding first.
     if (heightDelta > 0) {
-      if (currentTotalCompensation > COMPENSATION_EPSILON_PX && layoutTransitionCountRef.current > 0) {
+      const collapseIntent0 = pendingCollapseIntentRef.current;
+      const collapseProtectionActive = collapseIntent0.active && collapseIntent0.expiresAtMs >= performance.now();
+      if (currentTotalCompensation > COMPENSATION_EPSILON_PX && collapseProtectionActive) {
         previousScrollTopRef.current = currentScrollTop;
         recordScrollerGeometry(scroller);
         return;
@@ -861,12 +900,11 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     const collapseIntent = pendingCollapseIntentRef.current;
     const now = performance.now();
     const hasValidCollapseIntent = collapseIntent.active && collapseIntent.expiresAtMs >= now;
-    // For unsignaled shrinks, the visible gap to the bottom is what matters.
-    // Existing synthetic footer compensation may be stale from an earlier
-    // protected collapse, and subtracting it here makes the list think the
-    // viewport is still pinned near the bottom when the user has already moved
-    // away. That misclassification re-arms anchor restore and causes jitter.
-    const currentCollapseCompensation = getReservationTotalPx(bottomReservationStateRef.current.collapse);
+    // For unsignaled shrinks, the visible gap to the bottom determines the
+    // required compensation. We no longer ratchet up via Math.max with the
+    // previous collapse.px: stale compensation from an earlier protected
+    // collapse is intentionally allowed to shrink when the current shrink
+    // needs less, preventing permanent whitespace accumulation (issue #1176).
     const fallbackRequiredCollapseCompensation = Math.max(0, shrinkAmount - distanceFromBottom);
     const cumulativeShrinkPx = hasValidCollapseIntent
       ? collapseIntent.cumulativeShrinkPx + shrinkAmount
@@ -875,15 +913,8 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
       ? collapseIntent.baseTotalCompensationPx + Math.max(0, cumulativeShrinkPx - collapseIntent.distanceFromBottomBeforeCollapse)
       : 0;
     const nextTotalCompensation = hasValidCollapseIntent
-      ? (
-        layoutTransitionCountRef.current > 0
-          ? Math.max(currentTotalCompensation, resolvedIntentCompensation)
-          : resolvedIntentCompensation
-      )
-      : getReservationTotalPx(bottomReservationStateRef.current.pin) + Math.max(
-        currentCollapseCompensation,
-        fallbackRequiredCollapseCompensation,
-      );
+      ? Math.max(currentTotalCompensation, resolvedIntentCompensation)
+      : getReservationTotalPx(bottomReservationStateRef.current.pin) + fallbackRequiredCollapseCompensation;
     if (hasValidCollapseIntent) {
       pendingCollapseIntentRef.current = {
         ...collapseIntent,
@@ -918,22 +949,10 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
 
       activateAnchorLock(
         anchorTarget,
-        layoutTransitionCountRef.current > 0 ? 'transition-shrink' : 'instant-shrink'
+        hasValidCollapseIntent ? 'transition-shrink' : 'instant-shrink'
       );
       applyFooterCompensationNow(nextReservationState);
       restoreAnchorLockNow('measure-shrink');
-      if (layoutTransitionCountRef.current === 0) {
-        pendingCollapseIntentRef.current = {
-          active: false,
-          anchorScrollTop: 0,
-          toolId: null,
-          toolName: null,
-          expiresAtMs: 0,
-          distanceFromBottomBeforeCollapse: 0,
-          baseTotalCompensationPx: 0,
-          cumulativeShrinkPx: 0,
-        };
-      }
     }
 
     previousScrollTopRef.current = currentScrollTop;
@@ -1459,15 +1478,14 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     }
 
     const collapseIntent = pendingCollapseIntentRef.current;
-    const hasActiveCollapseTransition = (
-      layoutTransitionCountRef.current > 0 &&
+    const hasActiveCollapseProtection = (
       collapseIntent.active &&
       collapseIntent.expiresAtMs >= performance.now()
     );
     // During a collapse animation, let collapse compensation own the footer space.
     // Recomputing sticky pin floor from intermediate DOM heights causes the two
     // reservations to fight each other and reintroduces visible vertical jitter.
-    if (hasActiveCollapseTransition) {
+    if (hasActiveCollapseProtection) {
       return false;
     }
 
@@ -1894,10 +1912,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
 
   const shouldSuspendAutoFollow = useCallback(() => {
     const collapseIntent = pendingCollapseIntentRef.current;
-    return (
-      layoutTransitionCountRef.current > 0 ||
-      (collapseIntent.active && collapseIntent.expiresAtMs >= performance.now())
-    );
+    return collapseIntent.active && collapseIntent.expiresAtMs >= performance.now();
   }, []);
 
   const scheduleFollowToLatestWithViewportState = useCallback((reason: string) => {
@@ -2056,27 +2071,35 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
       characterData: true,
     });
 
-    const isLayoutTransitionProperty = (propertyName: string) => (
-      propertyName === 'grid-template-rows' ||
-      propertyName === 'height' ||
-      propertyName === 'max-height'
-    );
-
-    const handleTransitionRun = (event: TransitionEvent) => {
-      if (!isLayoutTransitionProperty(event.propertyName)) return;
-      layoutTransitionCountRef.current += 1;
-    };
-
-    const handleTransitionFinish = (event: TransitionEvent) => {
-      if (!isLayoutTransitionProperty(event.propertyName)) return;
-      layoutTransitionCountRef.current = Math.max(0, layoutTransitionCountRef.current - 1);
-      resolveLatestEndAnchorStabilizationRef.current?.('transition-finish');
-      scheduleHeightMeasure(2);
-      scheduleVisibleTurnMeasure(2);
-      schedulePinReservationReconcile(2);
-      scheduleTransientTurnPinStabilization(2);
-      scheduleHistoryProjectionHandoffRelease(1);
-      if (layoutTransitionCountRef.current === 0 && pendingCollapseIntentRef.current.active) {
+    // Re-evaluate deferred auto-follow: when a collapse intent expires naturally
+    // (via its expiresAtMs timestamp), resume any deferred follow that was queued
+    // while the protection was active. Also drain residual collapse compensation
+    // so the footer does not retain excess whitespace after the protection window
+    // closes (issue #1176).
+    const replayDeferredFollowIfSettled = () => {
+      const now = performance.now();
+      const intent = pendingCollapseIntentRef.current;
+      const stillActive = intent.active && intent.expiresAtMs >= now;
+      if (!stillActive && intent.active) {
+        // Collapse intent just expired — drain any residual collapse
+        // compensation. When the intent was active, consumption was blocked
+        // in measureHeightChange (grow branch early return). Now that the
+        // protection is over, collapse.px would only be consumed by future
+        // content growth or user scroll, which may never happen if the
+        // content has already finished arriving. Drain it immediately.
+        const collapsePx = getReservationTotalPx(bottomReservationStateRef.current.collapse);
+        if (collapsePx > COMPENSATION_EPSILON_PX) {
+          const next: BottomReservationState = {
+            ...bottomReservationStateRef.current,
+            collapse: {
+              ...bottomReservationStateRef.current.collapse,
+              px: 0,
+              floorPx: 0,
+            },
+          };
+          updateBottomReservationState(next);
+          applyFooterCompensationNow(next);
+        }
         pendingCollapseIntentRef.current = {
           active: false,
           anchorScrollTop: 0,
@@ -2088,19 +2111,18 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
           cumulativeShrinkPx: 0,
         };
       }
-      if (layoutTransitionCountRef.current === 0 && deferredFollowReasonRef.current && !shouldSuspendAutoFollow()) {
+      if (deferredFollowReasonRef.current && !shouldSuspendAutoFollow()) {
         const deferredReason = deferredFollowReasonRef.current;
         deferredFollowReasonRef.current = null;
-        followOutputControllerRef.current.scheduleFollowToLatest(`${deferredReason}-after-transition`);
+        followOutputControllerRef.current.scheduleFollowToLatest(`${deferredReason}-after-collapse`);
       }
     };
-    scrollerElement.addEventListener('transitionrun', handleTransitionRun, true);
-    scrollerElement.addEventListener('transitionend', handleTransitionFinish, true);
-    scrollerElement.addEventListener('transitioncancel', handleTransitionFinish, true);
 
     const handleScroll = () => {
       const now = performance.now();
-      if (anchorLockRef.current.active && now > anchorLockRef.current.lockUntilMs && layoutTransitionCountRef.current === 0) {
+      const intent = pendingCollapseIntentRef.current;
+      const collapseProtectionActive = intent.active && intent.expiresAtMs >= now;
+      if (anchorLockRef.current.active && now > anchorLockRef.current.lockUntilMs && !collapseProtectionActive) {
         releaseAnchorLock('expired-before-scroll');
       }
 
@@ -2127,7 +2149,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
         isStreamingOutputRef.current &&
         !hasRecentUserUpwardIntent &&
         !anchorLockRef.current.active &&
-        layoutTransitionCountRef.current === 0
+        !collapseProtectionActive
       ) {
         // Cap the clamp amount to what the footer actually needs.  Without
         // this, repeated scroll-clamp events during CSS transitions can
@@ -2163,7 +2185,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
       if (
         currentTotalCompensation > COMPENSATION_EPSILON_PX &&
         !anchorLockRef.current.active &&
-        layoutTransitionCountRef.current === 0
+        !collapseProtectionActive
       ) {
         const nextScrollTop = scrollerElement.scrollTop;
         const scrollDelta = nextScrollTop - previousScrollTopRef.current;
@@ -2197,9 +2219,11 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
       followOutputControllerRef.current.handleScroll();
       scheduleFullHistoryProjectionForUserIntent('scroll-near-partial-history-boundary');
 
-      if (anchorLockRef.current.active && performance.now() > anchorLockRef.current.lockUntilMs && layoutTransitionCountRef.current === 0) {
+      if (anchorLockRef.current.active && performance.now() > anchorLockRef.current.lockUntilMs && !collapseProtectionActive) {
         releaseAnchorLock('expired-after-scroll');
       }
+
+      replayDeferredFollowIfSettled();
     };
     scrollerElement.addEventListener('scroll', handleScroll, { passive: true });
 
@@ -2386,9 +2410,6 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     scheduleVisibleTurnMeasure(2);
 
     return () => {
-      scrollerElement.removeEventListener('transitionrun', handleTransitionRun, true);
-      scrollerElement.removeEventListener('transitionend', handleTransitionFinish, true);
-      scrollerElement.removeEventListener('transitioncancel', handleTransitionFinish, true);
       scrollerElement.removeEventListener('scroll', handleScroll);
       scrollerElement.removeEventListener('wheel', handleWheel);
       scrollerElement.removeEventListener('touchstart', handleTouchStart);
@@ -2944,6 +2965,37 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
       return;
     }
 
+    // Streaming just ended. If collapse compensation remains (e.g. because the
+    // transition stale timer hasn't fired yet, or consumption was blocked during
+    // the last streaming frames), drain it now so the footer doesn't retain
+    // excess whitespace after the turn completes (issue #1176).
+    const collapsePx = getReservationTotalPx(bottomReservationStateRef.current.collapse);
+    if (collapsePx > COMPENSATION_EPSILON_PX) {
+      const next = {
+        ...bottomReservationStateRef.current,
+        collapse: {
+          ...bottomReservationStateRef.current.collapse,
+          px: 0,
+          floorPx: 0,
+        },
+      };
+      updateBottomReservationState(next);
+      applyFooterCompensationNow(next);
+    }
+
+    // Clear any lingering collapse intent so auto-follow and compensation
+    // consumption resume immediately after the turn ends.
+    pendingCollapseIntentRef.current = {
+      active: false,
+      anchorScrollTop: 0,
+      toolId: null,
+      toolName: null,
+      expiresAtMs: 0,
+      distanceFromBottomBeforeCollapse: 0,
+      baseTotalCompensationPx: 0,
+      cumulativeShrinkPx: 0,
+    };
+
     const pinReservation = bottomReservationStateRef.current.pin;
     if (
       pinReservation.mode !== 'sticky-latest' ||
@@ -2964,7 +3016,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
         behavior: 'auto',
       });
     });
-  }, [clearPinReservationForUserNavigation, isStreamingOutput]);
+  }, [applyFooterCompensationNow, clearPinReservationForUserNavigation, isStreamingOutput, updateBottomReservationState]);
 
   const scrollToLatestEndPositionInternal = useCallback((behavior: 'auto' | 'smooth') => {
     const scroller = scrollerElementRef.current;
