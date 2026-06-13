@@ -6,7 +6,8 @@ use std::sync::Arc;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelExchangeRequestAttempt {
     pub request_url: String,
-    pub request_body: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request_body: Option<Value>,
     pub attempt_number: usize,
 }
 
@@ -18,7 +19,8 @@ pub struct ModelExchangeRequestTraceHandle {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelExchangeResponseTrace {
     pub kind: String,
-    pub assistant_text: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assistant_text: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub thinking: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -56,4 +58,5 @@ pub trait ModelExchangeTraceSink: Send + Sync {
 #[derive(Clone)]
 pub struct ModelExchangeTraceConfig {
     pub sink: Arc<dyn ModelExchangeTraceSink>,
+    pub capture_request_body: bool,
 }

@@ -1,6 +1,8 @@
 use super::types::RoundContext;
 use crate::infrastructure::ai::AIClient;
-use crate::service::config::GlobalConfigManager;
+use crate::service::config::{
+    GlobalConfigManager, ModelExchangeTracingConfig, ModelExchangeTracingMode,
+};
 use crate::service::workspace_runtime::{
     get_workspace_runtime_service_arc, WorkspaceRuntimeContext,
 };
@@ -30,6 +32,7 @@ struct ModelExchangeTraceRecord {
     session_id: String,
     turn_id: String,
     round_id: String,
+    capture_mode: ModelExchangeTracingMode,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     response: Option<ModelExchangeResponseTrace>,
     request: ModelExchangeTraceRequestRecord,
@@ -41,13 +44,52 @@ struct ModelExchangeTraceRequestRecord {
     api_format: String,
     model_id: String,
     request_url: String,
-    body: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    body: Option<Value>,
     attempt_number: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ModelExchangeTracePolicy {
+    mode: ModelExchangeTracingMode,
+    capture_request_body: bool,
+    capture_response_text: bool,
+    capture_reasoning: bool,
+    capture_tool_calls: bool,
+    capture_usage: bool,
+    capture_provider_metadata: bool,
+}
+
+impl ModelExchangeTracePolicy {
+    fn from_config(config: ModelExchangeTracingConfig) -> Option<Self> {
+        match config.mode {
+            ModelExchangeTracingMode::Off => None,
+            ModelExchangeTracingMode::Full => Some(Self {
+                mode: ModelExchangeTracingMode::Full,
+                capture_request_body: true,
+                capture_response_text: true,
+                capture_reasoning: true,
+                capture_tool_calls: true,
+                capture_usage: true,
+                capture_provider_metadata: true,
+            }),
+            ModelExchangeTracingMode::UsageOnly => Some(Self {
+                mode: ModelExchangeTracingMode::UsageOnly,
+                capture_request_body: false,
+                capture_response_text: false,
+                capture_reasoning: false,
+                capture_tool_calls: false,
+                capture_usage: true,
+                capture_provider_metadata: false,
+            }),
+        }
+    }
 }
 
 #[derive(Debug)]
 struct WorkspaceModelExchangeTraceSink {
     runtime_context: WorkspaceRuntimeContext,
+    policy: ModelExchangeTracePolicy,
     session_id: String,
     turn_id: String,
     round_id: String,
@@ -60,6 +102,7 @@ struct WorkspaceModelExchangeTraceSink {
 impl WorkspaceModelExchangeTraceSink {
     fn new(
         runtime_context: WorkspaceRuntimeContext,
+        policy: ModelExchangeTracePolicy,
         session_id: String,
         turn_id: String,
         round_id: String,
@@ -69,6 +112,7 @@ impl WorkspaceModelExchangeTraceSink {
     ) -> Self {
         Self {
             runtime_context,
+            policy,
             session_id,
             turn_id,
             round_id,
@@ -142,10 +186,46 @@ impl WorkspaceModelExchangeTraceSink {
         };
 
         let mut record = self.read_record(&path).await?;
-        record.response = Some(response.clone());
+        record.response = Some(self.sanitize_response(response));
         self.write_record(&path, &record).await?;
         self.trace_paths.remove(trace_id);
         Ok(())
+    }
+
+    fn sanitize_response(
+        &self,
+        response: &ModelExchangeResponseTrace,
+    ) -> ModelExchangeResponseTrace {
+        ModelExchangeResponseTrace {
+            kind: response.kind.clone(),
+            assistant_text: self
+                .policy
+                .capture_response_text
+                .then(|| response.assistant_text.clone())
+                .flatten(),
+            thinking: self
+                .policy
+                .capture_reasoning
+                .then(|| response.thinking.clone())
+                .flatten(),
+            tool_calls: self
+                .policy
+                .capture_tool_calls
+                .then(|| response.tool_calls.clone())
+                .flatten(),
+            usage: self
+                .policy
+                .capture_usage
+                .then(|| response.usage.clone())
+                .flatten(),
+            provider_metadata: self
+                .policy
+                .capture_provider_metadata
+                .then(|| response.provider_metadata.clone())
+                .flatten(),
+            partial_recovery_reason: response.partial_recovery_reason.clone(),
+            error: response.error.clone(),
+        }
     }
 }
 
@@ -178,6 +258,8 @@ impl ModelExchangeTraceSink for WorkspaceModelExchangeTraceSink {
             session_id: self.session_id.clone(),
             turn_id: self.turn_id.clone(),
             round_id: self.round_id.clone(),
+            capture_mode: self.policy.mode,
+            response: None,
             request: ModelExchangeTraceRequestRecord {
                 provider: self.provider.clone(),
                 api_format: self.api_format.clone(),
@@ -186,7 +268,6 @@ impl ModelExchangeTraceSink for WorkspaceModelExchangeTraceSink {
                 body: attempt.request_body.clone(),
                 attempt_number: attempt.attempt_number,
             },
-            response: None,
         };
 
         if let Err(error) = self.write_record(&path, &record).await {
@@ -215,7 +296,7 @@ impl ModelExchangeTraceSink for WorkspaceModelExchangeTraceSink {
                 &handle.trace_id,
                 &ModelExchangeResponseTrace {
                     kind: "error".to_string(),
-                    assistant_text: String::new(),
+                    assistant_text: None,
                     thinking: None,
                     tool_calls: None,
                     usage: None,
@@ -252,9 +333,9 @@ pub async fn prepare_model_exchange_trace(
     round_id: &str,
     ai_client: &AIClient,
 ) -> Option<ModelExchangeTraceConfig> {
-    if !model_exchange_trace_enabled().await {
+    let Some(policy) = current_model_exchange_trace_policy().await else {
         return None;
-    }
+    };
 
     let Some(workspace) = context.workspace.as_ref() else {
         debug!(
@@ -281,6 +362,7 @@ pub async fn prepare_model_exchange_trace(
     Some(ModelExchangeTraceConfig {
         sink: Arc::new(WorkspaceModelExchangeTraceSink::new(
             runtime_context,
+            policy,
             context.session_id.clone(),
             context.dialog_turn_id.clone(),
             round_id.to_string(),
@@ -288,18 +370,20 @@ pub async fn prepare_model_exchange_trace(
             ai_client.config.format.clone(),
             ai_client.config.model.clone(),
         )),
+        capture_request_body: policy.capture_request_body,
     })
 }
 
-async fn model_exchange_trace_enabled() -> bool {
+async fn current_model_exchange_trace_policy() -> Option<ModelExchangeTracePolicy> {
     let Ok(config_service) = GlobalConfigManager::get_service().await else {
-        return false;
+        return None;
     };
 
-    config_service
-        .get_config(Some("app.logging.model_exchange_trace"))
+    let tracing_config: ModelExchangeTracingConfig = config_service
+        .get_config(Some("app.logging.model_exchange_tracing"))
         .await
-        .unwrap_or(false)
+        .unwrap_or_default();
+    ModelExchangeTracePolicy::from_config(tracing_config)
 }
 
 async fn detect_last_sequence(session_dir: &Path) -> Result<u64, String> {

@@ -117,7 +117,7 @@ where
                 .sink
                 .request_attempt_started(&ModelExchangeRequestAttempt {
                     request_url: url.to_string(),
-                    request_body: request_body.clone(),
+                    request_body: trace.capture_request_body.then(|| request_body.clone()),
                     attempt_number: attempt + 1,
                 })
                 .await

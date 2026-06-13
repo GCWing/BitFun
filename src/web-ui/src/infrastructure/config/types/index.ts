@@ -28,11 +28,16 @@ export interface AppConfig {
 }
 
 export type BackendLogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'off';
+export type ModelExchangeTracingMode = 'off' | 'full' | 'usage_only';
+
+export interface ModelExchangeTracingConfig {
+  mode: ModelExchangeTracingMode;
+}
 
 export interface AppLoggingConfig {
   level: BackendLogLevel;
   include_sensitive_diagnostics: boolean;
-  model_exchange_trace: boolean;
+  model_exchange_tracing: ModelExchangeTracingConfig;
 }
 
 // Reserved; legacy `default_mode` in saved JSON is ignored by the app.

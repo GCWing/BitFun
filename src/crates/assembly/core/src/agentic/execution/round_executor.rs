@@ -1038,7 +1038,7 @@ impl RoundExecutor {
             partial_recovery_reason,
         ) = if let Some(result) = result {
             (
-                result.full_text.clone(),
+                Some(result.full_text.clone()),
                 Self::stream_result_reasoning(result),
                 serde_json::to_value(&result.tool_calls).ok(),
                 result
@@ -1049,7 +1049,7 @@ impl RoundExecutor {
                 result.partial_recovery_reason.clone(),
             )
         } else {
-            (String::new(), None, None, None, None, None)
+            (None, None, None, None, None, None)
         };
 
         ModelExchangeResponseTrace {
@@ -1426,7 +1426,7 @@ mod tests {
             trace.error.as_deref(),
             Some("Provider returned only invalid tool arguments")
         );
-        assert_eq!(trace.assistant_text, "");
+        assert_eq!(trace.assistant_text.as_deref(), Some(""));
         assert_eq!(trace.thinking.as_deref(), Some("reasoning"));
         assert_eq!(
             trace.partial_recovery_reason.as_deref(),
@@ -1463,7 +1463,7 @@ mod tests {
         let trace = RoundExecutor::error_trace_response("error", "request failed".to_string());
 
         assert_eq!(trace.kind, "error");
-        assert_eq!(trace.assistant_text, "");
+        assert!(trace.assistant_text.is_none());
         assert!(trace.thinking.is_none());
         assert!(trace.tool_calls.is_none());
         assert!(trace.usage.is_none());
