@@ -1545,6 +1545,8 @@
     },
     "default": {
       "waitingConfirm": "Waiting for confirmation",
+      "queued": "Queued",
+      "waiting": "Waiting",
       "executing": "Executing...",
       "completed": "Completed",
       "cancelled": "Cancelled",

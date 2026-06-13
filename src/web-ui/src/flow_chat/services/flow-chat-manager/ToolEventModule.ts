@@ -20,7 +20,9 @@ import type {
   FlowToolEvent,
   ParamsPartialToolEvent,
   ProgressToolEvent,
+  QueuedToolEvent,
   StartedToolEvent,
+  WaitingToolEvent,
 } from '../EventBatcher';
 
 const log = createLogger('ToolEventModule');
@@ -67,6 +69,16 @@ export function processToolEvent(
     
     case 'ParamsPartial': {
       handleParamsPartial(store, sessionId, turnId, toolEvent);
+      break;
+    }
+
+    case 'Queued': {
+      handleQueued(store, sessionId, turnId, toolEvent);
+      break;
+    }
+
+    case 'Waiting': {
+      handleWaiting(store, sessionId, turnId, toolEvent);
       break;
     }
     
@@ -355,6 +367,40 @@ function handleParamsPartial(
   toolEvent: ParamsPartialToolEvent
 ): void {
   applyParamsPartial(store, sessionId, turnId, toolEvent);
+}
+
+/**
+ * Handle tool queued event
+ */
+function handleQueued(
+  store: FlowChatStore,
+  sessionId: string,
+  turnId: string,
+  toolEvent: QueuedToolEvent
+): void {
+  const existingItem = store.findToolItem(sessionId, turnId, toolEvent.tool_id);
+  if (existingItem && existingItem.type === 'tool') {
+    updateToolItem(store, sessionId, turnId, toolEvent.tool_id, {
+      status: 'queued',
+    });
+  }
+}
+
+/**
+ * Handle tool waiting event
+ */
+function handleWaiting(
+  store: FlowChatStore,
+  sessionId: string,
+  turnId: string,
+  toolEvent: WaitingToolEvent
+): void {
+  const existingItem = store.findToolItem(sessionId, turnId, toolEvent.tool_id);
+  if (existingItem && existingItem.type === 'tool') {
+    updateToolItem(store, sessionId, turnId, toolEvent.tool_id, {
+      status: 'waiting',
+    });
+  }
 }
 
 /**

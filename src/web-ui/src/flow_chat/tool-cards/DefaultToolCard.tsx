@@ -160,6 +160,10 @@ export const DefaultToolCard: React.FC<ToolCardProps> = ({
     }
 
     switch (status) {
+      case 'queued':
+        return t('toolCards.default.queued');
+      case 'waiting':
+        return t('toolCards.default.waiting');
       case 'streaming':
       case 'running':
         return t('toolCards.default.executing');
@@ -185,6 +189,20 @@ export const DefaultToolCard: React.FC<ToolCardProps> = ({
     const progressMessage = (toolItem as any)._progressMessage;
     if (progressMessage && (status === 'running' || status === 'streaming')) {
       return progressMessage;
+    }
+
+    if (status === 'queued') {
+      const preview = getInlinePreview(filteredInput);
+      return preview
+        ? `${t('toolCards.default.queued')} - ${preview}`
+        : t('toolCards.default.queued');
+    }
+
+    if (status === 'waiting') {
+      const preview = getInlinePreview(filteredInput);
+      return preview
+        ? `${t('toolCards.default.waiting')} - ${preview}`
+        : t('toolCards.default.waiting');
     }
 
     if (status === 'completed') {

@@ -15,7 +15,7 @@ export interface FlowItem {
   id: string;
   type: 'text' | 'tool' | 'image-analysis' | 'thinking' | 'user-steering';
   timestamp: number;
-  status: 'pending' | 'preparing' | 'running' | 'streaming' | 'receiving' | 'completed' | 'cancelled' | 'error' | 'analyzing' | 'pending_confirmation' | 'confirmed'; // Includes error, analyzing, and confirmation states.
+  status: 'pending' | 'queued' | 'waiting' | 'preparing' | 'running' | 'streaming' | 'receiving' | 'completed' | 'cancelled' | 'error' | 'analyzing' | 'pending_confirmation' | 'confirmed'; // Includes error, analyzing, and confirmation states.
 
   /**
    * Session-scoped subagent linkage.
