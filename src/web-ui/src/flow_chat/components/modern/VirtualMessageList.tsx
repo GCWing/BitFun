@@ -886,17 +886,23 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
 
     // Content shrank: preserve the current visual anchor by extending the footer
     // when the user does not already have enough distance from the bottom.
+    //
+    // In follow-output + streaming mode, skip the compensation path entirely.
+    // The continuous follow loop (60fps RAF) will re-pin scrollTop to the new
+    // physical bottom on the next frame (~16ms), making the shrink invisible.
+    // Injecting footer compensation + anchor lock here would freeze the viewport
+    // on older content during the collapse animation and require a deferred
+    // follow path to resume — a source of the "occasionally not at the bottom"
+    // bug. Skipping compensation here also means there is nothing to accumulate
+    // or drain, so issue #1176 (permanent whitespace from un-drained
+    // compensation) cannot occur in this code path.
+    if (isFollowingOutputRef.current && isStreamingOutputRef.current) {
+      previousScrollTopRef.current = currentScrollTop;
+      recordScrollerGeometry(scroller);
+      return;
+    }
+
     const shrinkAmount = -heightDelta;
-    // Note: previously this branch returned early in follow-output mode to let
-    // the continuous follow loop chase the bottom every frame. That caused the
-    // visible "sink-down" jitter when tool-card auto-collapse shrank content
-    // above the viewport. We now run the full compensation path regardless of
-    // follow state — the bottom-reservation footer keeps `scrollHeight` stable
-    // and the anchor lock preserves the upper visual anchor during the
-    // animation. The continuous follow loop is gated by
-    // `shouldSuspendAutoFollow` while a collapse intent / layout transition is
-    // in flight, so it does not fight the anchor lock; once the transition
-    // ends, the deferred follow path resumes bottom-tracking smoothly.
     const collapseIntent = pendingCollapseIntentRef.current;
     const now = performance.now();
     const hasValidCollapseIntent = collapseIntent.active && collapseIntent.expiresAtMs >= now;
@@ -2132,13 +2138,14 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
       // because `scrollHeight` shrunk below `scrollTop + clientHeight`
       // (typical cause: an unsignaled item shrink from Virtuoso re-measure
       // or a tool result finalizing). With `overflow-anchor: none` we cannot
-      // ask the browser to keep the visual anchor for us, so we extend the
-      // bottom collapse reservation by the clamp amount and restore
-      // `scrollTop` to its pre-clamp value. The widened footer prevents the
-      // browser from re-clamping immediately; subsequent streaming-token
-      // growth drains the reservation via the grow branch of
-      // `measureHeightChange`. This is the only place that protects against
-      // unsignaled shrinks that do not arrive with a `collapse-intent` event.
+      // ask the browser to keep the visual anchor for us.
+      //
+      // In follow+streaming mode this protection is intentionally skipped: the
+      // continuous follow loop (60fps RAF) re-pins scrollTop to the new
+      // physical bottom on the next frame, making the shrink invisible.
+      // Injecting compensation + restoring the old scrollTop here would freeze
+      // the viewport on older content and require a deferred follow path to
+      // resume — the root cause of the "occasionally not at the bottom" bug.
       const intentCheckScrollTop = scrollerElement.scrollTop;
       const intentCheckPreviousScrollTop = previousScrollTopRef.current;
       const intentCheckScrollDelta = intentCheckScrollTop - intentCheckPreviousScrollTop;
@@ -2151,32 +2158,13 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
         !anchorLockRef.current.active &&
         !collapseProtectionActive
       ) {
-        // Cap the clamp amount to what the footer actually needs.  Without
-        // this, repeated scroll-clamp events during CSS transitions can
-        // ratchet `collapse.px` upward without bound because the
-        // consumption path is blocked while transitions are active.
-        const rawClampAmount = -intentCheckScrollDelta;
-        const maxClampAmount = Math.max(0,
-          scrollerElement.scrollHeight - scrollerElement.clientHeight - scrollerElement.scrollTop,
-        );
-        const clampAmount = Math.min(rawClampAmount, maxClampAmount);
-        const baseState = bottomReservationStateRef.current;
-        const nextReservationState: BottomReservationState = {
-          ...baseState,
-          collapse: {
-            ...baseState.collapse,
-            px: baseState.collapse.px + clampAmount,
-            floorPx: baseState.collapse.floorPx,
-          },
-        };
-        updateBottomReservationState(nextReservationState);
-        applyFooterCompensationNow(nextReservationState);
-        scrollerElement.scrollTop = intentCheckPreviousScrollTop;
-        previousScrollTopRef.current = intentCheckPreviousScrollTop;
-        previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(
-          scrollerElement,
-          nextReservationState,
-        );
+        // Follow+streaming: do not inject compensation or restore old
+        // scrollTop. Let the follow loop handle the scroll naturally on the
+        // next animation frame. Return here to prevent the downstream follow
+        // controller (followOutputControllerRef.current.handleScroll) from
+        // seeing the browser-clamp delta and misclassifying it as a user
+        // upward scroll, which would incorrectly exit follow mode.
+        previousScrollTopRef.current = intentCheckScrollTop;
         recordScrollerGeometry(scrollerElement);
         return;
       }
@@ -2354,18 +2342,19 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
         filePath?: string | null;
         reason?: string | null;
       }>).detail;
-      // In follow-output mode, the user wants the viewport pinned to the
-      // latest streaming token. Reserving footer space + locking an upper
-      // anchor would freeze the viewport on older content during the
-      // collapse animation, producing the "stutter then jump" effect. Skip
-      // the protection path entirely and let the continuous follow loop
-      // absorb the shrink frame-by-frame.
-      // Note: in follow-output mode we still run the full collapse pre-compensation
-      // path. Pinning the upper visual anchor during the collapse animation keeps
-      // the conversation visually stable; the continuous follow loop is gated by
-      // `shouldSuspendAutoFollow` while the layout transition is in progress, and
-      // resumes bottom-tracking via the deferred-follow path after the transition
-      // ends and the collapse reservation is consumed.
+      // In follow-output + streaming mode, skip the collapse compensation path
+      // entirely. The user wants the viewport tracking the latest streaming
+      // token; footer compensation + anchor lock would freeze the viewport on
+      // older content and require a deferred follow path to resume, which is
+      // the source of the "occasionally not at the bottom" bug. Instead, let
+      // the continuous follow loop (60fps RAF) re-pin to the bottom on the
+      // next frame — the shrink is absorbed in ~16ms and invisible to the user.
+      // Not injecting compensation here also means nothing accumulates, so
+      // issue #1176 (permanent whitespace) cannot occur in this code path.
+      if (isFollowingOutputRef.current && isStreamingOutputRef.current) {
+        return;
+      }
+
       const baseTotalCompensationPx = getTotalBottomCompensationPx();
       const distanceFromBottom = Math.max(
         0,
@@ -3328,6 +3317,45 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
   };
   isFollowingOutputRef.current = isFollowingOutput;
   isStreamingOutputRef.current = isStreamingOutput;
+
+  // When entering follow-output during streaming, clear any residual collapse
+  // intent + compensation left over from a non-follow browsing session.
+  // Without this, a stale intent (up to 1s lifetime) would block the grow
+  // branch of measureHeightChange from consuming compensation and suspend the
+  // continuous follow loop via shouldSuspendAutoFollow, leaving the user on
+  // excess footer whitespace until the intent expires naturally.
+  const previousIsFollowingOutputRef = useRef(false);
+  useEffect(() => {
+    if (!previousIsFollowingOutputRef.current && isFollowingOutput && isStreamingOutput) {
+      const intent = pendingCollapseIntentRef.current;
+      if (intent.active) {
+        pendingCollapseIntentRef.current = {
+          active: false,
+          anchorScrollTop: 0,
+          toolId: null,
+          toolName: null,
+          expiresAtMs: 0,
+          distanceFromBottomBeforeCollapse: 0,
+          baseTotalCompensationPx: 0,
+          cumulativeShrinkPx: 0,
+        };
+      }
+      const collapsePx = getReservationTotalPx(bottomReservationStateRef.current.collapse);
+      if (collapsePx > COMPENSATION_EPSILON_PX) {
+        const next = {
+          ...bottomReservationStateRef.current,
+          collapse: {
+            ...bottomReservationStateRef.current.collapse,
+            px: 0,
+            floorPx: 0,
+          },
+        };
+        updateBottomReservationState(next);
+        applyFooterCompensationNow(next);
+      }
+    }
+    previousIsFollowingOutputRef.current = isFollowingOutput;
+  }, [applyFooterCompensationNow, isFollowingOutput, isStreamingOutput, updateBottomReservationState]);
 
   const scrollToTurn = useCallback((turnIndex: number) => {
     if (!virtuosoRef.current) return;
