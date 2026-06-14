@@ -413,6 +413,8 @@ export function convertDialogTurnToBackendFormat(dialogTurn: DialogTurn, turnInd
               status: item.status || 'completed',
               orderIndex: index,
               subagentSessionId: (item as any).subagentSessionId,
+              attemptId: item.attemptId,
+              attemptIndex: item.attemptIndex,
             };
           }),
         toolItems: round.items
@@ -437,6 +439,8 @@ export function convertDialogTurnToBackendFormat(dialogTurn: DialogTurn, turnInd
               subagentSessionId: toolItem.subagentSessionId,
               subagentModelId: toolItem.subagentModelId,
               subagentModelAlias: toolItem.subagentModelAlias,
+              attemptId: item.attemptId,
+              attemptIndex: item.attemptIndex,
             };
           }),
         thinkingItems: round.items
@@ -453,10 +457,13 @@ export function convertDialogTurnToBackendFormat(dialogTurn: DialogTurn, turnInd
               status: item.status || 'completed',
               orderIndex: index,
               subagentSessionId: thinkingItem.subagentSessionId,
+              attemptId: item.attemptId,
+              attemptIndex: item.attemptIndex,
             };
           }),
         startTime: round.startTime,
         endTime: round.endTime,
+        attemptCount: round.attemptCount,
         status: round.status || 'completed',
       };
     }),

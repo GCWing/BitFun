@@ -3643,6 +3643,8 @@ impl SessionManager {
                     parent_task_tool_id: None,
                     subagent_session_id: None,
                     status: Some("completed".to_string()),
+                    attempt_id: None,
+                    attempt_index: None,
                 }],
                 tool_items: Vec::new(),
                 thinking_items: Vec::new(),

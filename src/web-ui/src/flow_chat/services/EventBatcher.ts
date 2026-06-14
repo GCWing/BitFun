@@ -350,6 +350,8 @@ export interface TextChunkEventData {
   sessionId: string;
   turnId: string;
   roundId: string;
+  attemptId?: string;
+  attemptIndex?: number;
   text: string;
   contentType: 'text' | 'thinking';
   isThinkingEnd?: boolean;
@@ -359,7 +361,19 @@ export interface ToolEventData {
   sessionId: string;
   turnId: string;
   roundId: string;
+  attemptId?: string;
+  attemptIndex?: number;
   toolEvent: FlowToolEvent;
+}
+
+function resolveAttemptMergeToken(data: { attemptId?: string; attemptIndex?: number }): string {
+  if (typeof data.attemptId === 'string' && data.attemptId.length > 0) {
+    return encodeURIComponent(data.attemptId);
+  }
+  if (typeof data.attemptIndex === 'number' && Number.isFinite(data.attemptIndex)) {
+    return `idx-${data.attemptIndex}`;
+  }
+  return 'none';
 }
 
 /**
@@ -371,7 +385,7 @@ export interface ToolEventData {
  */
 export function generateTextChunkKey(data: TextChunkEventData): string {
   const { sessionId, roundId, contentType } = data;
-  return `text:${sessionId}:${roundId}:${contentType}`;
+  return `text:${sessionId}:${roundId}:${contentType}:${resolveAttemptMergeToken(data)}`;
 }
 
 /**
@@ -389,6 +403,7 @@ export function generateToolEventKey(data: ToolEventData): { key: string; strate
   const { sessionId, toolEvent } = data;
   const toolUseId = toolEvent.tool_id;
   const eventType = toolEvent.event_type;
+  const attemptToken = resolveAttemptMergeToken(data);
 
   const isolatedEvents: ToolEventType[] = ['EarlyDetected', 'Started', 'Completed', 'Failed', 'Cancelled', 'ConfirmationNeeded'];
   if (isolatedEvents.includes(eventType)) {
@@ -397,13 +412,13 @@ export function generateToolEventKey(data: ToolEventData): { key: string; strate
 
   if (eventType === 'ParamsPartial') {
     return {
-      key: `tool:params:${sessionId}:${toolUseId}`,
+      key: `tool:params:${sessionId}:${toolUseId}:${attemptToken}`,
       strategy: 'accumulate'
     };
   }
   if (eventType === 'Progress') {
     return {
-      key: `tool:progress:${sessionId}:${toolUseId}`,
+      key: `tool:progress:${sessionId}:${toolUseId}:${attemptToken}`,
       strategy: 'replace'
     };
   }
@@ -419,13 +434,9 @@ export function parseEventKey(key: string): {
   eventType: 'text' | 'tool:params' | 'tool:progress';
   ids: Record<string, string>;
 } | null {
-  const parts = key.split(':');
-
-  if (parts[0] === 'subagent') {
-    // subagent:text:sessionId:roundId:contentType
-    // subagent:tool:params:sessionId:subToolUseId
-    // subagent:tool:progress:sessionId:subToolUseId
-    if (parts[1] === 'text') {
+  if (key.startsWith('subagent:text:')) {
+    const parts = key.split(':');
+    if (parts.length >= 5) {
       return {
         isSubagent: true,
         eventType: 'text',
@@ -435,7 +446,10 @@ export function parseEventKey(key: string): {
           contentType: parts[4]
         }
       };
-    } else if (parts[1] === 'tool' && parts[2] === 'params') {
+    }
+  } else if (key.startsWith('subagent:tool:params:')) {
+    const parts = key.split(':');
+    if (parts.length >= 5) {
       return {
         isSubagent: true,
         eventType: 'tool:params',
@@ -444,7 +458,10 @@ export function parseEventKey(key: string): {
           subToolUseId: parts[4]
         }
       };
-    } else if (parts[1] === 'tool' && parts[2] === 'progress') {
+    }
+  } else if (key.startsWith('subagent:tool:progress:')) {
+    const parts = key.split(':');
+    if (parts.length >= 5) {
       return {
         isSubagent: true,
         eventType: 'tool:progress',
@@ -454,11 +471,9 @@ export function parseEventKey(key: string): {
         }
       };
     }
-  } else {
-    // text:sessionId:roundId:contentType
-    // tool:params:sessionId:toolUseId
-    // tool:progress:sessionId:toolUseId
-    if (parts[0] === 'text') {
+  } else if (key.startsWith('text:')) {
+    const parts = key.split(':');
+    if (parts.length >= 4) {
       return {
         isSubagent: false,
         eventType: 'text',
@@ -468,7 +483,10 @@ export function parseEventKey(key: string): {
           contentType: parts[3]
         }
       };
-    } else if (parts[0] === 'tool' && parts[1] === 'params') {
+    }
+  } else if (key.startsWith('tool:params:')) {
+    const parts = key.split(':');
+    if (parts.length >= 4) {
       return {
         isSubagent: false,
         eventType: 'tool:params',
@@ -477,7 +495,10 @@ export function parseEventKey(key: string): {
           toolUseId: parts[3]
         }
       };
-    } else if (parts[0] === 'tool' && parts[1] === 'progress') {
+    }
+  } else if (key.startsWith('tool:progress:')) {
+    const parts = key.split(':');
+    if (parts.length >= 4) {
       return {
         isSubagent: false,
         eventType: 'tool:progress',

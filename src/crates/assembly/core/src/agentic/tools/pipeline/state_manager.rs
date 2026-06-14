@@ -265,6 +265,8 @@ impl ToolStateManager {
             session_id: task.context.session_id,
             turn_id: task.context.dialog_turn_id,
             round_id: task.context.round_id,
+            attempt_id: task.context.attempt_id,
+            attempt_index: task.context.attempt_index,
             tool_event,
         };
 

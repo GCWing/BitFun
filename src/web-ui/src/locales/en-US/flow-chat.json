@@ -1165,6 +1165,10 @@
     "userLabel": "👤 User:",
     "toolCallLabel": "🔧 Tool call: {{name}}",
     "loadingMoreHistory": "Loading more history...",
+    "retryHistoryShow": "Show {{count}} previous attempts",
+    "retryHistoryHide": "Hide retry history",
+    "attemptLabel": "Attempt {{index}}",
+    "attemptSuperseded": "superseded",
     "meta": {
       "label": "Response metadata",
       "completed": "Completed",
@@ -1391,7 +1395,8 @@
       "inputParams": "Input Parameters",
       "executionResult": "Execution Result",
       "viewDetails": "View Details",
-      "interruptedByRestart": "This tool was still running when the app closed last time, so it has been restored as interrupted"
+      "interruptedByRestart": "This tool was still running when the app closed last time, so it has been restored as interrupted",
+      "interruptedByRetry": "This attempt was superseded by a newer retry in the same response"
     },
     "askUser": {
       "completed": "Completed",

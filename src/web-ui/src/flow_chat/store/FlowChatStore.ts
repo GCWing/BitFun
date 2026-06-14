@@ -8,6 +8,7 @@ import {
   Session,
   DialogTurn,
   ModelRound,
+  ModelRoundAttempt,
   FlowItem,
   FlowToolItem,
   FlowImageAnalysisItem,
@@ -77,6 +78,254 @@ const HISTORICAL_SESSION_FULL_HISTORY_IDLE_TIMEOUT_MS = 1500;
 const HISTORICAL_SESSION_FULL_HISTORY_FIRST_PAINT_TIMEOUT_MS = 2500;
 const HISTORICAL_SESSION_FULL_HISTORY_STABLE_VIEWPORT_DELAY_MS = 250;
 const MAX_DEFERRED_FULL_HISTORY_PROJECTIONS = 3;
+
+function itemMatchesIdentity(item: AnyFlowItem, itemId: string): boolean {
+  if (item.id === itemId) {
+    return true;
+  }
+
+  if (item.type === 'tool') {
+    return (item as FlowToolItem).toolCall?.id === itemId;
+  }
+
+  return false;
+}
+
+function withAttemptMetadata<T extends AnyFlowItem>(
+  item: T,
+  attempt: { id: string; index: number },
+): T {
+  if (item.attemptId === attempt.id && item.attemptIndex === attempt.index) {
+    return item;
+  }
+
+  return {
+    ...item,
+    attemptId: attempt.id,
+    attemptIndex: attempt.index,
+  };
+}
+
+function sortAttemptEntries<T extends { index: number }>(attempts: T[]): T[] {
+  return [...attempts].sort((left, right) => left.index - right.index);
+}
+
+function isFlowItemActiveStatus(status: AnyFlowItem['status']): boolean {
+  return [
+    'pending',
+    'queued',
+    'waiting',
+    'preparing',
+    'running',
+    'streaming',
+    'receiving',
+    'pending_confirmation',
+    'confirmed',
+    'analyzing',
+  ].includes(status);
+}
+
+function normalizeSupersededItem(item: AnyFlowItem, endedAt: number): AnyFlowItem {
+  if (item.type === 'text') {
+    return {
+      ...item,
+      isStreaming: false,
+      status: 'completed',
+      runtimeStatus: undefined,
+    };
+  }
+
+  if (item.type === 'thinking') {
+    return {
+      ...item,
+      isStreaming: false,
+      isCollapsed: true,
+      status: 'completed',
+    };
+  }
+
+  if (item.type === 'tool') {
+    const toolItem = item as FlowToolItem;
+    if (!isFlowItemActiveStatus(toolItem.status)) {
+      return item;
+    }
+
+    const startTime = toolItem.startTime;
+    return {
+      ...toolItem,
+      status: 'cancelled',
+      requiresConfirmation: false,
+      acpPermission: undefined,
+      isParamsStreaming: false,
+      interruptionReason: 'retry_superseded',
+      endTime: toolItem.endTime ?? endedAt,
+      durationMs: toolItem.durationMs ?? (
+        typeof startTime === 'number' ? Math.max(0, endedAt - startTime) : undefined
+      ),
+      toolResult: toolItem.toolResult ?? {
+        result: null,
+        success: false,
+        error: 'Superseded by a newer retry in the same model round.',
+      },
+    };
+  }
+
+  return item;
+}
+
+function deriveAttemptStatus(
+  round: ModelRound,
+  attempt: ModelRoundAttempt,
+  attemptIndex: number,
+  attemptCount: number,
+): ModelRoundAttempt['status'] {
+  const isLatestAttempt = attemptIndex === attemptCount - 1;
+  if (!isLatestAttempt) {
+    return 'superseded';
+  }
+
+  if (round.status === 'completed') {
+    return 'completed';
+  }
+  if (round.status === 'cancelled') {
+    return 'cancelled';
+  }
+  if (round.status === 'error') {
+    return 'failed';
+  }
+  if (attempt.status === 'superseded') {
+    return 'superseded';
+  }
+  return 'streaming';
+}
+
+function normalizePersistedToolInterruptionReason(
+  interruptionReason: unknown,
+  status: unknown,
+): FlowToolItem['interruptionReason'] {
+  if (interruptionReason === 'retry_superseded') {
+    return 'retry_superseded';
+  }
+
+  if (interruptionReason === 'app_restart') {
+    return 'app_restart';
+  }
+
+  return isTransientToolStatus(status) ? 'app_restart' : undefined;
+}
+
+function flattenRoundAttemptItems(round: ModelRound): AnyFlowItem[] {
+  const attempts = sortAttemptEntries(round.attempts ?? []);
+  return attempts.flatMap(attempt => attempt.items);
+}
+
+function deriveRoundAttemptsFromItems(items: AnyFlowItem[]): ModelRound['attempts'] | undefined {
+  const attempts: Array<ModelRoundAttempt> = [];
+  const byKey = new Map<string, number>();
+  const leadingUnassigned: AnyFlowItem[] = [];
+  let currentAttemptKey: string | null = null;
+  let hasAttemptedItems = false;
+
+  const getOrCreateAttempt = (id: string, index: number) => {
+    const key = `${id}::${index}`;
+    const existingIndex = byKey.get(key);
+    if (existingIndex !== undefined) {
+      return attempts[existingIndex];
+    }
+
+    const attempt: ModelRoundAttempt = { id, index, status: 'streaming', items: [] as AnyFlowItem[] };
+    byKey.set(key, attempts.length);
+    attempts.push(attempt);
+    return attempt;
+  };
+
+  for (const item of items) {
+    const attemptId = typeof item.attemptId === 'string' && item.attemptId.length > 0
+      ? item.attemptId
+      : undefined;
+    const attemptIndex = typeof item.attemptIndex === 'number' && Number.isFinite(item.attemptIndex)
+      ? item.attemptIndex
+      : undefined;
+
+    if (attemptId || attemptIndex !== undefined) {
+      hasAttemptedItems = true;
+      const resolvedIndex = attemptIndex ?? attempts.length + 1;
+      const resolvedId = attemptId ?? `attempt:${resolvedIndex}`;
+      const attempt = getOrCreateAttempt(resolvedId, resolvedIndex);
+
+      if (leadingUnassigned.length > 0 && attempts.length === 1 && attempt.items.length === 0) {
+        attempt.items.push(...leadingUnassigned.map(unassigned => withAttemptMetadata(unassigned, attempt)));
+        leadingUnassigned.length = 0;
+      }
+
+      attempt.items.push(withAttemptMetadata(item, attempt));
+      currentAttemptKey = `${attempt.id}::${attempt.index}`;
+      continue;
+    }
+
+    if (currentAttemptKey) {
+      const attemptIndexInList = byKey.get(currentAttemptKey);
+      if (attemptIndexInList !== undefined) {
+        const attempt = attempts[attemptIndexInList];
+        attempt.items.push(withAttemptMetadata(item, attempt));
+        continue;
+      }
+    }
+
+    leadingUnassigned.push(item);
+  }
+
+  if (!hasAttemptedItems) {
+    return undefined;
+  }
+
+  if (leadingUnassigned.length > 0 && attempts.length > 0) {
+    const firstAttempt = attempts[0];
+    firstAttempt.items.unshift(...leadingUnassigned.map(item => withAttemptMetadata(item, firstAttempt)));
+  }
+
+  return sortAttemptEntries(attempts);
+}
+
+function synchronizeRoundAttempts(round: ModelRound): ModelRound {
+  const attempts = round.attempts ?? deriveRoundAttemptsFromItems(round.items);
+  if (!attempts || attempts.length === 0) {
+    return round;
+  }
+
+  const endedAt = round.endTime ?? Date.now();
+  const sortedAttempts = sortAttemptEntries(attempts).map((attempt, index, allAttempts) => {
+    const status = deriveAttemptStatus(round, attempt, index, allAttempts.length);
+    return {
+      ...attempt,
+      status,
+      items: status === 'superseded'
+        ? attempt.items.map(item => normalizeSupersededItem(item, endedAt))
+        : attempt.items.map(item => {
+            if (item.type === 'text') {
+              return round.isStreaming ? item : { ...item, isStreaming: false };
+            }
+            if (item.type === 'thinking') {
+              return round.isStreaming ? item : { ...item, isStreaming: false };
+            }
+            return item;
+          }),
+    };
+  });
+  const disableExploreGrouping = sortedAttempts.length > 1;
+
+  return {
+    ...round,
+    attempts: sortedAttempts,
+    items: flattenRoundAttemptItems({ ...round, attempts: sortedAttempts }),
+    renderHints: disableExploreGrouping
+      ? {
+          ...(round.renderHints ?? {}),
+          disableExploreGrouping: true,
+        }
+      : round.renderHints,
+  };
+}
 
 interface FullHistoryHydrationReleaseOptions {
   immediate?: boolean;
@@ -2051,7 +2300,7 @@ export class FlowChatStore {
   public addModelRound(sessionId: string, dialogTurnId: string, modelRound: ModelRound): void {
     this.updateDialogTurn(sessionId, dialogTurnId, turn => ({
       ...turn,
-      modelRounds: [...turn.modelRounds, modelRound],
+      modelRounds: [...turn.modelRounds, synchronizeRoundAttempts(modelRound)],
       status: 'processing'
     }));
   }
@@ -2060,7 +2309,7 @@ export class FlowChatStore {
     this.updateDialogTurn(sessionId, dialogTurnId, turn => ({
       ...turn,
       modelRounds: turn.modelRounds.map(round => 
-        round.id === modelRoundId ? updater(round) : round
+        round.id === modelRoundId ? synchronizeRoundAttempts(updater(round)) : round
       )
     }));
   }
@@ -2076,13 +2325,43 @@ export class FlowChatStore {
     if (updates.length === 0) return;
     
     this.updateDialogTurn(sessionId, dialogTurnId, turn => {
-      const updatedModelRounds = turn.modelRounds.map(round => ({
-        ...round,
-        items: round.items.map(item => {
-          const update = updates.find(u => u.itemId === item.id);
-          return update ? ({ ...item, ...update.changes } as AnyFlowItem) : item;
-        })
-      }));
+      const updatedModelRounds = turn.modelRounds.map(round => {
+        const activeAttempts = round.attempts ?? deriveRoundAttemptsFromItems(round.items);
+
+        if (activeAttempts && activeAttempts.length > 0) {
+          let roundChanged = false;
+          const nextAttempts = activeAttempts.map(attempt => {
+            let attemptChanged = false;
+            const nextItems = attempt.items.map(item => {
+              const update = updates.find(u => itemMatchesIdentity(item, u.itemId));
+              if (!update) {
+                return item;
+              }
+
+              attemptChanged = true;
+              roundChanged = true;
+              return { ...item, ...update.changes } as AnyFlowItem;
+            });
+
+            return attemptChanged ? { ...attempt, items: nextItems } : attempt;
+          });
+
+          return roundChanged
+            ? synchronizeRoundAttempts({
+                ...round,
+                attempts: nextAttempts,
+              })
+            : round;
+        }
+
+        return {
+          ...round,
+          items: round.items.map(item => {
+            const update = updates.find(u => itemMatchesIdentity(item, u.itemId));
+            return update ? ({ ...item, ...update.changes } as AnyFlowItem) : item;
+          })
+        };
+      });
       
       return {
         ...turn,
@@ -2115,11 +2394,67 @@ export class FlowChatStore {
       }
 
       const updatedModelRounds = [...turn.modelRounds];
-      
-      updatedModelRounds[targetModelRoundIndex] = {
-        ...targetModelRound,
-        items: [...targetModelRound.items, item]
-      };
+      const activeAttempts = targetModelRound.attempts ?? deriveRoundAttemptsFromItems(targetModelRound.items);
+      const incomingAttemptId = typeof item.attemptId === 'string' && item.attemptId.length > 0
+        ? item.attemptId
+        : undefined;
+      const incomingAttemptIndex = typeof item.attemptIndex === 'number' && Number.isFinite(item.attemptIndex)
+        ? item.attemptIndex
+        : undefined;
+
+      if (!activeAttempts || activeAttempts.length === 0) {
+        if (!incomingAttemptId && incomingAttemptIndex === undefined) {
+          updatedModelRounds[targetModelRoundIndex] = {
+            ...targetModelRound,
+            items: [...targetModelRound.items, item]
+          };
+        } else {
+          const initialAttempt = {
+            id: incomingAttemptId ?? `attempt:${incomingAttemptIndex ?? 1}`,
+            index: incomingAttemptIndex ?? 1,
+          };
+          const attemptItems = [
+            ...targetModelRound.items.map(existing => withAttemptMetadata(existing, initialAttempt)),
+            withAttemptMetadata(item, initialAttempt),
+          ];
+          updatedModelRounds[targetModelRoundIndex] = synchronizeRoundAttempts({
+            ...targetModelRound,
+            attempts: [{
+              ...initialAttempt,
+              status: 'streaming',
+              items: attemptItems,
+            }],
+          });
+        }
+      } else {
+        const latestAttempt = sortAttemptEntries(activeAttempts)[activeAttempts.length - 1];
+        const targetAttempt = {
+          id: incomingAttemptId ?? latestAttempt.id,
+          index: incomingAttemptIndex ?? latestAttempt.index,
+        };
+        const normalizedItem = withAttemptMetadata(item, targetAttempt);
+        const targetAttemptKey = `${targetAttempt.id}::${targetAttempt.index}`;
+        let attemptFound = false;
+        const nextAttempts = activeAttempts.map(attempt => {
+          const attemptKey = `${attempt.id}::${attempt.index}`;
+          if (attemptKey !== targetAttemptKey) {
+            return attempt;
+          }
+
+          attemptFound = true;
+          return {
+            ...attempt,
+            items: [...attempt.items, normalizedItem],
+          };
+        });
+
+        updatedModelRounds[targetModelRoundIndex] = synchronizeRoundAttempts({
+          ...targetModelRound,
+          attempts: attemptFound
+            ? nextAttempts
+            : [...nextAttempts, { ...targetAttempt, status: 'streaming', items: [normalizedItem] }],
+        });
+      }
 
       return {
         ...turn,
@@ -2148,26 +2483,47 @@ export class FlowChatStore {
       
       const updatedModelRounds = turn.modelRounds.map(modelRound => {
         if (updated) return modelRound;
-        
-        const updatedItems = modelRound.items.map((item: any) => {
-          const toolCallId =
-            item.type === 'tool' ? ((item as FlowToolItem).toolCall?.id as string | undefined) : undefined;
-          const idMatches = item.id === itemId || (toolCallId !== undefined && toolCallId === itemId);
-          if (idMatches) {
-            const updatedItem = { ...item, ...updates };
-            return updatedItem;
+
+        const activeAttempts = modelRound.attempts ?? deriveRoundAttemptsFromItems(modelRound.items);
+        if (activeAttempts && activeAttempts.length > 0) {
+          let foundInAttempts = false;
+          const nextAttempts = activeAttempts.map(attempt => {
+            let attemptChanged = false;
+            const nextItems = attempt.items.map(item => {
+              if (!itemMatchesIdentity(item, itemId)) {
+                return item;
+              }
+
+              foundInAttempts = true;
+              attemptChanged = true;
+              return { ...item, ...updates } as AnyFlowItem;
+            });
+
+            return attemptChanged ? { ...attempt, items: nextItems } : attempt;
+          });
+
+          if (foundInAttempts) {
+            updated = true;
+            return synchronizeRoundAttempts({
+              ...modelRound,
+              attempts: nextAttempts,
+            });
           }
-          return item;
+        }
+
+        const updatedItems = modelRound.items.map((item: any) => {
+          if (!itemMatchesIdentity(item, itemId)) {
+            return item;
+          }
+
+          return { ...item, ...updates };
         });
-        
-        if (updatedItems.some((item: any) => {
-          const tc = item.type === 'tool' ? (item as FlowToolItem).toolCall?.id : undefined;
-          return item.id === itemId || tc === itemId;
-        })) {
+
+        if (updatedItems.some((item: any) => itemMatchesIdentity(item, itemId))) {
           updated = true;
           return { ...modelRound, items: updatedItems };
         }
-        
+
         return modelRound;
       });
       
@@ -2615,6 +2971,8 @@ export class FlowChatStore {
               isStreaming: false,
               timestamp: item.timestamp,
               status: item.status,
+              attemptId: item.attemptId,
+              attemptIndex: item.attemptIndex,
             }));
           
           const toolItems = round.items
@@ -2636,6 +2994,8 @@ export class FlowChatStore {
               preflightMs: (item as any).preflightMs,
               confirmationWaitMs: (item as any).confirmationWaitMs,
               executionMs: (item as any).executionMs,
+              attemptId: item.attemptId,
+              attemptIndex: item.attemptIndex,
             }));
           
           const thinkingItems = round.items
@@ -2647,6 +3007,8 @@ export class FlowChatStore {
               isCollapsed: (item as any).isCollapsed || false,
               timestamp: item.timestamp,
               status: item.status,
+              attemptId: item.attemptId,
+              attemptIndex: item.attemptIndex,
             }));
           
           return {
@@ -3730,76 +4092,80 @@ export class FlowChatStore {
       },
       modelRounds: turn.modelRounds.map((round: any) => {
         const normalizedRoundStatus = normalizeRecoveredRoundStatus(round.status, normalizedTurnStatus);
+        const flatItems = [
+          ...round.textItems.map((text: any) => ({
+            id: text.id,
+            type: 'text' as const,
+            content: text.content,
+            isStreaming: false,
+            isMarkdown: text.isMarkdown !== undefined ? text.isMarkdown : true,
+            timestamp: text.timestamp,
+            status: normalizeRecoveredTextStatus(text.status, normalizedTurnStatus),
+            orderIndex: text.orderIndex,
+            subagentSessionId: text.subagentSessionId,
+            attemptId: text.attemptId,
+            attemptIndex: text.attemptIndex,
+          })),
+          ...round.toolItems.map((tool: any) => ({
+            id: tool.id,
+            type: 'tool' as const,
+            toolName: tool.toolName,
+            interruptionReason: normalizePersistedToolInterruptionReason(
+              tool.interruptionReason,
+              tool.status,
+            ),
+            toolCall: tool.toolCall,
+            toolResult: tool.toolResult,
+            aiIntent: tool.aiIntent,
+            requiresConfirmation: tool.requiresConfirmation,
+            userConfirmed: tool.userConfirmed,
+            acpPermission: tool.acpPermission,
+            startTime: tool.startTime,
+            endTime: tool.endTime,
+            durationMs: tool.durationMs,
+            queueWaitMs: tool.queueWaitMs,
+            preflightMs: tool.preflightMs,
+            confirmationWaitMs: tool.confirmationWaitMs,
+            executionMs: tool.executionMs,
+            timestamp: tool.startTime,
+            status: normalizeRecoveredToolStatus(
+              tool.status,
+              normalizedTurnStatus,
+              tool.toolResult,
+              { preservePendingConfirmation: true },
+            ),
+            orderIndex: tool.orderIndex,
+            subagentSessionId: tool.subagentSessionId,
+            subagentModelId: tool.subagentModelId,
+            subagentModelAlias: tool.subagentModelAlias,
+            attemptId: tool.attemptId,
+            attemptIndex: tool.attemptIndex,
+          })),
+          ...(round.thinkingItems || []).map((thinking: any) => ({
+            id: thinking.id,
+            type: 'thinking' as const,
+            content: thinking.content,
+            isStreaming: false,
+            isCollapsed: thinking.isCollapsed ?? true,
+            timestamp: thinking.timestamp,
+            status: normalizeRecoveredThinkingStatus(thinking.status, normalizedTurnStatus),
+            orderIndex: thinking.orderIndex,
+            subagentSessionId: thinking.subagentSessionId,
+            attemptId: thinking.attemptId,
+            attemptIndex: thinking.attemptIndex,
+          })),
+        ].sort((a: any, b: any) => {
+          const aIndex = a.orderIndex !== undefined ? a.orderIndex : a.timestamp || 0;
+          const bIndex = b.orderIndex !== undefined ? b.orderIndex : b.timestamp || 0;
+          
+          return aIndex - bIndex;
+        });
 
-        return {
+        const hydratedRound = synchronizeRoundAttempts({
           id: round.id,
-          turnId: round.turnId,
           index: round.roundIndex ?? 0,
           renderHints: round.renderHints,
-          items: [
-            ...round.textItems.map((text: any) => ({
-              id: text.id,
-              type: 'text' as const,
-              content: text.content,
-              isStreaming: false,
-              isMarkdown: text.isMarkdown !== undefined ? text.isMarkdown : true,
-              timestamp: text.timestamp,
-              status: normalizeRecoveredTextStatus(text.status, normalizedTurnStatus),
-              orderIndex: text.orderIndex,
-              subagentSessionId: text.subagentSessionId,
-            })),
-            ...round.toolItems.map((tool: any) => ({
-              id: tool.id,
-              type: 'tool' as const,
-              toolName: tool.toolName,
-              interruptionReason:
-                tool.interruptionReason === 'app_restart'
-                  ? 'app_restart'
-                  : isTransientToolStatus(tool.status)
-                    ? 'app_restart'
-                    : undefined,
-              toolCall: tool.toolCall,
-              toolResult: tool.toolResult,
-              aiIntent: tool.aiIntent,
-              requiresConfirmation: tool.requiresConfirmation,
-              userConfirmed: tool.userConfirmed,
-              acpPermission: tool.acpPermission,
-              startTime: tool.startTime,
-              endTime: tool.endTime,
-              durationMs: tool.durationMs,
-              queueWaitMs: tool.queueWaitMs,
-              preflightMs: tool.preflightMs,
-              confirmationWaitMs: tool.confirmationWaitMs,
-              executionMs: tool.executionMs,
-              timestamp: tool.startTime,
-              status: normalizeRecoveredToolStatus(
-                tool.status,
-                normalizedTurnStatus,
-                tool.toolResult,
-                { preservePendingConfirmation: true },
-              ),
-              orderIndex: tool.orderIndex,
-              subagentSessionId: tool.subagentSessionId,
-              subagentModelId: tool.subagentModelId,
-              subagentModelAlias: tool.subagentModelAlias,
-            })),
-            ...(round.thinkingItems || []).map((thinking: any) => ({
-              id: thinking.id,
-              type: 'thinking' as const,
-              content: thinking.content,
-              isStreaming: false,
-              isCollapsed: thinking.isCollapsed ?? true,
-              timestamp: thinking.timestamp,
-              status: normalizeRecoveredThinkingStatus(thinking.status, normalizedTurnStatus),
-              orderIndex: thinking.orderIndex,
-              subagentSessionId: thinking.subagentSessionId,
-            })),
-          ].sort((a: any, b: any) => {
-            const aIndex = a.orderIndex !== undefined ? a.orderIndex : a.timestamp || 0;
-            const bIndex = b.orderIndex !== undefined ? b.orderIndex : b.timestamp || 0;
-            
-            return aIndex - bIndex;
-          }),
+          items: flatItems,
           isStreaming: false,
           isComplete: normalizedRoundStatus !== 'pending' && normalizedRoundStatus !== 'streaming',
           status: normalizedRoundStatus,
@@ -3815,8 +4181,9 @@ export class FlowChatStore {
           attemptCount: round.attemptCount,
           failureCategory: round.failureCategory,
           tokenDetails: round.tokenDetails,
-          timestamp: round.timestamp,
-        };
+        });
+
+        return hydratedRound;
       }),
       timestamp: turn.timestamp,
       status: normalizedTurnStatus,

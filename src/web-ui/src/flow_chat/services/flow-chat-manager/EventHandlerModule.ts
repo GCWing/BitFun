@@ -1528,6 +1528,8 @@ function handleTextChunk(context: FlowChatContext, event: any): void {
     sessionId,
     turnId,
     roundId,
+    attemptId: event.attemptId,
+    attemptIndex: event.attemptIndex,
     text,
     contentType: contentType as 'text' | 'thinking',
     isThinkingEnd,
@@ -1567,11 +1569,11 @@ export function processBatchedEvents(
       const { eventType } = parsed;
       
       if (eventType === 'text') {
-        const { sessionId, turnId, roundId, text, contentType, isThinkingEnd } = payload;
+        const { sessionId, turnId, roundId, attemptId, attemptIndex, text, contentType, isThinkingEnd } = payload;
         if (contentType === 'thinking') {
-          processThinkingChunkInternal(context, sessionId, turnId, roundId, text, isThinkingEnd);
+          processThinkingChunkInternal(context, sessionId, turnId, roundId, text, isThinkingEnd, attemptId, attemptIndex);
         } else {
-          processNormalTextChunkInternal(context, sessionId, turnId, roundId, text);
+          processNormalTextChunkInternal(context, sessionId, turnId, roundId, text, attemptId, attemptIndex);
         }
         
         debouncedSaveDialogTurn(context, sessionId, turnId, 2000);
@@ -1597,11 +1599,13 @@ function handleToolEvent(
     sessionId: string;
     turnId?: string;
     roundId?: string;
+    attemptId?: string;
+    attemptIndex?: number;
     toolEvent: FlowToolEvent;
   },
   onTodoWriteResult: (sessionId: string, turnId: string, result: any) => void
 ): void {
-  const { sessionId, turnId, roundId, toolEvent } = event;
+  const { sessionId, turnId, roundId, attemptId, attemptIndex, toolEvent } = event;
   if (!turnId) {
     log.debug('Tool event missing turnId', { sessionId, toolId: toolEvent.tool_id, eventType: toolEvent.event_type });
     return;
@@ -1627,6 +1631,8 @@ function handleToolEvent(
     sessionId,
     turnId,
     roundId,
+    attemptId,
+    attemptIndex,
     toolEvent,
   };
   
@@ -1648,7 +1654,7 @@ function handleToolEvent(
     return;
   }
 
-  processToolEvent(context, sessionId, turnId, roundId, toolEvent, undefined, onTodoWriteResult);
+  processToolEvent(context, sessionId, turnId, roundId, toolEvent, attemptId, attemptIndex, undefined, onTodoWriteResult);
 }
 
 /**

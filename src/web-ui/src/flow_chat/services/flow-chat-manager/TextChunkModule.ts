@@ -6,6 +6,16 @@ import type { FlowChatContext, FlowTextItem } from './types';
 import { clearRuntimeStatus } from './RuntimeStatusModule';
 import { isAcpFlowSession } from '../../utils/acpSession';
 
+function resolveAttemptStreamKey(roundId: string, attemptId?: string, attemptIndex?: number): string {
+  if (typeof attemptId === 'string' && attemptId.length > 0) {
+    return attemptId;
+  }
+  if (typeof attemptIndex === 'number' && Number.isFinite(attemptIndex)) {
+    return `${roundId}:attempt:${attemptIndex}`;
+  }
+  return roundId;
+}
+
 function activeTextHasLaterRoundItem(
   context: FlowChatContext,
   sessionId: string,
@@ -32,7 +42,7 @@ function closeActiveTextSegment(
   context: FlowChatContext,
   sessionId: string,
   turnId: string,
-  roundId: string,
+  streamKey: string,
   textItemId: string
 ): void {
   context.flowChatStore.updateModelRoundItemSilent(sessionId, turnId, textItemId, {
@@ -40,8 +50,8 @@ function closeActiveTextSegment(
     status: 'completed',
   } as any);
 
-  context.contentBuffers.get(sessionId)?.delete(roundId);
-  context.activeTextItems.get(sessionId)?.delete(roundId);
+  context.contentBuffers.get(sessionId)?.delete(streamKey);
+  context.activeTextItems.get(sessionId)?.delete(streamKey);
 }
 
 function isRoundClosed(round: { isStreaming?: boolean; isComplete?: boolean; status?: string } | undefined): boolean {
@@ -71,7 +81,9 @@ export function processNormalTextChunkInternal(
   sessionId: string,
   turnId: string,
   roundId: string,
-  text: string
+  text: string,
+  attemptId?: string,
+  attemptIndex?: number,
 ): void {
   clearRuntimeStatus(context, sessionId, turnId, { roundId });
 
@@ -84,37 +96,42 @@ export function processNormalTextChunkInternal(
   
   const sessionContentBuffer = context.contentBuffers.get(sessionId)!;
   const sessionActiveTextItems = context.activeTextItems.get(sessionId)!;
+  const streamKey = resolveAttemptStreamKey(roundId, attemptId, attemptIndex);
 
-  const activeTextItemId = sessionActiveTextItems.get(roundId);
+  const activeTextItemId = sessionActiveTextItems.get(streamKey);
   const round = findRound(context, sessionId, turnId, roundId);
   if (
     activeTextItemId &&
     activeTextHasLaterRoundItem(context, sessionId, turnId, roundId, activeTextItemId)
   ) {
-    closeActiveTextSegment(context, sessionId, turnId, roundId, activeTextItemId);
+    closeActiveTextSegment(context, sessionId, turnId, streamKey, activeTextItemId);
   }
 
-  let textItemId = sessionActiveTextItems.get(roundId);
+  let textItemId = sessionActiveTextItems.get(streamKey);
   let recoveredExistingContent = '';
   if (!textItemId && isRoundClosed(round)) {
     const reusableTextItem = [...(round?.items ?? [])]
       .reverse()
-      .find((item): item is FlowTextItem => item.type === 'text');
+      .find((item): item is FlowTextItem =>
+        item.type === 'text' &&
+        item.attemptId === attemptId &&
+        item.attemptIndex === attemptIndex
+      );
 
     if (reusableTextItem) {
       textItemId = reusableTextItem.id;
       recoveredExistingContent = reusableTextItem.content || '';
-      sessionActiveTextItems.set(roundId, textItemId);
-      if (!sessionContentBuffer.has(roundId) && recoveredExistingContent) {
-        sessionContentBuffer.set(roundId, recoveredExistingContent);
+      sessionActiveTextItems.set(streamKey, textItemId);
+      if (!sessionContentBuffer.has(streamKey) && recoveredExistingContent) {
+        sessionContentBuffer.set(streamKey, recoveredExistingContent);
       }
     }
   }
 
   // Coalesce excessive newlines while appending.
-  const currentContent = sessionContentBuffer.get(roundId) || recoveredExistingContent;
+  const currentContent = sessionContentBuffer.get(streamKey) || recoveredExistingContent;
   const cleanedContent = (currentContent + text).replace(/\n{3,}/g, '\n\n');
-  sessionContentBuffer.set(roundId, cleanedContent);
+  sessionContentBuffer.set(streamKey, cleanedContent);
 
   if (!textItemId) {
     textItemId = `text_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -126,18 +143,22 @@ export function processNormalTextChunkInternal(
       isStreaming: true,
       isMarkdown: true,
       timestamp: Date.now(),
-      status: 'streaming'
+      status: 'streaming',
+      attemptId,
+      attemptIndex,
     };
     
     context.flowChatStore.addModelRoundItemSilent(sessionId, turnId, textItem, roundId);
-    sessionActiveTextItems.set(roundId, textItemId);
+    sessionActiveTextItems.set(streamKey, textItemId);
   } else {
     context.flowChatStore.updateModelRoundItemSilent(sessionId, turnId, textItemId, {
       content: cleanedContent,
       runtimeStatus: undefined,
       isStreaming: true,
       isMarkdown: true,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      attemptId,
+      attemptIndex,
     } as any);
   }
 }
@@ -151,7 +172,9 @@ export function processThinkingChunkInternal(
   turnId: string,
   roundId: string,
   text: string,
-  isThinkingEnd = false
+  isThinkingEnd = false,
+  attemptId?: string,
+  attemptIndex?: number,
 ): void {
   clearRuntimeStatus(context, sessionId, turnId, { roundId });
 
@@ -164,9 +187,10 @@ export function processThinkingChunkInternal(
   
   const sessionContentBuffer = context.contentBuffers.get(sessionId)!;
   const sessionActiveTextItems = context.activeTextItems.get(sessionId)!;
+  const streamKey = resolveAttemptStreamKey(roundId, attemptId, attemptIndex);
 
   // Store thinking content under a separate key.
-  const thinkingKey = `thinking_${roundId}`;
+  const thinkingKey = `thinking_${streamKey}`;
   const round = findRound(context, sessionId, turnId, roundId);
 
   let thinkingItemId = sessionActiveTextItems.get(thinkingKey);
@@ -174,7 +198,11 @@ export function processThinkingChunkInternal(
   if (!thinkingItemId && isRoundClosed(round)) {
     const reusableThinkingItem = [...(round?.items ?? [])]
       .reverse()
-      .find((item): item is import('../../types/flow-chat').FlowThinkingItem => item.type === 'thinking');
+      .find((item): item is import('../../types/flow-chat').FlowThinkingItem =>
+        item.type === 'thinking' &&
+        item.attemptId === attemptId &&
+        item.attemptIndex === attemptIndex
+      );
 
     if (reusableThinkingItem) {
       thinkingItemId = reusableThinkingItem.id;
@@ -200,7 +228,9 @@ export function processThinkingChunkInternal(
       isStreaming: !isThinkingEnd,
       isCollapsed: isThinkingEnd,
       timestamp: Date.now(),
-      status: isThinkingEnd ? 'completed' : 'streaming'
+      status: isThinkingEnd ? 'completed' : 'streaming',
+      attemptId,
+      attemptIndex,
     };
     
     context.flowChatStore.addModelRoundItemSilent(sessionId, turnId, thinkingItem, roundId);
@@ -217,7 +247,9 @@ export function processThinkingChunkInternal(
           isStreaming: false,
         isCollapsed: true,
         status: 'completed',
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        attemptId,
+        attemptIndex,
       } as any);
       
       sessionContentBuffer.delete(thinkingKey);
@@ -228,7 +260,9 @@ export function processThinkingChunkInternal(
           isStreaming: true,
           isCollapsed: false,
           status: 'streaming',
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          attemptId,
+          attemptIndex,
         } as any);
       }
     }

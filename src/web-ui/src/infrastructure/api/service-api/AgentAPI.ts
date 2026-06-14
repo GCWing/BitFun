@@ -275,6 +275,8 @@ export type DialogTurnStartedEvent = AgenticEvent;
 
 export interface TextChunkEvent extends AgenticEvent {
   roundId: string;
+  attemptId?: string;
+  attemptIndex?: number;
   text: string;
   contentType?: 'text' | 'thinking';
   isThinkingEnd?: boolean;
@@ -282,6 +284,8 @@ export interface TextChunkEvent extends AgenticEvent {
 
 export interface ToolEvent extends AgenticEvent {
   roundId: string;
+  attemptId?: string;
+  attemptIndex?: number;
   toolEvent: any;
 }
 

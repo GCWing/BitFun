@@ -129,6 +129,8 @@ impl TransportAdapter for WebSocketTransportAdapter {
                 session_id,
                 turn_id,
                 round_id,
+                attempt_id,
+                attempt_index,
                 text,
             } => {
                 json!({
@@ -136,6 +138,8 @@ impl TransportAdapter for WebSocketTransportAdapter {
                     "sessionId": session_id,
                     "turnId": turn_id,
                     "roundId": round_id,
+                    "attemptId": attempt_id,
+                    "attemptIndex": attempt_index,
                     "text": text,
                 })
             }
@@ -143,6 +147,8 @@ impl TransportAdapter for WebSocketTransportAdapter {
                 session_id,
                 turn_id,
                 round_id,
+                attempt_id,
+                attempt_index,
                 content,
                 is_end,
             } => {
@@ -151,6 +157,8 @@ impl TransportAdapter for WebSocketTransportAdapter {
                     "sessionId": session_id,
                     "turnId": turn_id,
                     "roundId": round_id,
+                    "attemptId": attempt_id,
+                    "attemptIndex": attempt_index,
                     "text": content,
                     "contentType": "thinking",
                     "isThinkingEnd": is_end,
@@ -160,6 +168,8 @@ impl TransportAdapter for WebSocketTransportAdapter {
                 session_id,
                 turn_id,
                 round_id,
+                attempt_id,
+                attempt_index,
                 tool_event,
             } => {
                 json!({
@@ -167,6 +177,8 @@ impl TransportAdapter for WebSocketTransportAdapter {
                     "sessionId": session_id,
                     "turnId": turn_id,
                     "roundId": round_id,
+                    "attemptId": attempt_id,
+                    "attemptIndex": attempt_index,
                     "toolEvent": tool_event,
                 })
             }

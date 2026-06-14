@@ -222,6 +222,8 @@ struct StreamContext {
     session_id: String,
     dialog_turn_id: String,
     round_id: String,
+    attempt_id: String,
+    attempt_index: u32,
 
     // Accumulated results
     full_thinking: String,
@@ -256,12 +258,16 @@ impl StreamContext {
         session_id: String,
         dialog_turn_id: String,
         round_id: String,
+        attempt_id: String,
+        attempt_index: u32,
         _options: StreamProcessOptions,
     ) -> Self {
         Self {
             session_id,
             dialog_turn_id,
             round_id,
+            attempt_id,
+            attempt_index,
             full_thinking: String::new(),
             reasoning_content_present: false,
             thinking_signature: None,
@@ -448,6 +454,8 @@ impl StreamProcessor {
                         session_id: ctx.session_id.clone(),
                         turn_id: ctx.dialog_turn_id.clone(),
                         round_id: ctx.round_id.clone(),
+                        attempt_id: Some(ctx.attempt_id.clone()),
+                        attempt_index: Some(ctx.attempt_index),
                         content: String::new(),
                         is_end: true,
                     },
@@ -487,6 +495,8 @@ impl StreamProcessor {
             ctx.session_id.clone(),
             ctx.dialog_turn_id.clone(),
             ctx.round_id.clone(),
+            ctx.attempt_id.clone(),
+            ctx.attempt_index,
             ctx.tool_calls.clone(),
             reason,
         )
@@ -499,6 +509,8 @@ impl StreamProcessor {
         session_id: String,
         turn_id: String,
         round_id: String,
+        attempt_id: String,
+        attempt_index: u32,
         tool_calls: Vec<ToolCall>,
         reason: String,
     ) {
@@ -549,6 +561,8 @@ impl StreamProcessor {
                         session_id: session_id.clone(),
                         turn_id: turn_id.clone(),
                         round_id: round_id.clone(),
+                        attempt_id: Some(attempt_id.clone()),
+                        attempt_index: Some(attempt_index),
                         tool_event,
                     },
                     Some(EventPriority::High),
@@ -627,6 +641,8 @@ impl StreamProcessor {
                         session_id: ctx.session_id.clone(),
                         turn_id: ctx.dialog_turn_id.clone(),
                         round_id: ctx.round_id.clone(),
+                        attempt_id: Some(ctx.attempt_id.clone()),
+                        attempt_index: Some(ctx.attempt_index),
                         tool_event: ToolEventData::EarlyDetected {
                             tool_id: early_detected.tool_id,
                             tool_name: early_detected.tool_name,
@@ -647,6 +663,8 @@ impl StreamProcessor {
                         session_id: ctx.session_id.clone(),
                         turn_id: ctx.dialog_turn_id.clone(),
                         round_id: ctx.round_id.clone(),
+                        attempt_id: Some(ctx.attempt_id.clone()),
+                        attempt_index: Some(ctx.attempt_index),
                         tool_event: ToolEventData::ParamsPartial {
                             tool_id: params_partial.tool_id,
                             tool_name: params_partial.tool_name,
@@ -676,6 +694,8 @@ impl StreamProcessor {
                     session_id: ctx.session_id.clone(),
                     turn_id: ctx.dialog_turn_id.clone(),
                     round_id: ctx.round_id.clone(),
+                    attempt_id: Some(ctx.attempt_id.clone()),
+                    attempt_index: Some(ctx.attempt_index),
                     text,
                 },
                 None,
@@ -700,6 +720,8 @@ impl StreamProcessor {
                     session_id: ctx.session_id.clone(),
                     turn_id: ctx.dialog_turn_id.clone(),
                     round_id: ctx.round_id.clone(),
+                    attempt_id: Some(ctx.attempt_id.clone()),
+                    attempt_index: Some(ctx.attempt_index),
                     content: thinking_content,
                     is_end: false,
                 },
@@ -778,6 +800,8 @@ impl StreamProcessor {
         session_id: String,
         dialog_turn_id: String,
         round_id: String,
+        attempt_id: String,
+        attempt_index: u32,
         cancellation_token: &tokio_util::sync::CancellationToken,
     ) -> Result<StreamResult, StreamProcessError> {
         self.process_stream_with_options(
@@ -787,6 +811,8 @@ impl StreamProcessor {
             session_id,
             dialog_turn_id,
             round_id,
+            attempt_id,
+            attempt_index,
             cancellation_token,
             StreamProcessOptions::default(),
         )
@@ -802,10 +828,19 @@ impl StreamProcessor {
         session_id: String,
         dialog_turn_id: String,
         round_id: String,
+        attempt_id: String,
+        attempt_index: u32,
         cancellation_token: &tokio_util::sync::CancellationToken,
         options: StreamProcessOptions,
     ) -> Result<StreamResult, StreamProcessError> {
-        let mut ctx = StreamContext::new(session_id, dialog_turn_id, round_id, options);
+        let mut ctx = StreamContext::new(
+            session_id,
+            dialog_turn_id,
+            round_id,
+            attempt_id,
+            attempt_index,
+            options,
+        );
         // Start SSE log collector (if raw_sse_rx is provided)
         let sse_collector = if let Some(mut rx) = raw_sse_rx {
             let collector = Arc::new(tokio::sync::Mutex::new(SseLogCollector::new(
@@ -1091,6 +1126,8 @@ mod tests {
                 "session_1".to_string(),
                 "turn_1".to_string(),
                 "round_1".to_string(),
+                "round_1:attempt:1".to_string(),
+                1,
                 &cancellation_token,
                 StreamProcessOptions {
                     recover_partial_on_cancel: true,

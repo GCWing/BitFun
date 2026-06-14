@@ -316,27 +316,19 @@ describe('processToolEvent late Started event behavior', () => {
   });
 });
 
-describe('processToolEvent AskUserQuestion retry cleanup', () => {
+describe('processToolEvent AskUserQuestion retry superseded handling', () => {
   afterEach(() => {
     resetStore();
   });
 
-  it('removes stale parse failure cards when a retry question is early detected', () => {
-    const staleTool = makeAskUserQuestionTool(
-      'ask-stale',
-      'error',
-      'Failed to parse input parameters: missing field `questions`',
-    );
-    const cancelledTool = makeAskUserQuestionTool(
-      'ask-cancelled',
-      'cancelled',
-      'User cancelled operation',
-    );
-    const ordinaryFailedTool = makeAskUserQuestionTool(
-      'ask-failed',
-      'error',
-      'User input channel closed',
-    );
+  it('keeps the previous card in history but closes it when a retry attempt starts', () => {
+    const staleTool = {
+      ...makeAskUserQuestionTool('ask-stale', 'preparing'),
+      attemptId: 'round-1:attempt:1',
+      attemptIndex: 1,
+      isParamsStreaming: true,
+      startTime: 1000,
+    } as FlowToolItem;
 
     const turn: DialogTurn = {
       id: 'turn-1',
@@ -350,20 +342,11 @@ describe('processToolEvent AskUserQuestion retry cleanup', () => {
         {
           id: 'round-1',
           index: 0,
-          items: [staleTool, cancelledTool, ordinaryFailedTool],
-          isStreaming: false,
-          isComplete: true,
-          status: 'completed',
-          startTime: 900,
-        },
-        {
-          id: 'round-2',
-          index: 1,
-          items: [],
+          items: [staleTool],
           isStreaming: true,
           isComplete: false,
           status: 'streaming',
-          startTime: 1200,
+          startTime: 900,
         },
       ],
       status: 'processing',
@@ -391,20 +374,32 @@ describe('processToolEvent AskUserQuestion retry cleanup', () => {
       makeToolContext(),
       'session-1',
       'turn-1',
-      'round-2',
+      'round-1',
       {
         event_type: 'EarlyDetected',
         tool_id: 'ask-retry',
         tool_name: 'AskUserQuestion',
       },
+      'round-1:attempt:2',
+      2,
     );
 
-    const updatedTurn = FlowChatStore.getInstance().getState().sessions.get('session-1')?.dialogTurns[0];
-    const allItemIds = updatedTurn?.modelRounds.flatMap(round => round.items.map(item => item.id)) || [];
+    const updatedRound = FlowChatStore.getInstance().getState().sessions.get('session-1')?.dialogTurns[0]?.modelRounds[0];
+    expect(updatedRound?.attempts?.map(attempt => attempt.status)).toEqual(['superseded', 'streaming']);
 
-    expect(allItemIds).not.toContain('ask-stale');
-    expect(allItemIds).toContain('ask-cancelled');
-    expect(allItemIds).toContain('ask-failed');
-    expect(allItemIds).toContain('ask-retry');
+    const previousAttemptTool = updatedRound?.attempts?.[0]?.items[0] as FlowToolItem | undefined;
+    const retryAttemptTool = updatedRound?.attempts?.[1]?.items[0] as FlowToolItem | undefined;
+
+    expect(previousAttemptTool).toMatchObject({
+      id: 'ask-stale',
+      status: 'cancelled',
+      interruptionReason: 'retry_superseded',
+    });
+    expect(retryAttemptTool).toMatchObject({
+      id: 'ask-retry',
+      status: 'preparing',
+      attemptId: 'round-1:attempt:2',
+      attemptIndex: 2,
+    });
   });
 });

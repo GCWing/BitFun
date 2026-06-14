@@ -90,6 +90,8 @@ impl StreamProcessor {
         session_id: String,
         dialog_turn_id: String,
         round_id: String,
+        attempt_id: String,
+        attempt_index: u32,
         cancellation_token: &CancellationToken,
     ) -> Result<StreamResult, StreamProcessError> {
         self.process_stream_with_options(
@@ -99,6 +101,8 @@ impl StreamProcessor {
             session_id,
             dialog_turn_id,
             round_id,
+            attempt_id,
+            attempt_index,
             cancellation_token,
             StreamProcessOptions::default(),
         )
@@ -114,6 +118,8 @@ impl StreamProcessor {
         session_id: String,
         dialog_turn_id: String,
         round_id: String,
+        attempt_id: String,
+        attempt_index: u32,
         cancellation_token: &CancellationToken,
         options: StreamProcessOptions,
     ) -> Result<StreamResult, StreamProcessError> {
@@ -125,6 +131,8 @@ impl StreamProcessor {
                 session_id,
                 dialog_turn_id,
                 round_id,
+                attempt_id,
+                attempt_index,
                 cancellation_token,
                 options,
             )

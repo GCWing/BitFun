@@ -281,6 +281,127 @@ describe('FlowChatStore token usage', () => {
   });
 });
 
+describe('FlowChatStore round attempts', () => {
+  afterEach(() => {
+    resetStore();
+  });
+
+  it('supersedes active items from an older attempt when a newer attempt starts in the same round', () => {
+    const session = createSession({
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: 'session-1',
+        userMessage: {
+          id: 'user-1',
+          content: 'hello',
+          timestamp: 1000,
+        },
+        modelRounds: [{
+          id: 'round-1',
+          index: 0,
+          items: [{
+            id: 'ask-1',
+            type: 'tool',
+            toolName: 'AskUserQuestion',
+            timestamp: 1100,
+            status: 'preparing',
+            attemptId: 'round-1:attempt:1',
+            attemptIndex: 1,
+            toolCall: {
+              id: 'ask-1',
+              input: {},
+            },
+            isParamsStreaming: true,
+            startTime: 1100,
+          }],
+          isStreaming: true,
+          isComplete: false,
+          status: 'streaming',
+          startTime: 1000,
+        }],
+        status: 'processing',
+        startTime: 1000,
+      }],
+    });
+
+    flowChatStore.setState(() => ({
+      sessions: new Map([[session.sessionId, session]]),
+      activeSessionId: session.sessionId,
+    }));
+
+    flowChatStore.addModelRoundItem(session.sessionId, 'turn-1', {
+      id: 'text-2',
+      type: 'text',
+      content: 'retry output',
+      isStreaming: true,
+      isMarkdown: true,
+      timestamp: 1200,
+      status: 'streaming',
+      attemptId: 'round-1:attempt:2',
+      attemptIndex: 2,
+    }, 'round-1');
+
+    const round = flowChatStore.getState().sessions.get(session.sessionId)?.dialogTurns[0]?.modelRounds[0];
+    expect(round?.attempts?.map(attempt => attempt.status)).toEqual(['superseded', 'streaming']);
+
+    const supersededTool = round?.attempts?.[0]?.items[0];
+    expect(supersededTool).toMatchObject({
+      type: 'tool',
+      status: 'cancelled',
+      interruptionReason: 'retry_superseded',
+    });
+  });
+
+  it('preserves retry superseded interruption details when restoring persisted turns', () => {
+    const restoredTurn = (flowChatStore as any).convertToDialogTurns([{
+      turnId: 'turn-1',
+      sessionId: 'session-1',
+      userMessage: {
+        id: 'user-1',
+        content: 'hello',
+        timestamp: 1000,
+        metadata: {},
+      },
+      modelRounds: [{
+        id: 'round-1',
+        index: 0,
+        status: 'completed',
+        timestamp: 1000,
+        textItems: [],
+        thinkingItems: [],
+        toolItems: [{
+          id: 'ask-1',
+          toolName: 'AskUserQuestion',
+          toolCall: { id: 'ask-1', input: {} },
+          toolResult: {
+            result: null,
+            success: false,
+            error: 'Superseded by a newer retry in the same model round.',
+          },
+          startTime: 1100,
+          endTime: 1200,
+          status: 'cancelled',
+          interruptionReason: 'retry_superseded',
+          attemptId: 'round-1:attempt:1',
+          attemptIndex: 1,
+        }],
+      }],
+      status: 'completed',
+      timestamp: 1000,
+    }])[0];
+
+    const restoredRound = restoredTurn.modelRounds[0];
+    expect(restoredRound.attempts?.map((attempt: any) => attempt.status)).toEqual(['completed']);
+    expect(restoredRound.attempts?.[0]?.items[0]).toMatchObject({
+      type: 'tool',
+      status: 'cancelled',
+      interruptionReason: 'retry_superseded',
+      attemptId: 'round-1:attempt:1',
+      attemptIndex: 1,
+    });
+  });
+});
+
 describe('FlowChatStore local usage reports', () => {
   afterEach(() => {
     resetStore();

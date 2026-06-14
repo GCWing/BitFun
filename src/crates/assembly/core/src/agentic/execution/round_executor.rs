@@ -121,6 +121,8 @@ impl RoundExecutor {
         let max_attempts = Self::MAX_STREAM_ATTEMPTS;
         let mut attempt_index = 0usize;
         let (stream_result, send_to_stream_ms, stream_processing_ms, final_trace_handle) = loop {
+            let attempt_number = (attempt_index + 1) as u32;
+            let attempt_id = format!("{round_id}:attempt:{attempt_number}");
             // Check cancellation before opening a model stream. This catches
             // early cancellation registered before the first round starts.
             if cancel_token.is_cancelled() {
@@ -252,6 +254,8 @@ impl RoundExecutor {
                     context.session_id.clone(),
                     context.dialog_turn_id.clone(),
                     round_id.clone(),
+                    attempt_id.clone(),
+                    attempt_number,
                     &cancel_token,
                     StreamProcessOptions {
                         recover_partial_on_cancel: context.recover_partial_on_cancel,
@@ -702,6 +706,8 @@ impl RoundExecutor {
                 session_id: context.session_id.clone(),
                 dialog_turn_id: context.dialog_turn_id.clone(),
                 round_id: round_id.clone(),
+                attempt_id: Some(format!("{round_id}:attempt:{}", attempt_index + 1)),
+                attempt_index: Some((attempt_index + 1) as u32),
                 agent_type: context.agent_type.clone(),
                 workspace: context.workspace.clone(),
                 context_vars: context.context_vars.clone(),
@@ -1015,6 +1021,8 @@ impl RoundExecutor {
                     session_id: context.session_id.clone(),
                     turn_id: context.dialog_turn_id.clone(),
                     round_id: round_id.to_string(),
+                    attempt_id: None,
+                    attempt_index: None,
                     tool_event: ToolEventData::Failed {
                         tool_id: tool_call.tool_id.clone(),
                         tool_name: tool_call.tool_name.clone(),

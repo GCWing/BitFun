@@ -322,6 +322,8 @@ mod tests {
                     parent_task_tool_id: None,
                     subagent_session_id: None,
                     status: None,
+                    attempt_id: None,
+                    attempt_index: None,
                 },
                 TextItemData {
                     id: "text-2".to_string(),
@@ -334,6 +336,8 @@ mod tests {
                     parent_task_tool_id: None,
                     subagent_session_id: None,
                     status: None,
+                    attempt_id: None,
+                    attempt_index: None,
                 },
             ],
             tool_items: vec![ToolItemData {
@@ -356,6 +360,8 @@ mod tests {
                 is_subagent_item: None,
                 parent_task_tool_id: None,
                 subagent_session_id: None,
+                attempt_id: None,
+                attempt_index: None,
                 subagent_model_id: None,
                 subagent_model_alias: None,
                 status: Some("completed".to_string()),

@@ -213,6 +213,8 @@ export interface TextItemData {
   orderIndex?: number;
   isMarkdown?: boolean;
   subagentSessionId?: string;
+  attemptId?: string;
+  attemptIndex?: number;
 }
 
 export interface ThinkingItemData {
@@ -224,6 +226,8 @@ export interface ThinkingItemData {
   orderIndex?: number;
   status?: string;
   subagentSessionId?: string;
+  attemptId?: string;
+  attemptIndex?: number;
 }
 
 export interface ToolItemData {
@@ -241,8 +245,10 @@ export interface ToolItemData {
   executionMs?: number;
   orderIndex?: number;
   status?: string;
-  interruptionReason?: 'app_restart';
+  interruptionReason?: 'app_restart' | 'retry_superseded';
   subagentSessionId?: string;
+  attemptId?: string;
+  attemptIndex?: number;
 }
 
 export interface ToolCallData {

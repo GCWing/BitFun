@@ -16,6 +16,8 @@ export interface FlowItem {
   type: 'text' | 'tool' | 'image-analysis' | 'thinking' | 'user-steering';
   timestamp: number;
   status: 'pending' | 'queued' | 'waiting' | 'preparing' | 'running' | 'streaming' | 'receiving' | 'completed' | 'cancelled' | 'error' | 'analyzing' | 'pending_confirmation' | 'confirmed'; // Includes error, analyzing, and confirmation states.
+  attemptId?: string;
+  attemptIndex?: number;
 
   /**
    * Session-scoped subagent linkage.
@@ -51,7 +53,7 @@ export interface FlowToolItem extends FlowItem {
   type: 'tool';
   toolName: string;
   terminalSessionId?: string;
-  interruptionReason?: 'app_restart';
+  interruptionReason?: 'app_restart' | 'retry_superseded';
   toolCall: {
     input: any;
     id: string;
@@ -146,11 +148,19 @@ export interface ModelRoundRenderHints {
   disableExploreGrouping?: boolean;
 }
 
+export interface ModelRoundAttempt {
+  id: string;
+  index: number;
+  status: 'streaming' | 'completed' | 'superseded' | 'failed' | 'cancelled';
+  items: AnyFlowItem[];
+}
+
 // Model round: output from a single model call.
 export interface ModelRound {
   id: string;
   index: number;
   items: AnyFlowItem[];
+  attempts?: ModelRoundAttempt[];
   isStreaming: boolean;
   isComplete: boolean;
   status: 'pending' | 'streaming' | 'completed' | 'cancelled' | 'error' | 'pending_confirmation';

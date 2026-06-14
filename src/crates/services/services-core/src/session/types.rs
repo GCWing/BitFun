@@ -542,6 +542,20 @@ pub struct TextItemData {
     /// Status field
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<String>,
+
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "attempt_id"
+    )]
+    pub attempt_id: Option<String>,
+
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "attempt_index"
+    )]
+    pub attempt_index: Option<u32>,
 }
 
 fn default_is_markdown() -> bool {
@@ -577,6 +591,20 @@ pub struct ThinkingItemData {
 
     #[serde(skip_serializing_if = "Option::is_none", alias = "subagent_session_id")]
     pub subagent_session_id: Option<String>,
+
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "attempt_id"
+    )]
+    pub attempt_id: Option<String>,
+
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "attempt_index"
+    )]
+    pub attempt_index: Option<u32>,
 }
 
 /// Tool item data
@@ -636,6 +664,20 @@ pub struct ToolItemData {
 
     #[serde(skip_serializing_if = "Option::is_none", alias = "subagent_session_id")]
     pub subagent_session_id: Option<String>,
+
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "attempt_id"
+    )]
+    pub attempt_id: Option<String>,
+
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "attempt_index"
+    )]
+    pub attempt_index: Option<u32>,
 
     #[serde(skip_serializing_if = "Option::is_none", alias = "subagent_model_id")]
     pub subagent_model_id: Option<String>,
@@ -928,7 +970,7 @@ impl DialogTurnData {
 mod tests {
     use super::{
         DialogTurnData, DialogTurnKind, ModelRoundData, SessionMetadata, SessionRelationship,
-        SessionRelationshipKind, ToolItemData, UserMessageData,
+        SessionRelationshipKind, TextItemData, ThinkingItemData, ToolItemData, UserMessageData,
     };
     use bitfun_core_types::SessionKind;
 
@@ -1184,6 +1226,50 @@ mod tests {
         let encoded = serde_json::to_value(&tool).expect("tool should serialize");
         assert_eq!(encoded["queueWaitMs"], 7);
         assert_eq!(encoded["executionMs"], 69);
+
+        let text_payload = serde_json::json!({
+            "id": "text-1",
+            "content": "hello",
+            "isStreaming": false,
+            "timestamp": 10,
+            "attemptId": "round-1:attempt:2",
+            "attemptIndex": 2
+        });
+        let text: TextItemData =
+            serde_json::from_value(text_payload).expect("text attempt fields should deserialize");
+        assert_eq!(text.attempt_id.as_deref(), Some("round-1:attempt:2"));
+        assert_eq!(text.attempt_index, Some(2));
+
+        let encoded_text = serde_json::to_value(&text).expect("text should serialize");
+        assert_eq!(encoded_text["attemptId"], "round-1:attempt:2");
+        assert_eq!(encoded_text["attemptIndex"], 2);
+
+        let thinking_payload = serde_json::json!({
+            "id": "thinking-1",
+            "content": "reasoning",
+            "isStreaming": false,
+            "isCollapsed": true,
+            "timestamp": 11,
+            "attemptId": "round-1:attempt:2",
+            "attemptIndex": 2
+        });
+        let thinking: ThinkingItemData = serde_json::from_value(thinking_payload)
+            .expect("thinking attempt fields should deserialize");
+        assert_eq!(thinking.attempt_id.as_deref(), Some("round-1:attempt:2"));
+        assert_eq!(thinking.attempt_index, Some(2));
+
+        let tool_attempt_payload = serde_json::json!({
+            "id": "tool-2",
+            "toolName": "write_file",
+            "toolCall": { "id": "call-2", "input": {} },
+            "startTime": 1,
+            "attemptId": "round-1:attempt:2",
+            "attemptIndex": 2
+        });
+        let tool_with_attempt: ToolItemData = serde_json::from_value(tool_attempt_payload)
+            .expect("tool attempt fields should deserialize");
+        assert_eq!(tool_with_attempt.attempt_id.as_deref(), Some("round-1:attempt:2"));
+        assert_eq!(tool_with_attempt.attempt_index, Some(2));
     }
 
     #[test]

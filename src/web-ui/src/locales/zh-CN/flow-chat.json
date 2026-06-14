@@ -1165,6 +1165,10 @@
     "userLabel": "👤 用户:",
     "toolCallLabel": "🔧 工具调用: {{name}}",
     "loadingMoreHistory": "正在加载更多历史...",
+    "retryHistoryShow": "显示 {{count}} 次历史尝试",
+    "retryHistoryHide": "隐藏重试历史",
+    "attemptLabel": "第 {{index}} 次尝试",
+    "attemptSuperseded": "已被重试接替",
     "meta": {
       "label": "回应元信息",
       "completed": "完成",
@@ -1391,7 +1395,8 @@
       "inputParams": "输入参数",
       "executionResult": "执行结果",
       "viewDetails": "查看详情",
-      "interruptedByRestart": "上次关闭应用时该工具尚未完成，已恢复为中断状态"
+      "interruptedByRestart": "上次关闭应用时该工具尚未完成，已恢复为中断状态",
+      "interruptedByRetry": "这次尝试已被同一轮响应中的更新重试接替"
     },
     "askUser": {
       "completed": "已完成",

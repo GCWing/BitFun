@@ -10,7 +10,6 @@ import type { FlowChatContext, FlowToolItem, ToolEventOptions, DialogTurn } from
 import { immediateSaveDialogTurn } from './PersistenceModule';
 import { applyPendingAcpPermissionForTool } from './AcpPermissionToolCardModule';
 import { normalizeParamsPartialFragment } from '../EventBatcher';
-import type { FlowItem } from '../../types/flow-chat';
 import type {
   CancelledToolEvent,
   CompletedToolEvent,
@@ -43,6 +42,8 @@ export function processToolEvent(
   turnId: string,
   roundId: string,
   toolEvent: FlowToolEvent,
+  attemptId?: string,
+  attemptIndex?: number,
   options?: ToolEventOptions,
   onTodoWriteResult?: (sessionId: string, turnId: string, result: any) => void
 ): void {
@@ -63,7 +64,7 @@ export function processToolEvent(
 
   switch (toolEvent.event_type) {
     case 'EarlyDetected': {
-      handleEarlyDetected(context, store, sessionId, turnId, roundId, dialogTurn, toolEvent, options);
+      handleEarlyDetected(context, store, sessionId, turnId, roundId, dialogTurn, toolEvent, attemptId, attemptIndex, options);
       break;
     }
     
@@ -84,7 +85,7 @@ export function processToolEvent(
     
     case 'Started': {
       flushPendingBatchedEvents(context);
-      handleStarted(store, sessionId, turnId, roundId, dialogTurn, toolEvent, options);
+      handleStarted(store, sessionId, turnId, roundId, dialogTurn, toolEvent, attemptId, attemptIndex, options);
       break;
     }
     
@@ -285,26 +286,11 @@ function handleEarlyDetected(
   roundId: string,
   dialogTurn: DialogTurn,
   toolEvent: EarlyDetectedToolEvent,
+  attemptId?: string,
+  attemptIndex?: number,
   options?: ToolEventOptions
 ): void {
   flushPendingBatchedEvents(context);
-
-  // AskUserQuestion cards are rendered by the streaming engine before tool
-  // arguments are parsed and validated. When a stream retry regenerates the
-  // question after that specific failure class, remove the stale failed card
-  // while preserving real user-cancelled or otherwise failed questions.
-  if (toolEvent.tool_name === 'AskUserQuestion') {
-    store.updateDialogTurn(sessionId, turnId, (turn) => ({
-      ...turn,
-      modelRounds: turn.modelRounds.map((round) => ({
-        ...round,
-        items: round.items.filter(
-          (item: FlowItem) =>
-            !isStaleAskUserQuestionRetryCard(item),
-        ),
-      })),
-    }));
-  }
   
   const preparingToolItem: FlowToolItem = {
     id: toolEvent.tool_id,
@@ -319,6 +305,8 @@ function handleEarlyDetected(
     requiresConfirmation: false,
     isParamsStreaming: true,
     startTime: options?.parentTimestamp ? options.parentTimestamp + 2 : Date.now(),
+    attemptId,
+    attemptIndex,
   };
 
   const targetRound = dialogTurn.modelRounds.find(round => round.id === roundId);
@@ -335,25 +323,6 @@ function handleEarlyDetected(
 
   store.addModelRoundItem(sessionId, turnId, preparingToolItem, roundId);
   applyPendingAcpPermissionForTool(store, toolEvent.tool_id);
-}
-
-function isStaleAskUserQuestionRetryCard(item: FlowItem): boolean {
-  if (item.type !== 'tool') {
-    return false;
-  }
-
-  const toolItem = item as FlowToolItem;
-  if (toolItem.toolName !== 'AskUserQuestion' || toolItem.status !== 'error') {
-    return false;
-  }
-
-  const error = toolItem.toolResult?.error || '';
-  return (
-    error.includes('Arguments are invalid JSON') ||
-    error.includes('Tool arguments were truncated by the model') ||
-    error.includes('Failed to parse input parameters') ||
-    /^Question \d+ /.test(error)
-  );
 }
 
 /**
@@ -412,6 +381,8 @@ function handleStarted(
   roundId: string,
   dialogTurn: DialogTurn,
   toolEvent: StartedToolEvent,
+  attemptId?: string,
+  attemptIndex?: number,
   options?: ToolEventOptions
 ): void {
   const existingItem = store.findToolItem(sessionId, turnId, toolEvent.tool_id);
@@ -429,7 +400,9 @@ function handleStarted(
       toolCall: toolCallData,
       status: 'running',
       isParamsStreaming: false,
-      partialParams: undefined
+      partialParams: undefined,
+      attemptId,
+      attemptIndex,
     } as any);
     applyPendingTerminalSessionId(store, sessionId, turnId, toolEvent.tool_id);
     applyPendingAcpPermissionForTool(store, toolEvent.tool_id);
@@ -444,6 +417,8 @@ function handleStarted(
       status: 'running',
       requiresConfirmation: false,
       startTime: options?.parentTimestamp ? options.parentTimestamp + 2 : Date.now(),
+      attemptId,
+      attemptIndex,
     };
 
     const targetRound = dialogTurn.modelRounds.find(round => round.id === roundId);

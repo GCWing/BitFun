@@ -109,6 +109,42 @@
   padding: var(--flowchat-inline-gap, 0.35rem) 0;
 }
 
+.model-round-item__retry-history {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.model-round-item__retry-toggle {
+  align-self: flex-start;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--color-text-secondary, #a0a0a0);
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--color-text-primary, #fff);
+  }
+}
+
+.model-round-item__retry-attempt {
+  padding: 0.35rem 0 0.15rem;
+  border-top: 1px solid color-mix(in srgb, var(--color-border, #444) 62%, transparent);
+}
+
+.model-round-item__retry-attempt-label {
+  margin-bottom: 0.35rem;
+  color: var(--color-text-muted, #999);
+  font-size: 11px;
+  line-height: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 .model-round-item__action-btn {
   display: flex;
   align-items: center;

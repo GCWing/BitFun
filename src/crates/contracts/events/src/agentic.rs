@@ -261,6 +261,10 @@ pub enum AgenticEvent {
         session_id: String,
         turn_id: String,
         round_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        attempt_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        attempt_index: Option<u32>,
         text: String,
     },
 
@@ -268,6 +272,10 @@ pub enum AgenticEvent {
         session_id: String,
         turn_id: String,
         round_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        attempt_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        attempt_index: Option<u32>,
         content: String,
         #[serde(default)]
         is_end: bool,
@@ -277,6 +285,10 @@ pub enum AgenticEvent {
         session_id: String,
         turn_id: String,
         round_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        attempt_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        attempt_index: Option<u32>,
         tool_event: ToolEventData,
     },
 
