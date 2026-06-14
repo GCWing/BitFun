@@ -2150,6 +2150,25 @@
     "statusPending": "Waiting to trigger",
     "statusInjected": "Triggered"
   },
+  "turnCompletionNotice": {
+    "reasonLabel": "End reason",
+    "finalResponseProvided": "The agent has provided a final response.",
+    "repeatedToolFailures": {
+      "title": "Turn stopped after repeated tool failures"
+    },
+    "emptyRound": {
+      "title": "Turn ended without a usable response"
+    },
+    "interrupted": {
+      "title": "Turn was interrupted"
+    },
+    "maxRounds": {
+      "title": "Turn hit the round limit"
+    },
+    "generic": {
+      "title": "Turn ended abnormally"
+    }
+  },
   "errors": {
     "sendFailed": "Failed to send message"
   },

@@ -243,7 +243,7 @@ describe('sessionToVirtualItems explore grouping', () => {
     expect(items.map(item => item.type)).toEqual(['user-message', 'model-round']);
   });
 
-  it('does not render a stopped indicator for non-complete finish reasons', () => {
+  it('appends a completion notice for abnormal completed turns', () => {
     const session = makeSession({
       dialogTurns: [{
         id: 'turn-1',
@@ -257,6 +257,38 @@ describe('sessionToVirtualItems explore grouping', () => {
         status: 'completed',
         startTime: 900,
         finishReason: 'interrupted',
+      }],
+    });
+
+    const items = sessionToVirtualItems(session);
+
+    expect(items.map(item => item.type)).toEqual([
+      'user-message',
+      'explore-group',
+      'turn-completion-notice',
+    ]);
+    expect(items[2]).toMatchObject({
+      type: 'turn-completion-notice',
+      data: {
+        reasonCode: 'interrupted',
+      },
+    });
+  });
+
+  it('does not append a completion notice for normal completed turns', () => {
+    const session = makeSession({
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: 'session-1',
+        userMessage: {
+          id: 'user-1',
+          content: 'Help',
+          timestamp: 900,
+        },
+        modelRounds: [makeRound()],
+        status: 'completed',
+        startTime: 900,
+        finishReason: 'complete',
       }],
     });
 

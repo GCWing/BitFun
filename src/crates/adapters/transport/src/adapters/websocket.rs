@@ -236,6 +236,7 @@ impl TransportAdapter for WebSocketTransportAdapter {
                 partial_recovery_reason,
                 success,
                 finish_reason,
+                has_final_response,
                 ..
             } => {
                 json!({
@@ -245,6 +246,7 @@ impl TransportAdapter for WebSocketTransportAdapter {
                     "partialRecoveryReason": partial_recovery_reason,
                     "success": success,
                     "finishReason": finish_reason,
+                    "hasFinalResponse": has_final_response,
                 })
             }
             AgenticEvent::DeepReviewQueueStateChanged {

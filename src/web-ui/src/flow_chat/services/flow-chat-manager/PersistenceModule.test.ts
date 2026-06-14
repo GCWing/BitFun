@@ -143,6 +143,17 @@ describe('PersistenceModule', () => {
     });
   });
 
+  it('persists finish reason when present', () => {
+    const turn = createDialogTurn('completed');
+    turn.finishReason = 'max_rounds';
+    turn.hasFinalResponse = false;
+
+    const persisted = convertDialogTurnToBackendFormat(turn, 0);
+
+    expect(persisted.finishReason).toBe('max_rounds');
+    expect(persisted.hasFinalResponse).toBe(false);
+  });
+
   it('persists ACP permission metadata for pending confirmation tools', () => {
     const turn = createDialogTurn('processing');
     turn.modelRounds[0].items = [

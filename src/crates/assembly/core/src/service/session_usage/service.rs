@@ -2264,6 +2264,8 @@ mod tests {
             end_time: Some(1_300 + turn_index as u64),
             duration_ms: Some(300),
             token_usage: None,
+            finish_reason: None,
+            has_final_response: None,
             status: TurnStatus::Completed,
         }
     }

@@ -30,7 +30,9 @@ use crate::agentic::tools::implementations::{SkillTool, TaskTool};
 use crate::agentic::tools::product_runtime::{
     collect_product_unlocked_collapsed_tools, GetToolSpecTool,
 };
-use crate::agentic::tools::{resolve_tool_manifest, tool_context_runtime, ResolvedToolManifest};
+use crate::agentic::tools::{
+    resolve_tool_manifest, tool_context_runtime, ResolvedToolManifest, ToolRuntimeRestrictions,
+};
 use crate::agentic::WorkspaceBinding;
 use crate::infrastructure::ai::get_global_ai_client_factory;
 use crate::service::config::get_global_config_service;
@@ -248,10 +250,12 @@ pub struct ExecutionEngine {
 }
 
 impl ExecutionEngine {
-    const FINALIZE_AFTER_TOOL_USE_REMINDER: &'static str = "Tool execution for this turn has already completed, but the turn is ending at this round boundary. Do not call any more tools. Provide the final response to the user based on the tool results already available.";
-    const FINALIZE_AFTER_REPEATED_TOOL_FAILURES_REMINDER: &'static str = "Repeated tool attempts have failed and tool use is now disabled for this turn. Provide a concise final response explaining what was completed, what failed, the evidence from the tool results, and the best actionable next step. Do not call any more tools.";
-    const FINALIZE_AFTER_MAX_ROUNDS_REMINDER: &'static str = "The execution round budget has been reached and tool use is now disabled for this turn. Provide the best final response possible from the work and evidence already collected. Clearly distinguish completed work from unresolved items. Do not call any more tools.";
-    const FORCE_TEXT_ONLY_REMINDER: &'static str = "STOP. Tool calls are disabled for this final turn. Respond ONLY with a plain-text answer summarizing what you have done and the result for the user. Do not output tool call syntax of any kind.";
+    const FINALIZE_AFTER_REPEATED_TOOL_FAILURES_REMINDER: &'static str = "This turn must end now because repeated tool failures have prevented further progress. Ignore any unfinished work. Your task now is to give the user a final answer. Do not call any more tools; any tool call will fail. Respond in plain text only. Summarize what was completed, what failed, the evidence available from the tool results, and the single best next step for the user.";
+    const FINALIZE_AFTER_MAX_ROUNDS_REMINDER: &'static str = "This turn must end now because it has reached the round limit. Ignore any unfinished work. Your task now is to give the user a final answer. Do not call any more tools; any tool call will fail. Respond in plain text only. Summarize the most useful completed work and evidence collected so far, and clearly distinguish resolved items from anything still unresolved.";
+    const FINALIZE_TOOL_DENIED_MESSAGE: &'static str =
+        "Tool use is disabled for finalize. Respond with plain text only.";
+    const FINALIZE_USER_FOLLOWUP: &'static str =
+        "Provide a final answer. You MUST not call any tools.";
 
     pub fn new(
         round_executor: Arc<RoundExecutor>,
@@ -408,17 +412,53 @@ impl ExecutionEngine {
         )
     }
 
-    fn has_tool_result_after_last_assistant(messages: &[Message]) -> bool {
-        let Some(last_assistant_index) = messages
+    fn finalize_tool_names(tool_definitions: Option<&[ToolDefinition]>) -> Vec<String> {
+        tool_definitions
+            .unwrap_or(&[])
             .iter()
-            .rposition(|message| message.role == MessageRole::Assistant)
-        else {
-            return false;
-        };
+            .map(|tool| tool.name.clone())
+            .collect()
+    }
 
-        messages[last_assistant_index + 1..]
-            .iter()
-            .any(|message| matches!(message.content, MessageContent::ToolResult { .. }))
+    fn finalize_runtime_tool_restrictions(
+        context: &ExecutionContext,
+        tool_names: &[String],
+    ) -> ToolRuntimeRestrictions {
+        let mut restrictions = context.runtime_tool_restrictions.clone();
+        for tool_name in tool_names {
+            restrictions.denied_tool_names.insert(tool_name.clone());
+            restrictions
+                .denied_tool_messages
+                .entry(tool_name.clone())
+                .or_insert_with(|| Self::FINALIZE_TOOL_DENIED_MESSAGE.to_string());
+        }
+        restrictions
+    }
+
+    fn build_local_final_response_message(reason: &str) -> String {
+        match reason {
+            "repeated_tool_failures" => {
+                "I'm stopping here because repeated tool failures prevented further progress in this turn.".to_string()
+            }
+            "max_rounds" => {
+                "I'm stopping here because this turn reached its round limit before I could complete a final response.".to_string()
+            }
+            _ => "I'm stopping here because this turn could not be completed successfully.".to_string(),
+        }
+    }
+
+    fn build_finalize_cache_anchor_messages(turn_id: &str, reminder_text: &str) -> Vec<Message> {
+        vec![
+            Message::internal_reminder(
+                InternalReminderKind::FinalizeCacheAnchor,
+                reminder_text.to_string(),
+            )
+            .with_turn_id(turn_id.to_string()),
+            Message::user(Self::FINALIZE_USER_FOLLOWUP.to_string())
+                .with_semantic_kind(MessageSemanticKind::InternalReminder)
+                .with_internal_reminder_kind(InternalReminderKind::FinalizeCacheAnchor)
+                .with_turn_id(turn_id.to_string()),
+        ]
     }
 
     /// Emergency truncation: drop oldest API rounds (assistant+tool pairs)
@@ -879,8 +919,17 @@ impl ExecutionEngine {
         prepended_reminders: &[&str],
         messages: &[Message],
         reminder_text: &str,
+        tool_definitions: Option<Vec<ToolDefinition>>,
         context_window: usize,
     ) -> BitFunResult<RoundResult> {
+        // Keep the original tool definitions attached to the finalize request
+        // even though finalize forbids tool execution at runtime. Dropping the
+        // tools here would change the provider request shape, which breaks
+        // prompt/prefix cache reuse and turns the finalize round into a cache
+        // miss for providers that key caching on the full request schema.
+        let finalize_tool_names = Self::finalize_tool_names(tool_definitions.as_deref());
+        let finalize_runtime_tool_restrictions =
+            Self::finalize_runtime_tool_restrictions(context, &finalize_tool_names);
         let mut final_ai_messages = Self::build_ai_messages_for_send(
             messages,
             &ai_client.config.format,
@@ -893,7 +942,8 @@ impl ExecutionEngine {
             prepended_reminders,
         )
         .await?;
-        final_ai_messages.push(AIMessage::user(reminder_text.to_string()));
+        final_ai_messages.push(AIMessage::user(render_system_reminder(reminder_text)));
+        final_ai_messages.push(AIMessage::user(Self::FINALIZE_USER_FOLLOWUP.to_string()));
 
         let round_context = RoundContext {
             session_id: context.session_id.clone(),
@@ -903,27 +953,26 @@ impl ExecutionEngine {
             round_number,
             workspace: context.workspace.clone(),
             messages: messages.to_vec(),
-            available_tools: Vec::new(),
+            available_tools: finalize_tool_names,
             collapsed_tools: Vec::new(),
             unlocked_collapsed_tools: Vec::new(),
             model_name: ai_client.config.model.clone(),
             agent_type,
             context_vars: execution_context_vars.clone(),
             delegation_policy: context.delegation_policy,
-            runtime_tool_restrictions: context.runtime_tool_restrictions.clone(),
+            runtime_tool_restrictions: finalize_runtime_tool_restrictions,
             steering_interrupt: None,
             cancellation_token: CancellationToken::new(),
             workspace_services: context.workspace_services.clone(),
             recover_partial_on_cancel: context.recover_partial_on_cancel,
         };
 
-        // Tools are disabled here (None) — model must respond in plain text.
         self.round_executor
             .execute_round(
                 ai_client,
                 round_context,
                 final_ai_messages,
-                None,
+                tool_definitions,
                 Some(context_window),
             )
             .await
@@ -2928,24 +2977,15 @@ impl ExecutionEngine {
 
         // P1-6: Track the actual termination reason for downstream reporting.
         // Defaults to "complete" (model produced a final answer naturally).
-        let mut effective_finish_reason: &'static str = match finalization_reason {
+        let effective_finish_reason: &'static str = match finalization_reason {
             Some(r) => r,
             None => "complete",
         };
-        let mut finalize_fallback_text_used = false;
+        let mut has_final_response = finalization_reason.is_none();
+        let mut used_local_final_response_synthesis = false;
 
         if let Some(reason) = finalization_reason {
             let finalize_reminder = match reason {
-                "queued_user_message"
-                    if messages
-                        .iter()
-                        .rev()
-                        .find(|message| message.role == MessageRole::Assistant)
-                        .is_some_and(Self::assistant_has_tool_calls)
-                        && Self::has_tool_result_after_last_assistant(&messages) =>
-                {
-                    Some(Self::FINALIZE_AFTER_TOOL_USE_REMINDER)
-                }
                 "repeated_tool_failures" => {
                     Some(Self::FINALIZE_AFTER_REPEATED_TOOL_FAILURES_REMINDER)
                 }
@@ -2970,24 +3010,22 @@ impl ExecutionEngine {
                         &prepended_reminders,
                         &messages,
                         finalize_reminder,
+                        tool_definitions.clone(),
                         context_window,
                     )
                     .await?;
 
                 let mut accepted = final_round_result.had_assistant_text
                     && !Self::assistant_has_tool_calls(&final_round_result.assistant_message);
-                let mut chosen_assistant_message: Option<Message> = None;
+                let chosen_assistant_message: Option<Message>;
                 let mut chosen_usage: Option<crate::util::types::ai::GeminiUsage> =
                     final_round_result.usage.clone();
 
                 if accepted {
                     chosen_assistant_message = Some(final_round_result.assistant_message.clone());
                 } else {
-                    // P1-10: First finalize round still returned tool calls
-                    // (rare; tools were not provided, but model hallucinated).
-                    // One last attempt with a stricter text-only reminder.
                     warn!(
-                        "Finalize round still returned tool calls; retrying with text-only reminder: session_id={}, turn_id={}",
+                        "Finalize round did not return usable assistant text; retrying once: session_id={}, turn_id={}",
                         context.session_id, context.dialog_turn_id
                     );
                     let retry_result = self
@@ -3000,17 +3038,23 @@ impl ExecutionEngine {
                             primary_supports_image_understanding,
                             &prepended_reminders,
                             &messages,
-                            Self::FORCE_TEXT_ONLY_REMINDER,
+                            finalize_reminder,
+                            tool_definitions.clone(),
                             context_window,
                         )
                         .await?;
-                    finalize_fallback_text_used = true;
                     if !retry_result.had_assistant_text
                         || Self::assistant_has_tool_calls(&retry_result.assistant_message)
                     {
                         warn!(
-                            "Text-only retry did not return usable assistant text; keeping prior messages: session_id={}, turn_id={}",
+                            "Finalize retry did not return usable assistant text; synthesizing local final response: session_id={}, turn_id={}",
                             context.session_id, context.dialog_turn_id
+                        );
+                        accepted = true;
+                        used_local_final_response_synthesis = true;
+                        chosen_assistant_message = Some(
+                            Message::assistant(Self::build_local_final_response_message(reason))
+                                .with_turn_id(context.dialog_turn_id.clone()),
                         );
                     } else {
                         accepted = true;
@@ -3019,7 +3063,25 @@ impl ExecutionEngine {
                     }
                 }
 
+                has_final_response = chosen_assistant_message.is_some();
                 if let Some(msg) = chosen_assistant_message {
+                    if accepted && !used_local_final_response_synthesis {
+                        let finalize_cache_anchor_messages =
+                            Self::build_finalize_cache_anchor_messages(
+                                &context.dialog_turn_id,
+                                finalize_reminder,
+                            );
+                        for anchor_message in finalize_cache_anchor_messages {
+                            messages.push(anchor_message.clone());
+                            if let Err(e) = self
+                                .session_manager
+                                .add_message(&context.session_id, anchor_message)
+                                .await
+                            {
+                                warn!("Failed to persist finalize cache anchor message: {}", e);
+                            }
+                        }
+                    }
                     completed_rounds += 1;
                     if let Some(usage) = chosen_usage {
                         last_usage = Some(usage);
@@ -3033,14 +3095,8 @@ impl ExecutionEngine {
                         warn!("Failed to update final assistant message in memory: {}", e);
                     }
                 }
-
-                if !accepted {
-                    effective_finish_reason = "finalize_failed";
-                } else if reason == "max_rounds" {
-                    effective_finish_reason = "max_rounds_finalized";
-                } else if finalize_fallback_text_used {
-                    effective_finish_reason = "finalize_text_only_forced";
-                }
+            } else if reason == "partial_truncated" {
+                has_final_response = true;
             }
         }
 
@@ -3052,11 +3108,14 @@ impl ExecutionEngine {
         );
 
         let finish_reason = FinishReason::Complete;
-        // success reflects whether we ended with a usable final answer.
-        let success = !matches!(
-            effective_finish_reason,
-            "finalize_failed" | "empty_round" | "max_rounds"
-        );
+        // Some abnormal turn endings still go through the completed-event path
+        // so the UI can explain the termination cause inline even when the turn
+        // ended without a final assistant reply.
+        let success = has_final_response
+            || matches!(
+                effective_finish_reason,
+                "max_rounds" | "repeated_tool_failures"
+            );
 
         // Post-processing hook: when a DeepResearch dialog turn finishes
         // successfully, renumber `cit_XXX` references in the final report
@@ -3090,6 +3149,7 @@ impl ExecutionEngine {
                     partial_recovery_reason: last_partial_recovery_reason,
                     success: Some(success),
                     finish_reason: Some(effective_finish_reason.to_string()),
+                    has_final_response: Some(has_final_response),
                 },
                 None,
             )
@@ -3191,12 +3251,14 @@ impl ExecutionEngine {
 #[cfg(test)]
 mod tests {
     use super::{ContextHealthSnapshot, ExecutionEngine};
-    use crate::agentic::core::{Message, MessageRole, ToolCall, ToolResult};
+    use crate::agentic::core::{InternalReminderKind, Message, MessageRole, ToolCall, ToolResult};
+    use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::service::config::types::AIConfig;
     use crate::service::config::types::AIModelConfig;
     use crate::util::types::ToolDefinition;
     use serde_json::json;
     use sha2::{Digest, Sha256};
+    use std::collections::HashMap;
 
     fn build_model(id: &str, name: &str, model_name: &str) -> AIModelConfig {
         AIModelConfig {
@@ -3282,6 +3344,94 @@ mod tests {
         assert!(!ExecutionEngine::should_continue_after_partial_response(
             "Stream processing cancelled"
         ));
+    }
+
+    #[test]
+    fn finalize_tool_names_match_tool_definitions() {
+        let tools = vec![
+            ToolDefinition {
+                name: "Read".to_string(),
+                description: String::new(),
+                parameters: json!({}),
+            },
+            ToolDefinition {
+                name: "Bash".to_string(),
+                description: String::new(),
+                parameters: json!({}),
+            },
+        ];
+
+        assert_eq!(
+            ExecutionEngine::finalize_tool_names(Some(&tools)),
+            vec!["Read".to_string(), "Bash".to_string()]
+        );
+    }
+
+    #[test]
+    fn finalize_runtime_tool_restrictions_deny_all_finalize_tools() {
+        let context = crate::agentic::execution::types::ExecutionContext {
+            session_id: "session".to_string(),
+            dialog_turn_id: "turn".to_string(),
+            turn_index: 0,
+            agent_type: "agentic".to_string(),
+            workspace: None,
+            context: HashMap::new(),
+            subagent_parent_info: None,
+            delegation_policy: bitfun_runtime_ports::DelegationPolicy::top_level(),
+            skip_tool_confirmation: false,
+            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+            workspace_services: None,
+            round_injection: None,
+            recover_partial_on_cancel: false,
+        };
+
+        let restrictions = ExecutionEngine::finalize_runtime_tool_restrictions(
+            &context,
+            &["Read".to_string(), "Bash".to_string()],
+        );
+
+        assert!(restrictions.denied_tool_names.contains("Read"));
+        assert!(restrictions.denied_tool_names.contains("Bash"));
+        assert_eq!(
+            restrictions.denied_tool_messages.get("Read"),
+            Some(&ExecutionEngine::FINALIZE_TOOL_DENIED_MESSAGE.to_string())
+        );
+    }
+
+    #[test]
+    fn local_final_response_message_mentions_reason() {
+        assert!(
+            ExecutionEngine::build_local_final_response_message("repeated_tool_failures")
+                .contains("repeated tool failures")
+        );
+        assert!(
+            ExecutionEngine::build_local_final_response_message("max_rounds")
+                .contains("round limit")
+        );
+        assert!(
+            !ExecutionEngine::build_local_final_response_message("max_rounds")
+                .contains("finalize mode")
+        );
+    }
+
+    #[test]
+    fn finalize_cache_anchor_messages_are_internal_and_not_actual_user_input() {
+        let messages = ExecutionEngine::build_finalize_cache_anchor_messages(
+            "turn-1",
+            ExecutionEngine::FINALIZE_AFTER_MAX_ROUNDS_REMINDER,
+        );
+
+        assert_eq!(messages.len(), 2);
+        assert_eq!(
+            messages[0].internal_reminder_kind(),
+            Some(InternalReminderKind::FinalizeCacheAnchor)
+        );
+        assert_eq!(
+            messages[1].internal_reminder_kind(),
+            Some(InternalReminderKind::FinalizeCacheAnchor)
+        );
+        assert!(!messages[0].is_actual_user_message());
+        assert!(!messages[1].is_actual_user_message());
     }
 
     #[test]

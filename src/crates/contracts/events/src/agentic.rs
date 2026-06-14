@@ -149,6 +149,9 @@ pub enum AgenticEvent {
         /// Why the turn finished.
         #[serde(skip_serializing_if = "Option::is_none")]
         finish_reason: Option<String>,
+        /// Whether the turn produced a user-visible final response.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        has_final_response: Option<bool>,
     },
 
     DialogTurnCancelled {

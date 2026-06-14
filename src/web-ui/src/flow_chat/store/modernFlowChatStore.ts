@@ -16,6 +16,10 @@ import {
 } from '../tool-cards/toolCardMetadata';
 import { isCompletedToolInTransientWindow } from '../components/modern/modelRoundItemGrouping';
 import { flowChatStore } from './FlowChatStore';
+import {
+  getTurnCompletionNotice,
+  type TurnCompletionNotice,
+} from '../utils/turnCompletionNotice';
 
 /**
  * Explore group statistics (merged computed stats)
@@ -75,6 +79,7 @@ export type VirtualItem =
       sourceRoundId?: string;
     }
   | { type: 'explore-group'; data: ExploreGroupData; turnId: string }
+  | { type: 'turn-completion-notice'; data: TurnCompletionNotice; turnId: string }
   | { type: 'image-analyzing'; turnId: string };
 
 /**
@@ -556,6 +561,15 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
     });
 
     flushRoundEntries(pendingRounds, { collapseTrailingExploreGroup: true });
+
+    const completionNotice = getTurnCompletionNotice(turn);
+    if (completionNotice) {
+      items.push({
+        type: 'turn-completion-notice',
+        turnId: turn.id,
+        data: completionNotice,
+      });
+    }
 
     if (isStableTurnProjection(turn)) {
       cachedTurnItems.set(turn, items.slice(turnItemStart));

@@ -2008,6 +2008,8 @@ describe('FlowChatStore historical session hydration state', () => {
       userMessage: { id: 'user-1', content: 'hello', timestamp: 1 },
       modelRounds: [],
       startTime: 1,
+      finishReason: 'max_rounds',
+      hasFinalResponse: false,
       status: 'completed',
     };
     apiMocks.restoreSessionView.mockResolvedValueOnce({
@@ -2042,6 +2044,13 @@ describe('FlowChatStore historical session hydration state', () => {
       isHistorical: false,
       historyState: 'ready',
       contextRestoreState: 'pending',
+      dialogTurns: expect.arrayContaining([
+        expect.objectContaining({
+          id: 'turn-1',
+          finishReason: 'max_rounds',
+          hasFinalResponse: false,
+        }),
+      ]),
     });
   });
 

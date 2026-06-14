@@ -2208,6 +2208,8 @@ mod tests {
             end_time: Some(2),
             duration_ms: Some(1),
             token_usage: None,
+            finish_reason: None,
+            has_final_response: None,
             status: TurnStatus::Completed,
         };
 
@@ -2286,6 +2288,8 @@ mod tests {
             end_time: Some(2),
             duration_ms: Some(1),
             token_usage: None,
+            finish_reason: None,
+            has_final_response: None,
             status: TurnStatus::Completed,
         }];
 
@@ -2345,6 +2349,8 @@ mod tests {
             end_time: Some(2),
             duration_ms: Some(1),
             token_usage: None,
+            finish_reason: None,
+            has_final_response: None,
             status: TurnStatus::Completed,
         }];
 

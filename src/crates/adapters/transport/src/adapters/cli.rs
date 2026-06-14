@@ -32,6 +32,7 @@ pub enum CliEvent {
         turn_id: String,
         success: Option<bool>,
         finish_reason: Option<String>,
+        has_final_response: Option<bool>,
     },
     /// Generic event (for LSP, file watch, etc.)
     Generic {
@@ -97,12 +98,14 @@ impl TransportAdapter for CliTransportAdapter {
                 turn_id,
                 success,
                 finish_reason,
+                has_final_response,
                 ..
             } => CliEvent::DialogTurnCompleted {
                 session_id,
                 turn_id,
                 success,
                 finish_reason,
+                has_final_response,
             },
             _ => return Ok(()),
         };

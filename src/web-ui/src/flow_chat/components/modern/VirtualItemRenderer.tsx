@@ -11,6 +11,7 @@ import { ModelRoundItem } from './ModelRoundItem';
 import { ExploreGroupRenderer } from './ExploreGroupRenderer';
 import { CompactToolCard, CompactToolCardHeader } from '../../tool-cards/CompactToolCard';
 import { useFlowChatContext } from './FlowChatContext';
+import { TurnCompletionNoticeItem } from './TurnCompletionNoticeItem';
 import './VirtualItemRenderer.scss';
 
 interface VirtualItemRendererProps {
@@ -63,6 +64,9 @@ export const VirtualItemRenderer = React.memo<VirtualItemRendererProps>(
               turnId={item.turnId}
             />
           );
+
+        case 'turn-completion-notice':
+          return <TurnCompletionNoticeItem notice={item.data} />;
 
         case 'image-analyzing':
           return (

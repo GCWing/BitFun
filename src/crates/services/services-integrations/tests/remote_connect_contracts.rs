@@ -2121,6 +2121,7 @@ fn remote_connect_tracker_keeps_finished_turn_snapshot_until_persistence_finaliz
         partial_recovery_reason: None,
         success: Some(true),
         finish_reason: Some("stop".to_string()),
+        has_final_response: Some(true),
     });
 
     assert_eq!(tracker.session_state(), "idle");
@@ -2266,6 +2267,7 @@ fn remote_connect_poll_helpers_preserve_delta_and_completion_policy() {
         partial_recovery_reason: None,
         success: Some(true),
         finish_reason: Some("stop".to_string()),
+        has_final_response: Some(true),
     });
 
     let waiting_for_persistence = serde_json::to_value(remote_persisted_poll_response(

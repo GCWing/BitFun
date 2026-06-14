@@ -347,8 +347,28 @@ pub struct DialogTurnData {
     pub duration_ms: Option<u64>,
 
     /// Provider-reported token usage for this dialog turn, when available.
-    #[serde(default, skip_serializing_if = "Option::is_none", alias = "token_usage")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "token_usage"
+    )]
     pub token_usage: Option<DialogTurnTokenUsageData>,
+
+    /// Detailed finish reason recorded when the turn ended.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "finish_reason"
+    )]
+    pub finish_reason: Option<String>,
+
+    /// Whether the turn produced a final assistant response visible to the user.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "has_final_response"
+    )]
+    pub has_final_response: Option<bool>,
 
     /// Turn status
     pub status: TurnStatus,
@@ -877,6 +897,8 @@ impl DialogTurnData {
             end_time: None,
             duration_ms: None,
             token_usage: None,
+            finish_reason: None,
+            has_final_response: None,
             status: TurnStatus::InProgress,
         }
     }

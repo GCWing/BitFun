@@ -212,6 +212,7 @@ impl TransportAdapter for TauriTransportAdapter {
                 partial_recovery_reason,
                 success,
                 finish_reason,
+                has_final_response,
                 ..
             } => {
                 self.app_handle.emit(
@@ -222,6 +223,7 @@ impl TransportAdapter for TauriTransportAdapter {
                         "partialRecoveryReason": partial_recovery_reason,
                         "success": success,
                         "finishReason": finish_reason,
+                        "hasFinalResponse": has_final_response,
                     }),
                 )?;
             }

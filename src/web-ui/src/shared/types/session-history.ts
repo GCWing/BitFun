@@ -158,6 +158,8 @@ export interface DialogTurnData {
   durationMs?: number;
   tokenUsage?: DialogTurnTokenUsageData;
   status: TurnStatus;
+  finishReason?: string;
+  hasFinalResponse?: boolean;
 }
 
 export interface DialogTurnTokenUsageData {

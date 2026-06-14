@@ -604,4 +604,27 @@ describe('handleDialogTurnComplete', () => {
     expect(turn?.error).toContain('empty response');
     expect(stateMachineManager.getCurrentState('session-1')).toBe(SessionExecutionState.IDLE);
   });
+
+  it('keeps abnormal completion turns on the completed path when no final response was produced', async () => {
+    putFinishingSessionInStore();
+    const context = createFlowChatContext();
+    await setFinishingMachine();
+
+    handleDialogTurnComplete(context, {
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      success: true,
+      finishReason: 'max_rounds',
+      hasFinalResponse: false,
+    }, vi.fn());
+
+    const turn = FlowChatStore.getInstance()
+      .getState()
+      .sessions.get('session-1')
+      ?.dialogTurns[0];
+
+    expect(turn?.status).toBe('finishing');
+    expect(turn?.finishReason).toBe('max_rounds');
+    expect(turn?.hasFinalResponse).toBe(false);
+  });
 });

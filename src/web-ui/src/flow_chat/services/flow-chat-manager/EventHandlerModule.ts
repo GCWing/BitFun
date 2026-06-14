@@ -2014,6 +2014,7 @@ export function handleDialogTurnComplete(
   const partialRecoveryReason = event?.partialRecoveryReason ?? event?.partial_recovery_reason;
   const success = event?.success;
   const finishReason = event?.finishReason ?? event?.finish_reason;
+  const hasFinalResponse = event?.hasFinalResponse ?? event?.has_final_response;
 
   if (!sessionId || !turnId) {
     log.warn('DialogTurnCompleted missing sessionId or turnId', { event });
@@ -2062,6 +2063,7 @@ export function handleDialogTurnComplete(
       status: 'finishing' as const,
       success: success ?? undefined,
       finishReason: finishReason ?? undefined,
+      hasFinalResponse: typeof hasFinalResponse === 'boolean' ? hasFinalResponse : undefined,
     };
   });
 

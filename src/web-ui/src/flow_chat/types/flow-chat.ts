@@ -235,6 +235,8 @@ export interface DialogTurn {
   success?: boolean;
   /** Why the turn finished. */
   finishReason?: string;
+  /** Whether the turn produced a final assistant response visible to the user. */
+  hasFinalResponse?: boolean;
 }
 
 export interface FlowChatState {

@@ -3820,6 +3820,18 @@ export class FlowChatStore {
       }),
       timestamp: turn.timestamp,
       status: normalizedTurnStatus,
+      finishReason:
+        typeof turn.finishReason === 'string'
+          ? turn.finishReason
+          : typeof turn.finish_reason === 'string'
+            ? turn.finish_reason
+            : undefined,
+      hasFinalResponse:
+        typeof turn.hasFinalResponse === 'boolean'
+          ? turn.hasFinalResponse
+          : typeof turn.has_final_response === 'boolean'
+            ? turn.has_final_response
+            : undefined,
       startTime: turn.startTime,
       endTime: turn.endTime,
       tokenUsage: rawTokenUsage

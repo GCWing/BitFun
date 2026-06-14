@@ -105,6 +105,7 @@ pub enum InternalReminderKind {
     BackgroundResult,
     InterruptedContinue,
     ThinkingOnlyRescue,
+    FinalizeCacheAnchor,
 }
 
 impl InternalReminderKind {
@@ -117,6 +118,7 @@ impl InternalReminderKind {
                 | Self::PeriodicLoopRecovery
                 | Self::InterruptedContinue
                 | Self::ThinkingOnlyRescue
+                | Self::FinalizeCacheAnchor
         )
     }
 

@@ -280,6 +280,8 @@ function getVirtualItemStableKey(item: VirtualItem): string {
       return `${item.type}:${item.turnId}:${item.data.id}`;
     case 'explore-group':
       return `${item.type}:${item.turnId}:${item.data.groupId}`;
+    case 'turn-completion-notice':
+      return `${item.type}:${item.turnId}:${item.data.reasonCode}`;
     case 'image-analyzing':
       return `${item.type}:${item.turnId}`;
   }
@@ -4018,6 +4020,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     .every(item =>
       item.type === 'user-message' ||
       item.type === 'user-steering-message' ||
+      item.type === 'turn-completion-notice' ||
       item.type === 'explore-group'
     );
   const hasInitialHistoryModelRoundProjection =

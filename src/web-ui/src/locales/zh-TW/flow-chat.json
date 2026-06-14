@@ -2150,6 +2150,25 @@
     "statusPending": "等待觸發",
     "statusInjected": "已觸發"
   },
+  "turnCompletionNotice": {
+    "reasonLabel": "結束原因",
+    "finalResponseProvided": "agent 已提供最終回覆。",
+    "repeatedToolFailures": {
+      "title": "該輪因重複工具失敗而結束"
+    },
+    "emptyRound": {
+      "title": "該輪沒有得到可用回覆"
+    },
+    "interrupted": {
+      "title": "該輪已中斷"
+    },
+    "maxRounds": {
+      "title": "該輪觸達 round 上限"
+    },
+    "generic": {
+      "title": "該輪以非標準方式結束"
+    }
+  },
   "errors": {
     "sendFailed": "傳送訊息失敗"
   },
