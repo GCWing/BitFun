@@ -70,6 +70,8 @@ chrono-tz = "0.10.4"
 cron = "0.15.0"
 # Tauri 2.9.2 utilities conflict with time 0.3.48 on current stable Rust.
 time = { version = "=0.3.47", default-features = false }
+# brotli-decompressor 5.0.2 pulls alloc-no-stdlib 3.x while brotli still uses 2.x.
+brotli-decompressor = "=5.0.0"
 regex = "1"
 base64 = "0.22"
 # Keep macOS Tauri's dispatch2/bitflags expansion on the known-good bitflags release.
