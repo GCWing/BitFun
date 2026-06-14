@@ -44,6 +44,7 @@ pub struct RoundContext {
     pub dialog_turn_id: String,
     pub turn_index: usize,
     pub round_number: usize,
+    pub round_group_id: Option<String>,
     pub workspace: Option<WorkspaceBinding>,
     pub messages: Vec<Message>,
     pub available_tools: Vec<String>,

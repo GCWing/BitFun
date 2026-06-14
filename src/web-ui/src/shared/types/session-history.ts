@@ -180,6 +180,7 @@ export interface ModelRoundData {
   id: string;
   turnId: string;
   roundIndex: number;
+  roundGroupId?: string;
   timestamp: number;
   renderHints?: ModelRoundRenderHints;
   textItems: TextItemData[];

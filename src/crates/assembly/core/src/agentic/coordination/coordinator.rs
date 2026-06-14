@@ -881,6 +881,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             id: format!("{}-manual-compaction-round", turn_id),
             turn_id: turn_id.to_string(),
             round_index: 0,
+            round_group_id: None,
             timestamp: started_at,
             text_items: Vec::new(),
             tool_items: vec![ToolItemData {
@@ -965,6 +966,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             id: format!("{}-manual-compaction-round", turn_id),
             turn_id: turn_id.to_string(),
             round_index: 0,
+            round_group_id: None,
             timestamp,
             text_items: Vec::new(),
             tool_items: vec![ToolItemData {

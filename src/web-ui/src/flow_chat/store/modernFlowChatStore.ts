@@ -242,6 +242,7 @@ function splitModelRoundForVirtualItems(
         ...round,
         id: segmentId,
         items: round.items.slice(start, end),
+        historyRounds: segmentIndex === 0 ? round.historyRounds : undefined,
       },
       segmentId,
       segmentIndex,
@@ -278,6 +279,19 @@ function steeringItemToUserMessage(item: FlowUserSteeringItem): NonNullable<Dial
     id: `user_steering_${item.steeringId}`,
     content: item.content,
     timestamp: item.timestamp,
+  };
+}
+
+function mergeRoundGroupForDisplay(currentRound: ModelRound, nextRound: ModelRound): ModelRound {
+  return {
+    ...nextRound,
+    historyRounds: [
+      ...(currentRound.historyRounds ?? []),
+      {
+        ...currentRound,
+        historyRounds: undefined,
+      },
+    ],
   };
 }
 
@@ -394,12 +408,23 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
       if (!round.items || round.items.length === 0) return;
       const nonSteeringItems = round.items.filter(item => item.type !== 'user-steering');
       if (nonSteeringItems.length > 0) {
-        renderEntries.push({
-          type: 'round',
-          round: nonSteeringItems.length === round.items.length
-            ? round
-            : { ...round, items: nonSteeringItems },
-        });
+        const normalizedRound = nonSteeringItems.length === round.items.length
+          ? round
+          : { ...round, items: nonSteeringItems };
+        const lastRenderEntry = renderEntries[renderEntries.length - 1];
+
+        if (
+          normalizedRound.roundGroupId &&
+          lastRenderEntry?.type === 'round' &&
+          lastRenderEntry.round.roundGroupId === normalizedRound.roundGroupId
+        ) {
+          lastRenderEntry.round = mergeRoundGroupForDisplay(lastRenderEntry.round, normalizedRound);
+        } else {
+          renderEntries.push({
+            type: 'round',
+            round: normalizedRound,
+          });
+        }
       }
       round.items
         .filter((item): item is FlowUserSteeringItem => item.type === 'user-steering')

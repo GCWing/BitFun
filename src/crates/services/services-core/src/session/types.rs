@@ -435,6 +435,12 @@ pub struct ModelRoundData {
     pub turn_id: String,
     #[serde(alias = "round_index")]
     pub round_index: usize,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "round_group_id"
+    )]
+    pub round_group_id: Option<String>,
     pub timestamp: u64,
 
     /// Text item entries

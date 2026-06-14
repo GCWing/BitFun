@@ -225,6 +225,8 @@ pub enum AgenticEvent {
         session_id: String,
         turn_id: String,
         round_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        round_group_id: Option<String>,
         round_index: usize,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         model_id: Option<String>,

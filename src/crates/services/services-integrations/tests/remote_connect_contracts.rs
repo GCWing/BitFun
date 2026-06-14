@@ -1982,6 +1982,7 @@ fn remote_connect_tracker_preserves_streaming_snapshot_contract() {
         session_id: "session-1".to_string(),
         turn_id: "turn-1".to_string(),
         round_id: "round-1".to_string(),
+        round_group_id: None,
         round_index: 3,
         model_id: None,
     });
@@ -1989,6 +1990,8 @@ fn remote_connect_tracker_preserves_streaming_snapshot_contract() {
         session_id: "session-1".to_string(),
         turn_id: "turn-1".to_string(),
         round_id: "round-1".to_string(),
+        attempt_id: None,
+        attempt_index: None,
         content: "<thinking>plan".to_string(),
         is_end: false,
     });
@@ -1996,6 +1999,8 @@ fn remote_connect_tracker_preserves_streaming_snapshot_contract() {
         session_id: "session-1".to_string(),
         turn_id: "turn-1".to_string(),
         round_id: "round-1".to_string(),
+        attempt_id: None,
+        attempt_index: None,
         text: "answer".to_string(),
     });
 
@@ -2033,6 +2038,8 @@ fn remote_connect_tracker_keeps_subagent_items_out_of_parent_accumulators() {
         session_id: "child-session".to_string(),
         turn_id: "child-turn".to_string(),
         round_id: "round-1".to_string(),
+        attempt_id: None,
+        attempt_index: None,
         text: "child text".to_string(),
     });
 
@@ -2062,6 +2069,8 @@ async fn remote_connect_tracker_broadcasts_tool_and_turn_events() {
         session_id: "session-1".to_string(),
         turn_id: "turn-1".to_string(),
         round_id: "round-1".to_string(),
+        attempt_id: None,
+        attempt_index: None,
         tool_event: ToolEventData::Started {
             tool_id: "tool-1".to_string(),
             tool_name: "AskUserQuestion".to_string(),
@@ -2108,6 +2117,8 @@ fn remote_connect_tracker_keeps_finished_turn_snapshot_until_persistence_finaliz
         session_id: "session-1".to_string(),
         turn_id: "turn-1".to_string(),
         round_id: "round-1".to_string(),
+        attempt_id: None,
+        attempt_index: None,
         text: "answer".to_string(),
     });
     tracker.mark_persistence_clean();
@@ -2243,6 +2254,8 @@ fn remote_connect_poll_helpers_preserve_delta_and_completion_policy() {
         session_id: "session-1".to_string(),
         turn_id: "turn-1".to_string(),
         round_id: "round-1".to_string(),
+        attempt_id: None,
+        attempt_index: None,
         text: "answer".to_string(),
     });
     tracker.mark_persistence_clean();
@@ -2329,6 +2342,8 @@ fn remote_connect_tracker_ignores_unrelated_direct_session_events() {
         session_id: "session-2".to_string(),
         turn_id: "turn-2".to_string(),
         round_id: "round-1".to_string(),
+        attempt_id: None,
+        attempt_index: None,
         text: "other answer".to_string(),
     });
 

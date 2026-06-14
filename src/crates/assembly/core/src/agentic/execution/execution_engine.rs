@@ -447,6 +447,13 @@ impl ExecutionEngine {
         }
     }
 
+    fn should_mark_has_final_response(
+        has_assistant_message: bool,
+        used_local_final_response_synthesis: bool,
+    ) -> bool {
+        has_assistant_message && !used_local_final_response_synthesis
+    }
+
     fn build_finalize_cache_anchor_messages(turn_id: &str, reminder_text: &str) -> Vec<Message> {
         vec![
             Message::internal_reminder(
@@ -914,6 +921,7 @@ impl ExecutionEngine {
         context: &ExecutionContext,
         agent_type: String,
         round_number: usize,
+        round_group_id: Option<String>,
         execution_context_vars: &HashMap<String, String>,
         primary_supports_image_understanding: bool,
         prepended_reminders: &[&str],
@@ -951,6 +959,7 @@ impl ExecutionEngine {
             dialog_turn_id: context.dialog_turn_id.clone(),
             turn_index: context.turn_index,
             round_number,
+            round_group_id,
             workspace: context.workspace.clone(),
             messages: messages.to_vec(),
             available_tools: finalize_tool_names,
@@ -2523,6 +2532,7 @@ impl ExecutionEngine {
                 dialog_turn_id: context.dialog_turn_id.clone(),
                 turn_index: context.turn_index,
                 round_number: round_index,
+                round_group_id: None,
                 workspace: context.workspace.clone(),
                 messages: messages.clone(),
                 available_tools: available_tools.clone(),
@@ -2994,6 +3004,10 @@ impl ExecutionEngine {
             };
 
             if let Some(finalize_reminder) = finalize_reminder {
+                let finalize_round_group_id = Some(format!(
+                    "{}:finalize:{}",
+                    context.dialog_turn_id, completed_rounds
+                ));
                 info!(
                     "Finalizing dialog turn: session_id={}, turn_id={}, reason={}",
                     context.session_id, context.dialog_turn_id, reason
@@ -3005,6 +3019,7 @@ impl ExecutionEngine {
                         &context,
                         agent_type.clone(),
                         completed_rounds,
+                        finalize_round_group_id.clone(),
                         &execution_context_vars,
                         primary_supports_image_understanding,
                         &prepended_reminders,
@@ -3030,15 +3045,16 @@ impl ExecutionEngine {
                     );
                     let retry_result = self
                         .run_finalize_round(
-                            ai_client.clone(),
-                            &context,
-                            agent_type.clone(),
-                            completed_rounds,
-                            &execution_context_vars,
-                            primary_supports_image_understanding,
-                            &prepended_reminders,
-                            &messages,
-                            finalize_reminder,
+                        ai_client.clone(),
+                        &context,
+                        agent_type.clone(),
+                        completed_rounds,
+                        finalize_round_group_id.clone(),
+                        &execution_context_vars,
+                        primary_supports_image_understanding,
+                        &prepended_reminders,
+                        &messages,
+                        finalize_reminder,
                             tool_definitions.clone(),
                             context_window,
                         )
@@ -3063,7 +3079,10 @@ impl ExecutionEngine {
                     }
                 }
 
-                has_final_response = chosen_assistant_message.is_some();
+                has_final_response = Self::should_mark_has_final_response(
+                    chosen_assistant_message.is_some(),
+                    used_local_final_response_synthesis,
+                );
                 if let Some(msg) = chosen_assistant_message {
                     if accepted && !used_local_final_response_synthesis {
                         let finalize_cache_anchor_messages =
@@ -3412,6 +3431,13 @@ mod tests {
             !ExecutionEngine::build_local_final_response_message("max_rounds")
                 .contains("finalize mode")
         );
+    }
+
+    #[test]
+    fn local_fallback_response_does_not_count_as_agent_final_response() {
+        assert!(ExecutionEngine::should_mark_has_final_response(true, false));
+        assert!(!ExecutionEngine::should_mark_has_final_response(true, true));
+        assert!(!ExecutionEngine::should_mark_has_final_response(false, false));
     }
 
     #[test]

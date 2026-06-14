@@ -3012,6 +3012,8 @@ mod tests {
             parent_task_tool_id: None,
             subagent_session_id: None,
             status: None,
+            attempt_id: None,
+            attempt_index: None,
         }
     }
 
@@ -3020,6 +3022,7 @@ mod tests {
             id: format!("round-{}", turn_id),
             turn_id: turn_id.to_string(),
             round_index: 0,
+            round_group_id: None,
             timestamp: 0,
             text_items,
             tool_items: Vec::new(),

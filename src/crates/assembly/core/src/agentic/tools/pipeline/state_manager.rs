@@ -316,6 +316,8 @@ mod tests {
                 session_id: "session-1".to_string(),
                 dialog_turn_id: "turn-1".to_string(),
                 round_id: "round-1".to_string(),
+                attempt_id: None,
+                attempt_index: None,
                 agent_type: "agentic".to_string(),
                 workspace: None,
                 context_vars: HashMap::new(),

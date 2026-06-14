@@ -374,6 +374,14 @@ export interface ModelRoundCompletedEvent extends AgenticEvent {
   tokenDetails?: unknown;
 }
 
+export interface ModelRoundStartedEvent extends AgenticEvent {
+  turnId: string;
+  roundId: string;
+  roundGroupId?: string;
+  roundIndex: number;
+  modelId?: string;
+}
+
 export interface AcpContextUsageUpdatedEvent extends AgenticEvent {
   clientId?: string;
   used: number;

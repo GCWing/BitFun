@@ -309,6 +309,7 @@ mod tests {
             id: format!("round-{turn_id}"),
             turn_id: turn_id.to_string(),
             round_index: 0,
+            round_group_id: None,
             timestamp: 1,
             text_items: vec![
                 TextItemData {

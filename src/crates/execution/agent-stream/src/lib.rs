@@ -1181,6 +1181,8 @@ mod tests {
                 "session_1".to_string(),
                 "turn_1".to_string(),
                 "round_1".to_string(),
+                "round_1:attempt:1".to_string(),
+                1,
                 &CancellationToken::new(),
             )
             .await
@@ -1221,6 +1223,8 @@ mod tests {
                 "session_1".to_string(),
                 "turn_1".to_string(),
                 "round_1".to_string(),
+                "round_1:attempt:1".to_string(),
+                1,
                 &CancellationToken::new(),
             )
             .await
@@ -1255,6 +1259,8 @@ mod tests {
                 "session_1".to_string(),
                 "turn_1".to_string(),
                 "round_1".to_string(),
+                "round_1:attempt:1".to_string(),
+                1,
                 &CancellationToken::new(),
             )
             .await
@@ -1292,6 +1298,8 @@ mod tests {
                 "session_1".to_string(),
                 "turn_1".to_string(),
                 "round_1".to_string(),
+                "round_1:attempt:1".to_string(),
+                1,
                 &CancellationToken::new(),
             )
             .await
@@ -1318,6 +1326,8 @@ mod tests {
                 "session_1".to_string(),
                 "turn_1".to_string(),
                 "round_1".to_string(),
+                "round_1:attempt:1".to_string(),
+                1,
                 &CancellationToken::new(),
             )
             .await
@@ -1353,6 +1363,8 @@ mod tests {
                 "session_1".to_string(),
                 "turn_1".to_string(),
                 "round_1".to_string(),
+                "round_1:attempt:1".to_string(),
+                1,
                 &CancellationToken::new(),
             )
             .await
@@ -1399,6 +1411,8 @@ mod tests {
                 "session_1".to_string(),
                 "turn_1".to_string(),
                 "round_1".to_string(),
+                "round_1:attempt:1".to_string(),
+                1,
                 &CancellationToken::new(),
             )
             .await
@@ -1433,6 +1447,8 @@ mod tests {
                 "session_1".to_string(),
                 "turn_1".to_string(),
                 "round_1".to_string(),
+                "round_1:attempt:1".to_string(),
+                1,
                 &CancellationToken::new(),
             )
             .await
@@ -1485,6 +1501,8 @@ mod tests {
                 "session_1".to_string(),
                 "turn_1".to_string(),
                 "round_1".to_string(),
+                "round_1:attempt:1".to_string(),
+                1,
                 &CancellationToken::new(),
             )
             .await
@@ -1557,6 +1575,8 @@ mod tests {
                 "session_1".to_string(),
                 "turn_1".to_string(),
                 "round_1".to_string(),
+                "round_1:attempt:1".to_string(),
+                1,
                 &CancellationToken::new(),
             )
             .await
@@ -1589,6 +1609,8 @@ mod tests {
                 "session_1".to_string(),
                 "turn_1".to_string(),
                 "round_1".to_string(),
+                "round_1:attempt:1".to_string(),
+                1,
                 &CancellationToken::new(),
             )
             .await

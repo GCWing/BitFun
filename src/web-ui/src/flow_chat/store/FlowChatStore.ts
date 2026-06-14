@@ -3015,6 +3015,7 @@ export class FlowChatStore {
             id: round.id,
             turnId,
             roundIndex,
+            roundGroupId: round.roundGroupId,
             timestamp: round.startTime,
             renderHints: round.renderHints,
             textItems,
@@ -4164,6 +4165,7 @@ export class FlowChatStore {
         const hydratedRound = synchronizeRoundAttempts({
           id: round.id,
           index: round.roundIndex ?? 0,
+          roundGroupId: round.roundGroupId,
           renderHints: round.renderHints,
           items: flatItems,
           isStreaming: false,

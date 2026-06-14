@@ -240,6 +240,8 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
     const { sessionId } = useFlowChatContext();
     const [copied, setCopied] = useState(false);
     const [showRetryHistory, setShowRetryHistory] = useState(false);
+    const [showRoundHistory, setShowRoundHistory] = useState(false);
+    const [openHistoryRoundAttemptIds, setOpenHistoryRoundAttemptIds] = useState<Record<string, boolean>>({});
     const copyButtonRef = useRef<HTMLButtonElement>(null);
     const renderTraceEnabled = isStartupRenderTraceEnabled();
     const renderTraceStartedAtMs = renderTraceEnabled ? performance.now() : null;
@@ -265,12 +267,26 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
     );
     const olderAttempts = attempts.length > 1 ? attempts.slice(0, -1) : [];
     const latestAttempt = attempts.length > 0 ? attempts[attempts.length - 1] : undefined;
+    const historyRounds = round.historyRounds ?? [];
 
     useEffect(() => {
       if (olderAttempts.length === 0 && showRetryHistory) {
         setShowRetryHistory(false);
       }
     }, [olderAttempts.length, showRetryHistory]);
+
+    useEffect(() => {
+      if (historyRounds.length === 0 && showRoundHistory) {
+        setShowRoundHistory(false);
+      }
+    }, [historyRounds.length, showRoundHistory]);
+
+    const toggleHistoryRoundAttempts = useCallback((historyRoundId: string) => {
+      setOpenHistoryRoundAttemptIds((current) => ({
+        ...current,
+        [historyRoundId]: !current[historyRoundId],
+      }));
+    }, []);
 
     // Keep the recorded round order; FlowChatStore already applies immutable updates.
     const sortedItems = useMemo(
@@ -595,6 +611,87 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
           </div>
         )}
 
+        {historyRounds.length > 0 && (
+          <div className="model-round-item__retry-history">
+            <button
+              type="button"
+              className="model-round-item__retry-toggle"
+              onClick={() => setShowRoundHistory(current => !current)}
+            >
+              {showRoundHistory
+                ? t('modelRound.roundHistoryHide')
+                : t('modelRound.roundHistoryShow', { count: historyRounds.length })}
+            </button>
+
+            {showRoundHistory && historyRounds.map((historyRound, historyIndex) => {
+              const historyAttempts = sortRoundAttempts(historyRound.attempts ?? []);
+              const historyOlderAttempts = historyAttempts.length > 1
+                ? historyAttempts.slice(0, -1)
+                : [];
+              const historyLatestAttempt = historyAttempts.length > 0
+                ? historyAttempts[historyAttempts.length - 1]
+                : undefined;
+              const showHistoryRoundAttempts = openHistoryRoundAttemptIds[historyRound.id] === true;
+              const historyGroups = buildModelRoundItemGroups({
+                items: historyLatestAttempt?.items ?? historyRound.items,
+                isStreaming: false,
+                disableExploreGrouping: true,
+                isCollapsibleTool,
+                nowMs: transientNowMs,
+              });
+
+              return (
+                <div key={historyRound.id} className="model-round-item__retry-attempt">
+                  <div className="model-round-item__retry-attempt-label">
+                    {t('modelRound.roundRetryLabel', { index: historyIndex + 1 })}
+                  </div>
+                  {historyOlderAttempts.length > 0 && (
+                    <div className="model-round-item__retry-history">
+                      <button
+                        type="button"
+                        className="model-round-item__retry-toggle"
+                        onClick={() => toggleHistoryRoundAttempts(historyRound.id)}
+                      >
+                        {showHistoryRoundAttempts
+                          ? t('modelRound.retryHistoryHide')
+                          : t('modelRound.retryHistoryShow', { count: historyOlderAttempts.length })}
+                      </button>
+
+                      {showHistoryRoundAttempts && historyOlderAttempts.map((attempt) => {
+                        const attemptGroups = buildModelRoundItemGroups({
+                          items: attempt.items,
+                          isStreaming: false,
+                          disableExploreGrouping: true,
+                          isCollapsibleTool,
+                          nowMs: transientNowMs,
+                        });
+
+                        return (
+                          <div key={attempt.id} className="model-round-item__retry-attempt">
+                            <div className="model-round-item__retry-attempt-label">
+                              {t('modelRound.attemptLabel', { index: attempt.index })}
+                            </div>
+                            {renderGroupList(attemptGroups, {
+                              roundId: historyRound.id,
+                              keyPrefix: `history-round:${historyRound.id}:attempt:${attempt.id}`,
+                              isFinalSection: false,
+                            })}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {renderGroupList(historyGroups, {
+                    roundId: historyRound.id,
+                    keyPrefix: `history-round:${historyRound.id}`,
+                    isFinalSection: false,
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {olderAttempts.length > 0 && (
           <div className="model-round-item__retry-history">
             <button
@@ -688,6 +785,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
     return (
       prev.round.id === next.round.id &&
       prev.round.items === next.round.items &&
+      prev.round.historyRounds === next.round.historyRounds &&
       prev.isLastRound === next.isLastRound &&
       prev.isTurnComplete === next.isTurnComplete &&
       prev.turnStartedAt === next.turnStartedAt &&

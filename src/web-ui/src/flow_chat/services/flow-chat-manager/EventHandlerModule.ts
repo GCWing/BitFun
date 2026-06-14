@@ -1661,7 +1661,7 @@ function handleToolEvent(
  * Handle model round started event
  */
 function handleModelRoundStart(context: FlowChatContext, event: any): void {
-  const { sessionId, turnId, roundId, roundIndex } = event;
+  const { sessionId, turnId, roundId, roundIndex, roundGroupId } = event;
   
   if (!shouldProcessEvent(sessionId, turnId, 'data', 'ModelRoundStarted')) {
     return;
@@ -1702,6 +1702,7 @@ function handleModelRoundStart(context: FlowChatContext, event: any): void {
   const modelRound: ModelRound = {
     id: roundId,
     index: roundIndex || 0,
+    roundGroupId,
     items: [],
     isStreaming: true,
     isComplete: false,

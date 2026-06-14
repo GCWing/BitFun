@@ -113,6 +113,7 @@ impl TransportAdapter for WebSocketTransportAdapter {
                 session_id,
                 turn_id,
                 round_id,
+                round_group_id,
                 round_index,
                 model_id,
             } => {
@@ -121,6 +122,7 @@ impl TransportAdapter for WebSocketTransportAdapter {
                     "sessionId": session_id,
                     "turnId": turn_id,
                     "roundId": round_id,
+                    "roundGroupId": round_group_id,
                     "roundIndex": round_index,
                     "modelId": model_id,
                 })

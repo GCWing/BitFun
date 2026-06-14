@@ -75,6 +75,7 @@ fn round(turn_id: &str, text_count: usize, tool_count: usize) -> ModelRoundData 
         id: format!("round-{turn_id}"),
         turn_id: turn_id.to_string(),
         round_index: 0,
+        round_group_id: None,
         timestamp: 0,
         text_items: (0..text_count)
             .map(|index| text_item(&format!("{turn_id}-text-{index}")))

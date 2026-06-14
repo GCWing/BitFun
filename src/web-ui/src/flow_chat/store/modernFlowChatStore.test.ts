@@ -206,6 +206,40 @@ describe('sessionToVirtualItems explore grouping', () => {
     });
   });
 
+  it('folds consecutive rounds that share the same round group id into retry history', () => {
+    const firstRound = makeRound({
+      id: 'finalize-round-1',
+      roundGroupId: 'finalize-group-1',
+      items: [makeTextItem('text-1', 'First finalize answer.')],
+    });
+    const secondRound = makeRound({
+      id: 'finalize-round-2',
+      roundGroupId: 'finalize-group-1',
+      items: [makeTextItem('text-2', 'Retried finalize answer.')],
+    });
+    const session = makeSession({
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: 'session-1',
+        userMessage: {
+          id: 'user-1',
+          content: 'Help',
+          timestamp: 900,
+        },
+        modelRounds: [firstRound, secondRound],
+        status: 'completed',
+        startTime: 900,
+      }],
+    });
+
+    const modelRounds = sessionToVirtualItems(session)
+      .filter((item): item is ModelRoundVirtualItem => item.type === 'model-round');
+
+    expect(modelRounds).toHaveLength(1);
+    expect(modelRounds[0].data.id).toBe('finalize-round-2');
+    expect(modelRounds[0].data.historyRounds?.map(round => round.id)).toEqual(['finalize-round-1']);
+  });
+
   it('does not special-case ACP rounds without explicit render hints', () => {
     const session = makeSession({
       sessionId: 'acp-session',

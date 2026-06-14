@@ -398,6 +398,7 @@ export function convertDialogTurnToBackendFormat(dialogTurn: DialogTurn, turnInd
         id: round.id,
         turnId: dialogTurn.id,
         roundIndex,
+        roundGroupId: round.roundGroupId,
         timestamp: round.startTime,
         renderHints: round.renderHints,
         textItems: round.items

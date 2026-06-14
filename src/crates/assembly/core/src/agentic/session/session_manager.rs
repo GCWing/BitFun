@@ -3631,6 +3631,7 @@ impl SessionManager {
                 id: format!("{}-final-round", turn.turn_id),
                 turn_id: turn.turn_id.clone(),
                 round_index,
+                round_group_id: None,
                 timestamp: completion_timestamp,
                 text_items: vec![TextItemData {
                     id: format!("{}-final-text", turn.turn_id),
@@ -5198,6 +5199,7 @@ mod tests {
             id: "round-1".to_string(),
             turn_id: "turn-1".to_string(),
             round_index: 0,
+            round_group_id: None,
             timestamp: 1,
             text_items: vec![],
             tool_items: vec![ToolItemData {
@@ -5231,6 +5233,8 @@ mod tests {
                 is_subagent_item: None,
                 parent_task_tool_id: None,
                 subagent_session_id: None,
+                attempt_id: None,
+                attempt_index: None,
                 subagent_model_id: None,
                 subagent_model_alias: None,
                 status: Some("completed".to_string()),

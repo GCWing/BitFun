@@ -2157,6 +2157,8 @@ mod tests {
             is_subagent_item: None,
             parent_task_tool_id: None,
             subagent_session_id: None,
+            attempt_id: None,
+            attempt_index: None,
             subagent_model_id: None,
             subagent_model_alias: None,
             status: None,
@@ -2183,6 +2185,7 @@ mod tests {
                 id: "round-1".to_string(),
                 turn_id: "turn-1".to_string(),
                 round_index: 0,
+                round_group_id: None,
                 timestamp: 1,
                 text_items: vec![],
                 tool_items: vec![
@@ -2262,6 +2265,7 @@ mod tests {
                 id: "round-1".to_string(),
                 turn_id: "turn-1".to_string(),
                 round_index: 0,
+                round_group_id: None,
                 timestamp: 1,
                 text_items: vec![],
                 tool_items: vec![tool_item(
@@ -2323,6 +2327,7 @@ mod tests {
                 id: "round-1".to_string(),
                 turn_id: "turn-1".to_string(),
                 round_index: 0,
+                round_group_id: None,
                 timestamp: 1,
                 text_items: vec![],
                 tool_items: vec![tool_item(

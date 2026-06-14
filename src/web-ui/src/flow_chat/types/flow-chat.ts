@@ -159,8 +159,10 @@ export interface ModelRoundAttempt {
 export interface ModelRound {
   id: string;
   index: number;
+  roundGroupId?: string;
   items: AnyFlowItem[];
   attempts?: ModelRoundAttempt[];
+  historyRounds?: ModelRound[];
   isStreaming: boolean;
   isComplete: boolean;
   status: 'pending' | 'streaming' | 'completed' | 'cancelled' | 'error' | 'pending_confirmation';
