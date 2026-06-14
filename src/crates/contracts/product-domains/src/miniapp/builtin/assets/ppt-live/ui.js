@@ -29,7 +29,6 @@ import {
   prepareSlidesForPptxExport,
   slideExportHtml,
   EXPORT_VIEWPORT,
-  validateSlideForPptxGeneration,
 } from './src/export-slide-browser.js';
 import {
   exportPdfFromBase64Pages,
@@ -310,7 +309,6 @@ function resetGeneration() {
   state.generation.eventSeq = 0;
   state.generation.steps = state.generation.steps.map((step) => ({ ...step, status: 'pending' }));
   state.generation.events = [];
-  resetSlideValidationCache('');
   renderGeneration(state);
   renderGenerationOverlay(state);
 }
@@ -680,8 +678,6 @@ const PPT_BACKEND_MAX_ATTEMPTS = 4;
 const PPT_BACKEND_CONTINUATION_MAX_ATTEMPTS = 8;
 const PPT_BACKEND_TOTAL_STAGE_ATTEMPTS =
   PPT_BACKEND_MAX_ATTEMPTS + PPT_BACKEND_CONTINUATION_MAX_ATTEMPTS;
-// Whole-deck Agent audit is slow; skip phase 3 until the audit path is fast enough.
-const PPT_LIVE_FINAL_AUDIT_ENABLED = false;
 const PPT_RETRY_DELAY_MS = 750;
 
 function stageAttemptInfo(attempt) {
@@ -725,40 +721,6 @@ function recoveryExhaustedError(stageKey, lastError, failures = [], stageVars = 
     reasons,
   };
   return error;
-}
-
-/** Per-run cache: validated slide html fingerprints keyed by runId:slideNumber. */
-const slideValidationCache = new Map();
-let slideValidationRunId = '';
-
-function slideHtmlFingerprint(html) {
-  const raw = String(html || '');
-  let hash = 0;
-  for (let i = 0; i < raw.length; i += 1) {
-    hash = ((hash << 5) - hash + raw.charCodeAt(i)) | 0;
-  }
-  return String(hash);
-}
-
-function resetSlideValidationCache(runId = '') {
-  slideValidationCache.clear();
-  slideValidationRunId = runId || '';
-}
-
-function slideValidationCacheKey(slideNumber) {
-  return `${slideValidationRunId}:${slideNumber}`;
-}
-
-function rememberValidatedSlide(slideNumber, html) {
-  slideValidationCache.set(slideValidationCacheKey(slideNumber), slideHtmlFingerprint(html));
-}
-
-function slideAlreadyValidated(slideNumber, html) {
-  return slideValidationCache.get(slideValidationCacheKey(slideNumber)) === slideHtmlFingerprint(html);
-}
-
-function slidePlanId(slidePlan, slideNumber) {
-  return String(slidePlan?.slideId || slidePlan?.id || `slide-${String(slideNumber).padStart(2, '0')}`);
 }
 
 function isRetryableBackendError(error) {
@@ -938,32 +900,6 @@ async function tryReadDeckJsonFile(project, relPath) {
   }
 }
 
-async function inspectDeckJsonFile(project, relPath) {
-  try {
-    const raw = String(await readDeckProjectFile(project, relPath) || '');
-    if (!raw.trim()) {
-      return { status: 'empty', value: null, reason: `${relPath} exists but is empty.` };
-    }
-    try {
-      return { status: 'valid', value: extractBackendJson(raw), reason: '' };
-    } catch (error) {
-      return {
-        status: 'invalid',
-        value: null,
-        reason: `${relPath} is not valid JSON: ${backendErrorDetail(error) || 'parse failed'}.`,
-      };
-    }
-  } catch (error) {
-    return {
-      status: 'missing',
-      value: null,
-      reason: `${relPath} was not created or could not be read: ${
-        backendErrorDetail(error) || 'file unavailable'
-      }.`,
-    };
-  }
-}
-
 /** Parsed `project.json`, or null when missing or not yet valid JSON. */
 async function tryReadDeckPlanFile(project) {
   return await tryReadDeckJsonFile(project, 'project.json');
@@ -1033,54 +969,6 @@ function planningEvidenceIssues(toolTrace, style) {
     }
   });
   return issues;
-}
-
-function auditWriteEvidenceIssues(toolTrace) {
-  const trace = Array.isArray(toolTrace) ? toolTrace : [];
-  const writeStarts = trace.filter((entry) => {
-    if (entry.eventType !== 'Started') return false;
-    const name = String(entry.toolName || '').toLowerCase();
-    const params = toolTraceParams(entry);
-    const path = String(params.file_path || params.path || '');
-    return (name === 'write' || name === 'filewrite') && path.endsWith('quality-report.json');
-  });
-  if (!writeStarts.length) {
-    return ['The Agent turn ended without calling Write for quality-report.json.'];
-  }
-  const terminalById = new Map(
-    trace
-      .filter((entry) => entry.toolId && ['Completed', 'Failed', 'Cancelled'].includes(entry.eventType))
-      .map((entry) => [entry.toolId, entry]),
-  );
-  const completed = writeStarts.some((entry) => terminalById.get(entry.toolId)?.eventType === 'Completed');
-  if (completed) return [];
-  const failed = writeStarts
-    .map((entry) => terminalById.get(entry.toolId))
-    .find((entry) => entry?.eventType === 'Failed' || entry?.eventType === 'Cancelled');
-  if (failed) {
-    return [
-      `The quality-report.json Write tool did not complete: ${
-        backendErrorDetail(failed.error) || failed.eventType
-      }.`,
-    ];
-  }
-  return ['The quality-report.json Write tool started but no completion event was observed.'];
-}
-
-function auditTurnCompletionIssue(completion) {
-  if (!completion) return '';
-  const finishReason = String(completion.finishReason || '').trim();
-  const partialReason = String(completion.partialRecoveryReason || '').trim();
-  if (completion.success === false) {
-    return `The Agent turn reported success=false${finishReason ? ` (${finishReason})` : ''}.`;
-  }
-  if (partialReason) {
-    return `The Agent turn ended after partial recovery: ${partialReason}.`;
-  }
-  if (finishReason && !['complete', 'completed', 'final_answer'].includes(finishReason.toLowerCase())) {
-    return `The Agent turn stopped with finish reason "${finishReason}".`;
-  }
-  return '';
 }
 
 /** Best-effort: drop old deck project dirs so appdata storage stays bounded. */
@@ -1582,77 +1470,10 @@ async function runStagedPlanPhase(operation, instruction, project = null) {
   throw lastError;
 }
 
-async function validateAndRepairSlide({
-  operation,
-  planContext,
-  slidePlan,
-  slideNumber,
-  session,
-  project,
-  html,
-}) {
-  let currentHtml = html;
-  const maxRepairAttempts = 2;
-  if (slideAlreadyValidated(slideNumber, currentHtml)) {
-    return {
-      html: currentHtml,
-      quality: { score: 100, issues: [] },
-    };
-  }
-  for (let repairAttempt = 0; repairAttempt <= maxRepairAttempts; repairAttempt += 1) {
-    const validation = await validateSlideForPptxGeneration(currentHtml);
-    if (validation.valid) {
-      rememberValidatedSlide(slideNumber, currentHtml);
-      return {
-        html: currentHtml,
-        quality: { score: 100, issues: [] },
-      };
-    }
-    if (repairAttempt >= maxRepairAttempts) {
-      throw new Error(
-        `PPT Live slide ${slideNumber} failed editable-PPTX validation: ${
-          validation.issues.map((issue) => issue.message).join(' ')
-        }`,
-      );
-    }
-
-    addGenerationEvent({
-      title: t('generationSlideRepair', {
-        slide: slideNumber,
-        attempt: repairAttempt + 1,
-        max: maxRepairAttempts,
-      }),
-      detail: compactText(validation.issues.map((issue) => issue.message).join(' '), 260),
-      kind: 'error',
-    });
-    const repairTurn = await executeBackendTurn({
-      operation,
-      locale: getLocale(),
-      phase: 'repair',
-      assignedSlide: slidePlan,
-      validationIssues: validation.issues,
-      generationContract: liveGenerationContract(planContext),
-      design: livePlanContextDesign(planContext),
-      style: livePlanContextStyle(planContext),
-    }, {}, {
-      sessionId: session?.id || undefined,
-      appDataWorkspace: project?.workspaceSubdir,
-      resultKind: 'text',
-    });
-    if (session && repairTurn.sessionId) session.id = repairTurn.sessionId;
-    currentHtml = await tryReadDeckSlideFile(project, slideNumber);
-    if (!currentHtml) {
-      throw new Error(`PPT Live repair turn did not rewrite slide ${slideNumber}`);
-    }
-  }
-  throw new Error(`PPT Live slide ${slideNumber} validation did not finish`);
-}
-
 /**
  * Render one slide. The normal path submits a lightweight turn INTO the
  * planning session (`session.id`), where the ppt-design skill, style preset,
- * research, and plan already live. The final audit reuses the pinned
- * skill-derived project contract before accepting the deck.
+ * research, and plan already live.
  * With the file protocol (`project` set) the agent writes
  * `slides/slide-NN.html` in the deck project directory and ui.js reads it
  * back; a file that landed on disk before a failure is recovered without
@@ -1678,16 +1499,7 @@ async function runStagedSlide({ operation, planContext, slidePlan, slideNumber, 
           // The failed turn may have written the slide file before dying.
           const recovered = await tryReadDeckSlideFile(project, slideNumber);
           if (recovered) {
-            const repaired = await validateAndRepairSlide({
-              operation,
-              planContext,
-              slidePlan,
-              slideNumber,
-              session,
-              project,
-              html: recovered,
-            });
-            return slideFromHtml(repaired.html, repaired.quality);
+            return slideFromHtml(recovered);
           }
         }
         addGenerationEvent({
@@ -1763,16 +1575,7 @@ async function runStagedSlide({ operation, planContext, slidePlan, slideNumber, 
         if (!html) {
           throw new Error(`PPT Live slide ${slideNumber} file is missing or incomplete`);
         }
-        const repaired = await validateAndRepairSlide({
-          operation,
-          planContext,
-          slidePlan,
-          slideNumber,
-          session,
-          project,
-          html,
-        });
-        return slideFromHtml(repaired.html, repaired.quality);
+        return slideFromHtml(html);
       }
       const slides = Array.isArray(payload?.slides) ? payload.slides : [];
       const slide = slides.find((candidate) => slidePlanNumber(candidate, NaN) === slideNumber) || slides[0];
@@ -1815,165 +1618,6 @@ async function runStagedSlide({ operation, planContext, slidePlan, slideNumber, 
   throw lastError;
 }
 
-async function runFinalDeckAudit({
-  operation,
-  planContext,
-  slidePlans,
-  session,
-  project,
-}) {
-  let auditComplete = false;
-  let lastAuditError = null;
-  let auditReport = null;
-  let auditIssues = [];
-  const failures = [];
-  for (let attempt = 1; attempt <= PPT_BACKEND_TOTAL_STAGE_ATTEMPTS; attempt += 1) {
-    try {
-      const attemptInfo = stageAttemptInfo(attempt);
-      if (attempt > 1) {
-        const status = attemptInfo.continuation
-          ? t('generationRecoveryContinuing', {
-              stage: t('generationStageAudit'),
-              attempt: attemptInfo.continuationAttempt,
-              max: PPT_BACKEND_CONTINUATION_MAX_ATTEMPTS,
-            })
-          : t('generationAuditRetry', {
-              attempt,
-              max: PPT_BACKEND_MAX_ATTEMPTS,
-            });
-        addGenerationEvent({
-          title: status,
-          detail: auditIssues.join(' ') || backendErrorDetail(lastAuditError),
-          kind: 'error',
-        });
-        setStatus(status);
-        await new Promise((resolve) => setTimeout(resolve, retryDelayMs(lastAuditError, attempt)));
-      }
-      const completionRecovery = completionRecoveryInput(
-        'audit',
-        attempt,
-        lastAuditError,
-        auditIssues,
-      );
-      const auditTurn = await executeBackendTurn({
-        operation,
-        locale: getLocale(),
-        phase: 'audit',
-        inSession: Boolean(session?.id),
-        generationContract: liveGenerationContract(planContext),
-        design: livePlanContextDesign(planContext),
-        style: livePlanContextStyle(planContext),
-        slideOrder: planContext.slideOrder,
-        slidePlans,
-        ...(auditIssues.length ? { auditIssues } : {}),
-        ...(completionRecovery ? { completionRecovery } : {}),
-      }, {}, {
-        sessionId: session?.id || undefined,
-        appDataWorkspace: project?.workspaceSubdir,
-        resultKind: 'text',
-      });
-      if (session && auditTurn.sessionId) session.id = auditTurn.sessionId;
-
-      if (!session?.id) {
-        const evidenceIssues = planningEvidenceIssues(auditTurn.toolTrace, planContext.style);
-        if (evidenceIssues.length) {
-          throw new Error(`PPT Live final audit compliance failed: ${evidenceIssues.join(' ')}`);
-        }
-      }
-      const reportInspection = await inspectDeckJsonFile(project, 'quality-report.json');
-      auditReport = reportInspection.value;
-      const checkedSlides = new Set(
-        Array.isArray(auditReport?.checkedSlides) ? auditReport.checkedSlides.map(String) : [],
-      );
-      const missingSlides = (planContext.slideOrder || [])
-        .map(String)
-        .filter((slideId) => !checkedSlides.has(slideId));
-      const verificationIssues = [];
-      if (reportInspection.status !== 'valid') {
-        verificationIssues.push(reportInspection.reason);
-      } else if (auditReport?.status !== 'passed') {
-        verificationIssues.push(
-          `quality-report.json status is "${String(auditReport?.status || 'missing')}", not "passed".`,
-        );
-      }
-      if (missingSlides.length) {
-        verificationIssues.push(
-          `quality-report.json did not confirm these slide ids: ${missingSlides.join(', ')}.`,
-        );
-      }
-      if (verificationIssues.length) {
-        verificationIssues.push(...auditWriteEvidenceIssues(auditTurn.toolTrace));
-        const completionIssue = auditTurnCompletionIssue(auditTurn.completion);
-        if (completionIssue) verificationIssues.push(completionIssue);
-        const reply = compactText(auditTurn.text || '', 180);
-        if (reply) verificationIssues.push(`Agent reply: ${reply}`);
-        const verificationError = new Error(
-          `PPT Live final audit verification failed: ${verificationIssues.join(' ')}`,
-        );
-        verificationError.pptLiveAuditIssues = verificationIssues;
-        throw verificationError;
-      }
-      auditComplete = true;
-      break;
-    } catch (error) {
-      lastAuditError = error;
-      failures.push(error);
-      auditIssues = Array.isArray(error?.pptLiveAuditIssues)
-        ? error.pptLiveAuditIssues
-        : [backendErrorDetail(error)].filter(Boolean);
-      if (session && isUnknownSessionBackendError(error)) session.id = null;
-      if (!isRetryableBackendError(error)) throw error;
-      if (attempt >= PPT_BACKEND_TOTAL_STAGE_ATTEMPTS) {
-        throw recoveryExhaustedError('generationStageAudit', error, failures);
-      }
-      runtime().log?.warn?.('PPT Live final deck audit failed, retrying', {
-        attempt,
-        maxAttempts: PPT_BACKEND_TOTAL_STAGE_ATTEMPTS,
-        continueInSession: Boolean(session?.id),
-        error: String(error),
-      });
-    }
-  }
-  if (!auditComplete) throw lastAuditError || new Error('PPT Live final audit did not finish');
-
-  const fixedSlideIds = new Set(
-    Array.isArray(auditReport?.fixedSlides) ? auditReport.fixedSlides.map(String) : [],
-  );
-  const auditedSlides = [];
-  for (const slidePlan of slidePlans) {
-    const slideNumber = slidePlan.slideNumber;
-    const html = await tryReadDeckSlideFile(project, slideNumber);
-    if (!html) throw new Error(`PPT Live final audit lost slide ${slideNumber}`);
-    const slideId = slidePlanId(slidePlan, slideNumber);
-    if (!fixedSlideIds.has(slideId) && slideAlreadyValidated(slideNumber, html)) {
-      auditedSlides.push({
-        ...slidePlan,
-        id: `ppt-live-slide-${slideNumber}`,
-        slideNumber,
-        html,
-        quality: { score: 100, issues: [] },
-      });
-      continue;
-    }
-    const repaired = await validateAndRepairSlide({
-      operation,
-      planContext,
-      slidePlan,
-      slideNumber,
-      session,
-      project,
-      html,
-    });
-    auditedSlides.push({
-      ...slidePlan,
-      id: `ppt-live-slide-${slideNumber}`,
-      slideNumber,
-      html: repaired.html,
-      quality: repaired.quality,
-    });
-  }
-  return auditedSlides;
-}
 
 async function runStagedDeckGeneration(operation, instruction) {
   const runEpoch = deckEpoch;
@@ -1990,7 +1634,6 @@ async function runStagedDeckGeneration(operation, instruction) {
   // ppt-design skill's native `project.json` + `slides/slide-NN.html` layout.
   const project = backendUsesFileProtocol() ? newDeckProject() : null;
   if (project) {
-    resetSlideValidationCache(project.runId);
     await pruneOldDeckProjects(project.runId);
   }
 
@@ -2127,22 +1770,7 @@ async function runStagedDeckGeneration(operation, instruction) {
     }
 
     const orderedReadySlides = [...readySlides].sort((a, b) => a.slideNumber - b.slideNumber);
-
-    // Phase 3 (optional): whole-deck skill/style audit, followed by deterministic
-    // editable-PPTX validation of every possibly rewritten page.
-    let finalSlides = orderedReadySlides;
-    if (PPT_LIVE_FINAL_AUDIT_ENABLED) {
-      addGenerationEvent({ title: t('generationAuditPhase'), detail: '', kind: 'phase' });
-      setGenerationStep('design', 'running', t('generationAuditPhase'));
-      setStatus(t('generationAuditPhase'));
-      finalSlides = await runFinalDeckAudit({
-        operation,
-        planContext,
-        slidePlans: normalizedPlans,
-        session,
-        project,
-      });
-    }
+    const finalSlides = orderedReadySlides;
     state.agentSession.id = session.id || state.agentSession.id;
 
     // Phase 4: finalize the complete deck and persist once.

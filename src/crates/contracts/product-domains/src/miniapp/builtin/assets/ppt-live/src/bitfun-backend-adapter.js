@@ -2,8 +2,8 @@
 //
 // The MiniApp agent bridge (`app.agent.*`) is the only generation path. The
 // planning turn loads BitFun's pinned built-in `ppt-design` skill, reads the
-// required references, and writes a durable generation contract. Serial render,
-// repair, audit, and edit turns reuse the deck session and project directory.
+// required references, and writes a durable generation contract. Serial render
+// and edit turns reuse the deck session and project directory.
 
 const EVENT_LISTENERS = new Set();
 export const PPT_DESIGN_SKILL_KEY = 'user::bitfun-system::ppt-design';
@@ -215,19 +215,6 @@ ${previousFailure ? `- Previous verified failure: ${previousFailure}\n` : ''}${
 `;
 }
 
-function buildAuditVerificationFeedback(input) {
-  const issues = Array.isArray(input?.auditIssues)
-    ? input.auditIssues.map(String).filter(Boolean)
-    : [];
-  if (!issues.length) return '';
-  return `The host rejected the previous audit turn because the audit artifact was not complete:
-- ${issues.join('\n- ')}
-
-Resolve every issue above in this turn. In particular, use the Write tool to create or completely rewrite \`quality-report.json\`; do not answer "DECK AUDIT PASSED" unless that file has been successfully written and covers every slide id.
-
-`;
-}
-
 function schemaPaletteBlock(input) {
   const palette = input?.style?.palette || {};
   return JSON.stringify(palette, null, 2)
@@ -435,103 +422,6 @@ ${serializeInput(input)}
   return body + buildStyleAppendix(input);
 }
 
-function buildRepairPrompt(input) {
-  const slidePlan = input?.assignedSlide || (input?.assignedSlides || [])[0] || {};
-  const assigned = slidePlan?.slideNumber ?? '?';
-  const file = slideFileName(slidePlan?.slideNumber || 0);
-  return `Repair PPT Live slide ${assigned} in the existing deck Agent Session.
-
-The host validated \`${file}\` and rejected it for editable-PPTX export. Fix the slide on disk. Do not regenerate the deck, re-research, or replace the page with a generic template.
-
-You choose how to repair:
-1. \`Read\` \`project.json\` and \`${file}\` first.
-2. Treat the validator findings below as the acceptance checklist. Keep the planned content, claim, evidence, visual identity, and layout unless a finding requires a structural change.
-3. Make the smallest change that clears every finding. Prefer targeted \`Edit\` on \`${file}\` when a finding points at a specific element or block (for example move background/border/shadow from a text tag onto an enclosing DIV, fix one rule, adjust one section). Use \`Write\` for the whole file only when localized edits are impractical or would leave the file inconsistent.
-4. Do not call Skill again, do not re-read reference markdown, and do not modify other slides.
-5. When \`${file}\` satisfies every finding, end with "SLIDE ${assigned} REPAIRED".
-
-Editable-PPTX rules the validator enforces:
-${EDITABLE_PPTX_HARD_RULES}
-${buildStyleAppendix(input)}
-
-Validator findings:
-\`\`\`json
-${serializeInput(input?.validationIssues || [])}
-\`\`\`
-
-Assigned slide and contract:
-\`\`\`json
-${serializeInput({
-    generationContract: input?.generationContract || {},
-    design: input?.design || {},
-    style: input?.style || {},
-    assignedSlide: slidePlan,
-  })}
-\`\`\``;
-}
-
-/**
- * In-session audit: skill, references, and generationContract were loaded during
- * planning. Re-read only project artifacts; avoid redundant Skill/reference turns.
- */
-function buildSessionAuditPrompt(input) {
-  return `Perform the FINAL whole-deck audit for this PPT Live project in the SAME deck Agent Session where planning and rendering already loaded Skill('${PPT_DESIGN_SKILL_KEY}') and distilled rules into \`project.json\`.
-
-Do NOT call Skill again and do NOT re-read reference markdown unless you must verify one specific rule. Treat \`generationContract.hardRules\`, \`visualGrammar\`, and \`design.renderGuide\` as authoritative.
-
-${buildAuditVerificationFeedback(input)}
-1. \`Read\` \`project.json\` and every \`slides/slide-XX.html\` listed in \`slide_order\`.
-2. Check every page against the generation contract, user prompt/style, narrative role, evidence, editable PPTX constraints, and taste guardrails already captured in the contract.
-3. Check deck-level quality using a thumbnail/contact-sheet pass: visual thesis, signature move discipline, distinct adjacent silhouettes, deliberate density curve, one dominant element per page, no SaaS card-template repetition, no filler labels or fake UI, no missed high-value visual explanation, accurate sources, readable density, and consistent typography/palette/object styles.
-4. Rewrite only slide files that need improvement. Preserve correct content and never invent facts.
-5. Write \`quality-report.json\` containing \`{"status":"passed","checkedSlides":["every slide_id from slide_order"],"fixedSlides":["only slide_ids you rewrote"],"notes":["specific deck-level findings and fixes, or a concise reason no fixes were needed"]}\`. \`checkedSlides\` must cover every slide id; \`fixedSlides\` must list only pages you changed.
-6. End with "DECK AUDIT PASSED".
-
-Editable PPTX rules:
-${EDITABLE_PPTX_HARD_RULES}
-${buildStyleAppendix(input)}
-
-Deck audit contract:
-\`\`\`json
-${serializeInput({
-    generationContract: input?.generationContract || {},
-    design: input?.design || {},
-    style: input?.style || {},
-    slideOrder: input?.slideOrder || [],
-    slidePlans: input?.slidePlans || [],
-  })}
-\`\`\``;
-}
-
-function buildAuditPrompt(input) {
-  return `Perform the FINAL whole-deck audit for this PPT Live project in the SAME Agent Session.
-
-${buildAuditVerificationFeedback(input)}
-1. Call \`Skill('${PPT_DESIGN_SKILL_KEY}')\` and verify the returned stable key is exact.
-2. \`Read\` mandatory references \`${PPT_DESIGN_REQUIRED_REFERENCES.join('`, `')}\`, then \`Read\` every additional style reference listed in \`generationContract.requiredReferences\`.
-3. \`Read\` \`project.json\` and every file named by \`slide_order\`.
-4. Check every page against \`generationContract\`, the pinned ppt-design skill, the selected style preset, user Prompt, user style/layout settings, narrative role, evidence, and editable PPTX constraints.
-5. Check deck-level quality using a thumbnail/contact-sheet pass: visual thesis, signature move discipline, distinct adjacent silhouettes, deliberate density curve, one dominant element per page, no SaaS card-template repetition, no filler labels or fake UI, no missed high-value visual explanation, accurate sources, readable density, and consistent typography/palette/object styles.
-6. Rewrite only slide files that need improvement. Preserve correct content and never invent facts.
-7. Write \`quality-report.json\` containing \`{"status":"passed","checkedSlides":["every slide_id from slide_order"],"fixedSlides":["only slide_ids you rewrote"],"notes":["specific deck-level findings and fixes, or a concise reason no fixes were needed"]}\`. The report is required and \`checkedSlides\` must cover every slide id.
-8. End with "DECK AUDIT PASSED".
-
-Editable PPTX rules:
-${EDITABLE_PPTX_HARD_RULES}
-${buildStyleAppendix(input)}
-
-Deck audit contract:
-\`\`\`json
-${serializeInput({
-    generationContract: input?.generationContract || {},
-    design: input?.design || {},
-    style: input?.style || {},
-    slideOrder: input?.slideOrder || [],
-    slidePlans: input?.slidePlans || [],
-  })}
-\`\`\``;
-}
-
 function buildLegacyPrompt(input) {
   const body = `Generate or revise a PPT Live deck. The user only sees the PPT Live app UI.
 
@@ -586,8 +476,6 @@ ${serializeInput(input)}
  * - "slides": render the assigned slide. With `input.inSession` the turn runs
  *   inside the planning session and relies on its context; otherwise it gets a
  *   self-contained prompt that reloads the skill and reads the plan JSON.
- * - "repair": rewrite one validator-failing slide in the deck session.
- * - "audit": inspect and improve the completed deck before acceptance.
  * - absent: legacy single-shot protocol (full deck or incremental patch).
  * `input.continueAfterInterruption` marks reruns of an interrupted turn.
  * `input.completionRecovery` is a stronger host-verified continuation after
@@ -598,11 +486,7 @@ function buildAgentPrompt(input) {
   if (input?.phase === 'plan') prompt = buildPlanPrompt(input);
   else if (input?.phase === 'slides') {
     prompt = input?.inSession ? buildSessionSlidePrompt(input) : buildSlidesPrompt(input);
-  }   else if (input?.phase === 'repair') prompt = buildRepairPrompt(input);
-  else if (input?.phase === 'audit') {
-    prompt = input?.inSession ? buildSessionAuditPrompt(input) : buildAuditPrompt(input);
-  }
-  else prompt = buildLegacyPrompt(input);
+  } else prompt = buildLegacyPrompt(input);
   if (input?.completionRecovery) {
     prompt = buildCompletionRecoveryPrefix(input.completionRecovery) + prompt;
   } else if (input?.continueAfterInterruption) {
