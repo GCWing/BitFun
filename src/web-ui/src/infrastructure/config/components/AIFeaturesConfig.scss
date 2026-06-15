@@ -15,6 +15,41 @@
     gap: $size-gap-2;
   }
 
+  &__label-with-tooltip {
+    display: inline-flex;
+    align-items: center;
+    gap: $size-gap-1;
+    min-width: 0;
+  }
+
+  &__label-tooltip-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-muted);
+    cursor: help;
+  }
+
+  &__label-tooltip-icon:hover {
+    color: var(--color-text-secondary);
+  }
+
+  &__policy-tooltip {
+    max-width: min(320px, calc(100vw - 32px));
+    display: grid;
+    gap: 4px;
+    line-height: var(--line-height-relaxed);
+  }
+
+  &__policy-tooltip strong {
+    color: var(--color-text-primary);
+    font-weight: var(--font-weight-medium);
+  }
+
+  &__policy-tooltip strong:not(:first-child) {
+    margin-top: 4px;
+  }
+
   /** Computer use: authorized status label (Granted / 已授权) */
   &__perm-status--granted {
     color: var(--color-text-muted);

@@ -18,6 +18,15 @@
     "confirmTimeoutDesc": "等待用户确认工具调用的最长时间（秒）。",
     "executionTimeout": "执行超时",
     "executionTimeoutDesc": "工具执行的最长时间（秒），包含 Task 子智能体运行时长。",
+    "subagentBatchPolicy": {
+      "label": "子智能体批量调度",
+      "desc": "选择同一模型回复中多个子智能体启动请求的调度方式。",
+      "tooltipLabel": "子智能体批量调度说明",
+      "safeOnly": "仅安全并发",
+      "safeOnlyDesc": "只并发运行目标标记为只读的子智能体。",
+      "forceParallel": "强制并行",
+      "forceParallelDesc": "并行运行同一回复中的多个子智能体启动请求，同时仍遵守子智能体容量上限。"
+    },
     "seconds": "秒"
   },
   "filters": {
@@ -53,6 +62,7 @@
     "noMatchingTools": "没有找到匹配的工具",
     "autoExecuteEnabled": "已启用自动执行工具",
     "autoExecuteDisabled": "已关闭自动执行工具",
+    "saveSuccess": "已保存",
     "saveFailed": "保存失败"
   }
 }

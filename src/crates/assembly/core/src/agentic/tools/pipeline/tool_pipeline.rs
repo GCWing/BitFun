@@ -242,6 +242,27 @@ fn map_tool_execution_admission_rejection(error: ToolExecutionAdmissionRejection
     }
 }
 
+const SUBAGENT_LAUNCH_TOOL_NAME: &str = "Task";
+
+fn resolve_subagent_tool_concurrency_safe(
+    tool_name: &str,
+    tool_is_concurrency_safe: bool,
+    same_batch_subagent_call_count: usize,
+    subagent_batch_execution_policy: SubagentBatchExecutionPolicy,
+) -> bool {
+    if tool_name != SUBAGENT_LAUNCH_TOOL_NAME {
+        return tool_is_concurrency_safe;
+    }
+
+    match subagent_batch_execution_policy {
+        SubagentBatchExecutionPolicy::SafeOnly => tool_is_concurrency_safe,
+        SubagentBatchExecutionPolicy::ForceParallel => {
+            same_batch_subagent_call_count > 1 || tool_is_concurrency_safe
+        }
+        SubagentBatchExecutionPolicy::Serial => false,
+    }
+}
+
 /// Tool pipeline
 pub struct ToolPipeline {
     tool_registry: Arc<TokioRwLock<ToolRegistry>>,
@@ -325,16 +346,27 @@ impl ToolPipeline {
             .map(|tool_call| tool_call.tool_name.clone())
             .collect();
 
+        let subagent_call_count = tool_calls
+            .iter()
+            .filter(|tool_call| tool_call.tool_name == SUBAGENT_LAUNCH_TOOL_NAME)
+            .count();
+
         // Determine concurrency safety for each tool call
         let concurrency_flags: Vec<bool> = {
             let registry = self.tool_registry.read().await;
             tool_calls
                 .iter()
                 .map(|tc| {
-                    registry
+                    let tool_is_concurrency_safe = registry
                         .get_tool(&tc.tool_name)
                         .map(|tool| tool.is_concurrency_safe(Some(&tc.arguments)))
-                        .unwrap_or(false)
+                        .unwrap_or(false);
+                    resolve_subagent_tool_concurrency_safe(
+                        &tc.tool_name,
+                        tool_is_concurrency_safe,
+                        subagent_call_count,
+                        options.subagent_batch_execution_policy,
+                    )
                 })
                 .collect()
         };
@@ -1317,6 +1349,66 @@ mod tests {
             ),
             state => panic!("expected failed task state, got {state:?}"),
         }
+    }
+
+    #[test]
+    fn subagent_batch_policy_preserves_safe_only_scheduling() {
+        assert!(!resolve_subagent_tool_concurrency_safe(
+            "Task",
+            false,
+            2,
+            SubagentBatchExecutionPolicy::SafeOnly,
+        ));
+        assert!(resolve_subagent_tool_concurrency_safe(
+            "Task",
+            true,
+            2,
+            SubagentBatchExecutionPolicy::SafeOnly,
+        ));
+        assert!(resolve_subagent_tool_concurrency_safe(
+            "Read",
+            true,
+            2,
+            SubagentBatchExecutionPolicy::SafeOnly,
+        ));
+    }
+
+    #[test]
+    fn subagent_batch_policy_force_parallel_only_changes_multi_subagent_batches() {
+        assert!(!resolve_subagent_tool_concurrency_safe(
+            "Task",
+            false,
+            1,
+            SubagentBatchExecutionPolicy::ForceParallel,
+        ));
+        assert!(resolve_subagent_tool_concurrency_safe(
+            "Task",
+            false,
+            2,
+            SubagentBatchExecutionPolicy::ForceParallel,
+        ));
+        assert!(!resolve_subagent_tool_concurrency_safe(
+            "Write",
+            false,
+            2,
+            SubagentBatchExecutionPolicy::ForceParallel,
+        ));
+    }
+
+    #[test]
+    fn subagent_batch_policy_serial_forces_subagent_calls_out_of_parallel_batches() {
+        assert!(!resolve_subagent_tool_concurrency_safe(
+            "Task",
+            true,
+            2,
+            SubagentBatchExecutionPolicy::Serial,
+        ));
+        assert!(resolve_subagent_tool_concurrency_safe(
+            "Read",
+            true,
+            2,
+            SubagentBatchExecutionPolicy::Serial,
+        ));
     }
 
     #[test]

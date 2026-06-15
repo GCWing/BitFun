@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FolderOpen, RefreshCw, ChevronDown, Plus, Trash2, Check } from 'lucide-react';
+import { FolderOpen, RefreshCw, ChevronDown, Plus, Trash2, Check, Info } from 'lucide-react';
 import {
   Switch,
   NumberInput,
@@ -13,6 +13,7 @@ import {
   ConfigPageLoading,
   Modal,
   Select,
+  Tooltip,
   type SelectOption,
 } from '@/component-library';
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigPageRow } from './common';
@@ -68,6 +69,16 @@ type BrowserControlBrowserOption = {
   installed: boolean;
 };
 
+type SubagentBatchExecutionPolicy = 'safe_only' | 'force_parallel' | 'serial';
+
+const DEFAULT_SUBAGENT_BATCH_EXECUTION_POLICY: SubagentBatchExecutionPolicy = 'safe_only';
+
+function normalizeSubagentBatchExecutionPolicy(value: unknown): SubagentBatchExecutionPolicy {
+  return value === 'force_parallel' || value === 'serial' || value === 'safe_only'
+    ? value
+    : DEFAULT_SUBAGENT_BATCH_EXECUTION_POLICY;
+}
+
 const DEFAULT_BROWSER_CONTROL_BROWSER = 'default';
 
 export type SessionSettingsPanelVariant = 'personalization' | 'permissions';
@@ -96,6 +107,8 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
   const [skipToolConfirmation, setSkipToolConfirmation] = useState(true);
   const [executionTimeout, setExecutionTimeout] = useState('');
   const [confirmationTimeout, setConfirmationTimeout] = useState('');
+  const [subagentBatchExecutionPolicy, setSubagentBatchExecutionPolicy] =
+    useState<SubagentBatchExecutionPolicy>(DEFAULT_SUBAGENT_BATCH_EXECUTION_POLICY);
   const [toolExecConfigLoading, setToolExecConfigLoading] = useState(false);
 
   const [computerUseEnabled, setComputerUseEnabled] = useState(false);
@@ -195,6 +208,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         skipConfirm,
         execTimeout,
         confirmTimeout,
+        loadedSubagentBatchExecutionPolicy,
         debugConfigData,
         computerUseCfg,
         browserControlPreferredBrowser,
@@ -206,6 +220,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         configManager.getConfig<boolean>('ai.skip_tool_confirmation'),
         configManager.getConfig<number | null>('ai.tool_execution_timeout_secs'),
         configManager.getConfig<number | null>('ai.tool_confirmation_timeout_secs'),
+        configManager.getConfig<SubagentBatchExecutionPolicy>('ai.subagent_batch_execution_policy'),
         configManager.getConfig<DebugModeConfig>('ai.debug_mode_config'),
         configManager.getConfig<boolean>('ai.computer_use_enabled'),
         configManager.getConfig<string>('ai.browser_control_preferred_browser'),
@@ -219,6 +234,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
       setSkipToolConfirmation(skipConfirm ?? true);
       setExecutionTimeout(execTimeout != null ? String(execTimeout) : '');
       setConfirmationTimeout(confirmTimeout != null ? String(confirmTimeout) : '');
+      setSubagentBatchExecutionPolicy(normalizeSubagentBatchExecutionPolicy(loadedSubagentBatchExecutionPolicy));
       if (debugConfigData) setDebugConfig(debugConfigData);
       setPreferredBrowser(browserControlPreferredBrowser || DEFAULT_BROWSER_CONTROL_BROWSER);
 
@@ -345,6 +361,38 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
     },
   ];
 
+  const subagentBatchExecutionPolicyOptions: SelectOption[] = [
+    {
+      value: 'safe_only',
+      label: tTools('config.subagentBatchPolicy.safeOnly'),
+    },
+    {
+      value: 'force_parallel',
+      label: tTools('config.subagentBatchPolicy.forceParallel'),
+    },
+  ];
+
+  const subagentBatchPolicyLabel = (
+    <span className="bitfun-func-agent-config__label-with-tooltip">
+      <span>{tTools('config.subagentBatchPolicy.label')}</span>
+      <Tooltip
+        content={
+          <span className="bitfun-func-agent-config__policy-tooltip">
+            <strong>{tTools('config.subagentBatchPolicy.safeOnly')}</strong>
+            <span>{tTools('config.subagentBatchPolicy.safeOnlyDesc')}</span>
+            <strong>{tTools('config.subagentBatchPolicy.forceParallel')}</strong>
+            <span>{tTools('config.subagentBatchPolicy.forceParallelDesc')}</span>
+          </span>
+        }
+        placement="top"
+      >
+        <span className="bitfun-func-agent-config__label-tooltip-icon" aria-label={tTools('config.subagentBatchPolicy.tooltipLabel')}>
+          <Info size={14} />
+        </span>
+      </Tooltip>
+    </span>
+  );
+
   const selectedCompanionPetPackage = settings?.agent_companion_pet
     ? companionPets.find(pet => pet.packagePath === settings.agent_companion_pet?.packagePath) ?? null
     : null;
@@ -417,6 +465,27 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         `${tTools('messages.saveFailed')}: ` + (error instanceof Error ? error.message : String(error))
       );
       setSkipToolConfirmation(!checked);
+    } finally {
+      setToolExecConfigLoading(false);
+    }
+  };
+
+  const handleSubagentBatchExecutionPolicyChange = async (value: string | number | (string | number)[]) => {
+    const nextPolicy = normalizeSubagentBatchExecutionPolicy(Array.isArray(value) ? value[0] : value);
+    const previousPolicy = subagentBatchExecutionPolicy;
+    setSubagentBatchExecutionPolicy(nextPolicy);
+    setToolExecConfigLoading(true);
+    try {
+      await configManager.setConfig('ai.subagent_batch_execution_policy', nextPolicy);
+      notificationService.success(tTools('messages.saveSuccess'), { duration: 2000 });
+      const { globalEventBus } = await import('@/infrastructure/event-bus');
+      globalEventBus.emit('mode:config:updated');
+    } catch (error) {
+      log.error('Failed to save subagent_batch_execution_policy', error);
+      notificationService.error(
+        `${tTools('messages.saveFailed')}: ` + (error instanceof Error ? error.message : String(error))
+      );
+      setSubagentBatchExecutionPolicy(previousPolicy);
     } finally {
       setToolExecConfigLoading(false);
     }
@@ -987,6 +1056,17 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
                 onChange={(e) => handleSkipToolConfirmationChange(e.target.checked)}
                 disabled={toolExecConfigLoading}
                 size="small"
+              />
+            </div>
+          </ConfigPageRow>
+          <ConfigPageRow label={subagentBatchPolicyLabel} description={tTools('config.subagentBatchPolicy.desc')} align="center">
+            <div className="bitfun-func-agent-config__row-control">
+              <Select
+                value={subagentBatchExecutionPolicy}
+                options={subagentBatchExecutionPolicyOptions}
+                size="small"
+                disabled={toolExecConfigLoading}
+                onChange={handleSubagentBatchExecutionPolicyChange}
               />
             </div>
           </ConfigPageRow>
