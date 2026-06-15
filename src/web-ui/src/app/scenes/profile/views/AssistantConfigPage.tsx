@@ -30,7 +30,7 @@ import { useNurseryStore } from '../nurseryStore';
 
 const log = createLogger('AssistantConfigPage');
 
-const AssistantScheduleView = lazy(() => import('@/app/scenes/my-agent/AssistantScheduleView'));
+const ScheduledJobsView = lazy(() => import('@/app/components/scheduled-jobs/ScheduledJobsView'));
 
 const PERSONA_DOC_FILES = ['IDENTITY.md', 'SOUL.md', 'USER.md'] as const;
 type PersonaDocFile = typeof PERSONA_DOC_FILES[number];
@@ -275,7 +275,7 @@ const AssistantConfigPage: React.FC = () => {
 
         <div className="acp-right-shell__divider" role="separator" aria-hidden="true" />
 
-        {/* Scheduled tasks — title/toolbar live inside AssistantScheduleView */}
+        {/* Scheduled tasks — title/toolbar live inside ScheduledJobsView */}
         <div className="acp-section acp-section--nested acp-section--schedule">
           <div className="acp-section__schedule-body">
             {!workspacePath ? (
@@ -288,9 +288,12 @@ const AssistantConfigPage: React.FC = () => {
                   </div>
                 )}
               >
-                <AssistantScheduleView
+                <ScheduledJobsView
                   workspacePath={workspacePath}
+                  workspaceId={workspace?.id}
+                  workspaceKind={workspace?.workspaceKind}
                   assistantName={identityName}
+                  assistantWorkspaceMode
                 />
               </Suspense>
             )}

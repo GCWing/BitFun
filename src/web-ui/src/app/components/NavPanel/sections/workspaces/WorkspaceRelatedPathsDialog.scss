@@ -168,9 +168,9 @@
     transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
 
     &:hover {
-      border-color: color-mix(in srgb, var(--color-error, #e05d5d) 20%, transparent);
-      background: color-mix(in srgb, var(--color-error, #e05d5d) 9%, transparent);
-      color: var(--color-error, #e05d5d);
+      border-color: color-mix(in srgb, var(--color-error) 20%, transparent);
+      background: color-mix(in srgb, var(--color-error) 9%, transparent);
+      color: var(--color-error);
     }
   }
 
@@ -209,10 +209,10 @@
 
   &__error {
     padding: 10px 12px;
-    border: 1px solid color-mix(in srgb, var(--color-error, #e05d5d) 22%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-error) 22%, transparent);
     border-radius: 10px;
-    background: color-mix(in srgb, var(--color-error, #e05d5d) 8%, transparent);
-    color: color-mix(in srgb, var(--color-error, #e05d5d) 88%, var(--color-text-primary));
+    background: color-mix(in srgb, var(--color-error) 8%, transparent);
+    color: color-mix(in srgb, var(--color-error) 88%, var(--color-text-primary));
     font-size: 12px;
     line-height: 1.45;
   }

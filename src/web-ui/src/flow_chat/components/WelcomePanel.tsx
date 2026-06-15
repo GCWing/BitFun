@@ -108,11 +108,16 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
     );
   }, [gitState, handleGitClick, t]);
 
-  const loadGitState = useCallback(async (workspacePath: string) => {
+  const loadGitState = useCallback(async (
+    workspacePath: string,
+    shouldCancel: () => boolean = () => false,
+  ) => {
     try {
       const isGitRepo = await gitAPI.isGitRepository(workspacePath);
+      if (shouldCancel()) return;
       if (!isGitRepo) { setGitState(null); return; }
-      const s = await gitAPI.getStatus(workspacePath);
+      const s = await gitAPI.getStatus(workspacePath, 'welcome_panel');
+      if (shouldCancel()) return;
       setGitState({
         currentBranch: s.current_branch,
         unstagedFiles: s.unstaged.length + s.untracked.length,
@@ -129,7 +134,11 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
 
   useEffect(() => {
     if (isCoworkSession || isClawSession || !currentWorkspace?.rootPath) { setGitState(null); return; }
-    void loadGitState(currentWorkspace.rootPath);
+    let cancelled = false;
+    void loadGitState(currentWorkspace.rootPath, () => cancelled);
+    return () => {
+      cancelled = true;
+    };
   }, [currentWorkspace?.rootPath, isCoworkSession, isClawSession, loadGitState]);
 
   useEffect(() => {

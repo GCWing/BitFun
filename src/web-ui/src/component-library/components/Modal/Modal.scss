@@ -90,7 +90,7 @@ $modal-edge-gutter-sm: 10px;
     transition: box-shadow 0.2s ease;
 
     &:hover {
-      box-shadow: 0 20px 44px rgba(0, 0, 0, 0.5);
+      box-shadow: 0 20px 44px var(--color-overlay-black-50);
     }
   }
 

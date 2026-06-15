@@ -158,9 +158,7 @@ export const ContextCompressionDisplay: React.FC<ContextCompressionDisplayProps>
 
     return (
       <div className="compression-detail-note">
-        {t('toolCards.contextCompression.noSummaryNotice', {
-          defaultValue: 'No additional summary was generated for this compaction pass.',
-        })}
+        {t('toolCards.contextCompression.noSummaryNotice')}
       </div>
     );
   };

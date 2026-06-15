@@ -108,10 +108,10 @@
   border-color: var(--color-primary-400);
   background: var(--glass-bg-active);
   box-shadow: 
-    0 4px 16px rgba(96, 165, 250, 0.15),
-    0 2px 8px rgba(0, 0, 0, 0.08),
+    0 4px 16px var(--color-accent-200),
+    0 2px 8px var(--color-overlay-black-08),
     0 0 0 2px var(--color-accent-300),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    inset 0 1px 0 var(--color-overlay-white-10);
   transform: translateY(-1px);
 }
 
@@ -129,7 +129,7 @@
 .form-textarea.error:focus {
   box-shadow: 
     0 4px 16px rgba(239, 68, 68, 0.15),
-    0 2px 8px rgba(0, 0, 0, 0.08),
+    0 2px 8px var(--color-overlay-black-08),
     0 0 0 2px rgba(239, 68, 68, 0.2);
 }
 
@@ -146,7 +146,7 @@
 .form-textarea.success:focus {
   box-shadow: 
     0 4px 16px rgba(52, 211, 153, 0.15),
-    0 2px 8px rgba(0, 0, 0, 0.08),
+    0 2px 8px var(--color-overlay-black-08),
     0 0 0 2px rgba(52, 211, 153, 0.2);
 }
 
@@ -388,7 +388,7 @@
 
 .form-range::-webkit-slider-thumb:hover {
   transform: scale(1.1);
-  box-shadow: 0 4px 12px rgba(96, 165, 250, 0.4);
+  box-shadow: 0 4px 12px var(--color-accent-400);
 }
 
 .form-range::-moz-range-thumb {

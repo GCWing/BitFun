@@ -28,6 +28,7 @@ import { syncSessionToModernStore } from '../../services/storeSync';
 import { FlowChatState } from '../../types/flow-chat';
 import { compareSessionsForDisplay } from '../../utils/sessionOrdering';
 import { createLogger } from '@/shared/utils/logger';
+import { isMacOSDesktopRuntime } from '@/infrastructure/runtime';
 import { i18nService } from '@/infrastructure/i18n';
 import { resolveSessionTitle } from '../../utils/sessionTitle';
 
@@ -57,6 +58,8 @@ export const ToolbarMode: React.FC = () => {
   );
   const sessionPickerRef = useRef<HTMLDivElement>(null);
   const headerOverflowRef = useRef<HTMLDivElement>(null);
+
+  const isMacOS = useMemo(() => isMacOSDesktopRuntime(), []);
 
   useEffect(() => {
     const unsubscribe = flowChatStore.subscribe((state) => {
@@ -374,7 +377,8 @@ export const ToolbarMode: React.FC = () => {
     isExpanded && 'bitfun-toolbar-mode--expanded',
     currentStreamState.isStreaming && 'bitfun-toolbar-mode--processing',
     toolbarState.hasError && 'bitfun-toolbar-mode--error',
-    toolbarState.hasPendingConfirmation && 'bitfun-toolbar-mode--confirm'
+    toolbarState.hasPendingConfirmation && 'bitfun-toolbar-mode--confirm',
+    isMacOS && 'bitfun-toolbar-mode--macos',
   ].filter(Boolean).join(' ');
   
   return (

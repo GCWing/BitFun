@@ -66,6 +66,13 @@ pub async fn debug_element_picked(request: DebugElementPickedRequest) -> Result<
     Ok(())
 }
 
+/// Report whether desktop debug commands are available in this build.
+#[tauri::command]
+#[cfg(any(debug_assertions, feature = "devtools"))]
+pub async fn debug_devtools_available() -> Result<bool, String> {
+    Ok(true)
+}
+
 /// Open the native webview DevTools window for the main window.
 #[tauri::command]
 #[cfg(any(debug_assertions, feature = "devtools"))]
@@ -91,6 +98,12 @@ pub async fn debug_close_devtools(app: tauri::AppHandle) -> Result<(), String> {
 // ---------------------------------------------------------------------------
 // No-op stubs for release builds (so the module always compiles)
 // ---------------------------------------------------------------------------
+
+#[tauri::command]
+#[cfg(not(any(debug_assertions, feature = "devtools")))]
+pub async fn debug_devtools_available() -> Result<bool, String> {
+    Ok(false)
+}
 
 #[tauri::command]
 #[cfg(not(any(debug_assertions, feature = "devtools")))]

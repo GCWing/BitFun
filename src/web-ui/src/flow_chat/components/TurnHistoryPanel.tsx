@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { snapshotAPI } from '@/infrastructure/api';
+import { useI18n } from '@/infrastructure/i18n';
 import type { TurnSnapshot } from '@/infrastructure/api/service-api/SnapshotAPI';
 import { TurnRollbackButton } from './TurnRollbackButton';
 import { createLogger } from '@/shared/utils/logger';
@@ -16,6 +17,7 @@ interface TurnHistoryPanelProps {
  * Shows all turns in the current session and allows rollback.
  */
 export const TurnHistoryPanel: React.FC<TurnHistoryPanelProps> = ({ sessionId }) => {
+  const { formatDate } = useI18n('flow-chat');
   const [turns, setTurns] = useState<TurnSnapshot[]>([]);
   const [loading, setLoading] = useState(false);
   const [currentTurnIndex, setCurrentTurnIndex] = useState<number>(-1);
@@ -96,7 +98,10 @@ export const TurnHistoryPanel: React.FC<TurnHistoryPanelProps> = ({ sessionId })
             )}
 
             <div className="turn-item-time">
-              {new Date(turn.timestamp * 1000).toLocaleString()}
+              {formatDate(new Date(turn.timestamp * 1000), {
+                dateStyle: 'medium',
+                timeStyle: 'short',
+              })}
             </div>
           </div>
         ))}

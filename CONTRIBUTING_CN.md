@@ -19,12 +19,12 @@
 
 #### Windows：OpenSSL 配置
 
-桌面端包含 SSH 远程功能，会链接 OpenSSL。Windows 上**不使用 OpenSSL 源码编译（vendored）**，需使用**预编译**库。
+大多数 Windows 贡献者不需要手动配置 OpenSSL。使用 `pnpm run desktop:dev`
+或常规 `desktop:build*` 脚本即可；脚本会在需要时自动引导预编译的 OpenSSL 包。
 
-- **默认**：Windows 下 `pnpm run desktop:dev` 会调用 `ensure-openssl-windows.mjs`；`pnpm run desktop:preview:debug` 在需要为预览执行快速本地 `cargo build -p bitfun-desktop` 时，也会做同样的 OpenSSL 引导。所有 `desktop:build*` 均通过 `scripts/desktop-tauri-build.mjs` 执行，在 `tauri build` 前做相同引导（首次下载到 `.bitfun/cache/`，之后走缓存）。
-- **手动 / CI**：下载 [FireDaemon ZIP](https://download.firedaemon.com/FireDaemon-OpenSSL/openssl-3.5.5.zip)，解压后将 `OPENSSL_DIR` 指向 `x64`，并设 `OPENSSL_STATIC=1`，或运行 `scripts/ci/setup-openssl-windows.ps1`。
-- **关闭自动下载**：设置 `BITFUN_SKIP_OPENSSL_BOOTSTRAP=1` 并自行配置 `OPENSSL_DIR`。
-- **`desktop:dev:raw`** 不经过 `dev.cjs`（无 OpenSSL 引导）；请自行设置 `OPENSSL_DIR`、运行 `scripts/ci/setup-openssl-windows.ps1`，或执行 `node scripts/ensure-openssl-windows.mjs`（会预热 `.bitfun/cache/` 并打印可在 PowerShell 中粘贴的 `OPENSSL_*` 命令）。
+只有在自动引导失败、准备 CI 环境，或你明确使用 `pnpm run desktop:dev:raw`
+时才需要手动处理。此时运行 `scripts/ci/setup-openssl-windows.ps1`，或将
+`OPENSSL_DIR` 指向预编译的 x64 OpenSSL 目录，并设置 `OPENSSL_STATIC=1`。
 
 ### 安装依赖
 
@@ -54,67 +54,21 @@ pnpm run e2e:test
 
 ### 桌面端调试工具
 
-开发桌面端 UI/UX 时，`devtools` Cargo feature 提供额外的调试能力。它在 `dev` 构建和 `release-fast` profile 构建中自动启用，但在面向最终用户的 `release` 构建中永不启用。
-
-| 快捷键 | 功能 |
-|---|---|
-| `Cmd/Ctrl + Shift + I` | 切换元素检查器 — 悬停高亮元素，点击采集元数据 |
-| `Cmd/Ctrl + Shift + J` | 打开原生 webview DevTools 窗口 |
-
-元素检查器向主 webview 注入一个轻量脚本。点击元素后会采集：
-- 标签、id、class、CSS 选择器路径
-- Computed styles 和 CSS 变量
-- Box model（margin、padding、border）
-- 颜色值（文本、背景、边框）
-- 元素属性
-
-采集的数据以结构化 JSON 形式输出到 `bitfun::devtools` 日志目标下。
+桌面端 dev 构建会启用 `devtools` Cargo feature。`F12` 打开原生 webview
+DevTools；`Cmd/Ctrl + Shift + I` 切换 BitFun 元素检查器，`Cmd/Ctrl + Shift + J`
+也可以打开原生 DevTools。面向最终用户的 `release` 构建不会启用这些工具。
 
 ## 代码规范与架构约束
 
-### 日志规范
+架构敏感规则、模块边界和验证矩阵以 [`AGENTS.md`](AGENTS.md) 为准。面向贡献者只需把握：
 
-- 仅使用英文日志，避免冗长输出
-- 前端：`createLogger('ModuleName')`
-- 后端：`log::{info, debug, warn, error}` 宏
-
-### 国际化
-
-- Locale 元数据统一维护在 `src/shared/i18n/contract/locales.json`；修改后运行
-  `pnpm run i18n:generate`。
-- 跨形态稳定标签放在 `src/shared/i18n/resources/shared`；流程文案留在所属形态资源中。
-- Web UI 路由或功能文案使用 `useI18n(namespace)`。不要把 Web UI locale 资源导入 mobile-web、installer、backend 或静态页面。
-- `pnpm run i18n:audit` 会检查 key / 占位符一致性、直接静态 key 是否存在，以及
-  source 中不再新增硬编码 CJK 文案。
-
-### 平台无关核心
-
-`core` 中禁止引入平台相关依赖：
-
-- ❌ `tauri::AppHandle`
-- ✅ `bitfun_events::EventEmitter`
-
-进行 `bitfun-core` 拆解或构建提速重构时，请遵循
-[`docs/architecture/core-decomposition.md`](docs/architecture/core-decomposition.md)，
-不要把产品 feature set 或 release 脚本变更作为顺手改动。
-
-### Tauri 命令规范
-
-- 命令名使用 `snake_case`
-- Rust 与 TypeScript 命名保持一致
-- 必须使用结构化请求格式：
-
-```rust
-#[tauri::command]
-pub async fn your_command(
-  state: State<'_, AppState>,
-  request: YourRequest,
-) -> Result<YourResponse, String>
-```
-
-```ts
-await api.invoke("your_command", { request: { /* ... */ } });
-```
+- 日志只使用英文，并保持必要、可读。
+- 用户可见文案走项目 i18n 流程；不要把 Web UI locale catalog 共享给较小产品形态。
+- shared core 必须保持平台无关；Desktop/Tauri 细节属于 app adapter，并通过 transport / API layer 回流。
+- Tauri command 使用 `snake_case` 命令名和结构化 `request` 参数。
+- core 拆解、feature 边界、依赖边界和构建提速重构必须遵循
+  `docs/architecture/core-decomposition.md`。
+- 功能级规则应放在离代码最近的模块 `AGENTS.md` 中。
 
 ## 重点关注的贡献方向
 
@@ -132,10 +86,10 @@ await api.invoke("your_command", { request: { /* ... */ } });
 
 | 贡献方向 | 位置/文件 | 示例说明 |
 | --- | --- | --- |
-| Prompts | `src/crates/core/src/agentic/agents/prompts/` | 新增或优化提示词，并按需更新相关逻辑 |
-| Tools | `src/crates/core/src/agentic/tools/implementations/`、`src/crates/core/src/agentic/tools/registry.rs` | 新增工具实现，并在工具注册表中注册 |
-| Subagents | `src/crates/core/src/agentic/agents/custom_subagents/`、`src/crates/core/src/agentic/agents/registry.rs` | 新增子代理实现，并在子代理注册表中注册 |
-| 模式贡献 | `src/crates/core/src/agentic/agents/*_mode.rs`、`src/crates/core/src/agentic/agents/prompts/*_mode.md`、`src/web-ui/src/locales/*/settings/modes.json` | 新增/优化 Agent 模式（例如 Plan/Debug/Agentic 或自定义模式）的逻辑与提示词，并同步前端模式文案 |
+| Prompts | `src/crates/assembly/core/src/agentic/agents/prompts/` | 新增或优化提示词，并按需更新相关逻辑 |
+| Tools | `src/crates/assembly/core/src/agentic/tools/implementations/`、`src/crates/assembly/core/src/agentic/tools/registry.rs` | 新增工具实现，并在工具注册表中注册 |
+| Subagents | `src/crates/assembly/core/src/agentic/agents/custom_subagents/`、`src/crates/assembly/core/src/agentic/agents/registry.rs` | 新增子代理实现，并在子代理注册表中注册 |
+| 模式贡献 | `src/crates/assembly/core/src/agentic/agents/*_mode.rs`、`src/crates/assembly/core/src/agentic/agents/prompts/*_mode.md`、`src/web-ui/src/locales/*/settings/modes.json` | 新增/优化 Agent 模式（例如 Plan/Debug/Agentic 或自定义模式）的逻辑与提示词，并同步前端模式文案 |
 | Code Agent 与 AIIde 场景指南 | `website/src/docs/` | 补充流程、playbook 与真实场景说明（或从 `README.md` 链接） |
 
 ### 开始前
@@ -171,29 +125,21 @@ UI 改动请附前后对比截图或短录屏，方便快速评审。
 
 ## 测试与验证
 
-按改动范围运行相关测试；不需要跑完下方所有命令，只选择与本次改动文件和行为匹配的最小集合：
+按改动文件和行为选择最小检查。完整构建和大范围测试由 CI 保护；只有改动影响构建、打包、发布行为，
+或 CI 无法覆盖对应路径时，才在本地运行更重命令。
 
-完整构建和大范围测试由 CI 保护。本地预检应保持聚焦；只有改动直接触及构建、打包，
-或 CI 不覆盖对应路径时才运行更重命令。
+常见本地检查：
 
-修改 `/usage` UI 文案时，请同步 `en-US`、`zh-CN`、`zh-TW` 多语言文本。
-
-| 改动类型 | 推荐验证 |
+| 改动类型 | 常用验证 |
 | --- | --- |
-| 仓库元信息、PR/Issue 模板或 GitHub workflow | `pnpm run check:repo-hygiene && pnpm run check:github-config && git diff --check` |
-| 仅 locale 资源改动 | `pnpm run i18n:audit` |
-| Locale contract 或 shared terms | `pnpm run i18n:generate && pnpm run i18n:contract:test && pnpm run i18n:audit` |
-| Web UI 状态、适配层或运行时代码 | `pnpm run type-check:web`；行为变化时再加最近的 focused test |
-| Web UI i18n runtime 或 namespace loading 改动 | `pnpm run i18n:contract:test && pnpm run type-check:web && pnpm --dir src/web-ui run test:run src/infrastructure/i18n/core/I18nService.test.ts` |
-| Mobile web UI、配对、重连、断开或聊天流程 | `pnpm --dir src/mobile-web run type-check` |
-| 不涉及打包的安装器前端或 i18n runtime | `pnpm --dir BitFun-Installer run type-check` |
-| Rust core、transport、API layer、services 或共享运行时逻辑 | `cargo check --workspace`；行为变化时再加最近的 focused `cargo test` |
-| 桌面端集成、Tauri API 或桌面端专属行为 | `cargo check -p bitfun-desktop`；行为变化时再加 focused desktop tests |
-| E2E 覆盖的行为 | 运行最近的 focused E2E/smoke check；除非影响构建，否则 broad build/test 交给 CI |
+| 仓库元信息或 GitHub 配置 | `pnpm run check:repo-hygiene && pnpm run check:github-config && git diff --check` |
+| 前端运行时或 UI | `pnpm run type-check:web`；行为变化时再加最近的 focused test |
+| Mobile web | `pnpm --dir src/mobile-web run type-check` |
+| Rust 共享 runtime 或 services | `cargo check --workspace`；行为变化时再加 focused `cargo test` |
+| Desktop/Tauri 集成 | `cargo check -p bitfun-desktop` |
+| i18n 资源或契约 | 使用 `AGENTS.md` 中匹配的 i18n 验证行 |
 
-Mobile web 配对、重连、断开或聊天流程改动，需要在 PR 中补充手动验证步骤；涉及 UI 变化时，请附截图或短录屏。
-
-如暂时无法运行测试，请在 PR 描述中说明原因，并提供手动验证步骤。
+UI 改动在有帮助时附截图或短录屏。无法运行相关检查时，在 PR 中说明原因，并提供风险更低的手动验证路径。
 
 ## 安全与合规
 

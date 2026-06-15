@@ -30,7 +30,7 @@
     background: linear-gradient(
       90deg,
       transparent 0%,
-      rgba(255, 255, 255, 0.1) 50%,
+      var(--color-overlay-white-10) 50%,
       transparent 100%
     );
     transition: left 0.5s ease;
@@ -46,7 +46,7 @@
     border-color: rgba(168, 85, 247, 0.9);
     box-shadow: 0 4px 16px rgba(168, 85, 247, 0.3),
                 0 2px 8px rgba(168, 85, 247, 0.2),
-                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+                inset 0 1px 0 var(--color-overlay-white-10);
     background: linear-gradient(135deg, rgba(25, 25, 25, 0.98), rgba(20, 20, 20, 1));
   }
 }
@@ -62,7 +62,7 @@
   min-height: 36px;
   position: relative;
   z-index: 2;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--color-overlay-black-20);
 }
 
 
@@ -128,7 +128,7 @@
   min-height: 36px;
   position: relative;
   z-index: 2;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--color-overlay-black-20);
 }
 
 
@@ -179,7 +179,7 @@
   gap: tokens.$size-gap-2;
   padding: 4px 16px;
   min-height: 36px;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--color-overlay-black-20);
   position: relative;
   z-index: 2;
 

@@ -5,13 +5,16 @@ import path from 'node:path';
 import test from 'node:test';
 
 const root = process.cwd();
+const contractTestProfile = process.env.BITFUN_I18N_CONTRACT_TEST_PROFILE ?? 'full';
+const runAuditIntegrationTests = process.env.BITFUN_I18N_CONTRACT_TEST_AUDIT_INTEGRATION === '1';
+const skipAuditIntegrationTests = contractTestProfile === 'ci' && !runAuditIntegrationTests;
 const contractPath = path.join(root, 'src', 'shared', 'i18n', 'contract', 'locales.json');
 const sharedTermsDir = path.join(root, 'src', 'shared', 'i18n', 'resources', 'shared');
 const expectedGeneratedFiles = [
   'src/web-ui/src/infrastructure/i18n/presets/generatedLocaleContract.ts',
   'src/mobile-web/src/i18n/generatedLocaleContract.ts',
   'BitFun-Installer/src/i18n/generatedLocaleContract.ts',
-  'src/crates/core/src/service/i18n/generated_locale_contract.rs',
+  'src/crates/assembly/core/src/service/i18n/generated_locale_contract.rs',
   'BitFun-Installer/src-tauri/src/installer/generated_locale_contract.rs',
 ];
 const expectedGeneratedJsonFiles = [
@@ -36,6 +39,17 @@ function runI18nAudit(args = []) {
     cwd: root,
     encoding: 'utf8',
   });
+}
+
+// CI runs one full i18n:audit immediately after this file; keep mutation-heavy
+// audit integration cases in the default profile without paying that cost twice.
+function auditIntegrationTest(name, optionsOrFn, maybeFn) {
+  const runner = skipAuditIntegrationTests ? test.skip : test;
+  if (typeof optionsOrFn === 'function') {
+    return runner(name, optionsOrFn);
+  }
+
+  return runner(name, optionsOrFn, maybeFn);
 }
 
 function withTemporaryTextFile(relativePath, content, callback) {
@@ -63,6 +77,12 @@ function flattenKeys(value, prefix = '') {
   return Object.entries(value)
     .flatMap(([key, child]) => flattenKeys(child, prefix ? `${prefix}.${key}` : key))
     .sort();
+}
+
+function getValueByPath(value, dottedPath) {
+  return dottedPath.split('.').reduce((current, segment) => (
+    current && typeof current === 'object' ? current[segment] : undefined
+  ), value);
 }
 
 function listFiles(dir, predicate) {
@@ -134,7 +154,7 @@ test('shared i18n terms exist for every canonical locale with matching keys', ()
 });
 
 test('core runtime uses the generated locale contract for language identity', () => {
-  const typesSource = readText('src/crates/core/src/service/i18n/types.rs');
+  const typesSource = readText('src/crates/assembly/core/src/service/i18n/types.rs');
   assert.match(
     typesSource,
     /generated_locale_contract::\{[\s\S]*GENERATED_LOCALE_CONTRACT/,
@@ -146,7 +166,7 @@ test('core runtime uses the generated locale contract for language identity', ()
     'types.rs must not read language identity from the backend resource registry',
   );
 
-  const resourceRegistrySource = readText('src/crates/core/src/service/i18n/locale_registry.rs');
+  const resourceRegistrySource = readText('src/crates/assembly/core/src/service/i18n/locale_registry.rs');
   assert.doesNotMatch(
     resourceRegistrySource,
     /\b(name|english_name|native_name|rtl|model_language_name|short_model_instruction|aliases):/,
@@ -164,7 +184,7 @@ test('shared i18n terms are consumed by each product surface runtime', () => {
   const installerLanguagesSource = readText('BitFun-Installer/src/i18n/languages.ts');
   assert.match(installerLanguagesSource, /SHARED_TERMS_BY_APP_LANGUAGE/, 'installer should merge shared terms into its i18next resources');
 
-  const coreServiceSource = readText('src/crates/core/src/service/i18n/service.rs');
+  const coreServiceSource = readText('src/crates/assembly/core/src/service/i18n/service.rs');
   assert.match(coreServiceSource, /generated_shared_term/, 'core i18n service should resolve generated shared terms');
 });
 
@@ -247,6 +267,60 @@ test('web-ui synchronous i18nService.t namespaces stay in the bootstrap set', ()
   );
 });
 
+test('web-ui slash command picker distinguishes all commands from quick actions', () => {
+  const source = readText('src/web-ui/src/flow_chat/components/ChatInput.tsx');
+  const allCommandsStart = source.indexOf("if (slashCommandState.kind === 'all')");
+  const allCommandsEnd = source.indexOf('if (!canSwitchModes)', allCommandsStart);
+  assert.notEqual(allCommandsStart, -1, 'ChatInput should render an all-command slash picker state');
+  assert.notEqual(allCommandsEnd, -1, 'ChatInput all-command branch should stay before the mode-only branch');
+
+  const allCommandsBlock = source.slice(allCommandsStart, allCommandsEnd);
+  assert.match(
+    allCommandsBlock,
+    /t\('chatInput\.commands'\)/,
+    'all-command slash picker should use a Commands label, not the quick-action label',
+  );
+  assert.doesNotMatch(
+    allCommandsBlock,
+    /t\('chatInput\.quickAction'\)/,
+    'all-command slash picker must not reuse the quick-action label',
+  );
+
+  const contract = readJson('src/shared/i18n/contract/locales.json');
+  for (const locale of contract.locales.map((entry) => entry.id)) {
+    const resource = readJson(`src/web-ui/src/locales/${locale}/flow-chat.json`);
+    const commands = getValueByPath(resource, 'chatInput.commands');
+    const quickAction = getValueByPath(resource, 'chatInput.quickAction');
+    assert.equal(typeof commands, 'string', `${locale} flow-chat chatInput.commands should exist`);
+    assert.notEqual(commands, quickAction, `${locale} chatInput.commands should not duplicate chatInput.quickAction`);
+  }
+});
+
+test('review platform relative time labels are locale resources', () => {
+  const source = readText('src/web-ui/src/app/components/panels/review-platform/ReviewPlatformPanel.tsx');
+
+  assert.match(source, /common:reviewPlatform\.relativeTime\.minutesAgo/, 'minute relative time label should be localized');
+  assert.match(source, /common:reviewPlatform\.relativeTime\.hoursAgo/, 'hour relative time label should be localized');
+  assert.match(source, /common:reviewPlatform\.relativeTime\.daysAgo/, 'day relative time label should be localized');
+  assert.doesNotMatch(source, /`[^`]*\bm ago`/, 'relative minute text must not be hard-coded in ReviewPlatformPanel');
+  assert.doesNotMatch(source, /`[^`]*\bh ago`/, 'relative hour text must not be hard-coded in ReviewPlatformPanel');
+  assert.doesNotMatch(source, /`[^`]*\bd ago`/, 'relative day text must not be hard-coded in ReviewPlatformPanel');
+
+  const contract = readJson('src/shared/i18n/contract/locales.json');
+  for (const locale of contract.locales.map((entry) => entry.id)) {
+    const resource = readJson(`src/web-ui/src/locales/${locale}/common.json`);
+    for (const key of [
+      'reviewPlatform.relativeTime.minutesAgo',
+      'reviewPlatform.relativeTime.hoursAgo',
+      'reviewPlatform.relativeTime.daysAgo',
+    ]) {
+      const value = getValueByPath(resource, key);
+      assert.equal(typeof value, 'string', `${locale} common ${key} should exist`);
+      assert.match(value, /\{\{\s*count\s*\}\}/, `${locale} common ${key} should interpolate count`);
+    }
+  }
+});
+
 test('i18n audit enforces the checked-in hardcoded source candidate budget', () => {
   const baselineSource = readText('scripts/i18n-hardcoded-baseline.json');
   const auditSource = readText('scripts/i18n-audit.mjs');
@@ -268,13 +342,14 @@ test('i18n audit treats locale key parity as an error', () => {
 
 test('CI runs i18n contract and audit guards before frontend builds', () => {
   const ciSource = readText('.github/workflows/ci.yml');
-  const contractIndex = ciSource.indexOf('pnpm run i18n:contract:test');
+  const contractIndex = ciSource.indexOf('pnpm run i18n:contract:test:ci');
   const auditIndex = ciSource.indexOf('pnpm run i18n:audit');
   const buildIndex = ciSource.indexOf('pnpm run build:web');
 
-  assert.notEqual(contractIndex, -1, 'CI should run pnpm run i18n:contract:test');
+  assert.notEqual(contractIndex, -1, 'CI should run pnpm run i18n:contract:test:ci');
   assert.notEqual(auditIndex, -1, 'CI should run pnpm run i18n:audit');
   assert.ok(contractIndex < buildIndex, 'i18n contract checks should run before web build');
+  assert.ok(contractIndex < auditIndex, 'CI should run the fast contract check before the full i18n audit');
   assert.ok(auditIndex < buildIndex, 'i18n audit should run before web build');
 });
 
@@ -289,6 +364,31 @@ test('i18n audit enforces interpolation parameter parity across resource formats
   assert.match(auditSource, /extractI18nextPlaceholders/, 'i18next placeholder extraction should be explicit');
   assert.match(auditSource, /extractMobilePlaceholders/, 'mobile placeholder extraction should be explicit');
   assert.match(auditSource, /extractFluentPlaceholders/, 'Fluent placeholder extraction should be explicit');
+});
+
+test('i18n audit report surface summaries derive from owned scan and budget sources', () => {
+  const auditSource = readText('scripts/i18n-audit.mjs');
+
+  assert.doesNotMatch(
+    auditSource,
+    /const governanceSurfaceIds\s*=\s*\[/,
+    'governance report surface summaries should derive from the governance baseline dimensions',
+  );
+  assert.doesNotMatch(
+    auditSource,
+    /const localeFormatSurfaceIds\s*=\s*\[/,
+    'locale format report surface summaries should derive from the locale-format scan specs',
+  );
+  assert.match(
+    auditSource,
+    /collectGovernanceBudgetSurfaceIds/,
+    'governance report should collect zero-count surfaces from the baseline bySurface budgets',
+  );
+  assert.match(
+    auditSource,
+    /createLocaleFormatScanSpecs/,
+    'locale format report should reuse the same scan specs for scanning and zero-count summaries',
+  );
 });
 
 test('i18n audit fails literal fallbacks and unknown static keys', () => {
@@ -318,7 +418,7 @@ test('i18n audit gates object-form literal fallbacks with an explicit budget', (
   assert.match(auditSource, /defaultValue/, 'audit should inspect i18next defaultValue options');
 });
 
-test('i18n audit reports literal fallback and locale formatting candidate baselines', { concurrency: false }, () => {
+auditIntegrationTest('i18n audit reports literal fallback and locale formatting candidate baselines', { concurrency: false }, () => {
   const auditSource = readText('scripts/i18n-audit.mjs');
   const localeFormatBaselineSource = readText('scripts/i18n-locale-format-baseline.json');
   const localeFormatBaseline = JSON.parse(localeFormatBaselineSource);
@@ -399,6 +499,7 @@ test('i18n audit can emit a machine-readable governance report', { concurrency: 
     assert.ok(Array.isArray(report.confirmedUnusedKeys), 'report should include confirmed unused keys');
     assert.ok(Array.isArray(report.dynamicKeyCandidates), 'report should include dynamic key candidates');
     assert.ok(Array.isArray(report.sharedTermDuplicates), 'report should include shared-term duplicate candidates');
+    assert.ok(Array.isArray(report.sameTextLocaleInventory), 'report should include same-text locale inventory');
     assert.ok(Array.isArray(report.l10nQualityCandidates), 'report should include l10n quality candidates');
     assert.ok(Array.isArray(report.literalDefaultValueFallbacks), 'report should include literal defaultValue fallback candidates');
     assert.ok(Array.isArray(report.localeFormatCandidates), 'report should include direct locale formatting candidates');
@@ -408,6 +509,7 @@ test('i18n audit can emit a machine-readable governance report', { concurrency: 
         confirmedUnusedKeys: report.confirmedUnusedKeys.length,
         dynamicKeyCandidates: report.dynamicKeyCandidates.length,
         sharedTermDuplicates: report.sharedTermDuplicates.length,
+        sameTextLocaleInventory: report.sameTextLocaleInventory.length,
         l10nQualityCandidates: report.l10nQualityCandidates.length,
         literalDefaultValueFallbacks: report.literalDefaultValueFallbacks.length,
         localeFormatCandidates: report.localeFormatCandidates.length,
@@ -425,12 +527,21 @@ test('i18n audit can emit a machine-readable governance report', { concurrency: 
       );
     }
     assert.equal(
-      report.summary.byCategory.l10nQualityCandidates.bySurface['web-ui'],
+      report.summary.byCategory.l10nQualityCandidates.bySurface['web-ui'] ?? 0,
       report.l10nQualityCandidates.filter((entry) => entry.surface === 'web-ui').length,
       'report should summarize l10n candidates by surface',
     );
     assert.equal(
-      report.summary.byCategory.l10nQualityCandidates.byNamespace['flow-chat'],
+      report.summary.byCategory.sameTextLocaleInventory.bySurface['web-ui'] ?? 0,
+      report.sameTextLocaleInventory.filter((entry) => entry.surface === 'web-ui').length,
+      'report should summarize same-text locale inventory by surface',
+    );
+    assert.ok(
+      report.sameTextLocaleInventory.length > report.l10nQualityCandidates.length,
+      'same-text locale inventory should retain broad non-blocking review data beyond actionable l10n signals',
+    );
+    assert.equal(
+      report.summary.byCategory.l10nQualityCandidates.byNamespace['flow-chat'] ?? 0,
       report.l10nQualityCandidates.filter((entry) => entry.namespace === 'flow-chat').length,
       'report should summarize l10n candidates by namespace',
     );
@@ -455,13 +566,10 @@ test('i18n audit can emit a machine-readable governance report', { concurrency: 
       report.sharedTermDuplicates.every((entry) => entry.resourceKey !== entry.sharedResourceKey),
       'shared-term duplicate findings should only report surface copies, not the shared source entry itself',
     );
-    assert.ok(
-      report.l10nQualityCandidates.some((entry) => (
-        entry.locale === 'zh-TW' &&
-        entry.comparisonLocale === 'zh-CN' &&
-        entry.reason === 'matches-comparison-locale'
-      )),
-      'unchanged zh-TW copy should be reported as a localization quality candidate',
+    assert.equal(
+      report.l10nQualityCandidates.length,
+      0,
+      'reviewed same-writing zh-CN/zh-TW copy without a script or terminology signal should not create l10n noise',
     );
     assert.ok(
       report.literalDefaultValueFallbacks.every((entry) => entry.file && entry.key && entry.location),
@@ -471,17 +579,58 @@ test('i18n audit can emit a machine-readable governance report', { concurrency: 
       report.localeFormatCandidates.every((entry) => entry.surface && entry.file && entry.location),
       'locale format candidates should include surface, file, and location for cleanup reviews',
     );
-    assert.equal(
-      report.l10nQualityCandidates.some((entry) => entry.resourceKey === 'shared:modes.agentic'),
-      false,
-      'intentional zh-CN/zh-TW identical shared terms should be excluded from l10n quality candidates',
-    );
   } finally {
     fs.rmSync(absoluteReportPath, { force: true });
   }
 });
 
-test('mobile-web uses shared terms for stable shared concept labels', { concurrency: false }, () => {
+auditIntegrationTest('i18n audit reports same-text zh-TW copy with a l10n signal', { concurrency: false }, () => {
+  const localePath = 'src/web-ui/src/locales/zh-TW/settings/acp-agents.json';
+  const reportPath = 'scripts/.tmp-i18n-l10n-signal-report.json';
+  const absoluteReportPath = path.join(root, reportPath);
+  const source = readText(localePath);
+  const fixture = source.replace('"learnMore": "瞭解更多"', '"learnMore": "了解更多"');
+
+  assert.notEqual(fixture, source, 'test fixture should introduce same-text zh-TW terminology debt');
+  fs.rmSync(absoluteReportPath, { force: true });
+
+  try {
+    withTemporaryTextFile(localePath, fixture, () => {
+      const result = runI18nAudit(['--report-json', reportPath]);
+      assert.notEqual(result.status, 0, 'same-text zh-TW terminology debt should exceed the zero l10n baseline');
+
+      const report = readJson(reportPath);
+      assert.ok(
+        report.l10nQualityCandidates.some((entry) => (
+          entry.surface === 'web-ui' &&
+          entry.namespace === 'settings/acp-agents' &&
+          entry.key === 'actions.learnMore' &&
+          entry.locale === 'zh-TW' &&
+          entry.comparisonLocale === 'zh-CN' &&
+          entry.signal?.type === 'terminology' &&
+          entry.signal?.match === '了解'
+        )),
+        'audit report should include the concrete same-text terminology signal',
+      );
+      assert.ok(
+        report.sameTextLocaleInventory.some((entry) => (
+          entry.surface === 'web-ui' &&
+          entry.namespace === 'settings/acp-agents' &&
+          entry.key === 'actions.learnMore' &&
+          entry.locale === 'zh-TW' &&
+          entry.comparisonLocale === 'zh-CN' &&
+          entry.signalType === 'terminology' &&
+          entry.allowlistState === 'unreviewed'
+        )),
+        'audit inventory should retain the same-text pair even though only signal-bearing entries are governance candidates',
+      );
+    });
+  } finally {
+    fs.rmSync(absoluteReportPath, { force: true });
+  }
+});
+
+auditIntegrationTest('mobile-web uses shared terms for stable shared concept labels', { concurrency: false }, () => {
   const reportPath = 'scripts/.tmp-i18n-mobile-shared-terms-report.json';
   const absoluteReportPath = path.join(root, reportPath);
   fs.rmSync(absoluteReportPath, { force: true });
@@ -494,11 +643,16 @@ test('mobile-web uses shared terms for stable shared concept labels', { concurre
     const migratedSharedKeys = new Set([
       'product.remote',
       'features.workspace',
+      'modes.assistant',
+      'modes.expert',
       'agents.claw',
+      'agents.code',
       'agents.cowork',
+      'agents.default',
       'tools.edit',
       'tools.explore',
       'tools.read',
+      'tools.shell',
       'tools.todo',
       'tools.write',
     ]);
@@ -509,12 +663,17 @@ test('mobile-web uses shared terms for stable shared concept labels', { concurre
     const legacyMobileKeys = [
       'common.appName',
       'sessions.workspace',
+      'sessions.assistantMode',
       'sessions.coworkSession',
+      'sessions.codeSession',
+      'sessions.defaultAssistant',
       'sessions.agentClaw',
+      'sessions.proMode',
       'workspace.title',
       'tools.edit',
       'tools.explore',
       'tools.read',
+      'tools.shell',
       'tools.todo',
       'tools.write',
     ];
@@ -543,7 +702,7 @@ test('mobile-web uses shared terms for stable shared concept labels', { concurre
   }
 });
 
-test('web-ui uses shared terms for stable navigation and feature labels', { concurrency: false }, () => {
+auditIntegrationTest('web-ui uses shared terms for stable navigation and feature labels', { concurrency: false }, () => {
   const reportPath = 'scripts/.tmp-i18n-web-ui-shared-terms-report.json';
   const absoluteReportPath = path.join(root, reportPath);
   fs.rmSync(absoluteReportPath, { force: true });
@@ -557,10 +716,16 @@ test('web-ui uses shared terms for stable navigation and feature labels', { conc
       'common:app.name',
       'common:header.remoteConnect',
       'common:nav.sections.workspace',
+      'common:nav.sessions.newCodeSessionShort',
+      'common:nav.sessions.newCoworkSessionShort',
       'common:scenes.settings',
       'common:tabs.settings',
       'common:remoteConnect.title',
+      'common:remoteConnect.tabBitfunServer',
+      'common:remoteConnect.tabLan',
       'flow-chat:layout.noPanels',
+      'flow-chat:deepReviewActionBar.minimizedDeep',
+      'flow-chat:toolCards.codeReview.reviewMode',
       'flow-chat:toolbar.settings',
       'flow-chat:toolCards.sessionControl.workspace',
       'flow-chat:toolCards.sessionMessage.workspace',
@@ -568,6 +733,7 @@ test('web-ui uses shared terms for stable navigation and feature labels', { conc
       'scenes/skills:suite.modes.claw',
       'settings:title',
       'settings:configCenter.title',
+      'settings/review:overview.badge',
       'settings:workspace.title',
       'settings/lsp:tabs.settings',
     ]);
@@ -578,16 +744,23 @@ test('web-ui uses shared terms for stable navigation and feature labels', { conc
     const legacyWebUiKeys = [
       'header.remoteConnect',
       'remoteConnect.title',
+      'remoteConnect.tabBitfunServer',
+      'remoteConnect.tabLan',
       'nav.sections.workspace',
+      'nav.sessions.newCodeSessionShort',
+      'nav.sessions.newCoworkSessionShort',
       'scenes.settings',
       'tabs.settings',
       'layout.noPanels',
+      'deepReviewActionBar.minimizedDeep',
       'toolbar.settings',
+      'toolCards.codeReview.reviewMode',
       'toolCards.sessionControl.workspace',
       'toolCards.sessionMessage.workspace',
       'welcome.workspace',
       'suite.modes.claw',
       'configCenter.title',
+      'overview.badge',
       'workspace.title',
     ];
     const webUiSourceFiles = listFiles(path.join(root, 'src', 'web-ui', 'src'), (file) => (
@@ -644,7 +817,7 @@ test('installer uses the shared product name for titlebar defaults', { concurren
   }
 });
 
-test('core and relay static homepage reuse shared product and feature terms', { concurrency: false }, () => {
+auditIntegrationTest('core and relay static homepage reuse shared product and feature terms', { concurrency: false }, () => {
   const reportPath = 'scripts/.tmp-i18n-core-relay-shared-terms-report.json';
   const absoluteReportPath = path.join(root, reportPath);
   fs.rmSync(absoluteReportPath, { force: true });
@@ -668,11 +841,11 @@ test('core and relay static homepage reuse shared product and feature terms', { 
     );
 
     for (const locale of ['en-US', 'zh-CN', 'zh-TW']) {
-      const fluentSource = readText(`src/crates/core/locales/${locale}.ftl`);
+      const fluentSource = readText(`src/crates/assembly/core/locales/${locale}.ftl`);
       assert.doesNotMatch(fluentSource, /^app-name\s*=/m, `${locale}.ftl should not copy shared.product.name`);
     }
 
-    const coreServiceSource = readText('src/crates/core/src/service/i18n/service.rs');
+    const coreServiceSource = readText('src/crates/assembly/core/src/service/i18n/service.rs');
     assert.match(
       coreServiceSource,
       /legacy_shared_term_key/,
@@ -697,7 +870,7 @@ test('core and relay static homepage reuse shared product and feature terms', { 
   }
 });
 
-test('i18n audit fails stale relay static shared-term references', { concurrency: false }, () => {
+auditIntegrationTest('i18n audit fails stale relay static shared-term references', { concurrency: false }, () => {
   const relayPath = 'src/apps/relay-server/static/homepage/i18n.json';
   const relayMessages = readJson(relayPath);
   relayMessages['en-US'].flowMobileSub = { $shared: 'features.__missingForTest' };
@@ -713,7 +886,7 @@ test('i18n audit fails stale relay static shared-term references', { concurrency
   });
 });
 
-test('i18n audit enforces governance candidate baselines', { concurrency: false }, () => {
+auditIntegrationTest('i18n audit enforces governance candidate baselines', { concurrency: false }, () => {
   const baselinePath = 'scripts/i18n-governance-baseline.json';
   const baseline = readJson(baselinePath);
 
@@ -730,7 +903,7 @@ test('i18n audit enforces governance candidate baselines', { concurrency: false 
   });
 });
 
-test('i18n audit enforces governance baseline dimensions', { concurrency: false }, () => {
+auditIntegrationTest('i18n audit enforces governance baseline dimensions', { concurrency: false }, () => {
   const baselinePath = 'scripts/i18n-governance-baseline.json';
   const baseline = readJson(baselinePath);
   const sharedKeyUnderTest = Object.entries(baseline.budgets.sharedTermDuplicates.bySharedKey)
@@ -750,7 +923,7 @@ test('i18n audit enforces governance baseline dimensions', { concurrency: false 
   });
 });
 
-test('i18n audit fails stale l10n identical allowlist entries', { concurrency: false }, () => {
+auditIntegrationTest('i18n audit fails stale l10n identical allowlist entries', { concurrency: false }, () => {
   const allowlistPath = 'scripts/i18n-l10n-identical-allowlist.json';
   const allowlist = readJson(allowlistPath);
 
@@ -776,24 +949,33 @@ test('i18n audit fails stale l10n identical allowlist entries', { concurrency: f
   });
 });
 
-test('i18n audit validates l10n identical allowlist array fields', { concurrency: false }, () => {
+auditIntegrationTest('i18n audit validates l10n identical allowlist array fields', { concurrency: false }, () => {
   const allowlistPath = 'scripts/i18n-l10n-identical-allowlist.json';
   const allowlist = readJson(allowlistPath);
 
-  allowlist.entries[0].keys = 'shared:modes.';
+  allowlist.entries.push({
+    id: 'invalid-test-l10n-identical-key-array',
+    surface: 'shared',
+    namespace: 'shared',
+    locale: 'zh-TW',
+    comparisonLocale: 'zh-CN',
+    owner: 'scripts/i18n-contract.test.mjs',
+    reason: 'Test fixture for invalid l10n identical governance.',
+    keys: 'shared:modes.',
+  });
 
   withTemporaryTextFile(allowlistPath, `${JSON.stringify(allowlist, null, 2)}\n`, () => {
     const result = runI18nAudit();
     assert.notEqual(result.status, 0, 'l10n identical allowlist keys must be an array');
     assert.match(
       `${result.stdout}\n${result.stderr}`,
-      /L10n identical allowlist "shared-zh-tw-same-han-terms" keys must be an array/,
+      /L10n identical allowlist "invalid-test-l10n-identical-key-array" keys must be an array/,
       'audit output should identify the invalid l10n allowlist field',
     );
   });
 });
 
-test('i18n audit fails stale dynamic key allowlist entries', { concurrency: false }, () => {
+auditIntegrationTest('i18n audit fails stale dynamic key allowlist entries', { concurrency: false }, () => {
   const allowlistPath = 'scripts/i18n-dynamic-key-allowlist.json';
   const reportPath = 'scripts/.tmp-i18n-stale-dynamic-key-report.json';
   const absoluteReportPath = path.join(root, reportPath);
@@ -823,7 +1005,7 @@ test('i18n audit fails stale dynamic key allowlist entries', { concurrency: fals
   });
 });
 
-test('i18n audit fails stale dynamic key source references', { concurrency: false }, () => {
+auditIntegrationTest('i18n audit fails stale dynamic key source references', { concurrency: false }, () => {
   const allowlistPath = 'scripts/i18n-dynamic-key-allowlist.json';
   const allowlist = readJson(allowlistPath);
 
@@ -853,7 +1035,7 @@ test('i18n audit validates static hook translation keys with namespace context',
   assert.match(auditSource, /relative static Web UI i18n key/, 'audit should report missing relative hook keys clearly');
 });
 
-test('i18n audit catches array-namespace keys and stale literal fallback budgets', { concurrency: false }, () => {
+auditIntegrationTest('i18n audit catches array-namespace keys and stale literal fallback budgets', { concurrency: false }, () => {
   const arrayNamespaceFixture = 'src/web-ui/src/__i18n_array_namespace_audit_fixture__.tsx';
   const missingFullKey = 'components:__arrayNamespaceAuditMissingKey__';
   const missingRelativeKey = 'components:__arrayNamespaceAuditMissingRelativeKey__';
@@ -909,6 +1091,31 @@ test('i18n audit catches array-namespace keys and stale literal fallback budgets
       'audit output should explain the stale literal fallback budget',
     );
   });
+});
+
+auditIntegrationTest('i18n audit catches composed literal defaultValue fallbacks', { concurrency: false }, () => {
+  const composedFallbackFixture = 'src/web-ui/src/__i18n_composed_default_value_fixture__.tsx';
+
+  withTemporaryTextFile(
+    composedFallbackFixture,
+    [
+      "import { useI18n } from '@/infrastructure/i18n';",
+      'export function I18nComposedDefaultValueFixture() {',
+      "  const { t } = useI18n('flow-chat');",
+      "  return <div>{t('flowChatHeader.turnBadge', { current: 1, defaultValue: `Turn ${1}` + ' fallback' })}</div>;",
+      '}',
+      '',
+    ].join('\n'),
+    () => {
+      const result = runI18nAudit();
+      assert.notEqual(result.status, 0, 'composed static defaultValue fallback should fail audit');
+      assert.match(
+        `${result.stdout}\n${result.stderr}`,
+        /literal i18next defaultValue fallback/,
+        'audit output should identify composed defaultValue fallback debt',
+      );
+    },
+  );
 });
 
 test('i18n generation checks are stable across line endings', () => {

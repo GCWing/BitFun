@@ -177,7 +177,7 @@ $_section-header-height: 24px;
     color: var(--color-text-primary);
     cursor: pointer;
     text-align: center;
-    box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 4%, transparent);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--color-static-white) 4%, transparent);
     transition: transform $motion-fast $easing-standard,
                 box-shadow $motion-fast $easing-standard,
                 border-color $motion-fast $easing-standard,
@@ -186,8 +186,8 @@ $_section-header-height: 24px;
     &:hover {
       transform: translateY(-1px);
       border-color: color-mix(in srgb, var(--color-primary) 28%, transparent);
-      box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 5%, transparent),
-                  0 10px 22px rgba(0, 0, 0, 0.12);
+      box-shadow: inset 0 1px 0 color-mix(in srgb, var(--color-static-white) 5%, transparent),
+                  0 10px 22px var(--color-overlay-black-12);
     }
 
     &:focus-visible {
@@ -226,7 +226,7 @@ $_section-header-height: 24px;
     border-radius: 999px;
     background: var(--bitfun-mode-pill-liquid-pro-bg);
     box-shadow:
-      inset 0 1px 0 color-mix(in srgb, #fff 12%, transparent),
+      inset 0 1px 0 color-mix(in srgb, var(--color-static-white) 12%, transparent),
       0 2px 10px color-mix(in srgb, var(--color-primary) 12%, transparent);
     transform: translate3d(0, 0, 0) scale(1, 1);
     transform-origin: 50% 50%;
@@ -241,7 +241,7 @@ $_section-header-height: 24px;
       transform: translate3d(100%, 0, 0) scale(1, 1);
       background: var(--bitfun-mode-pill-liquid-assistant-bg);
       box-shadow:
-        inset 0 1px 0 color-mix(in srgb, #fff 12%, transparent),
+        inset 0 1px 0 color-mix(in srgb, var(--color-static-white) 12%, transparent),
         0 2px 12px color-mix(in srgb, var(--color-accent-500) 18%, transparent);
     }
 
@@ -465,10 +465,10 @@ $_section-header-height: 24px;
     position: fixed;
     min-width: 180px;
     padding: $size-gap-1 0;
-    background: var(--color-bg-elevated, #1e1e22);
-    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--border-subtle);
     border-radius: $size-radius-base;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 4px 12px var(--color-overlay-black-25);
     z-index: 9999;
     transform-origin: top left;
     animation: bitfun-footer-menu-in $motion-fast $easing-decelerate forwards;
@@ -652,7 +652,7 @@ $_section-header-height: 24px;
     &:hover {
       color: var(--color-text-primary);
       background: color-mix(in srgb, var(--element-bg-soft) 94%, transparent);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+      box-shadow: 0 2px 8px var(--color-overlay-black-06);
     }
 
     &:active {
@@ -667,7 +667,7 @@ $_section-header-height: 24px;
     &.is-active {
       color: var(--color-text-primary);
       background: color-mix(in srgb, var(--element-bg-soft) 94%, transparent);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+      box-shadow: 0 2px 8px var(--color-overlay-black-06);
     }
   }
 
@@ -707,7 +707,7 @@ $_section-header-height: 24px;
     &:hover {
       color: var(--color-text-primary);
       background: color-mix(in srgb, var(--element-bg-soft) 94%, transparent);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+      box-shadow: 0 2px 8px var(--color-overlay-black-06);
     }
 
     &:active {
@@ -724,7 +724,7 @@ $_section-header-height: 24px;
       color: var(--color-text-primary);
       background: color-mix(in srgb, var(--element-bg-soft) 94%, transparent);
       border: 1px solid var(--border-subtle);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+      box-shadow: 0 2px 8px var(--color-overlay-black-06);
     }
 
     &.has-customizing-apps {
@@ -738,10 +738,10 @@ $_section-header-height: 24px;
         width: 7px;
         height: 7px;
         border-radius: 999px;
-        background: #60a5fa;
+        background: var(--color-accent-500);
         box-shadow:
           0 0 0 2px var(--color-bg-primary),
-          0 0 8px rgba(96, 165, 250, 0.75);
+          0 0 8px color-mix(in srgb, var(--color-accent-500) 75%, transparent);
         pointer-events: none;
       }
     }
@@ -830,14 +830,14 @@ $_section-header-height: 24px;
     }
 
     &.is-customizing {
-      box-shadow: 0 0 0 2px color-mix(in srgb, #60a5fa 42%, transparent),
-                  0 8px 18px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent-500) 42%, transparent),
+                  0 8px 18px var(--color-overlay-black-20);
     }
 
     &.is-active.is-customizing {
       box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22),
                   0 0 0 3px color-mix(in srgb, var(--color-primary) 28%, transparent),
-                  0 0 0 5px color-mix(in srgb, #60a5fa 28%, transparent);
+                  0 0 0 5px color-mix(in srgb, var(--color-accent-500) 28%, transparent);
     }
 
     &-customize-dot {
@@ -847,8 +847,8 @@ $_section-header-height: 24px;
       width: 6px;
       height: 6px;
       border-radius: 999px;
-      background: #60a5fa;
-      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.28), 0 0 7px rgba(96, 165, 250, 0.72);
+      background: var(--color-accent-500);
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.28), 0 0 7px color-mix(in srgb, var(--color-accent-500) 72%, transparent);
     }
 
     &--more {
@@ -944,10 +944,10 @@ $_section-header-height: 24px;
     vertical-align: top;
     box-sizing: border-box;
     padding: $size-gap-1 0;
-    background: var(--color-bg-elevated, #1e1e22);
-    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--border-subtle);
     border-radius: $size-radius-base;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 4px 12px var(--color-overlay-black-25);
     z-index: 9999;
     transform-origin: top left;
     animation: bitfun-footer-menu-in $motion-fast $easing-decelerate forwards;
@@ -1235,7 +1235,7 @@ $_section-header-height: 24px;
         transform: translateY(-50%);
         width: 2px;
         height: 16px;
-        background: var(--btn-primary-bg, var(--color-text-primary));
+        background: var(--btn-primary-bg);
         border-radius: 0 2px 2px 0;
       }
 
@@ -1489,7 +1489,7 @@ $_section-header-height: 24px;
 
 // Footer notification: yellow only when there are unread messages (BellDot)
 .bitfun-nav-panel__footer .bitfun-notification-btn .bitfun-notification-btn__icon--has-message {
-  color: #ca8a04;
+  color: var(--color-warning);
 }
 
 .bitfun-nav-panel__footer .bitfun-notification-btn.bitfun-notification-btn--nav-hover-icon:not(.bitfun-notification-btn--has-progress) {
@@ -1611,8 +1611,8 @@ $_section-header-height: 24px;
   gap: $size-gap-1;
   min-width: 140px;
   padding: $size-gap-1;
-  background: var(--color-bg-elevated, #1e1e22);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--border-subtle);
   border-radius: $size-radius-base;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28), 0 2px 8px rgba(0, 0, 0, 0.16);
   z-index: 9999;
@@ -1701,10 +1701,10 @@ $_section-header-height: 24px;
   left: 0;
   min-width: 148px;
   padding: $size-gap-1;
-  background: var(--color-bg-elevated, #1e1e22);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--border-subtle);
   border-radius: $size-radius-base;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 4px 12px var(--color-overlay-black-25);
   z-index: 9999;
   transform-origin: bottom left;
   animation: bitfun-footer-menu-in $motion-fast $easing-decelerate forwards;
@@ -1717,7 +1717,7 @@ $_section-header-height: 24px;
 .bitfun-nav-panel__footer-menu-divider {
   height: 1px;
   margin: $size-gap-1 $size-gap-2;
-  background: var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: var(--border-subtle);
 }
 
 .bitfun-nav-panel__footer-menu-item {
@@ -1841,12 +1841,12 @@ $_section-header-height: 24px;
 }
 
 .bitfun-nav-panel__remote-disclaimer-btn--primary {
-  background: var(--color-accent-600, #2563eb);
-  color: #fff;
-  border-color: color-mix(in srgb, var(--color-accent-700, #1d4ed8) 35%, transparent);
+  background: var(--color-accent-600);
+  color: var(--color-static-white);
+  border-color: color-mix(in srgb, var(--color-accent-700) 35%, transparent);
 
   &:hover:not(:disabled) {
-    background: var(--color-accent-700, #1d4ed8);
+    background: var(--color-accent-700);
   }
 }
 

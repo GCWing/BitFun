@@ -542,7 +542,6 @@
     "sessions": "Workbench",
     "files": "Files",
     "terminal": "Terminal",
-    "projectContext": "Project Context",
     "git": "Git",
     "capabilities": "Capabilities",
     "clickToSelectBranch": "Click to select branch",

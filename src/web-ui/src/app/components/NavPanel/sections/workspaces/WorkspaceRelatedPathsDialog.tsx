@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { open as openDirectoryDialog } from '@tauri-apps/plugin-dialog';
 import { Button, Input, Modal, Textarea } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
@@ -126,6 +125,7 @@ export const WorkspaceRelatedPathsDialog: React.FC<WorkspaceRelatedPathsDialogPr
 
   const handleSelectLocalDirectory = async (index: number) => {
     try {
+      const { open: openDirectoryDialog } = await import('@tauri-apps/plugin-dialog');
       const selected = await openDirectoryDialog({
         directory: true,
         multiple: false,

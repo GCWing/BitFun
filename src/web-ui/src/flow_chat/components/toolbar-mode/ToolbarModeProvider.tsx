@@ -12,6 +12,7 @@ import {
   type ToolbarModeContextType,
   type ToolbarModeState,
 } from './ToolbarModeContext';
+import { resolveToolbarWindowGeometry } from './toolbarWindowGeometry';
 
 const log = createLogger('ToolbarModeContext');
 
@@ -80,23 +81,21 @@ export const ToolbarModeProvider: React.FC<ToolbarModeProviderProps> = ({ childr
         await win.unmaximize();
       }
 
-      let x = 100;
-      let y = 100;
-
       const monitor = await currentMonitor();
-      if (monitor) {
-        const scaleFactor = await win.scaleFactor();
-        const margin = Math.round(20 * scaleFactor);
-        const taskbarHeight = Math.round(50 * scaleFactor);
-
-        x = monitor.size.width - TOOLBAR_EXPANDED_SIZE.width - margin;
-        y = monitor.size.height - TOOLBAR_EXPANDED_SIZE.height - margin - taskbarHeight;
-      }
+      const geometry = resolveToolbarWindowGeometry({
+        monitor,
+        targetSize: TOOLBAR_EXPANDED_SIZE,
+        minSize: TOOLBAR_EXPANDED_MIN,
+      });
+      const toolbarMinSize = {
+        width: Math.min(TOOLBAR_EXPANDED_MIN.width, geometry.width),
+        height: Math.min(TOOLBAR_EXPANDED_MIN.height, geometry.height),
+      };
 
       const toolbarWindowOps: Array<Promise<unknown>> = [
         win.setAlwaysOnTop(true),
-        win.setSize(new PhysicalSize(TOOLBAR_EXPANDED_SIZE.width, TOOLBAR_EXPANDED_SIZE.height)),
-        win.setPosition(new PhysicalPosition(x, y)),
+        win.setSize(new PhysicalSize(geometry.width, geometry.height)),
+        win.setPosition(new PhysicalPosition(geometry.x, geometry.y)),
         win.setResizable(true),
         win.setSkipTaskbar(true),
       ];
@@ -110,7 +109,7 @@ export const ToolbarModeProvider: React.FC<ToolbarModeProviderProps> = ({ childr
       }
       await Promise.all(toolbarWindowOps);
 
-      await win.setMinSize(new PhysicalSize(TOOLBAR_EXPANDED_MIN.width, TOOLBAR_EXPANDED_MIN.height));
+      await win.setMinSize(new PhysicalSize(toolbarMinSize.width, toolbarMinSize.height));
     } catch (error) {
       log.error('Failed to enable toolbar mode', error);
       setIsToolbarMode(false);
@@ -201,14 +200,32 @@ export const ToolbarModeProvider: React.FC<ToolbarModeProviderProps> = ({ childr
       const minSize = newIsExpanded ? TOOLBAR_EXPANDED_MIN : TOOLBAR_COMPACT_MIN;
       const currentPosition = await win.outerPosition();
       const currentSize = await win.outerSize();
-      const heightDiff = targetSize.height - currentSize.height;
-      const newY = currentPosition.y - heightDiff;
+      const monitor = await currentMonitor();
+      const geometry = resolveToolbarWindowGeometry({
+        monitor,
+        targetSize,
+        minSize,
+        anchor: {
+          x: currentPosition.x,
+          y: currentPosition.y,
+          width: currentSize.width,
+          height: currentSize.height,
+        },
+        fallbackPosition: {
+          x: currentPosition.x,
+          y: Math.max(0, currentPosition.y + currentSize.height - targetSize.height),
+        },
+      });
+      const toolbarMinSize = {
+        width: Math.min(minSize.width, geometry.width),
+        height: Math.min(minSize.height, geometry.height),
+      };
 
       setIsExpanded(newIsExpanded);
 
-      await win.setMinSize(new PhysicalSize(minSize.width, minSize.height));
-      await win.setSize(new PhysicalSize(targetSize.width, targetSize.height));
-      await win.setPosition(new PhysicalPosition(currentPosition.x, Math.max(0, newY)));
+      await win.setMinSize(new PhysicalSize(toolbarMinSize.width, toolbarMinSize.height));
+      await win.setSize(new PhysicalSize(geometry.width, geometry.height));
+      await win.setPosition(new PhysicalPosition(geometry.x, geometry.y));
     } catch (error) {
       log.error('Failed to toggle expanded state', { newIsExpanded, error });
     }

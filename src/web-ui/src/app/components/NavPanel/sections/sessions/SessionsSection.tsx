@@ -5,9 +5,9 @@
  * Owns all data fetching / mutation for chat sessions.
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Pencil, Trash2, Check, X, Bot, Code2, ClipboardList, Panda, MoreHorizontal, Loader2, Archive } from 'lucide-react';
+import { Pencil, Trash2, Check, X, Bot, Code2, ClipboardList, Panda, MoreHorizontal, Loader2, Archive, Clock3 } from 'lucide-react';
 import { IconButton, Input, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { flowChatStore } from '../../../../../flow_chat/store/FlowChatStore';
@@ -22,6 +22,10 @@ import {
   openMainSession,
   selectActiveBtwSessionTab,
 } from '@/flow_chat/services/openBtwSession';
+import {
+  dispatchHistorySessionOpenIntent,
+  shouldShowHistorySessionOpenIntent,
+} from '@/flow_chat/services/sessionOpenIntent';
 import { resolveSessionRelationship } from '@/flow_chat/utils/sessionMetadata';
 import {
   compareSessionsForNavStable,
@@ -36,17 +40,36 @@ import {
   deriveSessionReviewActivity,
   isReviewActivityBlocking,
 } from '@/flow_chat/utils/sessionReviewActivity';
+import { useBackgroundSubagentActivityStore } from '@/flow_chat/store/backgroundSubagentActivityStore';
+import type {
+  BackgroundSubagentActivity,
+  BackgroundSubagentActivityItem,
+} from '@/flow_chat/utils/backgroundSubagentActivity';
 import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
 import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
 import { confirmWarning } from '@/component-library/components/ConfirmDialog/confirmService';
+import { scheduleAfterStartupPaint, scheduleAfterStartupSignal } from '@/shared/utils/startupTaskScheduling';
+import {
+  SESSION_METADATA_DEFERRED_FALLBACK_MS,
+  SESSION_METADATA_DEFERRED_FRAME_COUNT,
+  SESSION_METADATA_DEFERRED_SIGNAL,
+  getDeferredSessionMetadataDelayMs,
+  getInitialSessionMetadataLoadMode,
+  hasStartupOverlayHandedOff,
+} from './sessionMetadataStartup';
+import {
+  getEffectiveTopLevelSessionCount,
+  getSessionExpandToggleState,
+  SESSIONS_LEVEL_0,
+  SESSIONS_LEVEL_1,
+} from './sessionNavExpand';
 import './SessionsSection.scss';
 
-/** Top-level parent sessions shown at each expand step (children still nest under visible parents). */
-const SESSIONS_LEVEL_0 = 5;
-const SESSIONS_LEVEL_1 = 10;
 const log = createLogger('SessionsSection');
+const ScheduledJobsModal = lazy(() => import('@/app/components/scheduled-jobs/ScheduledJobsModal'));
 
 type SessionMode = 'code' | 'cowork' | 'claw';
+type HistoryOpenIntentDispatchResult = 'none' | 'dispatched' | 'already-pending';
 
 const escapeRegExp = (value: string): string =>
   value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -60,6 +83,32 @@ const resolveSessionModeType = (session: Session): SessionMode => {
 
 const getTitle = (session: Session): string =>
   resolveSessionTitle(session, (key, options) => i18nService.t(key, options));
+
+const countTopLevelSessionsInScope = (
+  sessions: Iterable<Session>,
+  workspacePath?: string,
+  remoteConnectionId?: string | null,
+  remoteSshHost?: string | null
+): number => {
+  const scopedSessions = Array.from(sessions).filter((session: Session) => {
+    if (session.isTransient || session.sessionKind === 'subagent') {
+      return false;
+    }
+    if (workspacePath) {
+      return sessionBelongsToWorkspaceNavRow(session, workspacePath, remoteConnectionId, remoteSshHost);
+    }
+    return !session.workspacePath;
+  });
+
+  const knownIds = new Set(scopedSessions.map(session => session.sessionId));
+  return scopedSessions.reduce((count, session) => {
+    const parentSessionId = resolveSessionRelationship(session).parentSessionId;
+    if (parentSessionId && knownIds.has(parentSessionId)) {
+      return count;
+    }
+    return count + 1;
+  }, 0);
+};
 
 const getChildSessionBadge = (kind: Session['sessionKind']): string => {
   const normalizedKind =
@@ -110,7 +159,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   workspacePath,
   remoteConnectionId = null,
   remoteSshHost = null,
-  isActiveWorkspace: _isActiveWorkspace = true,
+  isActiveWorkspace = true,
   assistantLabel,
   showSessionModeIcon = true,
   isVisible = true,
@@ -125,16 +174,19 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   const [flowChatState, setFlowChatState] = useState<FlowChatState>(() =>
     flowChatStore.getState()
   );
+  const backgroundSubagentActivities = useBackgroundSubagentActivityStore(state => state.activities);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
   const [expandLevel, setExpandLevel] = useState<0 | 1 | 2>(0);
   const [metadataPageState, setMetadataPageState] = useState<{
     totalTopLevelCount: number | null;
+    syncedTopLevelCount: number | null;
     nextCursor?: string;
     hasMore: boolean;
     isLoading: boolean;
   }>({
     totalTopLevelCount: null,
+    syncedTopLevelCount: null,
     nextCursor: undefined,
     hasMore: false,
     isLoading: false,
@@ -142,10 +194,12 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   const [openMenuSessionId, setOpenMenuSessionId] = useState<string | null>(null);
   const [sessionMenuPosition, setSessionMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const [runningSessionIds, setRunningSessionIds] = useState<Set<string>>(new Set());
+  const [scheduledJobsSessionId, setScheduledJobsSessionId] = useState<string | null>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
   const sessionMenuPopoverRef = useRef<HTMLDivElement>(null);
   const sessionMenuAnchorRef = useRef<HTMLButtonElement>(null);
   const metadataLoadRequestIdRef = useRef(0);
+  const initialMetadataLoadKeyRef = useRef<string | null>(null);
 
   // Subscribe to state machine changes for running status
   useEffect(() => {
@@ -172,9 +226,48 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   }, [flowChatState.sessions]);
 
   useEffect(() => {
-    const unsub = flowChatStore.subscribe(s => setFlowChatState(s));
+    const selector = (s: FlowChatState): string => {
+      const parts: string[] = [s.activeSessionId ?? ''];
+      for (const session of s.sessions.values()) {
+        const latestTurn = session.dialogTurns[session.dialogTurns.length - 1];
+        parts.push(
+          `${session.sessionId}|${session.isTransient ? '1':'0'}|${session.sessionKind}|` +
+          `${session.parentSessionId ?? ''}|${session.parentToolCallId ?? ''}|${session.subagentType ?? ''}|` +
+          `${session.workspacePath ?? ''}|${session.mode ?? ''}|${session.needsUserAttention ? '1':'0'}|` +
+          `${session.hasUnreadCompletion ? '1':'0'}|${latestTurn?.status ?? ''}|${session.title ?? ''}`
+        );
+      }
+      return parts.join(';');
+    };
+    const unsub = flowChatStore.subscribeSelector(selector, (() => {
+      setFlowChatState(flowChatStore.getState());
+    }), { isEqual: (a, b) => a === b });
     return () => unsub();
   }, []);
+
+  const backgroundSubagentActivityByParent = useMemo(() => {
+    const itemsByParent = new Map<string, BackgroundSubagentActivityItem[]>();
+    for (const item of Object.values(backgroundSubagentActivities)) {
+      const items = itemsByParent.get(item.parentSessionId) ?? [];
+      items.push(item);
+      itemsByParent.set(item.parentSessionId, items);
+    }
+
+    const activityByParent = new Map<string, BackgroundSubagentActivity>();
+    for (const [parentSessionId, items] of itemsByParent) {
+      const sortedItems = [...items].sort((left, right) => (
+        left.createdAt - right.createdAt || left.sessionId.localeCompare(right.sessionId)
+      ));
+      activityByParent.set(parentSessionId, {
+        runningCount: sortedItems.filter(item => item.status === 'processing').length,
+        finishingCount: sortedItems.filter(item => item.status === 'finishing').length,
+        totalCount: sortedItems.length,
+        items: sortedItems,
+      });
+    }
+
+    return activityByParent;
+  }, [backgroundSubagentActivities]);
 
   useEffect(() => {
     if (editingSessionId && editInputRef.current) {
@@ -185,9 +278,11 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
 
   useEffect(() => {
     metadataLoadRequestIdRef.current += 1;
+    initialMetadataLoadKeyRef.current = null;
     setExpandLevel(0);
     setMetadataPageState({
       totalTopLevelCount: null,
+      syncedTopLevelCount: null,
       nextCursor: undefined,
       hasMore: false,
       isLoading: false,
@@ -214,8 +309,15 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           source
         );
         if (metadataLoadRequestIdRef.current === requestId) {
+          const syncedTopLevelCount = countTopLevelSessionsInScope(
+            flowChatStore.getState().sessions.values(),
+            workspacePath,
+            remoteConnectionId,
+            remoteSshHost
+          );
           setMetadataPageState({
             totalTopLevelCount: page.totalTopLevelCount,
+            syncedTopLevelCount,
             nextCursor: page.nextCursor,
             hasMore: page.hasMore,
             isLoading: false,
@@ -233,13 +335,119 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     [workspacePath, remoteConnectionId, remoteSshHost]
   );
 
+  const initialMetadataKey = useMemo(
+    () => [
+      workspacePath ?? '',
+      remoteConnectionId ?? '',
+      remoteSshHost ?? '',
+    ].join('\n'),
+    [workspacePath, remoteConnectionId, remoteSshHost],
+  );
+
+  const loadInitialMetadataPage = useCallback(
+    async (source: string) => {
+      if (!workspacePath) {
+        return;
+      }
+      if (initialMetadataLoadKeyRef.current === initialMetadataKey) {
+        return;
+      }
+
+      initialMetadataLoadKeyRef.current = initialMetadataKey;
+      const page = await loadMetadataPage(SESSIONS_LEVEL_0, undefined, source);
+      if (!page && initialMetadataLoadKeyRef.current === initialMetadataKey) {
+        initialMetadataLoadKeyRef.current = null;
+      }
+    },
+    [initialMetadataKey, loadMetadataPage, workspacePath],
+  );
+
   useEffect(() => {
     if (!isVisible || !workspacePath) {
       return;
     }
 
-    void loadMetadataPage(SESSIONS_LEVEL_0, undefined, 'sessions_nav_initial');
-  }, [isVisible, workspacePath, remoteConnectionId, remoteSshHost, loadMetadataPage]);
+    const loadMode = getInitialSessionMetadataLoadMode({
+      hasWorkspacePath: Boolean(workspacePath),
+      isActiveWorkspace,
+      isVisible,
+      startupOverlayHandedOff: hasStartupOverlayHandedOff(),
+    });
+
+    if (loadMode === 'skip') {
+      return;
+    }
+
+    if (loadMode === 'immediate') {
+      void loadInitialMetadataPage('sessions_nav_initial_active');
+      return;
+    }
+
+    let cancelled = false;
+    let delayTimer: number | null = null;
+    const scheduleDeferredMetadataLoad = () => {
+      if (cancelled) {
+        return;
+      }
+      const delayMs = getDeferredSessionMetadataDelayMs(workspaceId ?? workspacePath);
+      const runDeferredLoad = () => {
+        delayTimer = null;
+        if (!cancelled) {
+          void loadInitialMetadataPage('sessions_nav_initial_deferred');
+        }
+      };
+
+      if (delayMs > 0) {
+        delayTimer = window.setTimeout(runDeferredLoad, delayMs);
+        return;
+      }
+      runDeferredLoad();
+    };
+    const cancelStartupSchedule = loadMode === 'after-startup-paint'
+      ? scheduleAfterStartupPaint(scheduleDeferredMetadataLoad, {
+          frameCount: SESSION_METADATA_DEFERRED_FRAME_COUNT,
+        })
+      : scheduleAfterStartupSignal(scheduleDeferredMetadataLoad, {
+          signalName: SESSION_METADATA_DEFERRED_SIGNAL,
+          fallbackTimeoutMs: SESSION_METADATA_DEFERRED_FALLBACK_MS,
+          frameCount: SESSION_METADATA_DEFERRED_FRAME_COUNT,
+        });
+
+    return () => {
+      cancelled = true;
+      cancelStartupSchedule();
+      if (delayTimer !== null) {
+        window.clearTimeout(delayTimer);
+      }
+    };
+  }, [
+    isActiveWorkspace,
+    isVisible,
+    loadInitialMetadataPage,
+    workspaceId,
+    workspacePath,
+  ]);
+
+  // When sessions are archived, reset stale metadata so the expand toggle
+  // doesn't linger with old counts after all sessions are gone.
+  useEffect(() => {
+    const handler = () => {
+      metadataLoadRequestIdRef.current += 1;
+      setExpandLevel(0);
+      setMetadataPageState({
+        totalTopLevelCount: null,
+        syncedTopLevelCount: null,
+        nextCursor: undefined,
+        hasMore: false,
+        isLoading: false,
+      });
+      if (isVisible && workspacePath) {
+        void loadMetadataPage(SESSIONS_LEVEL_0, undefined, 'sessions_nav_post_archive');
+      }
+    };
+    window.addEventListener('bitfun:session-archived', handler);
+    return () => window.removeEventListener('bitfun:session-archived', handler);
+  }, [isVisible, workspacePath, loadMetadataPage]);
 
   useEffect(() => {
     if (!openMenuSessionId) return;
@@ -358,9 +566,37 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     return SESSIONS_LEVEL_0;
   }, [topLevelSessions.length, expandLevel]);
 
-  const totalTopLevelSessionCount = metadataPageState.totalTopLevelCount ?? topLevelSessions.length;
-  const hasMoreUnloadedSessions =
-    metadataPageState.hasMore || topLevelSessions.length < totalTopLevelSessionCount;
+  const totalTopLevelSessionCount = getEffectiveTopLevelSessionCount(
+    metadataPageState.totalTopLevelCount,
+    metadataPageState.syncedTopLevelCount,
+    topLevelSessions.length,
+    metadataPageState.isLoading
+  );
+  const hasMoreUnloadedSessions = topLevelSessions.length < totalTopLevelSessionCount;
+  const expandToggleState = getSessionExpandToggleState(totalTopLevelSessionCount, expandLevel);
+
+  useEffect(() => {
+    if (
+      !isVisible ||
+      !workspacePath ||
+      metadataPageState.isLoading ||
+      metadataPageState.totalTopLevelCount === null ||
+      metadataPageState.syncedTopLevelCount === null ||
+      topLevelSessions.length === metadataPageState.syncedTopLevelCount
+    ) {
+      return;
+    }
+
+    void loadMetadataPage(SESSIONS_LEVEL_0, undefined, 'sessions_nav_live_reconcile');
+  }, [
+    isVisible,
+    loadMetadataPage,
+    metadataPageState.isLoading,
+    metadataPageState.syncedTopLevelCount,
+    metadataPageState.totalTopLevelCount,
+    topLevelSessions.length,
+    workspacePath,
+  ]);
 
   const visibleItems = useMemo(() => {
     const visibleParents = topLevelSessions.slice(0, sessionDisplayLimit);
@@ -374,12 +610,51 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   }, [childrenByParent, sessionDisplayLimit, topLevelSessions]);
 
   const activeSessionId = flowChatState.activeSessionId;
+  const scheduledJobsSession = scheduledJobsSessionId
+    ? flowChatState.sessions.get(scheduledJobsSessionId) ?? null
+    : null;
+  const lastHistoryOpenIntentRef = useRef<{ sessionId: string; atMs: number } | null>(null);
+
+  const dispatchHistoryOpenIntentForSession = useCallback(
+    (session: Session): HistoryOpenIntentDispatchResult => {
+      const sessionId = session.sessionId;
+      if (
+        sessionId === activeSessionId ||
+        !shouldShowHistorySessionOpenIntent(session, {
+          isRunning: runningSessionIds.has(sessionId),
+        })
+      ) {
+        return 'none';
+      }
+
+      const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      const lastIntent = lastHistoryOpenIntentRef.current;
+      if (
+        lastIntent &&
+        lastIntent.sessionId === sessionId &&
+        now - lastIntent.atMs < 250
+      ) {
+        return 'already-pending';
+      }
+
+      lastHistoryOpenIntentRef.current = { sessionId, atMs: now };
+      dispatchHistorySessionOpenIntent(sessionId, getTitle(session));
+      return 'dispatched';
+    },
+    [activeSessionId, runningSessionIds],
+  );
 
   const handleSwitch = useCallback(
     async (sessionId: string) => {
       if (editingSessionId) return;
       try {
         const session = flowChatStore.getState().sessions.get(sessionId);
+        const historyOpenIntentDispatch = session
+          ? dispatchHistoryOpenIntentForSession(session)
+          : 'none';
+        if (session && historyOpenIntentDispatch !== 'none') {
+          flowChatManager.preloadHistoricalSessionForOpen(sessionId);
+        }
         const relationship = resolveSessionRelationship(session);
         const parentSessionId = relationship.parentSessionId;
         const mustActivateWorkspace =
@@ -424,11 +699,34 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     },
     [
       activeSessionId,
+      dispatchHistoryOpenIntentForSession,
       editingSessionId,
       setActiveWorkspace,
       workspaceId,
       currentWorkspace?.id,
     ]
+  );
+
+  const handleSessionOpenPointerDown = useCallback(
+    (event: React.PointerEvent<HTMLElement>, session: Session) => {
+      if (editingSessionId || session.sessionId === activeSessionId) {
+        return;
+      }
+      if (event.button !== 0) {
+        return;
+      }
+
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('.bitfun-nav-panel__inline-item-actions, .bitfun-nav-panel__inline-item-edit')) {
+        return;
+      }
+
+      const historyOpenIntentDispatch = dispatchHistoryOpenIntentForSession(session);
+      if (historyOpenIntentDispatch !== 'none') {
+        flowChatManager.preloadHistoricalSessionForOpen(session.sessionId);
+      }
+    },
+    [activeSessionId, dispatchHistoryOpenIntentForSession, editingSessionId],
   );
 
   const resolveSessionTitle = useCallback(
@@ -638,13 +936,20 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                 : null;
           const sessionModeKey = resolveSessionModeType(session);
           const sessionTitle = resolveSessionTitle(session);
+          const isRunning = runningSessionIds.has(session.sessionId);
+          const isHighPriority = !!session.needsUserAttention;
+          const backgroundSubagentActivity = !isChildSession
+            ? backgroundSubagentActivityByParent.get(session.sessionId)
+            : undefined;
+          const backgroundSubagentActivityCount = backgroundSubagentActivity?.totalCount ?? 0;
+          const showBackgroundSubagentActivity = !isChildSession && backgroundSubagentActivityCount > 0;
           const parentSessionId = relationship.parentSessionId;
           const parentSession = parentSessionId ? flowChatState.sessions.get(parentSessionId) : undefined;
           const parentTitle = parentSession ? resolveSessionTitle(parentSession) : '';
           const parentTurnIndex = relationship.origin?.parentTurnIndex;
           const trimmedAssistant = assistantLabel?.trim() ?? '';
           const showAssistantInTooltip = trimmedAssistant.length > 0;
-          const showRichTooltip = showAssistantInTooltip || isChildSession;
+          const showRichTooltip = showAssistantInTooltip || isChildSession || showBackgroundSubagentActivity;
           const tooltipContent = showRichTooltip ? (
             <div className="bitfun-nav-panel__inline-item-tooltip">
               <div className="bitfun-nav-panel__inline-item-tooltip-title">{sessionTitle}</div>
@@ -662,8 +967,25 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                       })
                     : t('nav.sessions.childSourceWithoutTurn', {
                         parentTitle: parentTitle || t('nav.sessions.parentSession'),
-                      })}
+                  })}
                 </div>
+              ) : null}
+              {showBackgroundSubagentActivity && backgroundSubagentActivity ? (
+                <>
+                  <div className="bitfun-nav-panel__inline-item-tooltip-meta">
+                    {t('nav.sessions.backgroundSubagentsRunning', {
+                      count: backgroundSubagentActivityCount,
+                    })}
+                  </div>
+                  {backgroundSubagentActivity.items.length > 0 ? (
+                    <div className="bitfun-nav-panel__inline-item-tooltip-meta">
+                      {backgroundSubagentActivity.items
+                        .slice(0, 2)
+                        .map(item => item.title)
+                        .join(' · ')}
+                    </div>
+                  ) : null}
+                </>
               ) : null}
             </div>
           ) : (
@@ -677,7 +999,6 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                   ? Panda
                   : Bot
                 : Code2;
-          const isRunning = runningSessionIds.has(session.sessionId);
           const isRowActive = isSessionNavRowActive({
             rowSessionId: session.sessionId,
             activeTabId,
@@ -690,7 +1011,6 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           const attentionKind = !isRunning && !isRowActive
             ? (session.needsUserAttention || session.hasUnreadCompletion || undefined)
             : undefined;
-          const isHighPriority = !!session.needsUserAttention;
           const row = (
             <div
               className={[
@@ -706,6 +1026,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
               data-testid="session-nav-item"
               data-session-id={session.sessionId}
               data-session-title={sessionTitle}
+              onPointerDown={event => handleSessionOpenPointerDown(event, session)}
               onClick={() => handleSwitch(session.sessionId)}
             >
               {showSessionModeIcon ? (
@@ -810,6 +1131,25 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                         {getReviewActivityBadge(reviewActivityKind)}
                       </span>
                     ) : null}
+                    {showBackgroundSubagentActivity ? (
+                      <span
+                        className="bitfun-nav-panel__inline-item-background-subagent-badge"
+                        aria-label={t('nav.sessions.backgroundSubagentsRunning', {
+                          count: backgroundSubagentActivityCount,
+                        })}
+                      >
+                        <Bot
+                          className="bitfun-nav-panel__inline-item-background-subagent-icon is-bot"
+                          size={10}
+                          aria-hidden
+                        />
+                        <Loader2
+                          className="bitfun-nav-panel__inline-item-background-subagent-icon is-loader"
+                          size={10}
+                          aria-hidden
+                        />
+                      </span>
+                    ) : null}
                   </span>
                   <div
                     className={`bitfun-nav-panel__inline-item-actions${openMenuSessionId === session.sessionId ? ' is-open' : ''}`}
@@ -841,6 +1181,19 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                       <button
                         type="button"
                         className="bitfun-nav-panel__inline-item-menu-item"
+                        onClick={e => {
+                          e.stopPropagation();
+                          setOpenMenuSessionId(null);
+                          setScheduledJobsSessionId(session.sessionId);
+                        }}
+                        disabled={!workspacePath}
+                      >
+                        <Clock3 size={13} />
+                        <span>{t('nav.scheduledJobs.open')}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="bitfun-nav-panel__inline-item-menu-item"
                         onClick={e => { setOpenMenuSessionId(null); void handleArchive(e, session.sessionId); }}
                       >
                         <Archive size={13} />
@@ -868,11 +1221,12 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           );
         })}
 
-      {(totalTopLevelSessionCount > SESSIONS_LEVEL_0 || hasMoreUnloadedSessions) && (
+      {expandToggleState.shouldRender && (
         <button
           type="button"
           className={`bitfun-nav-panel__inline-toggle${metadataPageState.isLoading ? ' is-loading' : ''}`}
           data-testid="session-nav-show-more"
+          data-session-nav-toggle-action={expandToggleState.action}
           disabled={metadataPageState.isLoading}
           onClick={() => { void handleExpandToggle(); }}
         >
@@ -885,11 +1239,11 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
               )}
               <span>
                 {t('nav.sessions.showMore', {
-                  count: Math.max(totalTopLevelSessionCount - SESSIONS_LEVEL_0, 0),
+                  count: expandToggleState.collapsedRemainingCount,
                 })}
               </span>
             </>
-          ) : expandLevel === 1 && totalTopLevelSessionCount > SESSIONS_LEVEL_1 ? (
+          ) : expandLevel === 1 && expandToggleState.expandedRemainingCount > 0 ? (
             <>
               {metadataPageState.isLoading ? (
                 <Loader2 size={12} className="bitfun-nav-panel__inline-toggle-spinner" />
@@ -898,7 +1252,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
               )}
               <span>
                 {t('nav.sessions.showAll', {
-                  count: Math.max(totalTopLevelSessionCount - SESSIONS_LEVEL_1, 0),
+                  count: expandToggleState.expandedRemainingCount,
                 })}
               </span>
             </>
@@ -906,6 +1260,25 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
             <span>{t('nav.sessions.showLess')}</span>
           )}
         </button>
+      )}
+
+      {scheduledJobsSession && (
+        <Suspense fallback={null}>
+          <ScheduledJobsModal
+            isOpen={scheduledJobsSession != null}
+            onClose={() => setScheduledJobsSessionId(null)}
+            workspacePath={scheduledJobsSession.workspacePath || workspacePath}
+            workspaceId={scheduledJobsSession.workspaceId || workspaceId}
+            remoteConnectionId={scheduledJobsSession.remoteConnectionId || remoteConnectionId}
+            remoteSshHost={scheduledJobsSession.remoteSshHost || remoteSshHost}
+            sessionId={scheduledJobsSession.sessionId}
+            targetKind="session"
+            lockSessionId
+            title={t('nav.scheduledJobs.title')}
+            targetLabel={resolveSessionTitle(scheduledJobsSession)}
+            targetDescription={scheduledJobsSession.workspacePath || workspacePath}
+          />
+        </Suspense>
       )}
     </div>
   );

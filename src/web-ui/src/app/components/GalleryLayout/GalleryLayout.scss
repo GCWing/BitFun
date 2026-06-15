@@ -159,7 +159,7 @@ $content-max: 1480px;
 
   &--skeleton {
     --skeleton-shimmer-0: rgba(255, 255, 255, 0);
-    --skeleton-shimmer-peak: rgba(255, 255, 255, 0.1);
+    --skeleton-shimmer-peak: var(--color-overlay-white-10);
     pointer-events: none;
   }
 }
@@ -341,7 +341,7 @@ $content-max: 1480px;
   padding: 0 $size-gap-3;
   height: 28px;
   border: 1px solid var(--border-subtle);
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--color-overlay-white-03);
 }
 
 .gallery-filter-chip.is-active,
@@ -390,7 +390,7 @@ $content-max: 1480px;
   border-radius: $size-radius-full;
   background: rgba(52, 211, 153, 0.12);
   border: 1px solid rgba(52, 211, 153, 0.28);
-  color: #34d399;
+  color: var(--color-success);
   font-size: 11px;
   font-weight: $font-weight-semibold;
 }

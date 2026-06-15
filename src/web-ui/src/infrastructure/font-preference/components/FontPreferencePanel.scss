@@ -97,7 +97,7 @@
     min-width: 0;
     padding: $size-gap-1 $size-gap-3;
     font-size: var(--font-size-sm);
-    font-family: var(--font-sans, var(--font-family-sans));
+    font-family: var(--font-sans);
     background: transparent;
     border: 1px solid var(--border-base);
     border-radius: $size-radius-sm;
@@ -117,14 +117,14 @@
 
     &--active {
       @include btn-primary.btn-primary-surface-default;
-      border-color: var(--btn-primary-border, transparent);
+      border-color: var(--btn-primary-border);
       font-weight: $font-weight-semibold;
-      box-shadow: var(--btn-primary-shadow, none);
+      box-shadow: var(--btn-primary-shadow);
 
       &:hover:not(:disabled) {
         @include btn-primary.btn-primary-surface-hover;
-        border-color: var(--btn-primary-hover-border, transparent);
-        box-shadow: var(--btn-primary-hover-shadow, none);
+        border-color: var(--btn-primary-hover-border);
+        box-shadow: var(--btn-primary-hover-shadow);
       }
     }
   }
@@ -254,7 +254,7 @@
     margin-left: auto;
     padding: $size-gap-2 $size-gap-4;
     font-size: var(--font-size-sm);
-    font-family: var(--font-sans, var(--font-family-sans));
+    font-family: var(--font-sans);
     background: transparent;
     border: 1px solid var(--border-base);
     border-radius: $size-radius-sm;

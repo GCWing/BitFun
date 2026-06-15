@@ -167,26 +167,25 @@
     "controls": {
       "refreshTooltip": "刷新可用终端列表",
       "autoDetect": "自动检测 (推荐)",
-      "description": "新建终端时使用的默认 Shell 类型",
+      "description": "新建终端以及本地工作区中 agent 执行命令时使用的默认 Shell 类型。",
+      "cmdFallbackMessage": "Agent 执行命令时实际使用 PowerShell。",
       "placeholder": "选择默认终端",
       "noShells": "未检测到可用的终端"
     },
-    "warnings": {
-      "cmd": "CMD 不支持 Shell 集成，AI 命令将通过 PowerShell 执行。",
-      "gitBash": "Git Bash 安装 oh-my-zsh 后可能导致 Shell 集成失效，如遇异常建议切换至 PowerShell。"
-    },
-    "recommendations": {
-      "pwsh": {
-        "prefix": "推荐安装使用",
-        "name": "PowerShell Core",
-        "suffix": "以获得更好的跨平台体验和现代化功能",
-        "link": "前往下载"
+    "panelPosition": {
+      "label": "终端打开位置",
+      "description": "在会话中从 Shell 导航打开终端时显示的位置",
+      "placeholder": "选择终端显示位置",
+      "options": {
+        "right": "右侧面板",
+        "bottom": "底部面板"
       }
     },
     "messages": {
       "loading": "加载中...",
       "loadFailed": "加载配置失败",
       "updated": "默认终端已更新",
+      "panelPositionUpdated": "终端显示位置已更新",
       "saveFailed": "保存配置失败",
       "refreshed": "已刷新可用终端列表"
     }

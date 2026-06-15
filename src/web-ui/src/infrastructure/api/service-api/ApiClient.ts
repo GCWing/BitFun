@@ -1,6 +1,6 @@
  
 
-import { getTransportAdapter, ITransportAdapter } from '../adapters';
+import { getTransportAdapter, ITransportAdapter, type TransportRequestTiming } from '../adapters';
 import {
   IApiClient,
   ApiResponse,
@@ -30,6 +30,10 @@ function responseEstimateMaxBytes(command: string): number | undefined {
     : undefined;
 }
 
+function shouldEstimateApiPayloadBytes(): boolean {
+  return globalThis.__BITFUN_PERF_TRACE_ENABLED__ === true;
+}
+
 function isOptionalConfigNotFoundCommand(config: TauriCommandConfig, error: unknown): boolean {
   if (config.command !== 'get_config') {
     return false;
@@ -57,9 +61,48 @@ function isOptionalConfigNotFound(request: ApiRequest, error: unknown): boolean 
   return isOptionalConfigNotFoundCommand(request.config as TauriCommandConfig, error);
 }
 
+function traceTargetForCommand(command: string, payload: unknown): string | undefined {
+  if (command === 'explorer_get_children') {
+    return 'file_explorer:children';
+  }
+
+  if (command === 'start_file_watch') {
+    const record = payload && typeof payload === 'object'
+      ? payload as Record<string, unknown>
+      : {};
+    return record.recursive === true ? 'file_watch:recursive' : 'file_watch:non_recursive';
+  }
+
+  if (command === 'stop_file_watch') {
+    return 'file_watch:stop';
+  }
+
+  if (!payload || typeof payload !== 'object') {
+    return undefined;
+  }
+
+  const request = (payload as { request?: unknown }).request;
+  if (!request || typeof request !== 'object') {
+    return undefined;
+  }
+
+  const record = request as Record<string, unknown>;
+  if ((command === 'get_config' || command === 'set_config') && typeof record.path === 'string') {
+    return record.path;
+  }
+
+  if (command === 'get_configs' && Array.isArray(record.paths)) {
+    const paths = record.paths.filter((item): item is string => typeof item === 'string');
+    return paths.length > 0 ? paths.join(',') : undefined;
+  }
+
+  return undefined;
+}
+
 export class ApiClient implements IApiClient {
   private config: ApiConfig;
   private activeRequests = new Map<string, AbortController>();
+  private activeRequestPressure = new Map<string, { maxConcurrentRequests: number }>();
   private stats: ApiStats = {
     totalRequests: 0,
     successfulRequests: 0,
@@ -166,7 +209,7 @@ export class ApiClient implements IApiClient {
 
   private async executeRequest<T>(request: ApiRequest): Promise<T> {
     const startedAt = nowMs();
-    const tracePayloadStartedAt = nowMs();
+    const estimatePayloadBytes = shouldEstimateApiPayloadBytes();
     const tracePayload = request.type === 'tauri'
       ? (request.config as TauriCommandConfig).args
       : {
@@ -176,16 +219,30 @@ export class ApiClient implements IApiClient {
     const traceCommand = request.type === 'tauri'
       ? (request.config as TauriCommandConfig).command
       : `${(request.config as HttpRequestConfig).method} ${(request.config as HttpRequestConfig).url}`;
-    const requestBytes = estimateJsonBytes(tracePayload);
+    const tracePayloadStartedAt = estimatePayloadBytes ? nowMs() : undefined;
+    const requestBytes = estimatePayloadBytes ? estimateJsonBytes(tracePayload) : undefined;
     const remote = isRemoteTraceRequest(tracePayload);
-    const requestPayloadEstimateDurationMs = elapsedMs(tracePayloadStartedAt);
+    const traceTarget = traceTargetForCommand(traceCommand, tracePayload);
+    const requestPayloadEstimateDurationMs = tracePayloadStartedAt !== undefined
+      ? elapsedMs(tracePayloadStartedAt)
+      : undefined;
+    let activeRequestsAtStart = 0;
+    let activeRequestsAtEnd = 0;
+    let maxConcurrentRequests = 0;
+    let transportTiming: TransportRequestTiming | undefined;
     
     this.updateStats({ totalRequests: this.stats.totalRequests + 1 });
 
     try {
       
       const controller = new AbortController();
+      activeRequestsAtStart = this.activeRequests.size;
       this.activeRequests.set(request.id, controller);
+      const pressure = { maxConcurrentRequests: this.activeRequests.size };
+      this.activeRequestPressure.set(request.id, pressure);
+      this.activeRequestPressure.forEach(item => {
+        item.maxConcurrentRequests = Math.max(item.maxConcurrentRequests, this.activeRequests.size);
+      });
 
       
       const timeoutId = setTimeout(() => {
@@ -196,31 +253,54 @@ export class ApiClient implements IApiClient {
         
         const response = await this.applyMiddleware(request, async (req) => {
           if (req.type === 'tauri') {
-            return this.executeTauriCommand(req.config as TauriCommandConfig);
+            transportTiming = {};
+            return this.executeTauriCommand(req.config as TauriCommandConfig, transportTiming);
           } else {
             return this.executeHttpRequest(req.config as HttpRequestConfig, controller.signal);
           }
         });
 
         clearTimeout(timeoutId);
+        maxConcurrentRequests = this.activeRequestPressure.get(request.id)?.maxConcurrentRequests ?? this.activeRequests.size;
         this.activeRequests.delete(request.id);
+        this.activeRequestPressure.delete(request.id);
+        activeRequestsAtEnd = this.activeRequests.size;
 
         
         const durationMs = elapsedMs(startedAt);
-        const responseEstimateStartedAt = nowMs();
-        const responseBytes = estimateJsonBytes(
-          response.data,
-          responseEstimateMaxBytes(traceCommand)
-        );
-        const responseEstimateDurationMs = elapsedMs(responseEstimateStartedAt);
+        const responseEstimateStartedAt = estimatePayloadBytes ? nowMs() : undefined;
+        const responseBytes = estimatePayloadBytes
+          ? estimateJsonBytes(
+              response.data,
+              responseEstimateMaxBytes(traceCommand)
+            )
+          : undefined;
+        const responseEstimateDurationMs = responseEstimateStartedAt !== undefined
+          ? elapsedMs(responseEstimateStartedAt)
+          : undefined;
+        const payloadEstimateDurationMs = requestPayloadEstimateDurationMs !== undefined ||
+          responseEstimateDurationMs !== undefined
+            ? (requestPayloadEstimateDurationMs ?? 0) + (responseEstimateDurationMs ?? 0)
+            : undefined;
         startupTrace.recordApiCall({
           type: request.type,
           command: traceCommand,
+          target: traceTarget,
           durationMs,
+          startedAtMs: startedAt,
+          endedAtMs: startedAt + durationMs,
           outcome: 'success',
           requestBytes,
           responseBytes,
-          payloadEstimateDurationMs: requestPayloadEstimateDurationMs + responseEstimateDurationMs,
+          payloadEstimateDurationMs,
+          requestPayloadEstimateDurationMs,
+          responsePayloadEstimateDurationMs: responseEstimateDurationMs,
+          adapterInitDurationMs: transportTiming?.adapterInitDurationMs,
+          transportDurationMs: transportTiming?.transportDurationMs,
+          invokeDurationMs: transportTiming?.invokeDurationMs,
+          activeRequestsAtStart,
+          activeRequestsAtEnd,
+          maxConcurrentRequests,
           remote,
         });
         this.recordResponseTime(durationMs);
@@ -237,8 +317,13 @@ export class ApiClient implements IApiClient {
 
         return response.data;
       } finally {
+        maxConcurrentRequests = maxConcurrentRequests ||
+          this.activeRequestPressure.get(request.id)?.maxConcurrentRequests ||
+          this.activeRequests.size;
         clearTimeout(timeoutId);
         this.activeRequests.delete(request.id);
+        this.activeRequestPressure.delete(request.id);
+        activeRequestsAtEnd = this.activeRequests.size;
       }
     } catch (error) {
       const optionalConfigNotFound = isOptionalConfigNotFound(request, error);
@@ -248,10 +333,20 @@ export class ApiClient implements IApiClient {
       startupTrace.recordApiCall({
         type: request.type,
         command: traceCommand,
+        target: traceTarget,
         durationMs: elapsedMs(startedAt),
+        startedAtMs: startedAt,
+        endedAtMs: nowMs(),
         outcome: optionalConfigNotFound ? 'success' : 'failure',
         requestBytes,
         payloadEstimateDurationMs: requestPayloadEstimateDurationMs,
+        requestPayloadEstimateDurationMs,
+        adapterInitDurationMs: transportTiming?.adapterInitDurationMs,
+        transportDurationMs: transportTiming?.transportDurationMs,
+        invokeDurationMs: transportTiming?.invokeDurationMs,
+        activeRequestsAtStart,
+        activeRequestsAtEnd,
+        maxConcurrentRequests,
         remote,
       });
 
@@ -288,11 +383,13 @@ export class ApiClient implements IApiClient {
     }
   }
 
-  private async executeTauriCommand(config: TauriCommandConfig): Promise<ApiResponse> {
+  private async executeTauriCommand(
+    config: TauriCommandConfig,
+    transportTiming?: TransportRequestTiming
+  ): Promise<ApiResponse> {
     try {
       
-      
-      const data = await this.adapter.request(config.command, config.args || {});
+      const data = await this.adapter.request(config.command, config.args || {}, transportTiming);
       
       return {
         success: true,

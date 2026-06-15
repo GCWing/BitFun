@@ -6,6 +6,7 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { File, Folder, Code, Image, Terminal, GitBranch, Link, FileText, GitPullRequest } from 'lucide-react';
 import { Tag } from '@/component-library';
+import { useI18n } from '@/infrastructure/i18n';
 import { shouldIgnoreCardToggleClick } from '@/shared/utils/textSelection';
 import { SnapshotRollbackButton } from './SnapshotRollbackButton';
 import './UserMessage.scss';
@@ -143,6 +144,7 @@ export const UserMessage: React.FC<UserMessageProps> = React.memo(({
   showSnapshotButton = false,
   isCurrentTurn = false
 }) => {
+  const { formatDate } = useI18n('flow-chat');
   const messageContent = message || content || '';
   const parts = useMemo(() => parseMessageContent(messageContent), [messageContent]);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -241,7 +243,10 @@ export const UserMessage: React.FC<UserMessageProps> = React.memo(({
       <div className="message-footer">
         {showTimestamp && timestamp && (
           <div className="message-timestamp">
-            {new Date(timestamp).toLocaleTimeString()}
+            {formatDate(new Date(timestamp), {
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
           </div>
         )}
         

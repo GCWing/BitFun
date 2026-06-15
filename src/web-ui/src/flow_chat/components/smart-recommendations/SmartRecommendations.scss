@@ -18,7 +18,7 @@
   }
 
   &__title {
-    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+    font-size: var(--tool-card-action-font-size);
     font-weight: 600;
     color: var(--color-text-primary);
   }
@@ -56,7 +56,7 @@
     border-radius: 6px;
     background: var(--color-bg-primary);
     color: var(--color-text-primary);
-    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+    font-size: var(--tool-card-action-font-size);
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s;
@@ -70,7 +70,7 @@
       background: var(--color-bg-hover);
       border-color: var(--color-primary);
       transform: translateY(-1px);
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 2px 4px var(--color-overlay-black-10);
     }
 
     &:active:not(:disabled) {

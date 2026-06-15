@@ -242,4 +242,45 @@ describe('UserMessageItem steering tag', () => {
 
     expect(container.querySelector('.user-message-item__edit-btn')).toBeNull();
   });
+
+  it('disables edit and rollback while a session only has a partial history view', () => {
+    activeSessionRef.current = {
+      sessionId: 'partial-session',
+      sessionKind: 'normal',
+      isPartial: true,
+      loadedTurnCount: 1,
+      totalTurnCount: 20,
+      dialogTurns: [
+        {
+          id: 'turn-20',
+          status: 'completed',
+          backendTurnIndex: 19,
+        },
+      ],
+    };
+
+    act(() => {
+      root.render(
+        <FlowChatContext.Provider
+          value={{
+            sessionId: 'partial-session',
+            allowUserMessageRollback: true,
+            allowUserMessageEdit: true,
+          }}
+        >
+          <UserMessageItem
+            message={{
+              id: 'user-partial-20',
+              content: 'latest partial prompt',
+              timestamp: 1000,
+            }}
+            turnId="turn-20"
+          />
+        </FlowChatContext.Provider>,
+      );
+    });
+
+    expect(container.querySelector<HTMLButtonElement>('.user-message-item__edit-btn')?.disabled).toBe(true);
+    expect(container.querySelector<HTMLButtonElement>('.user-message-item__rollback-btn')?.disabled).toBe(true);
+  });
 });

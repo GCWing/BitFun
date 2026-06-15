@@ -16,7 +16,7 @@
   .todo-progress {
     color: var(--color-text-muted);
     font-size: inherit;
-    margin-left: var(--flowchat-inline-gap, 0.35rem);
+    margin-left: var(--flowchat-inline-gap);
     font-family: var(--tool-card-font-mono);
   }
 }
@@ -51,7 +51,7 @@
 
   /* Expanded shell: thin neutral frame, no heavy elevation. */
   .base-tool-card-wrapper.todo-write-card {
-    border: 1px solid var(--border-subtle, var(--border-base));
+    border: 1px solid var(--border-subtle);
     box-shadow: none;
 
     &:hover {
@@ -68,7 +68,7 @@
   .todo-header-action-cluster {
     display: inline-flex;
     align-items: baseline;
-    gap: var(--flowchat-inline-gap, 0.35rem);
+    gap: var(--flowchat-inline-gap);
     min-width: 0;
   }
 
@@ -103,7 +103,7 @@
   .todo-header-content {
     display: inline-flex;
     align-items: center;
-    gap: var(--flowchat-inline-gap, 0.35rem);
+    gap: var(--flowchat-inline-gap);
     min-width: 0;
     overflow: hidden;
     white-space: nowrap;
@@ -133,7 +133,7 @@
   .todo-header-more {
     flex-shrink: 0;
     color: var(--color-text-muted);
-    background: var(--element-bg-subtle, rgba(255, 255, 255, 0.06));
+    background: var(--element-bg-subtle);
     border-radius: 8px;
     font-family: inherit;
     font-variant-numeric: tabular-nums;
@@ -177,7 +177,7 @@
   .todo-item {
     display: flex;
     align-items: center;
-    padding: var(--flowchat-card-expanded-pad-y, 0.5rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
+    padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
     font-size: var(--tool-card-action-font-size);
     line-height: var(--tool-card-action-line-height);
     font-weight: 400;
@@ -186,11 +186,11 @@
     border-left: none;
 
     &:hover {
-      background: var(--element-bg-subtle, rgba(255, 255, 255, 0.04));
+      background: var(--element-bg-subtle);
     }
 
     &.status-in_progress {
-      background: var(--element-bg-subtle, rgba(255, 255, 255, 0.06));
+      background: var(--element-bg-subtle);
 
       .todo-content {
         color: var(--color-text-muted);
@@ -222,7 +222,7 @@
   .todo-item-left {
     display: flex;
     align-items: center;
-    gap: var(--flowchat-inline-gap, 0.35rem);
+    gap: var(--flowchat-inline-gap);
     flex: 1;
     min-width: 0;
   }

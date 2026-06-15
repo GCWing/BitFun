@@ -73,4 +73,8 @@ export const TAB_EVENTS = {
   GIT_CREATE_TAB: 'git-create-tab',
   /** Expand right panel */
   EXPAND_RIGHT_PANEL: 'expand-right-panel',
+  /** Create tab in the session bottom terminal panel */
+  BOTTOM_TERMINAL_CREATE_TAB: 'bottom-terminal-create-tab',
+  /** Expand the session bottom terminal panel */
+  EXPAND_BOTTOM_TERMINAL_PANEL: 'expand-bottom-terminal-panel',
 } as const;

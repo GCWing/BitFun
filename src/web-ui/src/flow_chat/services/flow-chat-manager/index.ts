@@ -31,6 +31,7 @@ export {
 export {
   getModelMaxTokens,
   createChatSession,
+  preloadHistoricalSessionForOpen,
   switchChatSession,
   deleteChatSession,
   renameChatSessionTitle,

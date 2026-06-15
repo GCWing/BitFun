@@ -24,7 +24,6 @@ const REQUIRED_ACTION_BAR_KEYS = [
   'deepReviewActionBar.reviewRunningDeep',
   'deepReviewActionBar.reviewRunningStandard',
   'deepReviewActionBar.fixAndReviewRunning',
-  'deepReviewActionBar.minimizedDeep',
   'deepReviewActionBar.minimizedStandard',
   'deepReviewActionBar.minimizedReviewRunningDeep',
   'deepReviewActionBar.minimizedReviewRunningStandard',

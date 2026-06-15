@@ -103,6 +103,31 @@ export interface RestoreSessionWithTurnsResponse {
   turns: DialogTurnData[];
 }
 
+export interface SessionTurnLoadTiming {
+  requestedTailTurnCount?: number;
+  loadedTurnCount: number;
+  totalTurnCount: number;
+  turnFileCount: number;
+  missingTurnFileCount: number;
+  fastPath: boolean;
+  metadataDurationMs: number;
+  stateDurationMs: number;
+  scanDurationMs: number;
+  readDurationMs: number;
+  maxTurnReadDurationMs: number;
+  buildSessionDurationMs: number;
+  totalDurationMs: number;
+}
+
+export interface SessionViewRestoreTiming {
+  resolveStoragePathDurationMs: number;
+  visibilityMetadataDurationMs: number;
+  loadSessionWithTurnsDurationMs: number;
+  normalizeTurnIdsDurationMs: number;
+  totalDurationMs: number;
+  turnLoad: SessionTurnLoadTiming;
+}
+
 export interface RestoreSessionViewResponse {
   session: SessionInfo;
   turns: DialogTurnData[];
@@ -110,6 +135,7 @@ export interface RestoreSessionViewResponse {
   isPartial?: boolean;
   loadedTurnCount?: number;
   totalTurnCount?: number;
+  timings?: SessionViewRestoreTiming;
 }
 
 export interface EnsureAssistantBootstrapRequest {
@@ -154,6 +180,65 @@ export interface UpdateSessionTitleRequest {
   remoteSshHost?: string;
 }
 
+export interface ControlBackgroundCommandRequest {
+  execSessionId: number;
+  action: 'interrupt' | 'kill';
+  remote: boolean;
+}
+
+export interface SendBackgroundCommandInputRequest {
+  execSessionId: number;
+  remote: boolean;
+  chars: string;
+  appendEnter: boolean;
+}
+
+export type BackgroundCommandOutputStatus =
+  | 'running'
+  | 'exited'
+  | 'interrupted'
+  | 'killed'
+  | 'pruned'
+  | 'failed';
+
+export interface BackgroundCommandOutputMetadata {
+  agentSessionId?: string;
+  execSessionId?: number;
+  command: string;
+  workdir?: string;
+  remote: boolean;
+  tty: boolean;
+  status: BackgroundCommandOutputStatus;
+  exitCode?: number;
+  startedAt: number;
+  endedAt?: number;
+  retainedBytes: number;
+  retainedLimitBytes: number;
+  truncatedFromStart: boolean;
+}
+
+export interface ReadBackgroundCommandOutputRequest {
+  execSessionId: number;
+  remote: boolean;
+  cursor?: number;
+}
+
+export interface ReadBackgroundCommandOutputResponse {
+  metadata: BackgroundCommandOutputMetadata;
+  cursor: number;
+  reset: boolean;
+  snapshot?: string;
+  chunks: string[];
+}
+
+export interface ListBackgroundCommandActivitiesRequest {
+  agentSessionId?: string;
+}
+
+export interface ListBackgroundCommandActivitiesResponse {
+  activities: BackgroundCommandOutputMetadata[];
+}
+
  
 export interface ModeInfo {
   id: string;
@@ -190,6 +275,8 @@ export type DialogTurnStartedEvent = AgenticEvent;
 
 export interface TextChunkEvent extends AgenticEvent {
   roundId: string;
+  attemptId?: string;
+  attemptIndex?: number;
   text: string;
   contentType?: 'text' | 'thinking';
   isThinkingEnd?: boolean;
@@ -197,6 +284,8 @@ export interface TextChunkEvent extends AgenticEvent {
 
 export interface ToolEvent extends AgenticEvent {
   roundId: string;
+  attemptId?: string;
+  attemptIndex?: number;
   toolEvent: any;
 }
 
@@ -285,6 +374,14 @@ export interface ModelRoundCompletedEvent extends AgenticEvent {
   tokenDetails?: unknown;
 }
 
+export interface ModelRoundStartedEvent extends AgenticEvent {
+  turnId: string;
+  roundId: string;
+  roundGroupId?: string;
+  roundIndex: number;
+  modelId?: string;
+}
+
 export interface AcpContextUsageUpdatedEvent extends AgenticEvent {
   clientId?: string;
   used: number;
@@ -355,15 +452,108 @@ export class AgentAPI {
     remoteSshHost?: string;
   }): Promise<{
     success: boolean;
-    goalText: string;
-    successCriteria: string[];
-    kickoffMessage: string;
-    displayMessage: string;
+    goal: {
+      goalId: string;
+      sessionId: string;
+      objective: string;
+      status: string;
+      tokenBudget?: number | null;
+      tokensUsed: number;
+      timeUsedSeconds: number;
+      createdAt: number;
+      updatedAt: number;
+    };
   }> {
     try {
       return await api.invoke('activate_session_goal', { request });
     } catch (error) {
       throw createTauriCommandError('activate_session_goal', error, request);
+    }
+  }
+
+  async getSessionThreadGoal(request: {
+    sessionId: string;
+    workspacePath?: string;
+    remoteConnectionId?: string;
+    remoteSshHost?: string;
+  }): Promise<{
+    goal: {
+      goalId: string;
+      sessionId: string;
+      objective: string;
+      status: string;
+      tokenBudget?: number | null;
+      tokensUsed: number;
+      timeUsedSeconds: number;
+      createdAt: number;
+      updatedAt: number;
+    } | null;
+  }> {
+    try {
+      return await api.invoke('get_session_thread_goal', { request });
+    } catch (error) {
+      throw createTauriCommandError('get_session_thread_goal', error, request);
+    }
+  }
+
+  async clearSessionThreadGoal(request: {
+    sessionId: string;
+    workspacePath?: string;
+    remoteConnectionId?: string;
+    remoteSshHost?: string;
+  }): Promise<void> {
+    try {
+      await api.invoke('clear_session_thread_goal', { request });
+    } catch (error) {
+      throw createTauriCommandError('clear_session_thread_goal', error, request);
+    }
+  }
+
+  async setSessionThreadGoalStatus(request: {
+    sessionId: string;
+    status: string;
+    workspacePath?: string;
+    remoteConnectionId?: string;
+    remoteSshHost?: string;
+  }): Promise<{
+    goalId: string;
+    sessionId: string;
+    objective: string;
+    status: string;
+    tokenBudget?: number | null;
+    tokensUsed: number;
+    timeUsedSeconds: number;
+    createdAt: number;
+    updatedAt: number;
+  }> {
+    try {
+      return await api.invoke('set_session_thread_goal_status', { request });
+    } catch (error) {
+      throw createTauriCommandError('set_session_thread_goal_status', error, request);
+    }
+  }
+
+  async updateSessionThreadGoalObjective(request: {
+    sessionId: string;
+    objective: string;
+    workspacePath?: string;
+    remoteConnectionId?: string;
+    remoteSshHost?: string;
+  }): Promise<{
+    goalId: string;
+    sessionId: string;
+    objective: string;
+    status: string;
+    tokenBudget?: number | null;
+    tokensUsed: number;
+    timeUsedSeconds: number;
+    createdAt: number;
+    updatedAt: number;
+  }> {
+    try {
+      return await api.invoke('update_session_thread_goal_objective', { request });
+    } catch (error) {
+      throw createTauriCommandError('update_session_thread_goal_objective', error, request);
     }
   }
 
@@ -714,12 +904,10 @@ export class AgentAPI {
     return api.listen<CompressionEvent>('agentic://context-compression-failed', callback);
   }
 
-  onGoalVerificationStarted(callback: (event: AgenticEvent) => void): () => void {
-    return api.listen<AgenticEvent>('agentic://goal-verification-started', callback);
-  }
-
-  onGoalVerificationFinished(callback: (event: AgenticEvent) => void): () => void {
-    return api.listen<AgenticEvent>('agentic://goal-verification-finished', callback);
+  onThreadGoalUpdated(
+    callback: (event: { sessionId: string; goal?: Record<string, unknown> | null }) => void
+  ): () => void {
+    return api.listen('agentic://thread-goal-updated', callback);
   }
 
   onImageAnalysisStarted(callback: (event: ImageAnalysisEvent) => void): () => void {
@@ -801,6 +989,59 @@ export class AgentAPI {
       });
     } catch (error) {
       throw createTauriCommandError('set_subagent_timeout', error, { sessionId, action: action.type });
+    }
+  }
+
+  async controlBackgroundCommand(request: ControlBackgroundCommandRequest): Promise<void> {
+    const actionPayload = request.action === 'interrupt' ? 'interrupt' : 'kill';
+    try {
+      await api.invoke<void>('control_background_command', {
+        request: {
+          execSessionId: request.execSessionId,
+          action: actionPayload,
+          remote: request.remote,
+        },
+      });
+    } catch (error) {
+      throw createTauriCommandError('control_background_command', error, request);
+    }
+  }
+
+  async sendBackgroundCommandInput(request: SendBackgroundCommandInputRequest): Promise<void> {
+    try {
+      await api.invoke<void>('send_background_command_input', {
+        request,
+      });
+    } catch (error) {
+      throw createTauriCommandError('send_background_command_input', error, {
+        execSessionId: request.execSessionId,
+        remote: request.remote,
+        appendEnter: request.appendEnter,
+      });
+    }
+  }
+
+  async readBackgroundCommandOutput(
+    request: ReadBackgroundCommandOutputRequest,
+  ): Promise<ReadBackgroundCommandOutputResponse> {
+    try {
+      return await api.invoke<ReadBackgroundCommandOutputResponse>('read_background_command_output', {
+        request,
+      });
+    } catch (error) {
+      throw createTauriCommandError('read_background_command_output', error, request);
+    }
+  }
+
+  async listBackgroundCommandActivities(
+    request: ListBackgroundCommandActivitiesRequest,
+  ): Promise<ListBackgroundCommandActivitiesResponse> {
+    try {
+      return await api.invoke<ListBackgroundCommandActivitiesResponse>('list_background_command_activities', {
+        request,
+      });
+    } catch (error) {
+      throw createTauriCommandError('list_background_command_activities', error, request);
     }
   }
 

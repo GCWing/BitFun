@@ -36,6 +36,11 @@ const isDev = import.meta.env?.DEV ?? process.env.NODE_ENV === 'development';
 const CONSOLE_FORWARD_INSTALLED = '__bitfun_console_forward_installed__';
 let includeSensitiveDiagnostics = true;
 
+declare global {
+  // Injected by the desktop WebView initialization script before the frontend bundle runs.
+  var __BITFUN_BOOTSTRAP_LOG_LEVEL__: string | undefined;
+}
+
 export function setIncludeSensitiveDiagnostics(enabled: boolean): void {
   includeSensitiveDiagnostics = enabled;
 }
@@ -71,6 +76,17 @@ function formatConsoleArgs(args: unknown[]): string {
   return args.map(formatConsoleArg).join(' ');
 }
 
+const CONSOLE_KIND_LEVEL: Record<string, LogLevel> = {
+  trace: LogLevel.TRACE,
+  debug: LogLevel.DEBUG,
+  log: LogLevel.INFO,
+  info: LogLevel.INFO,
+  warn: LogLevel.WARN,
+  error: LogLevel.ERROR,
+};
+
+let consoleForwardMinLevel: LogLevel = isTauri && !isDev ? LogLevel.WARN : LogLevel.TRACE;
+
 /**
  * Patch `console.*` so messages also go through `tauri_plugin_log` (webview target → webview.log).
  */
@@ -93,6 +109,7 @@ function installWebviewConsoleForward(): void {
     kind: 'log' | 'debug' | 'info' | 'warn' | 'error' | 'trace',
     args: unknown[]
   ) => {
+    if ((CONSOLE_KIND_LEVEL[kind] ?? LogLevel.INFO) < consoleForwardMinLevel) return;
     const msg = `[console] ${formatConsoleArgs(args)}`;
     switch (kind) {
       case 'log':
@@ -158,6 +175,38 @@ export function bootstrapLogger(): void {
 let initialized = false;
 let initPromise: Promise<void> | null = null;
 
+function logLevelFromString(value: unknown): LogLevel | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  switch (value.trim().toLowerCase()) {
+    case 'trace':
+      return LogLevel.TRACE;
+    case 'debug':
+      return LogLevel.DEBUG;
+    case 'info':
+      return LogLevel.INFO;
+    case 'warn':
+      return LogLevel.WARN;
+    case 'error':
+      return LogLevel.ERROR;
+    case 'off':
+      return LogLevel.NONE;
+    default:
+      return null;
+  }
+}
+
+function initialLogLevel(): LogLevel {
+  const bootstrapLevel = logLevelFromString(globalThis.__BITFUN_BOOTSTRAP_LOG_LEVEL__);
+  if (bootstrapLevel !== null) {
+    return bootstrapLevel;
+  }
+
+  return isDev ? LogLevel.DEBUG : LogLevel.WARN;
+}
+
 /**
  * Initialize logger state and ensure console forwarding is installed.
  */
@@ -218,7 +267,7 @@ export class Logger {
   private currentLevel: LogLevel;
 
   private constructor() {
-    this.currentLevel = isDev ? LogLevel.DEBUG : LogLevel.WARN;
+    this.currentLevel = initialLogLevel();
   }
 
   public static getInstance(): Logger {
@@ -230,6 +279,9 @@ export class Logger {
 
   public setLevel(level: LogLevel): void {
     this.currentLevel = level;
+    if (level > consoleForwardMinLevel) {
+      consoleForwardMinLevel = level;
+    }
   }
 
   public getLevel(): LogLevel {

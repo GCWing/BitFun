@@ -151,6 +151,24 @@ class ConfigManagerImpl implements IConfigManager {
     return resolvedConfigs;
   }
 
+  private getFallbackConfigValue(path?: string): { hasFallback: boolean; value: unknown } {
+    if (path === 'ai.models') {
+      return { hasFallback: true, value: [] };
+    }
+    if (path === 'ai.agent_models' || path === 'ai.func_agent_models' || path === 'ai.default_models') {
+      return { hasFallback: true, value: {} };
+    }
+    return { hasFallback: false, value: undefined };
+  }
+
+  private fallbackOrThrow(path: string | undefined, error: unknown): unknown {
+    const fallback = this.getFallbackConfigValue(path);
+    if (fallback.hasFallback) {
+      return fallback.value;
+    }
+    throw error;
+  }
+
   async getConfig<T = any>(path?: string): Promise<T> {
     try {
       
@@ -190,6 +208,86 @@ class ConfigManagerImpl implements IConfigManager {
       }
       throw error;
     }
+  }
+
+  async getConfigs(paths: string[]): Promise<Record<string, unknown>> {
+    const uniquePaths = Array.from(new Set(paths));
+    const results: Record<string, unknown> = {};
+    const pendingReads: Array<[string, Promise<unknown>]> = [];
+    const missingPaths: string[] = [];
+
+    for (const path of uniquePaths) {
+      if (this.configCache.has(path)) {
+        results[path] = this.configCache.get(path);
+        continue;
+      }
+
+      const existingRead = this.inFlightReads.get(this.getReadKey(path));
+      if (existingRead) {
+        pendingReads.push([path, existingRead]);
+        continue;
+      }
+
+      missingPaths.push(path);
+    }
+
+    const batchRead = missingPaths.length > 0
+      ? this.readConfigs(missingPaths)
+      : undefined;
+    const perPathReads = new Map<string, Promise<unknown>>();
+    if (batchRead) {
+      for (const path of missingPaths) {
+        const perPathRead = batchRead.then(configs => configs[path]);
+        void perPathRead.catch(() => undefined);
+        perPathReads.set(path, perPathRead);
+        this.inFlightReads.set(this.getReadKey(path), perPathRead);
+      }
+    }
+
+    let fatalError: unknown;
+
+    try {
+      for (const [path, pendingRead] of pendingReads) {
+        try {
+          results[path] = await pendingRead;
+        } catch (error) {
+          try {
+            results[path] = this.fallbackOrThrow(path, error);
+          } catch (fallbackError) {
+            fatalError ??= fallbackError;
+          }
+        }
+      }
+
+      if (batchRead) {
+        try {
+          const batchResults = await batchRead;
+          Object.assign(results, batchResults);
+        } catch (error) {
+          log.error('Failed to get configs', { paths: missingPaths, error });
+          for (const path of missingPaths) {
+            try {
+              results[path] = this.fallbackOrThrow(path, error);
+            } catch (fallbackError) {
+              fatalError ??= fallbackError;
+            }
+          }
+        }
+      }
+    } finally {
+      for (const [path, perPathRead] of perPathReads) {
+        const readKey = this.getReadKey(path);
+        if (this.inFlightReads.get(readKey) === perPathRead) {
+          this.inFlightReads.delete(readKey);
+        }
+      }
+    }
+
+    if (fatalError) {
+      throw fatalError;
+    }
+
+    return results;
   }
 
   async setConfig<T = any>(path: string, value: T): Promise<void> {

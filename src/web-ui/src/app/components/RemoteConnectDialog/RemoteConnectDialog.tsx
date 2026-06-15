@@ -49,9 +49,9 @@ function isWeixinRasterQrSrc(raw: string): boolean {
 }
 
 const NETWORK_TABS: { id: NetworkTab; labelKey: string }[] = [
-  { id: 'lan', labelKey: 'remoteConnect.tabLan' },
+  { id: 'lan', labelKey: 'shared:connectionMethods.lan' },
   { id: 'ngrok', labelKey: 'remoteConnect.tabNgrok' },
-  { id: 'bitfun_server', labelKey: 'remoteConnect.tabBitfunServer' },
+  { id: 'bitfun_server', labelKey: 'shared:connectionMethods.bitfunServer' },
   { id: 'custom_server', labelKey: 'remoteConnect.tabCustomServer' },
 ];
 

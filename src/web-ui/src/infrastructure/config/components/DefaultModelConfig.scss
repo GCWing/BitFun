@@ -70,7 +70,7 @@
       }
       
       .default-model-config__expand-line {
-        border-color: var(--border-soft, rgba(255, 255, 255, 0.15));
+        border-color: var(--border-soft, var(--color-overlay-white-15));
       }
     }
     
@@ -87,7 +87,7 @@
     width: calc(40% - 40px);
     height: 0;
     border: none;
-    border-top: 1px dashed var(--border-subtle, rgba(255, 255, 255, 0.1));
+    border-top: 1px dashed var(--border-subtle);
     transition: border-color 0.15s ease;
   }
   

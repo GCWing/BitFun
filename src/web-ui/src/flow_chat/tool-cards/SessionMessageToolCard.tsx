@@ -126,7 +126,7 @@ export const SessionMessageToolCard: React.FC<ToolCardProps> = React.memo(({
               borderRadius: 8,
               whiteSpace: 'pre-wrap',
               wordBreak: 'break-word',
-              background: 'var(--color-bg-subtle, rgba(255,255,255,0.04))',
+              background: 'var(--color-bg-subtle)',
               fontFamily: 'var(--tool-card-font-mono)'
             }}
           >
@@ -136,7 +136,7 @@ export const SessionMessageToolCard: React.FC<ToolCardProps> = React.memo(({
       )}
 
       {toolResult?.error && (
-        <div style={{ color: 'var(--color-danger-text, #f87171)', whiteSpace: 'pre-wrap' }}>
+        <div style={{ color: 'var(--color-danger-text)', whiteSpace: 'pre-wrap' }}>
           {toolResult.error}
         </div>
       )}

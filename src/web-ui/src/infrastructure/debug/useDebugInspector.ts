@@ -1,16 +1,15 @@
 /**
  * Desktop debug inspector hook.
  *
- * Provides Cmd/Ctrl + Shift + I shortcut to toggle the interactive element
- * inspector in the main webview. Only active in development or when the
+ * Provides desktop-only shortcuts for the native DevTools window and the
+ * interactive element inspector. Only active in development or when the
  * desktop app is built with the `devtools` feature.
  *
  * The inspector is injected via `eval()` into the current page, so it works
  * without any server-side changes and has zero overhead when inactive.
  */
 
-import { useCallback } from 'react';
-import { useShortcut } from '@/infrastructure/hooks/useShortcut';
+import { useEffect } from 'react';
 import { createLogger } from '@/shared/utils/logger';
 import { isTauriRuntime } from '@/infrastructure/runtime';
 import {
@@ -21,17 +20,22 @@ import {
 
 const log = createLogger('DebugInspector');
 
-/** Detect whether we are running inside a Tauri desktop webview with devtools available. */
-function isDevToolsAvailable(): boolean {
+type DebugShortcutAction = 'toggleInspector' | 'openDevTools';
+
+/** Detect whether the desktop backend exposes debug commands in this build. */
+async function loadDevToolsAvailable(): Promise<boolean> {
   // In a standard web build (non-Tauri) the inspector is useless because we
   // already have browser DevTools. Only enable in the desktop webview.
   if (typeof window === 'undefined') return false;
   if (!isTauriRuntime()) return false;
 
-  // The backend only exposes debug commands when compiled with devtools feature
-  // or in debug builds. We optimistically enable the shortcut here; the invoke
-  // will gracefully fail if the backend does not support it.
-  return true;
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    return await invoke<boolean>('debug_devtools_available');
+  } catch (error) {
+    log.error('Failed to detect DevTools availability', error);
+    return false;
+  }
 }
 
 /** Toggle the element inspector by eval-ing the inspector script into the page. */
@@ -74,48 +78,81 @@ async function openNativeDevTools(): Promise<void> {
   }
 }
 
+function isPrimaryModifier(event: KeyboardEvent): boolean {
+  const isMac = typeof navigator !== 'undefined'
+    && navigator.platform.toUpperCase().includes('MAC');
+  return isMac ? event.metaKey : event.ctrlKey;
+}
+
+function getDebugShortcutAction(event: KeyboardEvent): DebugShortcutAction | null {
+  if (
+    event.key === 'F12' &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.shiftKey &&
+    !event.altKey
+  ) {
+    return 'openDevTools';
+  }
+
+  if (!isPrimaryModifier(event) || !event.shiftKey || event.altKey) {
+    return null;
+  }
+
+  const key = event.key.toLowerCase();
+  if (key === 'i') {
+    return 'toggleInspector';
+  }
+  if (key === 'j') {
+    return 'openDevTools';
+  }
+  return null;
+}
+
 /**
  * Register debug shortcuts when running in a Tauri desktop environment.
  *
  * Shortcuts:
  *   Cmd/Ctrl + Shift + I  → Toggle element inspector
  *   Cmd/Ctrl + Shift + J  → Open native DevTools
+ *   F12                   → Open native DevTools
  *
- * Note: shortcuts are always registered (so they work even if Tauri runtime
- * detection races with component mount), but the callback no-ops when not
- * in a Tauri desktop environment.
+ * These shortcuts intentionally bypass the user-configurable product shortcut
+ * manager so development tools stay available even when app shortcuts change.
  */
 export function useDebugInspector(): void {
-  const handleToggleInspector = useCallback(() => {
-    if (!isDevToolsAvailable()) return;
-    void toggleInspector();
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    let cancelled = false;
+    let unregister: (() => void) | null = null;
+
+    void (async () => {
+      const available = await loadDevToolsAvailable();
+      if (cancelled || !available) return;
+
+      const handleKeyDown = (event: KeyboardEvent) => {
+        const action = getDebugShortcutAction(event);
+        if (!action) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+
+        if (action === 'toggleInspector') {
+          void toggleInspector();
+          return;
+        }
+        void openNativeDevTools();
+      };
+
+      window.addEventListener('keydown', handleKeyDown, { capture: true });
+      unregister = () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
+    })();
+
+    return () => {
+      cancelled = true;
+      unregister?.();
+    };
   }, []);
-
-  const handleOpenDevTools = useCallback(() => {
-    if (!isDevToolsAvailable()) return;
-    void openNativeDevTools();
-  }, []);
-
-  // Ctrl/Cmd + Shift + I — toggle element inspector
-  // ctrl: true maps to Cmd on macOS and Ctrl on Windows/Linux (handled by ShortcutManager)
-  useShortcut(
-    'debug.toggleInspector',
-    { key: 'i', ctrl: true, shift: true, scope: 'app', allowInInput: true },
-    handleToggleInspector,
-    {
-      priority: 100,
-      description: 'Toggle element inspector',
-    }
-  );
-
-  // Ctrl/Cmd + Shift + J — open native DevTools
-  useShortcut(
-    'debug.openDevTools',
-    { key: 'j', ctrl: true, shift: true, scope: 'app', allowInInput: true },
-    handleOpenDevTools,
-    {
-      priority: 100,
-      description: 'Open native DevTools',
-    }
-  );
 }

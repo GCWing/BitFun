@@ -8,9 +8,29 @@ import {
 } from '../../../shared/types';
 import { normalizeRemoteWorkspacePath } from '@/shared/utils/pathUtils';
 import { createLogger } from '@/shared/utils/logger';
+import { startupTrace } from '@/shared/utils/startupTrace';
+import { elapsedMs, nowMs } from '@/shared/utils/timing';
 import { listen } from '@tauri-apps/api/event';
 
 const log = createLogger('WorkspaceManager');
+
+function markWorkspaceStartupStepStart(step: string): number {
+  const startedAt = nowMs();
+  startupTrace.markPhase('workspace_startup_step_start', { step });
+  return startedAt;
+}
+
+function markWorkspaceStartupStepEnd(
+  step: string,
+  startedAt: number,
+  data?: Record<string, unknown>
+): void {
+  startupTrace.markPhase('workspace_startup_step_end', {
+    step,
+    durationMs: elapsedMs(startedAt),
+    ...(data ?? {}),
+  });
+}
 
 interface WorkspaceIdentityChangedEvent {
   workspaceId: string;
@@ -297,13 +317,20 @@ class WorkspaceManager {
     }
 
     this.identityEventListening = true;
+    const registrationStartedAt = nowMs();
 
     try {
       await listen<WorkspaceIdentityChangedEvent>('workspace-identity-changed', event => {
         this.applyIdentityUpdate(event.payload);
       });
+      startupTrace.markPhase('workspace_identity_listener_ready', {
+        durationMs: elapsedMs(registrationStartedAt),
+      });
     } catch (error) {
       this.identityEventListening = false;
+      startupTrace.markPhase('workspace_identity_listener_failed', {
+        durationMs: elapsedMs(registrationStartedAt),
+      });
       log.error('Failed to subscribe workspace identity updates', { error });
     }
   }
@@ -366,21 +393,47 @@ class WorkspaceManager {
       return;
     }
 
+    const initializeStartedAt = nowMs();
+    startupTrace.markPhase('workspace_initialize_start');
+
     try {
       this.isInitializing = true;
       log.info('Initializing workspace state');
-      await this.ensureIdentityChangeListener();
 
+      const identityListenerStartedAt = markWorkspaceStartupStepStart('ensure_identity_listener');
+      const identityListenerReady = this.ensureIdentityChangeListener()
+        .finally(() => {
+          markWorkspaceStartupStepEnd('ensure_identity_listener', identityListenerStartedAt, {
+            blocking: true,
+            overlappedWithGlobalState: true,
+          });
+        });
+
+      const globalStateStartedAt = markWorkspaceStartupStepStart('initialize_global_state');
       const initResult = await globalStateAPI.initializeGlobalState();
+      markWorkspaceStartupStepEnd('initialize_global_state', globalStateStartedAt);
       log.debug('Backend initialization completed', { result: initResult });
-      await globalStateAPI.cleanupInvalidWorkspaces();
+      await identityListenerReady;
 
+      const cleanupStartedAt = markWorkspaceStartupStepStart('cleanup_invalid_workspaces');
+      await globalStateAPI.cleanupInvalidWorkspaces();
+      markWorkspaceStartupStepEnd('cleanup_invalid_workspaces', cleanupStartedAt);
+
+      const fetchStateStartedAt = markWorkspaceStartupStepStart('fetch_workspace_state');
       const [recentWorkspaces, openedWorkspaces, currentWorkspace] = await Promise.all([
         globalStateAPI.getRecentWorkspaces(),
         globalStateAPI.getOpenedWorkspaces(),
         globalStateAPI.getCurrentWorkspace(),
       ]);
+      markWorkspaceStartupStepEnd('fetch_workspace_state', fetchStateStartedAt, {
+        recentCount: recentWorkspaces.length,
+        openedCount: openedWorkspaces.length,
+        hasCurrentWorkspace: currentWorkspace !== null,
+        currentWorkspaceKind: currentWorkspace?.workspaceKind ?? null,
+        currentWorkspaceRemote: currentWorkspace ? isRemoteWorkspace(currentWorkspace) : false,
+      });
 
+      const updateStateStartedAt = markWorkspaceStartupStepStart('update_workspace_state');
       this.updateWorkspaceState(
         currentWorkspace,
         recentWorkspaces,
@@ -391,14 +444,28 @@ class WorkspaceManager {
           ? { type: 'workspace:opened', workspace: currentWorkspace }
           : undefined
       );
+      markWorkspaceStartupStepEnd('update_workspace_state', updateStateStartedAt, {
+        recentCount: recentWorkspaces.length,
+        openedCount: openedWorkspaces.length,
+        hasCurrentWorkspace: currentWorkspace !== null,
+      });
 
       this.emit({ type: 'workspace:loading', loading: false });
       this.isInitialized = true;
+      startupTrace.markPhase('workspace_initialize_end', {
+        durationMs: elapsedMs(initializeStartedAt),
+        recentCount: recentWorkspaces.length,
+        openedCount: openedWorkspaces.length,
+        hasCurrentWorkspace: currentWorkspace !== null,
+      });
       log.info('Workspace state initialization completed', {
         activeWorkspaceId: currentWorkspace?.id ?? null,
         openedWorkspaceCount: openedWorkspaces.length,
       });
     } catch (error) {
+      startupTrace.markPhase('workspace_initialize_failed', {
+        durationMs: elapsedMs(initializeStartedAt),
+      });
       log.error('Failed to initialize workspace state', { error });
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.updateWorkspaceState(null, [], [], false, errorMessage);

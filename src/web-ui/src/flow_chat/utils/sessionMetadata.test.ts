@@ -440,6 +440,7 @@ describe('sessionMetadata', () => {
     });
 
     expect(metadata.tags).toEqual(['subagent']);
+    expect(metadata.sessionKind).toBe('subagent');
     expect(metadata.relationship).toMatchObject({
       kind: 'subagent',
       parentSessionId: 'parent-1',
@@ -475,6 +476,31 @@ describe('sessionMetadata', () => {
       parentSessionId: 'parent-1',
       displayAsChild: true,
       canOpenInAuxPane: true,
+    });
+  });
+
+  it('persists subagent sessionKind without existing metadata', () => {
+    const session = createSession({
+      sessionId: 'subagent-child-2',
+      sessionKind: 'subagent',
+      parentSessionId: 'parent-2',
+      parentToolCallId: 'tool-call-8',
+      subagentType: 'Explore',
+      btwOrigin: {
+        parentSessionId: 'parent-2',
+        parentDialogTurnId: 'turn-2',
+        parentTurnIndex: 2,
+      },
+    });
+
+    const metadata = buildSessionMetadata(session);
+
+    expect(metadata.sessionKind).toBe('subagent');
+    expect(metadata.relationship).toMatchObject({
+      kind: 'subagent',
+      parentSessionId: 'parent-2',
+      parentToolCallId: 'tool-call-8',
+      subagentType: 'Explore',
     });
   });
 

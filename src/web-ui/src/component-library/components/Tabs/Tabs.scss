@@ -84,7 +84,7 @@
 
       &:hover {
         background: rgba(239, 68, 68, 0.2);
-        color: #ef4444;
+        color: var(--color-error);
       }
     }
   }
@@ -163,8 +163,8 @@
       &--active {
         background: linear-gradient(135deg,
           rgba(96, 165, 250, 0.9) 0%,
-          rgba(59, 130, 246, 0.9) 100%);
-        color: #fff;
+          var(--color-accent-800) 100%);
+        color: var(--color-static-white);
         box-shadow: 0 4px 12px rgba(96, 165, 250, 0.3);
       }
     }
@@ -209,7 +209,7 @@
       .bitfun-tabs__tab--active {
         background: linear-gradient(135deg,
           rgba(139, 92, 246, 0.9) 0%,
-          rgba(124, 58, 237, 0.9) 100%);
+          var(--color-purple-800) 100%);
         box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
       }
     }
@@ -241,8 +241,8 @@
           tokens.$color-accent-200 0%,
           tokens.$color-purple-200 100%);
         box-shadow:
-          0 2px 8px rgba(96, 165, 250, 0.15),
-          0 2px 8px rgba(139, 92, 246, 0.15);
+          0 2px 8px var(--color-accent-200),
+          0 2px 8px var(--color-purple-200);
       }
     }
 

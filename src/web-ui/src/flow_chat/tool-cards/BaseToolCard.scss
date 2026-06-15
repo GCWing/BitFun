@@ -9,8 +9,8 @@
 .base-tool-card-wrapper {
   display: flex;
   flex-direction: column;
-  margin: var(--flowchat-card-gap, 0.42rem) 0;
-  border-radius: var(--flowchat-card-radius, 8px);
+  margin: var(--flowchat-card-gap) 0;
+  border-radius: var(--flowchat-card-radius);
   border: 1px solid var(--border-base);
   background: var(--color-bg-flowchat);
   backdrop-filter: blur(10px);
@@ -22,15 +22,15 @@
   &:hover {
     border-color: var(--border-medium);
     box-shadow: 
-      0 2px 8px rgba(0, 0, 0, 0.15),
-      0 1px 4px rgba(0, 0, 0, 0.1),
-      inset 0 1px 0 rgba(255, 255, 255, 0.03);
+      0 2px 8px var(--color-overlay-black-15),
+      0 1px 4px var(--color-overlay-black-10),
+      inset 0 1px 0 var(--color-overlay-white-03);
   }
   
   &:active {
     box-shadow: 
-      0 2px 10px rgba(0, 0, 0, 0.2),
-      inset 0 2px 4px rgba(0, 0, 0, 0.4);
+      0 2px 10px var(--color-overlay-black-20),
+      inset 0 2px 4px var(--color-overlay-black-40);
   }
   
   /* Divider when body below header: success expanded panel or failed error panel */
@@ -50,7 +50,7 @@
   }
   
   &.requires-confirmation {
-    border-color: var(--color-warning, #f59e0b);
+    border-color: var(--color-warning);
     border-width: 1.5px;
     box-shadow: 
       0 0 0 1px rgba(245, 158, 11, 0.15),
@@ -59,11 +59,11 @@
     animation: confirmationPulse 2s ease-in-out infinite;
     
     &:hover {
-      border-color: var(--color-warning, #f59e0b);
+      border-color: var(--color-warning);
       box-shadow: 
         0 0 0 2px rgba(245, 158, 11, 0.25),
-        0 0 20px rgba(245, 158, 11, 0.3),
-        0 4px 20px rgba(0, 0, 0, 0.3),
+        0 0 20px var(--color-warning-border),
+        0 4px 20px var(--color-overlay-black-30),
         inset 0 0 12px rgba(245, 158, 11, 0.08);
     }
     
@@ -94,14 +94,14 @@
 .base-tool-card-header {
   display: flex;
   align-items: center;
-  gap: var(--flowchat-inline-gap, 0.35rem);
+  gap: var(--flowchat-inline-gap);
   padding: var(--tool-card-header-pad-y) var(--tool-card-header-pad-right) var(--tool-card-header-pad-y) var(--tool-card-header-pad-x);
   position: relative;
   z-index: 11;
   flex-shrink: 0;
   min-height: 0;
   /* 1.2 clips CJK / some Latin descenders inside overflow:hidden; keep room for em-box */
-  line-height: var(--flowchat-support-line-height, 1.45);
+  line-height: var(--flowchat-support-line-height);
   width: 100%;
   box-sizing: border-box;
   background: transparent;
@@ -138,28 +138,28 @@
 
 /* Action text */
 .tool-card-action {
-  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+  font-size: var(--tool-card-action-font-size);
   font-weight: 500;
   color: var(--color-text-primary);
   transition: color 0.2s ease;
   letter-spacing: -0.01em;
   flex-shrink: 0;
-  line-height: var(--tool-card-action-line-height, var(--flowchat-support-line-height, 1.45));
+  line-height: var(--tool-card-action-line-height);
 }
 
 /* Main content */
 .tool-card-content {
   display: flex;
   align-items: center;
-  gap: var(--flowchat-inline-gap, 0.35rem);
+  gap: var(--flowchat-inline-gap);
   flex: 1 1 auto;
   min-width: 0;
-  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+  font-size: var(--tool-card-action-font-size);
   font-weight: 500;
   color: var(--color-text-primary);
   transition: color 0.2s ease;
   letter-spacing: -0.01em;
-  line-height: var(--tool-card-action-line-height, var(--flowchat-support-line-height, 1.45));
+  line-height: var(--tool-card-action-line-height);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -189,8 +189,8 @@
 /* ========== Expanded content area ========== */
 .base-tool-card-expanded {
   /* Full-bleed dividers in children use these (header pad-x is 0; do not conflate). */
-  --tool-card-expanded-pad-x: var(--flowchat-card-expanded-pad-x, 0.625rem);
-  --tool-card-expanded-pad-y: var(--flowchat-card-expanded-pad-y, 0.5rem);
+  --tool-card-expanded-pad-x: var(--flowchat-card-expanded-pad-x);
+  --tool-card-expanded-pad-y: var(--flowchat-card-expanded-pad-y);
   padding: var(--tool-card-expanded-pad-y) var(--tool-card-expanded-pad-x);
   background: transparent;
   position: relative;
@@ -201,13 +201,13 @@
 
 /* ========== Error details area ========== */
 .base-tool-card-error {
-  margin-top: var(--flowchat-inline-gap, 0.35rem);
+  margin-top: var(--flowchat-inline-gap);
   padding:
-    var(--flowchat-card-expanded-pad-y, 0.5rem)
-    var(--flowchat-card-expanded-pad-x, 0.625rem)
-    var(--flowchat-card-expanded-pad-y, 0.5rem)
-    calc(var(--flowchat-card-expanded-pad-x, 0.625rem) + var(--flowchat-card-expanded-pad-x, 0.625rem));
-  margin-left: var(--flowchat-inline-gap, 0.35rem);
+    var(--flowchat-card-expanded-pad-y)
+    var(--flowchat-card-expanded-pad-x)
+    var(--flowchat-card-expanded-pad-y)
+    calc(var(--flowchat-card-expanded-pad-x) + var(--flowchat-card-expanded-pad-x));
+  margin-left: var(--flowchat-inline-gap);
   background: none !important;
   border: none !important;
   box-shadow: none !important;
@@ -217,7 +217,7 @@
   .error-content {
     display: flex;
     flex-direction: column;
-    gap: var(--flowchat-inline-gap, 0.35rem);
+    gap: var(--flowchat-inline-gap);
     background: none !important;
     border: none !important;
     padding: 0 !important;
@@ -225,7 +225,7 @@
 
   .error-message {
     font-size: var(--flowchat-font-size-sm) !important;
-    line-height: var(--flowchat-support-line-height, 1.45) !important;
+    line-height: var(--flowchat-support-line-height) !important;
     color: var(--color-text-muted) !important;
     white-space: pre-wrap !important;
     word-break: break-word !important;

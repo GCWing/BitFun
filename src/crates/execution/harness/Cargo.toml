@@ -1,0 +1,17 @@
+[package]
+name = "bitfun-harness"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "Harness workflow contracts and registry for BitFun"
+
+[lib]
+name = "bitfun_harness"
+crate-type = ["rlib"]
+
+[dependencies]
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }

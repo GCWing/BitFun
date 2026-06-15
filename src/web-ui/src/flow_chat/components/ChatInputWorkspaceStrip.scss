@@ -21,15 +21,15 @@
     justify-content: space-between;
   }
 
-  &--usage-only {
+  &--actions-only {
     justify-content: flex-end;
   }
   /* Room for descenders (g, y, p) */
   /* Collapsed capsule uses 18px horizontal padding on `.bitfun-chat-input__box`; match so strip text lines up with pill content */
   padding: 3px 18px 4px;
-  font-family: var(--font-sans, var(--font-family-sans, inherit));
+  font-family: var(--font-sans);
   font-size: var(--flowchat-font-size-xxs);
-  line-height: var(--flowchat-support-line-height, 1.45);
+  line-height: var(--flowchat-support-line-height);
   font-weight: 400;
   letter-spacing: 0.01em;
   color: var(--color-text-primary);
@@ -58,11 +58,61 @@
     max-width: calc(100% - 24px);
   }
 
-  &__usage {
+  &__actions {
     flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: flex-end;
+    gap: 4px;
+  }
+
+  &__goal-btn.icon-btn {
+    width: 16px;
+    height: 16px;
+    min-width: 16px;
+    border-radius: 50%;
+    opacity: 0.86;
+
+    svg {
+      color: currentColor;
+    }
+  }
+
+  &__goal-btn--none.icon-btn {
+    color: var(--color-text-muted);
+    opacity: 0.72;
+
+    &:hover:not(:disabled) {
+      transform: none;
+      border-radius: 50%;
+      background: color-mix(in srgb, var(--color-text-muted) 12%, var(--element-bg-medium));
+      color: var(--color-text-secondary);
+      opacity: 1;
+    }
+  }
+
+  &__goal-btn--active.icon-btn {
+    color: var(--color-warning-500);
+
+    &:hover:not(:disabled) {
+      transform: none;
+      border-radius: 50%;
+      background: color-mix(in srgb, var(--color-warning-500) 12%, var(--element-bg-medium));
+      color: var(--color-warning-500);
+      opacity: 1;
+    }
+  }
+
+  &__goal-btn--complete.icon-btn {
+    color: var(--color-success-500);
+
+    &:hover:not(:disabled) {
+      transform: none;
+      border-radius: 50%;
+      background: color-mix(in srgb, var(--color-success-500) 12%, var(--element-bg-medium));
+      color: var(--color-success-500);
+      opacity: 1;
+    }
   }
 
   /* Keep the usage action compact, but large enough to read beside the strip text. */

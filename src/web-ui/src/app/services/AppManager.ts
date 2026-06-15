@@ -18,6 +18,7 @@ import {
 import { globalEventBus } from '../../infrastructure/event-bus';
 import { createLogger } from '@/shared/utils/logger';
 import { i18nService } from '@/infrastructure/i18n';
+import { loadPanelWidth, savePanelWidth, STORAGE_KEYS } from '../layout/panelConfig';
 import { storage } from '@/shared/utils/storageAdapter';
 
 const log = createLogger('AppManager');
@@ -38,7 +39,12 @@ export class AppManager implements IAppManager {
         ...DEFAULT_LAYOUT_STATE,
         leftPanelWidth: typeof window !== 'undefined' && window.innerWidth > 0 
           ? Math.min(300, Math.floor(window.innerWidth * 0.15)) // Left 15%, max 300px
-          : 280
+          : 280,
+        rightPanelWidth: loadPanelWidth(STORAGE_KEYS.RIGHT_PANEL_LAST_WIDTH, DEFAULT_LAYOUT_STATE.rightPanelWidth),
+        bottomTerminalPanelHeight: loadPanelWidth(
+          STORAGE_KEYS.BOTTOM_TERMINAL_PANEL_LAST_HEIGHT,
+          DEFAULT_LAYOUT_STATE.bottomTerminalPanelHeight
+        ),
       },
       currentAgent: DEFAULT_AGENTS[0],
       availableAgents: [...DEFAULT_AGENTS],
@@ -64,6 +70,13 @@ export class AppManager implements IAppManager {
   }
 
   updateLayout(layout: Partial<LayoutState>): void {
+    if (typeof layout.rightPanelWidth === 'number') {
+      savePanelWidth(STORAGE_KEYS.RIGHT_PANEL_LAST_WIDTH, layout.rightPanelWidth);
+    }
+    if (typeof layout.bottomTerminalPanelHeight === 'number') {
+      savePanelWidth(STORAGE_KEYS.BOTTOM_TERMINAL_PANEL_LAST_HEIGHT, layout.bottomTerminalPanelHeight);
+    }
+
     const newLayout = { ...this.state.layout, ...layout };
     this.state = { ...this.state, layout: newLayout };
     this.notifyStateChange();
@@ -371,6 +384,7 @@ export class AppManager implements IAppManager {
       storage.removeItem('BitFun-left-panel-collapsed');
       storage.removeItem('BitFun-right-panel-collapsed');
       storage.removeItem('right-panel-collapsed');
+      storage.removeItem(STORAGE_KEYS.RIGHT_PANEL_WIDTH);
     } catch (error) {
       log.warn('Failed to clear persisted panel state', error);
     }

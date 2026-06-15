@@ -24,7 +24,7 @@
     width: 40px;
     height: 40px;
     border-radius: 10px;
-    background: rgba(255, 255, 255, 0.12);
+    background: var(--color-overlay-white-12);
     backdrop-filter: blur(8px);
     display: flex;
     align-items: center;
@@ -75,7 +75,7 @@
     margin: 0;
     font-size: 0.85em;
     font-weight: 300;
-    color: rgba(var(--color-text-secondary), 0.85);
+    color: color-mix(in srgb, var(--color-text-secondary) 85%, transparent);
     line-height: $line-height-relaxed;
     display: -webkit-box;
     -webkit-line-clamp: 2;

@@ -58,7 +58,7 @@
   &__icon {
     width: 11px;
     height: 11px;
-    color: #ffffff;
+    color: var(--color-static-white);
     opacity: 0;
     transform: scale(0.5);
     transition: all 0.2s ease;
@@ -136,12 +136,12 @@
   }
 
   &--error &__input:checked + &__box {
-    background: rgba(239, 68, 68, 0.1);
+    background: var(--color-error-bg);
     border-color: rgba(239, 68, 68, 0.8);
   }
 
   &--error &__input:checked + &__box &__icon {
-    color: rgb(239, 68, 68);
+    color: var(--color-error);
   }
 
   &--small {

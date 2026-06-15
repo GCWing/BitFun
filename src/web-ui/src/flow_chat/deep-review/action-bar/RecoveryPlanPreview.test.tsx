@@ -3,12 +3,20 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { RecoveryPlanPreview } from './RecoveryPlanPreview';
 
+const messages: Record<string, string> = {
+  'deepReviewActionBar.recoveryPreserve': '{{count}} completed reviewers will be preserved',
+  'deepReviewActionBar.recoveryRerun': '{{count}} reviewers will be rerun',
+  'deepReviewActionBar.recoverySkip': '{{count}} reviewers will be skipped',
+};
+
+function t(key: string, options?: Record<string, unknown> & { defaultValue?: string }): string {
+  const template = messages[key] ?? options?.defaultValue ?? key;
+  return template.replace(/{{(\w+)}}/g, (_match, token: string) => String(options?.[token] ?? _match));
+}
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (_key: string, options?: Record<string, unknown> & { defaultValue?: string }) => {
-      const template = options?.defaultValue ?? _key;
-      return template.replace(/{{(\w+)}}/g, (_match, token: string) => String(options?.[token] ?? _match));
-    },
+    t,
   }),
 }));
 

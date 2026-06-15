@@ -15,6 +15,7 @@ import { normalizeRemoteWorkspacePath } from '@/shared/utils/pathUtils';
 import { WorkspaceKind, type WorkspaceInfo } from '@/shared/types';
 import type { AIModelConfig, DefaultModelsConfig } from '@/infrastructure/config/types';
 import type { FlowChatContext, SessionConfig } from './types';
+import type { Session } from '../../types/flow-chat';
 import { touchSessionActivity, cleanupSaveState } from './PersistenceModule';
 import {
   createTextSessionTitleDescriptor,
@@ -23,14 +24,36 @@ import {
   resolveSessionTitle,
 } from '../../utils/sessionTitle';
 import { buildCreateSessionRelationship } from '../../utils/sessionMetadata';
+import {
+  consumeRecentHistorySessionOpenIntent,
+  hasRenderableSessionContent,
+} from '../sessionOpenIntent';
 
 const log = createLogger('SessionModule');
 const pendingSessionCreations = new Map<string, Promise<string>>();
+export const SESSION_ACTIVITY_TOUCH_DELAY_MS = 350;
+let latestSwitchRequestId = 0;
+let pendingActivityTouchTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleSessionActivityTouch(task: () => void): void {
+  if (pendingActivityTouchTimer !== null) {
+    clearTimeout(pendingActivityTouchTimer);
+  }
+  pendingActivityTouchTimer = setTimeout(() => {
+    pendingActivityTouchTimer = null;
+    task();
+  }, SESSION_ACTIVITY_TOUCH_DELAY_MS);
+}
 
 const normalizeOptional = (value: string | undefined): string | undefined => {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
 };
+
+function hasCompetingHistoryLoad(context: FlowChatContext, sessionId: string): boolean {
+  return Array.from(context.pendingHistoryLoads.keys())
+    .some(pendingSessionId => pendingSessionId !== sessionId);
+}
 
 const hostFromSshConnectionId = (connectionId: string | undefined): string | undefined => {
   const trimmed = connectionId?.trim();
@@ -144,7 +167,8 @@ async function hydrateHistoricalSession(
       workspacePath,
       undefined,
       effectiveConnectionId,
-      effectiveSshHost
+      effectiveSshHost,
+      { deferFullHistoryUntilActive: true },
     );
   })();
 
@@ -171,6 +195,34 @@ async function hydrateHistoricalSession(
       context.pendingHistoryLoads.delete(sessionId);
     }
   }
+}
+
+function shouldHydrateHistoricalSessionBeforeSwitch(session: Session | undefined): session is Session {
+  if (session?.isHistorical !== true) {
+    return false;
+  }
+  if (isRemoteTraceContext(session.remoteConnectionId, session.remoteSshHost)) {
+    return false;
+  }
+  return !hasRenderableSessionContent(session);
+}
+
+export function preloadHistoricalSessionForOpen(
+  context: FlowChatContext,
+  sessionId: string
+): void {
+  if (!hasCompetingHistoryLoad(context, sessionId)) {
+    return;
+  }
+
+  const session = context.flowChatStore.getState().sessions.get(sessionId);
+  if (!shouldHydrateHistoricalSessionBeforeSwitch(session)) {
+    return;
+  }
+
+  void hydrateHistoricalSession(context, sessionId, false).catch(error => {
+    log.debug('Historical session preload failed', { sessionId, error });
+  });
 }
 
 type SessionDisplayMode = 'code' | 'cowork' | 'claw';
@@ -318,14 +370,14 @@ function resolveModelForContextWindow(
 export async function getModelMaxTokens(modelName?: string, agentType?: string): Promise<number> {
   try {
     const configManager = await import('@/infrastructure/config/services/ConfigManager').then(m => m.configManager);
-    const [modelsConfig, defaultModelsConfig, agentModelsConfig] = await Promise.all([
-      configManager.getConfig<AIModelConfig[]>('ai.models'),
-      configManager.getConfig<DefaultModelsConfig>('ai.default_models'),
-      configManager.getConfig<Record<string, string>>('ai.agent_models'),
+    const configData = await configManager.getConfigs([
+      'ai.models',
+      'ai.default_models',
+      'ai.agent_models',
     ]);
-    const models = modelsConfig || [];
-    const defaultModels = defaultModelsConfig || {};
-    const agentModels = agentModelsConfig || {};
+    const models = (configData['ai.models'] as AIModelConfig[] | undefined) || [];
+    const defaultModels = (configData['ai.default_models'] as DefaultModelsConfig | undefined) || {};
+    const agentModels = (configData['ai.agent_models'] as Record<string, string> | undefined) || {};
     
     const explicitModel = resolveModelForContextWindow(modelName, models, defaultModels);
     if (explicitModel?.context_window) {
@@ -475,25 +527,74 @@ export async function switchChatSession(
   sessionId: string
 ): Promise<void> {
   try {
+    const switchRequestId = ++latestSwitchRequestId;
     const session = context.flowChatStore.getState().sessions.get(sessionId);
+    const isRemoteSession = isRemoteTraceContext(session?.remoteConnectionId, session?.remoteSshHost);
+    const shouldHydrateBeforeSwitch = shouldHydrateHistoricalSessionBeforeSwitch(session);
+    const shouldActivateBeforeHydrate =
+      shouldHydrateBeforeSwitch &&
+      consumeRecentHistorySessionOpenIntent(sessionId);
 
-    // Switch UI immediately so the user sees the new session without waiting for history load.
-    context.flowChatStore.switchSession(sessionId);
-    startupTrace.markPhase('historical_session_switch', {
-      historical: Boolean(session?.isHistorical),
-      remote: isRemoteTraceContext(session?.remoteConnectionId, session?.remoteSshHost),
-    });
+    const touchActiveSessionInBackground = () => {
+      scheduleSessionActivityTouch(() => {
+        const latestState = context.flowChatStore.getState();
+        const latestSession = latestState.sessions.get(sessionId);
+        if (switchRequestId !== latestSwitchRequestId || latestState.activeSessionId !== sessionId || !latestSession) {
+          return;
+        }
+        touchSessionActivity(
+          sessionId,
+          latestSession.workspacePath,
+          latestSession.remoteConnectionId,
+          latestSession.remoteSshHost
+        ).catch(error => {
+          log.debug('Failed to touch session activity', { sessionId, error });
+        });
+      });
+    };
 
-    touchSessionActivity(
-      sessionId,
-      session?.workspacePath,
-      session?.remoteConnectionId,
-      session?.remoteSshHost
-    ).catch(error => {
-      log.debug('Failed to touch session activity', { sessionId, error });
-    });
+    if (shouldActivateBeforeHydrate) {
+      context.flowChatStore.switchSession(sessionId);
+      startupTrace.markPhase('historical_session_switch', {
+        historical: true,
+        remote: false,
+        activation: 'before-hydrate',
+      });
+      touchActiveSessionInBackground();
+    }
 
-    if (session?.isHistorical) {
+    if (shouldHydrateBeforeSwitch) {
+      try {
+        await hydrateHistoricalSession(context, sessionId, true);
+      } catch {
+        // The hydrate path already marks the session failed and notifies the user.
+        // Continue with activation so the failed state is visible.
+      }
+
+      if (switchRequestId !== latestSwitchRequestId) {
+        startupTrace.markPhase('historical_session_switch_superseded', {
+          sessionId,
+        });
+        return;
+      }
+    }
+
+    // Avoid showing an empty loading page between two sessions. Historical
+    // sessions without a renderable tail are activated after their first
+    // visible content is restored unless a fresh user open intent is present.
+    // In that explicit path the intent shield keeps metadata-only content from
+    // flashing while the old large session is unmounted immediately.
+    if (!shouldActivateBeforeHydrate) {
+      context.flowChatStore.switchSession(sessionId);
+      startupTrace.markPhase('historical_session_switch', {
+        historical: Boolean(session?.isHistorical),
+        remote: isRemoteSession,
+        activation: shouldHydrateBeforeSwitch ? 'after-hydrate' : 'immediate',
+      });
+      touchActiveSessionInBackground();
+    }
+
+    if (session?.isHistorical && !shouldHydrateBeforeSwitch) {
       // Load history in the background — do not block the UI.
       void hydrateHistoricalSession(context, sessionId, true);
     }
@@ -612,7 +713,8 @@ export async function forkChatSession(
     workspacePath,
     undefined,
     sourceSession.remoteConnectionId,
-    sourceSession.remoteSshHost
+    sourceSession.remoteSshHost,
+    { deferFullHistoryUntilActive: true },
   );
   context.flowChatStore.switchSession(response.sessionId);
 

@@ -1,6 +1,8 @@
 //! Theme System
 
 use std::sync::{OnceLock, RwLock};
+#[cfg(target_os = "windows")]
+use std::time::Duration;
 use std::time::Instant;
 
 use bitfun_core::infrastructure::try_get_path_manager_arc;
@@ -9,16 +11,113 @@ use log::{debug, error, warn};
 use tauri::webview::PageLoadEvent;
 use tauri::{Manager, WebviewUrl};
 
+use crate::startup_trace::DesktopStartupTrace;
+
 const AGENT_COMPANION_WINDOW_LABEL: &str = "agent-companion-pet";
 const AGENT_COMPANION_WINDOW_MIN_SIZE: f64 = 96.0;
 const AGENT_COMPANION_WINDOW_MAX_WIDTH: f64 = 360.0;
 const AGENT_COMPANION_WINDOW_MAX_HEIGHT: f64 = 240.0;
 const AGENT_COMPANION_WINDOW_MARGIN: i32 = 64;
 const AGENT_COMPANION_WINDOW_EDGE_MARGIN: f64 = 8.0;
+#[cfg(target_os = "windows")]
+const WINDOWS_STARTUP_MAXIMIZE_SHOW_WAIT_MAX: Duration = Duration::from_millis(150);
+#[cfg(target_os = "windows")]
+const WINDOWS_STARTUP_MAXIMIZE_SHOW_WAIT_MIN: Duration = Duration::from_millis(16);
+#[cfg(target_os = "windows")]
+const WINDOWS_STARTUP_MAXIMIZE_SHOW_WAIT_POLL: Duration = Duration::from_millis(8);
 
 static AGENT_COMPANION_WINDOW_OPS: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
 static AGENT_COMPANION_WINDOW_LAST_POSITION: OnceLock<RwLock<Option<tauri::LogicalPosition<f64>>>> =
     OnceLock::new();
+
+#[cfg(target_os = "windows")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WindowsMaximizeShowWaitAction {
+    Ready,
+    Sleep(Duration),
+    TimedOut,
+}
+
+#[cfg(target_os = "windows")]
+fn windows_maximize_show_wait_action(
+    is_maximized: Option<bool>,
+    elapsed: Duration,
+) -> WindowsMaximizeShowWaitAction {
+    if is_maximized == Some(true) && elapsed >= WINDOWS_STARTUP_MAXIMIZE_SHOW_WAIT_MIN {
+        return WindowsMaximizeShowWaitAction::Ready;
+    }
+
+    if elapsed >= WINDOWS_STARTUP_MAXIMIZE_SHOW_WAIT_MAX {
+        return WindowsMaximizeShowWaitAction::TimedOut;
+    }
+
+    let target_wait = if is_maximized == Some(true) {
+        WINDOWS_STARTUP_MAXIMIZE_SHOW_WAIT_MIN
+    } else {
+        WINDOWS_STARTUP_MAXIMIZE_SHOW_WAIT_MAX
+    };
+    WindowsMaximizeShowWaitAction::Sleep(
+        target_wait
+            .saturating_sub(elapsed)
+            .min(WINDOWS_STARTUP_MAXIMIZE_SHOW_WAIT_POLL),
+    )
+}
+
+#[cfg(target_os = "windows")]
+fn read_windows_maximize_state(
+    window: &tauri::WebviewWindow,
+    logged_error: &mut bool,
+) -> Option<bool> {
+    match window.is_maximized() {
+        Ok(is_maximized) => Some(is_maximized),
+        Err(error) => {
+            if !*logged_error {
+                warn!(
+                    "Failed to read main window maximize state during startup show wait: {}",
+                    error
+                );
+                *logged_error = true;
+            }
+            None
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn wait_for_windows_maximize_before_show(window: &tauri::WebviewWindow) -> &'static str {
+    let started_at = Instant::now();
+    let mut logged_error = false;
+
+    loop {
+        match windows_maximize_show_wait_action(
+            read_windows_maximize_state(window, &mut logged_error),
+            started_at.elapsed(),
+        ) {
+            WindowsMaximizeShowWaitAction::Ready => return "ready",
+            WindowsMaximizeShowWaitAction::TimedOut => return "timeout",
+            WindowsMaximizeShowWaitAction::Sleep(duration) => std::thread::sleep(duration),
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+async fn wait_for_windows_maximize_before_show_async(
+    window: &tauri::WebviewWindow,
+) -> &'static str {
+    let started_at = Instant::now();
+    let mut logged_error = false;
+
+    loop {
+        match windows_maximize_show_wait_action(
+            read_windows_maximize_state(window, &mut logged_error),
+            started_at.elapsed(),
+        ) {
+            WindowsMaximizeShowWaitAction::Ready => return "ready",
+            WindowsMaximizeShowWaitAction::TimedOut => return "timeout",
+            WindowsMaximizeShowWaitAction::Sleep(duration) => tokio::time::sleep(duration).await,
+        }
+    }
+}
 
 fn agent_companion_window_ops() -> &'static tokio::sync::Mutex<()> {
     AGENT_COMPANION_WINDOW_OPS.get_or_init(|| tokio::sync::Mutex::new(()))
@@ -99,6 +198,7 @@ fn clamp_agent_companion_window_position(
 #[derive(Debug, Clone)]
 pub struct ThemeConfig {
     pub id: String,
+    pub selection_id: Option<String>,
     pub bg_primary: String,
     pub bg_secondary: String,
     pub bg_scene: String,
@@ -110,8 +210,9 @@ pub struct ThemeConfig {
 
 impl Default for ThemeConfig {
     fn default() -> Self {
-        Self::get_builtin_theme("bitfun-light").unwrap_or_else(|| Self {
+        let mut theme = Self::get_builtin_theme("bitfun-light").unwrap_or_else(|| Self {
             id: "bitfun-light".to_string(),
+            selection_id: None,
             bg_primary: "#f3f3f5".to_string(),
             bg_secondary: "#ffffff".to_string(),
             bg_scene: "#ffffff".to_string(),
@@ -119,7 +220,9 @@ impl Default for ThemeConfig {
             text_primary: "#1e293b".to_string(),
             text_muted: "#64748b".to_string(),
             accent_color: "#64748b".to_string(),
-        })
+        });
+        theme.selection_id = None;
+        theme
     }
 }
 
@@ -128,6 +231,7 @@ impl ThemeConfig {
         match theme_id {
             "bitfun-slate" => Some(Self {
                 id: theme_id.to_string(),
+                selection_id: Some(theme_id.to_string()),
                 bg_primary: "#1a1c1e".to_string(),
                 bg_secondary: "#1a1c1e".to_string(),
                 bg_scene: "#1d2023".to_string(),
@@ -138,6 +242,7 @@ impl ThemeConfig {
             }),
             "bitfun-dark" => Some(Self {
                 id: theme_id.to_string(),
+                selection_id: Some(theme_id.to_string()),
                 bg_primary: "#121214".to_string(),
                 bg_secondary: "#18181a".to_string(),
                 bg_scene: "#16161a".to_string(),
@@ -148,6 +253,7 @@ impl ThemeConfig {
             }),
             "bitfun-midnight" => Some(Self {
                 id: theme_id.to_string(),
+                selection_id: Some(theme_id.to_string()),
                 bg_primary: "#2b2d30".to_string(),
                 bg_secondary: "#1e1f22".to_string(),
                 bg_scene: "#27292c".to_string(),
@@ -158,6 +264,7 @@ impl ThemeConfig {
             }),
             "bitfun-cyber" => Some(Self {
                 id: theme_id.to_string(),
+                selection_id: Some(theme_id.to_string()),
                 bg_primary: "#101010".to_string(),
                 bg_secondary: "#151515".to_string(),
                 bg_scene: "#141414".to_string(),
@@ -168,6 +275,7 @@ impl ThemeConfig {
             }),
             "bitfun-tokyo-night" => Some(Self {
                 id: theme_id.to_string(),
+                selection_id: Some(theme_id.to_string()),
                 bg_primary: "#1a1b26".to_string(),
                 bg_secondary: "#16161e".to_string(),
                 bg_scene: "#1a1b26".to_string(),
@@ -178,6 +286,7 @@ impl ThemeConfig {
             }),
             "bitfun-china-night" => Some(Self {
                 id: theme_id.to_string(),
+                selection_id: Some(theme_id.to_string()),
                 bg_primary: "#1a1814".to_string(),
                 bg_secondary: "#141210".to_string(),
                 bg_scene: "#1e1c17".to_string(),
@@ -188,6 +297,7 @@ impl ThemeConfig {
             }),
             "bitfun-light" => Some(Self {
                 id: theme_id.to_string(),
+                selection_id: Some(theme_id.to_string()),
                 bg_primary: "#f3f3f5".to_string(),
                 bg_secondary: "#ffffff".to_string(),
                 bg_scene: "#ffffff".to_string(),
@@ -198,6 +308,7 @@ impl ThemeConfig {
             }),
             "bitfun-china-style" => Some(Self {
                 id: theme_id.to_string(),
+                selection_id: Some(theme_id.to_string()),
                 bg_primary: "#faf8f0".to_string(),
                 bg_secondary: "#f5f3e8".to_string(),
                 bg_scene: "#fdfcf6".to_string(),
@@ -251,7 +362,10 @@ impl ThemeConfig {
         let resolved_id = Self::resolve_builtin_theme_id(theme_id);
 
         match Self::get_builtin_theme(resolved_id) {
-            Some(config) => config,
+            Some(mut config) => {
+                config.selection_id = Some(theme_id.to_string());
+                config
+            }
             None => {
                 warn!("Unknown theme ID: {}, using default theme", theme_id);
                 default
@@ -265,19 +379,92 @@ impl ThemeConfig {
         "system"
     }
 
+    fn load_startup_locale_from_config() -> String {
+        let path_manager = match try_get_path_manager_arc() {
+            Ok(pm) => pm,
+            Err(_) => return "zh-CN".to_string(),
+        };
+        let config_file = path_manager.app_config_file();
+        let Ok(config_content) = std::fs::read_to_string(config_file) else {
+            return "zh-CN".to_string();
+        };
+        let Ok(config_value) = serde_json::from_str::<serde_json::Value>(&config_content) else {
+            return "zh-CN".to_string();
+        };
+        config_value
+            .pointer("/app/language")
+            .and_then(|value| value.as_str())
+            .or_else(|| {
+                config_value
+                    .pointer("/i18n/currentLanguage")
+                    .and_then(|value| value.as_str())
+            })
+            .unwrap_or("zh-CN")
+            .to_string()
+    }
+
+    fn startup_messages_json(locale: &str) -> String {
+        let messages = match locale {
+            "en-US" | "en" => serde_json::json!({
+                "loadingApp": "Starting BitFun...",
+                "minimize": "Minimize",
+                "maximize": "Maximize",
+                "close": "Close",
+                "petLoading": "Loading companion..."
+            }),
+            "zh-TW" | "zh-Hant-TW" => serde_json::json!({
+                "loadingApp": "正在啟動 BitFun...",
+                "minimize": "最小化",
+                "maximize": "最大化",
+                "close": "關閉",
+                "petLoading": "正在載入助手..."
+            }),
+            _ => serde_json::json!({
+                "loadingApp": "正在启动 BitFun...",
+                "minimize": "最小化",
+                "maximize": "最大化",
+                "close": "关闭",
+                "petLoading": "正在加载助手..."
+            }),
+        };
+        messages.to_string()
+    }
+
     pub fn generate_init_script(&self, startup_trace_id: &str) -> String {
         let theme_type = if self.is_light { "light" } else { "dark" };
+        let startup_locale = Self::load_startup_locale_from_config();
+        let startup_locale_json =
+            serde_json::to_string(&startup_locale).unwrap_or_else(|_| "\"zh-CN\"".to_string());
+        let startup_messages_json = Self::startup_messages_json(&startup_locale);
+        let show_startup_window_controls = !cfg!(target_os = "macos");
         let startup_trace_id_json = serde_json::to_string(startup_trace_id)
             .unwrap_or_else(|_| "\"desktop-unknown\"".to_string());
+        let bootstrap_log_level_json = serde_json::to_string(crate::logging::level_to_str(
+            crate::logging::current_runtime_log_level(),
+        ))
+        .unwrap_or_else(|_| "\"warn\"".to_string());
         let perf_trace_enabled = cfg!(debug_assertions)
             || ((cfg!(feature = "devtools") || std::env::var_os("BITFUN_PERF_TRACE").is_some())
                 && std::env::var_os("BITFUN_WEBDRIVER_PORT").is_some());
+        let bootstrap_theme_id_json =
+            serde_json::to_string(&self.id).unwrap_or_else(|_| "\"bitfun-light\"".to_string());
+        let bootstrap_theme_selection_json = self
+            .selection_id
+            .as_ref()
+            .and_then(|selection| serde_json::to_string(selection).ok())
+            .unwrap_or_else(|| "null".to_string());
 
         format!(
             r#"
             (function() {{
                 window.__BITFUN_STARTUP_TRACE_ID__ = {startup_trace_id_json};
                 window.__BITFUN_PERF_TRACE_ENABLED__ = {perf_trace_enabled};
+                window.__BITFUN_BOOTSTRAP_LOG_LEVEL__ = {bootstrap_log_level_json};
+                window.__BITFUN_BOOTSTRAP_LOCALE__ = {startup_locale_json};
+                window.__BITFUN_BOOTSTRAP_MESSAGES__ = {startup_messages_json};
+                window.__BITFUN_SHOW_STARTUP_WINDOW_CONTROLS__ = {show_startup_window_controls};
+                window.__BITFUN_BOOTSTRAP_THEME_ID__ = {bootstrap_theme_id_json};
+                window.__BITFUN_BOOTSTRAP_THEME_SELECTION__ = {bootstrap_theme_selection_json};
                 function applyTheme() {{
                     var root = document.documentElement;
                     if (!root) return false;
@@ -299,7 +486,7 @@ impl ThemeConfig {
                     if (document.body) {{
                         document.body.style.backgroundColor = '{bg_primary}';
                     }}
-
+                    
                     return true;
                 }}
                 
@@ -322,6 +509,10 @@ impl ThemeConfig {
             text_primary = self.text_primary,
             startup_trace_id_json = startup_trace_id_json,
             perf_trace_enabled = perf_trace_enabled,
+            bootstrap_log_level_json = bootstrap_log_level_json,
+            startup_locale_json = startup_locale_json,
+            startup_messages_json = startup_messages_json,
+            show_startup_window_controls = show_startup_window_controls,
         )
     }
 
@@ -334,11 +525,21 @@ impl ThemeConfig {
     }
 }
 
-pub fn create_main_window(app_handle: &tauri::AppHandle, startup_trace_id: &str) {
+pub fn create_main_window(
+    app_handle: &tauri::AppHandle,
+    startup_trace_id: &str,
+    startup_trace: &DesktopStartupTrace,
+) {
     let total_started_at = Instant::now();
     let theme = ThemeConfig::load_from_config();
     let bg_color = theme.to_tauri_color();
     let init_script = theme.generate_init_script(startup_trace_id);
+    startup_trace.record_step(
+        "native_step_end",
+        "native_window",
+        "prepare_theme",
+        total_started_at.elapsed().as_millis(),
+    );
     debug!(
         "Main window creation step completed: step=prepare_theme duration_ms={}",
         total_started_at.elapsed().as_millis()
@@ -404,6 +605,7 @@ pub fn create_main_window(app_handle: &tauri::AppHandle, startup_trace_id: &str)
     let build_started_at = Instant::now();
     match builder.build() {
         Ok(window) => {
+            startup_trace.record_elapsed_step("native_window", "webview_build", build_started_at);
             debug!(
                 "Main window creation step completed: step=build url_kind={} duration_ms={} total_duration_ms={}",
                 main_url_kind,
@@ -420,7 +622,7 @@ pub fn create_main_window(app_handle: &tauri::AppHandle, startup_trace_id: &str)
                 }
             }
 
-            show_main_window_for_startup(&window, total_started_at);
+            show_main_window_for_startup(&window, total_started_at, startup_trace);
         }
         Err(e) => {
             error!(
@@ -432,20 +634,37 @@ pub fn create_main_window(app_handle: &tauri::AppHandle, startup_trace_id: &str)
     }
 }
 
-fn show_main_window_for_startup(window: &tauri::WebviewWindow, total_started_at: Instant) {
+fn show_main_window_for_startup(
+    window: &tauri::WebviewWindow,
+    total_started_at: Instant,
+    startup_trace: &DesktopStartupTrace,
+) {
     #[cfg(target_os = "windows")]
     {
         let step_started_at = Instant::now();
         if let Err(error) = window.maximize() {
             warn!("Failed to maximize main window during startup: {}", error);
         } else {
+            startup_trace.record_elapsed_step("native_window", "windows_maximize", step_started_at);
             debug!(
                 "Main window startup show step completed: step=maximize duration_ms={} since_create_start_ms={}",
                 step_started_at.elapsed().as_millis(),
                 total_started_at.elapsed().as_millis()
             );
         }
-        std::thread::sleep(std::time::Duration::from_millis(150));
+        let show_delay_started_at = Instant::now();
+        let show_wait_outcome = wait_for_windows_maximize_before_show(window);
+        startup_trace.record_elapsed_step(
+            "native_window",
+            "windows_show_after_maximize_wait",
+            show_delay_started_at,
+        );
+        debug!(
+            "Main window startup show step completed: step=wait_for_maximize_state outcome={} duration_ms={} since_create_start_ms={}",
+            show_wait_outcome,
+            show_delay_started_at.elapsed().as_millis(),
+            total_started_at.elapsed().as_millis()
+        );
     }
 
     #[cfg(not(target_env = "ohos"))]
@@ -455,6 +674,7 @@ fn show_main_window_for_startup(window: &tauri::WebviewWindow, total_started_at:
             warn!("Failed to show main window during startup: {}", error);
             return;
         }
+        startup_trace.record_elapsed_step("native_window", "show_window", show_started_at);
         debug!(
         "Main window startup show step completed: step=show duration_ms={} since_create_start_ms={}",
         show_started_at.elapsed().as_millis(),
@@ -466,12 +686,12 @@ fn show_main_window_for_startup(window: &tauri::WebviewWindow, total_started_at:
             warn!("Failed to focus main window during startup: {}", error);
             return;
         }
+        startup_trace.record_elapsed_step("native_window", "focus_window", focus_started_at);
         debug!(
         "Main window startup show step completed: step=focus duration_ms={} since_create_start_ms={}",
         focus_started_at.elapsed().as_millis(),
         total_started_at.elapsed().as_millis()
     );
-
     }
 }
 
@@ -640,7 +860,6 @@ fn resize_agent_companion_window(
                 remember_agent_companion_window_position(next_position);
             }
         }
-        warn!("Failed to position Agent companion window")
     }
 }
 
@@ -649,9 +868,9 @@ pub async fn show_agent_companion_desktop_pet(app: tauri::AppHandle) -> Result<(
     #[cfg(not(target_env = "ohos"))]
     {
         let _guard = agent_companion_window_ops().lock().await;
-    let started_at = Instant::now();
-    let _guard = agent_companion_window_ops().lock().await;
-    debug!("Agent companion window show requested");
+        let started_at = Instant::now();
+        let _guard = agent_companion_window_ops().lock().await;
+        debug!("Agent companion window show requested");
 
         // Reuse any existing window: never destroy here. A previous implementation destroyed
         // whenever `is_visible` was false, which raced with another `show` that had built the
@@ -666,49 +885,13 @@ pub async fn show_agent_companion_desktop_pet(app: tauri::AppHandle) -> Result<(
                 error!("Failed to show Agent companion window: {}", e);
                 format!("Failed to show Agent companion window: {}", e)
             })?;
+            debug!(
+                "Agent companion window reused: total_duration_ms={}",
+                started_at.elapsed().as_millis()
+            );
             return Ok(());
-        }
-    // Reuse any existing window: never destroy here. A previous implementation destroyed
-    // whenever `is_visible` was false, which raced with another `show` that had built the
-    // window but not called `show()` yet (or with `hide`), producing duplicate pets or
-    // stuck windows.
-    if let Some(window) = app.get_webview_window(AGENT_COMPANION_WINDOW_LABEL) {
-        if let Err(e) = window.unminimize() {
-            warn!("Failed to unminimize Agent companion window: {}", e);
-        }
-        position_agent_companion_window(&app, &window);
-        window.show().map_err(|e| {
-            error!("Failed to show Agent companion window: {}", e);
-            format!("Failed to show Agent companion window: {}", e)
-        })?;
-        debug!(
-            "Agent companion window reused: total_duration_ms={}",
-            started_at.elapsed().as_millis()
-        );
-        return Ok(());
     }
 
-        let url = app_url("?bitfunWindow=agent-companion");
-        let mut builder = tauri::WebviewWindowBuilder::new(&app, AGENT_COMPANION_WINDOW_LABEL, url)
-            .title("BitFun Agent Companion")
-            .inner_size(
-                AGENT_COMPANION_WINDOW_MIN_SIZE,
-                AGENT_COMPANION_WINDOW_MIN_SIZE,
-            )
-            .max_inner_size(
-                AGENT_COMPANION_WINDOW_MAX_WIDTH,
-                AGENT_COMPANION_WINDOW_MAX_HEIGHT,
-            )
-            .min_inner_size(1.0, 1.0)
-            .resizable(false)
-            .decorations(false)
-            .transparent(true)
-            .always_on_top(true)
-            .skip_taskbar(true)
-            .shadow(false)
-            .visible(false)
-            .accept_first_mouse(true)
-            .background_color(tauri::window::Color(0, 0, 0, 0));
     let url = app_url("?bitfunWindow=agent-companion");
     let mut builder = tauri::WebviewWindowBuilder::new(&app, AGENT_COMPANION_WINDOW_LABEL, url)
         .title("BitFun Agent Companion")
@@ -746,12 +929,8 @@ pub async fn show_agent_companion_desktop_pet(app: tauri::AppHandle) -> Result<(
             }
         });
 
-        builder = builder.disable_drag_drop_handler();
+    builder = builder.disable_drag_drop_handler();
 
-        let window = builder.build().map_err(|e| {
-            error!("Failed to create Agent companion window: {}", e);
-            format!("Failed to create Agent companion window: {}", e)
-        })?;
     let build_started_at = Instant::now();
     let window = builder.build().map_err(|e| {
         error!(
@@ -767,12 +946,8 @@ pub async fn show_agent_companion_desktop_pet(app: tauri::AppHandle) -> Result<(
         started_at.elapsed().as_millis()
     );
 
-        position_agent_companion_window(&app, &window);
+    position_agent_companion_window(&app, &window);
 
-        window.show().map_err(|e| {
-            error!("Failed to show Agent companion window: {}", e);
-            format!("Failed to show Agent companion window: {}", e)
-        })?;
     let show_started_at = Instant::now();
     window.show().map_err(|e| {
         error!("Failed to show Agent companion window: {}", e);
@@ -820,7 +995,6 @@ pub async fn resize_agent_companion_desktop_pet(
         }
         Ok(())
     }
-
 }
 
 #[tauri::command]
@@ -852,23 +1026,40 @@ pub async fn hide_agent_companion_desktop_pet(app: tauri::AppHandle) -> Result<(
 pub async fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
     #[cfg(not(target_env = "ohos"))]
     {
+        let total_started_at = Instant::now();
         if let Some(main_window) = app.get_webview_window("main") {
             #[cfg(target_os = "windows")]
             {
                 // Work around Windows startup flicker: avoid creating the native window
                 // in maximized mode, and maximize it right before showing instead.
+                let step_started_at = Instant::now();
                 main_window.maximize().map_err(|e| {
                     error!("Failed to maximize main window: {}", e);
                     format!("Failed to maximize main window: {}", e)
                 })?;
+                debug!(
+                "Main window show step completed: step=maximize duration_ms={}",
+                step_started_at.elapsed().as_millis()
+            );
 
-                tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+                let wait_started_at = Instant::now();
+                let show_wait_outcome = wait_for_windows_maximize_before_show_async(&main_window).await;
+                debug!(
+                "Main window show step completed: step=wait_for_maximize_state outcome={} duration_ms={}",
+                show_wait_outcome,
+                wait_started_at.elapsed().as_millis()
+            );
             }
 
+            let step_started_at = Instant::now();
             main_window.show().map_err(|e| {
                 error!("Failed to show main window: {}", e);
                 format!("Failed to show main window: {}", e)
             })?;
+            debug!(
+            "Main window show step completed: step=show duration_ms={}",
+            step_started_at.elapsed().as_millis()
+        );
 
             #[cfg(target_os = "macos")]
             {
@@ -876,19 +1067,71 @@ pub async fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
                 crate::mark_main_window_hidden_on_macos(false);
             }
 
+            let step_started_at = Instant::now();
             main_window.set_focus().map_err(|e| {
                 error!("Failed to focus main window: {}", e);
                 format!("Failed to focus main window: {}", e)
             })?;
+            debug!(
+            "Main window show step completed: step=focus duration_ms={}",
+            step_started_at.elapsed().as_millis()
+        );
         } else {
             error!("Main window not found");
             return Err("Main window not found".to_string());
         }
 
+        debug!(
+        "Main window shown: total_duration_ms={}",
+        total_started_at.elapsed().as_millis()
+    );
         Ok(())
     }
+
     #[cfg(target_env = "ohos")]
     {
         Err("Failed to show main window".to_string())
+    }
+
+
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_maximize_show_wait_releases_when_maximized() {
+        assert_eq!(
+            windows_maximize_show_wait_action(Some(true), Duration::ZERO),
+            WindowsMaximizeShowWaitAction::Sleep(WINDOWS_STARTUP_MAXIMIZE_SHOW_WAIT_POLL)
+        );
+        assert_eq!(
+            windows_maximize_show_wait_action(Some(true), WINDOWS_STARTUP_MAXIMIZE_SHOW_WAIT_MIN),
+            WindowsMaximizeShowWaitAction::Ready
+        );
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_maximize_show_wait_polls_until_max_wait() {
+        assert_eq!(
+            windows_maximize_show_wait_action(Some(false), Duration::from_millis(20)),
+            WindowsMaximizeShowWaitAction::Sleep(WINDOWS_STARTUP_MAXIMIZE_SHOW_WAIT_POLL)
+        );
+        assert_eq!(
+            windows_maximize_show_wait_action(None, Duration::from_millis(148)),
+            WindowsMaximizeShowWaitAction::Sleep(Duration::from_millis(2))
+        );
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_maximize_show_wait_times_out_at_original_bound() {
+        assert_eq!(
+            windows_maximize_show_wait_action(Some(false), WINDOWS_STARTUP_MAXIMIZE_SHOW_WAIT_MAX),
+            WindowsMaximizeShowWaitAction::TimedOut
+        );
     }
 }

@@ -248,7 +248,7 @@ describe('deepReviewContinuation', () => {
           status: 'error',
           userMessage: {
             id: 'user-1',
-            content: 'Run a deep review for src/crates/core/src/lib.rs',
+            content: 'Run a deep review for src/crates/assembly/core/src/lib.rs',
             timestamp: 1,
           },
           startTime: 1,

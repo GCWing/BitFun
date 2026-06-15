@@ -51,10 +51,25 @@
     color: var(--color-text-muted);
     text-transform: uppercase;
     letter-spacing: 0.04em;
+    width: 100%;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    transition: background var(--motion-fast) var(--easing-standard);
+
+    &:hover {
+      background: var(--element-bg-hover);
+    }
+  }
+
+  &__group-chevron {
+    flex-shrink: 0;
+    color: var(--color-text-muted);
+    opacity: 0.6;
   }
 
   &__group-name {
-    font-weight: var(--font-weight-medium, 500);
+    font-weight: var(--font-weight-medium);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -71,7 +86,7 @@
     border-radius: 9px;
     background: var(--element-bg-soft);
     font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-medium, 500);
+    font-weight: var(--font-weight-medium);
     color: var(--color-text-secondary);
   }
 
@@ -106,7 +121,7 @@
 
   &__row-name {
     font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium, 500);
+    font-weight: var(--font-weight-medium);
     color: var(--color-text-primary);
     line-height: 1.4;
     overflow: hidden;
@@ -131,16 +146,16 @@
 
   &__delete-btn {
     &:hover {
-      color: var(--color-error, #ef4444);
+      color: var(--color-error);
     }
   }
 
   &__delete-all-btn {
-    color: var(--color-error, #ef4444);
+    color: var(--color-error);
 
     &:hover {
-      color: var(--color-error, #ef4444);
-      background: var(--color-error-bg, rgba(239, 68, 68, 0.1));
+      color: var(--color-error);
+      background: var(--color-error-bg);
     }
   }
 

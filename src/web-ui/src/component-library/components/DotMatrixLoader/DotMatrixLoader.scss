@@ -41,7 +41,7 @@ $matrix-epsilon: 0.0001%;
   gap: var(--dm-gap, 2px);
   width: calc(3 * var(--dm-cell, 6px) + 2 * var(--dm-gap, 2px));
   height: calc(3 * var(--dm-cell, 6px) + 2 * var(--dm-gap, 2px));
-  color: var(--text-secondary, rgba(107, 114, 128, 0.85));
+  color: var(--text-secondary);
 
   &--small {
     --dm-cell: 4px;

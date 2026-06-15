@@ -51,7 +51,7 @@ $_editor-padding-desktop: 32px;
     margin-bottom: $size-gap-4;
     box-shadow: 
       0 0 20px rgba(96, 165, 250, 0.3),
-      0 0 40px rgba(96, 165, 250, 0.15);
+      0 0 40px var(--color-accent-200);
   }
   
   &__loading-text {

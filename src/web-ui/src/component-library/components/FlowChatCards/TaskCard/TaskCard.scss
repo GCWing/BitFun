@@ -52,7 +52,7 @@
 
 
   &__description {
-    color: #ffffff;
+    color: var(--color-static-white);
     flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -115,7 +115,7 @@
     }
 
     svg:first-child {
-      color: #7c3aed;
+      color: var(--color-purple-600);
     }
 
     span {
@@ -159,7 +159,7 @@
     background: rgba(124, 58, 237, 0.05);
     border: 1px solid rgba(124, 58, 237, 0.2);
     border-radius: 4px;
-    color: #7c3aed;
+    color: var(--color-purple-600);
     font-size: 13px;
   }
 

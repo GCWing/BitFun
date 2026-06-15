@@ -5,10 +5,24 @@
 import { browser, $, $$ } from '@wdio/globals';
 import * as path from 'path';
 
+declare global {
+  interface Window {
+    __TAURI__?: {
+      core?: {
+        invoke?: (command: string, args?: unknown) => Promise<unknown>;
+      };
+    };
+  }
+}
+
 export interface WorkspaceState {
   currentWorkspacePath: string | null;
   openedWorkspacePaths: string[];
   workspaceLabels: string[];
+}
+
+export interface WorkspaceReadyOptions {
+  requireWorkspaceLabel?: boolean;
 }
 
 /**
@@ -16,6 +30,17 @@ export interface WorkspaceState {
  */
 export async function openWorkspaceThroughFrontend(workspacePath: string): Promise<void> {
   await browser.execute(async (targetWorkspacePath: string) => {
+    const invoke = window.__TAURI__?.core?.invoke;
+    if (typeof invoke === 'function') {
+      const workspace = await invoke('open_workspace', { request: { path: targetWorkspacePath } }) as {
+        id?: string;
+      };
+      if (workspace?.id) {
+        await invoke('set_active_workspace', { request: { workspaceId: workspace.id } });
+      }
+      return;
+    }
+
     const { workspaceManager } = await import('/src/infrastructure/services/business/workspaceManager.ts');
     await workspaceManager.openWorkspace(targetWorkspacePath);
   }, workspacePath);
@@ -26,6 +51,25 @@ export async function openWorkspaceThroughFrontend(workspacePath: string): Promi
  */
 export async function getWorkspaceState(): Promise<WorkspaceState> {
   return browser.execute(async () => {
+    const invoke = window.__TAURI__?.core?.invoke;
+    if (typeof invoke === 'function') {
+      const currentWorkspace = await invoke('get_current_workspace', { request: {} }) as {
+        rootPath?: string;
+      } | null;
+      const openedWorkspaces = await invoke('get_opened_workspaces', { request: {} }) as Array<{
+        rootPath?: string;
+      }>;
+      const workspaceLabels = Array.from(document.querySelectorAll('.bitfun-nav-panel__workspace-item-label'))
+        .map(element => element.textContent?.trim() || '')
+        .filter(Boolean);
+
+      return {
+        currentWorkspacePath: currentWorkspace?.rootPath || null,
+        openedWorkspacePaths: openedWorkspaces.map(workspace => workspace.rootPath || '').filter(Boolean),
+        workspaceLabels,
+      };
+    }
+
     const { globalStateAPI } = await import('/src/shared/types/global-state.ts');
     const currentWorkspace = await globalStateAPI.getCurrentWorkspace();
     const openedWorkspaces = await globalStateAPI.getOpenedWorkspaces();
@@ -42,18 +86,23 @@ export async function getWorkspaceState(): Promise<WorkspaceState> {
 }
 
 /**
- * Wait until both frontend state and nav DOM reflect the target workspace.
+ * Wait until frontend state reflects the target workspace.
+ * Most flows also require the nav DOM label; perf flows can opt out when the
+ * measurement only needs an active/opened workspace and must not depend on nav
+ * expansion rendering.
  */
 export async function waitForWorkspaceReady(
   workspacePath: string,
   projectName: string = path.basename(workspacePath),
   timeout: number = 15000,
+  options: WorkspaceReadyOptions = {},
 ): Promise<WorkspaceState> {
+  const requireWorkspaceLabel = options.requireWorkspaceLabel ?? true;
   await browser.waitUntil(async () => {
     const state = await getWorkspaceState();
     return state.currentWorkspacePath === workspacePath
       && state.openedWorkspacePaths.includes(workspacePath)
-      && state.workspaceLabels.some(label => label.includes(projectName));
+      && (!requireWorkspaceLabel || state.workspaceLabels.some(label => label.includes(projectName)));
   }, {
     timeout,
     interval: 500,
@@ -68,10 +117,22 @@ export async function waitForWorkspaceReady(
  */
 export async function openWorkspace(
   workspacePath: string = process.env.E2E_TEST_WORKSPACE || process.cwd(),
+  options: WorkspaceReadyOptions = {},
 ): Promise<boolean> {
   try {
+    const initialState = await getWorkspaceState();
+    const projectName = path.basename(workspacePath);
+    const requireWorkspaceLabel = options.requireWorkspaceLabel ?? true;
+    if (
+      initialState.currentWorkspacePath === workspacePath
+      && initialState.openedWorkspacePaths.includes(workspacePath)
+      && (!requireWorkspaceLabel || initialState.workspaceLabels.some(label => label.includes(projectName)))
+    ) {
+      return true;
+    }
+
     await openWorkspaceThroughFrontend(workspacePath);
-    await waitForWorkspaceReady(workspacePath);
+    await waitForWorkspaceReady(workspacePath, projectName, 15000, options);
     return true;
   } catch (error) {
     console.error('[WorkspaceHelper] Failed to open workspace through frontend state:', error);

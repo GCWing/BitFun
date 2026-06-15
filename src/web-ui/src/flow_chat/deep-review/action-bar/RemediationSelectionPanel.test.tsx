@@ -5,12 +5,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RemediationSelectionPanel } from './RemediationSelectionPanel';
 import type { ReviewRemediationItem } from '../../utils/codeReviewRemediation';
 
+const messages: Record<string, string> = {
+  'deepReviewActionBar.remediationStatus.fixed': 'Fixed',
+  'deepReviewActionBar.remediationStatus.fixing': 'Fixing',
+  'reviewActionBar.needsDecisionTag': 'Decision',
+  'toolCards.codeReview.remediationActions.collapseOptions': 'Hide options',
+  'toolCards.codeReview.remediationActions.expandOptions': 'Show options',
+  'toolCards.codeReview.remediationActions.noSelectionHint': 'Select at least one remediation item to start fixing.',
+  'toolCards.codeReview.remediationActions.recommended': 'recommended',
+  'toolCards.codeReview.remediationActions.selectionCount': '{{selected}}/{{total}} selected',
+  'toolCards.codeReview.remediationActions.ungrouped': 'Other',
+};
+
+function t(key: string, options?: Record<string, unknown> & { defaultValue?: string }): string {
+  const template = messages[key] ?? options?.defaultValue ?? key;
+  return template.replace(/{{(\w+)}}/g, (_match, token: string) => String(options?.[token] ?? _match));
+}
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (_key: string, options?: Record<string, unknown> & { defaultValue?: string }) => {
-      const template = options?.defaultValue ?? _key;
-      return template.replace(/{{(\w+)}}/g, (_match, token: string) => String(options?.[token] ?? _match));
-    },
+    t,
   }),
 }));
 

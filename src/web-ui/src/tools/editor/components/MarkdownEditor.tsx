@@ -690,11 +690,11 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
               className="bitfun-markdown-editor__toolbar-button bitfun-markdown-editor__copy-button"
               onClick={() => void handleCopyMarkdown()}
               aria-label={copied
-                ? t('editor.markdownEditor.copiedMarkdown', { defaultValue: 'Copied Markdown' })
-                : t('editor.markdownEditor.copyMarkdown', { defaultValue: 'Copy Markdown' })}
+                ? t('editor.markdownEditor.copiedMarkdown')
+                : t('editor.markdownEditor.copyMarkdown')}
               title={copied
-                ? t('editor.markdownEditor.copiedMarkdown', { defaultValue: 'Copied Markdown' })
-                : t('editor.markdownEditor.copyMarkdown', { defaultValue: 'Copy Markdown' })}
+                ? t('editor.markdownEditor.copiedMarkdown')
+                : t('editor.markdownEditor.copyMarkdown')}
             >
               {copied ? <Check size={13} /> : <Copy size={13} />}
             </Button>
@@ -798,11 +798,11 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
             className="bitfun-markdown-editor__toolbar-button bitfun-markdown-editor__copy-button"
             onClick={() => void handleCopyMarkdown()}
             aria-label={copied
-              ? t('editor.markdownEditor.copiedMarkdown', { defaultValue: 'Copied Markdown' })
-              : t('editor.markdownEditor.copyMarkdown', { defaultValue: 'Copy Markdown' })}
+              ? t('editor.markdownEditor.copiedMarkdown')
+              : t('editor.markdownEditor.copyMarkdown')}
             title={copied
-              ? t('editor.markdownEditor.copiedMarkdown', { defaultValue: 'Copied Markdown' })
-              : t('editor.markdownEditor.copyMarkdown', { defaultValue: 'Copy Markdown' })}
+              ? t('editor.markdownEditor.copiedMarkdown')
+              : t('editor.markdownEditor.copyMarkdown')}
           >
             {copied ? <Check size={13} /> : <Copy size={13} />}
           </Button>

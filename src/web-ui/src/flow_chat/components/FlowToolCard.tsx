@@ -4,7 +4,8 @@
  */
 
 import React from 'react';
-import { getToolCardConfig, getToolCardComponent } from '../tool-cards';
+import { getToolCardComponent } from '../tool-cards';
+import { getToolCardConfig } from '../tool-cards/toolCardMetadata';
 import type { FlowToolItem, ToolCardDisplayContext } from '../types/flow-chat';
 import { createLogger } from '@/shared/utils/logger';
 import { FlowToolCardErrorBoundary } from './FlowToolCardErrorBoundary';
@@ -94,6 +95,8 @@ export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
   // Compare streaming parameters and progress messages to avoid stale renders.
   const prevProgress = (prevProps.toolItem as any)._progressMessage;
   const nextProgress = (nextProps.toolItem as any)._progressMessage;
+  const prevProgressLogs = (prevProps.toolItem as any)._progressLogs;
+  const nextProgressLogs = (nextProps.toolItem as any)._progressLogs;
   
   return (
     prevProps.toolItem.id === nextProps.toolItem.id &&
@@ -109,6 +112,7 @@ export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
     prevProps.toolItem.subagentModelAlias === nextProps.toolItem.subagentModelAlias &&
     prevProps.displayContext === nextProps.displayContext &&
     prevProgress === nextProgress &&
+    prevProgressLogs === nextProgressLogs &&
     prevProps.toolItem.partialParams === nextProps.toolItem.partialParams &&
     prevProps.toolItem.toolResult === nextProps.toolItem.toolResult
   );

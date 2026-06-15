@@ -58,7 +58,7 @@
     gap: 4px;
     height: 22px;
     padding: 0 8px;
-    background: var(--element-bg-soft, var(--color-bg-secondary));
+    background: var(--element-bg-soft);
     border: 1px solid var(--border-base);
     color: var(--color-text-secondary);
     cursor: pointer;
@@ -67,7 +67,7 @@
     transition: all 0.15s ease;
 
     &:hover {
-      background: var(--element-bg-base, var(--element-bg-medium));
+      background: var(--element-bg-base);
       border-color: var(--border-base);
       color: var(--color-text-primary);
     }
@@ -154,9 +154,9 @@
     }
 
     &.is-active {
-      background: var(--group-color, var(--color-accent-500, var(--color-primary)));
+      background: var(--group-color, var(--color-accent-500));
       color: var(--color-text-primary);
-      box-shadow: 0 1px 3px var(--color-shadow, rgba(0, 0, 0, 0.2));
+      box-shadow: 0 1px 3px var(--color-shadow, var(--color-overlay-black-20));
 
       .canvas-mission-control__group-filter-indicator {
         opacity: 0;
@@ -170,7 +170,7 @@
       width: 6px;
       height: 6px;
       border-radius: 50%;
-      background: var(--group-color, var(--color-accent-500, var(--color-primary)));
+      background: var(--group-color, var(--color-accent-500));
       opacity: 0.6;
       transition: opacity 0.15s ease;
     }
@@ -245,7 +245,7 @@
       padding: 0 4px;
       font-size: 9px;
       font-family: inherit;
-      background: var(--element-bg-soft, var(--color-bg-secondary));
+      background: var(--element-bg-soft);
       border: 1px solid var(--border-base);
       border-radius: 2px;
       color: var(--color-text-secondary);

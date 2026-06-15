@@ -5,7 +5,6 @@
   "overview": {
     "title": "Review workflow",
     "description": "Deep Review runs a read-only reviewer lineup in parallel, then asks the quality inspector to merge and validate the final report.",
-    "badge": "Deep Review",
     "command": {
       "title": "/DeepReview entry",
       "description": "The command uses these settings whenever a chat session launches the full code review team."

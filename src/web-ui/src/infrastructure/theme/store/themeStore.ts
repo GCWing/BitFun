@@ -59,6 +59,7 @@ export const useThemeStore = create<ThemeState>((set) => ({
       
       
       await themeService.initialize();
+      await themeService.ensureUserThemesLoaded();
       
       
       const themes = themeService.getThemeList();

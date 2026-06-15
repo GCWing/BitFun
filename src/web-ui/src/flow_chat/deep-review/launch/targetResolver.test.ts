@@ -46,7 +46,7 @@ describe('Deep Review target resolver', () => {
 
   it('resolves explicit file targets before reading git state', async () => {
     const result = await resolveSlashCommandReviewTarget(
-      'src/web-ui/src/App.tsx src/crates/core/src/lib.rs for regressions',
+      'src/web-ui/src/App.tsx src/crates/assembly/core/src/lib.rs for regressions',
       'D:\\workspace\\repo',
     );
 
@@ -100,7 +100,7 @@ describe('Deep Review target resolver', () => {
 
     const result = await resolveSlashCommandReviewTarget('', 'D:\\workspace\\repo');
 
-    expect(mockGitGetStatus).toHaveBeenCalledWith('D:\\workspace\\repo');
+    expect(mockGitGetStatus).toHaveBeenCalledWith('D:\\workspace\\repo', 'deep_review_target_resolver');
     expect(result.target.source).toBe('workspace_diff');
     expect(result.changeStats).toEqual({
       fileCount: 2,

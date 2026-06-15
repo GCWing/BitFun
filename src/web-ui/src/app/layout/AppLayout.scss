@@ -172,7 +172,7 @@ html, body {
   border: 1px solid var(--border-subtle);
   border-radius: $size-radius-base;
   background: color-mix(in srgb, var(--color-bg-elevated) 90%, transparent);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.30);
+  box-shadow: 0 12px 28px var(--color-overlay-black-30);
   color: var(--color-text-primary);
   pointer-events: none;
   transform: translateX(-50%);

@@ -8,34 +8,34 @@
 
 .acp-permission-actions--text {
   flex-wrap: wrap;
-  gap: var(--flowchat-inline-gap, 0.35rem);
+  gap: var(--flowchat-inline-gap);
 }
 
 .acp-permission-actions__text-button {
   min-height: 26px;
-  padding: 0 var(--flowchat-card-expanded-pad-x, 0.625rem);
+  padding: 0 var(--flowchat-card-expanded-pad-x);
   border: 1px solid var(--color-border);
   border-radius: 6px;
   background: var(--color-surface, transparent);
   color: var(--color-text);
   font-size: var(--flowchat-font-size-sm);
-  line-height: var(--flowchat-compact-line-height, 1.32);
+  line-height: var(--flowchat-compact-line-height);
   cursor: pointer;
   white-space: nowrap;
 }
 
 .acp-permission-actions__text-button:hover:not(:disabled) {
-  background: var(--color-bg-tertiary, rgba(255, 255, 255, 0.08));
+  background: var(--color-bg-tertiary);
 }
 
 .acp-permission-actions__text-button--allow {
-  border-color: color-mix(in srgb, var(--color-success, #22c55e) 55%, var(--color-border, rgba(255, 255, 255, 0.12)));
-  color: var(--color-success, #22c55e);
+  border-color: color-mix(in srgb, var(--color-success) 55%, var(--color-border));
+  color: var(--color-success);
 }
 
 .acp-permission-actions__text-button--reject {
-  border-color: color-mix(in srgb, var(--color-danger, #ef4444) 55%, var(--color-border, rgba(255, 255, 255, 0.12)));
-  color: var(--color-danger, #ef4444);
+  border-color: color-mix(in srgb, var(--color-danger) 55%, var(--color-border));
+  color: var(--color-danger);
 }
 
 .acp-permission-actions__text-button:disabled {

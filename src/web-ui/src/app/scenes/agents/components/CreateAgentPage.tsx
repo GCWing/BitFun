@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Input, Textarea, Switch, Button } from '@/component-library';
+import { Input, Textarea, Switch, Button, Tooltip } from '@/component-library';
 import { SubagentAPI } from '@/infrastructure/api/service-api/SubagentAPI';
 import type { SubagentLevel } from '@/infrastructure/api/service-api/SubagentAPI';
 import { toolAPI } from '@/infrastructure/api/service-api/ToolAPI';
@@ -48,6 +48,7 @@ const CreateAgentPage: React.FC = () => {
             if (!name) return null;
             return {
               name,
+              description: typeof tool?.description === 'string' ? tool.description : '',
               isReadonly: Boolean(tool?.is_readonly),
             };
           })
@@ -329,16 +330,28 @@ const CreateAgentPage: React.FC = () => {
                   </span>
                 </label>
                 <div className="th-create-panel__tools">
-                  {selectableTools.map((tool) => (
-                    <button
-                      key={tool.name}
-                      type="button"
-                      className={`th-list__tool-item${selectedTools.has(tool.name) ? ' is-on' : ''}`}
-                      onClick={() => toggleTool(tool.name)}
-                    >
-                      <span className="th-list__tool-item-name">{tool.name}</span>
-                    </button>
-                  ))}
+                  {selectableTools.map((tool) => {
+                    const tooltipContent = tool.description.trim() || tool.name;
+
+                    return (
+                      <Tooltip
+                        key={tool.name}
+                        content={tooltipContent}
+                        placement="top"
+                        className="th-create-panel__tool-tooltip"
+                        interactive
+                      >
+                        <button
+                          type="button"
+                          className={`th-list__tool-item${selectedTools.has(tool.name) ? ' is-on' : ''}`}
+                          onClick={() => toggleTool(tool.name)}
+                          aria-label={`${tool.name}: ${tooltipContent}`}
+                        >
+                          <span className="th-list__tool-item-name">{tool.name}</span>
+                        </button>
+                      </Tooltip>
+                    );
+                  })}
                 </div>
               </div>
             )}

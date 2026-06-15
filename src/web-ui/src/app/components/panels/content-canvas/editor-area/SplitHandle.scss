@@ -23,7 +23,7 @@
 
     &:hover,
     &.is-dragging {
-      background: var(--color-primary-alpha, rgba(96, 165, 250, 0.2));
+      background: var(--color-primary-alpha);
     }
 
     .canvas-split-handle__line {
@@ -46,7 +46,7 @@
 
     &:hover,
     &.is-dragging {
-      background: var(--color-primary-alpha, rgba(96, 165, 250, 0.2));
+      background: var(--color-primary-alpha);
     }
 
     .canvas-split-handle__line {
@@ -70,7 +70,7 @@
 
   &:hover &__line,
   &.is-dragging &__line {
-    background: var(--color-primary, #60a5fa);
+    background: var(--color-primary);
   }
 
   // Grip handle
@@ -79,10 +79,10 @@
     align-items: center;
     justify-content: center;
     padding: 4px;
-    background: var(--color-bg-secondary, rgba(30, 30, 30, 0.9));
+    background: var(--color-bg-secondary);
     border: 1px solid var(--border-base);
     border-radius: 4px;
-    color: var(--color-text-tertiary, rgba(255, 255, 255, 0.4));
+    color: var(--color-text-tertiary);
     opacity: 0;
     transition: opacity 0.15s ease, color 0.15s ease;
   }
@@ -94,8 +94,8 @@
 
   &:hover &__grip,
   &.is-dragging &__grip {
-    color: var(--color-primary, #60a5fa);
-    border-color: var(--color-primary, #60a5fa);
+    color: var(--color-primary);
+    border-color: var(--color-primary);
   }
 }
 

@@ -176,6 +176,14 @@
   font-size: 11px;
 }
 
+.th-create-panel__tool-tooltip {
+  .bitfun-tooltip__content {
+    width: max-content;
+    max-width: min(520px, calc(100vw - 32px));
+    white-space: pre-wrap;
+  }
+}
+
 @container (max-width: 480px) {
   .th__list-body {
     padding: $size-gap-4;

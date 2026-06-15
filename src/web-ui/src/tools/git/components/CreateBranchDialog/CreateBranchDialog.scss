@@ -9,7 +9,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--color-overlay-black-50);
   z-index: $z-modal;
   animation: bitfun-create-branch-dialog-fade-in 0.2s ease-out;
 }
@@ -23,7 +23,7 @@
   max-width: 600px;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 8px 16px var(--color-overlay-black-30);
   animation: bitfun-create-branch-dialog-scale-in 0.2s ease-out;
 
   &__header {
@@ -124,7 +124,7 @@
   }
 
   &__required {
-    color: #ef4444;
+    color: var(--color-error);
   }
 
   &__input {
@@ -142,7 +142,7 @@
       outline: none;
       border-color: var(--color-accent-500);
       background: $element-bg-base;
-      box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.15);
+      box-shadow: 0 0 0 2px var(--color-accent-200);
     }
 
     &::placeholder {
@@ -173,7 +173,7 @@
     background: rgba(239, 68, 68, 0.08);
     border: 1px solid rgba(239, 68, 68, 0.25);
     border-radius: $size-radius-sm;
-    color: #ef4444;
+    color: var(--color-error);
     font-size: var(--font-size-xs);
     animation: bitfun-create-branch-dialog-shake 0.4s ease-in-out;
   }

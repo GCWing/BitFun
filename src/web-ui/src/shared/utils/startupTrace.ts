@@ -9,12 +9,23 @@ export type StartupTraceRequestType = 'tauri' | 'http';
 export interface StartupTraceApiCall {
   type: StartupTraceRequestType;
   command: string;
+  target?: string;
   durationMs: number;
+  startedAtMs?: number;
+  endedAtMs?: number;
   outcome?: 'success' | 'failure';
   cacheOutcome?: 'hit' | 'miss' | 'unknown';
   requestBytes?: number;
   responseBytes?: number;
   payloadEstimateDurationMs?: number;
+  requestPayloadEstimateDurationMs?: number;
+  responsePayloadEstimateDurationMs?: number;
+  adapterInitDurationMs?: number;
+  transportDurationMs?: number;
+  invokeDurationMs?: number;
+  activeRequestsAtStart?: number;
+  activeRequestsAtEnd?: number;
+  maxConcurrentRequests?: number;
   remote: boolean;
 }
 
@@ -24,12 +35,43 @@ export interface StartupTraceOptions {
   traceId?: string;
   now?: NowFn;
   maxPhaseEvents?: number;
+  maxApiCallRecords?: number;
+  logEvents?: boolean;
+  logSummary?: boolean;
 }
 
 export interface DeferredAnimationFrameTraceOptions {
   frameCount?: number;
   now?: NowFn;
   requestAnimationFrame?: (callback: (time: number) => void) => number;
+}
+
+export interface ReactRenderProfileTrace {
+  component: string;
+  phase: string;
+  actualDurationMs: number;
+  baseDurationMs?: number;
+  startTimeMs?: number;
+  commitTimeMs?: number;
+  contentLength?: number;
+  itemCount?: number;
+  groupCount?: number;
+  renderedCount?: number;
+  turnId?: string;
+  roundId?: string;
+  itemId?: string;
+  visibleGroupStartIndex?: number;
+  visibleGroupEndIndex?: number;
+  textItemCount?: number;
+  toolItemCount?: number;
+  visibleTextItemCount?: number;
+  visibleToolItemCount?: number;
+  criticalGroupCount?: number;
+  exploreGroupCount?: number;
+  hasCodeBlock?: boolean;
+  hasTable?: boolean;
+  isStreaming?: boolean;
+  [key: string]: unknown;
 }
 
 interface CommandAggregate {
@@ -66,6 +108,31 @@ export interface StartupTraceApiSummary {
   responseBytes: number;
   payloadEstimateDurationMs: number;
   byCommand: CommandAggregate[];
+  calls: StartupTraceApiCallRecord[];
+}
+
+export interface StartupTraceApiCallRecord {
+  traceId: string;
+  type: StartupTraceRequestType;
+  command: string;
+  target?: string;
+  startedAtMs?: number;
+  endedAtMs?: number;
+  durationMs: number;
+  outcome: 'success' | 'failure';
+  cacheOutcome: 'hit' | 'miss' | 'unknown';
+  requestBytes: number;
+  responseBytes: number;
+  remote: boolean;
+  payloadEstimateDurationMs?: number;
+  requestPayloadEstimateDurationMs?: number;
+  responsePayloadEstimateDurationMs?: number;
+  adapterInitDurationMs?: number;
+  transportDurationMs?: number;
+  invokeDurationMs?: number;
+  activeRequestsAtStart?: number;
+  activeRequestsAtEnd?: number;
+  maxConcurrentRequests?: number;
 }
 
 export interface StartupTraceSnapshot {
@@ -85,10 +152,9 @@ export interface StartupTraceDiagnostics {
 declare global {
   // E2E and manual performance collection read this sanitized diagnostic surface.
   // It intentionally exposes no raw request payloads or workspace paths.
-  // eslint-disable-next-line no-var
   var __BITFUN_STARTUP_TRACE__: StartupTraceDiagnostics | undefined;
-  // eslint-disable-next-line no-var
   var __BITFUN_PERF_TRACE_ENABLED__: boolean | undefined;
+  var __BITFUN_RENDER_PROFILE_ENABLED__: boolean | undefined;
 }
 
 const DEFAULT_MAX_ESTIMATED_BYTES = 64 * 1024;
@@ -107,6 +173,16 @@ function createTraceId(): string {
     return cryptoLike.randomUUID();
   }
   return `startup-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function optionalRounded(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? roundDurationMs(value)
+    : undefined;
+}
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
 function isSafeScalar(value: unknown): value is string | number | boolean | null {
@@ -281,9 +357,14 @@ export class StartupTrace {
   private readonly logger: LoggerLike;
   private readonly now: NowFn;
   private readonly maxPhaseEvents: number;
+  private readonly maxApiCallRecords: number;
+  private readonly logEvents: boolean;
+  private readonly logSummary: boolean;
   readonly traceId: string;
   private phaseEvents = 0;
   private readonly phaseRecords: PhaseRecord[] = [];
+  private apiCallEvents = 0;
+  private readonly apiCallRecords: StartupTraceApiCallRecord[] = [];
   private readonly commandAggregates = new Map<string, CommandAggregate>();
   private totalApiCount = 0;
   private successfulApiCount = 0;
@@ -301,7 +382,10 @@ export class StartupTrace {
     this.logger = options.logger ?? createLogger('StartupTrace');
     this.traceId = options.traceId ?? createTraceId();
     this.now = options.now ?? (() => globalThis.performance?.now?.() ?? Date.now());
-    this.maxPhaseEvents = options.maxPhaseEvents ?? 160;
+    this.maxPhaseEvents = options.maxPhaseEvents ?? 260;
+    this.maxApiCallRecords = options.maxApiCallRecords ?? 240;
+    this.logEvents = options.logEvents ?? false;
+    this.logSummary = options.logSummary ?? false;
   }
 
   markPhase(phase: string, data?: TraceData): void {
@@ -316,7 +400,9 @@ export class StartupTrace {
       ...(sanitizeTraceData(data) ?? {}),
     };
     this.phaseRecords.push(phaseRecord);
-    this.logger.debug('Startup trace event', phaseRecord);
+    if (this.logEvents) {
+      this.logger.debug('Startup trace event', phaseRecord);
+    }
   }
 
   recordApiCall(call: StartupTraceApiCall): void {
@@ -325,8 +411,18 @@ export class StartupTrace {
     }
 
     const durationMs = roundDurationMs(call.durationMs);
+    const startedAtMs = typeof call.startedAtMs === 'number'
+      ? roundDurationMs(call.startedAtMs)
+      : undefined;
+    const endedAtMs = typeof call.endedAtMs === 'number'
+      ? roundDurationMs(call.endedAtMs)
+      : (startedAtMs !== undefined ? roundDurationMs(startedAtMs + durationMs) : undefined);
     const requestBytes = call.requestBytes ?? 0;
     const responseBytes = call.responseBytes ?? 0;
+    const requestPayloadEstimateDurationMs = optionalRounded(call.requestPayloadEstimateDurationMs);
+    const responsePayloadEstimateDurationMs = optionalRounded(call.responsePayloadEstimateDurationMs);
+    const payloadEstimateDurationMs = optionalRounded(call.payloadEstimateDurationMs)
+      ?? roundDurationMs((requestPayloadEstimateDurationMs ?? 0) + (responsePayloadEstimateDurationMs ?? 0));
     const succeeded = call.outcome !== 'failure';
     const cacheOutcome = call.cacheOutcome ?? 'unknown';
     this.totalApiCount += 1;
@@ -338,7 +434,34 @@ export class StartupTrace {
     this.remoteApiCount += call.remote ? 1 : 0;
     this.requestBytes += requestBytes;
     this.responseBytes += responseBytes;
-    this.payloadEstimateDurationMs += call.payloadEstimateDurationMs ?? 0;
+    this.payloadEstimateDurationMs += payloadEstimateDurationMs;
+
+    if (this.apiCallEvents < this.maxApiCallRecords) {
+      this.apiCallEvents += 1;
+      this.apiCallRecords.push({
+        traceId: this.traceId,
+        type: call.type,
+        command: call.command,
+        target: call.target,
+        startedAtMs,
+        endedAtMs,
+        durationMs,
+        outcome: succeeded ? 'success' : 'failure',
+        cacheOutcome,
+        requestBytes,
+        responseBytes,
+        remote: call.remote,
+        payloadEstimateDurationMs,
+        requestPayloadEstimateDurationMs,
+        responsePayloadEstimateDurationMs,
+        adapterInitDurationMs: optionalRounded(call.adapterInitDurationMs),
+        transportDurationMs: optionalRounded(call.transportDurationMs),
+        invokeDurationMs: optionalRounded(call.invokeDurationMs),
+        activeRequestsAtStart: optionalRounded(call.activeRequestsAtStart),
+        activeRequestsAtEnd: optionalRounded(call.activeRequestsAtEnd),
+        maxConcurrentRequests: optionalRounded(call.maxConcurrentRequests),
+      });
+    }
 
     const existing = this.commandAggregates.get(call.command) ?? {
       command: call.command,
@@ -390,6 +513,7 @@ export class StartupTrace {
       responseBytes: this.responseBytes,
       payloadEstimateDurationMs: roundDurationMs(this.payloadEstimateDurationMs),
       byCommand,
+      calls: this.apiCallRecords.map(record => ({ ...record })),
     };
   }
 
@@ -409,15 +533,17 @@ export class StartupTrace {
       return;
     }
 
-    const snapshot = this.getSnapshot();
-    this.logger.info('Startup trace summary', {
-      traceId: snapshot.traceId,
-      reason,
-      phases: snapshot.phases,
-      api: {
-        ...snapshot.api,
-      },
-    });
+    if (this.logSummary) {
+      const snapshot = this.getSnapshot();
+      this.logger.info('Startup trace summary', {
+        traceId: snapshot.traceId,
+        reason,
+        phases: snapshot.phases,
+        api: {
+          ...snapshot.api,
+        },
+      });
+    }
   }
 }
 
@@ -426,6 +552,46 @@ export function createStartupTrace(options: StartupTraceOptions = {}): StartupTr
 }
 
 export const startupTrace = createStartupTrace();
+
+export function isStartupRenderTraceEnabled(): boolean {
+  return globalThis.__BITFUN_RENDER_PROFILE_ENABLED__ === true;
+}
+
+export function recordReactRenderProfile(
+  trace: StartupTrace,
+  profile: ReactRenderProfileTrace
+): void {
+  if (!isStartupRenderTraceEnabled()) {
+    return;
+  }
+
+  trace.markPhase('react_render_profile', {
+    component: profile.component,
+    renderPhase: profile.phase,
+    actualDurationMs: roundDurationMs(profile.actualDurationMs),
+    baseDurationMs: optionalRounded(profile.baseDurationMs),
+    startTimeMs: optionalRounded(profile.startTimeMs),
+    commitTimeMs: optionalRounded(profile.commitTimeMs),
+    contentLength: optionalRounded(profile.contentLength),
+    itemCount: optionalRounded(profile.itemCount),
+    groupCount: optionalRounded(profile.groupCount),
+    renderedCount: optionalRounded(profile.renderedCount),
+    turnId: optionalString(profile.turnId),
+    roundId: optionalString(profile.roundId),
+    itemId: optionalString(profile.itemId),
+    visibleGroupStartIndex: optionalRounded(profile.visibleGroupStartIndex),
+    visibleGroupEndIndex: optionalRounded(profile.visibleGroupEndIndex),
+    textItemCount: optionalRounded(profile.textItemCount),
+    toolItemCount: optionalRounded(profile.toolItemCount),
+    visibleTextItemCount: optionalRounded(profile.visibleTextItemCount),
+    visibleToolItemCount: optionalRounded(profile.visibleToolItemCount),
+    criticalGroupCount: optionalRounded(profile.criticalGroupCount),
+    exploreGroupCount: optionalRounded(profile.exploreGroupCount),
+    hasCodeBlock: profile.hasCodeBlock,
+    hasTable: profile.hasTable,
+    isStreaming: profile.isStreaming,
+  });
+}
 
 if (import.meta.env.DEV || globalThis.__BITFUN_PERF_TRACE_ENABLED__ === true) {
   globalThis.__BITFUN_STARTUP_TRACE__ = {

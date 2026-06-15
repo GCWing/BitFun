@@ -31,7 +31,15 @@ const FLOW_CHAT_LINK_COLORS = {
   },
 } as const;
 
-/** Space-separated R G B for `rgba(var(--color-primary-rgb) / α)` in component styles. */
+declare global {
+  // Injected by the desktop webview initialization script. These values let the
+  // first renderer pass apply the persisted built-in theme without waiting on a
+  // Tauri config round trip. They are absent on plain web/F5 fallback paths.
+  var __BITFUN_BOOTSTRAP_THEME_ID__: string | undefined;
+  var __BITFUN_BOOTSTRAP_THEME_SELECTION__: string | undefined;
+}
+
+/** Space-separated R G B for `rgba(var(--color-primary-rgb) / alpha)` in component styles. */
 function accentColorToRgbChannels(accent: string): string | null {
   const trimmed = accent.trim();
   const hex6 = /^#([0-9a-f]{6})$/i.exec(trimmed);
@@ -59,6 +67,9 @@ export class ThemeService {
   private listeners: Map<ThemeEventType, Set<ThemeEventListener>> = new Map();
   private hooks: ThemeHooks = {};
   private initialized = false;
+  private userThemesLoaded = false;
+  private userThemesLoadPromise: Promise<void> | null = null;
+  private pendingUserThemeSelection: ThemeId | null = null;
 
   constructor() {
     this.initializeBuiltinThemes();
@@ -79,29 +90,90 @@ export class ThemeService {
     if (this.initialized) return;
     this.initialized = true;
     try {
+      const bootstrapSelection = this.getBootstrapThemeSelection();
+      if (bootstrapSelection) {
+        await this.applyThemeSelection(bootstrapSelection, { persist: false });
+        return;
+      }
+
       const saved = await this.loadThemeSelection();
 
       if (saved === SYSTEM_THEME_ID) {
-        await this.applyTheme(SYSTEM_THEME_ID);
+        await this.applyThemeSelection(SYSTEM_THEME_ID, { persist: false });
       } else if (saved && this.themes.has(saved)) {
-        await this.applyTheme(saved);
-      } else {
-        const preInjectedThemeId = document.documentElement.getAttribute('data-theme');
-        if (preInjectedThemeId && this.themes.has(preInjectedThemeId as ThemeId)) {
-          await this.applyTheme(preInjectedThemeId as ThemeId);
-        } else {
-          await this.applyTheme(SYSTEM_THEME_ID);
+        await this.applyThemeSelection(saved, { persist: false });
+      } else if (saved) {
+        this.pendingUserThemeSelection = saved;
+        await this.ensureUserThemesLoaded();
+        if (this.themeSelection === saved) {
+          return;
         }
+        await this.applyStartupFallbackTheme();
+      } else {
+        await this.applyStartupFallbackTheme();
       }
 
-      this.loadUserThemes().catch(() => {
-
-      });
     } catch (error) {
       log.error('Theme system initialization failed', error);
 
-      await this.applyTheme(SYSTEM_THEME_ID);
+      await this.applyThemeSelection(SYSTEM_THEME_ID, { persist: false });
     }
+  }
+
+
+  private async applyStartupFallbackTheme(): Promise<void> {
+    const preInjectedThemeId = document.documentElement.getAttribute('data-theme');
+    if (preInjectedThemeId && this.themes.has(preInjectedThemeId as ThemeId)) {
+      await this.applyThemeSelection(preInjectedThemeId as ThemeId, { persist: false });
+    } else {
+      await this.applyThemeSelection(SYSTEM_THEME_ID, { persist: false });
+    }
+  }
+
+
+  private getBootstrapThemeSelection(): ThemeSelectionId | null {
+    const selection = globalThis.__BITFUN_BOOTSTRAP_THEME_SELECTION__;
+    if (selection === SYSTEM_THEME_ID) {
+      return SYSTEM_THEME_ID;
+    }
+    if (typeof selection === 'string' && this.themes.has(selection as ThemeId)) {
+      return selection as ThemeId;
+    }
+
+    return null;
+  }
+
+
+  async ensureUserThemesLoaded(): Promise<void> {
+    if (this.userThemesLoaded) {
+      await this.applyPendingUserThemeSelection();
+      return;
+    }
+    if (!this.userThemesLoadPromise) {
+      this.userThemesLoadPromise = this.loadUserThemes()
+        .finally(() => {
+          this.userThemesLoaded = true;
+          this.userThemesLoadPromise = null;
+        });
+    }
+    await this.userThemesLoadPromise;
+    await this.applyPendingUserThemeSelection();
+  }
+
+
+  private async applyPendingUserThemeSelection(): Promise<void> {
+    const pending = this.pendingUserThemeSelection;
+    if (!pending) {
+      return;
+    }
+
+    this.pendingUserThemeSelection = null;
+    if (!this.themes.has(pending)) {
+      log.warn('Saved theme selection was not found after loading user themes', { id: pending });
+      return;
+    }
+
+    await this.applyThemeSelection(pending, { persist: false });
   }
 
 
@@ -294,7 +366,10 @@ export class ThemeService {
     }
   }
 
-  async applyTheme(themeId: ThemeId | typeof SYSTEM_THEME_ID): Promise<void> {
+  private async applyThemeSelection(
+    themeId: ThemeId | typeof SYSTEM_THEME_ID,
+    options: { persist: boolean },
+  ): Promise<void> {
     if (themeId !== SYSTEM_THEME_ID && !this.themes.has(themeId)) {
       log.error('Theme not found', { id: themeId });
       throw new Error(`Theme ${themeId} not found`);
@@ -304,15 +379,27 @@ export class ThemeService {
 
     if (themeId === SYSTEM_THEME_ID) {
       this.themeSelection = SYSTEM_THEME_ID;
-      await this.saveThemeSelection(SYSTEM_THEME_ID);
+      if (options.persist) {
+        await this.saveThemeSelection(SYSTEM_THEME_ID);
+      } else {
+        this.lastSavedSelection = SYSTEM_THEME_ID;
+      }
       this.attachSystemThemeListener();
       const resolved = getSystemPreferredDefaultThemeId();
       await this.applyResolvedTheme(resolved);
     } else {
       this.themeSelection = themeId;
-      await this.saveThemeSelection(themeId);
+      if (options.persist) {
+        await this.saveThemeSelection(themeId);
+      } else {
+        this.lastSavedSelection = themeId;
+      }
       await this.applyResolvedTheme(themeId);
     }
+  }
+
+  async applyTheme(themeId: ThemeId | typeof SYSTEM_THEME_ID): Promise<void> {
+    await this.applyThemeSelection(themeId, { persist: true });
   }
 
 
@@ -322,6 +409,34 @@ export class ThemeService {
 
 
     root.style.setProperty('--color-bg-primary', colors.background.primary);
+    root.style.setProperty('--color-static-white', '#ffffff');
+    root.style.setProperty('--color-static-black', '#000000');
+    [
+      ['--color-overlay-white-02', 'rgba(255, 255, 255, 0.02)'],
+      ['--color-overlay-white-03', 'rgba(255, 255, 255, 0.03)'],
+      ['--color-overlay-white-04', 'rgba(255, 255, 255, 0.04)'],
+      ['--color-overlay-white-05', 'rgba(255, 255, 255, 0.05)'],
+      ['--color-overlay-white-06', 'rgba(255, 255, 255, 0.06)'],
+      ['--color-overlay-white-08', 'rgba(255, 255, 255, 0.08)'],
+      ['--color-overlay-white-10', 'rgba(255, 255, 255, 0.1)'],
+      ['--color-overlay-white-12', 'rgba(255, 255, 255, 0.12)'],
+      ['--color-overlay-white-15', 'rgba(255, 255, 255, 0.15)'],
+      ['--color-overlay-white-20', 'rgba(255, 255, 255, 0.2)'],
+      ['--color-overlay-white-60', 'rgba(255, 255, 255, 0.6)'],
+      ['--color-overlay-black-06', 'rgba(0, 0, 0, 0.06)'],
+      ['--color-overlay-black-08', 'rgba(0, 0, 0, 0.08)'],
+      ['--color-overlay-black-10', 'rgba(0, 0, 0, 0.1)'],
+      ['--color-overlay-black-12', 'rgba(0, 0, 0, 0.12)'],
+      ['--color-overlay-black-15', 'rgba(0, 0, 0, 0.15)'],
+      ['--color-overlay-black-20', 'rgba(0, 0, 0, 0.2)'],
+      ['--color-overlay-black-25', 'rgba(0, 0, 0, 0.25)'],
+      ['--color-overlay-black-30', 'rgba(0, 0, 0, 0.3)'],
+      ['--color-overlay-black-40', 'rgba(0, 0, 0, 0.4)'],
+      ['--color-overlay-black-50', 'rgba(0, 0, 0, 0.5)'],
+      ['--color-overlay-black-80', 'rgba(0, 0, 0, 0.8)'],
+    ].forEach(([name, value]) => {
+      root.style.setProperty(name, value);
+    });
     root.style.setProperty('--color-bg-secondary', colors.background.secondary);
     root.style.setProperty('--color-bg-tertiary', colors.background.tertiary);
     root.style.setProperty('--color-bg-quaternary', colors.background.quaternary);
@@ -329,6 +444,20 @@ export class ThemeService {
     root.style.setProperty('--color-bg-workbench', colors.background.workbench);
     root.style.setProperty('--color-bg-scene', colors.background.scene);
     root.style.setProperty('--color-bg-flowchat', colors.background.scene);
+    root.style.setProperty('--color-bg-surface', colors.background.secondary);
+    root.style.setProperty('--color-bg-base', colors.background.primary);
+    root.style.setProperty('--color-surface-hover', colors.element.medium);
+    root.style.setProperty('--color-hover', colors.element.medium);
+    root.style.setProperty('--bg-primary', colors.background.primary);
+    root.style.setProperty('--bg-secondary', colors.background.secondary);
+    root.style.setProperty('--bg-tertiary', colors.background.tertiary);
+    root.style.setProperty('--bg-elevated', colors.background.elevated);
+    root.style.setProperty('--bg-hover', colors.element.medium);
+    root.style.setProperty('--background-primary', colors.background.primary);
+    root.style.setProperty('--background-secondary', colors.background.secondary);
+    root.style.setProperty('--background-tertiary', colors.background.tertiary);
+    root.style.setProperty('--color-background-secondary', colors.background.secondary);
+    root.style.setProperty('--color-background-tertiary', colors.background.tertiary);
     if (colors.background.tooltip) {
       root.style.setProperty('--color-bg-tooltip', colors.background.tooltip);
     }
@@ -338,8 +467,14 @@ export class ThemeService {
 
     root.style.setProperty('--color-text-primary', colors.text.primary);
     root.style.setProperty('--color-text-secondary', colors.text.secondary);
+    root.style.setProperty('--color-text-tertiary', colors.text.muted);
     root.style.setProperty('--color-text-muted', colors.text.muted);
     root.style.setProperty('--color-text-disabled', colors.text.disabled);
+    root.style.setProperty('--text-primary', colors.text.primary);
+    root.style.setProperty('--text-secondary', colors.text.secondary);
+    root.style.setProperty('--text-tertiary', colors.text.muted);
+    root.style.setProperty('--text-muted', colors.text.muted);
+    root.style.setProperty('--text-disabled', colors.text.disabled);
 
 
     Object.entries(colors.accent).forEach(([key, value]) => {
@@ -352,6 +487,13 @@ export class ThemeService {
     root.style.setProperty('--color-primary-hover', primaryHover);
     root.style.setProperty('--color-accent', primaryAccent);
     root.style.setProperty('--color-accent-primary', primaryAccent);
+    root.style.setProperty('--accent-primary', primaryAccent);
+    root.style.setProperty('--accent-primary-hover', primaryHover);
+    root.style.setProperty('--color-primary-400', colors.accent[400]);
+    root.style.setProperty('--color-primary-500', primaryAccent);
+    root.style.setProperty('--color-primary-alpha', colors.accent[100]);
+    root.style.setProperty('--color-primary-bg', colors.accent[100]);
+    root.style.setProperty('--color-accent-alpha', colors.accent[100]);
     const flowChatLinkColors = theme.type === 'light'
       ? FLOW_CHAT_LINK_COLORS.light
       : FLOW_CHAT_LINK_COLORS.dark;
@@ -373,12 +515,21 @@ export class ThemeService {
     root.style.setProperty('--color-success', colors.semantic.success);
     root.style.setProperty('--color-success-bg', colors.semantic.successBg);
     root.style.setProperty('--color-success-border', colors.semantic.successBorder);
+    root.style.setProperty('--color-success-500', colors.semantic.success);
     root.style.setProperty('--color-warning', colors.semantic.warning);
     root.style.setProperty('--color-warning-bg', colors.semantic.warningBg);
     root.style.setProperty('--color-warning-border', colors.semantic.warningBorder);
+    root.style.setProperty('--color-warning-500', colors.semantic.warning);
     root.style.setProperty('--color-error', colors.semantic.error);
     root.style.setProperty('--color-error-bg', colors.semantic.errorBg);
     root.style.setProperty('--color-error-border', colors.semantic.errorBorder);
+    root.style.setProperty('--color-semantic-error', colors.semantic.error);
+    root.style.setProperty('--color-danger', colors.semantic.error);
+    root.style.setProperty('--color-danger-500', colors.semantic.error);
+    root.style.setProperty('--color-danger-text', colors.semantic.error);
+    root.style.setProperty('--color-danger-bg', colors.semantic.errorBg);
+    root.style.setProperty('--color-danger-border', colors.semantic.errorBorder);
+    root.style.setProperty('--color-danger-hover', colors.semantic.error);
     root.style.setProperty('--color-info', colors.semantic.info);
     root.style.setProperty('--color-info-bg', colors.semantic.infoBg);
     root.style.setProperty('--color-info-border', colors.semantic.infoBorder);
@@ -387,10 +538,16 @@ export class ThemeService {
 
 
     root.style.setProperty('--border-subtle', colors.border.subtle);
+    root.style.setProperty('--border-color', colors.border.subtle);
     root.style.setProperty('--border-base', colors.border.base);
     root.style.setProperty('--border-medium', colors.border.medium);
+    root.style.setProperty('--border-hover', colors.border.medium);
     root.style.setProperty('--border-strong', colors.border.strong);
     root.style.setProperty('--border-prominent', colors.border.prominent);
+    root.style.setProperty('--border-primary', colors.border.base);
+    root.style.setProperty('--color-border', colors.border.base);
+    root.style.setProperty('--color-border-primary', colors.border.base);
+    root.style.setProperty('--color-border-subtle', colors.border.subtle);
 
     const sceneViewportBorder = theme.layout?.sceneViewportBorder ?? true;
     root.style.setProperty(
@@ -404,6 +561,9 @@ export class ThemeService {
     root.style.setProperty('--element-bg-medium', colors.element.medium);
     root.style.setProperty('--element-bg-strong', colors.element.strong);
     root.style.setProperty('--element-bg-elevated', colors.element.elevated);
+    root.style.setProperty('--element-bg-hover', colors.element.medium);
+    root.style.setProperty('--color-bg-hover', colors.element.medium);
+    root.style.setProperty('--color-bg-subtle', colors.element.subtle);
 
 
     root.style.setProperty('--git-color-branch', colors.git.branch);
@@ -458,13 +618,19 @@ export class ThemeService {
     if (effects?.radius) {
       Object.entries(effects.radius).forEach(([key, value]) => {
         root.style.setProperty(`--radius-${key}`, value);
+        root.style.setProperty(`--size-radius-${key}`, value);
       });
+      if (effects.radius.base) {
+        root.style.setProperty('--radius-md', effects.radius.base);
+        root.style.setProperty('--size-radius-md', effects.radius.base);
+      }
     }
 
 
     if (effects?.spacing) {
       Object.entries(effects.spacing).forEach(([key, value]) => {
         root.style.setProperty(`--spacing-${key}`, value);
+        root.style.setProperty(`--size-gap-${key}`, value);
       });
     }
 
@@ -603,6 +769,20 @@ export class ThemeService {
       root.style.setProperty('--btn-primary-active-border', 'transparent');
       root.style.setProperty('--btn-primary-active-shadow', 'none');
       root.style.setProperty('--btn-primary-active-transform', 'none');
+      root.style.setProperty('--btn-ghost-bg', 'transparent');
+      root.style.setProperty('--btn-ghost-color', colors.text.muted);
+      root.style.setProperty('--btn-ghost-border', 'transparent');
+      root.style.setProperty('--btn-ghost-shadow', 'none');
+      root.style.setProperty('--btn-ghost-hover-bg', colors.element.subtle);
+      root.style.setProperty('--btn-ghost-hover-color', colors.text.primary);
+      root.style.setProperty('--btn-ghost-hover-border', 'transparent');
+      root.style.setProperty('--btn-ghost-hover-shadow', 'none');
+      root.style.setProperty('--btn-ghost-hover-transform', 'none');
+      root.style.setProperty('--btn-ghost-active-bg', colors.element.medium);
+      root.style.setProperty('--btn-ghost-active-color', colors.text.primary);
+      root.style.setProperty('--btn-ghost-active-border', 'transparent');
+      root.style.setProperty('--btn-ghost-active-shadow', 'none');
+      root.style.setProperty('--btn-ghost-active-transform', 'none');
     }
 
 

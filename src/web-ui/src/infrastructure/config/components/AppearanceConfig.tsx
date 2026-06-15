@@ -65,9 +65,7 @@ function AppearanceThemeSection() {
         <ConfigPageSection title={t('appearance.title')} description={t('appearance.hint')}>
           <ConfigPageRow
             label={t('appearance.language')}
-            description={t('appearance.languageRowHint', {
-              defaultValue: 'Choose one language pack as the active UI language.',
-            })}
+            description={t('appearance.languageRowHint')}
             align="center"
           >
             <div className="theme-config__language-select">
@@ -87,9 +85,7 @@ function AppearanceThemeSection() {
           </ConfigPageRow>
           <ConfigPageRow
             label={t('appearance.themes')}
-            description={t('appearance.themeRowHint', {
-              defaultValue: 'Choose the interface color theme.',
-            })}
+            description={t('appearance.themeRowHint')}
             align="center"
           >
             <div className="theme-config__theme-picker">

@@ -8,6 +8,7 @@ import { getEditorType } from '@/infrastructure/language-detection';
 import type { LineRange } from '@/component-library/components/Markdown';
 import { enqueuePendingTab } from './pendingTabQueue';
 import type { PendingTabDetail } from './pendingTabQueue';
+
 export interface FileTabOptions {
    
   filePath: string;

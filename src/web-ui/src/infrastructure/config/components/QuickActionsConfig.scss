@@ -72,7 +72,7 @@
 
   &__row-label {
     font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium, 500);
+    font-weight: var(--font-weight-medium);
     color: var(--color-text-primary);
     line-height: 1.4;
   }
@@ -97,7 +97,7 @@
   }
 
   &__delete-btn {
-    &:hover { color: var(--color-error, #ef4444); }
+    &:hover { color: var(--color-error); }
   }
 
   // ── Modal body ──────────────────────────────────────────────────────────
@@ -136,7 +136,7 @@
 
   &__modal-label {
     font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium, 500);
+    font-weight: var(--font-weight-medium);
     color: var(--color-text-primary);
   }
 

@@ -4,13 +4,12 @@
  */
 
 import { FlowChatStore } from '../../store/FlowChatStore';
-import { parsePartialJson } from '../../../shared/utils/partialJsonParser';
+import { extractFilePathFromJsonBuffer, parsePartialJson } from '../../../shared/utils/partialJsonParser';
 import { createLogger } from '@/shared/utils/logger';
 import type { FlowChatContext, FlowToolItem, ToolEventOptions, DialogTurn } from './types';
 import { immediateSaveDialogTurn } from './PersistenceModule';
 import { applyPendingAcpPermissionForTool } from './AcpPermissionToolCardModule';
 import { normalizeParamsPartialFragment } from '../EventBatcher';
-import type { FlowItem } from '../../types/flow-chat';
 import type {
   CancelledToolEvent,
   CompletedToolEvent,
@@ -20,7 +19,9 @@ import type {
   FlowToolEvent,
   ParamsPartialToolEvent,
   ProgressToolEvent,
+  QueuedToolEvent,
   StartedToolEvent,
+  WaitingToolEvent,
 } from '../EventBatcher';
 
 const log = createLogger('ToolEventModule');
@@ -41,6 +42,8 @@ export function processToolEvent(
   turnId: string,
   roundId: string,
   toolEvent: FlowToolEvent,
+  attemptId?: string,
+  attemptIndex?: number,
   options?: ToolEventOptions,
   onTodoWriteResult?: (sessionId: string, turnId: string, result: any) => void
 ): void {
@@ -61,7 +64,7 @@ export function processToolEvent(
 
   switch (toolEvent.event_type) {
     case 'EarlyDetected': {
-      handleEarlyDetected(context, store, sessionId, turnId, roundId, dialogTurn, toolEvent, options);
+      handleEarlyDetected(context, store, sessionId, turnId, roundId, dialogTurn, toolEvent, attemptId, attemptIndex, options);
       break;
     }
     
@@ -69,10 +72,20 @@ export function processToolEvent(
       handleParamsPartial(store, sessionId, turnId, toolEvent);
       break;
     }
+
+    case 'Queued': {
+      handleQueued(store, sessionId, turnId, toolEvent);
+      break;
+    }
+
+    case 'Waiting': {
+      handleWaiting(store, sessionId, turnId, toolEvent);
+      break;
+    }
     
     case 'Started': {
       flushPendingBatchedEvents(context);
-      handleStarted(store, sessionId, turnId, roundId, dialogTurn, toolEvent, options);
+      handleStarted(store, sessionId, turnId, roundId, dialogTurn, toolEvent, attemptId, attemptIndex, options);
       break;
     }
     
@@ -187,13 +200,21 @@ function applyParamsPartial(
     if (!incomingParams) {
       return;
     }
-    const isWriteFullParamsSnapshot = isWriteTool && incomingParams.trimStart().startsWith('{');
-    const newBuffer = isWriteFullParamsSnapshot ? incomingParams : prevBuffer + incomingParams;
+    const newBuffer = prevBuffer + incomingParams;
     
     let parsedParams: Record<string, any> = {};
     try {
       parsedParams = parsePartialJson(newBuffer);
     } catch {
+    }
+
+    if (isWriteTool) {
+      const extractedPath = extractFilePathFromJsonBuffer(newBuffer);
+      const hasPath = ['file_path', 'filePath', 'filepath', 'target_file', 'targetFile', 'path', 'filename']
+        .some((key) => typeof parsedParams[key] === 'string' && parsedParams[key].length > 0);
+      if (extractedPath && !hasPath) {
+        parsedParams = { ...parsedParams, file_path: extractedPath };
+      }
     }
     
     const isEditTool = ['edit', 'search_replace', 'Edit'].includes(toolEvent.tool_name);
@@ -265,26 +286,11 @@ function handleEarlyDetected(
   roundId: string,
   dialogTurn: DialogTurn,
   toolEvent: EarlyDetectedToolEvent,
+  attemptId?: string,
+  attemptIndex?: number,
   options?: ToolEventOptions
 ): void {
   flushPendingBatchedEvents(context);
-
-  // AskUserQuestion cards are rendered by the streaming engine before tool
-  // arguments are parsed and validated. When a stream retry regenerates the
-  // question after that specific failure class, remove the stale failed card
-  // while preserving real user-cancelled or otherwise failed questions.
-  if (toolEvent.tool_name === 'AskUserQuestion') {
-    store.updateDialogTurn(sessionId, turnId, (turn) => ({
-      ...turn,
-      modelRounds: turn.modelRounds.map((round) => ({
-        ...round,
-        items: round.items.filter(
-          (item: FlowItem) =>
-            !isStaleAskUserQuestionRetryCard(item),
-        ),
-      })),
-    }));
-  }
   
   const preparingToolItem: FlowToolItem = {
     id: toolEvent.tool_id,
@@ -299,6 +305,8 @@ function handleEarlyDetected(
     requiresConfirmation: false,
     isParamsStreaming: true,
     startTime: options?.parentTimestamp ? options.parentTimestamp + 2 : Date.now(),
+    attemptId,
+    attemptIndex,
   };
 
   const targetRound = dialogTurn.modelRounds.find(round => round.id === roundId);
@@ -317,25 +325,6 @@ function handleEarlyDetected(
   applyPendingAcpPermissionForTool(store, toolEvent.tool_id);
 }
 
-function isStaleAskUserQuestionRetryCard(item: FlowItem): boolean {
-  if (item.type !== 'tool') {
-    return false;
-  }
-
-  const toolItem = item as FlowToolItem;
-  if (toolItem.toolName !== 'AskUserQuestion' || toolItem.status !== 'error') {
-    return false;
-  }
-
-  const error = toolItem.toolResult?.error || '';
-  return (
-    error.includes('Arguments are invalid JSON') ||
-    error.includes('Tool arguments were truncated by the model') ||
-    error.includes('Failed to parse input parameters') ||
-    /^Question \d+ /.test(error)
-  );
-}
-
 /**
  * Handle tool params partial update event
  */
@@ -349,6 +338,40 @@ function handleParamsPartial(
 }
 
 /**
+ * Handle tool queued event
+ */
+function handleQueued(
+  store: FlowChatStore,
+  sessionId: string,
+  turnId: string,
+  toolEvent: QueuedToolEvent
+): void {
+  const existingItem = store.findToolItem(sessionId, turnId, toolEvent.tool_id);
+  if (existingItem && existingItem.type === 'tool') {
+    updateToolItem(store, sessionId, turnId, toolEvent.tool_id, {
+      status: 'queued',
+    });
+  }
+}
+
+/**
+ * Handle tool waiting event
+ */
+function handleWaiting(
+  store: FlowChatStore,
+  sessionId: string,
+  turnId: string,
+  toolEvent: WaitingToolEvent
+): void {
+  const existingItem = store.findToolItem(sessionId, turnId, toolEvent.tool_id);
+  if (existingItem && existingItem.type === 'tool') {
+    updateToolItem(store, sessionId, turnId, toolEvent.tool_id, {
+      status: 'waiting',
+    });
+  }
+}
+
+/**
  * Handle tool started event
  */
 function handleStarted(
@@ -358,6 +381,8 @@ function handleStarted(
   roundId: string,
   dialogTurn: DialogTurn,
   toolEvent: StartedToolEvent,
+  attemptId?: string,
+  attemptIndex?: number,
   options?: ToolEventOptions
 ): void {
   const existingItem = store.findToolItem(sessionId, turnId, toolEvent.tool_id);
@@ -375,7 +400,9 @@ function handleStarted(
       toolCall: toolCallData,
       status: 'running',
       isParamsStreaming: false,
-      partialParams: undefined
+      partialParams: undefined,
+      attemptId,
+      attemptIndex,
     } as any);
     applyPendingTerminalSessionId(store, sessionId, turnId, toolEvent.tool_id);
     applyPendingAcpPermissionForTool(store, toolEvent.tool_id);
@@ -390,6 +417,8 @@ function handleStarted(
       status: 'running',
       requiresConfirmation: false,
       startTime: options?.parentTimestamp ? options.parentTimestamp + 2 : Date.now(),
+      attemptId,
+      attemptIndex,
     };
 
     const targetRound = dialogTurn.modelRounds.find(round => round.id === roundId);
@@ -562,7 +591,7 @@ export function handleToolExecutionProgress(
   event: any
 ): void {
   const eventData = (event as any).value || event;
-  const { tool_use_id, progress_message, percentage } = eventData;
+  const { tool_use_id, tool_name, progress_message, percentage } = eventData;
 
   const store = FlowChatStore.getInstance();
   const state = store.getState();
@@ -578,10 +607,20 @@ export function handleToolExecutionProgress(
           ? (toolItem as any)._progressLogs
           : [];
         const lastLog = existingLogs.length > 0 ? existingLogs[existingLogs.length - 1] : undefined;
-        const shouldAppend =
-          typeof progress_message === 'string' &&
-          progress_message.trim().length > 0 &&
-          progress_message !== lastLog;
+        const isTerminalLikeProgress =
+          tool_name === 'Bash' ||
+          tool_name === 'ExecCommand' ||
+          tool_name === 'WriteStdin' ||
+          tool_name === 'ExecControl' ||
+          (toolItem as any).toolName === 'Bash' ||
+          (toolItem as any).toolName === 'ExecCommand' ||
+          (toolItem as any).toolName === 'WriteStdin' ||
+          (toolItem as any).toolName === 'ExecControl';
+        const shouldAppend = typeof progress_message === 'string' && (
+          isTerminalLikeProgress
+            ? progress_message.length > 0
+            : progress_message.trim().length > 0 && progress_message !== lastLog
+        );
         const nextLogs = shouldAppend ? [...existingLogs, progress_message].slice(-200) : existingLogs;
 
         store.updateModelRoundItem(sessionId, dialogTurn.id, tool_use_id, {

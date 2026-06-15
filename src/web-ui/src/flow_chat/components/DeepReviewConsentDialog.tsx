@@ -180,29 +180,17 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
   const getSkippedReasonLabel = useCallback((reason?: ReviewTeamManifestMemberReason) => {
     switch (reason) {
       case 'not_applicable':
-        return t('deepReviewConsent.skippedReasons.notApplicable', {
-          defaultValue: 'Not applicable to this target',
-        });
+        return t('deepReviewConsent.skippedReasons.notApplicable');
       case 'budget_limited':
-        return t('deepReviewConsent.skippedReasons.budgetLimited', {
-          defaultValue: 'Limited by token budget',
-        });
+        return t('deepReviewConsent.skippedReasons.budgetLimited');
       case 'invalid_tooling':
-        return t('deepReviewConsent.skippedReasons.invalidTooling', {
-          defaultValue: 'Configuration issue',
-        });
+        return t('deepReviewConsent.skippedReasons.invalidTooling');
       case 'disabled':
-        return t('deepReviewConsent.skippedReasons.disabled', {
-          defaultValue: 'Disabled',
-        });
+        return t('deepReviewConsent.skippedReasons.disabled');
       case 'unavailable':
-        return t('deepReviewConsent.skippedReasons.unavailable', {
-          defaultValue: 'Unavailable',
-        });
+        return t('deepReviewConsent.skippedReasons.unavailable');
       default:
-        return t('deepReviewConsent.skippedReasons.skipped', {
-          defaultValue: 'Skipped',
-        });
+        return t('deepReviewConsent.skippedReasons.skipped');
     }
   }, [t]);
 
@@ -218,7 +206,7 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
       <div className="deep-review-consent__summary">
         <div className="deep-review-consent__summary-header">
           <span className="deep-review-consent__fact-title">
-            {t('deepReviewConsent.summaryTitle', { defaultValue: 'Launch summary' })}
+            {t('deepReviewConsent.summaryTitle')}
           </span>
         </div>
 
@@ -228,7 +216,6 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
             <span className="deep-review-consent__summary-stat--warning">
               {t('deepReviewConsent.skippedReviewers', {
                 count: skippedCount,
-                defaultValue: '{{count}} skipped',
               })}
             </span>
           )}
@@ -240,7 +227,6 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
               <strong>
                 {t('deepReviewConsent.runStrategy', {
                   strategy: selectedStrategyLabel,
-                  defaultValue: 'Run strategy: {{strategy}}',
                 })}
               </strong>
               <span>{getStrategySummary(effectiveStrategy, t)}</span>
@@ -248,9 +234,7 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
             <div
               className="deep-review-consent__strategy-options"
               role="group"
-              aria-label={t('deepReviewConsent.strategyOverrideTitle', {
-                defaultValue: 'Run strategy',
-              })}
+              aria-label={t('deepReviewConsent.strategyOverrideTitle')}
             >
               {REVIEW_STRATEGY_LEVELS.map((strategyLevel) => {
                 const isActive = effectiveStrategy === strategyLevel;
@@ -272,7 +256,7 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
                       </span>
                       {isActive && (
                         <span className="deep-review-consent__strategy-option-badge">
-                          {t('deepReviewConsent.selectedStrategy', { defaultValue: 'Selected' })}
+                          {t('deepReviewConsent.selectedStrategy')}
                         </span>
                       )}
                     </span>
@@ -280,13 +264,11 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
                       <span>
                         {t('deepReviewConsent.strategyTokenImpact', {
                           tokenImpact: profile.tokenImpact,
-                          defaultValue: 'Token: {{tokenImpact}}',
                         })}
                       </span>
                       <span>
                         {t('deepReviewConsent.strategyRuntimeImpact', {
                           runtimeImpact: profile.runtimeImpact,
-                          defaultValue: 'Time: {{runtimeImpact}}',
                         })}
                       </span>
                     </span>
@@ -301,7 +283,7 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
           <div className="deep-review-consent__reviewer-group">
             <div className="deep-review-consent__reviewer-group-title deep-review-consent__reviewer-group-title--warning">
               <AlertTriangle size={13} />
-              {t('deepReviewConsent.skippedGroupTitle', { defaultValue: 'Skipped reviewers' })}
+              {t('deepReviewConsent.skippedGroupTitle')}
             </div>
             <ul className="deep-review-consent__skipped-list">
               {visibleSkippedReviewers.map((member) => (
@@ -315,7 +297,6 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
                   <span>
                     {t('deepReviewConsent.skippedMore', {
                       count: hiddenSkippedCount,
-                      defaultValue: '+{{count}} more',
                     })}
                   </span>
                 </li>
@@ -345,14 +326,14 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
         <div className="deep-review-consent__header">
           <div className="deep-review-consent__heading">
             <span className="deep-review-consent__eyebrow">
-              {t('deepReviewConsent.eyebrow', { defaultValue: 'Code review team' })}
+              {t('deepReviewConsent.eyebrow')}
             </span>
-            <h3>{t('deepReviewConsent.title', { defaultValue: 'Start Deep Review?' })}</h3>
+            <h3>{t('deepReviewConsent.title')}</h3>
           </div>
           <button
             type="button"
             className="deep-review-consent__close"
-            aria-label={t('deepReviewConsent.cancel', { defaultValue: 'Cancel' })}
+            aria-label={t('deepReviewConsent.cancel')}
             onClick={() => void settleConsent(false)}
           >
             <X size={16} />
@@ -366,15 +347,11 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
             </div>
             <div>
               <span className="deep-review-consent__fact-title">
-                {t('deepReviewConsent.sessionConcurrencyTitle', {
-                  defaultValue: 'Active session is busy',
-                })}
+                {t('deepReviewConsent.sessionConcurrencyTitle')}
               </span>
               <p>
                 {t('deepReviewConsent.sessionConcurrencyBody', {
                   count: pendingConsent.launchContext.sessionConcurrencyGuard.activeSubagentCount,
-                  defaultValue:
-                    'The target session already has {{count}} running subagent tasks. Choose a lighter strategy, cancel for now, or continue manually when capacity is free.',
                 })}
               </p>
             </div>
@@ -388,9 +365,7 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
             className="deep-review-consent__checkbox"
             checked={dontShowAgain}
             onChange={(event) => setDontShowAgain(event.target.checked)}
-            label={t('deepReviewConsent.dontShowAgain', {
-              defaultValue: 'Do not show this again',
-            })}
+            label={t('deepReviewConsent.dontShowAgain')}
           />
           <div className="deep-review-consent__actions">
             <Button
@@ -398,14 +373,14 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
               size="small"
               onClick={() => void settleConsent(false)}
             >
-              {t('deepReviewConsent.cancel', { defaultValue: 'Cancel' })}
+              {t('deepReviewConsent.cancel')}
             </Button>
             <Button
               variant="primary"
               size="small"
               onClick={() => void settleConsent(true)}
             >
-              {t('deepReviewConsent.confirm', { defaultValue: 'Start Deep Review' })}
+              {t('deepReviewConsent.confirm')}
             </Button>
           </div>
         </div>

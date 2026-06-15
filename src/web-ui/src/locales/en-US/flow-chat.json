@@ -32,6 +32,7 @@
       "leftAriaLabel": "Resize left panel",
       "centerAriaLabel": "Resize panel",
       "rightAriaLabel": "Resize right panel",
+      "terminalBottomAriaLabel": "Resize bottom terminal panel",
       "title": "Drag to resize | Double-click to switch mode | Current: {{mode}}"
     }
   },
@@ -108,7 +109,8 @@
       "modelNotRecorded": "Model not recorded",
       "legacyModel": "Legacy model not tracked",
       "inferredModel": "{{model}} (inferred)",
-      "p95SampleInsufficient": "Not enough samples"
+      "p95SampleInsufficient": "Not enough samples",
+      "timedOut": "Timed out"
     },
     "cacheCoverage": {
       "available": "Reported",
@@ -188,7 +190,8 @@
       "errorExampleRow": "Safe grouped label for a model/runtime error or failing tool type.",
       "errorExampleCount": "Number of matching errors in this report scope.",
       "slowestSpans": "Slow spans are derived from recorded turn, model-call, and tool timestamps. They help identify time sinks, not exact provider latency.",
-      "slowestModelCall": "Model call in this turn. Model: {{model}}."
+      "slowestModelCall": "Model call in this turn. Model: {{model}}.",
+      "slowestToolCall": "Tool call details identify whether time was spent waiting, confirming, or executing."
     },
     "meta": {
       "generatedAt": "Generated",
@@ -264,6 +267,84 @@
     "slowestLabels": {
       "modelCall": "Turn {{turn}} model call",
       "modelCallUnknown": "Model call"
+    },
+    "slowest": {
+      "details": {
+        "input": "Input",
+        "status": "Status",
+        "exitCode": "Exit code",
+        "timedOut": "Timed out",
+        "execution": "Execution",
+        "error": "Error"
+      }
+    }
+  },
+  "threadGoal": {
+    "replaceConfirmTitle": "Replace thread goal?",
+    "replaceConfirmMessage": "Replace the current goal?\n\nCurrent: {{existing}}\n\nNew: {{next}}",
+    "menuTitle": "Thread goal",
+    "objectiveLabel": "Objective",
+    "updatedUserMessage": "Thread goal updated: {{objective}}",
+    "kickoffUserMessage": "Continue toward the thread goal: {{objective}}",
+    "continuationCheckHeader": "Goal completion check",
+    "continuationCheckHeaderWithAttempt": "Goal completion check (auto {{attempt}}/{{max}})",
+    "continuationCheckUserMessage": "Goal completion check: {{objective}}",
+    "menuEmpty": "No thread goal yet. Set an objective to keep the agent focused across turns.",
+    "workflow": {
+      "title": "Completion check",
+      "steps": {
+        "continue": "After each turn, auto-continue toward the objective",
+        "audit": "Verify every requirement against current evidence (not surface-level done)",
+        "complete": "When proven, the agent calls update_goal to mark Complete"
+      },
+      "note": {
+        "active": "While active, each finished turn auto-continues toward the goal (up to 100 times) until the agent calls update_goal(complete) or the limit is reached.",
+        "complete": "Marked complete. Edit or clear the goal to start different work.",
+        "paused": "Paused — continuation and completion checks are stopped.",
+        "blocked": "Blocked — resume with /goal resume after you unblock or the environment changes.",
+        "usageLimited": "Paused due to usage limits — /goal resume after quota recovers.",
+        "budgetLimited": "Token budget reached — edit the goal or clear and set a new one."
+      }
+    },
+    "editTitleCreate": "Set thread goal",
+    "editTitleUpdate": "Edit thread goal",
+    "editHint": "Type an objective and save. The agent will continue toward it when idle.",
+    "editPlaceholder": "Objective…",
+    "editCancel": "Cancel",
+    "editSave": "Save",
+    "resumeTitle": "Resume paused goal?",
+    "resumeSubtitle": "Goal: {{objective}}",
+    "resumeHint": "Mark it active and continue when the session is idle. You can leave it paused and use /goal resume later.",
+    "resumeConfirm": "Resume goal",
+    "resumeLeavePaused": "Leave paused",
+    "stripTooltipEmpty": "Set or view the thread goal",
+    "stripTooltipWithGoal": "{{status}}: {{objective}}",
+    "stripOpenEmpty": "Open thread goal",
+    "stripOpenWithGoal": "Open thread goal menu",
+    "usageTokens": "{{used}} / {{budget}} tokens",
+    "usageTime": "{{seconds}}s elapsed",
+    "status": {
+      "active": "Active",
+      "paused": "Paused",
+      "blocked": "Blocked",
+      "usageLimited": "Usage limited",
+      "budgetLimited": "Budget limited"
+    },
+    "action": {
+      "pause": "Pause",
+      "resume": "Resume",
+      "clear": "Clear",
+      "set": "Set goal"
+    },
+    "commandHint": {
+      "none": "Commands: /goal <objective>",
+      "default": "Commands: /goal edit, /goal pause, /goal clear",
+      "active": "Commands: /goal edit, /goal pause, /goal clear",
+      "paused": "Commands: /goal edit, /goal resume, /goal clear",
+      "blocked": "Commands: /goal edit, /goal resume, /goal clear",
+      "usageLimited": "Commands: /goal edit, /goal resume, /goal clear",
+      "budgetLimited": "Commands: /goal edit, /goal clear",
+      "complete": "Commands: /goal edit, /goal clear"
     }
   },
   "agentCompanion": {
@@ -487,6 +568,10 @@
     "promptCacheGuardConfirm": "Send anyway",
     "promptCacheGuardCancel": "Stay here",
     "quickAction": "Quick action",
+    "commands": "Commands",
+    "acpPlan": {
+      "title": "Plan"
+    },
     "compactAction": "Compact session",
     "compactNoSession": "No active session for /compact",
     "compactBusy": "Wait until the session is idle before using /compact.",
@@ -499,15 +584,16 @@
     "usageNoWorkspace": "A workspace is required to build a usage report.",
     "usageFailed": "Usage report failed",
     "goalAction": "Session goal",
-    "goalGenerating": "Generating session goal...",
-    "goalVerifying": "Checking if the session goal is met...",
     "goalAchieved": "Session goal achieved",
     "goalVerifyFailed": "Goal verification failed. Check model configuration and try again.",
     "goalNoSession": "No active session for /goal",
     "goalUsage": "Use /goal with optional focus text, for example /goal fix the login bug.",
-    "goalFailed": "Goal mode activation failed",
-    "goalAiFailed": "Goal mode AI request failed. Check model configuration and try again.",
-    "goalActivated": "Session goal activated",
+    "goalFailed": "Thread goal command failed",
+    "goalActivated": "Thread goal set",
+    "goalCleared": "Thread goal cleared",
+    "goalPaused": "Thread goal paused",
+    "goalResumed": "Thread goal resumed",
+    "goalEdited": "Thread goal updated",
     "goalNestedDisabled": "Goal mode can only be started from the main session.",
     "initAction": "Generate AGENTS.md",
     "initNoSession": "No active session for /init",
@@ -522,6 +608,10 @@
     "deepreviewBusy": "A review is already running for this session. Stop or finish it before starting another Deep Review.",
     "deepreviewNestedDisabled": "Deep Review can only be started from the main session.",
     "deepreviewThreadTitle": "Deep review",
+    "reloadSkillsAction": "Reload skills",
+    "reloadSkillsUsage": "Use /reload-skills without extra arguments.",
+    "reloadSkillsDone": "Reloaded skills ({{count}} available)",
+    "reloadSkillsFailed": "Failed to reload skills",
     "currentMode": "Current mode: {{mode}}",
     "noMatchingMode": "No matching mode",
     "noMatchingCommand": "No matching command",
@@ -676,7 +766,6 @@
     "minimize": "Minimize",
     "restore": "Open {{label}}",
     "fixAndReviewRunning": "Fixing & preparing re-review...",
-    "minimizedDeep": "Deep Review",
     "minimizedStandard": "Code Review",
     "minimizedReviewRunningDeep": "Deep Review running",
     "minimizedReviewRunningStandard": "Code Review running",
@@ -936,11 +1025,65 @@
     "searchClose": "Close search",
     "searchOpen": "Search messages",
     "jumpToCurrentTurn": "Jump to Turn {{turn}}",
-    "backgroundSubagents": "Background subagents ({{count}})",
+    "backgroundActivities": "Background activity ({{count}})",
     "backgroundSubagentUntitled": "Background subagent",
+    "backgroundSubagentSection": "Background subagents ({{count}})",
+    "backgroundSubagentActions": "Subagent actions",
+    "backgroundSubagentStop": "Cancel",
+    "backgroundSubagentStopping": "Cancelling",
+    "backgroundSubagentStopAll": "Cancel all",
+    "backgroundSubagentStopFailed": "Failed to cancel background subagent.",
+    "backgroundCommandSection": "Background commands ({{count}})",
+    "backgroundCommandUntitled": "Background command",
+    "backgroundCommandSession": "Session #{{id}}",
     "subagentStatusProcessing": "Running",
     "subagentStatusFinishing": "Finishing",
+    "backgroundCommandStatusRunning": "Active",
+    "backgroundCommandStatusFinished": "Finished",
+    "backgroundCommandActions": "Command actions",
+    "backgroundCommandSendInput": "Send input",
+    "backgroundCommandStop": "Stop command",
+    "backgroundCommandStopping": "Stopping command",
+    "backgroundCommandStopAll": "Stop all",
+    "backgroundCommandStopFailed": "Failed to stop background command.",
     "pullRequests": "Pull requests"
+  },
+  "backgroundCommandInput": {
+    "title": "Send command input",
+    "commandLabel": "Command",
+    "inputLabel": "Input",
+    "inputPlaceholder": "Enter text to send to the interactive process",
+    "appendEnter": "Send Enter",
+    "maskInput": "Mask input",
+    "privacyNote": "Input is sent directly to the running TTY process and is not added to the chat transcript.",
+    "cancel": "Cancel",
+    "send": "Send",
+    "sendSucceeded": "Input sent to background command.",
+    "sendFailed": "Failed to send input to background command."
+  },
+  "backgroundCommandOutput": {
+    "title": "Command output",
+    "sendInput": "Send input",
+    "sendInputUnavailable": "Input can only be sent to a running interactive command.",
+    "copy": "Copy output",
+    "copyCommand": "Copy command",
+    "simplifiedView": "Simplified view",
+    "simplifiedViewTooltip": "Hide terminal control characters to make the output easier to read.",
+    "loading": "Loading output...",
+    "empty": "No output captured yet.",
+    "remote": "Remote",
+    "session": "Session #{{id}}",
+    "exitCode": "Exit {{code}}",
+    "truncatedFromStart": "Command output is too long, so earlier output was discarded from the beginning.",
+    "error": "Unable to load output: {{message}}",
+    "status": {
+      "running": "Command running",
+      "exited": "Exited",
+      "interrupted": "Interrupted",
+      "killed": "Terminated",
+      "pruned": "Pruned",
+      "failed": "Command failed"
+    }
   },
   "stickyTaskIndicator": {
     "tooltip": "Jump to current task"
@@ -1027,8 +1170,24 @@
     "feedbackDevVersion": "Feedback is not available in dev version",
     "userLabel": "👤 User:",
     "toolCallLabel": "🔧 Tool call: {{name}}",
-    "aiDisclaimer": "Content generated by AI, for reference only",
-    "loadingMoreHistory": "Loading more history..."
+    "loadingMoreHistory": "Loading more history...",
+    "roundHistoryShow": "Show {{count}} previous retry rounds",
+    "roundHistoryHide": "Hide previous retry rounds",
+    "roundRetryLabel": "Retry {{index}}",
+    "retryHistoryShow": "Show {{count}} previous attempts",
+    "retryHistoryHide": "Hide retry history",
+    "attemptLabel": "Attempt {{index}}",
+    "attemptSuperseded": "superseded",
+    "meta": {
+      "label": "Response metadata",
+      "completed": "Completed",
+      "stopped": "Stopped",
+      "duration": "Duration",
+      "tokens": "Tokens",
+      "tokensUnavailable": "unavailable",
+      "tokenBreakdown": "{{total}} total, {{input}} in, {{output}} out"
+    },
+    "aiDisclaimer": "Content generated by AI, for reference only"
   },
   "exploreRegion": {
     "readFiles_one": "Read {{count}} file",
@@ -1068,6 +1227,7 @@
       "guidanceHint": " hint",
       "guidanceTitle": "Hint",
       "parsingPath": "Parsing file path...",
+      "receivingContent": "Receiving file content...",
       "unknownFile": "Unknown file",
       "receivingParams": "Receiving parameters...",
       "analyzing": "Analyzing...",
@@ -1190,10 +1350,41 @@
       "commandInterrupted": "Command interrupted",
       "executionFailed": "Command execution failed"
     },
+    "execProcess": {
+      "executeCommand": "Run command:",
+      "writeStdin": "Write stdin:",
+      "pollProcess": "Poll process:",
+      "interruptProcess": "Interrupt process:",
+      "killProcess": "Kill process:",
+      "executingCommand": "Running command...",
+      "waitingForOutput": "Waiting for output...",
+      "pollingOutput": "Polling output...",
+      "interruptingSession": "Interrupting process...",
+      "killingSession": "Killing process...",
+      "pollSession": "Poll session #{{id}}",
+      "interruptSession": "Interrupt session #{{id}}",
+      "killSession": "Kill session #{{id}}",
+      "session": "Session:",
+      "wallTime": "{{seconds}}s",
+      "remote": "Remote",
+      "tty": "TTY",
+      "noOutput": "No output",
+      "interruptSentNoOutput": "Interrupt sent; no output",
+      "killSentNoOutput": "Kill sent; no output",
+      "sessionNotFound": "Session #{{id}} was not found",
+      "copyPrimary": "Copy",
+      "primaryCopied": "Copied",
+      "copyPrimaryFailed": "Failed to copy",
+      "copyOutput": "Copy output",
+      "outputCopied": "Output copied",
+      "copyOutputFailed": "Failed to copy output"
+    },
     "plan": {
       "loadingPlan": "Loading plan...",
       "generating": "Generating...",
       "clickToOpenPlan": "Click to open plan file",
+      "revealPlanInExplorer": "Reveal plan file in file manager",
+      "revealPlanUnavailable": "Plan files can only be revealed for local workspaces",
       "remainingTodos": "{{count}} Remaining To-dos",
       "viewPlan": "View Plan",
       "build": "Build",
@@ -1214,7 +1405,8 @@
       "inputParams": "Input Parameters",
       "executionResult": "Execution Result",
       "viewDetails": "View Details",
-      "interruptedByRestart": "This tool was still running when the app closed last time, so it has been restored as interrupted"
+      "interruptedByRestart": "This tool was still running when the app closed last time, so it has been restored as interrupted",
+      "interruptedByRetry": "This attempt was superseded by a newer retry in the same response"
     },
     "askUser": {
       "completed": "Completed",
@@ -1250,6 +1442,33 @@
       "clickToOpenLink": "Click to open link",
       "noTitle": "No title",
       "summaryAvailable": "summary available"
+    },
+    "webFetch": {
+      "parsingUrl": "Parsing URL...",
+      "readLabel": "Read Webpage:",
+      "readTitle": "Read Webpage: \"{{url}}\"",
+      "reading": "Reading \"{{url}}\"...",
+      "preparingRead": "Preparing to read \"{{url}}\"",
+      "clickToOpenLink": "Click to open link",
+      "copyResult": "Copy result",
+      "resultCopied": "Result copied",
+      "copyResultFailed": "Failed to copy result",
+      "contentAvailable": "content available",
+      "contentLength": "{{count}} chars",
+      "fetchFailed": "Failed to fetch content",
+      "noContent": "No content returned"
+    },
+    "getToolSpec": {
+      "title": "Tool Spec",
+      "readTitle": "Read tool spec: {{toolName}}",
+      "reading": "Reading tool spec for {{toolName}}...",
+      "preparingRead": "Preparing to read tool spec for {{toolName}}",
+      "loaded": "Loaded spec for {{toolName}}",
+      "alreadyLoaded": "{{toolName}} is already loaded",
+      "readFailed": "Failed to read tool spec",
+      "unknownTool": "Unknown tool",
+      "descriptionLabel": "Description",
+      "schemaLabel": "Input schema"
     },
     "todoWrite": {
       "tasksCount": "{{count}} tasks",
@@ -1349,6 +1568,8 @@
     },
     "default": {
       "waitingConfirm": "Waiting for confirmation",
+      "queued": "Queued",
+      "waiting": "Waiting",
       "executing": "Executing...",
       "completed": "Completed",
       "cancelled": "Cancelled",
@@ -1552,7 +1773,6 @@
       "overallAssessment": "Overall Assessment",
       "riskLevel": "Risk Level",
       "recommendedAction": "Recommended Action",
-      "reviewMode": "Review Mode",
       "reviewScope": "Scope",
       "contextLimitations": "Context Limitations",
       "issuesCount": "Issues ({{count}})",
@@ -1808,7 +2028,12 @@
     "autoModelDesc": "Automatically Routing",
     "primaryModel": "Primary Model",
     "fastModel": "Fast Model",
-    "modelNotConfigured": "Not Configured"
+    "modelNotConfigured": "Not Configured",
+    "contextUsage": {
+      "agentPrompt": "Last request prompt: {{usage}}",
+      "acpContext": "ACP reported context: {{usage}}",
+      "toolNote": "Tool outputs may be summarized or truncated before later requests."
+    }
   },
   "reasoningEffort": {
     "title": "Reasoning Effort",
@@ -1919,6 +2144,25 @@
     "injectedAt": "Injected before round {{round}}",
     "statusPending": "Waiting to trigger",
     "statusInjected": "Triggered"
+  },
+  "turnCompletionNotice": {
+    "reasonLabel": "End reason",
+    "finalResponseProvided": "The agent has provided a final response.",
+    "repeatedToolFailures": {
+      "title": "Turn stopped after repeated tool failures"
+    },
+    "emptyRound": {
+      "title": "Turn ended without a usable response"
+    },
+    "interrupted": {
+      "title": "Turn was interrupted"
+    },
+    "maxRounds": {
+      "title": "Turn hit the round limit"
+    },
+    "generic": {
+      "title": "Turn ended abnormally"
+    }
   },
   "errors": {
     "sendFailed": "Failed to send message"

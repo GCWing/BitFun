@@ -16,6 +16,7 @@ interface I18nContextValue {
   setLanguage: (language: MobileLanguage) => void;
   toggleLanguage: () => void;
   t: (key: string, params?: TranslateParams) => string;
+  formatDate: (date: Date | number, options?: Intl.DateTimeFormatOptions) => string;
 }
 
 const STORAGE_KEY = 'bitfun-mobile-language';
@@ -97,6 +98,7 @@ export const I18nContext = createContext<I18nContextValue>({
   setLanguage: () => {},
   toggleLanguage: () => {},
   t: (key) => key,
+  formatDate: (date, options) => new Intl.DateTimeFormat(DEFAULT_LANGUAGE, options).format(date),
 });
 
 export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -124,6 +126,7 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLanguage,
     toggleLanguage,
     t: (key, params) => translate(language, key, params),
+    formatDate: (date, options) => new Intl.DateTimeFormat(language, options).format(date),
   }), [language, setLanguage, toggleLanguage]);
 
   return (

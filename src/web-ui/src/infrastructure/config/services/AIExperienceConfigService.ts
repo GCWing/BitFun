@@ -84,14 +84,14 @@ export class AIExperienceConfigService {
   private listeners: Set<(settings: AIExperienceSettings) => void> = new Set();
   private unwatchConfig: (() => void) | null = null;
 
-  private constructor() {
-    // Defer configManager access to avoid circular dependency TDZ at module evaluation time.
-    // By the next microtask, all ESM modules have finished evaluating and configManager is available.
-    Promise.resolve().then(() => {
-      this.unwatchConfig = configManager.watch(CONFIG_PATH, () => {
-        this.reload();
-      });
-      this.loadSettings();
+  private constructor() {}
+
+  private ensureConfigWatcher(): void {
+    if (this.unwatchConfig) {
+      return;
+    }
+    this.unwatchConfig = configManager.watch(CONFIG_PATH, () => {
+      void this.reload();
     });
   }
 
@@ -105,6 +105,7 @@ export class AIExperienceConfigService {
 
    
   private async loadSettings(): Promise<void> {
+    this.ensureConfigWatcher();
     try {
       const settings = await configManager.getConfig<AIExperienceSettings>(CONFIG_PATH);
       const merged = normalizeSettings(settings);
@@ -130,6 +131,7 @@ export class AIExperienceConfigService {
 
    
   async getSettingsAsync(): Promise<AIExperienceSettings> {
+    this.ensureConfigWatcher();
     try {
       const settings = await configManager.getConfig<AIExperienceSettings>(CONFIG_PATH);
       this.cachedSettings = normalizeSettings(settings);
@@ -142,6 +144,7 @@ export class AIExperienceConfigService {
 
    
   async saveSettings(settings: AIExperienceSettings): Promise<void> {
+    this.ensureConfigWatcher();
     try {
       const normalized = normalizeSettings(settings);
       await configManager.setConfig(CONFIG_PATH, normalized);
@@ -159,6 +162,7 @@ export class AIExperienceConfigService {
   }
 
   addChangeListener(listener: (settings: AIExperienceSettings) => void): () => void {
+    this.ensureConfigWatcher();
     this.listeners.add(listener);
     
     

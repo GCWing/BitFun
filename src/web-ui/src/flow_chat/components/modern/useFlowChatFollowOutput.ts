@@ -177,6 +177,11 @@ export function useFlowChatFollowOutput({
       return;
     }
 
+    // Stop the loop when the page is hidden to avoid unnecessary work
+    if (document.hidden) {
+      return;
+    }
+
     continuousFollowFrameRef.current = requestAnimationFrame(runContinuousFollowFrame);
   }, [scrollerRef]);
 
@@ -440,6 +445,17 @@ export function useFlowChatFollowOutput({
     scheduleFollowToLatest('streaming-started');
     startContinuousFollowLoop();
   }, [isFollowingOutput, isStreaming, scheduleFollowToLatest, startContinuousFollowLoop, stopContinuousFollowLoop]);
+
+  // Restart follow loop when the page becomes visible again
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (!document.hidden && isFollowingOutputRef.current && isStreamingRef.current) {
+        startContinuousFollowLoop();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [startContinuousFollowLoop]);
 
   useEffect(() => {
     return () => {

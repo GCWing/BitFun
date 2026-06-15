@@ -123,4 +123,4 @@ const NavItem: React.FC<NavItemProps> = ({
   );
 };
 
-export default NavItem;
+export default React.memo(NavItem);

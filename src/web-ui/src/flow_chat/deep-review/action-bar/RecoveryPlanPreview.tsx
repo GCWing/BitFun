@@ -25,7 +25,6 @@ export const RecoveryPlanPreview: React.FC<RecoveryPlanPreviewProps> = ({
             <span>
               {t('deepReviewActionBar.recoveryPreserve', {
                 count: recoveryPlan.willPreserve.length,
-                defaultValue: '{{count}} completed reviewers will be preserved',
               })}
             </span>
           </div>
@@ -36,7 +35,6 @@ export const RecoveryPlanPreview: React.FC<RecoveryPlanPreviewProps> = ({
             <span>
               {t('deepReviewActionBar.recoveryRerun', {
                 count: recoveryPlan.willRerun.length,
-                defaultValue: '{{count}} reviewers will be rerun',
               })}
             </span>
           </div>
@@ -47,7 +45,6 @@ export const RecoveryPlanPreview: React.FC<RecoveryPlanPreviewProps> = ({
             <span>
               {t('deepReviewActionBar.recoverySkip', {
                 count: recoveryPlan.willSkip.length,
-                defaultValue: '{{count}} reviewers will be skipped',
               })}
             </span>
           </div>

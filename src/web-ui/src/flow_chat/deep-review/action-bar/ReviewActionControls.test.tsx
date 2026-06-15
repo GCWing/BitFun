@@ -9,14 +9,14 @@ vi.mock('../../tool-cards/CodeReviewReportExportActions', () => ({
   ),
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (_key: string, options?: Record<string, unknown> & { defaultValue?: string }) => {
-      const template = options?.defaultValue ?? _key;
-      return template.replace(/{{(\w+)}}/g, (_match, token: string) => String(options?.[token] ?? _match));
-    },
-  }),
-}));
+vi.mock('react-i18next', async () => {
+  const { createTestI18nT } = await import('@/test/i18nTestUtils');
+  return {
+    useTranslation: () => ({
+      t: createTestI18nT('flow-chat'),
+    }),
+  };
+});
 
 vi.mock('@/component-library', () => ({
   Button: ({
@@ -72,7 +72,7 @@ describe('ReviewActionControls', () => {
 
     expect(html).toContain('Retry incomplete slices (2)');
     expect(html).toContain('Start fixing');
-    expect(html).toContain('Fix and re-review');
+    expect(html).toContain('Fix &amp; re-review');
     expect(html).toContain('Fill to input');
   });
 

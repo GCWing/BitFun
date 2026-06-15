@@ -26,6 +26,7 @@ import { Button, IconButton, Input, MarkdownRenderer, Modal, Select, Tabs, TabPa
 import { reviewPlatformAPI, systemAPI, type ReviewPlatformAccount, type ReviewPlatformAuthChallenge, type ReviewPlatformCiItem, type ReviewPlatformCiLog, type ReviewPlatformCommit, type ReviewPlatformDetailSection, type ReviewPlatformFile, type ReviewPlatformPagination, type ReviewPlatformPullRequest, type ReviewPlatformPullRequestDetail, type ReviewPlatformPullRequestDetailPage, type ReviewPlatformRemote, type ReviewPlatformRepositoryRef, type ReviewPlatformThread, type ReviewPlatformWorkspaceSnapshot } from '@/infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
 import { notificationService } from '@/shared/notification-system';
+import { i18nService } from '@/infrastructure/i18n';
 import { openMainSession } from '@/flow_chat/services/openBtwSession';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import type { FlowToolItem, Session } from '@/flow_chat/types/flow-chat';
@@ -211,20 +212,20 @@ function formatRelativeTime(value: string): string {
   if (!Number.isFinite(time)) return '';
   const diffMs = Date.now() - time;
   const minutes = Math.max(1, Math.floor(diffMs / 60000));
-  if (minutes < 60) return `${minutes}m ago`;
+  if (minutes < 60) return i18nService.t('common:reviewPlatform.relativeTime.minutesAgo', { count: minutes });
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
+  if (hours < 24) return i18nService.t('common:reviewPlatform.relativeTime.hoursAgo', { count: hours });
+  return i18nService.t('common:reviewPlatform.relativeTime.daysAgo', { count: Math.floor(hours / 24) });
 }
 
 function formatAbsoluteTime(value: string): string {
   if (!value) return '';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
-  return new Intl.DateTimeFormat(undefined, {
+  return i18nService.formatDate(date, {
     dateStyle: 'medium',
     timeStyle: 'short',
-  }).format(date);
+  });
 }
 
 function getPrIcon(pr: ReviewPlatformPullRequest) {

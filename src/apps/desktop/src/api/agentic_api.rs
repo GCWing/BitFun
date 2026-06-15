@@ -2,11 +2,14 @@
 
 use log::{debug, warn};
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Instant;
 use tauri::{AppHandle, State};
 
 use crate::api::app_state::AppState;
 use crate::api::session_storage_path::desktop_effective_session_storage_path;
+use crate::startup_trace::DesktopStartupTrace;
 use bitfun_core::agentic::coordination::{
     AssistantBootstrapBlockReason, AssistantBootstrapEnsureOutcome, AssistantBootstrapSkipReason,
     ConversationCoordinator, DialogScheduler, DialogSubmissionPolicy, DialogTriggerSource,
@@ -17,8 +20,18 @@ use bitfun_core::agentic::deep_review_policy::{
     apply_deep_review_queue_control, default_review_team_definition, DeepReviewQueueControlAction,
     ReviewTeamDefinition,
 };
+use bitfun_core::agentic::goal_mode::{ThreadGoal, ThreadGoalStatus};
 use bitfun_core::agentic::image_analysis::ImageContextData;
+use bitfun_core::agentic::session::{SessionViewRestoreRequest, SessionViewRestoreTiming};
 use bitfun_core::agentic::tools::image_context::get_image_context;
+use bitfun_core::agentic::tools::implementations::exec_command::{
+    background_command_output_capture, control_exec_command_session, send_exec_command_input,
+    ExecCommandControlAction, ExecCommandControlOrigin, ExecCommandControlRequest,
+    ExecCommandInputRequest, ListBackgroundCommandOutputRequest,
+    ListBackgroundCommandOutputResponse,
+    ReadBackgroundCommandOutputRequest as CoreReadBackgroundCommandOutputRequest,
+    ReadBackgroundCommandOutputResponse,
+};
 use bitfun_core::service::session::{DialogTurnData, SessionRelationship};
 
 const SESSION_VIEW_TOOL_RESULT_TOTAL_CHAR_BUDGET: usize = 512 * 1024;
@@ -142,10 +155,59 @@ pub struct ActivateSessionGoalRequest {
 #[serde(rename_all = "camelCase")]
 pub struct ActivateSessionGoalResponse {
     pub success: bool,
-    pub goal_text: String,
-    pub success_criteria: Vec<String>,
-    pub kickoff_message: String,
-    pub display_message: String,
+    pub goal: ThreadGoal,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetSessionThreadGoalRequest {
+    pub session_id: String,
+    pub workspace_path: Option<String>,
+    #[serde(default)]
+    pub remote_connection_id: Option<String>,
+    #[serde(default)]
+    pub remote_ssh_host: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetSessionThreadGoalResponse {
+    pub goal: Option<ThreadGoal>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClearSessionThreadGoalRequest {
+    pub session_id: String,
+    pub workspace_path: Option<String>,
+    #[serde(default)]
+    pub remote_connection_id: Option<String>,
+    #[serde(default)]
+    pub remote_ssh_host: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetSessionThreadGoalStatusRequest {
+    pub session_id: String,
+    pub status: String,
+    pub workspace_path: Option<String>,
+    #[serde(default)]
+    pub remote_connection_id: Option<String>,
+    #[serde(default)]
+    pub remote_ssh_host: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateSessionThreadGoalObjectiveRequest {
+    pub session_id: String,
+    pub objective: String,
+    pub workspace_path: Option<String>,
+    #[serde(default)]
+    pub remote_connection_id: Option<String>,
+    #[serde(default)]
+    pub remote_ssh_host: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -227,6 +289,7 @@ pub struct RestoreSessionViewResponse {
     pub is_partial: bool,
     pub loaded_turn_count: usize,
     pub total_turn_count: usize,
+    pub timings: SessionViewRestoreTiming,
 }
 
 #[derive(Debug, Default)]
@@ -900,11 +963,199 @@ pub async fn activate_session_goal(
 
     Ok(ActivateSessionGoalResponse {
         success: true,
-        goal_text: activation.goal_text,
-        success_criteria: activation.success_criteria,
-        kickoff_message: activation.kickoff_message,
-        display_message: activation.display_message,
+        goal: activation,
     })
+}
+
+async fn ensure_session_for_thread_goal(
+    coordinator: &Arc<ConversationCoordinator>,
+    app_state: &AppState,
+    session_id: &str,
+    workspace_path: Option<&str>,
+    remote_connection_id: Option<&str>,
+    remote_ssh_host: Option<&str>,
+) -> Result<PathBuf, String> {
+    if coordinator
+        .get_session_manager()
+        .get_session(session_id)
+        .is_none()
+    {
+        let workspace_path = workspace_path
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| {
+                "workspace_path is required when the session is not loaded".to_string()
+            })?;
+        let effective = desktop_effective_session_storage_path(
+            app_state,
+            workspace_path,
+            remote_connection_id,
+            remote_ssh_host,
+        )
+        .await;
+        coordinator
+            .restore_session(&effective, session_id)
+            .await
+            .map_err(|e| format!("Failed to restore session before thread goal access: {e}"))?;
+    }
+
+    coordinator
+        .get_session_manager()
+        .get_session(session_id)
+        .and_then(|session| session.config.workspace_path.clone())
+        .map(PathBuf::from)
+        .ok_or_else(|| format!("Session workspace_path is missing: {session_id}"))
+}
+
+async fn resolve_session_workspace_path_for_thread_goal_read(
+    coordinator: &Arc<ConversationCoordinator>,
+    app_state: &AppState,
+    session_id: &str,
+    workspace_path: Option<&str>,
+    remote_connection_id: Option<&str>,
+    remote_ssh_host: Option<&str>,
+) -> Result<PathBuf, String> {
+    if let Some(workspace_path) = coordinator
+        .get_session_manager()
+        .get_session(session_id)
+        .and_then(|session| session.config.workspace_path.clone())
+    {
+        return Ok(PathBuf::from(workspace_path));
+    }
+
+    let workspace_path = workspace_path
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| "workspace_path is required when the session is not loaded".to_string())?;
+
+    Ok(desktop_effective_session_storage_path(
+        app_state,
+        workspace_path,
+        remote_connection_id,
+        remote_ssh_host,
+    )
+    .await)
+}
+
+#[tauri::command]
+pub async fn get_session_thread_goal(
+    coordinator: State<'_, Arc<ConversationCoordinator>>,
+    app_state: State<'_, AppState>,
+    startup_trace: State<'_, DesktopStartupTrace>,
+    request: GetSessionThreadGoalRequest,
+) -> Result<GetSessionThreadGoalResponse, String> {
+    let trace_started = Instant::now();
+    let result = async {
+        let session_id = request.session_id.trim();
+        if session_id.is_empty() {
+            return Err("session_id is required".to_string());
+        }
+        let workspace_path = resolve_session_workspace_path_for_thread_goal_read(
+            coordinator.inner(),
+            app_state.inner(),
+            session_id,
+            request.workspace_path.as_deref(),
+            request.remote_connection_id.as_deref(),
+            request.remote_ssh_host.as_deref(),
+        )
+        .await?;
+        let goal = coordinator
+            .get_thread_goal(session_id, workspace_path.as_path())
+            .await
+            .map_err(|error| error.to_string())?;
+        Ok(GetSessionThreadGoalResponse { goal })
+    }
+    .await;
+    startup_trace.record_tauri_command_elapsed("get_session_thread_goal", None, trace_started);
+    result
+}
+
+#[tauri::command]
+pub async fn clear_session_thread_goal(
+    coordinator: State<'_, Arc<ConversationCoordinator>>,
+    app_state: State<'_, AppState>,
+    request: ClearSessionThreadGoalRequest,
+) -> Result<(), String> {
+    let session_id = request.session_id.trim();
+    if session_id.is_empty() {
+        return Err("session_id is required".to_string());
+    }
+    let workspace_path = ensure_session_for_thread_goal(
+        coordinator.inner(),
+        app_state.inner(),
+        session_id,
+        request.workspace_path.as_deref(),
+        request.remote_connection_id.as_deref(),
+        request.remote_ssh_host.as_deref(),
+    )
+    .await?;
+    coordinator
+        .clear_thread_goal(session_id, workspace_path.as_path())
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn set_session_thread_goal_status(
+    coordinator: State<'_, Arc<ConversationCoordinator>>,
+    app_state: State<'_, AppState>,
+    request: SetSessionThreadGoalStatusRequest,
+) -> Result<ThreadGoal, String> {
+    let session_id = request.session_id.trim();
+    if session_id.is_empty() {
+        return Err("session_id is required".to_string());
+    }
+    let status = match request.status.trim().to_ascii_lowercase().as_str() {
+        "active" => ThreadGoalStatus::Active,
+        "paused" => ThreadGoalStatus::Paused,
+        "blocked" => ThreadGoalStatus::Blocked,
+        "usageLimited" | "usage_limited" => ThreadGoalStatus::UsageLimited,
+        "budgetLimited" | "budget_limited" => ThreadGoalStatus::BudgetLimited,
+        "complete" => ThreadGoalStatus::Complete,
+        other => return Err(format!("unsupported thread goal status: {other}")),
+    };
+    let workspace_path = ensure_session_for_thread_goal(
+        coordinator.inner(),
+        app_state.inner(),
+        session_id,
+        request.workspace_path.as_deref(),
+        request.remote_connection_id.as_deref(),
+        request.remote_ssh_host.as_deref(),
+    )
+    .await?;
+    coordinator
+        .set_thread_goal_status(session_id, workspace_path.as_path(), status)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn update_session_thread_goal_objective(
+    coordinator: State<'_, Arc<ConversationCoordinator>>,
+    app_state: State<'_, AppState>,
+    request: UpdateSessionThreadGoalObjectiveRequest,
+) -> Result<ThreadGoal, String> {
+    let session_id = request.session_id.trim();
+    if session_id.is_empty() {
+        return Err("session_id is required".to_string());
+    }
+    let objective = request.objective.trim();
+    if objective.is_empty() {
+        return Err("objective is required".to_string());
+    }
+    let workspace_path = ensure_session_for_thread_goal(
+        coordinator.inner(),
+        app_state.inner(),
+        session_id,
+        request.workspace_path.as_deref(),
+        request.remote_connection_id.as_deref(),
+        request.remote_ssh_host.as_deref(),
+    )
+    .await?;
+    coordinator
+        .update_thread_goal_objective(session_id, workspace_path.as_path(), objective.to_string())
+        .await
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -1226,6 +1477,161 @@ pub async fn set_subagent_timeout(
         })
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ControlBackgroundCommandRequest {
+    pub exec_session_id: i32,
+    pub action: BackgroundCommandControlActionDTO,
+    pub remote: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum BackgroundCommandControlActionDTO {
+    Interrupt,
+    Kill,
+}
+
+impl From<BackgroundCommandControlActionDTO> for ExecCommandControlAction {
+    fn from(action: BackgroundCommandControlActionDTO) -> Self {
+        match action {
+            BackgroundCommandControlActionDTO::Interrupt => ExecCommandControlAction::Interrupt,
+            BackgroundCommandControlActionDTO::Kill => ExecCommandControlAction::Kill,
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn control_background_command(
+    request: ControlBackgroundCommandRequest,
+) -> Result<(), String> {
+    let session_id = request.exec_session_id;
+    let remote = request.remote;
+    let action: ExecCommandControlAction = request.action.into();
+
+    control_exec_command_session(ExecCommandControlRequest {
+        session_id,
+        action,
+        origin: ExecCommandControlOrigin::OutOfBand,
+        remote,
+        yield_time_ms: Some(250),
+    })
+    .await
+    .map(|response| {
+        if response.session_id.is_none() {
+            let status = match response.completion.map(|completion| completion.status) {
+                Some(bitfun_core::agentic::tools::implementations::exec_command::ExecCommandCompletionStatus::Interrupted) => {
+                    bitfun_core::agentic::tools::implementations::exec_command::BackgroundCommandOutputStatus::Interrupted
+                }
+                Some(bitfun_core::agentic::tools::implementations::exec_command::ExecCommandCompletionStatus::Killed) => {
+                    bitfun_core::agentic::tools::implementations::exec_command::BackgroundCommandOutputStatus::Killed
+                }
+                Some(bitfun_core::agentic::tools::implementations::exec_command::ExecCommandCompletionStatus::Pruned) => {
+                    bitfun_core::agentic::tools::implementations::exec_command::BackgroundCommandOutputStatus::Pruned
+                }
+                _ => bitfun_core::agentic::tools::implementations::exec_command::BackgroundCommandOutputStatus::Exited,
+            };
+            let capture = background_command_output_capture();
+            tauri::async_runtime::spawn(async move {
+                capture
+                    .finish_by_session(remote, session_id, status, response.exit_code)
+                    .await;
+            });
+        }
+    })
+    .map_err(|e| {
+        log::error!(
+            "Failed to control background command: exec_session_id={}, remote={}, error={}",
+            session_id,
+            remote,
+            e
+        );
+        format!("Failed to control background command: {}", e)
+    })
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SendBackgroundCommandInputRequest {
+    pub exec_session_id: i32,
+    pub remote: bool,
+    pub chars: String,
+    pub append_enter: bool,
+}
+
+#[tauri::command]
+pub async fn send_background_command_input(
+    request: SendBackgroundCommandInputRequest,
+) -> Result<(), String> {
+    if request.chars.is_empty() && !request.append_enter {
+        return Err("chars or append_enter is required".to_string());
+    }
+
+    send_exec_command_input(ExecCommandInputRequest {
+        session_id: request.exec_session_id,
+        chars: request.chars,
+        append_enter: request.append_enter,
+        remote: request.remote,
+    })
+    .await
+    .map_err(|e| {
+        log::error!(
+            "Failed to send input to background command: exec_session_id={}, remote={}, error={}",
+            request.exec_session_id,
+            request.remote,
+            e
+        );
+        format!("Failed to send input to background command: {}", e)
+    })
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadBackgroundCommandOutputRequest {
+    pub exec_session_id: i32,
+    pub remote: bool,
+    pub cursor: Option<u64>,
+}
+
+#[tauri::command]
+pub async fn read_background_command_output(
+    request: ReadBackgroundCommandOutputRequest,
+) -> Result<ReadBackgroundCommandOutputResponse, String> {
+    background_command_output_capture()
+        .read(CoreReadBackgroundCommandOutputRequest {
+            exec_session_id: request.exec_session_id,
+            remote: request.remote,
+            cursor: request.cursor,
+        })
+        .await
+        .ok_or_else(|| {
+            format!(
+                "Background command output not found: exec_session_id={}, remote={}",
+                request.exec_session_id, request.remote
+            )
+        })
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListBackgroundCommandActivitiesRequest {
+    pub agent_session_id: Option<String>,
+}
+
+#[tauri::command]
+pub async fn list_background_command_activities(
+    request: ListBackgroundCommandActivitiesRequest,
+) -> Result<ListBackgroundCommandOutputResponse, String> {
+    let agent_session_id = request.agent_session_id.and_then(|value| {
+        let trimmed = value.trim().to_string();
+        (!trimmed.is_empty()).then_some(trimmed)
+    });
+
+    Ok(background_command_output_capture()
+        .list(ListBackgroundCommandOutputRequest { agent_session_id })
+        .await)
+}
+
 #[tauri::command]
 pub async fn cancel_tool(
     coordinator: State<'_, Arc<ConversationCoordinator>>,
@@ -1303,108 +1709,131 @@ pub async fn restore_session(
 pub async fn restore_session_view(
     coordinator: State<'_, Arc<ConversationCoordinator>>,
     app_state: State<'_, AppState>,
+    startup_trace: State<'_, DesktopStartupTrace>,
     request: RestoreSessionRequest,
 ) -> Result<RestoreSessionViewResponse, String> {
-    let started_at = std::time::Instant::now();
-    let trace_id = request.trace_id.as_deref().unwrap_or("none");
-    debug!(
-        "restore_session_view request received: trace_id={}, session_id={}",
-        trace_id, request.session_id
-    );
-    let path_started_at = std::time::Instant::now();
-    let effective_path = desktop_effective_session_storage_path(
-        &app_state,
-        &request.workspace_path,
-        request.remote_connection_id.as_deref(),
-        request.remote_ssh_host.as_deref(),
-    )
+    let started_at = Instant::now();
+    let result = async {
+        let trace_id = request.trace_id.as_deref().unwrap_or("none");
+        debug!(
+            "restore_session_view request received: trace_id={}, session_id={}",
+            trace_id, request.session_id
+        );
+        let path_started_at = Instant::now();
+        let effective_path = desktop_effective_session_storage_path(
+            &app_state,
+            &request.workspace_path,
+            request.remote_connection_id.as_deref(),
+            request.remote_ssh_host.as_deref(),
+        )
     .await;
-    debug!(
-        "restore_session_view storage path resolved: trace_id={}, session_id={}, duration_ms={}",
-        trace_id,
-        request.session_id,
-        path_started_at.elapsed().as_millis()
-    );
+        debug!(
+            "restore_session_view storage path resolved: trace_id={}, session_id={}, duration_ms={}",
+            trace_id,
+            request.session_id,
+            path_started_at.elapsed().as_millis()
+        );
 
-    let tail_turn_count = request.tail_turn_count.filter(|count| *count > 0);
-    let (session, mut turns, total_turn_count) = if let Some(tail_turn_count) = tail_turn_count {
-        let tail_turn_count = tail_turn_count.min(16);
-        if request.include_internal {
-            coordinator
-                .restore_internal_session_view_tail(
-                    &effective_path,
-                    &request.session_id,
-                    tail_turn_count,
-                )
-                .await
-        } else {
-            coordinator
-                .restore_session_view_tail(&effective_path, &request.session_id, tail_turn_count)
-                .await
+        let view_request = SessionViewRestoreRequest {
+            workspace_path: effective_path,
+            session_id: request.session_id.clone(),
+            include_internal: request.include_internal,
+            tail_turn_count: request.tail_turn_count,
+        };
+        let tail_turn_count = view_request
+            .tail_turn_count
+            .filter(|count| *count > 0)
+            .map(|count| count.min(16));
+        let (session, mut turns, total_turn_count, timings) =
+            if let Some(tail_turn_count) = tail_turn_count {
+                if view_request.include_internal {
+                    coordinator
+                        .restore_internal_session_view_tail_timed(
+                            &view_request.workspace_path,
+                            &view_request.session_id,
+                            tail_turn_count,
+                        )
+                        .await
+                } else {
+                    coordinator
+                        .restore_session_view_tail_timed(
+                            &view_request.workspace_path,
+                            &view_request.session_id,
+                            tail_turn_count,
+                        )
+                        .await
+                }
+            } else if view_request.include_internal {
+                coordinator
+                    .restore_internal_session_view_timed(
+                        &view_request.workspace_path,
+                        &view_request.session_id,
+                    )
+                    .await
+                    .map(|(session, turns, timings)| {
+                        let total_turn_count = turns.len();
+                        (session, turns, total_turn_count, timings)
+                    })
+            } else {
+                coordinator
+                    .restore_session_view_timed(&view_request.workspace_path, &view_request.session_id)
+                    .await
+                    .map(|(session, turns, timings)| {
+                        let total_turn_count = turns.len();
+                        (session, turns, total_turn_count, timings)
+                    })
+            }
+            .map_err(|e| format!("Failed to restore session view: {}", e))?;
+        let loaded_turn_count = turns.len();
+        let is_partial = loaded_turn_count < total_turn_count;
+
+        if log::log_enabled!(log::Level::Debug) {
+            let payload_stats = restore_turn_payload_stats(&turns);
+            if payload_stats.raw_result_string_chars >= 1024 * 1024
+                || payload_stats.result_for_assistant_chars >= 1024 * 1024
+            {
+                debug!(
+                    "restore_session_view payload diagnostics: trace_id={}, session_id={}, turn_count={}, total_turn_count={}, is_partial={}, tool_result_count={}, raw_result_string_chars={}, result_for_assistant_chars={}, largest_raw_result_chars={}, largest_raw_result_path={}, top_raw_results={}",
+                    trace_id,
+                    request.session_id,
+                    turns.len(),
+                    total_turn_count,
+                    is_partial,
+                    payload_stats.tool_result_count,
+                    payload_stats.raw_result_string_chars,
+                    payload_stats.result_for_assistant_chars,
+                    payload_stats.largest_raw_result_chars,
+                    payload_stats.largest_raw_result_path,
+                    format_top_raw_results(&payload_stats.top_raw_results)
+                );
+            }
         }
-    } else if request.include_internal {
-        coordinator
-            .restore_internal_session_view(&effective_path, &request.session_id)
-            .await
-            .map(|(session, turns)| {
-                let total_turn_count = turns.len();
-                (session, turns, total_turn_count)
-            })
-    } else {
-        coordinator
-            .restore_session_view(&effective_path, &request.session_id)
-            .await
-            .map(|(session, turns)| {
-                let total_turn_count = turns.len();
-                (session, turns, total_turn_count)
-            })
+
+        compact_tool_results_for_session_view(&mut turns);
+
+        debug!(
+            "restore_session_view completed: trace_id={}, session_id={}, turn_count={}, total_turn_count={}, is_partial={}, context_restore_state=pending, duration_ms={}",
+            trace_id,
+            request.session_id,
+            turns.len(),
+            total_turn_count,
+            is_partial,
+            started_at.elapsed().as_millis()
+        );
+
+        Ok(RestoreSessionViewResponse {
+            session: session_to_response_with_turn_count(session, total_turn_count),
+            turns,
+            context_restore_state: "pending".to_string(),
+            is_partial,
+            loaded_turn_count,
+            total_turn_count,
+            timings,
+        })
     }
-    .map_err(|e| format!("Failed to restore session view: {}", e))?;
-    let loaded_turn_count = turns.len();
-    let is_partial = loaded_turn_count < total_turn_count;
-
-    if log::log_enabled!(log::Level::Debug) {
-        let payload_stats = restore_turn_payload_stats(&turns);
-        if payload_stats.raw_result_string_chars >= 1024 * 1024
-            || payload_stats.result_for_assistant_chars >= 1024 * 1024
-        {
-            debug!(
-                "restore_session_view payload diagnostics: trace_id={}, session_id={}, turn_count={}, total_turn_count={}, is_partial={}, tool_result_count={}, raw_result_string_chars={}, result_for_assistant_chars={}, largest_raw_result_chars={}, largest_raw_result_path={}, top_raw_results={}",
-                trace_id,
-                request.session_id,
-                turns.len(),
-                total_turn_count,
-                is_partial,
-                payload_stats.tool_result_count,
-                payload_stats.raw_result_string_chars,
-                payload_stats.result_for_assistant_chars,
-                payload_stats.largest_raw_result_chars,
-                payload_stats.largest_raw_result_path,
-                format_top_raw_results(&payload_stats.top_raw_results)
-            );
-        }
-    }
-
-    compact_tool_results_for_session_view(&mut turns);
-
-    debug!(
-        "restore_session_view completed: trace_id={}, session_id={}, turn_count={}, total_turn_count={}, is_partial={}, context_restore_state=pending, duration_ms={}",
-        trace_id,
-        request.session_id,
-        turns.len(),
-        total_turn_count,
-        is_partial,
-        started_at.elapsed().as_millis()
-    );
-
-    Ok(RestoreSessionViewResponse {
-        session: session_to_response(session),
-        turns,
-        context_restore_state: "pending".to_string(),
-        is_partial,
-        loaded_turn_count,
-        total_turn_count,
-    })
+    .await;
+    startup_trace.record_tauri_command_elapsed("restore_session_view", None, started_at);
+    result
 }
 
 #[tauri::command]
@@ -1555,7 +1984,11 @@ pub async fn generate_session_title(
 }
 
 #[tauri::command]
-pub async fn get_available_modes(state: State<'_, AppState>) -> Result<Vec<ModeInfoDTO>, String> {
+pub async fn get_available_modes(
+    state: State<'_, AppState>,
+    startup_trace: State<'_, DesktopStartupTrace>,
+) -> Result<Vec<ModeInfoDTO>, String> {
+    let trace_started = Instant::now();
     let mode_infos = state.agent_registry.get_modes_info().await;
 
     let dtos: Vec<ModeInfoDTO> = mode_infos
@@ -1580,6 +2013,7 @@ pub async fn get_available_modes(state: State<'_, AppState>) -> Result<Vec<ModeI
         })
         .collect();
 
+    startup_trace.record_tauri_command_elapsed("get_available_modes", None, trace_started);
     Ok(dtos)
 }
 
@@ -1657,6 +2091,11 @@ fn assistant_bootstrap_block_reason_to_str(reason: AssistantBootstrapBlockReason
 }
 
 fn session_to_response(session: Session) -> SessionResponse {
+    let turn_count = session.dialog_turn_ids.len();
+    session_to_response_with_turn_count(session, turn_count)
+}
+
+fn session_to_response_with_turn_count(session: Session, turn_count: usize) -> SessionResponse {
     SessionResponse {
         session_id: session.session_id,
         session_name: session.session_name,
@@ -1664,7 +2103,7 @@ fn session_to_response(session: Session) -> SessionResponse {
         last_user_dialog_agent_type: session.last_user_dialog_agent_type,
         last_submitted_agent_type: session.last_submitted_agent_type,
         state: format!("{:?}", session.state),
-        turn_count: session.dialog_turn_ids.len(),
+        turn_count,
         created_at: system_time_to_unix_secs(session.created_at),
     }
 }
@@ -1718,6 +2157,8 @@ mod tests {
             is_subagent_item: None,
             parent_task_tool_id: None,
             subagent_session_id: None,
+            attempt_id: None,
+            attempt_index: None,
             subagent_model_id: None,
             subagent_model_alias: None,
             status: None,
@@ -1744,6 +2185,7 @@ mod tests {
                 id: "round-1".to_string(),
                 turn_id: "turn-1".to_string(),
                 round_index: 0,
+                round_group_id: None,
                 timestamp: 1,
                 text_items: vec![],
                 tool_items: vec![
@@ -1768,6 +2210,9 @@ mod tests {
             start_time: 1,
             end_time: Some(2),
             duration_ms: Some(1),
+            token_usage: None,
+            finish_reason: None,
+            has_final_response: None,
             status: TurnStatus::Completed,
         };
 
@@ -1784,6 +2229,21 @@ mod tests {
         assert_eq!(stats.top_raw_results[1].tool_name, "Read");
         assert_eq!(stats.top_raw_results[1].raw_result_string_chars, 3);
         assert!(!stats.top_raw_results[0].path.contains(&"x".repeat(20)));
+    }
+
+    #[test]
+    fn session_view_response_can_report_total_turn_count_for_tail_view() {
+        let mut session = Session::new_with_id(
+            "session-1".to_string(),
+            "Tail view".to_string(),
+            "agentic".to_string(),
+            SessionConfig::default(),
+        );
+        session.dialog_turn_ids = vec!["turn-49".to_string(), "turn-50".to_string()];
+
+        let response = session_to_response_with_turn_count(session, 50);
+
+        assert_eq!(response.turn_count, 50);
     }
 
     #[test]
@@ -1805,6 +2265,7 @@ mod tests {
                 id: "round-1".to_string(),
                 turn_id: "turn-1".to_string(),
                 round_index: 0,
+                round_group_id: None,
                 timestamp: 1,
                 text_items: vec![],
                 tool_items: vec![tool_item(
@@ -1830,6 +2291,9 @@ mod tests {
             start_time: 1,
             end_time: Some(2),
             duration_ms: Some(1),
+            token_usage: None,
+            finish_reason: None,
+            has_final_response: None,
             status: TurnStatus::Completed,
         }];
 
@@ -1863,6 +2327,7 @@ mod tests {
                 id: "round-1".to_string(),
                 turn_id: "turn-1".to_string(),
                 round_index: 0,
+                round_group_id: None,
                 timestamp: 1,
                 text_items: vec![],
                 tool_items: vec![tool_item(
@@ -1888,6 +2353,9 @@ mod tests {
             start_time: 1,
             end_time: Some(2),
             duration_ms: Some(1),
+            token_usage: None,
+            finish_reason: None,
+            has_final_response: None,
             status: TurnStatus::Completed,
         }];
 

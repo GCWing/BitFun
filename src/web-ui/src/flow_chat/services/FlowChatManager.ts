@@ -25,6 +25,7 @@ import {
   saveAllInProgressTurns,
   immediateSaveDialogTurn,
   createChatSession as createChatSessionModule,
+  preloadHistoricalSessionForOpen as preloadHistoricalSessionForOpenModule,
   switchChatSession as switchChatSessionModule,
   deleteChatSession as deleteChatSessionModule,
   renameChatSessionTitle as renameChatSessionTitleModule,
@@ -47,11 +48,15 @@ import {
 const log = createLogger('FlowChatManager');
 
 export class FlowChatManager {
-  private static instance: FlowChatManager;
+  private static instance: FlowChatManager | null = null;
   private context: FlowChatContext;
   private agentService: AgentService;
   private eventListenerInitialized = false;
+  private eventListenerInitializationPromise: Promise<void> | null = null;
   private eventListenerCleanup: (() => void) | null = null;
+  private initializationRequests = new Map<string, Promise<boolean>>();
+  private latestInitializationRequestKey: string | null = null;
+  private disposed = false;
 
   private constructor() {
     this.context = {
@@ -92,7 +97,65 @@ export class FlowChatManager {
     return FlowChatManager.instance;
   }
 
+  public static disposeInstance(): void {
+    FlowChatManager.instance?.destroy();
+    FlowChatManager.instance = null;
+  }
+
   async initialize(
+    workspacePath: string,
+    preferredMode?: string,
+    remoteConnectionId?: string,
+    remoteSshHost?: string
+  ): Promise<boolean> {
+    if (this.disposed) {
+      log.debug('Ignoring initialize call on disposed FlowChatManager', { workspacePath });
+      return false;
+    }
+
+    const requestKey = FlowChatManager.createInitializationRequestKey(
+      workspacePath,
+      preferredMode,
+      remoteConnectionId,
+      remoteSshHost,
+    );
+    const existingRequest = this.initializationRequests.get(requestKey);
+    this.latestInitializationRequestKey = requestKey;
+    if (existingRequest) {
+      return existingRequest;
+    }
+
+    const request = this.initializeWorkspace(
+      requestKey,
+      workspacePath,
+      preferredMode,
+      remoteConnectionId,
+      remoteSshHost,
+    ).finally(() => {
+      if (this.initializationRequests.get(requestKey) === request) {
+        this.initializationRequests.delete(requestKey);
+      }
+    });
+    this.initializationRequests.set(requestKey, request);
+    return request;
+  }
+
+  private static createInitializationRequestKey(
+    workspacePath: string,
+    preferredMode?: string,
+    remoteConnectionId?: string,
+    remoteSshHost?: string
+  ): string {
+    return JSON.stringify([
+      workspacePath,
+      preferredMode ?? '',
+      remoteConnectionId ?? '',
+      remoteSshHost ?? '',
+    ]);
+  }
+
+  private async initializeWorkspace(
+    requestKey: string,
     workspacePath: string,
     preferredMode?: string,
     remoteConnectionId?: string,
@@ -100,6 +163,9 @@ export class FlowChatManager {
   ): Promise<boolean> {
     try {
       await this.initializeEventListeners();
+      if (this.disposed) {
+        return false;
+      }
 
       // Register callback to persist unread completion changes to backend
       this.context.flowChatStore.registerPersistUnreadCompletionCallback(
@@ -118,6 +184,9 @@ export class FlowChatManager {
         remoteSshHost,
         'flow_chat_manager'
       );
+      if (this.disposed) {
+        return false;
+      }
 
       const sessionMatchesWorkspace = (session: {
         workspacePath?: string;
@@ -154,6 +223,9 @@ export class FlowChatManager {
             remoteSshHost,
             'flow_chat_manager_preferred_mode'
           );
+          if (this.disposed) {
+            return false;
+          }
           state = this.context.flowChatStore.getState();
           workspaceSessions = Array.from(state.sessions.values()).filter(sessionMatchesWorkspace);
           if (workspaceSessions.some(session => session.mode === preferredMode) || !nextPage.hasMore) {
@@ -166,13 +238,19 @@ export class FlowChatManager {
         workspaceSessions.length > 0 ||
         initialMetadataPage.totalTopLevelCount > 0 ||
         initialMetadataPage.sessions.length > 0;
+      const isCurrentInitializationRequest = () =>
+        this.latestInitializationRequestKey === requestKey;
       const activeSession = state.activeSessionId
         ? state.sessions.get(state.activeSessionId) ?? null
         : null;
       const activeSessionBelongsToWorkspace =
         !!activeSession && sessionMatchesWorkspace(activeSession);
+      const activeSessionIdAtAutoSelectStart = state.activeSessionId;
 
       if (hasHistoricalSessions && !activeSessionBelongsToWorkspace) {
+        if (!isCurrentInitializationRequest()) {
+          return hasHistoricalSessions;
+        }
         const sortedWorkspaceSessions = [...workspaceSessions].sort(compareSessionsForDisplay);
         const latestSession = (preferredMode
           ? sortedWorkspaceSessions.find(session => session.mode === preferredMode)
@@ -189,14 +267,41 @@ export class FlowChatManager {
             workspacePath,
             undefined,
             latestSession.remoteConnectionId,
-            latestSession.remoteSshHost
+            latestSession.remoteSshHost,
+            { deferFullHistoryUntilActive: true },
           );
+          if (this.disposed) {
+            return false;
+          }
+        }
+
+        if (!isCurrentInitializationRequest()) {
+          return hasHistoricalSessions;
+        }
+
+        const currentState = this.context.flowChatStore.getState();
+        const currentActiveSession = currentState.activeSessionId
+          ? currentState.sessions.get(currentState.activeSessionId) ?? null
+          : null;
+        const currentActiveSessionBelongsToWorkspace =
+          !!currentActiveSession && sessionMatchesWorkspace(currentActiveSession);
+        const activeSessionChangedDuringAutoSelect =
+          currentState.activeSessionId !== activeSessionIdAtAutoSelectStart &&
+          currentState.activeSessionId !== null;
+        if (currentActiveSessionBelongsToWorkspace) {
+          this.context.currentWorkspacePath = workspacePath;
+          return hasHistoricalSessions;
+        }
+        if (activeSessionChangedDuringAutoSelect) {
+          return hasHistoricalSessions;
         }
 
         this.context.flowChatStore.switchSession(latestSession.sessionId);
       }
 
-      this.context.currentWorkspacePath = workspacePath;
+      if (isCurrentInitializationRequest()) {
+        this.context.currentWorkspacePath = workspacePath;
+      }
 
       return hasHistoricalSessions;
     } catch (error) {
@@ -206,16 +311,36 @@ export class FlowChatManager {
   }
 
   private async initializeEventListeners(): Promise<void> {
+    if (this.disposed) {
+      return;
+    }
     if (this.eventListenerInitialized) {
       return;
     }
+    if (this.eventListenerInitializationPromise) {
+      return this.eventListenerInitializationPromise;
+    }
 
-    this.eventListenerCleanup = await initializeEventListeners(
-      this.context,
-      (sessionId, turnId, result) => this.handleTodoWriteResult(sessionId, turnId, result)
-    );
-    
-    this.eventListenerInitialized = true;
+    this.eventListenerInitializationPromise = (async () => {
+      const cleanup = await initializeEventListeners(
+        this.context,
+        (sessionId, turnId, result) => this.handleTodoWriteResult(sessionId, turnId, result)
+      );
+
+      if (this.disposed) {
+        cleanup();
+        return;
+      }
+
+      this.eventListenerCleanup = cleanup;
+      this.eventListenerInitialized = true;
+    })();
+
+    try {
+      await this.eventListenerInitializationPromise;
+    } finally {
+      this.eventListenerInitializationPromise = null;
+    }
   }
 
   public cleanupEventListeners(): void {
@@ -224,9 +349,27 @@ export class FlowChatManager {
       this.eventListenerCleanup = null;
       this.eventListenerInitialized = false;
     }
+    this.eventListenerInitializationPromise = null;
+  }
+
+  public destroy(): void {
+    if (this.disposed) {
+      return;
+    }
+
+    this.context.eventBatcher.flushNow();
+    this.disposed = true;
+    this.initializationRequests.clear();
+    this.latestInitializationRequestKey = null;
+    this.cleanupEventListeners();
+    this.context.eventBatcher.destroy();
   }
 
   private processBatchedEvents(events: Array<{ key: string; payload: any }>): void {
+    if (this.disposed) {
+      return;
+    }
+
     processBatchedEvents(
       this.context,
       events,
@@ -285,6 +428,10 @@ export class FlowChatManager {
 
   async switchChatSession(sessionId: string): Promise<void> {
     return switchChatSessionModule(this.context, sessionId);
+  }
+
+  preloadHistoricalSessionForOpen(sessionId: string): void {
+    preloadHistoricalSessionForOpenModule(this.context, sessionId);
   }
 
   async deleteChatSession(sessionId: string): Promise<void> {
@@ -581,5 +728,12 @@ export class FlowChatManager {
     }
   }
 }
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    FlowChatManager.disposeInstance();
+  });
+}
+
 export const flowChatManager = FlowChatManager.getInstance();
 export default flowChatManager;

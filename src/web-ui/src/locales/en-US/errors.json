@@ -62,7 +62,7 @@
     "networkError": "AI response interrupted",
     "networkErrorSuggestion": "The connection was unstable or the model server closed it prematurely. Check your network and retry",
     "rateLimit": "Model rate limit exceeded",
-    "rateLimitSuggestion": "Please retry later, or switch to a different model in settings",
+    "rateLimitSuggestion": "The provider rejected this request due to rate limiting. This may be caused by too many requests in a short period, or by tokens-per-minute (TPM) limits on certain provider platforms. Wait a moment and retry, or switch to a different model in settings",
     "authError": "API authentication failed",
     "authErrorSuggestion": "The API key is invalid or expired. Check the key in your model configuration",
     "contextOverflow": "Conversation exceeds context limit",

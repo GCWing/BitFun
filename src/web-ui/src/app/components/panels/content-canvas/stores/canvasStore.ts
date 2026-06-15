@@ -1070,7 +1070,7 @@ const createCanvasStoreHook = () => create<CanvasStore>()(
     }))
 );
 
-export type CanvasStoreMode = 'agent' | 'project' | 'git' | 'panel-view';
+export type CanvasStoreMode = 'agent' | 'project' | 'git' | 'panel-view' | 'bottom-terminal';
 
 /**
  * Selects which canvas store instance is used by the current subtree.
@@ -1082,6 +1082,7 @@ export const useAgentCanvasStore = createCanvasStoreHook();
 export const useProjectCanvasStore = createCanvasStoreHook();
 export const useGitCanvasStore = createCanvasStoreHook();
 export const usePanelViewCanvasStore = createCanvasStoreHook();
+export const useBottomTerminalCanvasStore = createCanvasStoreHook();
 
 // ==================== Agent canvas: per-workspace snapshots (AuxPane / Session scene) ====================
 // Switching active workspace saves the current agent canvas under the previous workspace id and restores
@@ -1209,10 +1210,12 @@ export function useCanvasStore<T>(selector?: (state: CanvasStore) => T): T | Can
   const projectValue = useProjectCanvasStore(resolvedSelector);
   const gitValue = useGitCanvasStore(resolvedSelector);
   const panelViewValue = usePanelViewCanvasStore(resolvedSelector);
+  const bottomTerminalValue = useBottomTerminalCanvasStore(resolvedSelector);
 
   if (mode === 'project') return projectValue;
   if (mode === 'git') return gitValue;
   if (mode === 'panel-view') return panelViewValue;
+  if (mode === 'bottom-terminal') return bottomTerminalValue;
   return agentValue;
 }
 

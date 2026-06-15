@@ -172,11 +172,12 @@ cp target/aarch64-unknow-linux-ohos/release/libbitfun_desktop_lib.so src/apps/oh
 ## 项目结构一览
 
 ```
-src/crates/core         # 兼容门面与完整产品 runtime 组装点
-src/crates/{core-types,agent-stream,runtime-ports} # 已拆出的 core 支撑边界
-src/crates/{terminal,tool-runtime} # workspace 顶层 terminal / tool 辅助 crate
-src/crates/transport    # Tauri / WebSocket / CLI 传输适配
-src/crates/api-layer    # 共享 handler 与 DTO
+src/crates/interfaces/         # ACP 等产品协议接口
+src/crates/assembly/           # 兼容门面与产品能力组装
+src/crates/adapters/           # AI、API、transport 与 WebDriver adapter
+src/crates/services/           # OS、terminal、MCP、remote、git 与 filesystem service
+src/crates/execution/          # Agent、harness、stream、typed-service 与 tool 原语
+src/crates/contracts/          # 稳定 DTO、事件、runtime ports 与产品领域契约
 src/apps/desktop        # Tauri 桌面宿主
 src/apps/server         # Web 服务端运行时
 src/apps/cli            # CLI 运行时

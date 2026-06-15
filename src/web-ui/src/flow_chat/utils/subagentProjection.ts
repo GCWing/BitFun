@@ -142,14 +142,15 @@ export function getSubagentProjectionState(
   const turn = pickProjectedTurn(session);
   const round = pickProjectedRound(turn);
   const itemsMode = options.itemsMode ?? 'full-turn';
+  const items = itemsMode === 'last-round'
+    ? flattenRoundItems(round)
+    : flattenTurnItems(turn);
 
   return {
     session,
     turn,
     round,
-    items: itemsMode === 'last-round'
-      ? flattenRoundItems(round)
-      : flattenTurnItems(turn),
+    items,
     isRunning: isActiveTurn(turn),
   };
 }

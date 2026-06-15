@@ -16,6 +16,8 @@ import { ToolCardStatusIcon } from './ToolCardStatusIcon';
 import './BaseToolCard.scss';
 
 const LOADING_SHIMMER_STATUSES = new Set([
+  'queued',
+  'waiting',
   'preparing',
   'streaming',
   'receiving',
@@ -29,7 +31,7 @@ function statusUsesLoadingShimmer(status: string): boolean {
 
 export interface BaseToolCardProps {
   /** Tool status */
-  status: 'pending' | 'preparing' | 'streaming' | 'receiving' | 'running' | 'completed' | 'error' | 'cancelled' | 'analyzing' | 'pending_confirmation' | 'confirmed';
+  status: 'pending' | 'queued' | 'waiting' | 'preparing' | 'streaming' | 'receiving' | 'running' | 'completed' | 'error' | 'cancelled' | 'analyzing' | 'pending_confirmation' | 'confirmed';
   /** Whether expanded */
   isExpanded?: boolean;
   /** Card click callback */

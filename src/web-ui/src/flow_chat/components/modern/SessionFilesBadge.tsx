@@ -50,6 +50,7 @@ import {
 } from '@/infrastructure/config/services/AIExperienceConfigService';
 import { resolveQuickActionText } from '@/infrastructure/config/services/quickActionLocalization';
 import { deriveDeepReviewSessionConcurrencyGuard } from '../../utils/deepReviewCapacityGuard';
+import { scheduleAfterStartupSignal } from '@/shared/utils/startupTaskScheduling';
 import './SessionFilesBadge.scss';
 
 const log = createLogger('SessionFilesBadge');
@@ -217,10 +218,29 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
 
   // Sync quick actions when settings change.
   useEffect(() => {
-    return aiExperienceConfigService.addChangeListener((settings) => {
+    let cancelled = false;
+    let unsubscribeSettings: (() => void) | null = null;
+    const cancelStartupSchedule = scheduleAfterStartupSignal(async () => {
+      const settings = await aiExperienceConfigService.getSettingsAsync();
+      if (cancelled) {
+        return;
+      }
       const actions = settings.quick_actions;
       setQuickActions((actions && actions.length > 0) ? actions : DEFAULT_QUICK_ACTIONS);
+      unsubscribeSettings = aiExperienceConfigService.addChangeListener((nextSettings) => {
+        const nextActions = nextSettings.quick_actions;
+        setQuickActions((nextActions && nextActions.length > 0) ? nextActions : DEFAULT_QUICK_ACTIONS);
+      });
+    }, {
+      signalName: 'bitfun:interactive-shell-ready',
+      fallbackTimeoutMs: 10000,
+      frameCount: 1,
     });
+    return () => {
+      cancelled = true;
+      cancelStartupSchedule();
+      unsubscribeSettings?.();
+    };
   }, []);
 
   // Reset cached state when the session changes.
@@ -480,12 +500,11 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
     if (fileStats.size === 0) return '';
     const head = t('sessionFilesBadge.filesSummaryCount', {
       count: fileStats.size,
-      defaultValue: '{{count}} files',
     });
     const deltas: string[] = [];
     if (totalStats.totalAdditions > 0) deltas.push(`+${totalStats.totalAdditions}`);
     if (totalStats.totalDeletions > 0) deltas.push(`-${totalStats.totalDeletions}`);
-    const cue = t('sessionFilesBadge.expandChangeListCue', { defaultValue: 'Expand list' });
+    const cue = t('sessionFilesBadge.expandChangeListCue');
     return deltas.length > 0 ? `${head} · ${deltas.join(' ')} · ${cue}` : `${head} · ${cue}`;
   }, [fileStats.size, totalStats.totalAdditions, totalStats.totalDeletions, t]);
 
@@ -493,14 +512,11 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
     if (fileStats.size === 0) return '';
     const head = t('sessionFilesBadge.filesSummaryCount', {
       count: fileStats.size,
-      defaultValue: '{{count}} files',
     });
     const deltas: string[] = [];
     if (totalStats.totalAdditions > 0) deltas.push(`+${totalStats.totalAdditions}`);
     if (totalStats.totalDeletions > 0) deltas.push(`-${totalStats.totalDeletions}`);
-    const cue = t('sessionFilesBadge.expandChangeListAriaCue', {
-      defaultValue: 'Expand to show files',
-    });
+    const cue = t('sessionFilesBadge.expandChangeListAriaCue');
     return deltas.length > 0 ? `${head}, ${deltas.join(' ')}, ${cue}` : `${head}, ${cue}`;
   }, [fileStats.size, totalStats.totalAdditions, totalStats.totalDeletions, t]);
 
@@ -600,9 +616,7 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
 
     if (reviewableFilePaths.length === 0) {
       notificationService.warning(
-        t('sessionFilesBadge.review.noEligibleFiles', {
-          defaultValue: 'No reviewable files remain after excluded files were filtered out.',
-        }),
+        t('sessionFilesBadge.review.noEligibleFiles'),
         { duration: 3500 }
       );
       return;
@@ -613,8 +627,6 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
         t('sessionFilesBadge.review.filteredNotice', {
           included: reviewableFilePaths.length,
           skipped: skippedCount,
-          defaultValue:
-            'Review will analyze {{included}} files and skip {{skipped}} excluded files such as lock, generated, or binary assets.',
         }),
         { duration: 3500 }
       );
@@ -625,16 +637,12 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
       ? t('sessionFilesBadge.review.displayMessageFiltered', {
           files: fileList,
           skipped: skippedCount,
-          defaultValue:
-            'Review filtered files:\n{{files}}\n\nSkipped {{skipped}} excluded files.',
         })
       : t('sessionFilesBadge.review.displayMessage', { files: fileList });
     const reviewMessage = skippedCount > 0
       ? t('sessionFilesBadge.review.promptFiltered', {
           files: fileList,
           skipped: skippedCount,
-          defaultValue:
-            'Please review the following modified files in this session:\n\n{{files}}\n\nDo not review the {{skipped}} skipped files because they matched the excluded lock, generated, or binary file rules.',
         })
       : t('sessionFilesBadge.review.prompt', { files: fileList });
 
@@ -642,9 +650,7 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
     try {
       const { FlowChatManager } = await import('../../services/FlowChatManager');
       const flowChatManager = FlowChatManager.getInstance();
-      const reviewThreadTitle = t('sessionFilesBadge.review.threadTitle', {
-        defaultValue: 'Code review',
-      });
+      const reviewThreadTitle = t('sessionFilesBadge.review.threadTitle');
       const created = await createBtwChildSession({
         parentSessionId: sessionId,
         workspacePath: currentWorkspace?.rootPath,
@@ -704,9 +710,7 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
 
     if (reviewableFilePaths.length === 0) {
       notificationService.warning(
-        t('sessionFilesBadge.review.noEligibleFiles', {
-          defaultValue: 'No reviewable files remain after excluded files were filtered out.',
-        }),
+        t('sessionFilesBadge.review.noEligibleFiles'),
         { duration: 3500 }
       );
       return;
@@ -717,12 +721,9 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
       ? t('sessionFilesBadge.deepReview.displayMessageFiltered', {
           files: fileList,
           skipped: skippedCount,
-          defaultValue:
-            'Deep review filtered files:\n{{files}}\n\nSkipped {{skipped}} excluded files.',
         })
       : t('sessionFilesBadge.deepReview.displayMessage', {
           files: fileList,
-          defaultValue: 'Deep review modified files:\n{{files}}',
         });
 
     try {
@@ -746,8 +747,6 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
           t('sessionFilesBadge.review.filteredNotice', {
             included: reviewableFilePaths.length,
             skipped: skippedCount,
-            defaultValue:
-              'Review will analyze {{included}} files and skip {{skipped}} excluded files such as lock, generated, or binary assets.',
           }),
           { duration: 3500 }
         );
@@ -765,9 +764,7 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
         prompt,
         displayMessage,
         runManifest,
-        childSessionName: t('sessionFilesBadge.deepReview.threadTitle', {
-          defaultValue: 'Deep review',
-        }),
+        childSessionName: t('sessionFilesBadge.deepReview.threadTitle'),
         requestedFiles: reviewableFilePaths,
       });
 
@@ -813,10 +810,8 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
 
   const activeReviewMode = launchingReviewMode ?? (reviewActivity?.isBlocking ? reviewActivity.kind : null) ?? null;
   const reviewButtonTitle = activeReviewMode
-    ? t('sessionFilesBadge.reviewRunningHint', {
-        defaultValue: 'Wait for the current review to finish or stop it from the review page.',
-      })
-    : t('sessionFilesBadge.actionsMenuHint', { defaultValue: 'Quick actions' });
+    ? t('sessionFilesBadge.reviewRunningHint')
+    : t('sessionFilesBadge.actionsMenuHint');
 
   // Hide when there is no session or parent disabled. Actions menu (reviews + quick actions)
   // renders first; file-change summary appears after we have stats.
@@ -861,8 +856,8 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
         >
           <span className="session-files-badge__review-actions-label">
             {activeReviewMode
-              ? t('sessionFilesBadge.actionsButtonRunning', { defaultValue: 'Busy…' })
-              : t('sessionFilesBadge.actionsButton', { defaultValue: 'Actions' })}
+              ? t('sessionFilesBadge.actionsButtonRunning')
+              : t('sessionFilesBadge.actionsButton')}
           </span>
           {!activeReviewMode ? (
             <ChevronDown
@@ -944,7 +939,7 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
         title={fileChangeToggleHint}
         aria-label={
           isExpanded
-            ? t('sessionFilesBadge.collapseFileDiffList', { defaultValue: 'Collapse file change list' })
+            ? t('sessionFilesBadge.collapseFileDiffList')
             : fileChangeToggleAriaCollapsed
         }
         aria-expanded={isExpanded}
@@ -976,7 +971,6 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
             <span className="session-files-badge__popover-summary-count">
               {t('sessionFilesBadge.filesSummaryCount', {
                 count: fileStats.size,
-                defaultValue: '{{count}} files',
               })}
             </span>
             {(totalStats.totalAdditions > 0 || totalStats.totalDeletions > 0) && (

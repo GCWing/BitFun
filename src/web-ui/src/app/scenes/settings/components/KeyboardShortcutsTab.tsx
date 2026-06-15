@@ -21,7 +21,7 @@ import {
   type ShortcutRegistration,
   type KeybindingOverrides,
 } from '@/infrastructure/services/ShortcutManager';
-import { configManager } from '@/infrastructure/config';
+import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import type { ShortcutConfig, ShortcutScope } from '@/shared/types/shortcut';
 import {
   ALL_SHORTCUTS,

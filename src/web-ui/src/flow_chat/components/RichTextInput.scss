@@ -49,7 +49,7 @@
 :root[data-theme-type="light"] .rich-text-input,
 .light .rich-text-input {
   &:empty::before {
-    color: color-mix(in srgb, var(--color-text-secondary, #6b7280) 48%, transparent);
+    color: color-mix(in srgb, var(--color-text-secondary) 48%, transparent);
   }
 }
 
@@ -68,7 +68,7 @@
   cursor: pointer;
   user-select: text;
   vertical-align: middle;
-  line-height: var(--flowchat-support-line-height, 1.45);
+  line-height: var(--flowchat-support-line-height);
   transition: all 0.2s ease;
   white-space: nowrap;
   
@@ -113,7 +113,7 @@
   cursor: default;
   user-select: none;
   vertical-align: middle;
-  line-height: var(--flowchat-support-line-height, 1.45);
+  line-height: var(--flowchat-support-line-height);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   
   &:hover {
@@ -181,7 +181,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  line-height: var(--flowchat-support-line-height, 1.45);
+  line-height: var(--flowchat-support-line-height);
   font-family: $font-family-mono;
   font-size: 0.85em;
 }
@@ -235,7 +235,7 @@
   transition: all 0.2s ease;
   
   &:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: var(--color-overlay-white-20);
     opacity: 1;
   }
   

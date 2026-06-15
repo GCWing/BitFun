@@ -8,10 +8,10 @@
   width: 500px;
   max-width: calc(100vw - 32px);
   max-height: 400px;
-  background: var(--color-bg-elevated, #1e1e1e);
+  background: var(--color-bg-elevated);
   border: 1px solid var(--border-base);
   border-radius: 8px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 8px 32px var(--color-overlay-black-50);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -34,7 +34,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 8px 12px;
-    background: var(--color-bg-secondary, rgba(255, 255, 255, 0.03));
+    background: var(--color-bg-secondary);
     border-bottom: 1px solid var(--border-base);
   }
 
@@ -51,7 +51,7 @@
       white-space: nowrap;
       font-size: 13px;
       font-weight: 500;
-      color: var(--color-text-primary, rgba(255, 255, 255, 0.9));
+      color: var(--color-text-primary);
     }
   }
 
@@ -64,14 +64,14 @@
     padding: 0;
     background: none;
     border: none;
-    color: var(--color-text-secondary, rgba(255, 255, 255, 0.5));
+    color: var(--color-text-secondary);
     cursor: pointer;
     border-radius: 3px;
     flex-shrink: 0;
 
     &:hover {
-      background: var(--color-bg-hover, rgba(255, 255, 255, 0.1));
-      color: var(--color-text-primary, rgba(255, 255, 255, 0.9));
+      background: var(--color-bg-hover);
+      color: var(--color-text-primary);
     }
   }
 
@@ -91,23 +91,23 @@
     padding: 0;
     background: none;
     border: none;
-    color: var(--color-text-secondary, rgba(255, 255, 255, 0.6));
+    color: var(--color-text-secondary);
     cursor: pointer;
     border-radius: 4px;
     transition: background-color 0.15s ease, color 0.15s ease;
 
     &:hover {
-      background: var(--color-bg-hover, rgba(255, 255, 255, 0.1));
-      color: var(--color-text-primary, rgba(255, 255, 255, 0.9));
+      background: var(--color-bg-hover);
+      color: var(--color-text-primary);
     }
   }
 
   &__pin-btn:hover {
-    color: var(--color-primary, #60a5fa);
+    color: var(--color-primary);
   }
 
   &__close-btn:hover {
-    color: var(--color-danger, #f87171);
+    color: var(--color-danger);
   }
 
   // Content area
@@ -138,8 +138,8 @@
     gap: 4px;
     padding: 6px 12px;
     font-size: 11px;
-    color: var(--color-text-tertiary, rgba(255, 255, 255, 0.4));
-    background: var(--color-bg-secondary, rgba(255, 255, 255, 0.02));
+    color: var(--color-text-tertiary);
+    background: var(--color-bg-secondary);
     border-top: 1px solid var(--border-subtle);
   }
 

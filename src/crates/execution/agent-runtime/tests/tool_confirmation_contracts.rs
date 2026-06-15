@@ -1,0 +1,116 @@
+use bitfun_agent_runtime::tool_confirmation::{
+    resolve_confirmation_failure, resolve_confirmation_wait_result, resolve_tool_confirmation_plan,
+    ConfirmationFailureKind, ToolConfirmationOutcome, ToolConfirmationPlan,
+    ToolConfirmationRequestFacts, ToolConfirmationWaitResult,
+};
+use std::time::{Duration, UNIX_EPOCH};
+
+#[test]
+fn confirmation_plan_requires_permission_only_when_both_flags_are_true() {
+    let plan = resolve_tool_confirmation_plan(ToolConfirmationRequestFacts {
+        confirm_before_run: true,
+        tool_needs_permission: true,
+        confirmation_timeout_secs: Some(30),
+        now: UNIX_EPOCH + Duration::from_secs(1_000),
+    });
+
+    assert_eq!(
+        plan,
+        ToolConfirmationPlan::Await {
+            timeout_at: UNIX_EPOCH + Duration::from_secs(1_030),
+            timeout_secs: Some(30),
+        }
+    );
+
+    assert_eq!(
+        resolve_tool_confirmation_plan(ToolConfirmationRequestFacts {
+            confirm_before_run: false,
+            tool_needs_permission: true,
+            confirmation_timeout_secs: Some(30),
+            now: UNIX_EPOCH + Duration::from_secs(1_000),
+        }),
+        ToolConfirmationPlan::Skip
+    );
+    assert_eq!(
+        resolve_tool_confirmation_plan(ToolConfirmationRequestFacts {
+            confirm_before_run: true,
+            tool_needs_permission: false,
+            confirmation_timeout_secs: None,
+            now: UNIX_EPOCH + Duration::from_secs(1_000),
+        }),
+        ToolConfirmationPlan::Skip
+    );
+}
+
+#[test]
+fn confirmation_plan_preserves_legacy_no_timeout_one_year_deadline() {
+    assert_eq!(
+        resolve_tool_confirmation_plan(ToolConfirmationRequestFacts {
+            confirm_before_run: true,
+            tool_needs_permission: true,
+            confirmation_timeout_secs: None,
+            now: UNIX_EPOCH + Duration::from_secs(1_000),
+        }),
+        ToolConfirmationPlan::Await {
+            timeout_at: UNIX_EPOCH + Duration::from_secs(31_537_000),
+            timeout_secs: None,
+        }
+    );
+}
+
+#[test]
+fn confirmation_failure_mapping_preserves_legacy_reasons_and_errors() {
+    assert_eq!(
+        resolve_confirmation_failure(ToolConfirmationOutcome::Confirmed),
+        None
+    );
+
+    let rejected = resolve_confirmation_failure(ToolConfirmationOutcome::Rejected {
+        reason: "unsafe".to_string(),
+    })
+    .expect("rejection should produce failure");
+    assert_eq!(rejected.kind, ConfirmationFailureKind::Rejected);
+    assert_eq!(rejected.state_reason, "User rejected: unsafe");
+    assert_eq!(rejected.error_message, "Tool was rejected by user: unsafe");
+
+    let closed = resolve_confirmation_failure(ToolConfirmationOutcome::ChannelClosed)
+        .expect("closed channel should produce failure");
+    assert_eq!(closed.kind, ConfirmationFailureKind::ChannelClosed);
+    assert_eq!(closed.state_reason, "Confirmation channel closed");
+    assert_eq!(closed.error_message, "Confirmation channel closed");
+
+    let timeout = resolve_confirmation_failure(ToolConfirmationOutcome::Timeout {
+        tool_name: "Bash".to_string(),
+    })
+    .expect("timeout should produce failure");
+    assert_eq!(timeout.kind, ConfirmationFailureKind::Timeout);
+    assert_eq!(timeout.state_reason, "Confirmation timeout");
+    assert_eq!(timeout.error_message, "Confirmation timeout: Bash");
+}
+
+#[test]
+fn confirmation_wait_result_mapping_preserves_legacy_timeout_and_rejection() {
+    assert_eq!(
+        resolve_confirmation_wait_result(ToolConfirmationWaitResult::Confirmed, "Bash"),
+        ToolConfirmationOutcome::Confirmed
+    );
+    assert_eq!(
+        resolve_confirmation_wait_result(
+            ToolConfirmationWaitResult::Rejected("unsafe".to_string()),
+            "Edit"
+        ),
+        ToolConfirmationOutcome::Rejected {
+            reason: "unsafe".to_string(),
+        }
+    );
+    assert_eq!(
+        resolve_confirmation_wait_result(ToolConfirmationWaitResult::ChannelClosed, "Read"),
+        ToolConfirmationOutcome::ChannelClosed
+    );
+    assert_eq!(
+        resolve_confirmation_wait_result(ToolConfirmationWaitResult::TimedOut, "Bash"),
+        ToolConfirmationOutcome::Timeout {
+            tool_name: "Bash".to_string(),
+        }
+    );
+}

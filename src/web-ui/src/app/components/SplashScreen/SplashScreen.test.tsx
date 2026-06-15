@@ -29,55 +29,55 @@ describe('SplashScreen', () => {
     dom.window.close();
   });
 
-  it('reveals the workspace loading message only after the delay', () => {
+  it('reveals the subtle startup hint only after the delay', () => {
     act(() => {
       root.render(
         <SplashScreen
           isExiting={false}
           onExited={() => {}}
-          delayedMessage="Loading workspace..."
+          delayedMessage="Starting BitFun..."
           delayedMessageMs={1000}
         />
       );
     });
 
-    const message = container.querySelector('.splash-screen__message');
-    expect(message?.textContent).toBe('Loading workspace...');
-    expect(message?.classList.contains('splash-screen__message--visible')).toBe(false);
+    expect(container.querySelector('.splash-screen__message')).toBeNull();
 
     act(() => {
       vi.advanceTimersByTime(999);
     });
-    expect(message?.classList.contains('splash-screen__message--visible')).toBe(false);
+    expect(container.querySelector('.splash-screen__message')).toBeNull();
 
     act(() => {
       vi.advanceTimersByTime(1);
     });
+    const message = container.querySelector('.splash-screen__message');
+    expect(message?.textContent).toBe('Starting BitFun...');
     expect(message?.classList.contains('splash-screen__message--visible')).toBe(true);
   });
 
-  it('does not reveal the workspace loading message during the normal startup splash window by default', () => {
+  it('does not reveal the subtle startup hint during the normal startup splash window by default', () => {
     act(() => {
       root.render(
         <SplashScreen
           isExiting={false}
           onExited={() => {}}
-          delayedMessage="Loading workspace..."
+          delayedMessage="Starting BitFun..."
         />
       );
     });
 
-    const message = container.querySelector('.splash-screen__message');
-    expect(message?.classList.contains('splash-screen__message--visible')).toBe(false);
+    expect(container.querySelector('.splash-screen__message')).toBeNull();
 
     act(() => {
       vi.advanceTimersByTime(1799);
     });
-    expect(message?.classList.contains('splash-screen__message--visible')).toBe(false);
+    expect(container.querySelector('.splash-screen__message')).toBeNull();
 
     act(() => {
       vi.advanceTimersByTime(1);
     });
+    const message = container.querySelector('.splash-screen__message');
     expect(message?.classList.contains('splash-screen__message--visible')).toBe(true);
   });
 
@@ -87,7 +87,7 @@ describe('SplashScreen', () => {
         <SplashScreen
           isExiting={true}
           onExited={() => {}}
-          delayedMessage="Loading workspace..."
+          delayedMessage="Starting BitFun..."
           delayedMessageMs={1000}
         />
       );
@@ -97,7 +97,6 @@ describe('SplashScreen', () => {
       vi.advanceTimersByTime(1000);
     });
 
-    const message = container.querySelector('.splash-screen__message');
-    expect(message?.classList.contains('splash-screen__message--visible')).toBe(false);
+    expect(container.querySelector('.splash-screen__message')).toBeNull();
   });
 });

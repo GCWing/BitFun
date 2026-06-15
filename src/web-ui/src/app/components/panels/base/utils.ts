@@ -19,6 +19,7 @@ import {
   Globe,
   Activity,
   GitPullRequest,
+  Terminal,
 } from 'lucide-react';
 import { PanelContentType, PanelContentConfig } from './types';
 
@@ -204,6 +205,14 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
     type: 'session-usage',
     displayName: 'Session Usage',
     icon: Activity,
+    supportsCopy: false,
+    supportsDownload: false,
+    showHeader: false
+  },
+  'background-command-output': {
+    type: 'background-command-output',
+    displayName: 'Command Output',
+    icon: Terminal,
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false

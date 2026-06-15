@@ -44,10 +44,9 @@ export function useCopyTextAction({
     }
 
     setCopied(true);
-    if (showSuccessNotification){
+    if (showSuccessNotification) {
       notificationService.success(successMessage, { duration: resetMs });
     }
-    
 
     if (resetTimerRef.current !== null) {
       window.clearTimeout(resetTimerRef.current);
@@ -56,7 +55,7 @@ export function useCopyTextAction({
       setCopied(false);
       resetTimerRef.current = null;
     }, resetMs);
-  }, [failureMessage, getText, resetMs, successMessage,showSuccessNotification]);
+  }, [failureMessage, getText, resetMs, showSuccessNotification, successMessage]);
 
   return { copied, copy };
 }

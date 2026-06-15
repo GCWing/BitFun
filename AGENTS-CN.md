@@ -13,30 +13,27 @@ BitFun 是一个由 Rust workspace 与 React 前端组成的项目。
 3. 修改 Rust 文件后，优先使用 `pnpm run fmt:rs`，只格式化已改动或已暂存的 `.rs` 文件。只有在你明确需要更大范围格式化时才使用 `cargo fmt`。
 4. 改完后按下方表格执行与改动范围匹配的最小验证。
 
-## 模块索引
+## 分层模块索引
 
-| 模块 | 路径 | Agent 文档 |
-|---|---|---|
-| Core（产品逻辑） | `src/crates/core` | [AGENTS.md](src/crates/core/AGENTS.md) |
-| 已拆出的 core 支撑 crate | `src/crates/{core-types,agent-stream,runtime-ports,runtime-services,terminal,tool-runtime}` | （使用 core 指南） |
-| Agent runtime owner crate | `src/crates/agent-runtime` | [AGENTS.md](src/crates/agent-runtime/AGENTS.md) |
-| Service core owner crate | `src/crates/services-core` | [AGENTS.md](src/crates/services-core/AGENTS.md) |
-| Service integrations owner crate | `src/crates/services-integrations` | [AGENTS.md](src/crates/services-integrations/AGENTS.md) |
-| Agent tool contracts | `src/crates/agent-tools` | [AGENTS.md](src/crates/agent-tools/AGENTS.md) |
-| Tool pack provider plan | `src/crates/tool-packs` | [AGENTS.md](src/crates/tool-packs/AGENTS.md) |
-| 产品领域 crate | `src/crates/product-domains` | [AGENTS.md](src/crates/product-domains/AGENTS.md) |
-| Transport 适配层 | `src/crates/transport` | （使用 core 指南） |
-| API layer | `src/crates/api-layer` | （使用 core 指南） |
-| ACP 集成 | `src/crates/acp` | [AGENTS.md](src/crates/acp/AGENTS.md) |
-| AI adapters | `src/crates/ai-adapters` | [AGENTS.md](src/crates/ai-adapters/AGENTS.md) |
-| 桌面应用 | `src/apps/desktop` | [AGENTS.md](src/apps/desktop/AGENTS.md) |
-| Server | `src/apps/server` | （使用 core 指南） |
-| CLI | `src/apps/cli` | （使用 core 指南） |
-| 中继服务器 | `src/apps/relay-server` | （使用 core 指南） |
-| 共享前端 | `src/web-ui` | [AGENTS.md](src/web-ui/AGENTS.md) |
-| Mobile web | `src/mobile-web` | [AGENTS.md](src/mobile-web/AGENTS.md) |
-| 安装器 | `BitFun-Installer` | [AGENTS.md](BitFun-Installer/AGENTS.md) |
-| E2E 测试 | `tests/e2e` | [AGENTS.md](tests/e2e/AGENTS.md) |
+依赖关系按自上而下读取：上层只能依赖下层，同层 crate 也应保持最小依赖。
+
+| # | 层级 | 路径 | 职责 | 模块 / 入口 | 层级文档 |
+|---|---|---|---|---|---|
+| 1 | 接口与入口层 | `src/apps/*`, `src/web-ui`, `src/mobile-web`, `BitFun-Installer`, `tests/e2e`, `src/crates/interfaces` | 产品宿主、命令、UI 入口、协议接口和跨形态测试 | desktop、CLI、server、relay、Web UI、mobile web、installer、E2E、`acp` | 最近的本地 `AGENTS.md`；[interfaces](src/crates/interfaces/AGENTS.md) |
+| 2 | 产品组装层 | `src/crates/assembly` | 兼容导出、产品能力选择、product-full 接线和 adapter/service 注册 | `core`, `product-capabilities` | [AGENTS.md](src/crates/assembly/AGENTS.md) |
+| 3 | 适配层 | `src/crates/adapters` | AI/API/transport/WebDriver 协议 adapter 和外部 provider 转换 | `ai-adapters`, `api-layer`, `transport`, `webdriver` | [AGENTS.md](src/crates/adapters/AGENTS.md) |
+| 4 | 服务实现层 | `src/crates/services` | 可复用 OS、filesystem、terminal、MCP、remote、git、watch、process、session persistence primitives、network 和 MiniApp runtime IO 实现 | `services-core`, `services-integrations`, `terminal` | [AGENTS.md](src/crates/services/AGENTS.md) |
+| 5 | 执行原语层 | `src/crates/execution` | 可移植 agent、harness、stream、DeepReview policy/report、typed-service、tool-contract、tool-group 和 tool-execution 构件 | `agent-runtime`, `agent-stream`, `tool-contracts`, `harness`, `runtime-services`, `tool-provider-groups`, `tool-execution` | [AGENTS.md](src/crates/execution/AGENTS.md) |
+| 6 | 稳定契约与产品领域层 | `src/crates/contracts` | 跨层共享 DTO、事件形状、runtime port、产品领域契约和策略 | `core-types`, `events`, `runtime-ports`, `product-domains` | [AGENTS.md](src/crates/contracts/AGENTS.md) |
+
+边界规则：
+
+- 接口与入口层暴露选定产品行为；可复用行为应下移。
+- 组装层只接线下层并选择产品能力事实，不实现具体 adapter、OS 或 service 细节。
+- 适配层翻译协议和外部系统，不拥有产品能力选择或可复用 OS service 行为。
+- 服务实现层负责可复用的 OS、process、terminal、MCP、remote、git、filesystem、session persistence primitives 和 MiniApp runtime IO 能力。
+- 执行原语层只放可移植运行时构件，不拥有宿主或交付形态。
+- 契约层保持轻行为，不得向上依赖。
 
 ## 常用命令
 
@@ -94,8 +91,11 @@ pnpm run desktop:build:nsis:fast      # Windows 安装器，release-fast profile
 - 不要把 Web UI locale 资源导入 `src/mobile-web`、`BitFun-Installer` 等较小形态。
 - Web UI 只急切加载 bootstrap namespace；路由或功能文案使用
   `useI18n(namespace)`，直接 `i18nService.t(...)` 只用于 bootstrap namespace。
-- `pnpm run i18n:audit` 会检查 key / 占位符一致性、直接静态 key 是否存在，以及
-  source 中不再新增硬编码 CJK 文案。
+- 用户可见的日期、时间和数字应通过共享 i18n 格式化 helper 处理，避免在产品代码中直接
+  使用 `Intl.*` 或 `toLocale*`。
+- `pnpm run i18n:audit` 会检查 key / 占位符一致性、直接静态 key、dynamic key
+  source proof、literal fallback / locale-format 零增长基线、shared-term / l10n
+  治理基线、非阻断 same-text locale 盘点，以及 source 中不再新增硬编码 CJK 文案。
 
 ### 日志
 
@@ -152,39 +152,16 @@ await api.invoke('your_command', { request: { ... } });
 - 产品表面可以有差异；共享稳定 facts 或 ports，不共享 UI、protocol、lifecycle 或平台实现。
 - 迁移 runtime owner 必须有评审过的 port/provider 设计、旧路径兼容、行为等价测试；如果可能改变行为边界，还需要先确认。
 
-### DeepReview 护栏
+### SDLC 质量护栏
 
-Deep Review / 代码审核团队横跨 core runtime 与 Web UI。target resolution 与
-manifest construction 保持在前端；policy validation、queue/retry state 和
-report enrichment 保持在 shared core。
+涉及生命周期证据、门禁、Artifact Graph、Project Profile、Deep Review 策略、
+OpenCode 兼容或目标项目治理的变更，先阅读
+[`docs/sdlc-harness/README.md`](docs/sdlc-harness/README.md)，再阅读
+[`docs/sdlc-harness/design.md`](docs/sdlc-harness/design.md)。如果变更影响模块边界或行为，
+继续参考 `docs/sdlc-harness/architecture/` 或 `docs/sdlc-harness/features/` 下的对应设计。
 
-### 后端链路
-
-大多数功能建议按这个顺序追踪：
-
-1. `src/web-ui` 或应用入口
-2. `src/apps/desktop/src/api/*` 或 server routes
-3. `src/crates/api-layer`
-4. `src/crates/transport`
-5. `src/crates/core`
-
-### `bitfun-core`
-
-`src/crates/core` 是代码库中心。
-
-主要区域：
-
-- `agentic/`：agents、prompts、tools、sessions、execution、persistence
-- `service/`：config、filesystem、terminal、git、LSP、MCP、remote connect、project context、AI memory
-- `infrastructure/`：AI clients、app paths、event system、storage、debug log server
-
-Agent 运行时心智模型：
-
-```text
-SessionManager → Session → DialogTurn → ModelRound
-```
-
-会话数据保存在 `.bitfun/sessions/{session_id}/`。
+不要把 BitFun 自身验证假设硬编码成目标项目通用规则；质量保护行为必须保持面向目标项目、
+基于证据、按风险分级、成本可控并可审计。
 
 ## 验证
 
@@ -198,28 +175,13 @@ SessionManager → Session → DialogTurn → ModelRound
 | Locale contract 或 shared terms | `pnpm run i18n:generate && pnpm run i18n:contract:test && pnpm run i18n:audit` |
 | Web UI i18n runtime、namespace loading 或直接 `i18nService.t(...)` 调用 | `pnpm run i18n:contract:test && pnpm run type-check:web && pnpm --dir src/web-ui run test:run src/infrastructure/i18n/core/I18nService.test.ts` |
 | Mobile web UI、状态、配对、断开或重连行为 | `pnpm --dir src/mobile-web run type-check`；行为变化还需要在 PR 中说明手动配对 / 重连验证 |
-| Deep Review / 代码审核团队行为 | 运行最近的 Web UI 检查，再运行 `cargo test -p bitfun-core deep_review -- --nocapture`；如果触及后端或 Tauri API，还需要运行对应 Rust / 桌面端检查 |
 | `core`、`transport`、`api-layer` 或共享服务中的 Rust 逻辑 | `cargo check --workspace`；行为变化时再加最近的 focused `cargo test` |
 | 桌面端集成、Tauri API、browser/computer-use 或桌面专属行为 | `cargo check -p bitfun-desktop`；行为变化时再加 focused desktop tests |
 | 被桌面端 smoke/functional 流覆盖的行为 | 优先运行最近的 focused E2E/smoke check；除非改动影响构建，否则 broad build/test 交给 CI |
-| `src/crates/ai-adapters` | 运行上面相关 Rust 检查；只有 stream contract 改动时再加 `cargo test -p bitfun-agent-stream` |
+| `src/crates/adapters/ai-adapters` | 运行上面相关 Rust 检查；只有 stream contract 改动时再加 `cargo test -p bitfun-agent-stream` |
 | 不涉及打包的安装器前端或 i18n runtime | `pnpm --dir BitFun-Installer run type-check` |
 | 安装器 Tauri/Rust 改动 | `cargo check --manifest-path BitFun-Installer/src-tauri/Cargo.toml` |
 | 安装器打包、payload、安装/卸载流程或 native bundling | `pnpm run installer:build` |
-
-## 先看哪里
-
-| 功能 | 关键路径 |
-|---|---|
-| Agent mode | `src/crates/core/src/agentic/agents/`、`src/crates/core/src/agentic/agents/prompts/`、`src/web-ui/src/locales/*/scenes/agents.json` |
-| Deep Review / 代码审核团队 | `src/crates/core/src/agentic/deep_review/`、`src/crates/core/src/agentic/deep_review_policy.rs`、`src/crates/core/src/agentic/agents/definitions/hidden/deep_review.rs`、`src/crates/core/src/agentic/tools/implementations/{task_tool.rs,code_review_tool.rs}`、`src/web-ui/src/shared/services/review-team/`、`src/web-ui/src/flow_chat/deep-review/`、`src/web-ui/src/app/scenes/agents/components/ReviewTeamPage.tsx` |
-| Mobile web 配对 / 远程控制 | `src/mobile-web/src/pages/PairingPage.tsx`、`src/mobile-web/src/pages/SessionListPage.tsx`、`src/mobile-web/src/pages/ChatPage.tsx`、`src/mobile-web/src/services/RemoteSessionManager.ts`、`src/mobile-web/src/services/RelayHttpClient.ts`、`src/mobile-web/src/services/store.ts` |
-| 会话用量报告（`/usage`） | `src/crates/core/src/service/session_usage/`、`src/web-ui/src/flow_chat/components/usage/`、`src/web-ui/src/locales/*/flow-chat.json` |
-| Tool | `src/crates/core/src/agentic/tools/implementations/`、`src/crates/core/src/agentic/tools/registry.rs` |
-| MCP / LSP / remote | `src/crates/core/src/service/mcp/`、`src/crates/core/src/service/lsp/`、`src/crates/core/src/service/remote_connect/`、`src/crates/core/src/service/remote_ssh/` |
-| 桌面端 API | `src/apps/desktop/src/api/`、`src/crates/api-layer/src/`、`src/crates/transport/src/adapters/tauri.rs` |
-| 中继服务器 | `src/apps/relay-server/` |
-| Web/server 通信 | `src/web-ui/src/infrastructure/api/`、`src/crates/transport/src/adapters/websocket.rs`、`src/apps/server/src/routes/`、`src/apps/server/src/main.rs` |
 
 ## Agent 文档优先级
 

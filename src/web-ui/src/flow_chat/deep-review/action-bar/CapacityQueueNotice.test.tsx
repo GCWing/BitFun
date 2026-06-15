@@ -3,17 +3,14 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { CapacityQueueNotice } from './CapacityQueueNotice';
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (_key: string, options?: Record<string, unknown> & { defaultValue?: string }) => {
-      if (_key === 'deepReviewActionBar.capacityQueue.reasons.launchBatchBlocked') {
-        return 'previous launch batch still running';
-      }
-      const template = options?.defaultValue ?? _key;
-      return template.replace(/{{(\w+)}}/g, (_match, token: string) => String(options?.[token] ?? _match));
-    },
-  }),
-}));
+vi.mock('react-i18next', async () => {
+  const { createTestI18nT } = await import('@/test/i18nTestUtils');
+  return {
+    useTranslation: () => ({
+      t: createTestI18nT('flow-chat'),
+    }),
+  };
+});
 
 vi.mock('@/component-library', () => ({
   Button: ({

@@ -1,35 +1,62 @@
-import { useEffect, useCallback, useState, useRef } from 'react';
+import { lazy, Suspense, useEffect, useCallback, useLayoutEffect, useState, useRef } from 'react';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
 import { useHasDismissibleLayer } from '@/infrastructure/hooks/useDismissibleLayer';
 import { dismissibleLayerManager } from '@/infrastructure/services/DismissibleLayerManager';
 import { ChatProvider } from '../infrastructure/contexts/ChatProvider';
 import { ViewModeProvider } from '../infrastructure/contexts/ViewModeProvider';
 import { SSHRemoteProvider } from '../features/ssh-remote';
-import AppLayout from './layout/AppLayout';
 import { ContextMenuRenderer } from '../shared/context-menu-system/components/ContextMenuRenderer';
 import { NotificationContainer, NotificationCenter, notificationService } from '../shared/notification-system';
 import { AnnouncementProvider } from '../shared/announcement-system';
 import { ConfirmDialogRenderer } from '../component-library';
 import { createLogger } from '@/shared/utils/logger';
 import { startupTrace } from '@/shared/utils/startupTrace';
-import { aiExperienceConfigService } from '@/infrastructure/config/services/AIExperienceConfigService';
-import { syncAgentCompanionDesktopWindow } from '@/infrastructure/config/services/AgentCompanionWindowService';
 import { isTauriRuntime } from '@/infrastructure/runtime';
-import { buildAgentCompanionActivity, subscribeAgentCompanionActivity } from '@/flow_chat/utils/agentCompanionActivity';
-import { emitAgentCompanionActivity } from '@/flow_chat/services/AgentCompanionActivityBridge';
-import { BackgroundTaskCancelledError } from '@/shared/utils/backgroundTaskScheduler';
 import { useWorkspaceContext } from '../infrastructure/contexts/WorkspaceContext';
-import SplashScreen from './components/SplashScreen/SplashScreen';
 import { useGlobalSceneShortcuts } from './hooks/useGlobalSceneShortcuts';
 import { useDebugInspector } from '@/infrastructure/debug/useDebugInspector';
-import { openAgentCompanionSession } from './services/openAgentCompanionSession';
 import { useI18n } from '@/infrastructure/i18n';
 import { scheduleDeferredStartupSystems } from './startup/deferredStartupSystems';
-
-// Toolbar Mode
-import { ToolbarModeProvider } from '../flow_chat';
+import { shouldScheduleDeferredStartupSystems } from './startup/deferredStartupGate';
+import { STARTUP_OVERLAY_HIDDEN_EVENT } from './startup/startupSignals';
+import {
+  getStartupOverlayElapsedMs,
+  hideStartupOverlay,
+  isStartupOverlayPresent,
+} from './startup/startupOverlay';
+import { ToolbarModeProvider } from '../flow_chat/components/toolbar-mode';
 
 const log = createLogger('App');
+
+function isBackgroundTaskCancelledError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'BackgroundTaskCancelledError';
+}
+
+interface AppLayoutStartupGateProps {
+  onReady: () => void;
+}
+
+const LazyAppLayout = lazy(async () => {
+  startupTrace.markPhase('app_layout_import_start');
+  try {
+    const module = await import('./layout/AppLayout');
+    startupTrace.markPhase('app_layout_import_end');
+    return {
+      default: function AppLayoutStartupGate({ onReady }: AppLayoutStartupGateProps) {
+        useLayoutEffect(() => {
+          startupTrace.markPhase('app_layout_ready');
+          onReady();
+        }, [onReady]);
+
+        return <module.default />;
+      },
+    };
+  } catch (error) {
+    startupTrace.markPhase('app_layout_import_failed');
+    throw error;
+  }
+});
+
 /**
  * BitFun main application component.
  *
@@ -45,32 +72,138 @@ const MIN_SPLASH_MS = 900;
 
 function App() {
   const { t } = useI18n('settings/basics');
-  const { t: tCommon } = useI18n('common');
 
   // Workspace loading state — drives splash exit timing
   const { loading: workspaceLoading } = useWorkspaceContext();
 
-  // Splash screen state
-  const [splashVisible, setSplashVisible] = useState(true);
-  const [splashExiting, setSplashExiting] = useState(false);
+  const [startupOverlayVisible, setStartupOverlayVisible] = useState(isStartupOverlayPresent);
   const hasAppDismissibleLayer = useHasDismissibleLayer('app');
-  const mountTimeRef = useRef(Date.now());
   const mainWindowShownRef = useRef(false);
+  const userCloseRequestedRef = useRef(false);
   const interactiveShellReadyRef = useRef(false);
+  const interactiveShellReadyFrameRef = useRef<number | null>(null);
+  const workspaceLoadingRef = useRef(workspaceLoading);
+  const appLayoutReadyRef = useRef(false);
   const [interactiveShellReady, setInteractiveShellReady] = useState(false);
+  const [appLayoutReady, setAppLayoutReady] = useState(false);
+
+  workspaceLoadingRef.current = workspaceLoading;
+
+  const releaseInteractiveShellReadyIfReady = useCallback((reason: string) => {
+    const latestWorkspaceLoading = workspaceLoadingRef.current;
+    const latestAppLayoutReady = appLayoutReadyRef.current;
+    startupTrace.markPhase('interactive_shell_ready_gate_check', {
+      workspaceLoading: latestWorkspaceLoading,
+      appLayoutReady: latestAppLayoutReady,
+      alreadyReady: interactiveShellReadyRef.current,
+      reason,
+      afterPaint: true,
+    });
+    if (latestWorkspaceLoading || !latestAppLayoutReady || interactiveShellReadyRef.current) {
+      return;
+    }
+    interactiveShellReadyRef.current = true;
+    startupTrace.markPhase('interactive_shell_ready', { reason });
+    window.dispatchEvent(new CustomEvent('bitfun:interactive-shell-ready', {
+      detail: { reason },
+    }));
+    setInteractiveShellReady(true);
+  }, []);
+
+  const markInteractiveShellReadyIfReady = useCallback((reason: string) => {
+    const latestWorkspaceLoading = workspaceLoadingRef.current;
+    const latestAppLayoutReady = appLayoutReadyRef.current;
+    startupTrace.markPhase('interactive_shell_ready_gate_check', {
+      workspaceLoading: latestWorkspaceLoading,
+      appLayoutReady: latestAppLayoutReady,
+      alreadyReady: interactiveShellReadyRef.current,
+      alreadyScheduled: interactiveShellReadyFrameRef.current !== null,
+      reason,
+    });
+    if (
+      latestWorkspaceLoading ||
+      !latestAppLayoutReady ||
+      interactiveShellReadyRef.current ||
+      interactiveShellReadyFrameRef.current !== null
+    ) {
+      return;
+    }
+
+    startupTrace.markPhase('interactive_shell_ready_after_paint_scheduled', { reason });
+    interactiveShellReadyFrameRef.current = window.requestAnimationFrame(() => {
+      interactiveShellReadyFrameRef.current = null;
+      releaseInteractiveShellReadyIfReady(`${reason}-after-paint`);
+    });
+  }, [releaseInteractiveShellReadyIfReady]);
+
+  const handleAppLayoutReady = useCallback(() => {
+    startupTrace.markPhase('app_layout_ready_state_update_requested');
+    appLayoutReadyRef.current = true;
+    setAppLayoutReady(true);
+    markInteractiveShellReadyIfReady('app-layout-ready');
+  }, [markInteractiveShellReadyIfReady]);
+
+  useEffect(() => {
+    return () => {
+      if (interactiveShellReadyFrameRef.current !== null) {
+        window.cancelAnimationFrame(interactiveShellReadyFrameRef.current);
+        interactiveShellReadyFrameRef.current = null;
+      }
+    };
+  }, []);
 
   // Once the workspace finishes loading, wait for the remaining min-display
   // time and then begin the exit animation.
   useEffect(() => {
-    if (workspaceLoading) return;
-    const elapsed = Date.now() - mountTimeRef.current;
+    if (workspaceLoading || !appLayoutReady) return;
+    const elapsed = getStartupOverlayElapsedMs();
     const remaining = Math.max(0, MIN_SPLASH_MS - elapsed);
-    const timer = window.setTimeout(() => setSplashExiting(true), remaining);
-    return () => window.clearTimeout(timer);
-  }, [workspaceLoading]);
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void hideStartupOverlay().then(() => {
+        if (!cancelled) {
+          setStartupOverlayVisible(false);
+          startupTrace.markPhase('startup_overlay_hidden');
+          window.dispatchEvent(new CustomEvent(STARTUP_OVERLAY_HIDDEN_EVENT));
+        }
+      });
+    }, remaining);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [workspaceLoading, appLayoutReady]);
 
-  const handleSplashExited = useCallback(() => {
-    setSplashVisible(false);
+  useEffect(() => {
+    if (!isTauriRuntime()) {
+      return;
+    }
+
+    let unlisten: (() => void) | null = null;
+    let disposed = false;
+
+    void import('@tauri-apps/api/event')
+      .then(({ listen }) => listen('bitfun_main_window_close_requested', () => {
+        userCloseRequestedRef.current = true;
+        startupTrace.markPhase('main_window_user_close_requested', { reason: 'user-close-requested' });
+      }))
+      .then(removeListener => {
+        if (disposed) {
+          removeListener();
+          return;
+        }
+        unlisten = removeListener;
+      })
+      .catch(error => {
+        if (!disposed) {
+          log.warn('Failed to listen for main window close request in startup visibility guard', error);
+        }
+      });
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
   }, []);
 
   const showMainWindow = useCallback(async (reason: string) => {
@@ -104,6 +237,14 @@ function App() {
   }, []);
 
   const verifyMainWindowVisible = useCallback(async (reason: string) => {
+    if (userCloseRequestedRef.current) {
+      log.debug('Skipping main window startup visibility retry after user close request', {
+        reason,
+        closeReason: 'user-close-requested',
+      });
+      return;
+    }
+
     if (!isTauriRuntime()) {
       void showMainWindow(reason);
       return;
@@ -140,20 +281,15 @@ function App() {
   }, [showMainWindow]);
 
   useEffect(() => {
-    if (workspaceLoading || interactiveShellReadyRef.current) {
-      return;
+    if (appLayoutReady) {
+      appLayoutReadyRef.current = true;
     }
-    interactiveShellReadyRef.current = true;
-    startupTrace.markPhase('interactive_shell_ready');
-    window.dispatchEvent(new CustomEvent('bitfun:interactive-shell-ready', {
-      detail: { reason: 'workspace-ready' },
-    }));
-    setInteractiveShellReady(true);
-  }, [workspaceLoading]);
+    markInteractiveShellReadyIfReady('workspace-or-layout-state');
+  }, [workspaceLoading, appLayoutReady, markInteractiveShellReadyIfReady]);
 
   // If the early reveal path fails, keep the old post-splash show as a retry.
   useEffect(() => {
-    if (splashVisible) {
+    if (startupOverlayVisible) {
       return;
     }
 
@@ -162,7 +298,7 @@ function App() {
     }, 50);
 
     return () => window.clearTimeout(timer);
-  }, [splashVisible, verifyMainWindowVisible]);
+  }, [startupOverlayVisible, verifyMainWindowVisible]);
 
   // Safety net: if startup gets stuck, reveal the window so the user can see errors.
   useEffect(() => {
@@ -173,25 +309,26 @@ function App() {
     return () => window.clearTimeout(timer);
   }, [verifyMainWindowVisible]);
 
-  // Non-critical systems are delayed until the shell is interactive.
+  // Non-critical systems are delayed until the shell is interactive and the
+  // startup overlay has fully handed off to the app surface.
   useEffect(() => {
-    if (!interactiveShellReady) {
+    if (!shouldScheduleDeferredStartupSystems({ interactiveShellReady, startupOverlayVisible })) {
       return;
     }
 
-    log.info('Application interactive, scheduling deferred systems');
+    log.info('Application visible and interactive, scheduling deferred systems');
     const startupSystemsHandle = scheduleDeferredStartupSystems();
     startupSystemsHandle.promise.catch(error => {
-      if (!(error instanceof BackgroundTaskCancelledError)) {
+      if (!isBackgroundTaskCancelledError(error)) {
         log.warn('Deferred startup systems task failed', error);
       }
     });
 
     return () => startupSystemsHandle.cancel();
-  }, [interactiveShellReady]);
+  }, [interactiveShellReady, startupOverlayVisible]);
 
   useEffect(() => {
-    if (!interactiveShellReady || splashVisible) {
+    if (!interactiveShellReady || startupOverlayVisible) {
       return;
     }
 
@@ -205,7 +342,7 @@ function App() {
         }
         editorWarmupHandle = scheduleMonacoStartupWarmup();
         editorWarmupHandle.promise.catch(error => {
-          if (!disposed && !(error instanceof BackgroundTaskCancelledError)) {
+          if (!disposed && !isBackgroundTaskCancelledError(error)) {
             log.warn('Editor startup warmup task failed', error);
           }
         });
@@ -220,26 +357,42 @@ function App() {
       disposed = true;
       editorWarmupHandle?.cancel();
     };
-  }, [interactiveShellReady, splashVisible]);
+  }, [interactiveShellReady, startupOverlayVisible]);
 
   useEffect(() => {
     if (!isTauriRuntime() || !interactiveShellReady) return;
 
     let disposed = false;
     let startupSyncHandle: { promise: Promise<void>; cancel: () => void } | null = null;
-    const emitCurrentAgentCompanionActivity = () => {
+    let removeSettingsListener: (() => void) | null = null;
+
+    void (async () => {
+      const [
+        { aiExperienceConfigService },
+        { syncAgentCompanionDesktopWindow },
+        { buildAgentCompanionActivity },
+        { emitAgentCompanionActivity },
+        { backgroundTaskScheduler },
+      ] = await Promise.all([
+        import('@/infrastructure/config/services/AIExperienceConfigService'),
+        import('@/infrastructure/config/services/AgentCompanionWindowService'),
+        import('@/flow_chat/utils/agentCompanionActivity'),
+        import('@/flow_chat/services/AgentCompanionActivityBridge'),
+        import('@/shared/utils/backgroundTaskScheduler'),
+      ]);
+
       if (disposed) {
         return;
       }
-      void emitAgentCompanionActivity(buildAgentCompanionActivity());
-    };
 
-    void aiExperienceConfigService.getSettingsAsync().then(async settings => {
-      if (disposed) {
-        return;
-      }
+      const emitCurrentAgentCompanionActivity = () => {
+        if (disposed) {
+          return;
+        }
+        void emitAgentCompanionActivity(buildAgentCompanionActivity());
+      };
 
-      const { backgroundTaskScheduler, BackgroundTaskCancelledError } = await import('@/shared/utils/backgroundTaskScheduler');
+      const settings = await aiExperienceConfigService.getSettingsAsync();
       if (disposed) {
         return;
       }
@@ -270,28 +423,57 @@ function App() {
       });
 
       startupSyncHandle.promise.catch(error => {
-        if (!disposed && !(error instanceof BackgroundTaskCancelledError)) {
+        if (!disposed && !isBackgroundTaskCancelledError(error)) {
           log.warn('Initial Agent companion sync task failed', error);
         }
       });
+
+      removeSettingsListener = aiExperienceConfigService.addChangeListener(settings => {
+        void syncAgentCompanionDesktopWindow(settings).then(() => {
+          emitCurrentAgentCompanionActivity();
+          window.setTimeout(emitCurrentAgentCompanionActivity, 250);
+        });
+      });
+    })().catch(error => {
+      if (!disposed) {
+        log.warn('Failed to initialize Agent companion startup sync', error);
+      }
     });
 
-    const removeSettingsListener = aiExperienceConfigService.addChangeListener(settings => {
-      void syncAgentCompanionDesktopWindow(settings).then(() => {
-        emitCurrentAgentCompanionActivity();
-        window.setTimeout(emitCurrentAgentCompanionActivity, 250);
-      });
-    });
     return () => {
       disposed = true;
       startupSyncHandle?.cancel();
-      removeSettingsListener();
+      removeSettingsListener?.();
     };
   }, [interactiveShellReady]);
 
-  useEffect(() => subscribeAgentCompanionActivity(activity => {
-    void emitAgentCompanionActivity(activity);
-  }), []);
+  useEffect(() => {
+    let disposed = false;
+    let unsubscribe: (() => void) | null = null;
+
+    void Promise.all([
+      import('@/flow_chat/utils/agentCompanionActivity'),
+      import('@/flow_chat/services/AgentCompanionActivityBridge'),
+    ])
+      .then(([{ subscribeAgentCompanionActivity }, { emitAgentCompanionActivity }]) => {
+        if (disposed) {
+          return;
+        }
+        unsubscribe = subscribeAgentCompanionActivity(activity => {
+          void emitAgentCompanionActivity(activity);
+        });
+      })
+      .catch(error => {
+        if (!disposed) {
+          log.warn('Failed to subscribe Agent companion activity bridge', error);
+        }
+      });
+
+    return () => {
+      disposed = true;
+      unsubscribe?.();
+    };
+  }, []);
 
   useEffect(() => {
     let unlisten: (() => void) | null = null;
@@ -302,6 +484,7 @@ function App() {
           const sessionId = event.payload?.sessionId;
           if (!sessionId) return;
 
+          const { openAgentCompanionSession } = await import('./services/openAgentCompanionSession');
           await openAgentCompanionSession(sessionId);
 
           try {
@@ -434,7 +617,9 @@ function App() {
         <SSHRemoteProvider>
           <ToolbarModeProvider>
             {/* Unified app layout with startup/workspace modes */}
-            <AppLayout />
+            <Suspense fallback={null}>
+              <LazyAppLayout onReady={handleAppLayoutReady} />
+            </Suspense>
 
             {/* Context menu renderer */}
             <ContextMenuRenderer />
@@ -449,14 +634,6 @@ function App() {
             {/* Announcement / feature-demo / tips system */}
             <AnnouncementProvider />
 
-            {/* Startup splash — sits above everything, exits once workspace is ready */}
-            {splashVisible && (
-              <SplashScreen
-                isExiting={splashExiting}
-                onExited={handleSplashExited}
-                delayedMessage={workspaceLoading ? tCommon('loading.workspace') : undefined}
-              />
-            )}
           </ToolbarModeProvider>
         </SSHRemoteProvider>
       </ViewModeProvider>
