@@ -14,12 +14,10 @@ body,
 
 body {
   margin: 0;
-  font-family: var(--font-family-sans, 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif);
+  font-family: var(--font-family-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: var(--color-bg-workbench, var(--color-bg-primary));
+  background: var(--color-bg-workbench);
   color: var(--color-text-primary);
 }
 
@@ -27,7 +25,7 @@ body {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: var(--color-bg-workbench, var(--color-bg-primary));
+  background: var(--color-bg-workbench);
   color: var(--color-text-primary);
   overflow: hidden;
 }
@@ -438,7 +436,7 @@ body {
 .info-list dd {
   margin: 0;
   color: var(--color-text-secondary);
-  font-family: var(--tool-card-font-mono, 'Courier New', monospace);
+  font-family: var(--tool-card-font-mono);
 }
 
 .empty-state {

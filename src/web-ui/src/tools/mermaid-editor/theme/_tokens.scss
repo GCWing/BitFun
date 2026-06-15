@@ -121,7 +121,7 @@
 .light {
   // Node styles
   --mermaid-node-fill: rgba(15, 23, 42, 0.06);
-  --mermaid-node-fill-hover: rgba(15, 23, 42, 0.10);
+  --mermaid-node-fill-hover: rgba(15, 23, 42, 0.1);
   --mermaid-node-stroke: rgba(100, 116, 139, 0.35);
   --mermaid-node-stroke-hover: rgba(51, 65, 85, 0.55);
   --mermaid-node-text: #1e293b;
@@ -156,7 +156,7 @@
   --mermaid-note-fill: rgba(184, 134, 58, 0.12);
   --mermaid-note-stroke: rgba(192, 140, 66, 0.4);
   --mermaid-note-text: #92400e;
-  --mermaid-activation-fill: rgba(15, 23, 42, 0.10);
+  --mermaid-activation-fill: rgba(15, 23, 42, 0.1);
   --mermaid-activation-stroke: rgba(51, 65, 85, 0.35);
   
   // Gantt chart
@@ -181,7 +181,7 @@
   --mermaid-class-fill: rgba(15, 23, 42, 0.06);
   --mermaid-class-stroke: rgba(100, 116, 139, 0.35);
   --mermaid-class-text: #1e293b;
-  --mermaid-class-divider: rgba(100, 116, 139, 0.20);
+  --mermaid-class-divider: rgba(100, 116, 139, 0.2);
   
   // Git diagram
   --mermaid-commit-text: #1e293b;

@@ -509,7 +509,7 @@
       background: rgba(96, 165, 250, 0.06);
       
       &:hover {
-        background: rgba(96, 165, 250, 0.10);
+        background: var(--card-bg-accent);
       }
     }
   }

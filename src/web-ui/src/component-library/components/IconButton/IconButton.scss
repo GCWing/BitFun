@@ -85,11 +85,11 @@
 
 
   &--primary {
-    background: rgba(96, 165, 250, 0.20);
+    background: rgba(96, 165, 250, 0.2);
     color: var(--color-static-white);
 
     &:hover:not(:disabled) {
-      background: rgba(96, 165, 250, 0.30);
+      background: rgba(96, 165, 250, 0.3);
     }
 
     &:active:not(:disabled) {

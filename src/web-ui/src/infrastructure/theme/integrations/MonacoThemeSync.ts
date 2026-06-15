@@ -24,7 +24,7 @@ function getBitfunLightMonacoTheme(): Monaco.editor.IStandaloneThemeData {
       'editor.selectionBackground': 'rgba(15, 23, 42, 0.14)',
       'editor.selectionForeground': '#1e293b',
       'editor.inactiveSelectionBackground': 'rgba(15, 23, 42, 0.09)',
-      'editor.selectionHighlightBackground': 'rgba(15, 23, 42, 0.10)',
+      'editor.selectionHighlightBackground': 'rgba(15, 23, 42, 0.1)',
       'editor.selectionHighlightBorder': 'rgba(15, 23, 42, 0.22)',
       'editor.wordHighlightBackground': 'rgba(15, 23, 42, 0.07)',
       'editor.wordHighlightStrongBackground': 'rgba(15, 23, 42, 0.11)',
@@ -299,7 +299,7 @@ export class MonacoThemeSync {
         const isLightSelection = this.isLightColor(monacoColors.selection);
         if (!isLightSelection) {
           
-          mappedMonacoColors['editor.selectionForeground'] = '#FFFFFF';
+          mappedMonacoColors['editor.selectionForeground'] = '#ffffff';
         }
       }
       if (monacoColors.cursor) {

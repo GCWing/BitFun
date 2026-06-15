@@ -737,9 +737,9 @@ const StatItem: React.FC<{ value: string; label: string }> = ({ value, label }) 
 
 // Bar chart palette (default + semantic roles)
 const CHART_COLORS = {
-  blue: '#60a5fa',      // default / primary series
+  blue: 'var(--color-accent-500)',      // default / primary series
   green: '#6eb88c',     // positive / success
-  purple: '#8b5cf6',    // distribution / category
+  purple: 'var(--color-purple-500)',    // distribution / category
   indigo: '#818cf8',    // time-related
   orange: '#c9944d',    // time-of-day / neutral
   red: '#c77070',       // issues / errors

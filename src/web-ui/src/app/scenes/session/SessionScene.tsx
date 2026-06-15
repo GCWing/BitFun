@@ -358,8 +358,8 @@ const SessionScene: React.FC<SessionSceneProps> = ({
   const panelCollapseHintStyles = useMemo(() => {
     const q = (v: string) => `"${v.replace(/"/g, '\\"')}"`;
     return {
-      ['--panel-collapse-hint-right' as any]: q(t('layout.panelCollapseHintRight')),
-    } as React.CSSProperties;
+      '--panel-collapse-hint-right': q(t('layout.panelCollapseHintRight')),
+    } as React.CSSProperties & Record<'--panel-collapse-hint-right', string>;
   }, [t]);
 
   return (

@@ -52,9 +52,9 @@ const log = createLogger('CodeReviewToolCard');
 
 const riskLevelColors: Record<string, string> = {
   low: '#22c55e',
-  medium: '#f59e0b',
+  medium: 'var(--color-warning)',
   high: '#f97316',
-  critical: '#ef4444',
+  critical: 'var(--color-error)',
 };
 
 type Translate = (key: string, options?: Record<string, unknown>) => string;

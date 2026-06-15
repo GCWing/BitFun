@@ -49,7 +49,7 @@ export const FLOWCHAT_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: i18nService.t('components:flowChatCards.toolConfig.read.description'),
     displayMode: 'compact',
-    primaryColor: '#3b82f6'
+    primaryColor: 'var(--color-accent-600)'
   },
   'Write': {
     toolName: 'Write',
@@ -69,7 +69,7 @@ export const FLOWCHAT_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: i18nService.t('components:flowChatCards.toolConfig.edit.description'),
     displayMode: 'standard',
-    primaryColor: '#f59e0b'
+    primaryColor: 'var(--color-warning)'
   },
   'Delete': {
     toolName: 'Delete',
@@ -79,7 +79,7 @@ export const FLOWCHAT_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: i18nService.t('components:flowChatCards.toolConfig.delete.description'),
     displayMode: 'detailed',
-    primaryColor: '#ef4444'
+    primaryColor: 'var(--color-error)'
   },
 
   'Grep': {
@@ -90,7 +90,7 @@ export const FLOWCHAT_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: i18nService.t('components:flowChatCards.toolConfig.grep.description'),
     displayMode: 'compact',
-    primaryColor: '#8b5cf6'
+    primaryColor: 'var(--color-purple-500)'
   },
   'Glob': {
     toolName: 'Glob',
@@ -132,7 +132,7 @@ export const FLOWCHAT_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: i18nService.t('components:flowChatCards.toolConfig.task.description'),
     displayMode: 'detailed',
-    primaryColor: '#7c3aed'
+    primaryColor: 'var(--color-purple-600)'
   },
   'TodoWrite': {
     toolName: 'TodoWrite',

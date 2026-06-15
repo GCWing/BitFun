@@ -103,9 +103,9 @@
       background: linear-gradient(135deg,
         rgba(59, 130, 246, 0.15) 0%,
         rgba(59, 130, 246, 0.12) 30%,
-        rgba(59, 130, 246, 0.08) 60%,
+        var(--glass-blue-subtle) 60%,
         rgba(59, 130, 246, 0.18) 100%);
-      border-color: rgba(59, 130, 246, 0.4);
+      border-color: var(--border-accent);
       color: var(--color-static-white);
       box-shadow: 
         0 4px 12px rgba(59, 130, 246, 0.2),
@@ -135,7 +135,7 @@
 
     &--danger {
       background: linear-gradient(135deg,
-        rgba(244, 71, 71, 0.20) 0%,
+        rgba(244, 71, 71, 0.2) 0%,
         rgba(244, 71, 71, 0.16) 50%,
         rgba(244, 71, 71, 0.24) 100%);
       border-color: rgba(244, 71, 71, 0.5);
@@ -154,7 +154,7 @@
           rgba(244, 71, 71, 0.25) 0%,
           rgba(244, 71, 71, 0.22) 30%,
           rgba(244, 71, 71, 0.18) 60%,
-          rgba(244, 71, 71, 0.30) 100%);
+          rgba(244, 71, 71, 0.3) 100%);
         border-color: rgba(244, 71, 71, 0.6);
         box-shadow: 
           0 4px 12px rgba(244, 71, 71, 0.3),

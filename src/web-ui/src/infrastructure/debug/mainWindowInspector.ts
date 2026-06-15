@@ -28,7 +28,7 @@ const INSPECTOR_SCRIPT_BODY = /* js */ `
   overlay.style.cssText = [
     'position:fixed',
     'border:2px solid #3b82f6',
-    'background:rgba(59,130,246,0.12)',
+    'background:rgba(59, 130, 246, 0.12)',
     'pointer-events:none',
     'z-index:2147483646',
     'box-sizing:border-box',
@@ -40,7 +40,7 @@ const INSPECTOR_SCRIPT_BODY = /* js */ `
   var tooltip = document.createElement('div');
   tooltip.style.cssText = [
     'position:fixed',
-    'background:rgba(15,23,42,0.95)',
+    'background:rgba(15, 23, 42, 0.95)',
     'color:#e2e8f0',
     'padding:8px 12px',
     'border-radius:6px',
@@ -50,16 +50,16 @@ const INSPECTOR_SCRIPT_BODY = /* js */ `
     'pointer-events:none',
     'display:none',
     'max-width:520px',
-    'box-shadow:0 4px 12px rgba(0,0,0,0.5)',
+    'box-shadow:0 4px 12px rgba(0, 0, 0, 0.5)',
     'line-height:1.5',
-    'border:1px solid rgba(59,130,246,0.4)',
+    'border:1px solid rgba(59, 130, 246, 0.4)',
   ].join(';');
 
   var sizeLabel = document.createElement('div');
   sizeLabel.style.cssText = [
     'position:fixed',
     'background:#3b82f6',
-    'color:#fff',
+    'color:#ffffff',
     'padding:2px 6px',
     'border-radius:3px',
     'font-size:10px',
@@ -283,10 +283,10 @@ const INSPECTOR_SCRIPT_BODY = /* js */ `
     invokeTauri('debug_element_picked', data);
 
     overlay.style.borderColor = '#22c55e';
-    overlay.style.background = 'rgba(34,197,94,0.18)';
+    overlay.style.background = 'rgba(34, 197, 94, 0.18)';
     setTimeout(function () {
       overlay.style.borderColor = '#3b82f6';
-      overlay.style.background = 'rgba(59,130,246,0.12)';
+      overlay.style.background = 'rgba(59, 130, 246, 0.12)';
     }, 400);
   }
 

@@ -649,7 +649,7 @@
       margin-bottom: 6px;
       padding: 6px 8px;
       border-radius: 4px;
-      background: rgba(59, 130, 246, 0.08);
+      background: var(--glass-blue-subtle);
       border: 1px solid rgba(59, 130, 246, 0.16);
       font-size: var(--flowchat-font-size-xs);
     }
@@ -874,7 +874,7 @@
           margin-bottom: 6px;
           padding: 6px 8px;
           border-radius: 4px;
-          background: rgba(59, 130, 246, 0.08);
+          background: var(--glass-blue-subtle);
           border: 1px solid rgba(59, 130, 246, 0.16);
           font-size: var(--flowchat-font-size-xs);
         }

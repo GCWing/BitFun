@@ -133,7 +133,7 @@
     padding: var(--flowchat-card-pad-y) var(--flowchat-card-pad-x);
     border: 1px solid rgba(239, 68, 68, 0.24);
     border-radius: 8px;
-    background: rgba(239, 68, 68, 0.08);
+    background: var(--glass-red-base);
     color: var(--color-error);
     font-size: var(--tool-card-action-font-size);
     line-height: var(--flowchat-support-line-height);

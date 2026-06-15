@@ -412,7 +412,7 @@
       }
 
       &.status-in_progress {
-        background: rgba(59, 130, 246, 0.08);
+        background: var(--glass-blue-subtle);
 
         .todo-content {
           color: var(--color-text-primary);

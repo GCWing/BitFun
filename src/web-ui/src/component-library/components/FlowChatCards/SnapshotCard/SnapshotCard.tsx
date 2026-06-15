@@ -47,9 +47,9 @@ export const SnapshotCard: React.FC<SnapshotCardProps> = ({
   const getOperationInfo = () => {
     const operationMap = {
       'write': { name: t('flowChatCards.snapshotCard.writeFile'), color: '#22c55e' },
-      'edit': { name: t('flowChatCards.snapshotCard.editFile'), color: '#f59e0b' },
-      'delete': { name: t('flowChatCards.snapshotCard.deleteFile'), color: '#ef4444' },
-      'multi-edit': { name: t('flowChatCards.snapshotCard.multiEdit'), color: '#f59e0b' }
+      'edit': { name: t('flowChatCards.snapshotCard.editFile'), color: 'var(--color-warning)' },
+      'delete': { name: t('flowChatCards.snapshotCard.deleteFile'), color: 'var(--color-error)' },
+      'multi-edit': { name: t('flowChatCards.snapshotCard.multiEdit'), color: 'var(--color-warning)' }
     };
     return operationMap[operationType] || operationMap['edit'];
   };

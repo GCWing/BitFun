@@ -80,7 +80,7 @@ export const bitfunMidnightTheme: ThemeConfig = {
     border: {
       subtle: 'rgba(255, 255, 255, 0.08)',
       base: 'rgba(255, 255, 255, 0.14)',
-      medium: 'rgba(255, 255, 255, 0.20)',
+      medium: 'rgba(255, 255, 255, 0.2)',
       strong: 'rgba(255, 255, 255, 0.26)',
       prominent: 'rgba(255, 255, 255, 0.35)',
     },
@@ -277,13 +277,13 @@ export const bitfunMidnightTheme: ThemeConfig = {
       
       primary: {
         default: {
-          background: 'rgba(88, 166, 255, 0.20)',
+          background: 'rgba(88, 166, 255, 0.2)',
           color: '#6aa8e8',
           border: 'transparent',
           shadow: 'none',
         },
         hover: {
-          background: 'rgba(88, 166, 255, 0.30)',
+          background: 'rgba(88, 166, 255, 0.3)',
           color: '#8fc0f0',
           border: 'transparent',
           shadow: 'none',

@@ -139,6 +139,12 @@ jobs:
       - name: Audit i18n resources
         run: pnpm run i18n:audit
 
+      - name: Validate theme color audit contract
+        run: pnpm run theme:color-audit:test
+
+      - name: Audit theme color governance
+        run: pnpm run theme:color-audit
+
       - name: Lint web UI
         run: pnpm run lint:web
 

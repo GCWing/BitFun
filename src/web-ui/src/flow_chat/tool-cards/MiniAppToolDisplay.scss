@@ -158,7 +158,7 @@
 
   .error-content {
     padding: var(--flowchat-card-expanded-pad-y) var(--size-gap-4);
-    background: rgba(239, 68, 68, 0.05);
+    background: var(--glass-red-subtle);
     border-top: 1px solid rgba(239, 68, 68, 0.2);
 
     .error-message {
