@@ -128,6 +128,57 @@ describe('dialogTurnStability', () => {
     expect((text as any).isStreaming).toBe(false);
   });
 
+  it('cancels transient tool state inside model round attempts', () => {
+    const settledAt = 123;
+    const toolItem = {
+      id: 'call-1',
+      type: 'tool' as const,
+      toolName: 'ExecCommand',
+      toolCall: {
+        input: { cmd: 'sleep 60' },
+        id: 'call-1',
+      },
+      timestamp: 2,
+      status: 'running' as const,
+      startTime: 2,
+      isParamsStreaming: false,
+      attemptId: 'round-1:attempt:1',
+      attemptIndex: 1,
+    };
+    const turn = createDialogTurn({
+      modelRounds: [
+        {
+          id: 'round-1',
+          index: 0,
+          items: [toolItem],
+          attempts: [
+            {
+              id: 'round-1:attempt:1',
+              index: 1,
+              status: 'completed',
+              items: [toolItem],
+            },
+          ],
+          isStreaming: false,
+          isComplete: true,
+          status: 'completed',
+          startTime: 2,
+        },
+      ],
+    });
+
+    const settled = settleInterruptedDialogTurn(turn, settledAt);
+    const roundItem = settled.modelRounds[0].items[0];
+    const attemptItem = settled.modelRounds[0].attempts?.[0]?.items[0];
+
+    expect(settled.status).toBe('cancelled');
+    expect(roundItem.status).toBe('cancelled');
+    expect((roundItem as any).endTime).toBe(settledAt);
+    expect(attemptItem?.status).toBe('cancelled');
+    expect((attemptItem as any).endTime).toBe(settledAt);
+    expect((attemptItem as any).isParamsStreaming).toBe(false);
+  });
+
   it('preserves completed tools when settling a completed turn', () => {
     const turn = createDialogTurn({
       status: 'completed',
