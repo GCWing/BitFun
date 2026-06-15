@@ -300,7 +300,7 @@
 @media print {
   .mermaid-block {
     break-inside: avoid;
-    border: 1px solid #000000;
+    border: 1px solid var(--color-static-black);
 
     .mermaid-block__actions {
       display: none;

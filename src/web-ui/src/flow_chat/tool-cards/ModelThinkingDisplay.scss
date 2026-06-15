@@ -139,8 +139,8 @@
     transition: opacity 0.2s ease;
 
     background: var(--thinking-scroll-fade-base);
-    -webkit-mask-image: linear-gradient(to bottom, #000000 0%, #000000 22%, transparent 100%);
-    mask-image: linear-gradient(to bottom, #000000 0%, #000000 22%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, var(--color-static-black) 0%, var(--color-static-black) 22%, transparent 100%);
+    mask-image: linear-gradient(to bottom, var(--color-static-black) 0%, var(--color-static-black) 22%, transparent 100%);
     -webkit-mask-repeat: no-repeat;
     mask-repeat: no-repeat;
     -webkit-mask-size: 100% 100%;
@@ -161,8 +161,8 @@
     transition: opacity 0.2s ease;
 
     background: var(--thinking-scroll-fade-base);
-    -webkit-mask-image: linear-gradient(to top, #000000 0%, #000000 22%, transparent 100%);
-    mask-image: linear-gradient(to top, #000000 0%, #000000 22%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to top, var(--color-static-black) 0%, var(--color-static-black) 22%, transparent 100%);
+    mask-image: linear-gradient(to top, var(--color-static-black) 0%, var(--color-static-black) 22%, transparent 100%);
     -webkit-mask-repeat: no-repeat;
     mask-repeat: no-repeat;
     -webkit-mask-size: 100% 100%;

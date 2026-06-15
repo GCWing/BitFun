@@ -2,6 +2,8 @@
  * User message item styles (BEM).
  */
 
+@use '../../../component-library/styles/tokens.scss' as tokens;
+
 .user-message-item {
   padding: var(--flowchat-user-message-pad-y) var(--flowchat-user-message-pad-x);
   background: color-mix(in srgb, var(--element-bg-medium) 86%, var(--color-bg-flowchat));
@@ -427,7 +429,7 @@
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background: rgba(0, 0, 0, 0.85);
+  background: tokens.$modal-backdrop;
   display: flex;
   align-items: center;
   justify-content: center;

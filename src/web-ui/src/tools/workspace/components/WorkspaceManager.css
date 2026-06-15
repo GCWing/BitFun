@@ -190,7 +190,7 @@
   padding: 4px 10px;
   border-radius: 999px;
   background: var(--color-accent-100);
-  border: 1px solid rgba(96, 165, 250, 0.14);
+  border: 1px solid var(--card-bg-accent-hover);
 }
 
 .workspace-identity__label {

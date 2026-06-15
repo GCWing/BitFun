@@ -14,9 +14,7 @@
   color: var(--color-text-primary);
   font-family: var(--font-family-sans);
   /* Shared layout contract for settings pages in wide scenes. */
-  --config-page-content-inline-padding: clamp(16px, 2.2vw, 28px);
   --config-page-content-bottom-padding: var(--size-gap-12);
-  --config-page-content-max-width: 600px;
   /* Vertical gap between top-level sections (ConfigPageSection blocks) inside ConfigPageContent. */
   --config-page-section-gap: var(--size-gap-10);
   container-type: inline-size;

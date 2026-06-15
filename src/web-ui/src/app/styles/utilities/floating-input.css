@@ -12,7 +12,7 @@
   backdrop-filter: blur(20px) saturate(1.2);
   -webkit-backdrop-filter: blur(20px) saturate(1.2);
   border-radius: calc(var(--size-radius-lg) * 2); /* Pill shape */
-  border: 1px solid rgba(59, 130, 246, 0.15);
+  border: 1px solid var(--border-accent-subtle);
   box-shadow: 
     var(--shadow-xl),
     0 4px 15px rgba(59, 130, 246, 0.1),
@@ -32,7 +32,7 @@
   border-color: rgba(59, 130, 246, 0.25);
   box-shadow: 
     0 12px 40px var(--color-overlay-black-40),
-    0 6px 20px rgba(59, 130, 246, 0.15),
+    0 6px 20px var(--border-accent-subtle),
     inset 0 1px 0 var(--color-overlay-white-10);
   transform: translateX(-50%) translateY(-1px);
 }
@@ -100,7 +100,7 @@
 /* Inner container styles when active */
 .floating-input-base:focus-within .floating-input-wrapper {
   background: var(--color-overlay-black-20);
-  border: 1px solid rgba(59, 130, 246, 0.3);
+  border: 1px solid var(--border-accent-soft);
   border-radius: var(--size-radius-md);
   padding: var(--size-gap-2);
 }

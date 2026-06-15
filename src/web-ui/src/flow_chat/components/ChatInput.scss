@@ -259,7 +259,7 @@
 
       &:focus-within {
         background: var(--color-bg-tertiary);
-        border-color: rgba(255, 255, 255, 0.18);
+        border-color: var(--border-base);
         box-shadow: 
           0 12px 32px rgba(0, 0, 0, 0.45),
           inset 0 1px 0 var(--color-overlay-white-10),
@@ -419,7 +419,7 @@
     }
     
     &:focus-within {
-      border-color: rgba(255, 255, 255, 0.18);
+      border-color: var(--border-base);
       box-shadow: 
         0 12px 32px rgba(0, 0, 0, 0.45),
         inset 0 1px 0 var(--color-overlay-white-10),
@@ -1418,7 +1418,7 @@
         rgba(252, 253, 255, 0.99) 0%,
         rgba(232, 235, 244, 0.97) 100%
       );
-      border-color: rgba(255, 255, 255, 0.4);
+      border-color: var(--border-prominent);
       box-shadow:
         0 0 0 1px rgba(0, 0, 0, 0.36),
         0 3px 12px rgba(0, 0, 0, 0.28);

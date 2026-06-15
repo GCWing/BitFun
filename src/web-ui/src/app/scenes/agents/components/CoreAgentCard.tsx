@@ -46,7 +46,7 @@ const CoreAgentCard: React.FC<CoreAgentCardProps> = ({
     <div
       className="core-agent-card"
       style={{
-        '--card-index': index,
+        '--surface-stagger-index': index,
         '--core-accent': meta.accentColor,
         '--core-accent-bg': meta.accentBg,
         '--core-card-gradient': `linear-gradient(135deg, ${meta.accentColor}40 0%, ${meta.accentColor}15 100%)`,

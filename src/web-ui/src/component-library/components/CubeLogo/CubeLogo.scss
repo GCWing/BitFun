@@ -19,7 +19,7 @@
   &__particle {
     position: absolute;
     border-radius: 50%;
-    background: linear-gradient(135deg, rgba(139, 92, 246, 0.8), rgba(59, 130, 246, 0.6));
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.8), var(--border-accent-strong));
     box-shadow: 0 0 6px rgba(139, 92, 246, 0.5);
     animation: cube-logo-particle-float 5s ease-in-out infinite;
   }

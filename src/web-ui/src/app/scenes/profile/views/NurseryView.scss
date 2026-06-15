@@ -81,7 +81,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     135deg,
     rgba(16, 185, 129, 0.1) 0%,
     rgba(59, 130, 246, 0.07) 55%,
-    rgba(139, 92, 246, 0.1) 100%
+    var(--card-bg-purple) 100%
   );
   position: relative;
   text-align: left;
@@ -95,7 +95,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     content: '';
     position: absolute;
     inset: 0;
-    background: linear-gradient(135deg, rgba(52, 211, 153, 0.08) 0%, var(--color-accent-100) 100%);
+    background: linear-gradient(135deg, var(--glass-green-base) 0%, var(--color-accent-100) 100%);
     opacity: 0;
     transition: opacity 0.32s ease;
     pointer-events: none;
@@ -217,7 +217,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
 
     &--muted {
       border-color: rgba(255, 255, 255, 0.14);
-      background: rgba(255, 255, 255, 0.07);
+      background: var(--element-bg-soft);
     }
 
     &--token {
@@ -285,7 +285,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
   text-align: left;
   font-family: $font-family-sans;
   animation: nursery-card-in 0.22s $easing-decelerate both;
-  animation-delay: calc(var(--card-index, 0) * 40ms);
+  animation-delay: calc(var(--surface-stagger-index, 0) * 40ms);
   transition:
     transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
     box-shadow 0.35s ease;
@@ -298,7 +298,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     left: 0;
     right: 0;
     bottom: 40px;
-    background: var(--assistant-card-gradient, linear-gradient(135deg, rgba(96, 165, 250, 0.2) 0%, rgba(139, 92, 246, 0.14) 100%));
+    background: var(--assistant-card-gradient, linear-gradient(135deg, rgba(96, 165, 250, 0.2) 0%, var(--card-bg-purple-hover) 100%));
     opacity: 0;
     transition: opacity 0.35s ease;
     pointer-events: none;
@@ -432,7 +432,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
       content: '';
       position: absolute;
       inset: 0;
-      background: var(--assistant-card-gradient, linear-gradient(135deg, rgba(96, 165, 250, 0.2) 0%, rgba(139, 92, 246, 0.14) 100%));
+      background: var(--assistant-card-gradient, linear-gradient(135deg, rgba(96, 165, 250, 0.2) 0%, var(--card-bg-purple-hover) 100%));
       opacity: 0.4;
       transition: opacity 0.35s ease;
       pointer-events: none;
@@ -624,7 +624,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     }
 
     &--confirm {
-      background: rgba(239, 68, 68, 0.15);
+      background: var(--glass-red-hover);
       color: var(--color-error);
 
       &:hover:not(:disabled) {
@@ -2494,7 +2494,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     &--connected,
     &--healthy {
       color: var(--color-success);
-      background: rgba(52, 211, 153, 0.08);
+      background: var(--glass-green-base);
       border-color: rgba(52, 211, 153, 0.22);
     }
 
@@ -2798,8 +2798,6 @@ $acp-content-top: clamp(40px, 4.5vh, 52px);
     flex-direction: column;
     overflow: hidden;
     padding: 0;
-    // Shared with AssistantQuickInput (.aqi) and .acp-sessions-area horizontal inset
-    --acp-left-inline-pad: #{$size-gap-6};
   }
 
   &__right {
@@ -2818,8 +2816,8 @@ $acp-content-top: clamp(40px, 4.5vh, 52px);
   display: flex;
   align-items: flex-start;
   gap: $size-gap-3;
-  // Match .aqi and .acp-sessions-area horizontal inset (--acp-left-inline-pad on .acp-layout__left)
-  padding: $acp-content-top var(--acp-left-inline-pad) $size-gap-5;
+  // Match .aqi and .acp-sessions-area horizontal inset from the shared profile ACP token
+  padding: $acp-content-top var(--profile-acp-left-inline-pad) $size-gap-5;
   flex-shrink: 0;
 
   &__info {
@@ -2905,7 +2903,7 @@ $acp-content-top: clamp(40px, 4.5vh, 52px);
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: $size-gap-3 var(--acp-left-inline-pad) $size-gap-5;
+  padding: $size-gap-3 var(--profile-acp-left-inline-pad) $size-gap-5;
 
   &__title {
     margin: 0 0 $size-gap-2;

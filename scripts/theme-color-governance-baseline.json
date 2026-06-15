@@ -3,19 +3,19 @@
   "description": "Baseline for Web UI theme color governance. Lower values when debt is removed; do not raise without a documented review reason.",
   "budgets": {
     "fallbackOccurrences": {
-      "max": 34
+      "max": 31
     },
     "colorScopes.appUi.uniqueColors": {
-      "max": 742
+      "max": 727
     },
     "colorScopes.appUi.occurrences": {
-      "max": 1683
+      "max": 1610
     },
     "colorScopes.token.uniqueColors": {
       "max": 683
     },
     "colorScopes.exception.uniqueColors": {
-      "max": 178
+      "max": 177
     },
     "cssVarDefinitions.unresolvedRequiredUnique": {
       "max": 0
@@ -27,85 +27,19 @@
       "max": 0
     },
     "cssVarDefinitions.nonContractCrossFileUnique": {
-      "max": 12
+      "max": 0
     },
     "cssVarDefinitions.nonContractDynamicInputUnique": {
-      "max": 3
+      "max": 0
     },
     "cssVarDefinitions.nonContractCssPrivateUnique": {
-      "max": 9
+      "max": 0
     },
     "tokenAliasLiterals.occurrences": {
-      "max": 194
+      "max": 129
     },
     "tokenAliasLiterals.uniqueColors": {
-      "max": 54
+      "max": 40
     }
-  },
-  "allowlists": {
-    "nonContractDynamicInputs": [
-      {
-        "key": "--card-index",
-        "owner": "app gallery, skills, miniapp, agent, and nursery card surfaces",
-        "reason": "Per-item animation staggering input. It is data-driven and should not become a global theme token."
-      },
-      {
-        "key": "--group-color",
-        "owner": "mission control canvas grouping",
-        "reason": "Runtime group color used to distinguish user-visible content groups. Merging would remove data identity."
-      },
-      {
-        "key": "--tag-color",
-        "owner": "flow chat inline context tags",
-        "reason": "Runtime tag color comes from context-tag configuration. It distinguishes tag type and should remain a dynamic input."
-      }
-    ],
-    "nonContractCssPrivate": [
-      {
-        "key": "--deep-review-action-bar-surface",
-        "owner": "flow_chat/components/btw/DeepReviewActionBar.scss",
-        "reason": "State-local surface token switches success/loading/error/warning/action backgrounds inside one component contract."
-      },
-      {
-        "key": "--m-editor-list-marker-width",
-        "owner": "tools/editor markdown and tiptap editors",
-        "reason": "Shared editor-private layout metric for matching list marker columns across paired markdown editor implementations."
-      },
-      {
-        "key": "--m-editor-task-checkbox-size",
-        "owner": "tools/editor markdown and tiptap editors",
-        "reason": "Shared editor-private task-list layout metric; not an app theme color or product semantic token."
-      },
-      {
-        "key": "--m-editor-list-gap",
-        "owner": "tools/editor markdown and tiptap editors",
-        "reason": "Shared editor-private list spacing metric needed to align list marker and content columns."
-      },
-      {
-        "key": "--m-editor-list-indent",
-        "owner": "tools/editor markdown and tiptap editors",
-        "reason": "Shared editor-private nested-list indent metric; promoting it globally would blur editor layout ownership."
-      },
-      {
-        "key": "--acp-left-inline-pad",
-        "owner": "profile nursery ACP view",
-        "reason": "Component-local layout offset used by the paired ACP column/header styles."
-      },
-      {
-        "key": "--config-page-content-inline-padding",
-        "owner": "configuration page layout and review team page",
-        "reason": "Configuration-page layout contract shared by the common layout and review-team specialization."
-      },
-      {
-        "key": "--config-page-content-max-width",
-        "owner": "configuration page layout and review team page",
-        "reason": "Configuration-page width contract shared by the common layout and review-team specialization."
-      },
-      {
-        "key": "--review-team-member-accent-default",
-        "owner": "ReviewTeamPage member cards",
-        "reason": "Component default for runtime member accent colors; individual cards may override it with member-specific colors."
-      }
-    ]
   }
 }

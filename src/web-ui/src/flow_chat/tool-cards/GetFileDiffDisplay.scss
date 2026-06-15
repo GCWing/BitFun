@@ -79,12 +79,12 @@
     word-break: break-all;
 
     .diff-add {
-      background: rgba(34, 197, 94, 0.15);
+      background: var(--git-color-added-bg-hover);
       color: var(--color-success);
     }
 
     .diff-del {
-      background: rgba(239, 68, 68, 0.15);
+      background: var(--git-color-deleted-bg-hover);
       color: var(--color-error);
     }
   }

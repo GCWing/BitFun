@@ -1,11 +1,6 @@
 @use '../../../../component-library/styles/tokens.scss' as *;
 
 .m-editor-tiptap {
-  --m-editor-list-indent: 1.75rem;
-  --m-editor-list-marker-width: 1.25rem;
-  --m-editor-list-gap: 0.25rem;
-  --m-editor-task-checkbox-size: 1rem;
-
   position: relative;
   width: 100%;
   height: 100%;
@@ -345,7 +340,7 @@
       list-style: none;
       position: relative;
       margin-bottom: $size-gap-1;
-      padding-left: calc(var(--m-editor-list-marker-width) + var(--m-editor-list-gap));
+      padding-left: calc(var(--markdown-editor-list-marker-width) + var(--markdown-editor-list-gap));
     }
 
     > ul:not([data-type='taskList']) > li::before,
@@ -353,7 +348,7 @@
       position: absolute;
       left: 0;
       top: 0;
-      width: var(--m-editor-list-marker-width);
+      width: var(--markdown-editor-list-marker-width);
       color: var(--color-text-primary);
       font-weight: $font-weight-medium;
     }
@@ -380,7 +375,7 @@
     li > ol:not([data-type='taskList']) {
       margin-top: $size-gap-1;
       margin-bottom: 0;
-      padding-left: var(--m-editor-list-indent);
+      padding-left: var(--markdown-editor-list-indent);
     }
 
     > ul[data-type='taskList'] {
@@ -391,14 +386,14 @@
 
     > ul[data-type='taskList'] > li {
       display: grid;
-      grid-template-columns: var(--m-editor-list-marker-width) 1fr;
-      column-gap: var(--m-editor-list-gap);
+      grid-template-columns: var(--markdown-editor-list-marker-width) 1fr;
+      column-gap: var(--markdown-editor-list-gap);
       align-items: start;
       margin-bottom: $size-gap-1;
     }
 
     > ul[data-type='taskList'] > li > label {
-      width: var(--m-editor-list-marker-width);
+      width: var(--markdown-editor-list-marker-width);
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -407,8 +402,8 @@
 
     > ul[data-type='taskList'] > li > label > input[type='checkbox'] {
       margin: 0;
-      width: var(--m-editor-task-checkbox-size);
-      height: var(--m-editor-task-checkbox-size);
+      width: var(--markdown-editor-task-checkbox-size);
+      height: var(--markdown-editor-task-checkbox-size);
     }
 
     > ul[data-type='taskList'] > li > label > span {
@@ -424,7 +419,7 @@
     ul[data-type='taskList'] li > ol {
       margin-top: $size-gap-1;
       margin-bottom: 0;
-      padding-left: var(--m-editor-list-indent);
+      padding-left: var(--markdown-editor-list-indent);
     }
 
     li > p {

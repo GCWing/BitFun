@@ -101,7 +101,7 @@
 
     &:hover {
       background: linear-gradient(135deg,
-        rgba(59, 130, 246, 0.15) 0%,
+        var(--border-accent-subtle) 0%,
         rgba(59, 130, 246, 0.12) 30%,
         var(--glass-blue-subtle) 60%,
         rgba(59, 130, 246, 0.18) 100%);
@@ -109,8 +109,8 @@
       color: var(--color-static-white);
       box-shadow: 
         0 4px 12px rgba(59, 130, 246, 0.2),
-        0 2px 6px rgba(59, 130, 246, 0.15),
-        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+        0 2px 6px var(--border-accent-subtle),
+        $inner-glow-top-hover;
     }
 
     &:active {
@@ -122,7 +122,7 @@
     }
 
     &:focus-visible {
-      outline: 2px solid rgba(59, 130, 246, 0.6);
+      outline: 2px solid var(--border-accent-strong);
       outline-offset: 2px;
     }
 

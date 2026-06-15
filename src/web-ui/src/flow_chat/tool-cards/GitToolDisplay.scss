@@ -332,8 +332,8 @@
     color: rgba(34, 197, 94, 0.8);
     
     &:hover:not(:disabled) {
-      background: rgba(34, 197, 94, 0.15);
-      color: rgba(34, 197, 94, 1);
+      background: var(--git-color-staged-bg-hover);
+      color: var(--git-color-staged);
     }
 
     &:active:not(:disabled) {
@@ -345,7 +345,7 @@
     color: rgba(239, 68, 68, 0.8);
     
     &:hover:not(:disabled) {
-      background: rgba(239, 68, 68, 0.15);
+      background: var(--git-color-deleted-bg-hover);
       color: var(--color-error);
     }
 

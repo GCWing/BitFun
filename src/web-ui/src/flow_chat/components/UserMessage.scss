@@ -81,7 +81,6 @@
 // ==================== Inline context tags ====================
 
 .inline-context-tag {
-  --tag-color: var(--color-accent-500);
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
@@ -98,11 +97,11 @@
   
   &__icon {
     flex-shrink: 0;
-    color: var(--tag-color);
+    color: var(--inline-context-tag-color);
   }
   
   &__label {
-    color: var(--tag-color);
+    color: var(--inline-context-tag-color);
     max-width: 200px;
     overflow: hidden;
     text-overflow: ellipsis;

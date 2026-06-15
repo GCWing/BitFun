@@ -29,11 +29,11 @@ const DefaultImage: React.FC<{ size: number }> = ({ size }) => (
       d="M40 50C40 44.4772 44.4772 40 50 40H70C75.5228 40 80 44.4772 80 50V70C80 75.5228 75.5228 80 70 80H50C44.4772 80 40 75.5228 40 70V50Z"
       fill="rgba(96, 165, 250, 0.2)"
     />
-    <circle cx="52" cy="55" r="4" fill="rgba(96, 165, 250, 0.4)" />
-    <circle cx="68" cy="55" r="4" fill="rgba(96, 165, 250, 0.4)" />
+    <circle cx="52" cy="55" r="4" fill="var(--color-accent-400)" />
+    <circle cx="68" cy="55" r="4" fill="var(--color-accent-400)" />
     <path
       d="M52 68C52 65.7909 53.7909 64 56 64H64C66.2091 64 68 65.7909 68 68"
-      stroke="rgba(96, 165, 250, 0.4)"
+      stroke="var(--color-accent-400)"
       strokeWidth="3"
       strokeLinecap="round"
     />

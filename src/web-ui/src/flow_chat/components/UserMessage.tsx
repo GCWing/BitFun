@@ -125,7 +125,7 @@ const InlineContextTag: React.FC<{ tagType: string; label: string }> = ({ tagTyp
       size="small"
       className="inline-context-tag"
       title={`${config.label}: ${label}`}
-      style={{ '--tag-color': config.color } as React.CSSProperties}
+      style={{ '--inline-context-tag-color': config.color } as React.CSSProperties}
     >
       <IconComponent size={12} style={{ marginRight: '4px', display: 'inline-flex', verticalAlign: 'middle' }} />
       <span>{label}</span>

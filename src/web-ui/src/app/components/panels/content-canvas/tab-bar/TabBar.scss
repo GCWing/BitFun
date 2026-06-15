@@ -61,7 +61,7 @@
     }
 
     &--close-all:hover {
-      background: rgba(239, 68, 68, 0.15);
+      background: var(--glass-red-hover);
       color: var(--color-error);
     }
   }

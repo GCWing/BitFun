@@ -63,7 +63,7 @@
   }
 
   &--purple {
-    background: rgba(139, 92, 246, 0.14);
+    background: var(--card-bg-purple-hover);
     color: tokens.$color-purple-500;
 
     &:hover {

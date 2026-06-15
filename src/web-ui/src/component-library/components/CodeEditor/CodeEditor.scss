@@ -67,7 +67,7 @@
         }
 
         .margin-view-overlays .line-numbers:hover {
-          color: rgba(255, 255, 255, 0.6);
+          color: var(--color-overlay-white-60);
         }
 
         .view-overlays .current-line {

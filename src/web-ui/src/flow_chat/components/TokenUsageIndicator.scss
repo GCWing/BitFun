@@ -92,7 +92,7 @@
     .bitfun-token-usage__progress-fill {
       background: linear-gradient(
         90deg,
-        rgba(59, 130, 246, 0.3),
+        var(--border-accent-soft),
         rgba(96, 165, 250, 0.5)
       );
     }

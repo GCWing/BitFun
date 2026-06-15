@@ -237,7 +237,7 @@
     font-size: 9px;
     font-weight: 600;
     color: var(--color-text-primary);
-    background: var(--group-color, var(--color-accent-500));
+    background: var(--mission-control-group-color, var(--color-accent-500));
     border-radius: 3px;
     z-index: 1;
     box-shadow: 0 1px 3px var(--color-overlay-black-30);
@@ -245,15 +245,15 @@
     text-shadow: 0 1px 2px var(--color-overlay-black-20);
 
     &--primary {
-      background: var(--group-color, var(--color-accent-500));
+      background: var(--mission-control-group-color, var(--color-accent-500));
     }
 
     &--secondary {
-      background: var(--group-color, var(--color-success));
+      background: var(--mission-control-group-color, var(--color-success));
     }
 
     &--tertiary {
-      background: var(--group-color, var(--color-warning));
+      background: var(--mission-control-group-color, var(--color-warning));
     }
   }
 }

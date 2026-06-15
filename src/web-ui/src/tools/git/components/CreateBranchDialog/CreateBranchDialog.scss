@@ -160,7 +160,7 @@
       
       &:focus {
         border-color: rgba(239, 68, 68, 0.8);
-        box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.15);
+        box-shadow: 0 0 0 2px var(--glass-red-hover);
       }
     }
   }

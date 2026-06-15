@@ -40,7 +40,7 @@ const AgentCard: React.FC<AgentCardProps> = ({
     <div
       className="agent-card"
       style={{
-        '--card-index': index,
+        '--surface-stagger-index': index,
         '--agent-card-gradient': getCardGradient(agent.id || agent.name),
       } as React.CSSProperties}
       onClick={openDetails}

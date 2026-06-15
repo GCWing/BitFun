@@ -975,6 +975,19 @@ $badge-info-text: $color-info;
   --tool-card-text-primary: var(--color-text-primary);
   --tool-card-text-secondary: var(--color-text-secondary);
   --tool-card-text-muted: var(--color-text-muted);
+
+  --surface-stagger-index: 0;
+  --mission-control-group-color: var(--color-accent-500);
+  --inline-context-tag-color: var(--color-accent-500);
+  --deep-review-action-bar-surface: var(--color-bg-secondary);
+  --markdown-editor-list-indent: 1.75rem;
+  --markdown-editor-list-marker-width: 1.25rem;
+  --markdown-editor-list-gap: 0.25rem;
+  --markdown-editor-task-checkbox-size: 1rem;
+  --config-page-content-inline-padding: clamp(16px, 2.2vw, 28px);
+  --config-page-content-max-width: 600px;
+  --profile-acp-left-inline-pad: var(--size-gap-6);
+  --review-team-member-accent-default: #64748b;
   
   --glow-shadow-blue: #{$glow-shadow-blue};
   --glow-shadow-purple: #{$glow-shadow-purple};

@@ -207,17 +207,17 @@ $_editor-padding-desktop: 32px;
       .hover-row,
       .hover-contents {
         font-size: 12px !important;
-        color: #000000 !important;
+        color: var(--color-static-black) !important;
       }
       
       p, span, div {
         font-size: 12px !important;
-        color: #000000 !important;
+        color: var(--color-static-black) !important;
       }
       
       .markdown-string {
         font-size: 12px !important;
-        color: #000000 !important;
+        color: var(--color-static-black) !important;
       }
     }
   }
@@ -319,7 +319,7 @@ $_editor-padding-desktop: 32px;
     
     * {
       font-size: 12px !important;
-      color: #000000 !important;
+      color: var(--color-static-black) !important;
     }
   }
 }

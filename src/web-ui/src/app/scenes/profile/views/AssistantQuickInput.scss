@@ -1,8 +1,8 @@
 @use '../../../../component-library/styles/tokens' as *;
 
 .aqi {
-  // Horizontal inset: shadow fade + align with .acp-sessions-area (var from .acp-layout__left)
-  padding: $size-gap-4 var(--acp-left-inline-pad, #{$size-gap-6}) $size-gap-5;
+  // Horizontal inset: shadow fade + align with .acp-sessions-area
+  padding: $size-gap-4 var(--profile-acp-left-inline-pad) $size-gap-5;
 
   &__box {
     display: flex;

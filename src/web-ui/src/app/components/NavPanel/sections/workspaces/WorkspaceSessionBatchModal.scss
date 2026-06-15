@@ -180,7 +180,7 @@
       transform: translateY(-1px);
       border-color: color-mix(in srgb, var(--border-medium) 74%, transparent);
       background: color-mix(in srgb, var(--element-bg-soft) 74%, transparent);
-      box-shadow: 0 10px 18px color-mix(in srgb, #000000 6%, transparent);
+      box-shadow: 0 10px 18px color-mix(in srgb, var(--color-static-black) 6%, transparent);
     }
 
     &.is-selected {

@@ -28,7 +28,7 @@ const AgentTeamCard: React.FC<AgentTeamCardProps> = ({
   return (
     <div
       className="agent-team-card"
-      style={{ '--card-index': index } as React.CSSProperties}
+      style={{ '--surface-stagger-index': index } as React.CSSProperties}
       role="button"
       tabIndex={0}
       onClick={onOpen}

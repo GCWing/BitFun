@@ -99,6 +99,8 @@ export const PROMPT_BYTE_ESTIMATE_PER_FILE_BYTES = 1_800;
 export const PROMPT_BYTE_ESTIMATE_PER_CHANGED_LINE_BYTES = 120;
 export const PROMPT_BYTE_ESTIMATE_UNKNOWN_LINES_PER_FILE = 80;
 
+export const REVIEW_TEAM_MEMBER_ACCENT_DEFAULT = '#64748b';
+
 export const EXTRA_MEMBER_DEFAULTS = {
   roleName: 'Additional Specialist Reviewer',
   description:
@@ -108,7 +110,7 @@ export const EXTRA_MEMBER_DEFAULTS = {
     'Stay tightly focused on the requested diff, commit, or workspace changes.',
     'Return concrete findings with clear fix suggestions or follow-up steps.',
   ],
-  accentColor: '#64748b',
+  accentColor: REVIEW_TEAM_MEMBER_ACCENT_DEFAULT,
 };
 
 export const REVIEW_WORK_PACKET_ALLOWED_TOOLS = [

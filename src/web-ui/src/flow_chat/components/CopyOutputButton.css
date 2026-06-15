@@ -42,10 +42,10 @@
 
 .copy-output-button:hover {
   background: var(--color-accent-700);
-  border-color: rgba(59, 130, 246, 0.6);
+  border-color: var(--border-accent-strong);
   color: white;
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 4px 12px var(--border-accent-soft);
 }
 
 .copy-output-button:active {
