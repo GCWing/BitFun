@@ -174,6 +174,7 @@ Avoid adding IDs to these surfaces unless there is a clear automated workflow.
 | FlowChat messages region | `flowchat-messages` | Message list/welcome panel host. |
 | FlowChat message list | `flowchat-message-list` | Virtual message list root when messages exist. |
 | FlowChat empty message list | `flowchat-message-list-empty` | Empty virtual list state. |
+| FlowChat message item | `flowchat-message-item` | Repeated virtual item. Pair with `data-turn-id`, `data-item-type`, and `data-item-index`. |
 | Chat input container | `chat-input-container` | Root container for the composer. |
 | Chat input editable region | `chat-input-textarea` | Rich text editable region. |
 | Chat send button | `chat-input-send-btn` | Send action when input is valid. |
@@ -184,7 +185,11 @@ Avoid adding IDs to these surfaces unless there is a clear automated workflow.
 | Chat input start BTW button | `chat-input-boost-start-btw` | Starts the BTW flow when present. |
 | Chat model selector button | `chat-model-selector-btn` | Opens the session model selector. |
 | Chat model selector menu | `chat-model-selector-menu` | Model selector dropdown root. |
-| Chat model selector option | `chat-model-selector-option` | Repeated item. Pair with `data-model-id` and `data-model-name`. |
+| Chat model selector option | `chat-model-selector-option` | Repeated item. Pair with `data-model-id`, `data-model-name`, and `data-selected`. |
+| Chat user message | `chat-user-message` | Repeated user message. Pair with `data-turn-id`, `data-status`, and `data-failed`. |
+| Chat user message content | `chat-user-message-content` | User message text content. Pair with `data-turn-id`. |
+| Chat assistant message | `chat-assistant-message` | Repeated model round container. Pair with `data-turn-id`, `data-round-id`, `data-status`, `data-model-id`, `data-model-alias`, and `data-streaming`. |
+| Chat assistant message content | `chat-assistant-message-content` | Assistant text block. Pair with `data-turn-id`, `data-flow-item-id`, `data-status`, and `data-streaming`. |
 | Pending queue panel | `pending-queue-panel` | Pending background task queue. |
 
 ## Settings
@@ -202,10 +207,21 @@ Avoid adding IDs to these surfaces unless there is a clear automated workflow.
 |---|---|---|
 | Model list | `settings-model-list` | Container for configured model rows. |
 | Create first model config button | `settings-model-create-first-config-btn` | Starts the first model provider setup from the empty state. |
+| Custom model config button | `settings-model-custom-config-btn` | Starts custom provider configuration. Includes `data-provider-id="custom"`. |
 | Model provider option | `settings-model-provider-option` | Repeated provider card. Pair with `data-provider-id`, for example `openbitfun`. |
+| Model provider name input | `settings-model-provider-name-input` | Provider/config display name field, such as a mock LLM provider name. |
 | Model API key input | `settings-model-api-key-input` | API key field in the model configuration form. Do not hardcode real keys in tests; load them from local config. |
+| Model base URL input | `settings-model-base-url-input` | API base URL field for custom/OpenAI-compatible providers. |
+| Model request format select | `settings-model-request-format-select` | Request format selector, for example OpenAI-compatible vs Anthropic. |
 | Model select button | `settings-model-select-btn` | Opens the model selection dropdown. |
-| Model selection option | `settings-model-option` | Repeated dropdown item. Pair with `data-model-id` and `data-model-name`. |
+| Model selection menu | `settings-model-select-menu` | Model selection dropdown root. |
+| Model selection option | `settings-model-option` | Repeated dropdown item. Pair with `data-model-id`, `data-model-name`, and `data-selected`. |
+| Manual model name input | `settings-model-manual-name-input` | Manual/custom model name entry field. |
+| Add custom model button | `settings-model-add-custom-btn` | Adds the manual model name into the selected model list. |
+| Selected model list | `settings-model-selected-list` | Selected model draft list. Includes `data-selected-count`. |
+| Selected model empty state | `settings-model-selected-list-empty` | Empty selected model draft state. Includes `data-selected-count="0"`. |
+| Selected model row | `settings-model-selected-row` | Repeated selected model draft. Pair with `data-model-id`, `data-model-name`, `data-selected`, and `data-expanded`. |
+| Selected model remove button | `settings-model-selected-remove-btn` | Removes a selected model draft. Pair with `data-model-id` and `data-model-name`. |
 | Model save button | `settings-model-save-btn` | Saves the model provider/configuration form. |
 | Model row | `settings-model-row` | Repeated saved model row. Pair with `data-model-id`, `data-model-name`, and `data-config-id`. |
 | Model test status | `settings-model-test-status` | Repeated saved model test status. Pair with `data-model-id`, `data-model-name`, `data-config-id`, and `data-status` (`success` or `error`). |

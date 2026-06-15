@@ -51,6 +51,8 @@ export interface SelectProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 
   allowCustomValue?: boolean;
   customValueHint?: string;
   onOpenChange?: (isOpen: boolean) => void;
+  triggerTestId?: string;
+  dropdownTestId?: string;
 }
 
 export const Select: React.FC<SelectProps> = ({
@@ -80,6 +82,8 @@ export const Select: React.FC<SelectProps> = ({
   allowCustomValue = false,
   customValueHint,
   onOpenChange,
+  triggerTestId,
+  dropdownTestId,
   ...rootProps
 }) => {
   const { t } = useI18n('components');
@@ -466,6 +470,7 @@ export const Select: React.FC<SelectProps> = ({
         role="option"
         aria-selected={selected}
         aria-disabled={option.disabled}
+        data-selected={selected ? 'true' : 'false'}
         data-testid={option.testId}
         {...option.testAttributes}
       >
@@ -503,6 +508,7 @@ export const Select: React.FC<SelectProps> = ({
         aria-expanded={isOpen}
         aria-haspopup="listbox"
         aria-disabled={disabled}
+        data-testid={triggerTestId}
       >
         {renderSelectedValue()}
         
@@ -524,7 +530,12 @@ export const Select: React.FC<SelectProps> = ({
       </div>
 
       {isOpen && (
-        <div className={`select__dropdown select__dropdown--${resolvedPlacement}`} ref={dropdownRef} role="listbox">
+        <div
+          className={`select__dropdown select__dropdown--${resolvedPlacement}`}
+          ref={dropdownRef}
+          role="listbox"
+          data-testid={dropdownTestId}
+        >
           {searchable && (
             <div className="select__search">
               <input

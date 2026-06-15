@@ -173,6 +173,7 @@
 | FlowChat 消息区域 | `flowchat-messages` | 消息列表/welcome panel 宿主。 |
 | FlowChat 消息列表 | `flowchat-message-list` | 有消息时的虚拟消息列表根节点。 |
 | FlowChat 空消息列表 | `flowchat-message-list-empty` | 空虚拟列表状态。 |
+| FlowChat 消息项 | `flowchat-message-item` | 重复的虚拟消息项。配合 `data-turn-id`、`data-item-type` 和 `data-item-index` 使用。 |
 | Chat 输入容器 | `chat-input-container` | composer 根容器。 |
 | Chat 输入可编辑区域 | `chat-input-textarea` | 富文本可编辑区域。 |
 | Chat 发送按钮 | `chat-input-send-btn` | 输入有效时的发送动作。 |
@@ -185,7 +186,11 @@
 
 | Chat 模型选择按钮 | `chat-model-selector-btn` | 打开当前会话的模型选择器。 |
 | Chat 模型选择菜单 | `chat-model-selector-menu` | 模型选择下拉菜单根节点。 |
-| Chat 模型选择项 | `chat-model-selector-option` | 重复项。配合 `data-model-id` 和 `data-model-name` 使用。 |
+| Chat 模型选择项 | `chat-model-selector-option` | 重复项。配合 `data-model-id`、`data-model-name` 和 `data-selected` 使用。 |
+| Chat 用户消息 | `chat-user-message` | 重复的用户消息。配合 `data-turn-id`、`data-status` 和 `data-failed` 使用。 |
+| Chat 用户消息内容 | `chat-user-message-content` | 用户消息文本内容。配合 `data-turn-id` 使用。 |
+| Chat assistant 消息 | `chat-assistant-message` | 重复的模型轮次容器。配合 `data-turn-id`、`data-round-id`、`data-status`、`data-model-id`、`data-model-alias` 和 `data-streaming` 使用。 |
+| Chat assistant 消息内容 | `chat-assistant-message-content` | assistant 文本块。配合 `data-turn-id`、`data-flow-item-id`、`data-status` 和 `data-streaming` 使用。 |
 
 ## Settings
 
@@ -202,10 +207,21 @@
 |---|---|---|
 | 模型列表 | `settings-model-list` | 已配置模型行的容器。 |
 | 创建第一个模型配置按钮 | `settings-model-create-first-config-btn` | 从空状态启动第一个模型提供商配置流程。 |
+| 自定义模型配置按钮 | `settings-model-custom-config-btn` | 启动自定义提供商配置。包含 `data-provider-id="custom"`。 |
 | 模型提供商选项 | `settings-model-provider-option` | 重复的提供商卡片。配合 `data-provider-id` 使用，例如 `openbitfun`。 |
+| 模型提供商名称输入框 | `settings-model-provider-name-input` | 提供商/配置展示名称字段，例如 mock LLM 提供商名称。 |
 | 模型 API key 输入框 | `settings-model-api-key-input` | 模型配置表单里的 API key 字段。测试中不要硬编码真实 key，应从 local config 读取。 |
+| 模型 Base URL 输入框 | `settings-model-base-url-input` | 自定义/OpenAI-compatible 提供商的 API base URL 字段。 |
+| 模型请求格式选择器 | `settings-model-request-format-select` | 请求格式选择器，例如 OpenAI-compatible 或 Anthropic。 |
 | 模型选择按钮 | `settings-model-select-btn` | 打开模型选择下拉框。 |
-| 模型选择项 | `settings-model-option` | 重复的下拉项。配合 `data-model-id` 和 `data-model-name` 使用。 |
+| 模型选择菜单 | `settings-model-select-menu` | 模型选择下拉框根节点。 |
+| 模型选择项 | `settings-model-option` | 重复的下拉项。配合 `data-model-id`、`data-model-name` 和 `data-selected` 使用。 |
+| 手动模型名称输入框 | `settings-model-manual-name-input` | 手动/自定义模型名称输入字段。 |
+| 添加自定义模型按钮 | `settings-model-add-custom-btn` | 将手动模型名称加入已选模型列表。 |
+| 已选模型列表 | `settings-model-selected-list` | 已选模型草稿列表。包含 `data-selected-count`。 |
+| 已选模型空状态 | `settings-model-selected-list-empty` | 已选模型草稿为空时的状态。包含 `data-selected-count="0"`。 |
+| 已选模型行 | `settings-model-selected-row` | 重复的已选模型草稿。配合 `data-model-id`、`data-model-name`、`data-selected` 和 `data-expanded` 使用。 |
+| 已选模型移除按钮 | `settings-model-selected-remove-btn` | 移除已选模型草稿。配合 `data-model-id` 和 `data-model-name` 使用。 |
 | 模型保存按钮 | `settings-model-save-btn` | 保存模型提供商/模型配置表单。 |
 | 模型行 | `settings-model-row` | 重复的已保存模型行。配合 `data-model-id`、`data-model-name` 和 `data-config-id` 使用。 |
 | 模型测试状态 | `settings-model-test-status` | 重复的已保存模型测试状态。配合 `data-model-id`、`data-model-name`、`data-config-id` 和 `data-status` 使用，`data-status` 可为 `success` 或 `error`。 |
