@@ -185,6 +185,8 @@
       "needsToolConfirm": "等待确认",
       "badgeNeedsInput": "等待中",
       "badgeNeedsConfirm": "待确认",
+      "badgeBackgroundSubagents": "后台 {{count}}",
+      "backgroundSubagentsRunning": "{{count}} 个后台子 Agent 运行中",
       "needProjectWorkspaceForSession": "请先打开或添加项目工作区。编码与工作（Cowork）会话不能在助理区域创建。",
       "manage": "批量管理会话",
       "batchManageDescription": "选择此工作区中的会话，然后批量归档或删除。",

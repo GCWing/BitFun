@@ -273,6 +273,37 @@
     }
   }
 
+  &__inline-item-background-subagent-badge {
+    flex: 0 0 auto;
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    border: 1px solid color-mix(in srgb, var(--color-success, #22c55e) 36%, var(--border-subtle));
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-success, #22c55e) 12%, var(--element-bg-soft));
+    color: color-mix(in srgb, var(--color-success, #22c55e) 76%, var(--color-text-primary));
+    overflow: hidden;
+  }
+
+  &__inline-item-background-subagent-icon {
+    grid-area: 1 / 1;
+    transition: opacity $motion-fast $easing-standard, transform $motion-fast $easing-standard;
+
+    &.is-bot {
+      animation: bitfun-nav-background-subagent-bot-cycle 3.6s ease-in-out infinite;
+    }
+
+    &.is-loader {
+      opacity: 0;
+      animation:
+        bitfun-nav-background-subagent-loader-cycle 3.6s ease-in-out infinite,
+        bitfun-nav-session-spin 1s linear infinite;
+    }
+  }
+
   // Attention badge for high-priority states (ask_user / tool_confirm)
   &__inline-item-attention-badge {
     flex: 0 0 auto;
@@ -655,6 +686,34 @@
   }
 }
 
+@keyframes bitfun-nav-background-subagent-bot-cycle {
+  0%,
+  62%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  70%,
+  88% {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+}
+
+@keyframes bitfun-nav-background-subagent-loader-cycle {
+  0%,
+  62%,
+  100% {
+    opacity: 0;
+  }
+
+  70%,
+  88% {
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .bitfun-nav-panel {
     &__inline-item,
@@ -670,6 +729,18 @@
 
   .bitfun-nav-panel__inline-item-review-badge svg {
     animation: none;
+  }
+
+  .bitfun-nav-panel__inline-item-background-subagent-icon {
+    animation: none;
+
+    &.is-bot {
+      opacity: 1;
+    }
+
+    &.is-loader {
+      opacity: 0;
+    }
   }
 
   .bitfun-nav-panel__items--session-blocks .bitfun-nav-panel__inline-item:hover .bitfun-nav-panel__inline-item-icon:not(.is-running) {
