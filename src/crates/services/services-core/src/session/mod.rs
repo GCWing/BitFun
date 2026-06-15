@@ -2,6 +2,7 @@ pub mod layout;
 mod lineage;
 mod metadata;
 mod metadata_store;
+mod migration;
 pub mod page;
 pub mod types;
 
@@ -19,5 +20,9 @@ pub use metadata::{
     SessionMetadataBuildFacts,
 };
 pub use metadata_store::{SessionMetadataStore, SessionMetadataStoreError};
+pub use migration::{
+    merge_legacy_session_store, move_legacy_path, SessionStoreMigrationError,
+    SessionStoreMigrationRecord,
+};
 pub use page::{build_session_metadata_page, empty_session_metadata_page, SessionMetadataPage};
 pub use types::*;
