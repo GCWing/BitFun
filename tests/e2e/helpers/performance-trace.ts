@@ -145,6 +145,19 @@ export type StartupPerfBreakdown = {
     providerManagerInitializeDurationMs?: number;
     steps: Record<string, number>;
   };
+  fileExplorer: {
+    rootLoadDurationMs?: number;
+    rootResolveDurationMs?: number;
+    rootChildCount?: number;
+    explorerGetChildrenFrontendDurationMs?: number;
+    explorerGetChildrenInvokeDurationMs?: number;
+    startFileWatchCount?: number;
+    startFileWatchRecursiveCount?: number;
+    startFileWatchNonRecursiveCount?: number;
+    startFileWatchUnknownTargetCount?: number;
+    startFileWatchFrontendDurationMs?: number;
+    startFileWatchInvokeDurationMs?: number;
+  };
   tauriCommand: {
     initializeGlobalState?: {
       frontendDurationMs?: number;
@@ -533,6 +546,13 @@ export function summarizeStartupBreakdown(snapshot: StartupTraceSnapshot): Start
       outcome: call.outcome,
       remote: call.remote,
     }));
+  const fileExplorerRootLoadEnd = last('file_explorer_root_load_end');
+  const fileExplorerRootResolveEnd = last('file_explorer_directory_resolve_end');
+  const explorerGetChildrenApiCall = apiCalls.find(call => call.command === 'explorer_get_children');
+  const startFileWatchApiCalls = apiCalls.filter(call => call.command === 'start_file_watch');
+  const startFileWatchRecursiveCalls = startFileWatchApiCalls.filter(call => call.target === 'file_watch:recursive');
+  const startFileWatchNonRecursiveCalls = startFileWatchApiCalls.filter(call => call.target === 'file_watch:non_recursive');
+  const startFileWatchUnknownTargetCalls = startFileWatchApiCalls.filter(call => call.target === undefined);
 
   return {
     native: {
@@ -595,6 +615,23 @@ export function summarizeStartupBreakdown(snapshot: StartupTraceSnapshot): Start
         fetchWorkspaceState: numeric(workspaceStepDuration('fetch_workspace_state')) ?? 0,
         updateWorkspaceState: numeric(workspaceStepDuration('update_workspace_state')) ?? 0,
       },
+    },
+    fileExplorer: {
+      rootLoadDurationMs: numeric(fileExplorerRootLoadEnd?.durationMs),
+      rootResolveDurationMs: numeric(fileExplorerRootResolveEnd?.durationMs),
+      rootChildCount: numeric(fileExplorerRootLoadEnd?.childCount),
+      explorerGetChildrenFrontendDurationMs: round(explorerGetChildrenApiCall?.durationMs),
+      explorerGetChildrenInvokeDurationMs: round(explorerGetChildrenApiCall?.invokeDurationMs),
+      startFileWatchCount: startFileWatchApiCalls.length,
+      startFileWatchRecursiveCount: startFileWatchRecursiveCalls.length,
+      startFileWatchNonRecursiveCount: startFileWatchNonRecursiveCalls.length,
+      startFileWatchUnknownTargetCount: startFileWatchUnknownTargetCalls.length,
+      startFileWatchFrontendDurationMs: round(
+        startFileWatchApiCalls.reduce((total, call) => total + call.durationMs, 0)
+      ),
+      startFileWatchInvokeDurationMs: round(
+        startFileWatchApiCalls.reduce((total, call) => total + (call.invokeDurationMs ?? 0), 0)
+      ),
     },
     tauriCommand: {
       initializeGlobalState: {

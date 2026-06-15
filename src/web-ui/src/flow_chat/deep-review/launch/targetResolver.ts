@@ -137,7 +137,7 @@ export async function resolveSlashCommandReviewTarget(
 
   if (!commandFocus && workspacePath) {
     try {
-      const status = await gitAPI.getStatus(workspacePath);
+      const status = await gitAPI.getStatus(workspacePath, 'deep_review_target_resolver');
       const target = classifyReviewTargetFromFiles(
         collectWorkspaceDiffFilePaths(status),
         'workspace_diff',

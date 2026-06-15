@@ -68,6 +68,8 @@ export interface SubagentTextChunkData {
   sessionId: string;
   turnId: string;
   roundId: string;
+  attemptId?: string;
+  attemptIndex?: number;
   text: string;
   contentType: string;
   isThinkingEnd?: boolean;
@@ -77,6 +79,8 @@ export interface SubagentToolEventData {
   sessionId: string;
   turnId: string;
   roundId: string;
+  attemptId?: string;
+  attemptIndex?: number;
   toolEvent: FlowToolEvent;
 }
 

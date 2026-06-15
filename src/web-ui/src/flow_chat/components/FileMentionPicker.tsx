@@ -326,6 +326,14 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
     onClose();
   }, [onSelect, onClose]);
 
+  const handleItemClick = useCallback((item: FileItem) => {
+    if (item.isDirectory && !isSearchMode) {
+      enterDirectory(item);
+    } else {
+      handleSelect(item);
+    }
+  }, [enterDirectory, handleSelect, isSearchMode]);
+
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (!isOpen) return;
 
@@ -344,11 +352,25 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
           setSelectedIndex(prev => (prev < displayItems.length - 1 ? prev + 1 : 0));
         }
         break;
+      case 'ArrowRight':
+        e.preventDefault();
+        e.stopPropagation();
+        if (!isSearchMode && displayItems.length > 0 && displayItems[selectedIndex]?.isDirectory) {
+          enterDirectory(displayItems[selectedIndex]);
+        }
+        break;
+      case 'ArrowLeft':
+        e.preventDefault();
+        e.stopPropagation();
+        if (!isSearchMode && pathHistory.length > 0) {
+          goBack();
+        }
+        break;
       case 'Enter':
         e.preventDefault();
         e.stopPropagation();
         if (displayItems.length > 0 && displayItems[selectedIndex]) {
-          handleSelect(displayItems[selectedIndex]);
+          handleItemClick(displayItems[selectedIndex]);
         }
         break;
       case 'Escape':
@@ -364,7 +386,7 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
         }
         break;
     }
-  }, [displayItems, handleSelect, isOpen, onClose, selectedIndex]);
+  }, [displayItems, handleSelect, handleItemClick, enterDirectory, goBack, isSearchMode, isOpen, onClose, selectedIndex, pathHistory.length]);
 
   useEffect(() => {
     if (isOpen) {
@@ -478,7 +500,7 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
                 key={item.path}
                 data-index={index}
                 className={`file-mention-picker__item ${index === selectedIndex ? 'file-mention-picker__item--selected' : ''}`}
-                onClick={() => handleSelect(item)}
+                onClick={() => handleItemClick(item)}
                 onContextMenu={(e) => handleContextMenu(e, item)}
                 onMouseEnter={() => setSelectedIndex(index)}
               >
@@ -495,6 +517,8 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
       
       <div className="file-mention-picker__footer">
         <span><kbd>↑</kbd><kbd>↓</kbd> {t('fileMention.navHint')}</span>
+        <span><kbd>→</kbd> {t('fileMention.enterHint')}</span>
+        <span><kbd>←</kbd> {t('fileMention.backHint')}</span>
         <span><kbd>Enter</kbd> {t('fileMention.selectHint')}</span>
       </div>
     </div>

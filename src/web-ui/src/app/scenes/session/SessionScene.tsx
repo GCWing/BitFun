@@ -19,7 +19,7 @@ import {
   getCachedTerminalPanelPosition,
   onTerminalPanelPositionChange,
   refreshTerminalPanelPosition,
-} from '@/tools/terminal';
+} from '@/tools/terminal/services/terminalPanelPreferenceService';
 import type { TerminalPanelPosition } from '@/infrastructure/config/types';
 
 import {

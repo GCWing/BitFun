@@ -10,7 +10,7 @@ vi.mock('./FlowChatStore', () => ({
   },
 }));
 
-vi.mock('../tool-cards', () => ({
+vi.mock('../tool-cards/toolCardMetadata', () => ({
   isCollapsibleTool: (toolName: string) => ['Read', 'LS', 'Grep', 'Glob', 'WebSearch', 'Bash', 'Git'].includes(toolName),
   READ_TOOL_NAMES: new Set(['Read']),
   SEARCH_TOOL_NAMES: new Set(['Grep', 'Glob', 'WebSearch']),
@@ -165,6 +165,81 @@ describe('sessionToVirtualItems explore grouping', () => {
     expect(items.map(item => item.type)).toEqual(['user-message', 'model-round']);
   });
 
+  it('carries turn timing and token metadata into the model round virtual item', () => {
+    const session = makeSession({
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: 'session-1',
+        userMessage: {
+          id: 'user-1',
+          content: 'Help',
+          timestamp: 900,
+        },
+        modelRounds: [makeRound({
+          id: 'round-with-answer',
+          items: [makeTextItem('text-final', 'Here is the answer.')],
+        })],
+        status: 'completed',
+        startTime: 900,
+        endTime: 2400,
+        tokenUsage: {
+          inputTokens: 1200,
+          outputTokens: 300,
+          totalTokens: 1500,
+          timestamp: 2400,
+        },
+      }],
+    });
+
+    const modelItem = sessionToVirtualItems(session)
+      .find((item): item is ModelRoundVirtualItem => item.type === 'model-round');
+
+    expect(modelItem).toMatchObject({
+      turnStartedAt: 900,
+      turnEndedAt: 2400,
+      turnDurationMs: 1500,
+      turnTokenUsage: {
+        inputTokens: 1200,
+        outputTokens: 300,
+        totalTokens: 1500,
+      },
+    });
+  });
+
+  it('folds consecutive rounds that share the same round group id into retry history', () => {
+    const firstRound = makeRound({
+      id: 'finalize-round-1',
+      roundGroupId: 'finalize-group-1',
+      items: [makeTextItem('text-1', 'First finalize answer.')],
+    });
+    const secondRound = makeRound({
+      id: 'finalize-round-2',
+      roundGroupId: 'finalize-group-1',
+      items: [makeTextItem('text-2', 'Retried finalize answer.')],
+    });
+    const session = makeSession({
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: 'session-1',
+        userMessage: {
+          id: 'user-1',
+          content: 'Help',
+          timestamp: 900,
+        },
+        modelRounds: [firstRound, secondRound],
+        status: 'completed',
+        startTime: 900,
+      }],
+    });
+
+    const modelRounds = sessionToVirtualItems(session)
+      .filter((item): item is ModelRoundVirtualItem => item.type === 'model-round');
+
+    expect(modelRounds).toHaveLength(1);
+    expect(modelRounds[0].data.id).toBe('finalize-round-2');
+    expect(modelRounds[0].data.historyRounds?.map(round => round.id)).toEqual(['finalize-round-1']);
+  });
+
   it('does not special-case ACP rounds without explicit render hints', () => {
     const session = makeSession({
       sessionId: 'acp-session',
@@ -202,7 +277,7 @@ describe('sessionToVirtualItems explore grouping', () => {
     expect(items.map(item => item.type)).toEqual(['user-message', 'model-round']);
   });
 
-  it('does not render a stopped indicator for non-complete finish reasons', () => {
+  it('appends a completion notice for abnormal completed turns', () => {
     const session = makeSession({
       dialogTurns: [{
         id: 'turn-1',
@@ -216,6 +291,38 @@ describe('sessionToVirtualItems explore grouping', () => {
         status: 'completed',
         startTime: 900,
         finishReason: 'interrupted',
+      }],
+    });
+
+    const items = sessionToVirtualItems(session);
+
+    expect(items.map(item => item.type)).toEqual([
+      'user-message',
+      'explore-group',
+      'turn-completion-notice',
+    ]);
+    expect(items[2]).toMatchObject({
+      type: 'turn-completion-notice',
+      data: {
+        reasonCode: 'interrupted',
+      },
+    });
+  });
+
+  it('does not append a completion notice for normal completed turns', () => {
+    const session = makeSession({
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: 'session-1',
+        userMessage: {
+          id: 'user-1',
+          content: 'Help',
+          timestamp: 900,
+        },
+        modelRounds: [makeRound()],
+        status: 'completed',
+        startTime: 900,
+        finishReason: 'complete',
       }],
     });
 

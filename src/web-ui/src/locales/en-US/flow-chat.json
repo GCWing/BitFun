@@ -1164,7 +1164,23 @@
     "feedbackDevVersion": "Feedback is not available in dev version",
     "userLabel": "👤 User:",
     "toolCallLabel": "🔧 Tool call: {{name}}",
-    "loadingMoreHistory": "Loading more history..."
+    "loadingMoreHistory": "Loading more history...",
+    "roundHistoryShow": "Show {{count}} previous retry rounds",
+    "roundHistoryHide": "Hide previous retry rounds",
+    "roundRetryLabel": "Retry {{index}}",
+    "retryHistoryShow": "Show {{count}} previous attempts",
+    "retryHistoryHide": "Hide retry history",
+    "attemptLabel": "Attempt {{index}}",
+    "attemptSuperseded": "superseded",
+    "meta": {
+      "label": "Response metadata",
+      "completed": "Completed",
+      "stopped": "Stopped",
+      "duration": "Duration",
+      "tokens": "Tokens",
+      "tokensUnavailable": "unavailable",
+      "tokenBreakdown": "{{total}} total, {{input}} in, {{output}} out"
+    }
   },
   "exploreRegion": {
     "readFiles_one": "Read {{count}} file",
@@ -1331,15 +1347,23 @@
       "executeCommand": "Run command:",
       "writeStdin": "Write stdin:",
       "pollProcess": "Poll process:",
+      "interruptProcess": "Interrupt process:",
+      "killProcess": "Kill process:",
       "executingCommand": "Running command...",
       "waitingForOutput": "Waiting for output...",
       "pollingOutput": "Polling output...",
+      "interruptingSession": "Interrupting process...",
+      "killingSession": "Killing process...",
       "pollSession": "Poll session #{{id}}",
+      "interruptSession": "Interrupt session #{{id}}",
+      "killSession": "Kill session #{{id}}",
       "session": "Session:",
       "wallTime": "{{seconds}}s",
       "remote": "Remote",
       "tty": "TTY",
       "noOutput": "No output",
+      "interruptSentNoOutput": "Interrupt sent; no output",
+      "killSentNoOutput": "Kill sent; no output",
       "sessionNotFound": "Session #{{id}} was not found",
       "copyPrimary": "Copy",
       "primaryCopied": "Copied",
@@ -1374,7 +1398,8 @@
       "inputParams": "Input Parameters",
       "executionResult": "Execution Result",
       "viewDetails": "View Details",
-      "interruptedByRestart": "This tool was still running when the app closed last time, so it has been restored as interrupted"
+      "interruptedByRestart": "This tool was still running when the app closed last time, so it has been restored as interrupted",
+      "interruptedByRetry": "This attempt was superseded by a newer retry in the same response"
     },
     "askUser": {
       "completed": "Completed",
@@ -1410,6 +1435,33 @@
       "clickToOpenLink": "Click to open link",
       "noTitle": "No title",
       "summaryAvailable": "summary available"
+    },
+    "webFetch": {
+      "parsingUrl": "Parsing URL...",
+      "readLabel": "Read Webpage:",
+      "readTitle": "Read Webpage: \"{{url}}\"",
+      "reading": "Reading \"{{url}}\"...",
+      "preparingRead": "Preparing to read \"{{url}}\"",
+      "clickToOpenLink": "Click to open link",
+      "copyResult": "Copy result",
+      "resultCopied": "Result copied",
+      "copyResultFailed": "Failed to copy result",
+      "contentAvailable": "content available",
+      "contentLength": "{{count}} chars",
+      "fetchFailed": "Failed to fetch content",
+      "noContent": "No content returned"
+    },
+    "getToolSpec": {
+      "title": "Tool Spec",
+      "readTitle": "Read tool spec: {{toolName}}",
+      "reading": "Reading tool spec for {{toolName}}...",
+      "preparingRead": "Preparing to read tool spec for {{toolName}}",
+      "loaded": "Loaded spec for {{toolName}}",
+      "alreadyLoaded": "{{toolName}} is already loaded",
+      "readFailed": "Failed to read tool spec",
+      "unknownTool": "Unknown tool",
+      "descriptionLabel": "Description",
+      "schemaLabel": "Input schema"
     },
     "todoWrite": {
       "tasksCount": "{{count}} tasks",
@@ -1509,6 +1561,8 @@
     },
     "default": {
       "waitingConfirm": "Waiting for confirmation",
+      "queued": "Queued",
+      "waiting": "Waiting",
       "executing": "Executing...",
       "completed": "Completed",
       "cancelled": "Cancelled",
@@ -1967,7 +2021,12 @@
     "autoModelDesc": "Automatically Routing",
     "primaryModel": "Primary Model",
     "fastModel": "Fast Model",
-    "modelNotConfigured": "Not Configured"
+    "modelNotConfigured": "Not Configured",
+    "contextUsage": {
+      "agentPrompt": "Last request prompt: {{usage}}",
+      "acpContext": "ACP reported context: {{usage}}",
+      "toolNote": "Tool outputs may be summarized or truncated before later requests."
+    }
   },
   "reasoningEffort": {
     "title": "Reasoning Effort",
@@ -2098,6 +2157,25 @@
     "injectedAt": "Injected before round {{round}}",
     "statusPending": "Waiting to trigger",
     "statusInjected": "Triggered"
+  },
+  "turnCompletionNotice": {
+    "reasonLabel": "End reason",
+    "finalResponseProvided": "The agent has provided a final response.",
+    "repeatedToolFailures": {
+      "title": "Turn stopped after repeated tool failures"
+    },
+    "emptyRound": {
+      "title": "Turn ended without a usable response"
+    },
+    "interrupted": {
+      "title": "Turn was interrupted"
+    },
+    "maxRounds": {
+      "title": "Turn hit the round limit"
+    },
+    "generic": {
+      "title": "Turn ended abnormally"
+    }
   },
   "errors": {
     "sendFailed": "Failed to send message"

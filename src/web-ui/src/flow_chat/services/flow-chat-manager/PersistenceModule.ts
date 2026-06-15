@@ -87,7 +87,8 @@ export function calculateTurnHash(dialogTurn: DialogTurn): string {
         }
       : null,
     error: dialogTurn.error,
-    endTime: dialogTurn.endTime
+    endTime: dialogTurn.endTime,
+    tokenUsage: dialogTurn.tokenUsage,
   });
   
   let hash = 0;
@@ -397,6 +398,7 @@ export function convertDialogTurnToBackendFormat(dialogTurn: DialogTurn, turnInd
         id: round.id,
         turnId: dialogTurn.id,
         roundIndex,
+        roundGroupId: round.roundGroupId,
         timestamp: round.startTime,
         renderHints: round.renderHints,
         textItems: round.items
@@ -412,6 +414,8 @@ export function convertDialogTurnToBackendFormat(dialogTurn: DialogTurn, turnInd
               status: item.status || 'completed',
               orderIndex: index,
               subagentSessionId: (item as any).subagentSessionId,
+              attemptId: item.attemptId,
+              attemptIndex: item.attemptIndex,
             };
           }),
         toolItems: round.items
@@ -436,6 +440,8 @@ export function convertDialogTurnToBackendFormat(dialogTurn: DialogTurn, turnInd
               subagentSessionId: toolItem.subagentSessionId,
               subagentModelId: toolItem.subagentModelId,
               subagentModelAlias: toolItem.subagentModelAlias,
+              attemptId: item.attemptId,
+              attemptIndex: item.attemptIndex,
             };
           }),
         thinkingItems: round.items
@@ -452,15 +458,28 @@ export function convertDialogTurnToBackendFormat(dialogTurn: DialogTurn, turnInd
               status: item.status || 'completed',
               orderIndex: index,
               subagentSessionId: thinkingItem.subagentSessionId,
+              attemptId: item.attemptId,
+              attemptIndex: item.attemptIndex,
             };
           }),
         startTime: round.startTime,
         endTime: round.endTime,
+        attemptCount: round.attemptCount,
         status: round.status || 'completed',
       };
     }),
     startTime: dialogTurn.startTime,
     endTime: dialogTurn.endTime,
+    tokenUsage: dialogTurn.tokenUsage
+      ? {
+          inputTokens: dialogTurn.tokenUsage.inputTokens,
+          outputTokens: dialogTurn.tokenUsage.outputTokens,
+          totalTokens: dialogTurn.tokenUsage.totalTokens,
+          timestamp: dialogTurn.tokenUsage.timestamp,
+        }
+      : undefined,
+    finishReason: dialogTurn.finishReason,
+    hasFinalResponse: dialogTurn.hasFinalResponse,
     status: dialogTurn.status === 'completed' ? 'completed' : 
             dialogTurn.status === 'error' ? 'error' : 
             dialogTurn.status === 'cancelled' ? 'cancelled' : 'inprogress',

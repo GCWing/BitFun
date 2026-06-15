@@ -26,3 +26,6 @@ regex = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 win32job = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

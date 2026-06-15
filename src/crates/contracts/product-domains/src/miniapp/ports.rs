@@ -8,10 +8,12 @@ pub use crate::miniapp::runtime_facade::MiniAppRuntimeFacade;
 
 use crate::miniapp::customization::MiniAppCustomizationMetadata;
 use crate::miniapp::runtime::DetectedRuntime;
-use crate::miniapp::types::{MiniApp, MiniAppMeta, MiniAppSource, NpmDep};
+use crate::miniapp::storage::MiniAppImportBundleWriteRequest;
+use crate::miniapp::types::{MiniApp, MiniAppMeta, MiniAppPermissions, MiniAppSource, NpmDep};
 use crate::miniapp::worker::InstallResult;
 use serde::{Deserialize, Serialize};
 use std::future::Future;
+use std::path::PathBuf;
 use std::pin::Pin;
 
 pub type MiniAppPortFuture<'a, T> = Pin<Box<dyn Future<Output = MiniAppPortResult<T>> + Send + 'a>>;
@@ -59,6 +61,16 @@ pub struct MiniAppInstallDepsRequest {
     pub app_id: String,
     #[serde(default)]
     pub dependencies: Vec<NpmDep>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MiniAppImportFromPathRequest {
+    pub source_path: PathBuf,
+    pub app_id: String,
+    pub theme: String,
+    pub workspace_root: Option<PathBuf>,
+    pub imported_at: i64,
+    pub recompiled_at: i64,
 }
 
 pub trait MiniAppStoragePort: Send + Sync {
@@ -110,4 +122,23 @@ pub trait MiniAppRuntimePort: Send + Sync {
         &self,
         request: MiniAppInstallDepsRequest,
     ) -> MiniAppPortFuture<'_, InstallResult>;
+}
+
+pub trait MiniAppImportPort: Send + Sync {
+    fn read_import_meta_json(&self, source_path: PathBuf) -> MiniAppPortFuture<'_, String>;
+    fn write_import_bundle(
+        &self,
+        request: MiniAppImportBundleWriteRequest,
+    ) -> MiniAppPortFuture<'_, ()>;
+}
+
+pub trait MiniAppCompilePort: Send + Sync {
+    fn compile_app(
+        &self,
+        app_id: String,
+        source: MiniAppSource,
+        permissions: MiniAppPermissions,
+        theme: String,
+        workspace_root: Option<PathBuf>,
+    ) -> MiniAppPortFuture<'_, String>;
 }

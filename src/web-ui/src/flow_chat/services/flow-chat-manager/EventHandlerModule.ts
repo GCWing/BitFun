@@ -123,8 +123,29 @@ function resolveDialogTurnDisplayContent(
   return resolveThreadGoalUserMessageDisplay(base, metadata);
 }
 
+function mergeParamsPartialEventData(
+  existing: ToolEventData,
+  incoming: ToolEventData,
+): ToolEventData {
+  const existingToolEvent = existing.toolEvent as ParamsPartialToolEvent;
+  const incomingToolEvent = incoming.toolEvent as ParamsPartialToolEvent;
+  const existingParams = normalizeParamsPartialFragment(existingToolEvent.params);
+  const incomingParams = normalizeParamsPartialFragment(incomingToolEvent.params);
+
+  return {
+    ...existing,
+    ...incoming,
+    toolEvent: {
+      ...existingToolEvent,
+      ...incomingToolEvent,
+      params: existingParams + incomingParams,
+    },
+  };
+}
+
 export const __test_only__ = {
   resolveDialogTurnDisplayContent,
+  mergeParamsPartialEventData,
 };
 
 function shouldMarkUnreadCompletion(sessionId: string): boolean {
@@ -636,7 +657,7 @@ export async function initializeEventListeners(
       handleDialogTurnCancelled(context, event, onTodoWriteResult);
     },
     onTokenUsageUpdated: (event) => {
-      handleTokenUsageUpdate(event);
+      handleTokenUsageUpdate(context, event);
     },
     onAcpContextUsageUpdated: (event) => {
       handleAcpContextUsageUpdate(event);
@@ -1360,13 +1381,22 @@ function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
   const session = state.sessions.get(sessionId);
 
   if (!session) {
-    log.warn('DialogTurnStarted: session not in store, creating placeholder', { sessionId, sessionsCount: state.sessions.size });
+    // Hidden MiniApp agent runs (e.g. PPT Live) submit turns with
+    // `surface: 'miniapp_agent'`. Register them as transient miniapp sessions
+    // so they stay out of the session list and the agent companion bubbles.
+    const isMiniAppAgentRun = userMessageMetadata?.surface === 'miniapp_agent';
+    const miniAppId = typeof userMessageMetadata?.appId === 'string'
+      ? userMessageMetadata.appId
+      : undefined;
+    log.warn('DialogTurnStarted: session not in store, creating placeholder', { sessionId, sessionsCount: state.sessions.size, isMiniAppAgentRun });
     store.addExternalSession(
       sessionId,
-      'Remote Session',
+      isMiniAppAgentRun ? (miniAppId ? `MiniApp: ${miniAppId}` : 'MiniApp Agent') : 'Remote Session',
       'agentic',
       resolveExternalSessionWorkspacePath(context, event),
-      undefined,
+      isMiniAppAgentRun
+        ? { sessionKind: 'miniapp', isTransient: true, agentBackedTransient: true }
+        : undefined,
       extractEventRemoteConnectionId(event),
       extractEventRemoteSshHost(event)
     );
@@ -1498,6 +1528,8 @@ function handleTextChunk(context: FlowChatContext, event: any): void {
     sessionId,
     turnId,
     roundId,
+    attemptId: event.attemptId,
+    attemptIndex: event.attemptIndex,
     text,
     contentType: contentType as 'text' | 'thinking',
     isThinkingEnd,
@@ -1537,11 +1569,11 @@ export function processBatchedEvents(
       const { eventType } = parsed;
       
       if (eventType === 'text') {
-        const { sessionId, turnId, roundId, text, contentType, isThinkingEnd } = payload;
+        const { sessionId, turnId, roundId, attemptId, attemptIndex, text, contentType, isThinkingEnd } = payload;
         if (contentType === 'thinking') {
-          processThinkingChunkInternal(context, sessionId, turnId, roundId, text, isThinkingEnd);
+          processThinkingChunkInternal(context, sessionId, turnId, roundId, text, isThinkingEnd, attemptId, attemptIndex);
         } else {
-          processNormalTextChunkInternal(context, sessionId, turnId, roundId, text);
+          processNormalTextChunkInternal(context, sessionId, turnId, roundId, text, attemptId, attemptIndex);
         }
         
         debouncedSaveDialogTurn(context, sessionId, turnId, 2000);
@@ -1567,11 +1599,13 @@ function handleToolEvent(
     sessionId: string;
     turnId?: string;
     roundId?: string;
+    attemptId?: string;
+    attemptIndex?: number;
     toolEvent: FlowToolEvent;
   },
   onTodoWriteResult: (sessionId: string, turnId: string, result: any) => void
 ): void {
-  const { sessionId, turnId, roundId, toolEvent } = event;
+  const { sessionId, turnId, roundId, attemptId, attemptIndex, toolEvent } = event;
   if (!turnId) {
     log.debug('Tool event missing turnId', { sessionId, toolId: toolEvent.tool_id, eventType: toolEvent.event_type });
     return;
@@ -1597,6 +1631,8 @@ function handleToolEvent(
     sessionId,
     turnId,
     roundId,
+    attemptId,
+    attemptIndex,
     toolEvent,
   };
   
@@ -1610,15 +1646,7 @@ function handleToolEvent(
         key,
         eventData,
         'accumulate',
-        (existing, incoming) => ({
-          ...existing,
-          toolEvent: {
-            ...(existing.toolEvent as ParamsPartialToolEvent),
-            params:
-              normalizeParamsPartialFragment((existing.toolEvent as ParamsPartialToolEvent).params) +
-              normalizeParamsPartialFragment((incoming.toolEvent as ParamsPartialToolEvent).params)
-          }
-        })
+        mergeParamsPartialEventData,
       );
     } else {
       context.eventBatcher.add(key, eventData, 'replace');
@@ -1626,14 +1654,14 @@ function handleToolEvent(
     return;
   }
 
-  processToolEvent(context, sessionId, turnId, roundId, toolEvent, undefined, onTodoWriteResult);
+  processToolEvent(context, sessionId, turnId, roundId, toolEvent, attemptId, attemptIndex, undefined, onTodoWriteResult);
 }
 
 /**
  * Handle model round started event
  */
 function handleModelRoundStart(context: FlowChatContext, event: any): void {
-  const { sessionId, turnId, roundId, roundIndex } = event;
+  const { sessionId, turnId, roundId, roundIndex, roundGroupId } = event;
   
   if (!shouldProcessEvent(sessionId, turnId, 'data', 'ModelRoundStarted')) {
     return;
@@ -1674,6 +1702,7 @@ function handleModelRoundStart(context: FlowChatContext, event: any): void {
   const modelRound: ModelRound = {
     id: roundId,
     index: roundIndex || 0,
+    roundGroupId,
     items: [],
     isStreaming: true,
     isComplete: false,
@@ -1767,8 +1796,13 @@ function handleModelRoundComplete(context: FlowChatContext, event: ModelRoundCom
 /**
  * Handle token usage update event
  */
-function handleTokenUsageUpdate(event: any): void {
-  const { sessionId, inputTokens, outputTokens, totalTokens, maxContextTokens } = event;
+function handleTokenUsageUpdate(context: FlowChatContext, event: any): void {
+  const sessionId = event.sessionId ?? event.session_id;
+  const turnId = event.turnId ?? event.turn_id;
+  const inputTokens = event.inputTokens ?? event.input_tokens;
+  const outputTokens = event.outputTokens ?? event.output_tokens;
+  const totalTokens = event.totalTokens ?? event.total_tokens;
+  const maxContextTokens = event.maxContextTokens ?? event.max_context_tokens;
   
   const store = FlowChatStore.getInstance();
   const session = store.getState().sessions.get(sessionId);
@@ -1777,15 +1811,23 @@ function handleTokenUsageUpdate(event: any): void {
     log.debug('Session not found (token usage update)', { sessionId });
     return;
   }
+  if (typeof inputTokens !== 'number' || typeof totalTokens !== 'number') {
+    log.debug('Dropped invalid token usage update', { event });
+    return;
+  }
 
   store.updateTokenUsage(sessionId, {
     inputTokens,
-    outputTokens,
+    outputTokens: typeof outputTokens === 'number' ? outputTokens : undefined,
     totalTokens
-  });
+  }, turnId);
 
   if (maxContextTokens !== undefined && maxContextTokens !== null) {
     store.updateSessionMaxContextTokens(sessionId, maxContextTokens);
+  }
+
+  if (turnId) {
+    immediateSaveDialogTurn(context, sessionId, turnId);
   }
 }
 
@@ -1979,6 +2021,7 @@ export function handleDialogTurnComplete(
   const partialRecoveryReason = event?.partialRecoveryReason ?? event?.partial_recovery_reason;
   const success = event?.success;
   const finishReason = event?.finishReason ?? event?.finish_reason;
+  const hasFinalResponse = event?.hasFinalResponse ?? event?.has_final_response;
 
   if (!sessionId || !turnId) {
     log.warn('DialogTurnCompleted missing sessionId or turnId', { event });
@@ -2027,6 +2070,7 @@ export function handleDialogTurnComplete(
       status: 'finishing' as const,
       success: success ?? undefined,
       finishReason: finishReason ?? undefined,
+      hasFinalResponse: typeof hasFinalResponse === 'boolean' ? hasFinalResponse : undefined,
     };
   });
 

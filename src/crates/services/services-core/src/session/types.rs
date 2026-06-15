@@ -346,8 +346,56 @@ pub struct DialogTurnData {
     #[serde(skip_serializing_if = "Option::is_none", alias = "duration_ms")]
     pub duration_ms: Option<u64>,
 
+    /// Provider-reported token usage for this dialog turn, when available.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "token_usage"
+    )]
+    pub token_usage: Option<DialogTurnTokenUsageData>,
+
+    /// Detailed finish reason recorded when the turn ended.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "finish_reason"
+    )]
+    pub finish_reason: Option<String>,
+
+    /// Whether the turn produced a final assistant response visible to the user.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "has_final_response"
+    )]
+    pub has_final_response: Option<bool>,
+
     /// Turn status
     pub status: TurnStatus,
+}
+
+/// Provider-reported token usage attached to a dialog turn.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DialogTurnTokenUsageData {
+    /// Input/prompt tokens for the model request.
+    #[serde(alias = "input_tokens")]
+    pub input_tokens: u64,
+
+    /// Output/completion tokens, when the provider reports them.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "output_tokens"
+    )]
+    pub output_tokens: Option<u64>,
+
+    /// Total tokens reported by the provider for this request.
+    #[serde(alias = "total_tokens")]
+    pub total_tokens: u64,
+
+    /// Frontend event timestamp in milliseconds since epoch.
+    pub timestamp: u64,
 }
 
 /// Persisted dialog turn kind.
@@ -387,6 +435,12 @@ pub struct ModelRoundData {
     pub turn_id: String,
     #[serde(alias = "round_index")]
     pub round_index: usize,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "round_group_id"
+    )]
+    pub round_group_id: Option<String>,
     pub timestamp: u64,
 
     /// Text item entries
@@ -494,6 +548,20 @@ pub struct TextItemData {
     /// Status field
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<String>,
+
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "attempt_id"
+    )]
+    pub attempt_id: Option<String>,
+
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "attempt_index"
+    )]
+    pub attempt_index: Option<u32>,
 }
 
 fn default_is_markdown() -> bool {
@@ -529,6 +597,20 @@ pub struct ThinkingItemData {
 
     #[serde(skip_serializing_if = "Option::is_none", alias = "subagent_session_id")]
     pub subagent_session_id: Option<String>,
+
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "attempt_id"
+    )]
+    pub attempt_id: Option<String>,
+
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "attempt_index"
+    )]
+    pub attempt_index: Option<u32>,
 }
 
 /// Tool item data
@@ -588,6 +670,20 @@ pub struct ToolItemData {
 
     #[serde(skip_serializing_if = "Option::is_none", alias = "subagent_session_id")]
     pub subagent_session_id: Option<String>,
+
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "attempt_id"
+    )]
+    pub attempt_id: Option<String>,
+
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "attempt_index"
+    )]
+    pub attempt_index: Option<u32>,
 
     #[serde(skip_serializing_if = "Option::is_none", alias = "subagent_model_id")]
     pub subagent_model_id: Option<String>,
@@ -848,6 +944,9 @@ impl DialogTurnData {
             start_time: now,
             end_time: None,
             duration_ms: None,
+            token_usage: None,
+            finish_reason: None,
+            has_final_response: None,
             status: TurnStatus::InProgress,
         }
     }
@@ -877,7 +976,7 @@ impl DialogTurnData {
 mod tests {
     use super::{
         DialogTurnData, DialogTurnKind, ModelRoundData, SessionMetadata, SessionRelationship,
-        SessionRelationshipKind, ToolItemData, UserMessageData,
+        SessionRelationshipKind, TextItemData, ThinkingItemData, ToolItemData, UserMessageData,
     };
     use bitfun_core_types::SessionKind;
 
@@ -919,6 +1018,45 @@ mod tests {
         );
 
         assert_eq!(turn.kind, DialogTurnKind::UserDialog);
+    }
+
+    #[test]
+    fn dialog_turn_token_usage_round_trips_camel_case_payloads() {
+        let payload = serde_json::json!({
+            "turnId": "turn-1",
+            "turnIndex": 0,
+            "sessionId": "session-1",
+            "timestamp": 1,
+            "userMessage": {
+                "id": "user-1",
+                "content": "hello",
+                "timestamp": 1
+            },
+            "modelRounds": [],
+            "startTime": 1,
+            "durationMs": 10,
+            "tokenUsage": {
+                "inputTokens": 1200,
+                "outputTokens": 320,
+                "totalTokens": 1520,
+                "timestamp": 2
+            },
+            "status": "completed"
+        });
+
+        let turn: DialogTurnData =
+            serde_json::from_value(payload).expect("turn payload should deserialize");
+
+        let token_usage = turn
+            .token_usage
+            .as_ref()
+            .expect("token usage should be preserved");
+        assert_eq!(token_usage.input_tokens, 1200);
+        assert_eq!(token_usage.output_tokens, Some(320));
+        assert_eq!(token_usage.total_tokens, 1520);
+
+        let serialized = serde_json::to_value(&turn).expect("turn should serialize");
+        assert_eq!(serialized["tokenUsage"]["totalTokens"], 1520);
     }
 
     #[test]
@@ -1094,6 +1232,50 @@ mod tests {
         let encoded = serde_json::to_value(&tool).expect("tool should serialize");
         assert_eq!(encoded["queueWaitMs"], 7);
         assert_eq!(encoded["executionMs"], 69);
+
+        let text_payload = serde_json::json!({
+            "id": "text-1",
+            "content": "hello",
+            "isStreaming": false,
+            "timestamp": 10,
+            "attemptId": "round-1:attempt:2",
+            "attemptIndex": 2
+        });
+        let text: TextItemData =
+            serde_json::from_value(text_payload).expect("text attempt fields should deserialize");
+        assert_eq!(text.attempt_id.as_deref(), Some("round-1:attempt:2"));
+        assert_eq!(text.attempt_index, Some(2));
+
+        let encoded_text = serde_json::to_value(&text).expect("text should serialize");
+        assert_eq!(encoded_text["attemptId"], "round-1:attempt:2");
+        assert_eq!(encoded_text["attemptIndex"], 2);
+
+        let thinking_payload = serde_json::json!({
+            "id": "thinking-1",
+            "content": "reasoning",
+            "isStreaming": false,
+            "isCollapsed": true,
+            "timestamp": 11,
+            "attemptId": "round-1:attempt:2",
+            "attemptIndex": 2
+        });
+        let thinking: ThinkingItemData = serde_json::from_value(thinking_payload)
+            .expect("thinking attempt fields should deserialize");
+        assert_eq!(thinking.attempt_id.as_deref(), Some("round-1:attempt:2"));
+        assert_eq!(thinking.attempt_index, Some(2));
+
+        let tool_attempt_payload = serde_json::json!({
+            "id": "tool-2",
+            "toolName": "write_file",
+            "toolCall": { "id": "call-2", "input": {} },
+            "startTime": 1,
+            "attemptId": "round-1:attempt:2",
+            "attemptIndex": 2
+        });
+        let tool_with_attempt: ToolItemData = serde_json::from_value(tool_attempt_payload)
+            .expect("tool attempt fields should deserialize");
+        assert_eq!(tool_with_attempt.attempt_id.as_deref(), Some("round-1:attempt:2"));
+        assert_eq!(tool_with_attempt.attempt_index, Some(2));
     }
 
     #[test]

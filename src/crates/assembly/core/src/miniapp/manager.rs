@@ -1,8 +1,10 @@
 //! MiniApp manager: CRUD, version management, compile on save.
 
-use crate::miniapp::compiler::compile;
-use crate::miniapp::permission_policy::resolve_policy;
-use crate::miniapp::storage::{MiniAppImportBundleRequest, MiniAppStorage};
+use crate::miniapp::compiler::{compile_with_request, MiniAppCompileRequest};
+use crate::miniapp::permission_policy::{
+    resolve_policy_with_request, MiniAppPermissionPolicyRequest,
+};
+use crate::miniapp::storage::MiniAppStorage;
 use crate::miniapp::types::{
     MiniApp, MiniAppAiContext, MiniAppMeta, MiniAppPermissions, MiniAppSource,
 };
@@ -13,13 +15,11 @@ use bitfun_product_domains::miniapp::customization::{
 };
 use bitfun_product_domains::miniapp::draft::MiniAppDraft;
 use bitfun_product_domains::miniapp::lifecycle::{
-    build_worker_revision, workspace_dir_string, MiniAppCreateInput, MiniAppUpdatePatch,
+    build_worker_revision, MiniAppCreateInput, MiniAppUpdatePatch,
 };
 use bitfun_product_domains::miniapp::ports::{
-    MiniAppPortError, MiniAppPortErrorKind, MiniAppRuntimeFacade,
-};
-use bitfun_product_domains::miniapp::storage::{
-    build_import_bundle_plan, MiniAppImportBundlePlanError,
+    MiniAppCompilePort, MiniAppImportFromPathRequest, MiniAppPortError, MiniAppPortErrorKind,
+    MiniAppPortFuture, MiniAppRuntimeFacade,
 };
 use chrono::Utc;
 use std::collections::HashMap;
@@ -75,17 +75,9 @@ impl MiniAppManager {
         workspace_root: Option<&Path>,
     ) -> BitFunResult<String> {
         let app_data_dir = self.path_manager.miniapp_dir(app_id);
-        let app_data_dir_str = app_data_dir.to_string_lossy().to_string();
-        let workspace_dir = workspace_dir_string(workspace_root);
-
-        compile(
-            source,
-            permissions,
-            app_id,
-            &app_data_dir_str,
-            &workspace_dir,
-            theme,
-        )
+        let request =
+            MiniAppCompileRequest::from_paths(app_id, &app_data_dir, workspace_root, theme);
+        compile_with_request(source, permissions, &request)
     }
 
     fn compile_source_with_app_data_dir(
@@ -97,17 +89,9 @@ impl MiniAppManager {
         theme: &str,
         workspace_root: Option<&Path>,
     ) -> BitFunResult<String> {
-        let app_data_dir_str = app_data_dir.to_string_lossy().to_string();
-        let workspace_dir = workspace_dir_string(workspace_root);
-
-        compile(
-            source,
-            permissions,
-            app_id,
-            &app_data_dir_str,
-            &workspace_dir,
-            theme,
-        )
+        let request =
+            MiniAppCompileRequest::from_paths(app_id, app_data_dir, workspace_root, theme);
+        compile_with_request(source, permissions, &request)
     }
 
     /// List all MiniApp metadata.
@@ -232,8 +216,14 @@ impl MiniAppManager {
     ) -> serde_json::Value {
         let app_data_dir = self.path_manager.miniapp_dir(app_id);
         let gp = self.granted_paths.read().await;
-        let granted = gp.get(app_id).map(|v| v.as_slice()).unwrap_or(&[]);
-        resolve_policy(permissions, app_id, &app_data_dir, workspace_root, granted)
+        let granted = gp.get(app_id).map(Vec::as_slice).unwrap_or(&[]);
+        let request = MiniAppPermissionPolicyRequest::from_paths(
+            app_id,
+            &app_data_dir,
+            workspace_root,
+            granted,
+        );
+        resolve_policy_with_request(permissions, &request)
     }
 
     pub async fn resolve_policy_for_draft(
@@ -245,8 +235,14 @@ impl MiniAppManager {
     ) -> serde_json::Value {
         let app_data_dir = self.storage.draft_dir(app_id, draft_id);
         let gp = self.granted_paths.read().await;
-        let granted = gp.get(app_id).map(|v| v.as_slice()).unwrap_or(&[]);
-        resolve_policy(permissions, app_id, &app_data_dir, workspace_root, granted)
+        let granted = gp.get(app_id).map(Vec::as_slice).unwrap_or(&[]);
+        let request = MiniAppPermissionPolicyRequest::from_paths(
+            app_id,
+            &app_data_dir,
+            workspace_root,
+            granted,
+        );
+        resolve_policy_with_request(permissions, &request)
     }
 
     /// Snapshot of user-granted extra paths for an app (used by the host-side dispatch
@@ -610,40 +606,63 @@ impl MiniAppManager {
         source_path: PathBuf,
         workspace_root: Option<&Path>,
     ) -> BitFunResult<MiniApp> {
-        let src = source_path.as_path();
-        let meta_content = self.storage.read_import_meta_json(src).await?;
         let id = Uuid::new_v4().to_string();
-        let now = Utc::now().timestamp_millis();
-        let plan = build_import_bundle_plan(&id, &meta_content, now)
-            .map_err(map_import_bundle_plan_error)?;
-        self.storage
-            .write_import_bundle(MiniAppImportBundleRequest {
-                source_path,
-                app_id: id.clone(),
-                meta_json: plan.meta_json,
-                esm_dependencies_json: plan.esm_dependencies_json,
-                package_json: plan.package_json,
-                storage_json: plan.storage_json,
-                compiled_html: plan.compiled_html,
-            })
-            .await?;
-
-        let app = self.recompile(&id, "dark", workspace_root).await?;
+        let imported_at = Utc::now().timestamp_millis();
         self.runtime_facade()
-            .persist_import_runtime_state(app)
+            .import_from_path(
+                &self.storage,
+                self,
+                MiniAppImportFromPathRequest {
+                    source_path,
+                    app_id: id,
+                    theme: "dark".to_string(),
+                    workspace_root: workspace_root.map(Path::to_path_buf),
+                    imported_at,
+                    recompiled_at: Utc::now().timestamp_millis(),
+                },
+            )
             .await
             .map_err(map_miniapp_port_error)
     }
 }
 
-fn map_import_bundle_plan_error(error: MiniAppImportBundlePlanError) -> BitFunError {
-    match error {
-        MiniAppImportBundlePlanError::InvalidMeta(source) => {
-            BitFunError::parse(format!("Invalid meta.json: {}", source))
-        }
-        MiniAppImportBundlePlanError::MetaSerialization(source)
-        | MiniAppImportBundlePlanError::PackageSerialization(source) => BitFunError::from(source),
+impl MiniAppCompilePort for MiniAppManager {
+    fn compile_app(
+        &self,
+        app_id: String,
+        source: MiniAppSource,
+        permissions: MiniAppPermissions,
+        theme: String,
+        workspace_root: Option<PathBuf>,
+    ) -> MiniAppPortFuture<'_, String> {
+        Box::pin(async move {
+            self.compile_source(
+                &app_id,
+                &source,
+                &permissions,
+                &theme,
+                workspace_root.as_deref(),
+            )
+            .map_err(map_bitfun_error_to_miniapp_port_error)
+        })
     }
+}
+
+fn map_bitfun_error_to_miniapp_port_error(error: BitFunError) -> MiniAppPortError {
+    let kind = match &error {
+        BitFunError::NotFound(_) => MiniAppPortErrorKind::NotFound,
+        BitFunError::Validation(_) => MiniAppPortErrorKind::InvalidInput,
+        BitFunError::Deserialization(_) | BitFunError::Serialization(_) => {
+            MiniAppPortErrorKind::Deserialization
+        }
+        BitFunError::Io(io_error) if io_error.kind() == std::io::ErrorKind::PermissionDenied => {
+            MiniAppPortErrorKind::PermissionDenied
+        }
+        BitFunError::Io(_) => MiniAppPortErrorKind::Io,
+        BitFunError::ProcessError(_) => MiniAppPortErrorKind::RuntimeUnavailable,
+        _ => MiniAppPortErrorKind::Backend,
+    };
+    MiniAppPortError::new(kind, error.to_string())
 }
 
 fn map_miniapp_port_error(error: MiniAppPortError) -> BitFunError {

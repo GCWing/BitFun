@@ -17,7 +17,7 @@ import {
   getTerminalService,
   refreshTerminalPanelPosition,
   setTerminalPanelPosition,
-} from '@/tools/terminal';
+} from '@/tools/terminal/services';
 import type { ShellInfo } from '@/tools/terminal/types/session';
 import {
   ConfigPageContent,

@@ -46,6 +46,10 @@ import {
   mapInitialHistoryExpansionScrollTop,
   selectInitialHistoryRenderWindow,
 } from './virtualMessageListLayout';
+import {
+  activeSessionHistoryProjectionHandoff,
+  type HistoryProjectionHandoffSnapshot,
+} from './historyProjectionHandoff';
 import './VirtualMessageList.scss';
 
 const COMPENSATION_EPSILON_PX = 0.5;
@@ -124,21 +128,6 @@ interface LatestEndAnchorRequestState {
   lastTargetBottom: number | null;
 }
 
-interface HistoryProjectionHandoffSnapshot {
-  sessionId: string;
-  reason: string;
-  createdAtMs: number;
-  items: VirtualItem[];
-  mode: 'scroll-position' | 'bottom-tail';
-  targetTurnId: string | null;
-  anchorKey: string | null;
-  anchorOffsetTopPx: number;
-  scrollTop: number;
-  scrollHeight: number;
-  clientHeight: number;
-  footerHeightPx: number;
-}
-
 type BottomReservationKind = 'collapse' | 'pin';
 
 interface BottomReservationBase {
@@ -160,6 +149,12 @@ interface PinBottomReservation extends BottomReservationBase {
 interface BottomReservationState {
   collapse: CollapseBottomReservation;
   pin: PinBottomReservation;
+}
+
+interface ScrollerGeometrySnapshot {
+  scrollTop: number;
+  scrollHeight: number;
+  clientHeight: number;
 }
 
 interface PendingTurnPinState {
@@ -285,6 +280,8 @@ function getVirtualItemStableKey(item: VirtualItem): string {
       return `${item.type}:${item.turnId}:${item.data.id}`;
     case 'explore-group':
       return `${item.type}:${item.turnId}:${item.data.groupId}`;
+    case 'turn-completion-notice':
+      return `${item.type}:${item.turnId}:${item.data.reasonCode}`;
     case 'image-analyzing':
       return `${item.type}:${item.turnId}`;
   }
@@ -364,6 +361,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
   const bottomReservationStateRef = useRef<BottomReservationState>(createInitialBottomReservationState());
   const previousMeasuredHeightRef = useRef<number | null>(null);
   const previousScrollTopRef = useRef(0);
+  const previousScrollerGeometryRef = useRef<ScrollerGeometrySnapshot | null>(null);
   const markedInitialHistoryRenderWindowKeyRef = useRef<string | null>(null);
   const autoScrolledInitialHistoryRenderKeyRef = useRef<string | null>(null);
   const pendingInitialHistoryExpansionRef = useRef<{
@@ -378,11 +376,12 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
   const pinReservationReconcileFrameRef = useRef<number | null>(null);
   const turnPinStabilizationFrameRef = useRef<number | null>(null);
   const latestEndAnchorStabilizationFrameRef = useRef<number | null>(null);
+  const staticInitialHistoryBottomGuardFrameRef = useRef<number | null>(null);
+  const staticInitialHistoryBottomGuardUntilMsRef = useRef(0);
   const latestEndAnchorRequestRef = useRef<LatestEndAnchorRequestState | null>(null);
   const resolveLatestEndAnchorStabilizationRef = useRef<((reason: LatestEndAnchorResolveReason) => boolean) | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const mutationObserverRef = useRef<MutationObserver | null>(null);
-  const layoutTransitionCountRef = useRef(0);
   const touchScrollIntentStartYRef = useRef<number | null>(null);
   const scrollbarPointerInteractionActiveRef = useRef(false);
   // Timestamp until which we treat any upward scroll as user-initiated. Set by
@@ -466,6 +465,116 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     const compensationPx = getTotalBottomCompensationPx(reservationState);
     return Math.max(0, scroller.scrollHeight - compensationPx - inputStackFooterPxRef.current);
   }, [getTotalBottomCompensationPx]);
+
+  const recordScrollerGeometry = useCallback((scroller: HTMLElement) => {
+    previousScrollerGeometryRef.current = {
+      scrollTop: scroller.scrollTop,
+      scrollHeight: scroller.scrollHeight,
+      clientHeight: scroller.clientHeight,
+    };
+  }, []);
+
+  const recordScrollerGeometryIfLayoutStable = useCallback((scroller: HTMLElement) => {
+    const previousGeometry = previousScrollerGeometryRef.current;
+    if (
+      previousGeometry &&
+      (
+        Math.abs(scroller.clientHeight - previousGeometry.clientHeight) > COMPENSATION_EPSILON_PX ||
+        Math.abs(scroller.scrollHeight - previousGeometry.scrollHeight) > COMPENSATION_EPSILON_PX
+      )
+    ) {
+      return;
+    }
+    recordScrollerGeometry(scroller);
+  }, [recordScrollerGeometry]);
+
+  const syncPhysicalBottomAfterViewportResize = useCallback((scroller: HTMLElement): boolean => {
+    const previousGeometry = previousScrollerGeometryRef.current;
+    if (!previousGeometry) {
+      return false;
+    }
+
+    const viewportGeometryChanged =
+      Math.abs(scroller.scrollHeight - previousGeometry.scrollHeight) > COMPENSATION_EPSILON_PX ||
+      Math.abs(scroller.clientHeight - previousGeometry.clientHeight) > COMPENSATION_EPSILON_PX;
+    if (!viewportGeometryChanged || pendingCollapseIntentRef.current.active) {
+      return false;
+    }
+
+    const previousMaxScrollTop = Math.max(0, previousGeometry.scrollHeight - previousGeometry.clientHeight);
+    const wasAtPhysicalBottom =
+      Math.abs(previousMaxScrollTop - previousGeometry.scrollTop) <= LATEST_END_ANCHOR_STABLE_EPSILON_PX;
+    if (!wasAtPhysicalBottom) {
+      return false;
+    }
+
+    const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+    if (Math.abs(maxScrollTop - scroller.scrollTop) > COMPENSATION_EPSILON_PX) {
+      scroller.scrollTop = maxScrollTop;
+    }
+    previousScrollTopRef.current = scroller.scrollTop;
+    previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller);
+    recordScrollerGeometry(scroller);
+    return true;
+  }, [recordScrollerGeometry, snapshotMeasuredContentHeight]);
+
+  const cancelStaticInitialHistoryBottomGuard = useCallback(() => {
+    staticInitialHistoryBottomGuardUntilMsRef.current = 0;
+    if (staticInitialHistoryBottomGuardFrameRef.current !== null) {
+      cancelAnimationFrame(staticInitialHistoryBottomGuardFrameRef.current);
+      staticInitialHistoryBottomGuardFrameRef.current = null;
+    }
+  }, []);
+
+  const startStaticInitialHistoryBottomGuard = useCallback((durationMs = 2500) => {
+    const scroller = scrollerElementRef.current;
+    if (!scroller?.classList.contains('virtual-message-list__static-scroller')) {
+      return;
+    }
+
+    const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+    if (Math.abs(maxScrollTop - scroller.scrollTop) > LATEST_END_ANCHOR_STABLE_EPSILON_PX) {
+      return;
+    }
+
+    staticInitialHistoryBottomGuardUntilMsRef.current = Math.max(
+      staticInitialHistoryBottomGuardUntilMsRef.current,
+      performance.now() + durationMs,
+    );
+    if (staticInitialHistoryBottomGuardFrameRef.current !== null) {
+      return;
+    }
+
+    const tick = () => {
+      staticInitialHistoryBottomGuardFrameRef.current = null;
+      const now = performance.now();
+      if (now > staticInitialHistoryBottomGuardUntilMsRef.current) {
+        return;
+      }
+
+      const currentScroller = scrollerElementRef.current;
+      if (
+        !currentScroller?.classList.contains('virtual-message-list__static-scroller') ||
+        now <= userInitiatedUpwardScrollUntilMsRef.current
+      ) {
+        staticInitialHistoryBottomGuardUntilMsRef.current = 0;
+        return;
+      }
+
+      syncPhysicalBottomAfterViewportResize(currentScroller);
+      const distanceFromBottom = Math.max(
+        0,
+        currentScroller.scrollHeight - currentScroller.clientHeight - currentScroller.scrollTop,
+      );
+      if (distanceFromBottom <= LATEST_END_ANCHOR_STABLE_EPSILON_PX) {
+        recordScrollerGeometry(currentScroller);
+      }
+
+      staticInitialHistoryBottomGuardFrameRef.current = requestAnimationFrame(tick);
+    };
+
+    staticInitialHistoryBottomGuardFrameRef.current = requestAnimationFrame(tick);
+  }, [recordScrollerGeometry, syncPhysicalBottomAfterViewportResize]);
 
   const updateBottomReservationState = useCallback((
     updater: BottomReservationState | ((prev: BottomReservationState) => BottomReservationState),
@@ -614,6 +723,40 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
       );
       scroller.scrollTop = Math.min(preClampScrollTop, maxScrollTop);
     }
+
+    // If no streaming is in progress, schedule a consumption pass to drain
+    // the compensation added above. Without streaming, the grow branch of
+    // measureHeightChange never fires, so the residual collapse.px would
+    // persist as permanent footer whitespace (issue #1176).
+    if (!isStreamingOutputRef.current) {
+      requestAnimationFrame(() => {
+        const scrollerNow = scrollerElementRef.current;
+        if (!scrollerNow) return;
+        // Do not drain if a collapse intent is still protecting an ongoing
+        // CSS transition — the intent's own expiry drain will handle it.
+        const intent = pendingCollapseIntentRef.current;
+        if (intent.active && intent.expiresAtMs >= performance.now()) return;
+        const collapsePx = getReservationTotalPx(bottomReservationStateRef.current.collapse);
+        if (collapsePx <= COMPENSATION_EPSILON_PX) return;
+        const distanceFromBottom = Math.max(
+          0,
+          scrollerNow.scrollHeight - scrollerNow.clientHeight - scrollerNow.scrollTop,
+        );
+        if (distanceFromBottom <= COMPENSATION_EPSILON_PX) {
+          // User is at the bottom — safe to drain all collapse compensation.
+          const drained: BottomReservationState = {
+            ...bottomReservationStateRef.current,
+            collapse: {
+              ...bottomReservationStateRef.current.collapse,
+              px: 0,
+              floorPx: 0,
+            },
+          };
+          updateBottomReservationState(drained);
+          applyFooterCompensationNow(drained);
+        }
+      });
+    }
   }, [inputStackFooterPx, updateBottomReservationState, applyFooterCompensationNow]);
 
   const releaseAnchorLock = useCallback((_reason: string) => {
@@ -642,9 +785,13 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     if (!scroller || !lockState.active) return false;
 
     const now = performance.now();
-    if (now > lockState.lockUntilMs && layoutTransitionCountRef.current === 0) {
-      releaseAnchorLock(`expired-before-${reason}`);
-      return false;
+    if (now > lockState.lockUntilMs) {
+      const intent = pendingCollapseIntentRef.current;
+      const intentActive = intent.active && intent.expiresAtMs >= now;
+      if (!intentActive) {
+        releaseAnchorLock(`expired-before-${reason}`);
+        return false;
+      }
     }
 
     const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
@@ -658,8 +805,9 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
 
     scroller.scrollTop = targetScrollTop;
     previousScrollTopRef.current = targetScrollTop;
+    recordScrollerGeometry(scroller);
     return true;
-  }, [releaseAnchorLock]);
+  }, [recordScrollerGeometry, releaseAnchorLock]);
 
   const measureHeightChange = useCallback(() => {
     const scroller = scrollerElementRef.current;
@@ -667,6 +815,21 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
 
     const currentScrollTop = scroller.scrollTop;
     const previousScrollTop = previousScrollTopRef.current;
+    const previousScrollerGeometry = previousScrollerGeometryRef.current;
+    const viewportGeometryChanged = Boolean(
+      previousScrollerGeometry &&
+      (
+        Math.abs(scroller.scrollHeight - previousScrollerGeometry.scrollHeight) > COMPENSATION_EPSILON_PX ||
+        Math.abs(scroller.clientHeight - previousScrollerGeometry.clientHeight) > COMPENSATION_EPSILON_PX
+      )
+    );
+    const wasAtPhysicalBottom = Boolean(
+      previousScrollerGeometry &&
+      Math.abs(
+        Math.max(0, previousScrollerGeometry.scrollHeight - previousScrollerGeometry.clientHeight) -
+        previousScrollerGeometry.scrollTop
+      ) <= LATEST_END_ANCHOR_STABLE_EPSILON_PX
+    );
     const currentTotalCompensation = getTotalBottomCompensationPx();
     const effectiveScrollHeight = Math.max(
       0,
@@ -677,12 +840,27 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
 
     if (previousMeasuredHeight === null) {
       previousScrollTopRef.current = currentScrollTop;
+      recordScrollerGeometry(scroller);
       return;
     }
 
     const heightDelta = effectiveScrollHeight - previousMeasuredHeight;
     if (Math.abs(heightDelta) <= COMPENSATION_EPSILON_PX) {
       previousScrollTopRef.current = currentScrollTop;
+      recordScrollerGeometry(scroller);
+      return;
+    }
+
+    if (viewportGeometryChanged && !pendingCollapseIntentRef.current.active) {
+      if (wasAtPhysicalBottom) {
+        const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+        if (Math.abs(maxScrollTop - scroller.scrollTop) > COMPENSATION_EPSILON_PX) {
+          scroller.scrollTop = maxScrollTop;
+        }
+      }
+      previousScrollTopRef.current = scroller.scrollTop;
+      previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller);
+      recordScrollerGeometry(scroller);
       return;
     }
 
@@ -693,39 +871,48 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
 
     // Content grew: consume temporary footer padding first.
     if (heightDelta > 0) {
-      if (currentTotalCompensation > COMPENSATION_EPSILON_PX && layoutTransitionCountRef.current > 0) {
+      const collapseIntent0 = pendingCollapseIntentRef.current;
+      const collapseProtectionActive = collapseIntent0.active && collapseIntent0.expiresAtMs >= performance.now();
+      if (currentTotalCompensation > COMPENSATION_EPSILON_PX && collapseProtectionActive) {
         previousScrollTopRef.current = currentScrollTop;
+        recordScrollerGeometry(scroller);
         return;
       }
 
       const nextReservationState = consumeBottomCompensation(heightDelta);
       applyFooterCompensationNow(nextReservationState);
       previousScrollTopRef.current = currentScrollTop;
+      recordScrollerGeometry(scroller);
       return;
     }
 
     // Content shrank: preserve the current visual anchor by extending the footer
     // when the user does not already have enough distance from the bottom.
+    //
+    // In follow-output + streaming mode, skip the compensation path entirely.
+    // The continuous follow loop (60fps RAF) will re-pin scrollTop to the new
+    // physical bottom on the next frame (~16ms), making the shrink invisible.
+    // Injecting footer compensation + anchor lock here would freeze the viewport
+    // on older content during the collapse animation and require a deferred
+    // follow path to resume — a source of the "occasionally not at the bottom"
+    // bug. Skipping compensation here also means there is nothing to accumulate
+    // or drain, so issue #1176 (permanent whitespace from un-drained
+    // compensation) cannot occur in this code path.
+    if (isFollowingOutputRef.current && isStreamingOutputRef.current) {
+      previousScrollTopRef.current = currentScrollTop;
+      recordScrollerGeometry(scroller);
+      return;
+    }
+
     const shrinkAmount = -heightDelta;
-    // Note: previously this branch returned early in follow-output mode to let
-    // the continuous follow loop chase the bottom every frame. That caused the
-    // visible "sink-down" jitter when tool-card auto-collapse shrank content
-    // above the viewport. We now run the full compensation path regardless of
-    // follow state — the bottom-reservation footer keeps `scrollHeight` stable
-    // and the anchor lock preserves the upper visual anchor during the
-    // animation. The continuous follow loop is gated by
-    // `shouldSuspendAutoFollow` while a collapse intent / layout transition is
-    // in flight, so it does not fight the anchor lock; once the transition
-    // ends, the deferred follow path resumes bottom-tracking smoothly.
     const collapseIntent = pendingCollapseIntentRef.current;
     const now = performance.now();
     const hasValidCollapseIntent = collapseIntent.active && collapseIntent.expiresAtMs >= now;
-    // For unsignaled shrinks, the visible gap to the bottom is what matters.
-    // Existing synthetic footer compensation may be stale from an earlier
-    // protected collapse, and subtracting it here makes the list think the
-    // viewport is still pinned near the bottom when the user has already moved
-    // away. That misclassification re-arms anchor restore and causes jitter.
-    const currentCollapseCompensation = getReservationTotalPx(bottomReservationStateRef.current.collapse);
+    // For unsignaled shrinks, the visible gap to the bottom determines the
+    // required compensation. We no longer ratchet up via Math.max with the
+    // previous collapse.px: stale compensation from an earlier protected
+    // collapse is intentionally allowed to shrink when the current shrink
+    // needs less, preventing permanent whitespace accumulation (issue #1176).
     const fallbackRequiredCollapseCompensation = Math.max(0, shrinkAmount - distanceFromBottom);
     const cumulativeShrinkPx = hasValidCollapseIntent
       ? collapseIntent.cumulativeShrinkPx + shrinkAmount
@@ -734,15 +921,8 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
       ? collapseIntent.baseTotalCompensationPx + Math.max(0, cumulativeShrinkPx - collapseIntent.distanceFromBottomBeforeCollapse)
       : 0;
     const nextTotalCompensation = hasValidCollapseIntent
-      ? (
-        layoutTransitionCountRef.current > 0
-          ? Math.max(currentTotalCompensation, resolvedIntentCompensation)
-          : resolvedIntentCompensation
-      )
-      : getReservationTotalPx(bottomReservationStateRef.current.pin) + Math.max(
-        currentCollapseCompensation,
-        fallbackRequiredCollapseCompensation,
-      );
+      ? Math.max(currentTotalCompensation, resolvedIntentCompensation)
+      : getReservationTotalPx(bottomReservationStateRef.current.pin) + fallbackRequiredCollapseCompensation;
     if (hasValidCollapseIntent) {
       pendingCollapseIntentRef.current = {
         ...collapseIntent,
@@ -756,6 +936,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
       // scroll listener restore an older anchor during upward scroll and causes
       // the visible "wall hit" jitter.
       previousScrollTopRef.current = currentScrollTop;
+      recordScrollerGeometry(scroller);
       return;
     }
 
@@ -776,31 +957,22 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
 
       activateAnchorLock(
         anchorTarget,
-        layoutTransitionCountRef.current > 0 ? 'transition-shrink' : 'instant-shrink'
+        hasValidCollapseIntent ? 'transition-shrink' : 'instant-shrink'
       );
       applyFooterCompensationNow(nextReservationState);
       restoreAnchorLockNow('measure-shrink');
-      if (layoutTransitionCountRef.current === 0) {
-        pendingCollapseIntentRef.current = {
-          active: false,
-          anchorScrollTop: 0,
-          toolId: null,
-          toolName: null,
-          expiresAtMs: 0,
-          distanceFromBottomBeforeCollapse: 0,
-          baseTotalCompensationPx: 0,
-          cumulativeShrinkPx: 0,
-        };
-      }
     }
 
     previousScrollTopRef.current = currentScrollTop;
+    recordScrollerGeometry(scroller);
   }, [
     activateAnchorLock,
     applyFooterCompensationNow,
     consumeBottomCompensation,
     getTotalBottomCompensationPx,
+    recordScrollerGeometry,
     restoreAnchorLockNow,
+    snapshotMeasuredContentHeight,
     updateBottomReservationState,
   ]);
 
@@ -1314,15 +1486,14 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     }
 
     const collapseIntent = pendingCollapseIntentRef.current;
-    const hasActiveCollapseTransition = (
-      layoutTransitionCountRef.current > 0 &&
+    const hasActiveCollapseProtection = (
       collapseIntent.active &&
       collapseIntent.expiresAtMs >= performance.now()
     );
     // During a collapse animation, let collapse compensation own the footer space.
     // Recomputing sticky pin floor from intermediate DOM heights causes the two
     // reservations to fight each other and reintroduces visible vertical jitter.
-    if (hasActiveCollapseTransition) {
+    if (hasActiveCollapseProtection) {
       return false;
     }
 
@@ -1540,6 +1711,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
         scroller,
         bottomReservationStateRef.current,
       );
+      recordScrollerGeometry(scroller);
       scheduleVisibleTurnMeasure(2);
       schedulePinReservationReconcile(2);
     };
@@ -1555,6 +1727,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
 
     previousScrollTopRef.current = targetScrollTop;
     previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller, nextReservationState);
+    recordScrollerGeometry(scroller);
 
     const alignedRect = resolvedMetrics.targetElement.getBoundingClientRect();
     const alignedWithinTolerance = Math.abs(alignedRect.top - resolvedMetrics.viewportTop) <= 1.5;
@@ -1575,6 +1748,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     buildPinReservation,
     applyFooterCompensationNow,
     getRenderedUserMessageElement,
+    recordScrollerGeometry,
     resolveTurnPinMetrics,
     schedulePinReservationReconcile,
     scheduleVisibleTurnMeasure,
@@ -1746,10 +1920,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
 
   const shouldSuspendAutoFollow = useCallback(() => {
     const collapseIntent = pendingCollapseIntentRef.current;
-    return (
-      layoutTransitionCountRef.current > 0 ||
-      (collapseIntent.active && collapseIntent.expiresAtMs >= performance.now())
-    );
+    return collapseIntent.active && collapseIntent.expiresAtMs >= performance.now();
   }, []);
 
   const scheduleFollowToLatestWithViewportState = useCallback((reason: string) => {
@@ -1767,6 +1938,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     previousScrollTopRef.current = 0;
     clearTurnPinRequest();
     cancelLatestEndAnchorStabilization();
+    cancelStaticInitialHistoryBottomGuard();
     anchorLockRef.current = {
       active: false,
       targetScrollTop: 0,
@@ -1783,6 +1955,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
       baseTotalCompensationPx: 0,
       cumulativeShrinkPx: 0,
     };
+    previousScrollerGeometryRef.current = null;
     const currentSessionId = activeSession?.sessionId ?? null;
     const activeHandoff = historyProjectionHandoffRef.current;
     if (!activeHandoff || activeHandoff.sessionId !== currentSessionId) {
@@ -1793,7 +1966,14 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
       pendingHistoryProjectionHandoffRef.current = null;
     }
     resetBottomReservations();
-  }, [activeSession?.sessionId, cancelLatestEndAnchorStabilization, clearHistoryProjectionHandoff, clearTurnPinRequest, resetBottomReservations]);
+  }, [
+    activeSession?.sessionId,
+    cancelLatestEndAnchorStabilization,
+    cancelStaticInitialHistoryBottomGuard,
+    clearHistoryProjectionHandoff,
+    clearTurnPinRequest,
+    resetBottomReservations,
+  ]);
 
   useEffect(() => {
     previousIsStreamingOutputRef.current = false;
@@ -1811,16 +1991,19 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
   useEffect(() => {
     return () => {
       cancelLatestEndAnchorStabilization();
+      cancelStaticInitialHistoryBottomGuard();
       if (historyProjectionHandoffReleaseFrameRef.current !== null) {
         cancelAnimationFrame(historyProjectionHandoffReleaseFrameRef.current);
         historyProjectionHandoffReleaseFrameRef.current = null;
       }
     };
-  }, [cancelLatestEndAnchorStabilization]);
+  }, [cancelLatestEndAnchorStabilization, cancelStaticInitialHistoryBottomGuard]);
 
   useEffect(() => {
     if (!scrollerElement) {
       previousMeasuredHeightRef.current = null;
+      previousScrollerGeometryRef.current = null;
+      cancelStaticInitialHistoryBottomGuard();
       return;
     }
 
@@ -1831,6 +2014,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
 
     previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scrollerElement);
     previousScrollTopRef.current = scrollerElement.scrollTop;
+    recordScrollerGeometry(scrollerElement);
 
     // Batch observer-triggered work into a single rAF per frame
     let observerBatchPending = false;
@@ -1850,10 +2034,22 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
 
     resizeObserverRef.current?.disconnect();
     resizeObserverRef.current = new ResizeObserver(() => {
+      syncPhysicalBottomAfterViewportResize(scrollerElement);
       resolveLatestEndAnchorStabilizationRef.current?.('resize-observer');
       scheduleObserverBatch();
     });
     resizeObserverRef.current.observe(resizeTarget);
+    if (resizeTarget !== scrollerElement) {
+      resizeObserverRef.current.observe(scrollerElement);
+    }
+
+    const handleWindowResize = () => {
+      syncPhysicalBottomAfterViewportResize(scrollerElement);
+      resolveLatestEndAnchorStabilizationRef.current?.('resize-observer');
+      scheduleObserverBatch();
+    };
+    window.addEventListener('resize', handleWindowResize);
+    window.visualViewport?.addEventListener('resize', handleWindowResize);
 
     mutationObserverRef.current?.disconnect();
     let mutationPending = false;
@@ -1883,27 +2079,35 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
       characterData: true,
     });
 
-    const isLayoutTransitionProperty = (propertyName: string) => (
-      propertyName === 'grid-template-rows' ||
-      propertyName === 'height' ||
-      propertyName === 'max-height'
-    );
-
-    const handleTransitionRun = (event: TransitionEvent) => {
-      if (!isLayoutTransitionProperty(event.propertyName)) return;
-      layoutTransitionCountRef.current += 1;
-    };
-
-    const handleTransitionFinish = (event: TransitionEvent) => {
-      if (!isLayoutTransitionProperty(event.propertyName)) return;
-      layoutTransitionCountRef.current = Math.max(0, layoutTransitionCountRef.current - 1);
-      resolveLatestEndAnchorStabilizationRef.current?.('transition-finish');
-      scheduleHeightMeasure(2);
-      scheduleVisibleTurnMeasure(2);
-      schedulePinReservationReconcile(2);
-      scheduleTransientTurnPinStabilization(2);
-      scheduleHistoryProjectionHandoffRelease(1);
-      if (layoutTransitionCountRef.current === 0 && pendingCollapseIntentRef.current.active) {
+    // Re-evaluate deferred auto-follow: when a collapse intent expires naturally
+    // (via its expiresAtMs timestamp), resume any deferred follow that was queued
+    // while the protection was active. Also drain residual collapse compensation
+    // so the footer does not retain excess whitespace after the protection window
+    // closes (issue #1176).
+    const replayDeferredFollowIfSettled = () => {
+      const now = performance.now();
+      const intent = pendingCollapseIntentRef.current;
+      const stillActive = intent.active && intent.expiresAtMs >= now;
+      if (!stillActive && intent.active) {
+        // Collapse intent just expired — drain any residual collapse
+        // compensation. When the intent was active, consumption was blocked
+        // in measureHeightChange (grow branch early return). Now that the
+        // protection is over, collapse.px would only be consumed by future
+        // content growth or user scroll, which may never happen if the
+        // content has already finished arriving. Drain it immediately.
+        const collapsePx = getReservationTotalPx(bottomReservationStateRef.current.collapse);
+        if (collapsePx > COMPENSATION_EPSILON_PX) {
+          const next: BottomReservationState = {
+            ...bottomReservationStateRef.current,
+            collapse: {
+              ...bottomReservationStateRef.current.collapse,
+              px: 0,
+              floorPx: 0,
+            },
+          };
+          updateBottomReservationState(next);
+          applyFooterCompensationNow(next);
+        }
         pendingCollapseIntentRef.current = {
           active: false,
           anchorScrollTop: 0,
@@ -1915,19 +2119,18 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
           cumulativeShrinkPx: 0,
         };
       }
-      if (layoutTransitionCountRef.current === 0 && deferredFollowReasonRef.current && !shouldSuspendAutoFollow()) {
+      if (deferredFollowReasonRef.current && !shouldSuspendAutoFollow()) {
         const deferredReason = deferredFollowReasonRef.current;
         deferredFollowReasonRef.current = null;
-        followOutputControllerRef.current.scheduleFollowToLatest(`${deferredReason}-after-transition`);
+        followOutputControllerRef.current.scheduleFollowToLatest(`${deferredReason}-after-collapse`);
       }
     };
-    scrollerElement.addEventListener('transitionrun', handleTransitionRun, true);
-    scrollerElement.addEventListener('transitionend', handleTransitionFinish, true);
-    scrollerElement.addEventListener('transitioncancel', handleTransitionFinish, true);
 
     const handleScroll = () => {
       const now = performance.now();
-      if (anchorLockRef.current.active && now > anchorLockRef.current.lockUntilMs && layoutTransitionCountRef.current === 0) {
+      const intent = pendingCollapseIntentRef.current;
+      const collapseProtectionActive = intent.active && intent.expiresAtMs >= now;
+      if (anchorLockRef.current.active && now > anchorLockRef.current.lockUntilMs && !collapseProtectionActive) {
         releaseAnchorLock('expired-before-scroll');
       }
 
@@ -1937,13 +2140,14 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
       // because `scrollHeight` shrunk below `scrollTop + clientHeight`
       // (typical cause: an unsignaled item shrink from Virtuoso re-measure
       // or a tool result finalizing). With `overflow-anchor: none` we cannot
-      // ask the browser to keep the visual anchor for us, so we extend the
-      // bottom collapse reservation by the clamp amount and restore
-      // `scrollTop` to its pre-clamp value. The widened footer prevents the
-      // browser from re-clamping immediately; subsequent streaming-token
-      // growth drains the reservation via the grow branch of
-      // `measureHeightChange`. This is the only place that protects against
-      // unsignaled shrinks that do not arrive with a `collapse-intent` event.
+      // ask the browser to keep the visual anchor for us.
+      //
+      // In follow+streaming mode this protection is intentionally skipped: the
+      // continuous follow loop (60fps RAF) re-pins scrollTop to the new
+      // physical bottom on the next frame, making the shrink invisible.
+      // Injecting compensation + restoring the old scrollTop here would freeze
+      // the viewport on older content and require a deferred follow path to
+      // resume — the root cause of the "occasionally not at the bottom" bug.
       const intentCheckScrollTop = scrollerElement.scrollTop;
       const intentCheckPreviousScrollTop = previousScrollTopRef.current;
       const intentCheckScrollDelta = intentCheckScrollTop - intentCheckPreviousScrollTop;
@@ -1954,34 +2158,16 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
         isStreamingOutputRef.current &&
         !hasRecentUserUpwardIntent &&
         !anchorLockRef.current.active &&
-        layoutTransitionCountRef.current === 0
+        !collapseProtectionActive
       ) {
-        // Cap the clamp amount to what the footer actually needs.  Without
-        // this, repeated scroll-clamp events during CSS transitions can
-        // ratchet `collapse.px` upward without bound because the
-        // consumption path is blocked while transitions are active.
-        const rawClampAmount = -intentCheckScrollDelta;
-        const maxClampAmount = Math.max(0,
-          scrollerElement.scrollHeight - scrollerElement.clientHeight - scrollerElement.scrollTop,
-        );
-        const clampAmount = Math.min(rawClampAmount, maxClampAmount);
-        const baseState = bottomReservationStateRef.current;
-        const nextReservationState: BottomReservationState = {
-          ...baseState,
-          collapse: {
-            ...baseState.collapse,
-            px: baseState.collapse.px + clampAmount,
-            floorPx: baseState.collapse.floorPx,
-          },
-        };
-        updateBottomReservationState(nextReservationState);
-        applyFooterCompensationNow(nextReservationState);
-        scrollerElement.scrollTop = intentCheckPreviousScrollTop;
-        previousScrollTopRef.current = intentCheckPreviousScrollTop;
-        previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(
-          scrollerElement,
-          nextReservationState,
-        );
+        // Follow+streaming: do not inject compensation or restore old
+        // scrollTop. Let the follow loop handle the scroll naturally on the
+        // next animation frame. Return here to prevent the downstream follow
+        // controller (followOutputControllerRef.current.handleScroll) from
+        // seeing the browser-clamp delta and misclassifying it as a user
+        // upward scroll, which would incorrectly exit follow mode.
+        previousScrollTopRef.current = intentCheckScrollTop;
+        recordScrollerGeometry(scrollerElement);
         return;
       }
 
@@ -1989,7 +2175,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
       if (
         currentTotalCompensation > COMPENSATION_EPSILON_PX &&
         !anchorLockRef.current.active &&
-        layoutTransitionCountRef.current === 0
+        !collapseProtectionActive
       ) {
         const nextScrollTop = scrollerElement.scrollTop;
         const scrollDelta = nextScrollTop - previousScrollTopRef.current;
@@ -2012,18 +2198,22 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
           if (Math.abs(restoreDelta) > ANCHOR_LOCK_MIN_DEVIATION_PX) {
             scrollerElement.scrollTop = targetScrollTop;
             previousScrollTopRef.current = targetScrollTop;
+            recordScrollerGeometry(scrollerElement);
             return;
           }
         }
       }
       previousScrollTopRef.current = scrollerElement.scrollTop;
+      recordScrollerGeometryIfLayoutStable(scrollerElement);
       scheduleVisibleTurnMeasure();
       followOutputControllerRef.current.handleScroll();
       scheduleFullHistoryProjectionForUserIntent('scroll-near-partial-history-boundary');
 
-      if (anchorLockRef.current.active && performance.now() > anchorLockRef.current.lockUntilMs && layoutTransitionCountRef.current === 0) {
+      if (anchorLockRef.current.active && performance.now() > anchorLockRef.current.lockUntilMs && !collapseProtectionActive) {
         releaseAnchorLock('expired-after-scroll');
       }
+
+      replayDeferredFollowIfSettled();
     };
     scrollerElement.addEventListener('scroll', handleScroll, { passive: true });
 
@@ -2154,18 +2344,19 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
         filePath?: string | null;
         reason?: string | null;
       }>).detail;
-      // In follow-output mode, the user wants the viewport pinned to the
-      // latest streaming token. Reserving footer space + locking an upper
-      // anchor would freeze the viewport on older content during the
-      // collapse animation, producing the "stutter then jump" effect. Skip
-      // the protection path entirely and let the continuous follow loop
-      // absorb the shrink frame-by-frame.
-      // Note: in follow-output mode we still run the full collapse pre-compensation
-      // path. Pinning the upper visual anchor during the collapse animation keeps
-      // the conversation visually stable; the continuous follow loop is gated by
-      // `shouldSuspendAutoFollow` while the layout transition is in progress, and
-      // resumes bottom-tracking via the deferred-follow path after the transition
-      // ends and the collapse reservation is consumed.
+      // In follow-output + streaming mode, skip the collapse compensation path
+      // entirely. The user wants the viewport tracking the latest streaming
+      // token; footer compensation + anchor lock would freeze the viewport on
+      // older content and require a deferred follow path to resume, which is
+      // the source of the "occasionally not at the bottom" bug. Instead, let
+      // the continuous follow loop (60fps RAF) re-pin to the bottom on the
+      // next frame — the shrink is absorbed in ~16ms and invisible to the user.
+      // Not injecting compensation here also means nothing accumulates, so
+      // issue #1176 (permanent whitespace) cannot occur in this code path.
+      if (isFollowingOutputRef.current && isStreamingOutputRef.current) {
+        return;
+      }
+
       const baseTotalCompensationPx = getTotalBottomCompensationPx();
       const distanceFromBottom = Math.max(
         0,
@@ -2210,9 +2401,6 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     scheduleVisibleTurnMeasure(2);
 
     return () => {
-      scrollerElement.removeEventListener('transitionrun', handleTransitionRun, true);
-      scrollerElement.removeEventListener('transitionend', handleTransitionFinish, true);
-      scrollerElement.removeEventListener('transitioncancel', handleTransitionFinish, true);
       scrollerElement.removeEventListener('scroll', handleScroll);
       scrollerElement.removeEventListener('wheel', handleWheel);
       scrollerElement.removeEventListener('touchstart', handleTouchStart);
@@ -2226,6 +2414,8 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
       window.removeEventListener('pointercancel', endScrollbarPointerInteraction, true);
       window.removeEventListener('tool-card-toggle', handleToolCardToggle);
       window.removeEventListener('flowchat:tool-card-collapse-intent', handleToolCardCollapseIntent as EventListener);
+      window.removeEventListener('resize', handleWindowResize);
+      window.visualViewport?.removeEventListener('resize', handleWindowResize);
       resizeObserverRef.current?.disconnect();
       resizeObserverRef.current = null;
       mutationObserverRef.current?.disconnect();
@@ -2257,18 +2447,22 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
         cancelAnimationFrame(fullHistoryProjectionIntentFrameRef.current);
         fullHistoryProjectionIntentFrameRef.current = null;
       }
+      cancelStaticInitialHistoryBottomGuard();
       pendingFullHistoryProjectionReasonRef.current = null;
     };
   }, [
     activateAnchorLock,
     applyFooterCompensationNow,
     cancelLatestEndAnchorStabilization,
+    cancelStaticInitialHistoryBottomGuard,
     consumeBottomCompensation,
     clearTurnPinRequest,
     getTotalBottomCompensationPx,
     latestTurnId,
     pendingTurnPin?.pinMode,
     pendingTurnPin?.turnId,
+    recordScrollerGeometry,
+    recordScrollerGeometryIfLayoutStable,
     releaseAnchorLock,
     scheduleHeightMeasure,
     scheduleFollowToLatestWithViewportState,
@@ -2280,6 +2474,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     scrollerElement,
     shouldSuspendAutoFollow,
     snapshotMeasuredContentHeight,
+    syncPhysicalBottomAfterViewportResize,
     isProcessing,
     updateBottomReservationState,
   ]);
@@ -2337,6 +2532,9 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     }
 
     request.attempts += 1;
+    const shouldSnapTargetToPhysicalBottom =
+      targetIndex >= virtualItems.length - 1 ||
+      request.turnId === latestTurnId;
     const targetElement = getRenderedVirtualItemElement(targetIndex);
     const scrollerRect = scroller.getBoundingClientRect();
     const inputOverlayInsetPx = Math.max(
@@ -2356,10 +2554,15 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
       const rect = currentTargetElement.getBoundingClientRect();
       const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
       const endDeltaPx = rect.bottom - visibleBottom;
-      const endAnchored =
-        Math.abs(endDeltaPx) <= LATEST_END_ANCHOR_STABLE_EPSILON_PX ||
-        (endDeltaPx > 0 && Math.abs(maxScrollTop - scroller.scrollTop) <= LATEST_END_ANCHOR_STABLE_EPSILON_PX) ||
-        (endDeltaPx < 0 && scroller.scrollTop <= LATEST_END_ANCHOR_STABLE_EPSILON_PX);
+      const physicalBottomAnchored =
+        Math.abs(maxScrollTop - scroller.scrollTop) <= LATEST_END_ANCHOR_STABLE_EPSILON_PX;
+      const endAnchored = shouldSnapTargetToPhysicalBottom
+        ? physicalBottomAnchored
+        : (
+          Math.abs(endDeltaPx) <= LATEST_END_ANCHOR_STABLE_EPSILON_PX ||
+          (endDeltaPx > 0 && physicalBottomAnchored) ||
+          (endDeltaPx < 0 && scroller.scrollTop <= LATEST_END_ANCHOR_STABLE_EPSILON_PX)
+        );
       return {
         endAnchored,
         endDeltaPx,
@@ -2433,16 +2636,19 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
       const state = readTargetEndState(targetElement);
       let nextScrollTop = scroller.scrollTop;
       if (state) {
-        nextScrollTop = Math.max(
-          0,
-          Math.min(state.maxScrollTop, scroller.scrollTop + state.endDeltaPx),
-        );
+        nextScrollTop = shouldSnapTargetToPhysicalBottom
+          ? state.maxScrollTop
+          : Math.max(
+            0,
+            Math.min(state.maxScrollTop, scroller.scrollTop + state.endDeltaPx),
+          );
       }
 
       if (Math.abs(nextScrollTop - scroller.scrollTop) > COMPENSATION_EPSILON_PX) {
         scroller.scrollTop = nextScrollTop;
         previousScrollTopRef.current = nextScrollTop;
         previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller);
+        recordScrollerGeometry(scroller);
       }
     } else if (virtuoso) {
       request.visibleFrames = 0;
@@ -2460,6 +2666,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
           scroller.scrollTop = maxScrollTop;
           previousScrollTopRef.current = maxScrollTop;
           previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller);
+          recordScrollerGeometry(scroller);
         }
       }
     } else {
@@ -2469,6 +2676,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
         scroller.scrollTop = maxScrollTop;
         previousScrollTopRef.current = maxScrollTop;
         previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller);
+        recordScrollerGeometry(scroller);
       }
     }
 
@@ -2495,6 +2703,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     cancelLatestEndAnchorStabilization,
     getRenderedVirtualItemElement,
     latestTurnId,
+    recordScrollerGeometry,
     scheduleVisibleTurnMeasure,
     snapshotMeasuredContentHeight,
     toVirtuosoIndex,
@@ -2627,10 +2836,12 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     if (scroller) {
       previousScrollTopRef.current = scroller.scrollTop;
       previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller, nextReservationState);
+      recordScrollerGeometry(scroller);
     }
   }, [
     applyFooterCompensationNow,
     clearTurnPinRequest,
+    recordScrollerGeometry,
     releaseAnchorLock,
     snapshotMeasuredContentHeight,
     updateBottomReservationState,
@@ -2669,10 +2880,12 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     if (scroller) {
       previousScrollTopRef.current = scroller.scrollTop;
       previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller, nextReservationState);
+      recordScrollerGeometry(scroller);
     }
   }, [
     applyFooterCompensationNow,
     clearTurnPinRequest,
+    recordScrollerGeometry,
     releaseAnchorLock,
     snapshotMeasuredContentHeight,
     updateBottomReservationState,
@@ -2743,6 +2956,37 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
       return;
     }
 
+    // Streaming just ended. If collapse compensation remains (e.g. because the
+    // transition stale timer hasn't fired yet, or consumption was blocked during
+    // the last streaming frames), drain it now so the footer doesn't retain
+    // excess whitespace after the turn completes (issue #1176).
+    const collapsePx = getReservationTotalPx(bottomReservationStateRef.current.collapse);
+    if (collapsePx > COMPENSATION_EPSILON_PX) {
+      const next = {
+        ...bottomReservationStateRef.current,
+        collapse: {
+          ...bottomReservationStateRef.current.collapse,
+          px: 0,
+          floorPx: 0,
+        },
+      };
+      updateBottomReservationState(next);
+      applyFooterCompensationNow(next);
+    }
+
+    // Clear any lingering collapse intent so auto-follow and compensation
+    // consumption resume immediately after the turn ends.
+    pendingCollapseIntentRef.current = {
+      active: false,
+      anchorScrollTop: 0,
+      toolId: null,
+      toolName: null,
+      expiresAtMs: 0,
+      distanceFromBottomBeforeCollapse: 0,
+      baseTotalCompensationPx: 0,
+      cumulativeShrinkPx: 0,
+    };
+
     const pinReservation = bottomReservationStateRef.current.pin;
     if (
       pinReservation.mode !== 'sticky-latest' ||
@@ -2763,7 +3007,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
         behavior: 'auto',
       });
     });
-  }, [clearPinReservationForUserNavigation, isStreamingOutput]);
+  }, [applyFooterCompensationNow, clearPinReservationForUserNavigation, isStreamingOutput, updateBottomReservationState]);
 
   const scrollToLatestEndPositionInternal = useCallback((behavior: 'auto' | 'smooth') => {
     const scroller = scrollerElementRef.current;
@@ -3076,6 +3320,45 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
   isFollowingOutputRef.current = isFollowingOutput;
   isStreamingOutputRef.current = isStreamingOutput;
 
+  // When entering follow-output during streaming, clear any residual collapse
+  // intent + compensation left over from a non-follow browsing session.
+  // Without this, a stale intent (up to 1s lifetime) would block the grow
+  // branch of measureHeightChange from consuming compensation and suspend the
+  // continuous follow loop via shouldSuspendAutoFollow, leaving the user on
+  // excess footer whitespace until the intent expires naturally.
+  const previousIsFollowingOutputRef = useRef(false);
+  useEffect(() => {
+    if (!previousIsFollowingOutputRef.current && isFollowingOutput && isStreamingOutput) {
+      const intent = pendingCollapseIntentRef.current;
+      if (intent.active) {
+        pendingCollapseIntentRef.current = {
+          active: false,
+          anchorScrollTop: 0,
+          toolId: null,
+          toolName: null,
+          expiresAtMs: 0,
+          distanceFromBottomBeforeCollapse: 0,
+          baseTotalCompensationPx: 0,
+          cumulativeShrinkPx: 0,
+        };
+      }
+      const collapsePx = getReservationTotalPx(bottomReservationStateRef.current.collapse);
+      if (collapsePx > COMPENSATION_EPSILON_PX) {
+        const next = {
+          ...bottomReservationStateRef.current,
+          collapse: {
+            ...bottomReservationStateRef.current.collapse,
+            px: 0,
+            floorPx: 0,
+          },
+        };
+        updateBottomReservationState(next);
+        applyFooterCompensationNow(next);
+      }
+    }
+    previousIsFollowingOutputRef.current = isFollowingOutput;
+  }, [applyFooterCompensationNow, isFollowingOutput, isStreamingOutput, updateBottomReservationState]);
+
   const scrollToTurn = useCallback((turnIndex: number) => {
     if (!virtuosoRef.current) return;
     if (turnIndex < 1 || turnIndex > userMessageItems.length) return;
@@ -3151,12 +3434,16 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     const scroller = scrollerElementRef.current;
     if (scroller) {
       clearAllBottomReservationsForUserNavigation();
+      const nextScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
       scroller.scrollTo({
-        top: Math.max(0, scroller.scrollHeight - scroller.clientHeight),
+        top: nextScrollTop,
         behavior: 'auto',
       });
+      previousScrollTopRef.current = nextScrollTop;
+      previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller);
+      recordScrollerGeometry(scroller);
     }
-  }, [clearAllBottomReservationsForUserNavigation]);
+  }, [clearAllBottomReservationsForUserNavigation, recordScrollerGeometry, snapshotMeasuredContentHeight]);
 
   const scrollToTurnEndAndClearPin = useCallback((turnId: string) => {
     const scroller = scrollerElementRef.current;
@@ -3192,6 +3479,12 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     clearAllBottomReservationsForUserNavigation();
 
     if (!virtuosoRef.current) {
+      const shouldSnapLatestToPhysicalBottom =
+        useStaticInitialHistoryList &&
+        (
+          targetIndex >= virtualItems.length - 1 ||
+          (Boolean(latestTurnId) && turnId === latestTurnId)
+        );
       const targetElement = getRenderedVirtualItemElement(targetIndex);
       if (!targetElement) {
         return reject('missing_static_target_element', {
@@ -3221,23 +3514,29 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
       };
       const canUseStaticFastPath = (state: ReturnType<typeof readStaticTargetEndState>) => {
         const distanceFromBottom = Math.max(0, state.maxScrollTop - scroller.scrollTop);
+        const bottomTolerancePx = shouldSnapLatestToPhysicalBottom
+          ? LATEST_END_ANCHOR_STABLE_EPSILON_PX
+          : LATEST_END_ANCHOR_STATIC_FAST_PATH_TOLERANCE_PX;
         return (
           state.visible &&
           state.rect.height <= state.visibleHeight + LATEST_END_ANCHOR_STATIC_FAST_PATH_TOLERANCE_PX &&
           Math.abs(state.endDeltaPx) <= LATEST_END_ANCHOR_STATIC_FAST_PATH_TOLERANCE_PX &&
-          distanceFromBottom <= LATEST_END_ANCHOR_STATIC_FAST_PATH_TOLERANCE_PX
+          distanceFromBottom <= bottomTolerancePx
         );
       };
       let staticState = readStaticTargetEndState();
       if (!canUseStaticFastPath(staticState)) {
-        const nextScrollTop = Math.max(
-          0,
-          Math.min(staticState.maxScrollTop, scroller.scrollTop + staticState.endDeltaPx),
-        );
+        const nextScrollTop = shouldSnapLatestToPhysicalBottom
+          ? staticState.maxScrollTop
+          : Math.max(
+            0,
+            Math.min(staticState.maxScrollTop, scroller.scrollTop + staticState.endDeltaPx),
+          );
         if (Math.abs(nextScrollTop - scroller.scrollTop) > COMPENSATION_EPSILON_PX) {
           scroller.scrollTop = nextScrollTop;
           previousScrollTopRef.current = nextScrollTop;
           previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller);
+          recordScrollerGeometry(scroller);
           staticState = readStaticTargetEndState();
         }
       }
@@ -3306,6 +3605,8 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     clearAllBottomReservationsForUserNavigation,
     exitFollowOutput,
     getRenderedVirtualItemElement,
+    latestTurnId,
+    recordScrollerGeometry,
     resolveLatestEndAnchorStabilization,
     scheduleVisibleTurnMeasure,
     snapshotMeasuredContentHeight,
@@ -3609,9 +3910,11 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     scroller.scrollTop = nextScrollTop;
     previousScrollTopRef.current = nextScrollTop;
     previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller);
+    recordScrollerGeometry(scroller);
   }, [
     expandedInitialHistoryRenderKey,
     initialHistoryRenderKey,
+    recordScrollerGeometry,
     snapshotMeasuredContentHeight,
   ]);
   useEffect(() => {
@@ -3709,12 +4012,15 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
   useLayoutEffect(() => {
     previousActiveSessionIdForOpenHandoffRef.current = activeSessionId;
   }, [activeSessionId]);
-  const activeHistoryProjectionHandoff = historyProjectionHandoff ?? sessionOpenProjectionHandoff;
+  const activeHistoryProjectionHandoff =
+    activeSessionHistoryProjectionHandoff(historyProjectionHandoff, activeSessionId) ??
+    activeSessionHistoryProjectionHandoff(sessionOpenProjectionHandoff, activeSessionId);
   const hasCompactHistoricalProjection = virtualItems.length >= 6 && virtualItems
     .slice(-16)
     .every(item =>
       item.type === 'user-message' ||
       item.type === 'user-steering-message' ||
+      item.type === 'turn-completion-notice' ||
       item.type === 'explore-group'
     );
   const hasInitialHistoryModelRoundProjection =
@@ -3736,6 +4042,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
   useLayoutEffect(() => {
     if (!useStaticInitialHistoryList) {
       autoScrolledInitialHistoryRenderKeyRef.current = null;
+      cancelStaticInitialHistoryBottomGuard();
       return;
     }
 
@@ -3753,13 +4060,18 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     scroller.scrollTop = nextScrollTop;
     previousScrollTopRef.current = nextScrollTop;
     previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller);
+    recordScrollerGeometry(scroller);
+    startStaticInitialHistoryBottomGuard();
     scheduleVisibleTurnMeasure(1);
   }, [
     activeSessionId,
+    cancelStaticInitialHistoryBottomGuard,
     initialHistoryRenderKey,
     latestTurnId,
+    recordScrollerGeometry,
     scheduleVisibleTurnMeasure,
     snapshotMeasuredContentHeight,
+    startStaticInitialHistoryBottomGuard,
     useStaticInitialHistoryList,
   ]);
   // ── Render ────────────────────────────────────────────────────────────
@@ -3796,6 +4108,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     scroller.scrollTop = nextScrollTop;
     previousScrollTopRef.current = nextScrollTop;
     previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller);
+    recordScrollerGeometry(scroller);
     scheduleHistoryProjectionHandoffRelease(2);
   }, [
     activeSessionId,
@@ -3805,6 +4118,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
     historyProjectionHandoff?.anchorOffsetTopPx,
     historyProjectionHandoff?.mode,
     historyProjectionHandoff?.sessionId,
+    recordScrollerGeometry,
     scheduleHistoryProjectionHandoffRelease,
     snapshotMeasuredContentHeight,
     virtualItems,

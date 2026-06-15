@@ -5,7 +5,7 @@ use super::background_command_output::{
 use super::env_snapshot::{remote_env_snapshot_for, RemoteEnvSnapshot};
 use super::local_shell::{resolve_local_exec_shell, ResolvedLocalExecShell};
 use super::progress::ExecOutputProgressBridge;
-use super::rendering::render_exec_response_for_assistant;
+use super::rendering::render_exec_response_for_assistant_with_notes;
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
 use crate::infrastructure::events::event_system::{
     get_global_event_system, BackendEvent::BackgroundCommandLifecycle,
@@ -29,9 +29,9 @@ use terminal_core::{
 };
 use tokio::sync::mpsc;
 
-const DEFAULT_MAX_OUTPUT_CHARS: u64 = 10_000;
 const REMOTE_SHELL_PROBE_TIMEOUT_MS: u64 = 3_000;
 const REMOTE_NON_TTY_INTERRUPT_GRACE_SECONDS: u64 = 2;
+const DEFAULT_TOOL_YIELD_TIME_MS: u64 = 30_000;
 const POWERSHELL_UTF8_OUTPUT_PREFIX: &str =
     "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8;\n";
 
@@ -342,6 +342,7 @@ exit "$__bitfun_status""#
 
     fn response_for_assistant(data: &Value) -> String {
         let mut status_lines = Vec::new();
+        let mut note_lines = Vec::new();
         let completion = data.get("completion");
         let completion_source = completion
             .and_then(|value| value.get("source"))
@@ -372,7 +373,19 @@ exit "$__bitfun_status""#
                 "Process is still running. session_id: {session_id}"
             ));
         }
-        render_exec_response_for_assistant(data, status_lines, 3)
+        if data.get("tty").and_then(Value::as_bool) == Some(false)
+            && data
+                .get("output")
+                .and_then(Value::as_str)
+                .map(str::is_empty)
+                .unwrap_or(true)
+        {
+            note_lines.push(
+                "No output was produced. In non-TTY mode, programs may block-buffer pipe output; use unbuffered flags/env vars or TTY mode if progressive output matters."
+                    .to_string(),
+            );
+        }
+        render_exec_response_for_assistant_with_notes(data, status_lines, note_lines, 3)
     }
 
     fn local_completion_value(completion: LocalExecSessionCompletion) -> Value {
@@ -615,13 +628,10 @@ exit "$__bitfun_status""#
                     "remote SSH manager is not initialized for ExecCommand".to_string(),
                 )
             })?;
-        let yield_time_ms = input.get("yield_time_ms").and_then(Value::as_u64);
-        let max_output_chars = input
-            .get("max_output_chars")
+        let yield_time_ms = input
+            .get("yield_time_ms")
             .and_then(Value::as_u64)
-            .unwrap_or(DEFAULT_MAX_OUTPUT_CHARS)
-            .try_into()
-            .unwrap_or(usize::MAX);
+            .unwrap_or(DEFAULT_TOOL_YIELD_TIME_MS);
         let shell = Self::resolve_remote_shell(&ssh_manager, &connection_id).await;
         let env_snapshot = remote_env_snapshot_for(
             ssh_manager.clone(),
@@ -663,8 +673,8 @@ exit "$__bitfun_status""#
             connection_id,
             command,
             tty,
-            yield_time_ms,
-            max_output_chars: Some(max_output_chars),
+            yield_time_ms: Some(yield_time_ms),
+            max_output_chars: None,
             lifecycle_tx: Self::start_remote_lifecycle_bridge(context, self.name()),
             output_capture_tx,
         };
@@ -775,10 +785,12 @@ impl Tool for ExecCommandTool {
     async fn description(&self) -> BitFunResult<String> {
         Ok(r#"Runs a shell command in a separate process.
 
-TTY and stdin:
-- tty=true allocates a PTY and gives the command terminal semantics. Use tty=true only for commands that need interactive stdin.
-- tty=false runs without a PTY. Locally this uses pipe-backed stdio; remotely it uses a non-PTY SSH exec channel.
-- With tty=false, no interactive stdin is attached, and input-waiting programs may see EOF instead of a prompt.
+TTY modes:
+- `tty=false` (Default): 
+  - runs without a PTY. Local commands use pipe-backed stdio; remote commands use a non-PTY SSH exec channel.
+  - No interactive stdin is attached, so input-waiting programs may see EOF instead of a prompt.
+  - programs may block-buffer pipe output, so output may appear only after the process exits. Use unbuffered flags/env vars such as `python -u` or `PYTHONUNBUFFERED=1` or TTY mode when progressive output matters.
+- `tty=true`: allocates a PTY and gives the command terminal semantics. Use it for commands that need interactive stdin or terminal behavior.
 
 Waiting and continuation:
 - yield_time_ms waits for output until the process exits or the deadline is reached. It does not stop the process.
@@ -787,7 +799,7 @@ Waiting and continuation:
 
 Output:
 - Output is only what was produced during this tool call's wait window.
-- With tty=false, stdout and stderr ordering is not guaranteed; use tty=true or redirect stderr with 2>&1 when terminal ordering matters."#
+- In non-TTY mode, stdout and stderr ordering is not guaranteed; use tty=true or redirect stderr with 2>&1 when terminal ordering matters."#
             .to_string())
     }
 
@@ -820,11 +832,7 @@ Output:
                 },
                 "yield_time_ms": {
                     "type": "number",
-                    "description": "How long to wait for output before yielding."
-                },
-                "max_output_chars": {
-                    "type": "number",
-                    "description": "Maximum output characters to return. Defaults to 10000; excess output keeps head and tail."
+                    "description": "How long to wait for output before yielding. Defaults to 30000 ms."
                 }
             },
             "required": ["cmd"],
@@ -886,13 +894,10 @@ Output:
         let workdir = Self::resolve_workdir(input, context)?;
         let tty = input.get("tty").and_then(Value::as_bool).unwrap_or(false);
         let shell = resolve_local_exec_shell().await;
-        let yield_time_ms = input.get("yield_time_ms").and_then(Value::as_u64);
-        let max_output_chars = input
-            .get("max_output_chars")
+        let yield_time_ms = input
+            .get("yield_time_ms")
             .and_then(Value::as_u64)
-            .unwrap_or(DEFAULT_MAX_OUTPUT_CHARS)
-            .try_into()
-            .unwrap_or(usize::MAX);
+            .unwrap_or(DEFAULT_TOOL_YIELD_TIME_MS);
         let output_capture_tx = if let Some(capture_id) = context.tool_call_id.as_ref() {
             Some(
                 background_command_output_capture()
@@ -915,8 +920,8 @@ Output:
             cwd: workdir.clone(),
             env: Self::command_env(),
             tty,
-            yield_time_ms,
-            max_output_chars: Some(max_output_chars),
+            yield_time_ms: Some(yield_time_ms),
+            max_output_chars: None,
             lifecycle_tx: Self::start_local_lifecycle_bridge(context, self.name()),
             output_capture_tx,
         };
@@ -992,6 +997,7 @@ mod tests {
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::agentic::workspace::WorkspaceBinding;
     use crate::service::remote_ssh::workspace_state::workspace_session_identity;
+    use serde_json::json;
     use std::collections::HashMap;
     use std::path::Path;
     use std::path::PathBuf;
@@ -1017,6 +1023,37 @@ mod tests {
             ExecCommandTool::argv_for_shell(Path::new("pwsh"), &ShellType::PowerShellCore, &script);
 
         assert_eq!(argv[2], script);
+    }
+
+    #[test]
+    fn response_notes_empty_non_tty_output_may_be_buffered() {
+        let data = json!({
+            "wall_time_seconds": 30.0,
+            "output": "",
+            "session_id": 42,
+            "exit_code": null,
+            "tty": false,
+        });
+
+        let assistant = ExecCommandTool::response_for_assistant(&data);
+
+        assert!(assistant.contains("<note>"));
+        assert!(assistant.contains("block-buffer pipe output"));
+    }
+
+    #[test]
+    fn response_does_not_note_empty_tty_output() {
+        let data = json!({
+            "wall_time_seconds": 30.0,
+            "output": "",
+            "session_id": 42,
+            "exit_code": null,
+            "tty": true,
+        });
+
+        let assistant = ExecCommandTool::response_for_assistant(&data);
+
+        assert!(!assistant.contains("<note>"));
     }
 
     #[test]

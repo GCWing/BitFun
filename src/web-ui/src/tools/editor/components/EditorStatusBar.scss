@@ -77,7 +77,7 @@ $_section-gap: 12px;
   // Read-only Badge
   &__readonly {
     background: rgba(251, 191, 36, 0.15);
-    color: #fbbf24;
+    color: var(--color-warning, #f59e0b);
     padding: 1px 6px;
     border-radius: 3px;
     font-size: 10px;
@@ -91,15 +91,15 @@ $_section-gap: 12px;
     padding: 2px 4px;
     
     &--connected {
-      color: #10b981;
+      color: var(--color-success, #10b981);
     }
     
     &--connecting {
-      color: #f59e0b;
+      color: var(--color-warning, #f59e0b);
     }
     
     &--disconnected {
-      color: #6b7280;
+      color: var(--color-text-muted, #6b7280);
       opacity: 0.6;
     }
   }
@@ -142,8 +142,8 @@ $_section-gap: 12px;
     border-top-width: 2px;
     
     &__indicator--modified {
-      fill: #fbbf24;
-      color: #fbbf24;
+      fill: var(--color-warning, #f59e0b);
+      color: var(--color-warning, #f59e0b);
     }
     
     &__indicator--saved {

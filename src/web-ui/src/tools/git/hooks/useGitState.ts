@@ -39,9 +39,16 @@ import {
 } from '../state/types';
 import type { GitBranch, GitCommit } from '../types/repository';
 
+const DEFAULT_CANCEL_PENDING_REFRESH_SOURCES: readonly string[] = [];
+
 export type GitBasicInfoOptions = Pick<
   UseGitStateOptions,
-  'isActive' | 'participateInWindowFocusRefresh' | 'refreshOnMount' | 'refreshOnActive'
+  | 'isActive'
+  | 'participateInWindowFocusRefresh'
+  | 'refreshOnMount'
+  | 'refreshOnActive'
+  | 'debugSource'
+  | 'cancelPendingRefreshSources'
 >;
 
 export function useGitState(options: UseGitStateOptions): UseGitStateReturn {
@@ -52,6 +59,8 @@ export function useGitState(options: UseGitStateOptions): UseGitStateReturn {
     selector,
     refreshOnMount = true,
     refreshOnActive = true,
+    debugSource = 'use_git_state',
+    cancelPendingRefreshSources = DEFAULT_CANCEL_PENDING_REFRESH_SOURCES,
     layers,
   } = options;
 
@@ -68,6 +77,7 @@ export function useGitState(options: UseGitStateOptions): UseGitStateReturn {
   const mountedRef = useRef(true);
   const selectorRef = useRef(selector);
   const layersRef = useRef(layers);
+  const suppressedMountRefreshRef = useRef(false);
 
   useEffect(() => {
     selectorRef.current = selector;
@@ -122,30 +132,79 @@ export function useGitState(options: UseGitStateOptions): UseGitStateReturn {
   }, [isActive, normalizedPath, participateInWindowFocusRefresh]);
 
   useEffect(() => {
+    if (!normalizedPath || !isActive) {
+      return;
+    }
+
+    if (!refreshOnMount) {
+      const layersToRefresh = layersRef.current || ['basic', 'status'];
+      const sourcesToCancel = Array.from(new Set([
+        debugSource,
+        ...cancelPendingRefreshSources,
+      ].filter(Boolean)));
+      const cancelAutomaticRefresh = (reason: 'mount' | 'visibility') => {
+        for (const source of sourcesToCancel) {
+          gitStateManager.cancelPendingRefresh(normalizedPath, {
+            layers: layersToRefresh,
+            reason,
+            source,
+          });
+        }
+      };
+
+      cancelAutomaticRefresh('mount');
+      cancelAutomaticRefresh('visibility');
+      suppressedMountRefreshRef.current = true;
+      return;
+    }
+
+    if (!suppressedMountRefreshRef.current) {
+      return;
+    }
+
+    suppressedMountRefreshRef.current = false;
+    gitStateManager.refresh(normalizedPath, {
+      layers: layersRef.current || ['basic', 'status'],
+      reason: 'visibility',
+      source: debugSource,
+    });
+  }, [
+    cancelPendingRefreshSources,
+    debugSource,
+    isActive,
+    normalizedPath,
+    refreshOnMount,
+  ]);
+
+  useEffect(() => {
     if (!normalizedPath) return;
 
     const isFirstMount = isFirstMountRef.current;
     isFirstMountRef.current = false;
 
-    const shouldRefresh = 
-      (isFirstMount && refreshOnMount) ||
-      (!isFirstMount && isActive && !prevActiveRef.current && refreshOnActive);
+    const shouldRefresh =
+      isActive && (
+        (isFirstMount && refreshOnMount) ||
+        (!isFirstMount && !prevActiveRef.current && refreshOnActive)
+      );
 
     if (shouldRefresh) {
       sendDebugProbe('useGitState.ts:visibilityEffect', 'Git refresh requested', {
         repositoryPath: normalizedPath,
         isActive,
         reason: isFirstMount ? 'mount' : 'visibility',
+        source: debugSource,
         layers: layersRef.current || ['basic', 'status'],
       });
       gitStateManager.refresh(normalizedPath, {
         layers: layersRef.current || ['basic', 'status'],
         reason: isFirstMount ? 'mount' : 'visibility',
+        source: debugSource,
       });
     }
 
     prevActiveRef.current = isActive;
-  }, [isActive, normalizedPath, refreshOnMount, refreshOnActive]);
+  }, [debugSource, isActive, normalizedPath, refreshOnMount, refreshOnActive]);
 
   const refresh = useCallback(
     async (options?: RefreshOptions): Promise<void> => {
@@ -185,12 +244,10 @@ export function useGitState(options: UseGitStateOptions): UseGitStateReturn {
     ahead: state?.ahead ?? 0,
     behind: state?.behind ?? 0,
     hasChanges: state?.hasChanges ?? false,
-
     staged: state?.staged ?? [],
     unstaged: state?.unstaged ?? [],
     untracked: state?.untracked ?? [],
     conflicts: state?.conflicts ?? [],
-
     branches: state?.branches,
     commits: state?.commits,
   };
@@ -211,6 +268,8 @@ export function useGitBasicInfo(
     layers: ['basic'],
     refreshOnMount: options.refreshOnMount ?? true,
     refreshOnActive: options.refreshOnActive ?? false,
+    debugSource: options.debugSource ?? 'use_git_basic_info',
+    cancelPendingRefreshSources: options.cancelPendingRefreshSources,
   });
 }
 
@@ -227,6 +286,7 @@ export function useGitFileStatus(
     layers: ['basic', 'status'],
     refreshOnMount: true,
     refreshOnActive: true,
+    debugSource: 'use_git_file_status',
   });
 }
 
@@ -241,6 +301,7 @@ export function useGitBranches(repositoryPath: string): {
     repositoryPath,
     layers: ['basic', 'detailed'],
     refreshOnMount: true,
+    debugSource: 'use_git_branches',
   });
 
   return {
@@ -263,6 +324,7 @@ export function useGitCommits(repositoryPath: string): {
     repositoryPath,
     layers: ['detailed'],
     refreshOnMount: true,
+    debugSource: 'use_git_commits',
   });
 
   return {

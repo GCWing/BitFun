@@ -10,11 +10,12 @@
 import React, { useMemo, useState, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Copy, Check } from 'lucide-react';
-import type { ModelRound, FlowItem, FlowTextItem, FlowToolItem, FlowThinkingItem } from '../../types/flow-chat';
+import type { ModelRound, ModelRoundAttempt, FlowItem, FlowTextItem, FlowToolItem, FlowThinkingItem, TokenUsage } from '../../types/flow-chat';
+import { useI18n } from '@/infrastructure/i18n';
 import { FlowTextBlock } from '../FlowTextBlock';
 import { FlowToolCard } from '../FlowToolCard';
 import { ModelThinkingDisplay } from '../../tool-cards/ModelThinkingDisplay';
-import { isCollapsibleTool } from '../../tool-cards';
+import { isCollapsibleTool } from '../../tool-cards/toolCardMetadata';
 import { useFlowChatContext } from './FlowChatContext';
 import { FlowChatStore } from '../../store/FlowChatStore';
 import { taskCollapseStateManager } from '../../store/TaskCollapseStateManager';
@@ -43,6 +44,7 @@ import {
 } from '@/shared/utils/startupTrace';
 import { SubagentProjectionView } from '../subagent/SubagentProjectionView';
 import { formatSessionViewPreviewText } from '../../utils/sessionViewPreview';
+import { buildModelRoundUsageMeta } from '../../utils/tokenUsageDisplay';
 import './ModelRoundItem.scss';
 import './SubagentItems.scss';
 
@@ -139,6 +141,14 @@ interface ModelRoundItemProps {
   turnId: string;
   isLastRound?: boolean;
   isTurnComplete?: boolean;
+  turnStartedAt?: number;
+  turnEndedAt?: number;
+  turnDurationMs?: number;
+  turnTokenUsage?: TokenUsage;
+}
+
+function sortRoundAttempts(attempts: ModelRoundAttempt[]): ModelRoundAttempt[] {
+  return [...attempts].sort((left, right) => left.index - right.index);
 }
 
 function useTaskCollapsed(toolId: string): boolean {
@@ -215,10 +225,23 @@ const TaskWithSubagentWrapper: React.FC<TaskWithSubagentWrapperProps> = React.me
 });
 
 export const ModelRoundItem = React.memo<ModelRoundItemProps>(
-  ({ round, turnId, isLastRound = false, isTurnComplete = false }) => {
+  ({
+    round,
+    turnId,
+    isLastRound = false,
+    isTurnComplete = false,
+    turnStartedAt,
+    turnEndedAt,
+    turnDurationMs,
+    turnTokenUsage,
+  }) => {
     const { t } = useTranslation('flow-chat');
+    const { formatDate, formatNumber } = useI18n('flow-chat');
     const { sessionId } = useFlowChatContext();
     const [copied, setCopied] = useState(false);
+    const [showRetryHistory, setShowRetryHistory] = useState(false);
+    const [showRoundHistory, setShowRoundHistory] = useState(false);
+    const [openHistoryRoundAttemptIds, setOpenHistoryRoundAttemptIds] = useState<Record<string, boolean>>({});
     const copyButtonRef = useRef<HTMLButtonElement>(null);
     const renderTraceEnabled = isStartupRenderTraceEnabled();
     const renderTraceStartedAtMs = renderTraceEnabled ? performance.now() : null;
@@ -237,11 +260,38 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
         document.removeEventListener('mousedown', handleClickOutside);
       };
     }, [copied]);
-    
+
+    const attempts = useMemo(
+      () => sortRoundAttempts(round.attempts ?? []),
+      [round.attempts]
+    );
+    const olderAttempts = attempts.length > 1 ? attempts.slice(0, -1) : [];
+    const latestAttempt = attempts.length > 0 ? attempts[attempts.length - 1] : undefined;
+    const historyRounds = round.historyRounds ?? [];
+
+    useEffect(() => {
+      if (olderAttempts.length === 0 && showRetryHistory) {
+        setShowRetryHistory(false);
+      }
+    }, [olderAttempts.length, showRetryHistory]);
+
+    useEffect(() => {
+      if (historyRounds.length === 0 && showRoundHistory) {
+        setShowRoundHistory(false);
+      }
+    }, [historyRounds.length, showRoundHistory]);
+
+    const toggleHistoryRoundAttempts = useCallback((historyRoundId: string) => {
+      setOpenHistoryRoundAttemptIds((current) => ({
+        ...current,
+        [historyRoundId]: !current[historyRoundId],
+      }));
+    }, []);
+
     // Keep the recorded round order; FlowChatStore already applies immutable updates.
     const sortedItems = useMemo(
-      () => round.items,
-      [round.items]
+      () => latestAttempt?.items ?? round.items,
+      [latestAttempt?.items, round.items]
     );
     
     const latestCompletedToolEndTime = useMemo(() => {
@@ -367,6 +417,66 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
     const hasDeferredEarlierGroups = visibleGroupStartIndex > 0;
     const hasDeferredLaterGroups = visibleGroupEndIndex < groupedItems.length;
 
+    const renderGroupList = useCallback((
+      groups: ModelRoundItemGroup[],
+      options: {
+        roundId: string;
+        keyPrefix: string;
+        isFinalSection: boolean;
+      },
+    ) => (
+      groups.map((group, groupIndex) => {
+        const isLastGroup = groupIndex === groups.length - 1;
+        const isLast = options.isFinalSection && isLastGroup;
+        switch (group.type) {
+          case 'explore':
+            return group.items.map((item, itemIdx) => (
+              <FlowItemRenderer
+                key={`${options.keyPrefix}:${item.id}`}
+                item={item}
+                turnId={turnId}
+                roundId={options.roundId}
+                isLastItem={isLast && itemIdx === group.items.length - 1}
+                completedToolExitNowMs={transientNowMs}
+              />
+            ));
+
+          case 'critical': {
+            const projectedSubagent = group.item.type === 'tool' && (group.item as FlowToolItem).toolName === 'Task'
+              ? group.item as FlowToolItem
+              : undefined;
+            if (projectedSubagent) {
+              return (
+                <TaskWithSubagentWrapper
+                  key={`${options.keyPrefix}:task-with-subagent-${projectedSubagent.id}`}
+                  taskItem={projectedSubagent}
+                  parentTaskToolId={projectedSubagent.id}
+                  parentSessionId={sessionId}
+                  directSubagentSessionId={projectedSubagent.subagentSessionId}
+                  turnId={turnId}
+                  roundId={options.roundId}
+                  completedToolExitNowMs={transientNowMs}
+                />
+              );
+            }
+            return (
+              <FlowItemRenderer
+                key={`${options.keyPrefix}:${group.item.id}`}
+                item={group.item}
+                turnId={turnId}
+                roundId={options.roundId}
+                isLastItem={isLast}
+                completedToolExitNowMs={transientNowMs}
+              />
+            );
+          }
+
+          default:
+            return null;
+        }
+      })
+    ), [sessionId, transientNowMs, turnId]);
+
     const extractDialogTurnContent = useCallback(() => {
       const flowChatStore = FlowChatStore.getInstance();
       const state = flowChatStore.getState();
@@ -453,6 +563,29 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
       (item.type === 'text' && (item as FlowTextItem).content.trim()) ||
       (item.type === 'tool' && (item as FlowToolItem).toolCall)
     );
+
+    const completedAt = turnEndedAt ?? round.endTime;
+    const effectiveDurationMs = turnDurationMs ??
+      (typeof turnStartedAt === 'number' && typeof completedAt === 'number'
+        ? Math.max(0, completedAt - turnStartedAt)
+        : round.durationMs);
+    const usageMetaItems = useMemo(() => buildModelRoundUsageMeta({
+      completedAt,
+      durationMs: effectiveDurationMs,
+      tokenUsage: turnTokenUsage,
+      status: round.status,
+      formatTime: timestamp => formatDate(new Date(timestamp), {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      }),
+      formatNumber,
+      t,
+    }), [completedAt, effectiveDurationMs, formatDate, formatNumber, round.status, t, turnTokenUsage]);
+    const shouldRenderFooter = isTurnComplete &&
+      isLastRound &&
+      !round.isStreaming &&
+      (hasContent || usageMetaItems.length > 0);
     
     return (
       <div 
@@ -478,55 +611,128 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
           </div>
         )}
 
-        {visibleGroupedItems.map((group, groupIndex) => {
-          const isLastGroup = visibleGroupStartIndex + groupIndex === groupedItems.length - 1;
-          const isLast = isLastRound && isLastGroup;
-          switch (group.type) {
-            case 'explore':
-              return group.items.map((item, itemIdx) => (
-                <FlowItemRenderer
-                  key={item.id}
-                  item={item}
-                  turnId={turnId}
-                  roundId={round.id}
-                  isLastItem={isLast && itemIdx === group.items.length - 1}
-                  completedToolExitNowMs={transientNowMs}
-                />
-              ));
+        {historyRounds.length > 0 && (
+          <div className="model-round-item__retry-history">
+            <button
+              type="button"
+              className="model-round-item__retry-toggle"
+              onClick={() => setShowRoundHistory(current => !current)}
+            >
+              {showRoundHistory
+                ? t('modelRound.roundHistoryHide')
+                : t('modelRound.roundHistoryShow', { count: historyRounds.length })}
+            </button>
 
-            case 'critical': {
-              const projectedSubagent = group.item.type === 'tool' && (group.item as FlowToolItem).toolName === 'Task'
-                ? group.item as FlowToolItem
+            {showRoundHistory && historyRounds.map((historyRound, historyIndex) => {
+              const historyAttempts = sortRoundAttempts(historyRound.attempts ?? []);
+              const historyOlderAttempts = historyAttempts.length > 1
+                ? historyAttempts.slice(0, -1)
+                : [];
+              const historyLatestAttempt = historyAttempts.length > 0
+                ? historyAttempts[historyAttempts.length - 1]
                 : undefined;
-              if (projectedSubagent) {
-                return (
-                  <TaskWithSubagentWrapper
-                    key={`task-with-subagent-${projectedSubagent.id}`}
-                    taskItem={projectedSubagent}
-                    parentTaskToolId={projectedSubagent.id}
-                    parentSessionId={sessionId}
-                    directSubagentSessionId={projectedSubagent.subagentSessionId}
-                    turnId={turnId}
-                    roundId={round.id}
-                    completedToolExitNowMs={transientNowMs}
-                  />
-                );
-              }
+              const showHistoryRoundAttempts = openHistoryRoundAttemptIds[historyRound.id] === true;
+              const historyGroups = buildModelRoundItemGroups({
+                items: historyLatestAttempt?.items ?? historyRound.items,
+                isStreaming: false,
+                disableExploreGrouping: true,
+                isCollapsibleTool,
+                nowMs: transientNowMs,
+              });
+
               return (
-                <FlowItemRenderer 
-                  key={group.item.id}
-                  item={group.item}
-                  turnId={turnId}
-                  roundId={round.id}
-                  isLastItem={isLast}
-                  completedToolExitNowMs={transientNowMs}
-                />
+                <div key={historyRound.id} className="model-round-item__retry-attempt">
+                  <div className="model-round-item__retry-attempt-label">
+                    {t('modelRound.roundRetryLabel', { index: historyIndex + 1 })}
+                  </div>
+                  {historyOlderAttempts.length > 0 && (
+                    <div className="model-round-item__retry-history">
+                      <button
+                        type="button"
+                        className="model-round-item__retry-toggle"
+                        onClick={() => toggleHistoryRoundAttempts(historyRound.id)}
+                      >
+                        {showHistoryRoundAttempts
+                          ? t('modelRound.retryHistoryHide')
+                          : t('modelRound.retryHistoryShow', { count: historyOlderAttempts.length })}
+                      </button>
+
+                      {showHistoryRoundAttempts && historyOlderAttempts.map((attempt) => {
+                        const attemptGroups = buildModelRoundItemGroups({
+                          items: attempt.items,
+                          isStreaming: false,
+                          disableExploreGrouping: true,
+                          isCollapsibleTool,
+                          nowMs: transientNowMs,
+                        });
+
+                        return (
+                          <div key={attempt.id} className="model-round-item__retry-attempt">
+                            <div className="model-round-item__retry-attempt-label">
+                              {t('modelRound.attemptLabel', { index: attempt.index })}
+                            </div>
+                            {renderGroupList(attemptGroups, {
+                              roundId: historyRound.id,
+                              keyPrefix: `history-round:${historyRound.id}:attempt:${attempt.id}`,
+                              isFinalSection: false,
+                            })}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {renderGroupList(historyGroups, {
+                    roundId: historyRound.id,
+                    keyPrefix: `history-round:${historyRound.id}`,
+                    isFinalSection: false,
+                  })}
+                </div>
               );
-            }
-            
-            default:
-              return null;
-          }
+            })}
+          </div>
+        )}
+
+        {olderAttempts.length > 0 && (
+          <div className="model-round-item__retry-history">
+            <button
+              type="button"
+              className="model-round-item__retry-toggle"
+              onClick={() => setShowRetryHistory(current => !current)}
+            >
+              {showRetryHistory
+                ? t('modelRound.retryHistoryHide')
+                : t('modelRound.retryHistoryShow', { count: olderAttempts.length })}
+            </button>
+
+            {showRetryHistory && olderAttempts.map((attempt) => {
+              const attemptGroups = buildModelRoundItemGroups({
+                items: attempt.items,
+                isStreaming: false,
+                disableExploreGrouping: true,
+                isCollapsibleTool,
+                nowMs: transientNowMs,
+              });
+
+              return (
+                <div key={attempt.id} className="model-round-item__retry-attempt">
+                  <div className="model-round-item__retry-attempt-label">
+                    {t('modelRound.attemptLabel', { index: attempt.index })}
+                  </div>
+                  {renderGroupList(attemptGroups, {
+                    roundId: round.id,
+                    keyPrefix: `attempt:${attempt.id}`,
+                    isFinalSection: false,
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {renderGroupList(visibleGroupedItems, {
+          roundId: round.id,
+          keyPrefix: latestAttempt ? `attempt:${latestAttempt.id}` : 'round',
+          isFinalSection: isLastRound,
         })}
 
         {hasDeferredLaterGroups && (
@@ -535,8 +741,22 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
           </div>
         )}
 
-        {isTurnComplete && isLastRound && hasContent && !round.isStreaming && (
+        {shouldRenderFooter && (
           <div className="model-round-item__footer">
+            {usageMetaItems.length > 0 && (
+              <div
+                className="model-round-item__meta"
+                aria-label={t('modelRound.meta.label')}
+              >
+                {usageMetaItems.map(item => (
+                  <span key={item.key} className="model-round-item__meta-item">
+                    <span className="model-round-item__meta-label">{item.label}</span>
+                    <span className="model-round-item__meta-value">{item.value}</span>
+                  </span>
+                ))}
+              </div>
+            )}
+
             <ForkSessionButton sessionId={sessionId} turnId={turnId} />
 
             <Tooltip content={copied ? t('modelRound.copiedDialog') : t('modelRound.copyDialog')} placement="top">
@@ -565,8 +785,13 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
     return (
       prev.round.id === next.round.id &&
       prev.round.items === next.round.items &&
+      prev.round.historyRounds === next.round.historyRounds &&
       prev.isLastRound === next.isLastRound &&
-      prev.isTurnComplete === next.isTurnComplete
+      prev.isTurnComplete === next.isTurnComplete &&
+      prev.turnStartedAt === next.turnStartedAt &&
+      prev.turnEndedAt === next.turnEndedAt &&
+      prev.turnDurationMs === next.turnDurationMs &&
+      prev.turnTokenUsage === next.turnTokenUsage
     );
   }
 );

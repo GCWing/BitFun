@@ -302,6 +302,13 @@ pub fn diff_permissions(
         &mut added,
         &mut removed,
     );
+    diff_enabled_flag(
+        "agent.enabled",
+        active.agent.as_ref().map(|agent| agent.enabled),
+        draft.agent.as_ref().map(|agent| agent.enabled),
+        &mut added,
+        &mut removed,
+    );
 
     let high_risk = added
         .iter()
@@ -323,6 +330,7 @@ pub fn is_high_risk_permission_change(item: &str) -> bool {
         || item.starts_with("net.allow:")
         || item == "node.enabled"
         || item == "ai.enabled"
+        || item == "agent.enabled"
 }
 
 fn diff_enabled_flag(

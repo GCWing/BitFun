@@ -1,10 +1,8 @@
-//! Compatibility re-exports for round-boundary scheduler owner state.
+//! Compatibility re-exports for round-boundary injection state.
 
 pub use bitfun_agent_runtime::scheduler::{
-    DialogRoundInjectionInterrupt, NoopDialogRoundInjectionSource, NoopDialogRoundPreemptSource,
-    SessionRoundInjectionBuffer, SessionRoundYieldFlags,
+    DialogRoundInjectionInterrupt, NoopDialogRoundInjectionSource, SessionRoundInjectionBuffer,
 };
 pub use bitfun_runtime_ports::{
-    DialogRoundInjectionSource, DialogRoundPreemptSource, RoundInjection, RoundInjectionKind,
-    RoundInjectionTarget,
+    DialogRoundInjectionSource, RoundInjection, RoundInjectionKind, RoundInjectionTarget,
 };

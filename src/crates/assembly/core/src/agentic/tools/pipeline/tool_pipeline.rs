@@ -3,7 +3,7 @@
 //! Manages the complete lifecycle of tools:
 //! confirmation, execution, caching, retries, etc.
 
-use super::state_manager::ToolStateManager;
+use super::state_manager::{tool_task_state_kind, ToolStateManager};
 use super::types::*;
 use crate::agentic::core::{ToolCall, ToolExecutionState, ToolResult as ModelToolResult};
 use crate::agentic::events::types::ToolEventData;
@@ -24,9 +24,9 @@ use bitfun_agent_tools::{
     build_invalid_tool_call_error_message, build_tool_call_truncation_recovery_notice,
     build_tool_execution_error_presentation, build_user_steering_interrupted_presentation,
     render_tool_result_for_assistant, truncate_raw_tool_arguments_preview,
-    truncate_tool_arguments_preview, validate_tool_execution_admission, ToolCallLoopDecision,
-    ToolCallLoopHistory, ToolExecutionAdmissionRejection, ToolExecutionAdmissionRequest,
-    GET_TOOL_SPEC_TOOL_NAME, USER_STEERING_INTERRUPTED_MESSAGE,
+    truncate_tool_arguments_preview, validate_tool_execution_admission,
+    ToolExecutionAdmissionRejection, ToolExecutionAdmissionRequest, GET_TOOL_SPEC_TOOL_NAME,
+    USER_STEERING_INTERRUPTED_MESSAGE,
 };
 use dashmap::DashMap;
 use futures::future::join_all;
@@ -37,8 +37,8 @@ use tokio::sync::{oneshot, RwLock as TokioRwLock};
 use tokio::time::{timeout, Duration};
 use tokio_util::sync::CancellationToken;
 use tool_runtime::pipeline::{
-    partition_tool_batches, retry_delay_ms, should_retry_tool_attempt, ToolExecutionErrorClass,
-    ToolRetryAttemptFacts,
+    partition_tool_batches, retry_delay_ms, should_cancel_tool_state, should_retry_tool_attempt,
+    summarize_dialog_turn_cancellation, ToolExecutionErrorClass, ToolRetryAttemptFacts,
 };
 
 /// Convert framework::ToolResult to core::ToolResult
@@ -257,10 +257,6 @@ pub struct ToolPipeline {
     confirmation_channels: Arc<DashMap<String, oneshot::Sender<ConfirmationResponse>>>,
     /// Cancellation token management (tool_id -> CancellationToken)
     cancellation_tokens: Arc<DashMap<String, CancellationToken>>,
-    /// Per-session ring buffer of recent tool calls for loop detection.
-    /// Keyed by session_id; entries store (tool_name, arguments) so that
-    /// "same tool with deep-equal arguments" can be recognized across rounds.
-    recent_tool_calls: Arc<DashMap<String, ToolCallLoopHistory>>,
     computer_use_host: Option<ComputerUseHostRef>,
 }
 
@@ -275,29 +271,8 @@ impl ToolPipeline {
             state_manager,
             confirmation_channels: Arc::new(DashMap::new()),
             cancellation_tokens: Arc::new(DashMap::new()),
-            recent_tool_calls: Arc::new(DashMap::new()),
             computer_use_host,
         }
-    }
-
-    fn check_and_record_tool_call(
-        &self,
-        session_id: &str,
-        tool_name: &str,
-        arguments: &serde_json::Value,
-    ) -> ToolCallLoopDecision {
-        let mut entry = self
-            .recent_tool_calls
-            .entry(session_id.to_string())
-            .or_default();
-        entry.value_mut().check_and_record(tool_name, arguments)
-    }
-
-    /// Drop the loop-detection history for a session that is ending. Bounded
-    /// memory either way (max 10 entries per session) but this prevents
-    /// long-lived processes from accumulating stale sessions.
-    pub fn clear_session_tool_call_history(&self, session_id: &str) {
-        self.recent_tool_calls.remove(session_id);
     }
 
     pub fn computer_use_host(&self) -> Option<ComputerUseHostRef> {
@@ -584,36 +559,9 @@ impl ToolPipeline {
             return Err(BitFunError::Validation(error_msg));
         }
 
-        // Loop detection: refuse to execute the same tool call repeatedly with
-        // identical arguments. Triggered on the (THRESHOLD + 1)-th consecutive
-        // identical call within the per-session sliding window.
-        if let ToolCallLoopDecision::Blocked(block) =
-            self.check_and_record_tool_call(&task.context.session_id, &tool_name, &tool_args)
-        {
-            let error_msg = block.message;
-            warn!(
-                "Tool-call loop blocked: tool_name={}, tool_id={}, session_id={}, threshold={}",
-                tool_name, tool_id, task.context.session_id, block.threshold
-            );
-
-            self.state_manager
-                .update_state(
-                    &tool_id,
-                    ToolExecutionState::Failed {
-                        error: error_msg.clone(),
-                        is_retryable: false,
-                        duration_ms: None,
-                        queue_wait_ms: None,
-                        preflight_ms: None,
-                        confirmation_wait_ms: None,
-                        execution_ms: None,
-                    },
-                )
-                .await;
-
-            return Err(BitFunError::Validation(error_msg));
-        }
-
+        // Repetition alone is not execution failure: polling and status checks
+        // may legitimately reuse identical arguments. The execution engine
+        // evaluates repeated patterns only after observing actual tool results.
         if let Err(err) = validate_tool_execution_admission(ToolExecutionAdmissionRequest {
             tool_name: &tool_name,
             allowed_tools: &task.context.allowed_tools,
@@ -1147,17 +1095,12 @@ impl ToolPipeline {
             return Ok(());
         };
 
-        match &task.state {
-            ToolExecutionState::Completed { .. }
-            | ToolExecutionState::Failed { .. }
-            | ToolExecutionState::Cancelled { .. } => {
-                debug!(
+        if tool_task_state_kind(&task.state).is_terminal() {
+            debug!(
                     "Ignoring duplicate cancel request for tool in terminal state: tool_id={}, state={:?}",
                     tool_id, task.state
                 );
-                return Ok(());
-            }
-            _ => {}
+            return Ok(());
         }
 
         // 1. Trigger cancellation token
@@ -1209,39 +1152,29 @@ impl ToolPipeline {
         let tasks = self.state_manager.get_dialog_turn_tasks(dialog_turn_id);
         debug!("Found {} tool tasks for dialog turn", tasks.len());
 
-        let mut cancelled_count = 0;
-        let mut skipped_count = 0;
+        let summary = summarize_dialog_turn_cancellation(
+            tasks.iter().map(|task| tool_task_state_kind(&task.state)),
+        );
 
         for task in tasks {
-            // Only cancel tasks in cancellable states
-            let can_cancel = matches!(
-                task.state,
-                ToolExecutionState::Queued { .. }
-                    | ToolExecutionState::Waiting { .. }
-                    | ToolExecutionState::Running { .. }
-                    | ToolExecutionState::AwaitingConfirmation { .. }
-            );
-
-            if can_cancel {
+            if should_cancel_tool_state(tool_task_state_kind(&task.state)) {
                 debug!(
                     "Cancelling tool: tool_id={}, state={:?}",
                     task.tool_call.tool_id, task.state
                 );
                 self.cancel_tool(&task.tool_call.tool_id, "Dialog turn cancelled".to_string())
                     .await?;
-                cancelled_count += 1;
             } else {
                 debug!(
                     "Skipping tool (state not cancellable): tool_id={}, state={:?}",
                     task.tool_call.tool_id, task.state
                 );
-                skipped_count += 1;
             }
         }
 
         info!(
             "Tool cancellation completed: cancelled={}, skipped={}",
-            cancelled_count, skipped_count
+            summary.cancelled, summary.skipped
         );
         Ok(())
     }
@@ -1362,6 +1295,8 @@ mod tests {
             session_id: "session_1".to_string(),
             dialog_turn_id: "turn_1".to_string(),
             round_id: "round_1".to_string(),
+            attempt_id: None,
+            attempt_index: None,
             agent_type: "agent".to_string(),
             workspace: None,
             context_vars: HashMap::new(),

@@ -58,6 +58,9 @@ describe('scheduleDeferredStartupSystems', () => {
       probeAcpClientRequirements: async () => {
         order.push('acp-probe');
       },
+      preloadDeferredRenderers: async () => {
+        order.push('renderer-preloads');
+      },
     });
 
     expect(schedule).toHaveBeenCalledTimes(1);
@@ -70,7 +73,7 @@ describe('scheduleDeferredStartupSystems', () => {
 
     await scheduledTask?.(new AbortController().signal);
 
-    expect(order).toEqual(['ide', 'mcp', 'acp', 'acp-probe']);
+    expect(order).toEqual(['ide', 'mcp', 'acp', 'acp-probe', 'renderer-preloads']);
   });
 
   it('skips deferred startup systems when cancelled before execution', async () => {
@@ -99,6 +102,7 @@ describe('scheduleDeferredStartupSystems', () => {
       initializeMcpServers: vi.fn(),
       initializeAcpClients: vi.fn(),
       probeAcpClientRequirements: vi.fn(),
+      preloadDeferredRenderers: vi.fn(),
     });
 
     controller.abort();

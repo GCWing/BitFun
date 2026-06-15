@@ -133,33 +133,33 @@
 }
 
 .header-btn.accept-btn {
-  background: rgba(110, 184, 140, 0.15);
-  color: #6eb88c;
-  border-color: rgba(110, 184, 140, 0.3);
+  background: var(--color-success-bg, rgba(52, 211, 153, 0.15));
+  color: var(--color-success, #34d399);
+  border-color: var(--color-success-border, rgba(52, 211, 153, 0.3));
 }
 
 .header-btn.accept-btn:hover:not(:disabled) {
-  background: rgba(110, 184, 140, 0.25);
-  border-color: rgba(110, 184, 140, 0.5);
-  box-shadow: 0 4px 12px rgba(110, 184, 140, 0.2);
+  background: color-mix(in srgb, var(--color-success, #34d399) 25%, transparent);
+  border-color: color-mix(in srgb, var(--color-success, #34d399) 50%, transparent);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--color-success, #34d399) 20%, transparent);
 }
 
 .header-btn.reject-btn {
-  background: rgba(199, 112, 112, 0.15);
-  color: #c77070;
-  border-color: rgba(199, 112, 112, 0.3);
+  background: var(--color-error-bg, rgba(239, 68, 68, 0.15));
+  color: var(--color-error, #ef4444);
+  border-color: var(--color-error-border, rgba(239, 68, 68, 0.3));
 }
 
 .header-btn.reject-btn:hover:not(:disabled) {
-  background: rgba(199, 112, 112, 0.25);
-  border-color: rgba(199, 112, 112, 0.5);
-  box-shadow: 0 4px 12px rgba(199, 112, 112, 0.2);
+  background: color-mix(in srgb, var(--color-error, #ef4444) 25%, transparent);
+  border-color: color-mix(in srgb, var(--color-error, #ef4444) 50%, transparent);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--color-error, #ef4444) 20%, transparent);
 }
 
 .header-btn.close-btn:hover:not(:disabled) {
-  background: rgba(199, 112, 112, 0.2);
-  color: #c77070;
-  border-color: rgba(199, 112, 112, 0.3);
+  background: color-mix(in srgb, var(--color-error, #ef4444) 20%, transparent);
+  color: var(--color-error, #ef4444);
+  border-color: var(--color-error-border, rgba(239, 68, 68, 0.3));
 }
 
 .header-divider {

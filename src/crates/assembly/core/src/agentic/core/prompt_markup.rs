@@ -71,6 +71,11 @@ impl PromptEnvelope {
     }
 }
 
+/// Legacy helper for explicit `<user_query>` prompt markup.
+///
+/// Do not use this for new persisted user messages or internal cache-anchor
+/// messages. Modern dialog turns should keep plain user text unless a specific
+/// compatibility path requires prompt-block markup.
 pub fn render_user_query(text: &str) -> String {
     PromptBlock::user_query(text).render()
 }

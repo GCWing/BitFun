@@ -1176,6 +1176,11 @@ pub async fn run() {
             api::miniapp_api::miniapp_ai_chat,
             api::miniapp_api::miniapp_ai_cancel,
             api::miniapp_api::miniapp_ai_list_models,
+            api::miniapp_agent_api::miniapp_agent_run,
+            api::miniapp_agent_api::miniapp_agent_cancel,
+            api::miniapp_agent_api::miniapp_agent_turn_text,
+            api::miniapp_agent_api::miniapp_agent_cancel_stale_runs,
+            api::miniapp_export_api::miniapp_render_slide_page,
             // Browser API (embedded webview)
             api::browser_api::browser_webview_eval,
             api::browser_api::browser_get_url,
@@ -1364,7 +1369,6 @@ async fn init_agentic_system() -> anyhow::Result<(
     let scheduler =
         coordination::DialogScheduler::new(coordinator.clone(), session_manager.clone());
     coordinator.set_scheduler_notifier(scheduler.outcome_sender());
-    coordinator.set_round_preempt_source(scheduler.preempt_monitor());
     coordinator.set_round_injection_source(scheduler.round_injection_monitor());
     coordination::set_global_scheduler(scheduler.clone());
 
@@ -1428,8 +1432,7 @@ fn setup_panic_hook() {
         let thread = std::thread::current();
         let thread_name = thread.name().map(str::to_string);
         let thread_id = format!("{:?}", thread.id());
-        let is_main_thread = thread_name.as_deref() == Some("main")
-            || thread_name.is_none(); // unnamed threads in simple test contexts
+        let is_main_thread = thread_name.as_deref() == Some("main") || thread_name.is_none(); // unnamed threads in simple test contexts
 
         let location = panic_info
             .location()

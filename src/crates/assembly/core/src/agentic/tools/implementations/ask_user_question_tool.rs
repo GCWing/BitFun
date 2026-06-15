@@ -135,14 +135,14 @@ Usage notes:
                             },
                             "multiSelect": {
                                 "type": "boolean",
-                                "description": "Set to true to allow the user to select multiple options instead of just one. Use when choices are not mutually exclusive."
+                                "default": false,
+                                "description": "Optional. Defaults to false. Set to true to allow the user to select multiple options instead of just one. Use when choices are not mutually exclusive."
                             }
                         },
                         "required": [
                             "question",
                             "header",
-                            "options",
-                            "multiSelect"
+                            "options"
                         ],
                         "additionalProperties": false
                     },
@@ -293,5 +293,21 @@ mod tests {
         let context = context_with_custom_data(HashMap::new());
 
         assert!(tool.is_available_in_context(Some(&context)).await);
+    }
+
+    #[test]
+    fn ask_user_question_schema_defaults_multi_select_to_false() {
+        let schema = AskUserQuestionTool::new().input_schema();
+        let question_schema = &schema["properties"]["questions"]["items"];
+
+        assert_eq!(
+            question_schema["properties"]["multiSelect"]["default"],
+            false
+        );
+        assert!(!question_schema["required"]
+            .as_array()
+            .expect("required array")
+            .iter()
+            .any(|value| value == "multiSelect"));
     }
 }

@@ -23,7 +23,7 @@ crate dependencies inside each layer to the smallest set needed.
 | 1 | Interfaces and entrypoints | `src/apps/*`, `src/web-ui`, `src/mobile-web`, `BitFun-Installer`, `tests/e2e`, `src/crates/interfaces` | Product hosts, commands, UI entrypoints, protocol interfaces, and cross-surface tests | desktop, CLI, server, relay, Web UI, mobile web, installer, E2E, `acp` | nearest local `AGENTS.md`; [interfaces](src/crates/interfaces/AGENTS.md) |
 | 2 | Product assembly | `src/crates/assembly` | Compatibility exports, product capability selection, product-full wiring, and adapter/service registration | `core`, `product-capabilities` | [AGENTS.md](src/crates/assembly/AGENTS.md) |
 | 3 | Adapters | `src/crates/adapters` | AI/API/transport/WebDriver protocol adapters and external-provider translation | `ai-adapters`, `api-layer`, `transport`, `webdriver` | [AGENTS.md](src/crates/adapters/AGENTS.md) |
-| 4 | Services | `src/crates/services` | Reusable OS, filesystem, terminal, MCP, remote, git, watch, process, MiniApp runtime IO, and network implementations | `services-core`, `services-integrations`, `terminal` | [AGENTS.md](src/crates/services/AGENTS.md) |
+| 4 | Services | `src/crates/services` | Reusable OS, filesystem, terminal, MCP, remote, git, watch, process, session persistence primitives, MiniApp runtime IO, and network implementations | `services-core`, `services-integrations`, `terminal` | [AGENTS.md](src/crates/services/AGENTS.md) |
 | 5 | Execution primitives | `src/crates/execution` | Portable agent, harness, stream, DeepReview policy/report, typed-service, tool-contract, tool-group, and tool-execution building blocks | `agent-runtime`, `agent-stream`, `tool-contracts`, `harness`, `runtime-services`, `tool-provider-groups`, `tool-execution` | [AGENTS.md](src/crates/execution/AGENTS.md) |
 | 6 | Stable contracts and product domains | `src/crates/contracts` | Shared DTOs, event shapes, runtime ports, and product domain contracts/policies | `core-types`, `events`, `runtime-ports`, `product-domains` | [AGENTS.md](src/crates/contracts/AGENTS.md) |
 
@@ -163,6 +163,19 @@ Repository-level decomposition rules:
 - Moving runtime ownership requires a reviewed port/provider design, old-path
   compatibility, behavior equivalence tests, and explicit confirmation when a
   behavior boundary could change.
+
+### SDLC quality guardrails
+
+For lifecycle evidence, gates, Artifact Graph, Project Profile, Deep Review
+policy, OpenCode compatibility, or target-project governance changes, read
+[`docs/sdlc-harness/README.md`](docs/sdlc-harness/README.md)
+first, then [`docs/sdlc-harness/design.md`](docs/sdlc-harness/design.md). If
+module boundaries or behavior change, follow the matching design under
+`docs/sdlc-harness/architecture/` or `docs/sdlc-harness/features/`.
+
+Do not hard-code BitFun repository assumptions as target-project rules; keep
+quality protection behavior target-aware, evidence-backed, risk-tiered,
+cost-aware, and auditable.
 
 ## Verification
 

@@ -228,7 +228,7 @@
       transition: all 0.1s ease;
 
       &:hover {
-        background: var(--color-error-alpha);
+        background: var(--color-error-bg, rgba(239, 68, 68, 0.1));
         color: var(--color-error);
       }
     }

@@ -6,6 +6,7 @@ use git2::{BranchType, Commit, Repository};
 use std::path::Path;
 use std::time::Duration;
 use std::time::Instant;
+use tokio::task;
 use tokio::time::timeout;
 
 pub struct GitService;
@@ -19,106 +20,128 @@ fn elapsed_ms_u64(started_at: Instant) -> u64 {
 impl GitService {
     /// Checks whether the path is a Git repository.
     pub async fn is_repository<P: AsRef<Path>>(path: P) -> Result<bool, GitError> {
-        Ok(is_git_repository(path))
+        let path_buf = path.as_ref().to_path_buf();
+        task::spawn_blocking(move || Ok(is_git_repository(path_buf)))
+            .await
+            .map_err(|e| GitError::CommandFailed(format!("spawn_blocking join: {e}")))?
     }
 
     /// Gets repository information.
     pub async fn get_repository<P: AsRef<Path>>(path: P) -> Result<GitRepository, GitError> {
-        let _start_time = Instant::now();
+        let path_buf = path.as_ref().to_path_buf();
+        task::spawn_blocking(move || {
+            let repo = Repository::open(&path_buf)
+                .map_err(|e| GitError::RepositoryNotFound(e.to_string()))?;
 
-        let repo =
-            Repository::open(&path).map_err(|e| GitError::RepositoryNotFound(e.to_string()))?;
+            let current_branch = get_current_branch(&repo)?;
+            let is_bare = repo.is_bare();
+            let has_changes = !get_file_statuses(&repo)?.is_empty();
 
-        let current_branch = get_current_branch(&repo)?;
-        let is_bare = repo.is_bare();
-        let has_changes = !get_file_statuses(&repo)?.is_empty();
+            let remotes = repo
+                .remotes()
+                .map_err(|e| GitError::CommandFailed(e.to_string()))?
+                .iter()
+                .filter_map(|name| name.ok().flatten().map(str::to_string))
+                .collect();
 
-        let remotes = repo
-            .remotes()
-            .map_err(|e| GitError::CommandFailed(e.to_string()))?
-            .iter()
-            .filter_map(|name| name.ok().flatten().map(str::to_string))
-            .collect();
+            let path_str = path_buf.to_string_lossy().to_string();
+            let name = path_buf
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
 
-        let path_str = path.as_ref().to_string_lossy().to_string();
-        let name = path
-            .as_ref()
-            .file_name()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .to_string();
-
-        Ok(GitRepository {
-            path: path_str,
-            name,
-            current_branch,
-            is_bare,
-            has_changes,
-            remotes,
+            Ok(GitRepository {
+                path: path_str,
+                name,
+                current_branch,
+                is_bare,
+                has_changes,
+                remotes,
+            })
         })
+        .await
+        .map_err(|e| GitError::CommandFailed(format!("spawn_blocking join: {e}")))?
     }
 
     /// Gets lightweight repository information without scanning worktree status.
     pub async fn get_repository_basic<P: AsRef<Path>>(path: P) -> Result<GitRepository, GitError> {
-        let repo =
-            Repository::open(&path).map_err(|e| GitError::RepositoryNotFound(e.to_string()))?;
+        let path_buf = path.as_ref().to_path_buf();
+        task::spawn_blocking(move || {
+            let repo = Repository::open(&path_buf)
+                .map_err(|e| GitError::RepositoryNotFound(e.to_string()))?;
 
-        let current_branch = get_current_branch(&repo)?;
-        let is_bare = repo.is_bare();
-        let path_str = path.as_ref().to_string_lossy().to_string();
-        let name = path
-            .as_ref()
-            .file_name()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .to_string();
+            let current_branch = get_current_branch(&repo)?;
+            let is_bare = repo.is_bare();
+            let path_str = path_buf.to_string_lossy().to_string();
+            let name = path_buf
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
 
-        Ok(GitRepository {
-            path: path_str,
-            name,
-            current_branch,
-            is_bare,
-            has_changes: false,
-            remotes: Vec::new(),
+            Ok(GitRepository {
+                path: path_str,
+                name,
+                current_branch,
+                is_bare,
+                has_changes: false,
+                remotes: Vec::new(),
+            })
         })
+        .await
+        .map_err(|e| GitError::CommandFailed(format!("spawn_blocking join: {e}")))?
     }
 
     /// Gets repository status.
     pub async fn get_status<P: AsRef<Path>>(path: P) -> Result<GitStatus, GitError> {
-        let repo =
-            Repository::open(&path).map_err(|e| GitError::RepositoryNotFound(e.to_string()))?;
+        let path_buf = path.as_ref().to_path_buf();
 
-        let current_branch = get_current_branch(&repo)?;
-        let file_statuses = get_file_statuses(&repo)?;
+        timeout(
+            Duration::from_secs(10),
+            task::spawn_blocking(move || {
+                let repo = Repository::open(&path_buf)
+                    .map_err(|e| GitError::RepositoryNotFound(e.to_string()))?;
 
-        let mut staged = Vec::new();
-        let mut unstaged = Vec::new();
-        let mut untracked = Vec::new();
+                let current_branch = get_current_branch(&repo)?;
+                let file_statuses = get_file_statuses(&repo)?;
 
-        for status in file_statuses {
-            if status.status.contains('?') {
-                untracked.push(status.path);
-            } else {
-                if status.index_status.is_some() {
-                    staged.push(status.clone());
+                let mut staged = Vec::new();
+                let mut unstaged = Vec::new();
+                let mut untracked = Vec::new();
+
+                for status in file_statuses {
+                    if status.status.contains('C') {
+                        staged.push(status.clone());
+                        unstaged.push(status);
+                    } else if status.status.contains('?') {
+                        untracked.push(status.path);
+                    } else {
+                        if status.index_status.is_some() {
+                            staged.push(status.clone());
+                        }
+                        if status.workdir_status.is_some() {
+                            unstaged.push(status);
+                        }
+                    }
                 }
-                if status.workdir_status.is_some() {
-                    unstaged.push(status);
-                }
-            }
-        }
 
-        let (ahead, behind) =
-            Self::get_ahead_behind_count(&repo, &current_branch).unwrap_or((0, 0));
+                let (ahead, behind) =
+                    GitService::get_ahead_behind_count(&repo, &current_branch).unwrap_or((0, 0));
 
-        Ok(GitStatus {
-            staged,
-            unstaged,
-            untracked,
-            current_branch,
-            ahead,
-            behind,
-        })
+                Ok(GitStatus {
+                    staged,
+                    unstaged,
+                    untracked,
+                    current_branch,
+                    ahead,
+                    behind,
+                })
+            }),
+        )
+        .await
+        .map_err(|_| GitError::CommandFailed("Git status timed out after 10s".to_string()))?
+        .map_err(|e| GitError::CommandFailed(format!("spawn_blocking join: {e}")))?
     }
 
     /// Gets the branch list.
@@ -126,78 +149,19 @@ impl GitService {
         path: P,
         include_remote: bool,
     ) -> Result<Vec<GitBranch>, GitError> {
-        let repo =
-            Repository::open(&path).map_err(|e| GitError::RepositoryNotFound(e.to_string()))?;
+        let path_buf = path.as_ref().to_path_buf();
+        task::spawn_blocking(move || {
+            let repo = Repository::open(&path_buf)
+                .map_err(|e| GitError::RepositoryNotFound(e.to_string()))?;
 
-        let mut branches = Vec::new();
-        let current_branch = get_current_branch(&repo)?;
+            let mut branches = Vec::new();
+            let current_branch = get_current_branch(&repo)?;
 
-        let local_branches = repo
-            .branches(Some(BranchType::Local))
-            .map_err(|e| GitError::CommandFailed(e.to_string()))?;
-
-        for branch_result in local_branches {
-            let (branch, _) = branch_result.map_err(|e| GitError::CommandFailed(e.to_string()))?;
-
-            if let Some(name) = branch
-                .name()
-                .map_err(|e| GitError::CommandFailed(e.to_string()))?
-            {
-                let is_current = name == current_branch;
-                let upstream = branch.upstream().ok().and_then(|upstream_branch| {
-                    upstream_branch.name().ok().flatten().map(|s| s.to_string())
-                });
-
-                let (last_commit, last_commit_date) =
-                    if let Ok(commit) = branch.get().peel_to_commit() {
-                        (
-                            Some(commit.id().to_string()),
-                            Some(format_timestamp(commit.time().seconds())),
-                        )
-                    } else {
-                        (None, None)
-                    };
-
-                let (ahead, behind) = if is_current {
-                    Self::get_ahead_behind_count(&repo, name).unwrap_or((0, 0))
-                } else {
-                    (0, 0)
-                };
-
-                branches.push(GitBranch {
-                    name: name.to_string(),
-                    current: is_current,
-                    remote: false,
-                    upstream,
-                    ahead,
-                    behind,
-                    last_commit,
-                    last_commit_date: last_commit_date.clone(),
-
-                    base_branch: None,
-                    child_branches: None,
-                    merged_branches: None,
-                    branch_type: Some(Self::determine_branch_type(name)),
-                    has_conflicts: None,
-                    can_merge: None,
-                    is_stale: None,
-                    merge_status: None,
-                    stats: None,
-                    created_at: None,
-                    last_activity_at: last_commit_date,
-                    tags: None,
-                    description: None,
-                    linked_issues: None,
-                });
-            }
-        }
-
-        if include_remote {
-            let remote_branches = repo
-                .branches(Some(BranchType::Remote))
+            let local_branches = repo
+                .branches(Some(BranchType::Local))
                 .map_err(|e| GitError::CommandFailed(e.to_string()))?;
 
-            for branch_result in remote_branches {
+            for branch_result in local_branches {
                 let (branch, _) =
                     branch_result.map_err(|e| GitError::CommandFailed(e.to_string()))?;
 
@@ -205,6 +169,11 @@ impl GitService {
                     .name()
                     .map_err(|e| GitError::CommandFailed(e.to_string()))?
                 {
+                    let is_current = name == current_branch;
+                    let upstream = branch.upstream().ok().and_then(|upstream_branch| {
+                        upstream_branch.name().ok().flatten().map(|s| s.to_string())
+                    });
+
                     let (last_commit, last_commit_date) =
                         if let Ok(commit) = branch.get().peel_to_commit() {
                             (
@@ -215,13 +184,19 @@ impl GitService {
                             (None, None)
                         };
 
+                    let (ahead, behind) = if is_current {
+                        GitService::get_ahead_behind_count(&repo, name).unwrap_or((0, 0))
+                    } else {
+                        (0, 0)
+                    };
+
                     branches.push(GitBranch {
                         name: name.to_string(),
-                        current: false,
-                        remote: true,
-                        upstream: None,
-                        ahead: 0,
-                        behind: 0,
+                        current: is_current,
+                        remote: false,
+                        upstream,
+                        ahead,
+                        behind,
                         last_commit,
                         last_commit_date: last_commit_date.clone(),
 
@@ -242,9 +217,63 @@ impl GitService {
                     });
                 }
             }
-        }
 
-        Ok(branches)
+            if include_remote {
+                let remote_branches = repo
+                    .branches(Some(BranchType::Remote))
+                    .map_err(|e| GitError::CommandFailed(e.to_string()))?;
+
+                for branch_result in remote_branches {
+                    let (branch, _) =
+                        branch_result.map_err(|e| GitError::CommandFailed(e.to_string()))?;
+
+                    if let Some(name) = branch
+                        .name()
+                        .map_err(|e| GitError::CommandFailed(e.to_string()))?
+                    {
+                        let (last_commit, last_commit_date) =
+                            if let Ok(commit) = branch.get().peel_to_commit() {
+                                (
+                                    Some(commit.id().to_string()),
+                                    Some(format_timestamp(commit.time().seconds())),
+                                )
+                            } else {
+                                (None, None)
+                            };
+
+                        branches.push(GitBranch {
+                            name: name.to_string(),
+                            current: false,
+                            remote: true,
+                            upstream: None,
+                            ahead: 0,
+                            behind: 0,
+                            last_commit,
+                            last_commit_date: last_commit_date.clone(),
+
+                            base_branch: None,
+                            child_branches: None,
+                            merged_branches: None,
+                            branch_type: Some(Self::determine_branch_type(name)),
+                            has_conflicts: None,
+                            can_merge: None,
+                            is_stale: None,
+                            merge_status: None,
+                            stats: None,
+                            created_at: None,
+                            last_activity_at: last_commit_date,
+                            tags: None,
+                            description: None,
+                            linked_issues: None,
+                        });
+                    }
+                }
+            }
+
+            Ok(branches)
+        })
+        .await
+        .map_err(|e| GitError::CommandFailed(format!("spawn_blocking join: {e}")))?
     }
 
     /// Gets branches with detailed information.
@@ -256,19 +285,29 @@ impl GitService {
 
         Self::analyze_branch_relations(&mut branches)?;
 
-        let repo =
-            Repository::open(&path).map_err(|e| GitError::RepositoryNotFound(e.to_string()))?;
+        let path_buf = path.as_ref().to_path_buf();
+        task::spawn_blocking(move || {
+            let repo = Repository::open(&path_buf)
+                .map_err(|e| GitError::RepositoryNotFound(e.to_string()))?;
+            let current_branch = get_current_branch(&repo)?;
 
-        for branch in &mut branches {
-            if !branch.remote {
-                branch.stats = Self::calculate_branch_stats(&repo, &branch.name).ok();
-                branch.is_stale = Some(Self::is_branch_stale(branch));
-                branch.can_merge = Self::can_merge_safely(&repo, &branch.name).ok();
-                branch.has_conflicts = branch.can_merge.map(|can| !can);
+            for branch in &mut branches {
+                if !branch.remote {
+                    branch.stats =
+                        GitService::calculate_branch_stats(&repo, &branch.name).ok();
+                    branch.is_stale = Some(GitService::is_branch_stale(branch));
+                    if branch.name != current_branch {
+                        branch.can_merge =
+                            GitService::can_merge_safely(&repo, &branch.name).ok();
+                        branch.has_conflicts = branch.can_merge.map(|can| !can);
+                    }
+                }
             }
-        }
 
-        Ok(branches)
+            Ok(branches)
+        })
+        .await
+        .map_err(|e| GitError::CommandFailed(format!("spawn_blocking join: {e}")))?
     }
 
     /// Determines the branch type.
@@ -354,7 +393,9 @@ impl GitService {
             .push(target)
             .map_err(|e| GitError::CommandFailed(e.to_string()))?;
 
-        let commit_count = revwalk.count() as i32;
+        // Only count recent commits, avoid full-history traversal.
+        const STATS_COMMIT_LIMIT: usize = 1000;
+        let commit_count = revwalk.take(STATS_COMMIT_LIMIT).count() as i32;
 
         Ok(GitBranchStats {
             commit_count,
@@ -368,14 +409,67 @@ impl GitService {
         })
     }
 
+    /// Branches with no activity in this many days are considered stale.
+    const STALE_DAYS_THRESHOLD: i64 = 90;
+
     /// Checks whether a branch is stale.
     fn is_branch_stale(branch: &GitBranch) -> bool {
-        !matches!(&branch.last_commit_date, Some(_last_commit_date))
+        match branch
+            .last_activity_at
+            .as_ref()
+            .or(branch.last_commit_date.as_ref())
+        {
+            Some(date_str) => {
+                // format_timestamp produces "YYYY-MM-DD HH:MM:SS UTC"
+                chrono::NaiveDateTime::parse_from_str(date_str, "%Y-%m-%d %H:%M:%S UTC")
+                    .map(|dt| {
+                        (chrono::Utc::now().naive_utc() - dt).num_days() > Self::STALE_DAYS_THRESHOLD
+                    })
+                    .unwrap_or(false)
+            }
+            None => true,
+        }
     }
 
-    /// Checks whether a branch can be merged safely.
-    fn can_merge_safely(_repo: &Repository, _branch_name: &str) -> Result<bool, GitError> {
-        Ok(true)
+    /// Checks whether a branch can be merged safely into HEAD via
+    /// three-way merge analysis (merge-base, merge-trees).
+    fn can_merge_safely(repo: &Repository, branch_name: &str) -> Result<bool, GitError> {
+        let branch = repo
+            .find_branch(branch_name, BranchType::Local)
+            .map_err(|e| GitError::BranchNotFound(e.to_string()))?;
+        let branch_commit = branch
+            .get()
+            .peel_to_commit()
+            .map_err(|e| GitError::CommandFailed(format!("Failed to peel branch: {e}")))?;
+
+        let head_commit = repo
+            .head()
+            .map_err(|e| GitError::CommandFailed(format!("Failed to get HEAD: {e}")))?
+            .peel_to_commit()
+            .map_err(|e| GitError::CommandFailed(format!("Failed to peel HEAD: {e}")))?;
+
+        let base_oid = repo
+            .merge_base(head_commit.id(), branch_commit.id())
+            .map_err(|e| GitError::CommandFailed(format!("Failed to find merge base: {e}")))?;
+        let base_commit = repo
+            .find_commit(base_oid)
+            .map_err(|e| GitError::CommandFailed(format!("Failed to find merge base commit: {e}")))?;
+
+        let base_tree = base_commit
+            .tree()
+            .map_err(|e| GitError::CommandFailed(format!("Failed to get base tree: {e}")))?;
+        let head_tree = head_commit
+            .tree()
+            .map_err(|e| GitError::CommandFailed(format!("Failed to get HEAD tree: {e}")))?;
+        let branch_tree = branch_commit
+            .tree()
+            .map_err(|e| GitError::CommandFailed(format!("Failed to get branch tree: {e}")))?;
+
+        let index = repo
+            .merge_trees(&base_tree, &head_tree, &branch_tree, None)
+            .map_err(|e| GitError::MergeConflict(format!("Merge analysis failed: {e}")))?;
+
+        Ok(!index.has_conflicts())
     }
 
     /// Gets commit history.
@@ -383,77 +477,129 @@ impl GitService {
         path: P,
         params: GitLogParams,
     ) -> Result<Vec<GitCommit>, GitError> {
-        let repo =
-            Repository::open(&path).map_err(|e| GitError::RepositoryNotFound(e.to_string()))?;
+        let path_buf = path.as_ref().to_path_buf();
+        task::spawn_blocking(move || {
+            let repo = Repository::open(&path_buf)
+                .map_err(|e| GitError::RepositoryNotFound(e.to_string()))?;
 
-        let mut revwalk = repo
-            .revwalk()
-            .map_err(|e| GitError::CommandFailed(e.to_string()))?;
-
-        revwalk
-            .push_head()
-            .map_err(|e| GitError::CommandFailed(e.to_string()))?;
-
-        let mut commits = Vec::new();
-        let mut count = 0;
-        let skip = params.skip.unwrap_or(0);
-        let max_count = params.max_count.unwrap_or(50);
-
-        for (index, oid_result) in revwalk.enumerate() {
-            if index < skip as usize {
-                continue;
-            }
-
-            if count >= max_count {
-                break;
-            }
-
-            let oid = oid_result.map_err(|e| GitError::CommandFailed(e.to_string()))?;
-
-            let commit = repo
-                .find_commit(oid)
+            let mut revwalk = repo
+                .revwalk()
                 .map_err(|e| GitError::CommandFailed(e.to_string()))?;
 
-            let author = commit.author();
-            let message = commit.message().unwrap_or("").to_string();
-
-            if let Some(author_filter) = &params.author {
-                if !author.name().unwrap_or("").contains(author_filter) {
-                    continue;
-                }
-            }
-
-            if let Some(grep_filter) = &params.grep {
-                if !message.contains(grep_filter) {
-                    continue;
-                }
-            }
-
-            let parents: Vec<String> = commit.parent_ids().map(|id| id.to_string()).collect();
-
-            let (additions, deletions, files_changed) = if params.stat.unwrap_or(false) {
-                Self::get_commit_stats(&repo, &commit).unwrap_or((None, None, None))
+            // Support commit range via since..until or since..HEAD semantics.
+            let has_range = params.since.is_some() || params.until.is_some();
+            if let Some(until_ref) = &params.until {
+                let until_oid = repo
+                    .revparse_single(until_ref)
+                    .map_err(|e| {
+                        GitError::CommandFailed(format!("Failed to resolve 'until' ref: {e}"))
+                    })?
+                    .id();
+                revwalk
+                    .push(until_oid)
+                    .map_err(|e| GitError::CommandFailed(e.to_string()))?;
             } else {
-                (None, None, None)
+                revwalk
+                    .push_head()
+                    .map_err(|e| GitError::CommandFailed(e.to_string()))?;
+            }
+
+            if let Some(since_ref) = &params.since {
+                let since_oid = repo
+                    .revparse_single(since_ref)
+                    .map_err(|e| {
+                        GitError::CommandFailed(format!("Failed to resolve 'since' ref: {e}"))
+                    })?
+                    .id();
+                revwalk
+                    .hide(since_oid)
+                    .map_err(|e| GitError::CommandFailed(e.to_string()))?;
+            }
+
+            // Safety valve: maximum revwalk steps for filtered queries.
+            const MAX_REVWALK_STEPS: usize = 500;
+            let has_filter = params.author.is_some() || params.grep.is_some();
+            let step_limit = if has_range || has_filter {
+                MAX_REVWALK_STEPS
+            } else {
+                usize::MAX
             };
 
-            commits.push(GitCommit {
-                hash: commit.id().to_string(),
-                short_hash: commit.id().to_string()[..7].to_string(),
-                message,
-                author: author.name().unwrap_or("Unknown").to_string(),
-                author_email: author.email().unwrap_or("").to_string(),
-                date: format_timestamp(commit.time().seconds()),
-                parents,
-                additions,
-                deletions,
-                files_changed,
-            });
+            let mut commits = Vec::new();
+            let mut count = 0;
+            let skip = params.skip.unwrap_or(0);
+            let max_count = params.max_count.unwrap_or(50);
+            let mut walk_steps = 0;
 
-            count += 1;
-        }
+            for oid_result in revwalk {
+                walk_steps += 1;
+                if walk_steps > step_limit {
+                    break;
+                }
+                if count < skip as usize {
+                    count += 1;
+                    continue;
+                }
 
-        Ok(commits)
+                if commits.len() >= max_count as usize {
+                    break;
+                }
+
+                let oid =
+                    oid_result.map_err(|e| GitError::CommandFailed(e.to_string()))?;
+
+                let commit = repo
+                    .find_commit(oid)
+                    .map_err(|e| GitError::CommandFailed(e.to_string()))?;
+
+                let author = commit.author();
+                let message = commit.message().unwrap_or("").to_string();
+
+                if let Some(author_filter) = &params.author {
+                    if !author.name().unwrap_or("").contains(author_filter) {
+                        count += 1;
+                        continue;
+                    }
+                }
+
+                if let Some(grep_filter) = &params.grep {
+                    if !message.contains(grep_filter) {
+                        count += 1;
+                        continue;
+                    }
+                }
+
+                let parents: Vec<String> =
+                    commit.parent_ids().map(|id| id.to_string()).collect();
+
+                let (additions, deletions, files_changed) = if params.stat.unwrap_or(false)
+                {
+                    GitService::get_commit_stats(&repo, &commit)
+                        .unwrap_or((None, None, None))
+                } else {
+                    (None, None, None)
+                };
+
+                commits.push(GitCommit {
+                    hash: commit.id().to_string(),
+                    short_hash: commit.id().to_string()[..7].to_string(),
+                    message,
+                    author: author.name().unwrap_or("Unknown").to_string(),
+                    author_email: author.email().unwrap_or("").to_string(),
+                    date: format_timestamp(commit.time().seconds()),
+                    parents,
+                    additions,
+                    deletions,
+                    files_changed,
+                });
+
+                count += 1;
+            }
+
+            Ok(commits)
+        })
+        .await
+        .map_err(|e| GitError::CommandFailed(format!("spawn_blocking join: {e}")))?
     }
 
     /// Adds files to the staging area.
@@ -863,9 +1009,31 @@ impl GitService {
         }
     }
 
-    /// Gets commit statistics.
-    fn get_commit_stats(_repo: &Repository, _commit: &Commit) -> Result<CommitStats, GitError> {
-        Ok((None, None, None))
+    /// Gets commit statistics via diff_tree_to_tree.
+    fn get_commit_stats(repo: &Repository, commit: &Commit) -> Result<CommitStats, GitError> {
+        let tree = commit
+            .tree()
+            .map_err(|e| GitError::CommandFailed(format!("Failed to get tree: {e}")))?;
+
+        let parent_tree = if commit.parent_count() > 0 {
+            commit.parent(0).ok().and_then(|p| p.tree().ok())
+        } else {
+            None
+        };
+
+        let diff = repo
+            .diff_tree_to_tree(parent_tree.as_ref(), Some(&tree), None)
+            .map_err(|e| GitError::CommandFailed(format!("Failed to diff: {e}")))?;
+
+        let stats = diff
+            .stats()
+            .map_err(|e| GitError::CommandFailed(format!("Failed to get diff stats: {e}")))?;
+
+        Ok((
+            Some(stats.insertions() as i32),
+            Some(stats.deletions() as i32),
+            Some(stats.files_changed() as i32),
+        ))
     }
 
     /// Gets Git commit graph data.
@@ -873,23 +1041,32 @@ impl GitService {
         path: P,
         max_count: Option<usize>,
     ) -> Result<GitGraph, GitError> {
-        let repo =
-            Repository::open(&path).map_err(|e| GitError::RepositoryNotFound(e.to_string()))?;
-
-        build_git_graph(&repo, max_count).map_err(|e| GitError::CommandFailed(e.to_string()))
+        let path_buf = path.as_ref().to_path_buf();
+        task::spawn_blocking(move || {
+            let repo = Repository::open(&path_buf)
+                .map_err(|e| GitError::RepositoryNotFound(e.to_string()))?;
+            build_git_graph(&repo, max_count)
+                .map_err(|e| GitError::CommandFailed(e.to_string()))
+        })
+        .await
+        .map_err(|e| GitError::CommandFailed(format!("spawn_blocking join: {e}")))?
     }
 
     /// Gets Git commit graph data for a specific branch.
     pub async fn get_git_graph_for_branch<P: AsRef<Path>>(
         path: P,
         max_count: Option<usize>,
-        branch_name: Option<&str>,
+        branch_name: Option<String>,
     ) -> Result<GitGraph, GitError> {
-        let repo =
-            Repository::open(&path).map_err(|e| GitError::RepositoryNotFound(e.to_string()))?;
-
-        build_git_graph_for_branch(&repo, max_count, branch_name)
-            .map_err(|e| GitError::CommandFailed(e.to_string()))
+        let path_buf = path.as_ref().to_path_buf();
+        task::spawn_blocking(move || {
+            let repo = Repository::open(&path_buf)
+                .map_err(|e| GitError::RepositoryNotFound(e.to_string()))?;
+            build_git_graph_for_branch(&repo, max_count, branch_name.as_deref())
+                .map_err(|e| GitError::CommandFailed(e.to_string()))
+        })
+        .await
+        .map_err(|e| GitError::CommandFailed(format!("spawn_blocking join: {e}")))?
     }
 
     /// Cherry-picks a commit onto the current branch.

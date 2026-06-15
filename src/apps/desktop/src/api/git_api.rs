@@ -1153,7 +1153,7 @@ pub async fn git_get_graph(
         return Err("Git graph is not supported for remote SSH workspaces yet".to_string());
     }
 
-    GitService::get_git_graph_for_branch(&repository_path, max_count, branch_name.as_deref())
+    GitService::get_git_graph_for_branch(&repository_path, max_count, branch_name)
         .await
         .map_err(|e| e.to_string())
 }

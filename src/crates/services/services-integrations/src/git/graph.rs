@@ -108,7 +108,7 @@ pub fn build_git_graph_for_branch(
     } else {
         for reference in repo.references()? {
             let reference = reference?;
-            if reference.is_branch() || reference.is_remote() || reference.is_tag() {
+            if reference.is_branch() || reference.is_remote() {
                 if let Some(oid) = reference.target() {
                     revwalk.push(oid)?;
                 }
@@ -117,7 +117,7 @@ pub fn build_git_graph_for_branch(
     }
 
     let mut commits: Vec<(Oid, Commit)> = Vec::new();
-    let max_count = max_count.unwrap_or(1000);
+    let max_count = max_count.unwrap_or(1000).min(500);
 
     for oid_result in revwalk.take(max_count) {
         let oid = oid_result?;

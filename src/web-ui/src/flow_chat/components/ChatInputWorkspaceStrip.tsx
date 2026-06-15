@@ -27,6 +27,8 @@ export interface ChatInputWorkspaceStripProps {
     goal: ThreadGoalSnapshot | null;
     onOpen: () => void;
   };
+  /** Keep the strip on cached Git state while historical content is still restoring. */
+  deferPassiveGitRefresh?: boolean;
 }
 
 export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = ({
@@ -34,6 +36,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
   workspaceLabel,
   usageReport,
   threadGoal,
+  deferPassiveGitRefresh = false,
 }) => {
   const { t } = useTranslation('flow-chat');
   const trimmedPath = repositoryPath.trim();
@@ -42,7 +45,10 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
   const { currentBranch, isRepository } = useGitState({
     repositoryPath: trimmedPath,
     layers: ['basic'],
-    isActive: true,
+    isActive: !deferPassiveGitRefresh,
+    refreshOnMount: !deferPassiveGitRefresh,
+    refreshOnActive: false,
+    debugSource: 'chat_input_workspace_strip',
   });
 
   const showUsage = usageReport?.visible && !!usageReport.onOpen;

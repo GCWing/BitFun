@@ -4,8 +4,10 @@ use crate::miniapp::bridge_builder::{
     build_bridge_script, build_csp_content, build_import_map, build_miniapp_default_theme_css,
     scroll_boundary_script,
 };
+use crate::miniapp::lifecycle::workspace_dir_string;
 use crate::miniapp::types::{MiniAppPermissions, MiniAppSource};
 use std::fmt;
+use std::path::Path;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MiniAppCompileError {
@@ -29,6 +31,30 @@ impl fmt::Display for MiniAppCompileError {
 impl std::error::Error for MiniAppCompileError {}
 
 pub type MiniAppCompileResult<T> = Result<T, MiniAppCompileError>;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MiniAppCompileRequest {
+    pub app_id: String,
+    pub app_data_dir: String,
+    pub workspace_dir: String,
+    pub theme: String,
+}
+
+impl MiniAppCompileRequest {
+    pub fn from_paths(
+        app_id: impl Into<String>,
+        app_data_dir: impl AsRef<Path>,
+        workspace_root: Option<&Path>,
+        theme: impl Into<String>,
+    ) -> Self {
+        Self {
+            app_id: app_id.into(),
+            app_data_dir: app_data_dir.as_ref().to_string_lossy().to_string(),
+            workspace_dir: workspace_dir_string(workspace_root),
+            theme: theme.into(),
+        }
+    }
+}
 
 /// Compile MiniApp source into full HTML with import map, runtime bridge, and CSP injected.
 pub fn compile(
@@ -94,6 +120,21 @@ pub fn compile(
     };
 
     Ok(html)
+}
+
+pub fn compile_with_request(
+    source: &MiniAppSource,
+    permissions: &MiniAppPermissions,
+    request: &MiniAppCompileRequest,
+) -> MiniAppCompileResult<String> {
+    compile(
+        source,
+        permissions,
+        &request.app_id,
+        &request.app_data_dir,
+        &request.workspace_dir,
+        &request.theme,
+    )
 }
 
 /// Place content just before </body>. If no </body> found, append before </html> or at end.
@@ -180,6 +221,8 @@ fn inject_into_head(html: &str, content: &str) -> MiniAppCompileResult<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::miniapp::types::{MiniAppPermissions, MiniAppSource};
+    use std::path::Path;
 
     #[test]
     fn inject_into_head_preserves_existing_head_content() {
@@ -190,5 +233,58 @@ mod tests {
 
         assert!(out.contains("<!-- injected -->"));
         assert!(out.contains("<meta charset"));
+    }
+
+    #[test]
+    fn compile_request_from_paths_preserves_runtime_paths() {
+        let app_data_dir = Path::new("miniapps").join("app-1");
+        let workspace_root = Path::new("workspace").join("project");
+
+        let request = MiniAppCompileRequest::from_paths(
+            "app-1",
+            &app_data_dir,
+            Some(&workspace_root),
+            "dark",
+        );
+
+        assert_eq!(request.app_id, "app-1");
+        assert_eq!(request.app_data_dir, app_data_dir.to_string_lossy());
+        assert_eq!(request.workspace_dir, workspace_root.to_string_lossy());
+        assert_eq!(request.theme, "dark");
+    }
+
+    #[test]
+    fn compile_with_request_preserves_legacy_compile_output() {
+        let source = MiniAppSource {
+            html: "<!DOCTYPE html><html><head></head><body><div id=\"app\"></div></body></html>"
+                .to_string(),
+            css: "#app { color: red; }".to_string(),
+            ui_js: "console.log('ready');".to_string(),
+            worker_js: String::new(),
+            esm_dependencies: Vec::new(),
+            npm_dependencies: Vec::new(),
+        };
+        let permissions = MiniAppPermissions::default();
+        let request = MiniAppCompileRequest {
+            app_id: "app-1".to_string(),
+            app_data_dir: "/tmp/miniapps/app-1".to_string(),
+            workspace_dir: "/tmp/workspace".to_string(),
+            theme: "dark".to_string(),
+        };
+
+        let legacy = compile(
+            &source,
+            &permissions,
+            &request.app_id,
+            &request.app_data_dir,
+            &request.workspace_dir,
+            &request.theme,
+        )
+        .unwrap();
+        let compiled = compile_with_request(&source, &permissions, &request).unwrap();
+
+        assert_eq!(compiled, legacy);
+        assert!(compiled.contains("data-theme-type=\"dark\""));
+        assert!(compiled.contains("console.log('ready');"));
     }
 }

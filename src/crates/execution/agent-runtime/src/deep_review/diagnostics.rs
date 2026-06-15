@@ -82,3 +82,105 @@ impl DeepReviewRuntimeDiagnostics {
         self.shared_context_duplicate_savings_candidate_count = duplicate_calls;
     }
 }
+
+fn map_log_value(map: &BTreeMap<String, usize>) -> String {
+    serde_json::to_string(map).unwrap_or_else(|_| "{}".to_string())
+}
+
+fn optional_usize_log_value(value: Option<usize>) -> String {
+    value
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| "none".to_string())
+}
+
+pub fn deep_review_runtime_diagnostics_log_line(
+    diagnostics: &DeepReviewRuntimeDiagnostics,
+) -> String {
+    format!(
+        "DeepReview runtime diagnostics: queue_wait_count={}, queue_wait_total_ms={}, queue_wait_max_ms={}, provider_capacity_queue_count={}, provider_capacity_retry_count={}, provider_capacity_retry_success_count={}, capacity_skip_count={}, provider_capacity_queue_reason_counts={}, provider_capacity_retry_reason_counts={}, provider_capacity_retry_success_reason_counts={}, capacity_skip_reason_counts={}, effective_parallel_min={}, effective_parallel_final={}, manual_queue_action_count={}, manual_retry_count={}, auto_retry_count={}, auto_retry_suppressed_reason_counts={}, shared_context_total_calls={}, shared_context_duplicate_calls={}, shared_context_duplicate_context_count={}, shared_context_duplicate_savings_candidate_count={}",
+        diagnostics.queue_wait_count,
+        diagnostics.queue_wait_total_ms,
+        diagnostics.queue_wait_max_ms,
+        diagnostics.provider_capacity_queue_count,
+        diagnostics.provider_capacity_retry_count,
+        diagnostics.provider_capacity_retry_success_count,
+        diagnostics.capacity_skip_count,
+        map_log_value(&diagnostics.provider_capacity_queue_reason_counts),
+        map_log_value(&diagnostics.provider_capacity_retry_reason_counts),
+        map_log_value(&diagnostics.provider_capacity_retry_success_reason_counts),
+        map_log_value(&diagnostics.capacity_skip_reason_counts),
+        optional_usize_log_value(diagnostics.effective_parallel_min),
+        optional_usize_log_value(diagnostics.effective_parallel_final),
+        diagnostics.manual_queue_action_count,
+        diagnostics.manual_retry_count,
+        diagnostics.auto_retry_count,
+        map_log_value(&diagnostics.auto_retry_suppressed_reason_counts),
+        diagnostics.shared_context_total_calls,
+        diagnostics.shared_context_duplicate_calls,
+        diagnostics.shared_context_duplicate_context_count,
+        diagnostics.shared_context_duplicate_savings_candidate_count
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn diagnostics_log_line_preserves_field_names_and_serialized_counts() {
+        let diagnostics = DeepReviewRuntimeDiagnostics {
+            queue_wait_count: 2,
+            queue_wait_total_ms: 120,
+            queue_wait_max_ms: 90,
+            provider_capacity_queue_count: 1,
+            provider_capacity_retry_count: 3,
+            provider_capacity_retry_success_count: 1,
+            capacity_skip_count: 4,
+            provider_capacity_queue_reason_counts: BTreeMap::from([(
+                "provider_rate_limit".to_string(),
+                1,
+            )]),
+            provider_capacity_retry_reason_counts: BTreeMap::from([(
+                "temporary_overload".to_string(),
+                3,
+            )]),
+            provider_capacity_retry_success_reason_counts: BTreeMap::from([(
+                "temporary_overload".to_string(),
+                1,
+            )]),
+            capacity_skip_reason_counts: BTreeMap::from([("local_concurrency_cap".to_string(), 4)]),
+            effective_parallel_min: Some(1),
+            effective_parallel_final: Some(2),
+            manual_queue_action_count: 5,
+            manual_retry_count: 6,
+            auto_retry_count: 7,
+            auto_retry_suppressed_reason_counts: BTreeMap::from([(
+                "budget_exhausted".to_string(),
+                2,
+            )]),
+            shared_context_total_calls: 8,
+            shared_context_duplicate_calls: 9,
+            shared_context_duplicate_context_count: 10,
+            shared_context_duplicate_savings_candidate_count: 11,
+        };
+
+        let line = deep_review_runtime_diagnostics_log_line(&diagnostics);
+
+        assert!(line.starts_with("DeepReview runtime diagnostics: queue_wait_count=2"));
+        assert!(line.contains("provider_capacity_queue_reason_counts={\"provider_rate_limit\":1}"));
+        assert!(line.contains("capacity_skip_reason_counts={\"local_concurrency_cap\":4}"));
+        assert!(line.contains("effective_parallel_min=1"));
+        assert!(line.contains("effective_parallel_final=2"));
+        assert!(line.contains("shared_context_duplicate_savings_candidate_count=11"));
+    }
+
+    #[test]
+    fn diagnostics_log_line_uses_none_for_missing_effective_parallel() {
+        let diagnostics = DeepReviewRuntimeDiagnostics::default();
+
+        let line = deep_review_runtime_diagnostics_log_line(&diagnostics);
+
+        assert!(line.contains("effective_parallel_min=none"));
+        assert!(line.contains("effective_parallel_final=none"));
+    }
+}

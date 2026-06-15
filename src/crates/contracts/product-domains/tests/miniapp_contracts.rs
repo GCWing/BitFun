@@ -43,8 +43,9 @@ use bitfun_product_domains::miniapp::lifecycle::{
 };
 use bitfun_product_domains::miniapp::permission_policy::resolve_policy;
 use bitfun_product_domains::miniapp::ports::{
-    MiniAppInstallDepsRequest, MiniAppPortError, MiniAppPortErrorKind, MiniAppPortFuture,
-    MiniAppRuntimeFacade, MiniAppRuntimePort, MiniAppStoragePort,
+    MiniAppCompilePort, MiniAppImportFromPathRequest, MiniAppImportPort, MiniAppInstallDepsRequest,
+    MiniAppPortError, MiniAppPortErrorKind, MiniAppPortFuture, MiniAppRuntimeFacade,
+    MiniAppRuntimePort, MiniAppStoragePort,
 };
 use bitfun_product_domains::miniapp::runtime::{
     candidate_dirs, candidate_executable_path, detect_runtime, runtime_lookup_order,
@@ -52,15 +53,15 @@ use bitfun_product_domains::miniapp::runtime::{
 };
 use bitfun_product_domains::miniapp::storage::{
     build_import_bundle_plan, build_import_fallbacks, build_package_json, parse_npm_dependencies,
-    MiniAppImportBundlePlanError, MiniAppImportLayout, MiniAppStorageLayout, COMPILED_HTML,
-    CUSTOMIZATION_JSON, DRAFTS_CLEANUP_MARKER, DRAFTS_CLEANUP_PREFIX, DRAFTS_DIR, DRAFT_JSON,
-    EMPTY_ESM_DEPENDENCIES_JSON, EMPTY_STORAGE_JSON, ESM_DEPS_JSON, INDEX_HTML, META_JSON,
-    PACKAGE_JSON, PLACEHOLDER_COMPILED_HTML, REQUIRED_SOURCE_FILES, SOURCE_DIR, STORAGE_JSON,
-    STYLE_CSS, UI_JS, VERSIONS_DIR, WORKER_JS,
+    MiniAppImportBundlePlanError, MiniAppImportBundleWriteRequest, MiniAppImportLayout,
+    MiniAppStorageLayout, COMPILED_HTML, CUSTOMIZATION_JSON, DRAFTS_CLEANUP_MARKER,
+    DRAFTS_CLEANUP_PREFIX, DRAFTS_DIR, DRAFT_JSON, EMPTY_ESM_DEPENDENCIES_JSON, EMPTY_STORAGE_JSON,
+    ESM_DEPS_JSON, INDEX_HTML, META_JSON, PACKAGE_JSON, PLACEHOLDER_COMPILED_HTML,
+    REQUIRED_SOURCE_FILES, SOURCE_DIR, STORAGE_JSON, STYLE_CSS, UI_JS, VERSIONS_DIR, WORKER_JS,
 };
 use bitfun_product_domains::miniapp::types::{
-    FsPermissions, MiniApp, MiniAppAiContext, MiniAppI18n, MiniAppPermissions, MiniAppRuntimeState,
-    MiniAppSource, NetPermissions, NotificationPermissions, NpmDep,
+    FsPermissions, MiniApp, MiniAppAiContext, MiniAppI18n, MiniAppMeta, MiniAppPermissions,
+    MiniAppRuntimeState, MiniAppSource, NetPermissions, NotificationPermissions, NpmDep,
 };
 use bitfun_product_domains::miniapp::worker::{
     install_command_for_runtime, plan_install_deps, select_lru_worker, worker_idle_timeout_ms,
@@ -93,6 +94,108 @@ impl MiniAppRuntimePort for RuntimePortStub {
                 stdout: String::new(),
                 stderr: String::new(),
             })
+        })
+    }
+}
+
+#[derive(Clone)]
+struct ImportPortStub {
+    storage: StoragePortStub,
+    meta_json: String,
+    writes: Arc<Mutex<Vec<MiniAppImportBundleWriteRequest>>>,
+}
+
+impl ImportPortStub {
+    fn new(storage: StoragePortStub, meta_json: String) -> Self {
+        Self {
+            storage,
+            meta_json,
+            writes: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    fn writes(&self) -> Vec<MiniAppImportBundleWriteRequest> {
+        self.writes.lock().unwrap().clone()
+    }
+}
+
+impl MiniAppImportPort for ImportPortStub {
+    fn read_import_meta_json(&self, _source_path: PathBuf) -> MiniAppPortFuture<'_, String> {
+        let meta_json = self.meta_json.clone();
+        Box::pin(async move { Ok(meta_json) })
+    }
+
+    fn write_import_bundle(
+        &self,
+        request: MiniAppImportBundleWriteRequest,
+    ) -> MiniAppPortFuture<'_, ()> {
+        let storage = self.storage.clone();
+        let writes = self.writes.clone();
+        Box::pin(async move {
+            let meta: MiniAppMeta = serde_json::from_str(&request.meta_json).map_err(|error| {
+                MiniAppPortError::new(
+                    MiniAppPortErrorKind::Deserialization,
+                    format!("Invalid meta.json: {error}"),
+                )
+            })?;
+            let mut app = sample_miniapp_for_lifecycle(MiniAppSource {
+                html: "<html><body>imported</body></html>".to_string(),
+                ..MiniAppSource::default()
+            });
+            app.id = request.app_id.clone();
+            app.name = meta.name;
+            app.description = meta.description;
+            app.icon = meta.icon;
+            app.category = meta.category;
+            app.tags = meta.tags;
+            app.compiled_html = request.compiled_html.clone();
+            app.updated_at = meta.updated_at;
+            app.created_at = meta.created_at;
+            storage.state.lock().unwrap().current = app;
+            writes.lock().unwrap().push(request);
+            Ok(())
+        })
+    }
+}
+
+struct CompilePortStub {
+    calls: Arc<Mutex<Vec<String>>>,
+}
+
+impl CompilePortStub {
+    fn new() -> Self {
+        Self {
+            calls: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    fn calls(&self) -> Vec<String> {
+        self.calls.lock().unwrap().clone()
+    }
+}
+
+impl MiniAppCompilePort for CompilePortStub {
+    fn compile_app(
+        &self,
+        app_id: String,
+        source: MiniAppSource,
+        _permissions: MiniAppPermissions,
+        theme: String,
+        workspace_root: Option<PathBuf>,
+    ) -> MiniAppPortFuture<'_, String> {
+        let calls = self.calls.clone();
+        Box::pin(async move {
+            calls.lock().unwrap().push(format!(
+                "{}|{}|{}|{}",
+                app_id,
+                source.html,
+                theme,
+                workspace_root
+                    .as_deref()
+                    .map(Path::to_string_lossy)
+                    .unwrap_or_else(|| "".into())
+            ));
+            Ok(format!("<html>{app_id}:{theme}</html>"))
         })
     }
 }
@@ -435,6 +538,14 @@ fn miniapp_bridge_exposes_host_notification_namespace() {
     assert!(bridge.contains("notifications.system"));
     assert!(bridge.contains("system:"));
     assert!(bridge.contains("system.openExternal"));
+}
+
+#[test]
+fn miniapp_bridge_exposes_deck_render_page_namespace() {
+    let bridge = build_bridge_script("app-1", "/tmp/app", "/tmp/workspace", "dark", "win32");
+
+    assert!(bridge.contains("deck:"));
+    assert!(bridge.contains("deck.renderPage"));
 }
 
 #[test]
@@ -1769,6 +1880,66 @@ fn miniapp_runtime_facade_owns_manager_create_update_draft_and_apply_workflows()
         storage.deleted_drafts(),
         vec![("created".to_string(), "draft-1".to_string())]
     );
+}
+
+#[test]
+fn miniapp_runtime_facade_owns_import_bundle_recompile_and_runtime_state_workflow() {
+    let storage = StoragePortStub::new(sample_miniapp_for_lifecycle(MiniAppSource::default()));
+    let import_port = ImportPortStub::new(
+        storage.clone(),
+        serde_json::json!({
+            "id": "legacy-id",
+            "name": "Imported",
+            "description": "Imported app",
+            "icon": "box",
+            "category": "utility",
+            "tags": ["imported"],
+            "version": 99,
+            "created_at": 1,
+            "updated_at": 2,
+            "permissions": {}
+        })
+        .to_string(),
+    );
+    let compile_port = CompilePortStub::new();
+    let facade = MiniAppRuntimeFacade::new(&storage);
+
+    let imported = block_on(facade.import_from_path(
+        &import_port,
+        &compile_port,
+        MiniAppImportFromPathRequest {
+            source_path: PathBuf::from("fixtures/imported"),
+            app_id: "imported-id".to_string(),
+            theme: "dark".to_string(),
+            workspace_root: Some(PathBuf::from("workspace/project")),
+            imported_at: 5000,
+            recompiled_at: 6000,
+        },
+    ))
+    .unwrap();
+
+    assert_eq!(imported.id, "imported-id");
+    assert_eq!(imported.name, "Imported");
+    assert_eq!(imported.compiled_html, "<html>imported-id:dark</html>");
+    assert_eq!(
+        imported.runtime.source_revision,
+        build_source_revision(imported.version, imported.updated_at)
+    );
+    assert!(!imported.runtime.ui_recompile_required);
+    assert_eq!(imported.updated_at, 6000);
+    assert_eq!(storage.save_count(), 2);
+    assert_eq!(compile_port.calls().len(), 1);
+    assert!(compile_port.calls()[0]
+        .contains("imported-id|<html><body>imported</body></html>|dark|workspace/project"));
+
+    let writes = import_port.writes();
+    assert_eq!(writes.len(), 1);
+    assert_eq!(writes[0].source_path, PathBuf::from("fixtures/imported"));
+    assert_eq!(writes[0].app_id, "imported-id");
+    let written_meta: serde_json::Value = serde_json::from_str(&writes[0].meta_json).unwrap();
+    assert_eq!(written_meta["id"], "imported-id");
+    assert_eq!(written_meta["updated_at"], 5000);
+    assert_eq!(writes[0].compiled_html, PLACEHOLDER_COMPILED_HTML);
 }
 
 #[test]

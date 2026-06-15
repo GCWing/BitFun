@@ -125,10 +125,10 @@
 
 .branch-select-dialog__error {
   padding: 8px 12px;
-  background: rgba(244, 67, 54, 0.08);
-  border: 1px solid rgba(244, 67, 54, 0.2);
+  background: var(--color-error-bg, rgba(239, 68, 68, 0.08));
+  border: 1px solid var(--color-error-border, rgba(239, 68, 68, 0.2));
   border-radius: 6px;
-  color: #f44336;
+  color: var(--color-error, #ef4444);
   font-size: 12px;
 }
 
@@ -261,7 +261,7 @@
 
   &--worktree {
     color: var(--color-warning);
-    background: rgba(255, 152, 0, 0.1);
+    background: var(--color-warning-bg, rgba(245, 158, 11, 0.1));
   }
 }
 

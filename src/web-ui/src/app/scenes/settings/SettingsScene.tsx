@@ -9,21 +9,38 @@
 import React, { lazy, Suspense, useEffect } from 'react';
 import { useSettingsStore } from './settingsStore';
 import './SettingsScene.scss';
-import AIModelConfig from '../../../infrastructure/config/components/AIModelConfig';
-import {
-  SessionPersonalizationConfig,
-  SessionPermissionsConfig,
-} from '../../../infrastructure/config/components/SessionConfig';
-import McpToolsConfig from '../../../infrastructure/config/components/McpToolsConfig';
-import AcpAgentsConfig from '../../../infrastructure/config/components/AcpAgentsConfig';
-import EditorConfig from '../../../infrastructure/config/components/EditorConfig';
-import BasicsConfig from '../../../infrastructure/config/components/BasicsConfig';
-import AppearanceConfig from '../../../infrastructure/config/components/AppearanceConfig';
-import ReviewConfig from '../../../infrastructure/config/components/ReviewConfig';
-import QuickActionsConfig from '../../../infrastructure/config/components/QuickActionsConfig';
-import ArchivedSessionsConfig from './components/ArchivedSessionsConfig';
 
+const AIModelConfig = lazy(() => import('../../../infrastructure/config/components/AIModelConfig'));
+const McpToolsConfig = lazy(() => import('../../../infrastructure/config/components/McpToolsConfig'));
+const AcpAgentsConfig = lazy(() => import('../../../infrastructure/config/components/AcpAgentsConfig'));
+const EditorConfig = lazy(() => import('../../../infrastructure/config/components/EditorConfig'));
+const BasicsConfig = lazy(() => import('../../../infrastructure/config/components/BasicsConfig'));
+const AppearanceConfig = lazy(() => import('../../../infrastructure/config/components/AppearanceConfig'));
+const ReviewConfig = lazy(() => import('../../../infrastructure/config/components/ReviewConfig'));
+const QuickActionsConfig = lazy(() => import('../../../infrastructure/config/components/QuickActionsConfig'));
+const ArchivedSessionsConfig = lazy(() => import('./components/ArchivedSessionsConfig'));
 const KeyboardShortcutsTab = lazy(() => import('./components/KeyboardShortcutsTab'));
+const SessionPersonalizationConfig = lazy(() =>
+  import('../../../infrastructure/config/components/SessionConfig').then((module) => ({
+    default: module.SessionPersonalizationConfig,
+  }))
+);
+const SessionPermissionsConfig = lazy(() =>
+  import('../../../infrastructure/config/components/SessionConfig').then((module) => ({
+    default: module.SessionPermissionsConfig,
+  }))
+);
+
+function SettingsSceneLoading() {
+  return (
+    <div className="bitfun-settings-scene__loading" aria-busy="true" aria-hidden="true">
+      <div className="bitfun-settings-scene__loading-line bitfun-settings-scene__loading-line--title" />
+      <div className="bitfun-settings-scene__loading-line" />
+      <div className="bitfun-settings-scene__loading-line" />
+      <div className="bitfun-settings-scene__loading-block" />
+    </div>
+  );
+}
 
 const SettingsScene: React.FC = () => {
   const activeTab = useSettingsStore(s => s.activeTab);
@@ -39,18 +56,6 @@ const SettingsScene: React.FC = () => {
     }
   }, [activeTab, setActiveTab]);
 
-  if (resolvedTab === 'keyboard') {
-    return (
-      <div className="bitfun-settings-scene">
-        <div key="keyboard" className="bitfun-settings-scene__content-wrapper">
-          <Suspense fallback={null}>
-            <KeyboardShortcutsTab />
-          </Suspense>
-        </div>
-      </div>
-    );
-  }
-
   let Content: React.ComponentType | null = null;
 
   switch (resolvedTab) {
@@ -65,13 +70,16 @@ const SettingsScene: React.FC = () => {
     case 'mcp-tools':        Content = McpToolsConfig;      break;
     case 'acp-agents':       Content = AcpAgentsConfig;     break;
     case 'editor':           Content = EditorConfig;         break;
+    case 'keyboard':         Content = KeyboardShortcutsTab; break;
   }
 
   return (
     <div className="bitfun-settings-scene">
       {Content && (
         <div key={resolvedTab} className="bitfun-settings-scene__content-wrapper">
-          <Content />
+          <Suspense fallback={<SettingsSceneLoading />}>
+            <Content />
+          </Suspense>
         </div>
       )}
     </div>

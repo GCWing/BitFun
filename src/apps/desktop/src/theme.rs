@@ -1,7 +1,9 @@
 //! Theme System
 
 use std::sync::{OnceLock, RwLock};
-use std::time::{Duration, Instant};
+#[cfg(target_os = "windows")]
+use std::time::Duration;
+use std::time::Instant;
 
 use bitfun_core::infrastructure::try_get_path_manager_arc;
 use bitfun_core::service::config::types::GlobalConfig;

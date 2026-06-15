@@ -117,7 +117,7 @@
     }
 
     &--action {
-      border-left-color: var(--color-danger, #ef4444);
+      border-left-color: var(--color-error, #ef4444);
     }
   }
 
@@ -558,7 +558,7 @@
     }
 
     &.severity-high {
-      border-left: 3px solid var(--color-warning, #f97316);
+      border-left: 3px solid var(--color-warning, #f59e0b);
     }
 
     &.severity-medium {
@@ -566,7 +566,7 @@
     }
 
     &.severity-low {
-      border-left: 3px solid var(--color-info, #22c55e);
+      border-left: 3px solid var(--color-info, #a1a1aa);
     }
 
     &.severity-info {
@@ -667,7 +667,7 @@
 
     .suggestion-label {
       font-weight: 600;
-      color: var(--color-success, #16a34a);
+      color: var(--color-success, #34d399);
       flex-shrink: 0;
       font-size: var(--flowchat-font-size-xs);
     }
@@ -783,7 +783,7 @@
         }
 
         &.severity-high {
-          border-left: 3px solid var(--color-warning, #f97316);
+          border-left: 3px solid var(--color-warning, #f59e0b);
         }
 
         &.severity-medium {
@@ -791,7 +791,7 @@
         }
 
         &.severity-low {
-          border-left: 3px solid var(--color-info, #22c55e);
+          border-left: 3px solid var(--color-info, #a1a1aa);
         }
 
         &.severity-info {
@@ -891,7 +891,7 @@
 
           .suggestion-label {
             font-weight: 600;
-            color: var(--color-success, #16a34a);
+            color: var(--color-success, #34d399);
             flex-shrink: 0;
             font-size: var(--flowchat-font-size-xs);
           }
@@ -1091,11 +1091,11 @@
     .remediation-item__suggestion {
       display: flex;
       gap: 6px;
-      background: color-mix(in srgb, var(--color-success, #22c55e) 8%, transparent);
-      border: 1px solid color-mix(in srgb, var(--color-success, #22c55e) 16%, transparent);
+      background: color-mix(in srgb, var(--color-success, #34d399) 8%, transparent);
+      border: 1px solid color-mix(in srgb, var(--color-success, #34d399) 16%, transparent);
 
       span {
-        color: var(--color-success, #16a34a);
+        color: var(--color-success, #34d399);
         font-weight: 650;
         flex-shrink: 0;
       }
@@ -1160,7 +1160,7 @@
     .positive-header {
       font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
       font-weight: 600;
-      color: var(--color-success, #22c55e);
+      color: var(--color-success, #34d399);
       margin-bottom: 8px;
       padding-bottom: 6px;
       border-bottom: 1px dashed var(--border-base);

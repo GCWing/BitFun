@@ -9,13 +9,10 @@ use crate::agentic::tools::tool_context_runtime::ToolUseContext;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use bitfun_agent_tools::{
+    build_get_tool_spec_catalog_description, build_get_tool_spec_description,
     GetToolSpecCollapsedToolSummary, GetToolSpecExecutionError, GET_TOOL_SPEC_TOOL_NAME,
 };
 use serde_json::Value;
-
-const GET_TOOL_SPEC_DESCRIPTION: &str = r#"Read full schema before first calling a collapsed tool.
-
-Do not call GetToolSpec again for a tool whose definition is already loaded in the current conversation."#;
 
 pub struct GetToolSpecTool;
 
@@ -27,20 +24,7 @@ impl GetToolSpecTool {
     pub(crate) fn build_collapsed_tools_context_section(
         collapsed_tools: &[GetToolSpecCollapsedToolSummary],
     ) -> Option<String> {
-        if collapsed_tools.is_empty() {
-            return None;
-        }
-
-        let collapsed_tools_list = collapsed_tools
-            .iter()
-            .map(|tool| format!("- {}", tool.name))
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        Some(format!(
-            "<collapsed_tools>\n{}\n</collapsed_tools>",
-            collapsed_tools_list
-        ))
+        build_get_tool_spec_catalog_description(collapsed_tools)
     }
 }
 
@@ -62,7 +46,7 @@ impl Tool for GetToolSpecTool {
     }
 
     async fn description(&self) -> BitFunResult<String> {
-        Ok(GET_TOOL_SPEC_DESCRIPTION.to_string())
+        Ok(build_get_tool_spec_description())
     }
 
     fn short_description(&self) -> String {
@@ -73,7 +57,7 @@ impl Tool for GetToolSpecTool {
         &self,
         _context: Option<&ToolUseContext>,
     ) -> BitFunResult<String> {
-        Ok(GET_TOOL_SPEC_DESCRIPTION.to_string())
+        Ok(build_get_tool_spec_description())
     }
 
     fn input_schema(&self) -> Value {

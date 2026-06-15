@@ -152,7 +152,7 @@ describe('DeepReviewService slash command', () => {
       'D:\\workspace\\repo',
     );
 
-    expect(mockGitGetStatus).toHaveBeenCalledWith('D:\\workspace\\repo');
+    expect(mockGitGetStatus).toHaveBeenCalledWith('D:\\workspace\\repo', 'deep_review_target_resolver');
     expect(buildEffectiveReviewTeamManifest).toHaveBeenLastCalledWith(
       expect.anything(),
       expect.objectContaining({

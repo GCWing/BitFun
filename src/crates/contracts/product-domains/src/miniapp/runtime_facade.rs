@@ -21,7 +21,11 @@ use crate::miniapp::lifecycle::{
     MiniAppCreateInput, MiniAppUpdatePatch,
 };
 use crate::miniapp::ports::{
-    MiniAppPortError, MiniAppPortErrorKind, MiniAppPortResult, MiniAppStoragePort,
+    MiniAppCompilePort, MiniAppImportFromPathRequest, MiniAppImportPort, MiniAppPortError,
+    MiniAppPortErrorKind, MiniAppPortResult, MiniAppStoragePort,
+};
+use crate::miniapp::storage::{
+    build_import_bundle_plan, MiniAppImportBundlePlanError, MiniAppImportBundleWriteRequest,
 };
 use crate::miniapp::types::{MiniApp, MiniAppMeta, MiniAppSource};
 
@@ -360,6 +364,45 @@ impl<'a> MiniAppRuntimeFacade<'a> {
         Ok(app)
     }
 
+    pub async fn import_from_path(
+        &self,
+        import_port: &dyn MiniAppImportPort,
+        compile_port: &dyn MiniAppCompilePort,
+        request: MiniAppImportFromPathRequest,
+    ) -> MiniAppPortResult<MiniApp> {
+        let meta_content = import_port
+            .read_import_meta_json(request.source_path.clone())
+            .await?;
+        let plan = build_import_bundle_plan(&request.app_id, &meta_content, request.imported_at)
+            .map_err(map_import_bundle_plan_error)?;
+        import_port
+            .write_import_bundle(MiniAppImportBundleWriteRequest {
+                source_path: request.source_path,
+                app_id: request.app_id.clone(),
+                meta_json: plan.meta_json,
+                esm_dependencies_json: plan.esm_dependencies_json,
+                package_json: plan.package_json,
+                storage_json: plan.storage_json,
+                compiled_html: plan.compiled_html,
+            })
+            .await?;
+
+        let app = self.storage.load(request.app_id.clone()).await?;
+        let compiled_html = compile_port
+            .compile_app(
+                app.id.clone(),
+                app.source.clone(),
+                app.permissions.clone(),
+                request.theme,
+                request.workspace_root,
+            )
+            .await?;
+        let app = self
+            .persist_recompile_result_for_app(app, compiled_html, request.recompiled_at)
+            .await?;
+        self.persist_import_runtime_state(app).await
+    }
+
     async fn load_draft_manifest(
         &self,
         app_id: String,
@@ -438,6 +481,19 @@ impl<'a> MiniAppRuntimeFacade<'a> {
             source_hash,
             local_snapshot,
         ))
+    }
+}
+
+fn map_import_bundle_plan_error(error: MiniAppImportBundlePlanError) -> MiniAppPortError {
+    match error {
+        MiniAppImportBundlePlanError::InvalidMeta(source) => MiniAppPortError::new(
+            MiniAppPortErrorKind::Deserialization,
+            format!("Invalid meta.json: {source}"),
+        ),
+        MiniAppImportBundlePlanError::MetaSerialization(source)
+        | MiniAppImportBundlePlanError::PackageSerialization(source) => {
+            MiniAppPortError::new(MiniAppPortErrorKind::Deserialization, source.to_string())
+        }
     }
 }
 

@@ -28,10 +28,16 @@ export interface AppConfig {
 }
 
 export type BackendLogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'off';
+export type ModelExchangeTracingMode = 'off' | 'full' | 'usage_only';
+
+export interface ModelExchangeTracingConfig {
+  mode: ModelExchangeTracingMode;
+}
 
 export interface AppLoggingConfig {
   level: BackendLogLevel;
   include_sensitive_diagnostics: boolean;
+  model_exchange_tracing: ModelExchangeTracingConfig;
 }
 
 // Reserved; legacy `default_mode` in saved JSON is ignored by the app.
@@ -474,6 +480,7 @@ export interface WorkspaceConfig {
 
 export interface IConfigManager {
   getConfig<T = any>(path?: string): Promise<T>;
+  getConfigs(paths: string[]): Promise<Record<string, unknown>>;
   setConfig<T = any>(path: string, value: T): Promise<void>;
   resetConfig(path?: string): Promise<void>;
   validateConfig(): Promise<ConfigValidationResult>;

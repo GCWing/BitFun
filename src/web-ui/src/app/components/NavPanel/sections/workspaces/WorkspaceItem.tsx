@@ -1,6 +1,6 @@
-import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { Folder, FolderOpen, MoreHorizontal, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw, Copy, FileText, GitBranch, Bot, Link2, Archive, Loader2, Clock3 } from 'lucide-react';
+import { Folder, FolderOpen, MoreHorizontal, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw, Copy, FileText, GitBranch, Bot, Link2, ListChecks, Loader2, Clock3 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { DotMatrixArrowRightIcon } from './DotMatrixArrowRightIcon';
 import { Button, ConfirmDialog, Modal, Tooltip } from '@/component-library';
@@ -14,11 +14,16 @@ import {
 import { useNavSceneStore } from '@/app/stores/navSceneStore';
 import { useApp } from '@/app/hooks/useApp';
 import { useGitBasicInfo } from '@/tools/git/hooks/useGitState';
+import { gitStateManager } from '@/tools/git/state/GitStateManager';
 import { workspaceAPI } from '@/infrastructure/api';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import { notificationService } from '@/shared/notification-system';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
 import { openMainSession } from '@/flow_chat/services/openBtwSession';
+import {
+  getHistorySessionOpenTransitionSnapshot,
+  subscribeHistorySessionOpenTransition,
+} from '@/flow_chat/services/sessionOpenIntent';
 import { findReusableEmptySessionId } from '@/app/utils/projectSessionWorkspace';
 import type { AcpClientInfo } from '@/infrastructure/api/service-api/ACPClientAPI';
 import { loadWorkspaceAcpMenuClients } from './workspaceAcpMenuClients';
@@ -33,13 +38,17 @@ import {
 import { SSHContext } from '@/features/ssh-remote/SSHRemoteContext';
 import { useWorkspaceSearchIndex } from '@/tools/file-explorer';
 import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
-import WorkspaceRelatedPathsDialog from './WorkspaceRelatedPathsDialog';
-import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
-import { confirmWarning } from '@/component-library/components/ConfirmDialog/confirmService';
 import { scheduleAfterStartupSignal } from '@/shared/utils/startupTaskScheduling';
-import { getWorkspaceGitBasicInfoOptions } from './workspaceGitRefreshOptions';
-import ScheduledJobsModal from '@/app/components/scheduled-jobs/ScheduledJobsModal';
+import {
+  getWorkspaceGitBasicInfoOptions,
+  suppressWorkspaceGitRefreshOnMountDuringSessionTransition,
+  WORKSPACE_GIT_PENDING_CANCEL_REASONS,
+  WORKSPACE_GIT_PENDING_CANCEL_SOURCES,
+} from './workspaceGitRefreshOptions';
 
+const WorkspaceRelatedPathsDialog = lazy(() => import('./WorkspaceRelatedPathsDialog'));
+const WorkspaceSessionBatchModal = lazy(() => import('./WorkspaceSessionBatchModal'));
+const ScheduledJobsModal = lazy(() => import('@/app/components/scheduled-jobs/ScheduledJobsModal'));
 
 interface WorkspaceItemProps {
   workspace: WorkspaceInfo;
@@ -78,6 +87,15 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   } = useWorkspaceContext();
   const { switchLeftPanelTab } = useApp();
   const openNavScene = useNavSceneStore(s => s.openNavScene);
+  const historySessionOpenTransition = useSyncExternalStore(
+    subscribeHistorySessionOpenTransition,
+    getHistorySessionOpenTransitionSnapshot,
+    getHistorySessionOpenTransitionSnapshot
+  );
+  const gitBasicInfoOptions = suppressWorkspaceGitRefreshOnMountDuringSessionTransition(
+    getWorkspaceGitBasicInfoOptions(workspace, isActive),
+    historySessionOpenTransition !== null
+  );
   const {
     isRepository,
     isLoading: isGitBasicInfoLoading,
@@ -85,7 +103,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     refreshBasic: refreshGitBasicInfo,
   } = useGitBasicInfo(
     workspace.rootPath,
-    getWorkspaceGitBasicInfoOptions(workspace, isActive)
+    gitBasicInfoOptions
   );
   const [menuOpen, setMenuOpen] = useState(false);
   const [worktreeModalOpen, setWorktreeModalOpen] = useState(false);
@@ -99,6 +117,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   const [sessionsCollapsed, setSessionsCollapsed] = useState(false);
   const [searchIndexModalOpen, setSearchIndexModalOpen] = useState(false);
   const [scheduledJobsModalOpen, setScheduledJobsModalOpen] = useState(false);
+  const [sessionBatchModalOpen, setSessionBatchModalOpen] = useState(false);
   const [workspaceSearchEnabled, setWorkspaceSearchEnabled] = useState(
     () => aiExperienceConfigService.getSettings().enable_workspace_search,
   );
@@ -121,6 +140,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
       : workspace.name;
   const isLinkedWorktree = isLinkedWorktreeWorkspace(workspace);
   const relatedPathCount = workspace.relatedPaths?.length ?? 0;
+  const workspaceIsRemote = isRemoteWorkspace(workspace);
   const canShowSearchIndex =
     isActive
     && workspaceSearchEnabled
@@ -130,7 +150,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     );
   const shouldRefreshGitBasicInfoOnMenuOpen =
     !isActive &&
-    !isRemoteWorkspace(workspace) &&
+    !workspaceIsRemote &&
     !gitBasicInfoState &&
     !isGitBasicInfoLoading;
   const isWorktreeActionDisabled = isGitBasicInfoLoading || !isRepository;
@@ -138,6 +158,31 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     workspacePath: canShowSearchIndex ? workspace.rootPath : undefined,
     enabled: canShowSearchIndex,
   });
+
+  useEffect(() => {
+    if (!isActive || workspaceIsRemote) {
+      return;
+    }
+
+    const cancelPendingAutoGitRefresh = () => {
+      if (getHistorySessionOpenTransitionSnapshot() === null) {
+        return;
+      }
+
+      for (const reason of WORKSPACE_GIT_PENDING_CANCEL_REASONS) {
+        for (const source of WORKSPACE_GIT_PENDING_CANCEL_SOURCES) {
+          gitStateManager.cancelPendingRefresh(workspace.rootPath, {
+            layers: ['basic'],
+            reason,
+            source,
+          });
+        }
+      }
+    };
+
+    cancelPendingAutoGitRefresh();
+    return subscribeHistorySessionOpenTransition(cancelPendingAutoGitRefresh);
+  }, [isActive, workspace.rootPath, workspaceIsRemote]);
 
   useEffect(() => {
     let cancelled = false;
@@ -430,36 +475,10 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     }
   }, [closeWorkspaceById, t, workspace.id]);
 
-  const handleArchiveAllSessions = useCallback(async () => {
+  const handleOpenSessionBatchModal = useCallback(() => {
     setMenuOpen(false);
-    const confirmed = await confirmWarning(
-      t('nav.sessions.archiveAllConfirmTitle'),
-      t('nav.sessions.archiveAllConfirmMessage')
-    );
-    if (!confirmed) return;
-    try {
-      const remoteWorkspace = isRemoteWorkspace(workspace);
-      await sessionAPI.archiveAllSessions(
-        workspace.rootPath,
-        remoteWorkspace ? workspace.connectionId : undefined,
-        remoteWorkspace ? workspace.sshHost : undefined
-      );
-      // Remove all workspace sessions from in-memory state (disk files preserved as archived)
-      flowChatManager.discardLocalSessionsForWorkspace({
-        id: workspace.id,
-        rootPath: workspace.rootPath,
-        connectionId: workspace.connectionId,
-        sshHost: workspace.sshHost,
-      });
-      window.dispatchEvent(new CustomEvent('bitfun:session-archived'));
-      notificationService.success(t('nav.sessions.archivedAll', { count: 0 }), { duration: 3000 });
-    } catch (error) {
-      notificationService.error(
-        error instanceof Error ? error.message : t('nav.sessions.archiveAllFailed'),
-        { duration: 4000 }
-      );
-    }
-  }, [workspace, t]);
+    setSessionBatchModalOpen(true);
+  }, []);
 
   const handleOpenScheduledJobs = useCallback(() => {
     setMenuOpen(false);
@@ -919,19 +938,23 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
           confirmDanger
           preview={`${t('nav.workspaces.resetWorkspaceDialog.pathLabel')}\n${workspace.rootPath}`}
         />
-        <ScheduledJobsModal
-          isOpen={scheduledJobsModalOpen}
-          onClose={() => setScheduledJobsModalOpen(false)}
-          workspacePath={workspace.rootPath}
-          workspaceId={workspace.id}
-          workspaceKind={workspace.workspaceKind}
-          remoteConnectionId={isRemoteWorkspace(workspace) ? workspace.connectionId : null}
-          remoteSshHost={isRemoteWorkspace(workspace) ? workspace.sshHost : null}
-          targetKind="workspace"
-          title={t('nav.scheduledJobs.title')}
-          targetLabel={workspaceDisplayName}
-          targetDescription={workspace.rootPath}
-        />
+        {scheduledJobsModalOpen && (
+          <Suspense fallback={null}>
+            <ScheduledJobsModal
+              isOpen={scheduledJobsModalOpen}
+              onClose={() => setScheduledJobsModalOpen(false)}
+              workspacePath={workspace.rootPath}
+              workspaceId={workspace.id}
+              workspaceKind={workspace.workspaceKind}
+              remoteConnectionId={isRemoteWorkspace(workspace) ? workspace.connectionId : null}
+              remoteSshHost={isRemoteWorkspace(workspace) ? workspace.sshHost : null}
+              targetKind="workspace"
+              title={t('nav.scheduledJobs.title')}
+              targetLabel={workspaceDisplayName}
+              targetDescription={workspace.rootPath}
+            />
+          </Suspense>
+        )}
       </div>
     );
   }
@@ -1256,10 +1279,10 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                 <button
                   type="button"
                   className="bitfun-nav-panel__workspace-item-menu-item"
-                  onClick={() => { void handleArchiveAllSessions(); }}
+                  onClick={handleOpenSessionBatchModal}
                 >
-                  <Archive size={13} />
-                  <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.sessions.archiveAll')}</span>
+                  <ListChecks size={13} />
+                  <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.sessions.manage')}</span>
                 </button>
                 <button type="button" className="bitfun-nav-panel__workspace-item-menu-item is-danger" onClick={() => { void handleCloseWorkspace(); }}>
                   <FolderOpen size={13} />
@@ -1303,24 +1326,44 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
         confirmDanger
         preview={`${t('nav.workspaces.deleteWorktreeDialog.pathLabel')}\n${workspace.rootPath}`}
       />
-      <WorkspaceRelatedPathsDialog
-        workspace={workspace}
-        isOpen={relatedPathsDialogOpen}
-        onClose={() => setRelatedPathsDialogOpen(false)}
-      />
-      <ScheduledJobsModal
-        isOpen={scheduledJobsModalOpen}
-        onClose={() => setScheduledJobsModalOpen(false)}
-        workspacePath={workspace.rootPath}
-        workspaceId={workspace.id}
-        workspaceKind={workspace.workspaceKind}
-        remoteConnectionId={isRemoteWorkspace(workspace) ? workspace.connectionId : null}
-        remoteSshHost={isRemoteWorkspace(workspace) ? workspace.sshHost : null}
-        targetKind="workspace"
-        title={t('nav.scheduledJobs.title')}
-        targetLabel={workspaceDisplayName}
-        targetDescription={workspace.rootPath}
-      />
+      {relatedPathsDialogOpen && (
+        <Suspense fallback={null}>
+          <WorkspaceRelatedPathsDialog
+            workspace={workspace}
+            isOpen={relatedPathsDialogOpen}
+            onClose={() => setRelatedPathsDialogOpen(false)}
+          />
+        </Suspense>
+      )}
+      {sessionBatchModalOpen && (
+        <Suspense fallback={null}>
+          <WorkspaceSessionBatchModal
+            isOpen={sessionBatchModalOpen}
+            onClose={() => setSessionBatchModalOpen(false)}
+            workspacePath={workspace.rootPath}
+            workspaceLabel={workspaceDisplayName}
+            remoteConnectionId={isRemoteWorkspace(workspace) ? workspace.connectionId : null}
+            remoteSshHost={isRemoteWorkspace(workspace) ? workspace.sshHost : null}
+          />
+        </Suspense>
+      )}
+      {scheduledJobsModalOpen && (
+        <Suspense fallback={null}>
+          <ScheduledJobsModal
+            isOpen={scheduledJobsModalOpen}
+            onClose={() => setScheduledJobsModalOpen(false)}
+            workspacePath={workspace.rootPath}
+            workspaceId={workspace.id}
+            workspaceKind={workspace.workspaceKind}
+            remoteConnectionId={isRemoteWorkspace(workspace) ? workspace.connectionId : null}
+            remoteSshHost={isRemoteWorkspace(workspace) ? workspace.sshHost : null}
+            targetKind="workspace"
+            title={t('nav.scheduledJobs.title')}
+            targetLabel={workspaceDisplayName}
+            targetDescription={workspace.rootPath}
+          />
+        </Suspense>
+      )}
     </div>
   );
 };

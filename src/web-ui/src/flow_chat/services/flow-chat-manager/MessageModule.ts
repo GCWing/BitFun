@@ -79,14 +79,14 @@ async function syncSessionModelSelection(
     return;
   }
 
-  const [agentModelsConfig, allModelsConfig, defaultModelsConfig] = await Promise.all([
-    configManager.getConfig<Record<string, string>>('ai.agent_models'),
-    configManager.getConfig<AIModelConfig[]>('ai.models'),
-    configManager.getConfig<DefaultModelsConfig>('ai.default_models'),
+  const configData = await configManager.getConfigs([
+    'ai.agent_models',
+    'ai.models',
+    'ai.default_models',
   ]);
-  const agentModels = agentModelsConfig || {};
-  const allModels = allModelsConfig || [];
-  const defaultModels = defaultModelsConfig || {};
+  const agentModels = (configData['ai.agent_models'] as Record<string, string> | undefined) || {};
+  const allModels = (configData['ai.models'] as AIModelConfig[] | undefined) || [];
+  const defaultModels = (configData['ai.default_models'] as DefaultModelsConfig | undefined) || {};
 
   const desiredModelId = normalizeModelSelection(agentModels[agentType], allModels, defaultModels);
   const shouldForceAutoSync = desiredModelId === 'auto';

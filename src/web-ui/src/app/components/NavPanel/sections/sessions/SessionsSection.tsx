@@ -5,7 +5,7 @@
  * Owns all data fetching / mutation for chat sessions.
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Pencil, Trash2, Check, X, Bot, Code2, ClipboardList, Panda, MoreHorizontal, Loader2, Archive, Clock3 } from 'lucide-react';
 import { IconButton, Input, Tooltip } from '@/component-library';
@@ -43,7 +43,6 @@ import {
 import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
 import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
 import { confirmWarning } from '@/component-library/components/ConfirmDialog/confirmService';
-import ScheduledJobsModal from '@/app/components/scheduled-jobs/ScheduledJobsModal';
 import { scheduleAfterStartupPaint, scheduleAfterStartupSignal } from '@/shared/utils/startupTaskScheduling';
 import {
   SESSION_METADATA_DEFERRED_FALLBACK_MS,
@@ -53,14 +52,19 @@ import {
   getInitialSessionMetadataLoadMode,
   hasStartupOverlayHandedOff,
 } from './sessionMetadataStartup';
+import {
+  getEffectiveTopLevelSessionCount,
+  getSessionExpandToggleState,
+  SESSIONS_LEVEL_0,
+  SESSIONS_LEVEL_1,
+} from './sessionNavExpand';
 import './SessionsSection.scss';
 
-/** Top-level parent sessions shown at each expand step (children still nest under visible parents). */
-const SESSIONS_LEVEL_0 = 5;
-const SESSIONS_LEVEL_1 = 10;
 const log = createLogger('SessionsSection');
+const ScheduledJobsModal = lazy(() => import('@/app/components/scheduled-jobs/ScheduledJobsModal'));
 
 type SessionMode = 'code' | 'cowork' | 'claw';
+type HistoryOpenIntentDispatchResult = 'none' | 'dispatched' | 'already-pending';
 
 const escapeRegExp = (value: string): string =>
   value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -75,17 +79,31 @@ const resolveSessionModeType = (session: Session): SessionMode => {
 const getTitle = (session: Session): string =>
   resolveSessionTitle(session, (key, options) => i18nService.t(key, options));
 
-const waitForHistoryOpenIntentPaint = (): Promise<void> =>
-  new Promise(resolve => {
-    if (typeof window === 'undefined' || typeof window.requestAnimationFrame !== 'function') {
-      globalThis.setTimeout(resolve, 0);
-      return;
+const countTopLevelSessionsInScope = (
+  sessions: Iterable<Session>,
+  workspacePath?: string,
+  remoteConnectionId?: string | null,
+  remoteSshHost?: string | null
+): number => {
+  const scopedSessions = Array.from(sessions).filter((session: Session) => {
+    if (session.isTransient || session.sessionKind === 'subagent') {
+      return false;
     }
-
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => resolve());
-    });
+    if (workspacePath) {
+      return sessionBelongsToWorkspaceNavRow(session, workspacePath, remoteConnectionId, remoteSshHost);
+    }
+    return !session.workspacePath;
   });
+
+  const knownIds = new Set(scopedSessions.map(session => session.sessionId));
+  return scopedSessions.reduce((count, session) => {
+    const parentSessionId = resolveSessionRelationship(session).parentSessionId;
+    if (parentSessionId && knownIds.has(parentSessionId)) {
+      return count;
+    }
+    return count + 1;
+  }, 0);
+};
 
 const getChildSessionBadge = (kind: Session['sessionKind']): string => {
   const normalizedKind =
@@ -156,11 +174,13 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   const [expandLevel, setExpandLevel] = useState<0 | 1 | 2>(0);
   const [metadataPageState, setMetadataPageState] = useState<{
     totalTopLevelCount: number | null;
+    syncedTopLevelCount: number | null;
     nextCursor?: string;
     hasMore: boolean;
     isLoading: boolean;
   }>({
     totalTopLevelCount: null,
+    syncedTopLevelCount: null,
     nextCursor: undefined,
     hasMore: false,
     isLoading: false,
@@ -230,6 +250,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     setExpandLevel(0);
     setMetadataPageState({
       totalTopLevelCount: null,
+      syncedTopLevelCount: null,
       nextCursor: undefined,
       hasMore: false,
       isLoading: false,
@@ -256,8 +277,15 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           source
         );
         if (metadataLoadRequestIdRef.current === requestId) {
+          const syncedTopLevelCount = countTopLevelSessionsInScope(
+            flowChatStore.getState().sessions.values(),
+            workspacePath,
+            remoteConnectionId,
+            remoteSshHost
+          );
           setMetadataPageState({
             totalTopLevelCount: page.totalTopLevelCount,
+            syncedTopLevelCount,
             nextCursor: page.nextCursor,
             hasMore: page.hasMore,
             isLoading: false,
@@ -376,6 +404,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       setExpandLevel(0);
       setMetadataPageState({
         totalTopLevelCount: null,
+        syncedTopLevelCount: null,
         nextCursor: undefined,
         hasMore: false,
         isLoading: false,
@@ -505,15 +534,37 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     return SESSIONS_LEVEL_0;
   }, [topLevelSessions.length, expandLevel]);
 
-  const totalTopLevelSessionCount = metadataPageState.totalTopLevelCount ?? topLevelSessions.length;
-  const hasMoreUnloadedSessions =
-    metadataPageState.hasMore || topLevelSessions.length < totalTopLevelSessionCount;
-  const expandToggleAction =
-    expandLevel === 0
-      ? 'show-more'
-      : expandLevel === 1 && totalTopLevelSessionCount > SESSIONS_LEVEL_1
-        ? 'show-all'
-        : 'show-less';
+  const totalTopLevelSessionCount = getEffectiveTopLevelSessionCount(
+    metadataPageState.totalTopLevelCount,
+    metadataPageState.syncedTopLevelCount,
+    topLevelSessions.length,
+    metadataPageState.isLoading
+  );
+  const hasMoreUnloadedSessions = topLevelSessions.length < totalTopLevelSessionCount;
+  const expandToggleState = getSessionExpandToggleState(totalTopLevelSessionCount, expandLevel);
+
+  useEffect(() => {
+    if (
+      !isVisible ||
+      !workspacePath ||
+      metadataPageState.isLoading ||
+      metadataPageState.totalTopLevelCount === null ||
+      metadataPageState.syncedTopLevelCount === null ||
+      topLevelSessions.length === metadataPageState.syncedTopLevelCount
+    ) {
+      return;
+    }
+
+    void loadMetadataPage(SESSIONS_LEVEL_0, undefined, 'sessions_nav_live_reconcile');
+  }, [
+    isVisible,
+    loadMetadataPage,
+    metadataPageState.isLoading,
+    metadataPageState.syncedTopLevelCount,
+    metadataPageState.totalTopLevelCount,
+    topLevelSessions.length,
+    workspacePath,
+  ]);
 
   const visibleItems = useMemo(() => {
     const visibleParents = topLevelSessions.slice(0, sessionDisplayLimit);
@@ -533,13 +584,15 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   const lastHistoryOpenIntentRef = useRef<{ sessionId: string; atMs: number } | null>(null);
 
   const dispatchHistoryOpenIntentForSession = useCallback(
-    (session: Session): boolean => {
+    (session: Session): HistoryOpenIntentDispatchResult => {
       const sessionId = session.sessionId;
       if (
         sessionId === activeSessionId ||
-        !shouldShowHistorySessionOpenIntent(session)
+        !shouldShowHistorySessionOpenIntent(session, {
+          isRunning: runningSessionIds.has(sessionId),
+        })
       ) {
-        return false;
+        return 'none';
       }
 
       const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
@@ -549,14 +602,14 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         lastIntent.sessionId === sessionId &&
         now - lastIntent.atMs < 250
       ) {
-        return true;
+        return 'already-pending';
       }
 
       lastHistoryOpenIntentRef.current = { sessionId, atMs: now };
       dispatchHistorySessionOpenIntent(sessionId, getTitle(session));
-      return true;
+      return 'dispatched';
     },
-    [activeSessionId],
+    [activeSessionId, runningSessionIds],
   );
 
   const handleSwitch = useCallback(
@@ -564,13 +617,11 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       if (editingSessionId) return;
       try {
         const session = flowChatStore.getState().sessions.get(sessionId);
-        const historyOpenIntentDispatched = session
+        const historyOpenIntentDispatch = session
           ? dispatchHistoryOpenIntentForSession(session)
-          : false;
-        if (session) {
-          if (historyOpenIntentDispatched) {
-            await waitForHistoryOpenIntentPaint();
-          }
+          : 'none';
+        if (session && historyOpenIntentDispatch !== 'none') {
+          flowChatManager.preloadHistoricalSessionForOpen(sessionId);
         }
         const relationship = resolveSessionRelationship(session);
         const parentSessionId = relationship.parentSessionId;
@@ -629,13 +680,19 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       if (editingSessionId || session.sessionId === activeSessionId) {
         return;
       }
+      if (event.button !== 0) {
+        return;
+      }
 
       const target = event.target as HTMLElement | null;
       if (target?.closest('.bitfun-nav-panel__inline-item-actions, .bitfun-nav-panel__inline-item-edit')) {
         return;
       }
 
-      dispatchHistoryOpenIntentForSession(session);
+      const historyOpenIntentDispatch = dispatchHistoryOpenIntentForSession(session);
+      if (historyOpenIntentDispatch !== 'none') {
+        flowChatManager.preloadHistoricalSessionForOpen(session.sessionId);
+      }
     },
     [activeSessionId, dispatchHistoryOpenIntentForSession, editingSessionId],
   );
@@ -1091,12 +1148,12 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           );
         })}
 
-      {(totalTopLevelSessionCount > SESSIONS_LEVEL_0 || hasMoreUnloadedSessions) && (
+      {expandToggleState.shouldRender && (
         <button
           type="button"
           className={`bitfun-nav-panel__inline-toggle${metadataPageState.isLoading ? ' is-loading' : ''}`}
           data-testid="session-nav-show-more"
-          data-session-nav-toggle-action={expandToggleAction}
+          data-session-nav-toggle-action={expandToggleState.action}
           disabled={metadataPageState.isLoading}
           onClick={() => { void handleExpandToggle(); }}
         >
@@ -1109,11 +1166,11 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
               )}
               <span>
                 {t('nav.sessions.showMore', {
-                  count: Math.max(totalTopLevelSessionCount - SESSIONS_LEVEL_0, 0),
+                  count: expandToggleState.collapsedRemainingCount,
                 })}
               </span>
             </>
-          ) : expandLevel === 1 && totalTopLevelSessionCount > SESSIONS_LEVEL_1 ? (
+          ) : expandLevel === 1 && expandToggleState.expandedRemainingCount > 0 ? (
             <>
               {metadataPageState.isLoading ? (
                 <Loader2 size={12} className="bitfun-nav-panel__inline-toggle-spinner" />
@@ -1122,7 +1179,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
               )}
               <span>
                 {t('nav.sessions.showAll', {
-                  count: Math.max(totalTopLevelSessionCount - SESSIONS_LEVEL_1, 0),
+                  count: expandToggleState.expandedRemainingCount,
                 })}
               </span>
             </>
@@ -1132,20 +1189,24 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         </button>
       )}
 
-      <ScheduledJobsModal
-        isOpen={scheduledJobsSession != null}
-        onClose={() => setScheduledJobsSessionId(null)}
-        workspacePath={scheduledJobsSession?.workspacePath || workspacePath}
-        workspaceId={scheduledJobsSession?.workspaceId || workspaceId}
-        remoteConnectionId={scheduledJobsSession?.remoteConnectionId || remoteConnectionId}
-        remoteSshHost={scheduledJobsSession?.remoteSshHost || remoteSshHost}
-        sessionId={scheduledJobsSession?.sessionId}
-        targetKind="session"
-        lockSessionId
-        title={t('nav.scheduledJobs.title')}
-        targetLabel={scheduledJobsSession ? resolveSessionTitle(scheduledJobsSession) : undefined}
-        targetDescription={scheduledJobsSession?.workspacePath || workspacePath}
-      />
+      {scheduledJobsSession && (
+        <Suspense fallback={null}>
+          <ScheduledJobsModal
+            isOpen={scheduledJobsSession != null}
+            onClose={() => setScheduledJobsSessionId(null)}
+            workspacePath={scheduledJobsSession.workspacePath || workspacePath}
+            workspaceId={scheduledJobsSession.workspaceId || workspaceId}
+            remoteConnectionId={scheduledJobsSession.remoteConnectionId || remoteConnectionId}
+            remoteSshHost={scheduledJobsSession.remoteSshHost || remoteSshHost}
+            sessionId={scheduledJobsSession.sessionId}
+            targetKind="session"
+            lockSessionId
+            title={t('nav.scheduledJobs.title')}
+            targetLabel={resolveSessionTitle(scheduledJobsSession)}
+            targetDescription={scheduledJobsSession.workspacePath || workspacePath}
+          />
+        </Suspense>
+      )}
     </div>
   );
 };

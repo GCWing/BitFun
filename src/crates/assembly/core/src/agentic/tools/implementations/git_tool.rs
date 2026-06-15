@@ -511,9 +511,26 @@ impl GitTool {
         let args_str = args.unwrap_or("");
 
         // Parse parameters
-        let mut max_count = 10;
+        let mut max_count = 50;
         let oneline = args_str.contains("--oneline");
         let stat = args_str.contains("--stat");
+        let mut since: Option<String> = None;
+        let mut until: Option<String> = None;
+
+        // Parse --since=<ref> and --until=<ref>
+        for prefix in &["--since=", "--until="] {
+            if let Some(pos) = args_str.find(prefix) {
+                let val = args_str[pos + prefix.len()..]
+                    .split_whitespace()
+                    .next()
+                    .map(|s| s.trim_matches('"').trim_matches('\'').to_string());
+                if *prefix == "--since=" {
+                    since = val;
+                } else {
+                    until = val;
+                }
+            }
+        }
 
         // Parse -n or -number
         if let Some(pos) = args_str.find("-n") {
@@ -539,6 +556,8 @@ impl GitTool {
         let params = GitLogParams {
             max_count: Some(max_count),
             stat: Some(stat),
+            since,
+            until,
             ..Default::default()
         };
 

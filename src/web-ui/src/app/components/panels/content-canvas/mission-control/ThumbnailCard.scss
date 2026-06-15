@@ -139,7 +139,7 @@
   }
 
   &__close-btn:hover {
-    background: var(--color-error-alpha, rgba(239, 68, 68, 0.15));
+    background: var(--color-error-bg, rgba(239, 68, 68, 0.15));
     color: var(--color-error, #ef4444);
   }
 

@@ -56,13 +56,13 @@ $_diff-error-max-width: 400px;
     font-size: var(--font-size-xs);
     
     &--add {
-      color: #3fb950;
+      color: var(--git-color-staged, #3fb950);
       background: rgba(63, 185, 80, 0.15);
       border: 1px solid rgba(63, 185, 80, 0.3);
     }
     
     &--del {
-      color: #f85149;
+      color: var(--git-color-deleted, #f85149);
       background: rgba(248, 81, 73, 0.15);
       border: 1px solid rgba(248, 81, 73, 0.3);
     }
@@ -547,12 +547,12 @@ $_diff-error-max-width: 400px;
       .monaco-diff-editor {
         .line-insert {
           background-color: rgba(63, 185, 80, 0.2) !important;
-          border-left: 3px solid #3fb950;
+          border-left: 3px solid var(--git-color-staged, #3fb950);
         }
 
         .line-delete {
           background-color: rgba(248, 81, 73, 0.2) !important;
-          border-left: 3px solid #f85149;
+          border-left: 3px solid var(--git-color-deleted, #f85149);
         }
       }
     }

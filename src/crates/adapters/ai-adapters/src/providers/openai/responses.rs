@@ -3,6 +3,7 @@ use crate::client::sse::execute_sse_request;
 use crate::client::{AIClient, StreamResponse};
 use crate::providers::shared;
 use crate::stream::handle_responses_stream;
+use crate::trace::ModelExchangeTraceConfig;
 use crate::types::ReasoningMode;
 use crate::types::{Message, ToolDefinition};
 use anyhow::Result;
@@ -92,6 +93,7 @@ pub(crate) async fn send_stream(
     tools: Option<Vec<ToolDefinition>>,
     extra_body: Option<serde_json::Value>,
     max_tries: usize,
+    trace: Option<ModelExchangeTraceConfig>,
 ) -> Result<StreamResponse> {
     // Codex CLI's ChatGPT-login backend (`chatgpt.com/backend-api/codex`)
     // speaks a constrained Responses dialect with several extra
@@ -99,8 +101,10 @@ pub(crate) async fn send_stream(
     // `store: false`, no `max_output_tokens`, etc.). Keep that adapter
     // self-contained so the standard Responses path stays untouched.
     if super::codex_chatgpt::is_codex_chatgpt_endpoint(&client.config.request_url) {
-        return super::codex_chatgpt::send_stream(client, messages, tools, extra_body, max_tries)
-            .await;
+        return super::codex_chatgpt::send_stream(
+            client, messages, tools, extra_body, max_tries, trace,
+        )
+        .await;
     }
 
     let url = client.config.request_url.clone();
@@ -128,6 +132,7 @@ pub(crate) async fn send_stream(
         &request_body,
         max_tries,
         ttft_timeout,
+        trace,
         || common::apply_headers(client, client.client.post(&url)),
         move |response, tx, tx_raw| {
             tokio::spawn(handle_responses_stream(response, tx, tx_raw, idle_timeout));

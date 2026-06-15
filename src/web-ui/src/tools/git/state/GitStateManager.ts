@@ -33,6 +33,7 @@ import {
 } from './types';
 import { createLogger } from '@/shared/utils/logger';
 import { sendDebugProbe } from '@/shared/utils/debugProbe';
+import { startupTrace } from '@/shared/utils/startupTrace';
 import { elapsedMs, nowMs } from '@/shared/utils/timing';
 import { i18nService } from '@/infrastructure/i18n';
 
@@ -47,8 +48,13 @@ interface PendingRefresh {
   layers: Set<GitStateLayer>;
   force: boolean;
   reason: RefreshReason;
+  source?: string;
   resolve: () => void;
   reject: (error: Error) => void;
+}
+
+function pendingRefreshIncludesSource(pendingSource: string | undefined, source: string): boolean {
+  return pendingSource?.split('|').includes(source) === true;
 }
 
 export class GitStateManager {
@@ -151,9 +157,44 @@ export class GitStateManager {
       layers = ['basic', 'status'],
       silent = false,
       reason = 'manual',
+      source,
     } = options;
 
-    return this.enqueueRefresh(normalizedPath, layers, force, reason, silent);
+    return this.enqueueRefresh(normalizedPath, layers, force, reason, silent, source);
+  }
+
+  cancelPendingRefresh(
+    repositoryPath: string,
+    options: {
+      reason?: RefreshReason;
+      source?: string;
+      layers?: GitStateLayer[];
+    } = {}
+  ): boolean {
+    const normalizedPath = this.normalizePath(repositoryPath);
+    const pending = this.pendingRefreshes.get(normalizedPath);
+    if (!pending) {
+      return false;
+    }
+
+    if (options.reason && pending.reason !== options.reason) {
+      return false;
+    }
+    if (options.source && !pendingRefreshIncludesSource(pending.source, options.source)) {
+      return false;
+    }
+    if (options.layers?.some(layer => !pending.layers.has(layer))) {
+      return false;
+    }
+
+    const timer = this.refreshDebounceTimers.get(normalizedPath);
+    if (timer) {
+      clearTimeout(timer);
+      this.refreshDebounceTimers.delete(normalizedPath);
+    }
+    this.pendingRefreshes.delete(normalizedPath);
+    pending.resolve();
+    return true;
   }
 
   /**
@@ -235,7 +276,8 @@ export class GitStateManager {
     layers: GitStateLayer[],
     force: boolean,
     reason: RefreshReason,
-    silent: boolean
+    silent: boolean,
+    source?: string
   ): Promise<void> {
 
     const existingTimer = this.refreshDebounceTimers.get(repositoryPath);
@@ -253,12 +295,16 @@ export class GitStateManager {
       if (force) {
         pending.force = true;
       }
+      if (source && pending.source !== source) {
+        pending.source = pending.source ? `${pending.source}|${source}` : source;
+      }
     } else {
 
       pending = {
         layers: new Set(layers),
         force,
         reason,
+        source,
         resolve: () => {},
         reject: () => {},
       };
@@ -302,7 +348,7 @@ export class GitStateManager {
     this.pendingRefreshes.delete(repositoryPath);
     this.refreshDebounceTimers.delete(repositoryPath);
 
-    const { layers, force, reason, resolve, reject } = pending;
+    const { layers, force, reason, source, resolve, reject } = pending;
 
     try {
       await this.doRefresh(
@@ -310,7 +356,8 @@ export class GitStateManager {
         Array.from(layers),
         force,
         reason,
-        silent
+        silent,
+        source
       );
       resolve();
     } catch (error) {
@@ -326,7 +373,8 @@ export class GitStateManager {
     layers: GitStateLayer[],
     force: boolean,
     reason: RefreshReason,
-    silent: boolean
+    silent: boolean,
+    source?: string
   ): Promise<void> {
     const existingLock = this.refreshLocks.get(repositoryPath);
     if (existingLock) {
@@ -431,11 +479,25 @@ export class GitStateManager {
       } finally {
         const durationMs = elapsedMs(startedAt);
         if (probeError || shouldProbeReason || durationMs >= 80) {
+          if (globalThis.__BITFUN_PERF_TRACE_ENABLED__ === true) {
+            startupTrace.markPhase('git_state_refresh', {
+              reason,
+              force,
+              silent,
+              requestedLayers: layers,
+              refreshedLayers: layersToRefresh,
+              durationMs,
+              outcome: probeOutcome,
+              error: probeError,
+              source,
+            });
+          }
           sendDebugProbe('GitStateManager.ts:doRefresh', 'Git refresh completed', {
             repositoryPath,
             reason,
             force,
             silent,
+            source,
             requestedLayers: layers,
             refreshedLayers: layersToRefresh,
             durationMs,
@@ -488,7 +550,7 @@ export class GitStateManager {
         return;
       }
 
-      const status = await gitAPI.getStatus(repositoryPath);
+      const status = await gitAPI.getStatus(repositoryPath, 'git_state_manager');
 
       const hasChanges =
         (status.staged?.length || 0) > 0 ||

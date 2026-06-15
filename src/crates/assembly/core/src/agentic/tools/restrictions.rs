@@ -3,7 +3,92 @@ pub use bitfun_agent_tools::{
     is_remote_posix_path_within_root, ToolPathOperation, ToolPathPolicy, ToolRestrictionError,
     ToolRuntimeRestrictions,
 };
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
+
+/// MiniApp agent runs execute inside a MiniApp iframe without Flow Chat tool cards
+/// or AskUserQuestion UI. Treat those sessions as headless even on follow-up turns
+/// that reuse the hidden session via `created_by`.
+pub fn is_miniapp_headless_agent_run(
+    user_message_metadata: Option<&serde_json::Value>,
+    created_by: Option<&str>,
+) -> bool {
+    if user_message_metadata
+        .and_then(|metadata| metadata.get("surface"))
+        .and_then(|value| value.as_str())
+        == Some("miniapp_agent")
+    {
+        return true;
+    }
+    created_by.is_some_and(|owner| owner.starts_with("miniapp-agent:"))
+}
+
+/// Tools that require Flow Chat / desktop UI interaction must not run inside MiniApps.
+pub fn miniapp_headless_agent_tool_restrictions() -> ToolRuntimeRestrictions {
+    const DENIED_TOOLS: &[(&str, &str)] = &[
+        (
+            "AskUserQuestion",
+            "AskUserQuestion is unavailable in MiniApp headless agent runs. Decide yourself and record assumptions in project files.",
+        ),
+        (
+            "ControlHub",
+            "ControlHub is unavailable in MiniApp headless agent runs.",
+        ),
+        (
+            "GenerativeUI",
+            "GenerativeUI is unavailable in MiniApp headless agent runs.",
+        ),
+        (
+            "ComputerUse",
+            "ComputerUse is unavailable in MiniApp headless agent runs.",
+        ),
+        (
+            "ComputerUseMouseClick",
+            "ComputerUseMouseClick is unavailable in MiniApp headless agent runs.",
+        ),
+        (
+            "ComputerUseMouseStep",
+            "ComputerUseMouseStep is unavailable in MiniApp headless agent runs.",
+        ),
+        (
+            "ComputerUseMousePrecise",
+            "ComputerUseMousePrecise is unavailable in MiniApp headless agent runs.",
+        ),
+        (
+            "ReviewPlatform",
+            "ReviewPlatform is unavailable in MiniApp headless agent runs.",
+        ),
+        (
+            "MiniappInit",
+            "MiniappInit is unavailable in MiniApp headless agent runs.",
+        ),
+        (
+            "Playbook",
+            "Playbook is unavailable in MiniApp headless agent runs.",
+        ),
+        (
+            "Cron",
+            "Cron is unavailable in MiniApp headless agent runs.",
+        ),
+        (
+            "SessionControl",
+            "SessionControl is unavailable in MiniApp headless agent runs.",
+        ),
+    ];
+
+    let mut denied_tool_names = BTreeSet::new();
+    let mut denied_tool_messages = BTreeMap::new();
+    for (name, message) in DENIED_TOOLS {
+        denied_tool_names.insert((*name).to_string());
+        denied_tool_messages.insert((*name).to_string(), (*message).to_string());
+    }
+
+    ToolRuntimeRestrictions {
+        denied_tool_names,
+        denied_tool_messages,
+        ..Default::default()
+    }
+}
 
 impl From<ToolRestrictionError> for BitFunError {
     fn from(error: ToolRestrictionError) -> Self {
@@ -68,6 +153,27 @@ fn canonicalize_best_effort(path: &Path) -> BitFunResult<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn miniapp_headless_restrictions_block_interactive_tools() {
+        let restrictions = miniapp_headless_agent_tool_restrictions();
+
+        assert!(!restrictions.is_tool_allowed("AskUserQuestion"));
+        assert!(!restrictions.is_tool_allowed("ControlHub"));
+        assert!(restrictions.is_tool_allowed("Task"));
+        assert!(restrictions.is_tool_allowed("WebSearch"));
+    }
+
+    #[test]
+    fn miniapp_headless_run_detection_uses_surface_and_created_by() {
+        let metadata = serde_json::json!({ "surface": "miniapp_agent" });
+        assert!(is_miniapp_headless_agent_run(Some(&metadata), None));
+        assert!(is_miniapp_headless_agent_run(
+            None,
+            Some("miniapp-agent:builtin-ppt-live:run-1")
+        ));
+        assert!(!is_miniapp_headless_agent_run(None, Some("desktop-user")));
+    }
 
     #[test]
     fn runtime_restrictions_allow_all_when_empty() {

@@ -62,6 +62,21 @@ function isOptionalConfigNotFound(request: ApiRequest, error: unknown): boolean 
 }
 
 function traceTargetForCommand(command: string, payload: unknown): string | undefined {
+  if (command === 'explorer_get_children') {
+    return 'file_explorer:children';
+  }
+
+  if (command === 'start_file_watch') {
+    const record = payload && typeof payload === 'object'
+      ? payload as Record<string, unknown>
+      : {};
+    return record.recursive === true ? 'file_watch:recursive' : 'file_watch:non_recursive';
+  }
+
+  if (command === 'stop_file_watch') {
+    return 'file_watch:stop';
+  }
+
   if (!payload || typeof payload !== 'object') {
     return undefined;
   }

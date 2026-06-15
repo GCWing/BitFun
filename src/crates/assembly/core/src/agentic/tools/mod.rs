@@ -38,4 +38,7 @@ pub use registry::{
     create_tool_registry, get_all_registered_tool_names, get_all_registered_tools, get_all_tools,
     get_readonly_registered_tool_names, get_readonly_tools,
 };
-pub use restrictions::{ToolPathOperation, ToolPathPolicy, ToolRuntimeRestrictions};
+pub use restrictions::{
+    is_miniapp_headless_agent_run, miniapp_headless_agent_tool_restrictions, ToolPathOperation,
+    ToolPathPolicy, ToolRuntimeRestrictions,
+};

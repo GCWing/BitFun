@@ -185,6 +185,15 @@ mod tests {
             resolve_builtin_default_enabled("pdf", "agentic"),
             Some(false)
         );
+        // ppt-design rides the office group: enabled in Cowork, not in coding modes.
+        assert_eq!(
+            resolve_builtin_default_enabled("ppt-design", "agentic"),
+            Some(false)
+        );
+        assert_eq!(
+            resolve_builtin_default_enabled("ppt-design", "Cowork"),
+            Some(true)
+        );
         assert_eq!(
             resolve_builtin_default_enabled("agent-browser", "agentic"),
             Some(true)

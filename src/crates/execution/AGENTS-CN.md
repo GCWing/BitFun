@@ -8,7 +8,7 @@
 
 | Crate | 职责 | 本地文档 |
 |---|---|---|
-| `agent-runtime` | Agent registry、scheduler、prompt cache、hooks、goal、prompt facts、DeepReview provider-neutral state、DeepResearch citation renumbering 和 runtime control 契约 | [AGENTS.md](agent-runtime/AGENTS.md) |
+| `agent-runtime` | Agent registry、scheduler、prompt cache、hooks、goal、prompt facts、port-backed `AgentRuntime` facade、DeepReview provider-neutral state、DeepResearch citation renumbering 和 runtime control 契约 | [AGENTS.md](agent-runtime/AGENTS.md) |
 | `agent-stream` | Provider-neutral stream DTO、tool-call 累积和 replay 契约 | [AGENTS.md](agent-stream/AGENTS.md) |
 | `tool-contracts` | Tool 契约、execution gate、input validation 和 result presentation 契约；Cargo package 仍为 `bitfun-agent-tools` | [AGENTS.md](tool-contracts/AGENTS.md) |
 | `harness` | Harness workflow 契约和 registry primitive | [AGENTS.md](harness/AGENTS.md) |

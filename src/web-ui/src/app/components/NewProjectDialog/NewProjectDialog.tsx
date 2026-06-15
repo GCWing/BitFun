@@ -12,7 +12,6 @@ import {
   Check,
   X
 } from 'lucide-react';
-import { open } from '@tauri-apps/plugin-dialog';
 import { useTranslation } from 'react-i18next';
 import { createLogger } from '@/shared/utils/logger';
 import { Modal, Button, Input } from '@/component-library';
@@ -49,6 +48,7 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
   // Open directory picker dialog
   const handleSelectParentPath = useCallback(async () => {
     try {
+      const { open } = await import('@tauri-apps/plugin-dialog');
       const selected = await open({
         directory: true,
         multiple: false,

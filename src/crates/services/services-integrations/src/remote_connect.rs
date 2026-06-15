@@ -2,8 +2,15 @@
 //!
 //! This module owns remote-connect wire assembly, runtime-port request
 //! construction, compatibility re-exports, and remote session tracker state.
-//! Network lifecycle and product assembly stay in `bitfun-core` until their
-//! ports are explicit.
+//! Pairing, encryption, QR generation, relay websocket lifecycle primitives,
+//! and command routing live here. Product assembly and concrete runtime hosts
+//! stay in `bitfun-core` until their ports are explicit.
+
+pub mod device;
+pub mod encryption;
+pub mod pairing;
+pub mod qr_generator;
+pub mod relay_client;
 
 use bitfun_events::AgenticEvent;
 use bitfun_runtime_ports::{
@@ -17,7 +24,14 @@ pub use bitfun_runtime_ports::{
     RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind, RemoteWorkspacePort,
     RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate,
 };
+pub use device::DeviceIdentity;
+pub use encryption::{decrypt_from_base64, encrypt_to_base64, KeyPair};
 use log::info;
+pub use pairing::{PairingChallenge, PairingProtocol, PairingResponse, PairingState, QrPayload};
+pub use qr_generator::QrGenerator;
+pub use relay_client::{
+    ensure_rustls_crypto_provider, ConnectionState, RelayClient, RelayEvent, RelayMessage,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

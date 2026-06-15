@@ -29,15 +29,15 @@ impl SkillTool {
 When users ask you to perform tasks, check whether any skills listed in the current skill listing can help complete the task more effectively. Skills provide specialized capabilities and domain knowledge.
 
 How to use skills:
-- Invoke skills using this tool with the skill name only (no arguments)
+- Invoke skills using this tool with the listed skill name or stable key (no arguments)
 - The skill's prompt will expand and provide detailed instructions on how to complete the task
 - Examples:
   - `command: "pdf"` - invoke the pdf skill
   - `command: "xlsx"` - invoke the xlsx skill
-  - `command: "ms-office-suite:pdf"` - invoke using fully qualified name
+  - `command: "user::bitfun-system::ppt-design"` - invoke a specific built-in skill by stable key
 
 Important:
-- Only use skills listed in the current skill listing's <available_skills> section
+- Only use skills listed in the current skill listing's <available_skills> section, unless a trusted host task explicitly supplies an exact stable key
 - Do not invoke a skill that is already running
 </skills_instructions>"#
             .to_string()
@@ -202,6 +202,7 @@ impl Tool for SkillTool {
 
         // Find and load skill through registry
         let registry = get_skill_registry();
+        let use_stable_key = skill_name.split("::").count() == 3;
         let skill_data = if context.is_remote() {
             if let Some(ws_fs) = context.ws_fs() {
                 let root = context
@@ -209,11 +210,50 @@ impl Tool for SkillTool {
                     .as_ref()
                     .map(|w| w.root_path_string())
                     .unwrap_or_default();
+                if use_stable_key {
+                    registry
+                        .find_and_load_skill_by_key_for_remote_workspace(
+                            skill_name,
+                            ws_fs,
+                            &root,
+                            context.agent_type.as_deref(),
+                        )
+                        .await?
+                } else {
+                    registry
+                        .find_and_load_skill_for_remote_workspace(
+                            skill_name,
+                            ws_fs,
+                            &root,
+                            context.agent_type.as_deref(),
+                        )
+                        .await?
+                }
+            } else {
+                if use_stable_key {
+                    registry
+                        .find_and_load_skill_by_key_for_workspace(
+                            skill_name,
+                            None,
+                            context.agent_type.as_deref(),
+                        )
+                        .await?
+                } else {
+                    registry
+                        .find_and_load_skill_for_workspace(
+                            skill_name,
+                            None,
+                            context.agent_type.as_deref(),
+                        )
+                        .await?
+                }
+            }
+        } else {
+            if use_stable_key {
                 registry
-                    .find_and_load_skill_for_remote_workspace(
+                    .find_and_load_skill_by_key_for_workspace(
                         skill_name,
-                        ws_fs,
-                        &root,
+                        context.workspace_root(),
                         context.agent_type.as_deref(),
                     )
                     .await?
@@ -221,19 +261,11 @@ impl Tool for SkillTool {
                 registry
                     .find_and_load_skill_for_workspace(
                         skill_name,
-                        None,
+                        context.workspace_root(),
                         context.agent_type.as_deref(),
                     )
                     .await?
             }
-        } else {
-            registry
-                .find_and_load_skill_for_workspace(
-                    skill_name,
-                    context.workspace_root(),
-                    context.agent_type.as_deref(),
-                )
-                .await?
         };
 
         let location_str = match skill_data.location {
@@ -242,13 +274,15 @@ impl Tool for SkillTool {
         };
 
         let result_for_assistant = format!(
-            "Skill '{}' loaded successfully. Note: any paths mentioned in this skill are relative to {}, not the workspace.\n\n{}",
-            skill_data.name, skill_data.path, skill_data.content
+            "Skill '{}' loaded successfully from stable key '{}'. Note: any paths mentioned in this skill are relative to {}, not the workspace.\n\n{}",
+            skill_data.name, skill_data.key, skill_data.path, skill_data.content
         );
 
         let result = ToolResult::Result {
             data: json!({
                 "skill_name": skill_data.name,
+                "skill_key": skill_data.key,
+                "source_slot": skill_data.source_slot,
                 "description": skill_data.description,
                 "location": location_str,
                 "content": skill_data.content,
@@ -448,6 +482,41 @@ Use the remote project skill.
             .as_str()
             .unwrap_or_default()
             .contains("# /cso"));
+    }
+
+    #[tokio::test]
+    async fn stable_key_loads_the_exact_builtin_skill() {
+        let context = crate::agentic::tools::framework::ToolUseContext {
+            tool_call_id: None,
+            agent_type: Some("Cowork".to_string()),
+            session_id: None,
+            dialog_turn_id: None,
+            workspace: None,
+            unlocked_collapsed_tools: Vec::new(),
+            custom_data: Default::default(),
+            computer_use_host: None,
+            runtime_tool_restrictions: Default::default(),
+            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::new(None, None),
+        };
+
+        let results = SkillTool::new()
+            .call_impl(
+                &json!({ "command": "user::bitfun-system::ppt-design" }),
+                &context,
+            )
+            .await
+            .expect("stable key should load BitFun's built-in ppt-design skill");
+
+        let ToolResult::Result { data, .. } = &results[0] else {
+            panic!("expected result payload");
+        };
+        assert_eq!(data["skill_name"], "ppt-design");
+        assert_eq!(data["skill_key"], "user::bitfun-system::ppt-design");
+        assert_eq!(data["source_slot"], "bitfun-system");
+        assert!(data["content"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("references/editable-pptx.md"));
     }
 
     struct OrderingRemoteFs;

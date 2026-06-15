@@ -14,6 +14,7 @@ export const config = createEmbeddedConfig(
     '../specs/l1-session.spec.ts',
     '../specs/l1-dialog.spec.ts',
     '../specs/l1-chat.spec.ts',
+    '../specs/l1-chat-scroll-whitespace.spec.ts',
   ],
   'L1'
 );

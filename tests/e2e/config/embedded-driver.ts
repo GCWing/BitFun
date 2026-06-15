@@ -22,6 +22,43 @@ function projectRoot(): string {
   return path.resolve(__dirname, '..', '..', '..');
 }
 
+function e2eRuntimeRoot(): string {
+  return process.env.BITFUN_E2E_STORAGE_ROOT
+    ? path.resolve(process.env.BITFUN_E2E_STORAGE_ROOT)
+    : path.join(projectRoot(), 'tests', 'e2e', '.bitfun', 'runtime');
+}
+
+function setDefaultEnvPath(name: string, value: string): void {
+  if (!process.env[name]) {
+    process.env[name] = value;
+  }
+}
+
+function ensureIsolatedE2eStorageEnv(): void {
+  if (process.env.BITFUN_E2E_USE_REAL_PROFILE === '1') {
+    delete process.env.BITFUN_E2E_STORAGE_GUARD;
+    return;
+  }
+
+  const root = e2eRuntimeRoot();
+  const userRoot = process.env.BITFUN_E2E_USER_ROOT
+    ? path.resolve(process.env.BITFUN_E2E_USER_ROOT)
+    : path.join(root, 'user-root');
+  const homeRoot = process.env.BITFUN_E2E_HOME
+    ? path.resolve(process.env.BITFUN_E2E_HOME)
+    : path.join(root, 'home');
+
+  process.env.BITFUN_E2E_USER_ROOT = userRoot;
+  process.env.BITFUN_USER_ROOT = userRoot;
+  process.env.BITFUN_E2E_HOME = homeRoot;
+  process.env.BITFUN_HOME = homeRoot;
+  process.env.BITFUN_E2E_STORAGE_GUARD = '1';
+  setDefaultEnvPath('BITFUN_E2E_LOG_DIR', path.join(root, 'logs'));
+  fs.mkdirSync(root, { recursive: true });
+}
+
+ensureIsolatedE2eStorageEnv();
+
 type BrowserLogEntry = {
   level: string;
   message: string;

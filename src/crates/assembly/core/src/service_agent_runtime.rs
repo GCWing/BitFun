@@ -5,11 +5,13 @@
 //! session restore, terminal pre-warm, remote image conversion, and runtime-port
 //! implementations until a reviewed port/provider migration proves equivalence.
 
+use bitfun_agent_runtime::runtime::{AgentRuntime, AgentRuntimeBuilder, RuntimeError};
 use bitfun_runtime_ports::{
-    AgentSessionCreateRequest, AgentSubmissionPort, AgentSubmissionSource,
-    AgentTurnCancellationPort, AgentTurnCancellationRequest, RemoteControlStatePort,
-    RemoteControlStateRequest, RemoteControlStateSnapshot, RuntimeServiceCapability,
-    RuntimeServicePort,
+    AgentDialogTurnPort, AgentDialogTurnRequest, AgentInputAttachment, AgentLifecycleDeliveryPort,
+    AgentSessionCreateRequest, AgentSessionManagementPort, AgentSubmissionPort,
+    AgentSubmissionSource, AgentTurnCancellationPort, AgentTurnCancellationRequest,
+    RemoteControlStatePort, RemoteControlStateRequest, RemoteControlStateSnapshot,
+    RuntimeServiceCapability, RuntimeServicePort,
 };
 use bitfun_services_integrations::remote_connect::{
     build_remote_chat_messages, build_remote_model_catalog,
@@ -65,11 +67,14 @@ fn remote_workspace_kind(
 }
 
 fn git_branch_for_workspace_path(path: &std::path::Path) -> Option<String> {
-    git2::Repository::open(path).ok().and_then(|repo| {
-        repo.head()
-            .ok()
-            .and_then(|head| head.shorthand().ok().map(String::from))
-    })
+    let path_str = path.to_string_lossy();
+    bitfun_services_integrations::git::execute_git_command_sync(
+        &path_str,
+        &["rev-parse", "--abbrev-ref", "HEAD"],
+    )
+    .ok()
+    .map(|s| s.trim().to_string())
+    .filter(|s| !s.is_empty() && s != "HEAD")
 }
 
 async fn current_remote_workspace_facts() -> Option<RemoteWorkspaceFacts> {
@@ -406,6 +411,32 @@ fn remote_dialog_scheduler_outcome_fact(
     }
 }
 
+fn agent_input_attachment_from_image_context(context: ImageContextData) -> AgentInputAttachment {
+    let mut metadata = serde_json::Map::new();
+    if let Some(image_path) = context.image_path {
+        metadata.insert(
+            "imagePath".to_string(),
+            serde_json::Value::String(image_path),
+        );
+    }
+    if let Some(data_url) = context.data_url {
+        metadata.insert("dataUrl".to_string(), serde_json::Value::String(data_url));
+    }
+    metadata.insert(
+        "mimeType".to_string(),
+        serde_json::Value::String(context.mime_type),
+    );
+    if let Some(context_metadata) = context.metadata {
+        metadata.insert("metadata".to_string(), context_metadata);
+    }
+
+    AgentInputAttachment {
+        kind: "remote_image".to_string(),
+        id: context.id,
+        metadata,
+    }
+}
+
 impl RemoteImageContextAdapter for ImageContextData {
     fn from_remote_image_context(context: RemoteImageContext) -> Self {
         Self {
@@ -601,22 +632,94 @@ impl CoreServiceAgentRuntime {
         Ok(normalized_model_id)
     }
 
-    pub(crate) fn agent_submission_port(
-        coordinator: &ConversationCoordinator,
-    ) -> &(dyn AgentSubmissionPort + '_) {
-        coordinator
-    }
-
-    pub(crate) fn agent_turn_cancellation_port(
-        coordinator: &ConversationCoordinator,
-    ) -> &(dyn AgentTurnCancellationPort + '_) {
-        coordinator
-    }
-
     pub(crate) fn remote_control_state_port(
         coordinator: &ConversationCoordinator,
     ) -> &(dyn RemoteControlStatePort + '_) {
         coordinator
+    }
+
+    pub(crate) fn agent_runtime(
+        coordinator: Arc<ConversationCoordinator>,
+    ) -> Result<AgentRuntime, String> {
+        let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
+        let session_management: Arc<dyn AgentSessionManagementPort> = coordinator.clone();
+        let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator;
+        AgentRuntimeBuilder::new()
+            .with_submission_port(submission)
+            .with_session_management_port(session_management)
+            .with_cancellation_port(cancellation)
+            .build()
+            .map_err(|error| error.to_string())
+    }
+
+    pub(crate) fn agent_runtime_with_dialog_turns(
+        coordinator: Arc<ConversationCoordinator>,
+        scheduler: Arc<DialogScheduler>,
+    ) -> Result<AgentRuntime, String> {
+        let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
+        let session_management: Arc<dyn AgentSessionManagementPort> = coordinator.clone();
+        let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator;
+        let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
+        let lifecycle_delivery: Arc<dyn AgentLifecycleDeliveryPort> = scheduler;
+        AgentRuntimeBuilder::new()
+            .with_submission_port(submission)
+            .with_session_management_port(session_management)
+            .with_cancellation_port(cancellation)
+            .with_dialog_turn_port(dialog_turn)
+            .with_lifecycle_delivery_port(lifecycle_delivery)
+            .build()
+            .map_err(|error| error.to_string())
+    }
+
+    pub(crate) fn agent_runtime_with_lifecycle_delivery(
+        coordinator: Arc<ConversationCoordinator>,
+        scheduler: Arc<DialogScheduler>,
+    ) -> Result<AgentRuntime, String> {
+        let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
+        let session_management: Arc<dyn AgentSessionManagementPort> = coordinator.clone();
+        let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator;
+        let lifecycle_delivery: Arc<dyn AgentLifecycleDeliveryPort> = scheduler;
+        AgentRuntimeBuilder::new()
+            .with_submission_port(submission)
+            .with_session_management_port(session_management)
+            .with_cancellation_port(cancellation)
+            .with_lifecycle_delivery_port(lifecycle_delivery)
+            .build()
+            .map_err(|error| error.to_string())
+    }
+
+    pub(crate) fn agent_runtime_with_scheduler_ports(
+        coordinator: Arc<ConversationCoordinator>,
+        scheduler: Arc<DialogScheduler>,
+    ) -> Result<AgentRuntime, String> {
+        let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
+        let session_management: Arc<dyn AgentSessionManagementPort> = coordinator;
+        let cancellation: Arc<dyn AgentTurnCancellationPort> = scheduler.clone();
+        let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
+        let lifecycle_delivery: Arc<dyn AgentLifecycleDeliveryPort> = scheduler;
+        AgentRuntimeBuilder::new()
+            .with_submission_port(submission)
+            .with_session_management_port(session_management)
+            .with_cancellation_port(cancellation)
+            .with_dialog_turn_port(dialog_turn)
+            .with_lifecycle_delivery_port(lifecycle_delivery)
+            .build()
+            .map_err(|error| error.to_string())
+    }
+
+    pub(crate) fn global_agent_runtime_with_lifecycle_delivery() -> Result<AgentRuntime, String> {
+        let coordinator = get_global_coordinator()
+            .ok_or_else(|| "Desktop session system not ready".to_string())?;
+        let scheduler = get_global_scheduler()
+            .ok_or_else(|| "Dialog scheduler is not initialized".to_string())?;
+        Self::agent_runtime_with_lifecycle_delivery(coordinator, scheduler)
+    }
+
+    pub(crate) fn runtime_error_message(error: RuntimeError) -> String {
+        match error {
+            RuntimeError::Port(error) => error.message,
+            other => other.to_string(),
+        }
     }
 }
 
@@ -671,7 +774,7 @@ impl RemoteSessionTrackerHost for CoreRemoteSessionTrackerHost {
 pub(crate) struct CoreRemoteDialogRuntimeHost<'a> {
     dispatcher: &'a RemoteExecutionDispatcher,
     coordinator: Arc<ConversationCoordinator>,
-    scheduler: Arc<DialogScheduler>,
+    runtime: AgentRuntime,
 }
 
 impl<'a> CoreRemoteDialogRuntimeHost<'a> {
@@ -680,24 +783,33 @@ impl<'a> CoreRemoteDialogRuntimeHost<'a> {
             .ok_or_else(|| "Desktop session system not ready".to_string())?;
         let scheduler = get_global_scheduler()
             .ok_or_else(|| "Dialog scheduler is not initialized".to_string())?;
+        let runtime = CoreServiceAgentRuntime::agent_runtime_with_dialog_turns(
+            coordinator.clone(),
+            scheduler,
+        )?;
 
         Ok(Self {
             dispatcher,
             coordinator,
-            scheduler,
+            runtime,
         })
     }
 }
 
 pub(crate) struct CoreRemoteCancelRuntimeHost {
     coordinator: Arc<ConversationCoordinator>,
+    runtime: AgentRuntime,
 }
 
 impl CoreRemoteCancelRuntimeHost {
     pub(crate) fn new() -> Result<Self, String> {
         let coordinator = get_global_coordinator()
             .ok_or_else(|| "Desktop session system not ready".to_string())?;
-        Ok(Self { coordinator })
+        let runtime = CoreServiceAgentRuntime::agent_runtime(coordinator.clone())?;
+        Ok(Self {
+            coordinator,
+            runtime,
+        })
     }
 }
 
@@ -731,13 +843,18 @@ impl RuntimeServicePort for CoreRemoteWorkspaceRuntimeHost {
 
 pub(crate) struct CoreRemoteSessionRuntimeHost {
     coordinator: Arc<ConversationCoordinator>,
+    runtime: AgentRuntime,
 }
 
 impl CoreRemoteSessionRuntimeHost {
     pub(crate) fn new() -> Result<Self, String> {
         let coordinator = get_global_coordinator()
             .ok_or_else(|| "Desktop session system not ready".to_string())?;
-        Ok(Self { coordinator })
+        let runtime = CoreServiceAgentRuntime::agent_runtime(coordinator.clone())?;
+        Ok(Self {
+            coordinator,
+            runtime,
+        })
     }
 }
 
@@ -850,29 +967,31 @@ impl RemoteDialogRuntimeHost for CoreRemoteDialogRuntimeHost<'_> {
         &self,
         submission: RemoteDialogResolvedSubmission<Self::ImageContext>,
     ) -> Result<RemoteDialogSubmitOutcome, String> {
-        let image_payload = if submission.image_contexts.is_empty() {
-            None
-        } else {
-            Some(submission.image_contexts)
-        };
         let policy = core_dialog_submission_policy(submission.policy);
+        let attachments = submission
+            .image_contexts
+            .into_iter()
+            .map(agent_input_attachment_from_image_context)
+            .collect();
 
-        self.scheduler
-            .submit(
-                submission.session_id,
-                submission.content,
-                None,
-                Some(submission.turn_id),
-                submission.resolved_agent_type,
-                submission.binding_workspace,
+        self.runtime
+            .submit_dialog_turn(AgentDialogTurnRequest {
+                session_id: submission.session_id,
+                message: submission.content,
+                original_message: None,
+                turn_id: Some(submission.turn_id),
+                agent_type: submission.resolved_agent_type,
+                workspace_path: submission.binding_workspace,
                 policy,
-                None,
-                None,
-                image_payload,
-            )
+                reply_route: None,
+                prepended_reminders: Vec::new(),
+                attachments,
+                metadata: serde_json::Map::new(),
+            })
             .await
             .map(remote_dialog_scheduler_outcome_fact)
             .map(remote_dialog_submit_outcome_from_scheduler)
+            .map_err(CoreServiceAgentRuntime::runtime_error_message)
     }
 }
 
@@ -978,13 +1097,11 @@ impl RemoteSessionRuntimeHost for CoreRemoteSessionRuntimeHost {
     }
 
     async fn create_session(&self, request: AgentSessionCreateRequest) -> Result<String, String> {
-        let submission_port =
-            CoreServiceAgentRuntime::agent_submission_port(self.coordinator.as_ref());
-        submission_port
+        self.runtime
             .create_session(request)
             .await
             .map(|session| session.session_id)
-            .map_err(|error| error.message)
+            .map_err(CoreServiceAgentRuntime::runtime_error_message)
     }
 
     async fn load_model_catalog(
@@ -1166,19 +1283,18 @@ impl RemoteCancelRuntimeHost for CoreRemoteCancelRuntimeHost {
     }
 
     async fn cancel_remote_turn(&self, session_id: &str, turn_id: &str) -> Result<(), String> {
-        let cancellation_port =
-            CoreServiceAgentRuntime::agent_turn_cancellation_port(self.coordinator.as_ref());
-        cancellation_port
+        self.runtime
             .cancel_turn(AgentTurnCancellationRequest {
                 session_id: session_id.to_string(),
                 turn_id: Some(turn_id.to_string()),
                 source: Some(AgentSubmissionSource::RemoteRelay),
+                requester_session_id: None,
                 reason: None,
                 wait_timeout_ms: None,
             })
             .await
             .map(|_| ())
-            .map_err(|error| error.message)
+            .map_err(CoreServiceAgentRuntime::runtime_error_message)
     }
 }
 
@@ -1197,6 +1313,7 @@ mod tests {
         fn assert_runtime_ports<T>()
         where
             T: AgentSubmissionPort
+                + AgentSessionManagementPort
                 + AgentTurnCancellationPort
                 + RemoteControlStatePort
                 + SessionTranscriptReader,
@@ -1207,20 +1324,56 @@ mod tests {
     }
 
     #[test]
-    fn core_service_agent_runtime_owner_exposes_remote_control_ports() {
-        fn assert_port_accessors(
-            coordinator: &ConversationCoordinator,
-        ) -> (
-            &(dyn AgentTurnCancellationPort + '_),
-            &(dyn RemoteControlStatePort + '_),
-        ) {
-            (
-                CoreServiceAgentRuntime::agent_turn_cancellation_port(coordinator),
-                CoreServiceAgentRuntime::remote_control_state_port(coordinator),
-            )
+    fn core_service_agent_runtime_owner_keeps_scheduler_lifecycle_port_contracts() {
+        fn assert_scheduler_ports<T>()
+        where
+            T: AgentDialogTurnPort + AgentLifecycleDeliveryPort + AgentTurnCancellationPort,
+        {
         }
 
-        let _ = assert_port_accessors;
+        assert_scheduler_ports::<DialogScheduler>();
+    }
+
+    #[test]
+    fn core_service_agent_runtime_owner_exposes_agent_runtime_and_remote_control_port() {
+        fn assert_agent_runtime(
+            coordinator: Arc<ConversationCoordinator>,
+        ) -> Result<AgentRuntime, String> {
+            CoreServiceAgentRuntime::agent_runtime(coordinator)
+        }
+
+        fn assert_agent_runtime_with_dialog_turns(
+            coordinator: Arc<ConversationCoordinator>,
+            scheduler: Arc<DialogScheduler>,
+        ) -> Result<AgentRuntime, String> {
+            CoreServiceAgentRuntime::agent_runtime_with_dialog_turns(coordinator, scheduler)
+        }
+
+        fn assert_agent_runtime_with_lifecycle_delivery(
+            coordinator: Arc<ConversationCoordinator>,
+            scheduler: Arc<DialogScheduler>,
+        ) -> Result<AgentRuntime, String> {
+            CoreServiceAgentRuntime::agent_runtime_with_lifecycle_delivery(coordinator, scheduler)
+        }
+
+        fn assert_agent_runtime_with_scheduler_ports(
+            coordinator: Arc<ConversationCoordinator>,
+            scheduler: Arc<DialogScheduler>,
+        ) -> Result<AgentRuntime, String> {
+            CoreServiceAgentRuntime::agent_runtime_with_scheduler_ports(coordinator, scheduler)
+        }
+
+        fn assert_remote_control_port(
+            coordinator: &ConversationCoordinator,
+        ) -> &(dyn RemoteControlStatePort + '_) {
+            CoreServiceAgentRuntime::remote_control_state_port(coordinator)
+        }
+
+        let _ = assert_agent_runtime;
+        let _ = assert_agent_runtime_with_dialog_turns;
+        let _ = assert_agent_runtime_with_lifecycle_delivery;
+        let _ = assert_agent_runtime_with_scheduler_ports;
+        let _ = assert_remote_control_port;
     }
 
     #[test]
@@ -1242,6 +1395,39 @@ mod tests {
         assert_eq!(bot.trigger_source, DialogTriggerSource::Bot);
         assert_eq!(bot.queue_priority, DialogQueuePriority::Low);
         assert!(!bot.skip_tool_confirmation);
+    }
+
+    #[test]
+    fn core_service_agent_runtime_owner_maps_image_context_to_lifecycle_attachment() {
+        let attachment = agent_input_attachment_from_image_context(ImageContextData {
+            id: "ctx-1".to_string(),
+            image_path: Some("/workspace/clip.png".to_string()),
+            data_url: Some("data:image/png;base64,abc".to_string()),
+            mime_type: "image/png".to_string(),
+            metadata: Some(serde_json::json!({ "name": "clip.png" })),
+        });
+
+        assert_eq!(attachment.kind, "remote_image");
+        assert_eq!(attachment.id, "ctx-1");
+        assert_eq!(
+            attachment.metadata.get("imagePath"),
+            Some(&serde_json::json!("/workspace/clip.png"))
+        );
+        assert_eq!(
+            attachment.metadata.get("dataUrl"),
+            Some(&serde_json::json!("data:image/png;base64,abc"))
+        );
+        assert_eq!(
+            attachment.metadata.get("mimeType"),
+            Some(&serde_json::json!("image/png"))
+        );
+        assert_eq!(
+            attachment
+                .metadata
+                .get("metadata")
+                .and_then(|value| value.get("name")),
+            Some(&serde_json::json!("clip.png"))
+        );
     }
 
     #[test]
@@ -1369,6 +1555,7 @@ mod tests {
                 id: "round-1".to_string(),
                 turn_id: "turn-1".to_string(),
                 round_index: 0,
+                round_group_id: None,
                 timestamp: 1_100,
                 text_items: vec![
                     TextItemData {
@@ -1382,6 +1569,8 @@ mod tests {
                         parent_task_tool_id: None,
                         subagent_session_id: None,
                         status: None,
+                        attempt_id: None,
+                        attempt_index: None,
                     },
                     TextItemData {
                         id: "text-1".to_string(),
@@ -1394,6 +1583,8 @@ mod tests {
                         parent_task_tool_id: None,
                         subagent_session_id: None,
                         status: None,
+                        attempt_id: None,
+                        attempt_index: None,
                     },
                 ],
                 tool_items: vec![ToolItemData {
@@ -1416,6 +1607,8 @@ mod tests {
                     is_subagent_item: None,
                     parent_task_tool_id: None,
                     subagent_session_id: None,
+                    attempt_id: None,
+                    attempt_index: None,
                     subagent_model_id: None,
                     subagent_model_alias: None,
                     status: Some("running".to_string()),
@@ -1432,6 +1625,8 @@ mod tests {
                     is_subagent_item: None,
                     parent_task_tool_id: None,
                     subagent_session_id: None,
+                    attempt_id: None,
+                    attempt_index: None,
                 }],
                 start_time: 1_100,
                 end_time: Some(1_200),
@@ -1450,6 +1645,9 @@ mod tests {
             start_time: 1_000,
             end_time: Some(1_250),
             duration_ms: Some(250),
+            token_usage: None,
+            finish_reason: None,
+            has_final_response: None,
             status,
         }
     }

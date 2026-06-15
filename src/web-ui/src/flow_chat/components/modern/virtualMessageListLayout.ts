@@ -110,6 +110,8 @@ export function estimateVirtualMessageItemHeight(item: VirtualItem): number {
       return estimateModelRoundHeight(item);
     case 'explore-group':
       return estimateExploreGroupHeight(item);
+    case 'turn-completion-notice':
+      return 120;
     case 'image-analyzing':
       return LIVE_SESSION_DEFAULT_ITEM_HEIGHT_PX;
   }

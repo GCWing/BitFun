@@ -306,25 +306,28 @@ pub fn build_collapsed_tool_stub_definition(
     tool_name: &str,
     short_description: &str,
 ) -> ToolManifestDefinition {
+    // Keep the prompt-visible stub stable for the life of the conversation.
+    // GetToolSpec returns the full schema out-of-band; replacing this stub with
+    // a different tool definition mid-session changes the request prefix and
+    // causes provider-side prefix/KV cache misses on later rounds.
+    // We still need a stub definition in the request because some providers
+    // constrain model tool calls to the exact tool list attached to that
+    // request. Without a prompt-visible stub entry, the model may be unable to
+    // call the collapsed tool at all, even after GetToolSpec has described it.
     ToolManifestDefinition::new(
         tool_name,
         format!(
-            "{} [This tool is collapsed. Call `GetToolSpec` with {{\"tool_name\":\"{}\"}} before first use.]",
-            short_description, tool_name,
+            "THIS IS A COLLAPSED TOOL. Before first use, call GetToolSpec({{\"tool_name\":\"{}\"}}) to load its schema. After that, you can call {} directly. Any direct call before loading will fail validation.\nSummary: {}",
+            tool_name,
+            tool_name,
+            short_description,
         ),
         serde_json::json!({
             "type": "object",
-            "additionalProperties": false,
+            "additionalProperties": true,
             "properties": {}
         }),
     )
-}
-
-pub fn build_get_tool_spec_collapsed_tool_entry(
-    tool_name: &str,
-    short_description: &str,
-) -> String {
-    format!("- {}: {}", tool_name, short_description)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -350,55 +353,6 @@ impl GetToolSpecDetail {
     }
 }
 
-pub fn build_get_tool_spec_catalog_description(
-    collapsed_tools: &[GetToolSpecCollapsedToolSummary],
-) -> String {
-    let collapsed_tools_list = if collapsed_tools.is_empty() {
-        "No additional tools are available.".to_string()
-    } else {
-        collapsed_tools
-            .iter()
-            .map(|tool| {
-                build_get_tool_spec_collapsed_tool_entry(&tool.name, &tool.short_description)
-            })
-            .collect::<Vec<_>>()
-            .join("\n")
-    };
-
-    build_get_tool_spec_description(&collapsed_tools_list)
-}
-
-pub fn build_get_tool_spec_description(collapsed_tools_list: &str) -> String {
-    format!(
-        r#"Read usage instructions for additional tools.
-
-You have access to the additional tools listed below. These tools are collapsed:
-their names may appear in the tool list, but you must not call them directly
-until you have loaded their definition with GetToolSpec.
-
-<collapsed_tools>
-{}
-</collapsed_tools>
-
-Before using one of these tools, first call GetToolSpec with its exact tool name
-to read its full description and input schema. If a direct call to a collapsed
-tool fails with a message like "Tool 'Git' is collapsed", make the next tool
-call `GetToolSpec` with `{{"tool_name":"Git"}}`, then retry the real tool after
-reading the returned schema.
-
-After reading the returned definition, call the real tool directly using its own name.
-
-Do not call GetToolSpec again for a tool whose definition is already loaded in the current conversation.
-
-Example:
-- Suppose the catalog includes a tool named `GetWeather` and you need to use it.
-- First call `GetToolSpec` with `{{"tool_name":"GetWeather"}}`
-- Then read the returned schema and call `GetWeather` itself with the appropriate arguments
-"#,
-        collapsed_tools_list
-    )
-}
-
 pub fn get_tool_spec_input_schema() -> Value {
     serde_json::json!({
         "type": "object",
@@ -415,6 +369,32 @@ pub fn get_tool_spec_input_schema() -> Value {
 
 pub fn get_tool_spec_short_description() -> String {
     "Discover collapsed tools and read their detailed definitions.".to_string()
+}
+
+pub fn build_get_tool_spec_description() -> String {
+    r#"Read full schema before first calling a collapsed tool.
+
+Do not call GetToolSpec again for a tool whose definition is already loaded in the current conversation."#
+        .to_string()
+}
+
+pub fn build_get_tool_spec_catalog_description(
+    collapsed_tools: &[GetToolSpecCollapsedToolSummary],
+) -> Option<String> {
+    if collapsed_tools.is_empty() {
+        return None;
+    }
+
+    let collapsed_tools_list = collapsed_tools
+        .iter()
+        .map(|tool| format!("- {}", tool.name))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    Some(format!(
+        "<collapsed_tools>\n{}\n</collapsed_tools>",
+        collapsed_tools_list
+    ))
 }
 
 pub fn get_tool_spec_is_readonly() -> bool {
@@ -734,6 +714,20 @@ pub fn summarize_get_tool_spec_collapsed_tools<Tool: ToolRegistryItem + ?Sized>(
         .collect()
 }
 
+pub async fn build_get_tool_spec_catalog_description_from_provider<Tool, Context, Provider>(
+    provider: &Provider,
+    context: Option<&Context>,
+) -> Result<Option<String>, String>
+where
+    Tool: ToolRegistryItem + ?Sized,
+    Context: Sync,
+    Provider: GetToolSpecCatalogProvider<Tool, Context> + ?Sized,
+{
+    let collapsed_tools = provider.collapsed_tools_for_get_tool_spec(context).await?;
+    let summaries = summarize_get_tool_spec_collapsed_tools(&collapsed_tools);
+    Ok(build_get_tool_spec_catalog_description(&summaries))
+}
+
 pub async fn resolve_readonly_enabled_tools<Tool: ToolRegistryItem + ?Sized>(
     tool_snapshot: &[ToolRef<Tool>],
 ) -> Vec<ToolRef<Tool>> {
@@ -848,24 +842,6 @@ where
     })
 }
 
-pub async fn build_get_tool_spec_catalog_description_from_provider<Tool, Context, Provider>(
-    provider: &Provider,
-    context: Option<&Context>,
-) -> String
-where
-    Tool: ToolRegistryItem + ?Sized,
-    Context: Sync,
-    Provider: GetToolSpecCatalogProvider<Tool, Context> + ?Sized,
-{
-    let summaries = provider
-        .collapsed_tools_for_get_tool_spec(context)
-        .await
-        .map(|tools| summarize_get_tool_spec_collapsed_tools(&tools))
-        .unwrap_or_default();
-
-    build_get_tool_spec_catalog_description(&summaries)
-}
-
 pub async fn resolve_get_tool_spec_detail_from_provider<Tool, Context, Provider>(
     provider: &Provider,
     tool_name: &str,
@@ -962,17 +938,6 @@ impl<'a, Tool: ?Sized, Context, Provider: ?Sized> GetToolSpecRuntime<'a, Tool, C
 
     pub fn validate_input(&self, input: &Value) -> ValidationResult {
         validate_get_tool_spec_input(input)
-    }
-}
-
-impl<'a, Tool, Context, Provider> GetToolSpecRuntime<'a, Tool, Context, Provider>
-where
-    Tool: ToolRegistryItem + ?Sized,
-    Context: Sync,
-    Provider: GetToolSpecCatalogProvider<Tool, Context> + ?Sized,
-{
-    pub async fn catalog_description(&self, context: Option<&Context>) -> String {
-        build_get_tool_spec_catalog_description_from_provider(self.provider, context).await
     }
 }
 
@@ -1134,6 +1099,10 @@ where
         });
     }
 
+    // This prompt-visible tool-definition list is part of the request prefix.
+    // Once a turn starts, enrich collapsed tools through GetToolSpec results
+    // instead of mutating this list, or later rounds will lose prefix-cache
+    // reuse even if the actual tool set is unchanged.
     let tool_definitions = build_prompt_visible_tool_manifest_definitions(&manifest_items);
 
     ContextualToolManifest {
@@ -2189,5 +2158,33 @@ mod tests {
             .tool_definitions
             .iter()
             .any(|definition| definition.name == "Read"));
+    }
+
+    #[test]
+    fn get_tool_spec_description_preserves_prompt_contract() {
+        let description = build_get_tool_spec_description();
+
+        assert!(description.contains("Read full schema"));
+        assert!(description.contains("Do not call GetToolSpec again"));
+    }
+
+    #[test]
+    fn get_tool_spec_catalog_description_lists_names_only() {
+        let description = build_get_tool_spec_catalog_description(&[
+            GetToolSpecCollapsedToolSummary {
+                name: "Git".to_string(),
+                short_description: "Inspect repository state.".to_string(),
+            },
+            GetToolSpecCollapsedToolSummary {
+                name: "WebFetch".to_string(),
+                short_description: "Fetch a URL.".to_string(),
+            },
+        ])
+        .expect("catalog description");
+
+        assert!(description.contains("- Git"));
+        assert!(description.contains("- WebFetch"));
+        assert!(!description.contains("Inspect repository state."));
+        assert!(!description.contains("Fetch a URL."));
     }
 }

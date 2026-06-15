@@ -62,7 +62,7 @@ const OUTPUT_FONT_SIZE = 12;
 const OUTPUT_LINE_HEIGHT = 1.4;
 const FALLBACK_OUTPUT_ROW_HEIGHT = Math.ceil(OUTPUT_FONT_SIZE * OUTPUT_LINE_HEIGHT);
 
-interface TerminalOutputRendererProps {
+export interface TerminalOutputRendererProps {
   /** Output content to render. */
   content: string;
   /** Optional class name. */

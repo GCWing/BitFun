@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
 import { systemAPI } from '@/infrastructure/api';
-import { configManager } from '@/infrastructure/config';
+import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { createLogger } from '@/shared/utils/logger';
 import { scheduleAfterStartupSignal } from '@/shared/utils/startupTaskScheduling';
 import type { CheckForUpdatesResponse } from '@/infrastructure/api/service-api/SystemAPI';

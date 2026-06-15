@@ -1164,7 +1164,23 @@
     "feedbackDevVersion": "开发版本暂不提供反馈功能",
     "userLabel": "👤 用户:",
     "toolCallLabel": "🔧 工具调用: {{name}}",
-    "loadingMoreHistory": "正在加载更多历史..."
+    "loadingMoreHistory": "正在加载更多历史...",
+    "roundHistoryShow": "显示 {{count}} 次历史重试轮次",
+    "roundHistoryHide": "隐藏历史重试轮次",
+    "roundRetryLabel": "重试轮次 {{index}}",
+    "retryHistoryShow": "显示 {{count}} 次历史尝试",
+    "retryHistoryHide": "隐藏重试历史",
+    "attemptLabel": "第 {{index}} 次尝试",
+    "attemptSuperseded": "已被重试接替",
+    "meta": {
+      "label": "回应元信息",
+      "completed": "完成",
+      "stopped": "已中止",
+      "duration": "耗时",
+      "tokens": "Token",
+      "tokensUnavailable": "不可用",
+      "tokenBreakdown": "共 {{total}}，输入 {{input}}，输出 {{output}}"
+    }
   },
   "exploreRegion": {
     "readFiles_one": "读取了 {{count}} 个文件",
@@ -1331,15 +1347,23 @@
       "executeCommand": "运行命令:",
       "writeStdin": "写入标准输入:",
       "pollProcess": "轮询进程:",
+      "interruptProcess": "中断进程:",
+      "killProcess": "终止进程:",
       "executingCommand": "正在运行命令...",
       "waitingForOutput": "等待输出...",
       "pollingOutput": "正在轮询输出...",
+      "interruptingSession": "正在中断进程...",
+      "killingSession": "正在终止进程...",
       "pollSession": "轮询会话 #{{id}}",
+      "interruptSession": "中断会话 #{{id}}",
+      "killSession": "终止会话 #{{id}}",
       "session": "会话:",
       "wallTime": "{{seconds}}秒",
       "remote": "远程",
       "tty": "TTY",
       "noOutput": "无输出",
+      "interruptSentNoOutput": "已发送中断，无输出",
+      "killSentNoOutput": "已发送终止，无输出",
       "sessionNotFound": "未找到会话 #{{id}}",
       "copyPrimary": "复制",
       "primaryCopied": "已复制",
@@ -1374,7 +1398,8 @@
       "inputParams": "输入参数",
       "executionResult": "执行结果",
       "viewDetails": "查看详情",
-      "interruptedByRestart": "上次关闭应用时该工具尚未完成，已恢复为中断状态"
+      "interruptedByRestart": "上次关闭应用时该工具尚未完成，已恢复为中断状态",
+      "interruptedByRetry": "这次尝试已被同一轮响应中的更新重试接替"
     },
     "askUser": {
       "completed": "已完成",
@@ -1410,6 +1435,33 @@
       "clickToOpenLink": "点击打开链接",
       "noTitle": "无标题",
       "summaryAvailable": "有搜索摘要"
+    },
+    "webFetch": {
+      "parsingUrl": "解析链接中...",
+      "readLabel": "读取网页:",
+      "readTitle": "读取网页: \"{{url}}\"",
+      "reading": "正在读取 \"{{url}}\"...",
+      "preparingRead": "准备读取 \"{{url}}\"",
+      "clickToOpenLink": "点击打开链接",
+      "copyResult": "复制结果",
+      "resultCopied": "结果已复制",
+      "copyResultFailed": "复制结果失败",
+      "contentAvailable": "有内容可预览",
+      "contentLength": "{{count}} 个字符",
+      "fetchFailed": "抓取内容失败",
+      "noContent": "未返回内容"
+    },
+    "getToolSpec": {
+      "title": "工具说明",
+      "readTitle": "读取工具说明：{{toolName}}",
+      "reading": "正在读取 {{toolName}} 的工具说明...",
+      "preparingRead": "准备读取 {{toolName}} 的工具说明",
+      "loaded": "已读取 {{toolName}} 的说明",
+      "alreadyLoaded": "{{toolName}} 已经加载",
+      "readFailed": "读取工具说明失败",
+      "unknownTool": "未知工具",
+      "descriptionLabel": "说明",
+      "schemaLabel": "输入 Schema"
     },
     "todoWrite": {
       "tasksCount": "{{count}} 项任务",
@@ -1509,6 +1561,8 @@
     },
     "default": {
       "waitingConfirm": "等待确认",
+      "queued": "排队中",
+      "waiting": "等待中",
       "executing": "执行中...",
       "completed": "已完成",
       "cancelled": "已取消",
@@ -1967,7 +2021,12 @@
     "autoModelDesc": "自动路由最优模型",
     "primaryModel": "Primary 模型",
     "fastModel": "Fast 模型",
-    "modelNotConfigured": "未配置"
+    "modelNotConfigured": "未配置",
+    "contextUsage": {
+      "agentPrompt": "上次请求输入上下文: {{usage}}",
+      "acpContext": "ACP 上报上下文: {{usage}}",
+      "toolNote": "工具输出在后续请求中可能会被摘要或截断。"
+    }
   },
   "reasoningEffort": {
     "title": "推理深度",
@@ -2098,6 +2157,25 @@
     "injectedAt": "已在第 {{round}} 轮前插入",
     "statusPending": "等待触发",
     "statusInjected": "已触发"
+  },
+  "turnCompletionNotice": {
+    "reasonLabel": "结束原因",
+    "finalResponseProvided": "agent 已提供最终回复。",
+    "repeatedToolFailures": {
+      "title": "该轮因重复工具失败而结束"
+    },
+    "emptyRound": {
+      "title": "该轮没有得到可用回复"
+    },
+    "interrupted": {
+      "title": "该轮已中断"
+    },
+    "maxRounds": {
+      "title": "该轮触达 round 上限"
+    },
+    "generic": {
+      "title": "该轮以非标准方式结束"
+    }
   },
   "errors": {
     "sendFailed": "发送消息失败"

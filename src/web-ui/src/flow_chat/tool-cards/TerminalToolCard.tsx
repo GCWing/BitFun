@@ -22,7 +22,7 @@ import { createTerminalTab } from '@/shared/utils/tabUtils';
 import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
 import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
 import { DotMatrixLoader, IconButton } from '../../component-library';
-import { TerminalOutputRenderer } from '@/tools/terminal/components';
+import { LazyTerminalOutputRenderer } from '@/tools/terminal/components/LazyTerminalOutputRenderer';
 import { createLogger } from '@/shared/utils/logger';
 import { useToolCardHeightContract, type ToolCardCollapseReason } from './useToolCardHeightContract';
 import { getTerminalViewState, type TerminalViewState } from './terminalToolCardState';
@@ -102,7 +102,7 @@ function renderTerminalExpandedContent(params: {
     <>
       {viewState.displayPhase === 'live_output' && (
         <div className="terminal-execution-output">
-          <TerminalOutputRenderer
+          <LazyTerminalOutputRenderer
             content={liveOutput}
             className="terminal-xterm-output"
             maxRows={maxRows}
@@ -120,7 +120,7 @@ function renderTerminalExpandedContent(params: {
         <div className="terminal-result-container">
           {parsedResult.output && (
             <div className="terminal-result-output">
-              <TerminalOutputRenderer
+              <LazyTerminalOutputRenderer
                 content={parsedResult.output}
                 className="terminal-xterm-output"
                 maxRows={maxRows}
@@ -149,7 +149,7 @@ function renderTerminalExpandedContent(params: {
       {viewState.showCancelledResult && (
         <div className="terminal-result-container cancelled">
           <div className="terminal-result-output">
-            <TerminalOutputRenderer
+            <LazyTerminalOutputRenderer
               content={liveOutput}
               className="terminal-xterm-output"
               maxRows={maxRows}

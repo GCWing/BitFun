@@ -5,10 +5,10 @@ use bitfun_product_domains::miniapp::ports::{
     MiniAppPortError, MiniAppPortErrorKind, MiniAppPortFuture, MiniAppStoragePort,
 };
 use bitfun_product_domains::miniapp::storage::{
-    build_package_json, parse_npm_dependencies, MiniAppImportLayout, MiniAppStorageLayout,
-    COMPILED_HTML, DRAFTS_CLEANUP_MARKER, DRAFTS_CLEANUP_PREFIX, DRAFTS_DIR, DRAFT_JSON,
-    ESM_DEPS_JSON, INDEX_HTML, META_JSON, PACKAGE_JSON, REQUIRED_SOURCE_FILES, STORAGE_JSON,
-    STYLE_CSS, UI_JS, WORKER_JS,
+    build_package_json, parse_npm_dependencies, MiniAppImportBundleWriteRequest,
+    MiniAppImportLayout, MiniAppStorageLayout, COMPILED_HTML, DRAFTS_CLEANUP_MARKER,
+    DRAFTS_CLEANUP_PREFIX, DRAFTS_DIR, DRAFT_JSON, ESM_DEPS_JSON, INDEX_HTML, META_JSON,
+    PACKAGE_JSON, REQUIRED_SOURCE_FILES, STORAGE_JSON, STYLE_CSS, UI_JS, WORKER_JS,
 };
 use bitfun_product_domains::miniapp::types::{MiniApp, MiniAppMeta, MiniAppSource, NpmDep};
 use serde_json;
@@ -72,17 +72,6 @@ impl std::fmt::Display for MiniAppStorageError {
 impl std::error::Error for MiniAppStorageError {}
 
 pub type MiniAppStorageResult<T> = Result<T, MiniAppStorageError>;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MiniAppImportBundleRequest {
-    pub source_path: PathBuf,
-    pub app_id: String,
-    pub meta_json: String,
-    pub esm_dependencies_json: String,
-    pub package_json: String,
-    pub storage_json: String,
-    pub compiled_html: String,
-}
 
 /// MiniApp storage service (file-based under the MiniApp data directory).
 pub struct MiniAppStorage {
@@ -219,7 +208,7 @@ impl MiniAppStorage {
 
     pub async fn write_import_bundle(
         &self,
-        request: MiniAppImportBundleRequest,
+        request: MiniAppImportBundleWriteRequest,
     ) -> MiniAppStorageResult<()> {
         let import_layout = MiniAppImportLayout::new(&request.source_path);
         Self::validate_import_layout(&request.source_path, &import_layout)?;
@@ -1261,7 +1250,7 @@ mod tests {
         assert_eq!(read_meta, meta_json);
 
         storage
-            .write_import_bundle(MiniAppImportBundleRequest {
+            .write_import_bundle(MiniAppImportBundleWriteRequest {
                 source_path: import_root,
                 app_id: "imported-app".to_string(),
                 meta_json,

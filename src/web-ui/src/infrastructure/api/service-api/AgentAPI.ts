@@ -275,6 +275,8 @@ export type DialogTurnStartedEvent = AgenticEvent;
 
 export interface TextChunkEvent extends AgenticEvent {
   roundId: string;
+  attemptId?: string;
+  attemptIndex?: number;
   text: string;
   contentType?: 'text' | 'thinking';
   isThinkingEnd?: boolean;
@@ -282,6 +284,8 @@ export interface TextChunkEvent extends AgenticEvent {
 
 export interface ToolEvent extends AgenticEvent {
   roundId: string;
+  attemptId?: string;
+  attemptIndex?: number;
   toolEvent: any;
 }
 
@@ -368,6 +372,14 @@ export interface ModelRoundCompletedEvent extends AgenticEvent {
   attemptCount?: number;
   failureCategory?: string;
   tokenDetails?: unknown;
+}
+
+export interface ModelRoundStartedEvent extends AgenticEvent {
+  turnId: string;
+  roundId: string;
+  roundGroupId?: string;
+  roundIndex: number;
+  modelId?: string;
 }
 
 export interface AcpContextUsageUpdatedEvent extends AgenticEvent {

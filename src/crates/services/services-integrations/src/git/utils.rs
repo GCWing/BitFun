@@ -58,6 +58,10 @@ pub fn get_current_branch(repo: &Repository) -> Result<String, GitError> {
 pub fn status_to_string(status: Status) -> String {
     let mut result = Vec::new();
 
+    if status.contains(Status::CONFLICTED) {
+        result.push("C");
+    }
+
     if status.contains(Status::INDEX_NEW) {
         result.push("A");
     }
@@ -130,14 +134,16 @@ fn collect_statuses(
                     | Status::INDEX_DELETED
                     | Status::INDEX_RENAMED
                     | Status::INDEX_TYPECHANGE,
-            ) {
+            ) || status.contains(Status::CONFLICTED)
+            {
                 Some(status_to_string(
                     status
                         & (Status::INDEX_NEW
                             | Status::INDEX_MODIFIED
                             | Status::INDEX_DELETED
                             | Status::INDEX_RENAMED
-                            | Status::INDEX_TYPECHANGE),
+                            | Status::INDEX_TYPECHANGE
+                            | Status::CONFLICTED),
                 ))
             } else {
                 None
@@ -149,14 +155,16 @@ fn collect_statuses(
                     | Status::WT_DELETED
                     | Status::WT_RENAMED
                     | Status::WT_TYPECHANGE,
-            ) {
+            ) || status.contains(Status::CONFLICTED)
+            {
                 Some(status_to_string(
                     status
                         & (Status::WT_NEW
                             | Status::WT_MODIFIED
                             | Status::WT_DELETED
                             | Status::WT_RENAMED
-                            | Status::WT_TYPECHANGE),
+                            | Status::WT_TYPECHANGE
+                            | Status::CONFLICTED),
                 ))
             } else {
                 None

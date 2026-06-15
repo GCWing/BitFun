@@ -12,10 +12,13 @@ use crate::agentic::coordination::{
     ConversationCoordinator, DialogQueuePriority, DialogScheduler, DialogSubmissionPolicy,
     DialogTriggerSource,
 };
-use crate::agentic::core::{InternalReminderKind, Message, SessionConfig};
+use crate::agentic::core::SessionConfig;
 use crate::infrastructure::PathManager;
+use crate::service_agent_runtime::CoreServiceAgentRuntime;
 use crate::util::errors::{BitFunError, BitFunResult};
+use bitfun_agent_runtime::runtime::AgentRuntime;
 use bitfun_agent_runtime::scheduled_job::ScheduledJobEnqueueFailureAction;
+use bitfun_runtime_ports::{AgentDialogPrependedReminder, AgentDialogTurnRequest};
 use chrono::{Local, SecondsFormat, TimeZone, Utc};
 use log::{debug, info, warn};
 use std::collections::HashMap;
@@ -29,7 +32,7 @@ static GLOBAL_CRON_SERVICE: OnceLock<Arc<CronService>> = OnceLock::new();
 
 pub struct CronService {
     coordinator: Arc<ConversationCoordinator>,
-    scheduler: Arc<DialogScheduler>,
+    runtime: AgentRuntime,
     store: Arc<CronJobStore>,
     jobs: Arc<RwLock<HashMap<String, CronJob>>>,
     mutation_lock: Arc<Mutex<()>>,
@@ -62,9 +65,15 @@ impl CronService {
             jobs.insert(job.id.clone(), job);
         }
 
+        let runtime = CoreServiceAgentRuntime::agent_runtime_with_dialog_turns(
+            coordinator.clone(),
+            scheduler,
+        )
+        .map_err(BitFunError::service)?;
+
         let service = Arc::new(Self {
             coordinator,
-            scheduler,
+            runtime,
             store,
             jobs: Arc::new(RwLock::new(jobs)),
             mutation_lock: Arc::new(Mutex::new(())),
@@ -543,21 +552,22 @@ impl CronService {
 
     async fn submit_enqueue_input(&self, enqueue_input: &EnqueueInput) -> Result<(), String> {
         let resolved = self.resolve_enqueue_submission(enqueue_input).await?;
-        self.scheduler
-            .submit_with_prepended_messages(
-                resolved.session_id,
-                enqueue_input.user_input.clone(),
-                Some(enqueue_input.user_input.clone()),
-                Some(enqueue_input.turn_id.clone()),
-                resolved.agent_type,
-                Some(resolved.workspace_path),
-                scheduled_job_policy(),
-                None,
-                None,
-                enqueue_input.prepended_messages.clone(),
-                None,
-            )
+        self.runtime
+            .submit_dialog_turn(AgentDialogTurnRequest {
+                session_id: resolved.session_id,
+                message: enqueue_input.user_input.clone(),
+                original_message: Some(enqueue_input.user_input.clone()),
+                turn_id: Some(enqueue_input.turn_id.clone()),
+                agent_type: resolved.agent_type,
+                workspace_path: Some(resolved.workspace_path),
+                policy: scheduled_job_policy(),
+                reply_route: None,
+                prepended_reminders: enqueue_input.prepended_messages.clone(),
+                attachments: Vec::new(),
+                metadata: serde_json::Map::new(),
+            })
             .await
+            .map_err(CoreServiceAgentRuntime::runtime_error_message)
             .map(|_| ())
     }
 
@@ -809,7 +819,10 @@ fn next_wakeup_for_job(job: &CronJob) -> Option<i64> {
     job.state.next_wakeup_at_ms()
 }
 
-fn format_scheduled_job_user_input(payload: &str, current_ms: i64) -> (String, Vec<Message>) {
+fn format_scheduled_job_user_input(
+    payload: &str,
+    current_ms: i64,
+) -> (String, Vec<AgentDialogPrependedReminder>) {
     let current_time = Local
         .timestamp_millis_opt(current_ms)
         .single()
@@ -818,13 +831,13 @@ fn format_scheduled_job_user_input(payload: &str, current_ms: i64) -> (String, V
 
     (
         payload.to_string(),
-        vec![Message::internal_reminder(
-            InternalReminderKind::ScheduledJob,
-            format!(
+        vec![AgentDialogPrependedReminder {
+            kind: "scheduled_job".to_string(),
+            text: format!(
                 "This message was triggered by a scheduled job.\nCurrent time: {}",
                 current_time
             ),
-        )],
+        }],
     )
 }
 
@@ -846,7 +859,7 @@ struct EnqueueInput {
     turn_id: String,
     target: CronJobTarget,
     user_input: String,
-    prepended_messages: Vec<Message>,
+    prepended_messages: Vec<AgentDialogPrependedReminder>,
 }
 
 struct ResolvedEnqueueSubmission {

@@ -51,6 +51,8 @@ pub struct MiniAppPermissions {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ai: Option<AiPermissions>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent: Option<AgentPermissions>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub notifications: Option<NotificationPermissions>,
 }
 
@@ -106,6 +108,21 @@ pub struct AiPermissions {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_tokens_per_request: Option<u32>,
     /// Maximum number of AI requests per minute (per app).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rate_limit_per_minute: Option<u32>,
+}
+
+/// Full agent-run permissions for MiniApps.
+///
+/// Unlike `AiPermissions` (raw single-call LLM access), this grants the MiniApp the
+/// ability to run complete host agent turns (agent loop with tools such as
+/// WebSearch/WebFetch and skills) through the host agent bridge.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentPermissions {
+    /// Whether full agent-run access is enabled for this MiniApp.
+    #[serde(default)]
+    pub enabled: bool,
+    /// Maximum number of agent runs per minute (per app). 0 / absent = unlimited.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rate_limit_per_minute: Option<u32>,
 }

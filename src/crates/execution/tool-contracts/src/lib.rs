@@ -16,9 +16,8 @@ pub use bitfun_runtime_ports::{
     DynamicToolDescriptor, DynamicToolProvider, PortError, PortErrorKind, PortResult, ToolDecorator,
 };
 pub use execution_gate::{
-    build_tool_call_loop_block_message, validate_tool_execution_admission, ToolCallLoopBlock,
-    ToolCallLoopDecision, ToolCallLoopHistory, ToolExecutionAdmissionRejection,
-    ToolExecutionAdmissionRequest, TOOL_CALL_HISTORY_WINDOW, TOOL_CALL_LOOP_THRESHOLD,
+    validate_tool_execution_admission, ToolExecutionAdmissionRejection,
+    ToolExecutionAdmissionRequest,
 };
 pub use file_guidance::{
     file_tool_guidance_message, is_file_tool_guidance_message, FILE_TOOL_GUIDANCE_PREFIX,
@@ -30,8 +29,7 @@ pub use file_read_freshness::{
 pub use framework::{
     build_bitfun_runtime_uri, build_collapsed_tool_stub_definition,
     build_get_tool_spec_assistant_detail, build_get_tool_spec_catalog_description,
-    build_get_tool_spec_catalog_description_from_provider,
-    build_get_tool_spec_collapsed_tool_entry, build_get_tool_spec_description,
+    build_get_tool_spec_catalog_description_from_provider, build_get_tool_spec_description,
     build_get_tool_spec_detail_result, build_get_tool_spec_duplicate_load_hint,
     build_get_tool_spec_duplicate_load_result, build_prompt_visible_tool_manifest_definitions,
     build_tool_manifest_policy_tools, build_tool_path_policy_denial_message,

@@ -2,6 +2,7 @@
 //!
 //! Executes a single model round: calls AI, processes streaming responses, executes tools
 
+use super::model_exchange_trace::prepare_model_exchange_trace;
 use super::stream_processor::{StreamProcessOptions, StreamProcessor, StreamResult};
 use super::types::{FinishReason, RoundContext, RoundResult};
 use crate::agentic::core::{Message, ToolCall};
@@ -18,6 +19,9 @@ use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::Message as AIMessage;
 use crate::util::types::ToolDefinition;
+use bitfun_ai_adapters::{
+    ModelExchangeRequestTraceHandle, ModelExchangeResponseTrace, ModelExchangeTraceConfig,
+};
 use dashmap::DashMap;
 use log::{debug, error, warn};
 use std::sync::Arc;
@@ -39,6 +43,16 @@ impl RoundExecutor {
 
     fn has_user_visible_assistant_text(text: &str) -> bool {
         !text.trim().is_empty()
+    }
+
+    async fn sleep_with_cancellation(
+        delay_ms: u64,
+        cancel_token: &CancellationToken,
+    ) -> BitFunResult<()> {
+        tokio::select! {
+            _ = cancel_token.cancelled() => Err(BitFunError::Cancelled("Execution cancelled".to_string())),
+            _ = tokio::time::sleep(Duration::from_millis(delay_ms)) => Ok(()),
+        }
     }
 
     pub fn new(
@@ -95,6 +109,7 @@ impl RoundExecutor {
                 session_id: context.session_id.clone(),
                 turn_id: context.dialog_turn_id.clone(),
                 round_id: round_id.clone(),
+                round_group_id: context.round_group_id.clone(),
                 round_index: context.round_number,
                 model_id: Some(context.model_name.clone()),
             },
@@ -102,9 +117,13 @@ impl RoundExecutor {
         )
         .await;
 
+        let trace_config =
+            prepare_model_exchange_trace(&context, &round_id, ai_client.as_ref()).await;
         let max_attempts = Self::MAX_STREAM_ATTEMPTS;
         let mut attempt_index = 0usize;
-        let (stream_result, send_to_stream_ms, stream_processing_ms) = loop {
+        let (stream_result, send_to_stream_ms, stream_processing_ms, final_trace_handle) = loop {
+            let attempt_number = (attempt_index + 1) as u32;
+            let attempt_id = format!("{round_id}:attempt:{attempt_number}");
             // Check cancellation before opening a model stream. This catches
             // early cancellation registered before the first round starts.
             if cancel_token.is_cancelled() {
@@ -124,12 +143,19 @@ impl RoundExecutor {
                 attempt_index + 1,
                 max_attempts
             );
-
             // Use dynamically obtained client for call
-            let (stream_response, send_to_stream_ms) = match ai_client
-                .send_message_stream(ai_messages.clone(), tool_definitions.clone())
-                .await
-            {
+            let send_future = ai_client.send_message_stream(
+                ai_messages.clone(),
+                tool_definitions.clone(),
+                trace_config.clone(),
+            );
+            let send_result = tokio::select! {
+                _ = cancel_token.cancelled() => {
+                    return Err(BitFunError::Cancelled("Execution cancelled".to_string()));
+                }
+                result = send_future => result,
+            };
+            let (stream_response, send_to_stream_ms) = match send_result {
                 Ok(response) => {
                     let send_to_stream_ms = elapsed_ms_u64(request_started_at);
                     debug!(
@@ -158,7 +184,11 @@ impl RoundExecutor {
                             delay_ms,
                             err_msg
                         );
-                        tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                        if let Err(cancel_err) =
+                            Self::sleep_with_cancellation(delay_ms, &cancel_token).await
+                        {
+                            return Err(cancel_err);
+                        }
                         attempt_index += 1;
                         continue;
                     }
@@ -168,16 +198,37 @@ impl RoundExecutor {
                             max_attempts, err_msg
                         )));
                     }
-                    return Err(BitFunError::AIClient(err_msg));
+                    // Non-transient errors (429 budget exhausted, context
+                    // overflow, auth, etc.) are returned directly. The error
+                    // message is classified downstream via
+                    // `BitFunError::error_category()` into `ErrorCategory` for
+                    // frontend recovery actions (wait_and_retry, switch_model,
+                    // etc.).
+                    let error = BitFunError::AIClient(err_msg);
+                    warn!(
+                        "AI request terminal failure: session_id={}, round_id={}, category={:?}, error={}",
+                        context.session_id,
+                        round_id,
+                        error.error_category(),
+                        error
+                    );
+                    return Err(error);
                 }
             };
 
             // Destructure StreamResponse: get stream and raw SSE data receiver
             let ai_stream = stream_response.stream;
             let raw_sse_rx = stream_response.raw_sse_rx;
+            let trace_handle = stream_response.trace_handle;
 
             // Check cancellation token before calling stream processing.
             if cancel_token.is_cancelled() {
+                Self::complete_model_exchange_trace(
+                    trace_config.as_ref(),
+                    trace_handle.as_ref(),
+                    Self::error_trace_response("cancelled", "Execution cancelled".to_string()),
+                )
+                .await;
                 debug!(
                     "Cancel token detected after AI stream opened, stopping execution: session_id={}",
                     context.session_id
@@ -204,6 +255,8 @@ impl RoundExecutor {
                     context.session_id.clone(),
                     context.dialog_turn_id.clone(),
                     round_id.clone(),
+                    attempt_id.clone(),
+                    attempt_number,
                     &cancel_token,
                     StreamProcessOptions {
                         recover_partial_on_cancel: context.recover_partial_on_cancel,
@@ -222,6 +275,12 @@ impl RoundExecutor {
                             && attempt_index < max_attempts - 1
                             && Self::is_transient_network_error(&err_msg)
                         {
+                            Self::complete_model_exchange_trace(
+                                trace_config.as_ref(),
+                                trace_handle.as_ref(),
+                                Self::trace_response_from_stream_result("partial", &result),
+                            )
+                            .await;
                             let delay_ms = Self::retry_delay_ms(attempt_index);
                             warn!(
                                 "Retrying stream because tool arguments were interrupted before valid JSON completed: session_id={}, round_id={}, attempt={}/{}, delay_ms={}, invalid_tool_calls={}, error={}",
@@ -237,7 +296,11 @@ impl RoundExecutor {
                                     .count(),
                                 err_msg
                             );
-                            tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                            if let Err(cancel_err) =
+                                Self::sleep_with_cancellation(delay_ms, &cancel_token).await
+                            {
+                                return Err(cancel_err);
+                            }
                             attempt_index += 1;
                             continue;
                         }
@@ -265,7 +328,12 @@ impl RoundExecutor {
                             recovered
                                 .tool_calls
                                 .retain(|tool_call| tool_call.is_valid());
-                            break (recovered, send_to_stream_ms, stream_processing_ms);
+                            break (
+                                recovered,
+                                send_to_stream_ms,
+                                stream_processing_ms,
+                                trace_handle,
+                            );
                         }
 
                         self.emit_failed_partial_tool_calls(
@@ -273,6 +341,16 @@ impl RoundExecutor {
                             &round_id,
                             &result.tool_calls,
                             &err_msg,
+                        )
+                        .await;
+                        Self::complete_model_exchange_trace(
+                            trace_config.as_ref(),
+                            trace_handle.as_ref(),
+                            Self::error_trace_response_from_stream_result(
+                                "error",
+                                err_msg.clone(),
+                                &result,
+                            ),
                         )
                         .await;
                         return Err(BitFunError::AIClient(format!(
@@ -292,6 +370,12 @@ impl RoundExecutor {
                         && Self::is_transient_network_error(partial_recovery_reason)
                         && attempt_index < max_attempts - 1
                     {
+                        Self::complete_model_exchange_trace(
+                            trace_config.as_ref(),
+                            trace_handle.as_ref(),
+                            Self::trace_response_from_stream_result("partial", &result),
+                        )
+                        .await;
                         let delay_ms = Self::retry_delay_ms(attempt_index);
                         warn!(
                             "Retrying stream because tool calls arrived on an interrupted network stream without assistant text: session_id={}, round_id={}, attempt={}/{}, delay_ms={}, tool_calls={}, reason={}",
@@ -303,13 +387,28 @@ impl RoundExecutor {
                             result.tool_calls.len(),
                             partial_recovery_reason
                         );
-                        tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                        if let Err(cancel_err) =
+                            Self::sleep_with_cancellation(delay_ms, &cancel_token).await
+                        {
+                            return Err(cancel_err);
+                        }
                         attempt_index += 1;
                         continue;
                     }
 
                     if Self::is_invalid_tool_only_without_text(&result) {
+                        let err_msg = "Provider returned only invalid tool arguments".to_string();
                         if attempt_index < max_attempts - 1 {
+                            Self::complete_model_exchange_trace(
+                                trace_config.as_ref(),
+                                trace_handle.as_ref(),
+                                Self::error_trace_response_from_stream_result(
+                                    "error",
+                                    err_msg.clone(),
+                                    &result,
+                                ),
+                            )
+                            .await;
                             let delay_ms = Self::retry_delay_ms(attempt_index);
                             warn!(
                                 "Retrying stream because provider returned only invalid tool arguments: session_id={}, round_id={}, attempt={}/{}, delay_ms={}, tool_calls={}",
@@ -320,17 +419,30 @@ impl RoundExecutor {
                                 delay_ms,
                                 result.tool_calls.len()
                             );
-                            tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                            if let Err(cancel_err) =
+                                Self::sleep_with_cancellation(delay_ms, &cancel_token).await
+                            {
+                                return Err(cancel_err);
+                            }
                             attempt_index += 1;
                             continue;
                         }
 
-                        let err_msg = "Provider returned only invalid tool arguments";
                         self.emit_failed_partial_tool_calls(
                             &context,
                             &round_id,
                             &result.tool_calls,
-                            err_msg,
+                            &err_msg,
+                        )
+                        .await;
+                        Self::complete_model_exchange_trace(
+                            trace_config.as_ref(),
+                            trace_handle.as_ref(),
+                            Self::error_trace_response_from_stream_result(
+                                "error",
+                                err_msg.clone(),
+                                &result,
+                            ),
                         )
                         .await;
                         return Err(BitFunError::AIClient(format!(
@@ -340,6 +452,15 @@ impl RoundExecutor {
                     }
 
                     if no_effective_output && attempt_index < max_attempts - 1 {
+                        Self::complete_model_exchange_trace(
+                            trace_config.as_ref(),
+                            trace_handle.as_ref(),
+                            Self::error_trace_response(
+                                "error",
+                                "No effective output received".to_string(),
+                            ),
+                        )
+                        .await;
                         let delay_ms = Self::retry_delay_ms(attempt_index);
                         warn!(
                             "Retrying stream because no effective output was received: session_id={}, round_id={}, attempt={}/{}, delay_ms={}",
@@ -349,7 +470,11 @@ impl RoundExecutor {
                             max_attempts,
                             delay_ms
                         );
-                        tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                        if let Err(cancel_err) =
+                            Self::sleep_with_cancellation(delay_ms, &cancel_token).await
+                        {
+                            return Err(cancel_err);
+                        }
                         attempt_index += 1;
                         continue;
                     }
@@ -368,13 +493,24 @@ impl RoundExecutor {
                         );
                     }
 
-                    break (result, send_to_stream_ms, stream_processing_ms);
+                    break (
+                        result,
+                        send_to_stream_ms,
+                        stream_processing_ms,
+                        trace_handle,
+                    );
                 }
                 Err(stream_err) => {
                     let err_msg = stream_err.error.to_string();
                     let can_retry = !stream_err.has_effective_output
                         && attempt_index < max_attempts - 1
                         && Self::is_transient_network_error(&err_msg);
+                    Self::complete_model_exchange_trace(
+                        trace_config.as_ref(),
+                        trace_handle.as_ref(),
+                        Self::error_trace_response("error", err_msg.clone()),
+                    )
+                    .await;
                     if can_retry {
                         let delay_ms = Self::retry_delay_ms(attempt_index);
                         warn!(
@@ -386,7 +522,11 @@ impl RoundExecutor {
                             delay_ms,
                             err_msg
                         );
-                        tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                        if let Err(cancel_err) =
+                            Self::sleep_with_cancellation(delay_ms, &cancel_token).await
+                        {
+                            return Err(cancel_err);
+                        }
                         attempt_index += 1;
                         continue;
                     }
@@ -400,6 +540,13 @@ impl RoundExecutor {
                 }
             }
         };
+
+        Self::complete_model_exchange_trace(
+            trace_config.as_ref(),
+            final_trace_handle.as_ref(),
+            Self::final_trace_response(&stream_result),
+        )
+        .await;
 
         // Model returned successfully (output to AI log file)
         if let Some(ref reason) = stream_result.partial_recovery_reason {
@@ -430,41 +577,23 @@ impl RoundExecutor {
             stream_result.first_visible_output_ms
         );
 
-        // Check cancellation token again after stream processing completes
+        // If stream response contains usage info, record it before the
+        // post-stream cancellation gate. A user can press stop after the
+        // provider returned usage but before this round settles; dropping that
+        // usage makes cancelled turns look unaccounted even though the provider
+        // already supplied authoritative counts.
+        if let Some(ref usage) = stream_result.usage {
+            self.emit_token_usage_update(&context, usage, context_window, is_subagent)
+                .await;
+        }
+
+        // Check cancellation token again after stream processing completes.
         if cancel_token.is_cancelled() {
             debug!(
                 "Cancel token detected after stream processing, stopping execution: session_id={}",
                 context.session_id
             );
             return Err(BitFunError::Cancelled("Execution cancelled".to_string()));
-        }
-
-        // If stream response contains usage info, update token statistics
-        if let Some(ref usage) = stream_result.usage {
-            debug!(
-                "Updating token stats from model response: input={}, output={}, total={}, is_subagent={}",
-                usage.prompt_token_count,
-                usage.candidates_token_count,
-                usage.total_token_count,
-                is_subagent
-            );
-
-            self.emit_event(
-                AgenticEvent::TokenUsageUpdated {
-                    session_id: context.session_id.clone(),
-                    turn_id: context.dialog_turn_id.clone(),
-                    model_id: context.model_name.clone(),
-                    input_tokens: usage.prompt_token_count as usize,
-                    output_tokens: Some(usage.candidates_token_count as usize),
-                    total_tokens: usage.total_token_count as usize,
-                    max_context_tokens: context_window,
-                    is_subagent,
-                    cached_tokens: usage.cached_content_token_count.map(|v| v as usize),
-                    token_details: token_details_from_usage(usage),
-                },
-                EventPriority::Normal,
-            )
-            .await;
         }
 
         // Emit model round completed event
@@ -578,6 +707,8 @@ impl RoundExecutor {
                 session_id: context.session_id.clone(),
                 dialog_turn_id: context.dialog_turn_id.clone(),
                 round_id: round_id.clone(),
+                attempt_id: Some(format!("{round_id}:attempt:{}", attempt_index + 1)),
+                attempt_index: Some((attempt_index + 1) as u32),
                 agent_type: context.agent_type.clone(),
                 workspace: context.workspace.clone(),
                 context_vars: context.context_vars.clone(),
@@ -845,6 +976,39 @@ impl RoundExecutor {
         let _ = self.event_queue.enqueue(event, Some(priority)).await;
     }
 
+    async fn emit_token_usage_update(
+        &self,
+        context: &RoundContext,
+        usage: &crate::util::types::ai::GeminiUsage,
+        context_window: Option<usize>,
+        is_subagent: bool,
+    ) {
+        debug!(
+            "Updating token stats from model response: input={}, output={}, total={}, is_subagent={}",
+            usage.prompt_token_count,
+            usage.candidates_token_count,
+            usage.total_token_count,
+            is_subagent
+        );
+
+        self.emit_event(
+            AgenticEvent::TokenUsageUpdated {
+                session_id: context.session_id.clone(),
+                turn_id: context.dialog_turn_id.clone(),
+                model_id: context.model_name.clone(),
+                input_tokens: usage.prompt_token_count as usize,
+                output_tokens: Some(usage.candidates_token_count as usize),
+                total_tokens: usage.total_token_count as usize,
+                max_context_tokens: context_window,
+                is_subagent,
+                cached_tokens: usage.cached_content_token_count.map(|v| v as usize),
+                token_details: token_details_from_usage(usage),
+            },
+            EventPriority::Normal,
+        )
+        .await;
+    }
+
     async fn emit_failed_partial_tool_calls(
         &self,
         context: &RoundContext,
@@ -858,6 +1022,8 @@ impl RoundExecutor {
                     session_id: context.session_id.clone(),
                     turn_id: context.dialog_turn_id.clone(),
                     round_id: round_id.to_string(),
+                    attempt_id: None,
+                    attempt_index: None,
                     tool_event: ToolEventData::Failed {
                         tool_id: tool_call.tool_id.clone(),
                         tool_name: tool_call.tool_name.clone(),
@@ -872,6 +1038,97 @@ impl RoundExecutor {
                 EventPriority::High,
             )
             .await;
+        }
+    }
+
+    async fn complete_model_exchange_trace(
+        trace_config: Option<&ModelExchangeTraceConfig>,
+        trace_handle: Option<&ModelExchangeRequestTraceHandle>,
+        response: ModelExchangeResponseTrace,
+    ) {
+        let (Some(trace_config), Some(trace_handle)) = (trace_config, trace_handle) else {
+            return;
+        };
+
+        trace_config
+            .sink
+            .request_attempt_completed(trace_handle, &response)
+            .await;
+    }
+
+    fn final_trace_response(result: &StreamResult) -> ModelExchangeResponseTrace {
+        let kind = if result.partial_recovery_reason.is_some() {
+            "partial"
+        } else {
+            "completed"
+        };
+        Self::trace_response(kind, Some(result), None)
+    }
+
+    fn trace_response_from_stream_result(
+        kind: &str,
+        result: &StreamResult,
+    ) -> ModelExchangeResponseTrace {
+        Self::trace_response(kind, Some(result), None)
+    }
+
+    fn error_trace_response_from_stream_result(
+        kind: &str,
+        error: String,
+        result: &StreamResult,
+    ) -> ModelExchangeResponseTrace {
+        Self::trace_response(kind, Some(result), Some(error))
+    }
+
+    fn error_trace_response(kind: &str, error: String) -> ModelExchangeResponseTrace {
+        Self::trace_response(kind, None, Some(error))
+    }
+
+    fn trace_response(
+        kind: &str,
+        result: Option<&StreamResult>,
+        error: Option<String>,
+    ) -> ModelExchangeResponseTrace {
+        let (
+            assistant_text,
+            thinking,
+            tool_calls,
+            usage,
+            provider_metadata,
+            partial_recovery_reason,
+        ) = if let Some(result) = result {
+            (
+                Some(result.full_text.clone()),
+                Self::stream_result_reasoning(result),
+                serde_json::to_value(&result.tool_calls).ok(),
+                result
+                    .usage
+                    .as_ref()
+                    .and_then(|usage| serde_json::to_value(usage).ok()),
+                result.provider_metadata.clone(),
+                result.partial_recovery_reason.clone(),
+            )
+        } else {
+            (None, None, None, None, None, None)
+        };
+
+        ModelExchangeResponseTrace {
+            kind: kind.to_string(),
+            assistant_text,
+            thinking,
+            tool_calls,
+            usage,
+            provider_metadata,
+            partial_recovery_reason,
+            error,
+        }
+    }
+
+    fn stream_result_reasoning(result: &StreamResult) -> Option<String> {
+        if result.full_thinking.is_empty() {
+            result.reasoning_content_present.then(String::new)
+        } else {
+            Some(result.full_thinking.clone())
         }
     }
 
@@ -898,8 +1155,28 @@ impl RoundExecutor {
         Self::RETRY_BASE_DELAY_MS * (1u64 << attempt_index.min(3))
     }
 
+    /// Check whether an error message represents a transient (retryable) condition.
+    ///
+    /// Errors that already exhausted the SSE-layer retry budget (e.g. "failed
+    /// after N attempts:" or "Stream retry budget exhausted") are **not**
+    /// transient from the round-executor perspective — the SSE transport layer
+    /// already retried with exponential backoff and `Retry-After` parsing.
+    /// Re-entering the send loop would multiply attempts (10 × 10 = 100) and
+    /// hold the user in a long silent stall.
     fn is_transient_network_error(error_message: &str) -> bool {
         let msg = error_message.to_lowercase();
+
+        // The SSE layer already exhausted its own retry budget — do not
+        // re-enter another round of attempts from the round executor.
+        // We require BOTH "failed after " and "attempts:" to co-occur,
+        // which uniquely identifies the SSE/round-executor budget-exhausted
+        // format without catching generic errors like "failed after timeout".
+        if msg.contains("failed after ") && msg.contains("attempts:") {
+            return false;
+        }
+        if msg.contains("retry budget exhausted") {
+            return false;
+        }
 
         let non_retryable_keywords = [
             "invalid api key",
@@ -1015,9 +1292,19 @@ fn token_details_from_usage(
 #[cfg(test)]
 mod tests {
     use super::{RoundExecutor, StreamProcessor};
+    use crate::agentic::core::ToolCall;
     use crate::agentic::events::{EventQueue, EventQueueConfig};
+    use crate::agentic::execution::stream_processor::StreamResult;
+    use crate::agentic::execution::types::RoundContext;
+    use crate::agentic::tools::ToolRuntimeRestrictions;
+    use crate::util::errors::BitFunError;
+    use crate::util::types::ai::GeminiUsage;
+    use bitfun_runtime_ports::DelegationPolicy;
     use dashmap::DashMap;
+    use serde_json::json;
+    use std::collections::HashMap;
     use std::sync::Arc;
+    use std::time::Duration;
     use tokio_util::sync::CancellationToken;
 
     fn test_round_executor() -> RoundExecutor {
@@ -1027,6 +1314,31 @@ mod tests {
             tool_pipeline: None,
             event_queue,
             cancellation_tokens: Arc::new(DashMap::new()),
+        }
+    }
+
+    fn test_round_context() -> RoundContext {
+        RoundContext {
+            session_id: "session-1".to_string(),
+            subagent_parent_info: None,
+            dialog_turn_id: "turn-1".to_string(),
+            turn_index: 0,
+            round_number: 0,
+            round_group_id: None,
+            workspace: None,
+            messages: Vec::new(),
+            available_tools: Vec::new(),
+            collapsed_tools: Vec::new(),
+            unlocked_collapsed_tools: Vec::new(),
+            model_name: "model-1".to_string(),
+            agent_type: "agentic".to_string(),
+            context_vars: HashMap::new(),
+            delegation_policy: DelegationPolicy::top_level(),
+            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+            steering_interrupt: None,
+            cancellation_token: CancellationToken::new(),
+            workspace_services: None,
+            recover_partial_on_cancel: false,
         }
     }
 
@@ -1058,6 +1370,66 @@ mod tests {
         executor.cleanup_dialog_turn("turn-1").await;
         assert!(!executor.has_active_dialog_turn("turn-1"));
         assert!(!executor.is_dialog_turn_cancelled("turn-1"));
+    }
+
+    #[tokio::test]
+    async fn emits_token_usage_before_post_stream_cancel_stops_round() {
+        let executor = test_round_executor();
+        let context = test_round_context();
+        let usage = GeminiUsage {
+            prompt_token_count: 100,
+            candidates_token_count: 20,
+            total_token_count: 120,
+            reasoning_token_count: None,
+            cached_content_token_count: Some(30),
+            cache_creation_token_count: None,
+        };
+
+        executor
+            .emit_token_usage_update(&context, &usage, Some(128_000), false)
+            .await;
+
+        let events = executor.event_queue.dequeue_batch(10).await;
+        assert!(events.iter().any(|envelope| matches!(
+            &envelope.event,
+            crate::agentic::events::AgenticEvent::TokenUsageUpdated {
+                session_id,
+                turn_id,
+                model_id,
+                input_tokens: 100,
+                output_tokens: Some(20),
+                total_tokens: 120,
+                max_context_tokens: Some(128_000),
+                is_subagent: false,
+                cached_tokens: Some(30),
+                ..
+            } if session_id == "session-1" && turn_id == "turn-1" && model_id == "model-1"
+        )));
+    }
+
+    #[tokio::test]
+    async fn cancellable_sleep_returns_cancelled_when_token_fires() {
+        let token = CancellationToken::new();
+        let token_for_task = token.clone();
+
+        let waiter = tokio::spawn(async move {
+            RoundExecutor::sleep_with_cancellation(5_000, &token_for_task).await
+        });
+
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        token.cancel();
+
+        let result = waiter.await.expect("sleep task should join");
+        assert!(matches!(result, Err(BitFunError::Cancelled(_))));
+    }
+
+    #[tokio::test]
+    async fn cancellable_sleep_completes_normally_without_cancel() {
+        let token = CancellationToken::new();
+
+        let result = RoundExecutor::sleep_with_cancellation(10, &token).await;
+
+        assert!(result.is_ok());
     }
 
     #[test]
@@ -1119,5 +1491,143 @@ mod tests {
             cache_creation_token_count: None,
         };
         assert!(super::token_details_from_usage(&usage).is_none());
+    }
+
+    #[test]
+    fn error_trace_response_from_stream_result_preserves_structured_context() {
+        let stream_result = StreamResult {
+            full_thinking: "reasoning".to_string(),
+            reasoning_content_present: true,
+            thinking_signature: Some("sig".to_string()),
+            full_text: String::new(),
+            tool_calls: vec![ToolCall {
+                tool_id: "tool-1".to_string(),
+                tool_name: "Bash".to_string(),
+                arguments: json!({}),
+                raw_arguments: Some("{\"command\":".to_string()),
+                is_error: true,
+                recovered_from_truncation: false,
+            }],
+            usage: Some(GeminiUsage {
+                prompt_token_count: 100,
+                candidates_token_count: 20,
+                total_token_count: 120,
+                reasoning_token_count: Some(5),
+                cached_content_token_count: Some(30),
+                cache_creation_token_count: None,
+            }),
+            provider_metadata: Some(json!({ "finish_reason": "tool_calls" })),
+            has_effective_output: false,
+            first_chunk_ms: Some(10),
+            first_visible_output_ms: None,
+            partial_recovery_reason: Some("tool arguments invalid".to_string()),
+        };
+
+        let trace = RoundExecutor::error_trace_response_from_stream_result(
+            "error",
+            "Provider returned only invalid tool arguments".to_string(),
+            &stream_result,
+        );
+
+        assert_eq!(trace.kind, "error");
+        assert_eq!(
+            trace.error.as_deref(),
+            Some("Provider returned only invalid tool arguments")
+        );
+        assert_eq!(trace.assistant_text.as_deref(), Some(""));
+        assert_eq!(trace.thinking.as_deref(), Some("reasoning"));
+        assert_eq!(
+            trace.partial_recovery_reason.as_deref(),
+            Some("tool arguments invalid")
+        );
+        assert_eq!(
+            trace.provider_metadata,
+            Some(json!({ "finish_reason": "tool_calls" }))
+        );
+        assert_eq!(
+            trace.usage,
+            Some(json!({
+                "promptTokenCount": 100,
+                "candidatesTokenCount": 20,
+                "totalTokenCount": 120,
+                "reasoningTokenCount": 5,
+                "cachedContentTokenCount": 30
+            }))
+        );
+        assert_eq!(
+            trace.tool_calls,
+            Some(json!([{
+                "tool_id": "tool-1",
+                "tool_name": "Bash",
+                "arguments": {},
+                "raw_arguments": "{\"command\":",
+                "is_error": true
+            }]))
+        );
+    }
+
+    #[test]
+    fn error_trace_response_without_stream_result_stays_empty() {
+        let trace = RoundExecutor::error_trace_response("error", "request failed".to_string());
+
+        assert_eq!(trace.kind, "error");
+        assert!(trace.assistant_text.is_none());
+        assert!(trace.thinking.is_none());
+        assert!(trace.tool_calls.is_none());
+        assert!(trace.usage.is_none());
+        assert!(trace.provider_metadata.is_none());
+        assert!(trace.partial_recovery_reason.is_none());
+        assert_eq!(trace.error.as_deref(), Some("request failed"));
+    }
+
+    #[test]
+    fn is_transient_error_treats_rate_limit_as_transient() {
+        assert!(RoundExecutor::is_transient_network_error(
+            "OpenAI Streaming API error 429 Too Many Requests"
+        ));
+        assert!(RoundExecutor::is_transient_network_error(
+            "rate limit exceeded"
+        ));
+    }
+
+    #[test]
+    fn is_transient_error_treats_network_errors_as_transient() {
+        assert!(RoundExecutor::is_transient_network_error(
+            "connection reset by peer"
+        ));
+        assert!(RoundExecutor::is_transient_network_error("timeout"));
+    }
+
+    #[test]
+    fn is_transient_error_treats_context_overflow_as_non_transient() {
+        assert!(!RoundExecutor::is_transient_network_error(
+            "prompt is too long"
+        ));
+    }
+
+    #[test]
+    fn is_transient_error_treats_budget_exhausted_as_non_transient() {
+        // After SSE layer exhausts its retry budget, the round executor must
+        // NOT re-enter another round of attempts (would cause 10×10 = 100
+        // retries).
+        assert!(!RoundExecutor::is_transient_network_error(
+            "OpenAI Streaming API failed after 10 attempts: \
+             OpenAI Streaming API error 429 Too Many Requests"
+        ));
+        assert!(!RoundExecutor::is_transient_network_error(
+            "Stream retry budget exhausted after 10 attempts: timeout"
+        ));
+    }
+
+    #[test]
+    fn is_transient_error_does_not_misclassify_failed_after_without_attempts() {
+        // "failed after " without "attempts:" should NOT be treated as budget
+        // exhausted — it may be a legitimately retryable transient error.
+        assert!(RoundExecutor::is_transient_network_error(
+            "stream failed after connection reset"
+        ));
+        assert!(RoundExecutor::is_transient_network_error(
+            "request failed after timeout"
+        ));
     }
 }

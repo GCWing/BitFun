@@ -8,6 +8,20 @@ use crate::agentic::events::{AgenticEvent, EventQueue, ToolEventData};
 use dashmap::DashMap;
 use log::debug;
 use std::sync::Arc;
+use tool_runtime::pipeline::{count_tool_states, ToolTaskStateKind};
+
+pub(crate) fn tool_task_state_kind(state: &ToolExecutionState) -> ToolTaskStateKind {
+    match state {
+        ToolExecutionState::Queued { .. } => ToolTaskStateKind::Queued,
+        ToolExecutionState::Waiting { .. } => ToolTaskStateKind::Waiting,
+        ToolExecutionState::Running { .. } => ToolTaskStateKind::Running,
+        ToolExecutionState::Streaming { .. } => ToolTaskStateKind::Streaming,
+        ToolExecutionState::AwaitingConfirmation { .. } => ToolTaskStateKind::AwaitingConfirmation,
+        ToolExecutionState::Completed { .. } => ToolTaskStateKind::Completed,
+        ToolExecutionState::Failed { .. } => ToolTaskStateKind::Failed,
+        ToolExecutionState::Cancelled { .. } => ToolTaskStateKind::Cancelled,
+    }
+}
 
 /// Tool state manager
 pub struct ToolStateManager {
@@ -66,16 +80,12 @@ impl ToolStateManager {
             task.state = new_state.clone();
 
             // Update timestamp
-            match &new_state {
-                ToolExecutionState::Running { .. } | ToolExecutionState::Streaming { .. } => {
-                    task.started_at = Some(std::time::SystemTime::now());
-                }
-                ToolExecutionState::Completed { .. }
-                | ToolExecutionState::Failed { .. }
-                | ToolExecutionState::Cancelled { .. } => {
-                    task.completed_at = Some(std::time::SystemTime::now());
-                }
-                _ => {}
+            let new_state_kind = tool_task_state_kind(&new_state);
+            if new_state_kind.starts_execution_timer() {
+                task.started_at = Some(std::time::SystemTime::now());
+            }
+            if new_state_kind.completes_execution_timer() {
+                task.completed_at = Some(std::time::SystemTime::now());
             }
 
             debug!(
@@ -255,6 +265,8 @@ impl ToolStateManager {
             session_id: task.context.session_id,
             turn_id: task.context.dialog_turn_id,
             round_id: task.context.round_id,
+            attempt_id: task.context.attempt_id,
+            attempt_index: task.context.attempt_index,
             tool_event,
         };
 
@@ -264,26 +276,19 @@ impl ToolStateManager {
     /// Get statistics
     pub fn get_stats(&self) -> ToolStats {
         let tasks: Vec<_> = self.tasks.iter().map(|e| e.value().clone()).collect();
+        let counts = count_tool_states(tasks.iter().map(|task| tool_task_state_kind(&task.state)));
 
-        let mut stats = ToolStats {
-            total: tasks.len(),
-            ..ToolStats::default()
-        };
-
-        for task in tasks {
-            match task.state {
-                ToolExecutionState::Queued { .. } => stats.queued += 1,
-                ToolExecutionState::Waiting { .. } => stats.waiting += 1,
-                ToolExecutionState::Running { .. } => stats.running += 1,
-                ToolExecutionState::Streaming { .. } => stats.streaming += 1,
-                ToolExecutionState::AwaitingConfirmation { .. } => stats.awaiting_confirmation += 1,
-                ToolExecutionState::Completed { .. } => stats.completed += 1,
-                ToolExecutionState::Failed { .. } => stats.failed += 1,
-                ToolExecutionState::Cancelled { .. } => stats.cancelled += 1,
-            }
+        ToolStats {
+            total: counts.total,
+            queued: counts.queued,
+            waiting: counts.waiting,
+            running: counts.running,
+            streaming: counts.streaming,
+            awaiting_confirmation: counts.awaiting_confirmation,
+            completed: counts.completed,
+            failed: counts.failed,
+            cancelled: counts.cancelled,
         }
-
-        stats
     }
 }
 
@@ -311,6 +316,8 @@ mod tests {
                 session_id: "session-1".to_string(),
                 dialog_turn_id: "turn-1".to_string(),
                 round_id: "round-1".to_string(),
+                attempt_id: None,
+                attempt_index: None,
                 agent_type: "agentic".to_string(),
                 workspace: None,
                 context_vars: HashMap::new(),

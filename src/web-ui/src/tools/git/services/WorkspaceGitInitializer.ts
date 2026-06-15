@@ -68,6 +68,7 @@ class WorkspaceGitInitializer {
         layers: ['basic'],
         reason: 'mount',
         force: true,
+        source: 'workspace_git_initializer',
       });
     } catch (error) {
       log.error('Failed to initialize Git state', { workspacePath, error });
@@ -95,6 +96,7 @@ class WorkspaceGitInitializer {
         layers: ['basic'],
         reason: 'mount',
         force: true,
+        source: 'workspace_git_initializer',
       });
     } catch (error) {
       log.error('Failed to initialize Git state for switched workspace', { workspacePath, error });

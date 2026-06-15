@@ -2,7 +2,10 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { useTranslation } from 'react-i18next';
 import { Terminal } from 'lucide-react';
 import type { FlowToolItem } from '../types/flow-chat';
-import { TerminalOutputRenderer, type TerminalOutputRendererHandle } from '@/tools/terminal/components';
+import {
+  LazyTerminalOutputRenderer,
+  type TerminalOutputRendererHandle,
+} from '@/tools/terminal/components/LazyTerminalOutputRenderer';
 import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
 import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
 import { ToolCardStatusSlot } from './ToolCardStatusSlot';
@@ -19,7 +22,7 @@ const EXEC_OUTPUT_STREAMING_MAX_ROWS = 4;
 const EXEC_OUTPUT_EXPANDED_MAX_ROWS = 15;
 
 export interface ExecProcessCardModel {
-  kind: 'command' | 'stdin';
+  kind: 'command' | 'stdin' | 'control';
   actionLabel: string;
   primaryText: string;
   emptyText: string;
@@ -310,7 +313,7 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
       <div className="exec-process-output-copy-actions">
         {renderCopyOutputButton()}
       </div>
-      <TerminalOutputRenderer
+      <LazyTerminalOutputRenderer
         ref={outputRendererRef}
         content={options?.formatSessionPreview ? formatSessionViewPreviewText(output) : output}
         className="terminal-xterm-output"

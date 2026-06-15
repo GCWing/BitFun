@@ -909,6 +909,41 @@ impl SkillRegistry {
         Ok(data)
     }
 
+    pub async fn find_and_load_skill_by_key_for_workspace(
+        &self,
+        skill_key: &str,
+        workspace_root: Option<&Path>,
+        agent_type: Option<&str>,
+    ) -> BitFunResult<SkillData> {
+        let candidates = self
+            .scan_skill_candidates_for_workspace(workspace_root)
+            .await;
+        let filtered = self
+            .apply_mode_filters_for_workspace(candidates, workspace_root, agent_type)
+            .await;
+        let info = filtered
+            .into_iter()
+            .map(|candidate| candidate.info)
+            .find(|skill| skill.key == skill_key)
+            .ok_or_else(|| {
+                BitFunError::tool(format!(
+                    "Skill key '{}' was not found or is disabled for this mode",
+                    skill_key
+                ))
+            })?;
+
+        let skill_md_path = PathBuf::from(&info.path).join("SKILL.md");
+        let content = fs::read_to_string(&skill_md_path)
+            .await
+            .map_err(|error| BitFunError::tool(format!("Failed to read skill file: {}", error)))?;
+
+        let mut data = SkillData::from_markdown(info.path.clone(), &content, info.level, true)?;
+        data.key = info.key;
+        data.source_slot = info.source_slot;
+        data.dir_name = info.dir_name;
+        Ok(data)
+    }
+
     pub async fn find_and_load_skill_for_remote_workspace(
         &self,
         skill_name: &str,
@@ -924,6 +959,38 @@ impl SkillRegistry {
                 agent_type,
             )
             .await?;
+
+        let content = Self::read_skill_md_for_remote_merge(&info, fs).await?;
+        let mut data = SkillData::from_markdown(info.path.clone(), &content, info.level, true)?;
+        data.key = info.key;
+        data.source_slot = info.source_slot;
+        data.dir_name = info.dir_name;
+        Ok(data)
+    }
+
+    pub async fn find_and_load_skill_by_key_for_remote_workspace(
+        &self,
+        skill_key: &str,
+        fs: &dyn WorkspaceFileSystem,
+        remote_root: &str,
+        agent_type: Option<&str>,
+    ) -> BitFunResult<SkillData> {
+        let candidates = self
+            .scan_skill_candidates_for_remote_workspace(fs, remote_root)
+            .await;
+        let filtered = self
+            .apply_mode_filters_for_remote_workspace(candidates, fs, remote_root, agent_type)
+            .await;
+        let info = filtered
+            .into_iter()
+            .map(|candidate| candidate.info)
+            .find(|skill| skill.key == skill_key)
+            .ok_or_else(|| {
+                BitFunError::tool(format!(
+                    "Skill key '{}' was not found or is disabled for this mode",
+                    skill_key
+                ))
+            })?;
 
         let content = Self::read_skill_md_for_remote_merge(&info, fs).await?;
         let mut data = SkillData::from_markdown(info.path.clone(), &content, info.level, true)?;

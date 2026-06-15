@@ -52,6 +52,246 @@ export const forbiddenContentRules = [
     ],
   },
   {
+    path: 'src/crates/assembly/core/src/agentic/persistence/session_branch.rs',
+    patterns: [
+      {
+        regex: /\bfn\s+estimate_turn_message_count\b/,
+        message:
+          'session branch metadata counting belongs in services-core session lineage owner, not core persistence',
+      },
+      {
+        regex: /\bfn\s+strip_child_session_metadata\b/,
+        message:
+          'branch child-metadata cleanup belongs in services-core session lineage owner, not core persistence',
+      },
+      {
+        regex: /\bfn\s+build_branch_custom_metadata\b/,
+        message:
+          'branch custom metadata shaping belongs in services-core session lineage owner, not core persistence',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/persistence/manager.rs',
+    patterns: [
+      {
+        regex: /\bfn\s+build_session_relationship\b/,
+        message:
+          'session relationship reconstruction belongs in services-core session metadata owner, not core persistence manager',
+      },
+      {
+        regex: /\bSessionMetadata\s*\{\s*session_id\s*:/,
+        message:
+          'session metadata field assembly belongs in services-core session metadata owner, not core persistence manager',
+      },
+      {
+        regex: /\bmetadata\.deep_review_cache\s*=\s*Some\s*\(/,
+        message:
+          'DeepReview cache metadata mutation belongs in services-core session metadata owner, not core persistence manager',
+      },
+      {
+        regex: /\bstatic\s+SESSION_INDEX_LOCKS\b/,
+        message:
+          'session metadata index locking belongs in services-core SessionMetadataStore, not core persistence manager',
+      },
+      {
+        regex: /\bfn\s+scan_session_metadata_dirs\b/,
+        message:
+          'session metadata directory scanning belongs in services-core SessionMetadataStore, not core persistence manager',
+      },
+      {
+        regex: /\bfn\s+count_session_metadata_dirs\b/,
+        message:
+          'session metadata directory counting belongs in services-core SessionMetadataStore, not core persistence manager',
+      },
+      {
+        regex: /\bfn\s+rebuild_index_locked\b/,
+        message:
+          'session metadata index rebuilding belongs in services-core SessionMetadataStore, not core persistence manager',
+      },
+      {
+        regex: /\bfn\s+upsert_index_entry_locked\b/,
+        message:
+          'session metadata index upsert belongs in services-core SessionMetadataStore, not core persistence manager',
+      },
+      {
+        regex: /\bfn\s+remove_index_entry_locked\b/,
+        message:
+          'session metadata index removal belongs in services-core SessionMetadataStore, not core persistence manager',
+      },
+      {
+        regex: /\bget_session_index_lock\b/,
+        message:
+          'session metadata index lock access belongs in services-core SessionMetadataStore, not core persistence manager',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/session/session_manager.rs',
+    patterns: [
+      {
+        regex: /\bfn\s+extract_subagent_relationship\b/,
+        message:
+          'subagent relationship extraction belongs in services-core session lineage owner, not core session manager',
+      },
+      {
+        regex: /\bmetadata\.custom_metadata\s*=\s*Some\s*\(\s*match\b/,
+        message:
+          'session custom-metadata merge rules belong in services-core session metadata owner, not core session manager',
+      },
+      {
+        regex: /\bmetadata\.relationship\s*=\s*Some\s*\(\s*relationship\s*\)/,
+        message:
+          'session relationship mutation belongs in services-core session metadata owner, not core session manager',
+      },
+      {
+        regex: /\bmetadata\.deep_review_run_manifest\s*=\s*deep_review_run_manifest\b/,
+        message:
+          'DeepReview run-manifest metadata mutation belongs in services-core session metadata owner, not core session manager',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/service_agent_runtime.rs',
+    patterns: [
+      {
+        regex: /\bself\.scheduler\s*\.\s*submit\b/,
+        message:
+          'remote dialog runtime host must submit through AgentRuntime dialog lifecycle port, not direct DialogScheduler',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/session_message_tool.rs',
+    patterns: [
+      {
+        regex: /\bsubmit_with_prepended_messages\b/,
+        message:
+          'SessionMessage must submit through AgentRuntime dialog lifecycle port, not direct DialogScheduler',
+      },
+      {
+        regex: /\bcoordinator\s*\.\s*resolve_session_workspace_path\b/,
+        message:
+          'SessionMessage target workspace resolution must flow through AgentRuntime session-management port, not direct coordinator access',
+      },
+      {
+        regex: /\bresolve_session_workspace_path\s*\(\s*&?target_session_id\b/,
+        message:
+          'SessionMessage target workspace resolution must use AgentSessionWorkspaceRequest, not legacy direct session id calls',
+      },
+      {
+        regex: /\bcoordinator\s*\.\s*list_sessions\b/,
+        message:
+          'SessionMessage target session lookup must flow through AgentRuntime session-management port, not direct coordinator access',
+      },
+      {
+        regex: /\blist_sessions\s*\(\s*(?:Path::new|workspace_path)\b/,
+        message:
+          'SessionMessage target session lookup must use AgentSessionListRequest, not legacy path arguments',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/session_control_tool.rs',
+    patterns: [
+      {
+        regex: /\bcancel_active_turn_for_session_from_requester\b/,
+        message:
+          'SessionControl requester-aware cancellation must flow through AgentRuntime cancellation port, not direct DialogScheduler',
+      },
+      {
+        regex: /\bcoordinator\s*\.\s*resolve_session_workspace_path\b/,
+        message:
+          'SessionControl workspace resolution must flow through AgentRuntime session-management port, not direct coordinator access',
+      },
+      {
+        regex: /\bresolve_session_workspace_path\s*\(\s*session_id\b/,
+        message:
+          'SessionControl workspace resolution must use AgentSessionWorkspaceRequest, not legacy direct session id calls',
+      },
+      {
+        regex: /\bcoordinator\s*\.\s*list_sessions\b/,
+        message:
+          'SessionControl session listing must flow through AgentRuntime session-management port, not direct coordinator access',
+      },
+      {
+        regex: /\blist_sessions\s*\(\s*(?:Path::new|workspace_path)\b/,
+        message:
+          'SessionControl session listing must use AgentSessionListRequest, not legacy path arguments',
+      },
+      {
+        regex: /\bcoordinator\s*\.\s*delete_session\b/,
+        message:
+          'SessionControl session deletion must flow through AgentRuntime session-management port, not direct coordinator access',
+      },
+      {
+        regex: /\bdelete_session\s*\(\s*(?:Path::new|workspace_path)\b/,
+        message:
+          'SessionControl session deletion must use AgentSessionDeleteRequest, not legacy path arguments',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/service/cron/service.rs',
+    patterns: [
+      {
+        regex: /\bsubmit_with_prepended_messages\b/,
+        message:
+          'Cron scheduled jobs must submit through AgentRuntime dialog lifecycle port, not direct DialogScheduler',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/cron_tool.rs',
+    patterns: [
+      {
+        regex: /\bcoordinator\s*\.\s*resolve_session_workspace_path\b/,
+        message:
+          'CronTool target workspace resolution must flow through AgentRuntime session-management port, not direct coordinator access',
+      },
+      {
+        regex: /\bresolve_session_workspace_path\s*\(\s*&?session_id\b/,
+        message:
+          'CronTool target workspace resolution must use AgentSessionWorkspaceRequest, not legacy direct session id calls',
+      },
+      {
+        regex: /\bcoordinator\s*\.\s*list_sessions\b/,
+        message:
+          'CronTool target session lookup must flow through AgentRuntime session-management port, not direct coordinator access',
+      },
+      {
+        regex: /\blist_sessions\s*\(\s*(?:Path::new|workspace_path)\b/,
+        message:
+          'CronTool target session lookup must use AgentSessionListRequest, not legacy path arguments',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/bash_tool.rs',
+    patterns: [
+      {
+        regex: /\bscheduler\s*\.\s*deliver_background_result\b/,
+        message:
+          'Bash background delivery must flow through AgentRuntime lifecycle delivery port, not direct DialogScheduler',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/coordination/coordinator.rs',
+    patterns: [
+      {
+        regex: /\bscheduler\s*\.\s*deliver_thread_goal_(?:resumed|objective_updated)\b/,
+        message:
+          'Coordinator thread-goal delivery must flow through AgentRuntime lifecycle delivery port, not direct DialogScheduler',
+      },
+      {
+        regex: /\bscheduler\s*\.\s*deliver_background_result\b/,
+        message:
+          'Coordinator background result delivery must flow through AgentRuntime lifecycle delivery port, not direct DialogScheduler',
+      },
+    ],
+  },
+  {
     path: 'src/crates/assembly/core/src/agentic/deep_review_policy.rs',
     patterns: [
       {
@@ -90,9 +330,24 @@ export const forbiddenContentRules = [
           'core DeepReview report must not re-own cache update logic; use bitfun-agent-runtime::deep_review::report',
       },
       {
+        regex: /\bmetadata\.deep_review_cache\s*=\s*Some\s*\(/,
+        message:
+          'DeepReview cache metadata mutation belongs in services-core session metadata owner, not core report bridge',
+      },
+      {
         regex: /\bstruct DeepReviewCacheUpdate\b/,
         message:
           'core DeepReview report must not re-own cache update DTO; use bitfun-agent-runtime::deep_review::report',
+      },
+      {
+        regex: /"kind": "concurrency_limited"/,
+        message:
+          'core DeepReview report must not re-own runtime tracker reliability signal shaping; use bitfun-agent-runtime::deep_review::report',
+      },
+      {
+        regex: /DeepReview runtime diagnostics:/,
+        message:
+          'core DeepReview report must not re-own runtime diagnostics log formatting; use bitfun-agent-runtime::deep_review::diagnostics',
       },
     ],
   },
@@ -140,6 +395,21 @@ export const forbiddenContentRules = [
           'core DeepReview task adapter must not re-own reviewer admission queue expiry policy; use bitfun-agent-runtime::deep_review::task_execution',
       },
       {
+        regex: /\bstruct QueueWaitTimer\b/,
+        message:
+          'core DeepReview task adapter must not re-own queue wait timing; use bitfun-agent-runtime::deep_review::task_execution',
+      },
+      {
+        regex: /runtime_task_execution::decide_provider_capacity_queue_step/,
+        message:
+          'core DeepReview task adapter must use the runtime provider queue state machine instead of direct step decisions',
+      },
+      {
+        regex: /runtime_task_execution::decide_blocked_reviewer_admission_queue_step/,
+        message:
+          'core DeepReview task adapter must use the runtime reviewer admission state machine instead of direct step decisions',
+      },
+      {
         regex: /\bcontrol_snapshot\.(?:cancelled|paused|skip_optional)\b/,
         message:
           'core DeepReview task adapter must not re-own queue control decision priority; use bitfun-agent-runtime::deep_review::task_execution',
@@ -148,6 +418,101 @@ export const forbiddenContentRules = [
         regex: /\bfn prompt_with_deep_review_retry_scope\b/,
         message:
           'core DeepReview task adapter must not re-own retry prompt shaping; use bitfun-agent-runtime::deep_review::task_execution',
+      },
+      {
+        regex: /<partial_result status=/,
+        message:
+          'core DeepReview task adapter must not re-own task completion result presentation; use bitfun-agent-runtime::deep_review::task_execution',
+      },
+      {
+        regex: /completed successfully with result:/,
+        message:
+          'core DeepReview task adapter must not re-own task completion result presentation; use bitfun-agent-runtime::deep_review::task_execution',
+      },
+      {
+        regex: /Retries used:/,
+        message:
+          'core DeepReview task adapter must not re-own retry guidance presentation; use bitfun-agent-runtime::deep_review::task_execution',
+      },
+      {
+        regex: /DeepReview automatic retry elapsed guard exceeded/,
+        message:
+          'core DeepReview task adapter must not re-own auto-retry admission policy; use bitfun-agent-runtime::deep_review::task_execution',
+      },
+      {
+        regex: /cancelled coverage/,
+        message:
+          'core DeepReview task adapter must not re-own cancelled reviewer presentation; use bitfun-agent-runtime::deep_review::task_execution',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/task_tool.rs',
+    patterns: [
+      {
+        regex: /\bDeepReviewIncrementalCache\b/,
+        message:
+          'TaskTool must not directly inspect DeepReview incremental cache internals; use deep_review_task_adapter',
+      },
+      {
+        regex: /deepReviewCache/,
+        message:
+          'TaskTool must not directly parse DeepReview cache payloads; use deep_review_task_adapter',
+      },
+      {
+        regex: /<partial_result status=/,
+        message:
+          'TaskTool must not re-own DeepReview task completion result presentation; use deep_review_task_adapter',
+      },
+      {
+        regex: /completed successfully with result:/,
+        message:
+          'TaskTool must not re-own DeepReview task completion result presentation; use deep_review_task_adapter',
+      },
+      {
+        regex: /Retries used:/,
+        message:
+          'TaskTool must not re-own DeepReview retry guidance presentation; use deep_review_task_adapter',
+      },
+      {
+        regex: /DeepReview automatic retry elapsed guard exceeded/,
+        message:
+          'TaskTool must not re-own DeepReview auto-retry admission policy; use deep_review_task_adapter',
+      },
+      {
+        regex: /cancelled coverage/,
+        message:
+          'TaskTool must not re-own DeepReview cancelled reviewer presentation; use deep_review_task_adapter',
+      },
+      {
+        regex: /\bprovider_capacity_retry_attempts\b/,
+        message:
+          'TaskTool must not re-own DeepReview provider capacity retry attempts; use deep_review_task_adapter',
+      },
+      {
+        regex: /\bprovider_capacity_queue_elapsed_ms\b/,
+        message:
+          'TaskTool must not re-own DeepReview provider capacity queue elapsed aggregation; use deep_review_task_adapter',
+      },
+      {
+        regex: /\bDEEP_REVIEW_PROVIDER_CAPACITY_MAX_RETRY_ATTEMPTS\b/,
+        message:
+          'TaskTool must not re-own DeepReview provider capacity retry limits; use deep_review_task_adapter',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/code_review_tool.rs',
+    patterns: [
+      {
+        regex: /"kind"\s*:\s*"cache_hit"/,
+        message:
+          'CodeReviewTool must not re-own DeepReview cache-hit reliability signal shaping; use deep_review_report',
+      },
+      {
+        regex: /"kind"\s*:\s*"cache_miss"/,
+        message:
+          'CodeReviewTool must not re-own DeepReview cache-miss reliability signal shaping; use deep_review_report',
       },
     ],
   },
@@ -228,6 +593,16 @@ export const forbiddenContentRules = [
         regex: /\basync fn dispatch_shell\b/,
         message:
           'core MiniApp host-dispatch adapter must not re-own shell dispatch helpers',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-integrations/src/miniapp/host_dispatch.rs',
+    patterns: [
+      {
+        regex: /\bresolve_policy\s*\(/,
+        message:
+          'services MiniApp host-dispatch must use MiniAppPermissionPolicyRequest for permission path adaptation',
       },
     ],
   },
@@ -902,9 +1277,24 @@ export const forbiddenContentRules = [
           'core tool pipeline must not own retry backoff policy; use tool-runtime::pipeline',
       },
       {
+        regex: /\blet\s+mut\s+cancelled_count\b/,
+        message:
+          'core tool pipeline must not own dialog-turn cancellation summary policy; use tool-runtime::pipeline',
+      },
+      {
         regex: /ToolConfirmationOutcome::(?:Rejected|ChannelClosed|Timeout)/,
         message:
           'core tool pipeline must not own confirmation wait-result mapping; use bitfun-agent-runtime',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/pipeline/state_manager.rs',
+    patterns: [
+      {
+        regex: /\bstats\.(?:queued|waiting|running|streaming|awaiting_confirmation|completed|failed|cancelled)\s*\+=/,
+        message:
+          'core tool state manager must not own provider-neutral state counting; use tool-runtime::pipeline',
       },
     ],
   },
@@ -1017,39 +1407,29 @@ export const forbiddenContentRules = [
     path: 'src/crates/assembly/core/src/agentic/round_preempt.rs',
     patterns: [
       {
-        regex: /\btrait\s+DialogRoundPreemptSource\b/,
-        message:
-          'core round preempt runtime must not redefine DialogRoundPreemptSource; use bitfun-runtime-ports',
-      },
-      {
         regex: /\bstruct\s+RoundInjection\b/,
         message:
-          'core round preempt runtime must not redefine RoundInjection; use bitfun-runtime-ports',
+          'core round-boundary runtime must not redefine RoundInjection; use bitfun-runtime-ports',
       },
       {
         regex: /\btrait\s+DialogRoundInjectionSource\b/,
         message:
-          'core round preempt runtime must not redefine DialogRoundInjectionSource; use bitfun-runtime-ports',
+          'core round-boundary runtime must not redefine DialogRoundInjectionSource; use bitfun-runtime-ports',
       },
       {
         regex: /\benum\s+RoundInjectionKind\b/,
         message:
-          'core round preempt runtime must not redefine RoundInjectionKind; use bitfun-runtime-ports',
+          'core round-boundary runtime must not redefine RoundInjectionKind; use bitfun-runtime-ports',
       },
       {
         regex: /\benum\s+RoundInjectionTarget\b/,
         message:
-          'core round preempt runtime must not redefine RoundInjectionTarget; use bitfun-runtime-ports',
+          'core round-boundary runtime must not redefine RoundInjectionTarget; use bitfun-runtime-ports',
       },
       {
         regex: /\bpub\s+struct\s+SessionRoundInjectionBuffer\b/,
         message:
-          'core round preempt runtime must not own round injection buffer; use bitfun-agent-runtime',
-      },
-      {
-        regex: /\bpub\s+struct\s+SessionRoundYieldFlags\b/,
-        message:
-          'core round preempt runtime must not own round yield flags; use bitfun-agent-runtime',
+          'core round-boundary runtime must not own round injection buffer; use bitfun-agent-runtime',
       },
     ],
   },
@@ -1377,6 +1757,31 @@ export const forbiddenContentRules = [
         regex: /\bbuild_import_fallbacks\b/,
         message:
           'core MiniApp manager must not own import fallback planning; use product-domain import bundle plan',
+      },
+      {
+        regex: /\bbuild_import_bundle_plan\b/,
+        message:
+          'core MiniApp manager must not own import bundle planning; use MiniAppRuntimeFacade',
+      },
+      {
+        regex: /\bread_import_meta_json\b/,
+        message:
+          'core MiniApp manager must not own import metadata IO; use MiniAppRuntimeFacade import ports',
+      },
+      {
+        regex: /\bwrite_import_bundle\b/,
+        message:
+          'core MiniApp manager must not own import bundle IO; use MiniAppRuntimeFacade import ports',
+      },
+      {
+        regex: /\bworkspace_dir_string\b/,
+        message:
+          'core MiniApp manager must not own compile workspace path adaptation; use MiniAppCompileRequest',
+      },
+      {
+        regex: /\bresolve_policy\s*\(/,
+        message:
+          'core MiniApp manager must not own permission policy path adaptation; use MiniAppPermissionPolicyRequest',
       },
     ],
   },
@@ -1929,6 +2334,36 @@ export const forbiddenContentRules = [
     ],
   },
   {
+    path: 'src/crates/assembly/core/src/service/remote_connect/mod.rs',
+    patterns: [
+      {
+        regex: /\bpub\s+mod\s+device\s*;/,
+        message:
+          'core remote-connect root must not own device module implementation; use the services-integrations owner',
+      },
+      {
+        regex: /\bpub\s+mod\s+encryption\s*;/,
+        message:
+          'core remote-connect root must not own encryption module implementation; use the services-integrations owner',
+      },
+      {
+        regex: /\bpub\s+mod\s+pairing\s*;/,
+        message:
+          'core remote-connect root must not own pairing module implementation; use the services-integrations owner',
+      },
+      {
+        regex: /\bpub\s+mod\s+qr_generator\s*;/,
+        message:
+          'core remote-connect root must not own QR module implementation; use the services-integrations owner',
+      },
+      {
+        regex: /\bpub\s+mod\s+relay_client\s*;/,
+        message:
+          'core remote-connect root must not own relay client module implementation; use the services-integrations owner',
+      },
+    ],
+  },
+  {
     path: 'src/crates/assembly/core/src/service/remote_connect/remote_server.rs',
     patterns: [
       {
@@ -2254,6 +2689,26 @@ export const forbiddenContentRules = [
       {
         regex: /\btokio::fs::read\(&abs_path\)/,
         message: 'core remote-connect bot facade must not own workspace file reads; use the integrations helper',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/session_control_tool.rs',
+    patterns: [
+      {
+        regex: /\bcreate_session_with_workspace_and_creator\b/,
+        message:
+          'SessionControl must not bypass the service/agent runtime owner when creating sessions',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/session_message_tool.rs',
+    patterns: [
+      {
+        regex: /\bcreate_session_with_workspace_and_creator\b/,
+        message:
+          'SessionMessage must not bypass the service/agent runtime owner when creating sessions',
       },
     ],
   },

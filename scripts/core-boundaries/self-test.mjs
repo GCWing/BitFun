@@ -290,6 +290,69 @@ export function runManifestParserSelfTest({
       throw new Error(`core tool restrictions boundary rule must forbid contract: ${contract}`);
     }
   }
+  const coreDeepReviewTaskAdapterRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/deep_review/task_adapter.rs',
+  );
+  if (!coreDeepReviewTaskAdapterRuleText) {
+    throw new Error('missing core DeepReview task adapter boundary rule');
+  }
+  const coreDeepReviewTaskAdapterContracts = [
+    'QueueWaitTimer',
+    'decide_provider_capacity_queue_step',
+    'decide_blocked_reviewer_admission_queue_step',
+    '<partial_result status=',
+    'completed successfully with result:',
+    'Retries used:',
+    'DeepReview automatic retry elapsed guard exceeded',
+    'cancelled coverage',
+  ];
+  for (const contract of coreDeepReviewTaskAdapterContracts) {
+    if (!coreDeepReviewTaskAdapterRuleText.includes(contract)) {
+      throw new Error(`core DeepReview task adapter boundary rule must forbid contract: ${contract}`);
+    }
+  }
+  const coreTaskToolRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/tools/implementations/task_tool.rs',
+  );
+  if (!coreTaskToolRuleText) {
+    throw new Error('missing core TaskTool DeepReview boundary rule');
+  }
+  const coreTaskToolContracts = [
+    '<partial_result status=',
+    'completed successfully with result:',
+    'Retries used:',
+    'DeepReview automatic retry elapsed guard exceeded',
+    'cancelled coverage',
+    'provider_capacity_retry_attempts',
+    'provider_capacity_queue_elapsed_ms',
+    'DEEP_REVIEW_PROVIDER_CAPACITY_MAX_RETRY_ATTEMPTS',
+  ];
+  for (const contract of coreTaskToolContracts) {
+    if (!coreTaskToolRuleText.includes(contract)) {
+      throw new Error(`core TaskTool DeepReview boundary rule must forbid contract: ${contract}`);
+    }
+  }
+  const coreCodeReviewToolRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/tools/implementations/code_review_tool.rs',
+  );
+  if (!coreCodeReviewToolRuleText) {
+    throw new Error('missing core CodeReviewTool DeepReview report boundary rule');
+  }
+  if (!coreCodeReviewToolRuleText.includes('"kind"')) {
+    throw new Error('core CodeReviewTool DeepReview boundary rule must be anchored to kind');
+  }
+  for (const contract of ['"cache_hit"', '"cache_miss"']) {
+    if (!coreCodeReviewToolRuleText.includes(contract)) {
+      throw new Error(
+        `core CodeReviewTool DeepReview boundary rule must forbid contract: ${contract}`,
+      );
+    }
+  }
+  for (const contract of ['DeepReviewIncrementalCache', 'deepReviewCache']) {
+    if (!coreTaskToolRuleText.includes(contract)) {
+      throw new Error(`core TaskTool DeepReview boundary rule must forbid contract: ${contract}`);
+    }
+  }
   const agentToolsFrameworkRule = requiredContentRules.find(
     (rule) => rule.path === 'src/crates/execution/tool-contracts/src/framework.rs',
   );
@@ -389,7 +452,6 @@ export function runManifestParserSelfTest({
     throw new Error('missing core round preempt boundary rule');
   }
   for (const contract of [
-    'DialogRoundPreemptSource',
     'RoundInjection',
     'DialogRoundInjectionSource',
     'RoundInjectionKind',
@@ -482,7 +544,11 @@ export function runManifestParserSelfTest({
   const coreOptionalOwnerDeps = new Set(
     coreOptionalOwnerRule?.dependencies.map((dependency) => dependency.depName) ?? [],
   );
+  const coreFullyMigratedDeps = new Set(['hostname', 'mac_address', 'qrcode', 'x25519-dalek']);
   for (const dep of coreProfile?.forbiddenNonOptionalDeps ?? []) {
+    if (coreFullyMigratedDeps.has(dep)) {
+      continue;
+    }
     if (!coreOptionalOwnerDeps.has(dep)) {
       throw new Error(`core optional dependency owner rule must cover forbidden dependency ${dep}`);
     }
@@ -501,7 +567,17 @@ export function runManifestParserSelfTest({
   const servicesOptionalOwnerRule = optionalDependencyFeatureOwnerRules.find(
     (rule) => rule.crateName === 'services-integrations',
   );
-  for (const dep of ['bitfun-runtime-ports', 'git2', 'notify', 'rmcp']) {
+  for (const dep of [
+    'bitfun-runtime-ports',
+    'git2',
+    'hostname',
+    'mac_address',
+    'notify',
+    'qrcode',
+    'rmcp',
+    'tokio-tungstenite',
+    'x25519-dalek',
+  ]) {
     if (!servicesOptionalOwnerRule?.dependencies.some((dependency) => dependency.depName === dep)) {
       throw new Error(`services-integrations optional dependency owner rule must cover ${dep}`);
     }
@@ -654,14 +730,104 @@ export function runManifestParserSelfTest({
       throw new Error(`tool-packs manifest boundary rule must forbid: ${contract}`);
     }
   }
+  const serviceAgentRuntimeRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/service_agent_runtime.rs',
+  );
+  if (!serviceAgentRuntimeRuleText.includes('self\\.scheduler')) {
+    throw new Error('service agent runtime boundary rule must forbid direct scheduler submit');
+  }
+  const sessionMessageRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/tools/implementations/session_message_tool.rs',
+  );
+  if (!sessionMessageRuleText.includes('submit_with_prepended_messages')) {
+    throw new Error('SessionMessage boundary rule must forbid direct scheduler submit');
+  }
+  const sessionMessageLegacySessionAccessContracts = [
+    'resolve_session_workspace_path',
+    'list_sessions',
+  ];
+  for (const contract of sessionMessageLegacySessionAccessContracts) {
+    if (!sessionMessageRuleText.includes(contract)) {
+      throw new Error(`SessionMessage boundary rule must forbid direct coordinator ${contract}`);
+    }
+  }
+  const sessionControlForbiddenRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/tools/implementations/session_control_tool.rs',
+  );
+  if (!sessionControlForbiddenRuleText.includes('cancel_active_turn_for_session_from_requester')) {
+    throw new Error('SessionControl boundary rule must forbid direct scheduler cancellation');
+  }
+  const sessionControlLegacySessionAccessContracts = [
+    'resolve_session_workspace_path',
+    'list_sessions',
+    'delete_session',
+  ];
+  for (const contract of sessionControlLegacySessionAccessContracts) {
+    if (!sessionControlForbiddenRuleText.includes(contract)) {
+      throw new Error(`SessionControl boundary rule must forbid direct coordinator ${contract}`);
+    }
+  }
+  const cronServiceRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/service/cron/service.rs',
+  );
+  if (!cronServiceRuleText.includes('submit_with_prepended_messages')) {
+    throw new Error('cron service boundary rule must forbid direct scheduler submit');
+  }
+  const cronToolRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/tools/implementations/cron_tool.rs',
+  );
+  const cronToolLegacySessionAccessContracts = [
+    'resolve_session_workspace_path',
+    'list_sessions',
+  ];
+  for (const contract of cronToolLegacySessionAccessContracts) {
+    if (!cronToolRuleText.includes(contract)) {
+      throw new Error(`CronTool boundary rule must forbid direct coordinator ${contract}`);
+    }
+  }
+  const bashToolRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/tools/implementations/bash_tool.rs',
+  );
+  if (!bashToolRuleText.includes('scheduler') || !bashToolRuleText.includes('deliver_background_result')) {
+    throw new Error('Bash boundary rule must forbid direct scheduler background delivery');
+  }
+  const coordinatorRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/coordination/coordinator.rs',
+  );
+  if (
+    !coordinatorRuleText.includes('scheduler') ||
+    !coordinatorRuleText.includes('deliver_thread_goal_') ||
+    !coordinatorRuleText.includes('deliver_background_result')
+  ) {
+    throw new Error('Coordinator boundary rule must forbid direct scheduler lifecycle delivery');
+  }
 
   const requiredContentContracts = [
     {
       path: 'src/crates/contracts/runtime-ports/src/lib.rs',
       contracts: [
+        'AgentDialogTurnRequest',
+        'AgentDialogPrependedReminder',
+        'AgentDialogTurnPort',
+        'AgentBackgroundResultRequest',
+        'AgentThreadGoalDeliveryKind',
+        'AgentThreadGoalDeliveryRequest',
+        'AgentLifecycleDeliveryPort',
+        'agent_dialog_turn_request_serializes_lifecycle_contract',
+        'agent_background_result_request_serializes_lifecycle_contract',
+        'agent_thread_goal_delivery_request_serializes_lifecycle_contract',
         'AgentTurnCancellationPort',
+        'requester_session_id',
+        'AgentSessionListRequest',
+        'AgentSessionSummary',
+        'AgentSessionDeleteRequest',
+        'AgentSessionWorkspaceRequest',
+        'AgentSessionManagementPort',
+        'agent_session_management_contracts_serialize_stable_shape',
         'RemoteControlStatePort',
         'RuntimeEventSink',
+        'AgentSessionCreateResult',
+        'session_name',
         'RemoteWorkspaceFacts',
         'RemoteWorkspaceRuntimeHost',
         'RemoteWorkspacePort',
@@ -681,7 +847,6 @@ export function runManifestParserSelfTest({
         'DialogSessionStateFact',
         'DialogSubmitQueueFacts',
         'DialogSubmitQueueAction',
-        'dialog_policy_may_preempt',
         'resolve_dialog_submit_queue_action',
         'dialog_submit_queue_action_preserves_current_scheduler_routing_policy',
         'should_suppress_agent_session_cancelled_reply',
@@ -695,7 +860,6 @@ export function runManifestParserSelfTest({
         'RoundInjectionKind',
         'RoundInjectionTarget',
         'RoundInjection',
-        'DialogRoundPreemptSource',
         'DialogRoundInjectionSource',
         'round_injection_contract_keeps_kind_and_target_identity',
         'round_injection_source_contract_drains_portable_injections',
@@ -745,6 +909,41 @@ export function runManifestParserSelfTest({
         'capability_availability_reports_optional_service_status_without_side_effects',
         'builder_rejects_port_registered_under_the_wrong_capability',
         'registered_remote_ports_expose_owner_contract_methods',
+      ],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/src/runtime.rs',
+      contracts: [
+        'AgentRuntime',
+        'AgentRuntimeBuilder',
+        'AgentSubmissionPort',
+        'AgentDialogTurnPort',
+        'with_dialog_turn_port',
+        'submit_dialog_turn',
+        'AgentLifecycleDeliveryPort',
+        'with_lifecycle_delivery_port',
+        'deliver_background_result',
+        'deliver_thread_goal',
+        'AgentTurnCancellationPort',
+        'AgentSessionManagementPort',
+        'with_session_management_port',
+        'MissingSessionManagementPort',
+        'list_sessions',
+        'delete_session',
+        'resolve_session_workspace_path',
+        'session_management_delegates_to_registered_port',
+        'RuntimeServices',
+        'RuntimeEventEnvelope',
+        'AgentEventStream',
+        'with_event_stream',
+        'SessionSelector',
+        'AgentRunRequest',
+        'AgentRunHandle',
+        'run',
+        'publish_event',
+        'publish_event_uses_runtime_services_event_sink',
+        'run_handle_exposes_configured_agent_event_stream',
+        'port_errors_remain_typed',
       ],
     },
     {
@@ -887,7 +1086,6 @@ export function runManifestParserSelfTest({
         'follow_up_submission_policy',
         'SubmitAgentSessionFollowUp',
         'InjectIntoRunningTurn',
-        'SessionRoundYieldFlags',
         'SessionRoundInjectionBuffer',
         'TurnOutcome',
         'TurnOutcomeQueueAction',
@@ -904,6 +1102,7 @@ export function runManifestParserSelfTest({
         'background_delivery_injection_builds_background_result_with_display_fallback',
         'dialog_turn_queue_preserves_priority_order_and_fifo_within_priority',
         'dialog_turn_queue_rejects_overflow_and_preserves_current_error_shape',
+        'dialog_turn_queue_clear_and_requeue_front_preserve_scheduler_recovery_contract',
         'dialog_turn_queue_requeued_turn_keeps_original_priority_for_later_ordering',
         'active_dialog_turn_owns_agent_session_reply_suppression_facts',
         'active_dialog_turn_store_owns_suppression_key_resolution_and_removal',
@@ -914,7 +1113,6 @@ export function runManifestParserSelfTest({
         'agent_session_reply_action_ignores_non_agent_session_turns',
         'dialog_steering_action_buffers_exact_running_turn_with_display_fallback',
         'dialog_steering_action_rejects_when_target_turn_is_not_running',
-        'round_yield_flags_are_session_scoped_and_clearable',
         'round_injection_buffer_drains_only_messages_for_the_active_turn',
         'turn_outcome_status_reply_and_queue_policy_are_portable',
       ],
@@ -1037,6 +1235,20 @@ export function runManifestParserSelfTest({
         'next_wakeup_at_ms',
         'clear_pending_trigger',
         'ScheduledJobEnqueueFailureAction',
+        'CoreServiceAgentRuntime::agent_runtime_with_dialog_turns',
+        'AgentDialogTurnRequest',
+        'AgentDialogPrependedReminder',
+        'submit_dialog_turn',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/agentic/tools/implementations/cron_tool.rs',
+      contracts: [
+        'CoreServiceAgentRuntime::agent_runtime',
+        'AgentSessionListRequest',
+        'AgentSessionWorkspaceRequest',
+        'list_sessions',
+        'resolve_session_workspace_path',
       ],
     },
     {
@@ -1057,7 +1269,6 @@ export function runManifestParserSelfTest({
         'bitfun_runtime_ports',
         'DelegationPolicy',
         'SubagentContextMode',
-        'queue_timing',
       ],
     },
     {
@@ -1067,6 +1278,47 @@ export function runManifestParserSelfTest({
         'start_dialog_turn_with_existing_context',
         'start_dialog_turn_with_existing_context_persists_turn_and_snapshot',
         'clone_prompt_cache_copies_runtime_and_persisted_entries',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/agentic/persistence/session_branch.rs',
+      contracts: ['SessionBranchRequest', 'SessionBranchResult', 'build_branched_session_metadata'],
+    },
+    {
+      path: 'src/crates/services/services-core/src/session/mod.rs',
+      contracts: ['mod metadata_store', 'SessionMetadataStore'],
+    },
+    {
+      path: 'src/crates/services/services-core/src/session/metadata_store.rs',
+      contracts: [
+        'SessionMetadataStore',
+        'SessionMetadataStoreError',
+        'SessionStorageLayout',
+        'list_metadata',
+        'list_metadata_page',
+        'list_metadata_including_internal',
+        'rebuild_index',
+        'save_metadata',
+        'load_metadata',
+        'delete_session_dir_and_index',
+        'metadata_store_saves_visible_metadata_and_updates_index',
+        'metadata_store_rebuilds_stale_index_entries',
+        'metadata_store_rebuild_index_counts_hidden_metadata_files',
+        'metadata_store_delete_session_updates_visible_index',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/agentic/persistence/manager.rs',
+      contracts: [
+        'SessionMetadataStore',
+        'session_metadata_store',
+        'list_metadata',
+        'list_metadata_page',
+        'list_metadata_including_internal',
+        'save_metadata',
+        'load_metadata',
+        'delete_session_dir_and_index',
+        'ensure_runtime_for_write',
       ],
     },
     {
@@ -1101,6 +1353,10 @@ export function runManifestParserSelfTest({
         'ToolRetryAttemptFacts',
         'should_retry_tool_attempt',
         'retry_delay_ms',
+        'ToolTaskStateKind',
+        'should_cancel_tool_state',
+        'summarize_dialog_turn_cancellation',
+        'count_tool_states',
       ],
     },
     {
@@ -1108,6 +1364,9 @@ export function runManifestParserSelfTest({
       contracts: [
         'partitions_consecutive_concurrency_safe_tools_into_parallel_batches',
         'retry_policy_preserves_attempt_limit_and_error_class_contract',
+        'cancellation_policy_preserves_cancellable_and_terminal_state_contract',
+        'dialog_turn_cancellation_summary_counts_cancelled_and_skipped_tasks',
+        'state_counts_preserve_pipeline_stats_contract',
       ],
     },
     {
@@ -1232,6 +1491,9 @@ export function runManifestParserSelfTest({
         'AgentSubmissionPort',
         'SessionTranscriptReader',
         'AgentTurnCancellationPort',
+        'AgentSessionManagementPort',
+        'runtime_session_summary',
+        'AgentSessionSummary',
         'RemoteControlStatePort',
         'generic attachments',
         'DialogTriggerSource',
@@ -1256,7 +1518,6 @@ export function runManifestParserSelfTest({
         'DialogSteeringAction',
         'DialogTurnQueue',
         'SessionAbortFlags',
-        'dialog_policy_may_preempt',
         'resolve_agent_session_reply_action',
         'resolve_background_delivery_injection',
         'resolve_dialog_submit_queue_action',
@@ -1269,12 +1530,10 @@ export function runManifestParserSelfTest({
         'bitfun_agent_runtime',
         'bitfun_runtime_ports',
         'DialogRoundInjectionSource',
-        'DialogRoundPreemptSource',
         'RoundInjection',
         'RoundInjectionKind',
         'RoundInjectionTarget',
         'SessionRoundInjectionBuffer',
-        'SessionRoundYieldFlags',
       ],
     },
     {
@@ -1322,14 +1581,25 @@ export function runManifestParserSelfTest({
         'strip_remote_user_input_tags',
         'compress_remote_chat_data_url_for_mobile',
         'load_remote_chat_messages',
-        'agent_submission_port',
-        'agent_turn_cancellation_port',
+        'agent_runtime',
+        'agent_runtime_with_dialog_turns',
+        'agent_runtime_with_lifecycle_delivery',
+        'agent_runtime_with_scheduler_ports',
+        'global_agent_runtime_with_lifecycle_delivery',
+        'with_lifecycle_delivery_port',
+        'agent_input_attachment_from_image_context',
+        'AgentDialogTurnRequest',
+        'submit_dialog_turn',
+        'AgentRuntimeBuilder',
         'remote_control_state_port',
         'CoreRemoteDialogRuntimeHost',
         'CoreRemoteCancelRuntimeHost',
+        'CoreRemoteCancelRuntimeHost\\s*\\{[\\s\\S]*\\bruntime:\\s*AgentRuntime',
+        'CoreServiceAgentRuntime::agent_runtime_with_scheduler_ports',
         'CoreRemoteWorkspaceFileRuntimeHost',
         'CoreRemoteWorkspaceRuntimeHost',
         'CoreRemoteSessionRuntimeHost',
+        'CoreRemoteSessionRuntimeHost\\s*\\{[\\s\\S]*\\bruntime:\\s*AgentRuntime',
         'CoreRemotePollRuntimeHost',
         'CoreRemoteInteractionRuntimeHost',
         'CoreRemoteSessionTrackerHost',
@@ -1337,7 +1607,10 @@ export function runManifestParserSelfTest({
         'ImageContextData',
         'RemoteImageContextAdapter',
         'AgentSubmissionPort',
+        'AgentDialogTurnPort',
         'AgentTurnCancellationPort',
+        'AgentSessionManagementPort',
+        'with_session_management_port',
         'RemoteControlStatePort',
         'SessionTranscriptReader',
         'core_service_agent_runtime_owner_keeps_coordinator_port_contracts',
@@ -1345,11 +1618,57 @@ export function runManifestParserSelfTest({
         'core_service_agent_runtime_owner_normalizes_remote_model_selection_aliases',
         'core_service_agent_runtime_owner_preserves_remote_chat_history_shape',
         'core_service_agent_runtime_owner_skips_in_progress_remote_assistant_history',
+        'core_service_agent_runtime_owner_maps_image_context_to_lifecycle_attachment',
+        'core_service_agent_runtime_owner_keeps_scheduler_lifecycle_port_contracts',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/agentic/tools/implementations/session_control_tool.rs',
+      contracts: [
+        'CoreServiceAgentRuntime::agent_runtime',
+        'CoreServiceAgentRuntime::agent_runtime_with_scheduler_ports',
+        'AgentSessionCreateRequest',
+        'AgentSessionListRequest',
+        'AgentSessionDeleteRequest',
+        'AgentSessionWorkspaceRequest',
+        'list_sessions',
+        'delete_session',
+        'resolve_session_workspace_path',
+        '"createdBy"',
+        'AgentTurnCancellationRequest',
+        'requester_session_id',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/agentic/tools/implementations/session_message_tool.rs',
+      contracts: [
+        'CoreServiceAgentRuntime::agent_runtime_with_dialog_turns',
+        'AgentSessionCreateRequest',
+        'AgentSessionListRequest',
+        'AgentSessionWorkspaceRequest',
+        'list_sessions',
+        'resolve_session_workspace_path',
+        '"createdBy"',
+        'AgentDialogTurnRequest',
+        'AgentDialogPrependedReminder',
+        'submit_dialog_turn',
       ],
     },
     {
       path: 'src/crates/services/services-integrations/src/remote_connect.rs',
       contracts: [
+        'pub mod device',
+        'pub mod encryption',
+        'pub mod pairing',
+        'pub mod qr_generator',
+        'pub mod relay_client',
+        'pub use device::DeviceIdentity',
+        'pub use encryption::{decrypt_from_base64, encrypt_to_base64, KeyPair}',
+        'PairingProtocol',
+        'QrPayload',
+        'pub use qr_generator::QrGenerator',
+        'RelayClient',
+        'RelayMessage',
         'RemoteSessionStateTracker',
         'TrackerEvent',
         'RemoteSessionTrackerHost',
@@ -1424,6 +1743,8 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/services/services-integrations/tests/remote_connect_contracts.rs',
       contracts: [
+        'remote_connect_pairing_primitives_live_in_services_owner',
+        'remote_connect_qr_and_relay_primitives_live_in_services_owner',
         'remote_connect_command_wire_shape_lives_in_owner_contract',
         'remote_connect_response_wire_shape_lives_in_owner_contract',
         'remote_connect_model_catalog_delta_preserves_poll_invalidation_policy',
@@ -1466,7 +1787,22 @@ export function runManifestParserSelfTest({
     },
     {
       path: 'src/crates/assembly/core/src/agentic/coordination/scheduler.rs',
-      contracts: ['remote_queue_policy_preserves_interactive_preempt_and_confirmation_boundary'],
+      contracts: [
+        'remote_queue_policy_preserves_confirmation_boundary',
+        'AgentDialogTurnPort',
+        'AgentLifecycleDeliveryPort',
+        'AgentTurnCancellationPort',
+        'AgentBackgroundResultRequest',
+        'AgentThreadGoalDeliveryRequest',
+        'AgentThreadGoalDeliveryKind::ObjectiveUpdated',
+        'cancel_active_turn_for_session_from_requester',
+        'agent_dialog_turn_image_contexts',
+        'agent_dialog_turn_prepended_messages',
+        'agent_dialog_turn_attachments_preserve_remote_image_context',
+        'agent_dialog_turn_attachments_reject_unknown_kind',
+        'agent_dialog_turn_prepended_reminders_preserve_session_message_kind',
+        'agent_dialog_turn_prepended_reminders_reject_unknown_kind',
+      ],
     },
     {
       path: 'src/crates/assembly/core/src/agentic/tools/registry.rs',
@@ -1747,6 +2083,58 @@ export function runManifestParserSelfTest({
       contracts: ['run_for_session_workspace', 'bitfun_services_integrations::deep_research'],
     },
     {
+      path: 'src/crates/execution/agent-runtime/src/deep_review/task_execution.rs',
+      contracts: [
+        'deep_review_task_completion_result',
+        'deep_review_cancelled_reviewer_result',
+        'should_emit_deep_review_retry_guidance',
+        'deep_review_retry_guidance',
+        'auto_retry_suppression_reason',
+        'ensure_deep_review_auto_retry_allowed',
+        'DeepReviewProviderCapacityQueueRuntime',
+        'DeepReviewProviderCapacityRetryRuntime',
+        'DeepReviewProviderCapacityRetryDecision',
+        'DeepReviewReviewerAdmissionQueueRuntime',
+        'QueueWaitTimer',
+      ],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/src/deep_review/report.rs',
+      contracts: ['fill_deep_review_runtime_tracker_signal'],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/src/deep_review/diagnostics.rs',
+      contracts: ['deep_review_runtime_diagnostics_log_line'],
+    },
+    {
+      path: 'src/crates/assembly/core/src/agentic/deep_review/task_adapter.rs',
+      contracts: [
+        'runtime_task_execution::deep_review_task_completion_result',
+        'runtime_task_execution::deep_review_cancelled_reviewer_result',
+        'runtime_task_execution::should_emit_deep_review_retry_guidance',
+        'runtime_task_execution::deep_review_retry_guidance',
+        'runtime_task_execution::auto_retry_suppression_reason',
+        'runtime_task_execution::ensure_deep_review_auto_retry_allowed',
+        'runtime_task_execution::DeepReviewProviderCapacityQueueRuntime::start',
+        'DeepReviewProviderCapacityRetryRuntime',
+        'DeepReviewProviderCapacityRetryDecision',
+        'runtime_task_execution::DeepReviewReviewerAdmissionQueueRuntime::start',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/agentic/tools/implementations/task_tool.rs',
+      contracts: [
+        'deep_review_task_adapter::should_emit_deep_review_retry_guidance',
+        'deep_review_task_adapter::deep_review_retry_guidance',
+        'deep_review_task_adapter::auto_retry_suppression_reason',
+        'deep_review_task_adapter::ensure_deep_review_auto_retry_allowed',
+        'deep_review_task_adapter::deep_review_task_completion_result',
+        'deep_review_task_adapter::deep_review_cancelled_reviewer_result',
+        'DeepReviewProviderCapacityRetryRuntime::default',
+        'DeepReviewProviderCapacityRetryDecision::WaitForCapacity',
+      ],
+    },
+    {
       path: 'src/crates/services/services-integrations/src/deep_research.rs',
       contracts: ['run_for_session_workspace', 'try_renumber_research_report', 'renumber_research_report', 'report.md', 'citations.md', 'display_map', 'REJECTED'],
     },
@@ -1878,7 +2266,14 @@ export function runManifestParserSelfTest({
     },
     {
       path: 'src/crates/assembly/core/src/service/workspace_runtime/service.rs',
-      contracts: ['feature = "product-full"', 'WorkspaceBinding', 'ensure_runtime_for_workspace_binding'],
+      contracts: [
+        'feature = "product-full"',
+        'WorkspaceBinding',
+        'ensure_runtime_for_workspace_binding',
+        'SessionMetadataStore',
+        'rebuild_index',
+        'metadata_file_count',
+      ],
     },
     {
       path: 'src/crates/interfaces/acp/src/client/manager.rs',
@@ -1929,7 +2324,7 @@ export function runManifestParserSelfTest({
       contracts: [
         'ServiceMiniAppStorage',
         'map_storage_error',
-        'MiniAppImportBundleRequest',
+        'MiniAppImportBundleWriteRequest',
         'read_import_meta_json',
         'write_import_bundle',
         'MiniAppStoragePort',
@@ -1940,7 +2335,7 @@ export function runManifestParserSelfTest({
       contracts: [
         'pub struct MiniAppStorage',
         'MiniAppStorageError',
-        'MiniAppImportBundleRequest',
+        'MiniAppImportBundleWriteRequest',
         'read_import_meta_json',
         'write_import_bundle',
         'tokio::fs::read_to_string',
@@ -2026,6 +2421,8 @@ export function runManifestParserSelfTest({
         'plan_fs_legacy_path_check',
         'plan_fs_host_call',
         'fs_policy_scopes',
+        'MiniAppPermissionPolicyRequest::from_paths',
+        'resolve_policy_with_request',
         'fs_resolved_path_allowed',
         'dispatch_shell',
         'plan_shell_host_call',
@@ -2089,7 +2486,7 @@ export function runManifestParserSelfTest({
       path: 'src/crates/assembly/core/src/service/remote_connect/bot/command_router.rs',
       contracts: [
         'CoreServiceAgentRuntime',
-        'agent_submission_port',
+        'agent_runtime',
         'build_remote_session_create_request',
       ],
     },
@@ -2163,6 +2560,30 @@ export function runManifestParserSelfTest({
         'mark_deps_installed_state',
         'persist_sync_from_fs_result_for_app',
         'persist_import_runtime_state',
+        'pub async fn import_from_path',
+        'MiniAppImportPort',
+        'MiniAppCompilePort',
+        'MiniAppImportBundleWriteRequest',
+        'build_import_bundle_plan',
+      ],
+    },
+    {
+      path: 'src/crates/contracts/product-domains/src/miniapp/compiler.rs',
+      contracts: [
+        'MiniAppCompileRequest',
+        'from_paths',
+        'compile_with_request',
+        'compile_request_from_paths_preserves_runtime_paths',
+        'compile_with_request_preserves_legacy_compile_output',
+      ],
+    },
+    {
+      path: 'src/crates/contracts/product-domains/src/miniapp/permission_policy.rs',
+      contracts: [
+        'MiniAppPermissionPolicyRequest',
+        'from_paths',
+        'resolve_policy_with_request',
+        'permission_policy_request_preserves_path_scope_and_granted_paths',
       ],
     },
     {
@@ -2181,6 +2602,7 @@ export function runManifestParserSelfTest({
         'build_import_fallbacks',
         'MiniAppImportBundlePlan',
         'MiniAppImportBundlePlanError',
+        'MiniAppImportBundleWriteRequest',
         'build_import_bundle_plan',
       ],
     },
@@ -2293,10 +2715,13 @@ export function runManifestParserSelfTest({
         'decline_builtin_update',
         'persist_sync_from_fs_result_for_app',
         'compile_source',
-        'read_import_meta_json',
-        'build_import_bundle_plan',
-        'write_import_bundle',
-        'persist_import_runtime_state',
+        'MiniAppCompileRequest::from_paths',
+        'compile_with_request',
+        'MiniAppPermissionPolicyRequest::from_paths',
+        'resolve_policy_with_request',
+        'MiniAppCompilePort',
+        'MiniAppImportFromPathRequest',
+        'import_from_path',
         'runtime_preflight_preserves_recompile_sync_rollback_and_deps_state',
         'import_from_path_preserves_fallback_files_recompile_and_runtime_state',
       ],
@@ -2410,6 +2835,13 @@ export function runManifestParserSelfTest({
         throw new Error(`owner content anchor rule for ${path} must require: ${contract}`);
       }
     }
+  }
+
+  const sessionControlRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/tools/implementations/session_control_tool.rs',
+  );
+  if (!sessionControlRuleText.includes('create_session_with_workspace_and_creator')) {
+    throw new Error('SessionControl old create-path boundary rule must cover legacy create path');
   }
 
   const remoteWorkspaceRule = forbiddenContentRules.find(

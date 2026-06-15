@@ -1,8 +1,15 @@
 //! Agentic Mode
+//!
+//! Shared coding modes inherit the agentic baseline for
+//! `SHARED_CODING_MODE_PROMPT_TEMPLATE`, `shared_coding_mode_tools()`,
+//! `shared_coding_mode_tool_exposure_overrides()`, and
+//! `shared_coding_mode_user_context_policy()`. Across the four coding modes,
+//! only the reminder content differs.
 
 use crate::agentic::agents::{
-    get_embedded_prompt, shared_coding_mode_tools, shared_coding_mode_user_context_policy, Agent,
-    UserContextPolicy, SHARED_CODING_MODE_PROMPT_TEMPLATE,
+    get_embedded_prompt, shared_coding_mode_tool_exposure_overrides, shared_coding_mode_tools,
+    shared_coding_mode_user_context_policy, Agent, AgentToolPolicyOverrides, UserContextPolicy,
+    SHARED_CODING_MODE_PROMPT_TEMPLATE,
 };
 use async_trait::async_trait;
 
@@ -10,6 +17,7 @@ const AGENTIC_MODE_FIRST_ENTRY_REMINDER_TEMPLATE: &str = "agentic_mode_first_ent
 
 pub struct AgenticMode {
     default_tools: Vec<String>,
+    tool_exposure_overrides: AgentToolPolicyOverrides,
 }
 
 impl Default for AgenticMode {
@@ -22,6 +30,7 @@ impl AgenticMode {
     pub fn new() -> Self {
         Self {
             default_tools: shared_coding_mode_tools(),
+            tool_exposure_overrides: shared_coding_mode_tool_exposure_overrides(),
         }
     }
 
@@ -66,6 +75,10 @@ impl Agent for AgenticMode {
         self.default_tools.clone()
     }
 
+    fn tool_exposure_overrides(&self) -> &AgentToolPolicyOverrides {
+        &self.tool_exposure_overrides
+    }
+
     fn user_context_policy(&self) -> UserContextPolicy {
         shared_coding_mode_user_context_policy()
     }
@@ -91,6 +104,18 @@ impl Agent for AgenticMode {
 mod tests {
     use super::AgenticMode;
     use crate::agentic::agents::Agent;
+    use crate::agentic::tools::framework::ToolExposure;
+
+    #[test]
+    fn agentic_mode_expands_web_research_tools() {
+        let mode = AgenticMode::new();
+        let overrides = mode.tool_exposure_overrides();
+
+        assert_eq!(overrides.get("WebSearch"), Some(&ToolExposure::Expanded));
+        assert_eq!(overrides.get("WebFetch"), Some(&ToolExposure::Expanded));
+        assert!(mode.default_tools().contains(&"WebSearch".to_string()));
+        assert!(mode.default_tools().contains(&"WebFetch".to_string()));
+    }
 
     #[tokio::test]
     async fn returns_first_entry_reminder_only_when_entering_agentic_mode() {

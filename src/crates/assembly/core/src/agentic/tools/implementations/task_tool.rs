@@ -13,8 +13,8 @@ use crate::agentic::deep_review_policy::{
     record_deep_review_runtime_auto_retry, record_deep_review_runtime_auto_retry_suppressed,
     record_deep_review_runtime_manual_retry, record_deep_review_task_budget,
     DeepReviewActiveReviewerGuard, DeepReviewCapacityQueueReason, DeepReviewConcurrencyPolicy,
-    DeepReviewExecutionPolicy, DeepReviewIncrementalCache, DeepReviewPolicyViolation,
-    DeepReviewRunManifestGate, DeepReviewSubagentRole, DEEP_REVIEW_AGENT_TYPE,
+    DeepReviewExecutionPolicy, DeepReviewPolicyViolation, DeepReviewRunManifestGate,
+    DeepReviewSubagentRole, DEEP_REVIEW_AGENT_TYPE,
 };
 use crate::agentic::events::DeepReviewQueueStatus;
 use crate::agentic::tools::framework::{
@@ -84,18 +84,6 @@ impl TaskTool {
         ))
     }
 
-    fn deep_review_packet_id_for_cache(
-        subagent_type: &str,
-        description: Option<&str>,
-        run_manifest: Option<&Value>,
-    ) -> Option<String> {
-        deep_review_task_adapter::deep_review_packet_id_for_cache(
-            subagent_type,
-            description,
-            run_manifest,
-        )
-    }
-
     async fn load_configured_tool_execution_timeout() -> Option<u64> {
         let service = GlobalConfigManager::get_service().await.ok()?;
         let ai_config: AIConfig = service.get_config(Some("ai")).await.ok()?;
@@ -150,12 +138,11 @@ impl TaskTool {
         is_retry: bool,
         deep_review_subagent_role: Option<DeepReviewSubagentRole>,
     ) -> bool {
-        is_partial_timeout
-            && !is_retry
-            && matches!(
-                deep_review_subagent_role,
-                Some(DeepReviewSubagentRole::Reviewer)
-            )
+        deep_review_task_adapter::should_emit_deep_review_retry_guidance(
+            is_partial_timeout,
+            is_retry,
+            deep_review_subagent_role,
+        )
     }
 
     fn ensure_deep_review_retry_coverage(
@@ -178,49 +165,17 @@ impl TaskTool {
     }
 
     fn auto_retry_suppression_reason(code: &str) -> &'static str {
-        match code {
-            "deep_review_auto_retry_disabled" => "auto_retry_disabled",
-            "deep_review_auto_retry_elapsed_guard_exceeded" => "elapsed_guard_exceeded",
-            "deep_review_retry_budget_exhausted" => "budget_exhausted",
-            "deep_review_retry_without_initial_attempt" => "without_initial_attempt",
-            "deep_review_retry_missing_coverage" => "missing_coverage",
-            "deep_review_retry_missing_packet_id" => "missing_coverage",
-            "deep_review_retry_missing_status" => "missing_coverage",
-            "deep_review_retry_non_retryable_status" => "non_retryable_status",
-            "deep_review_retry_unknown_packet" => "unknown_packet",
-            "deep_review_retry_missing_packet_scope" => "unknown_packet",
-            "deep_review_retry_timeout_required" => "timeout_not_reduced",
-            "deep_review_retry_timeout_not_reduced" => "timeout_not_reduced",
-            "deep_review_retry_empty_scope" => "empty_scope",
-            "deep_review_retry_scope_not_reduced" => "scope_not_reduced",
-            _ => "invalid_coverage",
-        }
+        deep_review_task_adapter::auto_retry_suppression_reason(code)
     }
 
     fn ensure_deep_review_auto_retry_allowed(
         conc_policy: &DeepReviewConcurrencyPolicy,
         dialog_turn_id: &str,
     ) -> Result<(), DeepReviewPolicyViolation> {
-        if !conc_policy.allow_bounded_auto_retry {
-            return Err(DeepReviewPolicyViolation::new(
-                "deep_review_auto_retry_disabled",
-                "DeepReview bounded automatic retry is disabled by Review Team settings",
-            ));
-        }
-
-        if let Some(elapsed_seconds) = deep_review_turn_elapsed_seconds(dialog_turn_id) {
-            if elapsed_seconds > conc_policy.auto_retry_elapsed_guard_seconds {
-                return Err(DeepReviewPolicyViolation::new(
-                    "deep_review_auto_retry_elapsed_guard_exceeded",
-                    format!(
-                        "DeepReview automatic retry elapsed guard exceeded (elapsed: {}s, guard: {}s)",
-                        elapsed_seconds, conc_policy.auto_retry_elapsed_guard_seconds
-                    ),
-                ));
-            }
-        }
-
-        Ok(())
+        deep_review_task_adapter::ensure_deep_review_auto_retry_allowed(
+            conc_policy,
+            deep_review_turn_elapsed_seconds(dialog_turn_id),
+        )
     }
 
     fn prompt_with_deep_review_retry_scope(prompt: &str, retry_scope_files: &[String]) -> String {
@@ -231,22 +186,6 @@ impl TaskTool {
         error: &BitFunError,
     ) -> crate::agentic::deep_review_policy::DeepReviewCapacityQueueDecision {
         deep_review_task_adapter::capacity_decision_for_provider_error(error)
-    }
-
-    fn deep_review_capacity_skip_result_for_provider_reason(
-        reason: DeepReviewCapacityQueueReason,
-        dialog_turn_id: &str,
-        subagent_type: &str,
-        conc_policy: &DeepReviewConcurrencyPolicy,
-        duration_ms: u128,
-    ) -> (Value, String) {
-        deep_review_task_adapter::capacity_skip_result_for_provider_reason(
-            reason,
-            dialog_turn_id,
-            subagent_type,
-            conc_policy,
-            duration_ms,
-        )
     }
 
     fn deep_review_capacity_skip_result_for_provider_queue_outcome(
@@ -266,18 +205,6 @@ impl TaskTool {
             duration_ms,
             queue_elapsed_ms,
             terminal_skip_reason,
-        )
-    }
-
-    fn deep_review_provider_capacity_queue_wait_seconds_for_attempt(
-        decision: &crate::agentic::deep_review_policy::DeepReviewCapacityQueueDecision,
-        conc_policy: &DeepReviewConcurrencyPolicy,
-        retry_attempt_index: usize,
-    ) -> Option<u64> {
-        deep_review_task_adapter::provider_capacity_queue_wait_seconds_for_attempt(
-            decision,
-            conc_policy,
-            retry_attempt_index,
         )
     }
 
@@ -413,23 +340,15 @@ impl TaskTool {
         reason: &str,
         duration_ms: u128,
     ) -> ToolResult {
-        let duration = u64::try_from(duration_ms).unwrap_or(u64::MAX);
-        let reason = if reason.trim().is_empty() {
-            "Subagent task was cancelled"
-        } else {
-            reason.trim()
-        };
-        let result_for_assistant = format!(
-            "Subagent '{}' was cancelled by the user.\n<result status=\"cancelled\" reason=\"user_cancelled\">Treat this reviewer as cancelled coverage, continue remaining reviewers when useful, and do not relaunch it automatically.</result>",
-            subagent_type
-        );
+        let (data, result_for_assistant) =
+            deep_review_task_adapter::deep_review_cancelled_reviewer_result(
+                subagent_type,
+                reason,
+                duration_ms,
+            );
 
         ToolResult::Result {
-            data: json!({
-                "duration": duration,
-                "status": "cancelled",
-                "reason": reason,
-            }),
+            data,
             result_for_assistant: Some(result_for_assistant),
             image_attachments: None,
         }
@@ -548,8 +467,13 @@ impl Tool for TaskTool {
         Ok(self.render_description())
     }
 
-    async fn is_available_in_context(&self, context: Option<&ToolUseContext>) -> bool {
-        !Self::get_enabled_agents(context).await.is_empty()
+    async fn is_available_in_context(&self, _context: Option<&ToolUseContext>) -> bool {
+        // Keep Task prompt-visible even when no fresh subagents are currently
+        // available. Hiding it based on transient subagent availability makes
+        // the tool manifest drift across turns and causes provider prefix/KV
+        // cache misses. Task also still supports `fork_context=true` in that
+        // state, so removing it from the manifest would be behaviorally wrong.
+        true
     }
 
     fn short_description(&self) -> String {
@@ -1114,28 +1038,19 @@ impl Tool for TaskTool {
             // Check incremental review cache before queueing. A cache hit does
             // not consume runtime reviewer capacity or reviewer timeout.
             if role == DeepReviewSubagentRole::Reviewer && !is_retry {
-                if let Some(cache_value) =
-                    run_manifest.as_ref().and_then(|m| m.get("deepReviewCache"))
+                if let Some(cache_hit) =
+                    deep_review_task_adapter::deep_review_incremental_cache_hit_for_task(
+                        subagent_type,
+                        description.as_deref(),
+                        run_manifest.as_ref(),
+                    )
                 {
-                    let cache = DeepReviewIncrementalCache::from_value(cache_value);
-                    if cache.matches_manifest(run_manifest.as_ref().unwrap_or(&Value::Null)) {
-                        if let Some(packet_id) = Self::deep_review_packet_id_for_cache(
+                    let (data, cached_result) =
+                        deep_review_task_adapter::deep_review_incremental_cache_hit_result(
                             subagent_type,
-                            description.as_deref(),
-                            run_manifest.as_ref(),
-                        ) {
-                            if let Some(cached_output) = cache.get_packet(&packet_id) {
-                                let cached_result = format!(
-                                    "Subagent '{}' result (from incremental review cache):\n<result source=\"cache\">\n{}\n</result>",
-                                    subagent_type, cached_output
-                                );
-                                return Ok(vec![ToolResult::ok(
-                                    json!({ "cached": true, "packet_id": packet_id }),
-                                    Some(cached_result),
-                                )]);
-                            }
-                        }
-                    }
+                            &cache_hit,
+                        );
+                    return Ok(vec![ToolResult::ok(data, Some(cached_result))]);
                 }
             }
 
@@ -1311,9 +1226,8 @@ impl Tool for TaskTool {
                 image_attachments: None,
             }]);
         }
-        let mut provider_capacity_retry_reason: Option<DeepReviewCapacityQueueReason> = None;
-        let mut provider_capacity_queue_elapsed_ms = 0_u64;
-        let mut provider_capacity_retry_attempts = 0_usize;
+        let mut provider_capacity_retry =
+            deep_review_task_adapter::DeepReviewProviderCapacityRetryRuntime::default();
         let deep_review_subagent_id = subagent_type.as_deref().unwrap_or("");
         let result = loop {
             let parent_info = SubagentParentInfo {
@@ -1364,7 +1278,7 @@ impl Tool for TaskTool {
                         elapsed_ms_u64(subagent_execution_started_at),
                         result.ledger_event_id()
                     );
-                    if let Some(reason) = provider_capacity_retry_reason {
+                    if let Some(reason) = provider_capacity_retry.last_retry_reason() {
                         Self::record_deep_review_provider_capacity_retry_success(
                             &dialog_turn_id,
                             reason,
@@ -1409,21 +1323,22 @@ impl Tool for TaskTool {
                         if let Some(conc_policy) = deep_review_concurrency_policy.as_ref() {
                             let decision =
                                 Self::deep_review_capacity_decision_for_provider_error(&error);
-                            if let Some(reason) =
-                                decision.queueable.then_some(decision.reason).flatten()
+                            match provider_capacity_retry
+                                .decide_after_error(&decision, conc_policy)
                             {
-                                drop(deep_review_active_guard.take());
-
-                                if provider_capacity_retry_attempts
-                                    >= deep_review_task_adapter::DEEP_REVIEW_PROVIDER_CAPACITY_MAX_RETRY_ATTEMPTS
-                                {
+                                deep_review_task_adapter::DeepReviewProviderCapacityRetryDecision::NotQueueable => {}
+                                deep_review_task_adapter::DeepReviewProviderCapacityRetryDecision::CapacitySkipped {
+                                    reason,
+                                    queue_elapsed_ms,
+                                } => {
+                                    drop(deep_review_active_guard.take());
                                     let (data, assistant_message) = Self::deep_review_capacity_skip_result_for_provider_queue_outcome(
                                         reason,
                                         &dialog_turn_id,
                                         deep_review_subagent_id,
                                         conc_policy,
                                         start_time.elapsed().as_millis(),
-                                        provider_capacity_queue_elapsed_ms,
+                                        queue_elapsed_ms,
                                         None,
                                     );
                                     let effective_parallel_instances = data
@@ -1441,7 +1356,7 @@ impl Tool for TaskTool {
                                         deep_review_active_reviewer_count(&dialog_turn_id),
                                         deep_review_is_optional_reviewer.then_some(1),
                                         effective_parallel_instances,
-                                        provider_capacity_queue_elapsed_ms,
+                                        queue_elapsed_ms,
                                         conc_policy.max_queue_wait_seconds,
                                     )
                                     .await;
@@ -1451,14 +1366,11 @@ impl Tool for TaskTool {
                                         image_attachments: None,
                                     }]);
                                 }
-
-                                if let Some(max_wait_seconds) =
-                                    Self::deep_review_provider_capacity_queue_wait_seconds_for_attempt(
-                                        &decision,
-                                        conc_policy,
-                                        provider_capacity_retry_attempts,
-                                    )
-                                {
+                                deep_review_task_adapter::DeepReviewProviderCapacityRetryDecision::WaitForCapacity {
+                                    reason,
+                                    max_wait_seconds,
+                                } => {
+                                    drop(deep_review_active_guard.take());
                                     match Self::wait_for_deep_review_provider_capacity_retry(
                                         &session_id,
                                         &dialog_turn_id,
@@ -1475,9 +1387,11 @@ impl Tool for TaskTool {
                                             queue_elapsed_ms,
                                             early_capacity_probe,
                                         } => {
-                                            provider_capacity_queue_elapsed_ms =
-                                                provider_capacity_queue_elapsed_ms
-                                                    .saturating_add(queue_elapsed_ms);
+                                            provider_capacity_retry.record_ready_to_retry(
+                                                reason,
+                                                queue_elapsed_ms,
+                                                early_capacity_probe,
+                                            );
                                             let effective_parallel_instances =
                                                 deep_review_effective_parallel_instances(
                                                     &dialog_turn_id,
@@ -1536,12 +1450,6 @@ impl Tool for TaskTool {
                                                     )));
                                                 }
                                             }
-                                            provider_capacity_retry_reason = Some(reason);
-                                            if !early_capacity_probe {
-                                                provider_capacity_retry_attempts =
-                                                    provider_capacity_retry_attempts
-                                                        .saturating_add(1);
-                                            }
                                             Self::record_deep_review_provider_capacity_retry(
                                                 &dialog_turn_id,
                                                 reason,
@@ -1552,16 +1460,16 @@ impl Tool for TaskTool {
                                             queue_elapsed_ms,
                                             skip_reason,
                                         } => {
-                                            provider_capacity_queue_elapsed_ms =
-                                                provider_capacity_queue_elapsed_ms
-                                                    .saturating_add(queue_elapsed_ms);
+                                            let total_provider_capacity_queue_elapsed_ms =
+                                                provider_capacity_retry
+                                                    .record_queue_skipped(queue_elapsed_ms);
                                             let (data, assistant_message) = Self::deep_review_capacity_skip_result_for_provider_queue_outcome(
                                                 reason,
                                                 &dialog_turn_id,
                                                 deep_review_subagent_id,
                                                 conc_policy,
                                                 start_time.elapsed().as_millis(),
-                                                provider_capacity_queue_elapsed_ms,
+                                                total_provider_capacity_queue_elapsed_ms,
                                                 Some(skip_reason),
                                             );
                                             return Ok(vec![ToolResult::Result {
@@ -1572,39 +1480,6 @@ impl Tool for TaskTool {
                                         }
                                     }
                                 }
-
-                                let (data, assistant_message) =
-                                    Self::deep_review_capacity_skip_result_for_provider_reason(
-                                        reason,
-                                        &dialog_turn_id,
-                                        deep_review_subagent_id,
-                                        conc_policy,
-                                        start_time.elapsed().as_millis(),
-                                    );
-                                let effective_parallel_instances = data
-                                    .get("effective_parallel_instances")
-                                    .and_then(Value::as_u64)
-                                    .and_then(|value| usize::try_from(value).ok());
-                                Self::emit_deep_review_queue_state(
-                                    &session_id,
-                                    &dialog_turn_id,
-                                    &tool_call_id,
-                                    deep_review_subagent_id,
-                                    DeepReviewQueueStatus::CapacitySkipped,
-                                    Some(reason),
-                                    0,
-                                    deep_review_active_reviewer_count(&dialog_turn_id),
-                                    deep_review_is_optional_reviewer.then_some(1),
-                                    effective_parallel_instances,
-                                    0,
-                                    conc_policy.max_queue_wait_seconds,
-                                )
-                                .await;
-                                return Ok(vec![ToolResult::Result {
-                                    data,
-                                    result_for_assistant: Some(assistant_message),
-                                    image_attachments: None,
-                                }]);
                             }
                         }
                     }
@@ -1625,11 +1500,6 @@ impl Tool for TaskTool {
         drop(deep_review_active_guard);
 
         let duration = start_time.elapsed().as_millis();
-        let status = if result.is_partial_timeout() {
-            "partial_timeout"
-        } else {
-            "completed"
-        };
 
         // Build retry hint for deep review reviewer timeouts.
         let retry_hint = if Self::should_emit_deep_review_retry_guidance(
@@ -1645,43 +1515,22 @@ impl Tool for TaskTool {
                 deep_review_effective_policy.as_ref(),
                 &dialog_turn_id,
             );
-            if max_retries > 0 && retries_used < max_retries {
-                format!(
-                    "\n\n<retry_guidance>This reviewer timed out. You may retry with 'retry: true' only if you can provide retry_coverage with source_packet_id, source_status='partial_timeout', covered_files, and a smaller retry_scope_files list. Retries used: {}/{}.</retry_guidance>",
-                    retries_used, max_retries
-                )
-            } else {
-                String::new()
-            }
+            deep_review_task_adapter::deep_review_retry_guidance(retries_used, max_retries)
         } else {
             String::new()
         };
 
-        let result_for_assistant = if result.is_partial_timeout() {
-            format!(
-                "{} timed out with partial result:\n<partial_result status=\"partial_timeout\">\n{}\n</partial_result>{}",
-                delegate_target_label, result.text, retry_hint
-            )
-        } else {
-            format!(
-                "{} completed successfully with result:\n<result>\n{}\n</result>",
-                delegate_target_label, result.text
-            )
-        };
-        let mut data = json!({
-            "duration": duration,
-            "context_mode": context_mode.as_str(),
-            "status": status
-        });
-        if result.is_partial_timeout() {
-            data["partial_output"] = json!(result.text);
-            if let Some(reason) = result.reason.as_deref() {
-                data["reason"] = json!(reason);
-            }
-            if let Some(event_id) = result.ledger_event_id() {
-                data["ledger_event_id"] = json!(event_id);
-            }
-        }
+        let (data, result_for_assistant) =
+            deep_review_task_adapter::deep_review_task_completion_result(
+                &delegate_target_label,
+                &result.text,
+                context_mode.as_str(),
+                duration,
+                result.is_partial_timeout(),
+                result.reason.as_deref(),
+                result.ledger_event_id(),
+                &retry_hint,
+            );
 
         Ok(vec![ToolResult::Result {
             data,
@@ -1704,7 +1553,6 @@ mod tests {
     };
     use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
     use crate::agentic::tools::ToolRuntimeRestrictions;
-    use crate::util::BitFunError;
     use async_trait::async_trait;
     use bitfun_runtime_ports::DelegationPolicy;
     use serde_json::json;
@@ -1845,6 +1693,14 @@ mod tests {
             .message
             .as_deref()
             .is_some_and(|message| message.contains("subagent_type is required")));
+    }
+
+    #[tokio::test]
+    async fn task_tool_stays_available_without_enabled_subagents() {
+        assert!(
+            TaskTool::new().is_available_in_context(None).await,
+            "Task should remain prompt-visible even when no fresh subagents are currently available"
+        );
     }
 
     #[tokio::test]
@@ -2570,133 +2426,6 @@ mod tests {
     }
 
     #[test]
-    fn deep_review_incremental_cache_hit_returns_cached_result() {
-        use crate::agentic::deep_review_policy::DeepReviewIncrementalCache;
-
-        let mut cache = DeepReviewIncrementalCache::new("fp-test-123");
-        cache.store_packet("ReviewSecurity", "Found 2 security issues");
-
-        // Cache hit
-        let result = cache.get_packet("ReviewSecurity");
-        assert_eq!(result, Some("Found 2 security issues"));
-
-        // Cache miss
-        assert_eq!(cache.get_packet("ReviewPerformance"), None);
-    }
-
-    #[test]
-    fn deep_review_incremental_cache_fingerprint_mismatch_skips() {
-        use crate::agentic::deep_review_policy::DeepReviewIncrementalCache;
-
-        let cache = DeepReviewIncrementalCache::new("fp-old");
-        let manifest = serde_json::json!({
-            "incrementalReviewCache": {
-                "fingerprint": "fp-new"
-            }
-        });
-        // Fingerprint mismatch -> cache should not match
-        assert!(!cache.matches_manifest(&manifest));
-    }
-
-    #[test]
-    fn deep_review_cache_packet_id_prefers_task_description_packet() {
-        let manifest = serde_json::json!({
-            "workPackets": [
-                {
-                    "packetId": "reviewer:ReviewSecurity:group-1-of-2",
-                    "phase": "reviewer",
-                    "subagentId": "ReviewSecurity"
-                },
-                {
-                    "packetId": "reviewer:ReviewSecurity:group-2-of-2",
-                    "phase": "reviewer",
-                    "subagentId": "ReviewSecurity"
-                }
-            ]
-        });
-
-        assert_eq!(
-            TaskTool::deep_review_packet_id_for_cache(
-                "ReviewSecurity",
-                Some("Security review [packet reviewer:ReviewSecurity:group-2-of-2]"),
-                Some(&manifest),
-            ),
-            Some("reviewer:ReviewSecurity:group-2-of-2".to_string())
-        );
-    }
-
-    #[test]
-    fn deep_review_cache_packet_id_uses_unique_manifest_packet() {
-        let manifest = serde_json::json!({
-            "workPackets": [
-                {
-                    "packetId": "reviewer:ReviewBusinessLogic",
-                    "phase": "reviewer",
-                    "subagentId": "ReviewBusinessLogic"
-                }
-            ]
-        });
-
-        assert_eq!(
-            TaskTool::deep_review_packet_id_for_cache(
-                "ReviewBusinessLogic",
-                Some("Logic review"),
-                Some(&manifest),
-            ),
-            Some("reviewer:ReviewBusinessLogic".to_string())
-        );
-    }
-
-    #[test]
-    fn deep_review_cache_packet_id_does_not_guess_split_packets() {
-        let manifest = serde_json::json!({
-            "workPackets": [
-                {
-                    "packetId": "reviewer:ReviewPerformance:group-1-of-2",
-                    "phase": "reviewer",
-                    "subagentId": "ReviewPerformance"
-                },
-                {
-                    "packetId": "reviewer:ReviewPerformance:group-2-of-2",
-                    "phase": "reviewer",
-                    "subagentId": "ReviewPerformance"
-                }
-            ]
-        });
-
-        assert_eq!(
-            TaskTool::deep_review_packet_id_for_cache(
-                "ReviewPerformance",
-                Some("Performance review"),
-                Some(&manifest),
-            ),
-            None
-        );
-    }
-
-    #[test]
-    fn deep_review_cache_packet_id_ignores_description_for_other_subagent() {
-        let manifest = serde_json::json!({
-            "workPackets": [
-                {
-                    "packetId": "reviewer:ReviewSecurity:group-1-of-1",
-                    "phase": "reviewer",
-                    "subagentId": "ReviewSecurity"
-                }
-            ]
-        });
-
-        assert_eq!(
-            TaskTool::deep_review_packet_id_for_cache(
-                "ReviewPerformance",
-                Some("Performance review [packet reviewer:ReviewSecurity:group-1-of-1]"),
-                Some(&manifest),
-            ),
-            None
-        );
-    }
-
-    #[test]
     fn deep_review_retry_guidance_includes_budget_info() {
         // Verify that the retry budget tracking functions work correctly
         // for the retry guidance injected in task_tool.
@@ -2975,12 +2704,14 @@ mod tests {
             .reason
             .expect("provider rate limit should surface as capacity_skipped");
         let (data, assistant_message) =
-            TaskTool::deep_review_capacity_skip_result_for_provider_reason(
+            TaskTool::deep_review_capacity_skip_result_for_provider_queue_outcome(
                 reason,
                 turn_id,
                 "ReviewSecurity",
                 &policy,
                 42,
+                0,
+                None,
             );
 
         assert_eq!(data["status"], "capacity_skipped");
@@ -3005,81 +2736,6 @@ mod tests {
         assert!(
             !decision.queueable,
             "quota errors should remain fail-fast instead of entering capacity queue flow"
-        );
-    }
-
-    #[test]
-    fn deep_review_provider_queue_wait_is_bounded_by_retry_after_and_policy() {
-        use crate::agentic::deep_review_policy::DeepReviewConcurrencyPolicy;
-
-        let policy = DeepReviewConcurrencyPolicy {
-            max_parallel_instances: 3,
-            stagger_seconds: 0,
-            max_queue_wait_seconds: 30,
-            batch_extras_separately: true,
-            allow_bounded_auto_retry: false,
-            auto_retry_elapsed_guard_seconds: 180,
-        };
-        let decision = TaskTool::deep_review_capacity_decision_for_provider_error(
-            &BitFunError::ai("Provider error: code=429, message=Retry-After: 45"),
-        );
-
-        assert_eq!(
-            TaskTool::deep_review_provider_capacity_queue_wait_seconds_for_attempt(
-                &decision, &policy, 0,
-            ),
-            Some(30)
-        );
-    }
-
-    #[test]
-    fn deep_review_provider_queue_wait_uses_exponential_backoff_attempts() {
-        use crate::agentic::deep_review_policy::DeepReviewConcurrencyPolicy;
-
-        let policy = DeepReviewConcurrencyPolicy {
-            max_parallel_instances: 3,
-            stagger_seconds: 0,
-            max_queue_wait_seconds: 60,
-            batch_extras_separately: true,
-            allow_bounded_auto_retry: false,
-            auto_retry_elapsed_guard_seconds: 180,
-        };
-        let decision = TaskTool::deep_review_capacity_decision_for_provider_error(
-            &BitFunError::ai("Provider error: code=429, message=too many concurrent requests"),
-        );
-
-        let waits = (0..3)
-            .map(|attempt| {
-                TaskTool::deep_review_provider_capacity_queue_wait_seconds_for_attempt(
-                    &decision, &policy, attempt,
-                )
-            })
-            .collect::<Vec<_>>();
-
-        assert_eq!(waits, vec![Some(60), Some(180), Some(540)]);
-    }
-
-    #[test]
-    fn deep_review_provider_queue_wait_rejects_fail_fast_errors() {
-        use crate::agentic::deep_review_policy::DeepReviewConcurrencyPolicy;
-
-        let policy = DeepReviewConcurrencyPolicy {
-            max_parallel_instances: 3,
-            stagger_seconds: 0,
-            max_queue_wait_seconds: 30,
-            batch_extras_separately: true,
-            allow_bounded_auto_retry: false,
-            auto_retry_elapsed_guard_seconds: 180,
-        };
-        let decision = TaskTool::deep_review_capacity_decision_for_provider_error(
-            &BitFunError::ai("Provider error: code=invalid_model, message=model does not exist"),
-        );
-
-        assert_eq!(
-            TaskTool::deep_review_provider_capacity_queue_wait_seconds_for_attempt(
-                &decision, &policy, 0,
-            ),
-            None
         );
     }
 

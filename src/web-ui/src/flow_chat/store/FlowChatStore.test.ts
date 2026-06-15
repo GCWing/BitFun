@@ -13,13 +13,23 @@ const apiMocks = vi.hoisted(() => ({
   restoreSessionWithTurns: vi.fn(),
 }));
 
-const configManagerMock = vi.hoisted(() => ({
-  getConfig: vi.fn(async (path: string) => {
+const configManagerMock = vi.hoisted(() => {
+  const getConfig = vi.fn(async (path: string) => {
     if (path === 'ai.models') return [];
     if (path === 'ai.default_models') return {};
     return undefined;
-  }),
-}));
+  });
+  return {
+    getConfig,
+    getConfigs: vi.fn(async (paths: string[]) => {
+      const configs: Record<string, unknown> = {};
+      for (const path of paths) {
+        configs[path] = await getConfig(path);
+      }
+      return configs;
+    }),
+  };
+});
 
 const stateMachineManagerMock = vi.hoisted(() => ({
   getOrCreate: vi.fn(),
@@ -173,6 +183,222 @@ describe('FlowChatStore metadata persistence callbacks', () => {
 
     expect(persist).toHaveBeenCalledTimes(1);
     expect(persist).toHaveBeenCalledWith(session.sessionId, undefined);
+  });
+});
+
+describe('FlowChatStore token usage', () => {
+  afterEach(() => {
+    resetStore();
+  });
+
+  it('stores provider token usage on the matching dialog turn', () => {
+    const session = createSession({
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: 'session-1',
+        userMessage: {
+          id: 'user-1',
+          content: 'hello',
+          timestamp: 1000,
+        },
+        modelRounds: [],
+        status: 'completed',
+        startTime: 1000,
+        endTime: 2400,
+      }],
+    });
+
+    flowChatStore.setState(() => ({
+      sessions: new Map([[session.sessionId, session]]),
+      activeSessionId: session.sessionId,
+    }));
+
+    flowChatStore.updateTokenUsage(session.sessionId, {
+      inputTokens: 1200,
+      outputTokens: 320,
+      totalTokens: 1520,
+    }, 'turn-1');
+
+    const stored = flowChatStore.getState().sessions.get(session.sessionId);
+
+    expect(stored?.currentTokenUsage).toMatchObject({
+      inputTokens: 1200,
+      outputTokens: 320,
+      totalTokens: 1520,
+    });
+    expect(stored?.dialogTurns[0].tokenUsage).toMatchObject({
+      inputTokens: 1200,
+      outputTokens: 320,
+      totalTokens: 1520,
+    });
+    expect(stored?.dialogTurns[0].tokenUsage?.timestamp).toEqual(expect.any(Number));
+  });
+
+  it('keeps session context usage as the latest request while accumulating turn usage', () => {
+    const session = createSession({
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: 'session-1',
+        userMessage: {
+          id: 'user-1',
+          content: 'hello',
+          timestamp: 1000,
+        },
+        modelRounds: [],
+        status: 'processing',
+        startTime: 1000,
+      }],
+    });
+
+    flowChatStore.setState(() => ({
+      sessions: new Map([[session.sessionId, session]]),
+      activeSessionId: session.sessionId,
+    }));
+
+    flowChatStore.updateTokenUsage(session.sessionId, {
+      inputTokens: 100,
+      outputTokens: 50,
+      totalTokens: 150,
+    }, 'turn-1');
+    flowChatStore.updateTokenUsage(session.sessionId, {
+      inputTokens: 200,
+      outputTokens: 75,
+      totalTokens: 275,
+    }, 'turn-1');
+
+    const stored = flowChatStore.getState().sessions.get(session.sessionId);
+
+    expect(stored?.currentTokenUsage).toMatchObject({
+      inputTokens: 200,
+      outputTokens: 75,
+      totalTokens: 275,
+    });
+    expect(stored?.dialogTurns[0].tokenUsage).toMatchObject({
+      inputTokens: 300,
+      outputTokens: 125,
+      totalTokens: 425,
+    });
+  });
+});
+
+describe('FlowChatStore round attempts', () => {
+  afterEach(() => {
+    resetStore();
+  });
+
+  it('supersedes active items from an older attempt when a newer attempt starts in the same round', () => {
+    const session = createSession({
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: 'session-1',
+        userMessage: {
+          id: 'user-1',
+          content: 'hello',
+          timestamp: 1000,
+        },
+        modelRounds: [{
+          id: 'round-1',
+          index: 0,
+          items: [{
+            id: 'ask-1',
+            type: 'tool',
+            toolName: 'AskUserQuestion',
+            timestamp: 1100,
+            status: 'preparing',
+            attemptId: 'round-1:attempt:1',
+            attemptIndex: 1,
+            toolCall: {
+              id: 'ask-1',
+              input: {},
+            },
+            isParamsStreaming: true,
+            startTime: 1100,
+          }],
+          isStreaming: true,
+          isComplete: false,
+          status: 'streaming',
+          startTime: 1000,
+        }],
+        status: 'processing',
+        startTime: 1000,
+      }],
+    });
+
+    flowChatStore.setState(() => ({
+      sessions: new Map([[session.sessionId, session]]),
+      activeSessionId: session.sessionId,
+    }));
+
+    flowChatStore.addModelRoundItem(session.sessionId, 'turn-1', {
+      id: 'text-2',
+      type: 'text',
+      content: 'retry output',
+      isStreaming: true,
+      isMarkdown: true,
+      timestamp: 1200,
+      status: 'streaming',
+      attemptId: 'round-1:attempt:2',
+      attemptIndex: 2,
+    }, 'round-1');
+
+    const round = flowChatStore.getState().sessions.get(session.sessionId)?.dialogTurns[0]?.modelRounds[0];
+    expect(round?.attempts?.map(attempt => attempt.status)).toEqual(['superseded', 'streaming']);
+
+    const supersededTool = round?.attempts?.[0]?.items[0];
+    expect(supersededTool).toMatchObject({
+      type: 'tool',
+      status: 'cancelled',
+      interruptionReason: 'retry_superseded',
+    });
+  });
+
+  it('preserves retry superseded interruption details when restoring persisted turns', () => {
+    const restoredTurn = (flowChatStore as any).convertToDialogTurns([{
+      turnId: 'turn-1',
+      sessionId: 'session-1',
+      userMessage: {
+        id: 'user-1',
+        content: 'hello',
+        timestamp: 1000,
+        metadata: {},
+      },
+      modelRounds: [{
+        id: 'round-1',
+        index: 0,
+        status: 'completed',
+        timestamp: 1000,
+        textItems: [],
+        thinkingItems: [],
+        toolItems: [{
+          id: 'ask-1',
+          toolName: 'AskUserQuestion',
+          toolCall: { id: 'ask-1', input: {} },
+          toolResult: {
+            result: null,
+            success: false,
+            error: 'Superseded by a newer retry in the same model round.',
+          },
+          startTime: 1100,
+          endTime: 1200,
+          status: 'cancelled',
+          interruptionReason: 'retry_superseded',
+          attemptId: 'round-1:attempt:1',
+          attemptIndex: 1,
+        }],
+      }],
+      status: 'completed',
+      timestamp: 1000,
+    }])[0];
+
+    const restoredRound = restoredTurn.modelRounds[0];
+    expect(restoredRound.attempts?.map((attempt: any) => attempt.status)).toEqual(['completed']);
+    expect(restoredRound.attempts?.[0]?.items[0]).toMatchObject({
+      type: 'tool',
+      status: 'cancelled',
+      interruptionReason: 'retry_superseded',
+      attemptId: 'round-1:attempt:1',
+      attemptIndex: 1,
+    });
   });
 });
 
@@ -381,6 +607,10 @@ describe('FlowChatStore historical session hydration state', () => {
     const configPaths = configManagerMock.getConfig.mock.calls.map(([path]) => path);
     expect(configPaths.filter(path => path === 'ai.models')).toHaveLength(1);
     expect(configPaths.filter(path => path === 'ai.default_models')).toHaveLength(1);
+    expect(configManagerMock.getConfigs).toHaveBeenCalledWith([
+      'ai.models',
+      'ai.default_models',
+    ]);
     expect(flowChatStore.getState().sessions.get('history-1')?.maxContextTokens).toBe(256000);
     expect(flowChatStore.getState().sessions.get('history-2')?.maxContextTokens).toBe(256000);
   });
@@ -1899,6 +2129,8 @@ describe('FlowChatStore historical session hydration state', () => {
       userMessage: { id: 'user-1', content: 'hello', timestamp: 1 },
       modelRounds: [],
       startTime: 1,
+      finishReason: 'max_rounds',
+      hasFinalResponse: false,
       status: 'completed',
     };
     apiMocks.restoreSessionView.mockResolvedValueOnce({
@@ -1933,6 +2165,13 @@ describe('FlowChatStore historical session hydration state', () => {
       isHistorical: false,
       historyState: 'ready',
       contextRestoreState: 'pending',
+      dialogTurns: expect.arrayContaining([
+        expect.objectContaining({
+          id: 'turn-1',
+          finishReason: 'max_rounds',
+          hasFinalResponse: false,
+        }),
+      ]),
     });
   });
 
