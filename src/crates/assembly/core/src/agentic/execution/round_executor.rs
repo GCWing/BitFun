@@ -5,7 +5,7 @@
 use super::model_exchange_trace::prepare_model_exchange_trace;
 use super::stream_processor::{StreamProcessOptions, StreamProcessor, StreamResult};
 use super::types::{FinishReason, RoundContext, RoundResult};
-use crate::agentic::core::{Message, ToolCall};
+use crate::agentic::core::{Message, ToolCall, ToolResult};
 use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue, ToolEventData};
 use crate::agentic::tools::computer_use_host::ComputerUseHostRef;
 use crate::agentic::tools::pipeline::{ToolExecutionContext, ToolExecutionOptions, ToolPipeline};
@@ -15,6 +15,9 @@ use crate::agentic::tools::tool_result_storage;
 use crate::agentic::MessageContent;
 use crate::infrastructure::ai::AIClient;
 use crate::service::config::GlobalConfigManager;
+use crate::service::session::{
+    ModelRoundData, TextItemData, ThinkingItemData, ToolCallData, ToolItemData, ToolResultData,
+};
 use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::Message as AIMessage;
@@ -23,9 +26,9 @@ use bitfun_agent_runtime::turn_cancellation::DialogTurnCancellationTokenStore;
 use bitfun_ai_adapters::{
     ModelExchangeRequestTraceHandle, ModelExchangeResponseTrace, ModelExchangeTraceConfig,
 };
-use log::{debug, error, warn};
+use log::{debug, error, info, warn};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 use tokio_util::sync::CancellationToken;
 
 /// Round executor
@@ -42,6 +45,160 @@ impl RoundExecutor {
 
     fn has_user_visible_assistant_text(text: &str) -> bool {
         !text.trim().is_empty()
+    }
+
+    fn system_time_to_unix_ms(time: SystemTime) -> u64 {
+        time.duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn build_model_round_data(
+        turn_id: &str,
+        round_id: &str,
+        round_index: usize,
+        round_started_at: SystemTime,
+        duration_ms: u64,
+        model_id: &str,
+        stream_result: &StreamResult,
+        tool_calls: &[ToolCall],
+        tool_results: &[ToolResult],
+        stream_processing_ms: u64,
+        attempt_count: u32,
+    ) -> ModelRoundData {
+        let start_time = Self::system_time_to_unix_ms(round_started_at);
+        let end_time = start_time.saturating_add(duration_ms);
+        let mut order_index = 0usize;
+
+        let thinking_items =
+            if stream_result.full_thinking.is_empty() && !stream_result.reasoning_content_present {
+                Vec::new()
+            } else {
+                let item = ThinkingItemData {
+                    id: format!("{}-thinking", round_id),
+                    content: stream_result.full_thinking.clone(),
+                    is_streaming: false,
+                    is_collapsed: false,
+                    timestamp: start_time,
+                    order_index: Some(order_index),
+                    status: Some("completed".to_string()),
+                    is_subagent_item: None,
+                    parent_task_tool_id: None,
+                    subagent_session_id: None,
+                    attempt_id: None,
+                    attempt_index: None,
+                };
+                order_index += 1;
+                vec![item]
+            };
+
+        let text_items = if stream_result.full_text.trim().is_empty() {
+            Vec::new()
+        } else {
+            let item = TextItemData {
+                id: format!("{}-text", round_id),
+                content: stream_result.full_text.clone(),
+                is_streaming: false,
+                timestamp: start_time,
+                is_markdown: true,
+                order_index: Some(order_index),
+                is_subagent_item: None,
+                parent_task_tool_id: None,
+                subagent_session_id: None,
+                status: Some("completed".to_string()),
+                attempt_id: None,
+                attempt_index: None,
+            };
+            order_index += 1;
+            vec![item]
+        };
+
+        let tool_items = tool_calls
+            .iter()
+            .map(|tool_call| {
+                let result = tool_results
+                    .iter()
+                    .find(|candidate| candidate.tool_id == tool_call.tool_id);
+                let result_duration = result.and_then(|value| value.duration_ms);
+                let status = match result {
+                    Some(result) if result.is_error => "error",
+                    Some(_) => "completed",
+                    None => "pending",
+                };
+                let tool_result = result.map(|result| ToolResultData {
+                    result: result.result.clone(),
+                    success: !result.is_error,
+                    result_for_assistant: result.result_for_assistant.clone(),
+                    error: if result.is_error {
+                        result
+                            .result_for_assistant
+                            .clone()
+                            .or_else(|| serde_json::to_string(&result.result).ok())
+                    } else {
+                        None
+                    },
+                    duration_ms: result.duration_ms,
+                });
+                let item_order_index = order_index;
+                order_index += 1;
+
+                ToolItemData {
+                    id: tool_call.tool_id.clone(),
+                    tool_name: tool_call.tool_name.clone(),
+                    tool_call: ToolCallData {
+                        input: tool_call.arguments.clone(),
+                        id: tool_call.tool_id.clone(),
+                    },
+                    tool_result,
+                    ai_intent: None,
+                    start_time,
+                    end_time: Some(end_time),
+                    duration_ms: result_duration,
+                    queue_wait_ms: None,
+                    preflight_ms: None,
+                    confirmation_wait_ms: None,
+                    execution_ms: result_duration,
+                    order_index: Some(item_order_index),
+                    is_subagent_item: None,
+                    parent_task_tool_id: None,
+                    subagent_session_id: None,
+                    subagent_model_id: None,
+                    subagent_model_alias: None,
+                    attempt_id: None,
+                    attempt_index: None,
+                    status: Some(status.to_string()),
+                    interruption_reason: stream_result.partial_recovery_reason.clone(),
+                }
+            })
+            .collect();
+
+        ModelRoundData {
+            id: round_id.to_string(),
+            turn_id: turn_id.to_string(),
+            round_index,
+            round_group_id: None,
+            timestamp: start_time,
+            text_items,
+            tool_items,
+            thinking_items,
+            start_time,
+            end_time: Some(end_time),
+            duration_ms: Some(duration_ms),
+            provider_id: None,
+            model_id: Some(model_id.to_string()),
+            model_alias: Some(model_id.to_string()),
+            first_chunk_ms: stream_result.first_chunk_ms,
+            first_visible_output_ms: stream_result.first_visible_output_ms,
+            stream_duration_ms: Some(stream_processing_ms),
+            attempt_count: Some(attempt_count),
+            failure_category: None,
+            token_details: stream_result
+                .usage
+                .as_ref()
+                .and_then(token_details_from_usage),
+            status: "completed".to_string(),
+        }
     }
 
     async fn sleep_with_cancellation(
@@ -83,6 +240,7 @@ impl RoundExecutor {
         context_window: Option<usize>,
     ) -> BitFunResult<RoundResult> {
         let round_started_at = Instant::now();
+        let round_started_wall_time = SystemTime::now();
         let subagent_parent_info = context.subagent_parent_info.clone();
         let is_subagent = subagent_parent_info.is_some();
 
@@ -566,6 +724,7 @@ impl RoundExecutor {
             stream_result.first_chunk_ms,
             stream_result.first_visible_output_ms
         );
+        let llm_latency_ms = send_to_stream_ms.saturating_add(stream_processing_ms);
 
         // If stream response contains usage info, record it before the
         // post-stream cancellation gate. A user can press stop after the
@@ -573,7 +732,7 @@ impl RoundExecutor {
         // usage makes cancelled turns look unaccounted even though the provider
         // already supplied authoritative counts.
         if let Some(ref usage) = stream_result.usage {
-            self.emit_token_usage_update(&context, usage, context_window, is_subagent)
+            self.emit_token_usage_update(&context, usage, context_window, is_subagent, llm_latency_ms)
                 .await;
         }
 
@@ -618,6 +777,8 @@ impl RoundExecutor {
         .await;
 
         debug!("ModelRoundCompleted event sent");
+        let round_duration_ms = elapsed_ms_u64(round_started_at);
+        let attempt_count = (attempt_index + 1) as u32;
 
         // If no tool calls, this round ends
         if stream_result.tool_calls.is_empty() {
@@ -659,12 +820,26 @@ impl RoundExecutor {
             // Cancellation token will be cleaned up by ExecutionEngine when the entire dialog turn ends
 
             return Ok(RoundResult {
+                model_round: Self::build_model_round_data(
+                    &context.dialog_turn_id,
+                    &round_id,
+                    context.round_number,
+                    round_started_wall_time,
+                    round_duration_ms,
+                    &context.model_name,
+                    &stream_result,
+                    &[],
+                    &[],
+                    stream_processing_ms,
+                    attempt_count,
+                ),
                 assistant_message,
                 tool_calls: vec![],
                 tool_result_messages: vec![],
                 has_more_rounds: false,
                 finish_reason: FinishReason::Complete,
                 usage: stream_result.usage.clone(),
+                llm_latency_ms,
                 provider_metadata: stream_result.provider_metadata.clone(),
                 partial_recovery_reason: stream_result.partial_recovery_reason.clone(),
                 had_assistant_text: Self::has_user_visible_assistant_text(&stream_result.full_text),
@@ -713,7 +888,7 @@ impl RoundExecutor {
             };
 
             // Read tool execution related configuration from global config
-            let (needs_confirmation, tool_execution_timeout, tool_confirmation_timeout) = {
+            let (needs_confirmation, configured_tool_execution_timeout, tool_confirmation_timeout) = {
                 let config_service = GlobalConfigManager::get_service().await.ok();
 
                 // Timeout and skip confirmation settings
@@ -764,10 +939,17 @@ impl RoundExecutor {
                 (needs_confirm, exec_timeout, confirm_timeout)
             };
 
-            // Create tool execution options (use configured timeout values)
+            // Create tool execution options. Tool execution timeout is disabled
+            // at runtime so evaluator runs are not capped by local tool policy.
+            if let Some(timeout_secs) = configured_tool_execution_timeout {
+                debug!(
+                    "Ignoring configured tool execution timeout for this round: timeout_secs={}",
+                    timeout_secs
+                );
+            }
             let tool_options = ToolExecutionOptions {
                 confirm_before_run: needs_confirmation,
-                timeout_secs: tool_execution_timeout,
+                timeout_secs: None,
                 confirmation_timeout_secs: tool_confirmation_timeout,
                 ..ToolExecutionOptions::default()
             };
@@ -893,6 +1075,19 @@ impl RoundExecutor {
         // Cancellation token will be cleaned up by ExecutionEngine when the entire dialog turn ends
 
         Ok(RoundResult {
+            model_round: Self::build_model_round_data(
+                &context.dialog_turn_id,
+                &round_id,
+                context.round_number,
+                round_started_wall_time,
+                round_duration_ms,
+                &context.model_name,
+                &stream_result,
+                &tool_calls,
+                &tool_results,
+                stream_processing_ms,
+                attempt_count,
+            ),
             assistant_message,
             tool_calls,
             tool_result_messages,
@@ -903,6 +1098,7 @@ impl RoundExecutor {
                 FinishReason::Complete
             },
             usage: stream_result.usage.clone(),
+            llm_latency_ms,
             provider_metadata: stream_result.provider_metadata.clone(),
             partial_recovery_reason: stream_result.partial_recovery_reason.clone(),
             had_assistant_text: Self::has_user_visible_assistant_text(&stream_result.full_text),
@@ -962,6 +1158,7 @@ impl RoundExecutor {
         usage: &crate::util::types::ai::GeminiUsage,
         context_window: Option<usize>,
         is_subagent: bool,
+        llm_latency_ms: u64,
     ) {
         debug!(
             "Updating token stats from model response: input={}, output={}, total={}, is_subagent={}",
@@ -969,6 +1166,21 @@ impl RoundExecutor {
             usage.candidates_token_count,
             usage.total_token_count,
             is_subagent
+        );
+        info!(
+            "Model call token stats: session_id={}, turn_id={}, round_id={}, model_id={}, prompt_tokens={}, completion_tokens={}, total_tokens={}, cached_tokens={}, cached_tokens_available={}",
+            context.session_id,
+            context.dialog_turn_id,
+            context.round_number,
+            context.model_name,
+            usage.prompt_token_count,
+            usage.candidates_token_count,
+            usage.total_token_count,
+            usage
+                .cached_content_token_count
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "missing".to_string()),
+            usage.cached_content_token_count.is_some()
         );
 
         self.emit_event(
@@ -981,6 +1193,7 @@ impl RoundExecutor {
                 total_tokens: usage.total_token_count as usize,
                 max_context_tokens: context_window,
                 is_subagent,
+                llm_latency_ms: Some(llm_latency_ms),
                 cached_tokens: usage.cached_content_token_count.map(|v| v as usize),
                 token_details: token_details_from_usage(usage),
             },
@@ -1366,7 +1579,7 @@ mod tests {
         };
 
         executor
-            .emit_token_usage_update(&context, &usage, Some(128_000), false)
+            .emit_token_usage_update(&context, &usage, Some(128_000), false, 0)
             .await;
 
         let events = executor.event_queue.dequeue_batch(10).await;

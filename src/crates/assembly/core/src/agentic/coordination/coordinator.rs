@@ -24,7 +24,7 @@ use crate::agentic::execution::{
 };
 use crate::agentic::fork_agent::ForkAgentContextSnapshot;
 use crate::agentic::goal_mode::{
-    effective_subagent_timeout_seconds, is_usage_limit_error, maybe_build_continuation_after_turn,
+    is_usage_limit_error, maybe_build_continuation_after_turn,
     should_skip_goal_continuation_after_turn, should_skip_goal_for_turn,
     thread_goal_status_is_resumable, user_facing_thread_goal_error, ThreadGoalRuntime,
     ThreadGoalStore,
