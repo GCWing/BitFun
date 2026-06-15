@@ -27,9 +27,9 @@
   /* Room for descenders (g, y, p) */
   /* Collapsed capsule uses 18px horizontal padding on `.bitfun-chat-input__box`; match so strip text lines up with pill content */
   padding: 3px 18px 4px;
-  font-family: var(--font-sans, var(--font-family-sans, inherit));
+  font-family: var(--font-sans);
   font-size: var(--flowchat-font-size-xxs);
-  line-height: var(--flowchat-support-line-height, 1.45);
+  line-height: var(--flowchat-support-line-height);
   font-weight: 400;
   letter-spacing: 0.01em;
   color: var(--color-text-primary);

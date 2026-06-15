@@ -7,7 +7,7 @@
    * round transitions all read as one continuous, evenly-spaced text column.
    */
   margin-bottom: 0;
-  padding: 0 var(--flowchat-content-inline-pad, 3rem);
+  padding: 0 var(--flowchat-content-inline-pad);
   animation: fadeIn 0.4s ease;
   position: relative;
 
@@ -30,15 +30,15 @@
   }
 
   @media (max-width: 768px) {
-    padding: 0 var(--flowchat-content-inline-pad-mobile, 1.5rem);
+    padding: 0 var(--flowchat-content-inline-pad-mobile);
   }
 }
 
 .model-round-item__header {
   display: flex;
   justify-content: flex-end;
-  margin-bottom: var(--flowchat-inline-gap, 0.35rem);
-  padding: 0 var(--flowchat-control-gap, 0.5rem);
+  margin-bottom: var(--flowchat-inline-gap);
+  padding: 0 var(--flowchat-control-gap);
 }
 
 // Action button container (bottom-right of last round).
@@ -47,9 +47,9 @@
   align-items: center;
   justify-content: flex-end;
   flex-wrap: wrap;
-  gap: var(--flowchat-inline-gap, 0.35rem);
-  padding: var(--flowchat-inline-gap, 0.35rem) 0;
-  margin-top: var(--flowchat-inline-gap, 0.35rem);
+  gap: var(--flowchat-inline-gap);
+  padding: var(--flowchat-inline-gap) 0;
+  margin-top: var(--flowchat-inline-gap);
 }
 
 .model-round-item__meta {
@@ -106,7 +106,7 @@
   color: var(--color-text-muted);
   font-size: 12px;
   line-height: 18px;
-  padding: var(--flowchat-inline-gap, 0.35rem) 0;
+  padding: var(--flowchat-inline-gap) 0;
 }
 
 .model-round-item__retry-history {
@@ -266,13 +266,13 @@
     opacity: 1;
     transform: translateY(0);
     max-height: 96px;
-    margin-bottom: var(--flowchat-flow-item-gap, 0.42rem);
+    margin-bottom: var(--flowchat-flow-item-gap);
   }
   55% {
     opacity: 0.72;
     transform: translateY(-1px);
     max-height: 96px;
-    margin-bottom: var(--flowchat-flow-item-gap, 0.42rem);
+    margin-bottom: var(--flowchat-flow-item-gap);
   }
   100% {
     opacity: 0;
@@ -293,6 +293,6 @@
 .flowchat-flow-item.flowchat-flow-item--focused {
   outline: 2px solid var(--border-accent);
   outline-offset: 2px;
-  border-radius: var(--flowchat-card-radius, 8px);
+  border-radius: var(--flowchat-card-radius);
   box-shadow: var(--glow-shadow-blue);
 }

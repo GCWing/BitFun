@@ -29,7 +29,7 @@
 
     &.search--focused .search__wrapper,
     .search__wrapper:focus-within {
-      border-color: var(--color-accent-500, var(--color-accent));
+      border-color: var(--color-accent-500);
       box-shadow: 0 0 0 2px var(--color-accent-alpha);
     }
 
@@ -81,7 +81,7 @@
     }
 
     &--conflict {
-      background: var(--color-warning-surface, rgba(245, 158, 11, 0.08));
+      background: var(--color-warning-bg);
     }
 
     &--modified .kb-shortcuts__item-name {

@@ -48,6 +48,8 @@
 }
 
 .bitfun-chat-input {
+  --chat-input-image-chip-remove-hover-bg: #374151;
+
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -105,7 +107,7 @@
           min-height: 22px !important;
           max-height: 22px !important;
           overflow: hidden;
-          line-height: var(--flowchat-support-line-height, 1.45);
+          line-height: var(--flowchat-support-line-height);
           font-size: var(--flowchat-font-size-base);
           padding: 0 !important;
           width: 100%;
@@ -168,7 +170,7 @@
     pointer-events: none;
     color: color-mix(in srgb, var(--color-text-muted) 52%, transparent);
     font-size: var(--flowchat-font-size-base);
-    line-height: var(--flowchat-support-line-height, 1.45);
+    line-height: var(--flowchat-support-line-height);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -214,9 +216,9 @@
     display: inline-flex;
     align-items: center;
     flex-shrink: 0;
-    gap: var(--flowchat-inline-gap, 0.35rem);
+    gap: var(--flowchat-inline-gap);
     font-size: var(--flowchat-font-size-sm);
-    line-height: var(--flowchat-support-line-height, 1.45);
+    line-height: var(--flowchat-support-line-height);
     color: var(--color-text-muted);
     opacity: 0.72;
     white-space: nowrap;
@@ -290,11 +292,11 @@
   }
 
   &__recommendations {
-    margin-bottom: var(--flowchat-card-gap, 0.42rem);
+    margin-bottom: var(--flowchat-card-gap);
   }
 
   &__cowork-examples {
-    margin-bottom: var(--flowchat-card-gap, 0.42rem);
+    margin-bottom: var(--flowchat-card-gap);
   }
   
   & > * {
@@ -330,8 +332,8 @@
     gap: 0;
     pointer-events: auto;
     border: 1px solid var(--color-overlay-white-10);
-    border-radius: calc(var(--flowchat-card-radius, 8px) + 4px);
-    padding: var(--flowchat-card-expanded-pad-x, 0.625rem) var(--flowchat-card-expanded-pad-y, 0.5rem) 0;
+    border-radius: calc(var(--flowchat-card-radius) + 4px);
+    padding: var(--flowchat-card-expanded-pad-x) var(--flowchat-card-expanded-pad-y) 0;
     background: var(--color-bg-scene);
     backdrop-filter: blur(16px) saturate(1.2);
     -webkit-backdrop-filter: blur(16px) saturate(1.2);
@@ -443,8 +445,8 @@
     font-size: var(--flowchat-font-size-xxs);
     color: var(--color-text-muted);
     font-weight: 400;
-    padding: 0.12rem var(--flowchat-card-expanded-pad-y, 0.5rem) 0.12rem 0;
-    margin-right: var(--flowchat-inline-gap, 0.35rem);
+    padding: 0.12rem var(--flowchat-card-expanded-pad-y) 0.12rem 0;
+    margin-right: var(--flowchat-inline-gap);
     flex-shrink: 0;
     letter-spacing: 0.02em;
     opacity: 0.72;
@@ -453,8 +455,8 @@
   &__target-tab {
     display: inline-flex;
     align-items: center;
-    gap: var(--flowchat-inline-gap, 0.35rem);
-    padding: 0.12rem var(--flowchat-card-expanded-pad-y, 0.5rem);
+    gap: var(--flowchat-inline-gap);
+    padding: 0.12rem var(--flowchat-card-expanded-pad-y);
     border: none;
     background: transparent;
     color: var(--color-text-muted);
@@ -509,8 +511,8 @@
   &__image-strip {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--flowchat-inline-gap, 0.35rem);
-    margin-bottom: var(--flowchat-inline-gap, 0.35rem);
+    gap: var(--flowchat-inline-gap);
+    margin-bottom: var(--flowchat-inline-gap);
     padding: 0.12rem 0;
   }
 
@@ -566,7 +568,7 @@
     transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease;
 
     &:hover {
-      background: var(--color-bg-elevated-hover, #374151);
+      background: var(--color-bg-elevated-hover, var(--chat-input-image-chip-remove-hover-bg));
     }
 
     &:focus-visible {
@@ -641,7 +643,7 @@
     align-items: center;
     gap: 0.125rem;
     max-width: 148px;
-    padding: 0.12rem 0.25rem 0.12rem var(--flowchat-card-expanded-pad-x, 0.625rem);
+    padding: 0.12rem 0.25rem 0.12rem var(--flowchat-card-expanded-pad-x);
     border-radius: 999px;
     border: none;
     font-size: var(--flowchat-font-size-xxs);
@@ -692,14 +694,14 @@
   }
 
   &__agent-boost-empty {
-    padding: var(--flowchat-card-expanded-pad-x, 0.625rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
+    padding: var(--flowchat-card-expanded-pad-x) var(--flowchat-card-expanded-pad-x);
     font-size: var(--flowchat-font-size-2xs);
     color: var(--color-text-tertiary);
     text-align: center;
-    line-height: var(--flowchat-support-line-height, 1.45);
+    line-height: var(--flowchat-support-line-height);
 
     &--inline {
-      padding: var(--flowchat-card-expanded-pad-y, 0.5rem) var(--flowchat-card-expanded-pad-x, 0.625rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
+      padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x) var(--flowchat-card-expanded-pad-x);
       text-align: left;
     }
   }
@@ -717,10 +719,10 @@
   &__boost-context-row {
     display: flex;
     align-items: center;
-    gap: var(--flowchat-control-gap, 0.5rem);
+    gap: var(--flowchat-control-gap);
     width: 100%;
     margin: 0;
-    padding: var(--flowchat-card-expanded-pad-y, 0.5rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
+    padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
     background: transparent;
     font-size: var(--flowchat-font-size-2xs);
     color: var(--color-text-secondary);
@@ -763,10 +765,10 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--flowchat-control-gap, 0.5rem);
+    gap: var(--flowchat-control-gap);
     width: 100%;
     margin: 0;
-    padding: var(--flowchat-card-expanded-pad-y, 0.5rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
+    padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
     background: transparent;
     font-size: var(--flowchat-font-size-2xs);
     color: var(--color-text-secondary);
@@ -778,7 +780,7 @@
   &__boost-submenu-trigger-main {
     display: inline-flex;
     align-items: center;
-    gap: var(--flowchat-control-gap, 0.5rem);
+    gap: var(--flowchat-control-gap);
     min-width: 0;
   }
 
@@ -850,15 +852,15 @@
     flex-direction: row;
     align-items: center;
     justify-content: center;
-    gap: var(--flowchat-control-gap, 0.5rem);
-    padding: var(--flowchat-card-expanded-pad-x, 0.625rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
+    gap: var(--flowchat-control-gap);
+    padding: var(--flowchat-card-expanded-pad-x) var(--flowchat-card-expanded-pad-x);
     font-size: var(--flowchat-font-size-2xs);
     color: var(--color-text-muted);
   }
 
   &__boost-submenu-spinner {
     animation: spin 0.8s linear infinite;
-    color: var(--color-accent-primary, rgba(96, 165, 250, 0.9));
+    color: var(--color-accent-primary);
   }
 
   &__boost-submenu-list {
@@ -881,9 +883,9 @@
   &__boost-submenu-item {
     display: flex;
     align-items: center;
-    gap: var(--flowchat-control-gap, 0.5rem);
+    gap: var(--flowchat-control-gap);
     width: 100%;
-    padding: 0.32rem var(--flowchat-card-expanded-pad-y, 0.5rem);
+    padding: 0.32rem var(--flowchat-card-expanded-pad-y);
     border-radius: 4px;
     background: transparent;
     font-size: var(--flowchat-font-size-xs);
@@ -909,14 +911,14 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     min-width: 0;
-    line-height: var(--flowchat-support-line-height, 1.45);
+    line-height: var(--flowchat-support-line-height);
   }
 
   &__boost-submenu-manage {
     flex-shrink: 0;
     width: 100%;
     margin: 0;
-    padding: var(--flowchat-card-expanded-pad-y, 0.5rem) var(--flowchat-card-expanded-pad-x, 0.625rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
+    padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x) var(--flowchat-card-expanded-pad-x);
     border-top: 1px solid var(--border-subtle);
     background: transparent;
     font-size: var(--flowchat-font-size-xxs);
@@ -951,7 +953,7 @@
     display: inline-flex;
     align-items: center;
     font-weight: 500;
-    line-height: var(--flowchat-compact-line-height, 1.32);
+    line-height: var(--flowchat-compact-line-height);
     vertical-align: middle;
   }
   
@@ -982,7 +984,7 @@
   }
   
   &__mode-option {
-    padding: var(--flowchat-inline-gap, 0.35rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
+    padding: var(--flowchat-inline-gap) var(--flowchat-card-expanded-pad-x);
     font-size: var(--flowchat-font-size-2xs);
     color: var(--color-text-secondary);
     cursor: pointer;
@@ -990,7 +992,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--flowchat-control-gap, 0.5rem);
+    gap: var(--flowchat-control-gap);
     
     &:hover:not(&--disabled) {
       background: var(--color-overlay-white-04);
@@ -1054,14 +1056,14 @@
   }
   
   &__mode-submenu-trigger {
-    padding: var(--flowchat-inline-gap, 0.35rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
+    padding: var(--flowchat-inline-gap) var(--flowchat-card-expanded-pad-x);
     font-size: var(--flowchat-font-size-2xs);
     color: var(--color-text-secondary);
     cursor: pointer;
     transition: all 0.15s ease;
     display: flex;
     align-items: center;
-    gap: var(--flowchat-inline-gap, 0.35rem);
+    gap: var(--flowchat-inline-gap);
     
     &:hover {
       background: var(--color-overlay-white-04);
@@ -1178,7 +1180,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: var(--flowchat-card-expanded-pad-y, 0.5rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
+    padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
     border-bottom: 1px solid var(--border-subtle);
     font-size: var(--flowchat-font-size-xxs);
     font-weight: 500;
@@ -1221,8 +1223,8 @@
   &__slash-command-item {
     display: flex;
     align-items: flex-start;
-    gap: var(--flowchat-control-gap, 0.5rem);
-    padding: var(--flowchat-inline-gap, 0.35rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
+    gap: var(--flowchat-control-gap);
+    padding: var(--flowchat-inline-gap) var(--flowchat-card-expanded-pad-x);
     cursor: pointer;
     transition: all 0.15s ease;
     min-width: 0;
@@ -1277,7 +1279,7 @@
   }
   
   &__slash-command-empty {
-    padding: var(--size-gap-4, 16px) var(--flowchat-card-expanded-pad-x, 0.625rem);
+    padding: var(--size-gap-4) var(--flowchat-card-expanded-pad-x);
     text-align: center;
     font-size: var(--flowchat-font-size-2xs);
     color: var(--color-text-tertiary);

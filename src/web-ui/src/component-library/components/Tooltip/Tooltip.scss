@@ -28,7 +28,7 @@
     padding: 6px 10px;
 
     font-family: var(--font-family-sans);
-    font-size: var(--font-size-xs, 12px);
+    font-size: var(--font-size-xs);
     font-weight: var(--font-weight-normal, 400);
     line-height: 1.4;
     color: var(--color-text-primary);
@@ -36,7 +36,7 @@
     background: var(--color-bg-tooltip);
 
     border: 1px solid var(--border-base);
-    border-radius: var(--size-radius-sm, 6px);
+    border-radius: var(--size-radius-sm);
 
     backdrop-filter: blur(8px) saturate(1.1);
     -webkit-backdrop-filter: blur(8px) saturate(1.1);

@@ -229,7 +229,7 @@
     }
 
     &--selected {
-      background: var(--color-selected) !important;
+      background: var(--color-accent-100) !important;
       box-shadow: 0 2px 4px var(--color-overlay-black-15);
       z-index: 2;
     }
@@ -274,12 +274,12 @@
     }
 
     &--remote {
-      background: var(--color-purple-600, #9c27b0);
+      background: var(--color-purple-600);
       color: var(--color-static-white);
     }
 
     &--tag {
-      background: var(--git-color-changes, #ff7043);
+      background: var(--git-color-changes);
       color: var(--color-static-white);
     }
 

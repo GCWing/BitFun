@@ -1086,7 +1086,7 @@
     padding: 8px 0;
     background: color-mix(in srgb, var(--color-bg-primary) 72%, transparent);
     color: var(--color-text-secondary);
-    font-family: var(--font-family-mono, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace);
+    font-family: var(--font-family-mono);
     font-size: 11px;
     line-height: 1.55;
     tab-size: 2;
@@ -1101,7 +1101,7 @@
 
   &__diff-line--hunk {
     color: var(--color-purple-500);
-    background: var(--color-purple-100, rgba(139, 92, 246, 0.1));
+    background: var(--color-purple-100);
   }
 
   &__diff-line--add {
@@ -1348,7 +1348,7 @@
     border-radius: 6px;
     background: color-mix(in srgb, var(--color-bg-primary) 86%, transparent);
     color: var(--color-text-primary);
-    font-family: var(--font-family-mono, ui-monospace, SFMono-Regular, Consolas, monospace);
+    font-family: var(--font-family-mono);
     font-size: 11px;
     line-height: 1.45;
     white-space: pre-wrap;

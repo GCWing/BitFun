@@ -29,7 +29,7 @@
   opacity: 0;
   transform: translateY(4px);
   pointer-events: none;
-  font-family: var(--font-family-sans, 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+  font-family: var(--font-family-sans);
 }
 
 /* Show buttons when parent is hovered */

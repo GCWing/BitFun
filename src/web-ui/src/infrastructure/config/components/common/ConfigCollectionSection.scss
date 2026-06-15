@@ -3,8 +3,8 @@
 .bitfun-config-collection-section__content {
   display: flex;
   flex-direction: column;
-  gap: var(--size-gap-4, 16px);
-  padding: var(--size-gap-4, 16px);
+  gap: var(--size-gap-4);
+  padding: var(--size-gap-4);
 }
 
 .bitfun-config-collection-section__toolbar,
@@ -15,12 +15,12 @@
 }
 
 .bitfun-config-collection-section__toolbar {
-  padding-bottom: var(--size-gap-2, 8px);
+  padding-bottom: var(--size-gap-2);
   border-bottom: 1px solid var(--border-subtle);
 }
 
 .bitfun-config-collection-section__filters {
-  padding-bottom: var(--size-gap-2, 8px);
+  padding-bottom: var(--size-gap-2);
   border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -28,7 +28,7 @@
   background: var(--element-bg-subtle);
   border: 1px solid var(--border-subtle);
   border-radius: var(--size-radius-md, 10px);
-  padding: var(--size-gap-3, 12px);
+  padding: var(--size-gap-3);
 }
 
 .bitfun-config-collection-section--with-editor .bitfun-config-collection-section__content {
@@ -56,17 +56,17 @@
 .bitfun-config-collection-section--with-editor .bitfun-config-collection-section__editor {
   grid-area: editor;
   position: sticky;
-  top: var(--size-gap-2, 8px);
+  top: var(--size-gap-2);
 }
 
 @container config-panel (max-width: 520px) {
   .bitfun-config-collection-section__content {
-    gap: var(--size-gap-3, 12px);
-    padding: var(--size-gap-3, 12px);
+    gap: var(--size-gap-3);
+    padding: var(--size-gap-3);
   }
 
   .bitfun-config-collection-section__editor {
-    padding: var(--size-gap-2, 8px);
+    padding: var(--size-gap-2);
   }
 
   .bitfun-config-collection-section--with-editor .bitfun-config-collection-section__content {
@@ -76,6 +76,6 @@
 
   .bitfun-config-collection-section__toolbar,
   .bitfun-config-collection-section__filters {
-    padding-bottom: var(--size-gap-2, 8px);
+    padding-bottom: var(--size-gap-2);
   }
 }

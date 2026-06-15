@@ -77,7 +77,7 @@
     word-break: break-word;
     font-family: var(--markdown-font-mono, "Fira Code", "JetBrains Mono", Consolas, "Courier New", monospace);
     font-size: var(--flowchat-font-size-sm);
-    line-height: var(--flowchat-code-line-height, 1.52);
+    line-height: var(--flowchat-code-line-height);
 
     code {
       display: block;

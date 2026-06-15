@@ -29,14 +29,14 @@
   // Active state - solid border
   &.is-active {
     border-style: solid;
-    border-color: var(--color-primary, var(--color-accent-500));
+    border-color: var(--color-primary);
 
     .canvas-thumbnail-card__header {
       border-color: var(--color-accent-200);
     }
 
     .canvas-thumbnail-card__icon {
-      color: var(--color-primary, var(--color-accent-500));
+      color: var(--color-primary);
     }
   }
 
@@ -129,12 +129,12 @@
     transition: all 0.1s ease;
 
     &:hover {
-      background: var(--element-bg-base, var(--element-bg-soft));
+      background: var(--element-bg-base);
       color: var(--color-text-primary);
     }
 
     &.is-active {
-      color: var(--color-primary, var(--color-accent-500));
+      color: var(--color-primary);
     }
   }
 
@@ -218,7 +218,7 @@
     justify-content: center;
     width: 14px;
     height: 14px;
-    background: var(--color-primary, var(--color-accent-500));
+    background: var(--color-primary);
     border-radius: 2px;
     color: var(--color-text-primary);
 
@@ -245,15 +245,15 @@
     text-shadow: 0 1px 2px var(--color-shadow, var(--color-overlay-black-20));
 
     &--primary {
-      background: var(--group-color, var(--color-accent-500, rgba(59, 130, 246, 0.85)));
+      background: var(--group-color, var(--color-accent-500));
     }
 
     &--secondary {
-      background: var(--group-color, var(--color-success, rgba(16, 185, 129, 0.85)));
+      background: var(--group-color, var(--color-success));
     }
 
     &--tertiary {
-      background: var(--group-color, var(--color-warning, rgba(245, 158, 11, 0.85)));
+      background: var(--group-color, var(--color-warning));
     }
   }
 }

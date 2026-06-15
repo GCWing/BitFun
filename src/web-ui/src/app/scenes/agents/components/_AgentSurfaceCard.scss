@@ -1,6 +1,8 @@
 @use '../../../../component-library/styles/tokens' as *;
 
 @mixin agent-surface-card($gradient, $accent) {
+  --agent-surface-shadow-color: #0f172a;
+
   width: 360px;
   height: 200px;
   border-radius: 15px;
@@ -29,7 +31,7 @@
 
   &:hover {
     transform: translateY(-4px) scale(1.02);
-    box-shadow: 0 16px 40px color-mix(in srgb, var(--shadow-color, #0f172a) 20%, transparent);
+    box-shadow: 0 16px 40px color-mix(in srgb, var(--shadow-color, var(--agent-surface-shadow-color)) 20%, transparent);
 
     &::before {
       opacity: 0.42;

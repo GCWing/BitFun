@@ -8,18 +8,18 @@
 
 .acp-permission-actions--text {
   flex-wrap: wrap;
-  gap: var(--flowchat-inline-gap, 0.35rem);
+  gap: var(--flowchat-inline-gap);
 }
 
 .acp-permission-actions__text-button {
   min-height: 26px;
-  padding: 0 var(--flowchat-card-expanded-pad-x, 0.625rem);
+  padding: 0 var(--flowchat-card-expanded-pad-x);
   border: 1px solid var(--color-border);
   border-radius: 6px;
   background: var(--color-surface, transparent);
   color: var(--color-text);
   font-size: var(--flowchat-font-size-sm);
-  line-height: var(--flowchat-compact-line-height, 1.32);
+  line-height: var(--flowchat-compact-line-height);
   cursor: pointer;
   white-space: nowrap;
 }

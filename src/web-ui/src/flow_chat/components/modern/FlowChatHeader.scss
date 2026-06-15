@@ -86,12 +86,12 @@
     }
 
     &--has-activity {
-      color: color-mix(in srgb, var(--color-success, #22c55e) 86%, var(--color-text-primary));
+      color: color-mix(in srgb, var(--color-success) 86%, var(--color-text-primary));
 
       &:not(:disabled):hover,
       &.flowchat-header__background-activity-nav-button--active {
-        color: var(--color-success, #22c55e);
-        background: color-mix(in srgb, var(--color-success, #22c55e) 12%, transparent);
+        color: var(--color-success);
+        background: color-mix(in srgb, var(--color-success) 12%, transparent);
       }
     }
   }
@@ -360,11 +360,11 @@
     }
 
     &--danger:not(:disabled):hover {
-      color: var(--color-danger, #ef4444);
-      background: color-mix(in srgb, var(--color-danger, #ef4444) 12%, transparent);
+      color: var(--color-danger);
+      background: color-mix(in srgb, var(--color-danger) 12%, transparent);
 
       svg {
-        color: var(--color-danger, #ef4444);
+        color: var(--color-danger);
       }
     }
   }
@@ -499,7 +499,7 @@
     border: 1px solid var(--border-base);
     border-radius: $size-radius-base;
     background: color-mix(in srgb, var(--color-bg-elevated) 98%, transparent);
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--shadow-base);
     z-index: 40;
 
     &--compact {

@@ -9,8 +9,8 @@
   gap: 6px;
 
   &__label {
-    font-size: var(--font-size-sm, 14px);
-    font-weight: var(--font-weight-medium, 500);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
     color: var(--color-text-secondary);
     letter-spacing: 0.2px;
   }
@@ -21,8 +21,8 @@
     align-items: center;
     background: transparent;
     border: 1px solid var(--border-base);
-    border-radius: var(--size-radius-sm, 6px);
-    transition: all var(--motion-base, 0.3s) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1));
+    border-radius: var(--size-radius-sm);
+    transition: all var(--motion-base) var(--easing-standard);
     overflow: hidden;
 
     &:hover:not(.bitfun-number-input--disabled &) {
@@ -56,7 +56,7 @@
     box-shadow: none !important;
     color: var(--color-text-primary);
     font-size: inherit;
-    font-weight: var(--font-weight-medium, 500);
+    font-weight: var(--font-weight-medium);
     font-variant-numeric: tabular-nums;
     text-align: center;
     padding: 0;
@@ -110,7 +110,7 @@
     border: none;
     color: var(--color-text-muted);
     cursor: pointer;
-    transition: all var(--motion-fast, 0.15s) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1));
+    transition: all var(--motion-fast) var(--easing-standard);
     position: relative;
     overflow: hidden;
 
@@ -135,16 +135,16 @@
 
     &--up {
       border-bottom: 1px solid var(--border-subtle);
-      border-radius: 0 var(--size-radius-sm, 6px) 0 0;
+      border-radius: 0 var(--size-radius-sm) 0 0;
     }
 
     &--down {
-      border-radius: 0 0 var(--size-radius-sm, 6px) 0;
+      border-radius: 0 0 var(--size-radius-sm) 0;
     }
 
     &--minus,
     &--plus {
-      border-radius: var(--size-radius-sm, 6px);
+      border-radius: var(--size-radius-sm);
     }
   }
 
@@ -157,7 +157,7 @@
     background: transparent;
     overflow: hidden;
     opacity: 0;
-    transition: opacity var(--motion-base, 0.3s) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1));
+    transition: opacity var(--motion-base) var(--easing-standard);
   }
 
   &__container:hover &__progress,
@@ -169,7 +169,7 @@
     height: 100%;
     background: var(--color-accent-500);
     border-radius: 0 2px 2px 0;
-    transition: width var(--motion-base, 0.3s) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1));
+    transition: width var(--motion-base) var(--easing-standard);
   }
 
   &--small {
@@ -229,7 +229,7 @@
 
   &--compact {
     .bitfun-number-input__container {
-      border-radius: var(--size-radius-sm, 6px);
+      border-radius: var(--size-radius-sm);
     }
 
     .bitfun-number-input__value-area {
@@ -262,12 +262,12 @@
 
       &--minus {
         border-right: 1px solid var(--border-subtle);
-        border-radius: var(--size-radius-sm, 6px) 0 0 var(--size-radius-sm, 6px);
+        border-radius: var(--size-radius-sm) 0 0 var(--size-radius-sm);
       }
 
       &--plus {
         border-left: 1px solid var(--border-subtle);
-        border-radius: 0 var(--size-radius-sm, 6px) var(--size-radius-sm, 6px) 0;
+        border-radius: 0 var(--size-radius-sm) var(--size-radius-sm) 0;
       }
     }
 
@@ -278,7 +278,7 @@
 
 
   &--disabled {
-    opacity: var(--opacity-disabled, 0.6);
+    opacity: var(--opacity-disabled);
     pointer-events: none;
 
     .bitfun-number-input__container {

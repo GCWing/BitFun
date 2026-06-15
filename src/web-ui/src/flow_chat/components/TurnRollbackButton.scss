@@ -1,6 +1,6 @@
 .turn-rollback-button {
   padding: 4px 12px;
-  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+  font-size: var(--tool-card-action-font-size);
   font-weight: 500;
   background: var(--color-accent-600);
   color: var(--color-static-white);
@@ -21,7 +21,7 @@
   }
 
   &:disabled {
-    opacity: var(--opacity-disabled, 0.5);
+    opacity: var(--opacity-disabled);
     cursor: default;
     transform: none;
     box-shadow: none;
@@ -30,7 +30,7 @@
 
 .turn-rollback-button-current {
   padding: 4px 12px;
-  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+  font-size: var(--tool-card-action-font-size);
   font-weight: 500;
   background: var(--color-success);
   color: var(--color-static-white);

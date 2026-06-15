@@ -3,7 +3,7 @@
  * Single source for `.markdown-renderer` and m-editor tables.
  */
 :root {
-  --flowchat-md-table-radius: var(--flowchat-card-radius, 8px);
+  --flowchat-md-table-radius: var(--flowchat-card-radius);
   --flowchat-md-table-border: var(--color-overlay-white-12);
   --flowchat-md-table-shadow: none;
   --flowchat-md-table-surface: transparent;

@@ -60,7 +60,7 @@
   color: var(--color-text-primary);
   font-size: var(--font-size-sm);
   font-family: var(--font-family-sans);
-  line-height: var(--line-height-normal);
+  line-height: var(--line-height-base);
   resize: none;
   outline: none;
   min-height: 24px;

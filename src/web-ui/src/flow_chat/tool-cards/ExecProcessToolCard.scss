@@ -48,7 +48,7 @@
   .exec-process-footer-group {
     display: inline-flex;
     align-items: center;
-    gap: var(--flowchat-inline-gap, 0.35rem);
+    gap: var(--flowchat-inline-gap);
     min-width: 0;
   }
 

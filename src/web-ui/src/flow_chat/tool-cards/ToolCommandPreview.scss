@@ -9,7 +9,7 @@
 
 .tool-command-preview--compact {
   font-size: var(--flowchat-font-size-xs);
-  line-height: var(--flowchat-support-line-height, 1.45);
+  line-height: var(--flowchat-support-line-height);
   font-weight: normal;
   color: var(--color-text-muted);
 }
@@ -25,5 +25,5 @@
   word-break: break-word;
   font-family: var(--tool-card-font-mono);
   font-size: var(--flowchat-font-size-sm);
-  line-height: var(--flowchat-support-line-height, 1.45);
+  line-height: var(--flowchat-support-line-height);
 }

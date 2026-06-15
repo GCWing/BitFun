@@ -61,7 +61,7 @@
 .u-font-bold { font-weight: var(--font-weight-bold); }
 
 .u-leading-tight { line-height: var(--line-height-tight); }
-.u-leading-normal { line-height: var(--line-height-normal); }
+.u-leading-normal { line-height: var(--line-height-base); }
 .u-leading-relaxed { line-height: var(--line-height-relaxed); }
 
 /* Opacity utilities */

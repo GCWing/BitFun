@@ -66,7 +66,7 @@
   display: flex;
   align-items: stretch;
   min-height: 22px;
-  line-height: var(--flowchat-code-line-height, 1.52);
+  line-height: var(--flowchat-code-line-height);
   cursor: pointer;
   transition: background-color 0.15s ease;
   
@@ -83,10 +83,10 @@
   }
   
   &--added {
-    background: var(--git-color-staged-bg, rgba(34, 197, 94, 0.1));
+    background: var(--git-color-staged-bg);
 
     .diff-line__gutter {
-      background: var(--git-color-staged-bg-hover, rgba(34, 197, 94, 0.15));
+      background: var(--git-color-staged-bg-hover);
     }
 
     .diff-line__prefix {
@@ -99,7 +99,7 @@
     background: var(--git-color-deleted-bg, var(--color-error-bg));
 
     .diff-line__gutter {
-      background: var(--git-color-deleted-bg-hover, rgba(239, 68, 68, 0.15));
+      background: var(--git-color-deleted-bg-hover);
     }
 
     .diff-line__prefix {
@@ -124,7 +124,7 @@
   &--separator {
     background: var(--color-bg-tertiary);
     justify-content: center;
-    padding: var(--flowchat-inline-gap, 0.35rem) 0;
+    padding: var(--flowchat-inline-gap) 0;
     cursor: default;
     
     &:hover {

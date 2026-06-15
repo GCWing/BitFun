@@ -85,7 +85,7 @@
   }
 
   &--disabled {
-    opacity: var(--opacity-disabled, 0.6);
+    opacity: var(--opacity-disabled);
     cursor: default;
 
     .bitfun-input-container {
@@ -95,8 +95,8 @@
 }
 
 .bitfun-input-label {
-  font-size: var(--font-size-sm, 14px);
-  font-weight: var(--font-weight-medium, 500);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
   color: var(--color-text-secondary);
   letter-spacing: 0.2px;
 }
@@ -104,10 +104,10 @@
 .bitfun-input-container {
   display: flex;
   align-items: center;
-  gap: var(--size-gap-2, 8px);
-  padding: 0 var(--size-gap-3, 12px);
+  gap: var(--size-gap-2);
+  padding: 0 var(--size-gap-3);
   border-radius: 4px;
-  transition: all var(--motion-base, 0.3s) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1));
+  transition: all var(--motion-base) var(--easing-standard);
   position: relative;
   min-width: 0;
   overflow: hidden;
@@ -175,7 +175,7 @@
 }
 
 .bitfun-input-error-message {
-  font-size: var(--font-size-xs, 12px);
+  font-size: var(--font-size-xs);
   color: var(--color-error);
   margin-top: -2px;
 }

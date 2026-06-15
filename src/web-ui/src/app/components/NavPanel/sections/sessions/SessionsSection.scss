@@ -281,10 +281,10 @@
     width: 16px;
     height: 16px;
     padding: 0;
-    border: 1px solid color-mix(in srgb, var(--color-success, #22c55e) 36%, var(--border-subtle));
+    border: 1px solid color-mix(in srgb, var(--color-success) 36%, var(--border-subtle));
     border-radius: 999px;
-    background: color-mix(in srgb, var(--color-success, #22c55e) 12%, var(--element-bg-soft));
-    color: color-mix(in srgb, var(--color-success, #22c55e) 76%, var(--color-text-primary));
+    background: color-mix(in srgb, var(--color-success) 12%, var(--element-bg-soft));
+    color: color-mix(in srgb, var(--color-success) 76%, var(--color-text-primary));
     overflow: hidden;
   }
 
