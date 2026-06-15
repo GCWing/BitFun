@@ -901,6 +901,17 @@ export function runManifestParserSelfTest({
       ],
     },
     {
+      path: 'src/crates/execution/runtime-services/src/backend_events.rs',
+      contracts: [
+        'BackendEvent',
+        'BackendEventSystem',
+        'event_name',
+        'emit',
+        'get_global_event_system',
+        'backend_event_names_remain_stable',
+      ],
+    },
+    {
       path: 'src/crates/execution/runtime-services/tests/runtime_services_contracts.rs',
       contracts: [
         'builder_requires_mandatory_runtime_services',
@@ -1286,7 +1297,22 @@ export function runManifestParserSelfTest({
     },
     {
       path: 'src/crates/services/services-core/src/session/mod.rs',
-      contracts: ['mod metadata_store', 'SessionMetadataStore'],
+      contracts: [
+        'mod metadata_store',
+        'mod migration',
+        'SessionMetadataStore',
+        'merge_legacy_session_store',
+      ],
+    },
+    {
+      path: 'src/crates/services/services-core/src/session/migration.rs',
+      contracts: [
+        'merge_legacy_session_store',
+        'merge_session_metadata_file',
+        'SessionMetadataStore::new',
+        'metadata_file_count',
+        'merge_legacy_session_store_preserves_newer_metadata_and_rebuilds_visible_index',
+      ],
     },
     {
       path: 'src/crates/services/services-core/src/session/metadata_store.rs',
@@ -2270,9 +2296,9 @@ export function runManifestParserSelfTest({
         'feature = "product-full"',
         'WorkspaceBinding',
         'ensure_runtime_for_workspace_binding',
-        'SessionMetadataStore',
-        'rebuild_index',
-        'metadata_file_count',
+        'merge_legacy_session_store',
+        'move_legacy_path',
+        'session_store_migration_error',
       ],
     },
     {

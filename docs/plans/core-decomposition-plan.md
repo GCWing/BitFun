@@ -1,6 +1,6 @@
-# BitFun Core 拆解与运行时迁移执行计划
+# BitFun Core 拆解与运行时迁移计划
 
-本文是活跃执行计划。稳定目标以
+本文只维护后续执行计划。稳定目标以
 [`core-decomposition.md`](../architecture/core-decomposition.md) 和
 [`agent-runtime-services-design.md`](../architecture/agent-runtime-services-design.md)
 为准；已完成事实归档在
@@ -8,92 +8,66 @@
 
 ## 1. 执行原则
 
-- 最终目标是让 `bitfun-core` 从完整 runtime / product logic 中心收敛为 compatibility facade 与 Product Assembly 边界。
-- `src/crates` 采用六层物理布局：`interfaces -> assembly -> adapters -> services -> execution -> contracts`。依赖只能自上而下。
-- `adapters` 负责协议、transport、外部 provider 和宿主通信转换；`services` 负责 OS、filesystem、terminal、MCP、remote、git、watch、process 等可复用具体实现。
-- `execution` 是执行原语层，不是完整运行时实现层。Agent、Harness、stream、typed-service、tool contracts、tool provider groups 和 tool execution helper 分别保持清晰 owner。
-- 新增抽象必须同时删除、迁移或显著简化现有 core 路径；纯 facade、纯 guard、纯文档或空接口不算 owner 迁移完成。
-- 任何可能改变产品行为、权限语义、工具曝光、事件语义、session 生命周期、remote 行为、MiniApp 行为或发布形态的变更必须暂停并单独评审。
-- 设计文档默认不随 PR 更新。只有目标架构本身需要修正时，才修改设计文档；阶段状态只写入本计划、completed 归档和 issue。
+- `bitfun-core` 最终收敛为 compatibility facade、Product Assembly 边界和少量迁移期 adapter。
+- `src/crates` 保持六层物理布局：`interfaces -> assembly -> adapters -> services -> execution -> contracts`，依赖只能自上而下。
+- 新抽象必须同步删除、迁移或显著简化旧 core 主体路径；纯 facade、纯 guard、纯文档或空接口不算完成。
+- 设计文档默认保持稳定。阶段状态、剩余工作和风险只写入本计划、completed 归档和 issue。
+- 任何会改变权限、工具 schema、事件语义、session 生命周期、remote 行为、MiniApp 行为或交付形态的变更必须暂停并单独评审。
 
-## 2. 当前代码基线判断
+## 2. 当前基线
 
-- 物理目录已按六层展开，旧 `surfaces` 和 `providers` 层级不再作为目标层级存在。
-- Cargo package / lib 名保持兼容；例如 `tool-contracts` 仍发布为 `bitfun-agent-tools`，`tool-provider-groups` 仍发布为 `bitfun-tool-packs`，`tool-execution` 仍发布为 `tool-runtime`。
-- Desktop / CLI / ACP 仍通过 `bitfun-core/product-full` 获取完整能力；Server / Web / Mobile Web 不直接依赖 core，但尚未完成按交付形态裁剪最小 feature / dependency。
-- `bitfun-core --no-default-features` 已不再携带 workspace-search owner、debug ingest HTTP server、AI provider adapter runtime 或 `reqwest` direct dependency；workspace search 旧路径、debug ingest、CLI credential acquisition 和 AI client runtime 只在显式 product feature 下组装。remote-ssh 基础 workspace identity 仍作为兼容期依赖保留，后续若要继续裁剪必须先完成 session / workspace identity 接口迁移。
-- `runtime-services` 已有 typed builder、capability availability 和 core product runtime provider adapter，但不少 concrete provider 仍在 core 创建或持有。
-- remote-connect pairing/encryption/QR/relay client primitives、command routing、wire response assembly、workspace/session/poll/file/dialog/cancel/interaction helper 和 state tracker contract 已归入 `services-integrations`；core 保留 product host adapter、bot/relay service lifecycle、initial sync glue 和全局 tracker 接线。
-- `tool-contracts` 已承接 provider-neutral tool manifest、admission、catalog、result policy、tool execution presentation 和截断恢复提示等纯策略；`tool-execution` 已承接低层 IO/search helper、Bash shell 可复用策略、结果渲染、tool pipeline batching plan、retry policy、state counting 和 cancellation state policy；`services-core` 已承接 session storage file layout、turn file indexing/deletion、metadata store CRUD/index rebuild IO、metadata pagination、metadata construction/counter/index/field mutation 规则、lineage / branch metadata shaping 和通用 JSON file store；`services-integrations` 已承接本地 indexed workspace search service owner、crate-private flashgrep protocol internals、remote SSH search 纯策略、remote workspace search concrete owner、remote SSH/SFTP/PTY concrete owner、DeepResearch report IO、MiniApp host dispatch、built-in seed/marker IO、MiniApp JS worker process/pool owner、MiniApp storage filesystem IO 和 MiniApp import bundle IO；`product-domains` 已承接 MiniApp create/update/draft/apply/customization workflow 持久化顺序、import bundle planning、compile request/path adaptation、permission policy request/path adaptation 和 import lifecycle orchestration；`agent-runtime` 已承接 tool confirmation plan/failure/wait-result、light checkpoint summary policy、prompt environment facts、remote session create host、remote dialog / SessionMessage / scheduled-job queued-turn lifecycle façade、SessionMessage / CronTool target session resolution/list validation、background result / thread-goal delivery / remote cancel host、SessionControl create/list/delete/workspace-resolution/cancel façade、DeepReview task-execution provider-neutral shaping、provider capacity error decision、provider/admission queue step decision、provider/reviewer queue wait timing 状态机、provider retry attempt/elapsed 状态机、runtime tracker reliability signal shaping、runtime diagnostics log shaping、TaskTool retry/cancelled/result presentation 和 DeepResearch citation renumber 纯重排。legacy workspace-runtime metadata merge 兼容处理、permission UI channel side effect、tool pipeline concrete token/channel/scheduler glue、DeepReview concrete launch/provider wait side effect/report persistence 和完整 execution pipeline owner 仍未完全迁移。
-- `agent-stream` 已承接统一 stream DTO、tool-call 累积和 replay 契约；provider SSE / 响应解析测试归属 `ai-adapters`。
-- `harness` 当前主要承接 descriptor / route plan / registry contract；Deep Review、DeepResearch、MiniApp 的 concrete workflow execution 仍在 core 或产品路径。
-- `product-domains` 已承接 MiniApp / function-agent 的部分纯领域逻辑；MiniApp storage shape、host call plan、seed-plan facts、marker wire format、worker capacity / idle / LRU policy、create/update/draft/apply/customization workflow 持久化顺序、import bundle planning、compile request/path adaptation、permission policy request/path adaptation 和 import lifecycle orchestration 已保持领域归属。MiniApp AI acquisition 和更大 concrete workflow execution 仍保留在 core 或 services 路径。
-- 当前架构已具备 Agent SDK 的候选原语，但尚未达到稳定外部 SDK 发布边界。`bitfun-agent-runtime`、`bitfun-runtime-services`、Tool primitives、Harness 和 runtime ports 可以支撑内部 façade 收口；在 `bitfun-core`、`product-full`、concrete service manager 或产品命令路径仍是调用方必需依赖时，不得宣称完整 SDK 已完成。
+- workspace 已按六层目录展开，旧 `surfaces` / `providers` 目标层级不再使用。
+- `bitfun-core --no-default-features` 已裁掉 workspace-search owner、debug ingest HTTP server、AI provider adapter runtime 和 direct `reqwest`。
+- Desktop / CLI / ACP 仍通过 `bitfun-core/product-full` 获取完整能力；Server / Web / Mobile Web 不直接依赖 core，但交付形态级 feature / dependency trimming 仍未闭环。
+- Runtime Services、Agent Runtime、Tool Contracts、Tool Execution、Harness、Product Domains、Services Core、Services Integrations 等 owner crate 已建立，部分逻辑仍由 core concrete manager 或产品命令路径持有。
+- 本轮 PR-A 已将 backend event delivery 和 workspace-runtime legacy session-store migration 从 core 迁出；core 保留旧路径兼容 re-export / 委托。
 
-## 3. PR 准出门禁
+## 3. 已完成但仍需保持的边界
 
-每个迁移 PR 必须同时满足：
+- `services-core` 已承接 session metadata store、session index rebuild、lineage / branch metadata shaping、JSON file store、session layout 和 legacy session-store merge。
+- `runtime-services` 已承接 typed runtime service assembly、capability validation、provider registry、backend event delivery owner。
+- `agent-runtime` 已承接 provider-neutral scheduler decisions、dialog lifecycle port contracts、background delivery decisions、thread-goal facts、prompt-cache facts、DeepReview provider-neutral policy / queue / retry / diagnostics shaping。
+- `tool-contracts` / `tool-execution` 已承接 tool manifest / catalog / admission、batching plan、retry policy、state counting、cancellation-state policy、shell helper 和部分 local / remote IO helper。
+- `services-integrations` 已承接 remote-connect primitives、workspace search concrete owner、remote SSH/SFTP/PTY owner、MiniApp host dispatch / storage / worker IO、DeepResearch report IO。
+- `product-domains` 已承接 MiniApp workflow planning、compile / permission path adaptation、function-agent prompt / parser / response policy 和部分 Git snapshot/fallback 逻辑。
+- boundary scripts 已覆盖核心 owner 防回流、six-layer path 解析、facade-only 文件和重点 feature gate。
 
-- 有完整 owner 主题，且范围足够迁移真实逻辑主体。
-- 保留旧路径兼容，并删除、迁移或显著简化对应 core 主体路径。
-- 有 focused regression、snapshot、contract test 或产品入口验证证明行为等价。
-- boundary check 覆盖新 owner 和旧路径 facade，禁止反向依赖、Tauri 下沉、无类型 service locator 和全局 mutable registry 膨胀。
-- PR 描述只说明本次 diff 的变更、风险、验证和剩余边界，不写过程信息。
+## 4. 剩余大块 PR
 
-不满足上述门禁时，不允许把变更作为独立 PR 提交。
-
-## 4. 后续执行节奏
-
-M6 Service / Adapter owner 深迁移、M7 Bash shell execution helper owner 迁移、M8 本地 indexed workspace search / tool presentation 纯策略收口、M9 remote search / checkpoint / confirmation / pipeline policy 收口，以及 M10 Harness / Agent runtime provider-neutral 收口已完成事实归档到
-[`core-decomposition-completed.md`](core-decomposition-completed.md)。后续计划从
-terminal lifecycle、concrete workflow execution、scheduler/session side effect、feature trimming、SDK readiness
-和 core facade 收口继续推进，避免再把已完成的 service/adapter、Bash helper、search owner、pipeline policy
-或 provider-neutral runtime owner 项重复拆成小 PR。
-
-| 阶段 | 目标 | 准出标准 |
-|---|---|---|
-| M11 Concrete owner 深迁移收口 | 已迁出 remote SSH/SFTP/PTY concrete owner、session storage file layout / turn file indexing-deletion / JSON file store / metadata store CRUD/index rebuild IO / metadata pagination / metadata construction/counter-index/field mutation / lineage / branch metadata shaping rules、DeepResearch report IO、MiniApp host dispatch、built-in seed/marker IO、MiniApp JS worker process/pool owner、MiniApp storage filesystem IO、MiniApp import bundle IO、MiniApp import bundle planning、MiniApp compile request/path adaptation、MiniApp permission policy request/path adaptation、MiniApp import lifecycle orchestration、MiniApp manager create/update/draft/apply/customization workflow 持久化顺序、tool pipeline state counting / cancellation state policy、DeepReview provider capacity error decision、provider/admission queue step decision、provider/reviewer queue wait timing 状态机、provider retry attempt/elapsed 状态机、runtime tracker reliability signal shaping、runtime diagnostics log shaping 和 TaskTool retry/cancelled/result presentation；剩余只保留需要单独接口设计的 legacy workspace-runtime metadata merge 兼容处理、DeepReview launch/provider wait side effect/report persistence、scheduler/event/session state-turn-prompt-cache side effect、tool pipeline concrete token/channel/scheduler glue，以及 MiniApp AI acquisition 和更大 concrete workflow execution | 每个已迁 concrete owner 有 focused behavior tests 和 boundary anchors；不改变权限、事件、session、remote、MiniApp 或 terminal 可见行为；剩余高风险项不得无设计确认硬迁 |
-| M12 Product shape / SDK readiness / Core facade 收口 | 基于 capability matrix 裁剪 no-default/product-full 和不同交付形态依赖；建立内部 Agent Runtime SDK façade 的最小可嵌入路径；将远程、bot、产品工具等会话创建/读取/取消入口、remote session create host、remote dialog / SessionMessage / scheduled-job queued-turn 提交、background result delivery、thread-goal delivery、remote cancel host 和 requester-aware cancellation 迁入 port-backed `AgentRuntime`；将 `bitfun-core` 限定为 compatibility facade、product-full assembly 与少量迁移期 adapter。scheduler concrete 队列、事件副作用和 session state/turn/prompt-cache IO 未具备等价 port 前不得硬迁 | cargo metadata / cargo tree 有对比数据；Agent SDK façade 可用 fake provider 跑通最小 session / turn / event stream；各产品形态关键入口验证通过；边界脚本阻止 owner 逻辑回流 |
+| PR | 目标 | 主要范围 | 准出标准 |
+|---|---|---|---|
+| PR-B | Agent lifecycle 与 tool side-effect closure | scheduler concrete lifecycle、session state / turn / prompt-cache IO 编排、tool pipeline token/channel/scheduler glue、permission UI/channel wait、terminal / exec command lifecycle | 保持 Flow Chat finalize / retry / round history、session metadata、cancel、non-TTY exec output、tool event / card 语义；core 旧路径显著简化；补 focused tests 和 boundary |
+| PR-C | Harness 与 product workflow concrete migration | DeepReview launch / provider wait / report persistence、DeepResearch concrete workflow、MiniApp AI acquisition / larger workflow execution、function-agent AI provider acquisition | 保持 DeepReview queue/report、MiniApp create/update/import/storage/PPT live、AI request trace、function-agent Git/AI 行为；core 只保留 legacy facade / adapter |
+| PR-D | Product shape / Agent SDK / core facade closure | 内部 Agent Runtime SDK façade、fake provider 最小 session / turn / event stream、Product Assembly capability matrix、delivery profile feature trimming、`bitfun-core` facade 收口 | cargo metadata / cargo tree 有 no-default/product-full 对比；各产品入口验证通过；SDK 不暴露 `bitfun-core`、product-full、concrete manager 或全局 mutable state |
 
 ## 5. 固定执行流程
 
-1. 同步最新 `main`，检查主干新增的 tool、remote、session、scheduler、CLI、mobile-web、ACP 或 product interface 变更。
-2. 对照 Issue #970 和设计文档确认本次 owner 边界，不从旧 plan 标签继承完成判断。
+1. 同步最新 `main`，检查主干新增的 CLI、tool、terminal、session、scheduler、remote、MiniApp、ACP 或 product interface 变更。
+2. 对照设计文档和 Issue #970 明确本次 owner 边界，不从旧计划标签继承完成判断。
 3. 先补等价保护，再迁移实现主体。
 4. 删除、迁移或显著简化 core 中对应旧路径。
-5. 运行最小但足够的 focused verification 和 boundary check。
+5. 运行 focused verification、boundary check 和必要的 feature / dependency 对比。
 6. 从独立第三方角度审查功能漂移、性能劣化、依赖回流、产品形态遗漏和文档一致性。
-7. 合入后只更新 completed 摘要和 issue 状态；设计文档默认不修改。
+7. 合入后只更新 completed 摘要和 issue 状态；设计文档只有目标架构变更时才修改。
 
 ## 6. 验证矩阵
 
 | 触达范围 | 最小验证 |
 |---|---|
-| docs / boundary script / layout | `pnpm run check:repo-hygiene`，`node --test scripts/check-core-boundaries.test.mjs`，`node scripts/check-core-boundaries.mjs` |
+| docs / boundary / layout | `pnpm run check:repo-hygiene`，`node --test scripts/check-core-boundaries.test.mjs`，`node scripts/check-core-boundaries.mjs` |
 | Workspace layout / Cargo path | `cargo metadata --no-deps --format-version 1` |
-| Runtime Services / ports | `cargo test -p bitfun-runtime-services`，`cargo check -p bitfun-core --features product-full` |
-| Tool primitives | `cargo test -p bitfun-agent-tools`，`cargo test -p tool-runtime`，tool focused tests |
-| Agent Runtime | `cargo test -p bitfun-agent-runtime`，core session / scheduler / goal / subagent focused tests |
-| Harness | `cargo test -p bitfun-harness`，core harness focused tests |
-| Product Domains | `cargo test -p bitfun-product-domains`，MiniApp / function-agent focused tests |
-| Agent SDK readiness | `cargo test -p bitfun-agent-runtime`，`cargo test -p bitfun-runtime-services`，并在新增 SDK façade 后补最小 fake-provider session / turn / event stream 测试 |
-| Desktop / Tauri/API | `cargo check -p bitfun-desktop`，并确认 Tauri 未下沉到 execution 或 contracts |
+| Runtime Services / backend events | `cargo test -p bitfun-runtime-services`，`cargo check -p bitfun-core --no-default-features` |
+| Services Core session migration | `cargo test -p bitfun-services-core merge_legacy_session_store`，core workspace-runtime focused tests |
+| Agent lifecycle / scheduler | `cargo test -p bitfun-agent-runtime`，core scheduler / session focused tests |
+| Tool / terminal | `cargo test -p bitfun-agent-tools`，`cargo test -p tool-runtime`，terminal / exec-command focused tests |
+| Harness / Product Domains | `cargo test -p bitfun-harness`，`cargo test -p bitfun-product-domains`，DeepReview / MiniApp focused tests |
+| Product shape / SDK | `cargo test -p bitfun-agent-runtime`，`cargo test -p bitfun-runtime-services`，SDK fake-provider smoke，cargo tree / metadata 对比 |
 | 大范围 owner 迁移 | `cargo check --workspace`，必要时补 `cargo test --workspace` |
-| feature / dependency 收益 | `cargo metadata`，`cargo tree`，对应 build/check 对比 |
 
 ## 7. 暂停条件
 
-- 迁移必须改变用户可见行为、权限策略、工具 schema、默认能力集合或 release 构建形态。
 - 新 owner crate 必须依赖回 `bitfun-core` 才能编译或测试。
-- Execution / contract crate 开始吸收 Tauri、CLI/TUI、process execution、network client、Git provider、AI provider、MCP client 等 concrete dependency。
+- Execution / contracts crate 吸收 Tauri、产品命令、AI provider、MCP client、process execution、Git provider 等 concrete dependency。
 - Product Assembly 变成无类型 service locator 或全局 mutable app state。
 - PR 只新增抽象，没有迁移、删除或显著简化旧 core 主体路径。
-- SDK façade 必须暴露 `bitfun-core`、`product-full`、concrete service manager、产品命令 registry 或全局 mutable state 才能完成基本 agent 执行。
-
-## 8. 完成标准
-
-- `bitfun-core` 只保留 compatibility facade、product-full / Product Assembly 兼容边界和清晰的迁移期 adapter。
-- Agent Runtime SDK 能在不依赖 `bitfun-core`、app crate 或 Tauri 的情况下，通过稳定 builder / runner / event stream / registry API 嵌入最小 agent 执行能力。
-- Agent Runtime、Runtime Services、Tool Contracts、Tool Provider Groups、Tool Execution、Harness、Product Capabilities、Product Domains、Adapters 和 Services 的职责边界可由代码结构、依赖检查和测试证明。
-- 产品入口通过 Product Assembly / capability matrix 显式选择能力，不再被完整 core 隐式牵引。
-- feature / dependency trimming 有数据证明，且不以功能缺失、权限漂移或性能劣化换取构建收益。
+- SDK façade 必须暴露 `bitfun-core`、`product-full`、concrete service manager 或产品命令 registry 才能完成基本 agent 执行。

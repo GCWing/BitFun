@@ -7,6 +7,11 @@ export const facadeOnlyFiles = [
     reason: 'core filesystem infrastructure facade must only re-export the services-core owner crate',
   },
   {
+    path: 'src/crates/assembly/core/src/infrastructure/events/event_system.rs',
+    importPrefix: 'bitfun_runtime_services::backend_events',
+    reason: 'core backend event system facade must only re-export the runtime-services owner crate',
+  },
+  {
     path: 'src/crates/assembly/core/src/service/filesystem/listing.rs',
     importPrefix: 'bitfun_services_core::filesystem',
     reason: 'core filesystem listing facade must only re-export the services-core owner crate',

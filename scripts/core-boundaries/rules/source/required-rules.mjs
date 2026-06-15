@@ -37,6 +37,37 @@ export const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/execution/runtime-services/src/backend_events.rs',
+    reason:
+      'runtime-services must own backend event delivery while core keeps only a compatibility facade',
+    patterns: [
+      {
+        regex: /\bpub enum BackendEvent\b/,
+        message: 'missing backend event contract',
+      },
+      {
+        regex: /\bpub struct BackendEventSystem\b/,
+        message: 'missing backend event system owner',
+      },
+      {
+        regex: /\bpub fn event_name\b/,
+        message: 'missing stable backend event-name mapping',
+      },
+      {
+        regex: /\bpub async fn emit\b/,
+        message: 'missing backend event emitter path',
+      },
+      {
+        regex: /\bget_global_event_system\b/,
+        message: 'missing global backend event compatibility entry',
+      },
+      {
+        regex: /\bbackend_event_names_remain_stable\b/,
+        message: 'missing backend event name regression',
+      },
+    ],
+  },
+  {
     path: 'src/crates/execution/runtime-services/tests/runtime_services_contracts.rs',
     reason:
       'runtime-services must keep behavior-equivalence contracts for required services, optional capabilities, registry assembly, and remote port exposure',
@@ -1702,6 +1733,10 @@ export const requiredContentRules = [
         message: 'missing services-core session metadata store module',
       },
       {
+        regex: /\bmod migration;/,
+        message: 'missing services-core session migration module',
+      },
+      {
         regex: /\bapply_session_lineage\b/,
         message: 'missing session lineage owner re-export',
       },
@@ -1730,8 +1765,40 @@ export const requiredContentRules = [
         message: 'missing session metadata store owner re-export',
       },
       {
+        regex: /\bmerge_legacy_session_store\b/,
+        message: 'missing legacy session-store migration owner re-export',
+      },
+      {
         regex: /\bset_deep_review_cache\b/,
         message: 'missing DeepReview cache metadata mutation owner re-export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-core/src/session/migration.rs',
+    reason:
+      'services-core must own legacy session-store merge, metadata selection, and index rebuild behavior',
+    patterns: [
+      {
+        regex: /\bpub async fn merge_legacy_session_store\b/,
+        message: 'missing legacy session-store merge owner',
+      },
+      {
+        regex: /\bfn merge_session_metadata_file\b/,
+        message: 'missing metadata merge conflict resolver',
+      },
+      {
+        regex: /\bSessionMetadataStore::new\s*\(\s*sessions_dir\s*\)/,
+        message: 'missing services-core session index rebuild delegation',
+      },
+      {
+        regex: /\bmetadata_file_count\b/,
+        message: 'missing metadata-file count regression coverage',
+      },
+      {
+        regex:
+          /\bmerge_legacy_session_store_preserves_newer_metadata_and_rebuilds_visible_index\b/,
+        message: 'missing legacy session-store merge regression',
       },
     ],
   },
@@ -2480,7 +2547,7 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/core/src/service/workspace_runtime/service.rs',
     reason:
-      'workspace runtime binding helpers may depend on agentic runtime only in full product builds and must reuse services-core for session index rebuilds',
+      'workspace runtime binding helpers may depend on agentic runtime only in full product builds and must delegate legacy session-store migration to services-core',
     patterns: [
       {
         regex: /#\[cfg\(feature = "product-full"\)\]\s*use crate::agentic::WorkspaceBinding\b/s,
@@ -2491,16 +2558,16 @@ export const requiredContentRules = [
         message: 'WorkspaceBinding runtime helper must stay behind product-full',
       },
       {
-        regex: /\bSessionMetadataStore\b/,
-        message: 'workspace runtime session merge must reuse services-core metadata store',
+        regex: /\bmerge_legacy_session_store\b/,
+        message: 'workspace runtime session merge must delegate to services-core',
       },
       {
-        regex: /\.rebuild_index\(\)/,
-        message: 'workspace runtime session merge must delegate index rebuild to services-core',
+        regex: /\bmove_legacy_path\b/,
+        message: 'workspace runtime legacy path movement must delegate to services-core',
       },
       {
-        regex: /\bmetadata_file_count\b/,
-        message: 'workspace runtime merge must preserve metadata-file count semantics',
+        regex: /\bsession_store_migration_error\b/,
+        message: 'workspace runtime must keep BitFunError compatibility mapping at the facade boundary',
       },
     ],
   },

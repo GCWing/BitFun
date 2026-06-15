@@ -152,6 +152,36 @@ export const forbiddenContentRules = [
     ],
   },
   {
+    path: 'src/crates/assembly/core/src/service/workspace_runtime/service.rs',
+    patterns: [
+      {
+        regex: /\bfn\s+merge_session_directory\b/,
+        message:
+          'legacy session directory merge belongs in services-core session migration owner, not core workspace runtime',
+      },
+      {
+        regex: /\bfn\s+merge_session_metadata_file\b/,
+        message:
+          'legacy session metadata conflict resolution belongs in services-core session migration owner, not core workspace runtime',
+      },
+      {
+        regex: /\bSessionMetadataStore::new\b/,
+        message:
+          'legacy session index rebuild belongs in services-core session migration owner, not core workspace runtime',
+      },
+      {
+        regex: /\bfn\s+copy_dir_recursive\b/,
+        message:
+          'legacy path copy fallback belongs in services-core session migration owner, not core workspace runtime',
+      },
+      {
+        regex: /\bfn\s+files_are_equal\b/,
+        message:
+          'legacy path conflict comparison belongs in services-core session migration owner, not core workspace runtime',
+      },
+    ],
+  },
+  {
     path: 'src/crates/assembly/core/src/service_agent_runtime.rs',
     patterns: [
       {

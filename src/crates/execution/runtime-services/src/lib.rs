@@ -9,6 +9,7 @@ use bitfun_runtime_ports::{
     WorkspacePort,
 };
 
+pub mod backend_events;
 pub mod test_support;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
