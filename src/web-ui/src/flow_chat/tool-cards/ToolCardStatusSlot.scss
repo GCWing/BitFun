@@ -28,8 +28,8 @@
     opacity: 1;
 
     svg {
-      width: var(--tool-card-icon-size, 16px);
-      height: var(--tool-card-icon-size, 16px);
+      width: var(--tool-card-icon-size);
+      height: var(--tool-card-icon-size);
     }
   }
 

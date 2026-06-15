@@ -81,6 +81,7 @@
 // ==================== Inline context tags ====================
 
 .inline-context-tag {
+  --tag-color: var(--color-accent-500);
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;

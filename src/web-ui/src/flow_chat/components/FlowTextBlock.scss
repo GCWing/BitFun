@@ -4,7 +4,7 @@
 
 .flow-text-block {
   width: 100%;
-  margin: 0 0 var(--flowchat-flow-item-gap, 0.45rem) 0;
+  margin: 0 0 var(--flowchat-flow-item-gap) 0;
   font-size: var(--flowchat-font-size-base);
   line-height: var(--flowchat-text-line-height);
   /* Transparent border to match the box-sizing of bordered cards (BaseToolCard,

@@ -173,7 +173,7 @@ $ins-label:   12px;
   @extend %ins-btn;
   background: $ins-red-bg;
   color: $ins-red;
-  &:hover { background: var(--color-error-border, $ins-red-bg); }
+  &:hover { background: var(--color-error-border); }
 }
 
 // Error / progress
@@ -1405,7 +1405,7 @@ $ins-label:   12px;
 
     &:hover {
       border-color: color-mix(in srgb, $ins-blue 45%, transparent);
-      background: var(--color-accent-200, $ins-blue-bg);
+      background: var(--color-accent-200);
       box-shadow: var(--shadow-sm);
     }
   }

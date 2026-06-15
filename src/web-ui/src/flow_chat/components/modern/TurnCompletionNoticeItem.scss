@@ -6,7 +6,7 @@
   margin:
     8px
     var(--flowchat-content-inline-pad)
-    calc(var(--flowchat-turn-gap, 0.46rem) + 0.18rem)
+    calc(var(--flowchat-turn-gap) + 0.18rem)
     var(--flowchat-content-inline-pad);
   padding: 6px 10px;
   border: 1px solid transparent;

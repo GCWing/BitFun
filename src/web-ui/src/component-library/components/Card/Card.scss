@@ -7,7 +7,7 @@
 
   background: var(--card-bg-default);
   border: none;
-  border-radius: var(--size-radius-base, 8px);
+  border-radius: var(--size-radius-base);
   color: var(--color-text-secondary);
 
   transition: all var(--motion-base) var(--easing-standard);
@@ -93,11 +93,11 @@
   }
 
   &--radius-medium {
-    border-radius: var(--size-radius-base, 8px);
+    border-radius: var(--size-radius-base);
   }
 
   &--radius-large {
-    border-radius: var(--size-radius-lg, 12px);
+    border-radius: var(--size-radius-lg);
   }
 
 
@@ -121,14 +121,14 @@
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-semibold);
     color: var(--color-text-primary);
-    line-height: var(--line-height-tight, 1.2);
+    line-height: var(--line-height-tight);
     margin-bottom: var(--size-gap-1);
   }
 
   &__subtitle {
     font-size: var(--font-size-xs);
     color: var(--color-text-muted);
-    line-height: var(--line-height-base, 1.5);
+    line-height: var(--line-height-base);
   }
 
   &__extra {
@@ -143,7 +143,7 @@
   flex: 1;
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
-  line-height: var(--line-height-relaxed, 1.6);
+  line-height: var(--line-height-relaxed);
 
   .v-card-header + & {
     margin-top: var(--size-gap-3);

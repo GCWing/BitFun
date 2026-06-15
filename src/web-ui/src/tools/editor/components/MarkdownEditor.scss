@@ -498,7 +498,7 @@
   details {
     margin: 0 0 $size-gap-4;
     padding: $size-gap-3 $size-gap-4;
-    background: color-mix(in srgb, var(--color-bg-secondary, #{$element-bg-subtle}) 86%, transparent);
+    background: color-mix(in srgb, var(--color-bg-secondary) 86%, transparent);
     border: 1px solid var(--border-subtle);
     border-radius: $size-radius-lg;
 

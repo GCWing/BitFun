@@ -444,6 +444,8 @@ export class ThemeService {
     root.style.setProperty('--color-bg-flowchat', colors.background.scene);
     root.style.setProperty('--color-bg-surface', colors.background.secondary);
     root.style.setProperty('--color-bg-base', colors.background.primary);
+    root.style.setProperty('--color-bg-elevated-hover', colors.element.medium);
+    root.style.setProperty('--color-surface-elevated', colors.element.elevated);
     root.style.setProperty('--color-surface-hover', colors.element.medium);
     root.style.setProperty('--color-hover', colors.element.medium);
     root.style.setProperty('--bg-primary', colors.background.primary);
@@ -451,6 +453,7 @@ export class ThemeService {
     root.style.setProperty('--bg-tertiary', colors.background.tertiary);
     root.style.setProperty('--bg-elevated', colors.background.elevated);
     root.style.setProperty('--bg-hover', colors.element.medium);
+    root.style.setProperty('--secondary-bg', colors.background.secondary);
     root.style.setProperty('--background-primary', colors.background.primary);
     root.style.setProperty('--background-secondary', colors.background.secondary);
     root.style.setProperty('--background-tertiary', colors.background.tertiary);
@@ -491,6 +494,7 @@ export class ThemeService {
     root.style.setProperty('--color-primary-500', primaryAccent);
     root.style.setProperty('--color-primary-alpha', colors.accent[100]);
     root.style.setProperty('--color-primary-bg', colors.accent[100]);
+    root.style.setProperty('--color-primary-bg-subtle', colors.accent[50]);
     root.style.setProperty('--color-accent-alpha', colors.accent[100]);
     const flowChatLinkColors = theme.type === 'light'
       ? FLOW_CHAT_LINK_COLORS.light
@@ -513,11 +517,14 @@ export class ThemeService {
     root.style.setProperty('--color-success', colors.semantic.success);
     root.style.setProperty('--color-success-bg', colors.semantic.successBg);
     root.style.setProperty('--color-success-border', colors.semantic.successBorder);
+    root.style.setProperty('--color-success-100', colors.semantic.successBg);
     root.style.setProperty('--color-success-500', colors.semantic.success);
     root.style.setProperty('--color-warning', colors.semantic.warning);
     root.style.setProperty('--color-warning-bg', colors.semantic.warningBg);
     root.style.setProperty('--color-warning-border', colors.semantic.warningBorder);
+    root.style.setProperty('--color-warning-100', colors.semantic.warningBg);
     root.style.setProperty('--color-warning-500', colors.semantic.warning);
+    root.style.setProperty('--color-warning-700', colors.semantic.warning);
     root.style.setProperty('--color-error', colors.semantic.error);
     root.style.setProperty('--color-error-bg', colors.semantic.errorBg);
     root.style.setProperty('--color-error-border', colors.semantic.errorBorder);
@@ -542,6 +549,7 @@ export class ThemeService {
     root.style.setProperty('--border-hover', colors.border.medium);
     root.style.setProperty('--border-strong', colors.border.strong);
     root.style.setProperty('--border-prominent', colors.border.prominent);
+    root.style.setProperty('--border-muted', colors.border.subtle);
     root.style.setProperty('--border-primary', colors.border.base);
     root.style.setProperty('--color-border', colors.border.base);
     root.style.setProperty('--color-border-primary', colors.border.base);
@@ -559,6 +567,7 @@ export class ThemeService {
     root.style.setProperty('--element-bg-medium', colors.element.medium);
     root.style.setProperty('--element-bg-strong', colors.element.strong);
     root.style.setProperty('--element-bg-elevated', colors.element.elevated);
+    root.style.setProperty('--element-bg', colors.element.base);
     root.style.setProperty('--element-bg-hover', colors.element.medium);
     root.style.setProperty('--color-bg-hover', colors.element.medium);
     root.style.setProperty('--color-bg-subtle', colors.element.subtle);
@@ -590,12 +599,17 @@ export class ThemeService {
     );
     root.style.setProperty('--scrollbar-thumb', scrollbarThumb);
     root.style.setProperty('--scrollbar-thumb-hover', scrollbarThumbHover);
+    root.style.setProperty('--color-scrollbar', scrollbarThumb);
 
 
     if (effects?.shadow) {
       Object.entries(effects.shadow).forEach(([key, value]) => {
         root.style.setProperty(`--shadow-${key}`, value);
       });
+      root.style.setProperty('--glass-shadow-sm', effects.shadow.sm);
+      root.style.setProperty('--glass-shadow-base', effects.shadow.base);
+      root.style.setProperty('--glass-shadow-lg', effects.shadow.lg);
+      root.style.setProperty('--glass-shadow-xl', effects.shadow.xl);
     }
 
 
@@ -610,6 +624,8 @@ export class ThemeService {
       Object.entries(effects.blur).forEach(([key, value]) => {
         root.style.setProperty(`--blur-${key}`, value);
       });
+      root.style.setProperty('--glass-blur-sm', effects.blur.subtle);
+      root.style.setProperty('--glass-blur-base', effects.blur.base);
     }
 
 
@@ -645,6 +661,7 @@ export class ThemeService {
       Object.entries(motion.duration).forEach(([key, value]) => {
         root.style.setProperty(`--motion-${key}`, value);
       });
+      root.style.setProperty('--motion-normal', motion.duration.base);
     }
 
 
@@ -658,6 +675,7 @@ export class ThemeService {
     if (typography?.font) {
       root.style.setProperty('--font-sans', typography.font.sans);
       root.style.setProperty('--font-mono', typography.font.mono);
+      root.style.setProperty('--markdown-font-mono', typography.font.mono);
     }
 
 

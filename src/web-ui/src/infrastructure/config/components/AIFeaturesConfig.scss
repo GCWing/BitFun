@@ -136,7 +136,7 @@
   }
 
   &__pet-expand-button:hover {
-    border-color: var(--border-medium, var(--border-subtle));
+    border-color: var(--border-medium);
     background: var(--element-bg-soft);
   }
 
@@ -169,7 +169,7 @@
     gap: $size-gap-2;
     padding: 12px;
     border: 1px solid var(--border-subtle);
-    border-radius: var(--size-radius-sm, 8px);
+    border-radius: var(--size-radius-sm);
     background: color-mix(in srgb, var(--element-bg-subtle) 52%, transparent);
   }
 
@@ -193,7 +193,7 @@
     gap: $size-gap-2;
     padding: 9px 10px;
     border: 1px solid var(--border-subtle);
-    border-radius: var(--size-radius-sm, 8px);
+    border-radius: var(--size-radius-sm);
     color: var(--color-text-primary);
     text-align: left;
     background: color-mix(in srgb, var(--element-bg-base) 74%, transparent);
@@ -206,7 +206,7 @@
 
   &__pet-select-option:hover,
   &__pet-select-option:focus-visible {
-    border-color: var(--border-medium, var(--border-subtle));
+    border-color: var(--border-medium);
     background: color-mix(in srgb, var(--element-bg-soft) 84%, transparent);
     outline: none;
   }

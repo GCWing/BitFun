@@ -19,7 +19,7 @@
 
     &:hover:not(:has(.bitfun-textarea__field:disabled)) {
       transform: translateY(-2px);
-      border-color: var(--border-strong, var(--border-medium));
+      border-color: var(--border-strong);
       background: color-mix(in srgb, var(--element-bg-base) 90%, transparent);
       box-shadow:
         0 20px 48px -14px color-mix(in srgb, var(--color-text-primary) 14%, transparent),
@@ -28,7 +28,7 @@
 
     &:focus-within {
       transform: translateY(-2px);
-      border-color: var(--border-focus, var(--color-accent-500));
+      border-color: var(--border-focus);
       background: var(--element-bg-soft);
       box-shadow:
         0 22px 52px -12px color-mix(in srgb, var(--color-accent-500) 18%, transparent),

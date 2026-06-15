@@ -14,6 +14,8 @@ $_nav-collapsed-width: 80px;
 // ── Root: left-right split ───────────────────────────────
 
 .bitfun-workspace-body {
+  --nav-width: #{$_nav-width};
+
   display: flex;
   flex-direction: row;
   flex: 1;
@@ -33,7 +35,7 @@ $_nav-collapsed-width: 80px;
 .bitfun-workspace-body__nav-area {
   display: flex;
   flex-direction: column;
-  width: var(--nav-width, $_nav-width);
+  width: var(--nav-width);
   flex-shrink: 0;
   height: 100%;
   overflow: visible;
@@ -74,7 +76,7 @@ $_nav-collapsed-width: 80px;
 .bitfun-workspace-body__nav-divider {
   position: absolute;
   top: 0;
-  left: calc(#{$size-gap-2} + var(--nav-width, #{$_nav-width}));
+  left: calc(#{$size-gap-2} + var(--nav-width));
   width: 8px;
   height: 100%;
   cursor: ew-resize;
@@ -150,14 +152,14 @@ $_nav-collapsed-width: 80px;
     opacity: 0;
   }
   to {
-    width: var(--nav-width, $_nav-width);
+    width: var(--nav-width);
     opacity: 1;
   }
 }
 
 @keyframes wb-nav-slide-out {
   from {
-    width: var(--nav-width, $_nav-width);
+    width: var(--nav-width);
     opacity: 1;
   }
   to {

@@ -9,7 +9,7 @@
   justify-content: center;
   width: 100%;
   height: 100%;
-  padding: var(--size-gap-8, 32px) var(--size-gap-6);
+  padding: var(--size-gap-8) var(--size-gap-6);
   box-sizing: border-box;
   overflow-y: auto;
   overscroll-behavior: contain;

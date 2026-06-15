@@ -365,7 +365,7 @@
 
     &.is-active {
       border-color: color-mix(in srgb, var(--border-subtle) 88%, transparent);
-      border-bottom-color: var(--color-surface-base, var(--surface-base, transparent));
+      border-bottom-color: transparent;
       background: color-mix(in srgb, var(--element-bg-subtle) 96%, transparent);
       color: var(--color-accent-500);
       box-shadow:

@@ -25,9 +25,6 @@
 
 /* Collapsed row: match thinking summary typography (`ModelThinkingDisplay.scss` `.thinking-label`). */
 .compact-tool-card-wrapper.git-tool-display {
-  --tool-compact-summary-font:
-    var(--font-family-sans);
-
   .compact-card-action,
   .compact-card-content .tool-command-preview.tool-command-preview--compact {
     font-family: var(--tool-compact-summary-font);
@@ -113,7 +110,7 @@
 
   .git-output-summary-inline {
     font-size: var(--flowchat-font-size-xs);
-    color: var(--tool-card-text-secondary, var(--color-text-muted));
+    color: var(--tool-card-text-secondary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -207,7 +204,7 @@
     padding: var(--flowchat-code-block-pad-y) var(--flowchat-code-block-pad-x);
     background: var(--color-bg-scene);
     border-radius: 4px;
-    font-size: var(--flowchat-code-font-size, 0.92em);
+    font-size: var(--flowchat-code-font-size);
     line-height: var(--flowchat-code-line-height);
     color: var(--color-text-secondary);
     white-space: pre-wrap;

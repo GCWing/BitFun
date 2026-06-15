@@ -1061,7 +1061,7 @@ export const Markdown = React.memo<MarkdownProps>(({
         lineHeight: '1.55',
       };
       const codeTagStyle: React.CSSProperties = {
-        fontFamily: 'var(--markdown-font-mono, "Fira Code", "JetBrains Mono", Consolas, "Courier New", monospace)',
+        fontFamily: 'var(--markdown-font-mono)',
       };
 
       return (

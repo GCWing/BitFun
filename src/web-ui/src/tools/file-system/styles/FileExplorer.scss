@@ -198,7 +198,7 @@ $_indent-width: 8px;
 
 @keyframes file-node-highlight-fade {
   0% {
-    background: rgba(var(--color-accent-rgb, 99, 102, 241), 0.2);
+    background: rgba(var(--color-primary-rgb) / 0.2);
   }
   30% {
     background: $git-color-branch-bg;

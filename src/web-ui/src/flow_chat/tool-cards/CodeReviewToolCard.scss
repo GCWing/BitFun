@@ -1118,7 +1118,7 @@
     border-radius: 12px;
     background:
       linear-gradient(180deg, color-mix(in srgb, var(--color-bg-elevated) 94%, transparent), color-mix(in srgb, var(--color-bg-primary) 90%, transparent)),
-      color-mix(in srgb, var(--color-accent-500) 8%, var(--color-bg-elevated, transparent));
+      color-mix(in srgb, var(--color-accent-500) 8%, var(--color-bg-elevated));
     backdrop-filter: blur(16px) saturate(1.15);
     -webkit-backdrop-filter: blur(16px) saturate(1.15);
     box-shadow:

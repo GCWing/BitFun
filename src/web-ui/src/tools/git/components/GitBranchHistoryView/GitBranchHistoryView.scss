@@ -3,8 +3,8 @@
   flex-direction: column;
   height: 100%;
   width: 100%;
-  background: var(--color-background);
-  color: var(--color-text);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
 
   &--loading,
   &--error {
@@ -259,7 +259,7 @@
   &__commit-message {
     font-size: 13px;
     font-weight: 400;
-    color: var(--color-text);
+    color: var(--color-text-primary);
     line-height: 1.4;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -338,7 +338,7 @@
     opacity: 0;
 
     &:hover {
-      color: var(--color-text);
+      color: var(--color-text-primary);
       background: var(--color-background-tertiary);
     }
   }

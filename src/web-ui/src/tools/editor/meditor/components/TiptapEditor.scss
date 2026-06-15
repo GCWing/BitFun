@@ -36,7 +36,7 @@
       transition: background $motion-base $easing-standard;
 
       &:hover {
-        background: var(--element-bg-subtle, #{$element-bg-subtle});
+        background: var(--element-bg-subtle);
       }
 
       &.m-editor-tiptap-block-highlighted {
@@ -651,7 +651,7 @@
     transition: background $motion-fast $easing-standard, color $motion-fast $easing-standard;
 
     &:hover {
-      background: var(--element-bg-medium, #{$element-bg-medium});
+      background: var(--element-bg-medium);
     }
   }
 

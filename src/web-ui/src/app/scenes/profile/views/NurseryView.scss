@@ -572,7 +572,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
 
 .nursery-delete-dialog {
   pointer-events: auto;
-  background: var(--color-bg-elevated, var(--color-bg-secondary));
+  background: var(--color-bg-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: 14px;
   padding: 24px;

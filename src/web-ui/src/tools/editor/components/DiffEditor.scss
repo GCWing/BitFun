@@ -178,7 +178,7 @@ $_diff-error-max-width: 400px;
   text-align: center;
   padding: $size-gap-6;
   background: var(--color-bg-primary);
-  border: 1px solid var(--color-border-secondary);
+  border: 1px solid var(--border-subtle);
   border-radius: $size-radius-lg;
   max-width: $_diff-error-max-width;
   z-index: 100;
@@ -312,12 +312,12 @@ $_diff-error-max-width: 400px;
     
     .monaco-diff-editor.side-by-side:hover .editor.original {
       border-right-style: solid !important;
-      border-right-color: var(--border-light, var(--color-overlay-white-15)) !important;
+      border-right-color: var(--color-overlay-white-15) !important;
     }
     
     .monaco-diff-editor.side-by-side:hover .editor.modified {
       border-left-style: solid !important;
-      border-left-color: var(--border-light, var(--color-overlay-white-15)) !important;
+      border-left-color: var(--color-overlay-white-15) !important;
     }
 
     .monaco-diff-editor .monaco-editor .view-lines {

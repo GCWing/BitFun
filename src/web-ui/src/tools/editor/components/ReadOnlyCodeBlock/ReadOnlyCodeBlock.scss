@@ -32,7 +32,7 @@
     
     // Adjust selection style
     .selected-text {
-      background: var(--color-selection, var(--readonly-code-selection-bg)) !important;
+      background: var(--readonly-code-selection-bg) !important;
     }
   }
   

@@ -174,7 +174,7 @@ $_diff-padding-desktop: 32px;
         
         &:hover::before {
           border-left-style: solid;
-          border-left-color: var(--border-light, var(--color-overlay-white-20));
+          border-left-color: var(--color-overlay-white-20);
         }
       }
       

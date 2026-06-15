@@ -11,6 +11,17 @@ const TOKEN_PATH_PARTS = [
   'infrastructure/theme',
   'theme/presets',
 ];
+const CONTRACT_VAR_DEFINITION_PATH_PARTS = [
+  'component-library/styles',
+  'infrastructure/theme',
+  'tools/generative-widget/themePayload.ts',
+];
+const STATIC_CONTRACT_VAR_DEFINITION_PATH_PARTS = [
+  'component-library/styles',
+];
+const RUNTIME_CONTRACT_VAR_DEFINITION_PATH_PARTS = [
+  'infrastructure/theme',
+];
 const EXCEPTION_PATH_PARTS = [
   'monaco',
   'terminal',
@@ -24,6 +35,9 @@ const COLOR_PATTERN =
 const CSS_VAR_USAGE_PATTERN = /var\(\s*(--[a-zA-Z0-9_-]+)/g;
 const CSS_VAR_DEFINITION_PATTERN = /(^|[;{\s])(--[a-zA-Z0-9_-]+)\s*:/g;
 const VAR_FALLBACK_PATTERN = /var\(\s*(--[a-zA-Z0-9_-]+)\s*,/g;
+const CSS_VAR_SET_PROPERTY_PATTERN = /\.setProperty\(\s*['"`](--[a-zA-Z0-9_-]+)/g;
+const CSS_VAR_INLINE_STYLE_PATTERN = /['"`](--[a-zA-Z0-9_-]+)['"`]\s*:/g;
+const CSS_VAR_DYNAMIC_SET_PATTERN = /\.setProperty\(\s*`(--[a-zA-Z0-9_-]*)\$\{/g;
 
 function parseArgs(argv) {
   const options = {
@@ -98,12 +112,30 @@ function isTokenFile(relativePath) {
   return TOKEN_PATH_PARTS.some(part => relativePath.includes(part));
 }
 
+function isContractVarDefinitionFile(relativePath) {
+  return CONTRACT_VAR_DEFINITION_PATH_PARTS.some(part => relativePath.includes(part));
+}
+
+function isStaticContractVarDefinitionFile(relativePath) {
+  return STATIC_CONTRACT_VAR_DEFINITION_PATH_PARTS.some(part => relativePath.includes(part));
+}
+
+function isRuntimeContractVarDefinitionFile(relativePath) {
+  return RUNTIME_CONTRACT_VAR_DEFINITION_PATH_PARTS.some(part => relativePath.includes(part));
+}
+
 function isExceptionFile(relativePath) {
   return EXCEPTION_PATH_PARTS.some(part => relativePath.toLowerCase().includes(part.toLowerCase()));
 }
 
 function incrementMap(map, key, amount = 1) {
   map.set(key, (map.get(key) ?? 0) + amount);
+}
+
+function addToSetMap(map, key, value) {
+  const values = map.get(key) ?? new Set();
+  values.add(value);
+  map.set(key, values);
 }
 
 function collectMatches(content, pattern) {
@@ -196,6 +228,13 @@ function audit(options) {
   const fallbackTokenCounts = new Map();
   const varUsageCounts = new Map();
   const varDefinitionCounts = new Map();
+  const varDefinitionKinds = new Map();
+  const varDefinitionFiles = new Map();
+  const contractVarDefinitions = new Set();
+  const staticContractVarDefinitions = new Set();
+  const runtimeContractVarDefinitions = new Set();
+  const varUsageFiles = new Map();
+  const dynamicDefinitionPrefixes = new Set();
   const fileColorCounts = new Map();
   const componentFileColorCounts = new Map();
   const exceptionColorCounts = new Map();
@@ -232,10 +271,44 @@ function audit(options) {
 
     for (const match of collectMatches(content, CSS_VAR_USAGE_PATTERN)) {
       incrementMap(varUsageCounts, match[1]);
+      addToSetMap(varUsageFiles, match[1], relativePath);
     }
 
     for (const match of collectMatches(content, CSS_VAR_DEFINITION_PATTERN)) {
       incrementMap(varDefinitionCounts, match[2]);
+      addToSetMap(varDefinitionKinds, match[2], 'css');
+      addToSetMap(varDefinitionFiles, match[2], relativePath);
+      if (isContractVarDefinitionFile(relativePath)) {
+        contractVarDefinitions.add(match[2]);
+      }
+      if (isStaticContractVarDefinitionFile(relativePath)) {
+        staticContractVarDefinitions.add(match[2]);
+      }
+    }
+
+    for (const match of collectMatches(content, CSS_VAR_SET_PROPERTY_PATTERN)) {
+      incrementMap(varDefinitionCounts, match[1]);
+      addToSetMap(varDefinitionKinds, match[1], 'runtime');
+      addToSetMap(varDefinitionFiles, match[1], relativePath);
+      if (isContractVarDefinitionFile(relativePath)) {
+        contractVarDefinitions.add(match[1]);
+      }
+      if (isRuntimeContractVarDefinitionFile(relativePath)) {
+        runtimeContractVarDefinitions.add(match[1]);
+      }
+    }
+
+    for (const match of collectMatches(content, CSS_VAR_INLINE_STYLE_PATTERN)) {
+      incrementMap(varDefinitionCounts, match[1]);
+      addToSetMap(varDefinitionKinds, match[1], 'inline-style');
+      addToSetMap(varDefinitionFiles, match[1], relativePath);
+      if (isContractVarDefinitionFile(relativePath)) {
+        contractVarDefinitions.add(match[1]);
+      }
+    }
+
+    for (const match of collectMatches(content, CSS_VAR_DYNAMIC_SET_PATTERN)) {
+      dynamicDefinitionPrefixes.add(match[1]);
     }
 
     for (const match of collectMatches(content, VAR_FALLBACK_PATTERN)) {
@@ -245,11 +318,73 @@ function audit(options) {
   }
 
   const definedVars = new Set(varDefinitionCounts.keys());
-  const undefinedVars = Array.from(varUsageCounts.entries())
-    .filter(([name]) => !definedVars.has(name))
+  const getDefinitionKinds = name => Array.from(varDefinitionKinds.get(name) ?? ['unknown']).sort();
+  const getDefinitionKind = name => {
+    if (definedVars.has(name)) {
+      return getDefinitionKinds(name).join('+');
+    }
+    const dynamicPrefix = Array.from(dynamicDefinitionPrefixes).find(prefix => name.startsWith(prefix));
+    return dynamicPrefix ? `dynamic-family:${dynamicPrefix}*` : null;
+  };
+  const unresolvedVarEntries = Array.from(varUsageCounts.entries())
+    .filter(([name]) => !getDefinitionKind(name))
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const undefinedVars = unresolvedVarEntries
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .slice(0, 100)
     .map(([key, count]) => ({ key, count }));
+  const fallbackOnlyVars = unresolvedVarEntries
+    .filter(([name]) => fallbackTokenCounts.has(name))
+    .slice(0, 100)
+    .map(([key, count]) => ({ key, count }));
+  const unresolvedRequiredVars = unresolvedVarEntries
+    .filter(([name]) => !fallbackTokenCounts.has(name))
+    .slice(0, 100)
+    .map(([key, count]) => ({
+      key,
+      count,
+      files: Array.from(varUsageFiles.get(key) ?? []).slice(0, 5),
+    }));
+  const dynamicDefinedVars = Array.from(varUsageCounts.entries())
+    .map(([key, count]) => ({ key, count, kind: getDefinitionKind(key) }))
+    .filter(entry => entry.kind && entry.kind !== 'css')
+    .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key))
+    .slice(0, 100);
+  const nonContractDefinedVars = Array.from(varUsageCounts.entries())
+    .filter(([name]) => definedVars.has(name) && !contractVarDefinitions.has(name))
+    .map(([key, count]) => ({
+      key,
+      count,
+      definitionKinds: getDefinitionKinds(key),
+      definitionFiles: Array.from(varDefinitionFiles.get(key) ?? []).slice(0, 5),
+      usageFiles: Array.from(varUsageFiles.get(key) ?? []).slice(0, 5),
+      usageFileCount: (varUsageFiles.get(key) ?? new Set()).size,
+    }))
+    .filter(entry => entry.usageFileCount > 1)
+    .sort((a, b) => b.usageFileCount - a.usageFileCount || b.count - a.count || a.key.localeCompare(b.key))
+    .slice(0, 100);
+  const nonContractDynamicInputVars = nonContractDefinedVars
+    .filter(entry => entry.definitionKinds.some(kind => kind === 'inline-style' || kind === 'runtime'));
+  const nonContractCssPrivateVars = nonContractDefinedVars
+    .filter(entry => (
+      entry.definitionKinds.includes('css')
+      && !entry.definitionKinds.some(kind => kind === 'inline-style' || kind === 'runtime')
+    ));
+  const runtimeOnlyRequiredContractVars = Array.from(varUsageCounts.entries())
+    .filter(([name]) => (
+      runtimeContractVarDefinitions.has(name)
+      && !staticContractVarDefinitions.has(name)
+      && !fallbackTokenCounts.has(name)
+    ))
+    .map(([key, count]) => ({
+      key,
+      count,
+      definitionFiles: Array.from(varDefinitionFiles.get(key) ?? []).slice(0, 5),
+      usageFiles: Array.from(varUsageFiles.get(key) ?? []).slice(0, 5),
+      usageFileCount: (varUsageFiles.get(key) ?? new Set()).size,
+    }))
+    .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key))
+    .slice(0, 100);
 
   const nearPairs = buildNearColorPairs(componentColorCounts);
   const uniqueComponentColors = componentColorCounts.size;
@@ -276,6 +411,27 @@ function audit(options) {
     topFiles: topEntries(fileColorCounts, options.top),
     topFallbackTokens: topEntries(fallbackTokenCounts, options.top),
     undefinedVars,
+    cssVarDefinitions: {
+      definedUnique: definedVars.size,
+      contractDefinedUnique: contractVarDefinitions.size,
+      staticContractDefinedUnique: staticContractVarDefinitions.size,
+      runtimeContractDefinedUnique: runtimeContractVarDefinitions.size,
+      dynamicFamilyPrefixes: Array.from(dynamicDefinitionPrefixes).sort(),
+      unresolvedUnique: unresolvedVarEntries.length,
+      fallbackOnlyUnique: fallbackOnlyVars.length,
+      unresolvedRequiredUnique: unresolvedRequiredVars.length,
+      runtimeOnlyRequiredContractUnique: runtimeOnlyRequiredContractVars.length,
+      nonContractCrossFileUnique: nonContractDefinedVars.length,
+      nonContractDynamicInputUnique: nonContractDynamicInputVars.length,
+      nonContractCssPrivateUnique: nonContractCssPrivateVars.length,
+    },
+    dynamicDefinedVars,
+    nonContractDefinedVars,
+    nonContractDynamicInputVars,
+    nonContractCssPrivateVars,
+    runtimeOnlyRequiredContractVars,
+    fallbackOnlyVars,
+    unresolvedRequiredVars,
     nearPairs,
   };
 }
@@ -307,8 +463,91 @@ function printText(report) {
   console.log('\nTop fallback tokens:');
   console.log(printRows(report.topFallbackTokens));
 
-  console.log('\nUndefined or dynamically-defined CSS vars (top):');
+  console.log('\nUnresolved CSS vars before fallback classification (top):');
   console.log(printRows(report.undefinedVars));
+  console.log(
+    `\nCSS var definition coverage: defined=${report.cssVarDefinitions.definedUnique}, ` +
+    `contractDefined=${report.cssVarDefinitions.contractDefinedUnique}, ` +
+    `staticContract=${report.cssVarDefinitions.staticContractDefinedUnique}, ` +
+    `runtimeContract=${report.cssVarDefinitions.runtimeContractDefinedUnique}, ` +
+    `dynamicFamilies=${report.cssVarDefinitions.dynamicFamilyPrefixes.length}, ` +
+    `unresolved=${report.cssVarDefinitions.unresolvedUnique}, ` +
+    `fallbackOnly=${report.cssVarDefinitions.fallbackOnlyUnique}, ` +
+    `requiredMissing=${report.cssVarDefinitions.unresolvedRequiredUnique}, ` +
+    `runtimeOnlyRequired=${report.cssVarDefinitions.runtimeOnlyRequiredContractUnique}, ` +
+    `nonContractCrossFile=${report.cssVarDefinitions.nonContractCrossFileUnique}, ` +
+    `nonContractDynamicInputs=${report.cssVarDefinitions.nonContractDynamicInputUnique}, ` +
+    `nonContractCssPrivate=${report.cssVarDefinitions.nonContractCssPrivateUnique}`
+  );
+
+  console.log('\nDynamic/runtime-defined CSS vars (top):');
+  console.log(
+    report.dynamicDefinedVars
+      .slice(0, 10)
+      .map(row => `  ${row.count.toString().padStart(5)}  ${row.key}  ${row.kind}`)
+      .join('\n') || '  none'
+  );
+
+  console.log('\nFallback-only unresolved CSS vars (top):');
+  console.log(printRows(report.fallbackOnlyVars.slice(0, 10)));
+
+  console.log('\nNon-contract CSS vars used across files (top):');
+  if (report.nonContractDefinedVars.length === 0) {
+    console.log('  none');
+  } else {
+    for (const row of report.nonContractDefinedVars.slice(0, 10)) {
+      console.log(
+        `  ${row.count.toString().padStart(5)}  ${row.key}  ` +
+        `usageFiles=${row.usageFileCount}  kinds=${row.definitionKinds.join('+')}  ` +
+        `definitions=${row.definitionFiles.join(', ')}`
+      );
+    }
+  }
+
+  console.log('\nNon-contract dynamic input CSS vars (top):');
+  if (report.nonContractDynamicInputVars.length === 0) {
+    console.log('  none');
+  } else {
+    for (const row of report.nonContractDynamicInputVars.slice(0, 10)) {
+      console.log(
+        `  ${row.count.toString().padStart(5)}  ${row.key}  ` +
+        `usageFiles=${row.usageFileCount}  definitions=${row.definitionFiles.join(', ')}`
+      );
+    }
+  }
+
+  console.log('\nNon-contract component-private CSS vars (top):');
+  if (report.nonContractCssPrivateVars.length === 0) {
+    console.log('  none');
+  } else {
+    for (const row of report.nonContractCssPrivateVars.slice(0, 10)) {
+      console.log(
+        `  ${row.count.toString().padStart(5)}  ${row.key}  ` +
+        `usageFiles=${row.usageFileCount}  definitions=${row.definitionFiles.join(', ')}`
+      );
+    }
+  }
+
+  console.log('\nRequired unresolved CSS vars (top):');
+  if (report.unresolvedRequiredVars.length === 0) {
+    console.log('  none');
+  } else {
+    for (const row of report.unresolvedRequiredVars.slice(0, 10)) {
+      console.log(`  ${row.count.toString().padStart(5)}  ${row.key}  files=${row.files.join(', ')}`);
+    }
+  }
+
+  console.log('\nRuntime-only contract CSS vars without fallback (top):');
+  if (report.runtimeOnlyRequiredContractVars.length === 0) {
+    console.log('  none');
+  } else {
+    for (const row of report.runtimeOnlyRequiredContractVars.slice(0, 10)) {
+      console.log(
+        `  ${row.count.toString().padStart(5)}  ${row.key}  ` +
+        `usageFiles=${row.usageFileCount}  definitions=${row.definitionFiles.join(', ')}`
+      );
+    }
+  }
 
   console.log('\nIndistinguishable component color pairs (sample):');
   if (report.nearPairs.indistinguishable.length === 0) {

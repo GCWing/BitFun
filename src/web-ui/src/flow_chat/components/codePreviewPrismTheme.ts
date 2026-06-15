@@ -5,7 +5,7 @@ import type { CSSProperties } from 'react';
 
 /** Match `.markdown-renderer` code blocks (`Markdown.scss` --markdown-font-mono). */
 export const CODE_PREVIEW_FONT_FAMILY =
-  'var(--markdown-font-mono, "Fira Code", "JetBrains Mono", Consolas, "Courier New", monospace)';
+  'var(--markdown-font-mono)';
 
 const PRE_KEY = 'pre[class*="language-"]' as const;
 const CODE_KEY = 'code[class*="language-"]' as const;

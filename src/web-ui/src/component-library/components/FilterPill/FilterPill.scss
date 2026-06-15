@@ -31,17 +31,17 @@
   }
 
   &--active {
-    background: var(--git-color-branch-bg, #{$git-color-branch-bg});
+    background: var(--git-color-branch-bg);
     border-color: transparent;
-    color: var(--git-color-branch, #{$git-color-branch});
+    color: var(--git-color-branch);
 
     .v-filter-pill__count {
-      background: color-mix(in srgb, var(--git-color-branch, #{$git-color-branch}) 22%, transparent);
-      color: var(--git-color-branch, #{$git-color-branch});
+      background: color-mix(in srgb, var(--git-color-branch) 22%, transparent);
+      color: var(--git-color-branch);
     }
 
     &:hover:not(:disabled) {
-      background: var(--git-color-branch-bg-hover, #{$git-color-branch-bg-hover});
+      background: var(--git-color-branch-bg-hover);
     }
   }
 

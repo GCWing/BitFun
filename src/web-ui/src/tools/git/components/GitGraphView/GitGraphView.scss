@@ -3,8 +3,8 @@
   flex-direction: column;
   height: 100%;
   width: 100%;
-  background: var(--color-background);
-  color: var(--color-text);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
 
   &--loading,
   &--error,
@@ -125,7 +125,7 @@
 
     &:hover:not(:disabled) {
       background: var(--color-hover);
-      color: var(--color-text);
+      color: var(--color-text-primary);
     }
 
     &:active:not(:disabled) {
@@ -220,7 +220,7 @@
     cursor: pointer;
     border-bottom: 1px solid var(--color-border);
     transition: background 0.15s, box-shadow 0.15s;
-    background: var(--color-background);
+    background: var(--color-bg-primary);
 
     &:hover {
       background: var(--color-hover);
@@ -284,7 +284,7 @@
     }
 
     &--current {
-      box-shadow: 0 0 0 2px var(--color-background),
+      box-shadow: 0 0 0 2px var(--color-bg-primary),
                   0 0 0 4px currentColor;
       animation: pulse 2s ease-in-out infinite;
     }
@@ -354,7 +354,7 @@
 
       &:hover {
         background: var(--color-hover);
-        color: var(--color-text);
+        color: var(--color-text-primary);
       }
     }
   }

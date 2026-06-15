@@ -80,7 +80,7 @@
   background: var(--color-bg-elevated);
   border: 1px solid var(--border-base);
   border-radius: 6px;
-  box-shadow: 0 8px 24px var(--color-shadow, var(--color-overlay-black-50));
+  box-shadow: 0 8px 24px var(--color-overlay-black-50);
   min-width: 200px;
   max-width: 280px;
   max-height: 360px;
@@ -111,7 +111,7 @@
 
     &:hover {
       // Use accent-200 for clear hover in light/dark themes
-      background: var(--color-accent-200, var(--color-accent-100, var(--element-bg-medium)));
+      background: var(--color-accent-200);
     }
 
     span {
@@ -157,7 +157,7 @@
     }
 
     &::-webkit-scrollbar-thumb {
-      background: var(--color-scrollbar, var(--color-overlay-white-15));
+      background: var(--color-scrollbar);
       border-radius: 3px;
     }
   }
@@ -183,7 +183,7 @@
 
     &.is-active {
       // Use accent-100 as active background
-      background: var(--color-accent-100, var(--color-accent-200, var(--element-bg-base)));
+      background: var(--color-accent-100);
 
       .canvas-tab-overflow-menu__item-title {
         color: var(--color-primary);
