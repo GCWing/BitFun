@@ -21,8 +21,8 @@
 - `bitfun-events` 已承接 backend event DTO、agentic event DTO 和 platform-neutral `EventEmitter` trait。
 - `services-integrations` 已承接 remote-connect primitives、wire command routing / response assembly、workspace search concrete owner、remote SSH/SFTP/PTY owner、DeepResearch report IO、MiniApp host dispatch / storage / worker / import IO。
 - `tool-contracts` 已承接 provider-neutral tool DTO、manifest/catalog/admission/result presentation、confirmation facts、truncation recovery presentation。
-- `tool-execution` 已承接 local / remote IO helper、Bash shell helper、batching plan、retry policy、state counting、cancellation-state policy 和部分 result rendering。
-- `agent-runtime` 已承接 scheduler/background delivery 纯决策、dialog lifecycle port contracts、session management/cancellation port contracts、thread-goal facts、prompt / prompt-cache facts、custom subagent discovery/loading、post-call hook routing、DeepReview provider-neutral policy/queue/retry/diagnostics shaping、DeepResearch citation renumber。
+- `tool-execution` 已承接 local / remote IO helper、Bash shell helper、batching plan、retry policy、state counting、cancellation-state/token-store policy、background exec output capture 和部分 result rendering。
+- `agent-runtime` 已承接 scheduler/background delivery 纯决策、dialog lifecycle port contracts、session management/cancellation port contracts、thread-goal facts、prompt / prompt-cache facts、turn skill/agent snapshot DTO/diff/render/store、file-read session state、session evidence ledger 与 compression-contract projection、dialog-turn cancellation token store、tool confirmation / user-question wait channel state、custom subagent discovery/loading、post-call hook routing、DeepReview provider-neutral policy/queue/retry/diagnostics shaping、DeepResearch citation renumber。
 - `harness` 已建立 descriptor、route plan 和 legacy provider registry。
 - `product-domains` 已承接 MiniApp state/workflow planning、compile / permission adaptation、import lifecycle、function-agent prompt/parser/response policy 和部分 Git snapshot/fallback 逻辑。
 - Product Assembly 已承接 `DeliveryProfile`、`CapabilitySet`、product-full provider plan、service availability report 和 profile-scoped harness registry 入口。
@@ -38,6 +38,6 @@
 
 - `bitfun-core` 仍是完整 product runtime 组装点，尚未退化为纯 compatibility facade。
 - 产品入口仍主要通过 `bitfun-core/product-full` 获取完整能力，交付形态级 feature / dependency trimming 未完成。
-- concrete scheduler lifecycle、session state / turn / prompt-cache IO orchestration、permission UI/channel wait、tool pipeline concrete token/channel/scheduler glue、concrete prompt assembly、AI client factory / provider acquisition 仍在 core 或产品路径。
+- concrete scheduler lifecycle、prompt-cache persistence orchestration、tool pipeline scheduler glue、concrete prompt assembly、AI client factory / provider acquisition 仍在 core 或产品路径。
 - DeepReview launch / provider wait / report persistence、MiniApp AI acquisition / larger workflow execution、function-agent AI provider acquisition 仍未完成 owner 迁移。
 - Agent Runtime SDK 具备候选原语，但尚未形成可独立发布的稳定外部 SDK 边界。

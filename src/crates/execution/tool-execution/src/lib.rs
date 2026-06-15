@@ -1,3 +1,4 @@
+pub mod background_command_output;
 pub mod fs;
 pub mod pipeline;
 pub mod search;

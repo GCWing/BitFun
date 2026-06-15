@@ -17,8 +17,8 @@ use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_agent_runtime::tool_confirmation::{
     resolve_confirmation_failure, resolve_confirmation_wait_result, resolve_tool_confirmation_plan,
-    ConfirmationFailureKind, ToolConfirmationPlan, ToolConfirmationRequestFacts,
-    ToolConfirmationWaitResult,
+    ConfirmationFailureKind, ToolConfirmationChannelStore, ToolConfirmationPlan,
+    ToolConfirmationRequestFacts, ToolConfirmationResponse, ToolConfirmationWaitResult,
 };
 use bitfun_agent_tools::{
     build_invalid_tool_call_error_message, build_tool_call_truncation_recovery_notice,
@@ -28,17 +28,17 @@ use bitfun_agent_tools::{
     ToolExecutionAdmissionRejection, ToolExecutionAdmissionRequest, GET_TOOL_SPEC_TOOL_NAME,
     USER_STEERING_INTERRUPTED_MESSAGE,
 };
-use dashmap::DashMap;
 use futures::future::join_all;
 use log::{debug, error, info, warn};
 use std::sync::Arc;
 use std::time::{Instant, SystemTime};
-use tokio::sync::{oneshot, RwLock as TokioRwLock};
+use tokio::sync::RwLock as TokioRwLock;
 use tokio::time::{timeout, Duration};
 use tokio_util::sync::CancellationToken;
 use tool_runtime::pipeline::{
     partition_tool_batches, retry_delay_ms, should_cancel_tool_state, should_retry_tool_attempt,
-    summarize_dialog_turn_cancellation, ToolExecutionErrorClass, ToolRetryAttemptFacts,
+    summarize_dialog_turn_cancellation, ToolCancellationTokenStore, ToolExecutionErrorClass,
+    ToolRetryAttemptFacts,
 };
 
 /// Convert framework::ToolResult to core::ToolResult
@@ -242,21 +242,12 @@ fn map_tool_execution_admission_rejection(error: ToolExecutionAdmissionRejection
     }
 }
 
-/// Confirmation response type
-#[derive(Debug, Clone)]
-pub enum ConfirmationResponse {
-    Confirmed,
-    Rejected(String),
-}
-
 /// Tool pipeline
 pub struct ToolPipeline {
     tool_registry: Arc<TokioRwLock<ToolRegistry>>,
     state_manager: Arc<ToolStateManager>,
-    /// Confirmation channel management (tool_id -> oneshot sender)
-    confirmation_channels: Arc<DashMap<String, oneshot::Sender<ConfirmationResponse>>>,
-    /// Cancellation token management (tool_id -> CancellationToken)
-    cancellation_tokens: Arc<DashMap<String, CancellationToken>>,
+    confirmation_channels: ToolConfirmationChannelStore,
+    cancellation_tokens: ToolCancellationTokenStore,
     computer_use_host: Option<ComputerUseHostRef>,
 }
 
@@ -269,8 +260,8 @@ impl ToolPipeline {
         Self {
             tool_registry,
             state_manager,
-            confirmation_channels: Arc::new(DashMap::new()),
-            cancellation_tokens: Arc::new(DashMap::new()),
+            confirmation_channels: ToolConfirmationChannelStore::new(),
+            cancellation_tokens: ToolCancellationTokenStore::new(),
             computer_use_host,
         }
     }
@@ -661,9 +652,7 @@ impl ToolPipeline {
         {
             info!("Tool requires confirmation: tool_name={}", tool_name);
 
-            let (tx, rx) = oneshot::channel::<ConfirmationResponse>();
-
-            self.confirmation_channels.insert(tool_id.clone(), tx);
+            let rx = self.confirmation_channels.register(tool_id.clone());
 
             self.state_manager
                 .update_state(
@@ -698,11 +687,11 @@ impl ToolPipeline {
             confirmation_wait_ms = elapsed_ms_u64(confirmation_started_at);
 
             let confirmation_wait_result = match confirmation_result {
-                Some(Ok(ConfirmationResponse::Confirmed)) => {
+                Some(Ok(ToolConfirmationResponse::Confirmed)) => {
                     debug!("Tool confirmed: tool_name={}", tool_name);
                     ToolConfirmationWaitResult::Confirmed
                 }
-                Some(Ok(ConfirmationResponse::Rejected(reason))) => {
+                Some(Ok(ToolConfirmationResponse::Rejected(reason))) => {
                     ToolConfirmationWaitResult::Rejected(reason)
                 }
                 Some(Err(_)) => ToolConfirmationWaitResult::ChannelClosed,
@@ -716,7 +705,7 @@ impl ToolPipeline {
                     failure.kind,
                     ConfirmationFailureKind::ChannelClosed | ConfirmationFailureKind::Timeout
                 ) {
-                    self.confirmation_channels.remove(&tool_id);
+                    self.confirmation_channels.cancel(&tool_id);
                 }
 
                 if matches!(failure.kind, ConfirmationFailureKind::Timeout) {
@@ -750,7 +739,7 @@ impl ToolPipeline {
                 }
             }
 
-            self.confirmation_channels.remove(&tool_id);
+            self.confirmation_channels.cancel(&tool_id);
         }
 
         let preflight_ms = elapsed_ms_u64(start_time).saturating_sub(confirmation_wait_ms);
@@ -1104,8 +1093,7 @@ impl ToolPipeline {
         }
 
         // 1. Trigger cancellation token
-        if let Some((_, token)) = self.cancellation_tokens.remove(tool_id) {
-            token.cancel();
+        if self.cancellation_tokens.cancel(tool_id) {
             debug!("Cancellation token triggered: tool_id={}", tool_id);
         } else {
             debug!(
@@ -1115,7 +1103,7 @@ impl ToolPipeline {
         }
 
         // 2. Clean up confirmation channel (if waiting for confirmation)
-        if let Some((_, _tx)) = self.confirmation_channels.remove(tool_id) {
+        if self.confirmation_channels.cancel(tool_id) {
             // Channel will be automatically closed, causing await rx to return Err
             debug!("Cleared confirmation channel: tool_id={}", tool_id);
         }
@@ -1205,8 +1193,7 @@ impl ToolPipeline {
         }
 
         // Get sender from map and send confirmation response
-        if let Some((_, tx)) = self.confirmation_channels.remove(tool_id) {
-            let _ = tx.send(ConfirmationResponse::Confirmed);
+        if self.confirmation_channels.confirm(tool_id) {
             info!("User confirmed tool execution: tool_id={}", tool_id);
             Ok(())
         } else {
@@ -1233,8 +1220,7 @@ impl ToolPipeline {
         }
 
         // Get sender from map and send rejection response
-        if let Some((_, tx)) = self.confirmation_channels.remove(tool_id) {
-            let _ = tx.send(ConfirmationResponse::Rejected(reason.clone()));
+        if self.confirmation_channels.reject(tool_id, reason.clone()) {
             info!(
                 "User rejected tool execution: tool_id={}, reason={}",
                 tool_id, reason

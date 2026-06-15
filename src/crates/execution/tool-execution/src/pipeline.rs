@@ -1,5 +1,9 @@
 //! Provider-neutral tool pipeline planning helpers.
 
+use dashmap::DashMap;
+use std::sync::Arc;
+use tokio_util::sync::CancellationToken;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToolBatch {
     pub task_ids: Vec<String>,
@@ -69,6 +73,37 @@ pub struct ToolStateCounts {
 pub struct ToolTurnCancellationSummary {
     pub cancelled: usize,
     pub skipped: usize,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ToolCancellationTokenStore {
+    tokens: Arc<DashMap<String, CancellationToken>>,
+}
+
+impl ToolCancellationTokenStore {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn insert(&self, tool_id: String, token: CancellationToken) {
+        self.tokens.insert(tool_id, token);
+    }
+
+    pub fn remove(&self, tool_id: &str) -> bool {
+        self.tokens.remove(tool_id).is_some()
+    }
+
+    pub fn cancel(&self, tool_id: &str) -> bool {
+        let Some((_, token)) = self.tokens.remove(tool_id) else {
+            return false;
+        };
+        token.cancel();
+        true
+    }
+
+    pub fn has_pending(&self, tool_id: &str) -> bool {
+        self.tokens.contains_key(tool_id)
+    }
 }
 
 /// Partition task IDs into execution batches.

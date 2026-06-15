@@ -1,7 +1,11 @@
 //! Portable contracts for user-question tool handlers.
 
+use dashmap::DashMap;
+use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::sync::{Arc, LazyLock};
+use tokio::sync::oneshot;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct QuestionOption {
@@ -27,6 +31,80 @@ pub struct AskUserQuestionInput {
 pub struct UserQuestionToolResult {
     pub data: Value,
     pub result_for_assistant: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct UserInputResponse {
+    pub answers: Value,
+}
+
+pub struct UserInputManager {
+    channels: Arc<DashMap<String, oneshot::Sender<UserInputResponse>>>,
+}
+
+impl Default for UserInputManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl UserInputManager {
+    pub fn new() -> Self {
+        Self {
+            channels: Arc::new(DashMap::new()),
+        }
+    }
+
+    pub fn register_channel(&self, tool_id: String, sender: oneshot::Sender<UserInputResponse>) {
+        debug!("Registered waiting channel: tool_id={}", tool_id);
+        self.channels.insert(tool_id, sender);
+    }
+
+    pub fn send_answer(&self, tool_id: &str, answers: Value) -> Result<(), String> {
+        info!("Sending user answer: tool_id={}", tool_id);
+
+        if let Some((_, sender)) = self.channels.remove(tool_id) {
+            let response = UserInputResponse { answers };
+            sender
+                .send(response)
+                .map_err(|_| format!("Channel closed, cannot send answer: {}", tool_id))?;
+            debug!("Answer sent: tool_id={}", tool_id);
+            Ok(())
+        } else {
+            let error_msg = format!("Waiting channel not found: {}", tool_id);
+            warn!("{}", error_msg);
+            Err(error_msg)
+        }
+    }
+
+    pub fn cancel(&self, tool_id: &str) -> bool {
+        if self.channels.remove(tool_id).is_some() {
+            debug!("Cancelled waiting: tool_id={}", tool_id);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn has_pending(&self, tool_id: &str) -> bool {
+        self.channels.contains_key(tool_id)
+    }
+
+    pub fn pending_tool_ids(&self) -> Vec<String> {
+        self.channels
+            .iter()
+            .map(|entry| entry.key().clone())
+            .collect()
+    }
+}
+
+pub static USER_INPUT_MANAGER: LazyLock<UserInputManager> = LazyLock::new(|| {
+    debug!("Initializing global user input manager");
+    UserInputManager::new()
+});
+
+pub fn get_user_input_manager() -> &'static UserInputManager {
+    &USER_INPUT_MANAGER
 }
 
 pub fn ask_user_question_available_for_acp_transport(acp_transport: Option<&Value>) -> bool {
@@ -156,5 +234,49 @@ fn format_result_for_assistant(questions: &[Question], answers: &Value) -> Strin
         result_lines.join("\n")
     } else {
         "User has answered your questions (no valid answers received).".to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{UserInputManager, UserInputResponse};
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn user_input_manager_delivers_answer_and_clears_channel() {
+        let manager = UserInputManager::new();
+        let (sender, receiver) = tokio::sync::oneshot::channel::<UserInputResponse>();
+
+        manager.register_channel("tool-1".to_string(), sender);
+        assert!(manager.has_pending("tool-1"));
+        manager
+            .send_answer("tool-1", json!({ "0": "yes" }))
+            .expect("answer should be sent");
+
+        let response = receiver.await.expect("receiver should get answer");
+        assert_eq!(response.answers, json!({ "0": "yes" }));
+        assert!(!manager.has_pending("tool-1"));
+    }
+
+    #[tokio::test]
+    async fn user_input_manager_cancel_closes_receiver() {
+        let manager = UserInputManager::new();
+        let (sender, receiver) = tokio::sync::oneshot::channel::<UserInputResponse>();
+
+        manager.register_channel("tool-1".to_string(), sender);
+
+        assert!(manager.cancel("tool-1"));
+        assert!(receiver.await.is_err());
+        assert!(!manager.cancel("tool-1"));
+    }
+
+    #[test]
+    fn user_input_manager_reports_pending_tool_ids() {
+        let manager = UserInputManager::new();
+        let (sender, _receiver) = tokio::sync::oneshot::channel::<UserInputResponse>();
+
+        manager.register_channel("tool-1".to_string(), sender);
+
+        assert_eq!(manager.pending_tool_ids(), vec!["tool-1".to_string()]);
     }
 }

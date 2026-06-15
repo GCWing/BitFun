@@ -20,14 +20,14 @@
 - `bitfun-core --no-default-features` 已裁掉 workspace-search owner、debug ingest HTTP server、AI provider adapter runtime 和 direct `reqwest`。
 - Desktop / CLI / ACP 仍通过 `bitfun-core/product-full` 获取完整能力；Server / Web / Mobile Web 不直接依赖 core，但交付形态级 feature / dependency trimming 仍未闭环。
 - Runtime Services、Agent Runtime、Tool Contracts、Tool Execution、Harness、Product Domains、Services Core、Services Integrations 等 owner crate 已建立，部分逻辑仍由 core concrete manager 或产品命令路径持有。
-- 本轮 PR-A 已将 backend event delivery 和 workspace-runtime legacy session-store migration 从 core 迁出；core 保留旧路径兼容 re-export / 委托。
+- 本轮 PR-B 收口 Agent lifecycle 与 tool side-effect owner：turn skill/agent snapshot DTO / diff / render / store、file-read session state、session evidence ledger 与 compression-contract projection、dialog-turn cancellation token store、tool confirmation / user-question wait channel state 已迁入 `agent-runtime`；background exec output capture、tool cancellation token store 已迁入 `tool-execution`；core 保留 resolver、产品事件、具体工具执行、IO 编排和旧路径兼容 re-export。
 
 ## 3. 已完成但仍需保持的边界
 
 - `services-core` 已承接 session metadata store、session index rebuild、lineage / branch metadata shaping、JSON file store、session layout 和 legacy session-store merge。
 - `runtime-services` 已承接 typed runtime service assembly、capability validation、provider registry、backend event delivery owner。
-- `agent-runtime` 已承接 provider-neutral scheduler decisions、dialog lifecycle port contracts、background delivery decisions、thread-goal facts、prompt-cache facts、DeepReview provider-neutral policy / queue / retry / diagnostics shaping。
-- `tool-contracts` / `tool-execution` 已承接 tool manifest / catalog / admission、batching plan、retry policy、state counting、cancellation-state policy、shell helper 和部分 local / remote IO helper。
+- `agent-runtime` 已承接 provider-neutral scheduler decisions、dialog lifecycle port contracts、background delivery decisions、thread-goal facts、prompt-cache facts、turn skill/agent snapshot state、file-read session state、session evidence ledger、dialog-turn cancellation token store、tool confirmation / user-question wait channel state、DeepReview provider-neutral policy / queue / retry / diagnostics shaping。
+- `tool-contracts` / `tool-execution` 已承接 tool manifest / catalog / admission、batching plan、retry policy、state counting、cancellation-state/token-store policy、background exec output capture、shell helper 和部分 local / remote IO helper。
 - `services-integrations` 已承接 remote-connect primitives、workspace search concrete owner、remote SSH/SFTP/PTY owner、MiniApp host dispatch / storage / worker IO、DeepResearch report IO。
 - `product-domains` 已承接 MiniApp workflow planning、compile / permission path adaptation、function-agent prompt / parser / response policy 和部分 Git snapshot/fallback 逻辑。
 - boundary scripts 已覆盖核心 owner 防回流、six-layer path 解析、facade-only 文件和重点 feature gate。
@@ -36,7 +36,7 @@
 
 | PR | 目标 | 主要范围 | 准出标准 |
 |---|---|---|---|
-| PR-B | Agent lifecycle 与 tool side-effect closure | scheduler concrete lifecycle、session state / turn / prompt-cache IO 编排、tool pipeline token/channel/scheduler glue、permission UI/channel wait、terminal / exec command lifecycle | 保持 Flow Chat finalize / retry / round history、session metadata、cancel、non-TTY exec output、tool event / card 语义；core 旧路径显著简化；补 focused tests 和 boundary |
+| PR-B | Agent lifecycle 与 tool side-effect closure | session state / turn state、dialog-turn cancellation token store、tool confirmation / user-question channel state、tool cancellation token store、terminal / exec output capture、core 兼容 facade 与防回流 boundary；concrete scheduler 和 prompt-cache persistence IO 保持在 core，待 SDK / product-shape 阶段通过 port 设计整体收口 | 保持 Flow Chat finalize / retry / round history、session metadata、cancel、non-TTY exec output、tool event / card 语义；core 旧路径显著简化；补 focused tests 和 boundary |
 | PR-C | Harness 与 product workflow concrete migration | DeepReview launch / provider wait / report persistence、DeepResearch concrete workflow、MiniApp AI acquisition / larger workflow execution、function-agent AI provider acquisition | 保持 DeepReview queue/report、MiniApp create/update/import/storage/PPT live、AI request trace、function-agent Git/AI 行为；core 只保留 legacy facade / adapter |
 | PR-D | Product shape / Agent SDK / core facade closure | 内部 Agent Runtime SDK façade、fake provider 最小 session / turn / event stream、Product Assembly capability matrix、delivery profile feature trimming、`bitfun-core` facade 收口 | cargo metadata / cargo tree 有 no-default/product-full 对比；各产品入口验证通过；SDK 不暴露 `bitfun-core`、product-full、concrete manager 或全局 mutable state |
 

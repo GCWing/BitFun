@@ -1061,6 +1061,216 @@ export const forbiddenContentRules = [
     ],
   },
   {
+    path: 'src/crates/assembly/core/src/agentic/session/file_read_state.rs',
+    patterns: [
+      {
+        regex: /\bpub struct FileReadState\b/,
+        message:
+          'core file_read_state must not own file-read state DTOs; use bitfun-agent-runtime file_read_state',
+      },
+      {
+        regex: /\bpub struct FileReadStateStore\b/,
+        message:
+          'core file_read_state must not own in-memory file-read state store; use bitfun-agent-runtime file_read_state',
+      },
+      {
+        regex: /\bDashMap\b/,
+        message:
+          'core file_read_state must not own file-read state storage maps; use bitfun-agent-runtime file_read_state',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/session/evidence_ledger.rs',
+    patterns: [
+      {
+        regex: /\bpub enum EvidenceLedgerTargetKind\b/,
+        message:
+          'core evidence_ledger must not own evidence ledger DTOs; use bitfun-agent-runtime evidence_ledger',
+      },
+      {
+        regex: /\bpub struct EvidenceLedgerEvent\b/,
+        message:
+          'core evidence_ledger must not own evidence ledger events; use bitfun-agent-runtime evidence_ledger',
+      },
+      {
+        regex: /\bpub struct SessionEvidenceLedger\b/,
+        message:
+          'core evidence_ledger must not own evidence ledger store; use bitfun-agent-runtime evidence_ledger',
+      },
+      {
+        regex: /\bimpl From<EvidenceLedgerSummary> for CompressionContract\b/,
+        message:
+          'core evidence_ledger must not own compression contract projection; use bitfun-agent-runtime evidence_ledger',
+      },
+      {
+        regex: /\buuid::Uuid::new_v4\b/,
+        message:
+          'core evidence_ledger must not own evidence ledger event id generation; use bitfun-agent-runtime evidence_ledger',
+      },
+      {
+        regex: /\bDashMap\b/,
+        message:
+          'core evidence_ledger must not own evidence ledger storage maps; use bitfun-agent-runtime evidence_ledger',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/tool_context_runtime.rs',
+    patterns: [
+      {
+        regex: /\bimpl From<LightCheckpoint> for EvidenceLedgerCheckpoint\b/,
+        message:
+          'core tool context runtime must not own checkpoint evidence projection; use bitfun-agent-runtime evidence_ledger',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/user_input_manager.rs',
+    patterns: [
+      {
+        regex: /\bpub struct UserInputManager\b/,
+        message:
+          'core user_input_manager must not own user-input channel state; use bitfun-agent-runtime user_questions',
+      },
+      {
+        regex: /\boneshot::Sender\b/,
+        message:
+          'core user_input_manager must not own user-input wait channels; use bitfun-agent-runtime user_questions',
+      },
+      {
+        regex: /\bDashMap\b/,
+        message:
+          'core user_input_manager must not own user-input channel storage; use bitfun-agent-runtime user_questions',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/pipeline/tool_pipeline.rs',
+    patterns: [
+      {
+        regex: /\bpub enum ConfirmationResponse\b/,
+        message:
+          'core tool pipeline must not own confirmation channel responses; use bitfun-agent-runtime tool_confirmation',
+      },
+      {
+        regex: /\boneshot::Sender<\s*ConfirmationResponse\s*>/,
+        message:
+          'core tool pipeline must not own confirmation wait-channel storage; use bitfun-agent-runtime tool_confirmation',
+      },
+      {
+        regex: /\bArc<DashMap<String,\s*CancellationToken>>\b/,
+        message:
+          'core tool pipeline must not own cancellation token storage; use tool-runtime pipeline',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/execution/round_executor.rs',
+    patterns: [
+      {
+        regex: /\bArc<DashMap<String,\s*CancellationToken>>\b/,
+        message:
+          'core round executor must not own dialog-turn cancellation token storage; use bitfun-agent-runtime turn_cancellation',
+      },
+      {
+        regex: /\bcancellation_tokens:\s*Arc<DashMap\b/,
+        message:
+          'core round executor must not reintroduce DashMap-backed cancellation token storage',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/background_command_output.rs',
+    patterns: [
+      {
+        regex: /\bpub struct BackgroundCommandOutputCapture\b/,
+        message:
+          'core exec_command output path must not own background output capture; use tool-runtime background_command_output',
+      },
+      {
+        regex: /\bpub enum BackgroundCommandOutputStatus\b/,
+        message:
+          'core exec_command output path must not own background output status; use tool-runtime background_command_output',
+      },
+      {
+        regex: /\bVecDeque\b/,
+        message:
+          'core exec_command output path must not own retained output buffers; use tool-runtime background_command_output',
+      },
+      {
+        regex: /\bmpsc::UnboundedSender\b/,
+        message:
+          'core exec_command output path must not own background output capture channels; use tool-runtime background_command_output',
+      },
+      {
+        regex: /\btokio::spawn\b/,
+        message:
+          'core exec_command output path must not own background output capture tasks; use tool-runtime background_command_output',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/session/turn_skill_agent_snapshot_store.rs',
+    patterns: [
+      {
+        regex: /\bpub struct TurnSkillAgentSnapshotStore\b/,
+        message:
+          'core turn_skill_agent_snapshot_store must not own in-memory skill/agent snapshot store; use bitfun-agent-runtime skill_agent_snapshot',
+      },
+      {
+        regex: /\bDashMap\b/,
+        message:
+          'core turn_skill_agent_snapshot_store must not own skill/agent snapshot storage maps; use bitfun-agent-runtime skill_agent_snapshot',
+      },
+      {
+        regex: /\bBTreeMap\b/,
+        message:
+          'core turn_skill_agent_snapshot_store must not own sparse turn snapshot ordering; use bitfun-agent-runtime skill_agent_snapshot',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/skill_agent_snapshot.rs',
+    patterns: [
+      {
+        regex: /\bpub struct SkillSnapshotEntry\b/,
+        message:
+          'core skill_agent_snapshot must not own skill snapshot DTOs; use bitfun-agent-runtime skill_agent_snapshot',
+      },
+      {
+        regex: /\bpub struct AgentSnapshotEntry\b/,
+        message:
+          'core skill_agent_snapshot must not own agent snapshot DTOs; use bitfun-agent-runtime skill_agent_snapshot',
+      },
+      {
+        regex: /\bpub struct TurnSkillAgentSnapshot\b/,
+        message:
+          'core skill_agent_snapshot must not own turn snapshot DTOs; use bitfun-agent-runtime skill_agent_snapshot',
+      },
+      {
+        regex: /\bpub struct SkillAgentDiff\b/,
+        message:
+          'core skill_agent_snapshot must not own skill/agent diff contracts; use bitfun-agent-runtime skill_agent_snapshot',
+      },
+      {
+        regex: /\bpub fn diff_skill_agent_snapshot\b/,
+        message:
+          'core skill_agent_snapshot must not own skill/agent diff rendering; use bitfun-agent-runtime skill_agent_snapshot',
+      },
+      {
+        regex: /\bfn render_titled_skill_entries\b/,
+        message:
+          'core skill_agent_snapshot must not own skill update rendering helpers; use bitfun-agent-runtime skill_agent_snapshot',
+      },
+      {
+        regex: /\bfn render_titled_subagent_entries\b/,
+        message:
+          'core skill_agent_snapshot must not own agent update rendering helpers; use bitfun-agent-runtime skill_agent_snapshot',
+      },
+    ],
+  },
+  {
     path: 'src/crates/assembly/core/src/agentic/agents/prompt_builder/prompt_builder_impl.rs',
     patterns: [
       {

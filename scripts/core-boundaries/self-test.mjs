@@ -801,6 +801,98 @@ export function runManifestParserSelfTest({
   ) {
     throw new Error('Coordinator boundary rule must forbid direct scheduler lifecycle delivery');
   }
+  const coreFileReadStateRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/session/file_read_state.rs',
+  );
+  for (const contract of ['FileReadState', 'FileReadStateStore', 'DashMap']) {
+    if (!coreFileReadStateRuleText.includes(contract)) {
+      throw new Error(`core file_read_state boundary rule must forbid ${contract}`);
+    }
+  }
+  const coreEvidenceLedgerRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/session/evidence_ledger.rs',
+  );
+  for (const contract of [
+    'EvidenceLedgerTargetKind',
+    'EvidenceLedgerEvent',
+    'SessionEvidenceLedger',
+    'CompressionContract',
+    'uuid::Uuid::new_v4',
+    'DashMap',
+  ]) {
+    if (!coreEvidenceLedgerRuleText.includes(contract)) {
+      throw new Error(`core evidence_ledger boundary rule must forbid ${contract}`);
+    }
+  }
+  const coreToolContextRuntimeRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/tools/tool_context_runtime.rs',
+  );
+  if (!coreToolContextRuntimeRuleText.includes('LightCheckpoint')) {
+    throw new Error(
+      'core tool_context_runtime boundary rule must forbid checkpoint evidence projection',
+    );
+  }
+  const coreUserInputManagerRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/tools/user_input_manager.rs',
+  );
+  for (const contract of ['UserInputManager', 'oneshot::Sender', 'DashMap']) {
+    if (!coreUserInputManagerRuleText.includes(contract)) {
+      throw new Error(`core user_input_manager boundary rule must forbid ${contract}`);
+    }
+  }
+  const coreToolPipelineRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/tools/pipeline/tool_pipeline.rs',
+  );
+  for (const contract of ['ConfirmationResponse', 'oneshot::Sender', 'CancellationToken']) {
+    if (!coreToolPipelineRuleText.includes(contract)) {
+      throw new Error(`core tool_pipeline boundary rule must forbid ${contract}`);
+    }
+  }
+  const coreRoundExecutorRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/execution/round_executor.rs',
+  );
+  for (const contract of ['CancellationToken', 'DashMap']) {
+    if (!coreRoundExecutorRuleText.includes(contract)) {
+      throw new Error(`core round_executor boundary rule must forbid ${contract}`);
+    }
+  }
+  const coreBackgroundCommandOutputRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/background_command_output.rs',
+  );
+  for (const contract of [
+    'BackgroundCommandOutputCapture',
+    'BackgroundCommandOutputStatus',
+    'VecDeque',
+    'mpsc::UnboundedSender',
+    'tokio::spawn',
+  ]) {
+    if (!coreBackgroundCommandOutputRuleText.includes(contract)) {
+      throw new Error(`core background_command_output boundary rule must forbid ${contract}`);
+    }
+  }
+  const coreSkillAgentSnapshotRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/skill_agent_snapshot.rs',
+  );
+  for (const contract of [
+    'SkillSnapshotEntry',
+    'AgentSnapshotEntry',
+    'TurnSkillAgentSnapshot',
+    'SkillAgentDiff',
+    'diff_skill_agent_snapshot',
+    'render_titled_skill_entries',
+  ]) {
+    if (!coreSkillAgentSnapshotRuleText.includes(contract)) {
+      throw new Error(`core skill_agent_snapshot boundary rule must forbid ${contract}`);
+    }
+  }
+  const coreTurnSkillAgentSnapshotStoreRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/session/turn_skill_agent_snapshot_store.rs',
+  );
+  for (const contract of ['TurnSkillAgentSnapshotStore', 'DashMap', 'BTreeMap']) {
+    if (!coreTurnSkillAgentSnapshotStoreRuleText.includes(contract)) {
+      throw new Error(`core turn_skill_agent_snapshot_store boundary rule must forbid ${contract}`);
+    }
+  }
 
   const requiredContentContracts = [
     {
@@ -1051,10 +1143,36 @@ export function runManifestParserSelfTest({
         'ToolConfirmationPlan',
         'ToolConfirmationOutcome',
         'ToolConfirmationWaitResult',
+        'ToolConfirmationResponse',
+        'ToolConfirmationChannelStore',
         'ConfirmationFailureKind',
         'resolve_tool_confirmation_plan',
         'resolve_confirmation_failure',
         'resolve_confirmation_wait_result',
+        'confirmation_channel_store_delivers_confirmation_once',
+      ],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/src/user_questions.rs',
+      contracts: [
+        'AskUserQuestionInput',
+        'UserInputResponse',
+        'UserInputManager',
+        'get_user_input_manager',
+        'validate_ask_user_question_input',
+        'user_input_manager_delivers_answer_and_clears_channel',
+        'user_input_manager_cancel_closes_receiver',
+      ],
+    },
+    {
+      path: 'src/crates/execution/tool-execution/src/background_command_output.rs',
+      contracts: [
+        'BackgroundCommandOutputCapture',
+        'BackgroundCommandOutputStatus',
+        'BackgroundCommandOutputMetadata',
+        'background_command_output_capture',
+        'BACKGROUND_COMMAND_OUTPUT_CAPTURE_LIMIT_BYTES',
+        'background_command_output_reads_snapshot_then_incremental_chunks',
       ],
     },
     {
@@ -1168,6 +1286,59 @@ export function runManifestParserSelfTest({
         'SessionPromptCacheStore',
         'PromptCacheLookup',
       ],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/src/skill_agent_snapshot.rs',
+      contracts: [
+        'SkillSnapshotEntry',
+        'AgentSnapshotEntry',
+        'TurnSkillAgentSnapshot',
+        'SkillAgentDiff',
+        'diff_skill_agent_snapshot',
+        'build_skill_agent_tool_listing_sections_from_snapshot',
+        'TurnSkillAgentSnapshotStore',
+        'skill_agent_diff_renders_changed_added_and_removed_entries',
+        'latest_snapshot_at_or_before_returns_nearest_sparse_snapshot',
+      ],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/src/file_read_state.rs',
+      contracts: [
+        'FileReadState',
+        'is_full_file_read',
+        'FileReadStateStore',
+        'file_read_state_accepts_nonempty_whole_file',
+        'file_read_state_store_scopes_entries_by_session',
+      ],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/src/evidence_ledger.rs',
+      contracts: [
+        'EvidenceLedgerTargetKind',
+        'EvidenceLedgerEventStatus',
+        'EvidenceLedgerEvent',
+        'EvidenceLedgerSummary',
+        'SessionEvidenceLedger',
+        'impl From<EvidenceLedgerSummary> for CompressionContract',
+        'impl From<LightCheckpoint> for EvidenceLedgerCheckpoint',
+        'ledger_reads_events_scoped_by_session_and_turn',
+        'checkpoint_from_light_checkpoint_preserves_recovery_boundary_metadata',
+        'summary_projects_into_compression_contract',
+      ],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/src/turn_cancellation.rs',
+      contracts: [
+        'DialogTurnCancellationTokenStore',
+        'get_or_insert_new',
+        'is_cancelled',
+        'turn_cancellation_store_reuses_existing_token',
+        'turn_cancellation_store_cancels_registered_token',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/agentic/execution/round_executor.rs',
+      contracts: ['DialogTurnCancellationTokenStore', 'get_or_insert_new', 'is_cancelled'],
     },
     {
       path: 'src/crates/execution/agent-runtime/tests/prompt_cache_contracts.rs',
@@ -1382,6 +1553,7 @@ export function runManifestParserSelfTest({
         'ToolTaskStateKind',
         'should_cancel_tool_state',
         'summarize_dialog_turn_cancellation',
+        'ToolCancellationTokenStore',
         'count_tool_states',
       ],
     },
@@ -1392,6 +1564,7 @@ export function runManifestParserSelfTest({
         'retry_policy_preserves_attempt_limit_and_error_class_contract',
         'cancellation_policy_preserves_cancellable_and_terminal_state_contract',
         'dialog_turn_cancellation_summary_counts_cancelled_and_skipped_tasks',
+        'cancellation_token_store_cancels_and_removes_tokens',
         'state_counts_preserve_pipeline_stats_contract',
       ],
     },

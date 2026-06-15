@@ -287,6 +287,150 @@ export const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/execution/agent-runtime/src/skill_agent_snapshot.rs',
+    reason:
+      'agent-runtime must own turn skill/agent snapshot DTOs, diff rendering, listing sections, and in-memory runtime store',
+    patterns: [
+      {
+        regex: /\bpub struct SkillSnapshotEntry\b/,
+        message: 'missing agent-runtime skill snapshot DTO',
+      },
+      {
+        regex: /\bpub struct AgentSnapshotEntry\b/,
+        message: 'missing agent-runtime agent snapshot DTO',
+      },
+      {
+        regex: /\bpub struct TurnSkillAgentSnapshot\b/,
+        message: 'missing agent-runtime turn skill/agent snapshot DTO',
+      },
+      {
+        regex: /\bpub struct SkillAgentDiff\b/,
+        message: 'missing agent-runtime skill/agent diff contract',
+      },
+      {
+        regex: /\bpub fn diff_skill_agent_snapshot\b/,
+        message: 'missing agent-runtime skill/agent diff owner',
+      },
+      {
+        regex: /\bpub fn build_skill_agent_tool_listing_sections_from_snapshot\b/,
+        message: 'missing agent-runtime tool listing section owner',
+      },
+      {
+        regex: /\bpub struct TurnSkillAgentSnapshotStore\b/,
+        message: 'missing agent-runtime turn skill/agent snapshot store',
+      },
+      {
+        regex: /\bskill_agent_diff_renders_changed_added_and_removed_entries\b/,
+        message: 'missing agent-runtime skill/agent diff rendering regression',
+      },
+      {
+        regex: /\blatest_snapshot_at_or_before_returns_nearest_sparse_snapshot\b/,
+        message: 'missing agent-runtime sparse turn snapshot store regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/src/file_read_state.rs',
+    reason:
+      'agent-runtime must own provider-neutral file-read state facts and session-scoped in-memory store',
+    patterns: [
+      {
+        regex: /\bpub struct FileReadState\b/,
+        message: 'missing agent-runtime file-read state DTO',
+      },
+      {
+        regex: /\bpub fn is_full_file_read\b/,
+        message: 'missing agent-runtime file-read completeness policy',
+      },
+      {
+        regex: /\bpub struct FileReadStateStore\b/,
+        message: 'missing agent-runtime file-read state store',
+      },
+      {
+        regex: /\bfile_read_state_accepts_nonempty_whole_file\b/,
+        message: 'missing agent-runtime file-read completeness regression',
+      },
+      {
+        regex: /\bfile_read_state_store_scopes_entries_by_session\b/,
+        message: 'missing agent-runtime file-read state session scoping regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/src/evidence_ledger.rs',
+    reason:
+      'agent-runtime must own provider-neutral session evidence ledger state and compression contract projection',
+    patterns: [
+      {
+        regex: /\bpub enum EvidenceLedgerTargetKind\b/,
+        message: 'missing agent-runtime evidence ledger target-kind DTO',
+      },
+      {
+        regex: /\bpub enum EvidenceLedgerEventStatus\b/,
+        message: 'missing agent-runtime evidence ledger event status DTO',
+      },
+      {
+        regex: /\bpub struct EvidenceLedgerEvent\b/,
+        message: 'missing agent-runtime evidence ledger event DTO',
+      },
+      {
+        regex: /\bpub struct EvidenceLedgerSummary\b/,
+        message: 'missing agent-runtime evidence ledger summary DTO',
+      },
+      {
+        regex: /\bpub struct SessionEvidenceLedger\b/,
+        message: 'missing agent-runtime session evidence ledger store',
+      },
+      {
+        regex: /\bimpl From<EvidenceLedgerSummary> for CompressionContract\b/,
+        message: 'missing agent-runtime evidence ledger compression contract projection',
+      },
+      {
+        regex: /\bimpl From<LightCheckpoint> for EvidenceLedgerCheckpoint\b/,
+        message: 'missing agent-runtime checkpoint evidence projection',
+      },
+      {
+        regex: /\bledger_reads_events_scoped_by_session_and_turn\b/,
+        message: 'missing agent-runtime evidence ledger session/turn scoping regression',
+      },
+      {
+        regex: /\bcheckpoint_from_light_checkpoint_preserves_recovery_boundary_metadata\b/,
+        message: 'missing agent-runtime checkpoint evidence projection regression',
+      },
+      {
+        regex: /\bsummary_projects_into_compression_contract\b/,
+        message: 'missing agent-runtime evidence ledger compression contract regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/src/turn_cancellation.rs',
+    reason:
+      'agent-runtime must own provider-neutral dialog-turn cancellation token lifecycle state',
+    patterns: [
+      {
+        regex: /\bpub struct DialogTurnCancellationTokenStore\b/,
+        message: 'missing dialog-turn cancellation token store',
+      },
+      {
+        regex: /\bpub fn get_or_insert_new\b/,
+        message: 'missing dialog-turn cancellation token creation/reuse owner',
+      },
+      {
+        regex: /\bpub fn is_cancelled\b/,
+        message: 'missing dialog-turn cancellation state query',
+      },
+      {
+        regex: /\bturn_cancellation_store_reuses_existing_token\b/,
+        message: 'missing dialog-turn cancellation token reuse regression',
+      },
+      {
+        regex: /\bturn_cancellation_store_cancels_registered_token\b/,
+        message: 'missing dialog-turn cancellation token cancel regression',
+      },
+    ],
+  },
+  {
     path: 'src/crates/execution/agent-runtime/src/deep_review/mod.rs',
     reason:
       'agent-runtime must own provider-neutral DeepReview policy, manifest, budget, queue, report, and shared-context runtime state',
@@ -808,7 +952,7 @@ export const requiredContentRules = [
   {
     path: 'src/crates/execution/agent-runtime/src/tool_confirmation.rs',
     reason:
-      'agent-runtime must own portable tool confirmation planning and failure mapping while core keeps UI/channel side effects',
+      'agent-runtime must own portable tool confirmation planning, failure mapping, and wait-channel lifecycle state',
     patterns: [
       {
         regex: /\bpub struct ToolConfirmationRequestFacts\b/,
@@ -827,8 +971,16 @@ export const requiredContentRules = [
         message: 'missing tool confirmation wait-result contract',
       },
       {
+        regex: /\bpub enum ToolConfirmationResponse\b/,
+        message: 'missing tool confirmation channel response',
+      },
+      {
         regex: /\bpub enum ConfirmationFailureKind\b/,
         message: 'missing tool confirmation failure kind',
+      },
+      {
+        regex: /\bpub struct ToolConfirmationChannelStore\b/,
+        message: 'missing tool confirmation channel store',
       },
       {
         regex: /\bpub fn resolve_tool_confirmation_plan\b/,
@@ -841,6 +993,10 @@ export const requiredContentRules = [
       {
         regex: /\bpub fn resolve_confirmation_wait_result\b/,
         message: 'missing tool confirmation wait-result resolver',
+      },
+      {
+        regex: /\bconfirmation_channel_store_delivers_confirmation_once\b/,
+        message: 'missing confirmation channel delivery regression',
       },
     ],
   },
@@ -1647,7 +1803,7 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/core/src/agentic/tools/pipeline/tool_pipeline.rs',
     reason:
-      'core tool pipeline must delegate portable confirmation planning and failure mapping to agent-runtime while retaining UI/channel side effects',
+      'core tool pipeline must delegate portable confirmation planning, failure mapping, and channel ownership to agent-runtime while retaining state/event/tool execution wiring',
     patterns: [
       {
         regex: /\bresolve_tool_confirmation_plan\b/,
@@ -1664,6 +1820,14 @@ export const requiredContentRules = [
       {
         regex: /\bToolConfirmationPlan::Await\b/,
         message: 'missing tool confirmation await-plan handling',
+      },
+      {
+        regex: /\bToolConfirmationChannelStore\b/,
+        message: 'missing tool confirmation channel owner delegation',
+      },
+      {
+        regex: /\bToolCancellationTokenStore\b/,
+        message: 'missing tool cancellation token owner delegation',
       },
       {
         regex: /\bshould_retry_tool_attempt\b/,
@@ -1716,6 +1880,95 @@ export const requiredContentRules = [
       {
         regex: /pub use bitfun_agent_runtime::prompt_cache::\*;/,
         message: 'missing agent-runtime prompt-cache compatibility re-export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/execution/round_executor.rs',
+    reason:
+      'core round executor must delegate dialog-turn cancellation token storage to agent-runtime while retaining concrete model streaming and events',
+    patterns: [
+      {
+        regex: /\bDialogTurnCancellationTokenStore\b/,
+        message: 'missing dialog-turn cancellation token store delegation',
+      },
+      {
+        regex: /\bget_or_insert_new\b/,
+        message: 'missing dialog-turn cancellation token creation/reuse delegation',
+      },
+      {
+        regex: /\bis_cancelled\b/,
+        message: 'missing dialog-turn cancellation state delegation',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/src/user_questions.rs',
+    reason:
+      'agent-runtime must own user-question contracts and user-input wait-channel lifecycle state',
+    patterns: [
+      {
+        regex: /\bpub struct AskUserQuestionInput\b/,
+        message: 'missing AskUserQuestion input contract',
+      },
+      {
+        regex: /\bpub struct UserInputResponse\b/,
+        message: 'missing user input response contract',
+      },
+      {
+        regex: /\bpub struct UserInputManager\b/,
+        message: 'missing user input manager owner',
+      },
+      {
+        regex: /\bpub fn get_user_input_manager\b/,
+        message: 'missing user input manager global entry',
+      },
+      {
+        regex: /\bvalidate_ask_user_question_input\b/,
+        message: 'missing AskUserQuestion validation owner',
+      },
+      {
+        regex: /\buser_input_manager_delivers_answer_and_clears_channel\b/,
+        message: 'missing user input manager answer regression',
+      },
+      {
+        regex: /\buser_input_manager_cancel_closes_receiver\b/,
+        message: 'missing user input manager cancel regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/session/file_read_state.rs',
+    reason:
+      'core file_read_state path must stay a compatibility facade over agent-runtime',
+    patterns: [
+      {
+        regex:
+          /pub use bitfun_agent_runtime::file_read_state::\{FileReadState, FileReadStateStore\};/,
+        message: 'missing agent-runtime file-read state compatibility re-export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/session/evidence_ledger.rs',
+    reason:
+      'core evidence_ledger path must stay a compatibility facade over agent-runtime',
+    patterns: [
+      {
+        regex: /pub use bitfun_agent_runtime::evidence_ledger::\*;/,
+        message: 'missing agent-runtime evidence ledger compatibility re-export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/session/turn_skill_agent_snapshot_store.rs',
+    reason:
+      'core turn_skill_agent_snapshot_store path must stay a compatibility facade over agent-runtime',
+    patterns: [
+      {
+        regex:
+          /pub use bitfun_agent_runtime::skill_agent_snapshot::TurnSkillAgentSnapshotStore;/,
+        message: 'missing agent-runtime turn skill/agent snapshot store compatibility re-export',
       },
     ],
   },
@@ -2270,6 +2523,10 @@ export const requiredContentRules = [
         message: 'missing dialog-turn cancellation summary policy',
       },
       {
+        regex: /\bpub struct ToolCancellationTokenStore\b/,
+        message: 'missing tool cancellation token store owner',
+      },
+      {
         regex: /\bpub fn count_tool_states\b/,
         message: 'missing tool state counting policy',
       },
@@ -2295,6 +2552,10 @@ export const requiredContentRules = [
       {
         regex: /\bdialog_turn_cancellation_summary_counts_cancelled_and_skipped_tasks\b/,
         message: 'missing dialog-turn cancellation summary regression',
+      },
+      {
+        regex: /\bcancellation_token_store_cancels_and_removes_tokens\b/,
+        message: 'missing cancellation token store regression',
       },
       {
         regex: /\bstate_counts_preserve_pipeline_stats_contract\b/,
@@ -2568,6 +2829,37 @@ export const requiredContentRules = [
       {
         regex: /\bsession_store_migration_error\b/,
         message: 'workspace runtime must keep BitFunError compatibility mapping at the facade boundary',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/tool-execution/src/background_command_output.rs',
+    reason:
+      'tool-runtime must own reusable background exec-command output capture state, cursors, retention, and lifecycle metadata',
+    patterns: [
+      {
+        regex: /\bpub struct BackgroundCommandOutputCapture\b/,
+        message: 'missing background command output capture owner',
+      },
+      {
+        regex: /\bpub enum BackgroundCommandOutputStatus\b/,
+        message: 'missing background command output status contract',
+      },
+      {
+        regex: /\bpub struct BackgroundCommandOutputMetadata\b/,
+        message: 'missing background command output metadata contract',
+      },
+      {
+        regex: /\bpub fn background_command_output_capture\b/,
+        message: 'missing background command output global entry',
+      },
+      {
+        regex: /\bBACKGROUND_COMMAND_OUTPUT_CAPTURE_LIMIT_BYTES\b/,
+        message: 'missing background command output retention limit',
+      },
+      {
+        regex: /\bbackground_command_output_reads_snapshot_then_incremental_chunks\b/,
+        message: 'missing background command output snapshot/incremental regression',
       },
     ],
   },

@@ -19,10 +19,10 @@ use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::Message as AIMessage;
 use crate::util::types::ToolDefinition;
+use bitfun_agent_runtime::turn_cancellation::DialogTurnCancellationTokenStore;
 use bitfun_ai_adapters::{
     ModelExchangeRequestTraceHandle, ModelExchangeResponseTrace, ModelExchangeTraceConfig,
 };
-use dashmap::DashMap;
 use log::{debug, error, warn};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -33,8 +33,7 @@ pub struct RoundExecutor {
     stream_processor: Arc<StreamProcessor>,
     tool_pipeline: Option<Arc<ToolPipeline>>,
     event_queue: Arc<EventQueue>,
-    /// Cancellation tokens: use dialog_turn_id as key
-    cancellation_tokens: Arc<DashMap<String, CancellationToken>>,
+    cancellation_tokens: DialogTurnCancellationTokenStore,
 }
 
 impl RoundExecutor {
@@ -64,7 +63,7 @@ impl RoundExecutor {
             stream_processor,
             tool_pipeline: Some(tool_pipeline),
             event_queue,
-            cancellation_tokens: Arc::new(DashMap::new()),
+            cancellation_tokens: DialogTurnCancellationTokenStore::new(),
         }
     }
 
@@ -90,18 +89,9 @@ impl RoundExecutor {
         let round_id = uuid::Uuid::new_v4().to_string();
 
         // Create or reuse cancellation token
-        let cancel_token = if let Some(existing_token) = self
+        let cancel_token = self
             .cancellation_tokens
-            .get(&context.dialog_turn_id.clone())
-        {
-            existing_token.clone()
-        } else {
-            // Create new token
-            let new_token = CancellationToken::new();
-            self.cancellation_tokens
-                .insert(context.dialog_turn_id.clone(), new_token.clone());
-            new_token
-        };
+            .get_or_insert_new(&context.dialog_turn_id);
 
         // Emit model round started event
         self.emit_event(
@@ -922,40 +912,30 @@ impl RoundExecutor {
 
     /// Check if dialog turn is still active (used to detect cancellation)
     pub fn has_active_dialog_turn(&self, dialog_turn_id: &str) -> bool {
-        self.cancellation_tokens.contains_key(dialog_turn_id)
+        self.cancellation_tokens.has_active(dialog_turn_id)
     }
 
     /// Check if dialog turn cancellation has been requested.
     pub fn is_dialog_turn_cancelled(&self, dialog_turn_id: &str) -> bool {
-        self.cancellation_tokens
-            .get(dialog_turn_id)
-            .is_some_and(|token| token.is_cancelled())
+        self.cancellation_tokens.is_cancelled(dialog_turn_id)
     }
 
     /// Register cancellation token (for external control, e.g., execute_subagent)
     pub fn register_cancel_token(&self, dialog_turn_id: &str, token: CancellationToken) {
-        self.cancellation_tokens
-            .insert(dialog_turn_id.to_string(), token);
+        self.cancellation_tokens.insert(dialog_turn_id, token);
     }
 
     /// Return a clone of the cancellation token registered for a dialog turn.
     pub fn cancel_token_for_dialog_turn(&self, dialog_turn_id: &str) -> Option<CancellationToken> {
-        self.cancellation_tokens
-            .get(dialog_turn_id)
-            .map(|entry| entry.clone())
+        self.cancellation_tokens.token(dialog_turn_id)
     }
 
     /// Cancel dialog turn (using dialog_turn_id)
     pub async fn cancel_dialog_turn(&self, dialog_turn_id: &str) -> BitFunResult<()> {
         debug!("Cancelling dialog turn: dialog_turn_id={}", dialog_turn_id);
 
-        if let Some(token) = self
-            .cancellation_tokens
-            .get(dialog_turn_id)
-            .map(|entry| entry.clone())
-        {
+        if self.cancellation_tokens.cancel(dialog_turn_id) {
             debug!("Found cancel token, triggering cancellation");
-            token.cancel();
             debug!("Cancel token triggered");
         } else {
             debug!("Cancel token not found (dialog may have completed or not started)");
@@ -966,7 +946,7 @@ impl RoundExecutor {
 
     /// Cleanup dialog turn token (called on normal completion)
     pub async fn cleanup_dialog_turn(&self, dialog_turn_id: &str) {
-        if self.cancellation_tokens.remove(dialog_turn_id).is_some() {
+        if self.cancellation_tokens.remove(dialog_turn_id) {
             debug!("Cleaned up cancel token: dialog_turn_id={}", dialog_turn_id);
         }
     }
@@ -1299,8 +1279,8 @@ mod tests {
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::util::errors::BitFunError;
     use crate::util::types::ai::GeminiUsage;
+    use bitfun_agent_runtime::turn_cancellation::DialogTurnCancellationTokenStore;
     use bitfun_runtime_ports::DelegationPolicy;
-    use dashmap::DashMap;
     use serde_json::json;
     use std::collections::HashMap;
     use std::sync::Arc;
@@ -1313,7 +1293,7 @@ mod tests {
             stream_processor: Arc::new(StreamProcessor::new(event_queue.clone())),
             tool_pipeline: None,
             event_queue,
-            cancellation_tokens: Arc::new(DashMap::new()),
+            cancellation_tokens: DialogTurnCancellationTokenStore::new(),
         }
     }
 
