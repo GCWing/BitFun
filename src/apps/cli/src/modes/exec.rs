@@ -1048,15 +1048,18 @@ This is your next signal — diagnose what is still wrong, fix it, and run the v
 ///   2. Project-defined targets: `make`/`just` `check|test|ci`.
 ///   3. Language manifests, **scoped to what `git diff` says actually
 ///      changed**, not the whole workspace:
-///        - `go.mod`       → `go vet` on the directory of each changed
-///          `.go` file (`go vet ./pkg/foo ./pkg/bar`); skip if no `.go`
-///          files changed. We use `vet` over `build` because `vet` runs
-///          the same parser + type checker (so it catches every "patch
-///          doesn't compile" error in our class — undefined symbol, type
-///          mismatch, wrong arity, missing import) while skipping codegen
-///          and linking. On big Go repos that's roughly 30% faster cold,
-///          and it also compiles `*_test.go` so a patch that breaks the
-///          package's own tests is caught here too.
+///        - `go.mod`       → `go vet -printf=false -composites=false
+///          -stdmethods=false` on the directory of each changed `.go`
+///          file; skip if no `.go` files changed. We use `vet` over
+///          `build` because `vet` runs the same parser + type checker
+///          (so it catches every "patch doesn't compile" error in our
+///          class — undefined symbol, type mismatch, wrong arity,
+///          missing import) while skipping codegen and linking. On big
+///          Go repos that's roughly 30% faster cold, and it also
+///          compiles `*_test.go` so a patch that breaks the package's
+///          own tests is caught here too. The three disabled analyzers
+///          are the only defaults known to false-positive on real
+///          production codebases.
 ///        - `Cargo.toml`   → `cargo check -p <crate>` for the crate(s)
 ///          owning the changed `.rs` files; skip if no `.rs` files map
 ///          to a workspace member.
@@ -1098,7 +1101,19 @@ fn detect_verify_command(workspace: &std::path::Path) -> Option<String> {
     if workspace.join("go.mod").exists() {
         let pkgs = scoped_go_packages(&changed);
         if !pkgs.is_empty() {
-            return Some(format!("go vet {}", pkgs.join(" ")));
+            // `-printf=false -composites=false -stdmethods=false` disables
+            // the three default analyzers known to false-positive on
+            // production code: `printf` on user-defined Printf-style
+            // functions, `composites` on intentional positional literals,
+            // `stdmethods` on methods that share a name with stdlib
+            // interfaces but are not implementations. Type checking
+            // (which is what catches "patch doesn't compile") runs
+            // regardless of analyzer selection, so this trims noise
+            // without trimming our actual signal.
+            return Some(format!(
+                "go vet -printf=false -composites=false -stdmethods=false {}",
+                pkgs.join(" ")
+            ));
         }
         // go.mod exists but no .go files changed — fall through rather than
         // vetting the entire module just to satisfy detection.
