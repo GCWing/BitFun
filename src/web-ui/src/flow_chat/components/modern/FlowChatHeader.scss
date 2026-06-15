@@ -84,6 +84,16 @@
     &--active {
       background: color-mix(in srgb, var(--element-bg-soft) 82%, transparent);
     }
+
+    &--has-activity {
+      color: color-mix(in srgb, var(--color-success, #22c55e) 86%, var(--color-text-primary));
+
+      &:not(:disabled):hover,
+      &.flowchat-header__background-activity-nav-button--active {
+        color: var(--color-success, #22c55e);
+        background: color-mix(in srgb, var(--color-success, #22c55e) 12%, transparent);
+      }
+    }
   }
 
   &__background-activity-nav-button-inner {
@@ -319,10 +329,44 @@
   }
 
   &__background-section-title {
-    padding: 2px $size-gap-2;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $size-gap-1;
+    padding: 2px 2px 2px $size-gap-2;
     color: var(--color-text-tertiary, var(--color-text-secondary));
     font-size: var(--flowchat-font-size-xs);
-    letter-spacing: 0.01em;
+  }
+
+  &__background-section-title-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__background-section-actions {
+    position: relative;
+    flex: 0 0 auto;
+  }
+
+  &__background-section-action {
+    flex: 0 0 auto;
+    color: var(--color-text-secondary);
+
+    &:not(:disabled):hover {
+      color: var(--color-text-primary);
+      background: color-mix(in srgb, var(--element-bg-soft) 88%, transparent);
+    }
+
+    &--danger:not(:disabled):hover {
+      color: var(--color-danger, #ef4444);
+      background: color-mix(in srgb, var(--color-danger, #ef4444) 12%, transparent);
+
+      svg {
+        color: var(--color-danger, #ef4444);
+      }
+    }
   }
 
   &__turn-list-item {
@@ -419,6 +463,16 @@
     flex: 0 0 auto;
     align-self: center;
     margin-right: 2px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity $motion-base $easing-standard;
+  }
+
+  &__background-command-list-item:hover &__background-command-actions,
+  &__background-command-list-item:focus-within &__background-command-actions,
+  &__background-command-actions:has([aria-expanded='true']) {
+    opacity: 1;
+    pointer-events: auto;
   }
 
   &__background-command-menu-button {
@@ -435,7 +489,9 @@
     position: absolute;
     top: calc(100% + 4px);
     right: 0;
-    min-width: 136px;
+    width: max-content;
+    min-width: 0;
+    max-width: min(200px, calc(100vw - 48px));
     display: flex;
     flex-direction: column;
     gap: 2px;
@@ -445,6 +501,10 @@
     background: color-mix(in srgb, var(--color-bg-elevated) 98%, transparent);
     box-shadow: var(--shadow-md);
     z-index: 40;
+
+    &--compact {
+      min-width: 0;
+    }
   }
 
   &__background-command-menu-item {
@@ -459,6 +519,7 @@
     color: var(--color-text-primary);
     font-size: var(--flowchat-font-size-xs);
     text-align: left;
+    white-space: nowrap;
     cursor: pointer;
 
     svg {

@@ -40,6 +40,7 @@ import {
   deriveSessionReviewActivity,
   isReviewActivityBlocking,
 } from '@/flow_chat/utils/sessionReviewActivity';
+import { buildBackgroundSubagentActivityIndex } from '@/flow_chat/utils/backgroundSubagentActivity';
 import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
 import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
 import { confirmWarning } from '@/component-library/components/ConfirmDialog/confirmService';
@@ -223,10 +224,12 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     const selector = (s: FlowChatState): string => {
       const parts: string[] = [s.activeSessionId ?? ''];
       for (const session of s.sessions.values()) {
+        const latestTurn = session.dialogTurns[session.dialogTurns.length - 1];
         parts.push(
           `${session.sessionId}|${session.isTransient ? '1':'0'}|${session.sessionKind}|` +
+          `${session.parentSessionId ?? ''}|${session.parentToolCallId ?? ''}|${session.subagentType ?? ''}|` +
           `${session.workspacePath ?? ''}|${session.mode ?? ''}|${session.needsUserAttention ? '1':'0'}|` +
-          `${session.hasUnreadCompletion ? '1':'0'}|${session.title ?? ''}`
+          `${session.hasUnreadCompletion ? '1':'0'}|${latestTurn?.status ?? ''}|${session.title ?? ''}`
         );
       }
       return parts.join(';');
@@ -236,6 +239,14 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     }), { isEqual: (a, b) => a === b });
     return () => unsub();
   }, []);
+
+  const backgroundSubagentActivityByParent = useMemo(
+    () => buildBackgroundSubagentActivityIndex(
+      flowChatState.sessions,
+      sessionId => stateMachineManager.getCurrentState(sessionId),
+    ),
+    [flowChatState.sessions],
+  );
 
   useEffect(() => {
     if (editingSessionId && editInputRef.current) {
@@ -904,13 +915,20 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                 : null;
           const sessionModeKey = resolveSessionModeType(session);
           const sessionTitle = resolveSessionTitle(session);
+          const isRunning = runningSessionIds.has(session.sessionId);
+          const isHighPriority = !!session.needsUserAttention;
+          const backgroundSubagentActivity = !isChildSession
+            ? backgroundSubagentActivityByParent.get(session.sessionId)
+            : undefined;
+          const backgroundSubagentActivityCount = backgroundSubagentActivity?.totalCount ?? 0;
+          const showBackgroundSubagentActivity = !isChildSession && backgroundSubagentActivityCount > 0;
           const parentSessionId = relationship.parentSessionId;
           const parentSession = parentSessionId ? flowChatState.sessions.get(parentSessionId) : undefined;
           const parentTitle = parentSession ? resolveSessionTitle(parentSession) : '';
           const parentTurnIndex = relationship.origin?.parentTurnIndex;
           const trimmedAssistant = assistantLabel?.trim() ?? '';
           const showAssistantInTooltip = trimmedAssistant.length > 0;
-          const showRichTooltip = showAssistantInTooltip || isChildSession;
+          const showRichTooltip = showAssistantInTooltip || isChildSession || showBackgroundSubagentActivity;
           const tooltipContent = showRichTooltip ? (
             <div className="bitfun-nav-panel__inline-item-tooltip">
               <div className="bitfun-nav-panel__inline-item-tooltip-title">{sessionTitle}</div>
@@ -928,8 +946,25 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                       })
                     : t('nav.sessions.childSourceWithoutTurn', {
                         parentTitle: parentTitle || t('nav.sessions.parentSession'),
-                      })}
+                  })}
                 </div>
+              ) : null}
+              {showBackgroundSubagentActivity && backgroundSubagentActivity ? (
+                <>
+                  <div className="bitfun-nav-panel__inline-item-tooltip-meta">
+                    {t('nav.sessions.backgroundSubagentsRunning', {
+                      count: backgroundSubagentActivityCount,
+                    })}
+                  </div>
+                  {backgroundSubagentActivity.items.length > 0 ? (
+                    <div className="bitfun-nav-panel__inline-item-tooltip-meta">
+                      {backgroundSubagentActivity.items
+                        .slice(0, 2)
+                        .map(item => item.title)
+                        .join(' · ')}
+                    </div>
+                  ) : null}
+                </>
               ) : null}
             </div>
           ) : (
@@ -943,7 +978,6 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                   ? Panda
                   : Bot
                 : Code2;
-          const isRunning = runningSessionIds.has(session.sessionId);
           const isRowActive = isSessionNavRowActive({
             rowSessionId: session.sessionId,
             activeTabId,
@@ -956,7 +990,6 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           const attentionKind = !isRunning && !isRowActive
             ? (session.needsUserAttention || session.hasUnreadCompletion || undefined)
             : undefined;
-          const isHighPriority = !!session.needsUserAttention;
           const row = (
             <div
               className={[
@@ -1075,6 +1108,25 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                       <span className="bitfun-nav-panel__inline-item-review-badge">
                         <Loader2 size={9} aria-hidden />
                         {getReviewActivityBadge(reviewActivityKind)}
+                      </span>
+                    ) : null}
+                    {showBackgroundSubagentActivity ? (
+                      <span
+                        className="bitfun-nav-panel__inline-item-background-subagent-badge"
+                        aria-label={t('nav.sessions.backgroundSubagentsRunning', {
+                          count: backgroundSubagentActivityCount,
+                        })}
+                      >
+                        <Bot
+                          className="bitfun-nav-panel__inline-item-background-subagent-icon is-bot"
+                          size={10}
+                          aria-hidden
+                        />
+                        <Loader2
+                          className="bitfun-nav-panel__inline-item-background-subagent-icon is-loader"
+                          size={10}
+                          aria-hidden
+                        />
                       </span>
                     ) : null}
                   </span>

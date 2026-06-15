@@ -185,6 +185,8 @@
       "needsToolConfirm": "Needs confirmation",
       "badgeNeedsInput": "Waiting",
       "badgeNeedsConfirm": "Confirm",
+      "badgeBackgroundSubagents": "BG {{count}}",
+      "backgroundSubagentsRunning": "Background subagents running: {{count}}",
       "needProjectWorkspaceForSession": "Open or add a project workspace first. Code and Cowork sessions cannot be created in the assistant area.",
       "manage": "Manage Sessions",
       "batchManageDescription": "Select sessions in this workspace, then archive or delete them in bulk.",
