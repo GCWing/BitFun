@@ -65,7 +65,7 @@
 
 .control-group label {
   font-size: 14px;
-  color: #888;
+  color: #888888;
   font-weight: 500;
 }
 
@@ -111,12 +111,12 @@
 }
 
 .markdown-editor:focus {
-  border-color: rgba(59, 130, 246, 0.4);
+  border-color: var(--border-accent);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .markdown-editor::placeholder {
-  color: #666;
+  color: #666666;
 }
 
 .usage-guide {

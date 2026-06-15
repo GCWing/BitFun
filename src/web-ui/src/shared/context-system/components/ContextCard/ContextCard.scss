@@ -299,7 +299,7 @@
       background: linear-gradient(135deg,
         var(--color-accent-100) 0%,
         rgba(96, 165, 250, 0.06) 50%,
-        rgba(96, 165, 250, 0.10) 100%
+        var(--card-bg-accent) 100%
       );
       border-color: rgba(96, 165, 250, 0.3);
       transform: translateY(-2px);

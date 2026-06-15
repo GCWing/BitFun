@@ -95,7 +95,7 @@
       border-color: rgba(239, 68, 68, 0.4);
     }
   } @else if $variant == 'primary' {
-    background: rgba(96, 165, 250, 0.10);
+    background: var(--card-bg-accent);
     color: tokens.$color-accent-500;
     border-color: tokens.$color-info-border;
 

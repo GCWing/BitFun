@@ -78,7 +78,7 @@ export const bitfunChinaNightTheme: ThemeConfig = {
     },
     
     border: {
-      subtle: 'rgba(232, 230, 225, 0.10)',      
+      subtle: 'rgba(232, 230, 225, 0.1)',
       base: 'rgba(232, 230, 225, 0.16)',        
       medium: 'rgba(232, 230, 225, 0.22)',      
       strong: 'rgba(232, 230, 225, 0.28)',      
@@ -90,7 +90,7 @@ export const bitfunChinaNightTheme: ThemeConfig = {
       soft: 'rgba(115, 165, 204, 0.09)',        
       base: 'rgba(115, 165, 204, 0.12)',        
       medium: 'rgba(115, 165, 204, 0.16)',      
-      strong: 'rgba(115, 165, 204, 0.20)',      
+      strong: 'rgba(115, 165, 204, 0.2)',
       elevated: 'rgba(45, 41, 38, 0.95)',       
     },
     

@@ -267,12 +267,12 @@
   .image-analysis-card {
     --image-analysis-surface: #1e1e1e;
     --image-analysis-background: #121212;
-    --image-analysis-border: #333;
+    --image-analysis-border: #333333;
     --image-analysis-text: #e0e0e0;
     --image-analysis-text-secondary: #a0a0a0;
     --image-analysis-primary: var(--color-accent-500);
     --image-analysis-success: #22c55e;
-    --image-analysis-error: #ef4444;
+    --image-analysis-error: var(--color-error);
   }
 }
 

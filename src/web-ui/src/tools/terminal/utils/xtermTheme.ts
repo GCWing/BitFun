@@ -116,7 +116,7 @@ export function buildXtermTheme(
     foreground: theme.colors.text.primary,
     cursor: theme.colors.text.primary,
     cursorAccent: theme.colors.background.secondary,
-    selectionBackground: isDark ? 'rgba(255, 255, 255, 0.30)' : 'rgba(173, 214, 255, 0.45)',
+    selectionBackground: isDark ? 'rgba(255, 255, 255, 0.3)' : 'rgba(173, 214, 255, 0.45)',
     selectionInactiveBackground: isDark ? 'rgba(255, 255, 255, 0.16)' : 'rgba(173, 214, 255, 0.25)',
     ...getXtermAnsiPalette(theme.type),
     ...overrides,

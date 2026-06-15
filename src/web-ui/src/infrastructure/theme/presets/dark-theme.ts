@@ -272,7 +272,7 @@ export const bitfunDarkTheme: ThemeConfig = {
         transform: 'none',
       },
       active: {
-        background: 'rgba(255, 255, 255, 0.10)',
+        background: 'rgba(255, 255, 255, 0.1)',
         color: '#c8c8c8',
         border: 'transparent',
         shadow: 'none',
@@ -312,7 +312,7 @@ export const bitfunDarkTheme: ThemeConfig = {
           shadow: 'none',
         },
         hover: {
-          background: 'rgba(255, 255, 255, 0.10)',
+          background: 'rgba(255, 255, 255, 0.1)',
           color: '#c8c8c8',
           border: 'transparent',
           shadow: 'none',

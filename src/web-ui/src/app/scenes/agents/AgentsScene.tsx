@@ -259,17 +259,17 @@ const AgentsHomeView: React.FC = () => {
     agentic: {
       role: t('coreAgentsZone.modes.agentic.role'),
       accentColor: '#6366f1',
-      accentBg: 'rgba(99,102,241,0.10)',
+      accentBg: 'rgba(99, 102, 241, 0.1)',
     },
     Cowork: {
       role: t('coreAgentsZone.modes.cowork.role'),
       accentColor: '#14b8a6',
-      accentBg: 'rgba(20,184,166,0.10)',
+      accentBg: 'rgba(20, 184, 166, 0.1)',
     },
     ComputerUse: {
       role: t('coreAgentsZone.modes.computerUse.role'),
       accentColor: '#f59e0b',
-      accentBg: 'rgba(245,158,11,0.10)',
+      accentBg: 'rgba(245, 158, 11, 0.1)',
     },
   }), [t]);
 
@@ -631,7 +631,7 @@ const AgentsHomeView: React.FC = () => {
                   key={agent.id}
                   agent={agent}
                   index={index}
-                  meta={coreAgentMeta[agent.id] ?? { role: agent.name, accentColor: '#6366f1', accentBg: 'rgba(99,102,241,0.10)' }}
+                  meta={coreAgentMeta[agent.id] ?? { role: agent.name, accentColor: '#6366f1', accentBg: 'rgba(99, 102, 241, 0.1)' }}
                   toolCount={getDisplayedToolCount(agent)}
                   skillCount={agent.agentKind === 'mode' && modeHasSkillTool(getModeConfig(agent.id)?.enabled_tools ?? agent.defaultTools ?? [])
                     ? getConfiguredEnabledSkillKeys(getModeSkills(agent.id)).length

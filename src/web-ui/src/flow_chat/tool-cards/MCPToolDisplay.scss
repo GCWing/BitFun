@@ -136,7 +136,7 @@
   }
 
   .error-content {
-    background: rgba(239, 68, 68, 0.05);
+    background: var(--glass-red-subtle);
     border-radius: 4px;
 
     .error-message {

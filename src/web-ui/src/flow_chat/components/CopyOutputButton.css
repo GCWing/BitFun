@@ -50,7 +50,7 @@
 
 .copy-output-button:active {
   transform: translateY(0);
-  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4);
+  box-shadow: 0 2px 6px var(--border-accent);
 }
 
 .copy-output-button.copied {

@@ -107,25 +107,25 @@
 
 :root[data-theme-type="light"] {
   .cube-logo__face {
-    border: 0.3px solid rgba(90, 123, 178, 0.40);
+    border: 0.3px solid rgba(90, 123, 178, 0.4);
 
     &--front {
       background: rgba(90, 123, 178, 0.45);
     }
     &--back {
-      background: rgba(90, 123, 178, 0.40);
+      background: rgba(90, 123, 178, 0.4);
     }
     &--top {
-      background: rgba(124, 107, 153, 0.40);
+      background: rgba(124, 107, 153, 0.4);
     }
     &--bottom {
-      background: rgba(90, 123, 178, 0.50);
+      background: rgba(90, 123, 178, 0.5);
     }
     &--right {
       background: rgba(124, 107, 153, 0.45);
     }
     &--left {
-      background: rgba(107, 90, 137, 0.40);
+      background: rgba(107, 90, 137, 0.4);
     }
   }
 
@@ -134,26 +134,26 @@
 
     &--front {
       background: rgba(90, 123, 178, 0.45);
-      box-shadow: inset 0 0 0 0.5px rgba(90, 123, 178, 0.30);
+      box-shadow: inset 0 0 0 0.5px rgba(90, 123, 178, 0.3);
     }
     &--back {
-      background: rgba(90, 123, 178, 0.40);
+      background: rgba(90, 123, 178, 0.4);
       box-shadow: inset 0 0 0 0.5px rgba(90, 123, 178, 0.25);
     }
     &--top {
-      background: rgba(124, 107, 153, 0.40);
-      box-shadow: inset 0 0 0 0.5px rgba(124, 107, 153, 0.30);
+      background: rgba(124, 107, 153, 0.4);
+      box-shadow: inset 0 0 0 0.5px rgba(124, 107, 153, 0.3);
     }
     &--bottom {
-      background: rgba(90, 123, 178, 0.50);
+      background: rgba(90, 123, 178, 0.5);
       box-shadow: inset 0 0 0 0.5px rgba(90, 123, 178, 0.35);
     }
     &--right {
       background: rgba(124, 107, 153, 0.45);
-      box-shadow: inset 0 0 0 0.5px rgba(124, 107, 153, 0.30);
+      box-shadow: inset 0 0 0 0.5px rgba(124, 107, 153, 0.3);
     }
     &--left {
-      background: rgba(107, 90, 137, 0.40);
+      background: rgba(107, 90, 137, 0.4);
       box-shadow: inset 0 0 0 0.5px rgba(107, 90, 137, 0.28);
     }
   }

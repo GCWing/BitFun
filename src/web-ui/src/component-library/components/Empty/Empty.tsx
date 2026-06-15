@@ -24,7 +24,7 @@ const DefaultImage: React.FC<{ size: number }> = ({ size }) => (
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
   >
-    <circle cx="60" cy="60" r="50" fill="rgba(96, 165, 250, 0.1)" />
+    <circle cx="60" cy="60" r="50" fill="var(--card-bg-accent)" />
     <path
       d="M40 50C40 44.4772 44.4772 40 50 40H70C75.5228 40 80 44.4772 80 50V70C80 75.5228 75.5228 80 70 80H50C44.4772 80 40 75.5228 40 70V50Z"
       fill="rgba(96, 165, 250, 0.2)"

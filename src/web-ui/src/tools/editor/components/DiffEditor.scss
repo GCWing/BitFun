@@ -108,7 +108,7 @@ $_diff-error-max-width: 400px;
       transform: translateY(-1px);
       box-shadow: 
         0 2px 8px rgba(96, 165, 250, 0.2),
-        0 0 20px rgba(96, 165, 250, 0.1);
+        0 0 20px var(--card-bg-accent);
     }
 
     &:active:not(:disabled) {

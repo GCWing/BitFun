@@ -328,7 +328,7 @@ $opacity-overlay: 0.4;
 $button-bg-default: linear-gradient(135deg,
   rgba(255, 255, 255, 0.08) 0%,
   rgba(255, 255, 255, 0.06) 50%,
-  rgba(255, 255, 255, 0.10) 100%
+  rgba(255, 255, 255, 0.1) 100%
 );
 $button-border-default: rgba(255, 255, 255, 0.08);
 
@@ -343,7 +343,7 @@ $button-text-hover: #ffffff;
 $button-transform-hover: translateY(-3px) scale(1.03);
 
 $button-bg-primary: linear-gradient(135deg,
-  rgba(255, 255, 255, 0.10) 0%,
+  rgba(255, 255, 255, 0.1) 0%,
   rgba(255, 255, 255, 0.08) 30%,
   rgba(255, 255, 255, 0.09) 60%,
   rgba(255, 255, 255, 0.12) 100%
@@ -365,9 +365,9 @@ $card-bg-elevated: rgba(255, 255, 255, 0.06);
 $card-bg-subtle: rgba(255, 255, 255, 0.02);
 $card-bg-hover: rgba(255, 255, 255, 0.06);
 $card-bg-active: rgba(255, 255, 255, 0.08);
-$card-bg-accent: rgba(96, 165, 250, 0.10);
+$card-bg-accent: rgba(96, 165, 250, 0.1);
 $card-bg-accent-hover: rgba(96, 165, 250, 0.14);
-$card-bg-purple: rgba(139, 92, 246, 0.10);
+$card-bg-purple: rgba(139, 92, 246, 0.1);
 $card-bg-purple-hover: rgba(139, 92, 246, 0.14);
 $card-bg: $card-bg-default;  // Legacy alias
 $card-border: $border-base;
@@ -422,7 +422,7 @@ $badge-info-text: $color-info;
   background: linear-gradient(135deg,
     rgba(255, 255, 255, 0.08) 0%,
     rgba(255, 255, 255, 0.06) 50%,
-    rgba(255, 255, 255, 0.10) 100%
+    rgba(255, 255, 255, 0.1) 100%
   );
   border: 1px solid rgba(255, 255, 255, 0.08);
   color: $color-text-secondary;

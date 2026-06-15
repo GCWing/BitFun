@@ -140,7 +140,7 @@
     }
 
     &::after {
-      content: var(--panel-collapse-hint-right, 'Release to collapse');
+      content: var(--panel-collapse-hint-right);
       position: absolute;
       left: 50%;
       top: 50%;

@@ -1085,7 +1085,7 @@ export const Markdown = React.memo<MarkdownProps>(({
               language={normalizedLang}
               bodyStyle={codeBodyStyle}
               codeTagStyle={codeTagStyle}
-              gutterColor={isLight ? '#999' : '#666'}
+              gutterColor={isLight ? '#999999' : '#666666'}
             />
           ) : (
             <AsyncPrismSyntaxHighlighter
@@ -1095,7 +1095,7 @@ export const Markdown = React.memo<MarkdownProps>(({
               customStyle={codeBodyStyle}
               codeTagProps={{ style: codeTagStyle }}
               lineNumberStyle={{
-                color: isLight ? '#999' : '#666',
+                color: isLight ? '#999999' : '#666666',
                 paddingRight: '1em',
                 textAlign: 'right',
                 userSelect: 'none',
@@ -1107,7 +1107,7 @@ export const Markdown = React.memo<MarkdownProps>(({
                 language: normalizedLang,
                 bodyStyle: codeBodyStyle,
                 codeTagStyle,
-                gutterColor: isLight ? '#999' : '#666',
+                gutterColor: isLight ? '#999999' : '#666666',
               }}
               traceContext={traceContext}
             >

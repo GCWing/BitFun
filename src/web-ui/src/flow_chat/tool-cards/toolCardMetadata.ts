@@ -19,7 +19,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: 'Read file contents',
     displayMode: 'compact',
-    primaryColor: '#3b82f6'
+    primaryColor: 'var(--color-accent-600)'
   },
   'Write': {
     toolName: 'Write',
@@ -39,7 +39,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Edit file contents',
     displayMode: 'standard',
-    primaryColor: '#f59e0b'
+    primaryColor: 'var(--color-warning)'
   },
   'Delete': {
     toolName: 'Delete',
@@ -49,7 +49,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: 'Delete a file',
     displayMode: 'detailed',
-    primaryColor: '#ef4444'
+    primaryColor: 'var(--color-error)'
   },
   'LS': {
     toolName: 'LS',
@@ -71,7 +71,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Search text in files',
     displayMode: 'compact',
-    primaryColor: '#8b5cf6'
+    primaryColor: 'var(--color-purple-500)'
   },
   'Glob': {
     toolName: 'Glob',
@@ -115,7 +115,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Run a specialized AI task',
     displayMode: 'detailed',
-    primaryColor: '#7c3aed'
+    primaryColor: 'var(--color-purple-600)'
   },
   'TodoWrite': {
     toolName: 'TodoWrite',
@@ -135,7 +135,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Submit code review results',
     displayMode: 'compact',
-    primaryColor: '#8b5cf6'
+    primaryColor: 'var(--color-purple-500)'
   },
   'ContextCompression': {
     toolName: 'ContextCompression',
@@ -167,7 +167,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Load and run skills',
     displayMode: 'compact',
-    primaryColor: '#8b5cf6'
+    primaryColor: 'var(--color-purple-500)'
   },
 
   // AskUserQuestion tool
@@ -179,7 +179,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Ask the user a question and wait for a reply',
     displayMode: 'detailed',
-    primaryColor: '#8b5cf6'
+    primaryColor: 'var(--color-purple-500)'
   },
 
   'ReviewSessionSummary': {
@@ -214,7 +214,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Get file diffs (Baseline/Git/Full)',
     displayMode: 'compact',
-    primaryColor: '#8b5cf6' // Purple
+    primaryColor: 'var(--color-purple-500)'
   },
 
   // CreatePlan tool
@@ -226,7 +226,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Create and manage project plans',
     displayMode: 'detailed',
-    primaryColor: '#f59e0b' // Orange
+    primaryColor: 'var(--color-warning)'
   },
 
   // TerminalControl tool
@@ -238,7 +238,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: 'Kill or interrupt a terminal session',
     displayMode: 'compact',
-    primaryColor: '#ef4444'
+    primaryColor: 'var(--color-error)'
   },
 
   'SessionControl': {
@@ -249,7 +249,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: 'Create, delete, or list sessions',
     displayMode: 'compact',
-    primaryColor: '#3b82f6'
+    primaryColor: 'var(--color-accent-600)'
   },
 
   'SessionMessage': {
@@ -260,7 +260,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: 'Send a message to another session',
     displayMode: 'compact',
-    primaryColor: '#8b5cf6'
+    primaryColor: 'var(--color-purple-500)'
   },
 
   // Bash terminal tool
@@ -305,7 +305,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Interrupt or kill a running command process',
     displayMode: 'standard',
-    primaryColor: '#ef4444'
+    primaryColor: 'var(--color-error)'
   },
 
   // MiniApp tool
@@ -348,7 +348,7 @@ export function getToolCardConfig(toolName: string): ToolCardConfig {
       resultDisplayType: 'detailed',
       description: 'MCP',
       displayMode: 'compact',
-      primaryColor: '#8b5cf6'
+      primaryColor: 'var(--color-purple-500)'
     };
   }
 

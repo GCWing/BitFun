@@ -12,7 +12,7 @@
   padding: 12px 16px;
   background: linear-gradient(135deg,
     var(--color-error-bg) 0%,
-    rgba(239, 68, 68, 0.05) 100%);
+    var(--glass-red-subtle) 100%);
   color: var(--color-error);
   border-radius: 12px;
   border: 1px solid rgba(239, 68, 68, 0.2);
@@ -76,7 +76,7 @@
   border-color: var(--color-accent-300);
   background: linear-gradient(135deg,
     var(--color-accent-200) 0%,
-    rgba(59, 130, 246, 0.08) 50%,
+    var(--glass-blue-subtle) 50%,
     rgba(96, 165, 250, 0.12) 100%);
   box-shadow: 
     0 8px 32px var(--color-accent-200),
@@ -166,7 +166,7 @@
   background: var(--color-overlay-black-20);
   padding: 4px 8px;
   border-radius: 6px;
-  border: 1px solid rgba(96, 165, 250, 0.1);
+  border: 1px solid var(--card-bg-accent);
 }
 
 .workspace-meta {
@@ -300,7 +300,7 @@
     var(--color-accent-50) 0%,
     rgba(59, 130, 246, 0.02) 100%);
   border-radius: 8px;
-  border: 1px solid rgba(96, 165, 250, 0.1);
+  border: 1px solid var(--card-bg-accent);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
