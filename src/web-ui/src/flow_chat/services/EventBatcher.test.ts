@@ -18,7 +18,7 @@ describe('summarizeBatchedEventsForLog', () => {
     setIncludeSensitiveDiagnostics(true);
     const events: BatchedEvent[] = [
       {
-        key: 'subagent:tool:params:session:call:tool',
+        key: 'tool:params:session:call:none',
         payload: {
           toolEvent: {
             event_type: 'ParamsPartial',
@@ -41,7 +41,7 @@ describe('summarizeBatchedEventsForLog', () => {
     setIncludeSensitiveDiagnostics(false);
     const events: BatchedEvent[] = [
       {
-        key: 'subagent:tool:params:session:call:tool',
+        key: 'tool:params:session:call:none',
         payload: {
           toolEvent: {
             event_type: 'ParamsPartial',
@@ -60,7 +60,7 @@ describe('summarizeBatchedEventsForLog', () => {
     expect(summary.rawEventCount).toBe(12);
     expect(summary.mergedEventCount).toBe(1);
     expect(summary.events[0]).toEqual({
-      key: 'subagent:tool:params:session:call:tool',
+      key: 'tool:params:session:call:none',
       strategy: 'accumulate',
       sourceCount: 12,
       timestamp: 1000,

@@ -59,6 +59,7 @@ import type { WorkspaceInfo } from '@/shared/types';
 import { sessionBelongsToWorkspaceNavRow } from '../utils/sessionOrdering';
 import { sessionMatchesWorkspace } from '../utils/workspaceScope';
 import { resolveThreadGoalUserMessageDisplay } from '../utils/threadGoalDisplay';
+import { useBackgroundSubagentActivityStore } from './backgroundSubagentActivityStore';
 
 const log = createLogger('FlowChatStore');
 const VALID_AGENT_TYPES = new Set([
@@ -1835,6 +1836,7 @@ export class FlowChatStore {
       return [];
     }
     this.clearRemovedSessionHistoryState(removedSessionIds, 'session-removed');
+    useBackgroundSubagentActivityStore.getState().removeSessions(removedSessionIds);
 
     this.setState(prev => {
       const removedSessionIdSet = new Set(removedSessionIds);

@@ -45,6 +45,7 @@ import {
 import { useReviewActionBarStore } from '../../store/deepReviewActionBarStore';
 import { buildDeepReviewCapacityQueueStateFromEvent } from '../../utils/deepReviewQueueStateEvents';
 import { useBackgroundCommandActivityStore } from '../../store/backgroundCommandActivityStore';
+import { useBackgroundSubagentActivityStore } from '../../store/backgroundSubagentActivityStore';
 
 const pendingImageAnalysisTurns = new Map<string, string>();
 import { 
@@ -430,6 +431,36 @@ function ensureSubagentSession(
   );
 }
 
+function reconcileBackgroundSubagentSession(subagentSessionId?: string | null): void {
+  if (!subagentSessionId) {
+    return;
+  }
+
+  const flowState = FlowChatStore.getInstance().getState();
+  useBackgroundSubagentActivityStore
+    .getState()
+    .reconcileSession(flowState, subagentSessionId);
+}
+
+function reconcileBackgroundSubagentFromParentTool(
+  parentSessionId: string,
+  parentDialogTurnId: string,
+  parentToolCallId: string,
+): void {
+  const store = FlowChatStore.getInstance();
+  const parentTool = store.findToolItem(parentSessionId, parentDialogTurnId, parentToolCallId);
+  if (parentTool?.type !== 'tool') {
+    return;
+  }
+
+  const subagentSessionId = (parentTool as FlowToolItem).subagentSessionId;
+  if (typeof subagentSessionId !== 'string' || !subagentSessionId.trim()) {
+    return;
+  }
+
+  reconcileBackgroundSubagentSession(subagentSessionId);
+}
+
 function handleSubagentSessionLinked(
   context: FlowChatContext,
   event: SubagentSessionLinkedEvent,
@@ -454,6 +485,7 @@ function handleSubagentSessionLinked(
 
   attachSubagentSessionToParentTool(parentInfo, childSessionId);
   ensureSubagentSession(context, parentInfo, childSessionId, event as Record<string, unknown>, agentType);
+  reconcileBackgroundSubagentSession(childSessionId);
 }
 
 function getLinkedSubagentParentInfo(sessionId: string): SubagentParentInfo | undefined {
@@ -927,6 +959,7 @@ function finalizeTurnCompletionState(
       endTime: Date.now()
     };
   });
+  reconcileBackgroundSubagentSession(sessionId);
 
   const currentState = stateMachineManager.getCurrentState(sessionId);
   if (isStreamingExecutionState(currentState)) {
@@ -1018,6 +1051,7 @@ function handleSessionTitleGenerated(event: any): void {
 
   const store = FlowChatStore.getInstance();
   store.updateSessionTitle(sessionId, title, 'generated');
+  reconcileBackgroundSubagentSession(sessionId);
 }
 
 function handleSessionModelAutoMigrated(event: SessionModelAutoMigratedEvent): void {
@@ -1245,6 +1279,7 @@ function handleImageAnalysisStarted(context: FlowChatContext, event: ImageAnalys
         status: 'image_analyzing' as const,
         userMessage: { ...turn.userMessage, hasImages: true },
       }));
+      reconcileBackgroundSubagentSession(sessionId);
       log.info('Image analysis started: updated existing turn', {
         sessionId,
         turnId: lastTurn.id,
@@ -1289,6 +1324,7 @@ function handleImageAnalysisStarted(context: FlowChatContext, event: ImageAnalys
   };
 
   store.addDialogTurn(sessionId, tempTurn);
+  reconcileBackgroundSubagentSession(sessionId);
   pendingImageAnalysisTurns.set(sessionId, tempTurnId);
 
   context.contentBuffers.set(sessionId, new Map());
@@ -1325,6 +1361,7 @@ function handleImageAnalysisCompleted(_context: FlowChatContext, event: ImageAna
         ...turn,
         status: 'processing' as const,
       }));
+      reconcileBackgroundSubagentSession(sessionId);
     }
   }
 
@@ -1443,6 +1480,7 @@ function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
       backendTurnIndex: typeof turnIndex === 'number' ? turnIndex : undefined,
     };
     store.addDialogTurn(sessionId, newTurn);
+    reconcileBackgroundSubagentSession(sessionId);
 
     context.contentBuffers.set(sessionId, new Map());
     context.activeTextItems.set(sessionId, new Map());
@@ -1469,6 +1507,7 @@ function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
       backendTurnIndex: turnIndex,
     }));
   }
+  reconcileBackgroundSubagentSession(sessionId);
 
   // User may have pre-added this turn from the composer while the previous turn was still running;
   // START failed then (PROCESSING/FINISHING cannot take START). When the backend dispatches this
@@ -1580,9 +1619,11 @@ export function processBatchedEvents(
       } else if (eventType === 'tool:params') {
         const { sessionId, turnId, toolEvent } = payload;
         processToolParamsPartialInternal(sessionId, turnId, toolEvent);
+        reconcileBackgroundSubagentFromParentTool(sessionId, turnId, toolEvent.tool_id);
       } else if (eventType === 'tool:progress') {
         const { sessionId, turnId, toolEvent } = payload;
         processToolProgressInternal(sessionId, turnId, toolEvent);
+        reconcileBackgroundSubagentFromParentTool(sessionId, turnId, toolEvent.tool_id);
       }
     }
   } finally {
@@ -1655,6 +1696,7 @@ function handleToolEvent(
   }
 
   processToolEvent(context, sessionId, turnId, roundId, toolEvent, attemptId, attemptIndex, undefined, onTodoWriteResult);
+  reconcileBackgroundSubagentFromParentTool(sessionId, turnId, toolEvent.tool_id);
 }
 
 /**
@@ -2073,6 +2115,7 @@ export function handleDialogTurnComplete(
       hasFinalResponse: typeof hasFinalResponse === 'boolean' ? hasFinalResponse : undefined,
     };
   });
+  reconcileBackgroundSubagentSession(sessionId);
 
   const currentState = stateMachineManager.getCurrentState(sessionId);
   if (currentState === SessionExecutionState.PROCESSING) {
@@ -2283,6 +2326,7 @@ function handleDialogTurnFailed(context: FlowChatContext, event: any): void {
       log.warn('Failed to update failed session metadata', { sessionId, error: err });
     });
   }
+  reconcileBackgroundSubagentSession(sessionId);
   
   const currentState = stateMachineManager.getCurrentState(sessionId);
   if (isStreamingExecutionState(currentState)) {
@@ -2384,7 +2428,8 @@ function handleDialogTurnCancelled(
       endTime: Date.now()
     };
   });
-  
+  reconcileBackgroundSubagentSession(sessionId);
+   
   const dialogTurn = session.dialogTurns.find(t => t.id === turnId);
   if (dialogTurn) {
     appendPlanDisplayItemsIfNeeded(context, sessionId, turnId, dialogTurn);

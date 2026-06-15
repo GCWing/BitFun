@@ -40,7 +40,11 @@ import {
   deriveSessionReviewActivity,
   isReviewActivityBlocking,
 } from '@/flow_chat/utils/sessionReviewActivity';
-import { buildBackgroundSubagentActivityIndex } from '@/flow_chat/utils/backgroundSubagentActivity';
+import { useBackgroundSubagentActivityStore } from '@/flow_chat/store/backgroundSubagentActivityStore';
+import type {
+  BackgroundSubagentActivity,
+  BackgroundSubagentActivityItem,
+} from '@/flow_chat/utils/backgroundSubagentActivity';
 import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
 import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
 import { confirmWarning } from '@/component-library/components/ConfirmDialog/confirmService';
@@ -170,6 +174,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   const [flowChatState, setFlowChatState] = useState<FlowChatState>(() =>
     flowChatStore.getState()
   );
+  const backgroundSubagentActivities = useBackgroundSubagentActivityStore(state => state.activities);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
   const [expandLevel, setExpandLevel] = useState<0 | 1 | 2>(0);
@@ -240,13 +245,29 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     return () => unsub();
   }, []);
 
-  const backgroundSubagentActivityByParent = useMemo(
-    () => buildBackgroundSubagentActivityIndex(
-      flowChatState.sessions,
-      sessionId => stateMachineManager.getCurrentState(sessionId),
-    ),
-    [flowChatState.sessions],
-  );
+  const backgroundSubagentActivityByParent = useMemo(() => {
+    const itemsByParent = new Map<string, BackgroundSubagentActivityItem[]>();
+    for (const item of Object.values(backgroundSubagentActivities)) {
+      const items = itemsByParent.get(item.parentSessionId) ?? [];
+      items.push(item);
+      itemsByParent.set(item.parentSessionId, items);
+    }
+
+    const activityByParent = new Map<string, BackgroundSubagentActivity>();
+    for (const [parentSessionId, items] of itemsByParent) {
+      const sortedItems = [...items].sort((left, right) => (
+        left.createdAt - right.createdAt || left.sessionId.localeCompare(right.sessionId)
+      ));
+      activityByParent.set(parentSessionId, {
+        runningCount: sortedItems.filter(item => item.status === 'processing').length,
+        finishingCount: sortedItems.filter(item => item.status === 'finishing').length,
+        totalCount: sortedItems.length,
+        items: sortedItems,
+      });
+    }
+
+    return activityByParent;
+  }, [backgroundSubagentActivities]);
 
   useEffect(() => {
     if (editingSessionId && editInputRef.current) {

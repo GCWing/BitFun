@@ -33,6 +33,10 @@ import {
   visibleBackgroundCommandActivitiesForSession,
   type BackgroundCommandActivity,
 } from '../../store/backgroundCommandActivityStore';
+import {
+  useBackgroundSubagentActivityStore,
+  visibleBackgroundSubagentActivitiesForSession,
+} from '../../store/backgroundSubagentActivityStore';
 import type { LineRange } from '@/component-library';
 import { isChatPopupActive, subscribeChatPopupChange } from '../chatPopupState';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
@@ -57,8 +61,6 @@ import {
   type HistorySessionOpenIntentDetail,
 } from '../../services/sessionOpenIntent';
 import {
-  buildBackgroundSubagentActivitySnapshotKey,
-  deriveBackgroundSubagentActivity,
   type BackgroundSubagentActivityItem,
 } from '../../utils/backgroundSubagentActivity';
 import './ModernFlowChatContainer.scss';
@@ -219,13 +221,13 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   // popup can be closed with Escape instead of cancelling the current task.
   const [chatPopupActive, setChatPopupActive] = useState(() => isChatPopupActive());
   const backgroundCommandActivities = useBackgroundCommandActivityStore(state => state.activities);
+  const backgroundSubagentActivities = useBackgroundSubagentActivityStore(state => state.activities);
 
   useEffect(() => {
     return subscribeChatPopupChange(() => {
       setChatPopupActive(isChatPopupActive());
     });
   }, []);
-  const [backgroundSubagents, setBackgroundSubagents] = useState<BackgroundSubagentSummary[]>([]);
   const [stoppingBackgroundSubagentIds, setStoppingBackgroundSubagentIds] = useState<Set<string>>(() => new Set());
   const [stoppingBackgroundCommandIds, setStoppingBackgroundCommandIds] = useState<Set<string>>(() => new Set());
   const [backgroundCommandInputTarget, setBackgroundCommandInputTarget] = useState<FlowChatHeaderCommandSummary | null>(null);
@@ -948,7 +950,6 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     void FlowChatManager.getInstance().switchChatSession(sessionId);
   }, [activeSession?.sessionId]);
 
-  const backgroundSubagentsRef = useRef<string | null>(null);
   const activeSessionIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -956,33 +957,14 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   }, [activeSession?.sessionId]);
 
   useEffect(() => {
-    const syncBackgroundSubagents = () => {
-      const parentId = activeSession?.sessionId;
-      if (!parentId) {
-        setBackgroundSubagents([]);
-        backgroundSubagentsRef.current = null;
-        return;
-      }
+    if (!activeSession?.sessionId) {
+      return;
+    }
 
-      const state = flowChatStore.getState();
-      const snapshot = buildBackgroundSubagentActivitySnapshotKey(state.sessions, parentId);
-      if (snapshot === backgroundSubagentsRef.current) {
-        return;
-      }
-      backgroundSubagentsRef.current = snapshot;
-
-      setBackgroundSubagents(deriveBackgroundSubagentActivity(state, parentId).items);
-    };
-
-    syncBackgroundSubagents();
-    const unsubscribe = flowChatStore.subscribe(syncBackgroundSubagents);
-    const intervalId = window.setInterval(syncBackgroundSubagents, 1000);
-
-    return () => {
-      unsubscribe();
-      window.clearInterval(intervalId);
-    };
-  }, [activeSession?.sessionId]);
+    useBackgroundSubagentActivityStore
+      .getState()
+      .reconcileParent(flowChatStore.getState(), activeSession.sessionId);
+  }, [activeSession?.dialogTurns.length, activeSession?.historyState, activeSession?.sessionId]);
 
   useEffect(() => {
     const agentSessionId = activeSession?.sessionId;
@@ -1042,6 +1024,13 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
       activeSession?.sessionId,
     ).map(backgroundCommandSummaryFromActivity),
     [activeSession?.sessionId, backgroundCommandActivities],
+  );
+  const backgroundSubagents = useMemo(
+    () => visibleBackgroundSubagentActivitiesForSession(
+      backgroundSubagentActivities,
+      activeSession?.sessionId,
+    ),
+    [activeSession?.sessionId, backgroundSubagentActivities],
   );
 
   useEffect(() => {

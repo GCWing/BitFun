@@ -6,7 +6,7 @@
  * Design principles:
  * - Events with the same key are merged (accumulated or replaced)
  * - Batch processing triggered once per frame
- * - Supports different key generation strategies for normal and subagent events
+ * - Merge keys are scoped by session, round/tool id, and retry attempt
  */
 
 import { areSensitiveDiagnosticsEnabled, createLogger } from '@/shared/utils/logger';
@@ -380,8 +380,7 @@ function resolveAttemptMergeToken(data: { attemptId?: string; attemptIndex?: num
  * Generate merge key for TextChunk events
  * 
  * Key structure:
- * - Normal text: text:{sessionId}:{roundId}:{contentType}
- * - Subagent text: subagent:text:{sessionId}:{roundId}:{contentType}
+ * - Text chunk: text:{sessionId}:{roundId}:{contentType}:{attemptToken}
  */
 export function generateTextChunkKey(data: TextChunkEventData): string {
   const { sessionId, roundId, contentType } = data;
@@ -394,10 +393,8 @@ export function generateTextChunkKey(data: TextChunkEventData): string {
  * Returns null if the event doesn't need batching (isolated event)
  * 
  * Key structure:
- * - Tool params: tool:params:{sessionId}:{toolUseId}
- * - Subagent tool params: subagent:tool:params:{sessionId}:{subToolUseId}
- * - Tool progress: tool:progress:{sessionId}:{toolUseId}
- * - Subagent tool progress: subagent:tool:progress:{sessionId}:{subToolUseId}
+ * - Tool params: tool:params:{sessionId}:{toolUseId}:{attemptToken}
+ * - Tool progress: tool:progress:{sessionId}:{toolUseId}:{attemptToken}
  */
 export function generateToolEventKey(data: ToolEventData): { key: string; strategy: MergeStrategy } | null {
   const { sessionId, toolEvent } = data;
@@ -427,55 +424,16 @@ export function generateToolEventKey(data: ToolEventData): { key: string; strate
 }
 
 /**
- * Parse event key to extract event type information
+ * Parse event key to extract event type information.
  */
 export function parseEventKey(key: string): {
-  isSubagent: boolean;
   eventType: 'text' | 'tool:params' | 'tool:progress';
   ids: Record<string, string>;
 } | null {
-  if (key.startsWith('subagent:text:')) {
-    const parts = key.split(':');
-    if (parts.length >= 5) {
-      return {
-        isSubagent: true,
-        eventType: 'text',
-        ids: {
-          sessionId: parts[2],
-          roundId: parts[3],
-          contentType: parts[4]
-        }
-      };
-    }
-  } else if (key.startsWith('subagent:tool:params:')) {
-    const parts = key.split(':');
-    if (parts.length >= 5) {
-      return {
-        isSubagent: true,
-        eventType: 'tool:params',
-        ids: {
-          sessionId: parts[3],
-          subToolUseId: parts[4]
-        }
-      };
-    }
-  } else if (key.startsWith('subagent:tool:progress:')) {
-    const parts = key.split(':');
-    if (parts.length >= 5) {
-      return {
-        isSubagent: true,
-        eventType: 'tool:progress',
-        ids: {
-          sessionId: parts[3],
-          subToolUseId: parts[4]
-        }
-      };
-    }
-  } else if (key.startsWith('text:')) {
+  if (key.startsWith('text:')) {
     const parts = key.split(':');
     if (parts.length >= 4) {
       return {
-        isSubagent: false,
         eventType: 'text',
         ids: {
           sessionId: parts[1],
@@ -488,7 +446,6 @@ export function parseEventKey(key: string): {
     const parts = key.split(':');
     if (parts.length >= 4) {
       return {
-        isSubagent: false,
         eventType: 'tool:params',
         ids: {
           sessionId: parts[2],
@@ -500,7 +457,6 @@ export function parseEventKey(key: string): {
     const parts = key.split(':');
     if (parts.length >= 4) {
       return {
-        isSubagent: false,
         eventType: 'tool:progress',
         ids: {
           sessionId: parts[2],

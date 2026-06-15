@@ -113,6 +113,61 @@ function collectBackgroundTaskToolsBySubagentId(
   return taskBySubagentId;
 }
 
+function findBackgroundTaskToolForSubagent(
+  sessions: Map<string, Session>,
+  parentSessionId: string,
+  subagentSessionId: string,
+): BackgroundTaskTool | null {
+  const parentSession = sessions.get(parentSessionId);
+  if (!parentSession) {
+    return null;
+  }
+
+  for (const turn of parentSession.dialogTurns) {
+    for (const round of turn.modelRounds) {
+      for (const item of round.items) {
+        if (item.type !== 'tool') {
+          continue;
+        }
+
+        const toolItem = item as BackgroundTaskTool;
+        if (
+          toolItem.toolName?.toLowerCase() === 'task' &&
+          toolItem.subagentSessionId === subagentSessionId &&
+          isBackgroundTaskTool(toolItem)
+        ) {
+          return toolItem;
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+function buildBackgroundSubagentActivityItem(
+  session: Session,
+  parentSessionId: string,
+  status: BackgroundSubagentActivityStatus,
+  parentTask: BackgroundTaskTool,
+): BackgroundSubagentActivityItem {
+  const input = parentTask.toolCall?.input ?? {};
+  return {
+    sessionId: session.sessionId,
+    parentSessionId,
+    title: session.title?.trim() || input.description || 'Background subagent',
+    agentType: session.subagentType || input.subagent_type || input.subagentType,
+    status,
+    workspacePath: session.workspacePath,
+    remoteConnectionId: session.remoteConnectionId,
+    remoteSshHost: session.remoteSshHost,
+    parentToolCallId: session.parentToolCallId || parentTask.toolCall?.id || parentTask.id,
+    subagentType: session.subagentType || input.subagent_type || input.subagentType,
+    createdAt: session.createdAt,
+    updatedAt: session.lastActiveAt || session.updatedAt || session.createdAt,
+  };
+}
+
 function emptyActivity(): BackgroundSubagentActivity {
   return EMPTY_BACKGROUND_SUBAGENT_ACTIVITY;
 }
@@ -159,21 +214,7 @@ export function buildBackgroundSubagentActivityIndex(
       continue;
     }
 
-    const input = parentTask.toolCall?.input ?? {};
-    const item: BackgroundSubagentActivityItem = {
-      sessionId: session.sessionId,
-      parentSessionId,
-      title: session.title?.trim() || input.description || 'Background subagent',
-      agentType: session.subagentType || input.subagent_type || input.subagentType,
-      status,
-      workspacePath: session.workspacePath,
-      remoteConnectionId: session.remoteConnectionId,
-      remoteSshHost: session.remoteSshHost,
-      parentToolCallId: session.parentToolCallId || parentTask.toolCall?.id || parentTask.id,
-      subagentType: session.subagentType || input.subagent_type || input.subagentType,
-      createdAt: session.createdAt,
-      updatedAt: session.lastActiveAt || session.updatedAt || session.createdAt,
-    };
+    const item = buildBackgroundSubagentActivityItem(session, parentSessionId, status, parentTask);
 
     const items = itemsByParentId.get(parentSessionId) ?? [];
     items.push(item);
@@ -195,6 +236,37 @@ export function buildBackgroundSubagentActivityIndex(
   }
 
   return index;
+}
+
+export function deriveBackgroundSubagentActivityItemForSession(
+  state: FlowChatState,
+  subagentSessionId: string,
+  resolveExecutionState?: SessionExecutionStateResolver,
+): BackgroundSubagentActivityItem | null {
+  const session = state.sessions.get(subagentSessionId);
+  const parentSessionId = session?.parentSessionId;
+  if (!session || session.sessionKind !== 'subagent' || !parentSessionId) {
+    return null;
+  }
+
+  const status = deriveBackgroundSubagentExecutionStatus(
+    session,
+    resolveExecutionState?.(session.sessionId),
+  );
+  if (!status) {
+    return null;
+  }
+
+  const parentTask = findBackgroundTaskToolForSubagent(
+    state.sessions,
+    parentSessionId,
+    session.sessionId,
+  );
+  if (!parentTask) {
+    return null;
+  }
+
+  return buildBackgroundSubagentActivityItem(session, parentSessionId, status, parentTask);
 }
 
 export function deriveBackgroundSubagentActivity(
