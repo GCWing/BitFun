@@ -480,6 +480,7 @@ export interface WorkspaceConfig {
 
 export interface IConfigManager {
   getConfig<T = any>(path?: string): Promise<T>;
+  getOptionalConfig<T = any>(path: string): Promise<T | undefined>;
   getConfigs(paths: string[]): Promise<Record<string, unknown>>;
   setConfig<T = any>(path: string, value: T): Promise<void>;
   resetConfig(path?: string): Promise<void>;

@@ -53,6 +53,17 @@ describe('startup performance contract', () => {
     expect(source).toContain("import('./shared/context-menu-system')");
   });
 
+  it('keeps the required i18n provider off an async startup waterfall', () => {
+    const source = readSource('../../main.tsx');
+
+    expect(source).toContain(
+      'import { I18nProvider } from "./infrastructure/i18n/providers/I18nProvider"'
+    );
+    expect(source).not.toMatch(/import\(['"]\.\/infrastructure\/i18n['"]\)/);
+    expect(source).toContain("step: 'load_i18n_provider'");
+    expect(source).toContain("mode: 'static'");
+  });
+
   it('does not block first React render on frontend log-level config reads', () => {
     const mainSource = readSource('../../main.tsx');
     const loggerSource = readSource('../../shared/utils/logger.ts');
@@ -64,6 +75,20 @@ describe('startup performance contract', () => {
     expect(mainSource).toContain('installFrontendLogLevelConfigWatcher');
     expect(loggerSource).toContain('__BITFUN_BOOTSTRAP_LOG_LEVEL__');
     expect(themeSource).toContain('__BITFUN_BOOTSTRAP_LOG_LEVEL__');
+  });
+
+  it('keeps startup keybindings on the bootstrap path instead of a first-window IPC', () => {
+    const configManagerSource = readSource('../../infrastructure/config/services/ConfigManager.ts');
+    const themeSource = readSource('../../../../apps/desktop/src/theme.rs');
+
+    expect(themeSource).toContain('__BITFUN_BOOTSTRAP_KEYBINDINGS__');
+    expect(themeSource).toContain('keybindings: global_config.app.keybindings');
+    expect(themeSource).toContain('MAX_BOOTSTRAP_KEYBINDINGS_JSON_BYTES');
+    expect(themeSource).toContain('.filter(|json| json.len() <= MAX_BOOTSTRAP_KEYBINDINGS_JSON_BYTES)');
+    expect(configManagerSource).toContain('consumeBootstrapOptionalConfig');
+    expect(configManagerSource).toContain('__BITFUN_BOOTSTRAP_KEYBINDINGS__');
+    expect(configManagerSource).toContain("path !== 'app.keybindings'");
+    expect(configManagerSource).toContain('delete globalThis.__BITFUN_BOOTSTRAP_KEYBINDINGS__');
   });
 
   it('keeps built-in theme startup on the bootstrap path without pre-render config writes', () => {

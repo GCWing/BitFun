@@ -168,12 +168,14 @@ export type StartupPerfBreakdown = {
     beforeInteractive: {
       matchedCount: number;
       totalFrontendDurationMs: number;
+      totalFrontendDurationUntilInteractiveMs: number;
       totalBackendDurationMs: number;
       totalEstimatedQueueOrBridgeMs: number;
       byCommand: Array<{
         command: string;
         count: number;
         frontendDurationMs: number;
+        frontendDurationUntilInteractiveMs: number;
         backendDurationMs: number;
         estimatedQueueOrBridgeMs: number;
       }>;
@@ -181,7 +183,9 @@ export type StartupPerfBreakdown = {
         command: string;
         target?: string;
         startedAtMs?: number;
+        endedAtMs?: number;
         frontendDurationMs: number;
+        frontendDurationUntilInteractiveMs?: number;
         backendDurationMs?: number;
         estimatedQueueOrBridgeMs?: number;
         transportDurationMs?: number;
@@ -194,13 +198,16 @@ export type StartupPerfBreakdown = {
   apiBeforeInteractive: {
     count: number;
     totalDurationMs: number;
+    totalDurationUntilInteractiveMs: number;
     maxDurationMs?: number;
     byCommand: StartupTraceCommandAggregate[];
     slowCalls: Array<{
       command: string;
       target?: string;
       startedAtMs?: number;
+      endedAtMs?: number;
       durationMs: number;
+      durationUntilInteractiveMs?: number;
       outcome: 'success' | 'failure';
       remote: boolean;
     }>;
@@ -211,7 +218,9 @@ export interface StartupApiCommandSegment {
   command: string;
   target?: string;
   startedAtMs?: number;
+  endedAtMs?: number;
   frontendDurationMs: number;
+  frontendDurationUntilInteractiveMs?: number;
   backendDurationMs?: number;
   estimatedQueueOrBridgeMs?: number;
   transportDurationMs?: number;
@@ -362,6 +371,18 @@ function aggregateApiCalls(calls: StartupTraceApiCallRecord[]): StartupTraceComm
     .sort((left, right) => right.totalDurationMs - left.totalDurationMs);
 }
 
+function durationUntilCutoffMs(
+  startedAtMs: number | undefined,
+  durationMs: number,
+  cutoffMs: number | undefined,
+): number {
+  if (startedAtMs === undefined || cutoffMs === undefined) {
+    return durationMs;
+  }
+  const endMs = startedAtMs + durationMs;
+  return Math.max(0, Math.min(endMs, cutoffMs) - startedAtMs);
+}
+
 export function summarizeApiCommandSegments(
   snapshot: StartupTraceSnapshot,
   frontendCalls: StartupTraceApiCallRecord[] = snapshot.api.calls ?? [],
@@ -394,6 +415,7 @@ function matchBackendCommandSegments(
       command: call.command,
       target: call.target,
       startedAtMs: round(call.startedAtMs),
+      endedAtMs: round(call.endedAtMs),
       frontendDurationMs: round(call.durationMs) ?? 0,
       backendDurationMs: round(backendDurationMs),
       estimatedQueueOrBridgeMs: round(
@@ -414,12 +436,20 @@ function matchBackendCommandSegments(
 function summarizeBackendCommandOverlap(
   frontendCalls: StartupTraceApiCallRecord[],
   nativeEvents: StartupTraceNativeEvent[],
+  cutoffMs?: number,
 ) {
-  const matched = matchBackendCommandSegments(frontendCalls, nativeEvents);
+  const matched = matchBackendCommandSegments(frontendCalls, nativeEvents)
+    .map(call => ({
+      ...call,
+      frontendDurationUntilInteractiveMs: round(
+        durationUntilCutoffMs(call.startedAtMs, call.frontendDurationMs, cutoffMs)
+      ),
+    }));
   const byCommand = new Map<string, {
     command: string;
     count: number;
     frontendDurationMs: number;
+    frontendDurationUntilInteractiveMs: number;
     backendDurationMs: number;
     estimatedQueueOrBridgeMs: number;
   }>();
@@ -428,11 +458,15 @@ function summarizeBackendCommandOverlap(
       command: call.command,
       count: 0,
       frontendDurationMs: 0,
+      frontendDurationUntilInteractiveMs: 0,
       backendDurationMs: 0,
       estimatedQueueOrBridgeMs: 0,
     };
     existing.count += 1;
     existing.frontendDurationMs = round((existing.frontendDurationMs ?? 0) + call.frontendDurationMs) ?? 0;
+    existing.frontendDurationUntilInteractiveMs = round(
+      (existing.frontendDurationUntilInteractiveMs ?? 0) + (call.frontendDurationUntilInteractiveMs ?? 0)
+    ) ?? 0;
     existing.backendDurationMs = round((existing.backendDurationMs ?? 0) + (call.backendDurationMs ?? 0)) ?? 0;
     existing.estimatedQueueOrBridgeMs = round(
       (existing.estimatedQueueOrBridgeMs ?? 0) + (call.estimatedQueueOrBridgeMs ?? 0)
@@ -444,6 +478,9 @@ function summarizeBackendCommandOverlap(
     matchedCount: matched.filter(call => call.backendDurationMs !== undefined).length,
     totalFrontendDurationMs: round(
       matched.reduce((total, call) => total + call.frontendDurationMs, 0)
+    ) ?? 0,
+    totalFrontendDurationUntilInteractiveMs: round(
+      matched.reduce((total, call) => total + (call.frontendDurationUntilInteractiveMs ?? call.frontendDurationMs), 0)
     ) ?? 0,
     totalBackendDurationMs: round(
       matched.reduce((total, call) => total + (call.backendDurationMs ?? 0), 0)
@@ -534,6 +571,7 @@ export function summarizeStartupBreakdown(snapshot: StartupTraceSnapshot): Start
   const backendBeforeInteractive = summarizeBackendCommandOverlap(
     apiBeforeInteractive,
     snapshot.native?.events ?? [],
+    interactive,
   );
   const slowApiCalls = [...apiBeforeInteractive]
     .sort((left, right) => right.durationMs - left.durationMs)
@@ -542,7 +580,11 @@ export function summarizeStartupBreakdown(snapshot: StartupTraceSnapshot): Start
       command: call.command,
       target: call.target,
       startedAtMs: round(call.startedAtMs),
+      endedAtMs: round(call.endedAtMs),
       durationMs: round(call.durationMs) ?? 0,
+      durationUntilInteractiveMs: round(
+        durationUntilCutoffMs(call.startedAtMs, call.durationMs, interactive)
+      ),
       outcome: call.outcome,
       remote: call.remote,
     }));
@@ -650,6 +692,12 @@ export function summarizeStartupBreakdown(snapshot: StartupTraceSnapshot): Start
     apiBeforeInteractive: {
       count: apiBeforeInteractive.length,
       totalDurationMs: round(apiBeforeInteractive.reduce((total, call) => total + call.durationMs, 0)) ?? 0,
+      totalDurationUntilInteractiveMs: round(
+        apiBeforeInteractive.reduce(
+          (total, call) => total + durationUntilCutoffMs(call.startedAtMs, call.durationMs, interactive),
+          0,
+        )
+      ) ?? 0,
       maxDurationMs: apiBeforeInteractive.length > 0
         ? round(Math.max(...apiBeforeInteractive.map(call => call.durationMs)))
         : undefined,

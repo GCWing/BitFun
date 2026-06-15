@@ -35,6 +35,23 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, State};
 
+struct WorkspaceStateSnapshot {
+    current_workspace: Option<WorkspaceInfoDto>,
+    recent_workspaces: Vec<WorkspaceInfoDto>,
+    opened_workspaces: Vec<WorkspaceInfoDto>,
+    legacy_remote_workspace: Option<crate::api::RemoteWorkspace>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceStartupStateSnapshotDto {
+    pub cleanup_removed_count: usize,
+    pub current_workspace: Option<WorkspaceInfoDto>,
+    pub recent_workspaces: Vec<WorkspaceInfoDto>,
+    pub opened_workspaces: Vec<WorkspaceInfoDto>,
+    pub legacy_remote_workspace: Option<crate::api::RemoteWorkspace>,
+}
+
 fn remote_workspace_from_info(info: &WorkspaceInfo) -> Option<crate::api::RemoteWorkspace> {
     if info.workspace_kind != WorkspaceKind::Remote {
         return None;
@@ -1949,6 +1966,34 @@ pub async fn get_recent_workspaces(
     result
 }
 
+async fn collect_workspace_state_snapshot(state: &State<'_, AppState>) -> WorkspaceStateSnapshot {
+    let workspace_service = &state.workspace_service;
+    let current_workspace = workspace_service
+        .get_current_workspace()
+        .await
+        .map(|info| WorkspaceInfoDto::from_workspace_info(&info));
+    let recent_workspaces = workspace_service
+        .get_recent_workspaces()
+        .await
+        .into_iter()
+        .map(|info| WorkspaceInfoDto::from_workspace_info(&info))
+        .collect();
+    let opened_workspaces = workspace_service
+        .get_opened_workspaces()
+        .await
+        .into_iter()
+        .map(|info| WorkspaceInfoDto::from_workspace_info(&info))
+        .collect();
+    let legacy_remote_workspace = state.get_remote_workspace_async().await;
+
+    WorkspaceStateSnapshot {
+        current_workspace,
+        recent_workspaces,
+        opened_workspaces,
+        legacy_remote_workspace,
+    }
+}
+
 #[tauri::command]
 pub async fn remove_recent_workspace(
     state: State<'_, AppState>,
@@ -1968,19 +2013,88 @@ pub async fn cleanup_invalid_workspaces(
     startup_trace: State<'_, DesktopStartupTrace>,
 ) -> Result<usize, String> {
     let trace_started = Instant::now();
+    cleanup_invalid_workspaces_impl(
+        &state,
+        &app,
+        &startup_trace,
+        "cleanup_invalid_workspaces",
+        Some("cleanup_invalid_workspaces"),
+        trace_started,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn cleanup_invalid_workspaces_and_get_workspace_state_snapshot(
+    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+    startup_trace: State<'_, DesktopStartupTrace>,
+) -> Result<WorkspaceStartupStateSnapshotDto, String> {
+    let trace_started = Instant::now();
+    let cleanup_removed_count = match cleanup_invalid_workspaces_impl(
+        &state,
+        &app,
+        &startup_trace,
+        "cleanup_invalid_workspaces_and_get_workspace_state_snapshot",
+        None,
+        trace_started,
+    )
+    .await
+    {
+        Ok(removed_count) => removed_count,
+        Err(error) => {
+            startup_trace.record_tauri_command_elapsed(
+                "cleanup_invalid_workspaces_and_get_workspace_state_snapshot",
+                None,
+                trace_started,
+            );
+            return Err(error);
+        }
+    };
+
+    let snapshot_started = Instant::now();
+    let snapshot = collect_workspace_state_snapshot(&state).await;
+    startup_trace.record_elapsed_step(
+        "tauri_command",
+        "cleanup_invalid_workspaces_and_get_workspace_state_snapshot.collect_workspace_state_snapshot",
+        snapshot_started,
+    );
+    startup_trace.record_tauri_command_elapsed(
+        "cleanup_invalid_workspaces_and_get_workspace_state_snapshot",
+        None,
+        trace_started,
+    );
+
+    Ok(WorkspaceStartupStateSnapshotDto {
+        cleanup_removed_count,
+        current_workspace: snapshot.current_workspace,
+        recent_workspaces: snapshot.recent_workspaces,
+        opened_workspaces: snapshot.opened_workspaces,
+        legacy_remote_workspace: snapshot.legacy_remote_workspace,
+    })
+}
+
+async fn cleanup_invalid_workspaces_impl(
+    state: &State<'_, AppState>,
+    app: &tauri::AppHandle,
+    startup_trace: &State<'_, DesktopStartupTrace>,
+    trace_step_prefix: &str,
+    command_name: Option<&str>,
+    command_started: Instant,
+) -> Result<usize, String> {
     let cleanup_started = Instant::now();
     match state.workspace_service.cleanup_invalid_workspaces().await {
         Ok(local_removed_count) => {
             startup_trace.record_elapsed_step(
                 "tauri_command",
-                "cleanup_invalid_workspaces.local_workspace_cleanup",
+                format!("{trace_step_prefix}.local_workspace_cleanup"),
                 cleanup_started,
             );
             let prune_remote_started = Instant::now();
-            let remote_removed_count = prune_unrecoverable_remote_workspaces(&state).await;
+            let remote_removed_count = prune_unrecoverable_remote_workspaces(state).await;
             startup_trace.record_elapsed_step(
                 "tauri_command",
-                "cleanup_invalid_workspaces.remote_workspace_prune",
+                format!("{trace_step_prefix}.remote_workspace_prune"),
                 prune_remote_started,
             );
             let removed_count = local_removed_count + remote_removed_count;
@@ -1993,7 +2107,7 @@ pub async fn cleanup_invalid_workspaces(
             }
             startup_trace.record_elapsed_step(
                 "tauri_command",
-                "cleanup_invalid_workspaces.apply_active_workspace_context",
+                format!("{trace_step_prefix}.apply_active_workspace_context"),
                 apply_context_started,
             );
 
@@ -2010,7 +2124,7 @@ pub async fn cleanup_invalid_workspaces(
             }
             startup_trace.record_elapsed_step(
                 "tauri_command",
-                "cleanup_invalid_workspaces.sync_identity_watchers",
+                format!("{trace_step_prefix}.sync_identity_watchers"),
                 sync_watchers_started,
             );
 
@@ -2018,20 +2132,16 @@ pub async fn cleanup_invalid_workspaces(
                 "Invalid workspaces cleaned up: removed_count={}",
                 removed_count
             );
-            startup_trace.record_tauri_command_elapsed(
-                "cleanup_invalid_workspaces",
-                None,
-                trace_started,
-            );
+            if let Some(command_name) = command_name {
+                startup_trace.record_tauri_command_elapsed(command_name, None, command_started);
+            }
             Ok(removed_count)
         }
         Err(e) => {
             error!("Failed to cleanup invalid workspaces: {}", e);
-            startup_trace.record_tauri_command_elapsed(
-                "cleanup_invalid_workspaces",
-                None,
-                trace_started,
-            );
+            if let Some(command_name) = command_name {
+                startup_trace.record_tauri_command_elapsed(command_name, None, command_started);
+            }
             Err(format!("Failed to cleanup invalid workspaces: {}", e))
         }
     }

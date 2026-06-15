@@ -1,7 +1,10 @@
  
 
-import {
+import type {
+  RemoteWorkspaceSnapshot,
   WorkspaceInfo,
+} from '../../../shared/types';
+import {
   WorkspaceKind,
   globalStateAPI,
   isRemoteWorkspace,
@@ -73,6 +76,9 @@ class WorkspaceManager {
   private isInitialized = false;
   private isInitializing = false;
   private identityEventListening = false;
+  private startupLegacyRemoteWorkspaceSnapshotAvailable = false;
+  private startupLegacyRemoteWorkspaceSnapshotConsumed = false;
+  private startupLegacyRemoteWorkspace: RemoteWorkspaceSnapshot | null = null;
 
   private constructor() {
     this.state = {
@@ -104,6 +110,24 @@ class WorkspaceManager {
     this.listeners.add(listener);
     return () => {
       this.listeners.delete(listener);
+    };
+  }
+
+  public consumeStartupLegacyRemoteWorkspaceSnapshot(): {
+    available: boolean;
+    workspace: RemoteWorkspaceSnapshot | null;
+  } {
+    if (
+      !this.startupLegacyRemoteWorkspaceSnapshotAvailable ||
+      this.startupLegacyRemoteWorkspaceSnapshotConsumed
+    ) {
+      return { available: false, workspace: null };
+    }
+
+    this.startupLegacyRemoteWorkspaceSnapshotConsumed = true;
+    return {
+      available: true,
+      workspace: this.startupLegacyRemoteWorkspace,
     };
   }
 
@@ -416,16 +440,25 @@ class WorkspaceManager {
       await identityListenerReady;
 
       const cleanupStartedAt = markWorkspaceStartupStepStart('cleanup_invalid_workspaces');
-      await globalStateAPI.cleanupInvalidWorkspaces();
-      markWorkspaceStartupStepEnd('cleanup_invalid_workspaces', cleanupStartedAt);
+      const {
+        cleanupRemovedCount,
+        recentWorkspaces,
+        openedWorkspaces,
+        currentWorkspace,
+        legacyRemoteWorkspace,
+      } = await globalStateAPI.cleanupInvalidWorkspacesAndGetWorkspaceStateSnapshot();
+      this.startupLegacyRemoteWorkspace = legacyRemoteWorkspace;
+      this.startupLegacyRemoteWorkspaceSnapshotAvailable = true;
+      this.startupLegacyRemoteWorkspaceSnapshotConsumed = false;
+      markWorkspaceStartupStepEnd('cleanup_invalid_workspaces', cleanupStartedAt, {
+        removedCount: cleanupRemovedCount,
+        includesWorkspaceStateSnapshot: true,
+        includesLegacyRemoteWorkspace: true,
+      });
 
       const fetchStateStartedAt = markWorkspaceStartupStepStart('fetch_workspace_state');
-      const [recentWorkspaces, openedWorkspaces, currentWorkspace] = await Promise.all([
-        globalStateAPI.getRecentWorkspaces(),
-        globalStateAPI.getOpenedWorkspaces(),
-        globalStateAPI.getCurrentWorkspace(),
-      ]);
       markWorkspaceStartupStepEnd('fetch_workspace_state', fetchStateStartedAt, {
+        source: 'startup_cleanup_snapshot',
         recentCount: recentWorkspaces.length,
         openedCount: openedWorkspaces.length,
         hasCurrentWorkspace: currentWorkspace !== null,

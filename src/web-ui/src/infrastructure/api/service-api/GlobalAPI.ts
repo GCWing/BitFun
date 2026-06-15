@@ -66,6 +66,21 @@ export interface WorkspaceInfo {
   sshHost?: string;
 }
 
+export interface RemoteWorkspaceSnapshot {
+  connectionId: string;
+  connectionName: string;
+  remotePath: string;
+  sshHost?: string;
+}
+
+export interface WorkspaceStartupStateSnapshot {
+  cleanupRemovedCount: number;
+  currentWorkspace: WorkspaceInfo | null;
+  recentWorkspaces: WorkspaceInfo[];
+  openedWorkspaces: WorkspaceInfo[];
+  legacyRemoteWorkspace?: RemoteWorkspaceSnapshot | null;
+}
+
 export interface UpdateAppStatusRequest {
   status: AppStatus;
 }
@@ -290,6 +305,17 @@ export class GlobalAPI {
       });
     } catch (error) {
       throw createTauriCommandError('get_recent_workspaces', error);
+    }
+  }
+
+  async cleanupInvalidWorkspacesAndGetWorkspaceStateSnapshot(): Promise<WorkspaceStartupStateSnapshot> {
+    try {
+      return await api.invoke('cleanup_invalid_workspaces_and_get_workspace_state_snapshot');
+    } catch (error) {
+      throw createTauriCommandError(
+        'cleanup_invalid_workspaces_and_get_workspace_state_snapshot',
+        error
+      );
     }
   }
 

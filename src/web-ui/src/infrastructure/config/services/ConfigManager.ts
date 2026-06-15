@@ -13,6 +13,12 @@ import { extractProviderSegmentFromBaseUrl, matchProviderCatalogItemByBaseUrl, n
 const log = createLogger('ConfigManager');
 const PROVIDER_INSTANCE_METADATA_KEY = 'provider_instance_id';
 
+declare global {
+  // Injected by the desktop webview initialization script before the frontend
+  // bundle runs. It avoids a startup-window IPC for the initial shortcut load.
+  var __BITFUN_BOOTSTRAP_KEYBINDINGS__: unknown | undefined;
+}
+
 function legacyProviderInstanceId(seed: string): string {
   let hash = 2166136261;
   for (let i = 0; i < seed.length; i += 1) {
@@ -118,8 +124,42 @@ class ConfigManagerImpl implements IConfigManager {
 
   
 
-  private getReadKey(path?: string): string {
-    return path ?? '<root>';
+  private getReadKey(path?: string, mode: 'normal' | 'optional' = 'normal'): string {
+    return `${mode}:${path ?? '<root>'}`;
+  }
+
+  private clearBootstrapOptionalConfigs(): void {
+    delete globalThis.__BITFUN_BOOTSTRAP_KEYBINDINGS__;
+  }
+
+  private deleteInFlightReadsForPath(path?: string): void {
+    this.inFlightReads.delete(this.getReadKey(path));
+    if (path) {
+      this.inFlightReads.delete(this.getReadKey(path, 'optional'));
+      if (path === 'app.keybindings') {
+        this.clearBootstrapOptionalConfigs();
+      }
+    }
+  }
+
+  private consumeBootstrapOptionalConfig<T = any>(path: string): {
+    available: boolean;
+    value: T | undefined;
+  } {
+    if (path !== 'app.keybindings') {
+      return { available: false, value: undefined };
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(globalThis, '__BITFUN_BOOTSTRAP_KEYBINDINGS__')) {
+      return { available: false, value: undefined };
+    }
+
+    const value = globalThis.__BITFUN_BOOTSTRAP_KEYBINDINGS__;
+    delete globalThis.__BITFUN_BOOTSTRAP_KEYBINDINGS__;
+    return {
+      available: true,
+      value: value == null ? undefined : value as T,
+    };
   }
 
   private async readConfig<T = any>(path?: string): Promise<T> {
@@ -133,6 +173,15 @@ class ConfigManagerImpl implements IConfigManager {
     }
 
     return resolvedConfig as T;
+  }
+
+  private async readOptionalConfig<T = any>(path: string): Promise<T | undefined> {
+    const config = await configAPI.getConfig(path, { skipRetryOnNotFound: true });
+    const resolvedConfig = path === 'ai.models'
+      ? await this.migrateLegacyAiModelsIfNeeded(config)
+      : config;
+
+    return resolvedConfig as T | undefined;
   }
 
   private async readConfigs(paths: string[]): Promise<Record<string, unknown>> {
@@ -206,6 +255,38 @@ class ConfigManagerImpl implements IConfigManager {
       if (path === 'ai.default_models') {
         return {} as T;
       }
+      throw error;
+    }
+  }
+
+  async getOptionalConfig<T = any>(path: string): Promise<T | undefined> {
+    try {
+      if (this.configCache.has(path)) {
+        return this.configCache.get(path);
+      }
+
+      const bootstrap = this.consumeBootstrapOptionalConfig<T>(path);
+      if (bootstrap.available) {
+        return bootstrap.value;
+      }
+
+      const readKey = this.getReadKey(path, 'optional');
+      const existingRead = this.inFlightReads.get(readKey);
+      if (existingRead) {
+        return (await existingRead) as T | undefined;
+      }
+
+      const readPromise = this.readOptionalConfig<T>(path);
+      this.inFlightReads.set(readKey, readPromise);
+      try {
+        return await readPromise;
+      } finally {
+        if (this.inFlightReads.get(readKey) === readPromise) {
+          this.inFlightReads.delete(readKey);
+        }
+      }
+    } catch (error) {
+      log.error('Failed to get optional config', { path, error });
       throw error;
     }
   }
@@ -293,7 +374,7 @@ class ConfigManagerImpl implements IConfigManager {
   async setConfig<T = any>(path: string, value: T): Promise<void> {
     try {
       const oldValue = this.configCache.get(path);
-      this.inFlightReads.delete(this.getReadKey(path));
+      this.deleteInFlightReadsForPath(path);
       
       
       await configAPI.setConfig(path, value);
@@ -316,7 +397,7 @@ class ConfigManagerImpl implements IConfigManager {
       
       if (path) {
         this.configCache.delete(path);
-        this.inFlightReads.delete(this.getReadKey(path));
+        this.deleteInFlightReadsForPath(path);
       } else {
         this.configCache.clear();
         this.inFlightReads.clear();
@@ -359,6 +440,8 @@ class ConfigManagerImpl implements IConfigManager {
       
       
       this.configCache.clear();
+      this.inFlightReads.clear();
+      this.clearBootstrapOptionalConfigs();
     } catch (error) {
       log.error('Failed to import config', error);
       throw error;
@@ -378,6 +461,7 @@ class ConfigManagerImpl implements IConfigManager {
     try {
       this.configCache.clear();
       this.inFlightReads.clear();
+      this.clearBootstrapOptionalConfigs();
     } catch (error) {
       log.error('Failed to refresh cache', error);
     }
@@ -386,6 +470,7 @@ class ConfigManagerImpl implements IConfigManager {
   clearCache(): void {
     this.configCache.clear();
     this.inFlightReads.clear();
+    this.clearBootstrapOptionalConfigs();
   }
 
   

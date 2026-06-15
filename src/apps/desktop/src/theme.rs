@@ -209,6 +209,15 @@ pub struct ThemeConfig {
     pub accent_color: String,
 }
 
+#[derive(Debug, Clone)]
+struct StartupBootstrapConfig {
+    theme: ThemeConfig,
+    locale: String,
+    keybindings: Option<serde_json::Value>,
+}
+
+const MAX_BOOTSTRAP_KEYBINDINGS_JSON_BYTES: usize = 64 * 1024;
+
 impl Default for ThemeConfig {
     fn default() -> Self {
         let mut theme = Self::get_builtin_theme("bitfun-light").unwrap_or_else(|| Self {
@@ -322,9 +331,13 @@ impl ThemeConfig {
         }
     }
 
-    pub fn load_from_config() -> Self {
-        let default = Self::default();
-
+    fn load_startup_bootstrap_config() -> StartupBootstrapConfig {
+        let default_theme = Self::default();
+        let default = StartupBootstrapConfig {
+            theme: default_theme.clone(),
+            locale: "zh-CN".to_string(),
+            keybindings: None,
+        };
         let path_manager = match try_get_path_manager_arc() {
             Ok(pm) => pm,
             Err(e) => {
@@ -346,11 +359,30 @@ impl ThemeConfig {
             }
         };
 
-        let global_config: GlobalConfig = match serde_json::from_str(&config_content) {
-            Ok(config) => config,
+        let config_value: serde_json::Value = match serde_json::from_str(&config_content) {
+            Ok(value) => value,
             Err(e) => {
                 debug!("Failed to parse config file, using default theme: {}", e);
                 return default;
+            }
+        };
+
+        let locale = config_value
+            .pointer("/app/language")
+            .and_then(|value| value.as_str())
+            .or_else(|| {
+                config_value
+                    .pointer("/i18n/currentLanguage")
+                    .and_then(|value| value.as_str())
+            })
+            .unwrap_or("zh-CN")
+            .to_string();
+
+        let global_config: GlobalConfig = match serde_json::from_value(config_value) {
+            Ok(config) => config,
+            Err(e) => {
+                debug!("Failed to parse config file, using default theme: {}", e);
+                return StartupBootstrapConfig { locale, ..default };
             }
         };
 
@@ -362,15 +394,21 @@ impl ThemeConfig {
 
         let resolved_id = Self::resolve_builtin_theme_id(theme_id);
 
-        match Self::get_builtin_theme(resolved_id) {
+        let theme = match Self::get_builtin_theme(resolved_id) {
             Some(mut config) => {
                 config.selection_id = Some(theme_id.to_string());
                 config
             }
             None => {
                 warn!("Unknown theme ID: {}, using default theme", theme_id);
-                default
+                default_theme
             }
+        };
+
+        StartupBootstrapConfig {
+            theme,
+            locale,
+            keybindings: global_config.app.keybindings,
         }
     }
 
@@ -384,30 +422,6 @@ impl ThemeConfig {
             };
         }
         theme_id
-    }
-
-    fn load_startup_locale_from_config() -> String {
-        let path_manager = match try_get_path_manager_arc() {
-            Ok(pm) => pm,
-            Err(_) => return "zh-CN".to_string(),
-        };
-        let config_file = path_manager.app_config_file();
-        let Ok(config_content) = std::fs::read_to_string(config_file) else {
-            return "zh-CN".to_string();
-        };
-        let Ok(config_value) = serde_json::from_str::<serde_json::Value>(&config_content) else {
-            return "zh-CN".to_string();
-        };
-        config_value
-            .pointer("/app/language")
-            .and_then(|value| value.as_str())
-            .or_else(|| {
-                config_value
-                    .pointer("/i18n/currentLanguage")
-                    .and_then(|value| value.as_str())
-            })
-            .unwrap_or("zh-CN")
-            .to_string()
     }
 
     fn startup_messages_json(locale: &str) -> String {
@@ -437,9 +451,13 @@ impl ThemeConfig {
         messages.to_string()
     }
 
-    pub fn generate_init_script(&self, startup_trace_id: &str) -> String {
+    fn generate_init_script(
+        &self,
+        startup_trace_id: &str,
+        bootstrap_config: &StartupBootstrapConfig,
+    ) -> String {
         let theme_type = if self.is_light { "light" } else { "dark" };
-        let startup_locale = Self::load_startup_locale_from_config();
+        let startup_locale = &bootstrap_config.locale;
         let startup_locale_json =
             serde_json::to_string(&startup_locale).unwrap_or_else(|_| "\"zh-CN\"".to_string());
         let startup_messages_json = Self::startup_messages_json(&startup_locale);
@@ -460,6 +478,11 @@ impl ThemeConfig {
             .as_ref()
             .and_then(|selection| serde_json::to_string(selection).ok())
             .unwrap_or_else(|| "null".to_string());
+        let bootstrap_keybindings_assignment = serde_json::to_string(&bootstrap_config.keybindings)
+            .ok()
+            .filter(|json| json.len() <= MAX_BOOTSTRAP_KEYBINDINGS_JSON_BYTES)
+            .map(|json| format!("window.__BITFUN_BOOTSTRAP_KEYBINDINGS__ = {json};"))
+            .unwrap_or_default();
 
         format!(
             r#"
@@ -472,6 +495,7 @@ impl ThemeConfig {
                 window.__BITFUN_SHOW_STARTUP_WINDOW_CONTROLS__ = {show_startup_window_controls};
                 window.__BITFUN_BOOTSTRAP_THEME_ID__ = {bootstrap_theme_id_json};
                 window.__BITFUN_BOOTSTRAP_THEME_SELECTION__ = {bootstrap_theme_selection_json};
+                {bootstrap_keybindings_assignment}
                 function applyTheme() {{
                     var root = document.documentElement;
                     if (!root) return false;
@@ -520,6 +544,7 @@ impl ThemeConfig {
             startup_locale_json = startup_locale_json,
             startup_messages_json = startup_messages_json,
             show_startup_window_controls = show_startup_window_controls,
+            bootstrap_keybindings_assignment = bootstrap_keybindings_assignment,
         )
     }
 
@@ -538,9 +563,10 @@ pub fn create_main_window(
     startup_trace: &DesktopStartupTrace,
 ) {
     let total_started_at = Instant::now();
-    let theme = ThemeConfig::load_from_config();
+    let bootstrap_config = ThemeConfig::load_startup_bootstrap_config();
+    let theme = bootstrap_config.theme.clone();
     let bg_color = theme.to_tauri_color();
-    let init_script = theme.generate_init_script(startup_trace_id);
+    let init_script = theme.generate_init_script(startup_trace_id, &bootstrap_config);
     startup_trace.record_step(
         "native_step_end",
         "native_window",

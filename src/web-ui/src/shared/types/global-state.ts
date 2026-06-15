@@ -6,6 +6,7 @@ import { workspaceAPI } from '@/infrastructure/api';
 import type {
   ApplicationState as APIApplicationState,
   AppStatus as APIAppStatus,
+  RemoteWorkspaceSnapshot as APIRemoteWorkspaceSnapshot,
   WorkspaceInfo as APIWorkspaceInfo,
 } from '@/infrastructure/api/service-api/GlobalAPI';
 import { createLogger } from '../utils/logger';
@@ -109,6 +110,13 @@ export interface WorkspaceInfo {
    * Logical workspace host for stable scoping: `{sshHost}:{rootPath}`.
    * Local / assistant workspaces use `localhost` (from backend); remote uses SSH config host.
    */
+  sshHost?: string;
+}
+
+export interface RemoteWorkspaceSnapshot {
+  connectionId: string;
+  connectionName: string;
+  remotePath: string;
   sshHost?: string;
 }
 
@@ -216,6 +224,13 @@ export interface GlobalStateAPI {
   getCurrentWorkspace(): Promise<WorkspaceInfo | null>;
   getOpenedWorkspaces(): Promise<WorkspaceInfo[]>;
   getRecentWorkspaces(): Promise<WorkspaceInfo[]>;
+  cleanupInvalidWorkspacesAndGetWorkspaceStateSnapshot(): Promise<{
+    cleanupRemovedCount: number;
+    currentWorkspace: WorkspaceInfo | null;
+    recentWorkspaces: WorkspaceInfo[];
+    openedWorkspaces: WorkspaceInfo[];
+    legacyRemoteWorkspace: RemoteWorkspaceSnapshot | null;
+  }>;
   removeWorkspaceFromRecent(workspaceId: string): Promise<void>;
   cleanupInvalidWorkspaces(): Promise<number>;
   scanWorkspaceInfo(workspacePath: string): Promise<WorkspaceInfo | null>;
@@ -345,6 +360,21 @@ function mapWorkspaceInfo(workspace: APIWorkspaceInfo): WorkspaceInfo {
   };
 }
 
+function mapRemoteWorkspaceSnapshot(
+  workspace: APIRemoteWorkspaceSnapshot | null | undefined
+): RemoteWorkspaceSnapshot | null {
+  if (!workspace) {
+    return null;
+  }
+
+  return {
+    connectionId: workspace.connectionId,
+    connectionName: workspace.connectionName,
+    remotePath: workspace.remotePath,
+    sshHost: workspace.sshHost?.trim() || undefined,
+  };
+}
+
 function mapApplicationState(state: APIApplicationState): ApplicationState {
   const now = new Date().toISOString();
   return {
@@ -455,6 +485,28 @@ export function createGlobalStateAPI(): GlobalStateAPI {
       const workspaces = (await globalAPI.getRecentWorkspaces()).map(mapWorkspaceInfo);
       logger.debug('getRecentWorkspaces returned', summarizeWorkspacesForLog(workspaces));
       return workspaces;
+    },
+
+    async cleanupInvalidWorkspacesAndGetWorkspaceStateSnapshot(): Promise<{
+      cleanupRemovedCount: number;
+      currentWorkspace: WorkspaceInfo | null;
+      recentWorkspaces: WorkspaceInfo[];
+      openedWorkspaces: WorkspaceInfo[];
+      legacyRemoteWorkspace: RemoteWorkspaceSnapshot | null;
+    }> {
+      const snapshot = await globalAPI.cleanupInvalidWorkspacesAndGetWorkspaceStateSnapshot();
+      const recentWorkspaces = snapshot.recentWorkspaces.map(mapWorkspaceInfo);
+      logger.debug(
+        'cleanupInvalidWorkspacesAndGetWorkspaceStateSnapshot returned',
+        summarizeWorkspacesForLog(recentWorkspaces)
+      );
+      return {
+        cleanupRemovedCount: snapshot.cleanupRemovedCount,
+        currentWorkspace: snapshot.currentWorkspace ? mapWorkspaceInfo(snapshot.currentWorkspace) : null,
+        recentWorkspaces,
+        openedWorkspaces: snapshot.openedWorkspaces.map(mapWorkspaceInfo),
+        legacyRemoteWorkspace: mapRemoteWorkspaceSnapshot(snapshot.legacyRemoteWorkspace),
+      };
     },
 
     async removeWorkspaceFromRecent(workspaceId: string): Promise<void> {

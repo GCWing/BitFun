@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const globalStateMocks = vi.hoisted(() => ({
   initializeGlobalState: vi.fn(),
   cleanupInvalidWorkspaces: vi.fn(),
+  cleanupInvalidWorkspacesAndGetWorkspaceStateSnapshot: vi.fn(),
   getRecentWorkspaces: vi.fn(),
   getOpenedWorkspaces: vi.fn(),
   getCurrentWorkspace: vi.fn(),
@@ -43,6 +44,13 @@ vi.mock('@/shared/utils/startupTrace', () => ({
 function configureGlobalState(): void {
   globalStateMocks.initializeGlobalState.mockResolvedValue('initialized');
   globalStateMocks.cleanupInvalidWorkspaces.mockResolvedValue(0);
+  globalStateMocks.cleanupInvalidWorkspacesAndGetWorkspaceStateSnapshot.mockResolvedValue({
+    cleanupRemovedCount: 0,
+    recentWorkspaces: [],
+    openedWorkspaces: [],
+    currentWorkspace: null,
+    legacyRemoteWorkspace: null,
+  });
   globalStateMocks.getRecentWorkspaces.mockResolvedValue([]);
   globalStateMocks.getOpenedWorkspaces.mockResolvedValue([]);
   globalStateMocks.getCurrentWorkspace.mockResolvedValue(null);
@@ -73,11 +81,44 @@ describe('WorkspaceManager startup initialization', () => {
 
     expect(listenMock).toHaveBeenCalledWith('workspace-identity-changed', expect.any(Function));
     expect(globalStateMocks.initializeGlobalState).toHaveBeenCalledTimes(1);
-    expect(globalStateMocks.getCurrentWorkspace).not.toHaveBeenCalled();
+    expect(globalStateMocks.cleanupInvalidWorkspacesAndGetWorkspaceStateSnapshot).not.toHaveBeenCalled();
 
     resolveListener?.(() => undefined);
     await initializePromise;
 
-    expect(globalStateMocks.getCurrentWorkspace).toHaveBeenCalledTimes(1);
+    expect(globalStateMocks.cleanupInvalidWorkspacesAndGetWorkspaceStateSnapshot).toHaveBeenCalledTimes(1);
+    expect(globalStateMocks.cleanupInvalidWorkspaces).not.toHaveBeenCalled();
+    expect(globalStateMocks.getCurrentWorkspace).not.toHaveBeenCalled();
+    expect(globalStateMocks.getRecentWorkspaces).not.toHaveBeenCalled();
+    expect(globalStateMocks.getOpenedWorkspaces).not.toHaveBeenCalled();
+  });
+
+  it('stores the startup legacy remote workspace snapshot for one reconnect pass', async () => {
+    const legacyRemoteWorkspace = {
+      connectionId: 'conn-1',
+      connectionName: 'Remote',
+      remotePath: '/repo',
+      sshHost: 'devbox',
+    };
+    globalStateMocks.cleanupInvalidWorkspacesAndGetWorkspaceStateSnapshot.mockResolvedValue({
+      cleanupRemovedCount: 0,
+      recentWorkspaces: [],
+      openedWorkspaces: [],
+      currentWorkspace: null,
+      legacyRemoteWorkspace,
+    });
+    listenMock.mockResolvedValue(() => undefined);
+    const manager = await getFreshWorkspaceManager();
+
+    await manager.initialize();
+
+    expect(manager.consumeStartupLegacyRemoteWorkspaceSnapshot()).toEqual({
+      available: true,
+      workspace: legacyRemoteWorkspace,
+    });
+    expect(manager.consumeStartupLegacyRemoteWorkspaceSnapshot()).toEqual({
+      available: false,
+      workspace: null,
+    });
   });
 });
