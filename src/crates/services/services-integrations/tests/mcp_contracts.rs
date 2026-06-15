@@ -191,11 +191,8 @@ fn mcp_remote_client_info_declares_supported_client_capabilities() {
     assert!(info.capabilities.sampling.is_some());
     assert!(info.capabilities.elicitation.is_some());
     assert_eq!(
-        info.capabilities
-            .elicitation
-            .as_ref()
-            .and_then(|cap| cap.schema_validation),
-        Some(true)
+        serde_json::to_value(&info.capabilities.elicitation).unwrap(),
+        serde_json::json!({})
     );
 }
 
