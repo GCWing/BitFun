@@ -1003,7 +1003,7 @@ $ {command}\n\
 (timed out after {ms}ms)\n\
 \n\
 Timeout doesn't mean your changes are broken — the command was too slow to finish in the budget. Either:\n\
-  - Run a lighter check yourself: e.g. `go vet` instead of `go build`, a single test file instead of the full package, `tsc --noEmit` on one tsconfig instead of all. If it passes, finalize.\n\
+  - Run a lighter check yourself: a single test file instead of the full package, `tsc --noEmit` on one sub-tsconfig instead of the root project, parsing just the changed file (`python -c 'import ast; ast.parse(...)'`, `node --check`, `gofmt -e`). If it passes, finalize.\n\
   - Or, if you believe your changes are correct, finalize without further verification.\n\
 Do not rerun the same command verbatim. Either pick a concretely lighter check or trust your edits.\n\
 </system-reminder>",
@@ -1048,9 +1048,15 @@ This is your next signal — diagnose what is still wrong, fix it, and run the v
 ///   2. Project-defined targets: `make`/`just` `check|test|ci`.
 ///   3. Language manifests, **scoped to what `git diff` says actually
 ///      changed**, not the whole workspace:
-///        - `go.mod`       → `go build` on the directory of each changed
-///          `.go` file (`go build ./pkg/foo ./pkg/bar`); skip if no `.go`
-///          files changed.
+///        - `go.mod`       → `go vet` on the directory of each changed
+///          `.go` file (`go vet ./pkg/foo ./pkg/bar`); skip if no `.go`
+///          files changed. We use `vet` over `build` because `vet` runs
+///          the same parser + type checker (so it catches every "patch
+///          doesn't compile" error in our class — undefined symbol, type
+///          mismatch, wrong arity, missing import) while skipping codegen
+///          and linking. On big Go repos that's roughly 30% faster cold,
+///          and it also compiles `*_test.go` so a patch that breaks the
+///          package's own tests is caught here too.
 ///        - `Cargo.toml`   → `cargo check -p <crate>` for the crate(s)
 ///          owning the changed `.rs` files; skip if no `.rs` files map
 ///          to a workspace member.
@@ -1092,10 +1098,10 @@ fn detect_verify_command(workspace: &std::path::Path) -> Option<String> {
     if workspace.join("go.mod").exists() {
         let pkgs = scoped_go_packages(&changed);
         if !pkgs.is_empty() {
-            return Some(format!("go build {}", pkgs.join(" ")));
+            return Some(format!("go vet {}", pkgs.join(" ")));
         }
         // go.mod exists but no .go files changed — fall through rather than
-        // building the entire module just to satisfy detection.
+        // vetting the entire module just to satisfy detection.
     }
     if workspace.join("Cargo.toml").exists() {
         let crates = scoped_cargo_crates(workspace, &changed);
