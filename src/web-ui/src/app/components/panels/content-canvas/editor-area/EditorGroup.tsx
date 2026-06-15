@@ -45,6 +45,7 @@ export interface EditorGroupProps {
   onCloseAllTabs?: () => Promise<void> | void;
   onInteraction?: (itemId: string, userInput: string) => Promise<void>;
   disablePopOut?: boolean;
+  terminalResizeSuspended?: boolean;
 }
 
 export const EditorGroup: React.FC<EditorGroupProps> = ({
@@ -72,9 +73,13 @@ export const EditorGroup: React.FC<EditorGroupProps> = ({
   onCloseAllTabs,
   onInteraction,
   disablePopOut = false,
+  terminalResizeSuspended = false,
 }) => {
   const { t } = useTranslation('components');
   const visibleTabs = useMemo(() => group.tabs.filter(t => !t.isHidden), [group.tabs]);
+  const isKeepAliveTerminalTab = useCallback((tab: EditorGroupState['tabs'][number]) =>
+    tab.content.type === 'terminal',
+  []);
   
   // Cache recently visited tabs (max 5) for instant switching
   const cachedTabsRef = useRef<Set<string>>(new Set());
@@ -82,7 +87,11 @@ export const EditorGroup: React.FC<EditorGroupProps> = ({
   // Update cache: keep active tab and 4 most recent tabs
   useEffect(() => {
     // Remove closed tabs
-    const validTabIds = new Set(group.tabs.filter(t => !t.isHidden).map(t => t.id));
+    const validTabIds = new Set(
+      group.tabs
+        .filter(t => !t.isHidden || isKeepAliveTerminalTab(t))
+        .map(t => t.id)
+    );
     cachedTabsRef.current = new Set(
       Array.from(cachedTabsRef.current).filter(id => validTabIds.has(id))
     );
@@ -102,16 +111,17 @@ export const EditorGroup: React.FC<EditorGroupProps> = ({
         cachedTabsRef.current = new Set([group.activeTabId, ...sortedTabs]);
       }
     }
-  }, [group.activeTabId, group.tabs]);
+  }, [group.activeTabId, group.tabs, isKeepAliveTerminalTab]);
   
-  // Tabs to render (active + cached)
+  // Tabs to render (active + cached). Hidden terminal tabs stay mounted so
+  // reopening a terminal reuses the xterm buffer instead of replaying history.
   const tabsToRender = useMemo(() => {
     const result = group.tabs.filter(t => 
-      !t.isHidden && 
-      (t.id === group.activeTabId || cachedTabsRef.current.has(t.id))
+      (!t.isHidden && (t.id === group.activeTabId || cachedTabsRef.current.has(t.id))) ||
+      (t.isHidden && isKeepAliveTerminalTab(t))
     );
     return result;
-  }, [group.tabs, group.activeTabId]);
+  }, [group.tabs, group.activeTabId, isKeepAliveTerminalTab]);
 
   const handleContentChange = useCallback((content: PanelContent | null) => {
     if (content && group.activeTabId) {
@@ -186,6 +196,7 @@ export const EditorGroup: React.FC<EditorGroupProps> = ({
                   }
                   onInteraction={onInteraction}
                   workspacePath={workspacePath}
+                  terminalResizeSuspended={terminalResizeSuspended}
                 />
               </div>
             ))

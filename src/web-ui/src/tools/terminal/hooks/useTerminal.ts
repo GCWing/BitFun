@@ -7,6 +7,7 @@ import { getTerminalService, TerminalService } from '../services';
 import { createLogger } from '@/shared/utils/logger';
 import type {
   SessionResponse,
+  TerminalReplayEvent,
   TerminalEvent,
   TerminalEventCallback,
 } from '../types';
@@ -21,7 +22,9 @@ export interface UseTerminalOptions {
   onReady?: () => void;
   onExit?: (exitCode?: number) => void;
   onError?: (message: string) => void;
-  /** Called with the PTY dimensions stored alongside history, before onOutput. */
+  /** Called with ordered replay events before live events are subscribed. */
+  onReplay?: (events: TerminalReplayEvent[]) => void;
+  /** @deprecated Use onReplay so resize/write ordering is preserved. */
   onHistoryDims?: (cols: number, rows: number) => void;
 }
 
@@ -47,6 +50,7 @@ export function useTerminal(options: UseTerminalOptions): UseTerminalReturn {
     onReady,
     onExit,
     onError,
+    onReplay,
     onHistoryDims,
   } = options;
 
@@ -64,6 +68,7 @@ export function useTerminal(options: UseTerminalOptions): UseTerminalReturn {
   const onReadyRef = useRef(onReady);
   const onExitRef = useRef(onExit);
   const onErrorRef = useRef(onError);
+  const onReplayRef = useRef(onReplay);
   const onHistoryDimsRef = useRef(onHistoryDims);
 
   // Keep refs updated
@@ -73,6 +78,7 @@ export function useTerminal(options: UseTerminalOptions): UseTerminalReturn {
     onReadyRef.current = onReady;
     onExitRef.current = onExit;
     onErrorRef.current = onError;
+    onReplayRef.current = onReplay;
     onHistoryDimsRef.current = onHistoryDims;
   });
 
@@ -131,11 +137,29 @@ export function useTerminal(options: UseTerminalOptions): UseTerminalReturn {
         // appear in both the event stream and the history buffer, causing duplicate output.
         try {
           const historyResponse = await service.getHistory(sessionId);
-          if (!cancelled && historyResponse.data) {
-            // Notify before queuing data so the terminal can resize to the correct
-            // dimensions before history is written to the buffer.
-            onHistoryDimsRef.current?.(historyResponse.cols, historyResponse.rows);
-            onOutputRef.current?.(historyResponse.data);
+          if (!cancelled) {
+            const replayEvents = historyResponse.events?.length
+              ? historyResponse.events
+              : historyResponse.data
+                ? [{
+                    cols: historyResponse.cols,
+                    rows: historyResponse.rows,
+                    data: historyResponse.data,
+                  }]
+                : [];
+
+            if (replayEvents.length > 0) {
+              if (onReplayRef.current) {
+                onReplayRef.current(replayEvents);
+              } else {
+                replayEvents.forEach((event) => {
+                  onHistoryDimsRef.current?.(event.cols, event.rows);
+                  if (event.data) {
+                    onOutputRef.current?.(event.data);
+                  }
+                });
+              }
+            }
           }
         } catch (histErr) {
           // History replay is optional — a failed fetch must not break the terminal.

@@ -165,6 +165,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
   onDirtyStateChange,
   isActive = true,
   onFileMissingFromDiskChange,
+  terminalResizeSuspended = false,
 }) => {
   const { t, formatDate } = useI18n('components');
 
@@ -772,6 +773,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
                 key={sessionId}
                 sessionId={sessionId}
                 autoFocus={true}
+                resizeSuspended={terminalResizeSuspended}
               />
             </div>
           </React.Suspense>

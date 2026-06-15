@@ -9,7 +9,7 @@
  * Resizer logic moved here from WorkspaceShell.
  */
 
-import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useCallback, useEffect, useLayoutEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useApp } from '../../hooks/useApp';
 import ChatPane from './ChatPane';
@@ -38,6 +38,7 @@ import {
 
 import './SessionScene.scss';
 
+const TERMINAL_PANEL_RESIZE_SUSPEND_FALLBACK_MS = 360;
 
 interface SessionSceneProps {
   workspacePath?: string;
@@ -64,6 +65,8 @@ const SessionScene: React.FC<SessionSceneProps> = ({
   const [isDraggingBottom, setIsDraggingBottom] = useState(false);
   const [isHovering, setIsHovering] = useState(false);
   const [isHoveringBottom, setIsHoveringBottom] = useState(false);
+  const [isRightPanelTransitioning, setIsRightPanelTransitioning] = useState(false);
+  const [isBottomTerminalPanelTransitioning, setIsBottomTerminalPanelTransitioning] = useState(false);
   const [terminalPanelPosition, setTerminalPanelPosition] = useState<TerminalPanelPosition>(() =>
     getCachedTerminalPanelPosition(),
   );
@@ -79,11 +82,53 @@ const SessionScene: React.FC<SessionSceneProps> = ({
   const animationFrameRef = useRef<number | null>(null);
   const bottomExpandPendingRef = useRef(false);
   const bottomCollapsePendingRef = useRef(false);
+  const rightPanelTransitionTimerRef = useRef<number | null>(null);
+  const bottomPanelTransitionTimerRef = useRef<number | null>(null);
+  const previousRightTransitionKeyRef = useRef<string | null>(null);
+  const previousBottomTransitionKeyRef = useRef<string | null>(null);
 
   const currentRightWidth = state.layout.rightPanelWidth || RIGHT_PANEL_CONFIG.COMFORTABLE_DEFAULT;
   const currentBottomHeight = state.layout.bottomTerminalPanelHeight || BOTTOM_TERMINAL_PANEL_CONFIG.COMFORTABLE_DEFAULT;
   const isTerminalDockedBottom = terminalPanelPosition === 'bottom';
   const isDragging = isDraggingRight || isDraggingBottom;
+
+  const stopRightPanelTransition = useCallback(() => {
+    if (rightPanelTransitionTimerRef.current !== null) {
+      window.clearTimeout(rightPanelTransitionTimerRef.current);
+      rightPanelTransitionTimerRef.current = null;
+    }
+    setIsRightPanelTransitioning(false);
+  }, []);
+
+  const startRightPanelTransition = useCallback(() => {
+    if (rightPanelTransitionTimerRef.current !== null) {
+      window.clearTimeout(rightPanelTransitionTimerRef.current);
+    }
+    setIsRightPanelTransitioning(true);
+    rightPanelTransitionTimerRef.current = window.setTimeout(
+      stopRightPanelTransition,
+      TERMINAL_PANEL_RESIZE_SUSPEND_FALLBACK_MS,
+    );
+  }, [stopRightPanelTransition]);
+
+  const stopBottomPanelTransition = useCallback(() => {
+    if (bottomPanelTransitionTimerRef.current !== null) {
+      window.clearTimeout(bottomPanelTransitionTimerRef.current);
+      bottomPanelTransitionTimerRef.current = null;
+    }
+    setIsBottomTerminalPanelTransitioning(false);
+  }, []);
+
+  const startBottomPanelTransition = useCallback(() => {
+    if (bottomPanelTransitionTimerRef.current !== null) {
+      window.clearTimeout(bottomPanelTransitionTimerRef.current);
+    }
+    setIsBottomTerminalPanelTransitioning(true);
+    bottomPanelTransitionTimerRef.current = window.setTimeout(
+      stopBottomPanelTransition,
+      TERMINAL_PANEL_RESIZE_SUSPEND_FALLBACK_MS,
+    );
+  }, [stopBottomPanelTransition]);
 
   const rightPanelMode: PanelDisplayMode = useMemo(() => {
     if (state.layout.rightPanelCollapsed) return 'collapsed';
@@ -343,10 +388,96 @@ const SessionScene: React.FC<SessionSceneProps> = ({
   // Cleanup animation frames
   useEffect(() => () => {
     if (animationFrameRef.current !== null) cancelAnimationFrame(animationFrameRef.current);
+    if (rightPanelTransitionTimerRef.current !== null) {
+      window.clearTimeout(rightPanelTransitionTimerRef.current);
+    }
+    if (bottomPanelTransitionTimerRef.current !== null) {
+      window.clearTimeout(bottomPanelTransitionTimerRef.current);
+    }
   }, []);
 
   const isRightAsMain = state.layout.chatCollapsed;
   const isChatHidden = state.layout.centerPanelCollapsed || isRightAsMain;
+
+  // Terminal resize is suspended for the whole CSS transition. xterm.js reflows
+  // its buffer on every resize, so fitting through intermediate panel widths can
+  // permanently damage scrollback before the panel reaches its final size.
+  useLayoutEffect(() => {
+    const transitionKey = [
+      state.layout.rightPanelCollapsed ? 'collapsed' : 'open',
+      currentRightWidth,
+      isRightAsMain ? 'main' : 'side',
+    ].join(':');
+
+    if (previousRightTransitionKeyRef.current === null) {
+      previousRightTransitionKeyRef.current = transitionKey;
+      return;
+    }
+
+    if (previousRightTransitionKeyRef.current === transitionKey) {
+      return;
+    }
+
+    previousRightTransitionKeyRef.current = transitionKey;
+
+    if (isDraggingRight || isAuxPaneExpandingImmediate) {
+      return;
+    }
+
+    startRightPanelTransition();
+  }, [
+    currentRightWidth,
+    isAuxPaneExpandingImmediate,
+    isDraggingRight,
+    isRightAsMain,
+    startRightPanelTransition,
+    state.layout.rightPanelCollapsed,
+  ]);
+
+  // Bottom docking uses the same suspension as the right panel. This keeps the
+  // compact final height usable while avoiding transient animation heights.
+  useLayoutEffect(() => {
+    const transitionKey = [
+      state.layout.bottomTerminalPanelCollapsed ? 'collapsed' : 'open',
+      currentBottomHeight,
+      isTerminalDockedBottom ? 'bottom' : 'right',
+    ].join(':');
+
+    if (previousBottomTransitionKeyRef.current === null) {
+      previousBottomTransitionKeyRef.current = transitionKey;
+      return;
+    }
+
+    if (previousBottomTransitionKeyRef.current === transitionKey) {
+      return;
+    }
+
+    previousBottomTransitionKeyRef.current = transitionKey;
+
+    if (isDraggingBottom || !isTerminalDockedBottom) {
+      return;
+    }
+
+    startBottomPanelTransition();
+  }, [
+    currentBottomHeight,
+    isDraggingBottom,
+    isTerminalDockedBottom,
+    startBottomPanelTransition,
+    state.layout.bottomTerminalPanelCollapsed,
+  ]);
+
+  const handleRightPanelTransitionEnd = useCallback((event: React.TransitionEvent<HTMLDivElement>) => {
+    if (event.currentTarget !== event.target) return;
+    if (event.propertyName !== 'width') return;
+    stopRightPanelTransition();
+  }, [stopRightPanelTransition]);
+
+  const handleBottomPanelTransitionEnd = useCallback((event: React.TransitionEvent<HTMLDivElement>) => {
+    if (event.currentTarget !== event.target) return;
+    if (event.propertyName !== 'height') return;
+    stopBottomPanelTransition();
+  }, [stopBottomPanelTransition]);
 
   const panelModeLabels = useMemo(() => ({
     collapsed:    t('layout.panelMode.collapsed'),
@@ -443,11 +574,13 @@ const SessionScene: React.FC<SessionSceneProps> = ({
               : isRightAsMain ? undefined : `${currentRightWidth}px`,
           }}
           data-mode={rightPanelMode}
+          onTransitionEnd={handleRightPanelTransitionEnd}
         >
           <AuxPane
             ref={auxPaneRef}
             workspacePath={workspacePath}
             isSceneActive={isActive}
+            terminalResizeSuspended={isRightPanelTransitioning || isDraggingRight}
           />
         </div>
       </div>
@@ -498,6 +631,7 @@ const SessionScene: React.FC<SessionSceneProps> = ({
               height: state.layout.bottomTerminalPanelCollapsed ? undefined : `${currentBottomHeight}px`,
             }}
             data-mode={bottomTerminalPanelMode}
+            onTransitionEnd={handleBottomPanelTransitionEnd}
           >
             <BottomTerminalPane
               workspacePath={workspacePath}
@@ -505,6 +639,7 @@ const SessionScene: React.FC<SessionSceneProps> = ({
               isCollapsed={state.layout.bottomTerminalPanelCollapsed}
               onExpand={expandBottomTerminalPanel}
               onCollapse={collapseBottomTerminalPanel}
+              terminalResizeSuspended={isBottomTerminalPanelTransitioning || isDraggingBottom}
             />
           </div>
         </>

@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use crate::shell::ShellType;
 use crate::{TerminalError, TerminalResult};
 
-use super::{SessionMetadata, SessionSource, SessionStatus, TerminalSession};
+use super::{SessionMetadata, SessionSource, SessionStatus, TerminalReplayEvent, TerminalSession};
 
 /// Version of the serialization format
 const SERIALIZATION_VERSION: u32 = 1;
@@ -57,21 +57,10 @@ pub struct SerializedSession {
     pub source: SessionSource,
 
     /// Replay events for restoring terminal content
-    pub replay_events: Vec<ReplayEvent>,
+    pub replay_events: Vec<TerminalReplayEvent>,
 
     /// Creation timestamp
     pub created_at: i64,
-}
-
-/// Event for replaying terminal content
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ReplayEvent {
-    /// Terminal dimensions at this point
-    pub cols: u16,
-    pub rows: u16,
-
-    /// Data to replay
-    pub data: String,
 }
 
 /// Session serializer
@@ -94,7 +83,7 @@ impl SessionSerializer {
                 env: s.env.clone(),
                 metadata: s.metadata.clone(),
                 source: s.source.clone(),
-                replay_events: Vec::new(), // TODO: Capture replay events
+                replay_events: s.get_replay_events(),
                 created_at: s.created_at.timestamp(),
             })
             .collect();
@@ -140,6 +129,7 @@ impl SessionSerializer {
         session.metadata = serialized.metadata.clone();
         session.metadata.was_restored = true;
         session.status = SessionStatus::Starting;
+        session.set_replay_events(serialized.replay_events.clone());
 
         session
     }
@@ -149,11 +139,8 @@ impl SessionSerializer {
         session: &TerminalSession,
         replay_data: &str,
     ) -> TerminalResult<String> {
-        let replay_event = ReplayEvent {
-            cols: session.cols,
-            rows: session.rows,
-            data: replay_data.to_string(),
-        };
+        let replay_event =
+            TerminalReplayEvent::data(session.cols, session.rows, replay_data.to_string());
 
         let serialized = SerializedSession {
             id: session.id.clone(),

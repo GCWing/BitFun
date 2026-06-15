@@ -6,6 +6,7 @@
 mod binding;
 mod manager;
 mod persistent;
+mod replay;
 mod serializer;
 mod singleton;
 
@@ -15,6 +16,7 @@ pub use manager::{
     ExecuteOptions, SessionManager,
 };
 pub use persistent::PersistentSession;
+pub use replay::{TerminalReplayEvent, TerminalReplayHistory};
 pub use serializer::SessionSerializer;
 pub use singleton::{
     get_session_manager, init_session_manager, is_session_manager_initialized, session_manager,
@@ -98,20 +100,15 @@ pub struct TerminalSession {
     /// Exit code if exited
     pub exit_code: Option<i32>,
 
-    /// Output history buffer (for frontend recovery)
-    /// Not serialized because it's only used during session lifetime
+    /// Replay history buffer (for frontend recovery).
+    ///
+    /// Not serialized by serde on TerminalSession itself; persistence paths use
+    /// SessionSerializer so they can control compatibility explicitly.
     #[serde(skip)]
-    pub output_history: Vec<String>,
-
-    /// Maximum size of output history (in bytes)
-    #[serde(skip)]
-    pub max_history_size: usize,
+    pub replay_history: TerminalReplayHistory,
 }
 
 impl TerminalSession {
-    /// Default maximum history size: 100KB
-    const DEFAULT_MAX_HISTORY_SIZE: usize = 100 * 1024;
-
     /// Create a new terminal session
     pub fn new(
         id: String,
@@ -141,48 +138,39 @@ impl TerminalSession {
             source,
             should_persist: true,
             exit_code: None,
-            output_history: Vec::new(),
-            max_history_size: Self::DEFAULT_MAX_HISTORY_SIZE,
+            replay_history: TerminalReplayHistory::default(),
         }
     }
 
     /// Add output to history (with automatic trimming)
     pub fn add_output(&mut self, data: &str) {
-        if data.is_empty() {
-            return;
-        }
-        self.output_history.push(data.to_string());
-        self.trim_history();
+        self.replay_history
+            .record_output(self.cols, self.rows, data);
+    }
+
+    /// Get structured replay events.
+    pub fn get_replay_events(&self) -> Vec<TerminalReplayEvent> {
+        self.replay_history.events()
+    }
+
+    /// Replace structured replay events, used by persistence restore.
+    pub fn set_replay_events(&mut self, events: Vec<TerminalReplayEvent>) {
+        self.replay_history.replace_events(events);
     }
 
     /// Get all output history as a single string
     pub fn get_history(&self) -> String {
-        self.output_history.concat()
+        self.replay_history.data()
     }
 
     /// Clear all output history
     pub fn clear_history(&mut self) {
-        self.output_history.clear();
-    }
-
-    /// Trim history to stay within max size limit
-    fn trim_history(&mut self) {
-        let mut total_size: usize = self.output_history.iter().map(|s| s.len()).sum();
-
-        // Remove oldest entries until we're under the limit
-        while total_size > self.max_history_size && !self.output_history.is_empty() {
-            if let Some(oldest) = self.output_history.first() {
-                total_size -= oldest.len();
-                self.output_history.remove(0);
-            } else {
-                break;
-            }
-        }
+        self.replay_history.clear();
     }
 
     /// Get current history size in bytes
     pub fn history_size(&self) -> usize {
-        self.output_history.iter().map(|s| s.len()).sum()
+        self.replay_history.size_bytes()
     }
 
     /// Check if the session is active
@@ -234,8 +222,12 @@ impl TerminalSession {
 
     /// Resize the terminal
     pub fn resize(&mut self, cols: u16, rows: u16) {
+        let changed = self.cols != cols || self.rows != rows;
         self.cols = cols;
         self.rows = rows;
+        if changed {
+            self.replay_history.record_resize(cols, rows);
+        }
         self.touch();
     }
 }

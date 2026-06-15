@@ -15,7 +15,7 @@ use crate::events::TerminalEvent;
 use crate::session::{
     get_session_manager, init_session_manager, is_session_manager_initialized,
     CommandCompletionReason, CommandExecuteResult, ExecuteOptions, SessionManager, SessionSource,
-    TerminalSession,
+    TerminalReplayEvent, TerminalSession,
 };
 use crate::shell::{ShellDetector, ShellType};
 use crate::{TerminalError, TerminalResult};
@@ -160,6 +160,9 @@ pub struct GetHistoryResponse {
     /// Session ID
     #[serde(rename = "sessionId")]
     pub session_id: String,
+    /// Ordered resize/data replay events.
+    #[serde(default)]
+    pub events: Vec<TerminalReplayEvent>,
     /// Output history data
     pub data: String,
     /// Current history size in bytes
@@ -396,10 +399,12 @@ impl TerminalApi {
             .ok_or_else(|| TerminalError::SessionNotFound(request.session_id.to_string()))?;
 
         let data = session.get_history();
+        let events = session.get_replay_events();
         let history_size = session.history_size();
 
         Ok(GetHistoryResponse {
             session_id: request.session_id,
+            events,
             data,
             history_size,
             cols: session.cols,
