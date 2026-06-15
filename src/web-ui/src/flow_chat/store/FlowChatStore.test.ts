@@ -43,13 +43,6 @@ vi.mock('@/infrastructure/api', () => ({
     loadSessionTurns: apiMocks.loadSessionTurns,
     saveSessionTurn: apiMocks.saveSessionTurn,
   },
-  agentAPI: {
-    restoreSession: apiMocks.restoreSession,
-    get restoreSessionView() {
-      return apiMocks.restoreSessionView;
-    },
-    restoreSessionWithTurns: apiMocks.restoreSessionWithTurns,
-  },
 }));
 
 vi.mock('@/infrastructure/api/service-api/SessionAPI', () => ({
@@ -58,6 +51,16 @@ vi.mock('@/infrastructure/api/service-api/SessionAPI', () => ({
     listSessionsPage: apiMocks.listSessionsPage,
     loadSessionTurns: apiMocks.loadSessionTurns,
     saveSessionTurn: apiMocks.saveSessionTurn,
+  },
+}));
+
+vi.mock('@/infrastructure/api/service-api/AgentAPI', () => ({
+  agentAPI: {
+    restoreSession: apiMocks.restoreSession,
+    get restoreSessionView() {
+      return apiMocks.restoreSessionView;
+    },
+    restoreSessionWithTurns: apiMocks.restoreSessionWithTurns,
   },
 }));
 

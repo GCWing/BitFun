@@ -1019,7 +1019,7 @@ export class FlowChatStore {
       loadedTurnCount: request.expectedDialogTurnIds.length,
     });
 
-    const { agentAPI } = await import('@/infrastructure/api');
+    const { agentAPI } = await import('@/infrastructure/api/service-api/AgentAPI');
     const restored = await agentAPI.restoreSessionView(
       request.sessionId,
       request.workspacePath,
@@ -1797,7 +1797,7 @@ export class FlowChatStore {
     });
 
     try {
-      const { agentAPI } = await import('@/infrastructure/api');
+      const { agentAPI } = await import('@/infrastructure/api/service-api/AgentAPI');
       const deleteResults = await Promise.allSettled(
         sessionIdsToDelete.map(async id => {
           const sess = this.state.sessions.get(id);
@@ -1953,7 +1953,7 @@ export class FlowChatStore {
       return [];
     }
 
-    const { agentAPI } = await import('@/infrastructure/api');
+    const { agentAPI } = await import('@/infrastructure/api/service-api/AgentAPI');
     await Promise.allSettled(
       runningSessionIds.map(async sessionId => {
         try {
@@ -3753,7 +3753,7 @@ export class FlowChatStore {
           sessionTraceId,
         });
         try {
-          const { agentAPI } = await import('@/infrastructure/api');
+          const { agentAPI } = await import('@/infrastructure/api/service-api/AgentAPI');
           const restoreSessionViewSupportKey = restoreCommandSupportKey(
             'restore_session_view',
             remoteConnectionId,

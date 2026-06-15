@@ -9,6 +9,13 @@ function readSource(relativePath: string): string {
   return readFileSync(fileURLToPath(new URL(relativePath, import.meta.url)), 'utf8');
 }
 
+function dynamicImportSpecifiers(source: string): string[] {
+  return Array.from(
+    source.matchAll(/import\(\s*(['"])(.*?)\1\s*\)/g),
+    match => match[2]
+  );
+}
+
 describe('startup performance contract', () => {
   it('keeps the pre-React startup fallback logo-only', () => {
     const source = readSource('../../../index.html');
@@ -525,11 +532,22 @@ describe('startup performance contract', () => {
 
   it('keeps startup session metadata paging on the narrow SessionAPI entrypoint', () => {
     const source = readSource('../../flow_chat/store/FlowChatStore.ts');
+    const imports = dynamicImportSpecifiers(source);
 
     expect(source).toContain("import('@/infrastructure/api/service-api/SessionAPI')");
-    expect(source).not.toMatch(
-      /const\s+\{\s*sessionAPI\s*\}\s*=\s*await\s+import\(['"]@\/infrastructure\/api['"]\)/
+    expect(imports).not.toContain('@/infrastructure/api');
+  });
+
+  it('keeps historical session restore on the narrow AgentAPI entrypoint', () => {
+    const source = readSource('../../flow_chat/store/FlowChatStore.ts');
+    const imports = dynamicImportSpecifiers(source);
+    const agentApiDynamicImports = imports.filter(specifier => specifier.endsWith('/AgentAPI'));
+
+    expect(agentApiDynamicImports.length).toBeGreaterThan(0);
+    expect(new Set(agentApiDynamicImports)).toEqual(
+      new Set(['@/infrastructure/api/service-api/AgentAPI'])
     );
+    expect(imports).not.toContain('@/infrastructure/api');
   });
 
   it('keeps Agent companion implementation modules out of the root startup bundle', () => {
