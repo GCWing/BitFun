@@ -342,7 +342,7 @@
     font-size: 10px;
     font-weight: $font-weight-medium;
     background: var(--color-accent-500);
-    color: #ffffff;
+    color: var(--color-static-white);
     border-radius: $size-radius-sm;
     margin-left: $size-gap-1;
   }
@@ -401,31 +401,31 @@
     gap: var(--size-gap-2, 8px);
     padding: 6px 12px;
     background: transparent;
-    border: 1px solid var(--border-base, rgba(255, 255, 255, 0.14));
+    border: 1px solid var(--border-base);
     border-radius: var(--size-radius-sm, 6px);
     transition: all var(--motion-base, 0.3s) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1));
     min-height: 36px;
 
     
     &:hover:not(:focus-within) {
-      background: var(--element-bg-subtle, rgba(255, 255, 255, 0.05));
-      border-color: var(--border-strong, rgba(255, 255, 255, 0.26));
+      background: var(--element-bg-subtle);
+      border-color: var(--border-strong);
     }
 
     
     &:focus-within {
       background: transparent;
-      border-color: var(--color-accent-500, #60a5fa);
+      border-color: var(--color-accent-500);
     }
 
     svg {
-      color: var(--color-text-muted, #a0a0a0);
+      color: var(--color-text-muted);
       flex-shrink: 0;
       transition: color var(--motion-base, 0.3s) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1));
     }
 
     &:focus-within svg {
-      color: var(--color-accent-500, #60a5fa);
+      color: var(--color-accent-500);
     }
 
     input {
@@ -434,12 +434,12 @@
       border: none !important;
       outline: none !important;
       box-shadow: none !important;
-      color: var(--color-text-primary, #e8e8e8);
+      color: var(--color-text-primary);
       font-size: var(--font-size-sm);
       font-family: $font-family-sans;
 
       &::placeholder {
-        color: var(--color-text-muted, #a0a0a0);
+        color: var(--color-text-muted);
       }
 
       &:focus {
@@ -672,7 +672,7 @@
     padding: $size-gap-4 !important;
     margin: 0 $size-gap-3 $size-gap-3;
     
-    background: rgba(255, 255, 255, 0.02);
+    background: var(--color-overlay-white-02);
     border-radius: var(--size-radius-sm, 6px);
     animation: slideDown 0.2s ease;
   }
@@ -939,9 +939,9 @@
       width: 100%;
       padding: 6px 12px;
       background: transparent;
-      border: 1px solid var(--border-base, rgba(255, 255, 255, 0.14));
+      border: 1px solid var(--border-base);
       border-radius: var(--size-radius-sm, 6px);
-      color: var(--color-text-primary, #e8e8e8);
+      color: var(--color-text-primary);
       font-size: var(--font-size-sm);
       font-family: $font-family-sans;
       transition: all var(--motion-base, 0.3s) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1));
@@ -949,15 +949,15 @@
 
       
       &:hover:not(:focus):not(:disabled) {
-        background: var(--element-bg-subtle, rgba(255, 255, 255, 0.05));
-        border-color: var(--border-strong, rgba(255, 255, 255, 0.26));
+        background: var(--element-bg-subtle);
+        border-color: var(--border-strong);
       }
 
       
       &:focus {
         outline: none;
         background: transparent;
-        border-color: var(--color-accent-500, #60a5fa);
+        border-color: var(--color-accent-500);
       }
 
       &:disabled {
@@ -966,7 +966,7 @@
       }
 
       &::placeholder {
-        color: var(--color-text-muted, #a0a0a0);
+        color: var(--color-text-muted);
       }
     }
 
@@ -1330,7 +1330,7 @@
       min-height: 32px;
       border-color: color-mix(
         in srgb,
-        var(--border-base, rgba(255, 255, 255, 0.14)) 72%,
+        var(--border-base) 72%,
         transparent
       );
     }
@@ -1417,7 +1417,7 @@
 
   &__resolved-url-input {
     .bitfun-input-container {
-      background: var(--element-bg-subtle, rgba(255, 255, 255, 0.05));
+      background: var(--element-bg-subtle);
       border: none;
       box-shadow: none;
     }
@@ -1484,12 +1484,12 @@
     padding: $size-gap-4;
     background: transparent;
     border-radius: var(--size-radius-sm, 6px);
-    border: 1px solid var(--border-base, rgba(255, 255, 255, 0.14));
+    border: 1px solid var(--border-base);
     transition: all var(--motion-base, 0.3s) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1));
 
     &:hover {
-      background: var(--element-bg-subtle, rgba(255, 255, 255, 0.05));
-      border-color: var(--border-strong, rgba(255, 255, 255, 0.26));
+      background: var(--element-bg-subtle);
+      border-color: var(--border-strong);
     }
   }
 

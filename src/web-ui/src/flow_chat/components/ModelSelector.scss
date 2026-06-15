@@ -141,15 +141,15 @@
     min-width: 220px;
     max-width: 280px;
     background: var(--color-bg-elevated);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--color-overlay-white-10);
     border-radius: 6px;
     overflow: hidden;
     backdrop-filter: blur(20px) saturate(1.2);
     -webkit-backdrop-filter: blur(20px) saturate(1.2);
     box-shadow: 
-      0 8px 32px rgba(0, 0, 0, 0.5),
-      0 0 1px rgba(255, 255, 255, 0.1),
-      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      0 8px 32px var(--color-overlay-black-50),
+      0 0 1px var(--color-overlay-white-10),
+      inset 0 1px 0 var(--color-overlay-white-06);
     z-index: $z-dropdown;
     animation: bitfun-model-dropdown-fade-in 0.15s ease-out;
   }
@@ -159,7 +159,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 8px 12px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    border-bottom: 1px solid var(--color-overlay-white-06);
     font-size: var(--flowchat-font-size-xxs);
     font-weight: 500;
     color: var(--color-text-muted);
@@ -196,7 +196,7 @@
     }
     
     &::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.15);
+      background: var(--color-overlay-white-15);
       border-radius: 2px;
       
       &:hover {

@@ -386,8 +386,8 @@
       background $motion-fast $easing-standard;
 
     &:hover {
-      color: var(--color-error, #ef4444);
-      background: color-mix(in srgb, var(--color-error, #ef4444) 12%, transparent);
+      color: var(--color-error);
+      background: color-mix(in srgb, var(--color-error) 12%, transparent);
     }
   }
 
@@ -417,8 +417,8 @@
     border-radius: 999px;
 
     &.is-running {
-      background: var(--color-success, #22c55e);
-      box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-success, #22c55e) 16%, transparent);
+      background: var(--color-success);
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-success) 16%, transparent);
     }
 
     &.is-stopped {

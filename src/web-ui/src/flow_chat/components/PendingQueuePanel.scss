@@ -171,7 +171,7 @@
 
   &__failed-label {
     font-size: var(--flowchat-font-size-xxs, 10px);
-    color: var(--color-error, #ef4444);
+    color: var(--color-error);
     font-weight: 500;
     margin-top: 2px;
   }
@@ -253,8 +253,8 @@
 
     &--danger {
       &:hover:not(:disabled) {
-        background: color-mix(in srgb, var(--color-error, #ef4444) 14%, transparent);
-        color: var(--color-error, #ef4444);
+        background: color-mix(in srgb, var(--color-error) 14%, transparent);
+        color: var(--color-error);
       }
     }
 

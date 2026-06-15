@@ -662,7 +662,7 @@
 
   &:hover {
     border-color: var(--border-medium);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 4px 16px var(--color-overlay-black-08);
     transform: translateY(-1px);
   }
 
@@ -955,12 +955,12 @@
     min-height: 46px;
     background: var(--element-bg-soft);
     border-color: var(--border-medium);
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+    box-shadow: 0 2px 12px var(--color-overlay-black-06);
     transition: border-color $motion-fast $easing-standard, box-shadow $motion-fast $easing-standard;
   }
 
   &.search--focused:not(.search--disabled) .search__wrapper {
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1), 0 0 0 3px color-mix(in srgb, var(--color-accent-500) 15%, transparent);
+    box-shadow: 0 4px 20px var(--color-overlay-black-10), 0 0 0 3px color-mix(in srgb, var(--color-accent-500) 15%, transparent);
     border-color: var(--color-accent-500);
   }
 }

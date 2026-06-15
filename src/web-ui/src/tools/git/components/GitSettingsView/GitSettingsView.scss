@@ -4,7 +4,7 @@ $size-gap-1-5: 6px !default;
 $size-radius-xs: 4px !default;
 $opacity-secondary: 0.7 !default;
 $opacity-high: 0.8 !default;
-$border-subtle: rgba(255, 255, 255, 0.06) !default;
+$border-subtle: var(--color-overlay-white-06) !default;
 
 .bitfun-git-settings-view {
   display: flex;

@@ -62,11 +62,11 @@
     margin-top: 2px;
 
     &--done {
-      color: var(--color-success, #4caf50);
+      color: var(--color-success);
     }
 
     &--active {
-      color: var(--color-primary, #648cff);
+      color: var(--color-primary);
       animation: bitfun-acp-plan-spin 1.2s linear infinite;
     }
 

@@ -28,11 +28,11 @@
     }
     
     &::-webkit-scrollbar-thumb {
-      background: var(--scrollbar-thumb, rgba(255, 255, 255, 0.15));
+      background: var(--scrollbar-thumb);
       border-radius: 3px;
 
       &:hover {
-        background: var(--scrollbar-thumb-hover, rgba(255, 255, 255, 0.25));
+        background: var(--scrollbar-thumb-hover);
       }
     }
   }
@@ -42,22 +42,22 @@
     align-items: center;
     justify-content: center;
     min-height: 60px;
-    color: var(--color-text-muted, #888);
+    color: var(--color-text-muted);
     font-size: var(--flowchat-font-size-sm);
     font-style: italic;
   }
   
   &__placeholder {
-    color: var(--color-text-muted, #888);
+    color: var(--color-text-muted);
     font-style: italic;
   }
 
   &__truncation-notice {
     padding: 0.25rem 0.625rem;
     font-size: var(--flowchat-font-size-xs);
-    color: var(--color-text-muted, #888);
-    background: var(--color-bg-tertiary, rgba(255, 255, 255, 0.03));
-    border-bottom: 1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.06));
+    color: var(--color-text-muted);
+    background: var(--color-bg-tertiary);
+    border-bottom: 1px solid var(--color-border-subtle);
     font-style: italic;
   }
 }
@@ -78,7 +78,7 @@
     background: transparent;
     
     .diff-line__prefix {
-      color: var(--color-text-muted, #666);
+      color: var(--color-text-muted);
     }
   }
   
@@ -90,20 +90,20 @@
     }
 
     .diff-line__prefix {
-      color: var(--git-color-staged, #34d399);
+      color: var(--git-color-staged);
       font-weight: 500;
     }
   }
 
   &--removed {
-    background: var(--git-color-deleted-bg, rgba(239, 68, 68, 0.1));
+    background: var(--git-color-deleted-bg, var(--color-error-bg));
 
     .diff-line__gutter {
       background: var(--git-color-deleted-bg-hover, rgba(239, 68, 68, 0.15));
     }
 
     .diff-line__prefix {
-      color: var(--git-color-deleted, #ef4444);
+      color: var(--git-color-deleted);
       font-weight: 500;
     }
     
@@ -114,15 +114,15 @@
   
   // Highlighted row (selected).
   &--highlighted {
-    background: var(--color-accent-200, rgba(96, 165, 250, 0.15)) !important;
+    background: var(--color-accent-200) !important;
 
     .diff-line__gutter {
-      background: var(--color-accent-300, rgba(96, 165, 250, 0.22)) !important;
+      background: var(--color-accent-300) !important;
     }
   }
   
   &--separator {
-    background: var(--color-bg-tertiary, rgba(255, 255, 255, 0.02));
+    background: var(--color-bg-tertiary);
     justify-content: center;
     padding: var(--flowchat-inline-gap, 0.35rem) 0;
     cursor: default;
@@ -136,7 +136,7 @@
     }
     
     .diff-line__content--separator {
-      color: var(--color-text-muted, #888);
+      color: var(--color-text-muted);
       font-size: var(--flowchat-font-size-xs);
       font-style: italic;
       text-align: center;
@@ -149,9 +149,9 @@
     flex-shrink: 0;
     padding: 0 8px;
     gap: 0.125rem;
-    background: var(--color-bg-secondary, rgba(255, 255, 255, 0.03));
+    background: var(--color-bg-secondary);
     user-select: none;
-    border-right: 1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.05));
+    border-right: 1px solid var(--color-border-subtle);
 
     &--single {
       padding: 0 4px;
@@ -168,12 +168,12 @@
     min-width: 32px;
     padding: 0 6px;
     text-align: right;
-    color: var(--color-text-muted, #666);
+    color: var(--color-text-muted);
     opacity: 0.6;
     font-size: var(--flowchat-font-size-xs);
 
     &--original {
-      border-right: 1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.08));
+      border-right: 1px solid var(--color-border-subtle);
       padding-right: 8px;
     }
 

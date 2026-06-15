@@ -146,16 +146,16 @@
 
   &__delete-btn {
     &:hover {
-      color: var(--color-error, #ef4444);
+      color: var(--color-error);
     }
   }
 
   &__delete-all-btn {
-    color: var(--color-error, #ef4444);
+    color: var(--color-error);
 
     &:hover {
-      color: var(--color-error, #ef4444);
-      background: var(--color-error-bg, rgba(239, 68, 68, 0.1));
+      color: var(--color-error);
+      background: var(--color-error-bg);
     }
   }
 

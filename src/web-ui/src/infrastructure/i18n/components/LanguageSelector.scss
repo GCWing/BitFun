@@ -128,7 +128,7 @@
       background: var(--color-bg-elevated);
       border: 1px solid var(--border-base);
       border-radius: var(--radius-md, 6px);
-      box-shadow: var(--shadow-lg, 0 4px 12px rgba(0, 0, 0, 0.15));
+      box-shadow: var(--shadow-lg);
       opacity: 0;
       visibility: hidden;
       transform: translateY(-4px);

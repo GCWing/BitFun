@@ -4,7 +4,7 @@
   padding: 16px;
   background: var(--color-bg-primary);
   border-radius: 8px;
-  box-shadow: var(--shadow-sm, 0 2px 4px rgba(0, 0, 0, 0.8));
+  box-shadow: var(--shadow-sm);
 
   .turn-history-header {
     display: flex;
@@ -46,13 +46,13 @@
     transition: all 0.2s ease;
 
     &:hover {
-      border-color: var(--color-accent-600, #3b82f6);
-      box-shadow: 0 2px 4px color-mix(in srgb, var(--color-accent-600, #3b82f6) 10%, transparent);
+      border-color: var(--color-accent-600);
+      box-shadow: 0 2px 4px color-mix(in srgb, var(--color-accent-600) 10%, transparent);
     }
 
     &.current {
       background: var(--color-accent-100);
-      border-color: var(--color-accent-600, #3b82f6);
+      border-color: var(--color-accent-600);
     }
 
     .turn-item-header {

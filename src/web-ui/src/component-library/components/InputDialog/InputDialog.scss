@@ -30,7 +30,7 @@
       border: 1px solid var(--border-base);
 
       &-primary {
-        border-color: rgba(96, 165, 250, 0.4);
+        border-color: var(--color-accent-400);
       }
     }
   }

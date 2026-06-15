@@ -56,13 +56,13 @@ $_diff-error-max-width: 400px;
     font-size: var(--font-size-xs);
     
     &--add {
-      color: var(--git-color-staged, #3fb950);
+      color: var(--git-color-staged);
       background: rgba(63, 185, 80, 0.15);
       border: 1px solid rgba(63, 185, 80, 0.3);
     }
     
     &--del {
-      color: var(--git-color-deleted, #f85149);
+      color: var(--git-color-deleted);
       background: rgba(248, 81, 73, 0.15);
       border: 1px solid rgba(248, 81, 73, 0.3);
     }
@@ -268,10 +268,10 @@ $_diff-error-max-width: 400px;
       border: none !important;
       box-shadow: none !important;
       background: transparent !important;
-      color: var(--color-text-muted, rgba(255, 255, 255, 0.4)) !important;
+      color: var(--color-text-muted) !important;
       
       &:hover {
-        color: var(--color-text-secondary, rgba(255, 255, 255, 0.6)) !important;
+        color: var(--color-text-secondary) !important;
       }
       
       &:focus {
@@ -301,23 +301,23 @@ $_diff-error-max-width: 400px;
     }
     
     .monaco-diff-editor.side-by-side .editor.original {
-      border-right: 1px dashed var(--border-medium, rgba(255, 255, 255, 0.1)) !important;
+      border-right: 1px dashed var(--border-medium) !important;
       transition: border-color 0.2s ease;
     }
     
     .monaco-diff-editor.side-by-side .editor.modified {
-      border-left: 1px dashed var(--border-medium, rgba(255, 255, 255, 0.1)) !important;
+      border-left: 1px dashed var(--border-medium) !important;
       transition: border-color 0.2s ease;
     }
     
     .monaco-diff-editor.side-by-side:hover .editor.original {
       border-right-style: solid !important;
-      border-right-color: var(--border-light, rgba(255, 255, 255, 0.15)) !important;
+      border-right-color: var(--border-light, var(--color-overlay-white-15)) !important;
     }
     
     .monaco-diff-editor.side-by-side:hover .editor.modified {
       border-left-style: solid !important;
-      border-left-color: var(--border-light, rgba(255, 255, 255, 0.15)) !important;
+      border-left-color: var(--border-light, var(--color-overlay-white-15)) !important;
     }
 
     .monaco-diff-editor .monaco-editor .view-lines {
@@ -342,26 +342,26 @@ $_diff-error-max-width: 400px;
     }
 
     .monaco-diff-editor .diffViewport {
-      background-color: rgba(255, 255, 255, 0.03) !important;
-      border-left: 1px dashed var(--border-medium, rgba(255, 255, 255, 0.1)) !important;
-      border-right: 1px dashed var(--border-medium, rgba(255, 255, 255, 0.1)) !important;
+      background-color: var(--color-overlay-white-03) !important;
+      border-left: 1px dashed var(--border-medium) !important;
+      border-right: 1px dashed var(--border-medium) !important;
       transition: all 0.2s ease;
       
       &:hover {
-        background-color: rgba(255, 255, 255, 0.05) !important;
+        background-color: var(--color-overlay-white-05) !important;
         border-left-style: solid !important;
         border-right-style: solid !important;
       }
     }
 
     .monaco-diff-editor .diagonal-fill {
-      background-color: var(--color-bg-secondary, #1a1a1a) !important;
+      background-color: var(--color-bg-secondary) !important;
       background-image: repeating-linear-gradient(
         45deg,
         transparent,
         transparent 4px,
-        rgba(255, 255, 255, 0.02) 4px,
-        rgba(255, 255, 255, 0.02) 8px
+        var(--color-overlay-white-02) 4px,
+        var(--color-overlay-white-02) 8px
       ) !important;
     }
 
@@ -444,12 +444,12 @@ $_diff-error-max-width: 400px;
         background: transparent;
 
         .slider {
-          background: rgba(255, 255, 255, 0.08);
+          background: var(--color-overlay-white-08);
           border-radius: 4px;
           transition: background $motion-base $easing-standard;
 
           &:hover {
-            background: rgba(255, 255, 255, 0.15);
+            background: var(--color-overlay-white-15);
           }
 
           &.active {
@@ -547,12 +547,12 @@ $_diff-error-max-width: 400px;
       .monaco-diff-editor {
         .line-insert {
           background-color: rgba(63, 185, 80, 0.2) !important;
-          border-left: 3px solid var(--git-color-staged, #3fb950);
+          border-left: 3px solid var(--git-color-staged);
         }
 
         .line-delete {
           background-color: rgba(248, 81, 73, 0.2) !important;
-          border-left: 3px solid var(--git-color-deleted, #f85149);
+          border-left: 3px solid var(--git-color-deleted);
         }
       }
     }

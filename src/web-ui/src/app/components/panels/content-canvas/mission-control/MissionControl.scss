@@ -156,7 +156,7 @@
     &.is-active {
       background: var(--group-color, var(--color-accent-500, var(--color-primary)));
       color: var(--color-text-primary);
-      box-shadow: 0 1px 3px var(--color-shadow, rgba(0, 0, 0, 0.2));
+      box-shadow: 0 1px 3px var(--color-shadow, var(--color-overlay-black-20));
 
       .canvas-mission-control__group-filter-indicator {
         opacity: 0;

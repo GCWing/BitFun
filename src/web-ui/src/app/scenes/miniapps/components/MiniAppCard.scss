@@ -33,7 +33,7 @@
 
   &:hover {
     transform: translateY(-4px) scale(1.02);
-    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 16px 40px var(--color-overlay-black-20);
 
     &::before {
       opacity: 0.4;
@@ -85,7 +85,7 @@
     width: 40px;
     height: 40px;
     border-radius: 10px;
-    background: rgba(255, 255, 255, 0.12);
+    background: var(--color-overlay-white-12);
     backdrop-filter: blur(8px);
   }
 
@@ -113,14 +113,14 @@
   }
 
   &__run-dot {
-    background: var(--color-success, #34d399);
-    box-shadow: 0 0 6px color-mix(in srgb, var(--color-success, #34d399) 65%, transparent);
+    background: var(--color-success);
+    box-shadow: 0 0 6px color-mix(in srgb, var(--color-success) 65%, transparent);
     animation: pulse 2s ease-in-out infinite;
   }
 
   &__customize-dot {
-    background: var(--color-accent-500, #60a5fa);
-    box-shadow: 0 0 6px color-mix(in srgb, var(--color-accent-500, #60a5fa) 68%, transparent);
+    background: var(--color-accent-500);
+    box-shadow: 0 0 6px color-mix(in srgb, var(--color-accent-500) 68%, transparent);
   }
 
   // ── Body ──
@@ -164,7 +164,7 @@
   &__desc-inner {
     font-size: 0.85em;
     font-weight: 300;
-    color: rgba(var(--color-text-secondary), 0.85);
+    color: color-mix(in srgb, var(--color-text-secondary) 85%, transparent);
     line-height: $line-height-relaxed;
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -189,8 +189,8 @@
     border-radius: $size-radius-full;
     font-size: 10px;
     color: var(--color-text-secondary);
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: var(--color-overlay-white-06);
+    border: 1px solid var(--color-overlay-white-08);
     white-space: nowrap;
   }
 
@@ -263,7 +263,7 @@
 
     &--stop:hover {
       background: rgba(247, 234, 234, 0.6);
-      color: var(--color-success, #34d399);
+      color: var(--color-success);
     }
   }
 }

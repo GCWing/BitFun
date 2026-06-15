@@ -128,20 +128,20 @@
   }
 
   &__account--connected {
-    color: color-mix(in srgb, var(--color-success, #3fb950) 92%, var(--color-text-secondary));
+    color: color-mix(in srgb, var(--color-success) 92%, var(--color-text-secondary));
   }
 
   &__account--not_required {
-    color: color-mix(in srgb, var(--color-accent-500, #58a6ff) 90%, var(--color-text-secondary));
+    color: color-mix(in srgb, var(--color-accent-500) 90%, var(--color-text-secondary));
   }
 
   &__account--expired,
   &__account--error {
-    color: var(--color-error, #f85149);
+    color: var(--color-error);
   }
 
   &__account--unsupported {
-    color: var(--color-warning, #d29922);
+    color: var(--color-warning);
   }
 
   &__icon-button.icon-btn {
@@ -204,9 +204,9 @@
     gap: 12px;
     margin: 10px 12px;
     padding: 12px;
-    border: 1px solid color-mix(in srgb, var(--color-warning, #d29922) 42%, var(--border-base));
+    border: 1px solid color-mix(in srgb, var(--color-warning) 42%, var(--border-base));
     border-radius: 10px;
-    background: color-mix(in srgb, var(--color-warning, #d29922) 10%, var(--color-bg-elevated));
+    background: color-mix(in srgb, var(--color-warning) 10%, var(--color-bg-elevated));
   }
 
   &__auth-gate--detail {
@@ -221,10 +221,10 @@
     width: 34px;
     height: 34px;
     flex: 0 0 auto;
-    border: 1px solid color-mix(in srgb, var(--color-warning, #d29922) 42%, var(--border-base));
+    border: 1px solid color-mix(in srgb, var(--color-warning) 42%, var(--border-base));
     border-radius: 8px;
-    color: var(--color-warning, #d29922);
-    background: color-mix(in srgb, var(--color-warning, #d29922) 14%, transparent);
+    color: var(--color-warning);
+    background: color-mix(in srgb, var(--color-warning) 14%, transparent);
   }
 
   &__auth-gate-copy {
@@ -403,7 +403,7 @@
     display: grid;
     justify-items: center;
     gap: 10px;
-    color: var(--color-error, #f85149);
+    color: var(--color-error);
   }
 
   &__pr-row {
@@ -484,31 +484,31 @@
   }
 
   &__decision--approved {
-    color: var(--color-success, #3fb950);
-    background: var(--color-success-bg, rgba(52, 211, 153, 0.1));
+    color: var(--color-success);
+    background: var(--color-success-bg);
   }
 
   &__decision--changes_requested {
-    color: var(--color-error, #f85149);
-    background: var(--color-error-bg, rgba(239, 68, 68, 0.1));
+    color: var(--color-error);
+    background: var(--color-error-bg);
   }
 
   &__decision--commented,
   &__decision--pending {
-    color: var(--color-warning, #d29922);
-    background: var(--color-warning-bg, rgba(245, 158, 11, 0.1));
+    color: var(--color-warning);
+    background: var(--color-warning-bg);
   }
 
   &__state-icon--open {
-    color: var(--color-success, #3fb950);
+    color: var(--color-success);
   }
 
   &__state-icon--merged {
-    color: var(--color-purple-500, #a371f7);
+    color: var(--color-purple-500);
   }
 
   &__state-icon--closed {
-    color: var(--color-error, #f85149);
+    color: var(--color-error);
   }
 
   &__detail {
@@ -878,11 +878,11 @@
   }
 
   &__review-session--completed &__review-session-icon {
-    color: var(--color-success, #3fb950);
+    color: var(--color-success);
   }
 
   &__review-session--error &__review-session-icon {
-    color: var(--color-error, #f85149);
+    color: var(--color-error);
   }
 
   &__review-session-icon {
@@ -981,11 +981,11 @@
   }
 
   &__additions {
-    color: var(--color-success, #3fb950) !important;
+    color: var(--color-success) !important;
   }
 
   &__deletions {
-    color: var(--color-error, #f85149) !important;
+    color: var(--color-error) !important;
   }
 
   &__file-list,
@@ -1053,19 +1053,19 @@
   }
 
   &__file-status--added {
-    color: var(--color-success, #3fb950);
-    background: var(--color-success-bg, rgba(52, 211, 153, 0.1));
+    color: var(--color-success);
+    background: var(--color-success-bg);
   }
 
   &__file-status--modified,
   &__file-status--renamed {
-    color: var(--color-accent-500, #58a6ff);
-    background: var(--color-accent-100, rgba(96, 165, 250, 0.12));
+    color: var(--color-accent-500);
+    background: var(--color-accent-100);
   }
 
   &__file-status--deleted {
-    color: var(--color-error, #f85149);
-    background: var(--color-error-bg, rgba(239, 68, 68, 0.1));
+    color: var(--color-error);
+    background: var(--color-error-bg);
   }
 
   &__file-delta {
@@ -1100,22 +1100,22 @@
   }
 
   &__diff-line--hunk {
-    color: var(--color-purple-500, #a371f7);
+    color: var(--color-purple-500);
     background: var(--color-purple-100, rgba(139, 92, 246, 0.1));
   }
 
   &__diff-line--add {
-    color: var(--color-success, #3fb950);
-    background: var(--color-success-bg, rgba(52, 211, 153, 0.1));
+    color: var(--color-success);
+    background: var(--color-success-bg);
   }
 
   &__diff-line--delete {
-    color: var(--color-error, #f85149);
-    background: var(--color-error-bg, rgba(239, 68, 68, 0.1));
+    color: var(--color-error);
+    background: var(--color-error-bg);
   }
 
   &__diff-line--meta {
-    color: var(--color-accent-500, #79c0ff);
+    color: var(--color-accent-500);
   }
 
   &__diff-empty {
@@ -1130,10 +1130,10 @@
     gap: 8px;
     min-height: 36px;
     padding: 8px 10px;
-    border: 1px solid color-mix(in srgb, var(--color-error, #f85149) 34%, var(--border-base));
+    border: 1px solid color-mix(in srgb, var(--color-error) 34%, var(--border-base));
     border-radius: 7px;
-    background: var(--color-error-bg, rgba(239, 68, 68, 0.08));
-    color: var(--color-error, #f85149);
+    background: var(--color-error-bg);
+    color: var(--color-error);
     font-size: 11px;
 
     span {
@@ -1179,18 +1179,18 @@
   }
 
   &__ci-item--passed {
-    border-color: color-mix(in srgb, var(--color-success, #3fb950) 28%, var(--border-base));
-    background: color-mix(in srgb, var(--color-success, #3fb950) 8%, var(--color-bg-elevated));
+    border-color: color-mix(in srgb, var(--color-success) 28%, var(--border-base));
+    background: color-mix(in srgb, var(--color-success) 8%, var(--color-bg-elevated));
   }
 
   &__ci-item--failed {
-    border-color: color-mix(in srgb, var(--color-error, #f85149) 30%, var(--border-base));
-    background: color-mix(in srgb, var(--color-error, #f85149) 8%, var(--color-bg-elevated));
+    border-color: color-mix(in srgb, var(--color-error) 30%, var(--border-base));
+    background: color-mix(in srgb, var(--color-error) 8%, var(--color-bg-elevated));
   }
 
   &__ci-item--pending {
-    border-color: color-mix(in srgb, var(--color-warning, #d29922) 24%, var(--border-base));
-    background: color-mix(in srgb, var(--color-warning, #d29922) 7%, var(--color-bg-elevated));
+    border-color: color-mix(in srgb, var(--color-warning) 24%, var(--border-base));
+    background: color-mix(in srgb, var(--color-warning) 7%, var(--color-bg-elevated));
   }
 
   &__ci-head {
@@ -1268,18 +1268,18 @@
   }
 
   &__ci-status--passed {
-    color: var(--color-success, #3fb950);
-    background: var(--color-success-bg, rgba(52, 211, 153, 0.1));
+    color: var(--color-success);
+    background: var(--color-success-bg);
   }
 
   &__ci-status--failed {
-    color: var(--color-error, #f85149);
-    background: var(--color-error-bg, rgba(239, 68, 68, 0.1));
+    color: var(--color-error);
+    background: var(--color-error-bg);
   }
 
   &__ci-status--pending {
-    color: var(--color-warning, #d29922);
-    background: var(--color-warning-bg, rgba(245, 158, 11, 0.1));
+    color: var(--color-warning);
+    background: var(--color-warning-bg);
   }
 
   &__ci-meta {
@@ -1458,15 +1458,15 @@
   }
 
   &__thread-tag--resolved {
-    color: color-mix(in srgb, var(--color-success, #3fb950) 90%, var(--color-text-secondary));
-    border-color: color-mix(in srgb, var(--color-success, #3fb950) 24%, var(--border-base));
-    background: color-mix(in srgb, var(--color-success, #3fb950) 10%, transparent);
+    color: color-mix(in srgb, var(--color-success) 90%, var(--color-text-secondary));
+    border-color: color-mix(in srgb, var(--color-success) 24%, var(--border-base));
+    background: color-mix(in srgb, var(--color-success) 10%, transparent);
   }
 
   &__thread-tag--open {
-    color: color-mix(in srgb, var(--color-warning, #f1c40f) 82%, var(--color-text-secondary));
-    border-color: color-mix(in srgb, var(--color-warning, #f1c40f) 24%, var(--border-base));
-    background: color-mix(in srgb, var(--color-warning, #f1c40f) 10%, transparent);
+    color: color-mix(in srgb, var(--color-warning) 82%, var(--color-text-secondary));
+    border-color: color-mix(in srgb, var(--color-warning) 24%, var(--border-base));
+    background: color-mix(in srgb, var(--color-warning) 10%, transparent);
   }
 
   &__thread-meta {

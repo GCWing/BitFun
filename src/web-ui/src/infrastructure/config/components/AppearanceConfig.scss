@@ -401,9 +401,9 @@
   display: flex;
   flex-direction: column;
   box-shadow: 
-    0 8px 32px rgba(0, 0, 0, 0.4),
-    0 4px 16px rgba(0, 0, 0, 0.3),
-    0 2px 8px rgba(0, 0, 0, 0.2);
+    0 8px 32px var(--color-overlay-black-40),
+    0 4px 16px var(--color-overlay-black-30),
+    0 2px 8px var(--color-overlay-black-20);
   
   
   &__titlebar {

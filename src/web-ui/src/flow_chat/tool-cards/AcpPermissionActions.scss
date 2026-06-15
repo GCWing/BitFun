@@ -25,17 +25,17 @@
 }
 
 .acp-permission-actions__text-button:hover:not(:disabled) {
-  background: var(--color-bg-tertiary, rgba(255, 255, 255, 0.08));
+  background: var(--color-bg-tertiary);
 }
 
 .acp-permission-actions__text-button--allow {
-  border-color: color-mix(in srgb, var(--color-success, #22c55e) 55%, var(--color-border, rgba(255, 255, 255, 0.12)));
-  color: var(--color-success, #22c55e);
+  border-color: color-mix(in srgb, var(--color-success) 55%, var(--color-border));
+  color: var(--color-success);
 }
 
 .acp-permission-actions__text-button--reject {
-  border-color: color-mix(in srgb, var(--color-danger, #ef4444) 55%, var(--color-border, rgba(255, 255, 255, 0.12)));
-  color: var(--color-danger, #ef4444);
+  border-color: color-mix(in srgb, var(--color-danger) 55%, var(--color-border));
+  color: var(--color-danger);
 }
 
 .acp-permission-actions__text-button:disabled {

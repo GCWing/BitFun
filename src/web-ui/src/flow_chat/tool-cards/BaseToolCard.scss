@@ -22,15 +22,15 @@
   &:hover {
     border-color: var(--border-medium);
     box-shadow: 
-      0 2px 8px rgba(0, 0, 0, 0.15),
-      0 1px 4px rgba(0, 0, 0, 0.1),
-      inset 0 1px 0 rgba(255, 255, 255, 0.03);
+      0 2px 8px var(--color-overlay-black-15),
+      0 1px 4px var(--color-overlay-black-10),
+      inset 0 1px 0 var(--color-overlay-white-03);
   }
   
   &:active {
     box-shadow: 
-      0 2px 10px rgba(0, 0, 0, 0.2),
-      inset 0 2px 4px rgba(0, 0, 0, 0.4);
+      0 2px 10px var(--color-overlay-black-20),
+      inset 0 2px 4px var(--color-overlay-black-40);
   }
   
   /* Divider when body below header: success expanded panel or failed error panel */
@@ -50,7 +50,7 @@
   }
   
   &.requires-confirmation {
-    border-color: var(--color-warning, #f59e0b);
+    border-color: var(--color-warning);
     border-width: 1.5px;
     box-shadow: 
       0 0 0 1px rgba(245, 158, 11, 0.15),
@@ -59,11 +59,11 @@
     animation: confirmationPulse 2s ease-in-out infinite;
     
     &:hover {
-      border-color: var(--color-warning, #f59e0b);
+      border-color: var(--color-warning);
       box-shadow: 
         0 0 0 2px rgba(245, 158, 11, 0.25),
-        0 0 20px rgba(245, 158, 11, 0.3),
-        0 4px 20px rgba(0, 0, 0, 0.3),
+        0 0 20px var(--color-warning-border),
+        0 4px 20px var(--color-overlay-black-30),
         inset 0 0 12px rgba(245, 158, 11, 0.08);
     }
     

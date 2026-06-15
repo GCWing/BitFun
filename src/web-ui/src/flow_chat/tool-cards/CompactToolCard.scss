@@ -306,8 +306,8 @@
   opacity: 1;
   transform: none;
   box-shadow: 
-    0 2px 8px rgba(0, 0, 0, 0.15),
-    inset 0 1px 0 rgba(255, 255, 255, 0.02);
+    0 2px 8px var(--color-overlay-black-15),
+    inset 0 1px 0 var(--color-overlay-white-02);
   backdrop-filter: blur(8px);
   
 }

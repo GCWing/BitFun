@@ -133,7 +133,7 @@
   .todo-header-more {
     flex-shrink: 0;
     color: var(--color-text-muted);
-    background: var(--element-bg-subtle, rgba(255, 255, 255, 0.06));
+    background: var(--element-bg-subtle);
     border-radius: 8px;
     font-family: inherit;
     font-variant-numeric: tabular-nums;
@@ -186,11 +186,11 @@
     border-left: none;
 
     &:hover {
-      background: var(--element-bg-subtle, rgba(255, 255, 255, 0.04));
+      background: var(--element-bg-subtle);
     }
 
     &.status-in_progress {
-      background: var(--element-bg-subtle, rgba(255, 255, 255, 0.06));
+      background: var(--element-bg-subtle);
 
       .todo-content {
         color: var(--color-text-muted);

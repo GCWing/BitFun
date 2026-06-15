@@ -15,8 +15,8 @@
   outline: none;
   user-select: none;
 
-  background: var(--element-bg-base, rgba(255, 255, 255, 0.08));
-  color: var(--color-text-secondary, #e5e5e5);
+  background: var(--element-bg-base);
+  color: var(--color-text-secondary);
   border: none;
   border-radius: var(--size-radius-sm, 6px);
   transition: all var(--motion-fast, 0.15s) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1));
@@ -45,12 +45,12 @@
   }
 
   &:hover:not(:disabled) {
-    background: var(--element-bg-medium, rgba(255, 255, 255, 0.14));
-    color: var(--color-text-primary, #ffffff);
+    background: var(--element-bg-medium);
+    color: var(--color-text-primary);
   }
 
   &:active:not(:disabled) {
-    background: var(--element-bg-soft, rgba(255, 255, 255, 0.10));
+    background: var(--element-bg-soft);
   }
 
   &:disabled,
@@ -74,55 +74,55 @@
     &:focus-visible {
       outline-color: color-mix(
         in srgb,
-        var(--btn-primary-color, var(--color-accent-500, #60a5fa)) 55%,
+        var(--btn-primary-color, var(--color-accent-500)) 55%,
         transparent
       );
     }
   }
 
   &-secondary {
-    background: var(--element-bg-base, rgba(255, 255, 255, 0.08));
-    color: var(--color-text-secondary, #e5e5e5);
+    background: var(--element-bg-base);
+    color: var(--color-text-secondary);
 
     &:hover:not(:disabled) {
-      background: var(--element-bg-medium, rgba(255, 255, 255, 0.14));
-      color: var(--color-text-primary, #ffffff);
+      background: var(--element-bg-medium);
+      color: var(--color-text-primary);
     }
 
     &:active:not(:disabled) {
-      background: var(--element-bg-soft, rgba(255, 255, 255, 0.10));
+      background: var(--element-bg-soft);
     }
   }
 
   &-ghost {
     background: transparent;
-    color: var(--color-text-secondary, #e5e5e5);
+    color: var(--color-text-secondary);
 
     &:hover:not(:disabled) {
-      background: var(--element-bg-soft, rgba(255, 255, 255, 0.08));
-      color: var(--color-text-primary, #ffffff);
+      background: var(--element-bg-soft);
+      color: var(--color-text-primary);
     }
 
     &:active:not(:disabled) {
-      background: var(--element-bg-base, rgba(255, 255, 255, 0.10));
+      background: var(--element-bg-base);
     }
   }
 
   &-dashed {
     background: transparent;
-    color: var(--color-text-secondary, #e5e5e5);
-    border: 1px dashed var(--border-base, rgba(255, 255, 255, 0.16));
+    color: var(--color-text-secondary);
+    border: 1px dashed var(--border-base);
 
     &:hover:not(:disabled) {
-      background: var(--element-bg-subtle, rgba(255, 255, 255, 0.08));
-      color: var(--color-text-primary, #ffffff);
+      background: var(--element-bg-subtle);
+      color: var(--color-text-primary);
       border-style: solid;
-      border-color: var(--border-medium, rgba(255, 255, 255, 0.24));
+      border-color: var(--border-medium);
     }
 
     &:active:not(:disabled) {
-      background: var(--element-bg-base, rgba(255, 255, 255, 0.1));
-      border-color: var(--border-strong, rgba(255, 255, 255, 0.32));
+      background: var(--element-bg-base);
+      border-color: var(--border-strong);
     }
   }
 
@@ -175,12 +175,12 @@
   border-radius: var(--size-radius-sm, 6px);
   transition: all var(--motion-fast, 0.15s) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1));
 
-  background: var(--element-bg-base, rgba(255, 255, 255, 0.08));
-  color: var(--color-text-secondary, #e5e5e5);
+  background: var(--element-bg-base);
+  color: var(--color-text-secondary);
 
   &:hover {
-    background: var(--element-bg-medium, rgba(255, 255, 255, 0.14));
-    color: var(--color-text-primary, #ffffff);
+    background: var(--element-bg-medium);
+    color: var(--color-text-primary);
   }
 
   &-ai {
@@ -189,7 +189,7 @@
 
     &:hover {
       background: rgba(139, 92, 246, 0.28);
-      color: #ffffff;
+      color: var(--color-static-white);
 
       svg {
         color: tokens.$color-purple-500;
@@ -203,11 +203,11 @@
 
   &-danger {
     background: rgba(199, 112, 112, 0.18);
-    color: var(--color-error, #c77070);
+    color: var(--color-error);
 
     &:hover {
       background: rgba(199, 112, 112, 0.28);
-      color: #ffffff;
+      color: var(--color-static-white);
     }
 
     &:active {
@@ -217,11 +217,11 @@
 
   &-success {
     background: rgba(110, 184, 140, 0.18);
-    color: var(--color-success, #6eb88c);
+    color: var(--color-success);
 
     &:hover {
       background: rgba(110, 184, 140, 0.28);
-      color: #ffffff;
+      color: var(--color-static-white);
     }
 
     &:active {

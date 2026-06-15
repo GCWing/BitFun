@@ -97,7 +97,7 @@
   }
 
   &__delete-btn {
-    &:hover { color: var(--color-error, #ef4444); }
+    &:hover { color: var(--color-error); }
   }
 
   // ── Modal body ──────────────────────────────────────────────────────────

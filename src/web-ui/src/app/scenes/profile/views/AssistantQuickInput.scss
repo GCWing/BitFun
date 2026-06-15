@@ -31,7 +31,7 @@
       border-color: var(--border-focus, var(--color-accent-500));
       background: var(--element-bg-soft);
       box-shadow:
-        0 22px 52px -12px color-mix(in srgb, var(--color-accent-500, #60a5fa) 18%, transparent),
+        0 22px 52px -12px color-mix(in srgb, var(--color-accent-500) 18%, transparent),
         0 12px 32px -10px color-mix(in srgb, var(--color-text-primary) 10%, transparent);
     }
   }
@@ -119,12 +119,12 @@
     border-radius: 7px !important;
 
     &.icon-btn--success:not(:disabled) {
-      background: var(--color-accent-500, #34d399);
-      color: #fff;
+      background: var(--color-accent-500);
+      color: var(--color-static-white);
 
       &:hover {
-        background: var(--color-accent-600, #10b981);
-        color: #fff;
+        background: var(--color-accent-600);
+        color: var(--color-static-white);
       }
     }
   }

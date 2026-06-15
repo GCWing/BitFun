@@ -9,10 +9,10 @@
   }
 
   .task-icon {
-    color: var(--color-text-secondary, #6b7280);
+    color: var(--color-text-secondary);
 
     &.is-running {
-      color: var(--color-primary, #3b82f6);
+      color: var(--color-primary);
     }
   }
 
@@ -87,7 +87,7 @@
     }
 
     &:hover::before {
-      background-color: var(--tool-card-bg-hover, var(--color-bg-hover, rgba(255, 255, 255, 0.09)));
+      background-color: var(--tool-card-bg-hover);
     }
 
     &:hover .task-header-rail__visual {
@@ -123,7 +123,7 @@
     font: inherit;
 
     &:focus-visible {
-      outline: 2px solid var(--color-accent-500, #60a5fa);
+      outline: 2px solid var(--color-accent-500);
       outline-offset: -2px;
     }
   }
@@ -216,7 +216,7 @@
 
   .task-header-main--failed {
     .task-action {
-      color: var(--color-text-muted, #6b7280);
+      color: var(--color-text-muted);
     }
 
     
@@ -233,7 +233,7 @@
     font-size: var(--flowchat-font-size-xxs);
     font-weight: 500;
     flex-shrink: 0;
-    color: var(--color-text-muted, #6b7280);
+    color: var(--color-text-muted);
     background: rgba(107, 114, 128, 0.15);
   }
 
@@ -245,8 +245,8 @@
     font-size: var(--flowchat-font-size-xxs);
     font-weight: 500;
     flex-shrink: 0;
-    color: var(--color-text-secondary, #9ca3af);
-    background: rgba(255, 255, 255, 0.1);
+    color: var(--color-text-secondary);
+    background: var(--color-overlay-white-10);
     letter-spacing: 0.02em;
   }
 
@@ -296,7 +296,7 @@
     svg {
       flex-shrink: 0;
       margin-top: 0.15em;
-      color: var(--color-warning, #f59e0b);
+      color: var(--color-warning);
     }
   }
 
@@ -329,7 +329,7 @@
     display: flex;
     align-items: center;
     gap: var(--flowchat-inline-gap, 0.35rem);
-    color: var(--tool-card-text-secondary, var(--color-text-secondary, #9ca3af));
+    color: var(--tool-card-text-secondary);
     font-size: var(--flowchat-font-size-xs);
     font-weight: 600;
     letter-spacing: 0.01em;
@@ -342,12 +342,12 @@
   }
 
   .duration-text--completed-success {
-    color: var(--color-success, #22c55e);
+    color: var(--color-success);
   }
 
   .duration-text--completed-error,
   .duration-text--completed-cancelled {
-    color: var(--color-error, #ef4444);
+    color: var(--color-error);
   }
 
   .section-header {
@@ -364,7 +364,7 @@
   }
 
   .section-icon {
-    color: var(--color-text-muted, #9ca3af);
+    color: var(--color-text-muted);
     flex-shrink: 0;
   }
 
@@ -387,7 +387,7 @@
 
   .error-message {
     font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
-    color: var(--color-error, #ef4444);
+    color: var(--color-error);
     line-height: var(--flowchat-support-line-height, 1.45);
   }
 
@@ -431,7 +431,7 @@
   }
 
   .confirm-button {
-    background: var(--color-primary, #3b82f6);
+    background: var(--color-primary);
     color: white;
 
     &:hover:not(:disabled) {
@@ -446,8 +446,8 @@
 
     &:hover:not(:disabled) {
       background: var(--tool-card-bg-tertiary);
-      border-color: var(--color-error, #ef4444);
-      color: var(--color-error, #ef4444);
+      border-color: var(--color-error);
+      color: var(--color-error);
     }
   }
 }
@@ -504,8 +504,8 @@
     backdrop-filter: blur(10px);
     overflow: hidden;
     box-shadow:
-      0 2px 6px rgba(0, 0, 0, 0.15),
-      0 1px 3px rgba(0, 0, 0, 0.1);
+      0 2px 6px var(--color-overlay-black-15),
+      0 1px 3px var(--color-overlay-black-10);
 
     // Strip the BaseToolCard's own border/background/shadow so it merges
     // into the wrapper; the wrapper provides the unified card chrome.
@@ -569,8 +569,8 @@
   &.task-with-subagent-wrapper--expanded:hover {
     box-shadow:
       0 2px 8px rgba(0, 0, 0, 0.18),
-      0 1px 4px rgba(0, 0, 0, 0.12),
-      inset 0 1px 0 rgba(255, 255, 255, 0.04);
+      0 1px 4px var(--color-overlay-black-12),
+      inset 0 1px 0 var(--color-overlay-white-04);
     border-color: var(--border-medium);
   }
 }

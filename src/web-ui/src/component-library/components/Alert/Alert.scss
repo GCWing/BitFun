@@ -61,7 +61,7 @@
     border-color: var(--color-info-border);
     background: linear-gradient(135deg,
       rgba(96, 165, 250, 0.06) 0%,
-      rgba(96, 165, 250, 0.04) 100%);
+      var(--color-accent-50) 100%);
 
     .alert__icon {
       color: var(--color-info);

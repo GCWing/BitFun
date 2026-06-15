@@ -34,17 +34,17 @@
     mask-image: linear-gradient(
       to bottom,
       transparent 0%,
-      rgba(0, 0, 0, 0.2) 20%,
-      rgba(0, 0, 0, 0.5) 40%,
-      rgba(0, 0, 0, 0.8) 60%,
+      var(--color-overlay-black-20) 20%,
+      var(--color-overlay-black-50) 40%,
+      var(--color-overlay-black-80) 60%,
       black 85%
     );
     -webkit-mask-image: linear-gradient(
       to bottom,
       transparent 0%,
-      rgba(0, 0, 0, 0.2) 20%,
-      rgba(0, 0, 0, 0.5) 40%,
-      rgba(0, 0, 0, 0.8) 60%,
+      var(--color-overlay-black-20) 20%,
+      var(--color-overlay-black-50) 40%,
+      var(--color-overlay-black-80) 60%,
       black 85%
     );
   }

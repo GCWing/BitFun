@@ -103,7 +103,7 @@
     transition: all tokens.$motion-base tokens.$easing-standard;
 
     &:hover {
-      background: rgba(0, 0, 0, 0.15);
+      background: var(--color-overlay-black-15);
     }
 
     svg {

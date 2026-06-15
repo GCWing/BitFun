@@ -4,18 +4,18 @@
 
 @mixin btn-primary-surface-default {
   background: var(--btn-primary-bg, var(--color-accent-200, rgba(96, 165, 250, 0.2)));
-  color: var(--btn-primary-color, var(--color-accent-600, #3b82f6));
+  color: var(--btn-primary-color, var(--color-accent-600));
   box-shadow: var(--btn-primary-shadow, none);
 }
 
 @mixin btn-primary-surface-hover {
   background: var(--btn-primary-hover-bg, var(--color-accent-300, rgba(96, 165, 250, 0.3)));
-  color: var(--btn-primary-hover-color, var(--color-text-primary, #ffffff));
+  color: var(--btn-primary-hover-color, var(--color-text-primary));
   box-shadow: var(--btn-primary-hover-shadow, none);
 }
 
 @mixin btn-primary-surface-active {
   background: var(--btn-primary-active-bg, var(--color-accent-200, rgba(96, 165, 250, 0.24)));
-  color: var(--btn-primary-active-color, var(--color-text-primary, #ffffff));
+  color: var(--btn-primary-active-color, var(--color-text-primary));
   box-shadow: var(--btn-primary-active-shadow, none);
 }

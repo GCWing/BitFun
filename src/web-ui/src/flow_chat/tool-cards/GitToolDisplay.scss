@@ -73,15 +73,15 @@
 .git-tool-display:hover {
   .git-result-output {
     &::-webkit-scrollbar-thumb {
-      background: var(--scrollbar-thumb, rgba(255, 255, 255, 0.12));
+      background: var(--scrollbar-thumb);
     }
 
     &::-webkit-scrollbar-thumb:hover {
-      background: var(--scrollbar-thumb-hover, rgba(255, 255, 255, 0.22));
+      background: var(--scrollbar-thumb-hover);
     }
 
     /* Firefox */
-    scrollbar-color: var(--scrollbar-thumb, rgba(255, 255, 255, 0.12)) transparent;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
   }
 }
 
@@ -238,7 +238,7 @@
     gap: var(--flowchat-inline-gap, 0.35rem);
     flex-wrap: wrap;
     line-height: var(--flowchat-compact-line-height, 1.32);
-    background: var(--element-bg-subtle, rgba(255, 255, 255, 0.05));
+    background: var(--element-bg-subtle);
     box-sizing: border-box;
   }
 
@@ -349,7 +349,7 @@
     
     &:hover:not(:disabled) {
       background: rgba(239, 68, 68, 0.15);
-      color: rgba(239, 68, 68, 1);
+      color: var(--color-error);
     }
 
     &:active:not(:disabled) {

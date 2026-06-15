@@ -12,7 +12,7 @@
     var(--flowchat-content-inline-pad, 3rem)
     var(--flowchat-turn-gap, 0.46rem)
     var(--flowchat-content-inline-pad, 3rem);
-  box-shadow: 0 1px 0 color-mix(in srgb, #fff 4%, transparent) inset;
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--color-static-white) 4%, transparent) inset;
   transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
   animation: slideInUp 0.3s ease;
   position: relative;
@@ -44,7 +44,7 @@
 
 .user-message-item__timestamp {
   font-size: var(--flowchat-font-size-xxs);
-  color: var(--color-text-muted, #888);
+  color: var(--color-text-muted);
   font-weight: 400;
   margin-bottom: 0.12rem;
   line-height: var(--flowchat-compact-line-height, 1.32);
@@ -76,9 +76,9 @@
 }
 
 .user-message-item__steering-tag--pending {
-  color: var(--color-warning, #f59e0b);
-  background: color-mix(in srgb, var(--color-warning, #f59e0b) 12%, transparent);
-  border: 1px solid color-mix(in srgb, var(--color-warning, #f59e0b) 28%, transparent);
+  color: var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-warning) 28%, transparent);
 }
 
 .user-message-item__actions {
@@ -97,7 +97,7 @@
   font-size: var(--flowchat-font-size-base);
   font-weight: 500;
   line-height: var(--flowchat-text-line-height, 1.58);
-  color: var(--color-text-primary, #e0e0e0);
+  color: var(--color-text-primary);
   white-space: pre-wrap;
   display: -webkit-box;
   -webkit-line-clamp: 3;
@@ -164,7 +164,7 @@
     box-sizing: border-box;
     height: var(--um-failed-line-box);
     min-height: var(--um-failed-line-box);
-    color: var(--color-text-muted, #888);
+    color: var(--color-text-muted);
     opacity: 0.9;
 
     svg {
@@ -178,13 +178,13 @@
     flex: 0 1 auto;
     width: max-content;
     max-width: 100%;
-    color: var(--color-text-muted, #888);
+    color: var(--color-text-muted);
     font-size: var(--um-failed-fs);
     font-weight: 400;
     font-style: italic;
     line-height: var(--um-failed-lh);
     text-decoration: line-through;
-    text-decoration-color: color-mix(in srgb, var(--color-text-muted, #888) 72%, transparent);
+    text-decoration-color: color-mix(in srgb, var(--color-text-muted) 72%, transparent);
   }
 
   .user-message-item__actions {
@@ -309,7 +309,7 @@
 
   &:hover:not(:disabled) {
     color: var(--color-text-primary);
-    background: color-mix(in srgb, var(--element-bg-hover, #fff) 10%, transparent);
+    background: color-mix(in srgb, var(--element-bg-hover) 10%, transparent);
   }
 
   &:active:not(:disabled) {
@@ -323,11 +323,11 @@
 }
 
 .user-message-edit-composer__icon-button--confirm {
-  color: var(--color-success, #22c55e);
+  color: var(--color-success);
 
   &:hover:not(:disabled) {
-    color: var(--color-success, #22c55e);
-    background: color-mix(in srgb, var(--color-success, #22c55e) 12%, transparent);
+    color: var(--color-success);
+    background: color-mix(in srgb, var(--color-success) 12%, transparent);
   }
 }
 
@@ -406,12 +406,12 @@
   border-radius: 6px;
   overflow: hidden;
   cursor: pointer;
-  border: 1px solid var(--border-base, #333);
+  border: 1px solid var(--border-base);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 
   &:hover {
     transform: scale(1.03);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 4px 12px var(--color-overlay-black-25);
   }
 
   img {
@@ -437,7 +437,7 @@
     max-width: 90vw;
     max-height: 85vh;
     border-radius: 8px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 8px 32px var(--color-overlay-black-50);
     object-fit: contain;
   }
 }
@@ -446,7 +446,7 @@
   position: absolute;
   top: 16px;
   right: 16px;
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--color-overlay-white-15);
   border: none;
   border-radius: 50%;
   width: 36px;
@@ -454,7 +454,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: var(--color-static-white);
   cursor: pointer;
   transition: background 0.15s ease;
 

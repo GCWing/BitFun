@@ -188,7 +188,7 @@
   }
 
   &:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--color-overlay-white-10);
   }
 }
 
@@ -204,7 +204,7 @@
 
 .snapshot-card__action-btn--reject {
   color: tokens.$color-error;
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  border: 1px solid var(--color-error-border);
 
   &:hover:not(:disabled) {
     background: rgba(239, 68, 68, 0.15);
@@ -346,8 +346,8 @@
   align-items: center;
   gap: tokens.$size-gap-2;
   padding: tokens.$size-gap-3;
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error-border);
   border-radius: tokens.$size-radius-base;
   color: tokens.$color-error;
   font-size: var(--font-size-sm);
