@@ -3088,6 +3088,7 @@ impl ExecutionEngine {
                 let mut accepted = final_round_result.had_assistant_text
                     && !Self::assistant_has_tool_calls(&final_round_result.assistant_message);
                 let mut chosen_assistant_message: Option<Message> = None;
+                let mut finalize_fallback_text_used = false;
                 let mut chosen_model_round = if accepted {
                     Some(final_round_result.model_round.clone())
                 } else {

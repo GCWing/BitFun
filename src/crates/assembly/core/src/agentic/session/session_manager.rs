@@ -25,7 +25,7 @@ use crate::service::config::{
 };
 use crate::service::session::{
     DialogTurnData, DialogTurnKind, ModelRoundData, SessionMetadata, SessionRelationship,
-    SessionRelationshipKind, TextItemData, ToolItemData, TurnStatus, UserMessageData,
+    TextItemData, ToolItemData, TurnStatus, UserMessageData,
 };
 use crate::service::snapshot::ensure_snapshot_manager_for_workspace;
 use crate::service::workspace::get_global_workspace_service;

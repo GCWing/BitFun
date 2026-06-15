@@ -1,4 +1,3 @@
-use crate::agentic::coordination::scheduler::get_global_scheduler;
 use crate::agentic::tools::implementations::shell_command_safety;
 use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
