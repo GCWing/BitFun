@@ -112,7 +112,7 @@ pub const BUILTIN_APPS: &[BuiltinMiniAppBundle] = &[
     },
     BuiltinMiniAppBundle {
         id: "builtin-ppt-live",
-        version: 167,
+        version: 174,
         meta_json: include_str!("builtin/assets/ppt-live/meta.json"),
         html: include_str!("builtin/assets/ppt-live/index.html"),
         css: include_str!("builtin/assets/ppt-live/style.css"),
@@ -312,20 +312,23 @@ mod tests {
             Some(0)
         );
         assert!(app.ui_js.contains("Unsupported PPT Live action"));
-        // Render, audit, and continuation turns reuse the hidden planning
-        // session and its pinned skill-derived project contract. The
+        // Planning, render, fallback, and continuation turns reuse the hidden
+        // agent backend and its pinned skill-derived project contract. The
         // bundle is minified, so structural checks read the source.
         let adapter_source = include_str!("builtin/assets/ppt-live/src/bitfun-backend-adapter.js");
         assert!(adapter_source.contains("sessionId: options.sessionId"));
         assert!(adapter_source.contains("user::bitfun-system::ppt-design"));
         assert!(adapter_source.contains("references/editable-pptx.md"));
         assert!(adapter_source.contains("references/slide-decks.md"));
-        assert!(adapter_source.contains("buildRepairPrompt"));
-        assert!(adapter_source.contains("buildAuditPrompt"));
+        assert!(adapter_source.contains("references/content-guidelines.md"));
+        assert!(adapter_source.contains("buildPlanPrompt"));
+        assert!(adapter_source.contains("buildSessionSlidePrompt"));
+        assert!(adapter_source.contains("buildSlidesPrompt"));
+        assert!(adapter_source.contains("buildLegacyPrompt"));
+        assert!(adapter_source.contains("MINIAPP_HEADLESS_AGENT_RULES"));
+        assert!(adapter_source.contains("app.agent.run(prompt"));
         assert!(adapter_source.contains("AUTOMATIC COMPLETION CONTINUATION"));
-        assert!(adapter_source.contains("buildAuditVerificationFeedback"));
         assert!(adapter_source.contains("do not merely explain what remains"));
-        assert!(adapter_source.contains("quality-report.json"));
         assert!(!adapter_source.contains("app.ai"));
         assert!(!adapter_source.contains("installFallbackBackend"));
         assert!(app.ui_js.contains("SAME deck Agent Session"));
@@ -363,15 +366,17 @@ mod tests {
         assert!(app.ui_js.contains("user::bitfun-system::ppt-design"));
         let ppt_live_source = include_str!("builtin/assets/ppt-live/ui.js");
         assert!(ppt_live_source.contains("for (const slidePlan of renderPlans)"));
-        assert!(ppt_live_source.contains("validateSlideForPptxGeneration"));
+        assert!(ppt_live_source.contains("prepareSlidesForPptxExport"));
+        let export_source = include_str!("builtin/assets/ppt-live/src/export-slide-browser.js");
+        assert!(export_source.contains("validateSlideForPptxGeneration"));
         assert!(ppt_live_source.contains("planningEvidenceIssues"));
-        assert!(ppt_live_source.contains("runFinalDeckAudit"));
         assert!(ppt_live_source.contains("completedById"));
-        assert!(ppt_live_source.contains("quality-report.json"));
         assert!(ppt_live_source.contains("PPT_BACKEND_CONTINUATION_MAX_ATTEMPTS"));
         assert!(ppt_live_source.contains("completionRecoveryInput"));
-        assert!(ppt_live_source.contains("inspectDeckJsonFile"));
-        assert!(ppt_live_source.contains("auditWriteEvidenceIssues"));
+        assert!(ppt_live_source.contains("tryReadDeckJsonFile"));
+        assert!(ppt_live_source.contains("tryReadDeckPlanFile"));
+        assert!(ppt_live_source.contains("runStagedPlanPhase"));
+        assert!(ppt_live_source.contains("runStagedSlide"));
         assert!(ppt_live_source.contains("recoveryExhaustedError"));
         assert!(!ppt_live_source.contains("PPT_PARALLEL_SLIDE_WORKERS"));
         assert!(!ppt_live_source.contains("runWithConcurrencyLimit"));

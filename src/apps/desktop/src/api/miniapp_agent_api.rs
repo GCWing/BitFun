@@ -13,10 +13,8 @@
 
 use log::warn;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::State;
 
@@ -25,35 +23,31 @@ use bitfun_core::agentic::coordination::{
     ConversationCoordinator, DialogScheduler, DialogSubmissionPolicy, DialogTriggerSource,
 };
 use bitfun_core::agentic::core::{MessageContent, MessageRole, SessionConfig};
+use bitfun_core::miniapp::agent_bridge::{
+    agent_owner, agent_run_metadata, default_agent_run_id, extract_agent_turn_text,
+    requested_session_id, require_enabled_agent_permissions, resolve_agent_workspace_path,
+    session_name_or_default, validate_reused_session, MiniAppAgentRateLimiter,
+    MiniAppAgentRunRecord, MiniAppAgentRunRegistry, MiniAppAgentTurnMessage,
+    MiniAppAgentTurnMessageRole, MINIAPP_AGENT_KIND, UNKNOWN_AGENT_RUN_MESSAGE,
+};
 
 // ============== Run registry ==============
 
-#[derive(Debug, Clone)]
-struct MiniAppAgentRunRecord {
-    app_id: String,
-    session_id: String,
-    turn_id: String,
-}
-
 /// Active/recent agent runs: run_id → record. Used for ownership validation,
 /// stale-run cancellation after a webview reload, and turn-text fallback.
-static AGENT_RUN_REGISTRY: OnceLock<Mutex<HashMap<String, MiniAppAgentRunRecord>>> =
-    OnceLock::new();
+static AGENT_RUN_REGISTRY: OnceLock<MiniAppAgentRunRegistry> = OnceLock::new();
 
 /// Per-app agent rate limiter state: app_id → (request_count, window_start_ms).
-static AGENT_RATE_LIMITER: OnceLock<Mutex<HashMap<String, (u32, u64)>>> = OnceLock::new();
+static AGENT_RATE_LIMITER: OnceLock<MiniAppAgentRateLimiter> = OnceLock::new();
 
 static AGENT_RUN_COUNTER: AtomicU64 = AtomicU64::new(1);
 
-/// Cap the per-process registry so completed runs cannot grow it unboundedly.
-const AGENT_RUN_REGISTRY_MAX: usize = 256;
-
-fn agent_run_registry() -> &'static Mutex<HashMap<String, MiniAppAgentRunRecord>> {
-    AGENT_RUN_REGISTRY.get_or_init(|| Mutex::new(HashMap::new()))
+fn agent_run_registry() -> &'static MiniAppAgentRunRegistry {
+    AGENT_RUN_REGISTRY.get_or_init(MiniAppAgentRunRegistry::default)
 }
 
-fn agent_rate_limiter() -> &'static Mutex<HashMap<String, (u32, u64)>> {
-    AGENT_RATE_LIMITER.get_or_init(|| Mutex::new(HashMap::new()))
+fn agent_rate_limiter() -> &'static MiniAppAgentRateLimiter {
+    AGENT_RATE_LIMITER.get_or_init(MiniAppAgentRateLimiter::default)
 }
 
 fn now_ms() -> u64 {
@@ -61,16 +55,6 @@ fn now_ms() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis() as u64
-}
-
-/// A clean relative subdir contains only normal components: no `..`, no root,
-/// no prefix, so joining it onto a base directory can never escape the base.
-fn is_clean_relative_subdir(subdir: &str) -> bool {
-    let relative = std::path::Path::new(subdir);
-    !relative.as_os_str().is_empty()
-        && relative
-            .components()
-            .all(|component| matches!(component, std::path::Component::Normal(_)))
 }
 
 /// Resolve a MiniApp-requested agent workspace inside the app's own appdata
@@ -82,92 +66,15 @@ fn resolve_app_data_workspace(
     app_id: &str,
     subdir: &str,
 ) -> Result<String, String> {
-    if !is_clean_relative_subdir(subdir) {
-        return Err("appDataWorkspace must be a clean relative path".to_string());
-    }
-    let relative = std::path::Path::new(subdir);
-    let workspace = state
-        .miniapp_manager
-        .path_manager()
-        .miniapp_dir(app_id)
-        .join(relative);
+    let app_data_dir = state.miniapp_manager.path_manager().miniapp_dir(app_id);
+    let workspace = resolve_agent_workspace_path(None, Some(subdir), &app_data_dir)?;
     std::fs::create_dir_all(&workspace)
         .map_err(|e| format!("Failed to create MiniApp agent workspace: {}", e))?;
     Ok(workspace.to_string_lossy().to_string())
 }
 
 fn check_agent_rate_limit(app_id: &str, rate_limit_per_minute: u32) -> Result<(), String> {
-    if rate_limit_per_minute == 0 {
-        return Ok(());
-    }
-    let now = now_ms();
-    let window_ms: u64 = 60_000;
-    let mut map = agent_rate_limiter()
-        .lock()
-        .unwrap_or_else(|p| p.into_inner());
-    let entry = map.entry(app_id.to_string()).or_insert((0, now));
-    if now - entry.1 >= window_ms {
-        *entry = (1, now);
-    } else {
-        entry.0 += 1;
-        if entry.0 > rate_limit_per_minute {
-            return Err(format!(
-                "Agent rate limit exceeded: max {} runs/minute",
-                rate_limit_per_minute
-            ));
-        }
-    }
-    Ok(())
-}
-
-fn register_agent_run(record: MiniAppAgentRunRecord) {
-    let mut registry = agent_run_registry()
-        .lock()
-        .unwrap_or_else(|p| p.into_inner());
-    if registry.len() >= AGENT_RUN_REGISTRY_MAX {
-        // Drop an arbitrary old entry; the registry is a safety net, not a
-        // source of truth, so losing the oldest record is acceptable.
-        if let Some(key) = registry.keys().next().cloned() {
-            registry.remove(&key);
-        }
-    }
-    registry.insert(record.turn_id.clone(), record);
-}
-
-fn lookup_agent_run(
-    app_id: &str,
-    session_id: &str,
-    turn_id: &str,
-) -> Option<MiniAppAgentRunRecord> {
-    let registry = agent_run_registry()
-        .lock()
-        .unwrap_or_else(|p| p.into_inner());
-    registry
-        .get(turn_id)
-        .filter(|record| record.app_id == app_id && record.session_id == session_id)
-        .cloned()
-}
-
-fn take_agent_runs_for_app(app_id: &str) -> Vec<MiniAppAgentRunRecord> {
-    let mut registry = agent_run_registry()
-        .lock()
-        .unwrap_or_else(|p| p.into_inner());
-    let turn_ids: Vec<String> = registry
-        .iter()
-        .filter(|(_, record)| record.app_id == app_id)
-        .map(|(turn_id, _)| turn_id.clone())
-        .collect();
-    turn_ids
-        .into_iter()
-        .filter_map(|turn_id| registry.remove(&turn_id))
-        .collect()
-}
-
-fn remove_agent_run(turn_id: &str) {
-    let mut registry = agent_run_registry()
-        .lock()
-        .unwrap_or_else(|p| p.into_inner());
-    registry.remove(turn_id);
+    agent_rate_limiter().check(app_id, rate_limit_per_minute, now_ms())
 }
 
 async fn require_agent_permission(
@@ -179,15 +86,7 @@ async fn require_agent_permission(
         .get(app_id)
         .await
         .map_err(|e| e.to_string())?;
-    let agent_perms = app
-        .permissions
-        .agent
-        .clone()
-        .ok_or("Agent access is not enabled for this MiniApp")?;
-    if !agent_perms.enabled {
-        return Err("Agent access is not enabled for this MiniApp".to_string());
-    }
-    Ok(agent_perms)
+    require_enabled_agent_permissions(app.permissions.agent.as_ref())
 }
 
 // ============== Request/Response DTOs ==============
@@ -312,27 +211,15 @@ pub async fn miniapp_agent_run(
         .filter(|value| !value.is_empty())
         .map(str::to_string)
         .unwrap_or_else(|| {
-            format!(
-                "miniapp-agent-{}-{}",
-                request.app_id,
-                AGENT_RUN_COUNTER.fetch_add(1, Ordering::Relaxed)
+            default_agent_run_id(
+                &request.app_id,
+                AGENT_RUN_COUNTER.fetch_add(1, Ordering::Relaxed),
             )
         });
-    let owner = format!("miniapp-agent:{}:{}", request.app_id, run_id);
-    let session_name = request
-        .session_name
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .unwrap_or("MiniApp Agent Run")
-        .to_string();
+    let owner = agent_owner(&request.app_id, &run_id);
+    let session_name = session_name_or_default(request.session_name.as_deref());
 
-    let requested_session_id = request
-        .session_id
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(str::to_string);
+    let requested_session_id = requested_session_id(request.session_id.as_deref());
 
     let session_id = if let Some(existing_session_id) = requested_session_id {
         // Reuse a hidden session created by an earlier run of this MiniApp so
@@ -341,17 +228,12 @@ pub async fn miniapp_agent_run(
             .get_session_manager()
             .get_session(&existing_session_id)
             .ok_or("Unknown MiniApp agent session")?;
-        let owner_prefix = format!("miniapp-agent:{}:", request.app_id);
-        if !session
-            .created_by
-            .as_deref()
-            .is_some_and(|created_by| created_by.starts_with(&owner_prefix))
-        {
-            return Err("Unknown MiniApp agent session".to_string());
-        }
-        if session.config.workspace_path.as_deref() != Some(workspace_path.as_str()) {
-            return Err("MiniApp agent session workspace does not match this run".to_string());
-        }
+        validate_reused_session(
+            session.created_by.as_deref(),
+            session.config.workspace_path.as_deref(),
+            &request.app_id,
+            &workspace_path,
+        )?;
         existing_session_id
     } else {
         // One hidden session per task keeps MiniApp work isolated and out of
@@ -371,7 +253,7 @@ pub async fn miniapp_agent_run(
             .create_hidden_subagent_session_with_workspace(
                 None,
                 session_name,
-                "Cowork".to_string(),
+                MINIAPP_AGENT_KIND.to_string(),
                 config,
                 workspace_path.clone(),
                 Some(owner),
@@ -383,14 +265,7 @@ pub async fn miniapp_agent_run(
 
     let policy = DialogSubmissionPolicy::for_source(DialogTriggerSource::DesktopApi)
         .with_skip_tool_confirmation(true);
-    let metadata = json!({
-        "surface": "miniapp_agent",
-        "appId": request.app_id,
-        "runId": run_id,
-        // Hide AskUserQuestion from the tool manifest; MiniApp iframes have no
-        // question UI and would otherwise stall until the channel times out.
-        "acp_transport": true,
-    });
+    let metadata = agent_run_metadata(&request.app_id, &run_id);
 
     let outcome = scheduler
         .submit(
@@ -398,7 +273,7 @@ pub async fn miniapp_agent_run(
             request.prompt.clone(),
             Some("MiniApp agent run".to_string()),
             Some(run_id.clone()),
-            "Cowork".to_string(),
+            MINIAPP_AGENT_KIND.to_string(),
             Some(workspace_path),
             policy,
             None,
@@ -413,7 +288,7 @@ pub async fn miniapp_agent_run(
         bitfun_core::agentic::coordination::DialogSubmitOutcome::Queued { .. } => "queued",
     };
 
-    register_agent_run(MiniAppAgentRunRecord {
+    agent_run_registry().register(MiniAppAgentRunRecord {
         app_id: request.app_id.clone(),
         session_id: session_id.clone(),
         turn_id: run_id.clone(),
@@ -435,14 +310,17 @@ pub async fn miniapp_agent_cancel(
     request: MiniAppAgentCancelRequest,
 ) -> Result<(), String> {
     require_agent_permission(&state, &request.app_id).await?;
-    if lookup_agent_run(&request.app_id, &request.session_id, &request.turn_id).is_none() {
-        return Err("Unknown MiniApp agent run".to_string());
+    if agent_run_registry()
+        .lookup(&request.app_id, &request.session_id, &request.turn_id)
+        .is_none()
+    {
+        return Err(UNKNOWN_AGENT_RUN_MESSAGE.to_string());
     }
     coordinator
         .cancel_dialog_turn(&request.session_id, &request.turn_id)
         .await
         .map_err(|e| e.to_string())?;
-    remove_agent_run(&request.turn_id);
+    agent_run_registry().remove(&request.turn_id);
     Ok(())
 }
 
@@ -456,8 +334,11 @@ pub async fn miniapp_agent_turn_text(
     request: MiniAppAgentTurnTextRequest,
 ) -> Result<MiniAppAgentTurnTextResponse, String> {
     require_agent_permission(&state, &request.app_id).await?;
-    if lookup_agent_run(&request.app_id, &request.session_id, &request.turn_id).is_none() {
-        return Err("Unknown MiniApp agent run".to_string());
+    if agent_run_registry()
+        .lookup(&request.app_id, &request.session_id, &request.turn_id)
+        .is_none()
+    {
+        return Err(UNKNOWN_AGENT_RUN_MESSAGE.to_string());
     }
 
     let messages = coordinator
@@ -465,41 +346,31 @@ pub async fn miniapp_agent_turn_text(
         .get_context_messages(&request.session_id)
         .await
         .map_err(|e| e.to_string())?;
-    // Sessions may hold multiple MiniApp turns; only this turn's assistant
-    // text is a valid answer for this run. The answer itself may span several
-    // assistant messages when the engine continues a truncated stream across
-    // rounds ("continue from exactly where you stopped"), so concatenate, in
-    // order, every assistant text after this turn's last tool result. The
-    // internal reminder user messages between segments do not break the run.
-    let turn_messages: Vec<&_> = messages
+    let turn_messages: Vec<MiniAppAgentTurnMessage> = messages
         .iter()
-        .filter(|message| message.metadata.turn_id.as_deref() == Some(request.turn_id.as_str()))
-        .collect();
-    let answer_start = turn_messages
-        .iter()
-        .rposition(|message| {
-            message.role == MessageRole::Tool
-                || matches!(message.content, MessageContent::ToolResult { .. })
-        })
-        .map_or(0, |index| index + 1);
-    let text = turn_messages[answer_start..]
-        .iter()
-        .filter(|message| message.role == MessageRole::Assistant)
-        .filter_map(|message| {
-            let text = match &message.content {
-                MessageContent::Text(text) => text.as_str(),
-                MessageContent::Multimodal { text, .. } => text.as_str(),
-                MessageContent::Mixed { text, .. } => text.as_str(),
-                MessageContent::ToolResult { .. } => "",
-            };
-            if text.trim().is_empty() {
-                None
+        .map(|message| {
+            let role = if message.role == MessageRole::Assistant {
+                MiniAppAgentTurnMessageRole::Assistant
+            } else if message.role == MessageRole::Tool {
+                MiniAppAgentTurnMessageRole::Tool
             } else {
-                Some(text)
+                MiniAppAgentTurnMessageRole::Other
+            };
+            let text = match &message.content {
+                MessageContent::Text(text) => text.clone(),
+                MessageContent::Multimodal { text, .. } => text.clone(),
+                MessageContent::Mixed { text, .. } => text.clone(),
+                MessageContent::ToolResult { .. } => String::new(),
+            };
+            MiniAppAgentTurnMessage {
+                turn_id: message.metadata.turn_id.clone(),
+                role,
+                is_tool_result: matches!(message.content, MessageContent::ToolResult { .. }),
+                text,
             }
         })
-        .collect::<Vec<_>>()
-        .concat();
+        .collect();
+    let text = extract_agent_turn_text(&turn_messages, &request.turn_id);
 
     Ok(MiniAppAgentTurnTextResponse { text })
 }
@@ -514,7 +385,7 @@ pub async fn miniapp_agent_cancel_stale_runs(
 ) -> Result<MiniAppAgentCancelStaleRunsResponse, String> {
     require_agent_permission(&state, &request.app_id).await?;
 
-    let runs = take_agent_runs_for_app(&request.app_id);
+    let runs = agent_run_registry().take_for_app(&request.app_id);
     let mut cancelled = 0u32;
     for run in runs {
         match coordinator
@@ -539,7 +410,8 @@ pub async fn miniapp_agent_cancel_stale_runs(
 
 #[cfg(test)]
 mod tests {
-    use super::{is_clean_relative_subdir, MiniAppAgentRunRequest};
+    use super::MiniAppAgentRunRequest;
+    use bitfun_core::miniapp::agent_bridge::is_clean_relative_subdir;
     use serde_json::json;
 
     #[test]

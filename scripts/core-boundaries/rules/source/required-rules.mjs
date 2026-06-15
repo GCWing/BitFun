@@ -1695,6 +1695,10 @@ export const requiredContentRules = [
         regex: /\brejected_index_rows_dropped\b/,
         message: 'missing rejected citation index cleanup telemetry',
       },
+      {
+        regex: /\bpub fn should_post_process_research_report\b/,
+        message: 'missing DeepResearch post-process gate owner',
+      },
     ],
   },
   {
@@ -5634,8 +5638,12 @@ export const requiredContentRules = [
         message: 'missing GetToolSpec execution contract',
       },
       {
-        regex: /\bcitation_renumber\b/,
-        message: 'missing DeepResearch citation renumber hook',
+        regex: /\bshould_post_process_research_report\b/,
+        message: 'missing DeepResearch post-process runtime gate',
+      },
+      {
+        regex: /\bbitfun_services_integrations::deep_research::run_for_session_workspace\b/,
+        message: 'missing DeepResearch report IO owner delegation',
       },
     ],
   },
@@ -5893,21 +5901,6 @@ export const requiredContentRules = [
       {
         regex: /\bfn render_subagent_line\b/,
         message: 'missing CLI subagent presentation renderer',
-      },
-    ],
-  },
-  {
-    path: 'src/crates/assembly/core/src/agentic/agents/citation_renumber.rs',
-    reason:
-      'core DeepResearch citation hook must stay a compatibility adapter over the integrations owner',
-    patterns: [
-      {
-        regex: /\bpub async fn run_for_session_workspace\b/,
-        message: 'missing DeepResearch citation hook entry point',
-      },
-      {
-        regex: /\bbitfun_services_integrations::deep_research::run_for_session_workspace\b/,
-        message: 'missing DeepResearch citation integrations owner delegation',
       },
     ],
   },
@@ -7297,9 +7290,9 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/assembly/core/src/function_agents/runtime_services.rs',
+    path: 'src/crates/assembly/core/src/function_agents/port_adapters.rs',
     reason:
-      'core function-agent runtime services must continue owning AI concrete calls while product-domains owns prompt, parser, and facade policy',
+      'core function-agent port adapters must continue owning AI concrete calls while product-domains owns prompt, parser, and facade policy',
     patterns: [
       {
         regex: /\bprepare_commit_ai_prompt\b/,

@@ -5,11 +5,6 @@
 mod definitions;
 mod prompt_builder;
 mod registry;
-// Utility hooks used by specific agents (not themselves an agent definition):
-// citation_renumber finalizes a DeepResearch report's cit_XXX references into
-// consecutive `[N]` display IDs after the dialog turn completes.
-#[cfg(feature = "product-full")]
-pub(crate) mod citation_renumber;
 
 use crate::agentic::session::{SystemPromptCacheIdentity, UserContextCacheIdentity};
 use crate::agentic::tools::framework::ToolExposure;
@@ -216,7 +211,6 @@ mod tests {
         shared_coding_mode_user_context_policy, Agent, AgenticMode, DebugMode, MultitaskMode,
         PlanMode,
     };
-    use crate::agentic::tools::framework::ToolExposure;
 
     #[test]
     fn shared_template_modes_share_system_prompt_cache_identity() {

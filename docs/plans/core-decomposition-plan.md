@@ -20,7 +20,8 @@
 - `bitfun-core --no-default-features` 已裁掉 workspace-search owner、debug ingest HTTP server、AI provider adapter runtime 和 direct `reqwest`。
 - Desktop / CLI / ACP 仍通过 `bitfun-core/product-full` 获取完整能力；Server / Web / Mobile Web 不直接依赖 core，但交付形态级 feature / dependency trimming 仍未闭环。
 - Runtime Services、Agent Runtime、Tool Contracts、Tool Execution、Harness、Product Domains、Services Core、Services Integrations 等 owner crate 已建立，部分逻辑仍由 core concrete manager 或产品命令路径持有。
-- 本轮 PR-B 收口 Agent lifecycle 与 tool side-effect owner：turn skill/agent snapshot DTO / diff / render / store、file-read session state、session evidence ledger 与 compression-contract projection、dialog-turn cancellation token store、tool confirmation / user-question wait channel state 已迁入 `agent-runtime`；background exec output capture、tool cancellation token store 已迁入 `tool-execution`；core 保留 resolver、产品事件、具体工具执行、IO 编排和旧路径兼容 re-export。
+- PR-B 已收口 Agent lifecycle 与 tool side-effect owner：turn skill/agent snapshot DTO / diff / render / store、file-read session state、session evidence ledger 与 compression-contract projection、dialog-turn cancellation token store、tool confirmation / user-question wait channel state 已迁入 `agent-runtime`；background exec output capture、tool cancellation token store 已迁入 `tool-execution`；core 保留 resolver、产品事件、具体工具执行、IO 编排和旧路径兼容 re-export。
+- PR-C 已收口 Harness / product workflow 的低风险 owner：MiniApp AI / Agent permission、rate-limit、model/message/session/workspace/turn-text 规则迁入 `product-domains`；DeepResearch 后处理 gate 迁入 `agent-runtime`，report IO 继续由 `services-integrations` 持有；function-agent AI concrete acquisition 收拢为 core port adapter，旧 `runtime_services` 路径删除。
 
 ## 3. 已完成但仍需保持的边界
 
@@ -36,8 +37,6 @@
 
 | PR | 目标 | 主要范围 | 准出标准 |
 |---|---|---|---|
-| PR-B | Agent lifecycle 与 tool side-effect closure | session state / turn state、dialog-turn cancellation token store、tool confirmation / user-question channel state、tool cancellation token store、terminal / exec output capture、core 兼容 facade 与防回流 boundary；concrete scheduler 和 prompt-cache persistence IO 保持在 core，待 SDK / product-shape 阶段通过 port 设计整体收口 | 保持 Flow Chat finalize / retry / round history、session metadata、cancel、non-TTY exec output、tool event / card 语义；core 旧路径显著简化；补 focused tests 和 boundary |
-| PR-C | Harness 与 product workflow concrete migration | DeepReview launch / provider wait / report persistence、DeepResearch concrete workflow、MiniApp AI acquisition / larger workflow execution、function-agent AI provider acquisition | 保持 DeepReview queue/report、MiniApp create/update/import/storage/PPT live、AI request trace、function-agent Git/AI 行为；core 只保留 legacy facade / adapter |
 | PR-D | Product shape / Agent SDK / core facade closure | 内部 Agent Runtime SDK façade、fake provider 最小 session / turn / event stream、Product Assembly capability matrix、delivery profile feature trimming、`bitfun-core` facade 收口 | cargo metadata / cargo tree 有 no-default/product-full 对比；各产品入口验证通过；SDK 不暴露 `bitfun-core`、product-full、concrete manager 或全局 mutable state |
 
 ## 5. 固定执行流程

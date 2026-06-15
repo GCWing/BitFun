@@ -3045,16 +3045,16 @@ impl ExecutionEngine {
                     );
                     let retry_result = self
                         .run_finalize_round(
-                        ai_client.clone(),
-                        &context,
-                        agent_type.clone(),
-                        completed_rounds,
-                        finalize_round_group_id.clone(),
-                        &execution_context_vars,
-                        primary_supports_image_understanding,
-                        &prepended_reminders,
-                        &messages,
-                        finalize_reminder,
+                            ai_client.clone(),
+                            &context,
+                            agent_type.clone(),
+                            completed_rounds,
+                            finalize_round_group_id.clone(),
+                            &execution_context_vars,
+                            primary_supports_image_understanding,
+                            &prepended_reminders,
+                            &messages,
+                            finalize_reminder,
                             tool_definitions.clone(),
                             context_window,
                         )
@@ -3142,9 +3142,12 @@ impl ExecutionEngine {
         // dialog success) so other agents and failed turns are unaffected.
         #[cfg(feature = "product-full")]
         {
-            if success && agent_type == "DeepResearch" {
+            if bitfun_agent_runtime::deep_research::should_post_process_research_report(
+                &agent_type,
+                success,
+            ) {
                 if let Some(workspace) = context.workspace.as_ref() {
-                    crate::agentic::agents::citation_renumber::run_for_session_workspace(
+                    bitfun_services_integrations::deep_research::run_for_session_workspace(
                         workspace.root_path(),
                         &context.session_id,
                     )
@@ -3437,7 +3440,9 @@ mod tests {
     fn local_fallback_response_does_not_count_as_agent_final_response() {
         assert!(ExecutionEngine::should_mark_has_final_response(true, false));
         assert!(!ExecutionEngine::should_mark_has_final_response(true, true));
-        assert!(!ExecutionEngine::should_mark_has_final_response(false, false));
+        assert!(!ExecutionEngine::should_mark_has_final_response(
+            false, false
+        ));
     }
 
     #[test]

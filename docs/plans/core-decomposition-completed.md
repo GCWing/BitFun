@@ -19,12 +19,13 @@
 - `services-core` 已承接 workspace-runtime legacy session-store merge、metadata 冲突选择、index rebuild 和 legacy path copy/move fallback；core workspace-runtime 只保留路径计算、runtime layout ensure 和错误兼容映射。
 - `runtime-services` 已承接 typed runtime service assembly、capability availability、provider registry、capability validation 和 backend event delivery；core backend event system 只保留兼容 re-export。
 - `bitfun-events` 已承接 backend event DTO、agentic event DTO 和 platform-neutral `EventEmitter` trait。
-- `services-integrations` 已承接 remote-connect primitives、wire command routing / response assembly、workspace search concrete owner、remote SSH/SFTP/PTY owner、DeepResearch report IO、MiniApp host dispatch / storage / worker / import IO。
+- `services-integrations` 已承接 remote-connect primitives、wire command routing / response assembly、workspace search concrete owner、remote SSH/SFTP/PTY owner、DeepResearch report IO / display-map sidecar、MiniApp host dispatch / storage / worker / import IO。
 - `tool-contracts` 已承接 provider-neutral tool DTO、manifest/catalog/admission/result presentation、confirmation facts、truncation recovery presentation。
 - `tool-execution` 已承接 local / remote IO helper、Bash shell helper、batching plan、retry policy、state counting、cancellation-state/token-store policy、background exec output capture 和部分 result rendering。
-- `agent-runtime` 已承接 scheduler/background delivery 纯决策、dialog lifecycle port contracts、session management/cancellation port contracts、thread-goal facts、prompt / prompt-cache facts、turn skill/agent snapshot DTO/diff/render/store、file-read session state、session evidence ledger 与 compression-contract projection、dialog-turn cancellation token store、tool confirmation / user-question wait channel state、custom subagent discovery/loading、post-call hook routing、DeepReview provider-neutral policy/queue/retry/diagnostics shaping、DeepResearch citation renumber。
+- `agent-runtime` 已承接 scheduler/background delivery 纯决策、dialog lifecycle port contracts、session management/cancellation port contracts、thread-goal facts、prompt / prompt-cache facts、turn skill/agent snapshot DTO/diff/render/store、file-read session state、session evidence ledger 与 compression-contract projection、dialog-turn cancellation token store、tool confirmation / user-question wait channel state、custom subagent discovery/loading、post-call hook routing、DeepReview provider-neutral policy/queue/retry/diagnostics shaping、DeepResearch citation renumber 与 report post-process gate。
 - `harness` 已建立 descriptor、route plan 和 legacy provider registry。
-- `product-domains` 已承接 MiniApp state/workflow planning、compile / permission adaptation、import lifecycle、function-agent prompt/parser/response policy 和部分 Git snapshot/fallback 逻辑。
+- `product-domains` 已承接 MiniApp state/workflow planning、compile / permission adaptation、import lifecycle、AI / Agent permission、rate-limit、model/message/session/workspace/turn-text bridge rules、function-agent prompt/parser/response policy 和部分 Git snapshot/fallback 逻辑。
+- `bitfun-core` 的 function-agent AI concrete acquisition 已从旧 `runtime_services` 路径收拢到明确的 core port adapter；Git / AI compatibility re-export 仍保留旧 public path。
 - Product Assembly 已承接 `DeliveryProfile`、`CapabilitySet`、product-full provider plan、service availability report 和 profile-scoped harness registry 入口。
 
 ## 3. 已建立保护
@@ -38,6 +39,7 @@
 
 - `bitfun-core` 仍是完整 product runtime 组装点，尚未退化为纯 compatibility facade。
 - 产品入口仍主要通过 `bitfun-core/product-full` 获取完整能力，交付形态级 feature / dependency trimming 未完成。
-- concrete scheduler lifecycle、prompt-cache persistence orchestration、tool pipeline scheduler glue、concrete prompt assembly、AI client factory / provider acquisition 仍在 core 或产品路径。
-- DeepReview launch / provider wait / report persistence、MiniApp AI acquisition / larger workflow execution、function-agent AI provider acquisition 仍未完成 owner 迁移。
+- concrete scheduler lifecycle、prompt-cache persistence orchestration、tool pipeline scheduler glue、concrete prompt assembly、AI client factory / provider acquisition 仍在 core 或产品路径，待 PR-D 通过 SDK / provider port 统一收口。
+- DeepReview concrete Task launch、queue event emission 和 session metadata cache persistence 仍是 core adapter，因为它们依赖 coordinator、session manager、subagent runtime 和产品事件；provider-neutral policy / queue / retry / report shaping 已在 `agent-runtime`。
+- MiniApp larger workflow 的 UI asset / desktop scheduler / AI factory 调用仍属于产品 host adapter；可复用规则已迁入 `product-domains`，不再在 desktop 命令内重复实现。
 - Agent Runtime SDK 具备候选原语，但尚未形成可独立发布的稳定外部 SDK 边界。
