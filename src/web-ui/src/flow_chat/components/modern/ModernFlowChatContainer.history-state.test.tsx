@@ -100,7 +100,7 @@ vi.mock('@/infrastructure/contexts/WorkspaceContext', () => ({
   }),
 }));
 
-vi.mock('@/infrastructure/api', () => ({
+vi.mock('@/infrastructure/api/service-api/AgentAPI', () => ({
   agentAPI: agentApiMock,
 }));
 

@@ -16,6 +16,13 @@ function dynamicImportSpecifiers(source: string): string[] {
   );
 }
 
+function staticImportSpecifiers(source: string): string[] {
+  return Array.from(
+    source.matchAll(/from\s+(['"])(.*?)\1/g),
+    match => match[2]
+  );
+}
+
 describe('startup performance contract', () => {
   it('keeps the pre-React startup fallback logo-only', () => {
     const source = readSource('../../../index.html');
@@ -548,6 +555,22 @@ describe('startup performance contract', () => {
       new Set(['@/infrastructure/api/service-api/AgentAPI'])
     );
     expect(imports).not.toContain('@/infrastructure/api');
+  });
+
+  it('keeps session interaction hot paths off the broad API barrel', () => {
+    const hotPathSources = [
+      '../../flow_chat/hooks/useFlowChat.ts',
+      '../../flow_chat/components/modern/ModernFlowChatContainer.tsx',
+      '../../flow_chat/components/modern/useFlowChatSync.ts',
+      '../../flow_chat/components/ChatInput.tsx',
+      '../../flow_chat/services/flow-chat-manager/PersistenceModule.ts',
+      '../../flow_chat/state-machine/SessionStateMachine.ts',
+    ].map(readSource);
+
+    for (const source of hotPathSources) {
+      expect(staticImportSpecifiers(source)).not.toContain('@/infrastructure/api');
+      expect(dynamicImportSpecifiers(source)).not.toContain('@/infrastructure/api');
+    }
   });
 
   it('keeps Agent companion implementation modules out of the root startup bundle', () => {

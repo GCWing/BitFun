@@ -52,7 +52,7 @@ import {
 } from '../../utils/flowChatTurnScrollPolicy';
 import { isRemoteTraceContext, startupTrace } from '@/shared/utils/startupTrace';
 import { scheduleAfterStartupPaint } from '@/shared/utils/startupTaskScheduling';
-import { agentAPI } from '@/infrastructure/api';
+import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import { notificationService } from '@/shared/notification-system';
 import {
   clearHistorySessionOpenTransition,

@@ -10,7 +10,7 @@ const saveSessionTurn = vi.fn();
 const saveSessionMetadata = vi.fn();
 const loadSessionMetadata = vi.fn();
 
-vi.mock('@/infrastructure/api', () => ({
+vi.mock('@/infrastructure/api/service-api/SessionAPI', () => ({
   sessionAPI: {
     saveSessionTurn,
     saveSessionMetadata,

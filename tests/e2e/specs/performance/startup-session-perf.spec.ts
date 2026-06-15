@@ -3612,6 +3612,9 @@ type RapidLongSessionSwitchMeasurement = {
       findDurationMs: number;
       clickDurationMs: number;
       pauseBeforeTargetMs: number;
+      clickActionCompletedAtMs: number;
+      clickActionCompletedToLatestVisibleMs: number;
+      clickActionCompletedToLatestUsableMs: number;
       clickToLatestVisibleMs: number;
       clickToLatestUsableMs: number;
       latestVisibleToUsableMs: number;
@@ -3974,6 +3977,8 @@ async function collectRapidLongSessionSwitchMeasurement(
   const targetClickPlanEntry = targetClickPlanIndex >= 0
     ? clickPlan[targetClickPlanIndex]
     : undefined;
+  const targetClickDurationMs = targetClickPlanEntry?.clickDurationMs ?? 0;
+  const targetClickActionCompletedAtMs = targetClickedAtMs + targetClickDurationMs;
   const pauseBeforeTargetMs = clickPlan
     .slice(0, Math.max(0, targetClickPlanIndex))
     .reduce((total, entry) => total + (entry.pauseDurationMs ?? 0), 0);
@@ -4011,8 +4016,11 @@ async function collectRapidLongSessionSwitchMeasurement(
         clickedAtMs: targetClickedAtMs,
         clickSinceFirstClickMs: targetClickedAtMs - clickedAtMs,
         findDurationMs: targetClickPlanEntry?.findDurationMs ?? 0,
-        clickDurationMs: targetClickPlanEntry?.clickDurationMs ?? 0,
+        clickDurationMs: targetClickDurationMs,
         pauseBeforeTargetMs,
+        clickActionCompletedAtMs: targetClickActionCompletedAtMs,
+        clickActionCompletedToLatestVisibleMs: latestVisible.visibleAtMs - targetClickActionCompletedAtMs,
+        clickActionCompletedToLatestUsableMs: latestUsable.usableAtMs - targetClickActionCompletedAtMs,
         clickToLatestVisibleMs: latestVisible.visibleAtMs - targetClickedAtMs,
         clickToLatestUsableMs: latestUsable.usableAtMs - targetClickedAtMs,
         latestVisibleToUsableMs: latestUsable.usableAtMs - latestVisible.visibleAtMs,
@@ -4555,6 +4563,10 @@ describe('Performance telemetry', () => {
           findDurationMs: measurement.rapidSwitchBreakdown.target.findDurationMs,
           clickDurationMs: measurement.rapidSwitchBreakdown.target.clickDurationMs,
           pauseBeforeTargetMs: measurement.rapidSwitchBreakdown.target.pauseBeforeTargetMs,
+          clickActionCompletedToLatestVisibleMs:
+            measurement.rapidSwitchBreakdown.target.clickActionCompletedToLatestVisibleMs,
+          clickActionCompletedToLatestUsableMs:
+            measurement.rapidSwitchBreakdown.target.clickActionCompletedToLatestUsableMs,
           clickToLatestVisibleMs: measurement.rapidSwitchBreakdown.target.clickToLatestVisibleMs,
           latestVisibleToUsableMs: measurement.rapidSwitchBreakdown.target.latestVisibleToUsableMs,
           clickToLatestUsableMs: measurement.rapidSwitchBreakdown.target.clickToLatestUsableMs,

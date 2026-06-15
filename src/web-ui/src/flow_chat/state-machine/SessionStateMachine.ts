@@ -282,7 +282,7 @@ export class SessionStateMachineImpl {
             remoteSshHost: session?.remoteSshHost,
           });
         } else {
-          const { agentAPI } = await import('@/infrastructure/api');
+          const { agentAPI } = await import('@/infrastructure/api/service-api/AgentAPI');
           await agentAPI.cancelDialogTurn(sessionId, dialogTurnId);
         }
         log.debug('Backend cancellation completed', { sessionId, dialogTurnId, acpClientId });

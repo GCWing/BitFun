@@ -3,7 +3,7 @@
  */
 
 import { useEffect } from 'react';
-import { agentAPI } from '@/infrastructure/api';
+import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import { flowChatStore } from '../../store/FlowChatStore';
 import { startAutoSync } from '../../services/storeSync';
 

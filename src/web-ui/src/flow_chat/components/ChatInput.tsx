@@ -65,7 +65,7 @@ import { resolveSessionRelationship } from '../utils/sessionMetadata';
 import { resolveWorkspaceChatInputMode } from '../utils/chatInputMode';
 import { useSceneStore } from '@/app/stores/sceneStore';
 import type { SceneTabId } from '@/app/components/SceneBar/types';
-import { configAPI } from '@/infrastructure/api';
+import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
 import type { ModeSkillInfo } from '@/infrastructure/config/types';
 import MCPAPI, { type MCPPrompt, type MCPPromptMessage, type MCPServerInfo } from '@/infrastructure/api/service-api/MCPAPI';
 import { ChatInputWorkspaceStrip } from './ChatInputWorkspaceStrip';
@@ -1767,7 +1767,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
 
     try {
-      const { agentAPI } = await import('@/infrastructure/api');
       await agentAPI.compactSession({
         sessionId: effectiveTargetSessionId,
         workspacePath: effectiveTargetSession.workspacePath,
