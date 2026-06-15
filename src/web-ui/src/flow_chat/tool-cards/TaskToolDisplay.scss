@@ -4,7 +4,7 @@
   .task-header-wrapper {
     display: flex;
     align-items: stretch;
-    gap: var(--flowchat-inline-gap, 0.35rem);
+    gap: var(--flowchat-inline-gap);
     width: 100%;
   }
 
@@ -76,9 +76,9 @@
       content: '';
       position: absolute;
       left: 0;
-      right: calc(-1 * var(--tool-card-header-pad-right, 10px));
-      top: calc(-1 * var(--tool-card-header-pad-y, 10px));
-      bottom: calc(-1 * var(--tool-card-header-pad-y, 10px));
+      right: calc(-1 * var(--tool-card-header-pad-right));
+      top: calc(-1 * var(--tool-card-header-pad-y));
+      bottom: calc(-1 * var(--tool-card-header-pad-y));
       background-color: transparent;
       border-radius: 0;
       transition: background-color 0.15s ease;
@@ -98,8 +98,8 @@
       content: '';
       position: absolute;
       left: 0;
-      top: calc(-1 * var(--tool-card-header-pad-y, 10px));
-      bottom: calc(-1 * var(--tool-card-header-pad-y, 10px));
+      top: calc(-1 * var(--tool-card-header-pad-y));
+      bottom: calc(-1 * var(--tool-card-header-pad-y));
       width: 0;
       border-left: 1px solid var(--border-base);
       pointer-events: none;
@@ -110,9 +110,9 @@
   .task-header-rail__hit {
     position: absolute;
     left: 0;
-    top: calc(-1 * var(--tool-card-header-pad-y, 10px));
-    right: calc(-1 * var(--tool-card-header-pad-right, 10px));
-    bottom: calc(-1 * var(--tool-card-header-pad-y, 10px));
+    top: calc(-1 * var(--tool-card-header-pad-y));
+    right: calc(-1 * var(--tool-card-header-pad-right));
+    bottom: calc(-1 * var(--tool-card-header-pad-y));
     z-index: 2;
     margin: 0;
     padding: 0;
@@ -144,7 +144,7 @@
     /* Start after the 1px divider line (::after sits at left: 0). */
     left: 1px;
     /* Match hover fill (::before) and hit area right edge — both extend into right padding. */
-    right: calc(-1 * var(--tool-card-header-pad-right, 10px));
+    right: calc(-1 * var(--tool-card-header-pad-right));
     top: 0;
     bottom: 0;
     display: flex;
@@ -160,7 +160,7 @@
     pointer-events: none;
 
     > * + * {
-      margin-top: var(--flowchat-inline-gap, 0.35rem);
+      margin-top: var(--flowchat-inline-gap);
     }
 
     > svg {
@@ -190,14 +190,14 @@
   .task-header-main {
     display: flex;
     align-items: center;
-    gap: var(--flowchat-inline-gap, 0.35rem);
+    gap: var(--flowchat-inline-gap);
     width: 100%;
     min-height: 20px;
   }
 
 
   .task-action {
-    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+    font-size: var(--tool-card-action-font-size);
     font-weight: 500;
     color: var(--color-text-primary);
     flex-shrink: 1;
@@ -228,7 +228,7 @@
   .task-failed-badge {
     display: inline-flex;
     align-items: center;
-    padding: 0.1rem var(--flowchat-inline-gap, 0.35rem);
+    padding: 0.1rem var(--flowchat-inline-gap);
     border-radius: 3px;
     font-size: var(--flowchat-font-size-xxs);
     font-weight: 500;
@@ -240,7 +240,7 @@
   .agent-type-badge {
     display: inline-flex;
     align-items: center;
-    padding: 0.125rem var(--flowchat-inline-gap, 0.35rem);
+    padding: 0.125rem var(--flowchat-inline-gap);
     border-radius: 4px;
     font-size: var(--flowchat-font-size-xxs);
     font-weight: 500;
@@ -253,7 +253,7 @@
   .task-header-meta {
     display: flex;
     align-items: center;
-    gap: var(--flowchat-inline-gap, 0.35rem);
+    gap: var(--flowchat-inline-gap);
     margin-left: auto;
     margin-right: 10px;
     flex-shrink: 0;
@@ -273,7 +273,7 @@
      The generic thinking content has vertical padding; with a one-line max-height
      that can leave only padding visible and push the prompt text out of view. */
   .task-expanded-content .task-prompt-content {
-    padding: 0 var(--flowchat-card-pad-x, 0.75rem);
+    padding: 0 var(--flowchat-card-pad-x);
     max-height: 3.2em;
     overflow-y: auto;
   }
@@ -288,10 +288,10 @@
   .task-interruption-note {
     display: flex;
     align-items: flex-start;
-    gap: var(--flowchat-inline-gap, 0.35rem);
+    gap: var(--flowchat-inline-gap);
     color: var(--color-text-secondary);
-    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
-    line-height: var(--flowchat-support-line-height, 1.45);
+    font-size: var(--tool-card-action-font-size);
+    line-height: var(--flowchat-support-line-height);
 
     svg {
       flex-shrink: 0;
@@ -328,12 +328,12 @@
   .duration-text {
     display: flex;
     align-items: center;
-    gap: var(--flowchat-inline-gap, 0.35rem);
+    gap: var(--flowchat-inline-gap);
     color: var(--tool-card-text-secondary);
     font-size: var(--flowchat-font-size-xs);
     font-weight: 600;
     letter-spacing: 0.01em;
-    line-height: var(--flowchat-compact-line-height, 1.32);
+    line-height: var(--flowchat-compact-line-height);
 
     svg {
       flex-shrink: 0;
@@ -353,8 +353,8 @@
   .section-header {
     display: flex;
     align-items: center;
-    gap: var(--flowchat-inline-gap, 0.35rem);
-    margin-bottom: var(--flowchat-card-gap, 0.45rem);
+    gap: var(--flowchat-inline-gap);
+    margin-bottom: var(--flowchat-card-gap);
     font-size: var(--flowchat-font-size-xs);
     font-weight: 600;
     color: var(--tool-card-text-secondary);
@@ -375,26 +375,26 @@
   .task-expanded-content {
     display: flex;
     flex-direction: column;
-    gap: var(--flowchat-card-gap, 0.45rem);
+    gap: var(--flowchat-card-gap);
   }
 
 
   .error-content {
     display: flex;
     flex-direction: column;
-    gap: var(--flowchat-card-gap, 0.45rem);
+    gap: var(--flowchat-card-gap);
   }
 
   .error-message {
-    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+    font-size: var(--tool-card-action-font-size);
     color: var(--color-error);
-    line-height: var(--flowchat-support-line-height, 1.45);
+    line-height: var(--flowchat-support-line-height);
   }
 
   .error-meta {
     display: flex;
     align-items: center;
-    gap: var(--flowchat-inline-gap, 0.35rem);
+    gap: var(--flowchat-inline-gap);
     font-size: var(--flowchat-font-size-xs);
     color: var(--tool-card-text-muted);
   }
@@ -410,15 +410,15 @@
 
   .tool-actions {
     display: flex;
-    gap: var(--flowchat-inline-gap, 0.35rem);
-    margin-top: var(--flowchat-card-gap, 0.45rem);
+    gap: var(--flowchat-inline-gap);
+    margin-top: var(--flowchat-card-gap);
   }
 
   .confirm-button,
   .reject-button {
-    padding: var(--flowchat-control-pad-y, 0.35rem) var(--flowchat-control-pad-x, 0.75rem);
+    padding: var(--flowchat-control-pad-y) var(--flowchat-control-pad-x);
     border-radius: 4px;
-    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+    font-size: var(--tool-card-action-font-size);
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -432,10 +432,10 @@
 
   .confirm-button {
     background: var(--color-primary);
-    color: white;
+    color: var(--color-static-white);
 
     &:hover:not(:disabled) {
-      background: var(--color-primary-dark, #2563eb);
+      background: var(--color-primary-hover);
     }
   }
 
@@ -445,7 +445,7 @@
     border: 1px solid var(--tool-card-border);
 
     &:hover:not(:disabled) {
-      background: var(--tool-card-bg-tertiary);
+      background: var(--tool-card-bg-hover);
       border-color: var(--color-error);
       color: var(--color-error);
     }
@@ -548,7 +548,7 @@
     // Match `.task-expanded-content .task-prompt-content` horizontal inset.
     .subagent-projection-container--expanded {
       --task-prompt-inline-pad: calc(
-        var(--flowchat-card-expanded-pad-x, 0.625rem) + var(--flowchat-card-pad-x, 0.75rem)
+        var(--flowchat-card-expanded-pad-x) + var(--flowchat-card-pad-x)
       );
       padding:
         8px
@@ -589,15 +589,15 @@
 .task-reviewer-context {
   display: flex;
   flex-direction: column;
-  gap: var(--flowchat-inline-gap, 0.35rem);
-  padding: var(--flowchat-inline-gap, 0.35rem) 0;
-  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
-  line-height: var(--flowchat-support-line-height, 1.45);
+  gap: var(--flowchat-inline-gap);
+  padding: var(--flowchat-inline-gap) 0;
+  font-size: var(--tool-card-action-font-size);
+  line-height: var(--flowchat-support-line-height);
   color: var(--color-text-secondary);
 
   &__role {
     font-weight: 600;
-    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+    font-size: var(--tool-card-action-font-size);
   }
 
   &__description {

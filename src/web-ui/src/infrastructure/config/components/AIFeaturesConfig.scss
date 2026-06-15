@@ -79,7 +79,7 @@
     color: var(--color-text-primary);
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-medium);
-    line-height: var(--line-height-normal);
+    line-height: var(--line-height-base);
   }
 
   &__pet-row-description {
@@ -125,7 +125,7 @@
     gap: $size-gap-3;
     padding: 5px 10px 5px 8px;
     border: 1px solid var(--border-subtle);
-    border-radius: var(--size-radius-sm, 6px);
+    border-radius: var(--size-radius-sm);
     color: var(--color-text-primary);
     background: var(--element-bg-subtle);
     cursor: pointer;

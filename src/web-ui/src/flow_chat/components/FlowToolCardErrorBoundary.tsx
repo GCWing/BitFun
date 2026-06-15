@@ -103,9 +103,9 @@ function RenderFallback({
                   gap: 6,
                   padding: '6px 10px',
                   borderRadius: 8,
-                  border: '1px solid var(--tool-card-border, rgba(255, 255, 255, 0.12))',
-                  background: 'var(--tool-card-bg-secondary, rgba(255, 255, 255, 0.04))',
-                  color: 'var(--tool-card-text-primary)',
+                  border: '1px solid var(--tool-card-border, var(--border-base))',
+                  background: 'var(--tool-card-bg-secondary, var(--element-bg-soft))',
+                  color: 'var(--tool-card-text-primary, var(--color-text-primary))',
                   cursor: 'pointer',
                 }}
                 type="button"

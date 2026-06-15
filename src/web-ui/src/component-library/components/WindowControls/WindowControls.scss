@@ -16,8 +16,8 @@
     padding: 0;
     background: transparent;
     border: 1px solid transparent;
-    border-radius: var(--size-radius-sm, 6px);
-    color: var(--btn-ghost-color, #8a8a8a);
+    border-radius: var(--size-radius-sm);
+    color: var(--btn-ghost-color);
     cursor: pointer;
     transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
     position: relative;
@@ -44,9 +44,9 @@
     }
 
     &:hover {
-      background: var(--btn-ghost-hover-bg, var(--color-overlay-white-06));
-      color: var(--btn-ghost-hover-color, #b8b8b8);
-      border-color: var(--btn-ghost-hover-border, transparent);
+      background: var(--btn-ghost-hover-bg);
+      color: var(--btn-ghost-hover-color);
+      border-color: var(--btn-ghost-hover-border);
     }
 
     &:active {
@@ -60,9 +60,9 @@
 
     &--minimize {
       &:hover {
-        background: var(--btn-ghost-hover-bg, var(--color-overlay-white-06));
-        color: var(--btn-ghost-hover-color, #b8b8b8);
-        border-color: var(--btn-ghost-hover-border, transparent);
+        background: var(--btn-ghost-hover-bg);
+        color: var(--btn-ghost-hover-color);
+        border-color: var(--btn-ghost-hover-border);
       }
 
       &:focus-visible {
@@ -72,9 +72,9 @@
 
     &--maximize {
       &:hover {
-        background: var(--btn-ghost-hover-bg, var(--color-overlay-white-06));
-        color: var(--btn-ghost-hover-color, #b8b8b8);
-        border-color: var(--btn-ghost-hover-border, transparent);
+        background: var(--btn-ghost-hover-bg);
+        color: var(--btn-ghost-hover-color);
+        border-color: var(--btn-ghost-hover-border);
       }
 
       &:focus-visible {
@@ -84,9 +84,9 @@
 
     &--close {
       &:hover {
-        background: var(--btn-ghost-hover-bg, var(--color-overlay-white-06));
+        background: var(--btn-ghost-hover-bg);
         color: var(--window-control-close-hover-color, var(--color-error));
-        border-color: var(--btn-ghost-hover-border, transparent);
+        border-color: var(--btn-ghost-hover-border);
       }
 
       &:focus-visible {
@@ -95,13 +95,13 @@
     }
 
     &:disabled {
-      opacity: var(--opacity-disabled, 0.5);
+      opacity: var(--opacity-disabled);
       cursor: default;
       pointer-events: none;
 
       &:hover {
         background: transparent;
-        color: var(--btn-ghost-color, #8a8a8a);
+        color: var(--btn-ghost-color);
         border-color: transparent;
       }
     }
@@ -115,7 +115,7 @@
     &__btn {
       width: 28px;
       height: 28px;
-      border-radius: var(--size-radius-sm, 6px);
+      border-radius: var(--size-radius-sm);
 
       svg {
         width: 12px;

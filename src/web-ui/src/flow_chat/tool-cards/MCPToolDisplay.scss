@@ -23,7 +23,7 @@
   }
 
   .content-summary {
-    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+    font-size: var(--tool-card-action-font-size);
     color: var(--tool-card-text-secondary);
     white-space: nowrap;
   }
@@ -53,7 +53,7 @@
     align-items: center;
     
     .error-text {
-      font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+      font-size: var(--tool-card-action-font-size);
       color: rgba(239, 68, 68, 0.9);
       font-weight: 600;
     }
@@ -62,8 +62,8 @@
   .mcp-expanded-content {
     .content-item {
       &:not(:last-child) {
-        margin-bottom: var(--flowchat-card-gap, 0.42rem);
-        padding-bottom: var(--flowchat-card-gap, 0.42rem);
+        margin-bottom: var(--flowchat-card-gap);
+        padding-bottom: var(--flowchat-card-gap);
         border-bottom: 1px solid var(--color-overlay-white-05);
       }
     }
@@ -71,11 +71,11 @@
     .text-content {
       pre {
         margin: 0;
-        padding: var(--flowchat-card-expanded-pad-y, 0.5rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
+        padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
         background: var(--color-overlay-black-20);
         border-radius: 4px;
         font-size: var(--flowchat-font-size-sm);
-        line-height: var(--flowchat-support-line-height, 1.45);
+        line-height: var(--flowchat-support-line-height);
         color: var(--tool-card-text-primary);
         white-space: pre-wrap;
         word-wrap: break-word;
@@ -91,8 +91,8 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: var(--flowchat-control-gap, 0.5rem);
-      padding: var(--size-gap-6, 24px);
+      gap: var(--flowchat-control-gap);
+      padding: var(--size-gap-6);
       color: var(--tool-card-text-secondary);
       font-size: var(--flowchat-font-size-sm);
     }
@@ -106,11 +106,11 @@
       min-height: 320px;
       border: 1px solid rgba(139, 92, 246, 0.2);
       border-radius: 6px;
-      background: var(--tool-card-bg, #0f0f0f);
+      background: var(--tool-card-bg-primary);
     }
 
     .resource-content {
-      padding: var(--flowchat-card-expanded-pad-y, 0.5rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
+      padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
       background: rgba(139, 92, 246, 0.05);
       border-left: 3px solid rgba(139, 92, 246, 0.5);
       border-radius: 4px;
@@ -118,14 +118,14 @@
       .resource-name {
         font-weight: 600;
         color: var(--tool-card-text-primary);
-        margin-bottom: var(--flowchat-inline-gap, 0.35rem);
+        margin-bottom: var(--flowchat-inline-gap);
       }
 
       .resource-uri {
         font-size: var(--flowchat-font-size-xs);
         color: rgba(139, 92, 246, 0.7);
         font-family: monospace;
-        margin-bottom: var(--flowchat-inline-gap, 0.35rem);
+        margin-bottom: var(--flowchat-inline-gap);
       }
 
       .resource-description {
@@ -152,7 +152,7 @@
   .mcp-action-buttons {
     display: flex;
     align-items: center;
-    gap: var(--flowchat-inline-gap, 0.35rem);
+    gap: var(--flowchat-inline-gap);
   }
 
   .mcp-icon-button {

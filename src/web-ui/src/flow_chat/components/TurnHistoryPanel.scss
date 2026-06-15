@@ -22,7 +22,7 @@
     }
 
     .turn-count {
-      font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+      font-size: var(--tool-card-action-font-size);
       color: var(--color-text-secondary);
       background: var(--element-bg-soft);
       padding: 4px 8px;
@@ -75,7 +75,7 @@
       border-radius: 4px;
 
       .files-label {
-        font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+        font-size: var(--tool-card-action-font-size);
         color: var(--color-text-secondary);
         font-weight: 500;
         display: block;
@@ -87,14 +87,14 @@
         padding-left: 16px;
 
         .file-item {
-          font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+          font-size: var(--tool-card-action-font-size);
           color: var(--color-text-secondary);
           margin: 2px 0;
-          font-family: var(--font-family-mono, 'JetBrains Mono', 'FiraCode', ui-monospace, monospace);
+          font-family: var(--font-family-mono);
         }
 
         .file-item-more {
-          font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+          font-size: var(--tool-card-action-font-size);
           color: var(--color-text-muted);
           font-style: italic;
           list-style: none;
@@ -128,7 +128,7 @@
     font-size: 14px;
 
     &.hint {
-      font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+      font-size: var(--tool-card-action-font-size);
       color: var(--color-text-muted);
     }
   }

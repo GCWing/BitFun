@@ -15,14 +15,14 @@
       border: 1px solid var(--border-base);
       
       &:hover {
-        border-color: var(--border-medium, var(--color-primary, var(--color-accent-500)));
+        border-color: var(--border-medium, var(--color-primary));
         border-style: solid;
       }
     }
 
     &.search--focused .search__wrapper {
       border-style: solid;
-      border-color: var(--color-accent-500, var(--color-primary));
+      border-color: var(--color-accent-500);
       background: var(--color-accent-50, var(--color-accent-100));
     }
   }

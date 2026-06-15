@@ -68,7 +68,7 @@
   cursor: pointer;
   user-select: text;
   vertical-align: middle;
-  line-height: var(--flowchat-support-line-height, 1.45);
+  line-height: var(--flowchat-support-line-height);
   transition: all 0.2s ease;
   white-space: nowrap;
   
@@ -113,7 +113,7 @@
   cursor: default;
   user-select: none;
   vertical-align: middle;
-  line-height: var(--flowchat-support-line-height, 1.45);
+  line-height: var(--flowchat-support-line-height);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   
   &:hover {
@@ -181,7 +181,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  line-height: var(--flowchat-support-line-height, 1.45);
+  line-height: var(--flowchat-support-line-height);
   font-family: $font-family-mono;
   font-size: 0.85em;
 }

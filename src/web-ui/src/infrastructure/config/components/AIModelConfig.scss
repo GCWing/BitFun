@@ -398,12 +398,12 @@
     min-width: 0;
     display: flex;
     align-items: center;
-    gap: var(--size-gap-2, 8px);
+    gap: var(--size-gap-2);
     padding: 6px 12px;
     background: transparent;
     border: 1px solid var(--border-base);
-    border-radius: var(--size-radius-sm, 6px);
-    transition: all var(--motion-base, 0.3s) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1));
+    border-radius: var(--size-radius-sm);
+    transition: all var(--motion-base) var(--easing-standard);
     min-height: 36px;
 
     
@@ -421,7 +421,7 @@
     svg {
       color: var(--color-text-muted);
       flex-shrink: 0;
-      transition: color var(--motion-base, 0.3s) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1));
+      transition: color var(--motion-base) var(--easing-standard);
     }
 
     &:focus-within svg {
@@ -673,7 +673,7 @@
     margin: 0 $size-gap-3 $size-gap-3;
     
     background: var(--color-overlay-white-02);
-    border-radius: var(--size-radius-sm, 6px);
+    border-radius: var(--size-radius-sm);
     animation: slideDown 0.2s ease;
   }
 
@@ -940,11 +940,11 @@
       padding: 6px 12px;
       background: transparent;
       border: 1px solid var(--border-base);
-      border-radius: var(--size-radius-sm, 6px);
+      border-radius: var(--size-radius-sm);
       color: var(--color-text-primary);
       font-size: var(--font-size-sm);
       font-family: $font-family-sans;
-      transition: all var(--motion-base, 0.3s) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1));
+      transition: all var(--motion-base) var(--easing-standard);
       min-height: 36px;
 
       
@@ -961,7 +961,7 @@
       }
 
       &:disabled {
-        opacity: var(--opacity-disabled, 0.6);
+        opacity: var(--opacity-disabled);
         cursor: default;
       }
 
@@ -1035,7 +1035,7 @@
     .bitfun-number-input__container,
     .resolved-url__value {
       min-height: 35px;
-      border-radius: var(--size-radius-sm, 6px);
+      border-radius: var(--size-radius-sm);
       box-sizing: border-box;
     }
 
@@ -1304,7 +1304,7 @@
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-medium);
     color: var(--color-text-primary);
-    line-height: var(--line-height-normal);
+    line-height: var(--line-height-base);
     font-family: $font-family-sans;
     word-break: break-word;
   }
@@ -1483,9 +1483,9 @@
   &__proxy-switch-wrapper {
     padding: $size-gap-4;
     background: transparent;
-    border-radius: var(--size-radius-sm, 6px);
+    border-radius: var(--size-radius-sm);
     border: 1px solid var(--border-base);
-    transition: all var(--motion-base, 0.3s) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1));
+    transition: all var(--motion-base) var(--easing-standard);
 
     &:hover {
       background: var(--element-bg-subtle);
@@ -2025,7 +2025,7 @@
   }
 
   &__cli-empty {
-    padding: var(--size-gap-4, 16px);
+    padding: var(--size-gap-4);
 
     p {
       margin: 0;

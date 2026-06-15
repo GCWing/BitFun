@@ -6,9 +6,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--size-gap-2, 8px);
-  font-weight: var(--font-weight-medium, 500);
-  font-family: var(--font-family-sans, inherit);
+  gap: var(--size-gap-2);
+  font-weight: var(--font-weight-medium);
+  font-family: var(--font-family-sans);
   text-decoration: none;
   cursor: pointer;
   position: relative;
@@ -18,8 +18,8 @@
   background: var(--element-bg-base);
   color: var(--color-text-secondary);
   border: none;
-  border-radius: var(--size-radius-sm, 6px);
-  transition: all var(--motion-fast, 0.15s) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1));
+  border-radius: var(--size-radius-sm);
+  transition: all var(--motion-fast) var(--easing-standard);
 
   &:focus-visible {
     outline: 2px solid rgba(96, 165, 250, 0.5);
@@ -28,19 +28,19 @@
 
   &-sm {
     height: var(--button-height-sm, 32px);
-    padding: 0 var(--size-gap-3, 12px);
-    font-size: var(--font-size-sm, 14px);
+    padding: 0 var(--size-gap-3);
+    font-size: var(--font-size-sm);
   }
 
   &-base {
     height: var(--button-height-base, 40px);
-    padding: 0 var(--size-gap-4, 16px);
+    padding: 0 var(--size-gap-4);
     font-size: var(--font-size-base, 15px);
   }
 
   &-lg {
     height: var(--button-height-lg, 48px);
-    padding: 0 var(--size-gap-6, 24px);
+    padding: 0 var(--size-gap-6);
     font-size: var(--font-size-lg, 16px);
   }
 
@@ -163,17 +163,17 @@
 .btn-action {
   display: inline-flex;
   align-items: center;
-  gap: var(--size-gap-2, 8px);
-  padding: 12px var(--size-gap-4, 16px);
-  font-size: var(--font-size-sm, 14px);
-  font-weight: var(--font-weight-medium, 500);
-  font-family: var(--font-family-sans, inherit);
+  gap: var(--size-gap-2);
+  padding: 12px var(--size-gap-4);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  font-family: var(--font-family-sans);
   cursor: pointer;
   position: relative;
   outline: none;
   border: none;
-  border-radius: var(--size-radius-sm, 6px);
-  transition: all var(--motion-fast, 0.15s) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1));
+  border-radius: var(--size-radius-sm);
+  transition: all var(--motion-fast) var(--easing-standard);
 
   background: var(--element-bg-base);
   color: var(--color-text-secondary);

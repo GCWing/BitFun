@@ -45,7 +45,7 @@ import './AgentTeamCard.scss';
 import './ReviewTeamPage.scss';
 
 const rtLog = createLogger('ReviewTeamPage');
-const DEFAULT_MEMBER_ACCENT = '#64748b';
+const DEFAULT_MEMBER_ACCENT = 'var(--review-team-member-accent-default)';
 
 function getMemberIcon(member: ReviewTeamMember) {
   switch (member.definitionKey) {

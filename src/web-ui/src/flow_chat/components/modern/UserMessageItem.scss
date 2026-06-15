@@ -4,21 +4,21 @@
 
 .user-message-item {
   padding: var(--flowchat-user-message-pad-y, 0.32rem) var(--flowchat-user-message-pad-x, 0.75rem);
-  background: color-mix(in srgb, var(--element-bg-medium) 86%, var(--color-bg-flowchat, transparent));
+  background: color-mix(in srgb, var(--element-bg-medium) 86%, var(--color-bg-flowchat));
   border: 1px solid color-mix(in srgb, var(--border-muted, transparent) 38%, transparent);
-  border-radius: var(--flowchat-card-radius, 8px);
+  border-radius: var(--flowchat-card-radius);
   margin:
     0.06rem
-    var(--flowchat-content-inline-pad, 3rem)
+    var(--flowchat-content-inline-pad)
     var(--flowchat-turn-gap, 0.46rem)
-    var(--flowchat-content-inline-pad, 3rem);
+    var(--flowchat-content-inline-pad);
   box-shadow: 0 1px 0 color-mix(in srgb, var(--color-static-white) 4%, transparent) inset;
   transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
   animation: slideInUp 0.3s ease;
   position: relative;
   
   &:hover {
-    background: color-mix(in srgb, var(--element-bg-medium) 92%, var(--color-bg-flowchat, transparent));
+    background: color-mix(in srgb, var(--element-bg-medium) 92%, var(--color-bg-flowchat));
     border-color: color-mix(in srgb, var(--border-muted, transparent) 56%, transparent);
 
     .user-message-item__copy-btn {
@@ -37,8 +37,8 @@
   
   // Responsive: reduce margins on smaller screens.
   @media (max-width: 768px) {
-    margin-left: var(--flowchat-content-inline-pad-mobile, 1.5rem);
-    margin-right: var(--flowchat-content-inline-pad-mobile, 1.5rem);
+    margin-left: var(--flowchat-content-inline-pad-mobile);
+    margin-right: var(--flowchat-content-inline-pad-mobile);
   }
 }
 
@@ -47,13 +47,13 @@
   color: var(--color-text-muted);
   font-weight: 400;
   margin-bottom: 0.12rem;
-  line-height: var(--flowchat-compact-line-height, 1.32);
+  line-height: var(--flowchat-compact-line-height);
 }
 
 .user-message-item__main {
   display: flex;
   align-items: center;
-  gap: var(--flowchat-inline-gap, 0.35rem);
+  gap: var(--flowchat-inline-gap);
 }
 
 // Bridges children to `.user-message-item__main` flex without an extra layout box.
@@ -70,7 +70,7 @@
   border-radius: 999px;
   font-size: var(--flowchat-font-size-xxs);
   font-weight: 600;
-  line-height: var(--flowchat-compact-line-height, 1.32);
+  line-height: var(--flowchat-compact-line-height);
   letter-spacing: 0;
   user-select: none;
 }
@@ -89,14 +89,14 @@
 }
 
 .user-message-item__blocks {
-  margin-top: var(--flowchat-flow-item-gap, 0.42rem);
+  margin-top: var(--flowchat-flow-item-gap);
 }
 
 .user-message-item__content {
   flex: 1;
   font-size: var(--flowchat-font-size-base);
   font-weight: 500;
-  line-height: var(--flowchat-text-line-height, 1.58);
+  line-height: var(--flowchat-text-line-height);
   color: var(--color-text-primary);
   white-space: pre-wrap;
   display: -webkit-box;
@@ -121,7 +121,7 @@
 // Failed state: no bubble. Icons/actions align to the first text line (not flex baseline:
 // `-webkit-box` line-clamp does not expose a reliable baseline for `align-items: baseline`).
 .user-message-item--failed {
-  --um-failed-fs: calc(var(--flowchat-font-size-base, 0.9375rem) * 0.86);
+  --um-failed-fs: calc(var(--flowchat-font-size-base) * 0.86);
   --um-failed-lh: 1.55;
   --um-failed-line-box: calc(var(--um-failed-fs) * var(--um-failed-lh));
 
@@ -132,7 +132,7 @@
 
   .user-message-item__main {
     align-items: flex-start;
-    gap: var(--flowchat-flow-item-gap, 0.42rem);
+    gap: var(--flowchat-flow-item-gap);
   }
 
   // Text column + actions row: actions sit beside text; optional vertical nudge vs first line.
@@ -140,8 +140,8 @@
     display: flex;
     flex-flow: row wrap;
     align-items: flex-start;
-    column-gap: var(--flowchat-inline-gap, 0.35rem);
-    row-gap: var(--flowchat-markdown-paragraph-gap, 0.28em);
+    column-gap: var(--flowchat-inline-gap);
+    row-gap: var(--flowchat-markdown-paragraph-gap);
     flex: 1;
     min-width: 0;
   }
@@ -152,7 +152,7 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: var(--flowchat-inline-gap, 0.35rem);
+    gap: var(--flowchat-inline-gap);
   }
 
   .user-message-item__failed-avatar {
@@ -224,7 +224,7 @@
   padding: 0;
   background: transparent;
   border: none;
-  border-radius: var(--size-radius-sm, 6px);
+  border-radius: var(--size-radius-sm);
   color: var(--color-text-secondary);
   cursor: pointer;
   transition: all 0.2s ease;
@@ -270,7 +270,7 @@
 .user-message-edit-composer {
   display: flex;
   flex-direction: column;
-  gap: var(--flowchat-inline-gap, 0.35rem);
+  gap: var(--flowchat-inline-gap);
   width: 100%;
 }
 
@@ -281,7 +281,7 @@
     min-height: 5.5rem;
     max-height: 45vh;
     font-size: var(--flowchat-font-size-base);
-    line-height: var(--flowchat-text-line-height, 1.58);
+    line-height: var(--flowchat-text-line-height);
     resize: vertical;
   }
 }
@@ -301,7 +301,7 @@
   height: 26px;
   padding: 0;
   border: none;
-  border-radius: var(--size-radius-sm, 6px);
+  border-radius: var(--size-radius-sm);
   background: transparent;
   color: var(--color-text-secondary);
   cursor: pointer;
@@ -346,7 +346,7 @@
   padding: 0;
   background: transparent;
   border: none;
-  border-radius: var(--size-radius-sm, 6px);
+  border-radius: var(--size-radius-sm);
   color: var(--color-text-secondary);
   cursor: pointer;
   transition: all 0.2s ease;

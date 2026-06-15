@@ -3,6 +3,8 @@
  */
 
 .readonly-code-block {
+  --readonly-code-selection-bg: rgba(30, 136, 229, 0.3);
+
   position: relative;
   width: 100%;
   overflow: hidden;
@@ -30,7 +32,7 @@
     
     // Adjust selection style
     .selected-text {
-      background: var(--color-selection, rgba(30, 136, 229, 0.3)) !important;
+      background: var(--color-selection, var(--readonly-code-selection-bg)) !important;
     }
   }
   

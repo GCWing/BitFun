@@ -15,7 +15,7 @@
 .explore-region--collapsible {
   margin: 0 0 0.3rem 0;
   font-size: var(--flowchat-font-size-sm);
-  line-height: var(--flowchat-support-line-height, 1.45);
+  line-height: var(--flowchat-support-line-height);
 
   .explore-region__header {
     display: flex;
@@ -24,10 +24,10 @@
     padding: 0;
     color: var(--text-tertiary);
     font-size: var(--flowchat-font-size-sm);
-    line-height: var(--flowchat-support-line-height, 1.45);
+    line-height: var(--flowchat-support-line-height);
     cursor: pointer;
     user-select: none;
-    border-radius: var(--radius-sm, 6px);
+    border-radius: var(--radius-sm);
     transition: color 0.15s ease, background 0.15s ease;
 
     &:hover {
@@ -46,7 +46,7 @@
 
   .explore-region__summary {
     font-size: var(--flowchat-font-size-sm);
-    line-height: var(--flowchat-support-line-height, 1.45);
+    line-height: var(--flowchat-support-line-height);
     opacity: 0.8;
   }
 
@@ -84,7 +84,7 @@
       border-radius: 2px;
 
       &:hover {
-        background: var(--border-hover, rgba(107, 114, 128, 0.5));
+        background: var(--border-hover);
       }
     }
   }

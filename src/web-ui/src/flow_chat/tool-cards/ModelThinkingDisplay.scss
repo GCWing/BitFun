@@ -26,20 +26,20 @@
   box-sizing: border-box;
   /* Collapsed summary line: match `.explore-region--collapsible` (e.g. command count). */
   font-size: var(--flowchat-font-size-sm);
-  line-height: var(--flowchat-support-line-height, 1.45);
+  line-height: var(--flowchat-support-line-height);
   transition: padding 0.2s ease;
 }
 
 .thinking-collapsed-header {
   display: flex;
   align-items: center;
-  gap: var(--flowchat-inline-gap, 0.35rem);
+  gap: var(--flowchat-inline-gap);
   padding: 0;
   border-radius: 4px;
   cursor: pointer;
   background: transparent;
   font-size: var(--flowchat-font-size-sm);
-  line-height: var(--flowchat-support-line-height, 1.45);
+  line-height: var(--flowchat-support-line-height);
 
   &:hover {
     .thinking-label {
@@ -66,7 +66,7 @@
     font-weight: normal;
     color: var(--text-tertiary);
     opacity: 0.8;
-    line-height: var(--flowchat-support-line-height, 1.45);
+    line-height: var(--flowchat-support-line-height);
   }
 }
 
@@ -92,13 +92,13 @@
 
 .thinking-content {
   font-size: var(--flowchat-font-size-base);
-  line-height: var(--flowchat-text-line-height, 1.58);
+  line-height: var(--flowchat-text-line-height);
   /* Match FlowChat body text (sans); mono stack + generic monospace yields Songti-like CJK on Windows. */
   font-family: var(--font-family-sans, 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei',
     sans-serif);
   word-break: break-word;
   color: var(--tool-card-text-muted);
-  padding: var(--flowchat-card-expanded-pad-y, 0.5rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
+  padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
   background: transparent;
   border: none;
   border-radius: 6px;
@@ -197,14 +197,14 @@
   --markdown-font-size: var(--flowchat-font-size-base);
   --markdown-font-size-sm: var(--flowchat-font-size-sm);
   --markdown-code-font-size: var(--flowchat-font-size-xs);
-  --markdown-line-height: var(--flowchat-text-line-height, 1.58);
-  --markdown-block-gap: var(--flowchat-markdown-block-gap, 0.58em);
-  --markdown-paragraph-gap: var(--flowchat-markdown-paragraph-gap, 0.28em);
+  --markdown-line-height: var(--flowchat-text-line-height);
+  --markdown-block-gap: var(--flowchat-markdown-block-gap);
+  --markdown-paragraph-gap: var(--flowchat-markdown-paragraph-gap);
 
   font-family: var(--font-family-sans, 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei',
     sans-serif);
   font-size: var(--flowchat-font-size-base);
-  line-height: var(--flowchat-text-line-height, 1.58);
+  line-height: var(--flowchat-text-line-height);
   color: var(--tool-card-text-muted);
   animation: none;
 
@@ -257,13 +257,13 @@
 
   .code-block-lang {
     font-size: 0.6rem;
-    line-height: var(--flowchat-compact-line-height, 1.32);
+    line-height: var(--flowchat-compact-line-height);
   }
 
   .code-block-wrapper pre[class*='language-'],
   .code-block-wrapper pre[style] {
     font-size: var(--flowchat-font-size-xs) !important;
-    line-height: var(--flowchat-support-line-height, 1.45) !important;
+    line-height: var(--flowchat-support-line-height) !important;
     border-radius: 6px !important;
   }
 

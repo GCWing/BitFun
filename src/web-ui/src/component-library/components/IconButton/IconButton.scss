@@ -6,7 +6,7 @@
   justify-content: center;
   padding: 0;
   border: none;
-  border-radius: var(--size-radius-sm, 6px);
+  border-radius: var(--size-radius-sm);
   cursor: pointer;
   position: relative;
   outline: none;
@@ -15,9 +15,9 @@
   transform: scale(1);
   transform-origin: center;
   transition:
-    transform var(--motion-fast, 0.15s) var(--easing-standard, ease),
-    background var(--motion-fast, 0.15s) var(--easing-standard, ease),
-    color var(--motion-fast, 0.15s) var(--easing-standard, ease);
+    transform var(--motion-fast) var(--easing-standard),
+    background var(--motion-fast) var(--easing-standard),
+    color var(--motion-fast) var(--easing-standard);
 
   background: transparent;
   color: var(--color-text-secondary);
@@ -36,7 +36,7 @@
   svg {
     display: block;
     flex-shrink: 0;
-    transition: color var(--motion-fast, 0.15s) var(--easing-standard, ease);
+    transition: color var(--motion-fast) var(--easing-standard);
   }
 
   &--xs {

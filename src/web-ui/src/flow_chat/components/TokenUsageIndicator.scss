@@ -69,7 +69,7 @@
   }
   
   &__percentage {
-    line-height: var(--flowchat-compact-line-height, 1.32);
+    line-height: var(--flowchat-compact-line-height);
     font-weight: 600;
     font-size: var(--flowchat-font-size-xxs);
   }

@@ -4,28 +4,28 @@
   --markdown-font-sans: var(--font-family-sans);
   --markdown-font-mono: var(--font-family-mono, "Fira Code", "JetBrains Mono", Consolas, "Courier New", monospace);
   --markdown-font-heading: var(--markdown-font-sans);
-  --markdown-font-size: var(--flowchat-font-size-base, var(--font-size-base, 14px));
+  --markdown-font-size: var(--flowchat-font-size-base);
   --markdown-font-size-sm: var(--flowchat-font-size-sm, var(--font-size-sm, 13px));
-  --markdown-code-font-size: var(--flowchat-code-font-size, var(--markdown-font-size-sm));
-  --markdown-line-height: var(--flowchat-text-line-height, 1.58);
-  --markdown-support-line-height: var(--flowchat-support-line-height, 1.45);
-  --markdown-code-line-height: var(--flowchat-code-line-height, 1.52);
-  --markdown-block-gap: var(--flowchat-markdown-block-gap, 0.58em);
-  --markdown-paragraph-gap: var(--flowchat-markdown-paragraph-gap, 0.28em);
-  --markdown-list-item-gap: var(--flowchat-markdown-list-item-gap, 0.28em);
-  --markdown-list-nested-gap: var(--flowchat-markdown-list-nested-gap, 0.22em);
-  --markdown-heading-gap-before: var(--flowchat-markdown-heading-gap-before, 0.86em);
-  --markdown-heading-gap-after: var(--flowchat-markdown-heading-gap-after, 0.36em);
-  --markdown-code-block-gap: var(--flowchat-markdown-code-block-gap, 0.72em);
-  --markdown-code-block-pad-y: var(--flowchat-markdown-code-block-pad-y, 0.78rem);
-  --markdown-code-block-pad-x: var(--flowchat-markdown-code-block-pad-x, 0.86rem);
-  --markdown-table-cell-pad-y: var(--flowchat-markdown-table-cell-pad-y, 0.52rem);
-  --markdown-table-cell-pad-x: var(--flowchat-markdown-table-cell-pad-x, 0.72rem);
+  --markdown-code-font-size: var(--flowchat-code-font-size);
+  --markdown-line-height: var(--flowchat-text-line-height);
+  --markdown-support-line-height: var(--flowchat-support-line-height);
+  --markdown-code-line-height: var(--flowchat-code-line-height);
+  --markdown-block-gap: var(--flowchat-markdown-block-gap);
+  --markdown-paragraph-gap: var(--flowchat-markdown-paragraph-gap);
+  --markdown-list-item-gap: var(--flowchat-markdown-list-item-gap);
+  --markdown-list-nested-gap: var(--flowchat-markdown-list-nested-gap);
+  --markdown-heading-gap-before: var(--flowchat-markdown-heading-gap-before);
+  --markdown-heading-gap-after: var(--flowchat-markdown-heading-gap-after);
+  --markdown-code-block-gap: var(--flowchat-markdown-code-block-gap);
+  --markdown-code-block-pad-y: var(--flowchat-markdown-code-block-pad-y);
+  --markdown-code-block-pad-x: var(--flowchat-markdown-code-block-pad-x);
+  --markdown-table-cell-pad-y: var(--flowchat-markdown-table-cell-pad-y);
+  --markdown-table-cell-pad-x: var(--flowchat-markdown-table-cell-pad-x);
   --markdown-code-bg-elevated: color-mix(in srgb, var(--color-bg-primary) 92%, var(--color-static-white) 8%);
   --markdown-inline-code-bg: rgba(255, 255, 255, 0.045);
   --markdown-inline-code-border: var(--color-overlay-white-08);
   --markdown-pre-bg: var(--color-bg-primary);
-  --markdown-pre-border: var(--border-color, rgba(255, 255, 255, 0.09));
+  --markdown-pre-border: var(--border-color);
   --markdown-blockquote-bg: rgba(255, 255, 255, 0.025);
   --markdown-blockquote-border: rgba(255, 255, 255, 0.16);
   --markdown-table-border: var(--flowchat-md-table-border, var(--color-overlay-white-12));
@@ -34,7 +34,7 @@
   --markdown-table-row-stripe: var(--flowchat-md-table-row-stripe, var(--color-overlay-white-02));
   --markdown-table-row-hover: var(--flowchat-md-table-hover, var(--color-overlay-white-04));
   --markdown-link-color: var(--flowchat-link-color);
-  --markdown-link-hover-color: var(--flowchat-link-hover-color, #93c5fd);
+  --markdown-link-hover-color: var(--flowchat-link-hover-color);
 
   width: 100%;
   max-width: 100%;
@@ -90,7 +90,7 @@
   border: 0;
   color: var(--color-text-primary);
   font-family: var(--markdown-font-heading);
-  font-weight: var(--font-weight-semibold, 600);
+  font-weight: var(--font-weight-semibold);
   letter-spacing: 0;
   line-height: var(--markdown-support-line-height);
 }
@@ -222,7 +222,7 @@
   padding: var(--markdown-code-block-pad-y) var(--markdown-code-block-pad-x);
   overflow: auto;
   border: 1px solid var(--markdown-pre-border);
-  border-radius: var(--flowchat-card-radius, 8px);
+  border-radius: var(--flowchat-card-radius);
   background: var(--markdown-pre-bg);
   box-shadow: none;
   color: var(--color-text-secondary);
@@ -265,7 +265,7 @@
   margin: var(--markdown-code-block-gap) 0;
   overflow: hidden;
   border: 1px solid var(--markdown-pre-border);
-  border-radius: var(--flowchat-card-radius, 8px);
+  border-radius: var(--flowchat-card-radius);
   background: var(--markdown-code-bg-elevated);
   box-shadow: none;
   transition: border-color 0.2s ease;
@@ -279,7 +279,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--flowchat-control-gap, 0.5rem);
+  gap: var(--flowchat-control-gap);
   min-height: 1.86rem;
   padding: 0.26rem 0.45rem 0.26rem 0.62rem;
   flex-shrink: 0;
@@ -290,10 +290,10 @@
 .markdown-renderer .code-block-lang {
   color: var(--color-text-muted);
   font-family: var(--markdown-font-sans);
-  font-size: var(--flowchat-font-size-xxs, 10px);
+  font-size: var(--flowchat-font-size-xxs);
   font-weight: 600;
   letter-spacing: 0.04em;
-  line-height: var(--flowchat-compact-line-height, 1.32);
+  line-height: var(--flowchat-compact-line-height);
   text-transform: uppercase;
   user-select: none;
 }
@@ -402,8 +402,8 @@
 .markdown-renderer details {
   margin: calc(var(--markdown-block-gap) * 1.2) 0;
   padding: 0.62rem 0.72rem;
-  border: 1px solid var(--border-color, var(--color-overlay-white-08));
-  border-radius: var(--flowchat-card-radius, 8px);
+  border: 1px solid var(--border-color);
+  border-radius: var(--flowchat-card-radius);
   background: var(--color-overlay-white-03);
 }
 
@@ -435,7 +435,7 @@
   height: auto;
   margin: 0.35rem 0.25rem;
   vertical-align: middle;
-  border-radius: var(--flowchat-card-radius, 8px);
+  border-radius: var(--flowchat-card-radius);
 }
 
 /* README-style centered badge rows: each badge is often its own <p> inside a div */
@@ -476,7 +476,7 @@
   margin: calc(var(--markdown-block-gap) * 1.2) 0;
   overflow: auto;
   border: 1px solid var(--markdown-table-border);
-  border-radius: var(--flowchat-card-radius, 8px);
+  border-radius: var(--flowchat-card-radius);
   background: var(--markdown-table-surface);
   box-shadow: var(--flowchat-md-table-shadow, none);
 }
@@ -564,7 +564,7 @@
   text-align: left;
   font-family: var(--markdown-font-mono);
   font-size: 0.78rem;
-  line-height: var(--flowchat-support-line-height, 1.45);
+  line-height: var(--flowchat-support-line-height);
 }
 
 .markdown-renderer strong {
@@ -603,8 +603,8 @@
   --markdown-inline-code-border: var(--color-overlay-black-12);
   --markdown-pre-bg: #f6f8fa;
   --markdown-pre-border: rgba(15, 23, 42, 0.12);
-  --markdown-blockquote-bg: var(--flowchat-md-bq-bg, rgba(15, 23, 42, 0.07));
-  --markdown-blockquote-border: var(--flowchat-md-bq-border, rgba(15, 23, 42, 0.24));
+  --markdown-blockquote-bg: var(--flowchat-md-bq-bg);
+  --markdown-blockquote-border: var(--flowchat-md-bq-border);
 
   .inline-code {
     color: #24292f;
@@ -636,7 +636,7 @@
 
   blockquote,
   .custom-blockquote {
-    color: var(--flowchat-md-bq-fg, var(--color-text-secondary, #475569));
+    color: var(--flowchat-md-bq-fg, var(--color-text-secondary));
   }
 }
 

@@ -490,6 +490,7 @@ export class ThemeService {
     root.style.setProperty('--color-primary-400', colors.accent[400]);
     root.style.setProperty('--color-primary-500', primaryAccent);
     root.style.setProperty('--color-primary-alpha', colors.accent[100]);
+    root.style.setProperty('--color-primary-bg', colors.accent[100]);
     root.style.setProperty('--color-accent-alpha', colors.accent[100]);
     const flowChatLinkColors = theme.type === 'light'
       ? FLOW_CHAT_LINK_COLORS.light
@@ -535,8 +536,10 @@ export class ThemeService {
 
 
     root.style.setProperty('--border-subtle', colors.border.subtle);
+    root.style.setProperty('--border-color', colors.border.subtle);
     root.style.setProperty('--border-base', colors.border.base);
     root.style.setProperty('--border-medium', colors.border.medium);
+    root.style.setProperty('--border-hover', colors.border.medium);
     root.style.setProperty('--border-strong', colors.border.strong);
     root.style.setProperty('--border-prominent', colors.border.prominent);
     root.style.setProperty('--border-primary', colors.border.base);
@@ -764,6 +767,20 @@ export class ThemeService {
       root.style.setProperty('--btn-primary-active-border', 'transparent');
       root.style.setProperty('--btn-primary-active-shadow', 'none');
       root.style.setProperty('--btn-primary-active-transform', 'none');
+      root.style.setProperty('--btn-ghost-bg', 'transparent');
+      root.style.setProperty('--btn-ghost-color', colors.text.muted);
+      root.style.setProperty('--btn-ghost-border', 'transparent');
+      root.style.setProperty('--btn-ghost-shadow', 'none');
+      root.style.setProperty('--btn-ghost-hover-bg', colors.element.subtle);
+      root.style.setProperty('--btn-ghost-hover-color', colors.text.primary);
+      root.style.setProperty('--btn-ghost-hover-border', 'transparent');
+      root.style.setProperty('--btn-ghost-hover-shadow', 'none');
+      root.style.setProperty('--btn-ghost-hover-transform', 'none');
+      root.style.setProperty('--btn-ghost-active-bg', colors.element.medium);
+      root.style.setProperty('--btn-ghost-active-color', colors.text.primary);
+      root.style.setProperty('--btn-ghost-active-border', 'transparent');
+      root.style.setProperty('--btn-ghost-active-shadow', 'none');
+      root.style.setProperty('--btn-ghost-active-transform', 'none');
     }
 
 

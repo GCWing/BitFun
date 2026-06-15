@@ -234,7 +234,7 @@
 
   &__item-error {
     font-size: var(--font-size-xs);
-    color: var(--color-danger-500, #f87171);
+    color: var(--color-danger-500);
     line-height: $line-height-relaxed;
     word-break: break-word;
   }
@@ -416,7 +416,7 @@
 
   &__warning {
     font-size: var(--font-size-xs);
-    color: var(--color-danger-500, #f87171);
+    color: var(--color-danger-500);
     line-height: $line-height-relaxed;
     padding: $size-gap-2 $size-gap-3;
     border-radius: $size-radius-base;

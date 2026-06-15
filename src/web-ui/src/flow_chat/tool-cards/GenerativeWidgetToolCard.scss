@@ -18,14 +18,14 @@
 .generative-widget-card__title {
   display: inline-flex;
   align-items: center;
-  gap: var(--flowchat-inline-gap, 0.35rem);
+  gap: var(--flowchat-inline-gap);
   min-width: 0;
 }
 
 .generative-widget-card__extra {
   display: inline-flex;
   align-items: center;
-  gap: var(--flowchat-control-gap, 0.5rem);
+  gap: var(--flowchat-control-gap);
 }
 
 .generative-widget-card__status {
@@ -39,7 +39,7 @@
 }
 
 .generative-widget-card__preview {
-  padding: var(--flowchat-card-expanded-pad-y, 0.5rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
+  padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
 }
 
 .generative-widget-card__preview--export {
@@ -51,7 +51,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: var(--size-gap-4, 16px);
+  padding: var(--size-gap-4);
   color: var(--color-text-secondary);
   font-size: var(--flowchat-font-size-sm);
 }
@@ -100,6 +100,6 @@
 }
 
 .generative-widget-card__export-stage-inner {
-  padding: var(--size-gap-5, 20px);
+  padding: var(--size-gap-5);
   background: var(--color-bg-flowchat);
 }

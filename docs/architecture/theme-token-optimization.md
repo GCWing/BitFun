@@ -476,6 +476,16 @@ semantic token 描述产品级语义，应作为共享 UI 的默认使用层。
 4. workspace、git 和 diff surface。
 5. generated widget frame 和 payload consumer。
 
+边界处理规则：
+
+- 普通 app 组件只有在 `tokens.scss`、`ThemeService.ts` 或组件根变量已经保证
+  token 存在后，才移除局部 `var(--token, literal)`。
+- embedded frame、generated widget、第三方内容宿主可以保留边界默认值，但默认值
+  应集中在 frame/root contract 上，不应在每个 selector 中重复一套 fallback palette。
+- `--member-accent`、`--group-color`、`--tag-color` 等由 TS inline style、数据驱动或
+  动态 key 设置的变量，不能仅凭静态未定义报告删除；需要先确认运行时设置路径，
+  再决定是建立组件根默认值，还是保留明确的边界 fallback。
+
 验收标准：
 
 - 组件文件不再携带根 token 的 fallback palette。
@@ -544,6 +554,7 @@ semantic token 描述产品级语义，应作为共享 UI 的默认使用层。
 | 主题个性被抹平 | 用户选择主题的价值下降。 | theme preset 保留自己的 primitive/accent 映射。 |
 | fallback 先删、alias 后补 | embedded 或 early render surface 样式丢失。 | 先加 alias，再删除 fallback。 |
 | 静态 token 与运行时 token 不一致 | widget、SCSS、runtime theme 注入结果不一致。 | `tokens.scss`、`ThemeService.ts`、`themePayload.ts` 同阶段对齐。 |
+| 动态 CSS 变量 key 被误判为未定义 | inline style 或数据驱动变量失去兜底，导致特定卡片、标签或分组颜色缺失。 | 对动态 key 建立运行时设置清单；删除 fallback 前补组件根默认值或保留边界 fallback。 |
 | contrast 验证不可信 | 可访问性回归可能漏掉。 | 先实现真实 contrast 检查，再声称可访问性改善。 |
 | 迁移 PR 过大 | review 疲劳导致视觉回归漏审。 | 按 surface 拆 PR，每个 PR 附指标和截图。 |
 | editor/terminal 颜色被强行泛化 | 代码语法和 terminal 语义下降。 | 建立 exception namespace，而不是直接套普通 app token。 |

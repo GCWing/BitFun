@@ -174,7 +174,7 @@
     &:hover {
       // Use element-bg-medium for clear hover in light/dark themes
       // Light theme: blue-gray tint; dark theme: translucent white
-      background: var(--element-bg-medium, var(--element-bg-base, var(--color-bg-hover)));
+      background: var(--element-bg-medium);
 
       .canvas-tab-overflow-menu__item-close {
         opacity: 1;
@@ -186,7 +186,7 @@
       background: var(--color-accent-100, var(--color-accent-200, var(--element-bg-base)));
 
       .canvas-tab-overflow-menu__item-title {
-        color: var(--color-primary, var(--color-accent-500));
+        color: var(--color-primary);
       }
     }
 

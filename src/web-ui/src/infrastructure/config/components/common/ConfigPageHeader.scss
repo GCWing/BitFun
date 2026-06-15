@@ -6,7 +6,7 @@
 .bitfun-config-page-header {
   flex-shrink: 0;
   padding: var(--size-gap-12, 100px) var(--config-page-content-inline-padding, 20px) 0;
-  margin-bottom: var(--size-gap-6, 24px);
+  margin-bottom: var(--size-gap-6);
 }
 
 .bitfun-config-page-header__inner {
@@ -105,7 +105,7 @@
 
 @container config-panel (max-width: 520px) {
   .bitfun-config-page-header {
-    padding-top: var(--size-gap-5, 20px);
+    padding-top: var(--size-gap-5);
   }
 
   .bitfun-config-page-header__inner {

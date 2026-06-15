@@ -94,18 +94,18 @@
   &__loading {
     width: 10px;
     height: 10px;
-    color: var(--color-accent-500, #{tokens.$color-accent-500});
+    color: var(--color-accent-500);
     animation: bitfun-switch-spin 1s linear infinite;
   }
 
   &__input:checked + &__track &__thumb {
     left: calc(100% - 18px);
-    background: var(--btn-primary-bg, var(--color-accent-500, #{tokens.$color-accent-500}));
-    border-color: var(--btn-primary-bg, var(--color-accent-500, #{tokens.$color-accent-500}));
+    background: var(--btn-primary-bg, var(--color-accent-500));
+    border-color: var(--btn-primary-bg, var(--color-accent-500));
   }
 
   :root[data-theme-type='dark'] &__input:checked + &__track &__thumb {
-    background: var(--color-accent-500, #{tokens.$color-accent-500});
+    background: var(--color-accent-500);
     border-color: var(--color-accent-600, #{tokens.$color-accent-600});
   }
 
@@ -129,17 +129,17 @@
 
   &:hover:not(&--disabled):not(&--loading) &__input:checked + &__track {
     background: var(--color-accent-300);
-    border-color: var(--color-accent-500, #{tokens.$color-accent-500});
+    border-color: var(--color-accent-500);
   }
 
   &:hover:not(&--disabled):not(&--loading) &__input:checked + &__track &__thumb {
-    background: var(--btn-primary-hover-bg, var(--color-accent-500, #{tokens.$color-accent-500}));
-    border-color: var(--btn-primary-hover-bg, var(--color-accent-500, #{tokens.$color-accent-500}));
+    background: var(--btn-primary-hover-bg, var(--color-accent-500));
+    border-color: var(--btn-primary-hover-bg, var(--color-accent-500));
   }
 
   :root[data-theme-type='dark'] &:hover:not(&--disabled):not(&--loading) &__input:checked + &__track &__thumb {
-    background: color-mix(in srgb, var(--color-accent-500, #{tokens.$color-accent-500}) 88%, white);
-    border-color: var(--color-accent-500, #{tokens.$color-accent-500});
+    background: color-mix(in srgb, var(--color-accent-500) 88%, white);
+    border-color: var(--color-accent-500);
   }
 
   &__input:checked + &__track &__loading {
@@ -165,7 +165,7 @@
 
   &__description {
     font-size: var(--font-size-xs);
-    color: var(--color-text-muted, tokens.$color-text-muted);
+    color: var(--color-text-muted);
     line-height: tokens.$line-height-base;
   }
 
