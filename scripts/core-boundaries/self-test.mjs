@@ -2198,7 +2198,8 @@ export function runManifestParserSelfTest({
         'unlocked_collapsed_tools',
         'collapsed_tool_names',
         'GetToolSpec',
-        'citation_renumber',
+        'should_post_process_research_report',
+        'bitfun_services_integrations::deep_research::run_for_session_workspace',
       ],
     },
     {
@@ -2278,10 +2279,6 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/assembly/core/src/agentic/agents/citation_renumber.rs',
-      contracts: ['run_for_session_workspace', 'bitfun_services_integrations::deep_research'],
-    },
-    {
       path: 'src/crates/execution/agent-runtime/src/deep_review/task_execution.rs',
       contracts: [
         'deep_review_task_completion_result',
@@ -2339,7 +2336,7 @@ export function runManifestParserSelfTest({
     },
     {
       path: 'src/crates/execution/agent-runtime/src/deep_research.rs',
-      contracts: ['renumber_research_report', 'ResearchCitationRenumberOutput', 'ResearchCitationDisplayMapEntry', 'rejected_index_rows_dropped'],
+      contracts: ['renumber_research_report', 'ResearchCitationRenumberOutput', 'ResearchCitationDisplayMapEntry', 'rejected_index_rows_dropped', 'should_post_process_research_report'],
     },
     {
       path: 'src/crates/execution/agent-runtime/tests/deep_research_contracts.rs',
@@ -2926,7 +2923,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/assembly/core/src/function_agents/runtime_services.rs',
+      path: 'src/crates/assembly/core/src/function_agents/port_adapters.rs',
       contracts: [
         'prepare_commit_ai_prompt',
         'parse_commit_ai_response',

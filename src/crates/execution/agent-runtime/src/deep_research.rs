@@ -41,6 +41,12 @@ pub struct ResearchCitationRenumberOutput {
     pub stats: ResearchCitationRenumberStats,
 }
 
+/// Decide whether a finalized dialog turn should run DeepResearch report
+/// post-processing. Callers still own workspace IO and persistence.
+pub fn should_post_process_research_report(agent_type: &str, success: bool) -> bool {
+    success && agent_type == "DeepResearch"
+}
+
 /// Renumber internal `cit_XXX` references in a finalized DeepResearch report.
 ///
 /// The numbering order is based on first appearance in the report body. Any
@@ -259,4 +265,17 @@ fn extract_display_sort_key(line: &str) -> usize {
     };
     let inner = &line[open + 1..open + 1 + close_offset];
     inner.parse().unwrap_or(usize::MAX)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn post_process_gate_only_allows_successful_deep_research_turns() {
+        assert!(should_post_process_research_report("DeepResearch", true));
+        assert!(!should_post_process_research_report("DeepResearch", false));
+        assert!(!should_post_process_research_report("DeepReview", true));
+        assert!(!should_post_process_research_report("", true));
+    }
 }

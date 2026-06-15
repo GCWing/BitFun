@@ -562,41 +562,6 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/assembly/core/src/agentic/agents/citation_renumber.rs',
-    patterns: [
-      {
-        regex: /\bfn parse_registry_status\b/,
-        message:
-          'core DeepResearch citation hook must not re-own registry parsing; use bitfun-agent-runtime::deep_research',
-      },
-      {
-        regex: /\bfn renumber_body\b/,
-        message:
-          'core DeepResearch citation hook must not re-own body renumbering; use bitfun-agent-runtime::deep_research',
-      },
-      {
-        regex: /\bfn renumber_index_section\b/,
-        message:
-          'core DeepResearch citation hook must not re-own Citation Index rewriting; use bitfun-agent-runtime::deep_research',
-      },
-      {
-        regex: /\bstatic CIT_ID_RE\b/,
-        message:
-          'core DeepResearch citation hook must not re-own citation regex parsing; use bitfun-agent-runtime::deep_research',
-      },
-      {
-        regex: /\btokio::fs\b/,
-        message:
-          'core DeepResearch citation hook must not own report filesystem IO; use bitfun-services-integrations::deep_research',
-      },
-      {
-        regex: /\bdisplay_map\.json\b/,
-        message:
-          'core DeepResearch citation hook must not own display-map sidecar persistence; use bitfun-services-integrations::deep_research',
-      },
-    ],
-  },
-  {
     path: 'src/crates/assembly/core/src/miniapp/host_dispatch.rs',
     patterns: [
       {
@@ -717,27 +682,27 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/assembly/core/src/function_agents/runtime_services.rs',
+    path: 'src/crates/assembly/core/src/function_agents/port_adapters.rs',
     patterns: [
       {
         regex: /\bCoreFunctionAgentGitService\b/,
         message:
-          'core function-agent runtime services must not re-own Git concrete snapshots; use bitfun-services-integrations::function_agents',
+          'core function-agent port adapters must not re-own Git concrete snapshots; use bitfun-services-integrations::function_agents',
       },
       {
         regex: /\bgit_stdout_lenient\b/,
         message:
-          'core function-agent runtime services must not re-own lenient Git process fallback; use bitfun-services-integrations::function_agents',
+          'core function-agent port adapters must not re-own lenient Git process fallback; use bitfun-services-integrations::function_agents',
       },
       {
         regex: /\bGitService::get_status\b/,
         message:
-          'core function-agent runtime services must not re-own Git status snapshots; use bitfun-services-integrations::function_agents',
+          'core function-agent port adapters must not re-own Git status snapshots; use bitfun-services-integrations::function_agents',
       },
       {
         regex: /\bcreate_command\("git"\)/,
         message:
-          'core function-agent runtime services must not spawn Git concrete commands; use bitfun-services-integrations::function_agents',
+          'core function-agent port adapters must not spawn Git concrete commands; use bitfun-services-integrations::function_agents',
       },
     ],
   },
