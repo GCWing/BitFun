@@ -33,17 +33,17 @@
 
 /* ==================== Show thumb on hover ==================== */
 *:hover::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb, rgba(255, 255, 255, 0.12));
+  background: var(--scrollbar-thumb);
 }
 
 /* Stronger thumb color on thumb hover */
 *:hover::-webkit-scrollbar-thumb:hover {
-  background: var(--scrollbar-thumb-hover, rgba(255, 255, 255, 0.22));
+  background: var(--scrollbar-thumb-hover);
 }
 
 /* ==================== Show while scrolling ==================== */
 *.is-scrolling::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb, rgba(255, 255, 255, 0.12));
+  background: var(--scrollbar-thumb);
 }
 
 /* ==================== Firefox scrollbar ==================== */
@@ -53,5 +53,5 @@
 }
 
 *:hover {
-  scrollbar-color: var(--scrollbar-thumb, rgba(255, 255, 255, 0.12)) transparent;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }

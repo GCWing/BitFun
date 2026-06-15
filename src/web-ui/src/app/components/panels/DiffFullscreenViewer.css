@@ -56,7 +56,7 @@
   justify-content: space-between;
   padding: 12px 20px;
   background: rgba(0, 0, 0, 0.9);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--color-overlay-white-10);
   backdrop-filter: blur(8px);
   flex-shrink: 0;
   z-index: 2;
@@ -116,14 +116,14 @@
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--color-overlay-white-05);
   color: rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--color-overlay-white-10);
 }
 
 .header-btn:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 12px var(--color-overlay-black-30);
 }
 
 .header-btn:disabled {
@@ -133,39 +133,39 @@
 }
 
 .header-btn.accept-btn {
-  background: var(--color-success-bg, rgba(52, 211, 153, 0.15));
-  color: var(--color-success, #34d399);
-  border-color: var(--color-success-border, rgba(52, 211, 153, 0.3));
+  background: var(--color-success-bg);
+  color: var(--color-success);
+  border-color: var(--color-success-border);
 }
 
 .header-btn.accept-btn:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--color-success, #34d399) 25%, transparent);
-  border-color: color-mix(in srgb, var(--color-success, #34d399) 50%, transparent);
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--color-success, #34d399) 20%, transparent);
+  background: color-mix(in srgb, var(--color-success) 25%, transparent);
+  border-color: color-mix(in srgb, var(--color-success) 50%, transparent);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--color-success) 20%, transparent);
 }
 
 .header-btn.reject-btn {
-  background: var(--color-error-bg, rgba(239, 68, 68, 0.15));
-  color: var(--color-error, #ef4444);
-  border-color: var(--color-error-border, rgba(239, 68, 68, 0.3));
+  background: var(--color-error-bg);
+  color: var(--color-error);
+  border-color: var(--color-error-border);
 }
 
 .header-btn.reject-btn:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--color-error, #ef4444) 25%, transparent);
-  border-color: color-mix(in srgb, var(--color-error, #ef4444) 50%, transparent);
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--color-error, #ef4444) 20%, transparent);
+  background: color-mix(in srgb, var(--color-error) 25%, transparent);
+  border-color: color-mix(in srgb, var(--color-error) 50%, transparent);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--color-error) 20%, transparent);
 }
 
 .header-btn.close-btn:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--color-error, #ef4444) 20%, transparent);
-  color: var(--color-error, #ef4444);
-  border-color: var(--color-error-border, rgba(239, 68, 68, 0.3));
+  background: color-mix(in srgb, var(--color-error) 20%, transparent);
+  color: var(--color-error);
+  border-color: var(--color-error-border);
 }
 
 .header-divider {
   width: 1px;
   height: 20px;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--color-overlay-white-10);
   margin: 0 4px;
 }
 
@@ -221,7 +221,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.8);
+  background: var(--color-overlay-black-80);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -287,7 +287,7 @@
   
   .diff-fullscreen-header {
     background: rgba(0, 0, 0, 0.95);
-    border-bottom-color: rgba(255, 255, 255, 0.15);
+    border-bottom-color: var(--color-overlay-white-15);
   }
   
   .diff-fullscreen-content {

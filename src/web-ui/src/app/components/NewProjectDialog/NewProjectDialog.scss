@@ -132,7 +132,7 @@
       user-select: none;
       font-size: 12px;
       padding: 10px 12px;
-      background: rgba(255, 255, 255, 0.02);
+      background: var(--color-overlay-white-02);
       border: 1px dashed var(--border-subtle);
       border-radius: 8px;
       color: var(--color-text-primary);
@@ -198,7 +198,7 @@
       width: 100%;
       font-size: 12px;
       padding: 10px 12px;
-      background: rgba(255, 255, 255, 0.02);
+      background: var(--color-overlay-white-02);
       border: 1px solid var(--border-subtle);
       border-radius: 8px;
       color: var(--color-text-primary);
@@ -299,12 +299,12 @@
       flex-shrink: 0;
       width: 14px;
       height: 14px;
-      color: #ef4444;
+      color: var(--color-error);
     }
     
     span {
       font-size: 12px;
-      color: #ef4444;
+      color: var(--color-error);
     }
   }
 

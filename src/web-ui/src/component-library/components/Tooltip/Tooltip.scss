@@ -132,7 +132,7 @@
     &__content {
       border-width: 1px;
       border-color: rgba(255, 255, 255, 0.4);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+      box-shadow: 0 2px 8px var(--color-overlay-black-25);
     }
   }
 }

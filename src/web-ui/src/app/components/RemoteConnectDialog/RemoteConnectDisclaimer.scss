@@ -65,11 +65,11 @@
 }
 
 .bitfun-remote-disclaimer__btn--primary {
-  background: var(--color-accent-600, #2563eb);
-  color: #fff;
-  border-color: color-mix(in srgb, var(--color-accent-700, #1d4ed8) 35%, transparent);
+  background: var(--color-accent-600);
+  color: var(--color-static-white);
+  border-color: color-mix(in srgb, var(--color-accent-700) 35%, transparent);
 
   &:hover:not(:disabled) {
-    background: var(--color-accent-700, #1d4ed8);
+    background: var(--color-accent-700);
   }
 }

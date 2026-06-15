@@ -16,7 +16,7 @@
   box-shadow: 
     var(--shadow-xl),
     0 4px 15px rgba(59, 130, 246, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    inset 0 1px 0 var(--color-overlay-white-05);
   padding: var(--size-gap-3) var(--size-gap-4);
   z-index: var(--z-overlay);
   transition: all var(--motion-normal) var(--easing-standard);
@@ -31,9 +31,9 @@
   opacity: 0.8;
   border-color: rgba(59, 130, 246, 0.25);
   box-shadow: 
-    0 12px 40px rgba(0, 0, 0, 0.4),
+    0 12px 40px var(--color-overlay-black-40),
     0 6px 20px rgba(59, 130, 246, 0.15),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    inset 0 1px 0 var(--color-overlay-white-10);
   transform: translateX(-50%) translateY(-1px);
 }
 
@@ -48,7 +48,7 @@
   box-shadow: 
     0 20px 60px rgba(0, 0, 0, 0.6),
     0 10px 40px rgba(59, 130, 246, 0.25),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    inset 0 1px 0 var(--color-overlay-white-20);
   transform: translateX(-50%) translateY(-4px);
 }
 
@@ -99,7 +99,7 @@
 
 /* Inner container styles when active */
 .floating-input-base:focus-within .floating-input-wrapper {
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--color-overlay-black-20);
   border: 1px solid rgba(59, 130, 246, 0.3);
   border-radius: var(--size-radius-md);
   padding: var(--size-gap-2);

@@ -67,7 +67,7 @@
     font-weight: $font-weight-semibold;
     color: var(--color-accent-500);
     text-align: center;
-    text-shadow: 0 2px 8px rgba(96, 165, 250, 0.4);
+    text-shadow: 0 2px 8px var(--color-accent-400);
     
     &--disabled {
       color: var(--color-text-disabled);

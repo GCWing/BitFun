@@ -86,7 +86,7 @@
   .subagent-text-block__expand-btn {
     background: none;
     border: none;
-    color: var(--flowchat-link-color, var(--markdown-link-color, #60a5fa));
+    color: var(--flowchat-link-color);
     cursor: pointer;
     font-size: var(--flowchat-font-size-sm);
     padding: 0;

@@ -7,12 +7,12 @@
 // Accent / semantic colors (theme-aware via tokens; fallback values keep
 // dark-only consumers happy if tokens are missing).
 $ins-blue:   var(--color-accent-500);
-$ins-green:  var(--color-success, #6eb88c);
+$ins-green:  var(--color-success);
 $ins-red:    var(--color-error);
-$ins-orange: var(--color-warning, #c9944d);
+$ins-orange: var(--color-warning);
 
 $ins-blue-bg:  var(--color-accent-100);
-$ins-green-bg: var(--color-success-bg, rgba(110, 184, 140, 0.10));
+$ins-green-bg: var(--color-success-bg);
 $ins-red-bg:   var(--color-error-bg);
 
 // Surfaces & borders — must work on both light & dark themes.
@@ -279,13 +279,13 @@ $ins-label:   12px;
   &:hover {
     background: $ins-tint-1;
     border-color: $ins-border-hover;
-    box-shadow: var(--shadow-sm, 0 2px 8px rgba(0, 0, 0, 0.08));
+    box-shadow: var(--shadow-sm);
     transform: translateY(-1px);
   }
 
   &:active {
     transform: translateY(0);
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+    box-shadow: 0 1px 4px var(--color-overlay-black-12);
     transition-duration: 0.08s;
   }
 
@@ -1401,12 +1401,12 @@ $ins-label:   12px;
     border: 1px solid color-mix(in srgb, $ins-blue 28%, transparent);
     background: $ins-blue-bg;
     transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
-    box-shadow: var(--shadow-xs, 0 1px 2px rgba(0, 0, 0, 0.04));
+    box-shadow: var(--shadow-xs);
 
     &:hover {
       border-color: color-mix(in srgb, $ins-blue 45%, transparent);
       background: var(--color-accent-200, $ins-blue-bg);
-      box-shadow: var(--shadow-sm, 0 4px 12px rgba(0, 0, 0, 0.10));
+      box-shadow: var(--shadow-sm);
     }
   }
 

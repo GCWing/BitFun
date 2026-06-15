@@ -11,7 +11,7 @@
 .error-message {
   padding: 12px 16px;
   background: linear-gradient(135deg,
-    rgba(239, 68, 68, 0.1) 0%,
+    var(--color-error-bg) 0%,
     rgba(239, 68, 68, 0.05) 100%);
   color: var(--color-error);
   border-radius: 12px;
@@ -20,8 +20,8 @@
   -webkit-backdrop-filter: blur(12px) saturate(1.05);
   box-shadow: 
     0 8px 32px rgba(239, 68, 68, 0.12),
-    0 4px 16px rgba(0, 0, 0, 0.06),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    0 4px 16px var(--color-overlay-black-06),
+    inset 0 1px 0 var(--color-overlay-white-10);
 }
 
 /* Section headings */
@@ -38,20 +38,20 @@
 /* Glassmorphism workspace card */
 .workspace-card {
   position: relative;
-  border: 1px solid rgba(96, 165, 250, 0.15);
+  border: 1px solid var(--color-accent-200);
   border-radius: 16px;
   padding: 20px 24px;
   background: linear-gradient(135deg,
-    rgba(96, 165, 250, 0.08) 0%,
+    var(--color-accent-100) 0%,
     rgba(59, 130, 246, 0.04) 50%,
     rgba(96, 165, 250, 0.06) 100%);
   backdrop-filter: blur(12px) saturate(1.05);
   -webkit-backdrop-filter: blur(12px) saturate(1.05);
   box-shadow: 
     0 8px 32px rgba(96, 165, 250, 0.12),
-    0 4px 16px rgba(0, 0, 0, 0.06),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+    0 4px 16px var(--color-overlay-black-06),
+    inset 0 1px 0 var(--color-overlay-white-10),
+    inset 0 -1px 0 var(--color-overlay-white-05);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   animation: slideInUp 0.4s ease-out;
 }
@@ -64,7 +64,7 @@
   right: 0;
   bottom: 0;
   background: linear-gradient(135deg,
-    rgba(255, 255, 255, 0.02) 0%,
+    var(--color-overlay-white-02) 0%,
     transparent 50%,
     rgba(255, 255, 255, 0.01) 100%);
   pointer-events: none;
@@ -73,17 +73,17 @@
 }
 
 .workspace-card.current {
-  border-color: rgba(96, 165, 250, 0.25);
+  border-color: var(--color-accent-300);
   background: linear-gradient(135deg,
-    rgba(96, 165, 250, 0.15) 0%,
+    var(--color-accent-200) 0%,
     rgba(59, 130, 246, 0.08) 50%,
     rgba(96, 165, 250, 0.12) 100%);
   box-shadow: 
-    0 8px 32px rgba(96, 165, 250, 0.15),
-    0 4px 16px rgba(0, 0, 0, 0.08),
-    0 2px 8px rgba(0, 0, 0, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.15),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.08);
+    0 8px 32px var(--color-accent-200),
+    0 4px 16px var(--color-overlay-black-08),
+    0 2px 8px var(--color-overlay-black-08),
+    inset 0 1px 0 var(--color-overlay-white-15),
+    inset 0 -1px 0 var(--color-overlay-white-08);
 }
 
 .workspace-card.recent {
@@ -91,17 +91,17 @@
 }
 
 .workspace-card.recent:hover {
-  border-color: rgba(96, 165, 250, 0.25);
+  border-color: var(--color-accent-300);
   background: linear-gradient(135deg,
     rgba(96, 165, 250, 0.12) 0%,
     rgba(59, 130, 246, 0.06) 50%,
-    rgba(96, 165, 250, 0.08) 100%);
+    var(--color-accent-100) 100%);
   transform: translateY(-2px);
   box-shadow: 
-    0 12px 40px rgba(96, 165, 250, 0.15),
-    0 6px 20px rgba(0, 0, 0, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.15),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.08);
+    0 12px 40px var(--color-accent-200),
+    0 6px 20px var(--color-overlay-black-08),
+    inset 0 1px 0 var(--color-overlay-white-15),
+    inset 0 -1px 0 var(--color-overlay-white-08);
 }
 
 .workspace-header {
@@ -119,13 +119,13 @@
   justify-content: center;
   width: 48px;
   height: 48px;
-  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+  background: linear-gradient(135deg, var(--color-accent-500) 0%, var(--color-accent-600) 100%);
   color: white;
   border-radius: 12px;
   flex-shrink: 0;
   box-shadow: 
-    0 4px 16px rgba(96, 165, 250, 0.25),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    0 4px 16px var(--color-accent-300),
+    inset 0 1px 0 var(--color-overlay-white-20);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -163,7 +163,7 @@
   margin-bottom: 12px;
   word-break: break-all;
   font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--color-overlay-black-20);
   padding: 4px 8px;
   border-radius: 6px;
   border: 1px solid rgba(96, 165, 250, 0.1);
@@ -189,7 +189,7 @@
   gap: 6px;
   padding: 4px 10px;
   border-radius: 999px;
-  background: rgba(96, 165, 250, 0.08);
+  background: var(--color-accent-100);
   border: 1px solid rgba(96, 165, 250, 0.14);
 }
 
@@ -287,7 +287,7 @@
   gap: 16px;
   margin-top: 20px;
   padding-top: 20px;
-  border-top: 1px solid rgba(96, 165, 250, 0.15);
+  border-top: 1px solid var(--color-accent-200);
   position: relative;
 }
 
@@ -297,7 +297,7 @@
   gap: 6px;
   padding: 12px 16px;
   background: linear-gradient(135deg,
-    rgba(96, 165, 250, 0.04) 0%,
+    var(--color-accent-50) 0%,
     rgba(59, 130, 246, 0.02) 100%);
   border-radius: 8px;
   border: 1px solid rgba(96, 165, 250, 0.1);
@@ -306,15 +306,15 @@
 
 .stat-item:hover {
   background: linear-gradient(135deg,
-    rgba(96, 165, 250, 0.08) 0%,
+    var(--color-accent-100) 0%,
     rgba(59, 130, 246, 0.04) 100%);
-  border-color: rgba(96, 165, 250, 0.15);
+  border-color: var(--color-accent-200);
   transform: translateY(-1px);
 }
 
 .stat-label {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--color-overlay-white-60);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -335,7 +335,7 @@
   justify-content: center;
   padding: 48px 20px;
   text-align: center;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--color-overlay-white-60);
   background: linear-gradient(135deg,
     rgba(96, 165, 250, 0.03) 0%,
     rgba(59, 130, 246, 0.01) 100%);
@@ -345,7 +345,7 @@
 
 .no-workspace svg {
   margin-bottom: 20px;
-  color: rgba(96, 165, 250, 0.4);
+  color: var(--color-accent-400);
   opacity: 0.8;
 }
 

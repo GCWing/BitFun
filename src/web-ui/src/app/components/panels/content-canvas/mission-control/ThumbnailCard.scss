@@ -32,7 +32,7 @@
     border-color: var(--color-primary, var(--color-accent-500));
 
     .canvas-thumbnail-card__header {
-      border-color: var(--color-accent-200, rgba(96, 165, 250, 0.12));
+      border-color: var(--color-accent-200);
     }
 
     .canvas-thumbnail-card__icon {
@@ -43,7 +43,7 @@
   // Pinned state - dashed border with stronger color
   &.is-pinned {
     border-style: dashed;
-    border-color: var(--color-accent-300, rgba(96, 165, 250, 0.3));
+    border-color: var(--color-accent-300);
 
     .canvas-thumbnail-card__pin-badge {
       display: flex;
@@ -104,7 +104,7 @@
     display: none;
     flex-shrink: 0;
     font-size: 8px;
-    color: var(--color-warning, #f59e0b);
+    color: var(--color-warning);
   }
 
   &__actions {
@@ -139,8 +139,8 @@
   }
 
   &__close-btn:hover {
-    background: var(--color-error-bg, rgba(239, 68, 68, 0.15));
-    color: var(--color-error, #ef4444);
+    background: var(--color-error-bg);
+    color: var(--color-error);
   }
 
   // Preview area
@@ -237,12 +237,12 @@
     font-size: 9px;
     font-weight: 600;
     color: var(--color-text-primary);
-    background: var(--group-color, var(--color-accent-500, rgba(59, 130, 246, 0.8)));
+    background: var(--group-color, var(--color-accent-500, var(--color-accent-700)));
     border-radius: 3px;
     z-index: 1;
-    box-shadow: 0 1px 3px var(--color-shadow, rgba(0, 0, 0, 0.3));
+    box-shadow: 0 1px 3px var(--color-shadow, var(--color-overlay-black-30));
     backdrop-filter: blur(4px);
-    text-shadow: 0 1px 2px var(--color-shadow, rgba(0, 0, 0, 0.2));
+    text-shadow: 0 1px 2px var(--color-shadow, var(--color-overlay-black-20));
 
     &--primary {
       background: var(--group-color, var(--color-accent-500, rgba(59, 130, 246, 0.85)));

@@ -43,7 +43,7 @@
 
   &:hover {
     .thinking-label {
-      color: var(--text-secondary, #9ca3af);
+      color: var(--text-secondary);
       opacity: 1;
     }
 
@@ -54,7 +54,7 @@
 
   .thinking-chevron {
     flex-shrink: 0;
-    color: var(--text-tertiary, #6b7280);
+    color: var(--text-tertiary);
     opacity: 0.6;
     display: block;
     transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.15s ease;
@@ -64,7 +64,7 @@
   .thinking-label {
     font-size: var(--flowchat-font-size-sm);
     font-weight: normal;
-    color: var(--text-tertiary, #6b7280);
+    color: var(--text-tertiary);
     opacity: 0.8;
     line-height: var(--flowchat-support-line-height, 1.45);
   }

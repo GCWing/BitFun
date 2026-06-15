@@ -130,7 +130,7 @@
     flex-wrap: wrap;
     line-height: var(--flowchat-compact-line-height, 1.32);
     margin-top: var(--flowchat-card-gap, 0.42rem);
-    background: var(--element-bg-subtle, rgba(255, 255, 255, 0.05));
+    background: var(--element-bg-subtle);
     box-sizing: border-box;
     border-top: 1px solid var(--border-subtle);
   }
@@ -151,8 +151,8 @@
     transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 
     &:hover {
-      background: var(--element-bg-hover, rgba(255, 255, 255, 0.06));
-      border-color: var(--border-primary, rgba(255, 255, 255, 0.12));
+      background: var(--element-bg-hover);
+      border-color: var(--border-primary, var(--color-overlay-white-12));
     }
   }
 

@@ -4,29 +4,29 @@
  */
 :root {
   --flowchat-md-table-radius: var(--flowchat-card-radius, 8px);
-  --flowchat-md-table-border: rgba(255, 255, 255, 0.12);
+  --flowchat-md-table-border: var(--color-overlay-white-12);
   --flowchat-md-table-shadow: none;
   --flowchat-md-table-surface: transparent;
-  --flowchat-md-table-cell-border: rgba(255, 255, 255, 0.1);
+  --flowchat-md-table-cell-border: var(--color-overlay-white-10);
   --flowchat-md-table-col-divider: transparent;
-  --flowchat-md-table-th-bg: rgba(255, 255, 255, 0.03);
+  --flowchat-md-table-th-bg: var(--color-overlay-white-03);
   --flowchat-md-table-th-fg: var(--color-text-primary);
   --flowchat-md-table-td-fg: var(--color-text-primary);
   --flowchat-md-table-row-base: transparent;
-  --flowchat-md-table-row-stripe: rgba(255, 255, 255, 0.02);
-  --flowchat-md-table-hover: rgba(255, 255, 255, 0.04);
+  --flowchat-md-table-row-stripe: var(--color-overlay-white-02);
+  --flowchat-md-table-hover: var(--color-overlay-white-04);
 }
 
 :root[data-theme-type="light"] {
   --flowchat-md-table-border: rgba(15, 23, 42, 0.12);
   --flowchat-md-table-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
-  --flowchat-md-table-surface: #ffffff;
+  --flowchat-md-table-surface: var(--color-static-white);
   --flowchat-md-table-cell-border: rgba(15, 23, 42, 0.1);
   --flowchat-md-table-col-divider: rgba(15, 23, 42, 0.08);
   --flowchat-md-table-th-bg: #f3f6fb;
   --flowchat-md-table-th-fg: #0f172a;
-  --flowchat-md-table-td-fg: var(--color-text-primary, #1f2937);
-  --flowchat-md-table-row-base: #ffffff;
+  --flowchat-md-table-td-fg: var(--color-text-primary);
+  --flowchat-md-table-row-base: var(--color-static-white);
   --flowchat-md-table-row-stripe: #f8fafc;
   --flowchat-md-table-hover: #eef4ff;
 }

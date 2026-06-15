@@ -5,7 +5,7 @@
 
   &__outline {
     fill: transparent;
-    stroke: rgba(255, 255, 255, 0.2);
+    stroke: var(--color-overlay-white-20);
     stroke-width: 1;
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
     font-size: 72px;

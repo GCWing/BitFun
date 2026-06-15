@@ -22,7 +22,7 @@
     align-items: center;
     gap: 4px;
     padding: 0;
-    color: var(--text-tertiary, #6b7280);
+    color: var(--text-tertiary);
     font-size: var(--flowchat-font-size-sm);
     line-height: var(--flowchat-support-line-height, 1.45);
     cursor: pointer;
@@ -31,8 +31,8 @@
     transition: color 0.15s ease, background 0.15s ease;
 
     &:hover {
-      background: var(--bg-hover, rgba(255, 255, 255, 0.05));
-      color: var(--text-secondary, #9ca3af);
+      background: var(--bg-hover, var(--element-bg-hover));
+      color: var(--text-secondary);
     }
   }
 
@@ -80,7 +80,7 @@
     }
 
     &::-webkit-scrollbar-thumb {
-      background: var(--border-base, rgba(107, 114, 128, 0.3));
+      background: var(--border-base);
       border-radius: 2px;
 
       &:hover {
@@ -118,8 +118,8 @@
     z-index: 3;
     background: linear-gradient(
       to bottom,
-      var(--color-bg-flowchat, #121214) 0%,
-      color-mix(in srgb, var(--color-bg-flowchat, #121214) 60%, transparent) 50%,
+      var(--color-bg-flowchat) 0%,
+      color-mix(in srgb, var(--color-bg-flowchat) 60%, transparent) 50%,
       transparent 100%
     );
   }
@@ -137,8 +137,8 @@
     z-index: 3;
     background: linear-gradient(
       to top,
-      var(--color-bg-flowchat, #121214) 0%,
-      color-mix(in srgb, var(--color-bg-flowchat, #121214) 60%, transparent) 50%,
+      var(--color-bg-flowchat) 0%,
+      color-mix(in srgb, var(--color-bg-flowchat) 60%, transparent) 50%,
       transparent 100%
     );
   }

@@ -49,7 +49,7 @@ $toast-width: 320px;
       transform: rotate(-8deg);
       background: var(--color-bg-secondary);
       border: 1px solid var(--border-base);
-      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+      box-shadow: 0 8px 20px var(--color-overlay-black-12);
     }
 
     // Ghost 2: tilted right  →  fans right on hover
@@ -66,7 +66,7 @@ $toast-width: 320px;
   &:hover {
     > .announcement-toast {
       transform: translateY(-10px) scale(1.025);
-      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 16px 40px var(--color-overlay-black-20);
     }
 
     .announcement-toast-ghost--1 {
@@ -230,7 +230,7 @@ $toast-width: 320px;
 
     &--primary {
       background: var(--color-primary);
-      color: #fff;
+      color: var(--color-static-white);
 
       &:hover { opacity: 0.9; }
       &:active { transform: scale(0.98); }

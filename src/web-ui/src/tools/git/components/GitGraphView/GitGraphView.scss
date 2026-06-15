@@ -30,7 +30,7 @@
     button {
       padding: 8px 16px;
       background: var(--color-primary);
-      color: #fff;
+      color: var(--color-static-white);
       border: none;
       border-radius: 4px;
       cursor: pointer;
@@ -45,7 +45,7 @@
   &__spinner {
     width: 32px;
     height: 32px;
-    border: 3px solid rgba(255, 255, 255, 0.1);
+    border: 3px solid var(--color-overlay-white-10);
     border-top-color: var(--color-primary);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
@@ -79,7 +79,7 @@
     gap: 4px;
     padding: 4px 8px;
     background: var(--color-primary);
-    color: #fff;
+    color: var(--color-static-white);
     border-radius: 4px;
     font-size: 12px;
     font-weight: 500;
@@ -157,12 +157,12 @@
     transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
     
     &:hover {
-      background: rgba(255, 255, 255, 0.04);
+      background: var(--color-overlay-white-04);
     }
 
     &--selected {
       background: var(--color-accent-100);
-      border-left: 2px solid var(--color-accent-500, #60a5fa);
+      border-left: 2px solid var(--color-accent-500);
       z-index: 2;
 
       &:hover {
@@ -171,40 +171,40 @@
     }
 
     &--search-match {
-      background: color-mix(in srgb, var(--color-warning, #fbbf24) 6%, transparent);
-      border-left: 2px solid color-mix(in srgb, var(--color-warning, #fbbf24) 40%, transparent);
+      background: color-mix(in srgb, var(--color-warning) 6%, transparent);
+      border-left: 2px solid color-mix(in srgb, var(--color-warning) 40%, transparent);
 
       &:hover {
-        background: color-mix(in srgb, var(--color-warning, #fbbf24) 10%, transparent);
+        background: color-mix(in srgb, var(--color-warning) 10%, transparent);
       }
     }
 
     &--current-search-match {
-      background: color-mix(in srgb, var(--color-warning, #fbbf24) 15%, transparent);
-      border-left: 3px solid var(--color-warning, #fbbf24);
-      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-warning, #fbbf24) 30%, transparent);
+      background: color-mix(in srgb, var(--color-warning) 15%, transparent);
+      border-left: 3px solid var(--color-warning);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-warning) 30%, transparent);
       animation: search-highlight 0.4s ease-out;
       z-index: 3;
 
       &:hover {
-        background: color-mix(in srgb, var(--color-warning, #fbbf24) 20%, transparent);
+        background: color-mix(in srgb, var(--color-warning) 20%, transparent);
       }
 
       &.git-graph-view__hit-area--selected {
         background: linear-gradient(
           90deg,
-          color-mix(in srgb, var(--color-warning, #fbbf24) 20%, transparent),
+          color-mix(in srgb, var(--color-warning) 20%, transparent),
           var(--color-accent-200)
         );
-        border-left: 3px solid var(--color-warning, #fbbf24);
+        border-left: 3px solid var(--color-warning);
         box-shadow:
-          inset 0 0 0 1px color-mix(in srgb, var(--color-warning, #fbbf24) 30%, transparent),
-          inset 3px 0 0 0 var(--color-accent-500, #60a5fa);
+          inset 0 0 0 1px color-mix(in srgb, var(--color-warning) 30%, transparent),
+          inset 3px 0 0 0 var(--color-accent-500);
 
         &:hover {
           background: linear-gradient(
             90deg,
-            color-mix(in srgb, var(--color-warning, #fbbf24) 25%, transparent),
+            color-mix(in srgb, var(--color-warning) 25%, transparent),
             var(--color-accent-200)
           );
         }
@@ -224,13 +224,13 @@
 
     &:hover {
       background: var(--color-hover);
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 1px 3px var(--color-overlay-black-10);
       z-index: 1;
     }
 
     &--selected {
       background: var(--color-selected) !important;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+      box-shadow: 0 2px 4px var(--color-overlay-black-15);
       z-index: 2;
     }
 
@@ -265,22 +265,22 @@
 
     &:hover {
       transform: scale(1.05);
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 2px 4px var(--color-overlay-black-20);
     }
 
     &--branch {
-      background: var(--color-accent-600, #42a5f5);
-      color: #ffffff;
+      background: var(--color-accent-600);
+      color: var(--color-static-white);
     }
 
     &--remote {
       background: var(--color-purple-600, #9c27b0);
-      color: #ffffff;
+      color: var(--color-static-white);
     }
 
     &--tag {
       background: var(--git-color-changes, #ff7043);
-      color: #ffffff;
+      color: var(--color-static-white);
     }
 
     &--current {

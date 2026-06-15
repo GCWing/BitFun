@@ -20,7 +20,7 @@
 
   &.non-clickable {
     cursor: default;
-    border-color: var(--border-light, rgba(255, 255, 255, 0.06));
+    border-color: var(--border-light, var(--color-overlay-white-06));
     opacity: 0.85;
 
     &:hover {
@@ -115,7 +115,7 @@
 .params-streaming-indicator {
   font-size: var(--flowchat-font-size-xxs);
   color: rgba(139, 92, 246, 0.75);
-  background: rgba(139, 92, 246, 0.08);
+  background: var(--color-purple-100);
   padding: 0.125rem var(--flowchat-inline-gap, 0.35rem);
   border-radius: 3px;
   animation: pulse-subtle 2s ease-in-out infinite;
@@ -161,7 +161,7 @@
     color 0.15s ease;
 
   &:hover:not(.file-op-diff-pill--disabled) {
-    background-color: var(--tool-card-bg-hover, var(--color-bg-hover, rgba(255, 255, 255, 0.09)));
+    background-color: var(--tool-card-bg-hover);
     color: var(--color-text-primary);
   }
 
@@ -220,7 +220,7 @@
   }
 
   &:hover::before {
-    background-color: var(--tool-card-bg-hover, var(--color-bg-hover, rgba(255, 255, 255, 0.09)));
+    background-color: var(--tool-card-bg-hover);
   }
 
   &:hover {
@@ -240,7 +240,7 @@
   }
 
   &:focus-visible {
-    outline: 2px solid var(--color-accent-500, #60a5fa);
+    outline: 2px solid var(--color-accent-500);
     outline-offset: -2px;
   }
 
@@ -368,7 +368,7 @@
 
 .file-operation-card--guidance {
   .base-tool-card.status-error {
-    border-color: var(--border-medium, rgba(255, 255, 255, 0.12));
+    border-color: var(--border-medium);
     background: var(--color-surface-elevated, transparent);
   }
 }

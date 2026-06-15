@@ -4,7 +4,7 @@
   --config-page-content-max-width: 1480px;
   --config-page-content-inline-padding: clamp(40px, 6vw, 80px);
   /* Aligns overview + member rows with `AgentTeamCard` / gallery team cards */
-  --review-team-accent: var(--color-accent-400, #0ea5e9);
+  --review-team-accent: var(--color-accent-400);
 
   .bitfun-config-page-content__inner {
     max-width: 1480px;
@@ -535,7 +535,7 @@
     margin: 0 0 12px;
     padding: 10px 12px;
     border-radius: 8px;
-    background: color-mix(in srgb, #f59e0b 12%, transparent);
+    background: color-mix(in srgb, var(--color-warning) 12%, transparent);
     color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
     line-height: 1.55;

@@ -16,7 +16,7 @@
   line-height: var(--flowchat-support-line-height, 1.45);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  box-shadow: 0 4px 24px var(--color-overlay-black-15), 0 0 0 1px var(--color-overlay-white-06);
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -25,35 +25,35 @@
 
   /* Variants */
   &--success {
-    --deep-review-action-bar-surface: color-mix(in srgb, var(--color-success, #22c55e) 10%, var(--color-bg-secondary));
+    --deep-review-action-bar-surface: color-mix(in srgb, var(--color-success) 10%, var(--color-bg-secondary));
 
     background: var(--deep-review-action-bar-surface);
-    border: 1px solid color-mix(in srgb, var(--color-success, #22c55e) 22%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-success) 22%, transparent);
   }
 
   &--loading {
-    --deep-review-action-bar-surface: color-mix(in srgb, var(--color-accent-500, #60a5fa) 10%, var(--color-bg-secondary));
+    --deep-review-action-bar-surface: color-mix(in srgb, var(--color-accent-500) 10%, var(--color-bg-secondary));
 
     background: var(--deep-review-action-bar-surface);
-    border: 1px solid color-mix(in srgb, var(--color-accent-500, #60a5fa) 22%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-accent-500) 22%, transparent);
   }
 
   &--error {
-    --deep-review-action-bar-surface: color-mix(in srgb, var(--color-error, #ef4444) 10%, var(--color-bg-secondary));
+    --deep-review-action-bar-surface: color-mix(in srgb, var(--color-error) 10%, var(--color-bg-secondary));
 
     background: var(--deep-review-action-bar-surface);
-    border: 1px solid color-mix(in srgb, var(--color-error, #ef4444) 22%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-error) 22%, transparent);
   }
 
   &--warning {
-    --deep-review-action-bar-surface: color-mix(in srgb, var(--color-warning, #f59e0b) 10%, var(--color-bg-secondary));
+    --deep-review-action-bar-surface: color-mix(in srgb, var(--color-warning) 10%, var(--color-bg-secondary));
 
     background: var(--deep-review-action-bar-surface);
-    border: 1px solid color-mix(in srgb, var(--color-warning, #f59e0b) 22%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-warning) 22%, transparent);
   }
 
   &--info {
-    --deep-review-action-bar-surface: color-mix(in srgb, var(--color-accent-500, #60a5fa) 5%, var(--color-bg-secondary));
+    --deep-review-action-bar-surface: color-mix(in srgb, var(--color-accent-500) 5%, var(--color-bg-secondary));
 
     background: var(--deep-review-action-bar-surface);
     border: 1px solid var(--border-base);
@@ -136,20 +136,20 @@
     flex-shrink: 0;
 
     &--success {
-      color: var(--color-success, #22c55e);
+      color: var(--color-success);
     }
 
     &--loading {
-      color: var(--color-accent-500, #60a5fa);
+      color: var(--color-accent-500);
       animation: deep-review-action-bar-spin 1s linear infinite;
     }
 
     &--error {
-      color: var(--color-error, #ef4444);
+      color: var(--color-error);
     }
 
     &--warning {
-      color: var(--color-warning, #f59e0b);
+      color: var(--color-warning);
     }
   }
 
@@ -162,7 +162,7 @@
   &__error-message {
     margin-left: auto;
     font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
-    color: var(--color-error, #ef4444);
+    color: var(--color-error);
     max-width: 50%;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -307,7 +307,7 @@
     }
 
     &--fixing {
-      background: color-mix(in srgb, var(--color-accent-500, #60a5fa) 8%, transparent);
+      background: color-mix(in srgb, var(--color-accent-500) 8%, transparent);
     }
 
     &--locked {
@@ -316,14 +316,14 @@
   }
 
   &__completed-icon {
-    color: var(--color-success, #22c55e);
+    color: var(--color-success);
     margin-right: 4px;
     flex-shrink: 0;
     vertical-align: text-bottom;
   }
 
   &__fixing-icon {
-    color: var(--color-accent-500, #60a5fa);
+    color: var(--color-accent-500);
     margin-right: 4px;
     flex-shrink: 0;
     vertical-align: text-bottom;
@@ -384,7 +384,7 @@
     padding: 0;
     border: none;
     background: none;
-    color: var(--color-accent-500, #60a5fa);
+    color: var(--color-accent-500);
     font-size: var(--flowchat-font-size-xxs);
     cursor: pointer;
     opacity: 0.8;
@@ -422,17 +422,17 @@
       transition: background-color 0.12s ease;
 
       &:hover {
-        background: var(--element-bg-soft, rgba(255, 255, 255, 0.06));
+        background: var(--element-bg-soft);
       }
     }
 
     &.is-selected > button {
-      background: color-mix(in srgb, var(--color-accent-500, #60a5fa) 12%, transparent);
+      background: color-mix(in srgb, var(--color-accent-500) 12%, transparent);
       color: var(--color-text-primary);
     }
 
     &.is-recommended .deep-review-action-bar__decision-option-text {
-      color: var(--color-accent-500, #60a5fa);
+      color: var(--color-accent-500);
       font-weight: 500;
     }
   }
@@ -457,8 +457,8 @@
     border-radius: 4px;
     font-size: var(--flowchat-font-size-xxs);
     font-weight: 500;
-    color: var(--color-accent-500, #60a5fa);
-    background: color-mix(in srgb, var(--color-accent-500, #60a5fa) 12%, transparent);
+    color: var(--color-accent-500);
+    background: color-mix(in srgb, var(--color-accent-500) 12%, transparent);
     margin-right: 6px;
     vertical-align: middle;
     flex-shrink: 0;
@@ -477,21 +477,21 @@
     align-items: center;
     gap: 8px;
     padding: 9px 11px;
-    border: 1px solid color-mix(in srgb, var(--color-warning, #f59e0b) 24%, var(--border-base));
+    border: 1px solid color-mix(in srgb, var(--color-warning) 24%, var(--border-base));
     border-radius: 8px;
     background: linear-gradient(
       135deg,
-      color-mix(in srgb, var(--color-warning, #f59e0b) 10%, var(--color-bg-secondary)) 0%,
-      color-mix(in srgb, var(--color-warning, #f59e0b) 4%, var(--color-bg-secondary)) 100%
+      color-mix(in srgb, var(--color-warning) 10%, var(--color-bg-secondary)) 0%,
+      color-mix(in srgb, var(--color-warning) 4%, var(--color-bg-secondary)) 100%
     );
     font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
     color: var(--color-text-secondary);
-    box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 8%, transparent);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--color-static-white) 8%, transparent);
   }
 
   &__empty-selection-icon {
     flex-shrink: 0;
-    color: var(--color-warning, #f59e0b);
+    color: var(--color-warning);
   }
 
   /* Execution decision gate */
@@ -500,9 +500,9 @@
     flex-direction: column;
     gap: 10px;
     padding: 10px 12px;
-    border: 1px solid color-mix(in srgb, var(--color-warning, #f59e0b) 28%, var(--border-base));
+    border: 1px solid color-mix(in srgb, var(--color-warning) 28%, var(--border-base));
     border-radius: 8px;
-    background: color-mix(in srgb, var(--color-bg-primary) 74%, var(--color-warning, #f59e0b) 8%);
+    background: color-mix(in srgb, var(--color-bg-primary) 74%, var(--color-warning) 8%);
   }
 
   &__decision-gate-header {
@@ -514,7 +514,7 @@
   &__decision-gate-icon {
     flex-shrink: 0;
     margin-top: 2px;
-    color: var(--color-warning, #f59e0b);
+    color: var(--color-warning);
   }
 
   &__decision-gate-title {
@@ -598,8 +598,8 @@
     }
 
     &.is-selected {
-      border-color: color-mix(in srgb, var(--color-accent-500, #60a5fa) 62%, var(--border-medium));
-      background: color-mix(in srgb, var(--color-accent-500, #60a5fa) 12%, transparent);
+      border-color: color-mix(in srgb, var(--color-accent-500) 62%, var(--border-medium));
+      background: color-mix(in srgb, var(--color-accent-500) 12%, transparent);
       color: var(--color-text-primary);
     }
 
@@ -610,7 +610,7 @@
 
   &__decision-gate-option-marker {
     flex-shrink: 0;
-    color: var(--color-accent-500, #60a5fa);
+    color: var(--color-accent-500);
   }
 
   &__decision-gate-option-text {
@@ -645,13 +645,13 @@
 
     &:focus {
       outline: none;
-      border-color: var(--color-accent-500, #60a5fa);
-      box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent-500, #60a5fa) 20%, transparent);
+      border-color: var(--color-accent-500);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent-500) 20%, transparent);
     }
   }
 
   &__decision-gate-warning {
-    color: color-mix(in srgb, var(--color-warning, #f59e0b) 82%, var(--color-text-primary));
+    color: color-mix(in srgb, var(--color-warning) 82%, var(--color-text-primary));
   }
 
   &__decision-gate-actions {
@@ -671,7 +671,7 @@
   }
 
   &__no-issues-icon {
-    color: var(--color-success, #22c55e);
+    color: var(--color-success);
     flex-shrink: 0;
   }
 
@@ -687,11 +687,11 @@
     gap: 6px;
     padding: 6px 8px;
     border-radius: 5px;
-    background: color-mix(in srgb, var(--color-success, #22c55e) 8%, transparent);
+    background: color-mix(in srgb, var(--color-success) 8%, transparent);
   }
 
   &__fix-done-icon {
-    color: var(--color-success, #22c55e);
+    color: var(--color-success);
     flex-shrink: 0;
   }
 
@@ -747,8 +747,8 @@
 
     &:focus {
       outline: none;
-      border-color: var(--color-accent-500, #60a5fa);
-      box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent-500, #60a5fa) 20%, transparent);
+      border-color: var(--color-accent-500);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent-500) 20%, transparent);
     }
   }
 
@@ -793,7 +793,7 @@
   }
 
   &__interruption-icon {
-    color: var(--color-warning, #f59e0b);
+    color: var(--color-warning);
     flex-shrink: 0;
   }
 
@@ -827,9 +827,9 @@
     justify-content: space-between;
     gap: 10px;
     padding: 8px 10px;
-    border-left: 2px solid color-mix(in srgb, var(--color-warning, #f59e0b) 56%, var(--border-base));
+    border-left: 2px solid color-mix(in srgb, var(--color-warning) 56%, var(--border-base));
     border-radius: 0 6px 6px 0;
-    background: color-mix(in srgb, var(--color-warning, #f59e0b) 8%, var(--deep-review-action-bar-surface));
+    background: color-mix(in srgb, var(--color-warning) 8%, var(--deep-review-action-bar-surface));
   }
 
   &__capacity-queue-main {
@@ -842,7 +842,7 @@
   &__capacity-queue-icon {
     flex-shrink: 0;
     margin-top: 2px;
-    color: var(--color-warning, #f59e0b);
+    color: var(--color-warning);
   }
 
   &__capacity-queue-copy {
@@ -876,8 +876,8 @@
     min-height: 22px;
     padding: 2px 7px;
     border-radius: 6px;
-    border: 1px solid color-mix(in srgb, var(--color-warning, #f59e0b) 24%, var(--border-base));
-    background: color-mix(in srgb, var(--color-warning, #f59e0b) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-warning) 24%, var(--border-base));
+    background: color-mix(in srgb, var(--color-warning) 10%, transparent);
     color: var(--color-text-secondary);
     line-height: var(--flowchat-compact-line-height, 1.32);
   }
@@ -952,7 +952,7 @@
     align-items: center;
     gap: 4px;
     margin-left: auto;
-    color: var(--color-accent-500, #60a5fa);
+    color: var(--color-accent-500);
     background: none;
     border: none;
     cursor: pointer;
@@ -962,7 +962,7 @@
     transition: background 0.2s;
 
     &:hover {
-      background: color-mix(in srgb, var(--color-accent-500, #60a5fa) 10%, transparent);
+      background: color-mix(in srgb, var(--color-accent-500) 10%, transparent);
     }
   }
 
@@ -1019,22 +1019,22 @@
     }
 
     &--warning {
-      background: color-mix(in srgb, var(--color-warning, #f59e0b) 7%, var(--color-bg-secondary));
-      border-color: color-mix(in srgb, var(--color-warning, #f59e0b) 18%, var(--border-base));
+      background: color-mix(in srgb, var(--color-warning) 7%, var(--color-bg-secondary));
+      border-color: color-mix(in srgb, var(--color-warning) 18%, var(--border-base));
 
       &::before {
-        background: var(--color-warning, #f59e0b);
-        box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-warning, #f59e0b) 14%, transparent);
+        background: var(--color-warning);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-warning) 14%, transparent);
       }
     }
 
     &--error {
-      background: color-mix(in srgb, var(--color-error, #ef4444) 7%, var(--color-bg-secondary));
-      border-color: color-mix(in srgb, var(--color-error, #ef4444) 18%, var(--border-base));
+      background: color-mix(in srgb, var(--color-error) 7%, var(--color-bg-secondary));
+      border-color: color-mix(in srgb, var(--color-error) 18%, var(--border-base));
 
       &::before {
-        background: var(--color-error, #ef4444);
-        box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-error, #ef4444) 14%, transparent);
+        background: var(--color-error);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-error) 14%, transparent);
       }
     }
   }
@@ -1072,11 +1072,11 @@
 
   &__recovery-icon {
     &--preserve {
-      color: var(--color-success, #22c55e);
+      color: var(--color-success);
     }
 
     &--rerun {
-      color: var(--color-accent-500, #60a5fa);
+      color: var(--color-accent-500);
     }
 
     &--skip {

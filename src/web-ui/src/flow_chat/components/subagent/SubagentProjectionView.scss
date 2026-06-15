@@ -41,7 +41,7 @@
   justify-content: space-between;
   gap: 12px;
   font-size: 12px;
-  color: var(--color-text-secondary, #6b7280);
+  color: var(--color-text-secondary);
 }
 
 .subagent-projection-text__message {
@@ -51,7 +51,7 @@
 .subagent-projection-text__expand-btn {
   border: 0;
   background: transparent;
-  color: var(--color-primary, #2563eb);
+  color: var(--color-primary);
   cursor: pointer;
   padding: 0;
   font: inherit;

@@ -7,7 +7,7 @@
   width: 100%;
   overflow: hidden;
   border-radius: 6px;
-  background: var(--color-bg-secondary, #1e1e1e);
+  background: var(--color-bg-secondary);
   
   // Monaco editor container
   .monaco-editor-core {
@@ -68,7 +68,7 @@
 
 // Bordered mode
 .readonly-code-block--bordered {
-  border: 1px solid var(--color-border, #333);
+  border: 1px solid var(--color-border);
 }
 
 // Inline mode (for inline code)

@@ -2,8 +2,8 @@
   padding: 4px 12px;
   font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   font-weight: 500;
-  background: var(--color-accent-600, #3b82f6);
-  color: #ffffff;
+  background: var(--color-accent-600);
+  color: var(--color-static-white);
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -11,9 +11,9 @@
   white-space: nowrap;
 
   &:hover {
-    background: var(--color-accent-700, #2563eb);
+    background: var(--color-accent-700);
     transform: translateY(-1px);
-    box-shadow: 0 2px 4px color-mix(in srgb, var(--color-accent-600, #3b82f6) 30%, transparent);
+    box-shadow: 0 2px 4px color-mix(in srgb, var(--color-accent-600) 30%, transparent);
   }
 
   &:active {
@@ -32,8 +32,8 @@
   padding: 4px 12px;
   font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
   font-weight: 500;
-  background: var(--color-success, #22c55e);
-  color: #ffffff;
+  background: var(--color-success);
+  color: var(--color-static-white);
   border-radius: 4px;
   display: inline-block;
   white-space: nowrap;

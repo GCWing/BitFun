@@ -469,15 +469,15 @@
   .m-editor-inline-ai__panel {
     width: min(26rem, calc(100vw - #{$size-gap-8}));
     padding: 10px 10px 8px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--color-overlay-white-10);
     border-radius: 12px;
     background: var(--color-bg-tertiary);
     backdrop-filter: blur(16px) saturate(1.2);
     -webkit-backdrop-filter: blur(16px) saturate(1.2);
     box-shadow:
       0 8px 24px rgba(0, 0, 0, 0.35),
-      inset 0 1px 0 rgba(255, 255, 255, 0.08),
-      inset 0 -1px 0 rgba(255, 255, 255, 0.02);
+      inset 0 1px 0 var(--color-overlay-white-08),
+      inset 0 -1px 0 var(--color-overlay-white-02);
     transition:
       transform 0.28s cubic-bezier(0.4, 0, 0.2, 1),
       box-shadow 0.28s cubic-bezier(0.4, 0, 0.2, 1);
@@ -487,9 +487,9 @@
     transform: translateY(-4px);
     box-shadow:
       0 16px 40px rgba(0, 0, 0, 0.45),
-      0 0 28px rgba(96, 165, 250, 0.08),
-      inset 0 1px 0 rgba(255, 255, 255, 0.12),
-      inset 0 -1px 0 rgba(255, 255, 255, 0.03);
+      0 0 28px var(--color-accent-100),
+      inset 0 1px 0 var(--color-overlay-white-12),
+      inset 0 -1px 0 var(--color-overlay-white-03);
   }
 
   :root[data-theme='light'] &,
@@ -520,7 +520,7 @@
       padding: 0 12px 0 14px;
       border-radius: 999px;
       background: color-mix(in srgb, var(--color-text-muted) 8%, transparent);
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--color-overlay-white-08);
     }
 
     .bitfun-input {
@@ -585,7 +585,7 @@
         rgba(120, 100, 255, 0.9)
       );
       border: 1px solid rgba(140, 160, 255, 0.6);
-      color: #fff;
+      color: var(--color-static-white);
       box-shadow:
         0 2px 8px rgba(100, 140, 255, 0.4),
         0 0 12px rgba(120, 100, 255, 0.25);
@@ -944,8 +944,8 @@
 
   .m-editor-raw-html-inline {
     color: var(--color-text-secondary);
-    background: color-mix(in srgb, var(--color-warning, #f59e0b) 8%, transparent);
-    border: 1px solid color-mix(in srgb, var(--color-warning, #f59e0b) 28%, transparent);
+    background: color-mix(in srgb, var(--color-warning) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-warning) 28%, transparent);
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -960,7 +960,7 @@
     font-weight: $font-weight-semibold;
     letter-spacing: 0.02em;
     text-transform: uppercase;
-    color: var(--color-warning, #f59e0b);
+    color: var(--color-warning);
   }
 
   .m-editor-raw-html-inline__source {

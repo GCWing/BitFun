@@ -138,10 +138,10 @@
     font-size: 10px;
     font-weight: 600;
 
-    &.wcv-status--modified { color: var(--color-warning, #eab308); }
-    &.wcv-status--added { color: var(--color-success, #22c55e); }
-    &.wcv-status--deleted { color: var(--color-danger, #ef4444); }
-    &.wcv-status--renamed { color: var(--color-info, #3b82f6); }
+    &.wcv-status--modified { color: var(--color-warning); }
+    &.wcv-status--added { color: var(--color-success); }
+    &.wcv-status--deleted { color: var(--color-danger); }
+    &.wcv-status--renamed { color: var(--color-info); }
   }
 
   &__empty {

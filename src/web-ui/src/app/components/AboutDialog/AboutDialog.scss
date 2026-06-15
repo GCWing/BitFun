@@ -95,7 +95,7 @@
   svg {
     flex-shrink: 0;
     margin-top: 2px;
-    color: var(--color-success, #22c55e);
+    color: var(--color-success);
   }
 
   &--success {
@@ -556,21 +556,21 @@
   // Frontend tag - blue
   &--frontend {
     background: var(--color-accent-100);
-    color: var(--color-accent-500, #60a5fa);
-    border: 1px solid var(--color-accent-200, rgba(59, 130, 246, 0.2));
+    color: var(--color-accent-500);
+    border: 1px solid var(--color-accent-200);
   }
 
   // Backend tag - green
   &--backend {
-    background: var(--color-success-bg, rgba(52, 211, 153, 0.12));
-    color: var(--color-success, #34d399);
-    border: 1px solid var(--color-success-border, rgba(52, 211, 153, 0.2));
+    background: var(--color-success-bg);
+    color: var(--color-success);
+    border: 1px solid var(--color-success-border);
   }
 
   // General tag - purple
   &--general {
     background: var(--color-purple-100);
-    color: var(--color-purple-500, #8b5cf6);
+    color: var(--color-purple-500);
     border: 1px solid var(--color-purple-200, rgba(139, 92, 246, 0.2));
   }
 }

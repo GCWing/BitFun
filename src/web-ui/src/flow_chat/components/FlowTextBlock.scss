@@ -29,7 +29,7 @@
   .markdown-renderer .file-link,
   .markdown-renderer .visualization-link,
   .markdown-renderer .tab-link {
-    color: var(--flowchat-link-color, #60a5fa);
+    color: var(--flowchat-link-color);
     text-decoration: underline;
     text-decoration-thickness: 1px;
     text-underline-offset: 2px;
@@ -155,7 +155,7 @@
 :root[data-theme-type='light'] .flow-text-block .markdown-renderer .code-block-wrapper .copy-button:hover,
 [data-theme-type='light'] .flow-text-block .markdown-renderer .code-block-wrapper .copy-button:hover,
 .light .flow-text-block .markdown-renderer .code-block-wrapper .copy-button:hover {
-  color: rgba(0, 0, 0, 0.5);
+  color: var(--color-overlay-black-50);
 }
 
 :root[data-theme='light'] .flow-text-block .markdown-renderer .code-block-wrapper .copy-button.copy-success:hover,

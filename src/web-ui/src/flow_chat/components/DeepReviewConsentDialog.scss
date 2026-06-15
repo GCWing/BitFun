@@ -9,7 +9,7 @@
 .deep-review-consent {
   --deep-review-accent: #2563eb;
   --deep-review-accent-strong: #1d4ed8;
-  --deep-review-warm: #f59e0b;
+  --deep-review-warm: var(--color-warning);
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -22,7 +22,7 @@
 
 :root[data-theme='dark'] .deep-review-consent,
 :root[data-theme-type='dark'] .deep-review-consent {
-  --deep-review-accent: #3b82f6;
+  --deep-review-accent: var(--color-accent-600);
   --deep-review-accent-strong: #2563eb;
   --deep-review-warm: #fbbf24;
 }

@@ -79,38 +79,38 @@
   }
 
   &__goal-btn--none.icon-btn {
-    color: var(--color-text-muted, #888);
+    color: var(--color-text-muted);
     opacity: 0.72;
 
     &:hover:not(:disabled) {
       transform: none;
       border-radius: 50%;
-      background: color-mix(in srgb, var(--color-text-muted, #888) 12%, var(--element-bg-medium));
-      color: var(--color-text-secondary, #a3a3a3);
+      background: color-mix(in srgb, var(--color-text-muted) 12%, var(--element-bg-medium));
+      color: var(--color-text-secondary);
       opacity: 1;
     }
   }
 
   &__goal-btn--active.icon-btn {
-    color: var(--color-warning-500, #eab308);
+    color: var(--color-warning-500);
 
     &:hover:not(:disabled) {
       transform: none;
       border-radius: 50%;
-      background: color-mix(in srgb, var(--color-warning-500, #eab308) 12%, var(--element-bg-medium));
-      color: var(--color-warning-500, #eab308);
+      background: color-mix(in srgb, var(--color-warning-500) 12%, var(--element-bg-medium));
+      color: var(--color-warning-500);
       opacity: 1;
     }
   }
 
   &__goal-btn--complete.icon-btn {
-    color: var(--color-success-500, #22c55e);
+    color: var(--color-success-500);
 
     &:hover:not(:disabled) {
       transform: none;
       border-radius: 50%;
-      background: color-mix(in srgb, var(--color-success-500, #22c55e) 12%, var(--element-bg-medium));
-      color: var(--color-success-500, #22c55e);
+      background: color-mix(in srgb, var(--color-success-500) 12%, var(--element-bg-medium));
+      color: var(--color-success-500);
       opacity: 1;
     }
   }

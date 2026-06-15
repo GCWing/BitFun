@@ -49,7 +49,7 @@
 :root[data-theme-type="light"] .rich-text-input,
 .light .rich-text-input {
   &:empty::before {
-    color: color-mix(in srgb, var(--color-text-secondary, #6b7280) 48%, transparent);
+    color: color-mix(in srgb, var(--color-text-secondary) 48%, transparent);
   }
 }
 
@@ -235,7 +235,7 @@
   transition: all 0.2s ease;
   
   &:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: var(--color-overlay-white-20);
     opacity: 1;
   }
   

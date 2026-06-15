@@ -110,10 +110,10 @@
     width: 4px;
     height: 4px;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--color-success, #22c55e) 92%, white 8%);
+    background: color-mix(in srgb, var(--color-success) 92%, white 8%);
     box-shadow:
       0 0 0 1px var(--color-bg-elevated),
-      0 0 0 0 color-mix(in srgb, var(--color-success, #22c55e) 42%, transparent);
+      0 0 0 0 color-mix(in srgb, var(--color-success) 42%, transparent);
     animation: flowchat-header-background-activity-pulse 1.45s ease-out infinite;
   }
 
@@ -124,7 +124,7 @@
       opacity: 0.9;
       box-shadow:
         0 0 0 1px var(--color-bg-elevated),
-        0 0 0 0 color-mix(in srgb, var(--color-success, #22c55e) 40%, transparent);
+        0 0 0 0 color-mix(in srgb, var(--color-success) 40%, transparent);
     }
 
     50% {
@@ -132,7 +132,7 @@
       opacity: 1;
       box-shadow:
         0 0 0 1px var(--color-bg-elevated),
-        0 0 0 5px color-mix(in srgb, var(--color-success, #22c55e) 0%, transparent);
+        0 0 0 5px color-mix(in srgb, var(--color-success) 0%, transparent);
     }
   }
 
@@ -191,7 +191,7 @@
     gap: 0;
     padding-left: 2px;
     margin-left: 2px;
-    border-left: 1px solid var(--color-border-subtle, rgba(128, 128, 128, 0.2));
+    border-left: 1px solid var(--color-border-subtle);
   }
 
   &__search-count {
@@ -231,7 +231,7 @@
 
     &:hover:not(:disabled) {
       opacity: 1;
-      background: var(--element-bg-soft, rgba(128, 128, 128, 0.1));
+      background: var(--element-bg-soft);
     }
 
     &:disabled {
@@ -537,11 +537,11 @@
     }
 
     &--danger:hover:not(:disabled) {
-      color: var(--color-danger, #ef4444);
-      background: color-mix(in srgb, var(--color-danger, #ef4444) 12%, transparent);
+      color: var(--color-danger);
+      background: color-mix(in srgb, var(--color-danger) 12%, transparent);
 
       svg {
-        color: var(--color-danger, #ef4444);
+        color: var(--color-danger);
       }
     }
   }
