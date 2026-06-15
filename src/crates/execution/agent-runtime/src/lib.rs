@@ -17,6 +17,7 @@ pub mod prompt_cache;
 pub mod runtime;
 pub mod scheduled_job;
 pub mod scheduler;
+pub mod sdk;
 pub mod session_control;
 pub mod skill_agent_snapshot;
 pub mod thread_goal;

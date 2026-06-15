@@ -11,8 +11,11 @@ use bitfun_harness::{
     HarnessRegistry, HarnessRegistryBuildError, HarnessWorkflow,
 };
 use bitfun_runtime_ports::RuntimeServiceCapability;
+use bitfun_runtime_services::RuntimeServices;
 pub use bitfun_tool_packs::ToolProviderGroupPlanSelectionError as ProductCapabilityBuildError;
-use bitfun_tool_packs::{try_product_tool_provider_group_plan_for_ids, ToolProviderGroupPlan};
+use bitfun_tool_packs::{
+    try_product_tool_provider_group_plan_for_ids, ToolPackFeatureGroup, ToolProviderGroupPlan,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum ProductCapabilityId {
@@ -36,6 +39,55 @@ impl ProductCapabilityId {
 impl fmt::Display for ProductCapabilityId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.id())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[non_exhaustive]
+pub enum ProductFeatureGroup {
+    Basic,
+    Git,
+    Mcp,
+    BrowserWeb,
+    ComputerUse,
+    ImageAnalysis,
+    MiniApp,
+    AgentControl,
+}
+
+impl ProductFeatureGroup {
+    pub const fn id(self) -> &'static str {
+        match self {
+            Self::Basic => "basic",
+            Self::Git => "git",
+            Self::Mcp => "mcp",
+            Self::BrowserWeb => "browser-web",
+            Self::ComputerUse => "computer-use",
+            Self::ImageAnalysis => "image-analysis",
+            Self::MiniApp => "miniapp",
+            Self::AgentControl => "agent-control",
+        }
+    }
+}
+
+impl fmt::Display for ProductFeatureGroup {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.id())
+    }
+}
+
+impl From<ToolPackFeatureGroup> for ProductFeatureGroup {
+    fn from(value: ToolPackFeatureGroup) -> Self {
+        match value {
+            ToolPackFeatureGroup::Basic => Self::Basic,
+            ToolPackFeatureGroup::Git => Self::Git,
+            ToolPackFeatureGroup::Mcp => Self::Mcp,
+            ToolPackFeatureGroup::BrowserWeb => Self::BrowserWeb,
+            ToolPackFeatureGroup::ComputerUse => Self::ComputerUse,
+            ToolPackFeatureGroup::ImageAnalysis => Self::ImageAnalysis,
+            ToolPackFeatureGroup::MiniApp => Self::MiniApp,
+            ToolPackFeatureGroup::AgentControl => Self::AgentControl,
+        }
     }
 }
 
@@ -210,6 +262,7 @@ impl ProductServiceCapabilityRequirement {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProductCapabilityAssembly {
     capability_ids: Vec<ProductCapabilityId>,
+    feature_groups: Vec<ProductFeatureGroup>,
     service_requirements: Vec<ProductServiceCapabilityRequirement>,
     tool_provider_group_plan: Vec<ToolProviderGroupPlan>,
     harness_provider_descriptors: Vec<HarnessProviderDescriptor>,
@@ -247,6 +300,14 @@ impl ProductAssemblyPlan {
         &self.capability_assembly
     }
 
+    pub fn feature_groups(&self) -> &[ProductFeatureGroup] {
+        self.capability_assembly.feature_groups()
+    }
+
+    pub fn feature_group_ids(&self) -> Vec<&'static str> {
+        self.capability_assembly.feature_group_ids()
+    }
+
     pub fn service_availability_report<F>(
         &self,
         mut is_available: F,
@@ -274,15 +335,55 @@ impl ProductAssemblyPlan {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct ProductRuntimeAssembly {
+    plan: ProductAssemblyPlan,
+}
+
+impl ProductRuntimeAssembly {
+    pub fn for_profile(profile: DeliveryProfile) -> Self {
+        Self {
+            plan: product_assembly_plan_for_profile(profile),
+        }
+    }
+
+    pub fn product_full() -> Self {
+        Self::for_profile(DeliveryProfile::ProductFull)
+    }
+
+    pub fn plan(&self) -> &ProductAssemblyPlan {
+        &self.plan
+    }
+
+    pub fn service_availability_report(
+        &self,
+        services: &RuntimeServices,
+    ) -> Vec<ProductServiceCapabilityAvailability> {
+        self.plan
+            .service_availability_report(|capability| services.has_capability(capability))
+    }
+
+    pub fn missing_service_requirements(
+        &self,
+        services: &RuntimeServices,
+    ) -> Vec<ProductServiceCapabilityRequirement> {
+        self.plan
+            .capability_assembly()
+            .missing_service_requirements(|capability| services.has_capability(capability))
+    }
+}
+
 impl ProductCapabilityAssembly {
     fn new(
         capability_ids: Vec<ProductCapabilityId>,
+        feature_groups: Vec<ProductFeatureGroup>,
         service_requirements: Vec<ProductServiceCapabilityRequirement>,
         tool_provider_group_plan: Vec<ToolProviderGroupPlan>,
         harness_provider_descriptors: Vec<HarnessProviderDescriptor>,
     ) -> Self {
         Self {
             capability_ids,
+            feature_groups,
             service_requirements,
             tool_provider_group_plan,
             harness_provider_descriptors,
@@ -291,6 +392,17 @@ impl ProductCapabilityAssembly {
 
     pub fn capability_ids(&self) -> &[ProductCapabilityId] {
         &self.capability_ids
+    }
+
+    pub fn feature_groups(&self) -> &[ProductFeatureGroup] {
+        &self.feature_groups
+    }
+
+    pub fn feature_group_ids(&self) -> Vec<&'static str> {
+        self.feature_groups
+            .iter()
+            .map(|feature_group| feature_group.id())
+            .collect()
     }
 
     pub fn service_requirements(&self) -> &[ProductServiceCapabilityRequirement] {
@@ -406,6 +518,20 @@ impl ProductCapabilityRegistry {
             .expect("product capability packs must reference known tool provider groups")
     }
 
+    pub fn try_feature_groups(
+        self,
+    ) -> Result<Vec<ProductFeatureGroup>, ProductCapabilityBuildError> {
+        let tool_provider_group_plan = self.try_tool_provider_group_plan()?;
+        Ok(feature_groups_from_tool_provider_group_plan(
+            &tool_provider_group_plan,
+        ))
+    }
+
+    pub fn feature_groups(self) -> Vec<ProductFeatureGroup> {
+        self.try_feature_groups()
+            .expect("product capability packs must reference known tool provider groups")
+    }
+
     pub fn harness_provider_descriptors(self) -> Vec<HarnessProviderDescriptor> {
         let mut seen = HashSet::new();
         let mut descriptors = Vec::new();
@@ -426,10 +552,14 @@ impl ProductCapabilityRegistry {
     pub fn try_build_assembly(
         self,
     ) -> Result<ProductCapabilityAssembly, ProductCapabilityBuildError> {
+        let tool_provider_group_plan = self.try_tool_provider_group_plan()?;
+        let feature_groups =
+            feature_groups_from_tool_provider_group_plan(&tool_provider_group_plan);
         Ok(ProductCapabilityAssembly::new(
             self.capability_ids(),
+            feature_groups,
             self.service_requirements(),
-            self.try_tool_provider_group_plan()?,
+            tool_provider_group_plan,
             self.harness_provider_descriptors(),
         ))
     }
@@ -448,6 +578,22 @@ impl ProductCapabilityRegistry {
         let capability_assembly = self.build_assembly();
         ProductAssemblyPlan::new(profile, capability_set, capability_assembly)
     }
+}
+
+fn feature_groups_from_tool_provider_group_plan(
+    tool_provider_group_plan: &[ToolProviderGroupPlan],
+) -> Vec<ProductFeatureGroup> {
+    let mut seen = HashSet::new();
+    let mut feature_groups = Vec::new();
+    for group_plan in tool_provider_group_plan {
+        for feature_group in group_plan.feature_groups() {
+            let product_feature_group = ProductFeatureGroup::from(*feature_group);
+            if seen.insert(product_feature_group) {
+                feature_groups.push(product_feature_group);
+            }
+        }
+    }
+    feature_groups
 }
 
 const CODE_AGENT_SERVICES: &[RuntimeServiceCapability] = &[

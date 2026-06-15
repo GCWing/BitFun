@@ -1,5 +1,5 @@
 use bitfun_core::product_assembly;
-use bitfun_core::product_runtime::CoreRuntimeServicesProvider;
+use bitfun_core::product_runtime::{CoreProductRuntimeAssembly, CoreRuntimeServicesProvider};
 use bitfun_product_capabilities::{
     product_assembly_plan_for_profile, DeliveryProfile, ProductServiceCapabilityStatus,
 };
@@ -62,5 +62,22 @@ fn core_provider_closes_current_product_full_service_capability_requirements() {
     assert!(
         unavailable.is_empty(),
         "product-full service requirements must be explicitly satisfied: {unavailable:?}"
+    );
+}
+
+#[test]
+fn core_product_runtime_assembly_validates_services_from_product_plan() {
+    let registry = RuntimeServicesRegistry::new()
+        .with_provider(FakeRuntimeServicesProvider::with_all_required())
+        .with_provider(CoreRuntimeServicesProvider::new());
+    let services = registry
+        .build(RuntimeServicesBuilder::new())
+        .expect("core product assembly provider should build with required services");
+    let assembly = CoreProductRuntimeAssembly::for_profile(DeliveryProfile::ProductFull);
+
+    assert_eq!(assembly.plan().profile(), DeliveryProfile::ProductFull);
+    assert!(
+        assembly.missing_service_requirements(&services).is_empty(),
+        "core product runtime assembly must satisfy the selected product plan"
     );
 }

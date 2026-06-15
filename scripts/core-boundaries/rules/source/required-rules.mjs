@@ -19,6 +19,10 @@ export const requiredContentRules = [
         message: 'missing capability availability contract',
       },
       {
+        regex: /\bpub struct RuntimeServiceMarkerPort\b/,
+        message: 'missing runtime service marker port owner',
+      },
+      {
         regex: /\bpub trait RuntimeServicesProvider\b/,
         message: 'missing runtime services provider contract',
       },
@@ -98,6 +102,10 @@ export const requiredContentRules = [
       {
         regex: /\bregistered_remote_ports_expose_owner_contract_methods\b/,
         message: 'missing remote port owner contract regression',
+      },
+      {
+        regex: /\bmarker_ports_register_optional_service_availability_without_core_dependency\b/,
+        message: 'missing marker-port capability availability regression',
       },
     ],
   },
@@ -675,6 +683,37 @@ export const requiredContentRules = [
       {
         regex: /\bProductCapabilityAssembly\b/,
         message: 'missing product capability assembly owner',
+      },
+      {
+        regex: /\bProductFeatureGroup\b/,
+        message: 'missing product feature group fact owner',
+      },
+      {
+        regex: /\bProductRuntimeAssembly\b/,
+        message: 'missing product runtime assembly owner',
+      },
+      {
+        regex: /\bfeature_groups_from_tool_provider_group_plan\b/,
+        message: 'missing tool-provider feature group projection owner',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/product-capabilities/tests/product_capabilities.rs',
+    reason:
+      'product-capabilities tests must protect product shape facts, runtime service gap reporting, and legacy harness routing',
+    patterns: [
+      {
+        regex: /\bproduct_assembly_plan_exposes_build_feature_groups_explicitly\b/,
+        message: 'missing product feature group shape regression',
+      },
+      {
+        regex: /\bproduct_runtime_assembly_reports_runtime_service_capability_gaps\b/,
+        message: 'missing product runtime service gap regression',
+      },
+      {
+        regex: /\bproduct_harness_provider_plans_legacy_facade_without_execution\b/,
+        message: 'missing legacy harness route non-execution regression',
       },
     ],
   },
@@ -2400,15 +2439,23 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/core/src/agentic/tools/restrictions.rs',
     reason:
-      'core tool restrictions facade must preserve per-tool denial messages while runtime restrictions live in agent-tools',
+      'core tool restrictions facade must delegate runtime restriction policy to agent-tools while preserving core error and local-path adapters',
     patterns: [
       {
-        regex: /\bdenied_tool_messages\b/,
-        message: 'missing per-tool denial message field propagation',
+        regex: /\btool_restrictions_for_delegation_policy\b/,
+        message: 'missing agent-tools runtime restriction policy re-export',
       },
       {
-        regex: /\bcustom_deny_message_overrides_generic_runtime_error\b/,
-        message: 'missing custom deny message regression',
+        regex: /\bminiapp_headless_agent_tool_restrictions\b/,
+        message: 'missing agent-tools MiniApp headless restriction re-export',
+      },
+      {
+        regex: /\bimpl From<ToolRestrictionError> for BitFunError\b/,
+        message: 'missing core error mapping adapter',
+      },
+      {
+        regex: /\bis_local_path_within_root\b/,
+        message: 'missing local filesystem path containment adapter',
       },
     ],
   },
@@ -5087,7 +5134,7 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/core/src/agentic/tools/product_runtime/materialization.rs',
     reason:
-      'product runtime materialization must keep only concrete tool construction and product plan adapter while delegating generic registry assembly to agent-tools',
+      'product runtime materialization must keep only concrete tool construction while delegating generic provider-entry registry assembly to agent-tools',
     patterns: [
       {
         regex: /\bProductConcreteToolFactory\b/,
@@ -5098,16 +5145,8 @@ export const requiredContentRules = [
         message: 'missing concrete tool factory implementation',
       },
       {
-        regex: /\bProductToolProviderPlanAdapter\b/,
-        message: 'missing product provider plan adapter',
-      },
-      {
-        regex: /\bimpl StaticToolProviderPlan for ProductToolProviderPlanAdapter\b/,
-        message: 'missing product provider plan adapter contract',
-      },
-      {
-        regex: /\bcreate_registry_from_static_provider_plans\b/,
-        message: 'missing generic agent-tools plan-to-registry delegation',
+        regex: /\bcreate_registry_from_static_provider_entries\b/,
+        message: 'missing generic agent-tools provider-entry registry delegation',
       },
       {
         regex: /\bcreate_product_tool_registry_from_plan\b/,
@@ -5301,8 +5340,24 @@ export const requiredContentRules = [
         message: 'missing generic static-provider plan-to-registry helper',
       },
       {
+        regex: /\bcreate_registry_from_static_provider_entries\b/,
+        message: 'missing generic static-provider entry-to-registry helper',
+      },
+      {
         regex: /\bpub fn install_static_provider\b/,
         message: 'missing static provider registry installer',
+      },
+      {
+        regex: /\bpub fn miniapp_headless_agent_tool_restrictions\b/,
+        message: 'missing MiniApp headless runtime restriction policy owner',
+      },
+      {
+        regex: /\bpub fn tool_restrictions_for_delegation_policy\b/,
+        message: 'missing delegation-policy runtime restriction owner',
+      },
+      {
+        regex: /\bdenied_tool_messages\b/,
+        message: 'missing per-tool denial message propagation owner',
       },
       {
         regex: /\bpub fn build_get_tool_spec_duplicate_load_result\b/,

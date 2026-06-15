@@ -5,7 +5,7 @@
 //! session restore, terminal pre-warm, remote image conversion, and runtime-port
 //! implementations until a reviewed port/provider migration proves equivalence.
 
-use bitfun_agent_runtime::runtime::{AgentRuntime, AgentRuntimeBuilder, RuntimeError};
+use bitfun_agent_runtime::sdk::{AgentRuntime, AgentRuntimeBuilder, RuntimeError};
 use bitfun_runtime_ports::{
     AgentDialogTurnPort, AgentDialogTurnRequest, AgentInputAttachment, AgentLifecycleDeliveryPort,
     AgentSessionCreateRequest, AgentSessionManagementPort, AgentSubmissionPort,

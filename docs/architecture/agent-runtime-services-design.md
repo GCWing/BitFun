@@ -30,7 +30,7 @@ Agent Runtime SDK 的发布边界以调用方能力为准，而不是以物理 c
 
 因此，SDK readiness 的最低标准是：
 
-- 公共 façade 只暴露 builder、runner、request/response DTO、event stream、typed error 和 registry API。
+- 公共 facade 只暴露 builder、runner、request/response DTO、event stream、typed error 和 registry API。
 - 所有 DTO 可序列化，所有 runtime handle 通过 typed port 注入，不进入 wire contract。
 - `bitfun-agent-runtime`、Tool primitives、Runtime Services 和 Harness 能通过 fake provider 独立测试。
 - SDK minimal feature 不牵引 Desktop、Tauri、Git provider、MCP client、AI HTTP client、remote SSH 或产品 UI。
@@ -276,7 +276,7 @@ Remote ports 的边界：
 - runtime events。
 - post-turn processor。
 
-公共 façade：
+公共 facade：
 
 ```rust
 pub struct AgentRuntimeBuilder {
@@ -309,7 +309,7 @@ impl AgentRuntime {
 }
 ```
 
-该 façade 是目标 API 形态。它必须只接收已组装的 typed parts，不负责创建
+该 facade 是目标 API 形态。它必须只接收已组装的 typed parts，不负责创建
 filesystem、terminal、MCP、AI client、Remote provider 或产品命令。
 
 旧路径兼容约束：
@@ -966,7 +966,7 @@ Product 测试：
 ### 5.4 目标态判定口径
 
 - `bitfun-agent-runtime` 能在不依赖 `bitfun-core` 的情况下构建 runtime kernel。
-- Agent Runtime SDK façade 能通过 fake model provider、fake runtime services、fake tool provider 和 fake
+- Agent Runtime SDK facade 能通过 fake model provider、fake runtime services、fake tool provider 和 fake
   harness provider 完成最小 session / turn / event stream 流程。
 - `bitfun-runtime-services` 提供 typed service injection，并由 boundary check 保护。
 - `tool-contracts`、`tool-provider-groups` 和 `tool-execution` 分别承担 tool contract、provider group plan 和低层 execution helper；具体 tool 通过 Product Assembly 注册。

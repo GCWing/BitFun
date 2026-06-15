@@ -3,13 +3,15 @@
 Scope: this guide applies to `src/crates/execution/agent-runtime`.
 
 `bitfun-agent-runtime` owns portable agent runtime decisions and the narrow
-port-backed `AgentRuntime` facade that can be built and tested without
+port-backed `sdk` / `AgentRuntime` facade that can be built and tested without
 `bitfun-core`.
 
 ## Guardrails
 
 - Do not depend on `bitfun-core`, app crates, Tauri, ACP protocol, web UI,
   concrete service crates, or product-domain implementations.
+- The `sdk` module may re-export only stable runtime request/response types and
+  runtime-port contracts.
 - `AgentRuntime` may depend on stable ports and typed `RuntimeServices`
   injected by assembly. Product assembly owns concrete registration; this crate
   must not create concrete managers, app state, filesystem, terminal, MCP,

@@ -6,8 +6,8 @@ use bitfun_runtime_ports::{
 };
 use bitfun_runtime_services::test_support::{FakeRuntimePort, FakeRuntimeServicesProvider};
 use bitfun_runtime_services::{
-    CapabilityAvailability, RuntimeServicesBuilder, RuntimeServicesError, RuntimeServicesProvider,
-    RuntimeServicesRegistry,
+    CapabilityAvailability, RuntimeServiceMarkerPort, RuntimeServicesBuilder, RuntimeServicesError,
+    RuntimeServicesProvider, RuntimeServicesRegistry,
 };
 
 #[test]
@@ -78,6 +78,30 @@ fn capability_availability_reports_optional_service_status_without_side_effects(
         CapabilityAvailability {
             capability: RuntimeServiceCapability::RemoteWorkspace,
             available: false,
+        }
+    );
+}
+
+#[test]
+fn marker_ports_register_optional_service_availability_without_core_dependency() {
+    let services = FakeRuntimeServicesProvider::with_all_required()
+        .register(RuntimeServicesBuilder::new())
+        .with_optional_terminal(Some(RuntimeServiceMarkerPort::terminal_port()))
+        .with_optional_network(Some(RuntimeServiceMarkerPort::network_port()))
+        .with_optional_git(Some(RuntimeServiceMarkerPort::git_port()))
+        .with_optional_mcp_catalog(Some(RuntimeServiceMarkerPort::mcp_catalog_port()))
+        .build()
+        .expect("marker ports should satisfy matching optional capabilities");
+
+    assert!(services.has_capability(RuntimeServiceCapability::Terminal));
+    assert!(services.has_capability(RuntimeServiceCapability::Network));
+    assert!(services.has_capability(RuntimeServiceCapability::Git));
+    assert!(services.has_capability(RuntimeServiceCapability::McpCatalog));
+    assert_eq!(
+        services.capability_availability(RuntimeServiceCapability::McpCatalog),
+        CapabilityAvailability {
+            capability: RuntimeServiceCapability::McpCatalog,
+            available: true,
         }
     );
 }

@@ -14,7 +14,7 @@ use crate::service::{
 use crate::service_agent_runtime::CoreServiceAgentRuntime;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
-use bitfun_agent_runtime::runtime::AgentRuntime;
+use bitfun_agent_runtime::sdk::AgentRuntime;
 use bitfun_runtime_ports::{AgentSessionListRequest, AgentSessionWorkspaceRequest};
 use chrono::{DateTime, Local, SecondsFormat, TimeZone};
 use serde::{Deserialize, Serialize};

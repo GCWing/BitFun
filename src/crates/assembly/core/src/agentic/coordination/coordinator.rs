@@ -42,6 +42,7 @@ use crate::agentic::skill_agent_snapshot::{
 use crate::agentic::tools::pipeline::{SubagentParentInfo, ToolPipeline};
 use crate::agentic::tools::{
     is_miniapp_headless_agent_run, miniapp_headless_agent_tool_restrictions,
+    tool_restrictions_for_delegation_policy as runtime_tool_restrictions_for_delegation_policy,
     ToolRuntimeRestrictions,
 };
 use crate::agentic::workspace::WorkspaceServices;
@@ -222,20 +223,6 @@ fn build_subagent_session_relationship(
 
 fn fork_subagent_system_reminder() -> String {
     "<system_reminder>You are now running as a forked subagent. Messages before this reminder were inherited from the parent agent as context. Messages after this reminder are the request for you. Do not call the Task tool to launch another subagent. Use the tools available to complete the task directly.</system_reminder>".to_string()
-}
-
-fn runtime_tool_restrictions_for_delegation_policy(
-    delegation_policy: DelegationPolicy,
-) -> ToolRuntimeRestrictions {
-    let mut restrictions = ToolRuntimeRestrictions::default();
-    if !delegation_policy.allow_subagent_spawn {
-        restrictions.denied_tool_names.insert("Task".to_string());
-        restrictions.denied_tool_messages.insert(
-            "Task".to_string(),
-            "Recursive subagent delegation is blocked. Use direct tools instead.".to_string(),
-        );
-    }
-    restrictions
 }
 
 struct HiddenSubagentExecutionRequest {

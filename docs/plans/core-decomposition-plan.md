@@ -18,15 +18,15 @@
 
 - workspace 已按六层目录展开，旧 `surfaces` / `providers` 目标层级不再使用。
 - `bitfun-core --no-default-features` 已裁掉 workspace-search owner、debug ingest HTTP server、AI provider adapter runtime 和 direct `reqwest`。
-- Desktop / CLI / ACP 仍通过 `bitfun-core/product-full` 获取完整能力；Server / Web / Mobile Web 不直接依赖 core，但交付形态级 feature / dependency trimming 仍未闭环。
-- Runtime Services、Agent Runtime、Tool Contracts、Tool Execution、Harness、Product Domains、Services Core、Services Integrations 等 owner crate 已建立，部分逻辑仍由 core concrete manager 或产品命令路径持有。
+- Desktop / CLI / ACP 仍通过 `bitfun-core/product-full` 获取完整能力；Server / Web / Mobile Web 不直接依赖 core。当前已显式化 Product Assembly feature group matrix，具体交付形态减少能力仍需要产品级入口验证后单独决策。
+- Runtime Services、Agent Runtime、Tool Contracts、Tool Execution、Harness、Product Domains、Services Core、Services Integrations 等 owner crate 已建立，部分 concrete 生命周期仍由 core concrete manager 或产品命令路径持有。
 - PR-B 已收口 Agent lifecycle 与 tool side-effect owner：turn skill/agent snapshot DTO / diff / render / store、file-read session state、session evidence ledger 与 compression-contract projection、dialog-turn cancellation token store、tool confirmation / user-question wait channel state 已迁入 `agent-runtime`；background exec output capture、tool cancellation token store 已迁入 `tool-execution`；core 保留 resolver、产品事件、具体工具执行、IO 编排和旧路径兼容 re-export。
 - PR-C 已收口 Harness / product workflow 的低风险 owner：MiniApp AI / Agent permission、rate-limit、model/message/session/workspace/turn-text 规则迁入 `product-domains`；DeepResearch 后处理 gate 迁入 `agent-runtime`，report IO 继续由 `services-integrations` 持有；function-agent AI concrete acquisition 收拢为 core port adapter，旧 `runtime_services` 路径删除。
 
 ## 3. 已完成但仍需保持的边界
 
 - `services-core` 已承接 session metadata store、session index rebuild、lineage / branch metadata shaping、JSON file store、session layout 和 legacy session-store merge。
-- `runtime-services` 已承接 typed runtime service assembly、capability validation、provider registry、backend event delivery owner。
+- `runtime-services` 已承接 typed runtime service assembly、capability validation、provider registry、backend event delivery owner 和无副作用 capability marker ports。
 - `agent-runtime` 已承接 provider-neutral scheduler decisions、dialog lifecycle port contracts、background delivery decisions、thread-goal facts、prompt-cache facts、turn skill/agent snapshot state、file-read session state、session evidence ledger、dialog-turn cancellation token store、tool confirmation / user-question wait channel state、DeepReview provider-neutral policy / queue / retry / diagnostics shaping。
 - `tool-contracts` / `tool-execution` 已承接 tool manifest / catalog / admission、batching plan、retry policy、state counting、cancellation-state/token-store policy、background exec output capture、shell helper 和部分 local / remote IO helper。
 - `services-integrations` 已承接 remote-connect primitives、workspace search concrete owner、remote SSH/SFTP/PTY owner、MiniApp host dispatch / storage / worker IO、DeepResearch report IO。
@@ -37,7 +37,9 @@
 
 | PR | 目标 | 主要范围 | 准出标准 |
 |---|---|---|---|
-| PR-D | Product shape / Agent SDK / core facade closure | 内部 Agent Runtime SDK façade、fake provider 最小 session / turn / event stream、Product Assembly capability matrix、delivery profile feature trimming、`bitfun-core` facade 收口 | cargo metadata / cargo tree 有 no-default/product-full 对比；各产品入口验证通过；SDK 不暴露 `bitfun-core`、product-full、concrete manager 或全局 mutable state |
+| PR-D | Product shape / Agent SDK / core facade closure | 内部 Agent Runtime SDK facade、fake provider 最小 session / turn / event stream、Product Assembly capability / feature group matrix、profile-scoped harness route 保护、product runtime assembly owner 下沉到 `product-capabilities`、runtime service marker port owner 下沉到 `runtime-services`、tool runtime restriction policy 与 provider-entry materialization 下沉到 `tool-contracts` | cargo metadata / cargo tree 有 no-default/product-full 对比；各产品入口验证通过；SDK 不暴露 `bitfun-core`、product-full、concrete manager 或全局 mutable state |
+
+PR-D 合入后，本文档不再规划新的大块 core decomposition PR。后续若要继续把内部 SDK 发布为外部 SDK，或按 Desktop / CLI / ACP / Server / Web / Mobile Web 做真实能力裁剪，需要先补产品入口矩阵和兼容性验证，再作为新的产品形态专项处理。
 
 ## 5. 固定执行流程
 
@@ -69,4 +71,4 @@
 - Execution / contracts crate 吸收 Tauri、产品命令、AI provider、MCP client、process execution、Git provider 等 concrete dependency。
 - Product Assembly 变成无类型 service locator 或全局 mutable app state。
 - PR 只新增抽象，没有迁移、删除或显著简化旧 core 主体路径。
-- SDK façade 必须暴露 `bitfun-core`、`product-full`、concrete service manager 或产品命令 registry 才能完成基本 agent 执行。
+- SDK facade 必须暴露 `bitfun-core`、`product-full`、concrete service manager 或产品命令 registry 才能完成基本 agent 执行。

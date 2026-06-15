@@ -13,4 +13,4 @@ pub use bitfun_product_capabilities::{
     ProductServiceCapabilityRequirement, ProductServiceCapabilityStatus,
 };
 
-pub use crate::product_runtime::CoreRuntimeServicesProvider;
+pub use crate::product_runtime::{CoreProductRuntimeAssembly, CoreRuntimeServicesProvider};

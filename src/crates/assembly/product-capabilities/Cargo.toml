@@ -12,4 +12,8 @@ crate-type = ["rlib"]
 [dependencies]
 bitfun-harness = { path = "../../execution/harness" }
 bitfun-runtime-ports = { path = "../../contracts/runtime-ports" }
+bitfun-runtime-services = { path = "../../execution/runtime-services" }
 bitfun-tool-packs = { path = "../../execution/tool-provider-groups", default-features = false }
+
+[dev-dependencies]
+tokio = { workspace = true }

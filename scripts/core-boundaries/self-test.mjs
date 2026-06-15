@@ -986,6 +986,7 @@ export function runManifestParserSelfTest({
         'RuntimeServices',
         'RuntimeServicesBuilder',
         'CapabilityAvailability',
+        'RuntimeServiceMarkerPort',
         'RuntimeServicesProvider',
         'RuntimeServicesRegistry',
         'CapabilityMismatch',
@@ -1012,6 +1013,7 @@ export function runManifestParserSelfTest({
         'capability_availability_reports_optional_service_status_without_side_effects',
         'builder_rejects_port_registered_under_the_wrong_capability',
         'registered_remote_ports_expose_owner_contract_methods',
+        'marker_ports_register_optional_service_availability_without_core_dependency',
       ],
     },
     {
@@ -1519,6 +1521,25 @@ export function runManifestParserSelfTest({
       ],
     },
     {
+      path: 'src/crates/assembly/product-capabilities/src/lib.rs',
+      contracts: [
+        'HarnessProviderDescriptor',
+        'build_descriptor_harness_registry',
+        'ProductCapabilityAssembly',
+        'ProductFeatureGroup',
+        'ProductRuntimeAssembly',
+        'feature_groups_from_tool_provider_group_plan',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/product-capabilities/tests/product_capabilities.rs',
+      contracts: [
+        'product_assembly_plan_exposes_build_feature_groups_explicitly',
+        'product_runtime_assembly_reports_runtime_service_capability_gaps',
+        'product_harness_provider_plans_legacy_facade_without_execution',
+      ],
+    },
+    {
       path: 'src/crates/assembly/core/src/agentic/tools/pipeline/tool_pipeline.rs',
       contracts: [
         'resolve_tool_confirmation_plan',
@@ -1535,7 +1556,12 @@ export function runManifestParserSelfTest({
     },
     {
       path: 'src/crates/assembly/core/src/agentic/tools/restrictions.rs',
-      contracts: ['denied_tool_messages', 'custom_deny_message_overrides_generic_runtime_error'],
+      contracts: [
+        'tool_restrictions_for_delegation_policy',
+        'miniapp_headless_agent_tool_restrictions',
+        'impl From<ToolRestrictionError> for BitFunError',
+        'is_local_path_within_root',
+      ],
     },
     {
       path: 'src/crates/assembly/core/src/agentic/tools/tool_result_storage.rs',
@@ -2058,9 +2084,7 @@ export function runManifestParserSelfTest({
       contracts: [
         'ProductConcreteToolFactory',
         'StaticToolProviderFactory',
-        'ProductToolProviderPlanAdapter',
-        'StaticToolProviderPlan',
-        'create_registry_from_static_provider_plans',
+        'create_registry_from_static_provider_entries',
         'create_product_tool_registry_from_plan',
         'materialize_tool',
         'GetToolSpecTool',
@@ -2080,6 +2104,7 @@ export function runManifestParserSelfTest({
         'materialize_static_tool_provider_groups',
         'ToolRuntimeAssembly',
         'create_registry_from_static_provider_plans',
+        'create_registry_from_static_provider_entries',
         'ToolCatalogRuntime',
         'ToolDecoratorRef',
         'SnapshotToolWrapper',
@@ -2089,6 +2114,9 @@ export function runManifestParserSelfTest({
         'resolve_readonly_enabled_tools',
         'build_get_tool_spec_duplicate_load_result',
         'build_get_tool_spec_detail_result',
+        'miniapp_headless_agent_tool_restrictions',
+        'tool_restrictions_for_delegation_policy',
+        'denied_tool_messages',
         'resolve_get_tool_spec_execution_plan',
         'resolve_get_tool_spec_execution_result_from_provider',
         'GetToolSpecRuntime',

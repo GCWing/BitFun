@@ -1,12 +1,17 @@
-use bitfun_harness::{HarnessCapability, HarnessWorkflow};
+use bitfun_harness::{HarnessCapability, HarnessInput, HarnessStepKind, HarnessWorkflow};
 use bitfun_product_capabilities::{
     default_product_assembly_plan, default_product_capability_assembly,
     default_product_capability_registry, default_product_harness_registry,
-    product_assembly_plan_for_profile, DeliveryProfile, ProductCapabilityBuildError,
-    ProductCapabilityId, ProductCapabilityPack, ProductCapabilityRegistry,
+    product_assembly_plan_for_profile, product_harness_registry_for_profile, DeliveryProfile,
+    ProductCapabilityBuildError, ProductCapabilityId, ProductCapabilityPack,
+    ProductCapabilityRegistry, ProductFeatureGroup, ProductRuntimeAssembly,
     ProductServiceCapabilityRequirement, ProductServiceCapabilityStatus,
 };
 use bitfun_runtime_ports::RuntimeServiceCapability;
+use bitfun_runtime_services::test_support::FakeRuntimeServicesProvider;
+use bitfun_runtime_services::{
+    RuntimeServiceMarkerPort, RuntimeServicesBuilder, RuntimeServicesProvider,
+};
 
 #[test]
 fn default_capability_registry_preserves_product_tool_provider_order() {
@@ -43,6 +48,45 @@ fn default_capability_registry_preserves_legacy_harness_routes() {
             HarnessWorkflow::DeepResearch,
             HarnessWorkflow::MiniApp,
         ]
+    );
+}
+
+#[tokio::test]
+async fn product_harness_provider_plans_legacy_facade_without_execution() {
+    let registry = default_product_harness_registry().expect("harness registry should build");
+    let provider = registry
+        .provider_for_workflow(HarnessWorkflow::DeepResearch)
+        .expect("DeepResearch should be registered");
+
+    let plan = provider
+        .plan(
+            Default::default(),
+            HarnessInput::new(HarnessWorkflow::DeepResearch, "research current question"),
+        )
+        .await
+        .expect("DeepResearch harness should produce a legacy route plan");
+
+    assert_eq!(plan.steps().len(), 1);
+    assert_eq!(plan.steps()[0].kind(), HarnessStepKind::LegacyFacade);
+    assert_eq!(
+        plan.steps()[0].target(),
+        "bitfun-core::agentic::agents::definitions::modes::deep_research"
+    );
+
+    assert!(
+        provider.execute(Default::default(), plan).await.is_err(),
+        "product-capabilities must not claim concrete workflow execution ownership"
+    );
+}
+
+#[test]
+fn product_harness_registry_can_be_built_from_explicit_delivery_profile() {
+    let registry = product_harness_registry_for_profile(DeliveryProfile::Cli)
+        .expect("profile-scoped product harness registry should build");
+
+    assert_eq!(
+        registry.provider_ids(),
+        vec!["core.deep_review", "core.deep_research", "core.miniapp"]
     );
 }
 
@@ -143,6 +187,38 @@ fn product_assembly_plan_makes_delivery_profile_explicit_without_reducing_capabi
 }
 
 #[test]
+fn product_assembly_plan_exposes_build_feature_groups_explicitly() {
+    let plan = product_assembly_plan_for_profile(DeliveryProfile::ProductFull);
+
+    assert_eq!(
+        plan.feature_groups(),
+        &[
+            ProductFeatureGroup::Basic,
+            ProductFeatureGroup::AgentControl,
+            ProductFeatureGroup::BrowserWeb,
+            ProductFeatureGroup::Mcp,
+            ProductFeatureGroup::Git,
+            ProductFeatureGroup::MiniApp,
+            ProductFeatureGroup::ComputerUse,
+            ProductFeatureGroup::ImageAnalysis,
+        ]
+    );
+    assert_eq!(
+        plan.feature_group_ids(),
+        vec![
+            "basic",
+            "agent-control",
+            "browser-web",
+            "mcp",
+            "git",
+            "miniapp",
+            "computer-use",
+            "image-analysis",
+        ]
+    );
+}
+
+#[test]
 fn product_assembly_plan_reports_service_availability_by_capability() {
     let plan = default_product_assembly_plan();
 
@@ -172,6 +248,45 @@ fn product_assembly_plan_reports_service_availability_by_capability() {
             RuntimeServiceCapability::Network,
         )
     );
+}
+
+#[test]
+fn product_runtime_assembly_reports_runtime_service_capability_gaps() {
+    let assembly = ProductRuntimeAssembly::product_full();
+    let partial_services = FakeRuntimeServicesProvider::with_all_required()
+        .build_services()
+        .expect("required runtime services should build");
+
+    assert_eq!(
+        assembly.missing_service_requirements(&partial_services),
+        vec![
+            ProductServiceCapabilityRequirement::new(
+                ProductCapabilityId::CodeAgent,
+                RuntimeServiceCapability::Terminal,
+            ),
+            ProductServiceCapabilityRequirement::new(
+                ProductCapabilityId::DeepReview,
+                RuntimeServiceCapability::Git,
+            ),
+            ProductServiceCapabilityRequirement::new(
+                ProductCapabilityId::DeepResearch,
+                RuntimeServiceCapability::Network,
+            ),
+        ]
+    );
+
+    let complete_services = FakeRuntimeServicesProvider::with_all_required()
+        .register(RuntimeServicesBuilder::new())
+        .with_optional_terminal(Some(RuntimeServiceMarkerPort::terminal_port()))
+        .with_optional_git(Some(RuntimeServiceMarkerPort::git_port()))
+        .with_optional_network(Some(RuntimeServiceMarkerPort::network_port()))
+        .build()
+        .expect("runtime service marker ports should satisfy product requirements");
+
+    assert!(assembly
+        .missing_service_requirements(&complete_services)
+        .is_empty());
+    assert_eq!(assembly.plan().profile(), DeliveryProfile::ProductFull);
 }
 
 #[test]
