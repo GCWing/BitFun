@@ -2,10 +2,11 @@ use bitfun_harness::{HarnessCapability, HarnessInput, HarnessStepKind, HarnessWo
 use bitfun_product_capabilities::{
     default_product_assembly_plan, default_product_capability_assembly,
     default_product_capability_registry, default_product_harness_registry,
-    product_assembly_plan_for_profile, product_harness_registry_for_profile, DeliveryProfile,
-    ProductCapabilityBuildError, ProductCapabilityId, ProductCapabilityPack,
-    ProductCapabilityRegistry, ProductFeatureGroup, ProductRuntimeAssembly,
-    ProductServiceCapabilityRequirement, ProductServiceCapabilityStatus,
+    product_assembly_plan_for_profile, product_delivery_profile_entries,
+    product_harness_registry_for_profile, DeliveryProfile, ProductAssembler, ProductAssemblyError,
+    ProductAssemblyInput, ProductCapabilityBuildError, ProductCapabilityId, ProductCapabilityPack,
+    ProductCapabilityRegistry, ProductCoreDependencyMode, ProductFeatureGroup,
+    ProductRuntimeAssembly, ProductServiceCapabilityRequirement, ProductServiceCapabilityStatus,
 };
 use bitfun_runtime_ports::RuntimeServiceCapability;
 use bitfun_runtime_services::test_support::FakeRuntimeServicesProvider;
@@ -187,6 +188,61 @@ fn product_assembly_plan_makes_delivery_profile_explicit_without_reducing_capabi
 }
 
 #[test]
+fn product_delivery_profile_matrix_documents_current_core_dependency_shape() {
+    let entries = product_delivery_profile_entries()
+        .iter()
+        .map(|entry| (entry.profile(), entry.core_dependency_mode()))
+        .collect::<Vec<_>>();
+    let matrix_profiles = entries
+        .iter()
+        .map(|(profile, _)| *profile)
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        entries,
+        vec![
+            (
+                DeliveryProfile::ProductFull,
+                ProductCoreDependencyMode::ProductFullCompatibility,
+            ),
+            (
+                DeliveryProfile::Desktop,
+                ProductCoreDependencyMode::ProductFullCompatibility,
+            ),
+            (
+                DeliveryProfile::Cli,
+                ProductCoreDependencyMode::ProductFullCompatibility,
+            ),
+            (
+                DeliveryProfile::Server,
+                ProductCoreDependencyMode::NoDirectCoreDependency,
+            ),
+            (
+                DeliveryProfile::Remote,
+                ProductCoreDependencyMode::NoDirectCoreDependency,
+            ),
+            (
+                DeliveryProfile::Acp,
+                ProductCoreDependencyMode::ProductFullCompatibility,
+            ),
+            (
+                DeliveryProfile::Web,
+                ProductCoreDependencyMode::NoDirectCoreDependency,
+            ),
+            (
+                DeliveryProfile::MobileWeb,
+                ProductCoreDependencyMode::NoDirectCoreDependency,
+            ),
+        ]
+    );
+    assert_eq!(
+        matrix_profiles,
+        DeliveryProfile::all_current_product_profiles(),
+        "delivery profile matrix must cover every current product profile exactly once"
+    );
+}
+
+#[test]
 fn product_assembly_plan_exposes_build_feature_groups_explicitly() {
     let plan = product_assembly_plan_for_profile(DeliveryProfile::ProductFull);
 
@@ -287,6 +343,66 @@ fn product_runtime_assembly_reports_runtime_service_capability_gaps() {
         .missing_service_requirements(&complete_services)
         .is_empty());
     assert_eq!(assembly.plan().profile(), DeliveryProfile::ProductFull);
+}
+
+#[test]
+fn product_assembler_builds_runtime_parts_from_explicit_profile_input() {
+    let services = FakeRuntimeServicesProvider::with_all_required()
+        .register(RuntimeServicesBuilder::new())
+        .with_optional_terminal(Some(RuntimeServiceMarkerPort::terminal_port()))
+        .with_optional_git(Some(RuntimeServiceMarkerPort::git_port()))
+        .with_optional_network(Some(RuntimeServiceMarkerPort::network_port()))
+        .build()
+        .expect("runtime service marker ports should satisfy product requirements");
+
+    let parts = ProductAssembler::new()
+        .assemble(ProductAssemblyInput::new(DeliveryProfile::Cli, services))
+        .expect("complete service set should assemble product runtime parts");
+
+    assert_eq!(parts.plan().profile(), DeliveryProfile::Cli);
+    assert_eq!(
+        parts.harness_registry().provider_ids(),
+        vec!["core.deep_review", "core.deep_research", "core.miniapp"]
+    );
+    assert!(parts.missing_service_requirements().is_empty());
+    assert!(parts
+        .services()
+        .has_capability(RuntimeServiceCapability::Terminal));
+}
+
+#[test]
+fn product_assembler_reports_missing_services_without_building_runtime_parts() {
+    let services = FakeRuntimeServicesProvider::with_all_required()
+        .build_services()
+        .expect("required runtime services should build");
+
+    let error = ProductAssembler::new()
+        .assemble(ProductAssemblyInput::new(
+            DeliveryProfile::Desktop,
+            services,
+        ))
+        .expect_err("desktop product-full compatibility requires optional product services");
+
+    assert_eq!(
+        error,
+        ProductAssemblyError::MissingRuntimeServices {
+            profile: DeliveryProfile::Desktop,
+            missing: vec![
+                ProductServiceCapabilityRequirement::new(
+                    ProductCapabilityId::CodeAgent,
+                    RuntimeServiceCapability::Terminal,
+                ),
+                ProductServiceCapabilityRequirement::new(
+                    ProductCapabilityId::DeepReview,
+                    RuntimeServiceCapability::Git,
+                ),
+                ProductServiceCapabilityRequirement::new(
+                    ProductCapabilityId::DeepResearch,
+                    RuntimeServiceCapability::Network,
+                ),
+            ],
+        }
+    );
 }
 
 #[test]

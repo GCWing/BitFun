@@ -2,18 +2,48 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use bitfun_agent_runtime::sdk::{
-    AgentEventStream, AgentRunRequest, AgentRuntimeBuilder, SessionSelector,
+    AgentEventStream, AgentRunRequest, AgentRuntimeBuilder, RuntimeHookErrorPolicy,
+    RuntimeHookKind, RuntimeHookPlan, RuntimeHookRegistry, SessionSelector,
+};
+use bitfun_agent_tools::{ToolRegistry, ToolRegistryItem};
+use bitfun_harness::{
+    build_descriptor_harness_registry, HarnessCapability, HarnessProviderDescriptor,
+    HarnessWorkflow,
 };
 use bitfun_runtime_ports::{
     AgentSessionCreateRequest, AgentSessionCreateResult, AgentSubmissionPort,
     AgentSubmissionRequest, AgentSubmissionResult, AgentSubmissionSource, PortResult,
     RuntimeEventEnvelope, RuntimeEventType,
 };
+use bitfun_runtime_services::test_support::FakeRuntimeServicesProvider;
+use serde_json::{json, Value};
 
 #[derive(Debug, Default)]
 struct FakeSdkAgentProvider {
     created_sessions: Mutex<Vec<AgentSessionCreateRequest>>,
     submitted_turns: Mutex<Vec<AgentSubmissionRequest>>,
+}
+
+struct FakeSdkTool;
+
+#[async_trait]
+impl ToolRegistryItem for FakeSdkTool {
+    fn name(&self) -> &str {
+        "sdk_echo"
+    }
+
+    async fn description(&self) -> Result<String, String> {
+        Ok("Echo input for SDK smoke coverage".to_string())
+    }
+
+    fn input_schema(&self) -> Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "text": { "type": "string" }
+            }
+        })
+    }
 }
 
 #[async_trait]
@@ -95,4 +125,46 @@ async fn sdk_facade_runs_with_fake_provider_and_local_event_stream() {
         events.snapshot()
     );
     assert_eq!(events.len(), 1);
+}
+
+#[tokio::test]
+async fn sdk_facade_accepts_fake_services_tools_harnesses_and_hooks_without_core() {
+    let provider = Arc::new(FakeSdkAgentProvider::default());
+    let services = FakeRuntimeServicesProvider::with_all_required()
+        .build_services()
+        .expect("fake required services");
+    let mut tools = ToolRegistry::new();
+    tools.register_tool(Arc::new(FakeSdkTool));
+    let harnesses = build_descriptor_harness_registry([HarnessProviderDescriptor::legacy_facade(
+        "sdk.fake_harness",
+        HarnessWorkflow::Sdd,
+        &[HarnessCapability::Plan],
+        "external-sdk-harness",
+    )])
+    .expect("fake harness registry should build");
+    let hooks = RuntimeHookRegistry::builder()
+        .register(
+            RuntimeHookPlan::new("sdk.post_call", RuntimeHookKind::SuccessfulToolPostCall)
+                .with_timeout_millis(250)
+                .with_error_policy(RuntimeHookErrorPolicy::RecordWarning),
+        )
+        .build()
+        .expect("hook registry should build");
+
+    let runtime = AgentRuntimeBuilder::new()
+        .with_submission_port(provider)
+        .with_services(services)
+        .with_tool_registry(Arc::new(tools))
+        .with_harness_registry(Arc::new(harnesses))
+        .with_hook_registry(hooks)
+        .build()
+        .expect("sdk runtime");
+
+    assert_eq!(runtime.registered_tool_names(), vec!["sdk_echo"]);
+    assert_eq!(runtime.harness_provider_ids(), vec!["sdk.fake_harness"]);
+    assert_eq!(runtime.hook_registry().hooks()[0].id(), "sdk.post_call");
+    assert!(runtime
+        .services()
+        .expect("services should be injected")
+        .has_capability(bitfun_runtime_ports::RuntimeServiceCapability::SessionStore));
 }

@@ -141,6 +141,7 @@ pub enum DeliveryProfile {
     Remote,
     Acp,
     Web,
+    MobileWeb,
 }
 
 impl DeliveryProfile {
@@ -153,6 +154,7 @@ impl DeliveryProfile {
             Self::Remote => "remote",
             Self::Acp => "acp",
             Self::Web => "web",
+            Self::MobileWeb => "mobile-web",
         }
     }
 
@@ -165,6 +167,7 @@ impl DeliveryProfile {
             Self::Remote,
             Self::Acp,
             Self::Web,
+            Self::MobileWeb,
         ]
     }
 }
@@ -173,6 +176,78 @@ impl fmt::Display for DeliveryProfile {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.id())
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ProductCoreDependencyMode {
+    ProductFullCompatibility,
+    NoDirectCoreDependency,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProductDeliveryProfileEntry {
+    profile: DeliveryProfile,
+    core_dependency_mode: ProductCoreDependencyMode,
+}
+
+impl ProductDeliveryProfileEntry {
+    pub const fn new(
+        profile: DeliveryProfile,
+        core_dependency_mode: ProductCoreDependencyMode,
+    ) -> Self {
+        Self {
+            profile,
+            core_dependency_mode,
+        }
+    }
+
+    pub const fn profile(self) -> DeliveryProfile {
+        self.profile
+    }
+
+    pub const fn core_dependency_mode(self) -> ProductCoreDependencyMode {
+        self.core_dependency_mode
+    }
+}
+
+const PRODUCT_DELIVERY_PROFILE_ENTRIES: &[ProductDeliveryProfileEntry] = &[
+    ProductDeliveryProfileEntry::new(
+        DeliveryProfile::ProductFull,
+        ProductCoreDependencyMode::ProductFullCompatibility,
+    ),
+    ProductDeliveryProfileEntry::new(
+        DeliveryProfile::Desktop,
+        ProductCoreDependencyMode::ProductFullCompatibility,
+    ),
+    ProductDeliveryProfileEntry::new(
+        DeliveryProfile::Cli,
+        ProductCoreDependencyMode::ProductFullCompatibility,
+    ),
+    ProductDeliveryProfileEntry::new(
+        DeliveryProfile::Server,
+        ProductCoreDependencyMode::NoDirectCoreDependency,
+    ),
+    ProductDeliveryProfileEntry::new(
+        DeliveryProfile::Remote,
+        ProductCoreDependencyMode::NoDirectCoreDependency,
+    ),
+    ProductDeliveryProfileEntry::new(
+        DeliveryProfile::Acp,
+        ProductCoreDependencyMode::ProductFullCompatibility,
+    ),
+    ProductDeliveryProfileEntry::new(
+        DeliveryProfile::Web,
+        ProductCoreDependencyMode::NoDirectCoreDependency,
+    ),
+    ProductDeliveryProfileEntry::new(
+        DeliveryProfile::MobileWeb,
+        ProductCoreDependencyMode::NoDirectCoreDependency,
+    ),
+];
+
+pub const fn product_delivery_profile_entries() -> &'static [ProductDeliveryProfileEntry] {
+    PRODUCT_DELIVERY_PROFILE_ENTRIES
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -370,6 +445,126 @@ impl ProductRuntimeAssembly {
         self.plan
             .capability_assembly()
             .missing_service_requirements(|capability| services.has_capability(capability))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ProductAssemblyInput {
+    profile: DeliveryProfile,
+    services: RuntimeServices,
+}
+
+impl ProductAssemblyInput {
+    pub const fn new(profile: DeliveryProfile, services: RuntimeServices) -> Self {
+        Self { profile, services }
+    }
+
+    pub const fn profile(&self) -> DeliveryProfile {
+        self.profile
+    }
+}
+
+#[derive(Debug)]
+pub struct ProductRuntimeParts {
+    plan: ProductAssemblyPlan,
+    services: RuntimeServices,
+    harness_registry: HarnessRegistry,
+    service_availability: Vec<ProductServiceCapabilityAvailability>,
+    missing_service_requirements: Vec<ProductServiceCapabilityRequirement>,
+}
+
+impl ProductRuntimeParts {
+    pub fn plan(&self) -> &ProductAssemblyPlan {
+        &self.plan
+    }
+
+    pub fn services(&self) -> &RuntimeServices {
+        &self.services
+    }
+
+    pub fn harness_registry(&self) -> &HarnessRegistry {
+        &self.harness_registry
+    }
+
+    pub fn service_availability(&self) -> &[ProductServiceCapabilityAvailability] {
+        &self.service_availability
+    }
+
+    pub fn missing_service_requirements(&self) -> &[ProductServiceCapabilityRequirement] {
+        &self.missing_service_requirements
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProductAssemblyError {
+    MissingRuntimeServices {
+        profile: DeliveryProfile,
+        missing: Vec<ProductServiceCapabilityRequirement>,
+    },
+    HarnessRegistry {
+        profile: DeliveryProfile,
+        source: HarnessRegistryBuildError,
+    },
+}
+
+impl fmt::Display for ProductAssemblyError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::MissingRuntimeServices { profile, missing } => {
+                write!(
+                    f,
+                    "delivery profile {profile} is missing {} runtime service requirements",
+                    missing.len()
+                )
+            }
+            Self::HarnessRegistry { profile, source } => {
+                write!(
+                    f,
+                    "delivery profile {profile} failed to build harness registry: {source}"
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for ProductAssemblyError {}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ProductAssembler;
+
+impl ProductAssembler {
+    pub const fn new() -> Self {
+        Self
+    }
+
+    pub fn assemble(
+        &self,
+        input: ProductAssemblyInput,
+    ) -> Result<ProductRuntimeParts, ProductAssemblyError> {
+        let assembly = ProductRuntimeAssembly::for_profile(input.profile);
+        let service_availability = assembly.service_availability_report(&input.services);
+        let missing_service_requirements = assembly.missing_service_requirements(&input.services);
+        if !missing_service_requirements.is_empty() {
+            return Err(ProductAssemblyError::MissingRuntimeServices {
+                profile: input.profile,
+                missing: missing_service_requirements,
+            });
+        }
+
+        let harness_registry = assembly.plan().build_harness_registry().map_err(|source| {
+            ProductAssemblyError::HarnessRegistry {
+                profile: input.profile,
+                source,
+            }
+        })?;
+
+        Ok(ProductRuntimeParts {
+            plan: assembly.plan().clone(),
+            services: input.services,
+            harness_registry,
+            service_availability,
+            missing_service_requirements,
+        })
     }
 }
 

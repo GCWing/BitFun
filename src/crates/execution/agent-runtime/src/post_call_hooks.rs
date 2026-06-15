@@ -1,18 +1,147 @@
 //! Portable post-call hook routing decisions.
 
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 /// Hook categories that concrete runtime integrations may execute after a
 /// successful tool call.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PostCallHookKind {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum RuntimeHookKind {
+    SuccessfulToolPostCall,
     DeepReviewSharedContextToolUse,
 }
 
-pub const fn successful_tool_post_call_hooks() -> [PostCallHookKind; 1] {
-    [PostCallHookKind::DeepReviewSharedContextToolUse]
+pub const fn successful_tool_post_call_hooks() -> [RuntimeHookKind; 1] {
+    [RuntimeHookKind::DeepReviewSharedContextToolUse]
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum RuntimeHookErrorPolicy {
+    FailTurn,
+    SkipHook,
+    DenyTool,
+    RecordWarning,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeHookPlan {
+    id: String,
+    kind: RuntimeHookKind,
+    order: u16,
+    timeout_millis: u64,
+    error_policy: RuntimeHookErrorPolicy,
+}
+
+impl RuntimeHookPlan {
+    pub fn new(id: impl Into<String>, kind: RuntimeHookKind) -> Self {
+        Self {
+            id: id.into(),
+            kind,
+            order: 100,
+            timeout_millis: 1_000,
+            error_policy: RuntimeHookErrorPolicy::RecordWarning,
+        }
+    }
+
+    pub fn with_order(mut self, order: u16) -> Self {
+        self.order = order;
+        self
+    }
+
+    pub fn with_timeout_millis(mut self, timeout_millis: u64) -> Self {
+        self.timeout_millis = timeout_millis;
+        self
+    }
+
+    pub fn with_error_policy(mut self, error_policy: RuntimeHookErrorPolicy) -> Self {
+        self.error_policy = error_policy;
+        self
+    }
+
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+
+    pub const fn kind(&self) -> RuntimeHookKind {
+        self.kind
+    }
+
+    pub const fn order(&self) -> u16 {
+        self.order
+    }
+
+    pub const fn timeout_millis(&self) -> u64 {
+        self.timeout_millis
+    }
+
+    pub const fn error_policy(&self) -> RuntimeHookErrorPolicy {
+        self.error_policy
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum RuntimeHookRegistryBuildError {
+    #[error("runtime hook id must not be empty")]
+    EmptyHookId,
+    #[error("runtime hook {hook_id} must declare a non-zero timeout")]
+    InvalidTimeoutMillis { hook_id: String },
+    #[error("duplicate runtime hook id {hook_id}")]
+    DuplicateHookId { hook_id: String },
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RuntimeHookRegistryBuilder {
+    hooks: Vec<RuntimeHookPlan>,
+}
+
+impl RuntimeHookRegistryBuilder {
+    pub fn register(mut self, hook: RuntimeHookPlan) -> Self {
+        self.hooks.push(hook);
+        self
+    }
+
+    pub fn build(mut self) -> Result<RuntimeHookRegistry, RuntimeHookRegistryBuildError> {
+        let mut hook_ids = HashSet::new();
+        for hook in &self.hooks {
+            if hook.id.trim().is_empty() {
+                return Err(RuntimeHookRegistryBuildError::EmptyHookId);
+            }
+            if hook.timeout_millis == 0 {
+                return Err(RuntimeHookRegistryBuildError::InvalidTimeoutMillis {
+                    hook_id: hook.id.clone(),
+                });
+            }
+            if !hook_ids.insert(hook.id.clone()) {
+                return Err(RuntimeHookRegistryBuildError::DuplicateHookId {
+                    hook_id: hook.id.clone(),
+                });
+            }
+        }
+        self.hooks.sort_by(|left, right| {
+            left.order
+                .cmp(&right.order)
+                .then_with(|| left.id.cmp(&right.id))
+        });
+        Ok(RuntimeHookRegistry { hooks: self.hooks })
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RuntimeHookRegistry {
+    hooks: Vec<RuntimeHookPlan>,
+}
+
+impl RuntimeHookRegistry {
+    pub fn builder() -> RuntimeHookRegistryBuilder {
+        RuntimeHookRegistryBuilder::default()
+    }
+
+    pub fn hooks(&self) -> &[RuntimeHookPlan] {
+        &self.hooks
+    }
 }
 
 pub trait SuccessfulToolPostCallHookExecutor<C> {
@@ -34,9 +163,10 @@ pub fn run_successful_tool_post_call_hooks<C, E>(
 {
     for hook in successful_tool_post_call_hooks() {
         match hook {
-            PostCallHookKind::DeepReviewSharedContextToolUse => {
+            RuntimeHookKind::DeepReviewSharedContextToolUse => {
                 executor.record_deep_review_shared_context_tool_use(tool_name, input, context);
             }
+            RuntimeHookKind::SuccessfulToolPostCall => {}
         }
     }
 }

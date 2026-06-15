@@ -6,6 +6,8 @@
 
 use std::sync::{Arc, Mutex};
 
+use bitfun_agent_tools::{ToolRegistry, ToolRegistryItem};
+use bitfun_harness::HarnessRegistry;
 use bitfun_runtime_ports::{
     AgentBackgroundResultRequest, AgentDialogTurnPort, AgentDialogTurnRequest,
     AgentInputAttachment, AgentLifecycleDeliveryPort, AgentSessionCreateRequest,
@@ -16,6 +18,8 @@ use bitfun_runtime_ports::{
     AgentTurnCancellationResult, DialogSubmitOutcome, PortError, RuntimeEventEnvelope,
 };
 use bitfun_runtime_services::RuntimeServices;
+
+use crate::post_call_hooks::RuntimeHookRegistry;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum RuntimeBuildError {
@@ -87,6 +91,9 @@ pub struct AgentRuntime {
     cancellation: Option<Arc<dyn AgentTurnCancellationPort>>,
     services: Option<RuntimeServices>,
     event_stream: Option<AgentEventStream>,
+    tool_registry: Option<Arc<dyn RuntimeToolRegistry>>,
+    harness_registry: Option<Arc<HarnessRegistry>>,
+    hook_registry: RuntimeHookRegistry,
 }
 
 impl std::fmt::Debug for AgentRuntime {
@@ -129,7 +136,29 @@ impl std::fmt::Debug for AgentRuntime {
                 "event_stream",
                 &self.event_stream.as_ref().map(|_| "<AgentEventStream>"),
             )
+            .field(
+                "tool_registry",
+                &self.tool_registry.as_ref().map(|_| "<RuntimeToolRegistry>"),
+            )
+            .field(
+                "harness_registry",
+                &self.harness_registry.as_ref().map(|_| "<HarnessRegistry>"),
+            )
+            .field("hook_count", &self.hook_registry.hooks().len())
             .finish()
+    }
+}
+
+pub trait RuntimeToolRegistry: Send + Sync {
+    fn tool_names(&self) -> Vec<String>;
+}
+
+impl<Tool> RuntimeToolRegistry for ToolRegistry<Tool>
+where
+    Tool: ToolRegistryItem + ?Sized,
+{
+    fn tool_names(&self) -> Vec<String> {
+        self.get_tool_names()
     }
 }
 
@@ -142,6 +171,9 @@ pub struct AgentRuntimeBuilder {
     cancellation: Option<Arc<dyn AgentTurnCancellationPort>>,
     services: Option<RuntimeServices>,
     event_stream: Option<AgentEventStream>,
+    tool_registry: Option<Arc<dyn RuntimeToolRegistry>>,
+    harness_registry: Option<Arc<HarnessRegistry>>,
+    hook_registry: RuntimeHookRegistry,
 }
 
 impl AgentRuntimeBuilder {
@@ -190,6 +222,21 @@ impl AgentRuntimeBuilder {
         self
     }
 
+    pub fn with_tool_registry(mut self, registry: Arc<dyn RuntimeToolRegistry>) -> Self {
+        self.tool_registry = Some(registry);
+        self
+    }
+
+    pub fn with_harness_registry(mut self, registry: Arc<HarnessRegistry>) -> Self {
+        self.harness_registry = Some(registry);
+        self
+    }
+
+    pub fn with_hook_registry(mut self, registry: RuntimeHookRegistry) -> Self {
+        self.hook_registry = registry;
+        self
+    }
+
     pub fn build(self) -> Result<AgentRuntime, RuntimeBuildError> {
         Ok(AgentRuntime {
             submission: self
@@ -201,6 +248,9 @@ impl AgentRuntimeBuilder {
             cancellation: self.cancellation,
             services: self.services,
             event_stream: self.event_stream,
+            tool_registry: self.tool_registry,
+            harness_registry: self.harness_registry,
+            hook_registry: self.hook_registry,
         })
     }
 }
@@ -302,6 +352,28 @@ pub struct AgentRunHandle {
 }
 
 impl AgentRuntime {
+    pub fn services(&self) -> Option<&RuntimeServices> {
+        self.services.as_ref()
+    }
+
+    pub fn registered_tool_names(&self) -> Vec<String> {
+        self.tool_registry
+            .as_ref()
+            .map(|registry| registry.tool_names())
+            .unwrap_or_default()
+    }
+
+    pub fn harness_provider_ids(&self) -> Vec<&str> {
+        self.harness_registry
+            .as_ref()
+            .map(|registry| registry.provider_ids())
+            .unwrap_or_default()
+    }
+
+    pub fn hook_registry(&self) -> &RuntimeHookRegistry {
+        &self.hook_registry
+    }
+
     pub async fn create_session(
         &self,
         request: AgentSessionCreateRequest,

@@ -10,6 +10,8 @@ name = "bitfun_agent_runtime"
 crate-type = ["rlib"]
 
 [dependencies]
+bitfun-agent-tools = { path = "../tool-contracts" }
+bitfun-harness = { path = "../harness" }
 bitfun-runtime-ports = { path = "../../contracts/runtime-ports" }
 bitfun-runtime-services = { path = "../runtime-services" }
 dashmap = { workspace = true }

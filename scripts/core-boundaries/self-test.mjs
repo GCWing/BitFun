@@ -1124,7 +1124,12 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/execution/agent-runtime/src/post_call_hooks.rs',
       contracts: [
-        'PostCallHookKind',
+        'RuntimeHookKind',
+        'RuntimeHookErrorPolicy',
+        'RuntimeHookPlan',
+        'RuntimeHookRegistry',
+        'EmptyHookId',
+        'InvalidTimeoutMillis',
         'successful_tool_post_call_hooks',
         'SuccessfulToolPostCallHookExecutor',
         'run_successful_tool_post_call_hooks',
@@ -1132,7 +1137,12 @@ export function runManifestParserSelfTest({
     },
     {
       path: 'src/crates/execution/agent-runtime/tests/post_call_hook_contracts.rs',
-      contracts: ['successful_tool_call_routes_to_shared_context_measurement_hook'],
+      contracts: [
+        'successful_tool_call_routes_to_shared_context_measurement_hook',
+        'runtime_hook_registry_preserves_order_timeout_and_error_policy',
+        'runtime_hook_registry_rejects_duplicate_ids',
+        'runtime_hook_registry_rejects_unstable_ids_and_zero_timeouts',
+      ],
     },
     {
       path: 'src/crates/execution/agent-runtime/tests/post_call_hook_execution_contracts.rs',

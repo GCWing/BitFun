@@ -12,10 +12,10 @@ port-backed `sdk` / `AgentRuntime` facade that can be built and tested without
   concrete service crates, or product-domain implementations.
 - The `sdk` module may re-export only stable runtime request/response types and
   runtime-port contracts.
-- `AgentRuntime` may depend on stable ports and typed `RuntimeServices`
-  injected by assembly. Product assembly owns concrete registration; this crate
-  must not create concrete managers, app state, filesystem, terminal, MCP,
-  remote, or AI clients.
+- `AgentRuntime` may depend on stable ports plus injected `RuntimeServices`,
+  tool registry, harness registry, and hook registry. Product assembly owns
+  concrete registration; this crate must not create concrete managers, app
+  state, filesystem, terminal, MCP, remote, or AI clients.
 - Keep concrete scheduler/session lifecycle execution, session metadata IO,
   event emitter wiring, permission UI presentation, and product `Tool` adapter
   execution in `bitfun-core` until a reviewed owner migration proves behavior

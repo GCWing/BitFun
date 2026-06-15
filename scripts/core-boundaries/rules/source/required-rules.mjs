@@ -203,6 +203,22 @@ export const requiredContentRules = [
         message: 'missing agent runtime event stream builder hook',
       },
       {
+        regex: /\bpub trait RuntimeToolRegistry\b/,
+        message: 'missing SDK tool registry abstraction',
+      },
+      {
+        regex: /\bpub fn with_tool_registry\b/,
+        message: 'missing SDK tool registry builder hook',
+      },
+      {
+        regex: /\bpub fn with_harness_registry\b/,
+        message: 'missing SDK harness registry builder hook',
+      },
+      {
+        regex: /\bpub fn with_hook_registry\b/,
+        message: 'missing SDK hook registry builder hook',
+      },
+      {
         regex: /\bpub enum SessionSelector\b/,
         message: 'missing session selector contract',
       },
@@ -233,6 +249,21 @@ export const requiredContentRules = [
       {
         regex: /\bport_errors_remain_typed\b/,
         message: 'missing typed port error regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/tests/sdk_smoke.rs',
+    reason:
+      'agent-runtime SDK smoke tests must prove the facade works with injected fake provider, services, tools, harnesses, and hooks without core',
+    patterns: [
+      {
+        regex: /\bsdk_facade_runs_with_fake_provider_and_local_event_stream\b/,
+        message: 'missing SDK fake-provider event-stream smoke',
+      },
+      {
+        regex: /\bsdk_facade_accepts_fake_services_tools_harnesses_and_hooks_without_core\b/,
+        message: 'missing SDK services/tools/harnesses/hooks injection smoke',
       },
     ],
   },
@@ -693,6 +724,26 @@ export const requiredContentRules = [
         message: 'missing product runtime assembly owner',
       },
       {
+        regex: /\bProductDeliveryProfileEntry\b/,
+        message: 'missing product delivery profile entry matrix',
+      },
+      {
+        regex: /\bMobileWeb\b/,
+        message: 'missing mobile web delivery profile coverage',
+      },
+      {
+        regex: /\bProductAssembler\b/,
+        message: 'missing typed product assembler',
+      },
+      {
+        regex: /\bProductAssemblyInput\b/,
+        message: 'missing product assembly input contract',
+      },
+      {
+        regex: /\bProductRuntimeParts\b/,
+        message: 'missing product runtime parts output',
+      },
+      {
         regex: /\bfeature_groups_from_tool_provider_group_plan\b/,
         message: 'missing tool-provider feature group projection owner',
       },
@@ -710,6 +761,18 @@ export const requiredContentRules = [
       {
         regex: /\bproduct_runtime_assembly_reports_runtime_service_capability_gaps\b/,
         message: 'missing product runtime service gap regression',
+      },
+      {
+        regex: /\bproduct_delivery_profile_matrix_documents_current_core_dependency_shape\b/,
+        message: 'missing delivery profile entry matrix regression',
+      },
+      {
+        regex: /\ball_current_product_profiles\b/,
+        message: 'missing delivery profile matrix coverage guard',
+      },
+      {
+        regex: /\bproduct_assembler_builds_runtime_parts_from_explicit_profile_input\b/,
+        message: 'missing typed product assembler regression',
       },
       {
         regex: /\bproduct_harness_provider_plans_legacy_facade_without_execution\b/,
@@ -946,11 +1009,39 @@ export const requiredContentRules = [
   {
     path: 'src/crates/execution/agent-runtime/src/post_call_hooks.rs',
     reason:
-      'agent-runtime must own portable post-call hook routing decisions while concrete hook execution stays in the owning runtime',
+      'agent-runtime must own portable hook registry and post-call routing decisions while concrete hook execution stays in the owning runtime',
     patterns: [
       {
-        regex: /\bpub enum PostCallHookKind\b/,
-        message: 'missing post-call hook kind contract',
+        regex: /\bpub enum RuntimeHookKind\b/,
+        message: 'missing runtime hook kind contract',
+      },
+      {
+        regex: /\bpub enum RuntimeHookErrorPolicy\b/,
+        message: 'missing runtime hook error policy contract',
+      },
+      {
+        regex: /\bpub struct RuntimeHookPlan\b/,
+        message: 'missing runtime hook plan contract',
+      },
+      {
+        regex: /\bpub struct RuntimeHookRegistry\b/,
+        message: 'missing runtime hook registry contract',
+      },
+      {
+        regex: /\btimeout_millis\b/,
+        message: 'missing runtime hook timeout contract',
+      },
+      {
+        regex: /\bDuplicateHookId\b/,
+        message: 'missing runtime hook duplicate-id guard',
+      },
+      {
+        regex: /\bEmptyHookId\b/,
+        message: 'missing runtime hook empty-id guard',
+      },
+      {
+        regex: /\bInvalidTimeoutMillis\b/,
+        message: 'missing runtime hook non-zero-timeout guard',
       },
       {
         regex: /\bpub const fn successful_tool_post_call_hooks\b/,
@@ -974,6 +1065,18 @@ export const requiredContentRules = [
       {
         regex: /\bsuccessful_tool_call_routes_to_shared_context_measurement_hook\b/,
         message: 'missing successful tool post-call hook routing regression',
+      },
+      {
+        regex: /\bruntime_hook_registry_preserves_order_timeout_and_error_policy\b/,
+        message: 'missing runtime hook order/timeout/error-policy regression',
+      },
+      {
+        regex: /\bruntime_hook_registry_rejects_duplicate_ids\b/,
+        message: 'missing runtime hook duplicate-id regression',
+      },
+      {
+        regex: /\bruntime_hook_registry_rejects_unstable_ids_and_zero_timeouts\b/,
+        message: 'missing runtime hook invalid-id/timeout regression',
       },
     ],
   },

@@ -4,9 +4,13 @@
 //! runtime with caller-provided ports. Concrete product assembly remains
 //! outside this crate.
 
+pub use crate::post_call_hooks::{
+    RuntimeHookErrorPolicy, RuntimeHookKind, RuntimeHookPlan, RuntimeHookRegistry,
+    RuntimeHookRegistryBuildError,
+};
 pub use crate::runtime::{
     AgentEventStream, AgentRunHandle, AgentRunRequest, AgentRuntime, AgentRuntimeBuilder,
-    RuntimeBuildError, RuntimeError, SessionSelector,
+    RuntimeBuildError, RuntimeError, RuntimeToolRegistry, SessionSelector,
 };
 pub use bitfun_runtime_ports::{
     AgentDialogTurnPort, AgentDialogTurnRequest, AgentInputAttachment, AgentLifecycleDeliveryPort,
