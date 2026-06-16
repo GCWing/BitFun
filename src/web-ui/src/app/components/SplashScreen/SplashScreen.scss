@@ -16,7 +16,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bitfun-startup-bg, var(--color-bg-primary, #f3f3f5));
+  background: var(--bitfun-startup-bg);
   pointer-events: none;
 
   // ── Exit state ─────────────────────────────────────────────────────────────
@@ -65,7 +65,7 @@
   left: 50%;
   min-width: 220px;
   max-width: min(360px, calc(100vw - 48px));
-  color: var(--color-text-tertiary, rgba(143, 143, 153, 0.72));
+  color: var(--color-text-tertiary);
   font-size: var(--font-size-xs);
   line-height: 1.4;
   text-align: center;

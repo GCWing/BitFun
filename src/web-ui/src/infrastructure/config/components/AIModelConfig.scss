@@ -342,7 +342,7 @@
     font-size: 10px;
     font-weight: $font-weight-medium;
     background: var(--color-accent-500);
-    color: #ffffff;
+    color: var(--color-static-white);
     border-radius: $size-radius-sm;
     margin-left: $size-gap-1;
   }
@@ -398,34 +398,34 @@
     min-width: 0;
     display: flex;
     align-items: center;
-    gap: var(--size-gap-2, 8px);
+    gap: var(--size-gap-2);
     padding: 6px 12px;
     background: transparent;
-    border: 1px solid var(--border-base, rgba(255, 255, 255, 0.14));
-    border-radius: var(--size-radius-sm, 6px);
-    transition: all var(--motion-base, 0.3s) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1));
+    border: 1px solid var(--border-base);
+    border-radius: var(--size-radius-sm);
+    transition: all var(--motion-base) var(--easing-standard);
     min-height: 36px;
 
     
     &:hover:not(:focus-within) {
-      background: var(--element-bg-subtle, rgba(255, 255, 255, 0.05));
-      border-color: var(--border-strong, rgba(255, 255, 255, 0.26));
+      background: var(--element-bg-subtle);
+      border-color: var(--border-strong);
     }
 
     
     &:focus-within {
       background: transparent;
-      border-color: var(--color-accent-500, #60a5fa);
+      border-color: var(--color-accent-500);
     }
 
     svg {
-      color: var(--color-text-muted, #a0a0a0);
+      color: var(--color-text-muted);
       flex-shrink: 0;
-      transition: color var(--motion-base, 0.3s) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1));
+      transition: color var(--motion-base) var(--easing-standard);
     }
 
     &:focus-within svg {
-      color: var(--color-accent-500, #60a5fa);
+      color: var(--color-accent-500);
     }
 
     input {
@@ -434,12 +434,12 @@
       border: none !important;
       outline: none !important;
       box-shadow: none !important;
-      color: var(--color-text-primary, #e8e8e8);
+      color: var(--color-text-primary);
       font-size: var(--font-size-sm);
       font-family: $font-family-sans;
 
       &::placeholder {
-        color: var(--color-text-muted, #a0a0a0);
+        color: var(--color-text-muted);
       }
 
       &:focus {
@@ -509,7 +509,7 @@
       background: rgba(96, 165, 250, 0.06);
       
       &:hover {
-        background: rgba(96, 165, 250, 0.10);
+        background: var(--card-bg-accent);
       }
     }
   }
@@ -637,28 +637,28 @@
     }
 
     &--text_chat {
-      background: rgba(96, 165, 250, 0.12);
+      background: color-mix(in srgb, var(--color-accent-500) 12%, transparent);
       color: var(--color-accent-400);
     }
 
     &--embedding {
-      background: rgba(34, 197, 94, 0.12);
+      background: color-mix(in srgb, var(--color-success) 12%, transparent);
       color: var(--color-success);
     }
 
     &--search {
-      background: rgba(234, 179, 8, 0.12);
+      background: color-mix(in srgb, var(--color-warning) 12%, transparent);
       color: var(--color-warning);
     }
 
     &--code_specialized {
-      background: rgba(6, 182, 212, 0.12);
+      background: color-mix(in srgb, var(--color-cyan-500) 12%, transparent);
       color: var(--color-info);
     }
 
     &--function_calling {
-      background: rgba(99, 102, 241, 0.12);
-      color: rgba(129, 140, 248, 1);
+      background: color-mix(in srgb, var(--color-indigo-500) 12%, transparent);
+      color: color-mix(in srgb, var(--color-indigo-500) 80%, var(--color-static-white));
     }
 
     &--more {
@@ -672,8 +672,8 @@
     padding: $size-gap-4 !important;
     margin: 0 $size-gap-3 $size-gap-3;
     
-    background: rgba(255, 255, 255, 0.02);
-    border-radius: var(--size-radius-sm, 6px);
+    background: var(--color-overlay-white-02);
+    border-radius: var(--size-radius-sm);
     animation: slideDown 0.2s ease;
   }
 
@@ -939,34 +939,34 @@
       width: 100%;
       padding: 6px 12px;
       background: transparent;
-      border: 1px solid var(--border-base, rgba(255, 255, 255, 0.14));
-      border-radius: var(--size-radius-sm, 6px);
-      color: var(--color-text-primary, #e8e8e8);
+      border: 1px solid var(--border-base);
+      border-radius: var(--size-radius-sm);
+      color: var(--color-text-primary);
       font-size: var(--font-size-sm);
       font-family: $font-family-sans;
-      transition: all var(--motion-base, 0.3s) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1));
+      transition: all var(--motion-base) var(--easing-standard);
       min-height: 36px;
 
       
       &:hover:not(:focus):not(:disabled) {
-        background: var(--element-bg-subtle, rgba(255, 255, 255, 0.05));
-        border-color: var(--border-strong, rgba(255, 255, 255, 0.26));
+        background: var(--element-bg-subtle);
+        border-color: var(--border-strong);
       }
 
       
       &:focus {
         outline: none;
         background: transparent;
-        border-color: var(--color-accent-500, #60a5fa);
+        border-color: var(--color-accent-500);
       }
 
       &:disabled {
-        opacity: var(--opacity-disabled, 0.6);
+        opacity: var(--opacity-disabled);
         cursor: default;
       }
 
       &::placeholder {
-        color: var(--color-text-muted, #a0a0a0);
+        color: var(--color-text-muted);
       }
     }
 
@@ -1035,7 +1035,7 @@
     .bitfun-number-input__container,
     .resolved-url__value {
       min-height: 35px;
-      border-radius: var(--size-radius-sm, 6px);
+      border-radius: var(--size-radius-sm);
       box-sizing: border-box;
     }
 
@@ -1304,7 +1304,7 @@
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-medium);
     color: var(--color-text-primary);
-    line-height: var(--line-height-normal);
+    line-height: var(--line-height-base);
     font-family: $font-family-sans;
     word-break: break-word;
   }
@@ -1330,7 +1330,7 @@
       min-height: 32px;
       border-color: color-mix(
         in srgb,
-        var(--border-base, rgba(255, 255, 255, 0.14)) 72%,
+        var(--border-base) 72%,
         transparent
       );
     }
@@ -1417,7 +1417,7 @@
 
   &__resolved-url-input {
     .bitfun-input-container {
-      background: var(--element-bg-subtle, rgba(255, 255, 255, 0.05));
+      background: var(--element-bg-subtle);
       border: none;
       box-shadow: none;
     }
@@ -1483,13 +1483,13 @@
   &__proxy-switch-wrapper {
     padding: $size-gap-4;
     background: transparent;
-    border-radius: var(--size-radius-sm, 6px);
-    border: 1px solid var(--border-base, rgba(255, 255, 255, 0.14));
-    transition: all var(--motion-base, 0.3s) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1));
+    border-radius: var(--size-radius-sm);
+    border: 1px solid var(--border-base);
+    transition: all var(--motion-base) var(--easing-standard);
 
     &:hover {
-      background: var(--element-bg-subtle, rgba(255, 255, 255, 0.05));
-      border-color: var(--border-strong, rgba(255, 255, 255, 0.26));
+      background: var(--element-bg-subtle);
+      border-color: var(--border-strong);
     }
   }
 
@@ -1565,7 +1565,7 @@
     padding: $size-gap-3;
     background: transparent;
     
-    border: 1px dashed rgba(234, 179, 8, 0.4);
+    border: 1px dashed color-mix(in srgb, var(--color-warning) 40%, transparent);
     border-radius: $size-radius-sm;
     margin-top: $size-gap-2;
     color: var(--color-warning);
@@ -2025,7 +2025,7 @@
   }
 
   &__cli-empty {
-    padding: var(--size-gap-4, 16px);
+    padding: var(--size-gap-4);
 
     p {
       margin: 0;

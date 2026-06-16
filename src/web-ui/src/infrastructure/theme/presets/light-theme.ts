@@ -39,7 +39,7 @@ export const bitfunLightTheme: ThemeConfig = {
     accent: {
       50: 'rgba(15, 23, 42, 0.04)',
       100: 'rgba(15, 23, 42, 0.07)',
-      200: 'rgba(15, 23, 42, 0.10)',
+      200: 'rgba(15, 23, 42, 0.1)',
       300: 'rgba(15, 23, 42, 0.16)',
       400: 'rgba(15, 23, 42, 0.26)',
       500: '#64748b',
@@ -76,7 +76,7 @@ export const bitfunLightTheme: ThemeConfig = {
       errorBorder: 'rgba(194, 101, 101, 0.25)',
       
       info: '#64748b',
-      infoBg: 'rgba(100, 116, 139, 0.10)',
+      infoBg: 'rgba(100, 116, 139, 0.1)',
       infoBorder: 'rgba(100, 116, 139, 0.28)',
       
       
@@ -106,7 +106,7 @@ export const bitfunLightTheme: ThemeConfig = {
     
     git: {
       branch: 'rgb(71, 85, 105)',
-      branchBg: 'rgba(71, 85, 105, 0.10)',
+      branchBg: 'rgba(71, 85, 105, 0.1)',
       changes: 'rgb(192, 140, 66)',            
       changesBg: 'rgba(192, 140, 66, 0.08)',
       added: 'rgb(91, 154, 111)',              
@@ -124,7 +124,7 @@ export const bitfunLightTheme: ThemeConfig = {
       
       xs: '0 1px 2px rgba(71, 85, 105, 0.06)',
       sm: '0 2px 4px rgba(71, 85, 105, 0.08)',
-      base: '0 4px 8px rgba(71, 85, 105, 0.10)',
+      base: '0 4px 8px rgba(71, 85, 105, 0.1)',
       lg: '0 8px 16px rgba(71, 85, 105, 0.12)',
       xl: '0 12px 24px rgba(71, 85, 105, 0.14)',
       '2xl': '0 16px 32px rgba(71, 85, 105, 0.16)',
@@ -249,7 +249,7 @@ export const bitfunLightTheme: ThemeConfig = {
       },
       close: {
         dot: 'rgba(194, 101, 101, 0.55)',
-        dotShadow: '0 0 4px rgba(194, 101, 101, 0.20)',
+        dotShadow: '0 0 4px rgba(194, 101, 101, 0.2)',
         hoverBg: 'rgba(194, 101, 101, 0.14)',
         hoverColor: '#a85555',
         hoverBorder: 'rgba(194, 101, 101, 0.25)',
@@ -259,7 +259,7 @@ export const bitfunLightTheme: ThemeConfig = {
         defaultColor: 'rgba(30, 41, 59, 0.95)',
         defaultDot: 'rgba(100, 116, 139, 0.28)',
         disabledDot: 'rgba(100, 116, 139, 0.15)',
-        flowGradient: 'linear-gradient(90deg, transparent, rgba(100, 116, 139, 0.06), rgba(100, 116, 139, 0.10), rgba(100, 116, 139, 0.06), transparent)',
+        flowGradient: 'linear-gradient(90deg, transparent, rgba(100, 116, 139, 0.06), rgba(100, 116, 139, 0.1), rgba(100, 116, 139, 0.06), transparent)',
       },
     },
     
@@ -365,7 +365,7 @@ export const bitfunLightTheme: ThemeConfig = {
       'editor.selectionBackground': 'rgba(15, 23, 42, 0.14)',
       'editor.selectionForeground': '#1e293b',
       'editor.inactiveSelectionBackground': 'rgba(15, 23, 42, 0.09)',
-      'editor.selectionHighlightBackground': 'rgba(15, 23, 42, 0.10)',
+      'editor.selectionHighlightBackground': 'rgba(15, 23, 42, 0.1)',
       'editor.selectionHighlightBorder': 'rgba(15, 23, 42, 0.22)',
       'editorCursor.foreground': '#1e293b',
 

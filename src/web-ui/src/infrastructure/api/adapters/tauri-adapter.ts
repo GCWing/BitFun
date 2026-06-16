@@ -89,15 +89,22 @@ export class TauriTransportAdapter implements ITransportAdapter {
         throw new Error('Tauri invoke function not initialized');
       }
       const invokeStartedAt = nowMs();
-      const result = params !== undefined
-        ? await this.invokeFn(action, params)
-        : await this.invokeFn(action);
-      if (timing) {
-        timing.invokeDurationMs = elapsedMs(invokeStartedAt);
-        timing.transportDurationMs = elapsedMs(transportStartedAt);
-      }
+      try {
+        const result = params !== undefined
+          ? await this.invokeFn(action, params)
+          : await this.invokeFn(action);
+        if (timing) {
+          timing.invokeDurationMs = elapsedMs(invokeStartedAt);
+          timing.transportDurationMs = elapsedMs(transportStartedAt);
+        }
 
-      return result as T;
+        return result as T;
+      } catch (error) {
+        if (timing) {
+          timing.invokeDurationMs = elapsedMs(invokeStartedAt);
+        }
+        throw error;
+      }
     } catch (error) {
       if (timing) {
         timing.transportDurationMs = elapsedMs(transportStartedAt);

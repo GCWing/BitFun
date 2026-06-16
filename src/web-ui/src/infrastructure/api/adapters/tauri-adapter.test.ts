@@ -61,4 +61,25 @@ describe('Tauri adapter expected errors', () => {
     expect(timing.invokeDurationMs).toEqual(expect.any(Number));
     expect(timing.transportDurationMs).toEqual(expect.any(Number));
   });
+
+  it('records invoke timing when a request rejects', async () => {
+    invokeMock.mockRejectedValueOnce(new Error("Config path not found: 'font'"));
+    const adapter = new TauriTransportAdapter();
+    const timing: {
+      adapterInitDurationMs?: number;
+      invokeDurationMs?: number;
+      transportDurationMs?: number;
+    } = {};
+
+    await expect(adapter.request('get_config', {
+      request: {
+        path: 'font',
+        skipRetryOnNotFound: true,
+      },
+    }, timing)).rejects.toThrow("Config path not found: 'font'");
+
+    expect(timing.adapterInitDurationMs).toEqual(expect.any(Number));
+    expect(timing.invokeDurationMs).toEqual(expect.any(Number));
+    expect(timing.transportDurationMs).toEqual(expect.any(Number));
+  });
 });

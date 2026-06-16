@@ -241,7 +241,7 @@ export const BitFunDarkTheme: editor.IStandaloneThemeData = {
     'editorCursor.foreground': '#E1AB80',
     'editorCursor.background': '#121214',
     'editor.selectionBackground': '#E1AB8040',
-    'editor.selectionForeground': '#FFFFFF',
+    'editor.selectionForeground': '#ffffff',
     'editor.inactiveSelectionBackground': '#E1AB8020',
     'editor.selectionHighlightBackground': '#E1AB8030',
     'editor.selectionHighlightBorder': '#E1AB80',

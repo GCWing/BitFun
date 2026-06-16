@@ -2242,6 +2242,7 @@ mod tests {
                 id: format!("round-{}", turn_index),
                 turn_id: turn_id.to_string(),
                 round_index: 0,
+                round_group_id: None,
                 timestamp: 1_000 + turn_index as u64,
                 text_items: vec![],
                 tool_items,
@@ -2263,6 +2264,9 @@ mod tests {
             start_time: 1_000 + turn_index as u64,
             end_time: Some(1_300 + turn_index as u64),
             duration_ms: Some(300),
+            token_usage: None,
+            finish_reason: None,
+            has_final_response: None,
             status: TurnStatus::Completed,
         }
     }
@@ -2278,6 +2282,7 @@ mod tests {
             id: id.to_string(),
             turn_id: turn_id.to_string(),
             round_index,
+            round_group_id: None,
             timestamp: 1_000 + round_index as u64,
             text_items: vec![],
             tool_items: vec![],
@@ -2345,6 +2350,8 @@ mod tests {
             is_subagent_item: None,
             parent_task_tool_id: None,
             subagent_session_id: None,
+            attempt_id: None,
+            attempt_index: None,
             subagent_model_id: None,
             subagent_model_alias: None,
             status: Some(

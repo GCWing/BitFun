@@ -15,7 +15,12 @@ import { FlowChatManager } from '@/flow_chat/services/FlowChatManager';
 import { useSessionModeStore } from '@/app/stores/sessionModeStore';
 import { useTtsPlayback } from '@/flow_chat/hooks/useTtsPlayback';
 import { VirtualMessageList, VirtualMessageListRef } from './VirtualMessageList';
-import { FlowChatHeader, type FlowChatHeaderCommandSummary, type FlowChatHeaderTurnSummary } from './FlowChatHeader';
+import {
+  FlowChatHeader,
+  type FlowChatHeaderCommandSummary,
+  type FlowChatHeaderSubagentSummary,
+  type FlowChatHeaderTurnSummary,
+} from './FlowChatHeader';
 import { BackgroundCommandInputDialog } from '../background-command/BackgroundCommandInputDialog';
 import { WelcomePanel } from '../WelcomePanel';
 import { HistorySessionPlaceholder } from './HistorySessionPlaceholder';
@@ -28,12 +33,16 @@ import { useFlowChatSync } from './useFlowChatSync';
 import { useFlowChatToolActions } from './useFlowChatToolActions';
 import { useFlowChatSearch } from './useFlowChatSearch';
 import { useVirtualItems, useActiveSession, useVisibleTurnInfo, type VisibleTurnInfo } from '../../store/modernFlowChatStore';
-import type { FlowChatConfig, FlowToolItem, Session, DialogTurn } from '../../types/flow-chat';
+import type { FlowChatConfig, DialogTurn } from '../../types/flow-chat';
 import {
   useBackgroundCommandActivityStore,
   visibleBackgroundCommandActivitiesForSession,
   type BackgroundCommandActivity,
 } from '../../store/backgroundCommandActivityStore';
+import {
+  useBackgroundSubagentActivityStore,
+  visibleBackgroundSubagentActivitiesForSession,
+} from '../../store/backgroundSubagentActivityStore';
 import type { LineRange } from '@/component-library';
 import { isChatPopupActive, subscribeChatPopupChange } from '../chatPopupState';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
@@ -49,12 +58,17 @@ import {
 } from '../../utils/flowChatTurnScrollPolicy';
 import { isRemoteTraceContext, startupTrace } from '@/shared/utils/startupTrace';
 import { scheduleAfterStartupPaint } from '@/shared/utils/startupTaskScheduling';
-import { agentAPI } from '@/infrastructure/api';
+import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import { notificationService } from '@/shared/notification-system';
 import {
+  clearHistorySessionOpenTransition,
+  getHistorySessionOpenTransitionSnapshot,
   HISTORY_SESSION_OPEN_INTENT_EVENT,
   type HistorySessionOpenIntentDetail,
 } from '../../services/sessionOpenIntent';
+import {
+  type BackgroundSubagentActivityItem,
+} from '../../utils/backgroundSubagentActivity';
 import './ModernFlowChatContainer.scss';
 
 interface ModernFlowChatContainerProps {
@@ -68,17 +82,7 @@ interface ModernFlowChatContainerProps {
   onSwitchToChatPanel?: () => void;
 }
 
-type BackgroundSubagentSummary = {
-  sessionId: string;
-  title: string;
-  agentType?: string;
-  status: 'processing' | 'finishing';
-  workspacePath?: string;
-  remoteConnectionId?: string;
-  remoteSshHost?: string;
-  parentToolCallId?: string;
-  subagentType?: string;
-};
+type BackgroundSubagentSummary = BackgroundSubagentActivityItem;
 
 type BackgroundCommandSummary = {
   execSessionKey: string;
@@ -101,15 +105,21 @@ const MOCK_BACKGROUND_ACTIVITIES_STORAGE_KEY = 'bitfun.flowChat.mockBackgroundAc
 const MOCK_BACKGROUND_SUBAGENTS: BackgroundSubagentSummary[] = [
   {
     sessionId: 'mock-background-subagent-review',
+    parentSessionId: 'mock-parent-session',
     title: 'Reviewing auth boundary changes',
     agentType: 'ReviewSecurity',
     status: 'processing',
+    createdAt: Date.now() - 36_000,
+    updatedAt: Date.now() - 4_000,
   },
   {
     sessionId: 'mock-background-subagent-docs',
+    parentSessionId: 'mock-parent-session',
     title: 'Preparing migration notes for command lifecycle events',
     agentType: 'GeneralPurpose',
     status: 'finishing',
+    createdAt: Date.now() - 58_000,
+    updatedAt: Date.now() - 6_000,
   },
 ];
 
@@ -173,104 +183,6 @@ function shouldShowMockBackgroundActivities(): boolean {
   );
 }
 
-function isBackgroundTaskTool(item: FlowToolItem): boolean {
-  const input = item.toolCall?.input;
-  if (!input || typeof input !== 'object') {
-    return false;
-  }
-
-  return (input as Record<string, unknown>).run_in_background === true;
-}
-
-function readSubagentExecutionStatus(session: Session): 'processing' | 'finishing' | null {
-  const latestTurn = session.dialogTurns[session.dialogTurns.length - 1];
-  if (!latestTurn) {
-    return null;
-  }
-
-  if (
-    latestTurn.status === 'pending' ||
-    latestTurn.status === 'image_analyzing' ||
-    latestTurn.status === 'processing'
-  ) {
-    return 'processing';
-  }
-
-  if (latestTurn.status === 'finishing' || latestTurn.status === 'cancelling') {
-    return 'finishing';
-  }
-
-  return null;
-}
-
-function collectRunningBackgroundSubagents(parentSessionId: string | undefined): BackgroundSubagentSummary[] {
-  if (!parentSessionId) {
-    return [];
-  }
-
-  const { sessions } = flowChatStore.getState();
-  const parentSession = sessions.get(parentSessionId);
-  if (!parentSession) {
-    return [];
-  }
-
-  const backgroundTaskBySessionId = new Map<string, FlowToolItem>();
-  for (const turn of parentSession.dialogTurns) {
-    for (const round of turn.modelRounds) {
-      for (const item of round.items) {
-        if (
-          item.type === 'tool' &&
-          item.toolName?.toLowerCase() === 'task' &&
-          item.subagentSessionId &&
-          isBackgroundTaskTool(item as FlowToolItem)
-        ) {
-          backgroundTaskBySessionId.set(item.subagentSessionId, item as FlowToolItem);
-        }
-      }
-    }
-  }
-
-  const results: BackgroundSubagentSummary[] = [];
-  for (const session of sessions.values()) {
-    if (session.sessionKind !== 'subagent' || session.parentSessionId !== parentSessionId) {
-      continue;
-    }
-
-    const parentTask = backgroundTaskBySessionId.get(session.sessionId);
-    if (!parentTask) {
-      continue;
-    }
-
-    const status = readSubagentExecutionStatus(session);
-    if (!status) {
-      continue;
-    }
-
-    results.push({
-      sessionId: session.sessionId,
-      title: session.title?.trim() || parentTask.toolCall?.input?.description || 'Background subagent',
-      agentType: session.subagentType || parentTask.toolCall?.input?.subagent_type || parentTask.toolCall?.input?.subagentType,
-      status,
-      workspacePath: session.workspacePath,
-      remoteConnectionId: session.remoteConnectionId,
-      remoteSshHost: session.remoteSshHost,
-      parentToolCallId: session.parentToolCallId || parentTask.toolCall?.id || parentTask.id,
-      subagentType: session.subagentType || parentTask.toolCall?.input?.subagent_type || parentTask.toolCall?.input?.subagentType,
-    });
-  }
-
-  return results.sort((a, b) => {
-    const aSession = sessions.get(a.sessionId);
-    const bSession = sessions.get(b.sessionId);
-    const createdAtDiff = (aSession?.createdAt ?? 0) - (bSession?.createdAt ?? 0);
-    if (createdAtDiff !== 0) {
-      return createdAtDiff;
-    }
-
-    return a.sessionId.localeCompare(b.sessionId);
-  });
-}
-
 function commandTitle(command: string): string {
   const trimmed = command.trim();
   if (!trimmed) {
@@ -295,21 +207,6 @@ function backgroundCommandSummaryFromActivity(activity: BackgroundCommandActivit
   };
 }
 
-function computeSubagentSnapshotKey(
-  sessions: Map<string, Session>,
-  parentSessionId: string,
-): string | null {
-  const parts: string[] = [];
-  for (const session of sessions.values()) {
-    if (session.sessionKind !== 'subagent' || session.parentSessionId !== parentSessionId) {
-      continue;
-    }
-    const status = readSubagentExecutionStatus(session);
-    parts.push(`${session.sessionId}:${status ?? 'none'}`);
-  }
-  return parts.length > 0 ? parts.join('|') : null;
-}
-
 export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = ({
   className = '',
   config,
@@ -330,13 +227,14 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   // popup can be closed with Escape instead of cancelling the current task.
   const [chatPopupActive, setChatPopupActive] = useState(() => isChatPopupActive());
   const backgroundCommandActivities = useBackgroundCommandActivityStore(state => state.activities);
+  const backgroundSubagentActivities = useBackgroundSubagentActivityStore(state => state.activities);
 
   useEffect(() => {
     return subscribeChatPopupChange(() => {
       setChatPopupActive(isChatPopupActive());
     });
   }, []);
-  const [backgroundSubagents, setBackgroundSubagents] = useState<BackgroundSubagentSummary[]>([]);
+  const [stoppingBackgroundSubagentIds, setStoppingBackgroundSubagentIds] = useState<Set<string>>(() => new Set());
   const [stoppingBackgroundCommandIds, setStoppingBackgroundCommandIds] = useState<Set<string>>(() => new Set());
   const [backgroundCommandInputTarget, setBackgroundCommandInputTarget] = useState<FlowChatHeaderCommandSummary | null>(null);
   const [isSendingBackgroundCommandInput, setIsSendingBackgroundCommandInput] = useState(false);
@@ -384,12 +282,13 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     const lastRound = lastTurn.modelRounds[lastTurn.modelRounds.length - 1];
     for (let i = lastRound.items.length - 1; i >= 0; i -= 1) {
       const item = lastRound.items[i];
-if (item.type === 'tool' && item.toolName) {
+      if (item.type === 'tool' && item.toolName) {
         return 'waiting' as const;
       }
     }
     return 'working' as const;
   }, [activeSession, showCompanionPet]);
+  const [historyInitialContentPostPaintKey, setHistoryInitialContentPostPaintKey] = useState<string | null>(null);
   const { workspacePath } = useWorkspaceContext();
   const allowUserMessageRollback = !isAcpFlowSession(activeSession);
   const historyState = activeSession?.historyState;
@@ -403,9 +302,9 @@ if (item.type === 'tool' && item.toolName) {
     historyState === 'failed' ||
     hasRestoredTurnsPendingVirtualItems
   );
-  const showHistoryOpenIntentOverlay =
+  const isPendingHistoryOpenActiveSession =
     pendingHistoryOpenSession !== null &&
-    activeSession?.sessionId !== pendingHistoryOpenSession.sessionId;
+    activeSession?.sessionId === pendingHistoryOpenSession.sessionId;
   const {
     exploreGroupStates,
     onExploreGroupToggle: handleExploreGroupToggle,
@@ -484,9 +383,13 @@ if (item.type === 'tool' && item.toolName) {
     }
 
     const timeoutId = window.setTimeout(() => {
-      setPendingHistoryOpenSession(current =>
-        current?.sessionId === pendingHistoryOpenSession.sessionId ? null : current
-      );
+      setPendingHistoryOpenSession(current => {
+        if (current?.sessionId === pendingHistoryOpenSession.sessionId) {
+          clearHistorySessionOpenTransition(pendingHistoryOpenSession.sessionId);
+          return null;
+        }
+        return current;
+      });
     }, 4000);
 
     return () => {
@@ -495,13 +398,24 @@ if (item.type === 'tool' && item.toolName) {
   }, [pendingHistoryOpenSession]);
 
   useEffect(() => {
-    if (
-      pendingHistoryOpenSession &&
-      activeSession?.sessionId === pendingHistoryOpenSession.sessionId
-    ) {
-      setPendingHistoryOpenSession(null);
+    if (!isPendingHistoryOpenActiveSession) {
+      return;
     }
-  }, [activeSession?.sessionId, pendingHistoryOpenSession]);
+
+    if (showHistoryPlaceholder && historyState !== 'failed') {
+      return;
+    }
+
+    if (historyState === 'failed') {
+      clearHistorySessionOpenTransition(pendingHistoryOpenSession.sessionId);
+    }
+    setPendingHistoryOpenSession(null);
+  }, [
+    historyState,
+    isPendingHistoryOpenActiveSession,
+    pendingHistoryOpenSession?.sessionId,
+    showHistoryPlaceholder,
+  ]);
 
   const contextValue: FlowChatContextValue = useMemo(() => ({
     onFileViewRequest: handleFileViewRequest,
@@ -642,14 +556,26 @@ if (item.type === 'tool' && item.toolName) {
   const shouldDeferBackgroundCommandSnapshot =
     activeSession?.historyState === 'metadata-only' ||
     activeSession?.historyState === 'hydrating' ||
-    shouldBlockHistoryInitialContentInteraction;
+    (
+      historyInitialContentKey !== null &&
+      historyInitialContentPostPaintKey !== historyInitialContentKey
+    );
+  const shouldScheduleBackgroundCommandSnapshotAfterPaint =
+    historyInitialContentKey !== null &&
+    historyInitialContentPostPaintKey === historyInitialContentKey;
+  const showFailedHistoryPlaceholder =
+    showHistoryPlaceholder && historyState === 'failed';
+  const showHistoryOpenIntentOverlay =
+    pendingHistoryOpenSession !== null &&
+    (
+      activeSession?.sessionId !== pendingHistoryOpenSession.sessionId ||
+      (isPendingHistoryOpenActiveSession && showHistoryPlaceholder && !showFailedHistoryPlaceholder)
+    );
   const shouldBlockHistoryTransitionInteraction =
     shouldBlockHistoryInitialContentInteraction ||
     showHistoryOpenIntentOverlay;
-  const showFailedHistoryPlaceholder =
-    showHistoryPlaceholder && historyState === 'failed';
   const showHistoryLoadingLayer =
-    !showFailedHistoryPlaceholder && showHistoryPlaceholder;
+    !showHistoryOpenIntentOverlay && !showFailedHistoryPlaceholder && showHistoryPlaceholder;
   const blockHistoryOverlayActivation = useCallback((event: React.SyntheticEvent<HTMLElement>) => {
     if (!showHistoryLoadingLayer && !shouldBlockHistoryTransitionInteraction) {
       return;
@@ -745,6 +671,7 @@ if (item.type === 'tool' && item.toolName) {
 
   useEffect(() => {
     setHistoryInitialContentReadyKey(null);
+    setHistoryInitialContentPostPaintKey(null);
     setPendingHeaderTurnId(null);
   }, [activeSession?.sessionId]);
 
@@ -937,12 +864,14 @@ if (item.type === 'tool' && item.toolName) {
       }
       releasedHistoryCompletionKeyRef.current = releaseKey;
       const released = flowChatStore.releaseSessionHistoryCompletionAfterInitialPaint(sessionId);
+      clearHistorySessionOpenTransition(sessionId);
       startupTrace.markPhase('historical_session_initial_content_painted', {
         sessionId,
         latestTurnId,
         released,
         turnCount: turnSummaries.length,
       });
+      setHistoryInitialContentPostPaintKey(releaseKey);
     };
 
     const checkLatestTextVisibility = () => {
@@ -959,7 +888,9 @@ if (item.type === 'tool' && item.toolName) {
 
       if (attempts >= HISTORY_INITIAL_CONTENT_PAINT_MAX_ATTEMPTS) {
         setHistoryInitialContentReadyKey(releaseKey);
+        setHistoryInitialContentPostPaintKey(releaseKey);
         releasedHistoryCompletionKeyRef.current = releaseKey;
+        clearHistorySessionOpenTransition(sessionId);
         startupTrace.markPhase('historical_session_initial_content_paint_signal_missed', {
           sessionId,
           latestTurnId,
@@ -1073,36 +1004,21 @@ if (item.type === 'tool' && item.toolName) {
     void FlowChatManager.getInstance().switchChatSession(sessionId);
   }, [activeSession?.sessionId]);
 
-  const backgroundSubagentsRef = useRef<string | null>(null);
+  const activeSessionIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const syncBackgroundSubagents = () => {
-      const parentId = activeSession?.sessionId;
-      if (!parentId) {
-        setBackgroundSubagents([]);
-        backgroundSubagentsRef.current = null;
-        return;
-      }
-
-      const { sessions } = flowChatStore.getState();
-      const snapshot = computeSubagentSnapshotKey(sessions, parentId);
-      if (snapshot === backgroundSubagentsRef.current) {
-        return;
-      }
-      backgroundSubagentsRef.current = snapshot;
-
-      setBackgroundSubagents(collectRunningBackgroundSubagents(parentId));
-    };
-
-    syncBackgroundSubagents();
-    const unsubscribe = flowChatStore.subscribe(syncBackgroundSubagents);
-    const intervalId = window.setInterval(syncBackgroundSubagents, 1000);
-
-    return () => {
-      unsubscribe();
-      window.clearInterval(intervalId);
-    };
+    activeSessionIdRef.current = activeSession?.sessionId ?? null;
   }, [activeSession?.sessionId]);
+
+  useEffect(() => {
+    if (!activeSession?.sessionId) {
+      return;
+    }
+
+    useBackgroundSubagentActivityStore
+      .getState()
+      .reconcileParent(flowChatStore.getState(), activeSession.sessionId);
+  }, [activeSession?.dialogTurns.length, activeSession?.historyState, activeSession?.sessionId]);
 
   useEffect(() => {
     const agentSessionId = activeSession?.sessionId;
@@ -1111,22 +1027,50 @@ if (item.type === 'tool' && item.toolName) {
     }
 
     let cancelled = false;
-    void agentAPI.listBackgroundCommandActivities({ agentSessionId })
-      .then((response) => {
-        if (!cancelled) {
-          useBackgroundCommandActivityStore
-            .getState()
-            .hydrateActivities(agentSessionId, response.activities);
-        }
-      })
-      .catch(() => {
-        /* Snapshot recovery is best-effort; live events remain authoritative. */
-      });
+    let cancelScheduledSnapshot: (() => void) | null = null;
+    const recoverSnapshot = () => {
+      const pendingHistoryTransition = getHistorySessionOpenTransitionSnapshot();
+      if (
+        cancelled ||
+        activeSessionIdRef.current !== agentSessionId ||
+        (pendingHistoryTransition && pendingHistoryTransition.sessionId !== agentSessionId)
+      ) {
+        return;
+      }
+
+      void agentAPI.listBackgroundCommandActivities({ agentSessionId })
+        .then((response) => {
+          const currentHistoryTransition = getHistorySessionOpenTransitionSnapshot();
+          if (
+            !cancelled &&
+            activeSessionIdRef.current === agentSessionId &&
+            (!currentHistoryTransition || currentHistoryTransition.sessionId === agentSessionId)
+          ) {
+            useBackgroundCommandActivityStore
+              .getState()
+              .hydrateActivities(agentSessionId, response.activities);
+          }
+        })
+        .catch(() => {
+          /* Snapshot recovery is best-effort; live events remain authoritative. */
+        });
+    };
+
+    if (shouldScheduleBackgroundCommandSnapshotAfterPaint) {
+      cancelScheduledSnapshot = scheduleAfterStartupPaint(recoverSnapshot, { frameCount: 2 });
+    } else {
+      recoverSnapshot();
+    }
 
     return () => {
       cancelled = true;
+      cancelScheduledSnapshot?.();
     };
-  }, [activeSession?.sessionId, shouldDeferBackgroundCommandSnapshot]);
+  }, [
+    activeSession?.sessionId,
+    shouldScheduleBackgroundCommandSnapshotAfterPaint,
+    shouldDeferBackgroundCommandSnapshot,
+  ]);
 
   const backgroundCommands = useMemo(
     () => visibleBackgroundCommandActivitiesForSession(
@@ -1134,6 +1078,13 @@ if (item.type === 'tool' && item.toolName) {
       activeSession?.sessionId,
     ).map(backgroundCommandSummaryFromActivity),
     [activeSession?.sessionId, backgroundCommandActivities],
+  );
+  const backgroundSubagents = useMemo(
+    () => visibleBackgroundSubagentActivitiesForSession(
+      backgroundSubagentActivities,
+      activeSession?.sessionId,
+    ),
+    [activeSession?.sessionId, backgroundSubagentActivities],
   );
 
   useEffect(() => {
@@ -1159,6 +1110,24 @@ if (item.type === 'tool' && item.toolName) {
     });
   }, [backgroundCommands, stoppingBackgroundCommandIds.size]);
 
+  useEffect(() => {
+    if (stoppingBackgroundSubagentIds.size === 0) {
+      return;
+    }
+
+    const runningSubagentIds = new Set(backgroundSubagents.map(subagent => subagent.sessionId));
+    if (import.meta.env.DEV && shouldShowMockBackgroundActivities()) {
+      for (const subagent of MOCK_BACKGROUND_SUBAGENTS) {
+        runningSubagentIds.add(subagent.sessionId);
+      }
+    }
+
+    setStoppingBackgroundSubagentIds((previous) => {
+      const next = new Set([...previous].filter(sessionId => runningSubagentIds.has(sessionId)));
+      return next.size === previous.size ? previous : next;
+    });
+  }, [backgroundSubagents, stoppingBackgroundSubagentIds.size]);
+
   const handleOpenBackgroundSubagent = useCallback((childSessionId: string) => {
     const subagent = backgroundSubagents.find(item => item.sessionId === childSessionId);
     if (!subagent || !activeSession?.sessionId) {
@@ -1179,6 +1148,39 @@ if (item.type === 'tool' && item.toolName) {
       includeInternal: true,
     });
   }, [activeSession, backgroundSubagents]);
+
+  const handleStopBackgroundSubagent = useCallback(async (subagent: FlowChatHeaderSubagentSummary) => {
+    if (stoppingBackgroundSubagentIds.has(subagent.sessionId)) {
+      return;
+    }
+
+    setStoppingBackgroundSubagentIds((previous) => new Set(previous).add(subagent.sessionId));
+
+    if (import.meta.env.DEV && subagent.sessionId.startsWith('mock-background-subagent-')) {
+      window.setTimeout(() => {
+        setStoppingBackgroundSubagentIds((previous) => {
+          const next = new Set(previous);
+          next.delete(subagent.sessionId);
+          return next;
+        });
+      }, 1200);
+      return;
+    }
+
+    try {
+      await agentAPI.cancelSession(subagent.sessionId);
+    } catch (_error) {
+      setStoppingBackgroundSubagentIds((previous) => {
+        const next = new Set(previous);
+        next.delete(subagent.sessionId);
+        return next;
+      });
+      notificationService.error(
+        t('flowChatHeader.backgroundSubagentStopFailed'),
+        { duration: 5000 },
+      );
+    }
+  }, [stoppingBackgroundSubagentIds, t]);
 
   const handleOpenBackgroundCommandOutput = useCallback((command: FlowChatHeaderCommandSummary) => {
     createBackgroundCommandOutputTab({
@@ -1281,10 +1283,14 @@ if (item.type === 'tool' && item.toolName) {
 
   const showMockBackgroundActivities = shouldShowMockBackgroundActivities();
   const headerBackgroundSubagents = useMemo(
-    () => showMockBackgroundActivities
+    () => (showMockBackgroundActivities
       ? [...backgroundSubagents, ...MOCK_BACKGROUND_SUBAGENTS]
-      : backgroundSubagents,
-    [backgroundSubagents, showMockBackgroundActivities],
+      : backgroundSubagents
+    ).map(subagent => ({
+      ...subagent,
+      isStopping: stoppingBackgroundSubagentIds.has(subagent.sessionId),
+    })),
+    [backgroundSubagents, showMockBackgroundActivities, stoppingBackgroundSubagentIds],
   );
   const headerBackgroundCommands = useMemo(
     () => (showMockBackgroundActivities
@@ -1296,6 +1302,22 @@ if (item.type === 'tool' && item.toolName) {
     })),
     [backgroundCommands, showMockBackgroundActivities, stoppingBackgroundCommandIds],
   );
+  const handleStopAllBackgroundSubagents = useCallback(() => {
+    for (const subagent of headerBackgroundSubagents) {
+      if (subagent.isStopping === true) {
+        continue;
+      }
+      void handleStopBackgroundSubagent(subagent);
+    }
+  }, [handleStopBackgroundSubagent, headerBackgroundSubagents]);
+  const handleStopAllBackgroundCommands = useCallback(() => {
+    for (const command of headerBackgroundCommands) {
+      if (command.status !== 'running' || command.isStopping === true) {
+        continue;
+      }
+      void handleStopBackgroundCommand(command);
+    }
+  }, [handleStopBackgroundCommand, headerBackgroundCommands]);
 
   useShortcut(
     'chat.stopGeneration',
@@ -1378,9 +1400,12 @@ if (item.type === 'tool' && item.toolName) {
           onOpenBackgroundSubagent={handleOpenBackgroundSubagent}
           isSpeaking={isTtsSpeaking}
           onStopSpeaking={stopTts}
+          onStopBackgroundSubagent={handleStopBackgroundSubagent}
+          onStopAllBackgroundSubagents={handleStopAllBackgroundSubagents}
           onOpenBackgroundCommandOutput={handleOpenBackgroundCommandOutput}
           onRequestBackgroundCommandInput={handleRequestBackgroundCommandInput}
           onStopBackgroundCommand={handleStopBackgroundCommand}
+          onStopAllBackgroundCommands={handleStopAllBackgroundCommands}
         />
 
         <BackgroundCommandInputDialog
@@ -1472,7 +1497,7 @@ if (item.type === 'tool' && item.toolName) {
                 onRetry={handleRetryHistoryLoad}
               />
             ) : virtualItems.length === 0 ? (
-              showHistoryLoadingLayer ? null : (
+              showHistoryPlaceholder || showHistoryOpenIntentOverlay ? null : (
                 <WelcomePanel
                   key={activeSession?.sessionId ?? 'welcome'}
                   sessionMode={activeSession?.mode}

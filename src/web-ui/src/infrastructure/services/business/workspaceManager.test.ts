@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const globalStateMocks = vi.hoisted(() => ({
-  initializeGlobalState: vi.fn(),
+  initializeWorkspaceStartupState: vi.fn(),
   cleanupInvalidWorkspaces: vi.fn(),
   getRecentWorkspaces: vi.fn(),
   getOpenedWorkspaces: vi.fn(),
@@ -41,7 +41,13 @@ vi.mock('@/shared/utils/startupTrace', () => ({
 }));
 
 function configureGlobalState(): void {
-  globalStateMocks.initializeGlobalState.mockResolvedValue('initialized');
+  globalStateMocks.initializeWorkspaceStartupState.mockResolvedValue({
+    cleanupRemovedCount: 0,
+    recentWorkspaces: [],
+    openedWorkspaces: [],
+    currentWorkspace: null,
+    legacyRemoteWorkspace: null,
+  });
   globalStateMocks.cleanupInvalidWorkspaces.mockResolvedValue(0);
   globalStateMocks.getRecentWorkspaces.mockResolvedValue([]);
   globalStateMocks.getOpenedWorkspaces.mockResolvedValue([]);
@@ -61,7 +67,7 @@ describe('WorkspaceManager startup initialization', () => {
     configureGlobalState();
   });
 
-  it('overlaps global state initialization with identity listener registration but waits before publishing state', async () => {
+  it('waits for the identity listener before loading startup workspace state with one IPC', async () => {
     let resolveListener: ((unlisten: () => void) => void) | null = null;
     listenMock.mockReturnValue(new Promise(resolve => {
       resolveListener = resolve;
@@ -72,12 +78,44 @@ describe('WorkspaceManager startup initialization', () => {
     await new Promise(resolve => setTimeout(resolve, 20));
 
     expect(listenMock).toHaveBeenCalledWith('workspace-identity-changed', expect.any(Function));
-    expect(globalStateMocks.initializeGlobalState).toHaveBeenCalledTimes(1);
-    expect(globalStateMocks.getCurrentWorkspace).not.toHaveBeenCalled();
+    expect(globalStateMocks.initializeWorkspaceStartupState).not.toHaveBeenCalled();
 
     resolveListener?.(() => undefined);
     await initializePromise;
 
-    expect(globalStateMocks.getCurrentWorkspace).toHaveBeenCalledTimes(1);
+    expect(globalStateMocks.initializeWorkspaceStartupState).toHaveBeenCalledTimes(1);
+    expect(globalStateMocks.cleanupInvalidWorkspaces).not.toHaveBeenCalled();
+    expect(globalStateMocks.getCurrentWorkspace).not.toHaveBeenCalled();
+    expect(globalStateMocks.getRecentWorkspaces).not.toHaveBeenCalled();
+    expect(globalStateMocks.getOpenedWorkspaces).not.toHaveBeenCalled();
+  });
+
+  it('stores the startup legacy remote workspace snapshot for one reconnect pass', async () => {
+    const legacyRemoteWorkspace = {
+      connectionId: 'conn-1',
+      connectionName: 'Remote',
+      remotePath: '/repo',
+      sshHost: 'devbox',
+    };
+    globalStateMocks.initializeWorkspaceStartupState.mockResolvedValue({
+      cleanupRemovedCount: 0,
+      recentWorkspaces: [],
+      openedWorkspaces: [],
+      currentWorkspace: null,
+      legacyRemoteWorkspace,
+    });
+    listenMock.mockResolvedValue(() => undefined);
+    const manager = await getFreshWorkspaceManager();
+
+    await manager.initialize();
+
+    expect(manager.consumeStartupLegacyRemoteWorkspaceSnapshot()).toEqual({
+      available: true,
+      workspace: legacyRemoteWorkspace,
+    });
+    expect(manager.consumeStartupLegacyRemoteWorkspaceSnapshot()).toEqual({
+      available: false,
+      workspace: null,
+    });
   });
 });

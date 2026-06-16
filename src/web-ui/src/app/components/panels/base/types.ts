@@ -55,6 +55,7 @@ export interface FlexiblePanelProps {
   onInteraction?: (itemId: string, userInput: string) => Promise<void>;
   workspacePath?: string;
   onBeforeClose?: (content: PanelContent | null) => Promise<boolean>;
+  terminalResizeSuspended?: boolean;
 }
 
 export interface TabbedFlexiblePanelProps {

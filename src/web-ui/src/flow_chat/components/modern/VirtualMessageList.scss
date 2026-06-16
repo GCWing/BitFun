@@ -24,7 +24,7 @@
     // Show scrollbar thumb when the anchor track is hovered.
     &.anchor-hovering {
       &::-webkit-scrollbar-thumb {
-        background: var(--scrollbar-thumb, rgba(255, 255, 255, 0.12)) !important;
+        background: var(--scrollbar-thumb) !important;
       }
     }
   }
@@ -49,7 +49,7 @@
   
   .empty-state {
     text-align: center;
-    color: var(--color-text-muted, #888);
+    color: var(--color-text-muted);
     padding: 2rem;
   }
   
@@ -96,7 +96,7 @@
     z-index: 2;
     overflow: hidden;
     pointer-events: none;
-    background: var(--color-bg-flowchat, var(--color-bg-scene, var(--color-bg-primary, #fff)));
+    background: var(--color-bg-flowchat);
     contain: paint;
   }
 

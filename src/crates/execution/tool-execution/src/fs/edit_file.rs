@@ -119,13 +119,21 @@ fn find_actual_string(file_content: &str, search_string: &str) -> Option<String>
         return Some(search_string.to_string());
     }
 
-    let file_chars: Vec<char> = file_content.chars().collect();
-    let search_chars: Vec<char> = search_string.chars().collect();
+    // Normalize line endings so CRLF files can match LF search strings.
+    let normalized_file = normalize_string(file_content);
+    let normalized_search = normalize_string(search_string);
+
+    if normalized_file.contains(&normalized_search) {
+        return Some(search_string.to_string());
+    }
+
+    let file_chars: Vec<char> = normalized_file.chars().collect();
+    let search_chars: Vec<char> = normalized_search.chars().collect();
     if search_chars.is_empty() || file_chars.len() < search_chars.len() {
         return None;
     }
 
-    let normalized_search: Vec<char> = search_chars
+    let normalized_search_chars: Vec<char> = search_chars
         .iter()
         .copied()
         .map(normalize_quote_char)
@@ -136,7 +144,7 @@ fn find_actual_string(file_content: &str, search_string: &str) -> Option<String>
             .iter()
             .copied()
             .map(normalize_quote_char)
-            .eq(normalized_search.iter().copied());
+            .eq(normalized_search_chars.iter().copied());
         if window_matches {
             return Some(
                 file_chars[start..start + search_chars.len()]
@@ -147,6 +155,34 @@ fn find_actual_string(file_content: &str, search_string: &str) -> Option<String>
     }
 
     None
+}
+
+/// Replace every tab with `tab_width` spaces.
+fn convert_tabs_to_spaces(s: &str, tab_width: usize) -> String {
+    s.replace('\t', &" ".repeat(tab_width))
+}
+
+/// Replace leading spaces on each line with tabs when the space count is a
+/// clean multiple of `tab_width`. Lines whose leading whitespace contains
+/// tabs or whose space count is not divisible by `tab_width` are left as-is.
+fn convert_leading_spaces_to_tabs(s: &str, tab_width: usize) -> String {
+    s.lines()
+        .map(|line| {
+            let trimmed_start = line.len() - line.trim_start().len();
+            let leading = &line[..trimmed_start];
+
+            if leading.is_empty()
+                || !leading.chars().all(|c| c == ' ')
+                || leading.len() % tab_width != 0
+            {
+                return line.to_string();
+            }
+
+            let tabs = "\t".repeat(leading.len() / tab_width);
+            tabs + &line[trimmed_start..]
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn edit_string_candidates(
@@ -180,6 +216,35 @@ fn edit_string_candidates(
         let with_newline = format!("{old_string}\n");
         if content.contains(&with_newline) {
             push_candidate(with_newline, format!("{new_string}\n"));
+        }
+    }
+
+    // Whitespace-normalization fallbacks: when the model copies indentation
+    // with tabs instead of spaces (or vice versa), try common conversions.
+    // Only the old/new string pair is transformed — file content is never
+    // rewritten speculatively.  Each pair must pass exact match inside
+    // apply_match_and_replace (after CRLF normalization) before any write.
+    for tab_width in [2, 4] {
+        let tabs_to_spaces_old = convert_tabs_to_spaces(old_string, tab_width);
+        if tabs_to_spaces_old != old_string {
+            let tabs_to_spaces_new = convert_tabs_to_spaces(new_string, tab_width);
+            push_candidate(tabs_to_spaces_old.clone(), tabs_to_spaces_new.clone());
+
+            // Also try quote-normalized variant (e.g. curly quotes in file
+            // after whitespace normalization).
+            if let Some(actual_old) = find_actual_string(content, &tabs_to_spaces_old) {
+                push_candidate(actual_old, tabs_to_spaces_new);
+            }
+        }
+
+        let spaces_to_tabs_old = convert_leading_spaces_to_tabs(old_string, tab_width);
+        if spaces_to_tabs_old != old_string {
+            let spaces_to_tabs_new = convert_leading_spaces_to_tabs(new_string, tab_width);
+            push_candidate(spaces_to_tabs_old.clone(), spaces_to_tabs_new.clone());
+
+            if let Some(actual_old) = find_actual_string(content, &spaces_to_tabs_old) {
+                push_candidate(actual_old, spaces_to_tabs_new);
+            }
         }
     }
 
@@ -286,16 +351,17 @@ fn build_not_found_diagnostics(content: &str, old_string: &str) -> String {
     hints.join("\n\n")
 }
 
+/// Core match-and-replace logic.  `normalized_content` and `uses_crlf` are
+/// pre-computed by the caller so they are not re-derived per candidate.
 fn apply_match_and_replace(
-    content: &str,
+    normalized_content: &str,
+    uses_crlf: bool,
     old_string: &str,
     new_string: &str,
     replace_all: bool,
 ) -> Result<ApplyEditResult, String> {
-    let uses_crlf = content.contains("\r\n");
     let normalized_old = normalize_string(old_string);
     let normalized_new = normalize_string(new_string);
-    let normalized_content = normalize_string(content);
 
     if normalized_old.is_empty() {
         return Err("old_string cannot be empty.".to_string());
@@ -311,12 +377,12 @@ fn apply_match_and_replace(
         return Err(format!(
             "`old_string` appears {} times in file, either provide a larger string with more surrounding context to make it unique or use `replace_all` to change every instance of `old_string`.\n{}",
             matches.len(),
-            match_contexts(&normalized_content, &normalized_old, &matches)
+            match_contexts(normalized_content, &normalized_old, &matches)
         ));
     }
 
     let first_match_pos = matches[0].0;
-    let start_line = count_lines_before(&normalized_content, first_match_pos);
+    let start_line = count_lines_before(normalized_content, first_match_pos);
     let old_end_line = start_line + count_newlines(&normalized_old);
     let new_end_line = start_line + count_newlines(&normalized_new);
 
@@ -351,8 +417,18 @@ pub fn apply_edit_to_content(
 ) -> Result<ApplyEditResult, String> {
     let mut last_error = String::from("old_string not found in file.");
 
+    // Pre-compute so every candidate iteration reuses the same normalized form.
+    let uses_crlf = content.contains("\r\n");
+    let normalized_content = normalize_string(content);
+
     for (candidate_old, candidate_new) in edit_string_candidates(content, old_string, new_string) {
-        match apply_match_and_replace(content, &candidate_old, &candidate_new, replace_all) {
+        match apply_match_and_replace(
+            &normalized_content,
+            uses_crlf,
+            &candidate_old,
+            &candidate_new,
+            replace_all,
+        ) {
             Ok(result) => return Ok(result),
             Err(error) if error == "old_string not found in file." => {
                 last_error = error;
@@ -574,5 +650,122 @@ mod tests {
             }
         );
         assert_eq!(content, "first\r\nalpha\r\nBETA\r\n");
+    }
+
+    // -- whitespace-normalization candidate tests ----------------------------------
+
+    #[test]
+    fn apply_edit_tabs_old_matches_spaces_file_2w() {
+        // Model copies with tabs; file uses 2-space indentation.
+        let content = "fn main() {\n  let x = 1;\n  let y = 2;\n}\n";
+        let result = apply_edit_to_content(
+            content,
+            "fn main() {\n\tlet x = 1;\n\tlet y = 2;\n}",
+            "fn main() {\n\tlet x = 0;\n\tlet y = 0;\n}",
+            false,
+        )
+        .expect("tabs→2-space edit should succeed");
+        assert_eq!(
+            result.new_content,
+            "fn main() {\n  let x = 0;\n  let y = 0;\n}\n"
+        );
+    }
+
+    #[test]
+    fn apply_edit_tabs_old_matches_spaces_file_4w() {
+        // Model copies with tabs; file uses 4-space indentation.
+        let content = "fn main() {\n    let x = 1;\n}\n";
+        let result = apply_edit_to_content(
+            content,
+            "fn main() {\n\tlet x = 1;\n}",
+            "fn main() {\n\tlet x = 0;\n}",
+            false,
+        )
+        .expect("tabs→4-space edit should succeed");
+        assert_eq!(result.new_content, "fn main() {\n    let x = 0;\n}\n");
+    }
+
+    #[test]
+    fn apply_edit_spaces_old_matches_tabs_file_4w() {
+        // Model copies with 4-space indentation; file uses tabs.
+        let content = "fn main() {\n\tlet x = 1;\n}\n";
+        let result = apply_edit_to_content(
+            content,
+            "fn main() {\n    let x = 1;\n}",
+            "fn main() {\n    let x = 0;\n}",
+            false,
+        )
+        .expect("4-space→tabs edit should succeed");
+        assert_eq!(result.new_content, "fn main() {\n\tlet x = 0;\n}\n");
+    }
+
+    #[test]
+    fn apply_edit_spaces_old_matches_tabs_file_2w() {
+        // Model copies with 2-space indentation; file uses tabs.
+        let content = "fn main() {\n\tlet x = 1;\n}\n";
+        let result = apply_edit_to_content(
+            content,
+            "fn main() {\n  let x = 1;\n}",
+            "fn main() {\n  let x = 0;\n}",
+            false,
+        )
+        .expect("2-space→tabs edit should succeed");
+        assert_eq!(result.new_content, "fn main() {\n\tlet x = 0;\n}\n");
+    }
+
+    #[test]
+    fn apply_edit_whitespace_candidate_does_not_match_when_content_differs() {
+        // Tabs→spaces conversion should NOT produce a false match when the
+        // non-whitespace portion of the content differs.
+        let content = "fn main() {\n    let x = 1;\n}\n";
+        let error = apply_edit_to_content(
+            content,
+            "fn main() {\n\tlet x = 999;\n}",
+            "fn main() {\n\tlet x = 0;\n}",
+            false,
+        )
+        .expect_err("different content should fail");
+        assert!(error.contains("old_string not found in file."));
+    }
+
+    #[test]
+    fn apply_edit_whitespace_candidate_preserves_crlf() {
+        // Whitespace-normalized edit on a CRLF file must preserve CRLF.
+        let content = "fn main() {\r\n    let x = 1;\r\n}\r\n";
+        let result = apply_edit_to_content(
+            content,
+            "fn main() {\n\tlet x = 1;\n}",
+            "fn main() {\n\tlet x = 0;\n}",
+            false,
+        )
+        .expect("whitespace-normalized CRLF edit should succeed");
+        assert_eq!(result.new_content, "fn main() {\r\n    let x = 0;\r\n}\r\n");
+        assert_eq!(result.match_count, 1);
+    }
+
+    #[test]
+    fn apply_edit_curly_quotes_with_crlf_file() {
+        // find_actual_string must work on CRLF files after the fix.
+        let content = "msg := \u{201c}hello\u{201d}\r\n";
+        let result = apply_edit_to_content(content, "msg := \"hello\"", "msg := \"hi\"", false)
+            .expect("curly-quote edit on CRLF file should succeed");
+        assert_eq!(result.new_content, "msg := \"hi\"\r\n");
+    }
+
+    #[test]
+    fn apply_edit_curly_quotes_with_crlf_file_and_whitespace_mismatch() {
+        // Combined: CRLF file, curly quotes, AND tab↔space mismatch.
+        let content = "fn main() {\r\n    msg := \u{201c}hello\u{201d}\r\n}\r\n";
+        let result = apply_edit_to_content(
+            content,
+            "fn main() {\n\tmsg := \"hello\"\n}",
+            "fn main() {\n\tmsg := \"hi\"\n}",
+            false,
+        )
+        .expect("combined CRLF + curly + tab→space edit should succeed");
+        assert_eq!(
+            result.new_content,
+            "fn main() {\r\n    msg := \"hi\"\r\n}\r\n"
+        );
     }
 }

@@ -49,16 +49,16 @@ $panel-height: 620px;
   width: $button-size;
   height: $button-size;
   border-radius: 50%;
-  border: 1px solid var(--border-base, rgba(255, 255, 255, 0.08));
+  border: 1px solid var(--border-base);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-text-secondary, #a0a0a0);
-  background: var(--color-bg-tertiary, #1e1e22);
+  color: var(--color-text-secondary);
+  background: var(--color-bg-tertiary);
   box-shadow:
     0 2px 8px rgba(0, 0, 0, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    inset 0 1px 0 var(--color-overlay-white-04);
   transition:
     transform 0.2s $fmc-ease,
     background 0.2s ease,
@@ -67,12 +67,12 @@ $panel-height: 620px;
     opacity $fmc-close-duration $fmc-ease;
 
   &:hover {
-    background: var(--color-bg-elevated, #262630);
-    border-color: var(--border-medium, rgba(255, 255, 255, 0.14));
-    color: var(--color-text-primary, #e8e8e8);
+    background: var(--color-bg-elevated);
+    border-color: var(--border-medium);
+    color: var(--color-text-primary);
     box-shadow:
       0 4px 16px rgba(0, 0, 0, 0.45),
-      0 0 12px rgba(100, 140, 255, 0.08);
+      0 0 12px color-mix(in srgb, var(--color-accent-500) 8%, transparent);
     transform: scale(1.06);
   }
 
@@ -98,12 +98,12 @@ $panel-height: 620px;
   height: $panel-height;
   max-width: calc(100vw - 32px);
   max-height: calc(100vh - 80px);
-  background: var(--color-bg-primary, #121214);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+  background: var(--color-bg-primary);
+  border: 1px solid var(--border-subtle);
   border-radius: 8px;
   box-shadow:
-    0 4px 12px rgba(0, 0, 0, 0.25),
-    0 0 1px rgba(255, 255, 255, 0.06);
+    0 4px 12px var(--color-overlay-black-25),
+    0 0 1px var(--color-overlay-white-06);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -129,7 +129,7 @@ $panel-height: 620px;
 
   // ── State borders ──
   &--processing {
-    border-color: var(--color-accent-300, rgba(96, 165, 250, 0.3));
+    border-color: var(--color-accent-300);
 
     &::before {
       content: '';
@@ -141,9 +141,9 @@ $panel-height: 620px;
       border-radius: 8px 8px 0 0;
       background: linear-gradient(
         90deg,
-        var(--color-accent-600, #3b82f6),
-        var(--color-purple-500, #8b5cf6),
-        var(--color-accent-600, #3b82f6)
+        var(--color-accent-600),
+        var(--color-purple-500),
+        var(--color-accent-600)
       );
       background-size: 200% 100%;
       animation: fmc-progress 2s linear infinite;
@@ -152,11 +152,11 @@ $panel-height: 620px;
   }
 
   &--error {
-    border-color: var(--color-error-border, rgba(239, 68, 68, 0.4));
+    border-color: var(--color-error-border);
   }
 
   &--confirm {
-    border-color: var(--color-warning-border, rgba(251, 146, 60, 0.4));
+    border-color: var(--color-warning-border);
     animation: fmc-pulse 1s ease-in-out infinite;
   }
 }
@@ -168,12 +168,12 @@ $panel-height: 620px;
 
 @keyframes fmc-pulse {
   0%, 100% {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25),
-      0 0 0 1px var(--color-warning-border, rgba(251, 146, 60, 0.3));
+    box-shadow: 0 4px 12px var(--color-overlay-black-25),
+      0 0 0 1px var(--color-warning-border);
   }
   50% {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25),
-      0 0 0 2px var(--color-warning, rgba(251, 146, 60, 0.5));
+    box-shadow: 0 4px 12px var(--color-overlay-black-25),
+      0 0 0 2px var(--color-warning);
   }
 }
 
@@ -185,7 +185,7 @@ $panel-height: 620px;
   align-items: center;
   padding: 0 10px;
   gap: 4px;
-  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .bitfun-fmc__header-btn {
@@ -197,14 +197,14 @@ $panel-height: 620px;
   justify-content: center;
   border: none;
   background: transparent;
-  color: var(--color-text-muted, #707070);
+  color: var(--color-text-muted);
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.15s ease;
 
   &:hover {
-    background: var(--element-bg-base, rgba(255, 255, 255, 0.08));
-    color: var(--color-text-primary, #e8e8e8);
+    background: var(--element-bg-base);
+    color: var(--color-text-primary);
   }
 
   &:active {
@@ -212,23 +212,23 @@ $panel-height: 620px;
   }
 
   &--confirm {
-    color: var(--color-success, #22c55e);
-    &:hover { background: var(--color-success-bg, rgba(34, 197, 94, 0.15)); }
+    color: var(--color-success);
+    &:hover { background: var(--color-success-bg); }
   }
 
   &--reject {
-    color: var(--color-error, #ef4444);
-    &:hover { background: var(--color-error-bg, rgba(239, 68, 68, 0.15)); }
+    color: var(--color-error);
+    &:hover { background: var(--color-error-bg); }
   }
 
   &--stop {
-    color: var(--color-error, #ef4444);
-    &:hover { background: var(--color-error-bg, rgba(239, 68, 68, 0.15)); }
+    color: var(--color-error);
+    &:hover { background: var(--color-error-bg); }
   }
 
   &--close:hover {
-    background: var(--color-error-bg, rgba(239, 68, 68, 0.15));
-    color: var(--color-error, #ef4444);
+    background: var(--color-error-bg);
+    color: var(--color-error);
   }
 }
 
@@ -247,7 +247,7 @@ $panel-height: 620px;
   padding: 4px 8px;
   border: none;
   background: transparent;
-  color: var(--color-text-primary, #e8e8e8);
+  color: var(--color-text-primary);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
@@ -255,12 +255,12 @@ $panel-height: 620px;
   transition: background 0.15s ease;
 
   &:hover {
-    background: var(--element-bg-base, rgba(255, 255, 255, 0.08));
+    background: var(--element-bg-base);
   }
 
   svg {
     flex-shrink: 0;
-    color: var(--color-text-muted, #707070);
+    color: var(--color-text-muted);
   }
 }
 
@@ -295,10 +295,10 @@ $panel-height: 620px;
   margin-top: 4px;
   max-height: 220px;
   overflow-y: auto;
-  background: var(--color-bg-elevated, #1a1a20);
-  border: 1px solid var(--border-medium, rgba(255, 255, 255, 0.12));
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--border-medium);
   border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 8px 24px var(--color-overlay-black-50);
   z-index: 100;
   animation: fmc-dropdown-in 0.18s $fmc-ease;
   transform-origin: top center;
@@ -319,7 +319,7 @@ $panel-height: 620px;
   padding: 7px 12px;
   border: none;
   background: transparent;
-  color: var(--color-text-secondary, #a0a0a0);
+  color: var(--color-text-secondary);
   font-size: 12px;
   text-align: left;
   cursor: pointer;
@@ -329,13 +329,13 @@ $panel-height: 620px;
   white-space: nowrap;
 
   &:hover {
-    background: var(--element-bg-soft, rgba(255, 255, 255, 0.06));
-    color: var(--color-text-primary, #e8e8e8);
+    background: var(--element-bg-soft);
+    color: var(--color-text-primary);
   }
 
   &--active {
-    background: var(--color-accent-200, rgba(96, 165, 250, 0.15));
-    color: var(--color-accent-500, #60a5fa);
+    background: var(--color-accent-200);
+    color: var(--color-accent-500);
   }
 }
 
@@ -367,8 +367,8 @@ $panel-height: 620px;
   align-items: center;
   gap: 6px;
   padding: 8px 10px;
-  border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
-  background: var(--element-bg-subtle, rgba(255, 255, 255, 0.02));
+  border-top: 1px solid var(--border-subtle);
+  background: var(--element-bg-subtle);
 }
 
 .bitfun-fmc__input-wrapper {
@@ -396,25 +396,25 @@ $panel-height: 620px;
 
     &:not(:disabled) {
       background: linear-gradient(135deg,
-        rgba(80, 130, 255, 0.85),
-        rgba(120, 100, 255, 0.9));
-      border: 1px solid rgba(140, 160, 255, 0.6);
-      color: white;
+        color-mix(in srgb, var(--color-accent-500) 85%, transparent),
+        color-mix(in srgb, var(--color-purple-500) 90%, transparent));
+      border: 1px solid color-mix(in srgb, var(--color-accent-500) 60%, transparent);
+      color: var(--color-static-white);
       box-shadow:
-        0 2px 8px rgba(100, 140, 255, 0.4),
-        0 0 12px rgba(120, 100, 255, 0.25);
+        0 2px 8px color-mix(in srgb, var(--color-accent-500) 40%, transparent),
+        0 0 12px color-mix(in srgb, var(--color-purple-500) 25%, transparent);
     }
 
     &:hover:not(:disabled) {
       background: linear-gradient(135deg,
-        rgba(90, 150, 255, 1),
-        rgba(140, 120, 255, 1));
-      border-color: rgba(160, 180, 255, 0.8);
-      color: white;
+        color-mix(in srgb, var(--color-accent-500) 94%, var(--color-static-white)),
+        color-mix(in srgb, var(--color-purple-500) 92%, var(--color-static-white)));
+      border-color: color-mix(in srgb, var(--color-accent-500) 80%, transparent);
+      color: var(--color-static-white);
       transform: scale(1.12);
       box-shadow:
-        0 6px 20px rgba(100, 140, 255, 0.55),
-        0 0 24px rgba(140, 100, 255, 0.4);
+        0 6px 20px color-mix(in srgb, var(--color-accent-500) 55%, transparent),
+        0 0 24px color-mix(in srgb, var(--color-purple-500) 40%, transparent);
     }
 
     &:active:not(:disabled) {
@@ -434,11 +434,11 @@ $panel-height: 620px;
     width: 24px;
     height: 24px;
     border-radius: 50%;
-    background: var(--color-error-bg, rgba(239, 68, 68, 0.15));
-    color: var(--color-error, #ef4444);
+    background: var(--color-error-bg);
+    color: var(--color-error);
 
     &:hover {
-      background: var(--color-error-border, rgba(239, 68, 68, 0.25));
+      background: var(--color-error-border);
     }
 
     &:active {

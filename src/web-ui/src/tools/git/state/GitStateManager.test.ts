@@ -132,6 +132,31 @@ describe('GitStateManager refresh performance guards', () => {
     expect(gitApiMocks.getStatus).toHaveBeenCalledTimes(1);
   });
 
+  it('cancels pending refreshes by merged source token before debounce execution', async () => {
+    const first = manager.refresh(repositoryPath, {
+      layers: ['basic'],
+      reason: 'mount',
+      source: 'workspace_git_initializer',
+    });
+    const second = manager.refresh(repositoryPath, {
+      layers: ['basic'],
+      reason: 'mount',
+      source: 'workspace_item_git_basic_info',
+    });
+
+    expect(manager.cancelPendingRefresh(repositoryPath, {
+      layers: ['basic'],
+      reason: 'mount',
+      source: 'workspace_item_git_basic_info',
+    })).toBe(true);
+
+    await Promise.all([first, second]);
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(gitApiMocks.isGitRepository).not.toHaveBeenCalled();
+    expect(gitApiMocks.getRepositoryBasic).not.toHaveBeenCalled();
+  });
+
   it('does not run force refresh concurrently with an in-flight refresh', async () => {
     const firstStatus = deferred<Awaited<ReturnType<typeof gitApiMocks.getStatus>>>();
     gitApiMocks.getStatus

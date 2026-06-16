@@ -9,14 +9,16 @@ use crate::service::remote_ssh::workspace_state::{
     normalize_remote_workspace_path, remote_root_to_mirror_subpath,
     sanitize_ssh_hostname_for_mirror,
 };
-use crate::service::session::{StoredSessionIndexFile, StoredSessionMetadataFile};
 use crate::util::errors::{BitFunError, BitFunResult};
+use bitfun_services_core::session::{
+    merge_legacy_session_store, move_legacy_path, SessionStoreMigrationError,
+    SessionStoreMigrationRecord,
+};
 use log::debug;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
-use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::Mutex as AsyncMutex;
 
 #[derive(Debug)]
@@ -391,50 +393,10 @@ impl WorkspaceRuntimeService {
             self.path_manager.ensure_dir(parent).await?;
         }
 
-        match tokio::fs::rename(source, target).await {
-            Ok(()) => Ok(RuntimeMigrationRecord {
-                source: source.to_path_buf(),
-                target: target.to_path_buf(),
-                strategy: "rename".to_string(),
-            }),
-            Err(_) if source.is_dir() => {
-                copy_dir_recursive(source, target)?;
-                std::fs::remove_dir_all(source).map_err(|e| {
-                    BitFunError::service(format!(
-                        "Failed to remove legacy directory {}: {}",
-                        source.display(),
-                        e
-                    ))
-                })?;
-                Ok(RuntimeMigrationRecord {
-                    source: source.to_path_buf(),
-                    target: target.to_path_buf(),
-                    strategy: "copy_dir".to_string(),
-                })
-            }
-            Err(_) => {
-                std::fs::copy(source, target).map_err(|e| {
-                    BitFunError::service(format!(
-                        "Failed to copy legacy file {} to {}: {}",
-                        source.display(),
-                        target.display(),
-                        e
-                    ))
-                })?;
-                std::fs::remove_file(source).map_err(|e| {
-                    BitFunError::service(format!(
-                        "Failed to remove legacy file {}: {}",
-                        source.display(),
-                        e
-                    ))
-                })?;
-                Ok(RuntimeMigrationRecord {
-                    source: source.to_path_buf(),
-                    target: target.to_path_buf(),
-                    strategy: "copy_file".to_string(),
-                })
-            }
-        }
+        move_legacy_path(source, target)
+            .await
+            .map(runtime_migration_record)
+            .map_err(session_store_migration_error)
     }
 
     async fn merge_session_store(
@@ -442,130 +404,10 @@ impl WorkspaceRuntimeService {
         source: &Path,
         target: &Path,
     ) -> BitFunResult<Option<RuntimeMigrationRecord>> {
-        if !source.exists() {
-            return Ok(None);
-        }
-
-        std::fs::create_dir_all(target).map_err(|e| {
-            BitFunError::service(format!(
-                "Failed to create target sessions directory {}: {}",
-                target.display(),
-                e
-            ))
-        })?;
-
-        for entry in std::fs::read_dir(source).map_err(|e| {
-            BitFunError::service(format!(
-                "Failed to read legacy sessions directory {}: {}",
-                source.display(),
-                e
-            ))
-        })? {
-            let entry = entry.map_err(|e| {
-                BitFunError::service(format!(
-                    "Failed to inspect legacy sessions entry under {}: {}",
-                    source.display(),
-                    e
-                ))
-            })?;
-            let source_path = entry.path();
-            let file_name = entry.file_name();
-            let file_type = entry.file_type().map_err(|e| {
-                BitFunError::service(format!(
-                    "Failed to read file type for {}: {}",
-                    source_path.display(),
-                    e
-                ))
-            })?;
-
-            if file_name
-                .to_string_lossy()
-                .eq_ignore_ascii_case("index.json")
-            {
-                remove_path_if_exists(&source_path)?;
-                continue;
-            }
-
-            if !file_type.is_dir() {
-                let target_path = target.join(&file_name);
-                if !target_path.exists() {
-                    move_path_best_effort(&source_path, &target_path)?;
-                } else if files_are_equal(&source_path, &target_path)? {
-                    remove_path_if_exists(&source_path)?;
-                } else {
-                    replace_target_if_source_newer(&source_path, &target_path)?;
-                }
-                continue;
-            }
-
-            let target_path = target.join(&file_name);
-            if !target_path.exists() {
-                move_path_best_effort(&source_path, &target_path)?;
-                continue;
-            }
-
-            merge_session_directory(&source_path, &target_path)?;
-            remove_path_if_exists(&source_path)?;
-        }
-
-        self.rebuild_session_index(target).await?;
-        remove_path_if_exists(&source.join("index.json"))?;
-        remove_path_if_exists(source)?;
-
-        Ok(Some(RuntimeMigrationRecord {
-            source: source.to_path_buf(),
-            target: target.to_path_buf(),
-            strategy: "merge_sessions".to_string(),
-        }))
-    }
-
-    async fn rebuild_session_index(&self, sessions_dir: &Path) -> BitFunResult<()> {
-        if !sessions_dir.exists() {
-            return Ok(());
-        }
-
-        let mut sessions = Vec::new();
-        for entry in std::fs::read_dir(sessions_dir).map_err(|e| {
-            BitFunError::service(format!(
-                "Failed to read merged sessions directory {}: {}",
-                sessions_dir.display(),
-                e
-            ))
-        })? {
-            let entry = entry.map_err(|e| {
-                BitFunError::service(format!(
-                    "Failed to inspect merged sessions entry under {}: {}",
-                    sessions_dir.display(),
-                    e
-                ))
-            })?;
-            let path = entry.path();
-            let file_type = entry.file_type().map_err(|e| {
-                BitFunError::service(format!(
-                    "Failed to read file type for {}: {}",
-                    path.display(),
-                    e
-                ))
-            })?;
-            if !file_type.is_dir() {
-                continue;
-            }
-
-            let metadata_path = path.join("metadata.json");
-            let Some(stored) =
-                read_json_optional_sync::<StoredSessionMetadataFile>(&metadata_path)?
-            else {
-                continue;
-            };
-            if stored.metadata.should_hide_from_user_lists() {
-                continue;
-            }
-            sessions.push(stored.metadata);
-        }
-
-        sessions.sort_by(|a, b| b.last_active_at.cmp(&a.last_active_at));
-        let index = StoredSessionIndexFile::new(unix_now_ms(), sessions);
-        write_json_pretty_async(&sessions_dir.join("index.json"), &index).await
+        merge_legacy_session_store(source, target)
+            .await
+            .map(|record| record.map(runtime_migration_record))
+            .map_err(session_store_migration_error)
     }
 
     async fn remove_dir_if_empty(&self, path: &Path) -> BitFunResult<()> {
@@ -602,350 +444,22 @@ impl WorkspaceRuntimeService {
     }
 }
 
-fn merge_session_directory(source: &Path, target: &Path) -> BitFunResult<()> {
-    std::fs::create_dir_all(target).map_err(|e| {
-        BitFunError::service(format!(
-            "Failed to create target session directory {}: {}",
-            target.display(),
-            e
-        ))
-    })?;
-
-    for entry in std::fs::read_dir(source).map_err(|e| {
-        BitFunError::service(format!(
-            "Failed to read legacy session directory {}: {}",
-            source.display(),
-            e
-        ))
-    })? {
-        let entry = entry.map_err(|e| {
-            BitFunError::service(format!(
-                "Failed to inspect legacy session entry under {}: {}",
-                source.display(),
-                e
-            ))
-        })?;
-        let source_path = entry.path();
-        let target_path = target.join(entry.file_name());
-        let file_type = entry.file_type().map_err(|e| {
-            BitFunError::service(format!(
-                "Failed to read file type for {}: {}",
-                source_path.display(),
-                e
-            ))
-        })?;
-
-        if file_type.is_dir() {
-            if !target_path.exists() {
-                move_path_best_effort(&source_path, &target_path)?;
-            } else {
-                merge_session_directory(&source_path, &target_path)?;
-                remove_path_if_exists(&source_path)?;
-            }
-            continue;
-        }
-
-        if file_name_eq(&source_path, "metadata.json") && target_path.exists() {
-            merge_session_metadata_file(&source_path, &target_path)?;
-            remove_path_if_exists(&source_path)?;
-            continue;
-        }
-
-        if !target_path.exists() {
-            move_path_best_effort(&source_path, &target_path)?;
-        } else if files_are_equal(&source_path, &target_path)? {
-            remove_path_if_exists(&source_path)?;
-        } else {
-            replace_target_if_source_newer(&source_path, &target_path)?;
-        }
+fn runtime_migration_record(record: SessionStoreMigrationRecord) -> RuntimeMigrationRecord {
+    RuntimeMigrationRecord {
+        source: record.source,
+        target: record.target,
+        strategy: record.strategy,
     }
-
-    Ok(())
 }
 
-fn merge_session_metadata_file(source: &Path, target: &Path) -> BitFunResult<()> {
-    let source_file =
-        read_json_optional_sync::<StoredSessionMetadataFile>(source)?.ok_or_else(|| {
-            BitFunError::service(format!(
-                "Missing readable session metadata in {}",
-                source.display()
-            ))
-        })?;
-    let target_file =
-        read_json_optional_sync::<StoredSessionMetadataFile>(target)?.ok_or_else(|| {
-            BitFunError::service(format!(
-                "Missing readable session metadata in {}",
-                target.display()
-            ))
-        })?;
-
-    let chosen = if source_file.metadata.last_active_at > target_file.metadata.last_active_at {
-        source_file
+fn session_store_migration_error(error: SessionStoreMigrationError) -> BitFunError {
+    if error.is_metadata_deserialization() {
+        BitFunError::Deserialization(error.to_string())
+    } else if error.is_metadata_serialization() {
+        BitFunError::serialization(error.to_string())
     } else {
-        target_file
-    };
-
-    write_json_pretty_sync(target, &chosen)?;
-    Ok(())
-}
-
-fn replace_target_if_source_newer(source: &Path, target: &Path) -> BitFunResult<()> {
-    if source_is_newer(source, target)? {
-        remove_path_if_exists(target)?;
-        move_path_best_effort(source, target)
-    } else {
-        remove_path_if_exists(source)
+        BitFunError::service(error.to_string())
     }
-}
-
-fn copy_dir_recursive(source: &Path, target: &Path) -> BitFunResult<()> {
-    std::fs::create_dir_all(target).map_err(|e| {
-        BitFunError::service(format!(
-            "Failed to create target directory {}: {}",
-            target.display(),
-            e
-        ))
-    })?;
-
-    for entry in std::fs::read_dir(source).map_err(|e| {
-        BitFunError::service(format!(
-            "Failed to read legacy directory {}: {}",
-            source.display(),
-            e
-        ))
-    })? {
-        let entry = entry.map_err(|e| {
-            BitFunError::service(format!(
-                "Failed to inspect legacy directory entry under {}: {}",
-                source.display(),
-                e
-            ))
-        })?;
-        let source_path = entry.path();
-        let target_path = target.join(entry.file_name());
-        let file_type = entry.file_type().map_err(|e| {
-            BitFunError::service(format!(
-                "Failed to read file type for {}: {}",
-                source_path.display(),
-                e
-            ))
-        })?;
-
-        if file_type.is_dir() {
-            copy_dir_recursive(&source_path, &target_path)?;
-        } else if file_type.is_file() {
-            std::fs::copy(&source_path, &target_path).map_err(|e| {
-                BitFunError::service(format!(
-                    "Failed to copy legacy file {} to {}: {}",
-                    source_path.display(),
-                    target_path.display(),
-                    e
-                ))
-            })?;
-        }
-    }
-
-    Ok(())
-}
-
-fn read_json_optional_sync<T>(path: &Path) -> BitFunResult<Option<T>>
-where
-    T: DeserializeOwned,
-{
-    if !path.exists() {
-        return Ok(None);
-    }
-
-    let bytes = std::fs::read(path).map_err(|e| {
-        BitFunError::service(format!(
-            "Failed to read JSON file {}: {}",
-            path.display(),
-            e
-        ))
-    })?;
-    let value = serde_json::from_slice(&bytes).map_err(|e| {
-        BitFunError::service(format!(
-            "Failed to deserialize JSON file {}: {}",
-            path.display(),
-            e
-        ))
-    })?;
-    Ok(Some(value))
-}
-
-async fn write_json_pretty_async<T>(path: &Path, value: &T) -> BitFunResult<()>
-where
-    T: Serialize,
-{
-    if let Some(parent) = path.parent() {
-        tokio::fs::create_dir_all(parent).await.map_err(|e| {
-            BitFunError::service(format!(
-                "Failed to create parent directory {}: {}",
-                parent.display(),
-                e
-            ))
-        })?;
-    }
-
-    let bytes = serde_json::to_vec_pretty(value).map_err(|e| {
-        BitFunError::service(format!(
-            "Failed to serialize JSON for {}: {}",
-            path.display(),
-            e
-        ))
-    })?;
-    tokio::fs::write(path, bytes).await.map_err(|e| {
-        BitFunError::service(format!(
-            "Failed to write JSON file {}: {}",
-            path.display(),
-            e
-        ))
-    })
-}
-
-fn write_json_pretty_sync<T>(path: &Path, value: &T) -> BitFunResult<()>
-where
-    T: Serialize,
-{
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| {
-            BitFunError::service(format!(
-                "Failed to create parent directory {}: {}",
-                parent.display(),
-                e
-            ))
-        })?;
-    }
-
-    let bytes = serde_json::to_vec_pretty(value).map_err(|e| {
-        BitFunError::service(format!(
-            "Failed to serialize JSON for {}: {}",
-            path.display(),
-            e
-        ))
-    })?;
-    std::fs::write(path, bytes).map_err(|e| {
-        BitFunError::service(format!(
-            "Failed to write JSON file {}: {}",
-            path.display(),
-            e
-        ))
-    })
-}
-
-fn move_path_best_effort(source: &Path, target: &Path) -> BitFunResult<()> {
-    if let Some(parent) = target.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| {
-            BitFunError::service(format!(
-                "Failed to create target parent directory {}: {}",
-                parent.display(),
-                e
-            ))
-        })?;
-    }
-
-    match std::fs::rename(source, target) {
-        Ok(()) => Ok(()),
-        Err(_) if source.is_dir() => {
-            copy_dir_recursive(source, target)?;
-            std::fs::remove_dir_all(source).map_err(|e| {
-                BitFunError::service(format!(
-                    "Failed to remove moved directory {}: {}",
-                    source.display(),
-                    e
-                ))
-            })
-        }
-        Err(_) => {
-            std::fs::copy(source, target).map_err(|e| {
-                BitFunError::service(format!(
-                    "Failed to copy file {} to {}: {}",
-                    source.display(),
-                    target.display(),
-                    e
-                ))
-            })?;
-            std::fs::remove_file(source).map_err(|e| {
-                BitFunError::service(format!(
-                    "Failed to remove moved file {}: {}",
-                    source.display(),
-                    e
-                ))
-            })
-        }
-    }
-}
-
-fn remove_path_if_exists(path: &Path) -> BitFunResult<()> {
-    if !path.exists() {
-        return Ok(());
-    }
-
-    if path.is_dir() {
-        std::fs::remove_dir_all(path).map_err(|e| {
-            BitFunError::service(format!(
-                "Failed to remove directory {}: {}",
-                path.display(),
-                e
-            ))
-        })
-    } else {
-        std::fs::remove_file(path).map_err(|e| {
-            BitFunError::service(format!("Failed to remove file {}: {}", path.display(), e))
-        })
-    }
-}
-
-fn files_are_equal(left: &Path, right: &Path) -> BitFunResult<bool> {
-    let left_bytes = std::fs::read(left).map_err(|e| {
-        BitFunError::service(format!("Failed to read file {}: {}", left.display(), e))
-    })?;
-    let right_bytes = std::fs::read(right).map_err(|e| {
-        BitFunError::service(format!("Failed to read file {}: {}", right.display(), e))
-    })?;
-    Ok(left_bytes == right_bytes)
-}
-
-fn source_is_newer(source: &Path, target: &Path) -> BitFunResult<bool> {
-    let source_modified = std::fs::metadata(source)
-        .map_err(|e| {
-            BitFunError::service(format!(
-                "Failed to stat source file {}: {}",
-                source.display(),
-                e
-            ))
-        })?
-        .modified()
-        .ok();
-    let target_modified = std::fs::metadata(target)
-        .map_err(|e| {
-            BitFunError::service(format!(
-                "Failed to stat target file {}: {}",
-                target.display(),
-                e
-            ))
-        })?
-        .modified()
-        .ok();
-
-    Ok(match (source_modified, target_modified) {
-        (Some(source_time), Some(target_time)) => source_time > target_time,
-        (Some(_), None) => true,
-        _ => false,
-    })
-}
-
-fn file_name_eq(path: &Path, expected: &str) -> bool {
-    path.file_name()
-        .and_then(|value| value.to_str())
-        .is_some_and(|value| value.eq_ignore_ascii_case(expected))
-}
-
-fn unix_now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64
 }
 
 fn runtime_lock_for(runtime_root: &Path) -> Arc<AsyncMutex<()>> {
@@ -1008,6 +522,7 @@ mod tests {
         let context = ensured.context;
         assert!(context.runtime_root.exists());
         assert!(context.sessions_dir.exists());
+        assert!(context.request_traces_dir.exists());
         assert!(context.snapshot_by_hash_dir.exists());
         assert!(context.snapshot_metadata_dir.exists());
         assert!(context.snapshot_baselines_dir.exists());
@@ -1100,9 +615,27 @@ mod tests {
             &legacy_sessions_root.join("legacy-session"),
             &legacy_only_metadata,
         );
+        fs::create_dir_all(legacy_sessions_root.join("hidden-session"))
+            .expect("hidden legacy session dir should exist");
+        let mut hidden_metadata = SessionMetadata::new(
+            "hidden-session".to_string(),
+            "Hidden Session".to_string(),
+            "agent".to_string(),
+            "model".to_string(),
+        );
+        hidden_metadata.session_kind = bitfun_core_types::SessionKind::Subagent;
+        hidden_metadata.last_active_at = 250;
+        write_session_metadata(
+            &legacy_sessions_root.join("hidden-session"),
+            &hidden_metadata,
+        );
         write_session_index(
             &legacy_sessions_root.join("index.json"),
-            vec![older_metadata.clone(), legacy_only_metadata.clone()],
+            vec![
+                hidden_metadata.clone(),
+                older_metadata.clone(),
+                legacy_only_metadata.clone(),
+            ],
         );
         write_session_index(
             &context.sessions_dir.join("index.json"),
@@ -1139,6 +672,11 @@ mod tests {
         )
         .expect("merged session index should deserialize");
         assert_eq!(merged_index.sessions.len(), 2);
+        assert_eq!(merged_index.metadata_file_count, 3);
+        assert!(merged_index
+            .sessions
+            .iter()
+            .all(|metadata| metadata.session_id != "hidden-session"));
         assert!(ensured
             .migrated_entries
             .iter()

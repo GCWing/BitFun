@@ -24,7 +24,7 @@ export const IconButtonExample: React.FC = () => {
 
   return (
     <div style={{ padding: '24px', background: '#1a1a1a', minHeight: '100vh' }}>
-      <h2 style={{ color: '#fff', marginBottom: '24px' }}>
+      <h2 style={{ color: 'var(--color-static-white)', marginBottom: '24px' }}>
         {t('componentLibrary.iconButtonExample.title')}
       </h2>
       
@@ -119,8 +119,8 @@ export const IconButtonExample: React.FC = () => {
         </div>
       </div>
 
-      <div style={{ marginTop: '48px', padding: '16px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
-        <h3 style={{ color: '#fff', marginBottom: '12px' }}>
+      <div style={{ marginTop: '48px', padding: '16px', background: 'var(--color-overlay-white-05)', borderRadius: '8px' }}>
+        <h3 style={{ color: 'var(--color-static-white)', marginBottom: '12px' }}>
           {t('componentLibrary.iconButtonExample.sections.usage')}
         </h3>
         <ul style={{ color: '#a0a0a0', lineHeight: '1.8' }}>

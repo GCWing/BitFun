@@ -34,14 +34,17 @@ $matrix-step: math.div(100%, $matrix-phase-count);
 $matrix-epsilon: 0.0001%;
 
 .dot-matrix-loader {
+  --dm-cell: 6px;
+  --dm-gap: 2px;
+
   flex-shrink: 0;
   display: grid;
-  grid-template-columns: repeat(3, var(--dm-cell, 6px));
-  grid-template-rows: repeat(3, var(--dm-cell, 6px));
-  gap: var(--dm-gap, 2px);
-  width: calc(3 * var(--dm-cell, 6px) + 2 * var(--dm-gap, 2px));
-  height: calc(3 * var(--dm-cell, 6px) + 2 * var(--dm-gap, 2px));
-  color: var(--text-secondary, rgba(107, 114, 128, 0.85));
+  grid-template-columns: repeat(3, var(--dm-cell));
+  grid-template-rows: repeat(3, var(--dm-cell));
+  gap: var(--dm-gap);
+  width: calc(3 * var(--dm-cell) + 2 * var(--dm-gap));
+  height: calc(3 * var(--dm-cell) + 2 * var(--dm-gap));
+  color: var(--text-secondary);
 
   &--small {
     --dm-cell: 4px;
@@ -60,8 +63,8 @@ $matrix-epsilon: 0.0001%;
 }
 
 .dot-matrix-loader__dot {
-  width: var(--dm-cell, 6px);
-  height: var(--dm-cell, 6px);
+  width: var(--dm-cell);
+  height: var(--dm-cell);
   border-radius: 1px;
   background-color: currentColor;
   animation-duration: $matrix-period;

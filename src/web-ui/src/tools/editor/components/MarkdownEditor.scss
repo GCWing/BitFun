@@ -15,8 +15,8 @@
   align-items: flex-start;
   gap: $size-gap-3;
   padding: $size-gap-3 $size-gap-4;
-  border-bottom: 1px solid color-mix(in srgb, var(--color-warning, #f59e0b) 22%, transparent);
-  background: color-mix(in srgb, var(--color-warning, #f59e0b) 8%, var(--color-bg-flowchat));
+  border-bottom: 1px solid color-mix(in srgb, var(--color-warning) 22%, transparent);
+  background: color-mix(in srgb, var(--color-warning) 8%, var(--color-bg-flowchat));
   color: var(--color-text-secondary);
   flex-shrink: 0;
 }
@@ -25,7 +25,7 @@
   width: 16px;
   height: 16px;
   margin-top: 2px;
-  color: var(--color-warning, #f59e0b);
+  color: var(--color-warning);
   flex-shrink: 0;
 }
 
@@ -48,8 +48,8 @@
   gap: $size-gap-3;
   min-height: 34px;
   padding: 4px $size-gap-3;
-  border-bottom: 1px solid var(--border-subtle, #{$border-subtle});
-  background: color-mix(in srgb, var(--color-bg-flowchat) 92%, var(--color-bg-elevated, #fff));
+  border-bottom: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--color-bg-flowchat) 92%, var(--color-bg-elevated));
   flex-shrink: 0;
 }
 
@@ -159,11 +159,6 @@
 
 // Markdown preview inside m-editor only (align with flow-chat markdown chrome via shared CSS vars)
 .m-editor .markdown-body {
-  --m-editor-list-indent: 1.75rem;
-  --m-editor-list-marker-width: 1.25rem;
-  --m-editor-list-gap: 0.25rem;
-  --m-editor-task-checkbox-size: 1rem;
-
   color: var(--color-text-secondary);
   font-family: $font-family-sans;
   font-size: var(--font-size-sm);
@@ -179,13 +174,13 @@
 
   strong, b {
     font-weight: $font-weight-bold;
-    color: #f59e0b;
+    color: var(--color-warning);
   }
 
   h1 {
     font-size: var(--font-size-3xl);
     color: var(--color-text-primary);
-    border-bottom: 1px solid var(--border-subtle, #{$border-subtle});
+    border-bottom: 1px solid var(--border-subtle);
     padding-bottom: $size-gap-3;
     text-align: center;
     letter-spacing: 0.5px;
@@ -193,7 +188,7 @@
 
   h2 {
     font-size: var(--font-size-2xl);
-    border-bottom: 1px solid var(--border-subtle, #{$border-subtle});
+    border-bottom: 1px solid var(--border-subtle);
     padding-bottom: $size-gap-2;
   }
 
@@ -323,7 +318,7 @@
     list-style: none;
     position: relative;
     margin-bottom: $size-gap-1;
-    padding-left: calc(var(--m-editor-list-marker-width) + var(--m-editor-list-gap));
+    padding-left: calc(var(--markdown-editor-list-marker-width) + var(--markdown-editor-list-gap));
   }
 
   > ul:not(.contains-task-list) > li::before,
@@ -331,7 +326,7 @@
     position: absolute;
     left: 0;
     top: 0;
-    width: var(--m-editor-list-marker-width);
+    width: var(--markdown-editor-list-marker-width);
     color: var(--color-text-primary);
     font-weight: $font-weight-medium;
   }
@@ -358,7 +353,7 @@
   li > ol {
     margin-top: $size-gap-1;
     margin-bottom: 0;
-    padding-left: var(--m-editor-list-indent);
+    padding-left: var(--markdown-editor-list-indent);
   }
 
   li {
@@ -498,8 +493,8 @@
   details {
     margin: 0 0 $size-gap-4;
     padding: $size-gap-3 $size-gap-4;
-    background: color-mix(in srgb, var(--color-bg-secondary, #{$element-bg-subtle}) 86%, transparent);
-    border: 1px solid var(--border-subtle, #{$border-subtle});
+    background: color-mix(in srgb, var(--color-bg-secondary) 86%, transparent);
+    border: 1px solid var(--border-subtle);
     border-radius: $size-radius-lg;
 
     > :last-child {
@@ -527,7 +522,7 @@
     padding: 0;
     margin: $size-gap-5 0;
     border: 0;
-    border-top: 1px solid var(--border-subtle, #{$border-subtle});
+    border-top: 1px solid var(--border-subtle);
     background: none;
     overflow: visible;
   }
@@ -543,24 +538,24 @@
   > ul.contains-task-list > .task-list-item {
     list-style: none;
     position: relative;
-    padding-left: calc(var(--m-editor-list-marker-width) + var(--m-editor-list-gap));
+    padding-left: calc(var(--markdown-editor-list-marker-width) + var(--markdown-editor-list-gap));
     margin-bottom: $size-gap-1;
   }
 
   > ul.contains-task-list > .task-list-item > input[type="checkbox"] {
     position: absolute;
-    left: calc((var(--m-editor-list-marker-width) - var(--m-editor-task-checkbox-size)) / 2);
+    left: calc((var(--markdown-editor-list-marker-width) - var(--markdown-editor-task-checkbox-size)) / 2);
     top: 0.15rem;
     margin: 0;
-    width: var(--m-editor-task-checkbox-size);
-    height: var(--m-editor-task-checkbox-size);
+    width: var(--markdown-editor-task-checkbox-size);
+    height: var(--markdown-editor-task-checkbox-size);
   }
 
   .task-list-item > ul,
   .task-list-item > ol {
     margin-top: $size-gap-1;
     margin-bottom: 0;
-    padding-left: var(--m-editor-list-indent);
+    padding-left: var(--markdown-editor-list-indent);
   }
 
   // KaTeX math formula styles

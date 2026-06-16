@@ -11,6 +11,7 @@ use super::{
     DeepReviewCapacityQueueDecision, DeepReviewCapacityQueueReason, DeepReviewConcurrencyPolicy,
     DeepReviewPolicyViolation, DeepReviewQueueControlSnapshot, DeepReviewSubagentRole,
 };
+use bitfun_events::{DeepReviewQueueReason, DeepReviewQueueState, DeepReviewQueueStatus};
 use serde_json::{json, Value};
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
@@ -189,6 +190,62 @@ pub enum DeepReviewProviderCapacityQueueRuntimeStep {
         queue_elapsed_ms: u64,
         next_sleep: Duration,
     },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeepReviewQueueStateInput<'a> {
+    pub tool_id: &'a str,
+    pub subagent_type: &'a str,
+    pub status: DeepReviewQueueStatus,
+    pub reason: Option<DeepReviewCapacityQueueReason>,
+    pub queued_reviewer_count: usize,
+    pub active_reviewer_count: usize,
+    pub optional_reviewer_count: Option<usize>,
+    pub effective_parallel_instances: Option<usize>,
+    pub queue_elapsed_ms: u64,
+    pub max_queue_wait_seconds: u64,
+}
+
+pub fn deep_review_capacity_reason_to_event_reason(
+    reason: DeepReviewCapacityQueueReason,
+) -> DeepReviewQueueReason {
+    match reason {
+        DeepReviewCapacityQueueReason::ProviderRateLimit => {
+            DeepReviewQueueReason::ProviderRateLimit
+        }
+        DeepReviewCapacityQueueReason::ProviderConcurrencyLimit => {
+            DeepReviewQueueReason::ProviderConcurrencyLimit
+        }
+        DeepReviewCapacityQueueReason::RetryAfter => DeepReviewQueueReason::RetryAfter,
+        DeepReviewCapacityQueueReason::LocalConcurrencyCap => {
+            DeepReviewQueueReason::LocalConcurrencyCap
+        }
+        DeepReviewCapacityQueueReason::LaunchBatchBlocked => {
+            DeepReviewQueueReason::LaunchBatchBlocked
+        }
+        DeepReviewCapacityQueueReason::TemporaryOverload => {
+            DeepReviewQueueReason::TemporaryOverload
+        }
+    }
+}
+
+pub fn deep_review_queue_state(input: DeepReviewQueueStateInput<'_>) -> DeepReviewQueueState {
+    DeepReviewQueueState {
+        tool_id: input.tool_id.to_string(),
+        subagent_type: input.subagent_type.to_string(),
+        status: input.status.clone(),
+        reason: input
+            .reason
+            .map(deep_review_capacity_reason_to_event_reason),
+        queued_reviewer_count: input.queued_reviewer_count,
+        active_reviewer_count: Some(input.active_reviewer_count),
+        effective_parallel_instances: input.effective_parallel_instances,
+        optional_reviewer_count: input.optional_reviewer_count,
+        queue_elapsed_ms: Some(input.queue_elapsed_ms),
+        run_elapsed_ms: matches!(input.status, DeepReviewQueueStatus::Running).then_some(0),
+        max_queue_wait_seconds: Some(input.max_queue_wait_seconds),
+        session_concurrency_high: false,
+    }
 }
 
 #[derive(Debug, Clone)]

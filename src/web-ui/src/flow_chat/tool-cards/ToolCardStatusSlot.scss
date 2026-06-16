@@ -28,8 +28,8 @@
     opacity: 1;
 
     svg {
-      width: var(--tool-card-icon-size, 16px);
-      height: var(--tool-card-icon-size, 16px);
+      width: var(--tool-card-icon-size);
+      height: var(--tool-card-icon-size);
     }
   }
 
@@ -47,12 +47,12 @@
 
 // Status icon colors
 .tcss-check {
-  color: var(--color-success, #4ade80);
+  color: var(--color-success);
 }
 
 .tcss-error {
-  color: var(--color-error, #f87171);
-  filter: drop-shadow(0 0 3px rgba(248, 113, 113, 0.35));
+  color: var(--color-error);
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--color-error) 35%, transparent));
 }
 
 .tcss-cancelled {

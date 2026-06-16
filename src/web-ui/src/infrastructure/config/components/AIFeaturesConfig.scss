@@ -15,6 +15,41 @@
     gap: $size-gap-2;
   }
 
+  &__label-with-tooltip {
+    display: inline-flex;
+    align-items: center;
+    gap: $size-gap-1;
+    min-width: 0;
+  }
+
+  &__label-tooltip-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-muted);
+    cursor: help;
+  }
+
+  &__label-tooltip-icon:hover {
+    color: var(--color-text-secondary);
+  }
+
+  &__policy-tooltip {
+    max-width: min(320px, calc(100vw - 32px));
+    display: grid;
+    gap: 4px;
+    line-height: var(--line-height-relaxed);
+  }
+
+  &__policy-tooltip strong {
+    color: var(--color-text-primary);
+    font-weight: var(--font-weight-medium);
+  }
+
+  &__policy-tooltip strong:not(:first-child) {
+    margin-top: 4px;
+  }
+
   /** Computer use: authorized status label (Granted / 已授权) */
   &__perm-status--granted {
     color: var(--color-text-muted);
@@ -48,7 +83,7 @@
     max-width: 100%;
     padding: 6px 10px;
     border-radius: $size-radius-sm;
-    border: 1px dashed rgba(234, 179, 8, 0.4);
+    border: 1px dashed color-mix(in srgb, var(--color-warning) 40%, transparent);
     color: var(--color-warning);
     font-size: var(--font-size-xs);
     line-height: $line-height-relaxed;
@@ -79,7 +114,7 @@
     color: var(--color-text-primary);
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-medium);
-    line-height: var(--line-height-normal);
+    line-height: var(--line-height-base);
   }
 
   &__pet-row-description {
@@ -125,7 +160,7 @@
     gap: $size-gap-3;
     padding: 5px 10px 5px 8px;
     border: 1px solid var(--border-subtle);
-    border-radius: var(--size-radius-sm, 6px);
+    border-radius: var(--size-radius-sm);
     color: var(--color-text-primary);
     background: var(--element-bg-subtle);
     cursor: pointer;
@@ -136,7 +171,7 @@
   }
 
   &__pet-expand-button:hover {
-    border-color: var(--border-medium, var(--border-subtle));
+    border-color: var(--border-medium);
     background: var(--element-bg-soft);
   }
 
@@ -169,7 +204,7 @@
     gap: $size-gap-2;
     padding: 12px;
     border: 1px solid var(--border-subtle);
-    border-radius: var(--size-radius-sm, 8px);
+    border-radius: var(--size-radius-sm);
     background: color-mix(in srgb, var(--element-bg-subtle) 52%, transparent);
   }
 
@@ -193,7 +228,7 @@
     gap: $size-gap-2;
     padding: 9px 10px;
     border: 1px solid var(--border-subtle);
-    border-radius: var(--size-radius-sm, 8px);
+    border-radius: var(--size-radius-sm);
     color: var(--color-text-primary);
     text-align: left;
     background: color-mix(in srgb, var(--element-bg-base) 74%, transparent);
@@ -206,7 +241,7 @@
 
   &__pet-select-option:hover,
   &__pet-select-option:focus-visible {
-    border-color: var(--border-medium, var(--border-subtle));
+    border-color: var(--border-medium);
     background: color-mix(in srgb, var(--element-bg-soft) 84%, transparent);
     outline: none;
   }

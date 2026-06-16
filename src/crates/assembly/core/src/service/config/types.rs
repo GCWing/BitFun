@@ -137,6 +137,24 @@ pub struct AppLoggingConfig {
     /// Whether diagnostic logs may include sensitive troubleshooting payloads.
     #[serde(default = "default_true")]
     pub include_sensitive_diagnostics: bool,
+    /// Per-request AI model exchange tracing configuration for developer diagnostics.
+    #[serde(default)]
+    pub model_exchange_tracing: ModelExchangeTracingConfig,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelExchangeTracingMode {
+    #[default]
+    Off,
+    Full,
+    UsageOnly,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ModelExchangeTracingConfig {
+    pub mode: ModelExchangeTracingMode,
 }
 
 /// Session-related UI preferences.
@@ -603,6 +621,10 @@ pub struct AIConfig {
     #[serde(default = "default_subagent_max_concurrency")]
     pub subagent_max_concurrency: usize,
 
+    /// Scheduling policy for multiple subagent launch calls in the same model batch.
+    #[serde(default = "default_subagent_batch_execution_policy")]
+    pub subagent_batch_execution_policy: SubagentBatchExecutionPolicy,
+
     /// Global proxy configuration.
     pub proxy: ProxyConfig,
 
@@ -646,6 +668,18 @@ pub struct AIConfig {
     /// Maximum number of rounds per dialog turn before soft-pausing.
     #[serde(default = "default_max_rounds")]
     pub max_rounds: usize,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SubagentBatchExecutionPolicy {
+    /// Preserve the tool-owned concurrency-safety decision.
+    #[default]
+    SafeOnly,
+    /// Force multiple Task calls from the same model batch into parallel scheduling.
+    ForceParallel,
+    /// Treat all Task calls as serial even when a subagent is read-only.
+    Serial,
 }
 
 impl AIConfig {
@@ -791,6 +825,10 @@ fn default_skip_tool_confirmation() -> bool {
 
 fn default_subagent_max_concurrency() -> usize {
     5
+}
+
+fn default_subagent_batch_execution_policy() -> SubagentBatchExecutionPolicy {
+    SubagentBatchExecutionPolicy::SafeOnly
 }
 
 pub const DEFAULT_MAX_ROUNDS: usize = 200;
@@ -1376,6 +1414,15 @@ impl Default for AppLoggingConfig {
             // Set to Debug in early development for easier diagnostics
             level: "debug".to_string(),
             include_sensitive_diagnostics: true,
+            model_exchange_tracing: ModelExchangeTracingConfig::default(),
+        }
+    }
+}
+
+impl Default for ModelExchangeTracingConfig {
+    fn default() -> Self {
+        Self {
+            mode: ModelExchangeTracingMode::Off,
         }
     }
 }
@@ -1598,6 +1645,7 @@ impl Default for AIConfig {
             review_team_rate_limit_status: default_review_team_rate_limit_status(),
             review_team_project_strategy_overrides: std::collections::HashMap::new(),
             subagent_max_concurrency: default_subagent_max_concurrency(),
+            subagent_batch_execution_policy: default_subagent_batch_execution_policy(),
             proxy: ProxyConfig::default(),
             stream_idle_timeout_secs: default_stream_idle_timeout(),
             stream_ttft_timeout_secs: default_stream_ttft_timeout(),
@@ -1814,7 +1862,8 @@ impl AIModelConfig {
 #[cfg(test)]
 mod tests {
     use super::{
-        AIConfig, AIExperienceConfig, AIModelConfig, AppLoggingConfig, GlobalConfig, ReasoningMode,
+        AIConfig, AIExperienceConfig, AIModelConfig, AppLoggingConfig, GlobalConfig,
+        ModelExchangeTracingMode, ReasoningMode, SubagentBatchExecutionPolicy,
     };
 
     #[test]
@@ -2062,6 +2111,10 @@ mod tests {
         assert_eq!(config.stream_idle_timeout_secs, Some(45));
         assert_eq!(config.stream_ttft_timeout_secs, Some(30));
         assert_eq!(config.subagent_max_concurrency, 5);
+        assert_eq!(
+            config.subagent_batch_execution_policy,
+            SubagentBatchExecutionPolicy::SafeOnly
+        );
         let review_team = config
             .review_teams
             .get("default")
@@ -2093,6 +2146,10 @@ mod tests {
         assert_eq!(config.stream_idle_timeout_secs, Some(45));
         assert_eq!(config.stream_ttft_timeout_secs, Some(30));
         assert_eq!(config.subagent_max_concurrency, 5);
+        assert_eq!(
+            config.subagent_batch_execution_policy,
+            SubagentBatchExecutionPolicy::SafeOnly
+        );
         assert!(config.review_teams.contains_key("default"));
     }
 
@@ -2104,6 +2161,10 @@ mod tests {
         .expect("logging config without sensitive preference should deserialize");
 
         assert!(config.include_sensitive_diagnostics);
+        assert_eq!(
+            config.model_exchange_tracing.mode,
+            ModelExchangeTracingMode::Off
+        );
     }
 
     #[test]
@@ -2123,6 +2184,28 @@ mod tests {
         .expect("config with subagent_max_concurrency should deserialize");
 
         assert_eq!(config.subagent_max_concurrency, 9);
+    }
+
+    #[test]
+    fn deserializes_explicit_subagent_batch_execution_policy() {
+        let config: AIConfig = serde_json::from_value(serde_json::json!({
+            "models": [],
+            "agent_models": {},
+            "func_agent_models": {},
+            "default_models": {},
+            "agent_profiles": {},
+            "subagent_batch_execution_policy": "force_parallel",
+            "proxy": {
+                "enabled": false,
+                "url": ""
+            }
+        }))
+        .expect("config with subagent_batch_execution_policy should deserialize");
+
+        assert_eq!(
+            config.subagent_batch_execution_policy,
+            SubagentBatchExecutionPolicy::ForceParallel
+        );
     }
 
     #[test]

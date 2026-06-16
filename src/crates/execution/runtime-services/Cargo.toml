@@ -10,9 +10,14 @@ name = "bitfun_runtime_services"
 crate-type = ["rlib"]
 
 [dependencies]
+bitfun-events = { path = "../../contracts/events" }
 bitfun-runtime-ports = { path = "../../contracts/runtime-ports" }
+anyhow = { workspace = true }
 async-trait = { workspace = true }
+log = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true }
 
 [dev-dependencies]
-tokio = { workspace = true }

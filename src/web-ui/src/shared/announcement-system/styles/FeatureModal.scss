@@ -151,7 +151,7 @@
     &--next,
     &--done {
       background: var(--color-primary);
-      color: #fff;
+      color: var(--color-static-white);
       padding: 6px 22px;
 
       &:hover { opacity: 0.9; }

@@ -11,17 +11,17 @@
 .error-message {
   padding: 12px 16px;
   background: linear-gradient(135deg,
-    rgba(239, 68, 68, 0.1) 0%,
-    rgba(239, 68, 68, 0.05) 100%);
+    var(--color-error-bg) 0%,
+    var(--glass-red-subtle) 100%);
   color: var(--color-error);
   border-radius: 12px;
-  border: 1px solid rgba(239, 68, 68, 0.2);
+  border: 1px solid color-mix(in srgb, var(--color-error) 20%, transparent);
   backdrop-filter: blur(12px) saturate(1.05);
   -webkit-backdrop-filter: blur(12px) saturate(1.05);
   box-shadow: 
-    0 8px 32px rgba(239, 68, 68, 0.12),
-    0 4px 16px rgba(0, 0, 0, 0.06),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    0 8px 32px color-mix(in srgb, var(--color-error) 12%, transparent),
+    0 4px 16px var(--color-overlay-black-06),
+    inset 0 1px 0 var(--color-overlay-white-10);
 }
 
 /* Section headings */
@@ -38,20 +38,20 @@
 /* Glassmorphism workspace card */
 .workspace-card {
   position: relative;
-  border: 1px solid rgba(96, 165, 250, 0.15);
+  border: 1px solid var(--color-accent-200);
   border-radius: 16px;
   padding: 20px 24px;
   background: linear-gradient(135deg,
-    rgba(96, 165, 250, 0.08) 0%,
-    rgba(59, 130, 246, 0.04) 50%,
-    rgba(96, 165, 250, 0.06) 100%);
+    var(--color-accent-100) 0%,
+    color-mix(in srgb, var(--color-accent-600) 4%, transparent) 50%,
+    color-mix(in srgb, var(--color-accent-500) 6%, transparent) 100%);
   backdrop-filter: blur(12px) saturate(1.05);
   -webkit-backdrop-filter: blur(12px) saturate(1.05);
   box-shadow: 
-    0 8px 32px rgba(96, 165, 250, 0.12),
-    0 4px 16px rgba(0, 0, 0, 0.06),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+    0 8px 32px color-mix(in srgb, var(--color-accent-500) 12%, transparent),
+    0 4px 16px var(--color-overlay-black-06),
+    inset 0 1px 0 var(--color-overlay-white-10),
+    inset 0 -1px 0 var(--color-overlay-white-05);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   animation: slideInUp 0.4s ease-out;
 }
@@ -64,26 +64,26 @@
   right: 0;
   bottom: 0;
   background: linear-gradient(135deg,
-    rgba(255, 255, 255, 0.02) 0%,
+    var(--color-overlay-white-02) 0%,
     transparent 50%,
-    rgba(255, 255, 255, 0.01) 100%);
+    color-mix(in srgb, var(--color-static-white) 1%, transparent) 100%);
   pointer-events: none;
   border-radius: 16px;
   z-index: 1;
 }
 
 .workspace-card.current {
-  border-color: rgba(96, 165, 250, 0.25);
+  border-color: var(--color-accent-300);
   background: linear-gradient(135deg,
-    rgba(96, 165, 250, 0.15) 0%,
-    rgba(59, 130, 246, 0.08) 50%,
-    rgba(96, 165, 250, 0.12) 100%);
+    var(--color-accent-200) 0%,
+    var(--glass-blue-subtle) 50%,
+    color-mix(in srgb, var(--color-accent-500) 12%, transparent) 100%);
   box-shadow: 
-    0 8px 32px rgba(96, 165, 250, 0.15),
-    0 4px 16px rgba(0, 0, 0, 0.08),
-    0 2px 8px rgba(0, 0, 0, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.15),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.08);
+    0 8px 32px var(--color-accent-200),
+    0 4px 16px var(--color-overlay-black-08),
+    0 2px 8px var(--color-overlay-black-08),
+    inset 0 1px 0 var(--color-overlay-white-15),
+    inset 0 -1px 0 var(--color-overlay-white-08);
 }
 
 .workspace-card.recent {
@@ -91,17 +91,17 @@
 }
 
 .workspace-card.recent:hover {
-  border-color: rgba(96, 165, 250, 0.25);
+  border-color: var(--color-accent-300);
   background: linear-gradient(135deg,
-    rgba(96, 165, 250, 0.12) 0%,
-    rgba(59, 130, 246, 0.06) 50%,
-    rgba(96, 165, 250, 0.08) 100%);
+    color-mix(in srgb, var(--color-accent-500) 12%, transparent) 0%,
+    color-mix(in srgb, var(--color-accent-600) 6%, transparent) 50%,
+    var(--color-accent-100) 100%);
   transform: translateY(-2px);
   box-shadow: 
-    0 12px 40px rgba(96, 165, 250, 0.15),
-    0 6px 20px rgba(0, 0, 0, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.15),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.08);
+    0 12px 40px var(--color-accent-200),
+    0 6px 20px var(--color-overlay-black-08),
+    inset 0 1px 0 var(--color-overlay-white-15),
+    inset 0 -1px 0 var(--color-overlay-white-08);
 }
 
 .workspace-header {
@@ -119,21 +119,21 @@
   justify-content: center;
   width: 48px;
   height: 48px;
-  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
-  color: white;
+  background: linear-gradient(135deg, var(--color-accent-500) 0%, var(--color-accent-600) 100%);
+  color: var(--color-static-white);
   border-radius: 12px;
   flex-shrink: 0;
   box-shadow: 
-    0 4px 16px rgba(96, 165, 250, 0.25),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    0 4px 16px var(--color-accent-300),
+    inset 0 1px 0 var(--color-overlay-white-20);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .workspace-icon:hover {
   transform: scale(1.05);
   box-shadow: 
-    0 6px 20px rgba(96, 165, 250, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    0 6px 20px color-mix(in srgb, var(--color-accent-500) 30%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--color-static-white) 25%, transparent);
 }
 
 .workspace-info {
@@ -153,20 +153,20 @@
 
 .workspace-name__ssh-host {
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.55);
+  color: color-mix(in srgb, var(--color-static-white) 55%, transparent);
   margin-right: 2px;
 }
 
 .workspace-path {
   font-size: 14px;
-  color: rgba(255, 255, 255, 0.7);
+  color: color-mix(in srgb, var(--color-static-white) 70%, transparent);
   margin-bottom: 12px;
   word-break: break-all;
   font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--color-overlay-black-20);
   padding: 4px 8px;
   border-radius: 6px;
-  border: 1px solid rgba(96, 165, 250, 0.1);
+  border: 1px solid var(--card-bg-accent);
 }
 
 .workspace-meta {
@@ -189,15 +189,15 @@
   gap: 6px;
   padding: 4px 10px;
   border-radius: 999px;
-  background: rgba(96, 165, 250, 0.08);
-  border: 1px solid rgba(96, 165, 250, 0.14);
+  background: var(--color-accent-100);
+  border: 1px solid var(--card-bg-accent-hover);
 }
 
 .workspace-identity__label {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.4px;
-  color: rgba(255, 255, 255, 0.55);
+  color: color-mix(in srgb, var(--color-static-white) 55%, transparent);
 }
 
 .workspace-identity__value {
@@ -229,8 +229,8 @@
 .workspace-related-paths__more {
   padding: 8px 10px;
   border-radius: 10px;
-  background: rgba(96, 165, 250, 0.06);
-  border: 1px solid rgba(96, 165, 250, 0.12);
+  background: color-mix(in srgb, var(--color-accent-500) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-accent-500) 12%, transparent);
 }
 
 .workspace-related-paths__path {
@@ -245,13 +245,13 @@
   display: block;
   margin-top: 4px;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.72);
+  color: color-mix(in srgb, var(--color-static-white) 72%, transparent);
   line-height: 1.45;
 }
 
 .workspace-related-paths__more {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.62);
+  color: color-mix(in srgb, var(--color-static-white) 62%, transparent);
 }
 
 .workspace-type {
@@ -287,7 +287,7 @@
   gap: 16px;
   margin-top: 20px;
   padding-top: 20px;
-  border-top: 1px solid rgba(96, 165, 250, 0.15);
+  border-top: 1px solid var(--color-accent-200);
   position: relative;
 }
 
@@ -297,24 +297,24 @@
   gap: 6px;
   padding: 12px 16px;
   background: linear-gradient(135deg,
-    rgba(96, 165, 250, 0.04) 0%,
-    rgba(59, 130, 246, 0.02) 100%);
+    var(--color-accent-50) 0%,
+    color-mix(in srgb, var(--color-accent-600) 2%, transparent) 100%);
   border-radius: 8px;
-  border: 1px solid rgba(96, 165, 250, 0.1);
+  border: 1px solid var(--card-bg-accent);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .stat-item:hover {
   background: linear-gradient(135deg,
-    rgba(96, 165, 250, 0.08) 0%,
-    rgba(59, 130, 246, 0.04) 100%);
-  border-color: rgba(96, 165, 250, 0.15);
+    var(--color-accent-100) 0%,
+    color-mix(in srgb, var(--color-accent-600) 4%, transparent) 100%);
+  border-color: var(--color-accent-200);
   transform: translateY(-1px);
 }
 
 .stat-label {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--color-overlay-white-60);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -335,17 +335,17 @@
   justify-content: center;
   padding: 48px 20px;
   text-align: center;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--color-overlay-white-60);
   background: linear-gradient(135deg,
-    rgba(96, 165, 250, 0.03) 0%,
-    rgba(59, 130, 246, 0.01) 100%);
+    color-mix(in srgb, var(--color-accent-500) 3%, transparent) 0%,
+    color-mix(in srgb, var(--color-accent-600) 1%, transparent) 100%);
   border-radius: 12px;
-  border: 1px dashed rgba(96, 165, 250, 0.2);
+  border: 1px dashed color-mix(in srgb, var(--color-accent-500) 20%, transparent);
 }
 
 .no-workspace svg {
   margin-bottom: 20px;
-  color: rgba(96, 165, 250, 0.4);
+  color: var(--color-accent-400);
   opacity: 0.8;
 }
 

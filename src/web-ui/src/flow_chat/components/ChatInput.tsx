@@ -3,7 +3,7 @@
  * Separated from bottom bar, supports session-level state awareness
  */
 
-import React, { useRef, useCallback, useEffect, useReducer, useState, useMemo } from 'react';
+import React, { useRef, useCallback, useEffect, useReducer, useState, useMemo, useSyncExternalStore } from 'react';
 import path from 'path-browserify';
 import { useTranslation } from 'react-i18next';
 import { ArrowUp, Image, RotateCcw, Plus, X, Sparkles, Loader2, ChevronRight, Files, MessageSquarePlus, Mic, MicOff } from 'lucide-react';
@@ -25,7 +25,7 @@ import { useAcpPlan } from '../hooks/useAcpPlan';
 import { filterSlashCommands, useAcpSlashCommands } from '../hooks/useAcpSlashCommands';
 import { acpSessionRef, acpSlashCommandText } from '../utils/acpSession';
 import { AcpPlanPanel } from './AcpPlanPanel';
-import type { FlowChatState, Session } from '../types/flow-chat';
+import type { FlowChatState } from '../types/flow-chat';
 import type { FileContext, DirectoryContext, ImageContext } from '@/types/context.ts';
 import { SmartRecommendations } from './smart-recommendations';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
@@ -42,6 +42,10 @@ import { useInputHistoryStore } from '../store/inputHistoryStore';
 import { startBtwThread } from '../services/BtwThreadService';
 import { runUsageReportCommand } from '../services/usageReportService';
 import { isGoalSlashCommand, parseGoalCommand } from '../services/goalService';
+import {
+  getHistorySessionOpenTransitionSnapshot,
+  subscribeHistorySessionOpenTransition,
+} from '../services/sessionOpenIntent';
 import { useThreadGoalController } from '../hooks/useThreadGoalController';
 import { ThreadGoalDialogs } from './thread-goal/ThreadGoalDialogs';
 import { FlowChatManager } from '@/flow_chat';
@@ -62,7 +66,7 @@ import { resolveSessionRelationship } from '../utils/sessionMetadata';
 import { resolveWorkspaceChatInputMode } from '../utils/chatInputMode';
 import { useSceneStore } from '@/app/stores/sceneStore';
 import type { SceneTabId } from '@/app/components/SceneBar/types';
-import { configAPI } from '@/infrastructure/api';
+import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
 import type { ModeSkillInfo } from '@/infrastructure/config/types';
 import MCPAPI, { type MCPPrompt, type MCPPromptMessage, type MCPServerInfo } from '@/infrastructure/api/service-api/MCPAPI';
 import { ChatInputWorkspaceStrip } from './ChatInputWorkspaceStrip';
@@ -72,6 +76,10 @@ import { useSessionReviewActivity } from '../hooks/useSessionReviewActivity';
 import { shouldBlockDeepReviewCommand } from '../utils/deepReviewCommandGuard';
 import { deriveDeepReviewSessionConcurrencyGuard } from '../utils/deepReviewCapacityGuard';
 import { acpAgentTypeFromSession } from '../utils/acpSession';
+import {
+  getSessionContextUsageDisplay,
+  type ContextUsageDisplay,
+} from '../utils/tokenUsageDisplay';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import './ChatInput.scss';
 
@@ -216,24 +224,6 @@ function renderMcpPromptMessages(messages: MCPPromptMessage[]): string {
     .join('\n\n');
 }
 
-function getSessionContextUsageDisplay(session?: Session): { current: number; max: number } {
-  if (!session) {
-    return { current: 0, max: 128128 };
-  }
-
-  if (session.currentAcpContextUsage) {
-    return {
-      current: session.currentAcpContextUsage.used,
-      max: session.currentAcpContextUsage.size,
-    };
-  }
-
-  return {
-    current: session.currentTokenUsage?.totalTokens || 0,
-    max: session.maxContextTokens || 128128,
-  };
-}
-
 export const ChatInput: React.FC<ChatInputProps> = ({
   className = '',
   onSendMessage
@@ -289,6 +279,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const effectiveTargetSession = effectiveTargetSessionId
     ? flowChatState.sessions.get(effectiveTargetSessionId)
     : undefined;
+  const historySessionOpenTransition = useSyncExternalStore(
+    subscribeHistorySessionOpenTransition,
+    getHistorySessionOpenTransitionSnapshot,
+    getHistorySessionOpenTransitionSnapshot,
+  );
   const effectiveTargetRelationship = resolveSessionRelationship(effectiveTargetSession);
   const isBtwSession = effectiveTargetRelationship.displayAsChild;
   const acpSessionForInput = useMemo(
@@ -319,6 +314,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         defaultValue: t('btw.threadLabel'),
       })
     : '';
+  const deferChatStripPassiveGitRefresh =
+    historySessionOpenTransition !== null ||
+    (
+      effectiveTargetSession?.isHistorical === true &&
+      effectiveTargetSession.contextRestoreState === 'pending'
+    );
   
   // Memoize history so keyboard handlers don't see a fresh [] on every render.
   const inputHistory = useMemo(
@@ -608,7 +609,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     return '';
   }, [workspaceName, chatStripRepositoryPath]);
   
-  const [tokenUsage, setTokenUsage] = React.useState({ current: 0, max: 128128 });
+  const [tokenUsage, setTokenUsage] = React.useState<ContextUsageDisplay>(
+    getSessionContextUsageDisplay()
+  );
   const isAssistantWorkspace = workspace?.workspaceKind === WorkspaceKind.Assistant;
   const currentMode = modeState.current;
   const isModeDropdownOpen = modeState.dropdownOpen;
@@ -713,7 +716,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               `${id}|${s.mode ?? ''}|${s.title ?? ''}|${s.workspacePath ?? ''}|` +
               `${s.remoteConnectionId ?? ''}|${s.remoteSshHost ?? ''}|${s.lastSubmittedMode ?? ''}|` +
               `${s.currentAcpContextUsage?.used ?? ''}|${s.currentAcpContextUsage?.size ?? ''}|` +
-              `${s.currentTokenUsage?.totalTokens ?? ''}|${s.maxContextTokens ?? ''}|` +
+              `${s.currentTokenUsage?.inputTokens ?? ''}|${s.maxContextTokens ?? ''}|` +
               `${s.needsUserAttention ? '1':'0'}`
             );
           }
@@ -1769,7 +1772,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
 
     try {
-      const { agentAPI } = await import('@/infrastructure/api');
       await agentAPI.compactSession({
         sessionId: effectiveTargetSessionId,
         workspacePath: effectiveTargetSession.workspacePath,
@@ -3535,6 +3537,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                     sessionId={effectiveTargetSessionId || undefined}
                     currentTokens={tokenUsage.current}
                     maxTokens={tokenUsage.max}
+                    contextUsageSource={tokenUsage.source}
                   />
                 </div>
 
@@ -3563,6 +3566,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         <ChatInputWorkspaceStrip
           repositoryPath={chatStripRepositoryPath}
           workspaceLabel={chatStripWorkspaceLabel}
+          deferPassiveGitRefresh={deferChatStripPassiveGitRefresh}
           usageReport={
             effectiveTargetSessionId && effectiveTargetSession
               ? { visible: true, onOpen: handleToolbarUsageReport }

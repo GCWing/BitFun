@@ -159,7 +159,7 @@ $content-max: 1480px;
 
   &--skeleton {
     --skeleton-shimmer-0: rgba(255, 255, 255, 0);
-    --skeleton-shimmer-peak: rgba(255, 255, 255, 0.1);
+    --skeleton-shimmer-peak: var(--color-overlay-white-10);
     pointer-events: none;
   }
 }
@@ -172,7 +172,7 @@ $content-max: 1480px;
   position: relative;
   overflow: hidden;
   animation: gallery-item-in 0.28s $easing-decelerate both;
-  animation-delay: calc(var(--card-index, 0) * 60ms);
+  animation-delay: calc(var(--surface-stagger-index, 0) * 60ms);
 
   &::after {
     content: '';
@@ -185,7 +185,7 @@ $content-max: 1480px;
       var(--skeleton-shimmer-peak) 50%,
       var(--skeleton-shimmer-0) 100%
     );
-    animation: gallery-shimmer 1.6s ease-in-out calc(var(--card-index, 0) * 0.12s) infinite;
+    animation: gallery-shimmer 1.6s ease-in-out calc(var(--surface-stagger-index, 0) * 0.12s) infinite;
   }
 }
 
@@ -341,7 +341,7 @@ $content-max: 1480px;
   padding: 0 $size-gap-3;
   height: 28px;
   border: 1px solid var(--border-subtle);
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--color-overlay-white-03);
 }
 
 .gallery-filter-chip.is-active,
@@ -388,9 +388,9 @@ $content-max: 1480px;
   height: 18px;
   padding: 0 5px;
   border-radius: $size-radius-full;
-  background: rgba(52, 211, 153, 0.12);
-  border: 1px solid rgba(52, 211, 153, 0.28);
-  color: #34d399;
+  background: color-mix(in srgb, var(--color-success) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-success) 28%, transparent);
+  color: var(--color-success);
   font-size: 11px;
   font-weight: $font-weight-semibold;
 }

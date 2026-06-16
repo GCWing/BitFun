@@ -150,4 +150,37 @@ describe('ApiClient startup trace classification', () => {
       maxConcurrentRequests: 2,
     }));
   });
+
+  it('binds file explorer and watcher startup trace targets without exposing paths', async () => {
+    adapterMocks.request.mockResolvedValue({ ok: true });
+    const client = new ApiClient({ enableLogging: false, retries: 0 });
+
+    await client.invoke('explorer_get_children', {
+      request: { path: 'D:/workspace/BitFun' },
+    });
+    await client.invoke('start_file_watch', {
+      path: 'D:/workspace/BitFun',
+      recursive: false,
+    });
+    await client.invoke('start_file_watch', {
+      path: 'D:/workspace/BitFun',
+      recursive: true,
+    });
+
+    expect(traceMocks.recordApiCall).toHaveBeenCalledWith(expect.objectContaining({
+      command: 'explorer_get_children',
+      target: 'file_explorer:children',
+    }));
+    expect(traceMocks.recordApiCall).toHaveBeenCalledWith(expect.objectContaining({
+      command: 'start_file_watch',
+      target: 'file_watch:non_recursive',
+    }));
+    expect(traceMocks.recordApiCall).toHaveBeenCalledWith(expect.objectContaining({
+      command: 'start_file_watch',
+      target: 'file_watch:recursive',
+    }));
+
+    const calls = traceMocks.recordApiCall.mock.calls.map(([call]) => call);
+    expect(JSON.stringify(calls)).not.toContain('D:/workspace/BitFun');
+  });
 });

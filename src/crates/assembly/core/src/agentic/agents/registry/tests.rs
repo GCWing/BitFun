@@ -12,6 +12,7 @@ use crate::agentic::agents::registry::visibility::{
 use crate::agentic::agents::{resolve_mode_config_profile_id, Agent, UserContextPolicy};
 use crate::service::config::types::AgentSubagentOverrideState;
 use async_trait::async_trait;
+use bitfun_agent_runtime::sdk::{RuntimeAgentRegistry, RuntimeAgentRegistryQuery};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -96,6 +97,43 @@ fn custom_subagent_kind_maps_to_registry_source() {
     assert_eq!(
         subagent_source_from_custom_kind(CustomSubagentKind::User),
         SubAgentSource::User
+    );
+}
+
+#[test]
+fn registry_exposes_sdk_agent_ids_without_leaking_core_agent_details() {
+    let registry = AgentRegistry::new();
+    let workspace = PathBuf::from("D:/workspace/project");
+    let other_workspace = PathBuf::from("D:/workspace/other");
+    insert_project_subagent(&registry, &workspace, "ProjectReviewer", "fast");
+    insert_project_subagent(&registry, &other_workspace, "OtherProjectReviewer", "fast");
+
+    let global_agent_ids =
+        RuntimeAgentRegistry::agent_ids(&registry, RuntimeAgentRegistryQuery::default());
+
+    assert!(global_agent_ids.contains(&"agentic".to_string()));
+    assert!(global_agent_ids.contains(&"Explore".to_string()));
+    assert!(!global_agent_ids.contains(&"ProjectReviewer".to_string()));
+    assert!(!global_agent_ids.contains(&"OtherProjectReviewer".to_string()));
+
+    let agent_ids = RuntimeAgentRegistry::agent_ids(
+        &registry,
+        RuntimeAgentRegistryQuery {
+            workspace_root: Some(&workspace),
+        },
+    );
+
+    assert!(agent_ids.contains(&"ProjectReviewer".to_string()));
+    assert!(!agent_ids.contains(&"OtherProjectReviewer".to_string()));
+    assert_eq!(
+        agent_ids,
+        {
+            let mut sorted = agent_ids.clone();
+            sorted.sort();
+            sorted.dedup();
+            sorted
+        },
+        "SDK agent registry projection must be stable and deduplicated"
     );
 }
 

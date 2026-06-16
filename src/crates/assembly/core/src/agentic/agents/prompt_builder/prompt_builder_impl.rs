@@ -45,6 +45,7 @@ pub struct RemoteExecutionHints {
 pub struct RuntimeContextNeeds {
     pub workspace_tools: bool,
     pub exec_command: bool,
+    pub exec_control: bool,
     pub computer_use: bool,
 }
 
@@ -64,6 +65,9 @@ impl RuntimeContextNeeds {
                     if tool_name == "ExecCommand" {
                         needs.exec_command = true;
                     }
+                    if tool_name == "ExecControl" {
+                        needs.exec_control = true;
+                    }
                 }
                 "ComputerUse" | "ControlHub" => {
                     needs.computer_use = true;
@@ -75,7 +79,7 @@ impl RuntimeContextNeeds {
     }
 
     fn is_empty(self) -> bool {
-        !self.workspace_tools && !self.exec_command && !self.computer_use
+        !self.workspace_tools && !self.exec_command && !self.exec_control && !self.computer_use
     }
 }
 
@@ -302,6 +306,20 @@ impl PromptBuilder {
         lines.extend(section_lines);
     }
 
+    fn exec_control_runtime_guidance(
+        host_os: &str,
+        remote_execution: bool,
+        exec_control_available: bool,
+    ) -> Vec<String> {
+        if !exec_control_available || remote_execution || host_os != "windows" {
+            return Vec::new();
+        }
+
+        vec![
+            "- On local Windows ExecCommand sessions, `ExecControl` `interrupt` is effectively the same as `kill` for non-TTY processes.".to_string(),
+        ]
+    }
+
     /// Build runtime facts that may change independently from the agent's system prompt.
     pub async fn build_runtime_context_reminder(&self) -> Option<String> {
         let needs = self.context.runtime_context_needs;
@@ -361,6 +379,13 @@ impl PromptBuilder {
             }
             Self::push_runtime_context_section(&mut lines, "ExecCommand Shell", exec_command_lines);
         }
+
+        let exec_control_lines = Self::exec_control_runtime_guidance(
+            host_os,
+            self.context.remote_execution.is_some(),
+            needs.exec_control,
+        );
+        Self::push_runtime_context_section(&mut lines, "ExecControl", exec_control_lines);
 
         if needs.computer_use {
             let mut local_client_lines = Vec::new();
@@ -878,6 +903,31 @@ mod tests {
     #[test]
     fn local_exec_shell_runtime_guidance_is_empty_for_non_powershell_shells() {
         assert!(PromptBuilder::local_exec_shell_runtime_guidance("bash").is_empty());
+    }
+
+    #[test]
+    fn exec_control_runtime_guidance_is_added_for_local_windows() {
+        let guidance = PromptBuilder::exec_control_runtime_guidance("windows", false, true);
+
+        assert_eq!(
+            guidance,
+            vec![
+                "- On local Windows ExecCommand sessions, `ExecControl` `interrupt` is effectively the same as `kill` for non-TTY processes.".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn exec_control_runtime_guidance_is_empty_when_exec_control_is_unavailable() {
+        assert!(
+            PromptBuilder::exec_control_runtime_guidance("windows", false, false).is_empty()
+        );
+    }
+
+    #[test]
+    fn exec_control_runtime_guidance_is_empty_for_remote_or_non_windows_hosts() {
+        assert!(PromptBuilder::exec_control_runtime_guidance("linux", false, true).is_empty());
+        assert!(PromptBuilder::exec_control_runtime_guidance("windows", true, true).is_empty());
     }
 
     #[tokio::test]

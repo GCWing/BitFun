@@ -386,7 +386,7 @@ mod tests {
     async fn product_catalog_facade_resolves_get_tool_spec_results_from_same_provider_owner() {
         let results = resolve_product_get_tool_spec_results(
             &json!({ "tool_name": "WebFetch" }),
-            &tool_context(Some("agentic")),
+            &tool_context(Some("GeneralPurpose")),
             "GetToolSpec",
         )
         .await
@@ -399,6 +399,24 @@ mod tests {
 
         assert_eq!(data["tool_name"], "WebFetch");
         assert_eq!(data["input_schema"]["type"], "object");
+    }
+
+    #[tokio::test]
+    async fn product_get_tool_spec_rejects_expanded_webfetch_in_agentic_mode() {
+        let error = resolve_product_get_tool_spec_results(
+            &json!({ "tool_name": "WebFetch" }),
+            &tool_context(Some("agentic")),
+            "GetToolSpec",
+        )
+        .await
+        .expect_err("agentic mode expands WebFetch, so GetToolSpec should reject it");
+
+        assert!(
+            error
+                .to_string()
+                .contains("not an available collapsed tool"),
+            "unexpected error: {error}"
+        );
     }
 
     #[tokio::test]
@@ -562,12 +580,12 @@ mod tests {
                 .unwrap_or_else(|| panic!("{tool_name} stub should exist"));
             assert!(
                 stub.description.contains(&format!(
-                    "THIS TOOL IS COLLAPSED. You MUST call GetToolSpec({{\"tool_name\":\"{tool_name}\"}}) before first calling {tool_name}."
+                    "THIS IS A COLLAPSED TOOL. Before first use, call GetToolSpec({{\"tool_name\":\"{tool_name}\"}}) to load its schema."
                 )),
                 "collapsed stub must point to the explicit GetToolSpec unlock flow"
             );
             assert_eq!(stub.parameters["type"], json!("object"));
-            assert_eq!(stub.parameters["additionalProperties"], json!(false));
+            assert_eq!(stub.parameters["additionalProperties"], json!(true));
             assert_eq!(stub.parameters["properties"], json!({}));
         }
     }

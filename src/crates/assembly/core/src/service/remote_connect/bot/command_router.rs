@@ -1489,8 +1489,16 @@ async fn create_session(state: &mut BotChatState, agent_type: &str) -> HandleRes
         Some(workspace_path.clone()),
         RemoteConnectSubmissionSource::Bot,
     );
-    let submission_port = CoreServiceAgentRuntime::agent_submission_port(coordinator.as_ref());
-    match submission_port.create_session(request).await {
+    let runtime = match CoreServiceAgentRuntime::agent_runtime(coordinator.clone()) {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            return result_from_menu(
+                state,
+                MenuView::plain(format!("{}{}", s.session_create_failed_prefix, error)),
+            );
+        }
+    };
+    match runtime.create_session(request).await {
         Ok(session) => {
             state.current_session_id = Some(session.session_id.clone());
             let body = format!(
@@ -1506,7 +1514,11 @@ async fn create_session(state: &mut BotChatState, agent_type: &str) -> HandleRes
         }
         Err(e) => result_from_menu(
             state,
-            MenuView::plain(format!("{}{}", s.session_create_failed_prefix, e.message)),
+            MenuView::plain(format!(
+                "{}{}",
+                s.session_create_failed_prefix,
+                CoreServiceAgentRuntime::runtime_error_message(e)
+            )),
         ),
     }
 }
@@ -1983,8 +1995,8 @@ async fn resolve_session_agent_type(session_id: &str) -> Option<String> {
     use crate::service_agent_runtime::CoreServiceAgentRuntime;
 
     let coordinator = get_global_coordinator()?;
-    let submission_port = CoreServiceAgentRuntime::agent_submission_port(coordinator.as_ref());
-    submission_port
+    let runtime = CoreServiceAgentRuntime::agent_runtime(coordinator).ok()?;
+    runtime
         .resolve_session_agent_type(session_id)
         .await
         .ok()

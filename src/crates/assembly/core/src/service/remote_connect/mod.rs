@@ -9,22 +9,37 @@
 //! `stop_all()` to shut everything down.
 
 pub mod bot;
-pub mod device;
 pub mod embedded_relay;
-pub mod encryption;
 pub mod lan;
 pub mod ngrok;
-pub mod pairing;
-pub mod qr_generator;
-pub mod relay_client;
 pub mod remote_server;
+
+pub mod device {
+    pub use bitfun_services_integrations::remote_connect::device::*;
+}
+
+pub mod encryption {
+    pub use bitfun_services_integrations::remote_connect::encryption::*;
+}
+
+pub mod pairing {
+    pub use bitfun_services_integrations::remote_connect::pairing::*;
+}
+
+pub mod qr_generator {
+    pub use bitfun_services_integrations::remote_connect::qr_generator::*;
+}
+
+pub mod relay_client {
+    pub use bitfun_services_integrations::remote_connect::relay_client::*;
+}
 
 pub use device::DeviceIdentity;
 pub use encryption::{decrypt_from_base64, encrypt_to_base64, KeyPair};
 pub use pairing::{PairingProtocol, PairingState};
 pub use qr_generator::QrGenerator;
-pub use relay_client::RelayClient;
 pub use relay_client::ensure_rustls_crypto_provider;
+pub use relay_client::RelayClient;
 pub use remote_server::RemoteServer;
 
 use anyhow::Result;

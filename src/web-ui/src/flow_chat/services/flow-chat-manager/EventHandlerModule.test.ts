@@ -62,6 +62,38 @@ describe('resolveDialogTurnDisplayContent', () => {
   });
 });
 
+describe('mergeParamsPartialEventData', () => {
+  it('appends Write argument deltas within a batch', () => {
+    const merged = __test_only__.mergeParamsPartialEventData(
+      {
+        sessionId: 'session-1',
+        turnId: 'turn-1',
+        roundId: 'round-1',
+        toolEvent: {
+          event_type: 'ParamsPartial',
+          tool_id: 'tool-1',
+          tool_name: 'Write',
+          params: '{"file_path":"src/app.ts","content":"',
+        },
+      },
+      {
+        sessionId: 'session-1',
+        turnId: 'turn-1',
+        roundId: 'round-1',
+        toolEvent: {
+          event_type: 'ParamsPartial',
+          tool_id: 'tool-1',
+          tool_name: 'Write',
+          params: 'hello',
+        },
+      },
+    );
+
+    expect((merged.toolEvent as any).params).toBe('{"file_path":"src/app.ts","content":"hello');
+  });
+
+});
+
 describe('shouldProcessEvent', () => {
   const mockSessionId = 'test-session';
   const mockTurnId = 'test-turn';
@@ -571,5 +603,28 @@ describe('handleDialogTurnComplete', () => {
     expect(turn?.status).toBe('error');
     expect(turn?.error).toContain('empty response');
     expect(stateMachineManager.getCurrentState('session-1')).toBe(SessionExecutionState.IDLE);
+  });
+
+  it('keeps abnormal completion turns on the completed path when no final response was produced', async () => {
+    putFinishingSessionInStore();
+    const context = createFlowChatContext();
+    await setFinishingMachine();
+
+    handleDialogTurnComplete(context, {
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      success: true,
+      finishReason: 'max_rounds',
+      hasFinalResponse: false,
+    }, vi.fn());
+
+    const turn = FlowChatStore.getInstance()
+      .getState()
+      .sessions.get('session-1')
+      ?.dialogTurns[0];
+
+    expect(turn?.status).toBe('finishing');
+    expect(turn?.finishReason).toBe('max_rounds');
+    expect(turn?.hasFinalResponse).toBe(false);
   });
 });

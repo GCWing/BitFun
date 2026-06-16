@@ -12,6 +12,7 @@ interface BottomTerminalPaneProps {
   isCollapsed: boolean;
   onExpand: () => void;
   onCollapse: () => void;
+  terminalResizeSuspended?: boolean;
 }
 
 const BottomTerminalPane: React.FC<BottomTerminalPaneProps> = ({
@@ -20,6 +21,7 @@ const BottomTerminalPane: React.FC<BottomTerminalPaneProps> = ({
   isCollapsed,
   onExpand,
   onCollapse,
+  terminalResizeSuspended = false,
 }) => {
   const handleInteraction = useCallback(async (_itemId: string, _userInput: string) => {
     // Terminal tabs do not use ContentCanvas interaction callbacks.
@@ -42,6 +44,7 @@ const BottomTerminalPane: React.FC<BottomTerminalPaneProps> = ({
           isPanelCollapsed={isCollapsed}
           onExpandPanel={onExpand}
           onCollapsePanel={onCollapse}
+          terminalResizeSuspended={terminalResizeSuspended}
         />
       </div>
     </CanvasStoreModeContext.Provider>

@@ -11,7 +11,7 @@
   overflow: hidden;
   cursor: pointer;
   animation: agent-card-in 0.22s $easing-decelerate both;
-  animation-delay: calc(var(--card-index, 0) * 35ms);
+  animation-delay: calc(var(--surface-stagger-index, 0) * 35ms);
   transition:
     transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
     box-shadow 0.35s ease;
@@ -33,7 +33,7 @@
 
   &:hover {
     transform: translateY(-4px) scale(1.02);
-    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 16px 40px var(--color-overlay-black-20);
 
     &::before {
       opacity: 0.4;
@@ -64,7 +64,7 @@
     width: 40px;
     height: 40px;
     border-radius: 10px;
-    background: rgba(255, 255, 255, 0.12);
+    background: var(--color-overlay-white-12);
     backdrop-filter: blur(8px);
   }
 
@@ -121,7 +121,7 @@
     margin: 0;
     font-size: 0.85em;
     font-weight: 300;
-    color: rgba(var(--color-text-secondary), 0.85);
+    color: color-mix(in srgb, var(--color-text-secondary) 85%, transparent);
     line-height: $line-height-relaxed;
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -162,7 +162,7 @@
     padding: 2px 8px;
     border-radius: $size-radius-full;
     border: 1px solid;
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--color-overlay-white-04);
     font-size: 10px;
     font-weight: $font-weight-medium;
     white-space: nowrap;
@@ -365,12 +365,12 @@
 
     &.is-active {
       border-color: color-mix(in srgb, var(--border-subtle) 88%, transparent);
-      border-bottom-color: var(--color-surface-base, var(--surface-base, transparent));
+      border-bottom-color: transparent;
       background: color-mix(in srgb, var(--element-bg-subtle) 96%, transparent);
       color: var(--color-accent-500);
       box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.04),
-        0 -1px 0 color-mix(in srgb, var(--color-accent-500, #60a5fa) 24%, transparent);
+        inset 0 1px 0 var(--color-overlay-white-04),
+        0 -1px 0 color-mix(in srgb, var(--color-accent-500) 24%, transparent);
     }
   }
 
@@ -501,8 +501,8 @@
     }
 
     &.is-on {
-      border: 1px solid rgba(96, 165, 250, 0.4);
-      background: rgba(96, 165, 250, 0.08);
+      border: 1px solid var(--color-accent-400);
+      background: var(--color-accent-100);
       color: var(--color-accent-500);
 
       &:hover {

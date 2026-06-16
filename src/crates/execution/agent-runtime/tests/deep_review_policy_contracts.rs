@@ -5,13 +5,13 @@ use bitfun_agent_runtime::deep_review::report::{
 use bitfun_agent_runtime::deep_review::task_execution::{
     capacity_decision_for_provider_error_facts, capacity_skip_result_for_local_queue_outcome,
     decide_blocked_reviewer_admission_queue_step, decide_provider_capacity_queue_step,
-    deep_review_launch_batch_for_task, deep_review_packet_id_for_cache,
+    deep_review_launch_batch_for_task, deep_review_packet_id_for_cache, deep_review_queue_state,
     ensure_deep_review_retry_coverage, local_reviewer_capacity_queue_decision,
     prompt_with_deep_review_retry_scope, provider_capacity_queue_wait_seconds_for_attempt,
     DeepReviewBlockedReviewerAdmissionQueueStepDecision,
     DeepReviewBlockedReviewerAdmissionQueueStepFacts, DeepReviewProviderCapacityErrorCategory,
     DeepReviewProviderCapacityErrorFacts, DeepReviewProviderCapacityQueueStepDecision,
-    DeepReviewProviderCapacityQueueStepFacts,
+    DeepReviewProviderCapacityQueueStepFacts, DeepReviewQueueStateInput,
 };
 use bitfun_agent_runtime::deep_review::{
     append_tool_use_context_data, apply_deep_review_queue_control,
@@ -22,6 +22,7 @@ use bitfun_agent_runtime::deep_review::{
     DeepReviewRunManifestGate, DeepReviewStrategyLevel, DeepReviewSubagentRole,
     DeepReviewToolParentContext, REVIEWER_SECURITY_AGENT_TYPE,
 };
+use bitfun_events::{DeepReviewQueueReason, DeepReviewQueueStatus};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
@@ -373,4 +374,36 @@ fn deep_review_task_execution_owner_preserves_packet_retry_and_queue_contracts()
         Some("launch_batch_blocked")
     );
     assert!(message.contains("previous launch batch did not finish"));
+}
+
+#[test]
+fn deep_review_task_execution_owner_builds_queue_event_state() {
+    let queue_state = deep_review_queue_state(DeepReviewQueueStateInput {
+        tool_id: "task-1",
+        subagent_type: "ReviewSecurity",
+        status: DeepReviewQueueStatus::Running,
+        reason: Some(DeepReviewCapacityQueueReason::ProviderConcurrencyLimit),
+        queued_reviewer_count: 0,
+        active_reviewer_count: 2,
+        optional_reviewer_count: Some(1),
+        effective_parallel_instances: Some(3),
+        queue_elapsed_ms: 1_200,
+        max_queue_wait_seconds: 60,
+    });
+
+    assert_eq!(queue_state.tool_id, "task-1");
+    assert_eq!(queue_state.subagent_type, "ReviewSecurity");
+    assert_eq!(queue_state.status, DeepReviewQueueStatus::Running);
+    assert_eq!(
+        queue_state.reason,
+        Some(DeepReviewQueueReason::ProviderConcurrencyLimit)
+    );
+    assert_eq!(queue_state.queued_reviewer_count, 0);
+    assert_eq!(queue_state.active_reviewer_count, Some(2));
+    assert_eq!(queue_state.optional_reviewer_count, Some(1));
+    assert_eq!(queue_state.effective_parallel_instances, Some(3));
+    assert_eq!(queue_state.queue_elapsed_ms, Some(1_200));
+    assert_eq!(queue_state.run_elapsed_ms, Some(0));
+    assert_eq!(queue_state.max_queue_wait_seconds, Some(60));
+    assert!(!queue_state.session_concurrency_high);
 }

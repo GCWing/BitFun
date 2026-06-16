@@ -62,7 +62,7 @@
     "networkError": "AI 響應中斷",
     "networkErrorSuggestion": "網絡連接不穩定或模型服務端提前關閉了連接，請檢查網絡後重試",
     "rateLimit": "模型請求頻率超限",
-    "rateLimitSuggestion": "請稍後重試，或在模型設置中切換到其他模型",
+    "rateLimitSuggestion": "服務商因頻率限制拒絕了本次請求。可能是短時間內請求過多，也可能是某些服務商平台存在每分鐘 token 數（TPM）限制。請稍候重試，或在設定中切換到其他模型",
     "authError": "API 認證失敗",
     "authErrorSuggestion": "API 密鑰無效或已過期，請檢查模型設定中的密鑰設置",
     "contextOverflow": "對話內容超出限制",

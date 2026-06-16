@@ -13,10 +13,10 @@
 }
 
 .base-tool-card-wrapper.miniapp-tool-display .miniapp-result-footer {
-  margin-left: calc(-1 * var(--flowchat-card-expanded-pad-x, 0.625rem));
-  margin-right: calc(-1 * var(--flowchat-card-expanded-pad-x, 0.625rem));
-  margin-bottom: calc(-1 * var(--flowchat-card-expanded-pad-y, 0.5rem));
-  padding: var(--flowchat-card-expanded-pad-y, 0.5rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
+  margin-left: calc(-1 * var(--flowchat-card-expanded-pad-x));
+  margin-right: calc(-1 * var(--flowchat-card-expanded-pad-x));
+  margin-bottom: calc(-1 * var(--flowchat-card-expanded-pad-y));
+  padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
   border-radius: 0 0 7px 7px;
 }
 
@@ -32,7 +32,7 @@
   .miniapp-tool-info {
     display: flex;
     align-items: center;
-    gap: var(--flowchat-control-gap, 0.5rem);
+    gap: var(--flowchat-control-gap);
     flex-wrap: nowrap;
     min-width: 0;
     flex: 1;
@@ -40,7 +40,7 @@
     .operation-tag {
       display: inline-flex;
       align-items: center;
-      font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+      font-size: var(--tool-card-action-font-size);
       font-weight: 500;
       flex-shrink: 0;
       white-space: nowrap;
@@ -49,7 +49,7 @@
 
     .command-text {
       font-family: var(--tool-card-font-mono);
-      font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+      font-size: var(--tool-card-action-font-size);
       font-weight: 500;
       color: var(--tool-card-text-primary);
       white-space: nowrap;
@@ -74,8 +74,8 @@
     align-items: center;
 
     .error-text {
-      font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
-      color: rgba(239, 68, 68, 0.9);
+      font-size: var(--tool-card-action-font-size);
+      color: color-mix(in srgb, var(--color-error) 90%, transparent);
       font-weight: 600;
     }
   }
@@ -87,18 +87,18 @@
   }
 
   .miniapp-result-rows {
-    padding: var(--flowchat-card-expanded-pad-y, 0.5rem) var(--flowchat-card-expanded-pad-x, 0.625rem) 0;
+    padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x) 0;
     display: flex;
     flex-direction: column;
-    gap: var(--flowchat-flow-item-gap, 0.42rem);
+    gap: var(--flowchat-flow-item-gap);
   }
 
   .miniapp-result-row {
     display: flex;
     align-items: baseline;
-    gap: var(--flowchat-control-gap, 0.5rem);
+    gap: var(--flowchat-control-gap);
     flex-wrap: wrap;
-    line-height: var(--flowchat-support-line-height, 1.45);
+    line-height: var(--flowchat-support-line-height);
   }
 
   .miniapp-result-label {
@@ -119,18 +119,18 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    line-height: var(--flowchat-compact-line-height, 1.32);
+    line-height: var(--flowchat-compact-line-height);
   }
 
   .miniapp-result-footer {
     display: flex;
     align-items: center;
     justify-content: flex-start;
-    gap: var(--flowchat-control-gap, 0.5rem);
+    gap: var(--flowchat-control-gap);
     flex-wrap: wrap;
-    line-height: var(--flowchat-compact-line-height, 1.32);
-    margin-top: var(--flowchat-card-gap, 0.42rem);
-    background: var(--element-bg-subtle, rgba(255, 255, 255, 0.05));
+    line-height: var(--flowchat-compact-line-height);
+    margin-top: var(--flowchat-card-gap);
+    background: var(--element-bg-subtle);
     box-sizing: border-box;
     border-top: 1px solid var(--border-subtle);
   }
@@ -138,8 +138,8 @@
   .miniapp-open-btn {
     display: inline-flex;
     align-items: center;
-    gap: var(--flowchat-inline-gap, 0.35rem);
-    padding: 0.32rem var(--flowchat-card-expanded-pad-x, 0.625rem);
+    gap: var(--flowchat-inline-gap);
+    padding: 0.32rem var(--flowchat-card-expanded-pad-x);
     border-radius: 4px;
     border: 1px solid var(--border-subtle);
     background: transparent;
@@ -151,20 +151,20 @@
     transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 
     &:hover {
-      background: var(--element-bg-hover, rgba(255, 255, 255, 0.06));
-      border-color: var(--border-primary, rgba(255, 255, 255, 0.12));
+      background: var(--element-bg-hover);
+      border-color: var(--border-primary);
     }
   }
 
   .error-content {
-    padding: var(--flowchat-card-expanded-pad-y, 0.5rem) var(--size-gap-4, 16px);
-    background: rgba(239, 68, 68, 0.05);
-    border-top: 1px solid rgba(239, 68, 68, 0.2);
+    padding: var(--flowchat-card-expanded-pad-y) var(--size-gap-4);
+    background: var(--glass-red-subtle);
+    border-top: 1px solid color-mix(in srgb, var(--color-error) 20%, transparent);
 
     .error-message {
-      color: rgba(239, 68, 68, 0.9);
+      color: color-mix(in srgb, var(--color-error) 90%, transparent);
       font-size: var(--flowchat-font-size-sm);
-      margin-bottom: var(--flowchat-card-gap, 0.42rem);
+      margin-bottom: var(--flowchat-card-gap);
       font-family: var(--tool-card-font-mono);
       white-space: pre-wrap;
       word-break: break-word;
@@ -173,12 +173,12 @@
     .error-meta {
       display: flex;
       align-items: center;
-      gap: var(--flowchat-control-gap, 0.5rem);
+      gap: var(--flowchat-control-gap);
       font-size: var(--flowchat-font-size-sm);
       color: var(--tool-card-text-secondary);
 
       .error-operation {
-        color: rgba(239, 68, 68, 0.7);
+        color: color-mix(in srgb, var(--color-error) 70%, transparent);
         font-family: var(--tool-card-font-mono);
       }
     }

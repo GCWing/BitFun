@@ -233,10 +233,10 @@ export const MissionControl: React.FC<MissionControlProps> = ({
             {hasMultipleGroups && (
               <div className="canvas-mission-control__group-filters">
                 {[
-                  { id: 'primary' as EditorGroupId, labelKey: 'canvas.groupPrimaryFull', shortLabelKey: 'canvas.groupPrimary', color: '#3b82f6', colorRgb: '59, 130, 246' },
-                  { id: 'secondary' as EditorGroupId, labelKey: 'canvas.groupSecondaryFull', shortLabelKey: 'canvas.groupSecondary', color: '#10b981', colorRgb: '16, 185, 129' },
-                  { id: 'tertiary' as EditorGroupId, labelKey: 'canvas.groupTertiaryFull', shortLabelKey: 'canvas.groupTertiary', color: '#f59e0b', colorRgb: '245, 158, 11' },
-                ].map(({ id, labelKey, shortLabelKey, color, colorRgb }) => {
+                  { id: 'primary' as EditorGroupId, labelKey: 'canvas.groupPrimaryFull', shortLabelKey: 'canvas.groupPrimary', color: 'var(--mission-control-group-primary-color)' },
+                  { id: 'secondary' as EditorGroupId, labelKey: 'canvas.groupSecondaryFull', shortLabelKey: 'canvas.groupSecondary', color: 'var(--mission-control-group-secondary-color)' },
+                  { id: 'tertiary' as EditorGroupId, labelKey: 'canvas.groupTertiaryFull', shortLabelKey: 'canvas.groupTertiary', color: 'var(--mission-control-group-tertiary-color)' },
+                ].map(({ id, labelKey, shortLabelKey, color }) => {
                   const hasTabs = organizedTabs[id as keyof typeof organizedTabs].length > 0;
                   if (!hasTabs) return null;
                   
@@ -247,8 +247,7 @@ export const MissionControl: React.FC<MissionControlProps> = ({
                       onClick={() => toggleGroupFilter(id)}
                       title={t(labelKey)}
                       style={{ 
-                        '--group-color': color,
-                        '--group-color-rgb': colorRgb,
+                        '--mission-control-group-color': color,
                       } as React.CSSProperties}
                     >
                       <span className="canvas-mission-control__group-filter-indicator" />

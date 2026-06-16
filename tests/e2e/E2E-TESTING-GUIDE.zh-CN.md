@@ -167,6 +167,8 @@ Debug build detected, checking dev server...
 
 **核心原理**: 功能 E2E 默认使用 `target/debug/bitfun-desktop.exe`。性能 E2E 需要显式设置 `BITFUN_E2E_APP_MODE=release-fast`，并先执行 `pnpm run desktop:build:release-fast`。
 
+不要直接手工启动 `target/release-fast/bitfun-desktop.exe` 做性能验证。直接启动会使用普通用户 profile，除非手动提供隔离存储环境变量。E2E launcher 会自动设置 `BITFUN_USER_ROOT`、`BITFUN_HOME` 和 `BITFUN_E2E_STORAGE_GUARD=1`，确保性能测试不会静默写入真实 BitFun profile。
+
 ### 5. 启动和长 Session 性能 E2E
 
 性能测试优先使用 `release-fast`，这样可以使用生产 Web bundle 和类 release Rust profile，同时通过 `devtools` feature 保留嵌入式 WebDriver。

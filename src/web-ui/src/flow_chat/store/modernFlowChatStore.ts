@@ -7,10 +7,19 @@
 import { create } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 import { immer } from 'zustand/middleware/immer';
-import type { Session, DialogTurn, ModelRound, FlowItem, FlowToolItem, FlowUserSteeringItem, AnyFlowItem } from '../types/flow-chat';
-import { isCollapsibleTool, READ_TOOL_NAMES, SEARCH_TOOL_NAMES, COMMAND_TOOL_NAMES } from '../tool-cards';
+import type { Session, DialogTurn, ModelRound, FlowItem, FlowToolItem, FlowUserSteeringItem, AnyFlowItem, TokenUsage } from '../types/flow-chat';
+import {
+  isCollapsibleTool,
+  READ_TOOL_NAMES,
+  SEARCH_TOOL_NAMES,
+  COMMAND_TOOL_NAMES,
+} from '../tool-cards/toolCardMetadata';
 import { isCompletedToolInTransientWindow } from '../components/modern/modelRoundItemGrouping';
 import { flowChatStore } from './FlowChatStore';
+import {
+  getTurnCompletionNotice,
+  type TurnCompletionNotice,
+} from '../utils/turnCompletionNotice';
 
 /**
  * Explore group statistics (merged computed stats)
@@ -60,12 +69,17 @@ export type VirtualItem =
       turnId: string;
       isLastRound: boolean;
       isTurnComplete: boolean;
+      turnStartedAt?: number;
+      turnEndedAt?: number;
+      turnDurationMs?: number;
+      turnTokenUsage?: TokenUsage;
       segmentId?: string;
       segmentIndex?: number;
       segmentCount?: number;
       sourceRoundId?: string;
     }
   | { type: 'explore-group'; data: ExploreGroupData; turnId: string }
+  | { type: 'turn-completion-notice'; data: TurnCompletionNotice; turnId: string }
   | { type: 'image-analyzing'; turnId: string };
 
 /**
@@ -228,6 +242,7 @@ function splitModelRoundForVirtualItems(
         ...round,
         id: segmentId,
         items: round.items.slice(start, end),
+        historyRounds: segmentIndex === 0 ? round.historyRounds : undefined,
       },
       segmentId,
       segmentIndex,
@@ -264,6 +279,19 @@ function steeringItemToUserMessage(item: FlowUserSteeringItem): NonNullable<Dial
     id: `user_steering_${item.steeringId}`,
     content: item.content,
     timestamp: item.timestamp,
+  };
+}
+
+function mergeRoundGroupForDisplay(currentRound: ModelRound, nextRound: ModelRound): ModelRound {
+  return {
+    ...nextRound,
+    historyRounds: [
+      ...(currentRound.historyRounds ?? []),
+      {
+        ...currentRound,
+        historyRounds: undefined,
+      },
+    ],
   };
 }
 
@@ -380,12 +408,23 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
       if (!round.items || round.items.length === 0) return;
       const nonSteeringItems = round.items.filter(item => item.type !== 'user-steering');
       if (nonSteeringItems.length > 0) {
-        renderEntries.push({
-          type: 'round',
-          round: nonSteeringItems.length === round.items.length
-            ? round
-            : { ...round, items: nonSteeringItems },
-        });
+        const normalizedRound = nonSteeringItems.length === round.items.length
+          ? round
+          : { ...round, items: nonSteeringItems };
+        const lastRenderEntry = renderEntries[renderEntries.length - 1];
+
+        if (
+          normalizedRound.roundGroupId &&
+          lastRenderEntry?.type === 'round' &&
+          lastRenderEntry.round.roundGroupId === normalizedRound.roundGroupId
+        ) {
+          lastRenderEntry.round = mergeRoundGroupForDisplay(lastRenderEntry.round, normalizedRound);
+        } else {
+          renderEntries.push({
+            type: 'round',
+            round: normalizedRound,
+          });
+        }
       }
       round.items
         .filter((item): item is FlowUserSteeringItem => item.type === 'user-steering')
@@ -509,6 +548,12 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
               turnId: turn.id,
               isLastRound: isLastRound && chunkIndex === roundChunks.length - 1,
               isTurnComplete,
+              turnStartedAt: turn.startTime,
+              turnEndedAt: turn.endTime,
+              turnDurationMs: typeof turn.endTime === 'number'
+                ? Math.max(0, turn.endTime - turn.startTime)
+                : undefined,
+              turnTokenUsage: turn.tokenUsage,
               segmentId: chunk.segmentId,
               segmentIndex: chunk.segmentIndex,
               segmentCount: chunk.segmentCount,
@@ -541,6 +586,15 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
     });
 
     flushRoundEntries(pendingRounds, { collapseTrailingExploreGroup: true });
+
+    const completionNotice = getTurnCompletionNotice(turn);
+    if (completionNotice) {
+      items.push({
+        type: 'turn-completion-notice',
+        turnId: turn.id,
+        data: completionNotice,
+      });
+    }
 
     if (isStableTurnProjection(turn)) {
       cachedTurnItems.set(turn, items.slice(turnItemStart));

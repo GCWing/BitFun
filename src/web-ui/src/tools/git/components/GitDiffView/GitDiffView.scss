@@ -387,7 +387,7 @@ $opacity-high: 0.8 !default;
     padding: $size-gap-6;
     min-width: 500px;
     max-width: 600px;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 20px 25px -5px var(--color-overlay-black-50), 0 10px 10px -5px var(--color-overlay-black-40);
     animation: bitfun-git-diff-view-scale-in 0.2s ease-out;
   }
 
@@ -470,7 +470,7 @@ $opacity-high: 0.8 !default;
       outline: none;
       border-color: var(--color-accent-500);
       background: $element-bg-medium;
-      box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
+      box-shadow: 0 0 0 3px var(--card-bg-accent);
     }
 
     &::placeholder {
@@ -489,8 +489,8 @@ $opacity-high: 0.8 !default;
     gap: $size-gap-2;
     padding: $size-gap-3;
     margin-top: $size-gap-2;
-    background: rgba(96, 165, 250, 0.05);
-    border: 1px solid rgba(96, 165, 250, 0.2);
+    background: color-mix(in srgb, var(--color-accent-500) 5%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-accent-500) 20%, transparent);
     border-radius: $size-radius-base;
     animation: bitfun-git-diff-view-slide-up 0.3s ease-out;
   }
@@ -512,8 +512,8 @@ $opacity-high: 0.8 !default;
     font-size: var(--font-size-xs);
     font-weight: $font-weight-medium;
     color: var(--color-accent-500);
-    background: rgba(96, 165, 250, 0.15);
-    border: 1px solid rgba(96, 165, 250, 0.3);
+    background: var(--color-accent-200);
+    border: 1px solid color-mix(in srgb, var(--color-accent-500) 30%, transparent);
     border-radius: $size-radius-sm;
     text-transform: capitalize;
   }
@@ -533,7 +533,7 @@ $opacity-high: 0.8 !default;
   &__ai-confidence-bar {
     width: 60px;
     height: 4px;
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--color-overlay-white-10);
     border-radius: 2px;
     overflow: hidden;
   }

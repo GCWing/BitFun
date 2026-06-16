@@ -28,7 +28,7 @@
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.16);
 
     &:hover:not(:disabled) {
-      background: var(--element-bg-subtle, rgba(255, 255, 255, 0.1));
+      background: var(--element-bg-subtle);
     }
   }
 
@@ -48,7 +48,7 @@
   .exec-process-footer-group {
     display: inline-flex;
     align-items: center;
-    gap: var(--flowchat-inline-gap, 0.35rem);
+    gap: var(--flowchat-inline-gap);
     min-width: 0;
   }
 

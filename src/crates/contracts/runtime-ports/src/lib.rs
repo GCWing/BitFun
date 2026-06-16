@@ -587,7 +587,38 @@ pub struct AgentSessionCreateRequest {
 #[serde(rename_all = "camelCase")]
 pub struct AgentSessionCreateResult {
     pub session_id: String,
+    #[serde(default)]
+    pub session_name: String,
     pub agent_type: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionListRequest {
+    pub workspace_path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionSummary {
+    pub session_id: String,
+    pub session_name: String,
+    pub agent_type: String,
+    pub created_at_ms: u64,
+    pub last_active_at_ms: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionDeleteRequest {
+    pub workspace_path: String,
+    pub session_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionWorkspaceRequest {
+    pub session_id: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -603,6 +634,68 @@ pub struct AgentSubmissionRequest {
     pub attachments: Vec<AgentInputAttachment>,
     #[serde(default, skip_serializing_if = "serde_json::Map::is_empty")]
     pub metadata: serde_json::Map<String, serde_json::Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentDialogTurnRequest {
+    pub session_id: String,
+    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub original_message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub turn_id: Option<String>,
+    pub agent_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workspace_path: Option<String>,
+    pub policy: DialogSubmissionPolicy,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reply_route: Option<AgentSessionReplyRoute>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub prepended_reminders: Vec<AgentDialogPrependedReminder>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attachments: Vec<AgentInputAttachment>,
+    #[serde(default, skip_serializing_if = "serde_json::Map::is_empty")]
+    pub metadata: serde_json::Map<String, serde_json::Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentDialogPrependedReminder {
+    pub kind: String,
+    pub text: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentBackgroundResultRequest {
+    pub session_id: String,
+    pub agent_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workspace_path: Option<String>,
+    pub content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display_content: Option<String>,
+    #[serde(default, skip_serializing_if = "serde_json::Map::is_empty")]
+    pub metadata: serde_json::Map<String, serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentThreadGoalDeliveryKind {
+    Resumed,
+    ObjectiveUpdated,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentThreadGoalDeliveryRequest {
+    pub session_id: String,
+    pub agent_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workspace_path: Option<String>,
+    pub kind: AgentThreadGoalDeliveryKind,
+    pub goal: ThreadGoal,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -700,18 +793,7 @@ pub enum DialogSubmitQueueAction {
     StartImmediately,
     ClearQueueAndStartImmediately,
     EnqueueThenStartNext,
-    EnqueueForActiveTurn { request_yield: bool },
-}
-
-pub const fn dialog_policy_may_preempt(policy: &DialogSubmissionPolicy) -> bool {
-    matches!(
-        policy.trigger_source,
-        DialogTriggerSource::DesktopUi
-            | DialogTriggerSource::DesktopApi
-            | DialogTriggerSource::Cli
-            | DialogTriggerSource::RemoteRelay
-            | DialogTriggerSource::Bot
-    )
+    EnqueueForActiveTurn,
 }
 
 pub const fn resolve_dialog_submit_queue_action(
@@ -727,9 +809,7 @@ pub const fn resolve_dialog_submit_queue_action(
                 DialogSubmitQueueAction::StartImmediately
             }
         }
-        DialogSessionStateFact::Processing => DialogSubmitQueueAction::EnqueueForActiveTurn {
-            request_yield: dialog_policy_may_preempt(&facts.policy),
-        },
+        DialogSessionStateFact::Processing => DialogSubmitQueueAction::EnqueueForActiveTurn,
     }
 }
 
@@ -758,7 +838,8 @@ pub const fn should_skip_agent_session_reply(
 
 /// Source session route used when an agent-session request should reply to the
 /// requester after the target session finishes.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AgentSessionReplyRoute {
     pub source_session_id: String,
     pub source_workspace_path: String,
@@ -801,13 +882,6 @@ pub struct RoundInjection {
     pub content: String,
     pub display_content: String,
     pub created_at: std::time::SystemTime,
-}
-
-/// Observes whether the current dialog turn should end after the latest model
-/// round so a queued user message can start as a new turn.
-pub trait DialogRoundPreemptSource: Send + Sync {
-    fn should_yield_after_round(&self, session_id: &str) -> bool;
-    fn clear_yield_after_round(&self, session_id: &str);
 }
 
 /// Observes round-boundary injections for a given running turn.
@@ -1057,6 +1131,39 @@ pub trait AgentSubmissionPort: Send + Sync {
     async fn resolve_session_agent_type(&self, session_id: &str) -> PortResult<Option<String>>;
 }
 
+#[async_trait::async_trait]
+pub trait AgentSessionManagementPort: Send + Sync {
+    async fn list_sessions(
+        &self,
+        request: AgentSessionListRequest,
+    ) -> PortResult<Vec<AgentSessionSummary>>;
+
+    async fn delete_session(&self, request: AgentSessionDeleteRequest) -> PortResult<()>;
+
+    async fn resolve_session_workspace_path(
+        &self,
+        request: AgentSessionWorkspaceRequest,
+    ) -> PortResult<Option<String>>;
+}
+
+#[async_trait::async_trait]
+pub trait AgentDialogTurnPort: Send + Sync {
+    async fn submit_dialog_turn(
+        &self,
+        request: AgentDialogTurnRequest,
+    ) -> PortResult<DialogSubmitOutcome>;
+}
+
+#[async_trait::async_trait]
+pub trait AgentLifecycleDeliveryPort: Send + Sync {
+    async fn deliver_background_result(
+        &self,
+        request: AgentBackgroundResultRequest,
+    ) -> PortResult<()>;
+
+    async fn deliver_thread_goal(&self, request: AgentThreadGoalDeliveryRequest) -> PortResult<()>;
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentTurnCancellationRequest {
@@ -1065,6 +1172,8 @@ pub struct AgentTurnCancellationRequest {
     pub turn_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<AgentSubmissionSource>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub requester_session_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1358,10 +1467,8 @@ mod tests {
     #[test]
     fn dialog_submit_queue_action_preserves_current_scheduler_routing_policy() {
         let remote = DialogSubmissionPolicy::for_source(DialogTriggerSource::RemoteRelay);
-        assert!(dialog_policy_may_preempt(&remote));
 
         let agent_session = DialogSubmissionPolicy::for_source(DialogTriggerSource::AgentSession);
-        assert!(!dialog_policy_may_preempt(&agent_session));
 
         assert_eq!(
             resolve_dialog_submit_queue_action(DialogSubmitQueueFacts {
@@ -1401,9 +1508,7 @@ mod tests {
                 queue_has_items: false,
                 policy: remote,
             }),
-            DialogSubmitQueueAction::EnqueueForActiveTurn {
-                request_yield: true
-            }
+            DialogSubmitQueueAction::EnqueueForActiveTurn
         );
         assert_eq!(
             resolve_dialog_submit_queue_action(DialogSubmitQueueFacts {
@@ -1411,9 +1516,7 @@ mod tests {
                 queue_has_items: false,
                 policy: agent_session,
             }),
-            DialogSubmitQueueAction::EnqueueForActiveTurn {
-                request_yield: false
-            }
+            DialogSubmitQueueAction::EnqueueForActiveTurn
         );
     }
 
@@ -1707,11 +1810,117 @@ mod tests {
     }
 
     #[test]
+    fn agent_dialog_turn_request_serializes_lifecycle_contract() {
+        let request = AgentDialogTurnRequest {
+            session_id: "session_1".to_string(),
+            message: "hello".to_string(),
+            original_message: Some("raw hello".to_string()),
+            turn_id: Some("turn_1".to_string()),
+            agent_type: "agentic".to_string(),
+            workspace_path: Some("/workspace/project".to_string()),
+            policy: DialogSubmissionPolicy::new(
+                AgentSubmissionSource::RemoteRelay,
+                DialogQueuePriority::High,
+                true,
+            ),
+            reply_route: Some(AgentSessionReplyRoute {
+                source_session_id: "source_session".to_string(),
+                source_workspace_path: "/workspace/source".to_string(),
+            }),
+            prepended_reminders: vec![AgentDialogPrependedReminder {
+                kind: "session_message_request".to_string(),
+                text: "sent by another agent".to_string(),
+            }],
+            attachments: vec![AgentInputAttachment::remote_image(
+                "image-1",
+                "clip.png",
+                "data:image/png;base64,abc",
+            )],
+            metadata: serde_json::Map::new(),
+        };
+
+        let json = serde_json::to_value(request).expect("serialize dialog turn request");
+
+        assert_eq!(json["sessionId"], "session_1");
+        assert_eq!(json["message"], "hello");
+        assert_eq!(json["originalMessage"], "raw hello");
+        assert_eq!(json["turnId"], "turn_1");
+        assert_eq!(json["agentType"], "agentic");
+        assert_eq!(json["workspacePath"], "/workspace/project");
+        assert_eq!(json["policy"]["triggerSource"], "remote_relay");
+        assert_eq!(json["policy"]["queuePriority"], "high");
+        assert_eq!(json["policy"]["skipToolConfirmation"], true);
+        assert_eq!(json["replyRoute"]["sourceSessionId"], "source_session");
+        assert_eq!(
+            json["prependedReminders"][0]["kind"],
+            "session_message_request"
+        );
+        assert_eq!(json["attachments"][0]["kind"], "remote_image");
+    }
+
+    #[test]
+    fn agent_background_result_request_serializes_lifecycle_contract() {
+        let mut metadata = serde_json::Map::new();
+        metadata.insert(
+            "kind".to_string(),
+            serde_json::Value::String("background_result".to_string()),
+        );
+        let request = AgentBackgroundResultRequest {
+            session_id: "session_1".to_string(),
+            agent_type: "agentic".to_string(),
+            workspace_path: Some("/workspace/project".to_string()),
+            content: "full result".to_string(),
+            display_content: Some("short result".to_string()),
+            metadata,
+        };
+
+        let json = serde_json::to_value(request).expect("serialize background result request");
+
+        assert_eq!(json["sessionId"], "session_1");
+        assert_eq!(json["agentType"], "agentic");
+        assert_eq!(json["workspacePath"], "/workspace/project");
+        assert_eq!(json["content"], "full result");
+        assert_eq!(json["displayContent"], "short result");
+        assert_eq!(json["metadata"]["kind"], "background_result");
+    }
+
+    #[test]
+    fn agent_thread_goal_delivery_request_serializes_lifecycle_contract() {
+        let request = AgentThreadGoalDeliveryRequest {
+            session_id: "session_1".to_string(),
+            agent_type: "agentic".to_string(),
+            workspace_path: Some("/workspace/project".to_string()),
+            kind: AgentThreadGoalDeliveryKind::ObjectiveUpdated,
+            goal: ThreadGoal {
+                goal_id: "goal_1".to_string(),
+                session_id: "session_1".to_string(),
+                objective: "Ship the refactor".to_string(),
+                status: ThreadGoalStatus::Active,
+                token_budget: Some(1000),
+                tokens_used: 10,
+                time_used_seconds: 0,
+                created_at: 1,
+                updated_at: 2,
+                auto_continuation_count: 0,
+            },
+        };
+
+        let json = serde_json::to_value(request).expect("serialize thread goal delivery request");
+
+        assert_eq!(json["sessionId"], "session_1");
+        assert_eq!(json["agentType"], "agentic");
+        assert_eq!(json["workspacePath"], "/workspace/project");
+        assert_eq!(json["kind"], "objective_updated");
+        assert_eq!(json["goal"]["goalId"], "goal_1");
+    }
+
+    #[test]
     fn agent_turn_cancellation_request_serializes_current_contract() {
         let request = AgentTurnCancellationRequest {
             session_id: "session_1".to_string(),
             turn_id: Some("turn_1".to_string()),
             source: Some(AgentSubmissionSource::Bot),
+            requester_session_id: Some("requester_session".to_string()),
             reason: Some("user_cancelled".to_string()),
             wait_timeout_ms: Some(1500),
         };
@@ -1721,8 +1930,43 @@ mod tests {
         assert_eq!(json["sessionId"], "session_1");
         assert_eq!(json["turnId"], "turn_1");
         assert_eq!(json["source"], "bot");
+        assert_eq!(json["requesterSessionId"], "requester_session");
         assert_eq!(json["reason"], "user_cancelled");
         assert_eq!(json["waitTimeoutMs"], 1500);
+    }
+
+    #[test]
+    fn agent_session_management_contracts_serialize_stable_shape() {
+        let list_request = AgentSessionListRequest {
+            workspace_path: "/workspace/project".to_string(),
+        };
+        let summary = AgentSessionSummary {
+            session_id: "session_1".to_string(),
+            session_name: "Main".to_string(),
+            agent_type: "agentic".to_string(),
+            created_at_ms: 1000,
+            last_active_at_ms: 2000,
+        };
+        let delete_request = AgentSessionDeleteRequest {
+            workspace_path: "/workspace/project".to_string(),
+            session_id: "session_1".to_string(),
+        };
+        let workspace_request = AgentSessionWorkspaceRequest {
+            session_id: "session_1".to_string(),
+        };
+
+        let list_json = serde_json::to_value(list_request).expect("serialize list request");
+        let summary_json = serde_json::to_value(summary).expect("serialize summary");
+        let delete_json = serde_json::to_value(delete_request).expect("serialize delete request");
+        let workspace_json =
+            serde_json::to_value(workspace_request).expect("serialize workspace request");
+
+        assert_eq!(list_json["workspacePath"], "/workspace/project");
+        assert_eq!(summary_json["sessionId"], "session_1");
+        assert_eq!(summary_json["createdAtMs"], 1000);
+        assert_eq!(summary_json["lastActiveAtMs"], 2000);
+        assert_eq!(delete_json["sessionId"], "session_1");
+        assert_eq!(workspace_json["sessionId"], "session_1");
     }
 
     #[test]

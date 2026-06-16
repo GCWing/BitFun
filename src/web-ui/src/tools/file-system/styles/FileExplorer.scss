@@ -49,7 +49,7 @@ $_indent-width: 8px;
     
     &:hover {
       color: var(--color-text-primary);
-      background: rgba(255, 255, 255, 0.08);
+      background: var(--color-overlay-white-08);
     }
     
     svg {
@@ -109,13 +109,13 @@ $_indent-width: 8px;
     
     &:hover {
       color: var(--color-text-primary);
-      background: rgba(255, 255, 255, 0.08);
+      background: var(--color-overlay-white-08);
     }
   }
   
   &:last-child {
     color: var(--color-text-secondary);
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--color-overlay-white-04);
   }
 }
 
@@ -198,7 +198,7 @@ $_indent-width: 8px;
 
 @keyframes file-node-highlight-fade {
   0% {
-    background: rgba(var(--color-accent-rgb, 99, 102, 241), 0.2);
+    background: rgba(var(--color-primary-rgb) / 0.2);
   }
   30% {
     background: $git-color-branch-bg;

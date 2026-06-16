@@ -7,14 +7,14 @@
   .diff-tool-info {
     display: flex;
     align-items: center;
-    gap: var(--flowchat-control-gap, 0.5rem);
+    gap: var(--flowchat-control-gap);
     overflow: hidden;
   }
 
   .diff-file-name {
     color: var(--color-text-primary);
     font-family: var(--font-mono);
-    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+    font-size: var(--tool-card-action-font-size);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -37,8 +37,8 @@
   .diff-stats {
     display: inline-flex;
     align-items: center;
-    gap: var(--flowchat-inline-gap, 0.35rem);
-    margin-right: var(--flowchat-control-gap, 0.5rem);
+    gap: var(--flowchat-inline-gap);
+    margin-right: var(--flowchat-control-gap);
     font-size: var(--flowchat-font-size-xs);
     font-family: var(--font-mono);
     flex-shrink: 0;
@@ -57,20 +57,20 @@
   .diff-message {
     font-size: var(--flowchat-font-size-xs);
     color: var(--color-text-muted);
-    margin-bottom: var(--flowchat-card-gap, 0.42rem);
-    padding-bottom: var(--flowchat-card-gap, 0.42rem);
+    margin-bottom: var(--flowchat-card-gap);
+    padding-bottom: var(--flowchat-card-gap);
     border-bottom: 1px solid var(--border-subtle);
   }
 
   .diff-content-preview {
     margin: 0;
-    padding: var(--flowchat-card-expanded-pad-y, 0.5rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
+    padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
     background: var(--color-bg-secondary);
     border: 1px solid var(--border-subtle);
     border-radius: 4px;
     font-family: var(--font-mono);
     font-size: var(--flowchat-font-size-sm);
-    line-height: var(--flowchat-support-line-height, 1.45);
+    line-height: var(--flowchat-support-line-height);
     color: var(--color-text-primary);
     overflow-x: auto;
     max-height: 400px;
@@ -79,12 +79,12 @@
     word-break: break-all;
 
     .diff-add {
-      background: rgba(34, 197, 94, 0.15);
+      background: var(--git-color-added-bg-hover);
       color: var(--color-success);
     }
 
     .diff-del {
-      background: rgba(239, 68, 68, 0.15);
+      background: var(--git-color-deleted-bg-hover);
       color: var(--color-error);
     }
   }

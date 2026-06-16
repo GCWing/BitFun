@@ -398,6 +398,7 @@ Usage notes:
 - Use 'timeout_seconds' when you need a hard deadline for the subagent. When omitted, the session execution timeout from settings is used. When provided, the effective timeout is the larger of the requested value and the session execution timeout. Set it to 0 with no configured session execution timeout to disable the timeout.
 - For DeepReview only, set 'retry' to true when re-dispatching a reviewer after that same reviewer returned partial_timeout or an explicit transient capacity failure in the current turn. Retry calls must include retry_coverage with source_packet_id, source_status, covered_files, and a smaller retry_scope_files list. Do not set 'auto_retry' unless this is a backend-owned automatic retry admitted by Review Team settings; model-issued retry decisions should omit it or set it to false. Example retry_coverage: {{ "source_packet_id": "reviewer-123", "source_status": "partial_timeout", "covered_files": ["src/main.rs"], "retry_scope_files": ["src/parser.rs"] }}.
 - Launch independent agents concurrently when that improves coverage or latency; send parallel Task calls in a single assistant message.
+- When launching multiple non-read-only subagents in parallel, assign non-overlapping scopes and outputs so their file edits, commands, or external side effects do not conflict.
 - When the agent is done, it will return a single message back to you.
 - Treat subagent outputs as useful evidence, but verify details yourself before making edits or final claims that depend on exact code.
 - Clearly tell the agent whether you expect it to write code or just to do research (search, file reads, web fetches, etc.), since it is not aware of the user's intent.
@@ -467,8 +468,13 @@ impl Tool for TaskTool {
         Ok(self.render_description())
     }
 
-    async fn is_available_in_context(&self, context: Option<&ToolUseContext>) -> bool {
-        !Self::get_enabled_agents(context).await.is_empty()
+    async fn is_available_in_context(&self, _context: Option<&ToolUseContext>) -> bool {
+        // Keep Task prompt-visible even when no fresh subagents are currently
+        // available. Hiding it based on transient subagent availability makes
+        // the tool manifest drift across turns and causes provider prefix/KV
+        // cache misses. Task also still supports `fork_context=true` in that
+        // state, so removing it from the manifest would be behaviorally wrong.
+        true
     }
 
     fn short_description(&self) -> String {
@@ -1688,6 +1694,14 @@ mod tests {
             .message
             .as_deref()
             .is_some_and(|message| message.contains("subagent_type is required")));
+    }
+
+    #[tokio::test]
+    async fn task_tool_stays_available_without_enabled_subagents() {
+        assert!(
+            TaskTool::new().is_available_in_context(None).await,
+            "Task should remain prompt-visible even when no fresh subagents are currently available"
+        );
     }
 
     #[tokio::test]

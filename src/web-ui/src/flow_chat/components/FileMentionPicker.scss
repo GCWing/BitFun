@@ -21,9 +21,9 @@
   border-radius: 8px;
   box-shadow:
     0 8px 32px rgba(0, 0, 0, 0.35),
-    0 4px 16px rgba(0, 0, 0, 0.2),
-    0 0 1px rgba(96, 165, 250, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    0 4px 16px var(--color-overlay-black-20),
+    0 0 1px color-mix(in srgb, var(--color-accent-500) 30%, transparent),
+    inset 0 1px 0 var(--color-overlay-white-05);
   overflow: hidden;
   z-index: 1100;
   display: flex;
@@ -48,8 +48,8 @@
   &__header {
     display: flex;
     align-items: center;
-    gap: var(--flowchat-inline-gap, 0.35rem);
-    padding: var(--flowchat-inline-gap, 0.35rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
+    gap: var(--flowchat-inline-gap);
+    padding: var(--flowchat-inline-gap) var(--flowchat-card-expanded-pad-x);
     border-bottom: 1px solid var(--color-border-subtle);
     color: var(--color-text-muted);
     font-size: var(--flowchat-font-size-xs);
@@ -68,15 +68,15 @@
     width: 18px;
     height: 18px;
     padding: 0;
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--color-overlay-white-08);
+    border: 1px solid var(--color-overlay-white-10);
     border-radius: 4px;
     cursor: pointer;
     transition: all 0.15s ease;
     color: var(--color-text-muted);
     
     &:hover {
-      background: rgba(255, 255, 255, 0.15);
+      background: var(--color-overlay-white-15);
       color: var(--color-text-primary);
     }
   }
@@ -103,8 +103,8 @@
     flex-direction: row;
     align-items: center;
     justify-content: center;
-    gap: var(--flowchat-inline-gap, 0.35rem);
-    padding: var(--flowchat-card-expanded-pad-x, 0.625rem);
+    gap: var(--flowchat-inline-gap);
+    padding: var(--flowchat-card-expanded-pad-x);
     color: var(--color-text-muted);
     font-size: var(--flowchat-font-size-xs);
     
@@ -130,14 +130,14 @@
   &__item {
     display: flex;
     align-items: center;
-    gap: var(--flowchat-inline-gap, 0.35rem);
-    padding: 0.25rem var(--flowchat-card-expanded-pad-y, 0.5rem);
+    gap: var(--flowchat-inline-gap);
+    padding: 0.25rem var(--flowchat-card-expanded-pad-y);
     border-radius: 4px;
     cursor: pointer;
     transition: all 0.12s ease;
     
     &:hover {
-      background: rgba(255, 255, 255, 0.06);
+      background: var(--color-overlay-white-06);
       
       .file-mention-picker__expand-icon {
         opacity: 1;
@@ -145,10 +145,10 @@
     }
     
     &--selected {
-      background: linear-gradient(135deg, rgba(96, 165, 250, 0.15), rgba(59, 130, 246, 0.1));
+      background: linear-gradient(135deg, var(--color-accent-200), color-mix(in srgb, var(--color-accent-600) 10%, transparent));
       
       .file-mention-picker__item-name {
-        color: rgba(147, 197, 253, 1);
+        color: var(--flowchat-link-hover-color);
       }
       
       .file-mention-picker__expand-icon {
@@ -161,11 +161,11 @@
     flex-shrink: 0;
     
     &--file {
-      color: rgba(96, 165, 250, 0.85);
+      color: color-mix(in srgb, var(--color-accent-500) 85%, transparent);
     }
     
     &--folder {
-      color: rgba(251, 191, 36, 0.85);
+      color: color-mix(in srgb, var(--color-warning) 85%, transparent);
     }
   }
   
@@ -177,7 +177,7 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    line-height: var(--flowchat-support-line-height, 1.45);
+    line-height: var(--flowchat-support-line-height);
   }
   
   &__expand-icon {
@@ -191,8 +191,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: var(--flowchat-control-gap, 0.5rem);
-    padding: var(--flowchat-inline-gap, 0.35rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
+    gap: var(--flowchat-control-gap);
+    padding: var(--flowchat-inline-gap) var(--flowchat-card-expanded-pad-x);
     border-top: 1px solid var(--color-border-subtle);
     font-size: var(--flowchat-font-size-xxs);
     color: var(--color-text-muted);
@@ -211,8 +211,8 @@
       min-width: 16px;
       height: 16px;
       padding: 0 3px;
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: var(--color-overlay-white-08);
+      border: 1px solid var(--color-overlay-white-12);
       border-radius: 3px;
       font-size: var(--flowchat-font-size-xxs);
       font-family: $font-family-mono;
@@ -229,16 +229,16 @@
     -webkit-backdrop-filter: none;
     border-color: var(--border-subtle);
     box-shadow:
-      0 4px 18px rgba(15, 23, 42, 0.04),
-      0 1px 3px rgba(15, 23, 42, 0.03),
-      inset 0 1px 0 rgba(255, 255, 255, 0.95);
+      0 4px 18px var(--color-overlay-slate-04),
+      0 1px 3px var(--color-overlay-slate-03),
+      inset 0 1px 0 var(--color-overlay-white-95);
 
     &__back-btn {
-      background: rgba(15, 23, 42, 0.04);
-      border-color: rgba(15, 23, 42, 0.08);
+      background: var(--color-overlay-slate-04);
+      border-color: var(--color-overlay-slate-08);
 
       &:hover {
-        background: rgba(15, 23, 42, 0.06);
+        background: var(--color-overlay-slate-06);
       }
     }
 
@@ -251,14 +251,14 @@
       background: var(--element-bg-medium);
       background: color-mix(
         in srgb,
-        var(--color-accent-primary, var(--color-accent-500)) 22%,
+        var(--color-accent-primary) 22%,
         var(--color-bg-elevated) 78%
       );
 
       .file-mention-picker__item-name {
         color: color-mix(
           in srgb,
-          var(--color-accent-primary, var(--color-accent-500)) 72%,
+          var(--color-accent-primary) 72%,
           var(--color-text-primary)
         );
       }
@@ -267,7 +267,7 @@
       .file-mention-picker__expand-icon {
         color: color-mix(
           in srgb,
-          var(--color-accent-primary, var(--color-accent-500)) 65%,
+          var(--color-accent-primary) 65%,
           var(--color-text-primary)
         );
         opacity: 0.92;
@@ -275,8 +275,8 @@
     }
 
     &__footer kbd {
-      background: rgba(15, 23, 42, 0.04);
-      border-color: rgba(15, 23, 42, 0.08);
+      background: var(--color-overlay-slate-04);
+      border-color: var(--color-overlay-slate-08);
     }
   }
 }

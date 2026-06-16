@@ -1515,7 +1515,6 @@ pub async fn control_background_command(
         origin: ExecCommandControlOrigin::OutOfBand,
         remote,
         yield_time_ms: Some(250),
-        max_output_chars: Some(4_096),
     })
     .await
     .map(|response| {
@@ -2158,6 +2157,8 @@ mod tests {
             is_subagent_item: None,
             parent_task_tool_id: None,
             subagent_session_id: None,
+            attempt_id: None,
+            attempt_index: None,
             subagent_model_id: None,
             subagent_model_alias: None,
             status: None,
@@ -2184,6 +2185,7 @@ mod tests {
                 id: "round-1".to_string(),
                 turn_id: "turn-1".to_string(),
                 round_index: 0,
+                round_group_id: None,
                 timestamp: 1,
                 text_items: vec![],
                 tool_items: vec![
@@ -2208,6 +2210,9 @@ mod tests {
             start_time: 1,
             end_time: Some(2),
             duration_ms: Some(1),
+            token_usage: None,
+            finish_reason: None,
+            has_final_response: None,
             status: TurnStatus::Completed,
         };
 
@@ -2260,6 +2265,7 @@ mod tests {
                 id: "round-1".to_string(),
                 turn_id: "turn-1".to_string(),
                 round_index: 0,
+                round_group_id: None,
                 timestamp: 1,
                 text_items: vec![],
                 tool_items: vec![tool_item(
@@ -2285,6 +2291,9 @@ mod tests {
             start_time: 1,
             end_time: Some(2),
             duration_ms: Some(1),
+            token_usage: None,
+            finish_reason: None,
+            has_final_response: None,
             status: TurnStatus::Completed,
         }];
 
@@ -2318,6 +2327,7 @@ mod tests {
                 id: "round-1".to_string(),
                 turn_id: "turn-1".to_string(),
                 round_index: 0,
+                round_group_id: None,
                 timestamp: 1,
                 text_items: vec![],
                 tool_items: vec![tool_item(
@@ -2343,6 +2353,9 @@ mod tests {
             start_time: 1,
             end_time: Some(2),
             duration_ms: Some(1),
+            token_usage: None,
+            finish_reason: None,
+            has_final_response: None,
             status: TurnStatus::Completed,
         }];
 

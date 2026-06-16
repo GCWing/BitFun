@@ -11,7 +11,6 @@ pub fn create_mcp_client_info(
             .enable_roots()
             .enable_sampling()
             .enable_elicitation()
-            .enable_elicitation_schema_validation()
             .build(),
         Implementation::new(client_name, client_version),
     )

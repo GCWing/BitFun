@@ -28,15 +28,15 @@
     padding: 6px 10px;
 
     font-family: var(--font-family-sans);
-    font-size: var(--font-size-xs, 12px);
-    font-weight: var(--font-weight-normal, 400);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-normal);
     line-height: 1.4;
     color: var(--color-text-primary);
 
     background: var(--color-bg-tooltip);
 
     border: 1px solid var(--border-base);
-    border-radius: var(--size-radius-sm, 6px);
+    border-radius: var(--size-radius-sm);
 
     backdrop-filter: blur(8px) saturate(1.1);
     -webkit-backdrop-filter: blur(8px) saturate(1.1);
@@ -131,8 +131,8 @@
   .bitfun-tooltip {
     &__content {
       border-width: 1px;
-      border-color: rgba(255, 255, 255, 0.4);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+      border-color: var(--border-prominent);
+      box-shadow: 0 2px 8px var(--color-overlay-black-25);
     }
   }
 }

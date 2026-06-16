@@ -37,7 +37,7 @@ import { GitToolDisplay } from '@/flow_chat/tool-cards/GitToolDisplay';
 import { CreatePlanDisplay } from '@/flow_chat/tool-cards/CreatePlanDisplay';
 import { InitMiniAppDisplay } from '@/flow_chat/tool-cards/MiniAppToolDisplay';
 import type { FlowToolItem, FlowThinkingItem } from '@/flow_chat/types/flow-chat';
-import { TOOL_CARD_CONFIGS } from '@/flow_chat/tool-cards';
+import { TOOL_CARD_CONFIGS } from '@/flow_chat/tool-cards/toolCardMetadata';
 import { ModelThinkingDisplay } from '@/flow_chat/tool-cards/ModelThinkingDisplay';
 import { ReproductionStepsBlock } from '@components/Markdown/ReproductionStepsBlock';
 
@@ -71,7 +71,7 @@ function createMockToolItem(
       resultDisplayType: 'summary',
       description: '',
       displayMode: 'compact',
-      primaryColor: '#6b7280'
+      primaryColor: 'var(--color-text-muted)'
     }
   } as FlowToolItem;
 }
@@ -281,25 +281,25 @@ export const componentRegistry: ComponentCategory[] = [
           <div style={{ display: 'flex', flexDirection: 'column', gap: '32px', padding: '20px' }}>
             {}
             <div>
-              <div style={{ fontSize: '12px', color: '#666', marginBottom: '16px', fontWeight: 500 }}>尺寸</div>
+              <div style={{ fontSize: '12px', color: '#666666', marginBottom: '16px', fontWeight: 500 }}>尺寸</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '48px', alignItems: 'flex-end' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
                   <CubeLoading size="small" />
-                  <span style={{ fontSize: '12px', color: '#999' }}>Small</span>
+                  <span style={{ fontSize: '12px', color: '#999999' }}>Small</span>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
                   <CubeLoading size="medium" />
-                  <span style={{ fontSize: '12px', color: '#999' }}>Medium</span>
+                  <span style={{ fontSize: '12px', color: '#999999' }}>Medium</span>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
                   <CubeLoading size="large" />
-                  <span style={{ fontSize: '12px', color: '#999' }}>Large</span>
+                  <span style={{ fontSize: '12px', color: '#999999' }}>Large</span>
                 </div>
               </div>
             </div>
             {}
             <div>
-              <div style={{ fontSize: '12px', color: '#666', marginBottom: '16px', fontWeight: 500 }}>With text</div>
+              <div style={{ fontSize: '12px', color: '#666666', marginBottom: '16px', fontWeight: 500 }}>With text</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '48px', alignItems: 'flex-start' }}>
                 <CubeLoading text="加载中.." />
                 <CubeLoading size="large" text="加载中.." />
@@ -362,7 +362,7 @@ export const componentRegistry: ComponentCategory[] = [
                 padding: '20px',
                 background: 'rgba(255, 255, 255, 0.02)',
                 borderRadius: '8px',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
+                border: '1px solid var(--color-overlay-white-10)',
                 maxWidth: '700px'
               }}>
                 <StreamText
@@ -458,10 +458,10 @@ name: 'Search - Demo',
                     <button
                       style={{
                         padding: '4px 6px',
-                        background: searchOptions.caseSensitive ? 'rgba(96, 165, 250, 0.2)' : 'transparent',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        background: searchOptions.caseSensitive ? 'color-mix(in srgb, var(--color-accent-500) 20%, transparent)' : 'transparent',
+                        border: '1px solid var(--color-overlay-white-10)',
                         borderRadius: '4px',
-                        color: searchOptions.caseSensitive ? '#60a5fa' : '#a0a0a0',
+                        color: searchOptions.caseSensitive ? 'var(--color-accent-500)' : 'var(--color-text-muted)',
                         cursor: 'pointer',
                         fontSize: '12px',
                       }}
@@ -473,10 +473,10 @@ name: 'Search - Demo',
                     <button
                       style={{
                         padding: '4px 6px',
-                        background: searchOptions.useRegex ? 'rgba(96, 165, 250, 0.2)' : 'transparent',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        background: searchOptions.useRegex ? 'color-mix(in srgb, var(--color-accent-500) 20%, transparent)' : 'transparent',
+                        border: '1px solid var(--color-overlay-white-10)',
                         borderRadius: '4px',
-                        color: searchOptions.useRegex ? '#60a5fa' : '#a0a0a0',
+                        color: searchOptions.useRegex ? 'var(--color-accent-500)' : 'var(--color-text-muted)',
                         cursor: 'pointer',
                         fontSize: '12px',
                       }}
@@ -1037,7 +1037,7 @@ console.log(user.greet());`);
         category: 'flowchat-cards',
         component: () => (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
-            <h3 style={{ color: '#ffffff', marginBottom: '8px' }}>读取文件 - 成功</h3>
+            <h3 style={{ color: 'var(--color-static-white)', marginBottom: '8px' }}>读取文件 - 成功</h3>
             <ReadFileDisplay
               toolItem={createMockToolItem('Read',
                 { target_file: 'src/App.tsx', offset: 1, limit: 50 },
@@ -1053,7 +1053,7 @@ console.log(user.greet());`);
               sessionId="preview-session"
             />
 
-            <h3 style={{ color: '#ffffff', marginTop: '16px', marginBottom: '8px' }}>读取文件 - 执行中</h3>
+            <h3 style={{ color: 'var(--color-static-white)', marginTop: '16px', marginBottom: '8px' }}>读取文件 - 执行中</h3>
             <ReadFileDisplay
               toolItem={createMockToolItem('Read',
                 { target_file: 'src/components/Header.tsx' },
@@ -1073,7 +1073,7 @@ console.log(user.greet());`);
         category: 'flowchat-cards',
         component: () => (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
-            <h3 style={{ color: '#ffffff', marginBottom: '8px' }}>写入文件</h3>
+            <h3 style={{ color: 'var(--color-static-white)', marginBottom: '8px' }}>写入文件</h3>
             <FileOperationToolCard
               toolItem={createMockToolItem('Write',
                 {
@@ -1089,7 +1089,7 @@ console.log(user.greet());`);
               onReject={async () => alert('已拒绝')}
             />
 
-            <h3 style={{ color: '#ffffff', marginTop: '16px', marginBottom: '8px' }}>编辑文件</h3>
+            <h3 style={{ color: 'var(--color-static-white)', marginTop: '16px', marginBottom: '8px' }}>编辑文件</h3>
             <FileOperationToolCard
               toolItem={createMockToolItem('Edit',
                 {
@@ -1106,7 +1106,7 @@ console.log(user.greet());`);
               onReject={async () => alert('已拒绝')}
             />
 
-            <h3 style={{ color: '#ffffff', marginTop: '16px', marginBottom: '8px' }}>删除文件</h3>
+            <h3 style={{ color: 'var(--color-static-white)', marginTop: '16px', marginBottom: '8px' }}>删除文件</h3>
             <FileOperationToolCard
               toolItem={createMockToolItem('Delete',
                 { target_file: 'src/oldFile.ts' },
@@ -1128,7 +1128,7 @@ console.log(user.greet());`);
         category: 'flowchat-cards',
         component: () => (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
-            <h3 style={{ color: '#ffffff', marginBottom: '8px' }}>Grep 搜索结果</h3>
+            <h3 style={{ color: 'var(--color-static-white)', marginBottom: '8px' }}>Grep 搜索结果</h3>
             <GrepSearchDisplay
               toolItem={createMockToolItem('Grep',
                 { pattern: 'function', path: 'src/' },
@@ -1146,7 +1146,7 @@ console.log(user.greet());`);
               sessionId="preview-session"
             />
 
-            <h3 style={{ color: '#ffffff', marginTop: '16px', marginBottom: '8px' }}>Grep - 多结果示例</h3>
+            <h3 style={{ color: 'var(--color-static-white)', marginTop: '16px', marginBottom: '8px' }}>Grep - 多结果示例</h3>
             <GrepSearchDisplay
               toolItem={createMockToolItem('Grep',
                 { pattern: 'import React', path: 'src/components' },
@@ -1165,7 +1165,7 @@ console.log(user.greet());`);
               sessionId="preview-session"
             />
 
-            <h3 style={{ color: '#ffffff', marginTop: '16px', marginBottom: '8px' }}>Glob 搜索结果</h3>
+            <h3 style={{ color: 'var(--color-static-white)', marginTop: '16px', marginBottom: '8px' }}>Glob 搜索结果</h3>
             <GlobSearchDisplay
               toolItem={createMockToolItem('Glob',
                 { glob_pattern: '*.tsx' },
@@ -1179,7 +1179,7 @@ console.log(user.greet());`);
               sessionId="preview-session"
             />
 
-            <h3 style={{ color: '#ffffff', marginTop: '16px', marginBottom: '8px' }}>LS 目录列表</h3>
+            <h3 style={{ color: 'var(--color-static-white)', marginTop: '16px', marginBottom: '8px' }}>LS 目录列表</h3>
             <LSDisplay
               toolItem={createMockToolItem('LS',
                 { target_directory: 'src/components' },
@@ -1208,7 +1208,7 @@ console.log(user.greet());`);
         category: 'flowchat-cards',
         component: () => (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
-            <h3 style={{ color: '#ffffff', marginBottom: '8px' }}>AI 任务 - 执行中</h3>
+            <h3 style={{ color: 'var(--color-static-white)', marginBottom: '8px' }}>AI 任务 - 执行中</h3>
             <TaskToolDisplay
               toolItem={createMockToolItem('Task',
                 {
@@ -1224,7 +1224,7 @@ console.log(user.greet());`);
               sessionId="preview-session"
             />
 
-            <h3 style={{ color: '#ffffff', marginTop: '16px', marginBottom: '8px' }}>AI 任务 - 已完成</h3>
+            <h3 style={{ color: 'var(--color-static-white)', marginTop: '16px', marginBottom: '8px' }}>AI 任务 - 已完成</h3>
             <TaskToolDisplay
               toolItem={createMockToolItem('Task',
                 {
@@ -1261,7 +1261,7 @@ console.log(user.greet());`);
         category: 'flowchat-cards',
         component: () => (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
-            <h3 style={{ color: '#ffffff', marginBottom: '8px' }}>Todo - 基础示例</h3>
+            <h3 style={{ color: 'var(--color-static-white)', marginBottom: '8px' }}>Todo - 基础示例</h3>
             <TodoWriteDisplay
               toolItem={createMockToolItem('TodoWrite',
                 {
@@ -1284,7 +1284,7 @@ console.log(user.greet());`);
               sessionId="preview-session"
             />
 
-            <h3 style={{ color: '#ffffff', marginTop: '16px', marginBottom: '8px' }}>Todo - 多任务示例</h3>
+            <h3 style={{ color: 'var(--color-static-white)', marginTop: '16px', marginBottom: '8px' }}>Todo - 多任务示例</h3>
             <TodoWriteDisplay
               toolItem={createMockToolItem('TodoWrite',
                 {
@@ -1313,7 +1313,7 @@ console.log(user.greet());`);
               sessionId="preview-session"
             />
 
-            <h3 style={{ color: '#ffffff', marginTop: '16px', marginBottom: '8px' }}>Todo进度 - 进行中</h3>
+            <h3 style={{ color: 'var(--color-static-white)', marginTop: '16px', marginBottom: '8px' }}>Todo进度 - 进行中</h3>
             <TodoWriteDisplay
               toolItem={createMockToolItem('TodoWrite',
                 {
@@ -1340,7 +1340,7 @@ console.log(user.greet());`);
               sessionId="preview-session"
             />
 
-            <h3 style={{ color: '#ffffff', marginTop: '16px', marginBottom: '8px' }}>Todo - 待处理</h3>
+            <h3 style={{ color: 'var(--color-static-white)', marginTop: '16px', marginBottom: '8px' }}>Todo - 待处理</h3>
             <TodoWriteDisplay
               toolItem={createMockToolItem('TodoWrite',
                 {
@@ -1365,7 +1365,7 @@ console.log(user.greet());`);
               sessionId="preview-session"
             />
 
-            <h3 style={{ color: '#ffffff', marginTop: '16px', marginBottom: '8px' }}>Todo - 已完成</h3>
+            <h3 style={{ color: 'var(--color-static-white)', marginTop: '16px', marginBottom: '8px' }}>Todo - 已完成</h3>
             <TodoWriteDisplay
               toolItem={createMockToolItem('TodoWrite',
                 {
@@ -1397,7 +1397,7 @@ console.log(user.greet());`);
         category: 'flowchat-cards',
         component: () => (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
-            <h3 style={{ color: '#ffffff', marginBottom: '8px' }}>网页搜索 - 结果</h3>
+            <h3 style={{ color: 'var(--color-static-white)', marginBottom: '8px' }}>网页搜索 - 结果</h3>
             <RealWebSearchCard
               toolItem={createMockToolItem('WebSearch',
                 { query: 'React Hooks 教程' },
@@ -1416,7 +1416,7 @@ console.log(user.greet());`);
               sessionId="preview-session"
             />
 
-            <h3 style={{ color: '#ffffff', marginTop: '16px', marginBottom: '8px' }}>多结果 - 网页搜索</h3>
+            <h3 style={{ color: 'var(--color-static-white)', marginTop: '16px', marginBottom: '8px' }}>多结果 - 网页搜索</h3>
             <RealWebSearchCard
               toolItem={createMockToolItem('WebSearch',
                 { query: 'TypeScript best practices' },
@@ -1454,7 +1454,7 @@ console.log(user.greet());`);
         category: 'flowchat-cards',
         component: () => (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
-            <h3 style={{ color: '#ffffff', marginBottom: '8px' }}>MCP工具 - 文件列表</h3>
+            <h3 style={{ color: 'var(--color-static-white)', marginBottom: '8px' }}>MCP工具 - 文件列表</h3>
             <MCPToolDisplay
               toolItem={createMockToolItem('mcp__server__list_files',
                 { directory: '/project/src' },
@@ -1476,12 +1476,12 @@ console.log(user.greet());`);
                 resultDisplayType: 'detailed',
                 description: 'MCP工具调用',
                 displayMode: 'compact',
-                primaryColor: '#8b5cf6'
+                primaryColor: 'var(--color-purple-500)'
               }}
               sessionId="preview-session"
             />
 
-            <h3 style={{ color: '#ffffff', marginTop: '16px', marginBottom: '8px' }}>MCP - 执行中</h3>
+            <h3 style={{ color: 'var(--color-static-white)', marginTop: '16px', marginBottom: '8px' }}>MCP - 执行中</h3>
             <MCPToolDisplay
               toolItem={createMockToolItem('mcp__server__fetch_data',
                 { url: 'https://api.example.com/data' },
@@ -1496,7 +1496,7 @@ console.log(user.greet());`);
                 resultDisplayType: 'detailed',
                 description: 'MCP工具调用',
                 displayMode: 'compact',
-                primaryColor: '#8b5cf6'
+                primaryColor: 'var(--color-purple-500)'
               }}
               sessionId="preview-session"
             />
@@ -1510,7 +1510,7 @@ console.log(user.greet());`);
         category: 'flowchat-cards',
         component: () => (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
-            <h3 style={{ color: '#ffffff', marginBottom: '8px' }}>上下文压缩 - 示例</h3>
+            <h3 style={{ color: 'var(--color-static-white)', marginBottom: '8px' }}>上下文压缩 - 示例</h3>
             <ContextCompressionDisplay
               toolItem={createMockToolItem('ContextCompression',
                 {
@@ -1530,7 +1530,7 @@ console.log(user.greet());`);
               )}
             />
 
-            <h3 style={{ color: '#ffffff', marginTop: '16px', marginBottom: '8px' }}>上下文压缩 - 本地 fallback</h3>
+            <h3 style={{ color: 'var(--color-static-white)', marginTop: '16px', marginBottom: '8px' }}>上下文压缩 - 本地 fallback</h3>
             <ContextCompressionDisplay
               toolItem={createMockToolItem('ContextCompression',
                 {
@@ -1550,7 +1550,7 @@ console.log(user.greet());`);
               )}
             />
 
-            <h3 style={{ color: '#ffffff', marginTop: '16px', marginBottom: '8px' }}>上下文压缩 - 执行中</h3>
+            <h3 style={{ color: 'var(--color-static-white)', marginTop: '16px', marginBottom: '8px' }}>上下文压缩 - 执行中</h3>
             <ContextCompressionDisplay
               toolItem={createMockToolItem('ContextCompression',
                 { trigger: 'user_message' },
@@ -1568,7 +1568,7 @@ console.log(user.greet());`);
         category: 'flowchat-cards',
         component: () => (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
-            <h3 style={{ color: '#ffffff', marginBottom: '8px' }}>Skill调用</h3>
+            <h3 style={{ color: 'var(--color-static-white)', marginBottom: '8px' }}>Skill调用</h3>
             <SkillDisplay
               toolItem={createMockToolItem('Skill',
                 {
@@ -1594,7 +1594,7 @@ console.log(user.greet());`);
         category: 'flowchat-cards',
         component: () => (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
-            <h3 style={{ color: '#ffffff', marginBottom: '8px' }}>向用户提问 - 单题示例</h3>
+            <h3 style={{ color: 'var(--color-static-white)', marginBottom: '8px' }}>向用户提问 - 单题示例</h3>
             <AskUserQuestionCard
               toolItem={createMockToolItem('AskUserQuestion',
                 {
@@ -1618,7 +1618,7 @@ console.log(user.greet());`);
               sessionId="preview-session"
             />
 
-            <h3 style={{ color: '#ffffff', marginBottom: '8px' }}>多问题 - 单选和多选</h3>
+            <h3 style={{ color: 'var(--color-static-white)', marginBottom: '8px' }}>多问题 - 单选和多选</h3>
             <AskUserQuestionCard
               toolItem={createMockToolItem('AskUserQuestion',
                 {
@@ -1653,7 +1653,7 @@ console.log(user.greet());`);
               sessionId="preview-session"
             />
 
-            <h3 style={{ color: '#ffffff', marginBottom: '8px' }}>已回答 - 数据库选择</h3>
+            <h3 style={{ color: 'var(--color-static-white)', marginBottom: '8px' }}>已回答 - 数据库选择</h3>
             <AskUserQuestionCard
               toolItem={createMockToolItem('AskUserQuestion',
                 {
@@ -1715,7 +1715,7 @@ console.log(user.greet());`);
 
           return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
-              <h3 style={{ color: '#ffffff', marginBottom: '8px' }}>Reproduction Steps</h3>
+              <h3 style={{ color: 'var(--color-static-white)', marginBottom: '8px' }}>Reproduction Steps</h3>
               <ReproductionStepsBlock
                 steps={`1. Run npm run dev
 2. Open http://localhost:3000
@@ -1724,7 +1724,7 @@ console.log(user.greet());`);
                 onProceed={() => {}}
               />
 
-              <h3 style={{ color: '#ffffff', marginTop: '16px', marginBottom: '8px' }}>已完成</h3>
+              <h3 style={{ color: 'var(--color-static-white)', marginTop: '16px', marginBottom: '8px' }}>已完成</h3>
               <CompletedReproductionSteps />
             </div>
           );
@@ -1737,7 +1737,7 @@ console.log(user.greet());`);
         category: 'flowchat-cards',
         component: () => (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
-            <h3 style={{ color: '#ffffff', marginBottom: '8px' }}>Create Plan - Streaming</h3>
+            <h3 style={{ color: 'var(--color-static-white)', marginBottom: '8px' }}>Create Plan - Streaming</h3>
             <CreatePlanDisplay
               toolItem={createMockToolItem('CreatePlan',
                 {
@@ -1751,12 +1751,12 @@ console.log(user.greet());`);
               sessionId="preview-session"
             />
 
-            <h3 style={{ color: '#ffffff', marginTop: '16px', marginBottom: '8px' }}>创建计划 - 已完成</h3>
+            <h3 style={{ color: 'var(--color-static-white)', marginTop: '16px', marginBottom: '8px' }}>创建计划 - 已完成</h3>
             <CreatePlanDisplay
               toolItem={createMockToolItem('CreatePlan',
                 {},
                 {
-                  plan_file_path: '/Users/demo/.bitfun/projects/project-slug/plans/refactor-user-module.plan.md',
+                  plan_file_path: '<bitfun-home>/projects/project-slug/plans/refactor-user-module.plan.md',
                   name: 'Refactor Module',
                   overview: 'Plan overview',
                   todos: [
@@ -1774,12 +1774,12 @@ console.log(user.greet());`);
               sessionId="preview-session"
             />
 
-            <h3 style={{ color: '#ffffff', marginTop: '16px', marginBottom: '8px' }}>Create Plan - Dark Mode</h3>
+            <h3 style={{ color: 'var(--color-static-white)', marginTop: '16px', marginBottom: '8px' }}>Create Plan - Dark Mode</h3>
             <CreatePlanDisplay
               toolItem={createMockToolItem('CreatePlan',
                 {},
                 {
-                  plan_file_path: '/Users/demo/.bitfun/projects/project-slug/plans/add-dark-mode.plan.md',
+                  plan_file_path: '<bitfun-home>/projects/project-slug/plans/add-dark-mode.plan.md',
                   name: 'Dark Mode',
                   overview: 'Add dark mode support',
                   todos: [
@@ -1803,7 +1803,7 @@ console.log(user.greet());`);
         category: 'flowchat-cards',
         component: () => (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
-            <h3 style={{ color: '#ffffff', marginBottom: '8px' }}>Git Status - Success</h3>
+            <h3 style={{ color: 'var(--color-static-white)', marginBottom: '8px' }}>Git Status - Success</h3>
             <GitToolDisplay
               toolItem={createMockToolItem('Git',
                 {
@@ -1837,7 +1837,7 @@ Changes not staged for commit:
               sessionId="preview-session"
             />
 
-            <h3 style={{ color: '#ffffff', marginTop: '16px', marginBottom: '8px' }}>Git Commit - Success</h3>
+            <h3 style={{ color: 'var(--color-static-white)', marginTop: '16px', marginBottom: '8px' }}>Git Commit - Success</h3>
             <GitToolDisplay
               toolItem={createMockToolItem('Git',
                 {
@@ -1862,7 +1862,7 @@ Changes not staged for commit:
               sessionId="preview-session"
             />
 
-            <h3 style={{ color: '#ffffff', marginTop: '16px', marginBottom: '8px' }}>Git Diff - View</h3>
+            <h3 style={{ color: 'var(--color-static-white)', marginTop: '16px', marginBottom: '8px' }}>Git Diff - View</h3>
             <GitToolDisplay
               toolItem={createMockToolItem('Git',
                 {
@@ -1894,7 +1894,7 @@ index abc1234..def5678 100644
               sessionId="preview-session"
             />
 
-            <h3 style={{ color: '#ffffff', marginTop: '16px', marginBottom: '8px' }}>Git Push - 执行中</h3>
+            <h3 style={{ color: 'var(--color-static-white)', marginTop: '16px', marginBottom: '8px' }}>Git Push - 执行中</h3>
             <GitToolDisplay
               toolItem={createMockToolItem('Git',
                 {
@@ -1909,7 +1909,7 @@ index abc1234..def5678 100644
               sessionId="preview-session"
             />
 
-            <h3 style={{ color: '#ffffff', marginTop: '16px', marginBottom: '8px' }}>Git Pull - 冲突错误</h3>
+            <h3 style={{ color: 'var(--color-static-white)', marginTop: '16px', marginBottom: '8px' }}>Git Pull - 冲突错误</h3>
             <GitToolDisplay
               toolItem={createMockToolItem('Git',
                 {
@@ -1944,7 +1944,7 @@ Aborting`,
         category: 'flowchat-cards',
         component: () => (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
-            <h3 style={{ color: '#ffffff', marginBottom: '8px' }}>InitMiniApp - 执行中</h3>
+            <h3 style={{ color: 'var(--color-static-white)', marginBottom: '8px' }}>InitMiniApp - 执行中</h3>
             <InitMiniAppDisplay
               toolItem={createMockToolItem(
                 'InitMiniApp',
@@ -1956,7 +1956,7 @@ Aborting`,
               sessionId="preview-session"
             />
 
-            <h3 style={{ color: '#ffffff', marginTop: '16px', marginBottom: '8px' }}>InitMiniApp - 参数流式</h3>
+            <h3 style={{ color: 'var(--color-static-white)', marginTop: '16px', marginBottom: '8px' }}>InitMiniApp - 参数流式</h3>
             <InitMiniAppDisplay
               toolItem={
                 {
@@ -1969,7 +1969,7 @@ Aborting`,
               sessionId="preview-session"
             />
 
-            <h3 style={{ color: '#ffffff', marginTop: '16px', marginBottom: '8px' }}>InitMiniApp - 创建成功</h3>
+            <h3 style={{ color: 'var(--color-static-white)', marginTop: '16px', marginBottom: '8px' }}>InitMiniApp - 创建成功</h3>
             <InitMiniAppDisplay
               toolItem={createMockToolItem(
                 'InitMiniApp',
@@ -2008,7 +2008,7 @@ Aborting`,
 
           return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
-              <h3 style={{ color: '#ffffff', marginBottom: '8px' }}>模型思考 - 流式输出</h3>
+              <h3 style={{ color: 'var(--color-static-white)', marginBottom: '8px' }}>模型思考 - 流式输出</h3>
               <ModelThinkingDisplay
                 thinkingItem={createMockThinkingItem(
                   `正在分析用户的请求..
@@ -2024,7 +2024,7 @@ Aborting`,
                 )}
               />
 
-              <h3 style={{ color: '#ffffff', marginTop: '16px', marginBottom: '8px' }}>模型思考 - 折叠完成状态</h3>
+              <h3 style={{ color: 'var(--color-static-white)', marginTop: '16px', marginBottom: '8px' }}>模型思考 - 折叠完成状态</h3>
               <ModelThinkingDisplay
                 thinkingItem={createMockThinkingItem(
                   `分析了用户关于性能优化的问题
@@ -2045,7 +2045,7 @@ Aborting`,
                 )}
               />
 
-              <h3 style={{ color: '#ffffff', marginTop: '16px', marginBottom: '8px' }}>模型思考 - 长内容展示</h3>
+              <h3 style={{ color: 'var(--color-static-white)', marginTop: '16px', marginBottom: '8px' }}>模型思考 - 长内容展示</h3>
               <ModelThinkingDisplay
                 thinkingItem={createMockThinkingItem(
                   `这是一个复杂任务，需要多步骤分析

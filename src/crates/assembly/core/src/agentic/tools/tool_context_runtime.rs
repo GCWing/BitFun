@@ -34,7 +34,7 @@ use crate::service::{get_workspace_runtime_service_arc, WorkspaceRuntimeContext}
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_agent_runtime::checkpoint::{
     build_light_checkpoint as build_runtime_light_checkpoint, GitStatusCheckpointFacts,
-    LightCheckpoint, LightCheckpointWorkspaceFacts,
+    LightCheckpointWorkspaceFacts,
 };
 use bitfun_agent_tools::{PortableToolContextProvider, ToolContextFacts, ToolWorkspaceKind};
 use bitfun_runtime_ports::{DelegationPolicy, ToolRuntimeHandles};
@@ -62,17 +62,6 @@ pub struct ToolUseContext {
     pub runtime_tool_restrictions: ToolRuntimeRestrictions,
     /// Runtime handles such as workspace I/O services and cancellation.
     pub runtime_handles: ToolRuntimeHandles,
-}
-
-impl From<LightCheckpoint> for EvidenceLedgerCheckpoint {
-    fn from(value: LightCheckpoint) -> Self {
-        Self {
-            current_branch: value.current_branch,
-            dirty_state_summary: value.dirty_state_summary,
-            touched_files: value.touched_files,
-            diff_hash: value.diff_hash,
-        }
-    }
 }
 
 impl ToolUseContext {
@@ -1335,6 +1324,8 @@ mod task_context_tests {
                 session_id: "session_1".to_string(),
                 dialog_turn_id: "turn_1".to_string(),
                 round_id: "round_1".to_string(),
+                attempt_id: None,
+                attempt_index: None,
                 agent_type: "agent".to_string(),
                 workspace: None,
                 context_vars,

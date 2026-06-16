@@ -1,6 +1,6 @@
 /* User message styling aligned with inline tags. */
 .message-inline-content {
-  line-height: var(--flowchat-text-line-height, 1.58);
+  line-height: var(--flowchat-text-line-height);
   word-break: break-word;
   white-space: pre-wrap;
 }
@@ -15,7 +15,7 @@
   border-radius: 12px;
   font-size: 0.875em;
   font-weight: 500;
-  line-height: var(--flowchat-support-line-height, 1.45);
+  line-height: var(--flowchat-support-line-height);
   border: 1px solid;
   vertical-align: middle;
   cursor: default;
@@ -26,9 +26,9 @@
   overflow: hidden;
 
   /* Use CSS variables for tag colors. */
-  color: var(--tag-color);
-  background: var(--tag-color);
-  border-color: var(--tag-color);
+  color: var(--inline-context-tag-color);
+  background: var(--inline-context-tag-color);
+  border-color: var(--inline-context-tag-color);
 
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -36,7 +36,7 @@
 
 .inline-context-tag:hover {
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 8px var(--color-overlay-black-15);
   filter: brightness(1.1);
 }
 
@@ -53,7 +53,7 @@
   white-space: nowrap;
   opacity: 0.95;
   font-weight: 500;
-  line-height: var(--flowchat-support-line-height, 1.45);
+  line-height: var(--flowchat-support-line-height);
   display: flex;
   align-items: center;
 }
@@ -74,12 +74,12 @@
   gap: 12px;
   margin-top: 8px;
   padding-top: 8px;
-  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  border-top: 1px solid var(--color-overlay-black-06);
 }
 
 .message-timestamp {
   font-size: 0.75em;
-  color: var(--color-text-tertiary, #9ca3af);
+  color: var(--color-text-tertiary);
 }
 
 .message-snapshot-action {
@@ -89,6 +89,6 @@
 
 @media (prefers-color-scheme: dark) {
   .message-footer {
-    border-top-color: rgba(255, 255, 255, 0.08);
+    border-top-color: var(--color-overlay-white-08);
   }
 }

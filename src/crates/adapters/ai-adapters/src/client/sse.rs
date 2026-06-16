@@ -1,6 +1,7 @@
 use crate::client::utils::elapsed_ms_u64;
 use crate::client::StreamResponse;
 use crate::stream::UnifiedResponse;
+use crate::trace::{ModelExchangeRequestAttempt, ModelExchangeTraceConfig};
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc};
 use log::{debug, error, warn};
@@ -12,7 +13,15 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 
 const BASE_RETRY_DELAY_MS: u64 = 500;
-const MAX_RETRY_AFTER_DELAY_MS: u64 = 10_000;
+/// Maximum delay applied to a `Retry-After` header value.
+///
+/// Some providers (especially TPM-based rate limits on aggregator platforms
+/// like NVIDIA's integrate API) return large `Retry-After` values of 30-60
+/// seconds. Capping at 10s caused tight retry loops that burned through the
+/// user's request budget without actually waiting for the TPM window to reset.
+/// 60s is a reasonable upper bound that respects provider guidance without
+/// locking the user into an interminable stall.
+const MAX_RETRY_AFTER_DELAY_MS: u64 = 60_000;
 
 enum StreamSendOutcome {
     Response(reqwest::Response),
@@ -93,10 +102,11 @@ fn retry_delay_ms(attempt: usize, headers: &HeaderMap) -> u64 {
 
 pub(crate) async fn execute_sse_request<BuildRequest, SpawnHandler>(
     label: &str,
-    _url: &str,
+    url: &str,
     request_body: &serde_json::Value,
     max_tries: usize,
     ttft_timeout: Option<Duration>,
+    trace: Option<ModelExchangeTraceConfig>,
     build_request: BuildRequest,
     spawn_handler: SpawnHandler,
 ) -> Result<StreamResponse>
@@ -110,6 +120,18 @@ where
 {
     let mut last_error = None;
     for attempt in 0..max_tries {
+        let trace_handle = if let Some(trace) = trace.as_ref() {
+            trace
+                .sink
+                .request_attempt_started(&ModelExchangeRequestAttempt {
+                    request_url: url.to_string(),
+                    request_body: trace.capture_request_body.then(|| request_body.clone()),
+                    attempt_number: attempt + 1,
+                })
+                .await
+        } else {
+            None
+        };
         let request_start_time = std::time::Instant::now();
         let send_outcome = send_stream_request(&build_request, request_body, ttft_timeout).await;
 
@@ -124,6 +146,15 @@ where
                         .text()
                         .await
                         .unwrap_or_else(|e| format!("Failed to read error response: {}", e));
+                    if let Some(trace) = trace.as_ref() {
+                        trace
+                            .sink
+                            .request_attempt_failed(
+                                trace_handle.as_ref(),
+                                &format!("{} client error {}: {}", label, status, error_text),
+                            )
+                            .await;
+                    }
                     error!("{} client error {}: {}", label, status, error_text);
                     return Err(anyhow!("{} client error {}: {}", label, status, error_text));
                 }
@@ -153,6 +184,18 @@ where
                         error
                     );
                     last_error = Some(error);
+                    if let Some(trace) = trace.as_ref() {
+                        trace
+                            .sink
+                            .request_attempt_failed(
+                                trace_handle.as_ref(),
+                                &last_error
+                                    .as_ref()
+                                    .map(ToString::to_string)
+                                    .unwrap_or_else(|| "unknown error".to_string()),
+                            )
+                            .await;
+                    }
 
                     if attempt < max_tries - 1 {
                         let delay_ms = retry_delay_ms(attempt, &headers);
@@ -181,6 +224,12 @@ where
                     error_msg
                 );
                 last_error = Some(error);
+                if let Some(trace) = trace.as_ref() {
+                    trace
+                        .sink
+                        .request_attempt_failed(trace_handle.as_ref(), &error_msg)
+                        .await;
+                }
 
                 if attempt < max_tries - 1 {
                     let delay_ms = exponential_retry_delay_ms(attempt);
@@ -207,6 +256,12 @@ where
                     error_msg
                 );
                 last_error = Some(error);
+                if let Some(trace) = trace.as_ref() {
+                    trace
+                        .sink
+                        .request_attempt_failed(trace_handle.as_ref(), &error_msg)
+                        .await;
+                }
 
                 if attempt < max_tries - 1 {
                     let delay_ms = exponential_retry_delay_ms(attempt);
@@ -229,6 +284,7 @@ where
         return Ok(StreamResponse {
             stream: Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(rx)),
             raw_sse_rx: Some(rx_raw),
+            trace_handle,
         });
     }
 
@@ -278,6 +334,14 @@ mod tests {
             retry_after_delay_ms(&headers),
             Some(MAX_RETRY_AFTER_DELAY_MS)
         );
+    }
+
+    #[test]
+    fn retry_after_preserves_sub_cap_values() {
+        let mut headers = HeaderMap::new();
+        headers.insert(RETRY_AFTER, HeaderValue::from_static("45"));
+
+        assert_eq!(retry_after_delay_ms(&headers), Some(45_000));
     }
 
     #[test]

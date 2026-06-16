@@ -34,6 +34,10 @@ export interface MiniAppPermissions {
     max_tokens_per_request?: number;
     rate_limit_per_minute?: number;
   };
+  agent?: {
+    enabled?: boolean;
+    rate_limit_per_minute?: number;
+  };
   notifications?: { system?: boolean };
 }
 
@@ -76,6 +80,37 @@ export interface AiModelInfo {
   name: string;
   provider: string;
   isDefault: boolean;
+}
+
+// ─── Agent bridge types ───────────────────────────────────────────────────────
+
+export interface AgentRunOptions {
+  runId?: string;
+  sessionName?: string;
+  /** Defaults to true host-side; only applies when a new session is created. */
+  enableTools?: boolean;
+  /** Reuse an existing hidden agent session from an earlier run of this app. */
+  sessionId?: string;
+  /**
+   * Relative subdirectory inside the app's own appdata directory to use as
+   * the agent workspace (file-protocol apps keep agent outputs there).
+   */
+  appDataWorkspace?: string;
+}
+
+export interface AgentRunStartedResult {
+  sessionId: string;
+  turnId: string;
+  actionRunId: string;
+  status: string;
+}
+
+export interface AgentTurnTextResult {
+  text: string;
+}
+
+export interface AgentCancelStaleRunsResult {
+  cancelledRuns: number;
 }
 
 export interface MiniAppRuntimeState {
@@ -595,6 +630,78 @@ export class MiniAppAPI {
       return await api.invoke('miniapp_ai_list_models', { request: { appId } });
     } catch (error) {
       throw createTauriCommandError('miniapp_ai_list_models', error, { appId });
+    }
+  }
+
+  // ─── Agent bridge commands ──────────────────────────────────────────────────
+
+  async agentRun(
+    appId: string,
+    prompt: string,
+    workspacePath?: string,
+    options?: AgentRunOptions,
+  ): Promise<AgentRunStartedResult> {
+    try {
+      return await api.invoke('miniapp_agent_run', {
+        request: {
+          appId,
+          prompt,
+          runId: options?.runId,
+          sessionName: options?.sessionName,
+          workspacePath,
+          enableTools: options?.enableTools,
+          sessionId: options?.sessionId,
+          appDataWorkspace: options?.appDataWorkspace,
+        }
+      });
+    } catch (error) {
+      throw createTauriCommandError('miniapp_agent_run', error, { appId });
+    }
+  }
+
+  async agentCancel(appId: string, sessionId: string, turnId: string): Promise<void> {
+    try {
+      await api.invoke('miniapp_agent_cancel', { request: { appId, sessionId, turnId } });
+    } catch (error) {
+      throw createTauriCommandError('miniapp_agent_cancel', error, { appId, sessionId, turnId });
+    }
+  }
+
+  async agentTurnText(appId: string, sessionId: string, turnId: string): Promise<AgentTurnTextResult> {
+    try {
+      return await api.invoke('miniapp_agent_turn_text', { request: { appId, sessionId, turnId } });
+    } catch (error) {
+      throw createTauriCommandError('miniapp_agent_turn_text', error, { appId, sessionId, turnId });
+    }
+  }
+
+  async agentCancelStaleRuns(appId: string): Promise<AgentCancelStaleRunsResult> {
+    try {
+      return await api.invoke('miniapp_agent_cancel_stale_runs', { request: { appId } });
+    } catch (error) {
+      throw createTauriCommandError('miniapp_agent_cancel_stale_runs', error, { appId });
+    }
+  }
+
+  /**
+   * Render one slide HTML page in a hidden host WebView and return base64
+   * PNG/PDF data. Desktop-only; used for page-by-page deck export.
+   */
+  async renderSlidePage(
+    appId: string,
+    options: { html: string; format: string; width?: number; height?: number },
+  ): Promise<string> {
+    try {
+      return await api.invoke('miniapp_render_slide_page', {
+        request: {
+          html: options.html,
+          format: options.format,
+          width: options.width,
+          height: options.height,
+        }
+      });
+    } catch (error) {
+      throw createTauriCommandError('miniapp_render_slide_page', error, { appId });
     }
   }
 }

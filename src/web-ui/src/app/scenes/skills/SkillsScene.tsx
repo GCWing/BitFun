@@ -251,7 +251,7 @@ const SkillsScene: React.FC = () => {
                         <div
                           key={`ins-sk-${i}`}
                           className="skills-card-skeleton"
-                          style={{ '--card-index': i } as React.CSSProperties}
+                          style={{ '--surface-stagger-index': i } as React.CSSProperties}
                         />
                       ))}
                     </div>
@@ -285,7 +285,7 @@ const SkillsScene: React.FC = () => {
                               'skills-card',
                               skill.isShadowed && 'is-shadowed',
                             ].filter(Boolean).join(' ')}
-                            style={{ '--card-index': index } as React.CSSProperties}
+                            style={{ '--surface-stagger-index': index } as React.CSSProperties}
                             onClick={() => setSelectedDetail({ type: 'installed', skill })}
                             role="button"
                             tabIndex={0}
@@ -443,7 +443,7 @@ const SkillsScene: React.FC = () => {
                     <div
                       key={`mkt-sk-${i}`}
                       className="skills-discover__skeleton-card"
-                      style={{ '--card-index': i } as React.CSSProperties}
+                      style={{ '--surface-stagger-index': i } as React.CSSProperties}
                     />
                   ))}
                 </div>
@@ -462,7 +462,7 @@ const SkillsScene: React.FC = () => {
                     <div
                       key={`mkt-page-sk-${i}`}
                       className="skills-discover__skeleton-card"
-                      style={{ '--card-index': i } as React.CSSProperties}
+                      style={{ '--surface-stagger-index': i } as React.CSSProperties}
                     />
                   ))}
                 </div>

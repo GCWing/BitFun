@@ -45,7 +45,7 @@ const SkillCard: React.FC<SkillCardProps> = ({
     <div
       className="skill-card"
       style={{
-        '--card-index': index,
+        '--surface-stagger-index': index,
         '--skill-card-gradient': getCardGradient(accentSeed ?? name),
         '--skill-card-color-rgb': getCardColorRgb(accentSeed ?? name),
       } as React.CSSProperties}

@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   getCurrentWorkspacePath: vi.fn(),
   revealInExplorer: vi.fn(),
   openExternal: vi.fn(),
+  renderMath: vi.fn(),
 }));
 
 vi.mock('../../../infrastructure/api', () => ({
@@ -26,9 +27,9 @@ vi.mock('../../../infrastructure/api', () => ({
 }));
 
 vi.mock('@/infrastructure/i18n', () => ({
-  useI18n: () => ({
+  i18nService: {
     t: (key: string, options?: { defaultValue?: string }) => options?.defaultValue ?? key,
-  }),
+  },
 }));
 
 vi.mock('@/infrastructure/theme', () => ({
@@ -45,6 +46,13 @@ vi.mock('./MermaidBlock', () => ({
 
 vi.mock('./ReproductionStepsBlock', () => ({
   ReproductionStepsBlock: () => <div data-testid="reproduction-steps" />,
+}));
+
+vi.mock('./MarkdownMathRenderer', () => ({
+  default: ({ markdownContent }: { markdownContent: string }) => {
+    mocks.renderMath(markdownContent);
+    return <span data-testid="markdown-math-renderer">{markdownContent}</span>;
+  },
 }));
 
 vi.mock('./AsyncPrismSyntaxHighlighter', () => ({
@@ -91,6 +99,7 @@ describe('Markdown file links', () => {
     mocks.getCurrentWorkspacePath.mockReset();
     mocks.revealInExplorer.mockReset();
     mocks.openExternal.mockReset();
+    mocks.renderMath.mockReset();
     mocks.getCurrentWorkspacePath.mockResolvedValue(EXAMPLE_WORKSPACE);
   });
 
@@ -100,6 +109,21 @@ describe('Markdown file links', () => {
     });
     container.remove();
     vi.clearAllMocks();
+  });
+
+  it('does not resolve workspace path for markdown without local file links', async () => {
+    await act(async () => {
+      root.render(
+        <Markdown
+          content={'Plain answer without file links.\n\n```ts\nconst value = 1;\n```'}
+          onFileViewRequest={onFileViewRequest}
+        />,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mocks.getCurrentWorkspacePath).not.toHaveBeenCalled();
   });
 
   it('routes same-label relative, absolute, and computer links independently', async () => {
@@ -165,5 +189,43 @@ describe('Markdown file links', () => {
 
     expect(mocks.revealInExplorer).toHaveBeenNthCalledWith(1, `${EXAMPLE_WORKSPACE}\\deck.pptx`);
     expect(onFileViewRequest).toHaveBeenCalledTimes(4);
+  });
+
+  it('does not load the math renderer for ordinary markdown', async () => {
+    await act(async () => {
+      root.render(
+        <Markdown
+          content={'Plain answer with **bold** text and a table-like sentence.'}
+          onFileViewRequest={onFileViewRequest}
+        />,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('Plain answer with');
+    expect(container.querySelector('[data-testid="markdown-math-renderer"]')).toBeNull();
+    expect(mocks.renderMath).not.toHaveBeenCalled();
+  });
+
+  it('keeps math markdown visible while the math renderer loads', async () => {
+    act(() => {
+      root.render(
+        <Markdown
+          content={'Formula: $x + y$'}
+          onFileViewRequest={onFileViewRequest}
+        />,
+      );
+    });
+
+    expect(container.textContent).toContain('Formula:');
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('[data-testid="markdown-math-renderer"]')).not.toBeNull();
+    expect(mocks.renderMath).toHaveBeenCalledWith('Formula: $x + y$');
   });
 });

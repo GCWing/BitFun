@@ -76,17 +76,22 @@ describe('SessionsSection layout styles', () => {
     const labelBlock = extractInlineItemBlock(stylesheet, 'label');
     const btwBadgeBlock = extractInlineItemBlock(stylesheet, 'btw-badge');
     const reviewBadgeBlock = extractInlineItemBlock(stylesheet, 'review-badge');
+    const backgroundSubagentBadgeBlock = extractInlineItemBlock(stylesheet, 'background-subagent-badge');
 
     expect(labelBlock).toContain('flex: 1 1 0;');
     expect(labelBlock).toContain('overflow: hidden;');
     expect(labelBlock).toContain('text-overflow: ellipsis;');
     expect(btwBadgeBlock).toContain('white-space: nowrap;');
     expect(btwBadgeBlock).toContain('overflow: visible;');
-    expect(btwBadgeBlock).toContain('color: color-mix(in srgb, var(--color-accent-400, #8b5cf6) 62%, var(--color-text-primary));');
+    expect(btwBadgeBlock).toContain('color: color-mix(in srgb, var(--color-accent-400) 62%, var(--color-text-primary));');
     expect(btwBadgeBlock).toContain('font-weight: 600;');
     expect(btwBadgeBlock).toContain('opacity: 0.96;');
     expect(reviewBadgeBlock).toContain('white-space: nowrap;');
-    expect(reviewBadgeBlock).toContain('color: color-mix(in srgb, var(--color-accent-400, #8b5cf6) 82%, var(--color-text-primary));');
+    expect(reviewBadgeBlock).toContain('color: color-mix(in srgb, var(--color-accent-400) 82%, var(--color-text-primary));');
     expect(reviewBadgeBlock).toContain('font-weight: 600;');
+    expect(backgroundSubagentBadgeBlock).toContain('flex: 0 0 auto;');
+    expect(backgroundSubagentBadgeBlock).toContain('display: inline-grid;');
+    expect(backgroundSubagentBadgeBlock).toContain('width: 16px;');
+    expect(backgroundSubagentBadgeBlock).toContain('height: 16px;');
   });
 });

@@ -77,7 +77,7 @@ export const bitfunChinaStyleTheme: ThemeConfig = {
     
     border: {
       subtle: 'rgba(106, 92, 70, 0.12)',      
-      base: 'rgba(106, 92, 70, 0.20)',        
+      base: 'rgba(106, 92, 70, 0.2)',
       medium: 'rgba(106, 92, 70, 0.28)',      
       strong: 'rgba(106, 92, 70, 0.36)',      
       prominent: 'rgba(106, 92, 70, 0.48)',   
@@ -86,7 +86,7 @@ export const bitfunChinaStyleTheme: ThemeConfig = {
     element: {
       subtle: 'rgba(46, 94, 138, 0.03)',      
       soft: 'rgba(46, 94, 138, 0.06)',        
-      base: 'rgba(46, 94, 138, 0.10)',        
+      base: 'rgba(46, 94, 138, 0.1)',
       medium: 'rgba(46, 94, 138, 0.14)',      
       strong: 'rgba(46, 94, 138, 0.18)',      
       elevated: 'rgba(255, 255, 255, 0.85)',  
@@ -120,7 +120,7 @@ export const bitfunChinaStyleTheme: ThemeConfig = {
     glow: {
       blue: '0 8px 24px rgba(46, 94, 138, 0.18), 0 4px 12px rgba(46, 94, 138, 0.12), 0 2px 6px rgba(106, 92, 70, 0.05)',
       purple: '0 8px 24px rgba(126, 176, 155, 0.18), 0 4px 12px rgba(126, 176, 155, 0.12), 0 2px 6px rgba(106, 92, 70, 0.05)',
-      mixed: '0 8px 24px rgba(46, 94, 138, 0.12), 0 4px 12px rgba(126, 176, 155, 0.10), 0 2px 6px rgba(106, 92, 70, 0.05)',
+      mixed: '0 8px 24px rgba(46, 94, 138, 0.12), 0 4px 12px rgba(126, 176, 155, 0.1), 0 2px 6px rgba(106, 92, 70, 0.05)',
     },
     
     blur: {
@@ -351,7 +351,7 @@ export const bitfunChinaStyleTheme: ThemeConfig = {
       'editor.selectionBackground': 'rgba(46, 94, 138, 0.28)',   
       'editor.selectionForeground': '#1a1a1a',                   
       'editor.inactiveSelectionBackground': 'rgba(46, 94, 138, 0.18)',  
-      'editor.selectionHighlightBackground': 'rgba(46, 94, 138, 0.20)',  
+      'editor.selectionHighlightBackground': 'rgba(46, 94, 138, 0.2)',
       'editor.selectionHighlightBorder': 'rgba(46, 94, 138, 0.35)',      
       'editorCursor.foreground': '#2e5e8a',       
       'editor.wordHighlightBackground': 'rgba(46, 94, 138, 0.12)',  

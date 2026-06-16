@@ -14,6 +14,7 @@ use std::time::SystemTime;
 #[derive(Debug, Clone)]
 pub struct ToolExecutionOptions {
     pub allow_parallel: bool,
+    pub subagent_batch_execution_policy: SubagentBatchExecutionPolicy,
     pub max_retries: usize,
     /// Tool execution timeout (seconds), None means infinite waiting
     pub timeout_secs: Option<u64>,
@@ -26,12 +27,21 @@ impl Default for ToolExecutionOptions {
     fn default() -> Self {
         Self {
             allow_parallel: true,
+            subagent_batch_execution_policy: SubagentBatchExecutionPolicy::default(),
             max_retries: 0,
             timeout_secs: None, // Default no timeout (infinite waiting)
             confirm_before_run: true,
             confirmation_timeout_secs: None, // Default no timeout (infinite waiting)
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SubagentBatchExecutionPolicy {
+    #[default]
+    SafeOnly,
+    ForceParallel,
+    Serial,
 }
 
 #[derive(Debug, Clone)]
@@ -57,6 +67,8 @@ pub struct ToolExecutionContext {
     pub session_id: String,
     pub dialog_turn_id: String,
     pub round_id: String,
+    pub attempt_id: Option<String>,
+    pub attempt_index: Option<u32>,
     pub agent_type: String,
     pub workspace: Option<WorkspaceBinding>,
     pub context_vars: HashMap<String, String>,

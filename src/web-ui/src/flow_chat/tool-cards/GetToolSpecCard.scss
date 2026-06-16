@@ -20,8 +20,8 @@
 
 .get-tool-spec-card__description {
   color: var(--color-text-secondary);
-  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
-  line-height: var(--flowchat-text-line-height, 1.58);
+  font-size: var(--tool-card-action-font-size);
+  line-height: var(--flowchat-text-line-height);
   white-space: pre-wrap;
 }
 

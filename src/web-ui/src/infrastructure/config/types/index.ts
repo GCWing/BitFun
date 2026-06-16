@@ -28,10 +28,16 @@ export interface AppConfig {
 }
 
 export type BackendLogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'off';
+export type ModelExchangeTracingMode = 'off' | 'full' | 'usage_only';
+
+export interface ModelExchangeTracingConfig {
+  mode: ModelExchangeTracingMode;
+}
 
 export interface AppLoggingConfig {
   level: BackendLogLevel;
   include_sensitive_diagnostics: boolean;
+  model_exchange_tracing: ModelExchangeTracingConfig;
 }
 
 // Reserved; legacy `default_mode` in saved JSON is ignored by the app.
@@ -193,6 +199,7 @@ export interface AIConfig {
   stream_ttft_timeout_secs?: number | null;
   tool_execution_timeout_secs?: number | null;
   tool_confirmation_timeout_secs?: number | null;
+  subagent_batch_execution_policy?: 'safe_only' | 'force_parallel' | 'serial';
   skip_tool_confirmation?: boolean;
   computer_use_enabled?: boolean;
   browser_control_preferred_browser?: string;
@@ -474,6 +481,8 @@ export interface WorkspaceConfig {
 
 export interface IConfigManager {
   getConfig<T = any>(path?: string): Promise<T>;
+  getOptionalConfig<T = any>(path: string): Promise<T | undefined>;
+  getConfigs(paths: string[]): Promise<Record<string, unknown>>;
   setConfig<T = any>(path: string, value: T): Promise<void>;
   resetConfig(path?: string): Promise<void>;
   validateConfig(): Promise<ConfigValidationResult>;

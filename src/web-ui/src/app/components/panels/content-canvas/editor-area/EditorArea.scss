@@ -2,7 +2,7 @@
   display: flex;
   width: 100%;
   height: 100%;
-  background: var(--color-bg-primary, #1a1a1a);
+  background: var(--color-bg-primary);
 
   &:not(.is-split):not(.is-grid) {
     .canvas-editor-area__primary {

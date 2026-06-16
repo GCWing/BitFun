@@ -9,7 +9,7 @@
   padding: $size-gap-3;
   background: var(--color-bg-primary);
   border-radius: $size-radius-base;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 6px var(--color-overlay-black-08);
   border: 1px solid var(--border-base);
   min-width: 280px;
   max-width: 320px;
@@ -41,8 +41,8 @@
 
   &--info {
     .notification-item__icon {
-      color: #ca8a04;
-      background: rgba(234, 179, 8, 0.18);
+      color: var(--color-warning);
+      background: color-mix(in srgb, var(--color-warning) 18%, transparent);
     }
   }
 
@@ -96,7 +96,7 @@
     word-break: break-all;
 
     &:hover {
-      color: var(--color-accent, var(--color-primary));
+      color: var(--color-accent);
     }
   }
 

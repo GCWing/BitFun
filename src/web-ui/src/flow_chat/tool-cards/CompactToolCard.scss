@@ -14,7 +14,7 @@
   width: 100%;
   box-sizing: border-box;
   font-size: var(--flowchat-font-size-base);
-  line-height: var(--flowchat-support-line-height, 1.45);
+  line-height: var(--flowchat-support-line-height);
 }
 
 .compact-tool-card-wrapper--dense-command {
@@ -67,20 +67,20 @@
 .flowchat-tool-wrapper {
   margin: 0 0 0.35rem 0;
   font-size: var(--flowchat-font-size-base);
-  line-height: var(--flowchat-support-line-height, 1.45);
+  line-height: var(--flowchat-support-line-height);
 }
 
 .flow-tool-card-wrapper {
   display: flex;
   flex-direction: column;
-  gap: var(--flowchat-inline-gap, 0.35rem);
+  gap: var(--flowchat-inline-gap);
 }
 
 .flow-tool-card-note {
   margin-left: 1.5rem;
   color: var(--color-text-secondary);
   font-size: 0.82em;
-  line-height: var(--flowchat-support-line-height, 1.45);
+  line-height: var(--flowchat-support-line-height);
   opacity: 0.84;
 }
 
@@ -306,8 +306,8 @@
   opacity: 1;
   transform: none;
   box-shadow: 
-    0 2px 8px rgba(0, 0, 0, 0.15),
-    inset 0 1px 0 rgba(255, 255, 255, 0.02);
+    0 2px 8px var(--color-overlay-black-15),
+    inset 0 1px 0 var(--color-overlay-white-02);
   backdrop-filter: blur(8px);
   
 }
@@ -328,7 +328,7 @@
 .compact-detail-inline-item {
   display: flex;
   align-items: center;
-    gap: var(--flowchat-inline-gap, 0.35rem);
+    gap: var(--flowchat-inline-gap);
   white-space: nowrap;
 }
 
@@ -370,7 +370,7 @@
   align-items: center;
   gap: 6px;
   color: var(--color-text-secondary);
-  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+  font-size: var(--tool-card-action-font-size);
   font-weight: 600;
   cursor: pointer;
   margin-bottom: 4px;
@@ -395,8 +395,8 @@
 
 .compact-expanded-result-snippet {
   color: var(--color-text-muted);
-  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
-  line-height: var(--flowchat-text-line-height, 1.58);
+  font-size: var(--tool-card-action-font-size);
+  line-height: var(--flowchat-text-line-height);
   margin-bottom: 4px;
   padding-left: 18px;
 }
@@ -422,7 +422,7 @@
     color: var(--color-text-primary);
     font-family: var(--tool-card-font-mono);
     font-size: var(--flowchat-font-size-xs);
-    line-height: var(--flowchat-text-line-height, 1.58);
+    line-height: var(--flowchat-text-line-height);
     white-space: pre-wrap;
     word-break: break-word;
     overflow-x: auto;

@@ -20,11 +20,10 @@ use bitfun_agent_tools::{
     validate_tool_execution_admission, DynamicMcpToolInfo, DynamicToolInfo,
     GetToolSpecCollapsedToolSummary, GetToolSpecExecutionError, GetToolSpecExecutionPlan,
     GetToolSpecLoadObservation, GetToolSpecRuntime, InputValidator, PromptVisibleToolManifestItem,
-    ToolCallLoopHistory, ToolContextFacts, ToolExecutionAdmissionRejection,
-    ToolExecutionAdmissionRequest, ToolExposure, ToolImageAttachment, ToolManifestDefinition,
-    ToolManifestPolicyTool, ToolPathBackend, ToolPathOperation, ToolPathResolution,
-    ToolRenderOptions, ToolResult, ToolRuntimeRestrictions, ToolWorkspaceKind, ValidationResult,
-    GET_TOOL_SPEC_TOOL_NAME,
+    ToolContextFacts, ToolExecutionAdmissionRejection, ToolExecutionAdmissionRequest, ToolExposure,
+    ToolImageAttachment, ToolManifestDefinition, ToolManifestPolicyTool, ToolPathBackend,
+    ToolPathOperation, ToolPathResolution, ToolRenderOptions, ToolResult, ToolRuntimeRestrictions,
+    ToolWorkspaceKind, ValidationResult, GET_TOOL_SPEC_TOOL_NAME,
 };
 use bitfun_agent_tools::{
     build_invalid_tool_call_error_message, build_tool_call_truncation_recovery_notice,
@@ -901,33 +900,6 @@ fn tool_allowed_list_gate_preserves_pipeline_rejection_contract() {
 }
 
 #[test]
-fn tool_call_loop_history_blocks_fourth_identical_call_and_keeps_recovery_message() {
-    let mut history = ToolCallLoopHistory::default();
-    let args = json!({ "file_path": "src/lib.rs" });
-
-    for _ in 0..3 {
-        assert!(history.check_and_record("Write", &args).is_allowed());
-    }
-
-    let blocked = history
-        .check_and_record("Write", &args)
-        .into_blocked()
-        .expect("fourth identical call should be blocked");
-
-    assert_eq!(blocked.threshold, 3);
-    assert_eq!(blocked.attempt, 4);
-    assert!(blocked.message.contains("Tool-call loop blocked: 'Write'"));
-    assert!(blocked.message.contains("use the latest Read result"));
-
-    assert!(
-        history
-            .check_and_record("Edit", &json!({ "file_path": "src/lib.rs" }))
-            .is_allowed(),
-        "different tool call should reset the consecutive loop window"
-    );
-}
-
-#[test]
 fn tool_execution_admission_gate_preserves_pipeline_rejection_order() {
     let mut restrictions = ToolRuntimeRestrictions::default();
     restrictions
@@ -1251,12 +1223,12 @@ fn collapsed_tool_stub_definition_preserves_prompt_visible_guardrail() {
     assert!(stub.description.contains("Fetch a URL"));
     assert!(stub
         .description
-        .contains("THIS TOOL IS COLLAPSED. You MUST call GetToolSpec({\"tool_name\":\"WebFetch\"}) before first calling WebFetch."));
+        .contains("THIS IS A COLLAPSED TOOL. Before first use, call GetToolSpec({\"tool_name\":\"WebFetch\"}) to load its schema."));
     assert_eq!(
         stub.parameters,
         json!({
             "type": "object",
-            "additionalProperties": false,
+            "additionalProperties": true,
             "properties": {}
         })
     );
@@ -1316,7 +1288,7 @@ fn prompt_visible_manifest_builder_preserves_expanded_and_collapsed_contract() {
     );
     assert!(definitions[2]
         .description
-        .contains("THIS TOOL IS COLLAPSED. You MUST call GetToolSpec({\"tool_name\":\"WebFetch\"}) before first calling WebFetch."));
+        .contains("THIS IS A COLLAPSED TOOL. Before first use, call GetToolSpec({\"tool_name\":\"WebFetch\"}) to load its schema."));
 }
 
 #[test]
@@ -2156,8 +2128,8 @@ async fn contextual_manifest_resolver_preserves_runtime_visible_manifest_contrac
         .expect("collapsed WebFetch stub");
     assert!(web_fetch
         .description
-        .contains("THIS TOOL IS COLLAPSED. You MUST call GetToolSpec({\"tool_name\":\"WebFetch\"}) before first calling WebFetch."));
-    assert_eq!(web_fetch.parameters["additionalProperties"], false);
+        .contains("THIS IS A COLLAPSED TOOL. Before first use, call GetToolSpec({\"tool_name\":\"WebFetch\"}) to load its schema."));
+    assert_eq!(web_fetch.parameters["additionalProperties"], true);
     assert_eq!(web_fetch.parameters["properties"], json!({}));
 }
 

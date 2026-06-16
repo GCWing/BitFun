@@ -13,6 +13,8 @@ implementation layer.
 - Builders should assemble explicit typed service bundles and capability
   availability. Do not introduce untyped maps, global mutable registries, or
   implicit service lookup.
+- Marker ports may express optional capability availability only; they must not
+  perform IO, own lifecycle, or hide concrete provider behavior.
 - Fake/test providers may live here only when they protect port behavior without
   pulling product runtime dependencies.
 - Concrete filesystem, terminal, network, Git, MCP, remote, or AI provider

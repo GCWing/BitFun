@@ -5,11 +5,6 @@
 mod definitions;
 mod prompt_builder;
 mod registry;
-// Utility hooks used by specific agents (not themselves an agent definition):
-// citation_renumber finalizes a DeepResearch report's cit_XXX references into
-// consecutive `[N]` display IDs after the dialog turn completes.
-#[cfg(feature = "product-full")]
-pub(crate) mod citation_renumber;
 
 use crate::agentic::session::{SystemPromptCacheIdentity, UserContextCacheIdentity};
 use crate::agentic::tools::framework::ToolExposure;
@@ -61,6 +56,16 @@ pub type AgentToolPolicyOverrides = IndexMap<String, ToolExposure>;
 
 static EMPTY_AGENT_TOOL_POLICY_OVERRIDES: std::sync::LazyLock<AgentToolPolicyOverrides> =
     std::sync::LazyLock::new(AgentToolPolicyOverrides::default);
+
+pub fn shared_coding_mode_tool_exposure_overrides() -> AgentToolPolicyOverrides {
+    // Web research is a baseline capability of the shared coding modes; keep
+    // WebSearch/WebFetch expanded so models do not need a GetToolSpec
+    // unlock round-trip when switching between those modes.
+    let mut overrides = AgentToolPolicyOverrides::default();
+    overrides.insert("WebSearch".to_string(), ToolExposure::Expanded);
+    overrides.insert("WebFetch".to_string(), ToolExposure::Expanded);
+    overrides
+}
 
 pub fn shared_coding_mode_tools() -> Vec<String> {
     vec![
@@ -202,8 +207,9 @@ pub trait Agent: Send + Sync + 'static {
 #[cfg(test)]
 mod tests {
     use super::{
-        shared_coding_mode_tools, shared_coding_mode_user_context_policy, Agent, AgenticMode,
-        DebugMode, MultitaskMode, PlanMode,
+        shared_coding_mode_tool_exposure_overrides, shared_coding_mode_tools,
+        shared_coding_mode_user_context_policy, Agent, AgenticMode, DebugMode, MultitaskMode,
+        PlanMode,
     };
 
     #[test]
@@ -257,5 +263,19 @@ mod tests {
         assert_eq!(MultitaskMode::new().user_context_policy(), shared_policy);
         assert_eq!(PlanMode::new().user_context_policy(), shared_policy);
         assert_eq!(DebugMode::new().user_context_policy(), shared_policy);
+    }
+
+    #[test]
+    fn shared_coding_mode_tool_exposure_overrides_match_all_shared_modes() {
+        let shared_overrides = shared_coding_mode_tool_exposure_overrides();
+        let agentic = AgenticMode::new();
+        let multitask = MultitaskMode::new();
+        let plan = PlanMode::new();
+        let debug = DebugMode::new();
+
+        assert_eq!(agentic.tool_exposure_overrides(), &shared_overrides);
+        assert_eq!(multitask.tool_exposure_overrides(), &shared_overrides);
+        assert_eq!(plan.tool_exposure_overrides(), &shared_overrides);
+        assert_eq!(debug.tool_exposure_overrides(), &shared_overrides);
     }
 }

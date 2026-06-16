@@ -79,10 +79,10 @@ export const bitfunCyberTheme: ThemeConfig = {
     
     border: {
       subtle: 'rgba(0, 230, 255, 0.14)',
-      base: 'rgba(0, 230, 255, 0.20)',
+      base: 'rgba(0, 230, 255, 0.2)',
       medium: 'rgba(0, 230, 255, 0.28)',
       strong: 'rgba(0, 230, 255, 0.36)',
-      prominent: 'rgba(0, 230, 255, 0.50)',
+      prominent: 'rgba(0, 230, 255, 0.5)',
     },
     
     element: {

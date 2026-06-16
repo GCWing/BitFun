@@ -70,7 +70,7 @@
       }
       
       .default-model-config__expand-line {
-        border-color: var(--border-soft, rgba(255, 255, 255, 0.15));
+        border-color: var(--border-base);
       }
     }
     
@@ -87,7 +87,7 @@
     width: calc(40% - 40px);
     height: 0;
     border: none;
-    border-top: 1px dashed var(--border-subtle, rgba(255, 255, 255, 0.1));
+    border-top: 1px dashed var(--border-subtle);
     transition: border-color 0.15s ease;
   }
   
@@ -140,12 +140,12 @@
     font-size: var(--font-size-xs);
     font-weight: $font-weight-medium;
     border-radius: $size-radius-sm;
-    background: rgba(var(--color-success-rgb, 34, 197, 94), 0.15);
+    background: var(--color-success-bg);
     border: none;
     color: var(--color-text-secondary);
     
     &--optional {
-      background: rgba(var(--color-warning-rgb, 234, 179, 8), 0.12);
+      background: var(--color-warning-bg);
       color: var(--color-text-muted);
     }
   }

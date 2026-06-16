@@ -13,7 +13,7 @@ use terminal_core::{
     LocalExecSessionCompletionStatus, LocalWriteStdinRequest, TerminalError,
 };
 
-const DEFAULT_MAX_OUTPUT_CHARS: u64 = 10_000;
+const DEFAULT_TOOL_YIELD_TIME_MS: u64 = 30_000;
 
 pub struct WriteStdinTool;
 
@@ -143,20 +143,16 @@ impl WriteStdinTool {
             .get("append_enter")
             .and_then(Value::as_bool)
             .unwrap_or(false);
-        let yield_time_ms = input.get("yield_time_ms").and_then(Value::as_u64);
-        let max_output_chars = input
-            .get("max_output_chars")
+        let yield_time_ms = input
+            .get("yield_time_ms")
             .and_then(Value::as_u64)
-            .unwrap_or(DEFAULT_MAX_OUTPUT_CHARS)
-            .try_into()
-            .unwrap_or(usize::MAX);
-
+            .unwrap_or(DEFAULT_TOOL_YIELD_TIME_MS);
         let request = RemoteWriteStdinRequest {
             session_id,
             chars,
             append_enter,
-            yield_time_ms,
-            max_output_chars: Some(max_output_chars),
+            yield_time_ms: Some(yield_time_ms),
+            max_output_chars: None,
         };
         let progress_bridge = ExecOutputProgressBridge::start(context, self.name());
         let response_result = if let Some(bridge) = progress_bridge.as_ref() {
@@ -237,11 +233,7 @@ Output is only what was produced during this tool call's wait window."#
                 },
                 "yield_time_ms": {
                     "type": "number",
-                    "description": "How long to wait for output before yielding."
-                },
-                "max_output_chars": {
-                    "type": "number",
-                    "description": "Maximum output characters to return. Defaults to 10000; excess output keeps head and tail."
+                    "description": "How long to wait for output before yielding. Defaults to 30000 ms."
                 }
             },
             "required": ["session_id"],
@@ -303,20 +295,16 @@ Output is only what was produced during this tool call's wait window."#
             .get("append_enter")
             .and_then(Value::as_bool)
             .unwrap_or(false);
-        let yield_time_ms = input.get("yield_time_ms").and_then(Value::as_u64);
-        let max_output_chars = input
-            .get("max_output_chars")
+        let yield_time_ms = input
+            .get("yield_time_ms")
             .and_then(Value::as_u64)
-            .unwrap_or(DEFAULT_MAX_OUTPUT_CHARS)
-            .try_into()
-            .unwrap_or(usize::MAX);
-
+            .unwrap_or(DEFAULT_TOOL_YIELD_TIME_MS);
         let request = LocalWriteStdinRequest {
             session_id,
             chars,
             append_enter,
-            yield_time_ms,
-            max_output_chars: Some(max_output_chars),
+            yield_time_ms: Some(yield_time_ms),
+            max_output_chars: None,
         };
         let progress_bridge = ExecOutputProgressBridge::start(context, self.name());
         let response_result = if let Some(bridge) = progress_bridge.as_ref() {

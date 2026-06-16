@@ -27,14 +27,22 @@ chrono = { workspace = true, optional = true }
 dunce = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
 git2 = { workspace = true, optional = true }
+hostname = { workspace = true, optional = true }
+image = { workspace = true, optional = true }
+mac_address = { workspace = true, optional = true }
 notify = { workspace = true, optional = true }
+qrcode = { workspace = true, optional = true }
 rand = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
 rmcp = { workspace = true, optional = true }
+rustls = { workspace = true, optional = true }
+rustls-native-certs = { version = "0.8", optional = true }
 sha2 = { workspace = true, optional = true }
 sse-stream = { workspace = true, optional = true }
 thiserror = { workspace = true, optional = true }
 tokio-util = { workspace = true, optional = true }
+tokio-tungstenite = { workspace = true, optional = true }
+urlencoding = { workspace = true, optional = true }
 uuid = { workspace = true, optional = true }
 which = { workspace = true, optional = true }
 dirs = { workspace = true, optional = true }
@@ -44,9 +52,13 @@ russh-keys = { workspace = true, optional = true }
 shellexpand = { workspace = true, optional = true }
 ssh_config = { workspace = true, optional = true }
 terminal-core = { path = "../terminal", optional = true }
+x25519-dalek = { workspace = true, optional = true }
 
 [target.'cfg(not(windows))'.dependencies]
 git2 = { workspace = true, features = ["vendored-openssl"], optional = true }
+
+[target.'cfg(windows)'.dependencies]
+schannel = { version = "0.1", optional = true }
 
 [features]
 default = []
@@ -82,7 +94,28 @@ miniapp-runtime = [
     "uuid",
     "which",
 ]
-remote-connect = ["async-trait", "base64", "bitfun-runtime-ports", "uuid"]
+remote-connect = [
+    "anyhow",
+    "aes-gcm",
+    "async-trait",
+    "base64",
+    "bitfun-runtime-ports",
+    "chrono",
+    "futures",
+    "hostname",
+    "image",
+    "mac_address",
+    "qrcode",
+    "rand",
+    "rustls",
+    "rustls-native-certs",
+    "schannel",
+    "sha2",
+    "tokio-tungstenite",
+    "urlencoding",
+    "uuid",
+    "x25519-dalek",
+]
 remote-ssh = ["dunce", "sha2", "tokio-util"]
 remote-ssh-concrete = [
     "remote-ssh",

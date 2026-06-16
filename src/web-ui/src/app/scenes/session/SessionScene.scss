@@ -140,7 +140,7 @@
     }
 
     &::after {
-      content: var(--panel-collapse-hint-right, 'Release to collapse');
+      content: var(--panel-collapse-hint-right);
       position: absolute;
       left: 50%;
       top: 50%;
@@ -151,7 +151,7 @@
       pointer-events: none;
       z-index: 101;
       white-space: nowrap;
-      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+      text-shadow: 0 1px 2px var(--color-overlay-black-30);
       animation: pane-collapse-hint 0.3s ease-out;
     }
   }

@@ -303,7 +303,7 @@
   border: 1px solid color-mix(in srgb, var(--color-accent-500) 20%, var(--border-subtle));
   border-radius: $size-radius-full;
   background: color-mix(in srgb, var(--color-accent-500) 8%, transparent);
-  color: var(--color-accent-600, var(--color-text-secondary));
+  color: var(--color-accent-600);
   font-size: var(--font-size-xs);
   font-weight: $font-weight-medium;
   cursor: pointer;
@@ -316,7 +316,7 @@
   &:hover {
     background: color-mix(in srgb, var(--color-accent-500) 14%, transparent);
     border-color: color-mix(in srgb, var(--color-accent-500) 35%, var(--border-medium));
-    color: var(--color-accent-600, var(--color-text-primary));
+    color: var(--color-accent-600);
   }
 
   &:focus-visible {
@@ -654,7 +654,7 @@
   background: var(--color-bg-secondary);
   cursor: pointer;
   animation: skills-card-in 0.18s $easing-decelerate both;
-  animation-delay: calc(var(--card-index, 0) * 30ms);
+  animation-delay: calc(var(--surface-stagger-index, 0) * 30ms);
   transition:
     border-color $motion-fast $easing-standard,
     box-shadow $motion-fast $easing-standard,
@@ -662,7 +662,7 @@
 
   &:hover {
     border-color: var(--border-medium);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 4px 16px var(--color-overlay-black-08);
     transform: translateY(-1px);
   }
 
@@ -819,7 +819,7 @@
   background: var(--element-bg-subtle);
   border: 1px solid var(--border-subtle);
   animation: skills-card-in 0.2s $easing-decelerate both;
-  animation-delay: calc(var(--card-index, 0) * 40ms);
+  animation-delay: calc(var(--surface-stagger-index, 0) * 40ms);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -955,12 +955,12 @@
     min-height: 46px;
     background: var(--element-bg-soft);
     border-color: var(--border-medium);
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+    box-shadow: 0 2px 12px var(--color-overlay-black-06);
     transition: border-color $motion-fast $easing-standard, box-shadow $motion-fast $easing-standard;
   }
 
   &.search--focused:not(.search--disabled) .search__wrapper {
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1), 0 0 0 3px color-mix(in srgb, var(--color-accent-500) 15%, transparent);
+    box-shadow: 0 4px 20px var(--color-overlay-black-10), 0 0 0 3px color-mix(in srgb, var(--color-accent-500) 15%, transparent);
     border-color: var(--color-accent-500);
   }
 }
@@ -998,7 +998,7 @@
   background: var(--element-bg-subtle);
   border: 1px solid var(--border-subtle);
   animation: skills-card-in 0.18s $easing-decelerate both;
-  animation-delay: calc(var(--card-index, 0) * 40ms);
+  animation-delay: calc(var(--surface-stagger-index, 0) * 40ms);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

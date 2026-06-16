@@ -10,7 +10,7 @@
   min-height: 100px;
   background: transparent;
   // Default dashed border - use border-base for cross-theme visibility
-  border: 1px dashed var(--border-base, var(--border-medium));
+  border: 1px dashed var(--border-base);
   border-radius: 6px;
   overflow: hidden;
   cursor: pointer;
@@ -19,7 +19,7 @@
   // Switch to solid border on hover
   &:hover {
     border-style: solid;
-    border-color: var(--border-medium, var(--border-base));
+    border-color: var(--border-medium);
 
     .canvas-thumbnail-card__actions {
       opacity: 1;
@@ -29,21 +29,21 @@
   // Active state - solid border
   &.is-active {
     border-style: solid;
-    border-color: var(--color-primary, var(--color-accent-500));
+    border-color: var(--color-primary);
 
     .canvas-thumbnail-card__header {
-      border-color: var(--color-accent-200, rgba(96, 165, 250, 0.12));
+      border-color: var(--color-accent-200);
     }
 
     .canvas-thumbnail-card__icon {
-      color: var(--color-primary, var(--color-accent-500));
+      color: var(--color-primary);
     }
   }
 
   // Pinned state - dashed border with stronger color
   &.is-pinned {
     border-style: dashed;
-    border-color: var(--color-accent-300, rgba(96, 165, 250, 0.3));
+    border-color: var(--color-accent-300);
 
     .canvas-thumbnail-card__pin-badge {
       display: flex;
@@ -63,7 +63,7 @@
     align-items: center;
     gap: 6px;
     padding: 6px 8px;
-    border-bottom: 1px dashed var(--border-base, var(--border-medium));
+    border-bottom: 1px dashed var(--border-base);
     flex-shrink: 0;
   }
 
@@ -104,7 +104,7 @@
     display: none;
     flex-shrink: 0;
     font-size: 8px;
-    color: var(--color-warning, #f59e0b);
+    color: var(--color-warning);
   }
 
   &__actions {
@@ -129,18 +129,18 @@
     transition: all 0.1s ease;
 
     &:hover {
-      background: var(--element-bg-base, var(--element-bg-soft));
+      background: var(--element-bg-base);
       color: var(--color-text-primary);
     }
 
     &.is-active {
-      color: var(--color-primary, var(--color-accent-500));
+      color: var(--color-primary);
     }
   }
 
   &__close-btn:hover {
-    background: var(--color-error-alpha, rgba(239, 68, 68, 0.15));
-    color: var(--color-error, #ef4444);
+    background: var(--color-error-bg);
+    color: var(--color-error);
   }
 
   // Preview area
@@ -149,7 +149,7 @@
     min-height: 50px;
     padding: 8px;
     overflow: hidden;
-    background: var(--element-bg-subtle, var(--color-bg-secondary));
+    background: var(--element-bg-subtle);
     border-radius: 0 0 5px 5px;
   }
 
@@ -218,7 +218,7 @@
     justify-content: center;
     width: 14px;
     height: 14px;
-    background: var(--color-primary, var(--color-accent-500));
+    background: var(--color-primary);
     border-radius: 2px;
     color: var(--color-text-primary);
 
@@ -237,23 +237,23 @@
     font-size: 9px;
     font-weight: 600;
     color: var(--color-text-primary);
-    background: var(--group-color, var(--color-accent-500, rgba(59, 130, 246, 0.8)));
+    background: var(--mission-control-group-color, var(--color-accent-500));
     border-radius: 3px;
     z-index: 1;
-    box-shadow: 0 1px 3px var(--color-shadow, rgba(0, 0, 0, 0.3));
+    box-shadow: 0 1px 3px var(--color-overlay-black-30);
     backdrop-filter: blur(4px);
-    text-shadow: 0 1px 2px var(--color-shadow, rgba(0, 0, 0, 0.2));
+    text-shadow: 0 1px 2px var(--color-overlay-black-20);
 
     &--primary {
-      background: var(--group-color, var(--color-accent-500, rgba(59, 130, 246, 0.85)));
+      background: var(--mission-control-group-color, var(--color-accent-500));
     }
 
     &--secondary {
-      background: var(--group-color, var(--color-success, rgba(16, 185, 129, 0.85)));
+      background: var(--mission-control-group-color, var(--color-success));
     }
 
     &--tertiary {
-      background: var(--group-color, var(--color-warning, rgba(245, 158, 11, 0.85)));
+      background: var(--mission-control-group-color, var(--color-warning));
     }
   }
 }

@@ -7,7 +7,7 @@ import type {
   BackgroundCommandOutputMetadata,
   BackgroundCommandOutputStatus,
 } from '@/infrastructure/api/service-api/AgentAPI';
-import { TerminalOutputRenderer } from '@/tools/terminal/components';
+import { LazyTerminalOutputRenderer } from '@/tools/terminal/components/LazyTerminalOutputRenderer';
 import { notificationService } from '@/shared/notification-system';
 import './BackgroundCommandOutputPanel.scss';
 
@@ -380,7 +380,7 @@ export const BackgroundCommandOutputPanel: React.FC<BackgroundCommandOutputPanel
 
         <div className="background-command-output-panel__output">
           {displayedOutput ? (
-            <TerminalOutputRenderer
+            <LazyTerminalOutputRenderer
               content={displayedOutput}
               className="background-command-output-panel__terminal"
               minHeight={420}

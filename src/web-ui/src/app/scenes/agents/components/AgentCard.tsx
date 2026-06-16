@@ -8,7 +8,8 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/component-library';
 import type { AgentWithCapabilities } from '../agentsStore';
-import { AGENT_ICON_MAP, CAPABILITY_ACCENT } from '../agentsIcons';
+import { AGENT_ICON_MAP } from '../agentsIcons';
+import { CAPABILITY_ACCENT, getCapabilityAccentBorder } from '../agentTheme';
 import { getCardGradient } from '@/shared/utils/cardGradients';
 import { getAgentBadge, getAgentDescription, getCapabilityLabel } from '../utils';
 import './AgentCard.scss';
@@ -40,7 +41,7 @@ const AgentCard: React.FC<AgentCardProps> = ({
     <div
       className="agent-card"
       style={{
-        '--card-index': index,
+        '--surface-stagger-index': index,
         '--agent-card-gradient': getCardGradient(agent.id || agent.name),
       } as React.CSSProperties}
       onClick={openDetails}
@@ -87,7 +88,7 @@ const AgentCard: React.FC<AgentCardProps> = ({
               className="agent-card__cap-chip"
               style={{
                 color: CAPABILITY_ACCENT[cap.category],
-                borderColor: `${CAPABILITY_ACCENT[cap.category]}44`,
+                borderColor: getCapabilityAccentBorder(cap.category),
               }}
             >
               {getCapabilityLabel(t, cap.category)}

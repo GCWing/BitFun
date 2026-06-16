@@ -13,6 +13,9 @@ pub(crate) mod sse;
 pub(crate) mod utils;
 
 use crate::providers::{anthropic, gemini, openai};
+use crate::trace::{
+    ModelExchangeRequestTraceHandle, ModelExchangeResponseTrace, ModelExchangeTraceConfig,
+};
 use crate::types::ProxyConfig;
 use crate::types::*;
 use anyhow::Result;
@@ -31,6 +34,7 @@ pub struct StreamResponse {
         Box<dyn futures::Stream<Item = Result<crate::stream::UnifiedResponse>> + Send>,
     >,
     pub raw_sse_rx: Option<mpsc::UnboundedReceiver<String>>,
+    pub trace_handle: Option<ModelExchangeRequestTraceHandle>,
 }
 
 /// Default time to wait for the first response headers / stream body to start.
@@ -116,9 +120,10 @@ impl AIClient {
         &self,
         messages: Vec<Message>,
         tools: Option<Vec<ToolDefinition>>,
+        trace: Option<ModelExchangeTraceConfig>,
     ) -> Result<StreamResponse> {
         let custom_body = self.config.custom_request_body.clone();
-        self.send_message_stream_with_extra_body(messages, tools, custom_body)
+        self.send_message_stream_with_extra_body(messages, tools, custom_body, trace)
             .await
     }
 
@@ -127,23 +132,30 @@ impl AIClient {
         messages: Vec<Message>,
         tools: Option<Vec<ToolDefinition>>,
         extra_body: Option<serde_json::Value>,
+        trace: Option<ModelExchangeTraceConfig>,
     ) -> Result<StreamResponse> {
         let max_tries = SEND_MESSAGE_STREAM_ATTEMPTS;
         match ApiFormat::parse(&self.config.format)? {
             ApiFormat::OpenAIChat => {
-                openai::chat::send_stream(self, messages, tools, extra_body, max_tries).await
+                openai::chat::send_stream(self, messages, tools, extra_body, max_tries, trace).await
             }
             ApiFormat::OpenAIResponses => {
-                openai::responses::send_stream(self, messages, tools, extra_body, max_tries).await
+                openai::responses::send_stream(self, messages, tools, extra_body, max_tries, trace)
+                    .await
             }
             ApiFormat::Anthropic => {
-                anthropic::request::send_stream(self, messages, tools, extra_body, max_tries).await
+                anthropic::request::send_stream(self, messages, tools, extra_body, max_tries, trace)
+                    .await
             }
             ApiFormat::Gemini => {
-                gemini::request::send_stream(self, messages, tools, extra_body, max_tries).await
+                gemini::request::send_stream(self, messages, tools, extra_body, max_tries, trace)
+                    .await
             }
             ApiFormat::GeminiCodeAssist => {
-                gemini::code_assist::send_stream(self, messages, tools, extra_body, max_tries).await
+                gemini::code_assist::send_stream(
+                    self, messages, tools, extra_body, max_tries, trace,
+                )
+                .await
             }
         }
     }
@@ -164,21 +176,55 @@ impl AIClient {
         tools: Option<Vec<ToolDefinition>>,
         extra_body: Option<serde_json::Value>,
     ) -> Result<GeminiResponse> {
+        self.send_message_with_extra_body_and_trace(messages, tools, extra_body, None)
+            .await
+    }
+
+    pub async fn send_message_with_trace(
+        &self,
+        messages: Vec<Message>,
+        tools: Option<Vec<ToolDefinition>>,
+        trace: Option<ModelExchangeTraceConfig>,
+    ) -> Result<GeminiResponse> {
+        let custom_body = self.config.custom_request_body.clone();
+        self.send_message_with_extra_body_and_trace(messages, tools, custom_body, trace)
+            .await
+    }
+
+    pub async fn send_message_with_extra_body_and_trace(
+        &self,
+        messages: Vec<Message>,
+        tools: Option<Vec<ToolDefinition>>,
+        extra_body: Option<serde_json::Value>,
+        trace: Option<ModelExchangeTraceConfig>,
+    ) -> Result<GeminiResponse> {
         for attempt in 0..SEND_MESSAGE_STREAM_ATTEMPTS {
             let stream_response = self
                 .send_message_stream_with_extra_body(
                     messages.clone(),
                     tools.clone(),
                     extra_body.clone(),
+                    trace.clone(),
                 )
                 .await?;
+            let trace_handle = stream_response.trace_handle.clone();
 
             match response_aggregator::aggregate_stream_response(stream_response).await {
-                Ok(response) => return Ok(response),
+                Ok(response) => {
+                    complete_aggregated_trace(trace.as_ref(), trace_handle.as_ref(), &response)
+                        .await;
+                    return Ok(response);
+                }
                 Err(error)
                     if attempt < SEND_MESSAGE_STREAM_ATTEMPTS - 1
                         && is_transient_stream_error(&error.to_string()) =>
                 {
+                    fail_aggregated_trace(
+                        trace.as_ref(),
+                        trace_handle.as_ref(),
+                        &error.to_string(),
+                    )
+                    .await;
                     let delay_ms = send_message_retry_delay_ms(attempt);
                     warn!(
                         "Retrying aggregated AI stream after transient error: attempt={}/{}, delay_ms={}, error={}",
@@ -189,7 +235,15 @@ impl AIClient {
                     );
                     tokio::time::sleep(Duration::from_millis(delay_ms)).await;
                 }
-                Err(error) => return Err(error),
+                Err(error) => {
+                    fail_aggregated_trace(
+                        trace.as_ref(),
+                        trace_handle.as_ref(),
+                        &error.to_string(),
+                    )
+                    .await;
+                    return Err(error);
+                }
             }
         }
 
@@ -304,6 +358,55 @@ fn is_transient_stream_error(error_message: &str) -> bool {
     ]
     .iter()
     .any(|k| msg.contains(k))
+}
+
+async fn complete_aggregated_trace(
+    trace_config: Option<&ModelExchangeTraceConfig>,
+    trace_handle: Option<&ModelExchangeRequestTraceHandle>,
+    response: &GeminiResponse,
+) {
+    let (Some(trace_config), Some(trace_handle)) = (trace_config, trace_handle) else {
+        return;
+    };
+
+    trace_config
+        .sink
+        .request_attempt_completed(trace_handle, &gemini_response_to_trace(response))
+        .await;
+}
+
+async fn fail_aggregated_trace(
+    trace_config: Option<&ModelExchangeTraceConfig>,
+    trace_handle: Option<&ModelExchangeRequestTraceHandle>,
+    error: &str,
+) {
+    let Some(trace_config) = trace_config else {
+        return;
+    };
+
+    trace_config
+        .sink
+        .request_attempt_failed(trace_handle, error)
+        .await;
+}
+
+fn gemini_response_to_trace(response: &GeminiResponse) -> ModelExchangeResponseTrace {
+    ModelExchangeResponseTrace {
+        kind: "completed".to_string(),
+        assistant_text: Some(response.text.clone()),
+        thinking: response.reasoning_content.clone(),
+        tool_calls: response
+            .tool_calls
+            .as_ref()
+            .and_then(|tool_calls| serde_json::to_value(tool_calls).ok()),
+        usage: response
+            .usage
+            .as_ref()
+            .and_then(|usage| serde_json::to_value(usage).ok()),
+        provider_metadata: response.provider_metadata.clone(),
+        partial_recovery_reason: None,
+        error: None,
+    }
 }
 
 #[cfg(test)]

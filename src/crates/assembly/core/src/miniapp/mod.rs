@@ -15,7 +15,9 @@ pub use bitfun_product_domains::miniapp::customization::{
     MiniAppCustomizationOriginKind, MiniAppDeclinedBuiltinUpdate, MiniAppPermissionDiff,
 };
 pub use bitfun_product_domains::miniapp::draft::{MiniAppDraft, MiniAppDraftManifest};
-pub use bitfun_product_domains::miniapp::{bridge_builder, permission_policy, types};
+pub use bitfun_product_domains::miniapp::{
+    agent_bridge, ai_bridge, bridge_builder, permission_policy, rate_limit, types,
+};
 
 pub use builtin::{seed_builtin_miniapps, BuiltinApp, BUILTIN_APPS};
 pub use exporter::{ExportCheckResult, ExportOptions, ExportResult, ExportTarget, MiniAppExporter};
@@ -29,7 +31,7 @@ pub use permission_policy::resolve_policy;
 pub use runtime_detect::{DetectedRuntime, RuntimeKind};
 pub use storage::MiniAppStorage;
 pub use types::{
-    AiPermissions, EsmDep, FsPermissions, MiniApp, MiniAppAiContext, MiniAppMeta,
+    AgentPermissions, AiPermissions, EsmDep, FsPermissions, MiniApp, MiniAppAiContext, MiniAppMeta,
     MiniAppPermissions, MiniAppSource, NetPermissions, NodePermissions, NpmDep, PathScope,
     ShellPermissions,
 };

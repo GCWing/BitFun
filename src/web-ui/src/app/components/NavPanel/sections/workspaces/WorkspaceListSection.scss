@@ -470,7 +470,7 @@
 
     svg {
       flex-shrink: 0;
-      color: var(--color-success, #22c55e);
+      color: var(--color-success);
     }
 
     span {
@@ -487,21 +487,21 @@
     border-radius: 50%;
 
     &.is-connected {
-      background: var(--color-success, #22c55e);
+      background: var(--color-success);
     }
 
     &.is-unknown,
     &.is-error,
     &.is-disconnected {
-      background: var(--color-error, #ef4444);
+      background: var(--color-error);
     }
 
     &.is-unknown {
-      background: var(--color-text-tertiary, #94a3b8);
+      background: var(--color-text-tertiary);
     }
 
     &.is-connecting {
-      background: var(--color-warning, #f59e0b);
+      background: var(--color-warning);
       animation: bitfun-status-dot-pulse 1.4s ease-in-out infinite;
     }
   }
@@ -526,11 +526,11 @@
     }
 
     &.is-green {
-      background: var(--color-success, #36c275);
+      background: var(--color-success);
     }
 
     &.is-yellow {
-      background: var(--color-warning, #e8b54b);
+      background: var(--color-warning);
     }
 
     &.is-gray {
@@ -538,7 +538,7 @@
     }
 
     &.is-red {
-      background: var(--color-error, #e05d5d);
+      background: var(--color-error);
     }
   }
 
@@ -560,15 +560,15 @@
     color: var(--color-text-primary);
 
     &.is-green {
-      --bitfun-index-tone: var(--color-success, #36c275);
+      --bitfun-index-tone: var(--color-success);
     }
 
     &.is-yellow {
-      --bitfun-index-tone: var(--color-warning, #e8b54b);
+      --bitfun-index-tone: var(--color-warning);
     }
 
     &.is-red {
-      --bitfun-index-tone: var(--color-error, #e05d5d);
+      --bitfun-index-tone: var(--color-error);
     }
   }
 
@@ -599,11 +599,11 @@
       0 0 10px color-mix(in srgb, var(--bitfun-index-tone) 26%, transparent);
 
     &.is-green {
-      --bitfun-index-tone: var(--color-success, #36c275);
+      --bitfun-index-tone: var(--color-success);
     }
 
     &.is-yellow {
-      --bitfun-index-tone: var(--color-warning, #e8b54b);
+      --bitfun-index-tone: var(--color-warning);
     }
 
     &.is-gray {
@@ -611,7 +611,7 @@
     }
 
     &.is-red {
-      --bitfun-index-tone: var(--color-error, #e05d5d);
+      --bitfun-index-tone: var(--color-error);
     }
   }
 
@@ -644,11 +644,11 @@
     color: color-mix(in srgb, var(--bitfun-index-tone) 78%, var(--color-text-primary));
 
     &.is-green {
-      --bitfun-index-tone: var(--color-success, #36c275);
+      --bitfun-index-tone: var(--color-success);
     }
 
     &.is-yellow {
-      --bitfun-index-tone: var(--color-warning, #e8b54b);
+      --bitfun-index-tone: var(--color-warning);
     }
 
     &.is-gray {
@@ -656,7 +656,7 @@
     }
 
     &.is-red {
-      --bitfun-index-tone: var(--color-error, #e05d5d);
+      --bitfun-index-tone: var(--color-error);
     }
   }
 
@@ -722,19 +722,19 @@
     box-shadow: 0 0 12px color-mix(in srgb, var(--bitfun-index-tone) 28%, transparent);
 
     &.is-green {
-      --bitfun-index-tone: var(--color-success, #36c275);
+      --bitfun-index-tone: var(--color-success);
       background: linear-gradient(
         90deg,
-        color-mix(in srgb, var(--bitfun-index-tone) 82%, #fff 18%),
+        color-mix(in srgb, var(--bitfun-index-tone) 82%, var(--color-static-white) 18%),
         var(--bitfun-index-tone)
       );
     }
 
     &.is-yellow {
-      --bitfun-index-tone: var(--color-warning, #e8b54b);
+      --bitfun-index-tone: var(--color-warning);
       background: linear-gradient(
         90deg,
-        color-mix(in srgb, var(--bitfun-index-tone) 84%, #fff 16%),
+        color-mix(in srgb, var(--bitfun-index-tone) 84%, var(--color-static-white) 16%),
         var(--bitfun-index-tone)
       );
     }
@@ -743,16 +743,16 @@
       --bitfun-index-tone: color-mix(in srgb, var(--color-text-muted) 75%, var(--element-bg-medium));
       background: linear-gradient(
         90deg,
-        color-mix(in srgb, var(--bitfun-index-tone) 88%, #fff 12%),
+        color-mix(in srgb, var(--bitfun-index-tone) 88%, var(--color-static-white) 12%),
         var(--bitfun-index-tone)
       );
     }
 
     &.is-red {
-      --bitfun-index-tone: var(--color-error, #e05d5d);
+      --bitfun-index-tone: var(--color-error);
       background: linear-gradient(
         90deg,
-        color-mix(in srgb, var(--bitfun-index-tone) 84%, #fff 16%),
+        color-mix(in srgb, var(--bitfun-index-tone) 84%, var(--color-static-white) 16%),
         var(--bitfun-index-tone)
       );
     }
@@ -772,16 +772,16 @@
     color: var(--color-text-secondary);
 
     &.is-warning {
-      color: color-mix(in srgb, var(--color-warning, #e8b54b) 84%, var(--color-text-primary));
-      border-color: color-mix(in srgb, var(--color-warning, #e8b54b) 18%, transparent);
-      background: color-mix(in srgb, var(--color-warning, #e8b54b) 10%, transparent);
+      color: color-mix(in srgb, var(--color-warning) 84%, var(--color-text-primary));
+      border-color: color-mix(in srgb, var(--color-warning) 18%, transparent);
+      background: color-mix(in srgb, var(--color-warning) 10%, transparent);
     }
   }
 
   &__workspace-index-tooltip-error {
-    color: color-mix(in srgb, var(--color-error, #e05d5d) 88%, var(--color-text-primary));
-    border-color: color-mix(in srgb, var(--color-error, #e05d5d) 22%, transparent);
-    background: color-mix(in srgb, var(--color-error, #e05d5d) 11%, transparent);
+    color: color-mix(in srgb, var(--color-error) 88%, var(--color-text-primary));
+    border-color: color-mix(in srgb, var(--color-error) 22%, transparent);
+    background: color-mix(in srgb, var(--color-error) 11%, transparent);
   }
 
   &__workspace-index-tooltip-actions {
@@ -889,9 +889,9 @@
     overflow-y: auto;
     padding: $size-gap-1 0;
     border-radius: $size-radius-base;
-    background: var(--color-bg-elevated, #1e1e22);
-    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--border-subtle);
+    box-shadow: 0 4px 12px var(--color-overlay-black-25);
     z-index: 10000;
     transform-origin: top left;
     animation: bitfun-footer-menu-in $motion-fast $easing-decelerate forwards;
@@ -901,7 +901,7 @@
   &__workspace-item-menu-divider {
     height: 1px;
     margin: $size-gap-1 $size-gap-2;
-    background: var(--border-subtle, rgba(255, 255, 255, 0.08));
+    background: var(--border-subtle);
   }
 
   &__workspace-item-menu-item {
@@ -948,8 +948,8 @@
     }
 
     &.is-danger:hover:not(:disabled) {
-      color: var(--color-error, #ef4444);
-      background: color-mix(in srgb, var(--color-error, #ef4444) 10%, transparent);
+      color: var(--color-error);
+      background: color-mix(in srgb, var(--color-error) 10%, transparent);
     }
   }
 

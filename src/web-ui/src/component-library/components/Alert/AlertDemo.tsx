@@ -15,16 +15,16 @@ export const AlertDemo: React.FC = () => {
   return (
     <div style={{ padding: '32px', maxWidth: '800px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <div>
-        <h2 style={{ color: '#e8e8e8', fontSize: '16px', fontWeight: '500', marginBottom: '4px' }}>
+        <h2 style={{ color: 'var(--color-text-primary)', fontSize: '16px', fontWeight: '500', marginBottom: '4px' }}>
           {t('componentLibrary.alertDemo.title')}
         </h2>
-        <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '13px' }}>
+        <p style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '13px' }}>
           {t('componentLibrary.alertDemo.subtitle')}
         </p>
       </div>
 
       <section>
-        <h3 style={{ color: 'rgba(255,255,255,0.6)', fontSize: '13px', fontWeight: '500', marginBottom: '12px' }}>
+        <h3 style={{ color: 'var(--color-overlay-white-60)', fontSize: '13px', fontWeight: '500', marginBottom: '12px' }}>
           {t('componentLibrary.alertDemo.sections.basic')}
         </h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -48,7 +48,7 @@ export const AlertDemo: React.FC = () => {
       </section>
 
       <section>
-        <h3 style={{ color: 'rgba(255,255,255,0.6)', fontSize: '13px', fontWeight: '500', marginBottom: '12px' }}>
+        <h3 style={{ color: 'var(--color-overlay-white-60)', fontSize: '13px', fontWeight: '500', marginBottom: '12px' }}>
           {t('componentLibrary.alertDemo.sections.withTitle')}
         </h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -66,7 +66,7 @@ export const AlertDemo: React.FC = () => {
       </section>
 
       <section>
-        <h3 style={{ color: 'rgba(255,255,255,0.6)', fontSize: '13px', fontWeight: '500', marginBottom: '12px' }}>
+        <h3 style={{ color: 'var(--color-overlay-white-60)', fontSize: '13px', fontWeight: '500', marginBottom: '12px' }}>
           {t('componentLibrary.alertDemo.sections.withDescription')}
         </h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -86,7 +86,7 @@ export const AlertDemo: React.FC = () => {
       </section>
 
       <section>
-        <h3 style={{ color: 'rgba(255,255,255,0.6)', fontSize: '13px', fontWeight: '500', marginBottom: '12px' }}>
+        <h3 style={{ color: 'var(--color-overlay-white-60)', fontSize: '13px', fontWeight: '500', marginBottom: '12px' }}>
           {t('componentLibrary.alertDemo.sections.closable')}
         </h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -106,7 +106,7 @@ export const AlertDemo: React.FC = () => {
       </section>
 
       <section>
-        <h3 style={{ color: 'rgba(255,255,255,0.6)', fontSize: '13px', fontWeight: '500', marginBottom: '12px' }}>
+        <h3 style={{ color: 'var(--color-overlay-white-60)', fontSize: '13px', fontWeight: '500', marginBottom: '12px' }}>
           {t('componentLibrary.alertDemo.sections.noIcon')}
         </h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>

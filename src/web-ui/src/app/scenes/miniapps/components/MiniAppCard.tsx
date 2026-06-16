@@ -60,7 +60,7 @@ const MiniAppCard: React.FC<MiniAppCardProps> = ({
         .filter(Boolean)
         .join(' ')}
       style={{
-        '--card-index': index,
+        '--surface-stagger-index': index,
         '--miniapp-card-gradient': isRunning
           ? 'linear-gradient(135deg, rgba(52, 211, 153, 0.28) 0%, rgba(16, 185, 129, 0.18) 100%)'
           : 'linear-gradient(135deg, rgba(59, 130, 246, 0.28) 0%, rgba(139, 92, 246, 0.18) 100%)',

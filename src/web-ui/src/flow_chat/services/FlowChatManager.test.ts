@@ -4,6 +4,10 @@ import { FlowChatManager } from './FlowChatManager';
 const storeMocks = vi.hoisted(() => ({
   store: {} as any,
   initializeEventListeners: vi.fn(),
+  eventBatchers: [] as Array<{
+    flushNow: ReturnType<typeof vi.fn>;
+    destroy: ReturnType<typeof vi.fn>;
+  }>,
 }));
 
 vi.mock('./ProcessingStatusManager', () => ({
@@ -32,7 +36,12 @@ vi.mock('../state-machine', () => ({
 
 vi.mock('./EventBatcher', () => ({
   EventBatcher: class {
-    constructor(private readonly options: { onFlush: (events: Array<{ key: string; payload: unknown }>) => void }) {}
+    public flushNow = vi.fn();
+    public destroy = vi.fn();
+
+    constructor(private readonly options: { onFlush: (events: Array<{ key: string; payload: unknown }>) => void }) {
+      storeMocks.eventBatchers.push(this);
+    }
 
     flush(events: Array<{ key: string; payload: unknown }>): void {
       this.options.onFlush(events);
@@ -104,7 +113,68 @@ describe('FlowChatManager initialization', () => {
   beforeEach(() => {
     (FlowChatManager as any).instance = undefined;
     vi.clearAllMocks();
+    storeMocks.eventBatchers.length = 0;
     storeMocks.initializeEventListeners.mockResolvedValue(() => {});
+  });
+
+  it('flushes and destroys the batcher when the singleton is disposed', () => {
+    storeMocks.store = {};
+
+    const manager = FlowChatManager.getInstance();
+    const batcher = storeMocks.eventBatchers[0];
+
+    FlowChatManager.disposeInstance();
+
+    expect(batcher.flushNow).toHaveBeenCalledTimes(1);
+    expect(batcher.destroy).toHaveBeenCalledTimes(1);
+    expect(batcher.flushNow.mock.invocationCallOrder[0]).toBeLessThan(
+      batcher.destroy.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('runs listener cleanup if disposal wins the initialization race', async () => {
+    storeMocks.store = {};
+    const listenerInitialization = createDeferred<() => void>();
+    const cleanup = vi.fn();
+    storeMocks.initializeEventListeners.mockReturnValue(listenerInitialization.promise);
+
+    const manager = FlowChatManager.getInstance();
+    const initializeListeners = (manager as any).initializeEventListeners();
+
+    await flushAsyncWork();
+    manager.destroy();
+    expect(cleanup).not.toHaveBeenCalled();
+
+    listenerInitialization.resolve(cleanup);
+    await initializeListeners;
+
+    expect(cleanup).toHaveBeenCalledTimes(1);
+    expect((manager as any).eventListenerInitialized).toBe(false);
+    expect((manager as any).eventListenerCleanup).toBeNull();
+  });
+
+  it('stops workspace initialization if the manager is disposed while listeners initialize', async () => {
+    const listenerInitialization = createDeferred<() => void>();
+    storeMocks.initializeEventListeners.mockReturnValue(listenerInitialization.promise);
+    storeMocks.store = {
+      registerPersistUnreadCompletionCallback: vi.fn(),
+      loadSessionMetadataPage: vi.fn(async () => ({
+        sessions: [],
+        totalTopLevelCount: 0,
+        hasMore: false,
+      })),
+    };
+
+    const manager = FlowChatManager.getInstance();
+    const initialize = manager.initialize('D:/workspace/BitFun');
+
+    await flushAsyncWork();
+    manager.destroy();
+    listenerInitialization.resolve(vi.fn());
+
+    await expect(initialize).resolves.toBe(false);
+    expect(storeMocks.store.registerPersistUnreadCompletionCallback).not.toHaveBeenCalled();
+    expect(storeMocks.store.loadSessionMetadataPage).not.toHaveBeenCalled();
   });
 
   it('reuses concurrent initialization for the same workspace history restore', async () => {

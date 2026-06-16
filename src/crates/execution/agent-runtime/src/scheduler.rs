@@ -5,12 +5,11 @@ use crate::thread_goal::{build_objective_updated_plan, build_thread_goal_continu
 use bitfun_runtime_ports::{
     should_skip_agent_session_reply, should_suppress_agent_session_cancelled_reply,
     AgentSessionReplyRoute, DialogQueuePriority, DialogRoundInjectionSource,
-    DialogRoundPreemptSource, DialogSessionStateFact, DialogSteerOutcome, DialogSubmissionPolicy,
-    DialogTriggerSource, RoundInjection, RoundInjectionKind, RoundInjectionTarget, ThreadGoal,
+    DialogSessionStateFact, DialogSteerOutcome, DialogSubmissionPolicy, DialogTriggerSource,
+    RoundInjection, RoundInjectionKind, RoundInjectionTarget, ThreadGoal,
 };
 use std::collections::VecDeque;
 use std::fmt;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::SystemTime;
 
@@ -428,53 +427,6 @@ pub fn build_thread_goal_objective_updated_delivery_plan(
 }
 
 /// Used when no scheduler is wired (e.g. tests, isolated execution).
-pub struct NoopDialogRoundPreemptSource;
-
-impl DialogRoundPreemptSource for NoopDialogRoundPreemptSource {
-    fn should_yield_after_round(&self, _session_id: &str) -> bool {
-        false
-    }
-
-    fn clear_yield_after_round(&self, _session_id: &str) {}
-}
-
-/// Shared flag storage keyed by session; scheduler sets, engine reads and clears.
-#[derive(Debug, Default)]
-pub struct SessionRoundYieldFlags {
-    inner: dashmap::DashMap<String, Arc<AtomicBool>>,
-}
-
-impl SessionRoundYieldFlags {
-    pub fn request_yield(&self, session_id: &str) {
-        self.inner
-            .entry(session_id.to_string())
-            .or_insert_with(|| Arc::new(AtomicBool::new(false)))
-            .store(true, Ordering::SeqCst);
-    }
-
-    pub fn should_yield(&self, session_id: &str) -> bool {
-        self.inner
-            .get(session_id)
-            .map(|r| r.value().load(Ordering::SeqCst))
-            .unwrap_or(false)
-    }
-
-    pub fn clear(&self, session_id: &str) {
-        self.inner.remove(session_id);
-    }
-}
-
-impl DialogRoundPreemptSource for SessionRoundYieldFlags {
-    fn should_yield_after_round(&self, session_id: &str) -> bool {
-        self.should_yield(session_id)
-    }
-
-    fn clear_yield_after_round(&self, session_id: &str) {
-        self.clear(session_id);
-    }
-}
-
-/// Used when no scheduler is wired (e.g. tests, isolated execution).
 pub struct NoopDialogRoundInjectionSource;
 
 impl DialogRoundInjectionSource for NoopDialogRoundInjectionSource {
@@ -731,7 +683,6 @@ pub enum GoalContinuationAfterTurnAction {
 pub struct TurnOutcomeLifecyclePlan {
     pub status: TurnOutcomeStatus,
     pub queue_action: TurnOutcomeQueueAction,
-    pub clear_round_yield: bool,
     pub drain_finished_turn_injections: bool,
     pub goal_continuation: GoalContinuationAfterTurnAction,
 }
@@ -768,7 +719,6 @@ pub fn resolve_turn_outcome_lifecycle_plan(
     TurnOutcomeLifecyclePlan {
         status,
         queue_action: outcome.queue_action(),
-        clear_round_yield: true,
         drain_finished_turn_injections: true,
         goal_continuation,
     }
@@ -859,7 +809,6 @@ mod tests {
 
         assert_eq!(plan.status, TurnOutcomeStatus::Completed);
         assert_eq!(plan.queue_action, TurnOutcomeQueueAction::DispatchNext);
-        assert!(plan.clear_round_yield);
         assert!(plan.drain_finished_turn_injections);
         assert_eq!(
             plan.goal_continuation,

@@ -31,13 +31,13 @@
 
 .search-card--compact.search-card--grep {
   .search-card__icon {
-    color: #8b5cf6;
+    color: var(--color-purple-500);
   }
 }
 
 .search-card--compact.search-card--glob {
   .search-card__icon {
-    color: #06b6d4;
+    color: var(--tool-card-file-search-color);
   }
 }
 

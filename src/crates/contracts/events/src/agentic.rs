@@ -149,6 +149,9 @@ pub enum AgenticEvent {
         /// Why the turn finished.
         #[serde(skip_serializing_if = "Option::is_none")]
         finish_reason: Option<String>,
+        /// Whether the turn produced a user-visible final response.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        has_final_response: Option<bool>,
     },
 
     DialogTurnCancelled {
@@ -222,6 +225,8 @@ pub enum AgenticEvent {
         session_id: String,
         turn_id: String,
         round_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        round_group_id: Option<String>,
         round_index: usize,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         model_id: Option<String>,
@@ -258,6 +263,10 @@ pub enum AgenticEvent {
         session_id: String,
         turn_id: String,
         round_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        attempt_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        attempt_index: Option<u32>,
         text: String,
     },
 
@@ -265,6 +274,10 @@ pub enum AgenticEvent {
         session_id: String,
         turn_id: String,
         round_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        attempt_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        attempt_index: Option<u32>,
         content: String,
         #[serde(default)]
         is_end: bool,
@@ -274,6 +287,10 @@ pub enum AgenticEvent {
         session_id: String,
         turn_id: String,
         round_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        attempt_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        attempt_index: Option<u32>,
         tool_event: ToolEventData,
     },
 

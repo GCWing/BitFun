@@ -22,9 +22,7 @@ use crate::agentic::deep_review_policy::{
     DeepReviewCapacityQueueDecision, DeepReviewCapacityQueueReason, DeepReviewConcurrencyPolicy,
     DeepReviewExecutionPolicy, DeepReviewPolicyViolation, DeepReviewSubagentRole,
 };
-use crate::agentic::events::{
-    DeepReviewQueueReason, DeepReviewQueueState, DeepReviewQueueStatus, ErrorCategory,
-};
+use crate::agentic::events::{DeepReviewQueueStatus, ErrorCategory};
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_agent_runtime::deep_review::task_execution as runtime_task_execution;
 pub(crate) use bitfun_agent_runtime::deep_review::task_execution::{
@@ -140,29 +138,6 @@ pub(crate) fn deep_review_cancelled_reviewer_result(
     )
 }
 
-pub(crate) fn queue_reason_to_event_reason(
-    reason: DeepReviewCapacityQueueReason,
-) -> DeepReviewQueueReason {
-    match reason {
-        DeepReviewCapacityQueueReason::ProviderRateLimit => {
-            DeepReviewQueueReason::ProviderRateLimit
-        }
-        DeepReviewCapacityQueueReason::ProviderConcurrencyLimit => {
-            DeepReviewQueueReason::ProviderConcurrencyLimit
-        }
-        DeepReviewCapacityQueueReason::RetryAfter => DeepReviewQueueReason::RetryAfter,
-        DeepReviewCapacityQueueReason::LocalConcurrencyCap => {
-            DeepReviewQueueReason::LocalConcurrencyCap
-        }
-        DeepReviewCapacityQueueReason::LaunchBatchBlocked => {
-            DeepReviewQueueReason::LaunchBatchBlocked
-        }
-        DeepReviewCapacityQueueReason::TemporaryOverload => {
-            DeepReviewQueueReason::TemporaryOverload
-        }
-    }
-}
-
 pub(crate) fn capacity_decision_for_provider_error(
     error: &BitFunError,
 ) -> DeepReviewCapacityQueueDecision {
@@ -258,27 +233,23 @@ pub(crate) async fn emit_queue_state(
     queue_elapsed_ms: u64,
     max_queue_wait_seconds: u64,
 ) {
-    let run_elapsed_ms = matches!(&status, DeepReviewQueueStatus::Running).then_some(0);
     if let Some(coordinator) = get_global_coordinator() {
+        let queue_state = runtime_task_execution::deep_review_queue_state(
+            runtime_task_execution::DeepReviewQueueStateInput {
+                tool_id,
+                subagent_type,
+                status,
+                reason,
+                queued_reviewer_count,
+                active_reviewer_count,
+                optional_reviewer_count,
+                effective_parallel_instances,
+                queue_elapsed_ms,
+                max_queue_wait_seconds,
+            },
+        );
         coordinator
-            .emit_deep_review_queue_state_changed(
-                session_id,
-                dialog_turn_id,
-                DeepReviewQueueState {
-                    tool_id: tool_id.to_string(),
-                    subagent_type: subagent_type.to_string(),
-                    status,
-                    reason: reason.map(queue_reason_to_event_reason),
-                    queued_reviewer_count,
-                    active_reviewer_count: Some(active_reviewer_count),
-                    effective_parallel_instances,
-                    optional_reviewer_count,
-                    queue_elapsed_ms: Some(queue_elapsed_ms),
-                    run_elapsed_ms,
-                    max_queue_wait_seconds: Some(max_queue_wait_seconds),
-                    session_concurrency_high: false,
-                },
-            )
+            .emit_deep_review_queue_state_changed(session_id, dialog_turn_id, queue_state)
             .await;
     }
 }

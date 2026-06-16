@@ -1,5 +1,6 @@
 import type {
   DialogTurn,
+  AnyFlowItem,
   FlowTextItem,
   FlowThinkingItem,
   FlowToolItem,
@@ -13,6 +14,11 @@ const TRANSIENT_TOOL_STATUSES = new Set(['pending', 'preparing', 'streaming', 'r
 const TERMINAL_TOOL_STATUSES = new Set(['completed', 'cancelled', 'error', 'pending_confirmation', 'confirmed']);
 const TERMINAL_ITEM_STATUSES = new Set(['completed', 'cancelled', 'error']);
 const STABLE_ITEM_STATUSES = new Set(['completed', 'cancelled', 'error', 'pending_confirmation', 'confirmed']);
+
+type SettleInterruptedDialogTurnOptions = {
+  preservePendingConfirmation?: boolean;
+  interruptionReason?: FlowToolItem['interruptionReason'];
+};
 
 export function isTransientToolStatus(status: unknown): boolean {
   return typeof status === 'string' && TRANSIENT_TOOL_STATUSES.has(status);
@@ -140,13 +146,62 @@ export function normalizeRecoveredToolStatus(
   return 'cancelled';
 }
 
+function settleInterruptedItem(
+  item: AnyFlowItem,
+  finalTurnStatus: DialogTurn['status'],
+  settledAt: number,
+  options?: SettleInterruptedDialogTurnOptions,
+): AnyFlowItem {
+  if (item.type === 'text') {
+    const nextStatus = TERMINAL_ITEM_STATUSES.has(item.status)
+      ? item.status
+      : normalizeRecoveredTextStatus(item.status, finalTurnStatus);
+    return {
+      ...item,
+      status: nextStatus,
+      isStreaming: false,
+    };
+  }
+
+  if (item.type === 'thinking') {
+    const nextStatus = TERMINAL_ITEM_STATUSES.has(item.status)
+      ? item.status
+      : normalizeRecoveredThinkingStatus(item.status, finalTurnStatus);
+    return {
+      ...item,
+      status: nextStatus,
+      isStreaming: false,
+      isCollapsed: true,
+    };
+  }
+
+  if (item.type === 'tool') {
+    const wasTransient = isTransientToolStatus(item.status);
+    const nextStatus = normalizeRecoveredToolStatus(
+      item.status,
+      finalTurnStatus,
+      item.toolResult,
+      options,
+    );
+    return {
+      ...item,
+      status: nextStatus,
+      interruptionReason:
+        options?.interruptionReason === 'app_restart' && wasTransient && nextStatus === 'cancelled'
+          ? 'app_restart'
+          : item.interruptionReason,
+      isParamsStreaming: false,
+      endTime: item.endTime ?? settledAt,
+    };
+  }
+
+  return item;
+}
+
 export function settleInterruptedDialogTurn(
   dialogTurn: DialogTurn,
   settledAt: number,
-  options?: {
-    preservePendingConfirmation?: boolean;
-    interruptionReason?: FlowToolItem['interruptionReason'];
-  },
+  options?: SettleInterruptedDialogTurnOptions,
 ): DialogTurn {
   const finalTurnStatus = normalizeRecoveredTurnStatus(dialogTurn.status, dialogTurn);
 
@@ -160,12 +215,21 @@ export function settleInterruptedDialogTurn(
     return dialogTurn;
   }
 
-  return {
+  const settledTurn = {
     ...dialogTurn,
     status: finalTurnStatus,
     endTime: dialogTurn.endTime ?? settledAt,
     modelRounds: dialogTurn.modelRounds.map(round => {
       const finalRoundStatus = normalizeRecoveredRoundStatus(round.status, finalTurnStatus);
+      const nextItems = round.items.map(item =>
+        settleInterruptedItem(item, finalTurnStatus, settledAt, options),
+      );
+      const nextAttempts = round.attempts?.map(attempt => ({
+        ...attempt,
+        items: attempt.items.map(item =>
+          settleInterruptedItem(item, finalTurnStatus, settledAt, options),
+        ),
+      }));
 
       return {
         ...round,
@@ -173,53 +237,11 @@ export function settleInterruptedDialogTurn(
         isStreaming: false,
         isComplete: true,
         endTime: round.endTime ?? settledAt,
-        items: round.items.map(item => {
-          if (item.type === 'text') {
-            const nextStatus = TERMINAL_ITEM_STATUSES.has(item.status)
-              ? item.status
-              : normalizeRecoveredTextStatus(item.status, finalTurnStatus);
-            return {
-              ...item,
-              status: nextStatus,
-              isStreaming: false,
-            };
-          }
-
-          if (item.type === 'thinking') {
-            const nextStatus = TERMINAL_ITEM_STATUSES.has(item.status)
-              ? item.status
-              : normalizeRecoveredThinkingStatus(item.status, finalTurnStatus);
-            return {
-              ...item,
-              status: nextStatus,
-              isStreaming: false,
-              isCollapsed: true,
-            };
-          }
-
-          if (item.type === 'tool') {
-            const wasTransient = isTransientToolStatus(item.status);
-            const nextStatus = normalizeRecoveredToolStatus(
-              item.status,
-              finalTurnStatus,
-              item.toolResult,
-              options,
-            );
-            return {
-              ...item,
-              status: nextStatus,
-              interruptionReason:
-                options?.interruptionReason === 'app_restart' && wasTransient && nextStatus === 'cancelled'
-                  ? 'app_restart'
-                  : item.interruptionReason,
-              isParamsStreaming: false,
-              endTime: item.endTime ?? settledAt,
-            };
-          }
-
-          return item;
-        }),
+        items: nextItems,
+        attempts: nextAttempts,
       };
     }),
   };
+
+  return settledTurn;
 }

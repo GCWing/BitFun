@@ -7,13 +7,13 @@
   align-items: center;
   gap: 6px;
   padding: 4px 12px;
-  font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+  font-size: var(--tool-card-action-font-size);
   font-weight: 500;
-  line-height: var(--flowchat-support-line-height, 1.45);
+  line-height: var(--flowchat-support-line-height);
   border-radius: 6px;
-  border: 1px solid var(--color-border, #e5e7eb);
-  background: var(--color-bg-elevated, #ffffff);
-  color: var(--color-text-secondary, #6b7280);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-secondary);
   cursor: pointer;
   transition: all 0.2s ease;
   white-space: nowrap;
@@ -23,16 +23,16 @@
   }
   
   &:hover:not(:disabled) {
-    border-color: var(--color-primary, #3b82f6);
-    background: var(--color-primary-bg, rgba(59, 130, 246, 0.1));
-    color: var(--color-primary, #3b82f6);
+    border-color: var(--color-primary);
+    background: var(--color-primary-bg);
+    color: var(--color-primary);
     transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 4px var(--color-overlay-black-10);
   }
   
   &:active:not(:disabled) {
     transform: translateY(0);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 1px 2px var(--color-overlay-black-10);
   }
   
   &:disabled {
@@ -42,17 +42,17 @@
   
   // Loading state
   &--loading {
-    border-color: var(--color-primary, #3b82f6);
-    background: var(--color-primary-bg, rgba(59, 130, 246, 0.1));
-    color: var(--color-primary, #3b82f6);
+    border-color: var(--color-primary);
+    background: var(--color-primary-bg);
+    color: var(--color-primary);
     cursor: wait;
   }
   
   // Success state
   &--success {
-    border-color: var(--color-success, #22c55e);
-    background: var(--color-success-bg, rgba(34, 197, 94, 0.1));
-    color: var(--color-success, #22c55e);
+    border-color: var(--color-success);
+    background: var(--color-success-bg);
+    color: var(--color-success);
     cursor: default;
     
     &:hover {
@@ -63,9 +63,9 @@
   
   // Error state
   &--error {
-    border-color: var(--color-error, #ef4444);
-    background: var(--color-error-bg, rgba(239, 68, 68, 0.1));
-    color: var(--color-error, #ef4444);
+    border-color: var(--color-error);
+    background: var(--color-error-bg);
+    color: var(--color-error);
     cursor: default;
     
     &:hover {
@@ -76,9 +76,9 @@
   
   // Current turn marker
   &--current {
-    border-color: var(--color-success, #22c55e);
-    background: var(--color-success-bg, rgba(34, 197, 94, 0.1));
-    color: var(--color-success, #22c55e);
+    border-color: var(--color-success);
+    background: var(--color-success-bg);
+    color: var(--color-success);
     cursor: default;
     font-weight: 600;
     
@@ -109,11 +109,9 @@
     --color-border: #374151;
     --color-bg-elevated: #1f2937;
     --color-text-secondary: #9ca3af;
-    --color-primary: #60a5fa;
-    --color-primary-bg: rgba(96, 165, 250, 0.1);
-    --color-success: #34d399;
-    --color-success-bg: rgba(52, 211, 153, 0.1);
-    --color-error: #f87171;
+    --color-primary: var(--color-accent-500);
+    --color-primary-bg: var(--card-bg-accent);
+    --color-error: var(--color-error-soft);
     --color-error-bg: rgba(248, 113, 113, 0.1);
   }
 }

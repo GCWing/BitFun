@@ -11,11 +11,13 @@ use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::persistence::PersistenceManager;
 use crate::agentic::session::session_store_port::CoreSessionStorePort;
 use crate::agentic::session::{
-    CachedSystemPrompt, CachedUserContext, EvidenceLedgerCheckpoint, EvidenceLedgerEvent,
-    EvidenceLedgerEventStatus, EvidenceLedgerSummary, EvidenceLedgerTargetKind, FileReadState,
-    FileReadStateStore, PromptCacheLookup, PromptCachePolicy, PromptCacheScope,
-    SessionContextStore, SessionEvidenceLedger, SessionPromptCache, SessionPromptCacheStore,
-    SystemPromptCacheIdentity, TurnSkillAgentSnapshotStore, UserContextCacheIdentity,
+    prompt_cache_persist_action, reconcile_prompt_cache_restore, CachedSystemPrompt,
+    CachedUserContext, EvidenceLedgerCheckpoint, EvidenceLedgerEvent, EvidenceLedgerEventStatus,
+    EvidenceLedgerSummary, EvidenceLedgerTargetKind, FileReadState, FileReadStateStore,
+    PromptCacheLookup, PromptCachePersistenceWriteAction, PromptCachePolicy,
+    PromptCacheRestoreDecision, PromptCacheScope, SessionContextStore, SessionEvidenceLedger,
+    SessionPromptCache, SessionPromptCacheStore, SystemPromptCacheIdentity,
+    TurnSkillAgentSnapshotStore, UserContextCacheIdentity,
 };
 use crate::agentic::skill_agent_snapshot::TurnSkillAgentSnapshot;
 use crate::infrastructure::ai::get_global_ai_client_factory;
@@ -25,7 +27,7 @@ use crate::service::config::{
 };
 use crate::service::session::{
     DialogTurnData, DialogTurnKind, ModelRoundData, SessionMetadata, SessionRelationship,
-    SessionRelationshipKind, TextItemData, TurnStatus, UserMessageData,
+    TextItemData, TurnStatus, UserMessageData,
 };
 use crate::service::snapshot::ensure_snapshot_manager_for_workspace;
 use crate::service::workspace::get_global_workspace_service;
@@ -36,10 +38,15 @@ pub use bitfun_runtime_ports::SessionViewRestoreTiming;
 use bitfun_runtime_ports::{
     SessionStoragePathRequest, SessionStorePort, SessionViewRestoreRequest,
 };
+use bitfun_services_core::session::{
+    apply_session_lineage, collect_hidden_subagent_cascade as collect_hidden_subagent_cascade_ids,
+    merge_session_custom_metadata as merge_session_custom_metadata_value,
+    set_deep_review_run_manifest, set_session_relationship,
+};
 use dashmap::DashMap;
 use log::{debug, error, info, warn};
 use serde_json::json;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
@@ -727,7 +734,7 @@ impl SessionManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<Option<SessionPromptCache>> {
-        let mut cache = match self
+        let cache = match self
             .persistence_manager
             .load_prompt_cache(workspace_path, session_id)
             .await?
@@ -736,24 +743,22 @@ impl SessionManager {
             None => return Ok(None),
         };
 
-        let expired_entries_removed =
-            cache.apply_persistence_ttl(self.config.prompt_cache_policy.persistence_ttl);
-
-        if !expired_entries_removed {
-            return Ok(Some(cache));
+        let decision =
+            reconcile_prompt_cache_restore(cache, self.config.prompt_cache_policy.persistence_ttl);
+        match &decision {
+            PromptCacheRestoreDecision::DeleteExpired => {
+                self.persistence_manager
+                    .delete_prompt_cache(workspace_path, session_id)
+                    .await?;
+            }
+            PromptCacheRestoreDecision::SavePruned(cache) => {
+                self.persistence_manager
+                    .save_prompt_cache(workspace_path, session_id, cache)
+                    .await?;
+            }
+            PromptCacheRestoreDecision::Keep(_) => {}
         }
-
-        if cache.is_empty() {
-            self.persistence_manager
-                .delete_prompt_cache(workspace_path, session_id)
-                .await?;
-            Ok(None)
-        } else {
-            self.persistence_manager
-                .save_prompt_cache(workspace_path, session_id, &cache)
-                .await?;
-            Ok(Some(cache))
-        }
+        Ok(decision.into_cache())
     }
 
     async fn persist_prompt_cache_best_effort(&self, session_id: &str, reason: &str) {
@@ -774,14 +779,17 @@ impl SessionManager {
             .get_cache(session_id)
             .unwrap_or_default();
 
-        let persist_result = if cache.system_prompt.is_none() && cache.user_context.is_none() {
-            self.persistence_manager
-                .delete_prompt_cache(&workspace_path, session_id)
-                .await
-        } else {
-            self.persistence_manager
-                .save_prompt_cache(&workspace_path, session_id, &cache)
-                .await
+        let persist_result = match prompt_cache_persist_action(&cache) {
+            PromptCachePersistenceWriteAction::Delete => {
+                self.persistence_manager
+                    .delete_prompt_cache(&workspace_path, session_id)
+                    .await
+            }
+            PromptCachePersistenceWriteAction::Save => {
+                self.persistence_manager
+                    .save_prompt_cache(&workspace_path, session_id, &cache)
+                    .await
+            }
         };
 
         if let Err(error) = persist_result {
@@ -2173,10 +2181,7 @@ impl SessionManager {
     /// This method reloads the AI config and updates `max_context_tokens` to the
     /// model's actual configured `context_window`, so subagents with large-context
     /// models are not prematurely capped.
-    pub async fn refresh_session_context_window(
-        &self,
-        session_id: &str,
-    ) -> BitFunResult<()> {
+    pub async fn refresh_session_context_window(&self, session_id: &str) -> BitFunResult<()> {
         if let Some(ai_config) = Self::load_ai_config_for_model_resolution().await {
             if let Some(mut session) = self.sessions.get_mut(session_id) {
                 let previous = session.config.max_context_tokens;
@@ -3100,31 +3105,35 @@ impl SessionManager {
             .await
     }
 
-    pub async fn merge_session_custom_metadata(
-        &self,
-        session_id: &str,
-        patch: serde_json::Value,
-    ) -> BitFunResult<()> {
+    async fn metadata_workspace_path_for_update(&self, session_id: &str) -> BitFunResult<PathBuf> {
         if !self.should_persist_session_id(session_id) {
-            return Ok(());
+            return Err(BitFunError::Validation(format!(
+                "Session persistence is disabled: {}",
+                session_id
+            )));
         }
 
-        let workspace_path = self
-            .effective_session_workspace_path(session_id)
+        self.effective_session_workspace_path(session_id)
             .await
             .ok_or_else(|| {
                 BitFunError::Validation(format!(
                     "Session workspace_path is missing: {}",
                     session_id
                 ))
-            })?;
+            })
+    }
 
-        let mut metadata = match self
+    async fn load_or_persist_session_metadata(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<SessionMetadata> {
+        match self
             .persistence_manager
-            .load_session_metadata(&workspace_path, session_id)
+            .load_session_metadata(workspace_path, session_id)
             .await?
         {
-            Some(metadata) => metadata,
+            Some(metadata) => Ok(metadata),
             None => {
                 let session = self
                     .sessions
@@ -3134,32 +3143,56 @@ impl SessionManager {
                         BitFunError::NotFound(format!("Session not found: {}", session_id))
                     })?;
                 self.persistence_manager
-                    .save_session(&workspace_path, &session)
+                    .save_session(workspace_path, &session)
                     .await?;
                 self.persistence_manager
-                    .load_session_metadata(&workspace_path, session_id)
+                    .load_session_metadata(workspace_path, session_id)
                     .await?
                     .ok_or_else(|| {
                         BitFunError::NotFound(format!("Session not found: {}", session_id))
-                    })?
+                    })
             }
-        };
-        metadata.custom_metadata = Some(match (metadata.custom_metadata.take(), patch) {
-            (
-                Some(serde_json::Value::Object(mut existing)),
-                serde_json::Value::Object(patch_obj),
-            ) => {
-                for (key, value) in patch_obj {
-                    existing.insert(key, value);
-                }
-                serde_json::Value::Object(existing)
-            }
-            (_, value) => value,
-        });
+        }
+    }
 
+    async fn update_session_metadata_at_workspace(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        update: impl FnOnce(&mut SessionMetadata),
+    ) -> BitFunResult<()> {
+        let mut metadata = self
+            .load_or_persist_session_metadata(workspace_path, session_id)
+            .await?;
+        update(&mut metadata);
         self.persistence_manager
-            .save_session_metadata(&workspace_path, &metadata)
+            .save_session_metadata(workspace_path, &metadata)
             .await
+    }
+
+    async fn update_persisted_session_metadata(
+        &self,
+        session_id: &str,
+        update: impl FnOnce(&mut SessionMetadata),
+    ) -> BitFunResult<()> {
+        if !self.should_persist_session_id(session_id) {
+            return Ok(());
+        }
+
+        let workspace_path = self.metadata_workspace_path_for_update(session_id).await?;
+        self.update_session_metadata_at_workspace(&workspace_path, session_id, update)
+            .await
+    }
+
+    pub async fn merge_session_custom_metadata(
+        &self,
+        session_id: &str,
+        patch: serde_json::Value,
+    ) -> BitFunResult<()> {
+        self.update_persisted_session_metadata(session_id, |metadata| {
+            merge_session_custom_metadata_value(metadata, patch)
+        })
+        .await
     }
 
     pub async fn merge_session_relationship(
@@ -3167,50 +3200,10 @@ impl SessionManager {
         session_id: &str,
         relationship: SessionRelationship,
     ) -> BitFunResult<()> {
-        if !self.should_persist_session_id(session_id) {
-            return Ok(());
-        }
-
-        let workspace_path = self
-            .effective_session_workspace_path(session_id)
-            .await
-            .ok_or_else(|| {
-                BitFunError::Validation(format!(
-                    "Session workspace_path is missing: {}",
-                    session_id
-                ))
-            })?;
-
-        let mut metadata = match self
-            .persistence_manager
-            .load_session_metadata(&workspace_path, session_id)
-            .await?
-        {
-            Some(metadata) => metadata,
-            None => {
-                let session = self
-                    .sessions
-                    .get(session_id)
-                    .map(|value| value.clone())
-                    .ok_or_else(|| {
-                        BitFunError::NotFound(format!("Session not found: {}", session_id))
-                    })?;
-                self.persistence_manager
-                    .save_session(&workspace_path, &session)
-                    .await?;
-                self.persistence_manager
-                    .load_session_metadata(&workspace_path, session_id)
-                    .await?
-                    .ok_or_else(|| {
-                        BitFunError::NotFound(format!("Session not found: {}", session_id))
-                    })?
-            }
-        };
-
-        metadata.relationship = Some(relationship);
-        self.persistence_manager
-            .save_session_metadata(&workspace_path, &metadata)
-            .await
+        self.update_persisted_session_metadata(session_id, |metadata| {
+            set_session_relationship(metadata, relationship)
+        })
+        .await
     }
 
     pub async fn persist_session_lineage(
@@ -3218,69 +3211,10 @@ impl SessionManager {
         session_id: &str,
         relationship: SessionRelationship,
     ) -> BitFunResult<()> {
-        if !self.should_persist_session_id(session_id) {
-            return Ok(());
-        }
-
-        let workspace_path = self
-            .effective_session_workspace_path(session_id)
-            .await
-            .ok_or_else(|| {
-                BitFunError::Validation(format!(
-                    "Session workspace_path is missing: {}",
-                    session_id
-                ))
-            })?;
-
-        let mut metadata = match self
-            .persistence_manager
-            .load_session_metadata(&workspace_path, session_id)
-            .await?
-        {
-            Some(metadata) => metadata,
-            None => {
-                let session = self
-                    .sessions
-                    .get(session_id)
-                    .map(|value| value.clone())
-                    .ok_or_else(|| {
-                        BitFunError::NotFound(format!("Session not found: {}", session_id))
-                    })?;
-                self.persistence_manager
-                    .save_session(&workspace_path, &session)
-                    .await?;
-                self.persistence_manager
-                    .load_session_metadata(&workspace_path, session_id)
-                    .await?
-                    .ok_or_else(|| {
-                        BitFunError::NotFound(format!("Session not found: {}", session_id))
-                    })?
-            }
-        };
-
-        metadata.relationship = Some(relationship);
-
-        if let Some(serde_json::Value::Object(mut custom_metadata)) =
-            metadata.custom_metadata.take()
-        {
-            for key in [
-                "kind",
-                "parentSessionId",
-                "parentRequestId",
-                "parentDialogTurnId",
-                "parentTurnIndex",
-                "parentToolCallId",
-                "subagentType",
-            ] {
-                custom_metadata.remove(key);
-            }
-            metadata.custom_metadata =
-                (!custom_metadata.is_empty()).then_some(serde_json::Value::Object(custom_metadata));
-        }
-
-        self.persistence_manager
-            .save_session_metadata(&workspace_path, &metadata)
-            .await
+        self.update_persisted_session_metadata(session_id, |metadata| {
+            apply_session_lineage(metadata, relationship)
+        })
+        .await
     }
 
     pub async fn collect_hidden_subagent_cascade_for_parent_turns(
@@ -3297,70 +3231,11 @@ impl SessionManager {
             .persistence_manager
             .list_session_metadata_including_internal(workspace_path)
             .await?;
-
-        let mut child_session_ids_by_parent: HashMap<String, Vec<String>> = HashMap::new();
-        let mut root_session_ids = Vec::new();
-
-        for metadata in metadata_list {
-            let Some((relationship_kind, relationship_parent_session_id, parent_dialog_turn_id)) =
-                extract_subagent_relationship(&metadata)
-            else {
-                continue;
-            };
-
-            if relationship_kind != SessionRelationshipKind::Subagent {
-                continue;
-            }
-
-            child_session_ids_by_parent
-                .entry(relationship_parent_session_id.clone())
-                .or_default()
-                .push(metadata.session_id.clone());
-
-            if relationship_parent_session_id == parent_session_id
-                && parent_dialog_turn_ids.contains(&parent_dialog_turn_id)
-            {
-                root_session_ids.push(metadata.session_id);
-            }
-        }
-
-        let mut visited = HashSet::new();
-        let mut ordered_session_ids = Vec::new();
-
-        fn visit(
-            session_id: &str,
-            child_session_ids_by_parent: &HashMap<String, Vec<String>>,
-            visited: &mut HashSet<String>,
-            ordered_session_ids: &mut Vec<String>,
-        ) {
-            if !visited.insert(session_id.to_string()) {
-                return;
-            }
-
-            if let Some(child_session_ids) = child_session_ids_by_parent.get(session_id) {
-                for child_session_id in child_session_ids {
-                    visit(
-                        child_session_id,
-                        child_session_ids_by_parent,
-                        visited,
-                        ordered_session_ids,
-                    );
-                }
-            }
-
-            ordered_session_ids.push(session_id.to_string());
-        }
-
-        for root_session_id in root_session_ids {
-            visit(
-                &root_session_id,
-                &child_session_ids_by_parent,
-                &mut visited,
-                &mut ordered_session_ids,
-            );
-        }
-
-        Ok(ordered_session_ids)
+        Ok(collect_hidden_subagent_cascade_ids(
+            metadata_list,
+            parent_session_id,
+            parent_dialog_turn_ids,
+        ))
     }
 
     pub async fn set_session_deep_review_run_manifest(
@@ -3368,50 +3243,10 @@ impl SessionManager {
         session_id: &str,
         deep_review_run_manifest: Option<serde_json::Value>,
     ) -> BitFunResult<()> {
-        if !self.should_persist_session_id(session_id) {
-            return Ok(());
-        }
-
-        let workspace_path = self
-            .effective_session_workspace_path(session_id)
-            .await
-            .ok_or_else(|| {
-                BitFunError::Validation(format!(
-                    "Session workspace_path is missing: {}",
-                    session_id
-                ))
-            })?;
-
-        let mut metadata = match self
-            .persistence_manager
-            .load_session_metadata(&workspace_path, session_id)
-            .await?
-        {
-            Some(metadata) => metadata,
-            None => {
-                let session = self
-                    .sessions
-                    .get(session_id)
-                    .map(|value| value.clone())
-                    .ok_or_else(|| {
-                        BitFunError::NotFound(format!("Session not found: {}", session_id))
-                    })?;
-                self.persistence_manager
-                    .save_session(&workspace_path, &session)
-                    .await?;
-                self.persistence_manager
-                    .load_session_metadata(&workspace_path, session_id)
-                    .await?
-                    .ok_or_else(|| {
-                        BitFunError::NotFound(format!("Session not found: {}", session_id))
-                    })?
-            }
-        };
-
-        metadata.deep_review_run_manifest = deep_review_run_manifest;
-        self.persistence_manager
-            .save_session_metadata(&workspace_path, &metadata)
-            .await
+        self.update_persisted_session_metadata(session_id, |metadata| {
+            set_deep_review_run_manifest(metadata, deep_review_run_manifest)
+        })
+        .await
     }
 
     // ============ Dialog Turn Management ============
@@ -3799,6 +3634,7 @@ impl SessionManager {
                 id: format!("{}-final-round", turn.turn_id),
                 turn_id: turn.turn_id.clone(),
                 round_index,
+                round_group_id: None,
                 timestamp: completion_timestamp,
                 text_items: vec![TextItemData {
                     id: format!("{}-final-text", turn.turn_id),
@@ -3811,6 +3647,8 @@ impl SessionManager {
                     parent_task_tool_id: None,
                     subagent_session_id: None,
                     status: Some("completed".to_string()),
+                    attempt_id: None,
+                    attempt_index: None,
                 }],
                 tool_items: Vec::new(),
                 thinking_items: Vec::new(),
@@ -4109,151 +3947,6 @@ impl SessionManager {
             "Maintenance turn marked as failed: turn_id={}, turn_index={}, error={}",
             turn_id, turn.turn_index, error
         );
-
-        Ok(())
-    }
-
-    /// Persist a completed `/btw` side-question turn into an existing child session.
-    #[allow(clippy::too_many_arguments)]
-    pub async fn persist_btw_turn(
-        &self,
-        workspace_path: &Path,
-        child_session_id: &str,
-        request_id: &str,
-        question: &str,
-        full_text: &str,
-        parent_session_id: &str,
-        parent_dialog_turn_id: Option<&str>,
-        parent_turn_index: Option<usize>,
-    ) -> BitFunResult<()> {
-        let session = self.sessions.get(child_session_id).ok_or_else(|| {
-            BitFunError::NotFound(format!("Session not found: {}", child_session_id))
-        })?;
-        let turn_id = format!("btw-turn-{}", request_id);
-        let turn_index = session
-            .dialog_turn_ids
-            .iter()
-            .position(|existing| existing == &turn_id)
-            .unwrap_or(session.dialog_turn_ids.len());
-
-        let user_message_id = format!("btw-user-{}", request_id);
-        let round_id = format!("btw-round-{}", request_id);
-        let text_id = format!("btw-text-{}", request_id);
-        let now = SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as u64;
-
-        let mut turn = DialogTurnData::new(
-            turn_id.clone(),
-            turn_index,
-            child_session_id.to_string(),
-            UserMessageData {
-                id: user_message_id,
-                content: question.to_string(),
-                timestamp: now,
-                metadata: Some(json!({
-                    "kind": "btw",
-                    "parentSessionId": parent_session_id,
-                    "parentRequestId": request_id,
-                    "parentDialogTurnId": parent_dialog_turn_id,
-                    "parentTurnIndex": parent_turn_index,
-                })),
-            },
-        );
-        turn.timestamp = now;
-        turn.start_time = now;
-        turn.end_time = Some(now);
-        turn.duration_ms = Some(0);
-        turn.status = TurnStatus::Completed;
-        turn.model_rounds = vec![ModelRoundData {
-            id: round_id,
-            turn_id: turn_id.clone(),
-            round_index: 0,
-            timestamp: now,
-            text_items: vec![TextItemData {
-                id: text_id,
-                content: full_text.to_string(),
-                is_streaming: false,
-                timestamp: now,
-                is_markdown: true,
-                order_index: None,
-                is_subagent_item: None,
-                parent_task_tool_id: None,
-                subagent_session_id: None,
-                status: Some("completed".to_string()),
-            }],
-            tool_items: vec![],
-            thinking_items: vec![],
-            start_time: now,
-            end_time: Some(now),
-            duration_ms: Some(0),
-            provider_id: None,
-            model_id: None,
-            model_alias: None,
-            first_chunk_ms: None,
-            first_visible_output_ms: None,
-            stream_duration_ms: None,
-            attempt_count: None,
-            failure_category: None,
-            token_details: None,
-            status: "completed".to_string(),
-        }];
-
-        drop(session);
-
-        // Persist the turn to disk
-        self.persistence_manager
-            .save_dialog_turn(workspace_path, &turn)
-            .await?;
-
-        // Sync messages to the in-memory caches so subsequent turns can access context.
-        let user_message = Message::user(question.to_string())
-            .with_turn_id(turn_id.clone())
-            .with_semantic_kind(MessageSemanticKind::ActualUserInput);
-        let assistant_message =
-            Message::assistant(full_text.to_string()).with_turn_id(turn_id.clone());
-
-        // Add to the in-memory runtime context cache.
-        self.context_store
-            .add_message(child_session_id, user_message);
-        self.context_store
-            .add_message(child_session_id, assistant_message);
-
-        // IMPORTANT: keep the DashMap guard scope short -- do NOT hold it across .await.
-        let session_snapshot = if let Some(mut session) = self.sessions.get_mut(child_session_id) {
-            if !session
-                .dialog_turn_ids
-                .iter()
-                .any(|existing| existing == &turn_id)
-            {
-                session.dialog_turn_ids.push(turn_id);
-            }
-            session.updated_at = SystemTime::now();
-            session.last_activity_at = SystemTime::now();
-
-            if self.config.enable_persistence && Self::should_persist_session(&session) {
-                Some(session.clone())
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-        // RefMut guard released here -- DashMap shard lock is free.
-
-        if let Some(session) = session_snapshot {
-            self.persistence_manager
-                .save_session(workspace_path, &session)
-                .await?;
-        }
-
-        self.persist_context_snapshot_for_turn_best_effort(
-            child_session_id,
-            turn_index,
-            "btw_turn_persisted",
-        )
-        .await;
 
         Ok(())
     }
@@ -4634,45 +4327,6 @@ impl SessionManager {
 
         debug!("Cleanup task started");
     }
-}
-
-fn extract_subagent_relationship(
-    metadata: &SessionMetadata,
-) -> Option<(SessionRelationshipKind, String, String)> {
-    let relationship = metadata.relationship.as_ref();
-    let custom_metadata = metadata.custom_metadata.as_ref();
-
-    let relationship_kind = relationship
-        .and_then(|value| value.kind.clone())
-        .or_else(|| {
-            custom_metadata
-                .and_then(|value| value.get("kind"))
-                .and_then(|value| value.as_str())
-                .and_then(|value| match value {
-                    "subagent" => Some(SessionRelationshipKind::Subagent),
-                    _ => None,
-                })
-        })?;
-
-    let parent_session_id = relationship
-        .and_then(|value| value.parent_session_id.clone())
-        .or_else(|| {
-            custom_metadata
-                .and_then(|value| value.get("parentSessionId"))
-                .and_then(|value| value.as_str())
-                .map(str::to_string)
-        })?;
-
-    let parent_dialog_turn_id = relationship
-        .and_then(|value| value.parent_dialog_turn_id.clone())
-        .or_else(|| {
-            custom_metadata
-                .and_then(|value| value.get("parentDialogTurnId"))
-                .and_then(|value| value.as_str())
-                .map(str::to_string)
-        })?;
-
-    Some((relationship_kind, parent_session_id, parent_dialog_turn_id))
 }
 
 #[cfg(test)]
@@ -5548,6 +5202,7 @@ mod tests {
             id: "round-1".to_string(),
             turn_id: "turn-1".to_string(),
             round_index: 0,
+            round_group_id: None,
             timestamp: 1,
             text_items: vec![],
             tool_items: vec![ToolItemData {
@@ -5581,6 +5236,8 @@ mod tests {
                 is_subagent_item: None,
                 parent_task_tool_id: None,
                 subagent_session_id: None,
+                attempt_id: None,
+                attempt_index: None,
                 subagent_model_id: None,
                 subagent_model_alias: None,
                 status: Some("completed".to_string()),

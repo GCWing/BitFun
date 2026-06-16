@@ -158,6 +158,23 @@ impl AgentRegistry {
     }
 }
 
+impl bitfun_agent_runtime::sdk::RuntimeAgentRegistry for AgentRegistry {
+    fn agent_ids(
+        &self,
+        query: bitfun_agent_runtime::sdk::RuntimeAgentRegistryQuery<'_>,
+    ) -> Vec<String> {
+        let mut ids = self.read_agents().keys().cloned().collect::<Vec<_>>();
+        if let Some(workspace_root) = query.workspace_root {
+            if let Some(entries) = self.read_project_subagents().get(workspace_root) {
+                ids.extend(entries.keys().cloned());
+            }
+        }
+        ids.sort();
+        ids.dedup();
+        ids
+    }
+}
+
 // Global agent registry singleton
 static GLOBAL_AGENT_REGISTRY: OnceLock<Arc<AgentRegistry>> = OnceLock::new();
 

@@ -17,11 +17,15 @@ import { ACPClientAPI, type AcpSessionOptions } from '@/infrastructure/api/servi
 import { getProviderDisplayName } from '@/infrastructure/config/services/modelConfigs';
 import { getEffectiveReasoningMode, isReasoningVisiblyEnabled } from '@/infrastructure/config/utils/reasoning';
 import { globalEventBus } from '@/infrastructure/event-bus';
-import type { AIModelConfig } from '@/infrastructure/config/types';
+import type { AIModelConfig, DefaultModelsConfig } from '@/infrastructure/config/types';
 import { Tooltip } from '@/component-library';
 import { FlowChatStore } from '../store/FlowChatStore';
 import { getModelMaxTokens } from '../services/flow-chat-manager/SessionModule';
 import { acpClientIdFromAgentType } from '../utils/acpSession';
+import {
+  buildContextUsageTooltip,
+  type ContextUsageSource,
+} from '../utils/tokenUsageDisplay';
 import { createLogger } from '@/shared/utils/logger';
 import './ModelSelector.scss';
 
@@ -39,6 +43,8 @@ interface ModelSelectorProps {
   currentTokens?: number;
   /** Max token capacity. */
   maxTokens?: number;
+  /** Semantic source for the context usage number. */
+  contextUsageSource?: ContextUsageSource;
 }
 
 interface ModelInfo {
@@ -153,10 +159,11 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   sessionId,
   currentTokens = 0,
   maxTokens = 0,
+  contextUsageSource,
 }) => {
   const { t } = useTranslation('flow-chat');
   const [allModels, setAllModels] = useState<AIModelConfig[]>([]);
-  const [defaultModels, setDefaultModels] = useState<Record<string, string>>({});
+  const [defaultModels, setDefaultModels] = useState<DefaultModelsConfig>({});
   const [agentModels, setAgentModels] = useState<Record<string, string>>({}); // mode_id -> model_id
   const [acpOptions, setAcpOptions] = useState<AcpSessionOptions | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -179,11 +186,14 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   // Load configuration data.
   const loadConfigData = useCallback(async () => {
     try {
-      const [models, defaultModelsData, agentModelsData] = await Promise.all([
-        configManager.getConfig<AIModelConfig[]>('ai.models') || [],
-        configManager.getConfig<any>('ai.default_models') || {},
-        configManager.getConfig<Record<string, string>>('ai.agent_models') || {}
+      const configData = await configManager.getConfigs([
+        'ai.models',
+        'ai.default_models',
+        'ai.agent_models',
       ]);
+      const models = (configData['ai.models'] as AIModelConfig[] | undefined) || [];
+      const defaultModelsData = (configData['ai.default_models'] as DefaultModelsConfig | undefined) || {};
+      const agentModelsData = (configData['ai.agent_models'] as Record<string, string> | undefined) || {};
 
       setAllModels(models);
       setDefaultModels(defaultModelsData);
@@ -395,7 +405,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       return buildAutoModelInfo(t);
     }
 
-    if (isSpecialModel(modelId)) {
+    if (modelId === 'primary' || modelId === 'fast') {
       const actualModelId = defaultModels[modelId];
       if (!actualModelId) return buildAutoModelInfo(t);
 
@@ -527,8 +537,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     return '';
   }, [tokenPercentage]);
 
-  const formatTokenCount = (n: number) =>
-    n >= 1000 ? `${Math.round(n / 1000)}K` : `${n}`;
+  const resolvedContextUsageSource: ContextUsageSource =
+    contextUsageSource ?? (isAcpSession ? 'acp_context' : 'agent_prompt');
 
   if (isAcpSession) {
     if (acpAvailableModels.length === 0) {
@@ -537,11 +547,15 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
     const currentAcpModelId = acpOptions?.currentModelId || acpAvailableModels[0]?.id || '';
     const acpBaseTooltip = getModelTooltipText(acpCurrentModel, acpClientId ? `${acpClientId} ACP` : 'ACP');
-    const acpUsageTooltip =
-      currentTokens > 0 && maxTokens > 0
-        ? `${formatTokenCount(currentTokens)}/${formatTokenCount(maxTokens)} (${tokenPercentage}%)`
-        : '';
-    const acpTooltip = acpUsageTooltip ? `${acpBaseTooltip} · ${acpUsageTooltip}` : acpBaseTooltip;
+    const acpTooltip = buildContextUsageTooltip({
+      baseTooltip: acpBaseTooltip,
+      usage: {
+        current: currentTokens,
+        max: maxTokens,
+        source: resolvedContextUsageSource,
+      },
+      t,
+    });
 
     return (
       <div
@@ -619,10 +633,15 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
   const fallbackTooltip = t('modelSelector.autoModelDesc');
   const baseTooltip = getModelTooltipText(currentModel, fallbackTooltip);
-  const tooltipContent =
-    currentTokens > 0 && maxTokens > 0
-      ? `${baseTooltip} · ${formatTokenCount(currentTokens)}/${formatTokenCount(maxTokens)} (${tokenPercentage}%)`
-      : baseTooltip;
+  const tooltipContent = buildContextUsageTooltip({
+    baseTooltip,
+    usage: {
+      current: currentTokens,
+      max: maxTokens,
+      source: resolvedContextUsageSource,
+    },
+    t,
+  });
 
   return (
     <div

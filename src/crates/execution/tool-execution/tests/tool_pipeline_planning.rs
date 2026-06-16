@@ -1,7 +1,7 @@
 use tool_runtime::pipeline::{
     count_tool_states, partition_tool_batches, retry_delay_ms, should_cancel_tool_state,
-    should_retry_tool_attempt, summarize_dialog_turn_cancellation, ToolExecutionErrorClass,
-    ToolRetryAttemptFacts, ToolTaskStateKind,
+    should_retry_tool_attempt, summarize_dialog_turn_cancellation, ToolCancellationTokenStore,
+    ToolExecutionErrorClass, ToolRetryAttemptFacts, ToolTaskStateKind,
 };
 
 #[test]
@@ -93,6 +93,20 @@ fn dialog_turn_cancellation_summary_counts_cancelled_and_skipped_tasks() {
 
     assert_eq!(summary.cancelled, 2);
     assert_eq!(summary.skipped, 2);
+}
+
+#[test]
+fn cancellation_token_store_cancels_and_removes_tokens() {
+    let store = ToolCancellationTokenStore::new();
+    let token = tokio_util::sync::CancellationToken::new();
+
+    store.insert("tool-1".to_string(), token.clone());
+
+    assert!(store.has_pending("tool-1"));
+    assert!(store.cancel("tool-1"));
+    assert!(token.is_cancelled());
+    assert!(!store.has_pending("tool-1"));
+    assert!(!store.cancel("tool-1"));
 }
 
 #[test]

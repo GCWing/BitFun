@@ -5,8 +5,8 @@
 
 .bitfun-config-page-header {
   flex-shrink: 0;
-  padding: var(--size-gap-12, 100px) var(--config-page-content-inline-padding, 20px) 0;
-  margin-bottom: var(--size-gap-6, 24px);
+  padding: var(--size-gap-12) var(--config-page-content-inline-padding) 0;
+  margin-bottom: var(--size-gap-6);
 }
 
 .bitfun-config-page-header__inner {
@@ -93,7 +93,7 @@
   height: 1px;
   background: var(--border-subtle);
   width: min(
-    calc(100% - (2 * var(--config-page-content-inline-padding, 20px))),
+    calc(100% - (2 * var(--config-page-content-inline-padding))),
     var(--config-page-content-max-width)
   );
   margin: var(--size-gap-4) auto;
@@ -105,7 +105,7 @@
 
 @container config-panel (max-width: 520px) {
   .bitfun-config-page-header {
-    padding-top: var(--size-gap-5, 20px);
+    padding-top: var(--size-gap-5);
   }
 
   .bitfun-config-page-header__inner {

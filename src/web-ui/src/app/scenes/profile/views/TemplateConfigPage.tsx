@@ -57,9 +57,9 @@ type CtxSegKey = 'systemPrompt' | 'toolInjection' | 'rules' | 'memories';
 const CTX_SEGMENT_ORDER: readonly CtxSegKey[] = ['systemPrompt', 'toolInjection', 'rules', 'memories'];
 
 const CTX_SEGMENT_COLORS: Record<CtxSegKey, string> = {
-  systemPrompt: '#34d399',
-  toolInjection: '#60a5fa',
-  rules: '#a78bfa',
+  systemPrompt: 'var(--color-success)',
+  toolInjection: 'var(--color-accent-500)',
+  rules: 'var(--color-purple-soft)',
   memories: '#f472b6',
 };
 

@@ -20,6 +20,7 @@ pub(crate) use bitfun_agent_runtime::deep_review::report::{
     deep_review_cache_from_completed_reviewers, fill_deep_review_cache_update_signals,
     fill_deep_review_packet_metadata,
 };
+use bitfun_services_core::session::set_deep_review_cache;
 use log::debug;
 use serde_json::Value;
 
@@ -157,7 +158,7 @@ pub(crate) async fn persist_deep_review_cache(
         return Ok(());
     };
 
-    metadata.deep_review_cache = Some(cache_value);
+    set_deep_review_cache(&mut metadata, cache_value);
     session_manager
         .save_session_metadata(&session_storage_path, &metadata)
         .await

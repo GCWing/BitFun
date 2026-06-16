@@ -15,7 +15,9 @@ export interface FlowItem {
   id: string;
   type: 'text' | 'tool' | 'image-analysis' | 'thinking' | 'user-steering';
   timestamp: number;
-  status: 'pending' | 'preparing' | 'running' | 'streaming' | 'receiving' | 'completed' | 'cancelled' | 'error' | 'analyzing' | 'pending_confirmation' | 'confirmed'; // Includes error, analyzing, and confirmation states.
+  status: 'pending' | 'queued' | 'waiting' | 'preparing' | 'running' | 'streaming' | 'receiving' | 'completed' | 'cancelled' | 'error' | 'analyzing' | 'pending_confirmation' | 'confirmed'; // Includes error, analyzing, and confirmation states.
+  attemptId?: string;
+  attemptIndex?: number;
 
   /**
    * Session-scoped subagent linkage.
@@ -51,7 +53,7 @@ export interface FlowToolItem extends FlowItem {
   type: 'tool';
   toolName: string;
   terminalSessionId?: string;
-  interruptionReason?: 'app_restart';
+  interruptionReason?: 'app_restart' | 'retry_superseded';
   toolCall: {
     input: any;
     id: string;
@@ -146,11 +148,21 @@ export interface ModelRoundRenderHints {
   disableExploreGrouping?: boolean;
 }
 
+export interface ModelRoundAttempt {
+  id: string;
+  index: number;
+  status: 'streaming' | 'completed' | 'superseded' | 'failed' | 'cancelled';
+  items: AnyFlowItem[];
+}
+
 // Model round: output from a single model call.
 export interface ModelRound {
   id: string;
   index: number;
+  roundGroupId?: string;
   items: AnyFlowItem[];
+  attempts?: ModelRoundAttempt[];
+  historyRounds?: ModelRound[];
   isStreaming: boolean;
   isComplete: boolean;
   status: 'pending' | 'streaming' | 'completed' | 'cancelled' | 'error' | 'pending_confirmation';
@@ -235,6 +247,8 @@ export interface DialogTurn {
   success?: boolean;
   /** Why the turn finished. */
   finishReason?: string;
+  /** Whether the turn produced a final assistant response visible to the user. */
+  hasFinalResponse?: boolean;
 }
 
 export interface FlowChatState {

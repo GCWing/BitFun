@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "description": "Baseline for Web UI theme color governance. Lower values when debt is removed; do not raise without a documented review reason.",
+  "budgets": {
+    "fallbackOccurrences": {
+      "max": 31
+    },
+    "colorScopes.appUi.uniqueColors": {
+      "max": 492
+    },
+    "colorScopes.appUi.occurrences": {
+      "max": 874
+    },
+    "colorScopes.token.uniqueColors": {
+      "max": 698
+    },
+    "colorScopes.exception.uniqueColors": {
+      "max": 172
+    },
+    "cssVarDefinitions.unresolvedRequiredUnique": {
+      "max": 0
+    },
+    "cssVarDefinitions.runtimeOnlyRequiredContractUnique": {
+      "max": 0
+    },
+    "cssVarDefinitions.fallbackOnlyUnique": {
+      "max": 0
+    },
+    "cssVarDefinitions.nonContractCrossFileUnique": {
+      "max": 0
+    },
+    "cssVarDefinitions.nonContractDynamicInputUnique": {
+      "max": 0
+    },
+    "cssVarDefinitions.nonContractCssPrivateUnique": {
+      "max": 0
+    },
+    "tokenAliasLiterals.occurrences": {
+      "max": 74
+    },
+    "tokenAliasLiterals.uniqueColors": {
+      "max": 34
+    }
+  }
+}

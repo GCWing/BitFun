@@ -176,6 +176,12 @@ Debug build detected, checking dev server...
 Performance E2E should explicitly set `BITFUN_E2E_APP_MODE=release-fast` after
 building `pnpm run desktop:build:release-fast`.
 
+Do not manually start `target/release-fast/bitfun-desktop.exe` for performance
+validation. A direct launch uses the normal user profile unless isolated storage
+environment variables are provided. The E2E launcher sets `BITFUN_USER_ROOT`,
+`BITFUN_HOME`, and `BITFUN_E2E_STORAGE_GUARD=1` automatically so performance
+runs cannot silently write into the real BitFun profile.
+
 ### 5. Startup and Long-Session Performance E2E
 
 Generate a long-session fixture in the workspace you want to measure:

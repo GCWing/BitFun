@@ -29,6 +29,7 @@ import {
   WebElementCardRenderer,
 } from './types/WebElementContextImpl';
 import { i18nService } from '@/infrastructure/i18n';
+import { UI_EXCEPTION_ACCENTS } from '@/shared/theme/uiExceptionAccents';
 import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('ContextRegistry');
@@ -44,7 +45,7 @@ export function registerDefaultContextTypes(): void {
       displayName: i18nService.t('components:contextSystem.contextRegistry.file.name'),
       description: i18nService.t('components:contextSystem.contextRegistry.file.description'),
       icon: React.createElement(FileIcon, { size: 16 }),
-      color: '#60a5fa', 
+      color: 'var(--color-accent-500)',
       category: 'file',
       transformer: new FileContextTransformer(),
       validator: new FileContextValidator(),
@@ -67,7 +68,7 @@ export function registerDefaultContextTypes(): void {
       displayName: i18nService.t('components:contextSystem.contextRegistry.directory.name'),
       description: i18nService.t('components:contextSystem.contextRegistry.directory.description'),
       icon: React.createElement(FileIcon, { size: 16 }),
-      color: '#8b5cf6', 
+      color: 'var(--color-purple-500)',
       category: 'file',
       transformer: new FileContextTransformer() as any,
       validator: new FileContextValidator() as any,
@@ -89,7 +90,7 @@ export function registerDefaultContextTypes(): void {
       displayName: i18nService.t('components:contextSystem.contextRegistry.codeSnippet.name'),
       description: i18nService.t('components:contextSystem.contextRegistry.codeSnippet.description'),
       icon: React.createElement(Code, { size: 16 }),
-      color: '#a78bfa', 
+      color: 'var(--color-purple-soft)',
       category: 'code',
       transformer: new CodeSnippetContextTransformer(),
       validator: new CodeSnippetContextValidator(),
@@ -135,7 +136,7 @@ export function registerDefaultContextTypes(): void {
       displayName: i18nService.t('components:contextSystem.contextRegistry.image.name'),
       description: i18nService.t('components:contextSystem.contextRegistry.image.description'),
       icon: React.createElement(FileIcon, { size: 16 }),
-      color: '#f59e0b', 
+      color: 'var(--color-warning)',
       category: 'media',
       transformer: new ImageContextTransformer(),
       validator: new ImageContextValidator(),
@@ -157,7 +158,7 @@ export function registerDefaultContextTypes(): void {
       displayName: i18nService.t('components:contextSystem.contextRegistry.webElement.name'),
       description: i18nService.t('components:contextSystem.contextRegistry.webElement.description'),
       icon: React.createElement(Code2Icon, { size: 16 }),
-      color: '#38bdf8',
+      color: UI_EXCEPTION_ACCENTS.generativeUi,
       category: 'reference',
       transformer: new WebElementContextTransformer(),
       validator: new WebElementContextValidator(),

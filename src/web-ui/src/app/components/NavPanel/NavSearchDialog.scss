@@ -24,10 +24,10 @@
   border: 1px solid var(--border-subtle);
   box-shadow:
     0 0 0 1px color-mix(in srgb, var(--color-text-primary) 4%, transparent),
-    0 2px 4px rgba(15, 23, 42, 0.04),
-    0 8px 24px rgba(15, 23, 42, 0.08),
-    0 24px 56px -12px rgba(15, 23, 42, 0.22),
-    0 48px 80px -24px rgba(15, 23, 42, 0.12);
+    0 2px 4px var(--color-overlay-slate-04),
+    0 8px 24px var(--color-overlay-slate-08),
+    0 24px 56px -12px var(--color-overlay-slate-22),
+    0 48px 80px -24px var(--color-overlay-slate-12);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -41,8 +41,8 @@
 
 :root[data-theme-type='dark'] .bitfun-nav-search-dialog__card {
   box-shadow:
-    0 0 0 1px color-mix(in srgb, #fff 6%, transparent),
-    0 1px 0 color-mix(in srgb, #fff 5%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--color-static-white) 6%, transparent),
+    0 1px 0 color-mix(in srgb, var(--color-static-white) 5%, transparent),
     0 4px 12px rgba(0, 0, 0, 0.35),
     0 20px 48px -8px rgba(0, 0, 0, 0.65),
     0 40px 72px -20px rgba(0, 0, 0, 0.45);

@@ -5,14 +5,13 @@ use bitfun_agent_runtime::scheduler::{
     ActiveDialogTurnStore, AgentSessionReplyAction, BackgroundDeliveryAction,
     BackgroundDeliveryFacts, BackgroundInjectionKind, DialogReplySuppressionSet,
     DialogRoundInjectionInterrupt, DialogSteeringAction, DialogTurnQueue, DialogTurnQueueError,
-    NoopDialogRoundPreemptSource, SessionAbortFlags, SessionRoundInjectionBuffer,
-    SessionRoundYieldFlags, ThreadGoalDeliveryReminderKind, TurnOutcome, TurnOutcomeQueueAction,
-    TurnOutcomeStatus, DEFAULT_MAX_DIALOG_QUEUE_DEPTH,
+    SessionAbortFlags, SessionRoundInjectionBuffer, ThreadGoalDeliveryReminderKind, TurnOutcome,
+    TurnOutcomeQueueAction, TurnOutcomeStatus, DEFAULT_MAX_DIALOG_QUEUE_DEPTH,
 };
 use bitfun_runtime_ports::{
-    AgentSessionReplyRoute, DialogQueuePriority, DialogRoundPreemptSource, DialogSessionStateFact,
-    DialogSteerOutcome, DialogSubmissionPolicy, DialogTriggerSource, RoundInjection,
-    RoundInjectionKind, RoundInjectionTarget, ThreadGoal, ThreadGoalStatus,
+    AgentSessionReplyRoute, DialogQueuePriority, DialogSessionStateFact, DialogSteerOutcome,
+    DialogSubmissionPolicy, DialogTriggerSource, RoundInjection, RoundInjectionKind,
+    RoundInjectionTarget, ThreadGoal, ThreadGoalStatus,
 };
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -499,21 +498,6 @@ fn turn_outcome_status_reply_and_queue_policy_are_portable() {
     assert_eq!(failed.status(), TurnOutcomeStatus::Failed);
     assert!(failed.reply_text().contains("network offline"));
     assert_eq!(failed.queue_action(), TurnOutcomeQueueAction::ClearQueue);
-}
-
-#[test]
-fn round_yield_flags_are_session_scoped_and_clearable() {
-    let noop = NoopDialogRoundPreemptSource;
-    assert!(!noop.should_yield_after_round("s1"));
-
-    let flags = SessionRoundYieldFlags::default();
-    flags.request_yield("s1");
-
-    assert!(flags.should_yield_after_round("s1"));
-    assert!(!flags.should_yield_after_round("s2"));
-
-    flags.clear_yield_after_round("s1");
-    assert!(!flags.should_yield_after_round("s1"));
 }
 
 #[test]

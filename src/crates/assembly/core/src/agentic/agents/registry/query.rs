@@ -50,11 +50,9 @@ impl AgentRegistry {
                 let registered_tool_names = get_all_registered_tool_names().await;
                 let valid_tools: HashSet<String> = registered_tool_names.iter().cloned().collect();
                 let profile_id = resolve_mode_config_profile_id(agent_type);
-                let resolved_tools = resolve_effective_tools(
-                    &entry.agent.default_tools(),
-                    mode_configs.get(profile_id.as_ref()),
-                    &valid_tools,
-                );
+                let default_tools = entry.agent.default_tools();
+                let config = mode_configs.get(profile_id.as_ref());
+                let resolved_tools = resolve_effective_tools(&default_tools, config, &valid_tools);
                 let allowed_tools = merge_dynamic_mcp_tools(resolved_tools, &registered_tool_names);
                 let allowed_tool_set: HashSet<&str> =
                     allowed_tools.iter().map(String::as_str).collect();

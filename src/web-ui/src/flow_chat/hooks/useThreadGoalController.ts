@@ -20,6 +20,8 @@ import {
   type ThreadGoalSnapshot,
 } from '../services/goalService';
 
+const HISTORICAL_THREAD_GOAL_REFRESH_DELAY_MS = 350;
+
 export interface ThreadGoalController {
   goal: ThreadGoalSnapshot | null;
   menuOpen: boolean;
@@ -149,8 +151,14 @@ export function useThreadGoalController(
 
   useEffect(() => {
     if (!sessionId || isBtwSession) return;
+    if (session?.isHistorical) {
+      const timeoutId = globalThis.setTimeout(() => {
+        void refreshGoal();
+      }, HISTORICAL_THREAD_GOAL_REFRESH_DELAY_MS);
+      return () => globalThis.clearTimeout(timeoutId);
+    }
     void refreshGoal();
-  }, [sessionId, isBtwSession, refreshGoal]);
+  }, [session?.isHistorical, sessionId, isBtwSession, refreshGoal]);
 
   const goalId = goal?.goalId;
   const goalStatus = goal?.status;

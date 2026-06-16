@@ -32,10 +32,11 @@ export interface AuxPaneRef {
 interface AuxPaneProps {
   workspacePath?: string;
   isSceneActive?: boolean;
+  terminalResizeSuspended?: boolean;
 }
 
 const AuxPane = forwardRef<AuxPaneRef, AuxPaneProps>(
-  ({ workspacePath, isSceneActive = true }, ref) => {
+  ({ workspacePath, isSceneActive = true, terminalResizeSuspended = false }, ref) => {
     const { workspace } = useCurrentWorkspace();
     const workspaceId = workspace?.id;
 
@@ -137,6 +138,7 @@ const AuxPane = forwardRef<AuxPaneRef, AuxPaneProps>(
           isSceneActive={isSceneActive}
           onInteraction={handleInteraction}
           onBeforeClose={handleBeforeClose}
+          terminalResizeSuspended={terminalResizeSuspended}
         />
       </div>
     );

@@ -4,9 +4,9 @@
 
 .flow-text-block {
   width: 100%;
-  margin: 0 0 var(--flowchat-flow-item-gap, 0.45rem) 0;
+  margin: 0 0 var(--flowchat-flow-item-gap) 0;
   font-size: var(--flowchat-font-size-base);
-  line-height: var(--flowchat-text-line-height, 1.58);
+  line-height: var(--flowchat-text-line-height);
   /* Transparent border to match the box-sizing of bordered cards (BaseToolCard,
    * TerminalRegion, etc.) so that text and card content share the same left edge. */
   border: 1px solid transparent;
@@ -15,13 +15,13 @@
   .markdown-renderer {
     --markdown-font-size: var(--flowchat-font-size-base);
     --markdown-font-size-sm: var(--flowchat-font-size-sm);
-    --markdown-code-font-size: var(--flowchat-code-font-size, var(--flowchat-font-size-sm));
-    --markdown-line-height: var(--flowchat-text-line-height, 1.58);
-    --markdown-block-gap: var(--flowchat-markdown-block-gap, 0.58em);
-    --markdown-paragraph-gap: var(--flowchat-markdown-paragraph-gap, 0.28em);
+    --markdown-code-font-size: var(--flowchat-code-font-size);
+    --markdown-line-height: var(--flowchat-text-line-height);
+    --markdown-block-gap: var(--flowchat-markdown-block-gap);
+    --markdown-paragraph-gap: var(--flowchat-markdown-paragraph-gap);
 
     font-size: var(--flowchat-font-size-base);
-    line-height: var(--flowchat-text-line-height, 1.58);
+    line-height: var(--flowchat-text-line-height);
   }
 
   /* Keep all rendered link variants (anchors and button-like local links) visibly link-blue. */
@@ -29,7 +29,7 @@
   .markdown-renderer .file-link,
   .markdown-renderer .visualization-link,
   .markdown-renderer .tab-link {
-    color: var(--flowchat-link-color, #60a5fa);
+    color: var(--flowchat-link-color);
     text-decoration: underline;
     text-decoration-thickness: 1px;
     text-underline-offset: 2px;
@@ -39,7 +39,7 @@
   .markdown-renderer .file-link:hover,
   .markdown-renderer .visualization-link:hover,
   .markdown-renderer .tab-link:hover {
-    color: var(--flowchat-link-hover-color, #93c5fd);
+    color: var(--flowchat-link-hover-color);
     text-decoration-thickness: 1.5px;
   }
 
@@ -56,7 +56,7 @@
   .markdown-renderer .code-block-wrapper pre[style],
   .markdown-renderer .code-block-wrapper code[style],
   .markdown-renderer pre code {
-    font-size: var(--flowchat-code-font-size, var(--flowchat-font-size-sm)) !important;
+    font-size: var(--flowchat-code-font-size) !important;
   }
 
   .markdown-renderer .table-wrapper table {
@@ -83,7 +83,7 @@
 
   .markdown-renderer .code-block-lang {
     font-size: var(--flowchat-font-size-xxs);
-    line-height: var(--flowchat-compact-line-height, 1.32);
+    line-height: var(--flowchat-compact-line-height);
   }
 
   .markdown-renderer .code-block-wrapper .copy-button {
@@ -108,7 +108,7 @@
   }
 
   .markdown-renderer .code-block-wrapper .copy-button.copy-success:hover {
-    color: #22c55e;
+    color: var(--markdown-copy-success-color);
     transform: scale(1.08);
   }
 
@@ -119,7 +119,7 @@
 
   .text-content {
     color: var(--color-text-primary);
-    line-height: var(--flowchat-text-line-height, 1.58);
+    line-height: var(--flowchat-text-line-height);
     white-space: pre-wrap;
     word-wrap: break-word;
   }
@@ -130,13 +130,24 @@
     }
   }
 
-  &--speaking {
+&--speaking {
     animation: tts-speaking-pulse 1.2s ease-in-out infinite;
     border-color: var(--color-accent, #60a5fa);
   }
 
   &--speaking-end {
     animation: tts-speaking-end 0.6s ease-out forwards;
+  }
+
+  &--runtime-status {
+    display: flex;
+    align-items: center;
+    gap: var(--flowchat-control-gap);
+    min-height: 1.5rem;
+    color: var(--color-text-muted);
+    font-size: var(--flowchat-font-size-base);
+    line-height: var(--flowchat-support-line-height);
+    opacity: 0.86;
   }
 
   &__runtime-status-icon {
@@ -153,7 +164,7 @@
 :root[data-theme-type='light'] .flow-text-block .markdown-renderer .code-block-wrapper .copy-button:hover,
 [data-theme-type='light'] .flow-text-block .markdown-renderer .code-block-wrapper .copy-button:hover,
 .light .flow-text-block .markdown-renderer .code-block-wrapper .copy-button:hover {
-  color: rgba(0, 0, 0, 0.5);
+  color: var(--color-overlay-black-50);
 }
 
 :root[data-theme='light'] .flow-text-block .markdown-renderer .code-block-wrapper .copy-button.copy-success:hover,

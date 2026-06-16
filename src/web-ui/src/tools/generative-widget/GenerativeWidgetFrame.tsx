@@ -1,7 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import morphdomRuntime from 'morphdom/dist/morphdom-umd.js?raw';
 import { themeService } from '@/infrastructure/theme';
-import { readWidgetThemePayload, type WidgetThemePayload } from './themePayload';
+import {
+  createWidgetThemeFallbackCss,
+  readWidgetThemePayload,
+  type WidgetThemePayload,
+} from './themePayload';
 import './GenerativeWidgetFrame.scss';
 
 export type WidgetMessage =
@@ -86,14 +90,34 @@ export const GENERATIVE_WIDGET_SHELL_HTML = `<!DOCTYPE html>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     * { box-sizing: border-box; }
+    :root {
+${createWidgetThemeFallbackCss()}
+      --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font-mono: "SF Mono", Consolas, monospace;
+      --font-size-xs: 12px;
+      --font-size-sm: 14px;
+      --font-size-base: 14px;
+      --font-size-lg: 15px;
+      --font-size-2xl: 18px;
+      --font-weight-medium: 500;
+      --font-weight-semibold: 600;
+      --spacing-3: 12px;
+      --spacing-4: 16px;
+      --spacing-5: 20px;
+      --radius-sm: 6px;
+      --radius-base: 8px;
+      --radius-lg: 12px;
+      --motion-fast: 0.15s;
+      --easing-standard: ease;
+    }
     html, body {
       margin: 0;
       padding: 0;
       width: 100%;
       min-height: 0;
       background: transparent;
-      color: var(--color-text-primary, #e8e8e8);
-      font-family: var(--font-sans, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+      color: var(--color-text-primary);
+      font-family: var(--font-sans);
       overflow-x: hidden;
       overflow-y: hidden;
     }
@@ -121,21 +145,21 @@ export const GENERATIVE_WIDGET_SHELL_HTML = `<!DOCTYPE html>
       word-break: break-word;
     }
     body {
-      font-size: var(--font-size-sm, 14px);
+      font-size: var(--font-size-sm);
       line-height: 1.5;
     }
     body, button, input, textarea, select {
-      font-family: var(--font-sans, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+      font-family: var(--font-sans);
     }
     button, input, textarea, select {
       font: inherit;
     }
     a {
-      color: var(--color-accent-500, #60a5fa);
+      color: var(--color-accent-500);
       text-decoration: none;
     }
     a:hover {
-      color: var(--color-accent-600, #3b82f6);
+      color: var(--color-accent-600);
     }
     [data-file-path],
     [data-bitfun-open-file] {
@@ -156,25 +180,25 @@ export const GENERATIVE_WIDGET_SHELL_HTML = `<!DOCTYPE html>
       max-width: 100%;
       display: flex;
       flex-direction: column;
-      gap: var(--spacing-4, 16px);
-      color: var(--color-text-primary, #e8e8e8);
+      gap: var(--spacing-4);
+      color: var(--color-text-primary);
     }
     .bf-stack {
       display: flex;
       flex-direction: column;
-      gap: var(--spacing-3, 12px);
+      gap: var(--spacing-3);
     }
     .bf-row {
       display: flex;
       align-items: center;
-      gap: var(--spacing-3, 12px);
+      gap: var(--spacing-3);
       min-width: 0;
     }
     .bf-row-wrap {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      gap: var(--spacing-3, 12px);
+      gap: var(--spacing-3);
       min-width: 0;
     }
     .bf-toolbar {
@@ -182,84 +206,84 @@ export const GENERATIVE_WIDGET_SHELL_HTML = `<!DOCTYPE html>
       flex-wrap: wrap;
       align-items: center;
       justify-content: space-between;
-      gap: var(--spacing-3, 12px);
-      padding: var(--spacing-3, 12px) var(--spacing-4, 16px);
-      border-radius: var(--radius-lg, 12px);
-      background: color-mix(in srgb, var(--color-bg-secondary, #1c1c1f) 82%, transparent);
-      border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
-      box-shadow: var(--shadow-xs, 0 1px 2px rgba(0, 0, 0, 0.4));
+      gap: var(--spacing-3);
+      padding: var(--spacing-3) var(--spacing-4);
+      border-radius: var(--radius-lg);
+      background: color-mix(in srgb, var(--color-bg-secondary) 82%, transparent);
+      border: 1px solid var(--border-subtle);
+      box-shadow: var(--shadow-xs);
     }
     .bf-section {
       display: flex;
       flex-direction: column;
-      gap: var(--spacing-3, 12px);
+      gap: var(--spacing-3);
     }
     .bf-section-header {
       display: flex;
       flex-wrap: wrap;
       align-items: flex-start;
       justify-content: space-between;
-      gap: var(--spacing-3, 12px);
+      gap: var(--spacing-3);
     }
     .bf-title {
       margin: 0;
-      font-size: var(--font-size-lg, 15px);
-      font-weight: var(--font-weight-semibold, 600);
+      font-size: var(--font-size-lg);
+      font-weight: var(--font-weight-semibold);
       line-height: 1.2;
-      color: var(--color-text-primary, #e8e8e8);
+      color: var(--color-text-primary);
       letter-spacing: -0.01em;
     }
     .bf-subtitle {
       margin: 0;
-      font-size: var(--font-size-xs, 12px);
-      color: var(--color-text-muted, #858585);
+      font-size: var(--font-size-xs);
+      color: var(--color-text-muted);
       line-height: 1.5;
     }
     .bf-eyebrow {
       margin: 0;
       font-size: 11px;
-      font-weight: var(--font-weight-medium, 500);
+      font-weight: var(--font-weight-medium);
       letter-spacing: 0.08em;
       text-transform: uppercase;
-      color: var(--color-text-muted, #858585);
+      color: var(--color-text-muted);
     }
     .bf-card,
     .bf-panel {
       position: relative;
       display: flex;
       flex-direction: column;
-      gap: var(--spacing-3, 12px);
+      gap: var(--spacing-3);
       width: 100%;
-      padding: var(--spacing-4, 16px);
-      border-radius: var(--radius-lg, 12px);
-      background: var(--color-bg-secondary, #1c1c1f);
-      border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
-      box-shadow: var(--shadow-sm, 0 2px 4px rgba(0, 0, 0, 0.4));
+      padding: var(--spacing-4);
+      border-radius: var(--radius-lg);
+      background: var(--color-bg-secondary);
+      border: 1px solid var(--border-subtle);
+      box-shadow: var(--shadow-sm);
       overflow: hidden;
     }
     .bf-panel {
-      background: color-mix(in srgb, var(--color-bg-secondary, #1c1c1f) 74%, var(--element-bg-subtle, rgba(255, 255, 255, 0.05)));
+      background: color-mix(in srgb, var(--color-bg-secondary) 74%, var(--element-bg-subtle));
     }
     [data-bitfun-prompt-selected="true"],
     [data-bitfun-context-selected="true"] {
       position: relative;
-      outline: 2px solid var(--color-accent-500, #60a5fa);
+      outline: 2px solid var(--color-accent-500);
       outline-offset: 2px;
       box-shadow:
-        0 0 0 4px color-mix(in srgb, var(--color-accent-500, #60a5fa) 18%, transparent),
-        0 10px 24px color-mix(in srgb, var(--color-accent-500, #60a5fa) 14%, transparent);
-      border-radius: min(var(--radius-base, 8px), 12px);
+        0 0 0 4px color-mix(in srgb, var(--color-accent-500) 18%, transparent),
+        0 10px 24px color-mix(in srgb, var(--color-accent-500) 14%, transparent);
+      border-radius: min(var(--radius-base), 12px);
       transition: outline-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
       transform: translateY(-1px);
     }
     .bf-card-accent {
-      background: color-mix(in srgb, var(--color-accent-500, #60a5fa) 10%, var(--color-bg-secondary, #1c1c1f));
-      border-color: color-mix(in srgb, var(--color-accent-500, #60a5fa) 30%, var(--border-subtle, rgba(255, 255, 255, 0.1)));
+      background: color-mix(in srgb, var(--color-accent-500) 10%, var(--color-bg-secondary));
+      border-color: color-mix(in srgb, var(--color-accent-500) 30%, var(--border-subtle));
     }
     .bf-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
-      gap: var(--spacing-3, 12px);
+      gap: var(--spacing-3);
       width: 100%;
       min-width: 0;
     }
@@ -268,27 +292,27 @@ export const GENERATIVE_WIDGET_SHELL_HTML = `<!DOCTYPE html>
       flex-direction: column;
       gap: 6px;
       min-width: 0;
-      padding: var(--spacing-3, 12px);
-      border-radius: var(--radius-base, 8px);
-      background: var(--element-bg-base, rgba(255, 255, 255, 0.08));
-      border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
+      padding: var(--spacing-3);
+      border-radius: var(--radius-base);
+      background: var(--element-bg-base);
+      border: 1px solid var(--border-subtle);
     }
     .bf-kpi-label {
       font-size: 11px;
-      font-weight: var(--font-weight-medium, 500);
+      font-weight: var(--font-weight-medium);
       text-transform: uppercase;
       letter-spacing: 0.08em;
-      color: var(--color-text-muted, #858585);
+      color: var(--color-text-muted);
     }
     .bf-kpi-value {
-      font-size: var(--font-size-2xl, 18px);
-      font-weight: var(--font-weight-semibold, 600);
+      font-size: var(--font-size-2xl);
+      font-weight: var(--font-weight-semibold);
       line-height: 1.1;
-      color: var(--color-text-primary, #e8e8e8);
+      color: var(--color-text-primary);
     }
     .bf-kpi-meta {
-      font-size: var(--font-size-xs, 12px);
-      color: var(--color-text-secondary, #b0b0b0);
+      font-size: var(--font-size-xs);
+      color: var(--color-text-secondary);
     }
     .bf-badge {
       display: inline-flex;
@@ -298,32 +322,32 @@ export const GENERATIVE_WIDGET_SHELL_HTML = `<!DOCTYPE html>
       min-height: 24px;
       padding: 0 10px;
       border-radius: 999px;
-      background: var(--element-bg-base, rgba(255, 255, 255, 0.08));
-      border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
+      background: var(--element-bg-base);
+      border: 1px solid var(--border-subtle);
       font-size: 12px;
-      font-weight: var(--font-weight-medium, 500);
-      color: var(--color-text-secondary, #b0b0b0);
+      font-weight: var(--font-weight-medium);
+      color: var(--color-text-secondary);
       white-space: nowrap;
     }
     .bf-badge-accent {
-      background: color-mix(in srgb, var(--color-accent-500, #60a5fa) 14%, transparent);
-      border-color: color-mix(in srgb, var(--color-accent-500, #60a5fa) 28%, var(--border-subtle, rgba(255, 255, 255, 0.1)));
-      color: var(--color-accent-500, #60a5fa);
+      background: color-mix(in srgb, var(--color-accent-500) 14%, transparent);
+      border-color: color-mix(in srgb, var(--color-accent-500) 28%, var(--border-subtle));
+      color: var(--color-accent-500);
     }
     .bf-badge-success {
-      background: color-mix(in srgb, var(--color-success, #34d399) 14%, transparent);
-      border-color: color-mix(in srgb, var(--color-success, #34d399) 28%, var(--border-subtle, rgba(255, 255, 255, 0.1)));
-      color: var(--color-success, #34d399);
+      background: color-mix(in srgb, var(--color-success) 14%, transparent);
+      border-color: color-mix(in srgb, var(--color-success) 28%, var(--border-subtle));
+      color: var(--color-success);
     }
     .bf-badge-warning {
-      background: color-mix(in srgb, var(--color-warning, #f59e0b) 14%, transparent);
-      border-color: color-mix(in srgb, var(--color-warning, #f59e0b) 28%, var(--border-subtle, rgba(255, 255, 255, 0.1)));
-      color: var(--color-warning, #f59e0b);
+      background: color-mix(in srgb, var(--color-warning) 14%, transparent);
+      border-color: color-mix(in srgb, var(--color-warning) 28%, var(--border-subtle));
+      color: var(--color-warning);
     }
     .bf-badge-error {
-      background: color-mix(in srgb, var(--color-error, #ef4444) 14%, transparent);
-      border-color: color-mix(in srgb, var(--color-error, #ef4444) 28%, var(--border-subtle, rgba(255, 255, 255, 0.1)));
-      color: var(--color-error, #ef4444);
+      background: color-mix(in srgb, var(--color-error) 14%, transparent);
+      border-color: color-mix(in srgb, var(--color-error) 28%, var(--border-subtle));
+      color: var(--color-error);
     }
     .bf-button {
       display: inline-flex;
@@ -333,28 +357,28 @@ export const GENERATIVE_WIDGET_SHELL_HTML = `<!DOCTYPE html>
       min-height: 32px;
       max-width: 100%;
       padding: 0 12px;
-      border: 1px solid var(--border-base, rgba(255, 255, 255, 0.16));
-      border-radius: var(--radius-sm, 6px);
-      background: var(--element-bg-base, rgba(255, 255, 255, 0.08));
-      color: var(--color-text-secondary, #b0b0b0);
+      border: 1px solid var(--border-base);
+      border-radius: var(--radius-sm);
+      background: var(--element-bg-base);
+      color: var(--color-text-secondary);
       text-decoration: none;
       white-space: nowrap;
-      transition: all var(--motion-fast, 0.15s) var(--easing-standard, ease);
+      transition: all var(--motion-fast) var(--easing-standard);
     }
     .bf-button:hover {
-      background: var(--element-bg-medium, rgba(255, 255, 255, 0.14));
-      color: var(--color-text-primary, #e8e8e8);
-      border-color: var(--border-medium, rgba(255, 255, 255, 0.24));
+      background: var(--element-bg-medium);
+      color: var(--color-text-primary);
+      border-color: var(--border-medium);
     }
     .bf-button-primary {
-      background: var(--color-accent-500, #60a5fa);
-      color: white;
+      background: var(--color-accent-500);
+      color: var(--color-static-white);
       border-color: transparent;
-      box-shadow: var(--shadow-xs, 0 1px 2px rgba(0, 0, 0, 0.4));
+      box-shadow: var(--shadow-xs);
     }
     .bf-button-primary:hover {
-      background: var(--color-accent-600, #3b82f6);
-      color: white;
+      background: var(--color-accent-600);
+      color: var(--color-static-white);
       border-color: transparent;
     }
     .bf-input,
@@ -364,11 +388,11 @@ export const GENERATIVE_WIDGET_SHELL_HTML = `<!DOCTYPE html>
       max-width: 100%;
       min-width: 0;
       padding: 0 12px;
-      border-radius: var(--radius-sm, 6px);
-      border: 1px solid var(--border-base, rgba(255, 255, 255, 0.16));
-      background: var(--element-bg-subtle, rgba(255, 255, 255, 0.05));
-      color: var(--color-text-primary, #e8e8e8);
-      transition: all var(--motion-fast, 0.15s) var(--easing-standard, ease);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-base);
+      background: var(--element-bg-subtle);
+      color: var(--color-text-primary);
+      transition: all var(--motion-fast) var(--easing-standard);
     }
     .bf-input,
     .bf-select {
@@ -382,14 +406,14 @@ export const GENERATIVE_WIDGET_SHELL_HTML = `<!DOCTYPE html>
     }
     .bf-input::placeholder,
     .bf-textarea::placeholder {
-      color: color-mix(in srgb, var(--color-text-muted, #858585) 55%, transparent);
+      color: color-mix(in srgb, var(--color-text-muted) 55%, transparent);
     }
     .bf-input:focus,
     .bf-textarea:focus,
     .bf-select:focus {
       outline: none;
-      border-color: var(--color-accent-500, #60a5fa);
-      background: var(--element-bg-soft, rgba(255, 255, 255, 0.08));
+      border-color: var(--color-accent-500);
+      background: var(--element-bg-soft);
     }
     .bf-list {
       display: flex;
@@ -401,25 +425,25 @@ export const GENERATIVE_WIDGET_SHELL_HTML = `<!DOCTYPE html>
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
-      gap: var(--spacing-3, 12px);
-      padding: var(--spacing-3, 12px);
-      border-radius: var(--radius-base, 8px);
-      background: var(--element-bg-subtle, rgba(255, 255, 255, 0.05));
+      gap: var(--spacing-3);
+      padding: var(--spacing-3);
+      border-radius: var(--radius-base);
+      background: var(--element-bg-subtle);
       border: 1px solid transparent;
     }
     .bf-list-item[data-file-path]:hover,
     .bf-list-item[data-bitfun-open-file]:hover,
     .bf-card[data-file-path]:hover,
     .bf-panel[data-file-path]:hover {
-      border-color: color-mix(in srgb, var(--color-accent-500, #60a5fa) 35%, var(--border-subtle, rgba(255, 255, 255, 0.1)));
-      background: color-mix(in srgb, var(--element-bg-base, rgba(255, 255, 255, 0.08)) 76%, var(--color-accent-500, #60a5fa));
+      border-color: color-mix(in srgb, var(--color-accent-500) 35%, var(--border-subtle));
+      background: color-mix(in srgb, var(--element-bg-base) 76%, var(--color-accent-500));
     }
     .bf-table-wrap {
       width: 100%;
       overflow-x: auto;
-      border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
-      border-radius: var(--radius-base, 8px);
-      background: var(--color-bg-secondary, #1c1c1f);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-base);
+      background: var(--color-bg-secondary);
     }
     .bf-table {
       width: 100%;
@@ -431,15 +455,15 @@ export const GENERATIVE_WIDGET_SHELL_HTML = `<!DOCTYPE html>
       padding: 10px 12px;
       text-align: left;
       vertical-align: top;
-      border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
-      color: var(--color-text-secondary, #b0b0b0);
+      border-bottom: 1px solid var(--border-subtle);
+      color: var(--color-text-secondary);
       font-size: 13px;
       word-break: break-word;
     }
     .bf-table th {
       font-size: 12px;
-      font-weight: var(--font-weight-medium, 500);
-      color: var(--color-text-muted, #858585);
+      font-weight: var(--font-weight-medium);
+      color: var(--color-text-muted);
       text-transform: uppercase;
       letter-spacing: 0.04em;
     }
@@ -450,42 +474,42 @@ export const GENERATIVE_WIDGET_SHELL_HTML = `<!DOCTYPE html>
       justify-content: center;
       gap: 8px;
       min-height: 140px;
-      padding: var(--spacing-5, 20px);
-      border-radius: var(--radius-lg, 12px);
-      border: 1px dashed var(--border-base, rgba(255, 255, 255, 0.16));
-      background: color-mix(in srgb, var(--element-bg-subtle, rgba(255, 255, 255, 0.05)) 80%, transparent);
-      color: var(--color-text-muted, #858585);
+      padding: var(--spacing-5);
+      border-radius: var(--radius-lg);
+      border: 1px dashed var(--border-base);
+      background: color-mix(in srgb, var(--element-bg-subtle) 80%, transparent);
+      color: var(--color-text-muted);
       text-align: center;
     }
     .bf-divider {
       width: 100%;
       height: 1px;
-      background: var(--border-subtle, rgba(255, 255, 255, 0.1));
+      background: var(--border-subtle);
       border: 0;
       margin: 0;
     }
     .bf-code {
       padding: 2px 6px;
       border-radius: 6px;
-      background: var(--element-bg-base, rgba(255, 255, 255, 0.08));
-      color: var(--color-text-primary, #e8e8e8);
-      font-family: var(--font-mono, "SF Mono", Consolas, monospace);
+      background: var(--element-bg-base);
+      color: var(--color-text-primary);
+      font-family: var(--font-mono);
       font-size: 12px;
     }
     .bf-mono {
-      font-family: var(--font-mono, "SF Mono", Consolas, monospace);
+      font-family: var(--font-mono);
     }
     @media (max-width: 560px) {
       .bf-card,
       .bf-panel,
       .bf-toolbar {
-        padding: var(--spacing-3, 12px);
+        padding: var(--spacing-3);
       }
       .bf-grid {
         grid-template-columns: 1fr;
       }
       .bf-title {
-        font-size: var(--font-size-base, 14px);
+        font-size: var(--font-size-base);
       }
     }
     @keyframes bitfunWidgetFadeIn {
@@ -526,7 +550,7 @@ export const GENERATIVE_WIDGET_SHELL_HTML = `<!DOCTYPE html>
         var text = normalizeSpace(value);
         if (!text) return '';
         if (text.length <= maxLength) return text;
-        return text.slice(0, Math.max(0, maxLength - 1)).trimEnd() + '…';
+        return text.slice(0, Math.max(0, maxLength - 3)).trimEnd() + '...';
       }
 
       function clearPromptTargetSelection() {
@@ -727,7 +751,10 @@ export const GENERATIVE_WIDGET_SHELL_HTML = `<!DOCTYPE html>
         var body = document.body;
         if (body) {
           body.style.background = vars['--color-bg-primary'] || 'transparent';
-          body.style.color = vars['--color-text-primary'] || '#e8e8e8';
+          body.style.color =
+            vars['--color-text-primary'] ||
+            getComputedStyle(root).getPropertyValue('--color-text-primary') ||
+            body.style.color;
           body.style.fontFamily = vars['--font-sans'] || body.style.fontFamily;
         }
       }

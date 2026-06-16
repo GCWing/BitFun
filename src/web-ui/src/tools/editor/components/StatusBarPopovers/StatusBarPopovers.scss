@@ -69,16 +69,16 @@
     color: var(--color-text-primary);
  
      &:hover {
-       background: rgba(255, 255, 255, 0.08);
+       background: var(--color-overlay-white-08);
      }
 
     &:focus-visible {
       outline: none;
-      background: rgba(255, 255, 255, 0.1);
+      background: var(--color-overlay-white-10);
     }
 
      &--active {
-       background: rgba(255, 255, 255, 0.12);
+       background: var(--color-overlay-white-12);
        color: var(--color-accent-400);
      }
    }

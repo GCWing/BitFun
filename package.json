@@ -1,7 +1,7 @@
 {
   "name": "BitFun",
   "private": true,
-  "version": "0.2.9",
+  "version": "0.2.10",
   "type": "module",
   "engines": {
     "node": ">=18.0.0"
@@ -25,6 +25,8 @@
     "i18n:contract:test": "node --test scripts/i18n-contract.test.mjs",
     "i18n:contract:test:ci": "cross-env BITFUN_I18N_CONTRACT_TEST_PROFILE=ci node --test scripts/i18n-contract.test.mjs",
     "i18n:audit": "node scripts/i18n-audit.mjs",
+    "theme:color-audit": "node scripts/audit-theme-colors.mjs",
+    "theme:color-audit:test": "node --test scripts/audit-theme-colors.test.mjs",
     "check:repo-hygiene": "node scripts/check-repo-hygiene.mjs",
     "check:github-config": "pnpm --dir src/web-ui exec node ../../scripts/check-github-config.mjs",
     "fmt:rs": "node scripts/format-changed-rust.mjs",

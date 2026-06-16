@@ -47,13 +47,13 @@
     transition: background 0.15s, color 0.15s, border-color 0.15s;
 
     &:hover:not(:disabled) {
-      background: var(--element-bg-base, rgba(255, 255, 255, 0.08));
+      background: var(--element-bg-base);
       border-color: var(--border-subtle);
       color: var(--color-text-primary);
     }
 
     &:active:not(:disabled) {
-      background: var(--element-bg-medium, rgba(255, 255, 255, 0.14));
+      background: var(--element-bg-medium);
     }
 
     &:disabled {
@@ -69,7 +69,7 @@
     background: transparent;
     border: 1px dashed var(--border-base);
     color: var(--color-text-primary);
-    font-family: var(--font-family-mono, Consolas, "Courier New", monospace);
+    font-family: var(--font-family-mono);
     font-size: 12px;
     word-break: break-all;
     overflow-wrap: anywhere;

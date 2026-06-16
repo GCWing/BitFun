@@ -5,7 +5,7 @@ use serde_json;
 
 /// Build the Runtime Adapter script (JS) to inject into the iframe.
 /// Exposes window.app with call(), fs.*, shell.*, net.*, os.*, storage.*, dialog.*,
-/// ai.*, clipboard.*, lifecycle, events.
+/// ai.*, agent.*, deck.*, clipboard.*, lifecycle, events.
 pub fn build_bridge_script(
     app_id: &str,
     app_data_dir: &str,
@@ -114,6 +114,24 @@ pub fn build_bridge_script(
       }},
       cancel:    (streamId) => _rpc('ai.cancel', {{ streamId }}),
       getModels: () => _rpc('ai.getModels', {{}}),
+    }},
+
+    // Agent namespace — full host agent turns (agent loop with tools and skills).
+    // Requires manifest permissions.agent.enabled = true; enforced host-side.
+    agent: {{
+      run:            (prompt, opts) => _rpc('agent.run', {{ prompt, ...(opts || {{}}) }}),
+      cancel:         (sessionId, turnId) => _rpc('agent.cancel', {{ sessionId, turnId }}),
+      turnText:       (sessionId, turnId) => _rpc('agent.turnText', {{ sessionId, turnId }}),
+      cancelStaleRuns: () => _rpc('agent.cancelStaleRuns', {{}}),
+      onEvent:        (fn) => app.on('agent:event', fn),
+      offEvent:       (fn) => app.off('agent:event', fn),
+    }},
+
+    // Deck namespace — renders one slide HTML page in a hidden host WebView
+    // and returns base64 PNG/PDF. Used by presentation MiniApps for
+    // page-by-page export rasterization.
+    deck: {{
+      renderPage: (opts) => _rpc('deck.renderPage', opts || {{}}),
     }},
 
     // Clipboard namespace — proxies to host navigator.clipboard (bypasses sandbox restriction).

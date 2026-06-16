@@ -1,1 +1,1 @@
-pub use crate::function_agents::runtime_services::CoreCommitAiAnalysisService as AIAnalysisService;
+pub use crate::function_agents::port_adapters::CoreCommitAiAnalysisService as AIAnalysisService;

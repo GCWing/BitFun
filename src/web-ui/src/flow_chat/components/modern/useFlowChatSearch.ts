@@ -48,6 +48,9 @@ function getVirtualItemSearchText(item: VirtualItem): string {
   if (item.type === 'explore-group') {
     return extractSearchableText(item.data.allItems);
   }
+  if (item.type === 'turn-completion-notice') {
+    return item.data.reasonCode;
+  }
   return '';
 }
 

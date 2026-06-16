@@ -4,8 +4,7 @@ use crate::agentic::tools::framework::Tool;
 use crate::agentic::tools::implementations::*;
 use crate::agentic::tools::registry::ProductToolDecoratorRef;
 use bitfun_agent_tools::{
-    StaticToolProviderFactory, StaticToolProviderPlan, ToolRegistry as AgentToolRegistry,
-    ToolRuntimeAssembly,
+    StaticToolProviderFactory, ToolRegistry as AgentToolRegistry, ToolRuntimeAssembly,
 };
 use bitfun_tool_packs::ToolProviderGroupPlan;
 use std::sync::Arc;
@@ -61,30 +60,15 @@ impl StaticToolProviderFactory<dyn Tool> for ProductConcreteToolFactory {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-struct ProductToolProviderPlanAdapter(ToolProviderGroupPlan);
-
-impl StaticToolProviderPlan for ProductToolProviderPlanAdapter {
-    fn provider_id(&self) -> &'static str {
-        self.0.provider_id()
-    }
-
-    fn tool_names(&self) -> &'static [&'static str] {
-        self.0.tool_names()
-    }
-}
-
 pub(in crate::agentic::tools) fn create_product_tool_registry_from_plan(
     plan: &[ToolProviderGroupPlan],
     tool_decorator: ProductToolDecoratorRef,
 ) -> AgentToolRegistry<dyn Tool> {
-    let adapters = plan
+    let entries = plan
         .iter()
-        .copied()
-        .map(ProductToolProviderPlanAdapter)
-        .collect::<Vec<_>>();
+        .map(|group| (group.provider_id(), group.tool_names()));
 
     ToolRuntimeAssembly::with_tool_decorator(tool_decorator)
-        .create_registry_from_static_provider_plans(&adapters, &ProductConcreteToolFactory)
+        .create_registry_from_static_provider_entries(entries, &ProductConcreteToolFactory)
         .expect("product capability tool provider plan must reference concrete core tools")
 }

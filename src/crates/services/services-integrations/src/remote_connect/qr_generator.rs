@@ -63,7 +63,7 @@ impl QrGenerator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::service::remote_connect::pairing::QrPayload;
+    use crate::remote_connect::pairing::QrPayload;
 
     #[test]
     fn build_url_includes_language_parameter() {

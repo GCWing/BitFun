@@ -6,6 +6,8 @@ import { workspaceAPI } from '@/infrastructure/api';
 import type {
   ApplicationState as APIApplicationState,
   AppStatus as APIAppStatus,
+  RemoteWorkspaceSnapshot as APIRemoteWorkspaceSnapshot,
+  WorkspaceStartupStateSnapshot as APIWorkspaceStartupStateSnapshot,
   WorkspaceInfo as APIWorkspaceInfo,
 } from '@/infrastructure/api/service-api/GlobalAPI';
 import { createLogger } from '../utils/logger';
@@ -112,6 +114,30 @@ export interface WorkspaceInfo {
   sshHost?: string;
 }
 
+export interface RemoteWorkspaceSnapshot {
+  connectionId: string;
+  connectionName: string;
+  remotePath: string;
+  sshHost?: string;
+}
+
+function summarizeWorkspacesForLog(workspaces: WorkspaceInfo[]) {
+  return workspaces.reduce(
+    (summary, workspace) => {
+      summary.total += 1;
+      if (workspace.workspaceKind === WorkspaceKind.Assistant) {
+        summary.assistant += 1;
+      } else if (workspace.workspaceKind === WorkspaceKind.Remote) {
+        summary.remote += 1;
+      } else {
+        summary.normal += 1;
+      }
+      return summary;
+    },
+    { total: 0, normal: 0, assistant: 0, remote: 0 }
+  );
+}
+
 export function isRemoteWorkspace(workspace: WorkspaceInfo | null | undefined): boolean {
   return workspace?.workspaceKind === WorkspaceKind.Remote;
 }
@@ -164,10 +190,18 @@ export interface CacheStatistics {
   oldestCacheAge?: string;
 }
 
+export interface WorkspaceStartupState {
+  cleanupRemovedCount: number;
+  currentWorkspace: WorkspaceInfo | null;
+  recentWorkspaces: WorkspaceInfo[];
+  openedWorkspaces: WorkspaceInfo[];
+  legacyRemoteWorkspace: RemoteWorkspaceSnapshot | null;
+}
+
  
 export interface GlobalStateAPI {
   
-  initializeGlobalState(): Promise<string>;
+  initializeWorkspaceStartupState(): Promise<WorkspaceStartupState>;
   
   
   getAppState(): Promise<ApplicationState>;
@@ -328,6 +362,21 @@ function mapWorkspaceInfo(workspace: APIWorkspaceInfo): WorkspaceInfo {
   };
 }
 
+function mapRemoteWorkspaceSnapshot(
+  workspace: APIRemoteWorkspaceSnapshot | null | undefined
+): RemoteWorkspaceSnapshot | null {
+  if (!workspace) {
+    return null;
+  }
+
+  return {
+    connectionId: workspace.connectionId,
+    connectionName: workspace.connectionName,
+    remotePath: workspace.remotePath,
+    sshHost: workspace.sshHost?.trim() || undefined,
+  };
+}
+
 function mapApplicationState(state: APIApplicationState): ApplicationState {
   const now = new Date().toISOString();
   return {
@@ -340,12 +389,31 @@ function mapApplicationState(state: APIApplicationState): ApplicationState {
   };
 }
 
+function mapWorkspaceStartupStateSnapshot(
+  snapshot: APIWorkspaceStartupStateSnapshot
+): WorkspaceStartupState {
+  const recentWorkspaces = snapshot.recentWorkspaces.map(mapWorkspaceInfo);
+  return {
+    cleanupRemovedCount: snapshot.cleanupRemovedCount,
+    currentWorkspace: snapshot.currentWorkspace ? mapWorkspaceInfo(snapshot.currentWorkspace) : null,
+    recentWorkspaces,
+    openedWorkspaces: snapshot.openedWorkspaces.map(mapWorkspaceInfo),
+    legacyRemoteWorkspace: mapRemoteWorkspaceSnapshot(snapshot.legacyRemoteWorkspace),
+  };
+}
+
  
 export function createGlobalStateAPI(): GlobalStateAPI {
   return {
     
-    async initializeGlobalState(): Promise<string> {
-      return await globalAPI.initializeGlobalState();
+    async initializeWorkspaceStartupState(): Promise<WorkspaceStartupState> {
+      const snapshot = await globalAPI.initializeWorkspaceStartupState();
+      const mappedSnapshot = mapWorkspaceStartupStateSnapshot(snapshot);
+      logger.debug(
+        'initializeWorkspaceStartupState returned',
+        summarizeWorkspacesForLog(mappedSnapshot.recentWorkspaces)
+      );
+      return mappedSnapshot;
     },
 
     
@@ -436,7 +504,7 @@ export function createGlobalStateAPI(): GlobalStateAPI {
 
     async getRecentWorkspaces(): Promise<WorkspaceInfo[]> {
       const workspaces = (await globalAPI.getRecentWorkspaces()).map(mapWorkspaceInfo);
-      logger.debug('getRecentWorkspaces returned', workspaces);
+      logger.debug('getRecentWorkspaces returned', summarizeWorkspacesForLog(workspaces));
       return workspaces;
     },
 

@@ -17,7 +17,7 @@
       align-items: center;
       justify-content: center;
       color: var(--color-text-muted);
-      font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+      font-size: var(--tool-card-action-font-size);
     }
   }
 
@@ -39,7 +39,7 @@
   }
 
   &__header-title {
-    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+    font-size: var(--tool-card-action-font-size);
     font-weight: 500;
     color: var(--color-text-primary);
     overflow: hidden;
@@ -55,7 +55,7 @@
     font-size: var(--flowchat-font-size-xxs);
     font-weight: 500;
     color: var(--color-text-secondary);
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--color-overlay-white-08);
     flex-shrink: 0;
   }
 
@@ -93,8 +93,8 @@
     align-items: flex-start;
     gap: 8px;
     padding: 10px 16px;
-    background: color-mix(in srgb, var(--color-error, #ef4444) 10%, var(--color-bg-secondary));
-    border-bottom: 1px solid color-mix(in srgb, var(--color-error, #ef4444) 22%, transparent);
+    background: color-mix(in srgb, var(--color-error) 10%, var(--color-bg-secondary));
+    border-bottom: 1px solid color-mix(in srgb, var(--color-error) 22%, transparent);
     flex-shrink: 0;
 
     &-icon {
@@ -105,8 +105,8 @@
 
     &-text {
       flex: 1;
-      font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
-      line-height: var(--flowchat-support-line-height, 1.45);
+      font-size: var(--tool-card-action-font-size);
+      line-height: var(--flowchat-support-line-height);
       color: var(--color-error);
       word-break: break-word;
       user-select: text;
@@ -130,13 +130,13 @@
 
     summary {
       padding: 8px 12px;
-      font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+      font-size: var(--tool-card-action-font-size);
       font-weight: 500;
       color: var(--color-text-secondary);
       cursor: pointer;
       user-select: none;
       transition: all 0.15s ease;
-      border: 1px dashed var(--tool-card-border, rgba(255, 255, 255, 0.15));
+      border: 1px dashed var(--tool-card-border);
       border-radius: 6px;
 
       &:hover {
@@ -158,16 +158,16 @@
     margin: 0;
     padding: 10px 12px;
     font-family: inherit;
-    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+    font-size: var(--tool-card-action-font-size);
     font-weight: 500;
-    line-height: var(--flowchat-support-line-height, 1.45);
-    color: var(--tool-card-text-secondary, var(--color-text-secondary));
+    line-height: var(--flowchat-support-line-height);
+    color: var(--tool-card-text-secondary);
     background: transparent;
     white-space: pre-wrap;
     word-break: break-word;
     max-height: 300px;
     overflow-y: auto;
-    border: 1px dashed var(--tool-card-border, rgba(255, 255, 255, 0.15));
+    border: 1px dashed var(--tool-card-border);
     border-top: none;
     border-radius: 0 0 6px 6px;
 
@@ -179,11 +179,11 @@
       background: transparent;
     }
     &::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.1);
+      background: var(--color-overlay-white-10);
       border-radius: 2px;
       
       &:hover {
-        background: rgba(255, 255, 255, 0.2);
+        background: var(--color-overlay-white-20);
       }
     }
   }
@@ -195,13 +195,13 @@
 
     summary {
       padding: 8px 12px;
-      font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+      font-size: var(--tool-card-action-font-size);
       font-weight: 500;
       color: var(--color-text-secondary);
       cursor: pointer;
       user-select: none;
       transition: all 0.15s ease;
-      border: 1px dashed var(--tool-card-border, rgba(255, 255, 255, 0.15));
+      border: 1px dashed var(--tool-card-border);
       border-radius: 6px;
 
       &:hover {
@@ -224,16 +224,16 @@
     flex-direction: column;
     gap: 6px;
     padding: 10px 12px;
-    border: 1px dashed var(--tool-card-border, rgba(255, 255, 255, 0.15));
+    border: 1px dashed var(--tool-card-border);
     border-top: none;
     border-radius: 0 0 6px 6px;
-    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
-    line-height: var(--flowchat-support-line-height, 1.45);
+    font-size: var(--tool-card-action-font-size);
+    line-height: var(--flowchat-support-line-height);
   }
 
   &__reviewer-role {
     font-weight: 600;
-    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+    font-size: var(--tool-card-action-font-size);
   }
 
   &__reviewer-desc {
@@ -272,14 +272,14 @@
     gap: 8px;
     padding: 12px;
     border-radius: 8px;
-    border: 1px solid var(--tool-card-border, rgba(255, 255, 255, 0.15));
-    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--tool-card-border);
+    background: var(--color-overlay-white-03);
     flex-shrink: 0;
   }
 
   &__actions-hint {
-    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
-    line-height: var(--flowchat-support-line-height, 1.45);
+    font-size: var(--tool-card-action-font-size);
+    line-height: var(--flowchat-support-line-height);
     color: var(--color-text-muted);
   }
 
@@ -291,14 +291,14 @@
     gap: 12px;
     padding: 40px 20px;
     color: var(--color-text-muted);
-    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+    font-size: var(--tool-card-action-font-size);
   }
 
   &__loading--inline {
     flex-direction: row;
     justify-content: center;
     padding: 10px 12px 4px;
-    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+    font-size: var(--tool-card-action-font-size);
     flex-shrink: 0;
   }
 
@@ -308,10 +308,10 @@
     gap: 8px;
     padding: 10px 12px;
     border-radius: 6px;
-    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+    font-size: var(--tool-card-action-font-size);
     color: var(--color-error);
-    background: rgba(239, 68, 68, 0.08);
-    border: 1px solid rgba(239, 68, 68, 0.2);
+    background: var(--glass-red-base);
+    border: 1px solid color-mix(in srgb, var(--color-error) 20%, transparent);
     flex-shrink: 0;
 
     svg {

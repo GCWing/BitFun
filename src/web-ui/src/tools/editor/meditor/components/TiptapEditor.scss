@@ -1,11 +1,6 @@
 @use '../../../../component-library/styles/tokens.scss' as *;
 
 .m-editor-tiptap {
-  --m-editor-list-indent: 1.75rem;
-  --m-editor-list-marker-width: 1.25rem;
-  --m-editor-list-gap: 0.25rem;
-  --m-editor-task-checkbox-size: 1rem;
-
   position: relative;
   width: 100%;
   height: 100%;
@@ -36,7 +31,7 @@
       transition: background $motion-base $easing-standard;
 
       &:hover {
-        background: var(--element-bg-subtle, #{$element-bg-subtle});
+        background: var(--element-bg-subtle);
       }
 
       &.m-editor-tiptap-block-highlighted {
@@ -203,7 +198,7 @@
       margin: $size-gap-4 0;
       padding: 0;
       border: 0;
-      border-top: 1px solid var(--border-subtle, #{$border-subtle});
+      border-top: 1px solid var(--border-subtle);
       background: none;
       background-color: transparent;
       overflow: visible;
@@ -345,7 +340,7 @@
       list-style: none;
       position: relative;
       margin-bottom: $size-gap-1;
-      padding-left: calc(var(--m-editor-list-marker-width) + var(--m-editor-list-gap));
+      padding-left: calc(var(--markdown-editor-list-marker-width) + var(--markdown-editor-list-gap));
     }
 
     > ul:not([data-type='taskList']) > li::before,
@@ -353,7 +348,7 @@
       position: absolute;
       left: 0;
       top: 0;
-      width: var(--m-editor-list-marker-width);
+      width: var(--markdown-editor-list-marker-width);
       color: var(--color-text-primary);
       font-weight: $font-weight-medium;
     }
@@ -380,7 +375,7 @@
     li > ol:not([data-type='taskList']) {
       margin-top: $size-gap-1;
       margin-bottom: 0;
-      padding-left: var(--m-editor-list-indent);
+      padding-left: var(--markdown-editor-list-indent);
     }
 
     > ul[data-type='taskList'] {
@@ -391,14 +386,14 @@
 
     > ul[data-type='taskList'] > li {
       display: grid;
-      grid-template-columns: var(--m-editor-list-marker-width) 1fr;
-      column-gap: var(--m-editor-list-gap);
+      grid-template-columns: var(--markdown-editor-list-marker-width) 1fr;
+      column-gap: var(--markdown-editor-list-gap);
       align-items: start;
       margin-bottom: $size-gap-1;
     }
 
     > ul[data-type='taskList'] > li > label {
-      width: var(--m-editor-list-marker-width);
+      width: var(--markdown-editor-list-marker-width);
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -407,8 +402,8 @@
 
     > ul[data-type='taskList'] > li > label > input[type='checkbox'] {
       margin: 0;
-      width: var(--m-editor-task-checkbox-size);
-      height: var(--m-editor-task-checkbox-size);
+      width: var(--markdown-editor-task-checkbox-size);
+      height: var(--markdown-editor-task-checkbox-size);
     }
 
     > ul[data-type='taskList'] > li > label > span {
@@ -424,7 +419,7 @@
     ul[data-type='taskList'] li > ol {
       margin-top: $size-gap-1;
       margin-bottom: 0;
-      padding-left: var(--m-editor-list-indent);
+      padding-left: var(--markdown-editor-list-indent);
     }
 
     li > p {
@@ -469,15 +464,15 @@
   .m-editor-inline-ai__panel {
     width: min(26rem, calc(100vw - #{$size-gap-8}));
     padding: 10px 10px 8px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--color-overlay-white-10);
     border-radius: 12px;
     background: var(--color-bg-tertiary);
     backdrop-filter: blur(16px) saturate(1.2);
     -webkit-backdrop-filter: blur(16px) saturate(1.2);
     box-shadow:
       0 8px 24px rgba(0, 0, 0, 0.35),
-      inset 0 1px 0 rgba(255, 255, 255, 0.08),
-      inset 0 -1px 0 rgba(255, 255, 255, 0.02);
+      inset 0 1px 0 var(--color-overlay-white-08),
+      inset 0 -1px 0 var(--color-overlay-white-02);
     transition:
       transform 0.28s cubic-bezier(0.4, 0, 0.2, 1),
       box-shadow 0.28s cubic-bezier(0.4, 0, 0.2, 1);
@@ -487,9 +482,9 @@
     transform: translateY(-4px);
     box-shadow:
       0 16px 40px rgba(0, 0, 0, 0.45),
-      0 0 28px rgba(96, 165, 250, 0.08),
-      inset 0 1px 0 rgba(255, 255, 255, 0.12),
-      inset 0 -1px 0 rgba(255, 255, 255, 0.03);
+      0 0 28px var(--color-accent-100),
+      inset 0 1px 0 var(--color-overlay-white-12),
+      inset 0 -1px 0 var(--color-overlay-white-03);
   }
 
   :root[data-theme='light'] &,
@@ -505,7 +500,7 @@
     .m-editor-inline-ai:hover .m-editor-inline-ai__panel {
       box-shadow:
         0 14px 36px rgba(15, 23, 42, 0.12),
-        0 0 24px rgba(59, 130, 246, 0.08),
+        0 0 24px var(--glass-blue-subtle),
         inset 0 1px 0 rgba(255, 255, 255, 0.95);
     }
   }
@@ -520,7 +515,7 @@
       padding: 0 12px 0 14px;
       border-radius: 999px;
       background: color-mix(in srgb, var(--color-text-muted) 8%, transparent);
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--color-overlay-white-08);
     }
 
     .bitfun-input {
@@ -581,27 +576,27 @@
     &:not(:disabled) {
       background: linear-gradient(
         135deg,
-        rgba(80, 130, 255, 0.85),
-        rgba(120, 100, 255, 0.9)
+        color-mix(in srgb, var(--color-accent-500) 85%, transparent),
+        color-mix(in srgb, var(--color-purple-500) 90%, transparent)
       );
-      border: 1px solid rgba(140, 160, 255, 0.6);
-      color: #fff;
+      border: 1px solid color-mix(in srgb, var(--color-accent-500) 60%, transparent);
+      color: var(--color-static-white);
       box-shadow:
-        0 2px 8px rgba(100, 140, 255, 0.4),
-        0 0 12px rgba(120, 100, 255, 0.25);
+        0 2px 8px color-mix(in srgb, var(--color-accent-500) 40%, transparent),
+        0 0 12px color-mix(in srgb, var(--color-purple-500) 25%, transparent);
     }
 
     &:hover:not(:disabled) {
       background: linear-gradient(
         135deg,
-        rgba(90, 150, 255, 1),
-        rgba(140, 120, 255, 1)
+        color-mix(in srgb, var(--color-accent-500) 94%, var(--color-static-white)),
+        color-mix(in srgb, var(--color-purple-500) 92%, var(--color-static-white))
       );
-      border-color: rgba(160, 180, 255, 0.8);
+      border-color: color-mix(in srgb, var(--color-accent-500) 80%, transparent);
       transform: scale(1.06);
       box-shadow:
-        0 4px 14px rgba(100, 140, 255, 0.5),
-        0 0 18px rgba(140, 100, 255, 0.35);
+        0 4px 14px color-mix(in srgb, var(--color-accent-500) 50%, transparent),
+        0 0 18px color-mix(in srgb, var(--color-purple-500) 35%, transparent);
     }
 
     &:active:not(:disabled) {
@@ -651,7 +646,7 @@
     transition: background $motion-fast $easing-standard, color $motion-fast $easing-standard;
 
     &:hover {
-      background: var(--element-bg-medium, #{$element-bg-medium});
+      background: var(--element-bg-medium);
     }
   }
 
@@ -944,8 +939,8 @@
 
   .m-editor-raw-html-inline {
     color: var(--color-text-secondary);
-    background: color-mix(in srgb, var(--color-warning, #f59e0b) 8%, transparent);
-    border: 1px solid color-mix(in srgb, var(--color-warning, #f59e0b) 28%, transparent);
+    background: color-mix(in srgb, var(--color-warning) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-warning) 28%, transparent);
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -960,7 +955,7 @@
     font-weight: $font-weight-semibold;
     letter-spacing: 0.02em;
     text-transform: uppercase;
-    color: var(--color-warning, #f59e0b);
+    color: var(--color-warning);
   }
 
   .m-editor-raw-html-inline__source {

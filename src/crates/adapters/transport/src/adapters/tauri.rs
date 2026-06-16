@@ -141,6 +141,7 @@ impl TransportAdapter for TauriTransportAdapter {
                 session_id,
                 turn_id,
                 round_id,
+                round_group_id,
                 round_index,
                 model_id,
             } => {
@@ -150,6 +151,7 @@ impl TransportAdapter for TauriTransportAdapter {
                         "sessionId": session_id,
                         "turnId": turn_id,
                         "roundId": round_id,
+                        "roundGroupId": round_group_id,
                         "roundIndex": round_index,
                         "modelId": model_id,
                     }),
@@ -159,6 +161,8 @@ impl TransportAdapter for TauriTransportAdapter {
                 session_id,
                 turn_id,
                 round_id,
+                attempt_id,
+                attempt_index,
                 text,
             } => {
                 self.app_handle.emit(
@@ -167,6 +171,8 @@ impl TransportAdapter for TauriTransportAdapter {
                         "sessionId": session_id,
                         "turnId": turn_id,
                         "roundId": round_id,
+                        "attemptId": attempt_id,
+                        "attemptIndex": attempt_index,
                         "text": text,
                     }),
                 )?;
@@ -175,6 +181,8 @@ impl TransportAdapter for TauriTransportAdapter {
                 session_id,
                 turn_id,
                 round_id,
+                attempt_id,
+                attempt_index,
                 content,
                 is_end,
             } => {
@@ -184,6 +192,8 @@ impl TransportAdapter for TauriTransportAdapter {
                         "sessionId": session_id,
                         "turnId": turn_id,
                         "roundId": round_id,
+                        "attemptId": attempt_id,
+                        "attemptIndex": attempt_index,
                         "text": content,
                         "contentType": "thinking",
                         "isThinkingEnd": is_end,
@@ -194,6 +204,8 @@ impl TransportAdapter for TauriTransportAdapter {
                 session_id,
                 turn_id,
                 round_id,
+                attempt_id,
+                attempt_index,
                 tool_event,
             } => {
                 self.app_handle.emit(
@@ -202,6 +214,8 @@ impl TransportAdapter for TauriTransportAdapter {
                         "sessionId": session_id,
                         "turnId": turn_id,
                         "roundId": round_id,
+                        "attemptId": attempt_id,
+                        "attemptIndex": attempt_index,
                         "toolEvent": tool_event,
                     }),
                 )?;
@@ -212,6 +226,7 @@ impl TransportAdapter for TauriTransportAdapter {
                 partial_recovery_reason,
                 success,
                 finish_reason,
+                has_final_response,
                 ..
             } => {
                 self.app_handle.emit(
@@ -222,6 +237,7 @@ impl TransportAdapter for TauriTransportAdapter {
                         "partialRecoveryReason": partial_recovery_reason,
                         "success": success,
                         "finishReason": finish_reason,
+                        "hasFinalResponse": has_final_response,
                     }),
                 )?;
             }

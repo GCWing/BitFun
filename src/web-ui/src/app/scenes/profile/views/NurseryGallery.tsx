@@ -243,7 +243,7 @@ const NurseryGallery: React.FC = () => {
                   onClick={() => openAssistant(workspace.id)}
                   onNewSession={() => { void handleNewAssistantSession(workspace); }}
                   onDelete={isPrimary ? undefined : () => handleDeleteRequest(workspace)}
-                  style={{ '--card-index': i } as React.CSSProperties}
+                  style={{ '--surface-stagger-index': i } as React.CSSProperties}
                 />
               );
             })}

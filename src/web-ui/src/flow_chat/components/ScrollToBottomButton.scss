@@ -75,10 +75,10 @@
     justify-content: center;
     
     // Glass-like badge
-    background: rgba(59, 130, 246, 0.9);
+    background: var(--color-accent-800);
     color: white;
     border-radius: 8px;
-    border: 1px solid rgba(96, 165, 250, 0.3);
+    border: 1px solid color-mix(in srgb, var(--color-accent-500) 30%, transparent);
     
     // Frosted effect
     backdrop-filter: blur(8px);
@@ -89,8 +89,8 @@
     line-height: 1;
     
     box-shadow: 
-      0 2px 8px rgba(59, 130, 246, 0.4),
-      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+      0 2px 8px var(--border-accent),
+      inset 0 1px 0 var(--color-overlay-white-20);
   }
 }
 

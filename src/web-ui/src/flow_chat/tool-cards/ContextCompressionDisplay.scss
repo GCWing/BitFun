@@ -11,7 +11,7 @@
   .compression-info {
     display: flex;
     align-items: center;
-    gap: var(--flowchat-control-gap, 0.5rem);
+    gap: var(--flowchat-control-gap);
     flex-wrap: nowrap;
 
     .token-stat {
@@ -29,8 +29,8 @@
       font-weight: 600;
       flex-shrink: 0;
       white-space: nowrap;
-      color: rgba(34, 197, 94, 0.75);
-      background: rgba(34, 197, 94, 0.08);
+      color: color-mix(in srgb, var(--tool-card-positive-color) 75%, transparent);
+      background: color-mix(in srgb, var(--tool-card-positive-color) 8%, transparent);
     }
 
     .processing-text {
@@ -46,24 +46,24 @@
   }
 
   .error-content {
-    padding: var(--flowchat-card-expanded-pad-y, 0.5rem) var(--size-gap-4, 16px);
-    background: rgba(239, 68, 68, 0.05);
-    border-top: 1px solid rgba(239, 68, 68, 0.2);
+    padding: var(--flowchat-card-expanded-pad-y) var(--size-gap-4);
+    background: var(--glass-red-subtle);
+    border-top: 1px solid color-mix(in srgb, var(--color-error) 20%, transparent);
 
     .error-message {
-      color: rgba(239, 68, 68, 0.9);
+      color: color-mix(in srgb, var(--color-error) 90%, transparent);
       font-size: var(--flowchat-font-size-sm);
     }
   }
 
   .icon-completed {
-    color: rgba(34, 197, 94, 0.9);
+    color: var(--tool-card-positive-icon);
   }
 
   .compression-detail-note {
-    padding: var(--flowchat-card-expanded-pad-y, 0.5rem) var(--size-gap-4, 16px);
+    padding: var(--flowchat-card-expanded-pad-y) var(--size-gap-4);
     font-size: var(--flowchat-font-size-sm);
-    line-height: var(--flowchat-support-line-height, 1.45);
+    line-height: var(--flowchat-support-line-height);
     color: var(--tool-card-text-secondary);
     background: rgba(148, 163, 184, 0.08);
     border-top: 1px solid rgba(148, 163, 184, 0.18);

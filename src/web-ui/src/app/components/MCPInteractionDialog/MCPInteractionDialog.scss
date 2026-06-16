@@ -11,7 +11,7 @@
   align-items: center;
   gap: 8px;
   font-size: 12px;
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary);
 }
 
 .mcp-interaction-dialog__server {
@@ -21,7 +21,7 @@
 }
 
 .mcp-interaction-dialog__queue {
-  color: var(--text-tertiary, #6b7280);
+  color: var(--text-tertiary);
 }
 
 .mcp-interaction-dialog__section {
@@ -32,16 +32,16 @@
 
 .mcp-interaction-dialog__label {
   font-size: 12px;
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary);
 }
 
 .mcp-interaction-dialog__params {
   margin: 0;
   padding: 10px;
   border-radius: 8px;
-  background: var(--bg-tertiary, #111827);
-  border: 1px solid var(--border-primary, #374151);
-  color: var(--text-primary, #e5e7eb);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  color: var(--text-primary);
   font-size: 12px;
   line-height: 1.5;
   white-space: pre-wrap;
@@ -55,9 +55,9 @@
   min-height: 190px;
   padding: 10px;
   border-radius: 8px;
-  background: var(--bg-secondary, #0b1220);
-  border: 1px solid var(--border-primary, #374151);
-  color: var(--text-primary, #e5e7eb);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  color: var(--text-primary);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 12px;
   line-height: 1.5;

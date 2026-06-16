@@ -8,13 +8,13 @@
 @keyframes defaultToolConfirmationPulse {
   0%, 100% {
     box-shadow:
-      0 0 0 1px rgba(245, 158, 11, 0.14),
-      0 0 12px rgba(245, 158, 11, 0.16);
+      0 0 0 1px color-mix(in srgb, var(--color-warning) 14%, transparent),
+      0 0 12px color-mix(in srgb, var(--color-warning) 16%, transparent);
   }
   50% {
     box-shadow:
-      0 0 0 2px rgba(245, 158, 11, 0.2),
-      0 0 16px rgba(245, 158, 11, 0.22);
+      0 0 0 2px color-mix(in srgb, var(--color-warning) 20%, transparent),
+      0 0 16px color-mix(in srgb, var(--color-warning) 22%, transparent);
   }
 }
 
@@ -22,7 +22,7 @@
   .compact-tool-card {
     min-height: 0;
     padding: 0 !important;
-    line-height: var(--flowchat-support-line-height, 1.45);
+    line-height: var(--flowchat-support-line-height);
   }
 
   .compact-card-action {
@@ -59,7 +59,7 @@
     background: transparent;
     color: var(--color-text-muted);
     font-size: var(--flowchat-font-size-xxs);
-    line-height: var(--flowchat-compact-line-height, 1.32);
+    line-height: var(--flowchat-compact-line-height);
     font-weight: 600;
     letter-spacing: 0.04em;
     text-transform: uppercase;
@@ -68,13 +68,13 @@
   .default-tool-card__expanded {
     display: flex;
     flex-direction: column;
-    gap: var(--flowchat-card-gap, 0.45rem);
+    gap: var(--flowchat-card-gap);
   }
 
   .default-tool-card__meta {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--flowchat-inline-gap, 0.35rem);
+    gap: var(--flowchat-inline-gap);
     align-items: center;
     padding-bottom: 8px;
     border-bottom: 1px solid var(--border-subtle);
@@ -83,9 +83,9 @@
   .default-tool-card__meta-label {
     display: inline-flex;
     align-items: center;
-    padding: 0.125rem var(--flowchat-control-pad-x, 0.75rem);
+    padding: 0.125rem var(--flowchat-control-pad-x);
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--color-overlay-white-04);
     border: 1px solid var(--border-subtle);
     color: var(--color-text-secondary);
     font-size: var(--flowchat-font-size-xs);
@@ -95,14 +95,14 @@
 
   .default-tool-card__meta-description {
     color: var(--color-text-muted);
-    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
-    line-height: var(--flowchat-support-line-height, 1.45);
+    font-size: var(--tool-card-action-font-size);
+    line-height: var(--flowchat-support-line-height);
   }
 
   .default-tool-card__section {
     display: flex;
     flex-direction: column;
-    gap: var(--flowchat-inline-gap, 0.35rem);
+    gap: var(--flowchat-inline-gap);
   }
 
   .default-tool-card__section-label {
@@ -115,14 +115,14 @@
 
   .default-tool-card__code-block {
     margin: 0;
-    padding: var(--flowchat-code-block-pad-y, 0.55rem) var(--flowchat-code-block-pad-x, 0.75rem);
+    padding: var(--flowchat-code-block-pad-y) var(--flowchat-code-block-pad-x);
     border: 1px solid var(--border-subtle);
     border-radius: 8px;
     background: var(--color-bg-secondary);
     color: var(--color-text-primary);
     font-family: var(--tool-card-font-mono);
-    font-size: var(--flowchat-code-font-size, 0.92em);
-    line-height: var(--flowchat-code-line-height, 1.52);
+    font-size: var(--flowchat-code-font-size);
+    line-height: var(--flowchat-code-line-height);
     white-space: pre-wrap;
     word-break: break-word;
     overflow: auto;
@@ -130,20 +130,20 @@
   }
 
   .default-tool-card__error-message {
-    padding: var(--flowchat-card-pad-y, 0.625rem) var(--flowchat-card-pad-x, 0.75rem);
-    border: 1px solid rgba(239, 68, 68, 0.24);
+    padding: var(--flowchat-card-pad-y) var(--flowchat-card-pad-x);
+    border: 1px solid color-mix(in srgb, var(--color-error) 24%, transparent);
     border-radius: 8px;
-    background: rgba(239, 68, 68, 0.08);
+    background: var(--glass-red-base);
     color: var(--color-error);
-    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
-    line-height: var(--flowchat-support-line-height, 1.45);
+    font-size: var(--tool-card-action-font-size);
+    line-height: var(--flowchat-support-line-height);
     white-space: pre-wrap;
     word-break: break-word;
   }
 
   .default-tool-card__actions {
     display: flex;
-    gap: var(--flowchat-inline-gap, 0.35rem);
+    gap: var(--flowchat-inline-gap);
     flex-wrap: wrap;
   }
 
@@ -151,8 +151,8 @@
     appearance: none;
     border: 1px solid var(--border-base);
     border-radius: 8px;
-    padding: var(--flowchat-control-pad-y, 0.35rem) var(--flowchat-control-pad-x, 0.75rem);
-    font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+    padding: var(--flowchat-control-pad-y) var(--flowchat-control-pad-x);
+    font-size: var(--tool-card-action-font-size);
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -164,39 +164,39 @@
   }
 
   .default-tool-card__button--confirm {
-    background: rgba(34, 197, 94, 0.12);
-    border-color: rgba(34, 197, 94, 0.26);
+    background: color-mix(in srgb, var(--tool-card-positive-color) 12%, transparent);
+    border-color: color-mix(in srgb, var(--tool-card-positive-color) 26%, transparent);
     color: #86efac;
   }
 
   .default-tool-card__button--confirm:hover:not(:disabled) {
-    background: rgba(34, 197, 94, 0.18);
-    border-color: rgba(34, 197, 94, 0.4);
+    background: color-mix(in srgb, var(--tool-card-positive-color) 18%, transparent);
+    border-color: color-mix(in srgb, var(--tool-card-positive-color) 40%, transparent);
   }
 
   .default-tool-card__button--reject {
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--color-overlay-white-03);
     color: var(--color-text-secondary);
   }
 
   .default-tool-card__button--reject:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--color-overlay-white-06);
     color: var(--color-text-primary);
   }
 
   &.requires-confirmation {
     .compact-tool-card {
       border-radius: 8px;
-      background: rgba(245, 158, 11, 0.05) !important;
+      background: color-mix(in srgb, var(--color-warning) 5%, transparent) !important;
       box-shadow:
-        inset 0 0 0 1px rgba(245, 158, 11, 0.18),
-        0 0 0 1px rgba(245, 158, 11, 0.1);
+        inset 0 0 0 1px color-mix(in srgb, var(--color-warning) 18%, transparent),
+        0 0 0 1px var(--color-warning-bg);
       animation: defaultToolConfirmationPulse 2s ease-in-out infinite;
     }
 
     .compact-card-status-icon,
     .compact-card-right-icon {
-      color: var(--color-warning, #f59e0b);
+      color: var(--color-warning);
     }
   }
 }

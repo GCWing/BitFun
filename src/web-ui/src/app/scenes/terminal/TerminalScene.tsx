@@ -29,17 +29,16 @@ const TerminalScene: React.FC<TerminalSceneProps> = ({ isActive = true }) => {
     setActiveSession(null);
   }, [setActiveSession]);
 
-  if (!isActive) {
-    return <div className="bitfun-terminal-scene" aria-hidden="true" />;
-  }
-
+  // Keep the ConnectedTerminal mounted when the scene is inactive. Unmounting
+  // would dispose xterm and force replay on return, which can lose scrollback
+  // and cursor state after resize-sensitive shell output.
   return (
-    <div className="bitfun-terminal-scene">
+    <div className="bitfun-terminal-scene" aria-hidden={!isActive}>
       {activeSessionId ? (
         <ConnectedTerminal
           key={activeSessionId}
           sessionId={activeSessionId}
-          autoFocus
+          autoFocus={isActive}
           showToolbar
           showStatusBar
           onExit={handleExit}

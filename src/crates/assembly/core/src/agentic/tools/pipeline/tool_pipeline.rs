@@ -17,28 +17,28 @@ use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_agent_runtime::tool_confirmation::{
     resolve_confirmation_failure, resolve_confirmation_wait_result, resolve_tool_confirmation_plan,
-    ConfirmationFailureKind, ToolConfirmationPlan, ToolConfirmationRequestFacts,
-    ToolConfirmationWaitResult,
+    ConfirmationFailureKind, ToolConfirmationChannelStore, ToolConfirmationPlan,
+    ToolConfirmationRequestFacts, ToolConfirmationResponse, ToolConfirmationWaitResult,
 };
 use bitfun_agent_tools::{
     build_invalid_tool_call_error_message, build_tool_call_truncation_recovery_notice,
     build_tool_execution_error_presentation, build_user_steering_interrupted_presentation,
     render_tool_result_for_assistant, truncate_raw_tool_arguments_preview,
-    truncate_tool_arguments_preview, validate_tool_execution_admission, ToolCallLoopDecision,
-    ToolCallLoopHistory, ToolExecutionAdmissionRejection, ToolExecutionAdmissionRequest,
-    GET_TOOL_SPEC_TOOL_NAME, USER_STEERING_INTERRUPTED_MESSAGE,
+    truncate_tool_arguments_preview, validate_tool_execution_admission,
+    ToolExecutionAdmissionRejection, ToolExecutionAdmissionRequest, GET_TOOL_SPEC_TOOL_NAME,
+    USER_STEERING_INTERRUPTED_MESSAGE,
 };
-use dashmap::DashMap;
 use futures::future::join_all;
 use log::{debug, error, info, warn};
 use std::sync::Arc;
 use std::time::{Instant, SystemTime};
-use tokio::sync::{oneshot, RwLock as TokioRwLock};
+use tokio::sync::RwLock as TokioRwLock;
 use tokio::time::{timeout, Duration};
 use tokio_util::sync::CancellationToken;
 use tool_runtime::pipeline::{
     partition_tool_batches, retry_delay_ms, should_cancel_tool_state, should_retry_tool_attempt,
-    summarize_dialog_turn_cancellation, ToolExecutionErrorClass, ToolRetryAttemptFacts,
+    summarize_dialog_turn_cancellation, ToolCancellationTokenStore, ToolExecutionErrorClass,
+    ToolRetryAttemptFacts,
 };
 
 /// Convert framework::ToolResult to core::ToolResult
@@ -242,25 +242,33 @@ fn map_tool_execution_admission_rejection(error: ToolExecutionAdmissionRejection
     }
 }
 
-/// Confirmation response type
-#[derive(Debug, Clone)]
-pub enum ConfirmationResponse {
-    Confirmed,
-    Rejected(String),
+const SUBAGENT_LAUNCH_TOOL_NAME: &str = "Task";
+
+fn resolve_subagent_tool_concurrency_safe(
+    tool_name: &str,
+    tool_is_concurrency_safe: bool,
+    same_batch_subagent_call_count: usize,
+    subagent_batch_execution_policy: SubagentBatchExecutionPolicy,
+) -> bool {
+    if tool_name != SUBAGENT_LAUNCH_TOOL_NAME {
+        return tool_is_concurrency_safe;
+    }
+
+    match subagent_batch_execution_policy {
+        SubagentBatchExecutionPolicy::SafeOnly => tool_is_concurrency_safe,
+        SubagentBatchExecutionPolicy::ForceParallel => {
+            same_batch_subagent_call_count > 1 || tool_is_concurrency_safe
+        }
+        SubagentBatchExecutionPolicy::Serial => false,
+    }
 }
 
 /// Tool pipeline
 pub struct ToolPipeline {
     tool_registry: Arc<TokioRwLock<ToolRegistry>>,
     state_manager: Arc<ToolStateManager>,
-    /// Confirmation channel management (tool_id -> oneshot sender)
-    confirmation_channels: Arc<DashMap<String, oneshot::Sender<ConfirmationResponse>>>,
-    /// Cancellation token management (tool_id -> CancellationToken)
-    cancellation_tokens: Arc<DashMap<String, CancellationToken>>,
-    /// Per-session ring buffer of recent tool calls for loop detection.
-    /// Keyed by session_id; entries store (tool_name, arguments) so that
-    /// "same tool with deep-equal arguments" can be recognized across rounds.
-    recent_tool_calls: Arc<DashMap<String, ToolCallLoopHistory>>,
+    confirmation_channels: ToolConfirmationChannelStore,
+    cancellation_tokens: ToolCancellationTokenStore,
     computer_use_host: Option<ComputerUseHostRef>,
 }
 
@@ -273,31 +281,10 @@ impl ToolPipeline {
         Self {
             tool_registry,
             state_manager,
-            confirmation_channels: Arc::new(DashMap::new()),
-            cancellation_tokens: Arc::new(DashMap::new()),
-            recent_tool_calls: Arc::new(DashMap::new()),
+            confirmation_channels: ToolConfirmationChannelStore::new(),
+            cancellation_tokens: ToolCancellationTokenStore::new(),
             computer_use_host,
         }
-    }
-
-    fn check_and_record_tool_call(
-        &self,
-        session_id: &str,
-        tool_name: &str,
-        arguments: &serde_json::Value,
-    ) -> ToolCallLoopDecision {
-        let mut entry = self
-            .recent_tool_calls
-            .entry(session_id.to_string())
-            .or_default();
-        entry.value_mut().check_and_record(tool_name, arguments)
-    }
-
-    /// Drop the loop-detection history for a session that is ending. Bounded
-    /// memory either way (max 10 entries per session) but this prevents
-    /// long-lived processes from accumulating stale sessions.
-    pub fn clear_session_tool_call_history(&self, session_id: &str) {
-        self.recent_tool_calls.remove(session_id);
     }
 
     pub fn computer_use_host(&self) -> Option<ComputerUseHostRef> {
@@ -359,16 +346,27 @@ impl ToolPipeline {
             .map(|tool_call| tool_call.tool_name.clone())
             .collect();
 
+        let subagent_call_count = tool_calls
+            .iter()
+            .filter(|tool_call| tool_call.tool_name == SUBAGENT_LAUNCH_TOOL_NAME)
+            .count();
+
         // Determine concurrency safety for each tool call
         let concurrency_flags: Vec<bool> = {
             let registry = self.tool_registry.read().await;
             tool_calls
                 .iter()
                 .map(|tc| {
-                    registry
+                    let tool_is_concurrency_safe = registry
                         .get_tool(&tc.tool_name)
                         .map(|tool| tool.is_concurrency_safe(Some(&tc.arguments)))
-                        .unwrap_or(false)
+                        .unwrap_or(false);
+                    resolve_subagent_tool_concurrency_safe(
+                        &tc.tool_name,
+                        tool_is_concurrency_safe,
+                        subagent_call_count,
+                        options.subagent_batch_execution_policy,
+                    )
                 })
                 .collect()
         };
@@ -584,36 +582,9 @@ impl ToolPipeline {
             return Err(BitFunError::Validation(error_msg));
         }
 
-        // Loop detection: refuse to execute the same tool call repeatedly with
-        // identical arguments. Triggered on the (THRESHOLD + 1)-th consecutive
-        // identical call within the per-session sliding window.
-        if let ToolCallLoopDecision::Blocked(block) =
-            self.check_and_record_tool_call(&task.context.session_id, &tool_name, &tool_args)
-        {
-            let error_msg = block.message;
-            warn!(
-                "Tool-call loop blocked: tool_name={}, tool_id={}, session_id={}, threshold={}",
-                tool_name, tool_id, task.context.session_id, block.threshold
-            );
-
-            self.state_manager
-                .update_state(
-                    &tool_id,
-                    ToolExecutionState::Failed {
-                        error: error_msg.clone(),
-                        is_retryable: false,
-                        duration_ms: None,
-                        queue_wait_ms: None,
-                        preflight_ms: None,
-                        confirmation_wait_ms: None,
-                        execution_ms: None,
-                    },
-                )
-                .await;
-
-            return Err(BitFunError::Validation(error_msg));
-        }
-
+        // Repetition alone is not execution failure: polling and status checks
+        // may legitimately reuse identical arguments. The execution engine
+        // evaluates repeated patterns only after observing actual tool results.
         if let Err(err) = validate_tool_execution_admission(ToolExecutionAdmissionRequest {
             tool_name: &tool_name,
             allowed_tools: &task.context.allowed_tools,
@@ -713,9 +684,7 @@ impl ToolPipeline {
         {
             info!("Tool requires confirmation: tool_name={}", tool_name);
 
-            let (tx, rx) = oneshot::channel::<ConfirmationResponse>();
-
-            self.confirmation_channels.insert(tool_id.clone(), tx);
+            let rx = self.confirmation_channels.register(tool_id.clone());
 
             self.state_manager
                 .update_state(
@@ -750,11 +719,11 @@ impl ToolPipeline {
             confirmation_wait_ms = elapsed_ms_u64(confirmation_started_at);
 
             let confirmation_wait_result = match confirmation_result {
-                Some(Ok(ConfirmationResponse::Confirmed)) => {
+                Some(Ok(ToolConfirmationResponse::Confirmed)) => {
                     debug!("Tool confirmed: tool_name={}", tool_name);
                     ToolConfirmationWaitResult::Confirmed
                 }
-                Some(Ok(ConfirmationResponse::Rejected(reason))) => {
+                Some(Ok(ToolConfirmationResponse::Rejected(reason))) => {
                     ToolConfirmationWaitResult::Rejected(reason)
                 }
                 Some(Err(_)) => ToolConfirmationWaitResult::ChannelClosed,
@@ -768,7 +737,7 @@ impl ToolPipeline {
                     failure.kind,
                     ConfirmationFailureKind::ChannelClosed | ConfirmationFailureKind::Timeout
                 ) {
-                    self.confirmation_channels.remove(&tool_id);
+                    self.confirmation_channels.cancel(&tool_id);
                 }
 
                 if matches!(failure.kind, ConfirmationFailureKind::Timeout) {
@@ -802,7 +771,7 @@ impl ToolPipeline {
                 }
             }
 
-            self.confirmation_channels.remove(&tool_id);
+            self.confirmation_channels.cancel(&tool_id);
         }
 
         let preflight_ms = elapsed_ms_u64(start_time).saturating_sub(confirmation_wait_ms);
@@ -1156,8 +1125,7 @@ impl ToolPipeline {
         }
 
         // 1. Trigger cancellation token
-        if let Some((_, token)) = self.cancellation_tokens.remove(tool_id) {
-            token.cancel();
+        if self.cancellation_tokens.cancel(tool_id) {
             debug!("Cancellation token triggered: tool_id={}", tool_id);
         } else {
             debug!(
@@ -1167,7 +1135,7 @@ impl ToolPipeline {
         }
 
         // 2. Clean up confirmation channel (if waiting for confirmation)
-        if let Some((_, _tx)) = self.confirmation_channels.remove(tool_id) {
+        if self.confirmation_channels.cancel(tool_id) {
             // Channel will be automatically closed, causing await rx to return Err
             debug!("Cleared confirmation channel: tool_id={}", tool_id);
         }
@@ -1257,8 +1225,7 @@ impl ToolPipeline {
         }
 
         // Get sender from map and send confirmation response
-        if let Some((_, tx)) = self.confirmation_channels.remove(tool_id) {
-            let _ = tx.send(ConfirmationResponse::Confirmed);
+        if self.confirmation_channels.confirm(tool_id) {
             info!("User confirmed tool execution: tool_id={}", tool_id);
             Ok(())
         } else {
@@ -1285,8 +1252,7 @@ impl ToolPipeline {
         }
 
         // Get sender from map and send rejection response
-        if let Some((_, tx)) = self.confirmation_channels.remove(tool_id) {
-            let _ = tx.send(ConfirmationResponse::Rejected(reason.clone()));
+        if self.confirmation_channels.reject(tool_id, reason.clone()) {
             info!(
                 "User rejected tool execution: tool_id={}, reason={}",
                 tool_id, reason
@@ -1347,6 +1313,8 @@ mod tests {
             session_id: "session_1".to_string(),
             dialog_turn_id: "turn_1".to_string(),
             round_id: "round_1".to_string(),
+            attempt_id: None,
+            attempt_index: None,
             agent_type: "agent".to_string(),
             workspace: None,
             context_vars: HashMap::new(),
@@ -1381,6 +1349,66 @@ mod tests {
             ),
             state => panic!("expected failed task state, got {state:?}"),
         }
+    }
+
+    #[test]
+    fn subagent_batch_policy_preserves_safe_only_scheduling() {
+        assert!(!resolve_subagent_tool_concurrency_safe(
+            "Task",
+            false,
+            2,
+            SubagentBatchExecutionPolicy::SafeOnly,
+        ));
+        assert!(resolve_subagent_tool_concurrency_safe(
+            "Task",
+            true,
+            2,
+            SubagentBatchExecutionPolicy::SafeOnly,
+        ));
+        assert!(resolve_subagent_tool_concurrency_safe(
+            "Read",
+            true,
+            2,
+            SubagentBatchExecutionPolicy::SafeOnly,
+        ));
+    }
+
+    #[test]
+    fn subagent_batch_policy_force_parallel_only_changes_multi_subagent_batches() {
+        assert!(!resolve_subagent_tool_concurrency_safe(
+            "Task",
+            false,
+            1,
+            SubagentBatchExecutionPolicy::ForceParallel,
+        ));
+        assert!(resolve_subagent_tool_concurrency_safe(
+            "Task",
+            false,
+            2,
+            SubagentBatchExecutionPolicy::ForceParallel,
+        ));
+        assert!(!resolve_subagent_tool_concurrency_safe(
+            "Write",
+            false,
+            2,
+            SubagentBatchExecutionPolicy::ForceParallel,
+        ));
+    }
+
+    #[test]
+    fn subagent_batch_policy_serial_forces_subagent_calls_out_of_parallel_batches() {
+        assert!(!resolve_subagent_tool_concurrency_safe(
+            "Task",
+            true,
+            2,
+            SubagentBatchExecutionPolicy::Serial,
+        ));
+        assert!(resolve_subagent_tool_concurrency_safe(
+            "Read",
+            true,
+            2,
+            SubagentBatchExecutionPolicy::Serial,
+        ));
     }
 
     #[test]

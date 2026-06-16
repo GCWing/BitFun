@@ -4,6 +4,7 @@ import AgentCompanionDesktopPet from "./app/components/AgentCompanionDesktopPet/
 import AppErrorBoundary from "./app/components/AppErrorBoundary";
 import { STARTUP_OVERLAY_HIDDEN_EVENT } from "./app/startup/startupSignals";
 import { WorkspaceProvider } from "./infrastructure/contexts/WorkspaceProvider";
+import { I18nProvider } from "./infrastructure/i18n/providers/I18nProvider";
 import "./app/styles/index.scss";
 
 // Font: Noto Sans SC is loaded via a <link> tag in index.html.
@@ -317,18 +318,12 @@ async function startApplication(): Promise<void> {
     log.error('Failed to initialize BitFun (pre-render)', error);
   }
 
-  // I18n Provider.
-  const i18nProviderImportResult = await traceStartupStep(
-    'startup_step',
-    'load_i18n_provider',
-    () => measureAsyncAndLog(
-      log,
-      'Startup step completed',
-      () => import('./infrastructure/i18n'),
-      { data: { step: 'loadI18nProvider' } }
-    )
-  );
-  const { I18nProvider } = i18nProviderImportResult.value;
+  startupTrace.markPhase('startup_step_start', { step: 'load_i18n_provider', mode: 'static' });
+  startupTrace.markPhase('startup_step_end', {
+    step: 'load_i18n_provider',
+    durationMs: 0,
+    mode: 'static',
+  });
   const isAgentCompanionWindow = new URLSearchParams(window.location.search)
     .get('bitfunWindow') === 'agent-companion';
 

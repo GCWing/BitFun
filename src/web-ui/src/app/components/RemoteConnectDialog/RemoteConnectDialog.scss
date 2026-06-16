@@ -26,7 +26,7 @@
   }
 
   &:focus-visible {
-    outline: 2px solid color-mix(in srgb, var(--color-accent-500, #3b82f6) 55%, transparent);
+    outline: 2px solid color-mix(in srgb, var(--color-accent-500) 55%, transparent);
     outline-offset: 2px;
     border-radius: 4px;
   }
@@ -83,7 +83,7 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--color-success, #22c55e);
+  background: var(--color-success);
   flex-shrink: 0;
 }
 
@@ -121,7 +121,7 @@
   }
 
   &.is-connected {
-    color: var(--color-success, #22c55e);
+    color: var(--color-success);
     font-weight: 600;
   }
 
@@ -143,7 +143,7 @@
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: var(--color-success, #22c55e);
+  background: var(--color-success);
   flex-shrink: 0;
 }
 
@@ -164,7 +164,7 @@
   height: 200px;
   border-radius: 10px;
   border: 1px solid var(--border-subtle);
-  background: #ffffff;
+  background: var(--color-static-white);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -172,12 +172,12 @@
   transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.15s ease;
 
   &:hover {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 8px var(--color-overlay-black-10);
   }
 
   &:active {
     transform: scale(0.95);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 1px 2px var(--color-overlay-black-08);
   }
 
   svg {
@@ -302,7 +302,7 @@
   }
 
   &:focus-visible {
-    outline: 2px solid color-mix(in srgb, var(--color-accent-500, #3b82f6) 55%, transparent);
+    outline: 2px solid color-mix(in srgb, var(--color-accent-500) 55%, transparent);
     outline-offset: 2px;
     border-radius: 4px;
   }
@@ -380,16 +380,16 @@
   transition: all 0.15s ease;
 
   &--connect {
-    background: var(--color-accent-600, #2563eb);
-    color: #fff;
-    border: 1px solid color-mix(in srgb, var(--color-accent-700, #1d4ed8) 35%, transparent);
+    background: var(--color-accent-600);
+    color: var(--color-static-white);
+    border: 1px solid color-mix(in srgb, var(--color-accent-700) 35%, transparent);
 
     &:hover:not(:disabled) {
-      background: var(--color-accent-700, #1d4ed8);
+      background: var(--color-accent-700);
     }
 
     &:focus-visible {
-      outline: 2px solid color-mix(in srgb, var(--color-accent-500, #3b82f6) 55%, transparent);
+      outline: 2px solid color-mix(in srgb, var(--color-accent-500) 55%, transparent);
       outline-offset: 1px;
     }
 
@@ -483,7 +483,7 @@
   }
 
   &.is-active {
-    color: #fff;
+    color: var(--color-static-white);
     background: $color-success;
     font-weight: $font-weight-semibold;
     box-shadow: 0 1px 4px rgba(110, 184, 140, 0.35);
@@ -513,7 +513,7 @@
   display: inline-block;
   margin: 0 auto 8px;
   padding: 10px;
-  background: #fff;
+  background: var(--color-static-white);
   border-radius: 8px;
   box-sizing: border-box;
 

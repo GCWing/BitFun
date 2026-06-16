@@ -7,12 +7,12 @@
   align-items: center;
   height: 36px;
   padding: 0 4px;
-  background: var(--color-bg-scene, #1a1a1a);
+  background: var(--color-bg-scene);
   border-bottom: 1px solid var(--border-base);
 
   // Active group - slightly different background for active tabs
   &.is-active-group {
-    background: var(--color-bg-scene, #1a1a1a);
+    background: var(--color-bg-scene);
   }
 
   // Tab list
@@ -51,18 +51,18 @@
     background: transparent;
     border: none;
     border-radius: 4px;
-    color: var(--color-text-secondary, rgba(255, 255, 255, 0.6));
+    color: var(--color-text-secondary);
     cursor: pointer;
     transition: background-color 0.15s ease, color 0.15s ease;
 
     &:hover {
-      background: var(--color-bg-hover, rgba(255, 255, 255, 0.1));
-      color: var(--color-text-primary, rgba(255, 255, 255, 0.9));
+      background: var(--color-bg-hover);
+      color: var(--color-text-primary);
     }
 
     &--close-all:hover {
-      background: rgba(239, 68, 68, 0.15);
-      color: #ef4444;
+      background: var(--glass-red-hover);
+      color: var(--color-error);
     }
   }
 }
@@ -74,7 +74,7 @@
   top: 4px;
   bottom: 4px;
   width: 2px;
-  background: var(--color-primary, #60a5fa);
+  background: var(--color-primary);
   border-radius: 1px;
   z-index: 10;
   pointer-events: none;

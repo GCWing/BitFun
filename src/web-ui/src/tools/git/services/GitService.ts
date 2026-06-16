@@ -230,7 +230,7 @@ export class GitService {
       );
       
       const result = await Promise.race([
-        gitAPI.getStatus(repositoryPath),
+        gitAPI.getStatus(repositoryPath, 'git_service'),
         timeoutPromise
       ]);
       

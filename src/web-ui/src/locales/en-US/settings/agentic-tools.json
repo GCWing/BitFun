@@ -18,6 +18,15 @@
     "confirmTimeoutDesc": "Maximum time (seconds) to wait for user confirmation of tool calls.",
     "executionTimeout": "Execution Timeout",
     "executionTimeoutDesc": "Maximum time (seconds) for tool execution, including Task subagent runs.",
+    "subagentBatchPolicy": {
+      "label": "Subagent Batch Scheduling",
+      "desc": "Choose how multiple subagent launches from the same model response are scheduled.",
+      "tooltipLabel": "Subagent batch scheduling details",
+      "safeOnly": "Safe only",
+      "safeOnlyDesc": "Parallelize only subagent launches whose target is marked read-only.",
+      "forceParallel": "Force parallel",
+      "forceParallelDesc": "Run multiple subagent launches from the same response in parallel, still respecting subagent capacity limits."
+    },
     "seconds": "sec"
   },
   "filters": {
@@ -53,6 +62,7 @@
     "noMatchingTools": "No matching tools found",
     "autoExecuteEnabled": "Auto execute enabled",
     "autoExecuteDisabled": "Auto execute disabled",
+    "saveSuccess": "Saved",
     "saveFailed": "Save failed"
   }
 }

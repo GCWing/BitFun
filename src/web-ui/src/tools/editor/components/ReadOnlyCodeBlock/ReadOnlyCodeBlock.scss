@@ -3,11 +3,13 @@
  */
 
 .readonly-code-block {
+  --readonly-code-selection-bg: rgba(30, 136, 229, 0.3);
+
   position: relative;
   width: 100%;
   overflow: hidden;
   border-radius: 6px;
-  background: var(--color-bg-secondary, #1e1e1e);
+  background: var(--color-bg-secondary);
   
   // Monaco editor container
   .monaco-editor-core {
@@ -30,7 +32,7 @@
     
     // Adjust selection style
     .selected-text {
-      background: var(--color-selection, rgba(30, 136, 229, 0.3)) !important;
+      background: var(--readonly-code-selection-bg) !important;
     }
   }
   
@@ -68,7 +70,7 @@
 
 // Bordered mode
 .readonly-code-block--bordered {
-  border: 1px solid var(--color-border, #333);
+  border: 1px solid var(--color-border);
 }
 
 // Inline mode (for inline code)

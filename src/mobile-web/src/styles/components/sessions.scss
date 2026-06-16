@@ -1050,11 +1050,11 @@
   }
 
   &--danger {
-    color: var(--color-error-500, #dc3545);
-    background: var(--color-error-50, #fef2f2);
+    color: var(--color-error);
+    background: var(--color-error-bg);
 
     &:active {
-      background: var(--color-error-100, #fee2e2);
+      background: color-mix(in srgb, var(--color-error) 12%, transparent);
     }
   }
 }
@@ -1171,7 +1171,7 @@
 }
 
 .session-list__confirm-icon {
-  color: var(--color-error-500, #dc3545);
+  color: var(--color-error);
   margin-bottom: var(--size-gap-1);
 }
 
@@ -1221,7 +1221,7 @@
   }
 
   &--danger {
-    background: var(--color-error-500, #dc3545);
+    background: var(--color-error);
     color: #fff;
 
     &:active:not(:disabled) {

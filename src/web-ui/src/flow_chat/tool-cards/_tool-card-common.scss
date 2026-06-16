@@ -6,9 +6,9 @@
 .tool-display-compact {
   display: flex;
   align-items: center;
-  gap: var(--flowchat-control-gap, 0.5rem);
+  gap: var(--flowchat-control-gap);
   font-size: var(--flowchat-font-size-base);
-  line-height: var(--flowchat-text-line-height, 1.58);
+  line-height: var(--flowchat-text-line-height);
   position: relative;
 }
 
@@ -55,27 +55,15 @@
   }
 }
 
-/* CSS variables */
-:root {
-  /* Prefer explicit Windows/Linux fonts before generic `monospace` — on zh-CN Windows,
-   * bare `monospace` often resolves to NSimSun (Songti-like) for CJK. */
-  --tool-card-font-mono:
-    'SF Mono', 'Monaco', 'Cascadia Code', 'Cascadia Mono', Consolas, 'Inconsolata', 'Fira Code', 'Fira Mono',
-    'Droid Sans Mono', 'Source Code Pro', 'Lucida Console', 'Courier New', monospace;
-}
-
 /* ========== Shared header icon variables ========== */
 :root {
-  --tool-card-header-pad-y: var(--flowchat-card-header-pad-y, 0.44rem);
-  --tool-card-header-pad-x: var(--flowchat-card-header-pad-x, 0);
-  --tool-card-header-pad-right: var(--flowchat-card-header-pad-right, 0.625rem);
-  --tool-card-header-icon-rail: 24px;
-  --tool-card-header-icon-slot: calc(var(--tool-card-header-icon-rail) + 10px);
+  --tool-card-header-pad-y: var(--flowchat-card-header-pad-y);
+  --tool-card-header-pad-x: var(--flowchat-card-header-pad-x);
+  --tool-card-header-pad-right: var(--flowchat-card-header-pad-right);
 
   /* Shared icon & text sizing — dense-command variants only override spacing, not these */
-  --tool-card-icon-size: 16px;
   --tool-card-action-font-size: var(--flowchat-font-size-sm);
-  --tool-card-action-line-height: var(--flowchat-support-line-height, 1.45);
+  --tool-card-action-line-height: var(--flowchat-support-line-height);
   --tool-card-action-font-weight: 500;
 }
 
@@ -121,7 +109,7 @@
   appearance: none;
 
   &:focus-visible {
-    outline: 2px solid var(--color-accent-500, #60a5fa);
+    outline: 2px solid var(--color-accent-500);
     outline-offset: 2px;
     border-radius: 6px;
   }
@@ -209,7 +197,7 @@
     width: 16px !important;
     height: 16px !important;
     border-width: 2px !important;
-    box-shadow: 0 0 8px var(--loading-color-light) !important;
+    box-shadow: 0 0 8px var(--color-primary-alpha) !important;
   }
 
   .icon-completed {
@@ -218,6 +206,6 @@
 
   .icon-error {
     color: var(--color-error);
-    filter: drop-shadow(0 0 4px rgba(239, 68, 68, 0.4));
+    filter: drop-shadow(0 0 4px color-mix(in srgb, var(--color-error) 40%, transparent));
   }
 }

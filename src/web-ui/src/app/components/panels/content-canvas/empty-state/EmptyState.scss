@@ -28,13 +28,13 @@
     border: none;
     border-radius: 4px;
     background: transparent;
-    color: var(--color-text-secondary, rgba(255, 255, 255, 0.6));
+    color: var(--color-text-secondary);
     cursor: pointer;
     transition: background 0.15s, color 0.15s;
 
     &:hover {
-      background: var(--color-bg-hover, rgba(255, 255, 255, 0.08));
-      color: var(--color-text-primary, rgba(255, 255, 255, 0.9));
+      background: var(--color-bg-hover);
+      color: var(--color-text-primary);
     }
   }
 
@@ -57,7 +57,7 @@
     p {
       margin: 0;
       font-size: 16px;
-      color: var(--color-text-secondary, rgba(255, 255, 255, 0.6));
+      color: var(--color-text-secondary);
     }
   }
 }

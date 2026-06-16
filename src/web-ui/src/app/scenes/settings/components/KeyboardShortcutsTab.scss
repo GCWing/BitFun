@@ -19,7 +19,7 @@
       border-radius: 6px;
       /* Match Search defaults; --color-border alone can be undefined and drop the border */
       border: 1px solid var(--border-base);
-      background: var(--color-bg-input, var(--color-surface));
+      background: var(--input-bg);
       transition: border-color 0.15s ease, box-shadow 0.15s ease;
     }
 
@@ -29,8 +29,8 @@
 
     &.search--focused .search__wrapper,
     .search__wrapper:focus-within {
-      border-color: var(--color-accent-500, var(--color-accent));
-      box-shadow: 0 0 0 2px var(--color-accent-alpha, rgba(99, 102, 241, 0.2));
+      border-color: var(--color-accent-500);
+      box-shadow: 0 0 0 2px var(--color-accent-alpha);
     }
 
     .search__input {
@@ -53,8 +53,8 @@
     padding: 8px 12px;
     margin-bottom: 16px;
     border-radius: 6px;
-    background: var(--color-error-surface, rgba(239, 68, 68, 0.1));
-    color: var(--color-error, #ef4444);
+    background: var(--color-error-bg);
+    color: var(--color-error);
     font-size: 13px;
   }
 
@@ -73,15 +73,15 @@
     transition: background 0.1s;
 
     &:hover {
-      background: var(--color-bg-hover, rgba(0, 0, 0, 0.04));
+      background: var(--color-bg-hover);
     }
 
     &--recording {
-      background: var(--color-accent-alpha, rgba(99, 102, 241, 0.08));
+      background: var(--color-accent-alpha);
     }
 
     &--conflict {
-      background: var(--color-warning-surface, rgba(245, 158, 11, 0.08));
+      background: var(--color-warning-bg);
     }
 
     &--modified .kb-shortcuts__item-name {
@@ -116,7 +116,7 @@
 
   &__item-conflict-hint {
     font-size: 11px;
-    color: var(--color-warning, #f59e0b);
+    color: var(--color-warning);
   }
 
   &__item-key {
@@ -147,7 +147,7 @@
     padding: 3px 8px;
     border-radius: 4px;
     border: 1px solid var(--color-border);
-    background: var(--color-surface);
+    background: var(--element-bg-subtle);
     color: var(--color-text-secondary);
     font-family: ui-monospace, 'Cascadia Code', 'Fira Code', monospace;
     font-size: 12px;
@@ -164,14 +164,14 @@
 
     &--recording {
       border-color: var(--color-accent);
-      background: var(--color-accent-alpha, rgba(99, 102, 241, 0.1));
+      background: var(--color-accent-alpha);
       color: var(--color-accent);
       animation: kb-pulse 1s ease-in-out infinite;
     }
 
     &--conflict {
-      border-color: var(--color-warning, #f59e0b);
-      color: var(--color-warning, #f59e0b);
+      border-color: var(--color-warning);
+      color: var(--color-warning);
     }
   }
 

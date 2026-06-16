@@ -16,7 +16,6 @@ use tokio::time::{Duration, Instant};
 use uuid::Uuid;
 
 const DEFAULT_YIELD_TIME_MS: u64 = 10_000;
-const DEFAULT_MAX_OUTPUT_CHARS: usize = 10_000;
 const MAX_RETAINED_OUTPUT_BYTES: usize = 1024 * 1024;
 const MAX_REMOTE_EXEC_SESSIONS: usize = 64;
 const MAX_COMPLETED_REMOTE_EXEC_SESSIONS: usize = 64;
@@ -267,7 +266,7 @@ impl RemoteExecProcessManager {
             .collect_until(
                 cursor,
                 deadline_from_now(request.yield_time_ms),
-                request.max_output_chars.unwrap_or(DEFAULT_MAX_OUTPUT_CHARS),
+                request.max_output_chars.unwrap_or(usize::MAX),
                 output_tx.as_ref(),
             )
             .await;
@@ -385,7 +384,7 @@ impl RemoteExecProcessManager {
             .collect_until(
                 cursor,
                 deadline_from_now(request.yield_time_ms),
-                request.max_output_chars.unwrap_or(DEFAULT_MAX_OUTPUT_CHARS),
+                request.max_output_chars.unwrap_or(usize::MAX),
                 output_tx.as_ref(),
             )
             .await;
@@ -447,7 +446,7 @@ impl RemoteExecProcessManager {
             .collect_until(
                 cursor.clone(),
                 deadline_from_now(request.yield_time_ms),
-                request.max_output_chars.unwrap_or(DEFAULT_MAX_OUTPUT_CHARS),
+                request.max_output_chars.unwrap_or(usize::MAX),
                 None,
             )
             .await;
@@ -1133,7 +1132,7 @@ fn new_chunk_id() -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::new_session_id;
+    use super::{new_session_id, HeadTailText};
     use std::collections::HashMap;
 
     #[test]
@@ -1141,5 +1140,14 @@ mod tests {
         let sessions = HashMap::new();
 
         assert_eq!(new_session_id(&sessions), 1000);
+    }
+
+    #[test]
+    fn head_tail_text_keeps_full_output_when_unbounded() {
+        let mut buffer = HeadTailText::new(usize::MAX);
+        buffer.push_str("abcdefghijklmnop");
+
+        assert_eq!(buffer.total_chars, 16);
+        assert_eq!(buffer.render(), "abcdefghijklmnop");
     }
 }

@@ -24,6 +24,21 @@ import '@xterm/xterm/css/xterm.css';
 import './Terminal.scss';
 
 const log = createLogger('Terminal');
+const MIN_STABLE_TERMINAL_ROWS = 3;
+
+// Empty xterm buffers start with blank rows. Do not treat those as replayed
+// content, otherwise a new terminal can inherit the replay column guard and skip
+// its first real fit.
+function terminalHasBufferedScreenText(terminal: XTerm): boolean {
+  const buffer = terminal.buffer.active;
+  for (let index = 0; index < buffer.length; index += 1) {
+    const line = buffer.getLine(index)?.translateToString(true) ?? '';
+    if (line.trim().length > 0) {
+      return true;
+    }
+  }
+  return false;
+}
 
 type TerminalCoreWithMeasurement = XTerm & {
   _core?: {
@@ -54,16 +69,6 @@ function remeasureTerminal(terminal: XTerm): void {
   const rawTerminal = terminal as TerminalCoreWithMeasurement;
   rawTerminal._core?._charSizeService?.measure?.();
   rawTerminal._core?._renderService?.handleDevicePixelRatioChange?.();
-}
-
-/**
- * Scroll to bottom when the cursor is below the viewport.
- */
-function scrollToBottomIfNeeded(terminal: XTerm): void {
-  const buffer = terminal.buffer.active;
-  if (buffer.cursorY >= terminal.rows - 1) {
-    terminal.scrollToBottom();
-  }
 }
 
 export interface TerminalOptions {
@@ -130,6 +135,12 @@ export interface TerminalProps {
    * content. Set back to 0 (or leave unset) to restore normal resize behaviour.
    */
   preventShrinkBelowColsRef?: React.MutableRefObject<number>;
+  /**
+   * Suspend layout-driven resize while the containing panel is animating.
+   * xterm.js reflows its buffer on resize, so intermediate transition sizes
+   * should be ignored and replaced by one final fit when animation settles.
+   */
+  resizeSuspended?: boolean;
 }
 
 export interface TerminalRef {
@@ -179,6 +190,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
   onReady,
   onPaste,
   preventShrinkBelowColsRef,
+  resizeSuspended = false,
 }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<XTerm | null>(null);
@@ -199,6 +211,8 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
   const onResizeRef = useRef(onResize);
   const onReadyRef = useRef(onReady);
   const onPasteRef = useRef(onPaste);
+  const resizeSuspendedRef = useRef(resizeSuspended);
+  const pendingFitAfterSuspendRef = useRef(false);
   const [isReady, setIsReady] = useState(false);
   const currentTheme = themeService.getCurrentTheme();
   const initialFontWeights = getXtermFontWeights(currentTheme.type);
@@ -226,6 +240,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
   onResizeRef.current = onResize;
   onReadyRef.current = onReady;
   onPasteRef.current = onPaste;
+  resizeSuspendedRef.current = resizeSuspended;
   mergedOptionsRef.current = mergedOptions;
   initialFontWeightsRef.current = initialFontWeights;
 
@@ -236,13 +251,18 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
     clearTextureAtlas(terminal);
   }, []);
 
-  const doXtermResize = useCallback((cols: number, rows: number) => {
+  const doXtermResize = useCallback((cols: number, rows: number): boolean => {
     const terminal = terminalRef.current;
-    if (!terminal) return;
+    if (!terminal) return false;
 
     try {
+      if (resizeSuspendedRef.current) {
+        pendingFitAfterSuspendRef.current = true;
+        return false;
+      }
+
       if (terminal.cols === cols && terminal.rows === rows) {
-        return;
+        return true;
       }
 
       // While the caller has set a minimum column guard (e.g., during history
@@ -250,18 +270,38 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
       // prevents CSS open-animation intermediate widths from permanently
       // truncating buffered content that was written at a wider column count.
       const minCols = preventShrinkBelowColsRef?.current ?? 0;
-      if (minCols > 0 && cols < minCols) {
-        return;
+      const hasBufferedScreenText = minCols > 0 ? terminalHasBufferedScreenText(terminal) : false;
+      // The guard only protects actual screen text. Applying it to an empty new
+      // terminal leaves xterm at 80x24 while the PTY moves to the panel size,
+      // which creates blank scrollback during shell startup repaints.
+      if (minCols > 0 && cols < minCols && hasBufferedScreenText) {
+        return false;
       }
 
       terminal.resize(cols, rows);
+
+      return true;
     } catch (error) {
       log.warn('Xterm resize error', { cols, rows, error });
+      return false;
     }
   }, [preventShrinkBelowColsRef]);
 
   // Notify backend PTY with deduping.
   const doBackendResize = useCallback((cols: number, rows: number) => {
+    if (resizeSuspendedRef.current) {
+      pendingFitAfterSuspendRef.current = true;
+      return;
+    }
+
+    const terminal = terminalRef.current;
+    // Keep frontend and PTY dimensions in lockstep. If xterm skipped a resize
+    // because of replay protection or panel suspension, sending it to the PTY
+    // would make subsequent shell repaint output land in the wrong geometry.
+    if (terminal && (terminal.cols !== cols || terminal.rows !== rows)) {
+      return;
+    }
+
     const lastSize = lastBackendSizeRef.current;
     if (lastSize && lastSize.cols === cols && lastSize.rows === rows) {
       return;
@@ -280,7 +320,6 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
     requestAnimationFrame(() => {
       if (terminalRef.current) {
         forceRefresh(terminalRef.current);
-        scrollToBottomIfNeeded(terminalRef.current);
       }
     });
   }, [forceRefresh]);
@@ -291,6 +330,11 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
     }
 
     try {
+      if (resizeSuspendedRef.current) {
+        pendingFitAfterSuspendRef.current = true;
+        return;
+      }
+
       const { clientWidth, clientHeight } = containerRef.current;
       if (clientWidth < 50 || clientHeight < 50) {
         return;
@@ -301,22 +345,20 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
         return;
       }
 
-      // Skip tiny intermediate dimensions that occur when a panel CSS-animates
-      // from zero width to its final size. xterm.js permanently truncates buffer
-      // lines to the current column count on resize, so we must avoid resizing
-      // to columns fewer than any content already in the buffer.
-      // 40 cols is the minimum usable terminal width (below this, most shells
-      // are unusable anyway and content would be permanently damaged).
-      if (dims.cols < 40 || dims.rows < 3) {
+      // Skip only unusably tiny dimensions. Panel animation and drag resizes are
+      // suspended by the parent; the final compact bottom panel still needs to
+      // resize to fewer than 10 rows so the prompt remains visible.
+      if (dims.cols < 40 || dims.rows < MIN_STABLE_TERMINAL_ROWS) {
         return;
       }
 
       if (resizeDebouncerRef.current) {
         resizeDebouncerRef.current.resize(dims.cols, dims.rows, immediate);
       } else {
-        doXtermResize(dims.cols, dims.rows);
-        doBackendResize(dims.cols, dims.rows);
-        handleResizeComplete();
+        if (doXtermResize(dims.cols, dims.rows)) {
+          doBackendResize(dims.cols, dims.rows);
+          handleResizeComplete();
+        }
       }
     } catch (error) {
       log.warn('Fit error', error);
@@ -324,6 +366,10 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
   }, [doXtermResize, doBackendResize, handleResizeComplete]);
 
   const flushResize = useCallback(() => {
+    if (resizeSuspendedRef.current) {
+      pendingFitAfterSuspendRef.current = true;
+      return;
+    }
     resizeDebouncerRef.current?.flush();
   }, []);
 
@@ -344,6 +390,22 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
   handleResizeCompleteRef.current = handleResizeComplete;
   fitRef.current = fit;
   forceRefreshRef.current = forceRefresh;
+
+  useEffect(() => {
+    if (resizeSuspended) {
+      return;
+    }
+
+    if (!pendingFitAfterSuspendRef.current) {
+      return;
+    }
+
+    pendingFitAfterSuspendRef.current = false;
+    requestAnimationFrame(() => {
+      resizeDebouncerRef.current?.flush();
+      fitRef.current(true);
+    });
+  }, [resizeSuspended]);
 
   useImperativeHandle(ref, () => ({
     write: (data: string) => {
@@ -502,7 +564,6 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
             requestAnimationFrame(() => {
               if (!terminalRef.current) return;
               forceRefreshRef.current(terminalRef.current);
-              scrollToBottomIfNeeded(terminalRef.current);
             });
           });
         });
@@ -577,7 +638,6 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
             if (term) {
               term.refresh(0, term.rows - 1);
               clearTextureAtlas(term);
-              scrollToBottomIfNeeded(term);
               if (autoFocusRef.current) {
                 term.focus();
               }

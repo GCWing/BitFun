@@ -3,6 +3,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use bitfun_core_types::ToolImageAttachment;
+use bitfun_runtime_ports::DelegationPolicy;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -306,17 +307,25 @@ pub fn build_collapsed_tool_stub_definition(
     tool_name: &str,
     short_description: &str,
 ) -> ToolManifestDefinition {
+    // Keep the prompt-visible stub stable for the life of the conversation.
+    // GetToolSpec returns the full schema out-of-band; replacing this stub with
+    // a different tool definition mid-session changes the request prefix and
+    // causes provider-side prefix/KV cache misses on later rounds.
+    // We still need a stub definition in the request because some providers
+    // constrain model tool calls to the exact tool list attached to that
+    // request. Without a prompt-visible stub entry, the model may be unable to
+    // call the collapsed tool at all, even after GetToolSpec has described it.
     ToolManifestDefinition::new(
         tool_name,
         format!(
-            "THIS TOOL IS COLLAPSED. You MUST call GetToolSpec({{\"tool_name\":\"{}\"}}) before first calling {}. Any direct call will fail validation. Summary: {}",
+            "THIS IS A COLLAPSED TOOL. Before first use, call GetToolSpec({{\"tool_name\":\"{}\"}}) to load its schema. After that, you can call {} directly. Any direct call before loading will fail validation.\nSummary: {}",
             tool_name,
             tool_name,
             short_description,
         ),
         serde_json::json!({
             "type": "object",
-            "additionalProperties": false,
+            "additionalProperties": true,
             "properties": {}
         }),
     )
@@ -1091,6 +1100,10 @@ where
         });
     }
 
+    // This prompt-visible tool-definition list is part of the request prefix.
+    // Once a turn starts, enrich collapsed tools through GetToolSpec results
+    // instead of mutating this list, or later rounds will lose prefix-cache
+    // reuse even if the actual tool set is unchanged.
     let tool_definitions = build_prompt_visible_tool_manifest_definitions(&manifest_items);
 
     ContextualToolManifest {
@@ -1281,6 +1294,32 @@ impl<Tool: ToolRegistryItem + ?Sized> ToolRuntimeAssembly<Tool> {
         Factory: StaticToolProviderFactory<Tool> + ?Sized,
     {
         let providers = materialize_static_tool_provider_groups(plans, factory)?;
+        Ok(self.create_registry_from_static_providers(&providers))
+    }
+
+    pub fn create_registry_from_static_provider_entries<Entries, Factory>(
+        &self,
+        entries: Entries,
+        factory: &Factory,
+    ) -> Result<ToolRegistry<Tool>, StaticToolMaterializationError>
+    where
+        Entries: IntoIterator<Item = (&'static str, &'static [&'static str])>,
+        Factory: StaticToolProviderFactory<Tool> + ?Sized,
+    {
+        let mut providers = Vec::new();
+        for (provider_id, tool_names) in entries {
+            let mut tools = Vec::new();
+            for tool_name in tool_names {
+                let tool = factory.materialize_tool(tool_name).ok_or(
+                    StaticToolMaterializationError::UnknownTool {
+                        provider_id,
+                        tool_name,
+                    },
+                )?;
+                tools.push(tool);
+            }
+            providers.push(StaticToolProviderGroup::new(provider_id, tools));
+        }
         Ok(self.create_registry_from_static_providers(&providers))
     }
 }
@@ -1942,6 +1981,106 @@ pub struct ToolRuntimeRestrictions {
     pub path_policy: ToolPathPolicy,
 }
 
+const MINIAPP_HEADLESS_AGENT_SURFACE: &str = "miniapp_agent";
+const MINIAPP_HEADLESS_AGENT_OWNER_PREFIX: &str = "miniapp-agent:";
+
+/// MiniApp agent runs execute inside a MiniApp iframe without Flow Chat tool
+/// cards or AskUserQuestion UI. Treat those sessions as headless even on
+/// follow-up turns that reuse the hidden session through `created_by`.
+pub fn is_miniapp_headless_agent_run(
+    user_message_metadata: Option<&serde_json::Value>,
+    created_by: Option<&str>,
+) -> bool {
+    if user_message_metadata
+        .and_then(|metadata| metadata.get("surface"))
+        .and_then(|value| value.as_str())
+        == Some(MINIAPP_HEADLESS_AGENT_SURFACE)
+    {
+        return true;
+    }
+    created_by.is_some_and(|owner| owner.starts_with(MINIAPP_HEADLESS_AGENT_OWNER_PREFIX))
+}
+
+pub fn miniapp_headless_agent_tool_restrictions() -> ToolRuntimeRestrictions {
+    const DENIED_TOOLS: &[(&str, &str)] = &[
+        (
+            "AskUserQuestion",
+            "AskUserQuestion is unavailable in MiniApp headless agent runs. Decide yourself and record assumptions in project files.",
+        ),
+        (
+            "ControlHub",
+            "ControlHub is unavailable in MiniApp headless agent runs.",
+        ),
+        (
+            "GenerativeUI",
+            "GenerativeUI is unavailable in MiniApp headless agent runs.",
+        ),
+        (
+            "ComputerUse",
+            "ComputerUse is unavailable in MiniApp headless agent runs.",
+        ),
+        (
+            "ComputerUseMouseClick",
+            "ComputerUseMouseClick is unavailable in MiniApp headless agent runs.",
+        ),
+        (
+            "ComputerUseMouseStep",
+            "ComputerUseMouseStep is unavailable in MiniApp headless agent runs.",
+        ),
+        (
+            "ComputerUseMousePrecise",
+            "ComputerUseMousePrecise is unavailable in MiniApp headless agent runs.",
+        ),
+        (
+            "ReviewPlatform",
+            "ReviewPlatform is unavailable in MiniApp headless agent runs.",
+        ),
+        (
+            "MiniappInit",
+            "MiniappInit is unavailable in MiniApp headless agent runs.",
+        ),
+        (
+            "Playbook",
+            "Playbook is unavailable in MiniApp headless agent runs.",
+        ),
+        (
+            "Cron",
+            "Cron is unavailable in MiniApp headless agent runs.",
+        ),
+        (
+            "SessionControl",
+            "SessionControl is unavailable in MiniApp headless agent runs.",
+        ),
+    ];
+
+    let mut denied_tool_names = BTreeSet::new();
+    let mut denied_tool_messages = BTreeMap::new();
+    for (name, message) in DENIED_TOOLS {
+        denied_tool_names.insert((*name).to_string());
+        denied_tool_messages.insert((*name).to_string(), (*message).to_string());
+    }
+
+    ToolRuntimeRestrictions {
+        denied_tool_names,
+        denied_tool_messages,
+        ..Default::default()
+    }
+}
+
+pub fn tool_restrictions_for_delegation_policy(
+    delegation_policy: DelegationPolicy,
+) -> ToolRuntimeRestrictions {
+    let mut restrictions = ToolRuntimeRestrictions::default();
+    if !delegation_policy.allow_subagent_spawn {
+        restrictions.denied_tool_names.insert("Task".to_string());
+        restrictions.denied_tool_messages.insert(
+            "Task".to_string(),
+            "Recursive subagent delegation is blocked. Use direct tools instead.".to_string(),
+        );
+    }
+    restrictions
+}
+
 impl ToolRuntimeRestrictions {
     pub fn is_tool_allowed(&self, tool_name: &str) -> bool {
         (self.allowed_tool_names.is_empty() || self.allowed_tool_names.contains(tool_name))
@@ -2174,5 +2313,126 @@ mod tests {
         assert!(description.contains("- WebFetch"));
         assert!(!description.contains("Inspect repository state."));
         assert!(!description.contains("Fetch a URL."));
+    }
+
+    #[test]
+    fn delegation_policy_tool_restrictions_block_recursive_subagents() {
+        let restrictions =
+            tool_restrictions_for_delegation_policy(DelegationPolicy::top_level().spawn_child());
+
+        assert!(!restrictions.is_tool_allowed("Task"));
+        assert!(restrictions.is_tool_allowed("Read"));
+        assert_eq!(
+            restrictions
+                .ensure_tool_allowed("Task")
+                .expect_err("Task should be blocked")
+                .to_string(),
+            "Recursive subagent delegation is blocked. Use direct tools instead."
+        );
+    }
+
+    #[test]
+    fn miniapp_headless_tool_restrictions_block_interactive_tools() {
+        let restrictions = miniapp_headless_agent_tool_restrictions();
+
+        assert!(!restrictions.is_tool_allowed("AskUserQuestion"));
+        assert!(!restrictions.is_tool_allowed("ControlHub"));
+        assert!(!restrictions.is_tool_allowed("Cron"));
+        assert!(restrictions.is_tool_allowed("Task"));
+        assert!(restrictions.is_tool_allowed("WebSearch"));
+    }
+
+    #[test]
+    fn miniapp_headless_run_detection_uses_surface_and_created_by() {
+        let metadata = json!({ "surface": "miniapp_agent" });
+
+        assert!(is_miniapp_headless_agent_run(Some(&metadata), None));
+        assert!(is_miniapp_headless_agent_run(
+            None,
+            Some("miniapp-agent:builtin-ppt-live:run-1")
+        ));
+        assert!(!is_miniapp_headless_agent_run(None, Some("desktop-user")));
+    }
+
+    #[test]
+    fn runtime_restrictions_allow_all_when_empty() {
+        let restrictions = ToolRuntimeRestrictions::default();
+
+        assert!(restrictions.is_tool_allowed("Write"));
+        assert!(restrictions.ensure_tool_allowed("Write").is_ok());
+    }
+
+    #[test]
+    fn denied_tool_names_override_allow_list() {
+        let restrictions = ToolRuntimeRestrictions {
+            allowed_tool_names: ["Write", "Edit"].into_iter().map(str::to_string).collect(),
+            denied_tool_names: ["Write"].into_iter().map(str::to_string).collect(),
+            denied_tool_messages: Default::default(),
+            path_policy: ToolPathPolicy::default(),
+        };
+
+        assert!(!restrictions.is_tool_allowed("Write"));
+        assert!(restrictions.is_tool_allowed("Edit"));
+    }
+
+    #[test]
+    fn custom_deny_message_overrides_generic_runtime_error() {
+        let restrictions = ToolRuntimeRestrictions {
+            denied_tool_names: ["Task"].into_iter().map(str::to_string).collect(),
+            denied_tool_messages: [(
+                "Task".to_string(),
+                "Recursive subagent delegation is blocked. Use direct tools instead.".to_string(),
+            )]
+            .into_iter()
+            .collect(),
+            ..Default::default()
+        };
+
+        let error = restrictions
+            .ensure_tool_allowed("Task")
+            .expect_err("custom deny message should be used");
+        assert_eq!(
+            error.to_string(),
+            "Recursive subagent delegation is blocked. Use direct tools instead."
+        );
+    }
+
+    #[test]
+    fn remote_posix_roots_require_true_containment() {
+        assert!(is_remote_posix_path_within_root(
+            "/workspace/src/lib.rs",
+            "/workspace/src"
+        ));
+        assert!(!is_remote_posix_path_within_root(
+            "/workspace/src2/lib.rs",
+            "/workspace/src"
+        ));
+    }
+
+    #[test]
+    fn generic_tool_runtime_assembly_materializes_provider_entries_without_adapter() {
+        struct EntryFactory;
+        impl StaticToolProviderFactory<TestTool> for EntryFactory {
+            fn materialize_tool(&self, tool_name: &str) -> Option<ToolRef<TestTool>> {
+                Some(Arc::new(TestTool {
+                    name: match tool_name {
+                        "Read" => "Read",
+                        "Write" => "Write",
+                        _ => return None,
+                    },
+                    available: true,
+                }))
+            }
+        }
+
+        let assembly = ToolRuntimeAssembly::<TestTool>::new();
+        let registry = assembly
+            .create_registry_from_static_provider_entries(
+                [("core.basic", &["Read", "Write"][..])],
+                &EntryFactory,
+            )
+            .expect("provider entries should materialize");
+
+        assert_eq!(registry.get_tool_names(), vec!["Read", "Write"]);
     }
 }

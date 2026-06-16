@@ -265,6 +265,8 @@ impl ToolStateManager {
             session_id: task.context.session_id,
             turn_id: task.context.dialog_turn_id,
             round_id: task.context.round_id,
+            attempt_id: task.context.attempt_id,
+            attempt_index: task.context.attempt_index,
             tool_event,
         };
 
@@ -314,6 +316,8 @@ mod tests {
                 session_id: "session-1".to_string(),
                 dialog_turn_id: "turn-1".to_string(),
                 round_id: "round-1".to_string(),
+                attempt_id: None,
+                attempt_index: None,
                 agent_type: "agentic".to_string(),
                 workspace: None,
                 context_vars: HashMap::new(),

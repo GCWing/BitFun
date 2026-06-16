@@ -15,7 +15,7 @@
  */
 
 import React, { ReactNode } from 'react';
-import { Check, X } from 'lucide-react';
+import { Check, X, Clock } from 'lucide-react';
 import { ToolProcessingDots } from '@/component-library';
 import type { ToolProcessingDotsSize } from '@/component-library';
 import type { BaseToolCardProps } from './BaseToolCard';
@@ -43,6 +43,9 @@ function StatusIcon({ status, size }: { status: ToolCardStatusSlotStatus; size: 
       return <X size={size} className="tcss-error" />;
     case 'cancelled':
       return <X size={size} className="tcss-cancelled" />;
+    case 'queued':
+    case 'waiting':
+      return <Clock size={size} className="tcss-waiting" />;
     default:
       return <ToolProcessingDots size={size} />;
   }

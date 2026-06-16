@@ -35,6 +35,8 @@ fn text_item(id: &str) -> TextItemData {
         parent_task_tool_id: None,
         subagent_session_id: None,
         status: None,
+        attempt_id: None,
+        attempt_index: None,
     }
 }
 
@@ -59,6 +61,8 @@ fn tool_item(id: &str) -> ToolItemData {
         is_subagent_item: None,
         parent_task_tool_id: None,
         subagent_session_id: None,
+        attempt_id: None,
+        attempt_index: None,
         subagent_model_id: None,
         subagent_model_alias: None,
         status: Some("completed".to_string()),
@@ -71,6 +75,7 @@ fn round(turn_id: &str, text_count: usize, tool_count: usize) -> ModelRoundData 
         id: format!("round-{turn_id}"),
         turn_id: turn_id.to_string(),
         round_index: 0,
+        round_group_id: None,
         timestamp: 0,
         text_items: (0..text_count)
             .map(|index| text_item(&format!("{turn_id}-text-{index}")))

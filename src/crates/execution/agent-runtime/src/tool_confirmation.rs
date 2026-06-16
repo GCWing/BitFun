@@ -1,6 +1,9 @@
 //! Tool confirmation planning and failure mapping.
 
+use dashmap::DashMap;
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
+use tokio::sync::oneshot;
 
 pub const CONFIRMATION_NO_TIMEOUT_SECS: u64 = 365 * 24 * 60 * 60;
 
@@ -37,6 +40,12 @@ pub enum ToolConfirmationWaitResult {
     TimedOut,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ToolConfirmationResponse {
+    Confirmed,
+    Rejected(String),
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfirmationFailureKind {
     Rejected,
@@ -49,6 +58,47 @@ pub struct ToolConfirmationFailure {
     pub kind: ConfirmationFailureKind,
     pub state_reason: String,
     pub error_message: String,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ToolConfirmationChannelStore {
+    channels: Arc<DashMap<String, oneshot::Sender<ToolConfirmationResponse>>>,
+}
+
+impl ToolConfirmationChannelStore {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn register(&self, tool_id: String) -> oneshot::Receiver<ToolConfirmationResponse> {
+        let (sender, receiver) = oneshot::channel();
+        self.channels.insert(tool_id, sender);
+        receiver
+    }
+
+    pub fn confirm(&self, tool_id: &str) -> bool {
+        self.send(tool_id, ToolConfirmationResponse::Confirmed)
+    }
+
+    pub fn reject(&self, tool_id: &str, reason: String) -> bool {
+        self.send(tool_id, ToolConfirmationResponse::Rejected(reason))
+    }
+
+    pub fn cancel(&self, tool_id: &str) -> bool {
+        self.channels.remove(tool_id).is_some()
+    }
+
+    pub fn has_pending(&self, tool_id: &str) -> bool {
+        self.channels.contains_key(tool_id)
+    }
+
+    fn send(&self, tool_id: &str, response: ToolConfirmationResponse) -> bool {
+        let Some((_, sender)) = self.channels.remove(tool_id) else {
+            return false;
+        };
+        let _ = sender.send(response);
+        true
+    }
 }
 
 pub fn resolve_tool_confirmation_plan(
@@ -137,5 +187,41 @@ mod tests {
         let failure = resolve_confirmation_failure(outcome).unwrap();
         assert_eq!(failure.kind, ConfirmationFailureKind::Rejected);
         assert_eq!(failure.error_message, "Tool was rejected by user: no");
+    }
+
+    #[tokio::test]
+    async fn confirmation_channel_store_delivers_confirmation_once() {
+        let store = ToolConfirmationChannelStore::new();
+        let receiver = store.register("tool-1".to_string());
+
+        assert!(store.has_pending("tool-1"));
+        assert!(store.confirm("tool-1"));
+        assert!(!store.has_pending("tool-1"));
+        assert_eq!(
+            receiver.await.expect("confirmation should be delivered"),
+            ToolConfirmationResponse::Confirmed
+        );
+        assert!(!store.confirm("tool-1"));
+    }
+
+    #[tokio::test]
+    async fn confirmation_channel_store_delivers_rejection_reason() {
+        let store = ToolConfirmationChannelStore::new();
+        let receiver = store.register("tool-1".to_string());
+
+        assert!(store.reject("tool-1", "unsafe".to_string()));
+        assert_eq!(
+            receiver.await.expect("rejection should be delivered"),
+            ToolConfirmationResponse::Rejected("unsafe".to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn confirmation_channel_store_cancel_closes_receiver() {
+        let store = ToolConfirmationChannelStore::new();
+        let receiver = store.register("tool-1".to_string());
+
+        assert!(store.cancel("tool-1"));
+        assert!(receiver.await.is_err());
     }
 }
