@@ -1,5 +1,22 @@
 /* Streaming text output styles */
 .stream-text {
+  --stream-text-matrix-green: #00ff00;
+  --stream-text-rainbow-pink: #ff0080;
+  --stream-text-rainbow-orange: #ff8c00;
+  --stream-text-rainbow-teal: #40e0d0;
+  --stream-text-rainbow-sky: #00bfff;
+  --stream-text-rainbow-purple: #9370db;
+  --stream-text-rainbow-hot-pink: #ff1493;
+  --stream-text-fire-red: #ff0000;
+  --stream-text-fire-orange: #ff8800;
+  --stream-text-fire-yellow: #ffdd00;
+  --stream-text-ocean-deep: #0077be;
+  --stream-text-ocean-mid: #00b4d8;
+  --stream-text-ocean-foam: #48cae4;
+  --stream-text-sunset-coral: #ff6b6b;
+  --stream-text-sunset-yellow: #ffd93d;
+  --stream-text-sunset-pink: #ff9ff3;
+
   display: inline;
   font-family: var(--font-family-sans);
   line-height: 1.6;
@@ -181,9 +198,9 @@
 
 
 .stream-text--matrix {
-  color: #00ff00;
+  color: var(--stream-text-matrix-green);
   font-family: 'Courier New', monospace;
-  text-shadow: 0 0 5px #00ff00;
+  text-shadow: 0 0 5px var(--stream-text-matrix-green);
 }
 
 .stream-text--matrix .stream-text__char--matrix {
@@ -195,18 +212,18 @@
     opacity: 0;
     transform: translateY(-20px);
     color: var(--color-static-white);
-    text-shadow: 0 0 20px #00ff00;
+    text-shadow: 0 0 20px var(--stream-text-matrix-green);
   }
   50% {
     opacity: 1;
-    color: #00ff00;
-    text-shadow: 0 0 10px #00ff00, 0 0 20px #00ff00;
+    color: var(--stream-text-matrix-green);
+    text-shadow: 0 0 10px var(--stream-text-matrix-green), 0 0 20px var(--stream-text-matrix-green);
   }
   100% {
     opacity: 1;
     transform: translateY(0);
-    color: #00ff00;
-    text-shadow: 0 0 5px #00ff00;
+    color: var(--stream-text-matrix-green);
+    text-shadow: 0 0 5px var(--stream-text-matrix-green);
   }
 }
 
@@ -214,12 +231,12 @@
 .stream-text--gradient {
   background: linear-gradient(
     90deg,
-    #ff0080,
-    #ff8c00,
-    #40e0d0,
-    #00bfff,
-    #9370db,
-    #ff1493
+    var(--stream-text-rainbow-pink),
+    var(--stream-text-rainbow-orange),
+    var(--stream-text-rainbow-teal),
+    var(--stream-text-rainbow-sky),
+    var(--stream-text-rainbow-purple),
+    var(--stream-text-rainbow-hot-pink)
   );
   background-size: 200% auto;
   -webkit-background-clip: text;
@@ -404,11 +421,11 @@
   height: 1em;
   background: linear-gradient(
     180deg,
-    #ff0080,
-    #ff8c00,
-    #40e0d0,
-    #00bfff,
-    #9370db
+    var(--stream-text-rainbow-pink),
+    var(--stream-text-rainbow-orange),
+    var(--stream-text-rainbow-teal),
+    var(--stream-text-rainbow-sky),
+    var(--stream-text-rainbow-purple)
   );
   animation: cursor-rainbow 2s linear infinite;
 }
@@ -474,12 +491,12 @@
 .stream-text--theme-rainbow {
   background: linear-gradient(
     90deg,
-    #ff0080 0%,
-    #ff8c00 20%,
-    #40e0d0 40%,
-    #00bfff 60%,
-    #9370db 80%,
-    #ff1493 100%
+    var(--stream-text-rainbow-pink) 0%,
+    var(--stream-text-rainbow-orange) 20%,
+    var(--stream-text-rainbow-teal) 40%,
+    var(--stream-text-rainbow-sky) 60%,
+    var(--stream-text-rainbow-purple) 80%,
+    var(--stream-text-rainbow-hot-pink) 100%
   );
   background-size: 200% auto;
   -webkit-background-clip: text;
@@ -492,11 +509,11 @@
 .stream-text--theme-fire {
   background: linear-gradient(
     90deg,
-    #ff0000,
-    #ff8800,
-    #ffdd00,
-    #ff8800,
-    #ff0000
+    var(--stream-text-fire-red),
+    var(--stream-text-fire-orange),
+    var(--stream-text-fire-yellow),
+    var(--stream-text-fire-orange),
+    var(--stream-text-fire-red)
   );
   background-size: 200% auto;
   -webkit-background-clip: text;
@@ -509,11 +526,11 @@
 .stream-text--theme-ocean {
   background: linear-gradient(
     90deg,
-    #0077be,
-    #00b4d8,
-    #48cae4,
-    #00b4d8,
-    #0077be
+    var(--stream-text-ocean-deep),
+    var(--stream-text-ocean-mid),
+    var(--stream-text-ocean-foam),
+    var(--stream-text-ocean-mid),
+    var(--stream-text-ocean-deep)
   );
   background-size: 200% auto;
   -webkit-background-clip: text;
@@ -526,11 +543,11 @@
 .stream-text--theme-sunset {
   background: linear-gradient(
     90deg,
-    #ff6b6b,
-    #ffd93d,
-    #ff9ff3,
-    #ffd93d,
-    #ff6b6b
+    var(--stream-text-sunset-coral),
+    var(--stream-text-sunset-yellow),
+    var(--stream-text-sunset-pink),
+    var(--stream-text-sunset-yellow),
+    var(--stream-text-sunset-coral)
   );
   background-size: 200% auto;
   -webkit-background-clip: text;

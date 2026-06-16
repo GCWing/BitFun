@@ -1,6 +1,14 @@
 @use '../../styles/tokens.scss' as tokens;
 
 .code-editor {
+  --code-editor-blue-100: rgba(130, 170, 255, 1);
+  --code-editor-blue-40: rgba(130, 170, 255, 0.4);
+  --code-editor-blue-30: rgba(130, 170, 255, 0.3);
+  --code-editor-blue-25: rgba(130, 170, 255, 0.25);
+  --code-editor-teal-15: rgba(127, 219, 202, 0.15);
+  --code-editor-teal-08: rgba(127, 219, 202, 0.08);
+  --code-editor-current-find-50: rgba(255, 152, 0, 0.5);
+
   position: relative;
   width: 100%;
   height: 100%;
@@ -12,15 +20,15 @@
     border-radius: 12px;
     overflow: hidden;
     background: var(--color-bg-primary);
-    border: 1px solid rgba(130, 170, 255, 0.25);
+    border: 1px solid var(--code-editor-blue-25);
     box-shadow:
       0 8px 32px rgba(0, 0, 0, 0.5),
-      0 0 0 1px rgba(127, 219, 202, 0.08) inset,
+      0 0 0 1px var(--code-editor-teal-08) inset,
       0 2px 16px rgba(130, 170, 255, 0.12);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
     &:hover {
-      border-color: rgba(130, 170, 255, 0.4);
+      border-color: var(--code-editor-blue-40);
       box-shadow:
         0 12px 48px rgba(0, 0, 0, 0.6),
         0 0 0 1px rgba(127, 219, 202, 0.12) inset,
@@ -60,7 +68,7 @@
         }
 
         .margin-view-overlays .current-line ~ .line-numbers {
-          color: rgba(130, 170, 255, 1);
+          color: var(--code-editor-blue-100);
           font-weight: 700;
           text-shadow: 0 0 10px rgba(130, 170, 255, 0.6);
           transform: scale(1.05);
@@ -150,7 +158,7 @@
         }
 
         .bracket-match {
-          background: rgba(127, 219, 202, 0.15);
+          background: var(--code-editor-teal-15);
           border: 1px solid rgba(127, 219, 202, 0.7);
           border-radius: 2px;
           box-shadow: 0 0 10px rgba(127, 219, 202, 0.4);
@@ -178,10 +186,10 @@
         }
 
         .currentFindMatch {
-          background: rgba(255, 152, 0, 0.5);
+          background: var(--code-editor-current-find-50);
           border: 1px solid rgba(255, 152, 0, 1);
           border-radius: 2px;
-          box-shadow: 0 0 10px rgba(255, 152, 0, 0.5);
+          box-shadow: 0 0 10px var(--code-editor-current-find-50);
           animation: current-find-pulse 1s ease-in-out infinite;
         }
 
@@ -202,7 +210,7 @@
 
         @keyframes current-find-pulse {
           0%, 100% {
-            box-shadow: 0 0 10px rgba(255, 152, 0, 0.5);
+            box-shadow: 0 0 10px var(--code-editor-current-find-50);
           }
           50% {
             box-shadow: 0 0 16px rgba(255, 152, 0, 0.8);
@@ -215,7 +223,7 @@
             transition: all 0.2s ease;
 
             &:hover {
-              color: rgba(130, 170, 255, 1);
+              color: var(--code-editor-blue-100);
               text-shadow: 0 0 10px rgba(130, 170, 255, 0.8);
               transform: scale(1.1);
             }
@@ -227,12 +235,12 @@
             color-mix(in srgb, var(--color-bg-primary) 98%, transparent) 0%,
             color-mix(in srgb, var(--color-bg-secondary) 98%, transparent) 100%
           );
-          border: 1px solid rgba(130, 170, 255, 0.4);
+          border: 1px solid var(--code-editor-blue-40);
           border-radius: 10px;
           box-shadow:
             0 12px 48px rgba(0, 0, 0, 0.7),
-            0 0 0 1px rgba(127, 219, 202, 0.08) inset,
-            0 4px 16px rgba(130, 170, 255, 0.25);
+            0 0 0 1px var(--code-editor-teal-08) inset,
+            0 4px 16px var(--code-editor-blue-25);
           backdrop-filter: blur(20px);
           -webkit-backdrop-filter: blur(20px);
           overflow: hidden;
@@ -261,9 +269,9 @@
             &.focused {
               background: linear-gradient(90deg,
                 rgba(130, 170, 255, 0.2) 0%,
-                rgba(127, 219, 202, 0.15) 100%
+                var(--code-editor-teal-15) 100%
               );
-              box-shadow: 0 0 12px rgba(130, 170, 255, 0.3);
+              box-shadow: 0 0 12px var(--code-editor-blue-30);
               transform: translateX(4px);
             }
 
@@ -278,12 +286,12 @@
             color-mix(in srgb, var(--color-bg-primary) 98%, transparent) 0%,
             color-mix(in srgb, var(--color-bg-secondary) 98%, transparent) 100%
           );
-          border: 1px solid rgba(130, 170, 255, 0.4);
+          border: 1px solid var(--code-editor-blue-40);
           border-radius: 8px;
           box-shadow:
             0 8px 40px rgba(0, 0, 0, 0.7),
-            0 0 0 1px rgba(127, 219, 202, 0.08) inset,
-            0 2px 12px rgba(130, 170, 255, 0.25);
+            0 0 0 1px var(--code-editor-teal-08) inset,
+            0 2px 12px var(--code-editor-blue-25);
           backdrop-filter: blur(20px);
           -webkit-backdrop-filter: blur(20px);
           animation: hover-fade-in 0.2s ease-out;
@@ -305,12 +313,12 @@
             color-mix(in srgb, var(--color-bg-primary) 98%, transparent) 0%,
             color-mix(in srgb, var(--color-bg-secondary) 98%, transparent) 100%
           );
-          border: 1px solid rgba(130, 170, 255, 0.4);
+          border: 1px solid var(--code-editor-blue-40);
           border-radius: 8px;
           box-shadow:
             0 8px 40px rgba(0, 0, 0, 0.7),
-            0 0 0 1px rgba(127, 219, 202, 0.08) inset,
-            0 2px 12px rgba(130, 170, 255, 0.25);
+            0 0 0 1px var(--code-editor-teal-08) inset,
+            0 2px 12px var(--code-editor-blue-25);
           backdrop-filter: blur(20px);
           -webkit-backdrop-filter: blur(20px);
 
@@ -334,9 +342,9 @@
           .minimap-slider {
             background: linear-gradient(135deg,
               rgba(130, 170, 255, 0.2),
-              rgba(127, 219, 202, 0.15)
+              var(--code-editor-teal-15)
             ) !important;
-            border: 1px solid rgba(130, 170, 255, 0.3);
+            border: 1px solid var(--code-editor-blue-30);
 
             &:hover {
               background: linear-gradient(135deg,
@@ -388,7 +396,7 @@
     z-index: 10;
     padding: 8px;
     background: color-mix(in srgb, var(--color-bg-primary) 85%, transparent);
-    border: 1px solid rgba(130, 170, 255, 0.4);
+    border: 1px solid var(--code-editor-blue-40);
     border-radius: 6px;
     color: rgba(130, 170, 255, 0.8);
     cursor: pointer;
@@ -402,10 +410,10 @@
     &:hover {
       background: color-mix(in srgb, var(--color-bg-primary) 95%, transparent);
       border-color: rgba(130, 170, 255, 0.8);
-      color: rgba(130, 170, 255, 1);
+      color: var(--code-editor-blue-100);
       box-shadow:
         0 4px 16px rgba(0, 0, 0, 0.6),
-        0 0 20px rgba(130, 170, 255, 0.4),
+        0 0 20px var(--code-editor-blue-40),
         0 0 40px rgba(127, 219, 202, 0.2);
       transform: scale(1.08);
     }

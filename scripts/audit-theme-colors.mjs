@@ -33,6 +33,78 @@ const EXCEPTION_PATH_PARTS = [
   'syntax',
   'CodeEditor',
 ];
+const COLOR_DOMAIN_RULES = [
+  {
+    key: 'themePreset',
+    label: 'Theme presets',
+    pathParts: ['infrastructure/theme/presets', 'theme/presets'],
+  },
+  {
+    key: 'themeRuntime',
+    label: 'Theme runtime',
+    pathParts: ['infrastructure/theme/core'],
+  },
+  {
+    key: 'tokenContract',
+    label: 'Token contracts',
+    pathParts: ['component-library/styles'],
+  },
+  {
+    key: 'generatedWidget',
+    label: 'Generated widget',
+    pathParts: ['tools/generative-widget'],
+  },
+  {
+    key: 'mermaid',
+    label: 'Mermaid',
+    pathParts: ['tools/mermaid-editor'],
+  },
+  {
+    key: 'editor',
+    label: 'Editor',
+    pathParts: ['tools/editor', 'component-library/components/CodeEditor'],
+  },
+  {
+    key: 'syntax',
+    label: 'Syntax',
+    pathParts: ['shared/prism'],
+  },
+  {
+    key: 'terminal',
+    label: 'Terminal',
+    pathParts: [
+      'tools/terminal',
+      'flow_chat/tool-cards/TerminalToolCard',
+      'app/components/panels/TerminalEditModal',
+    ],
+  },
+  {
+    key: 'debugOverlay',
+    label: 'Debug overlay',
+    pathParts: ['shared/inspector'],
+  },
+  {
+    key: 'languageIdentity',
+    label: 'Language identity',
+    pathParts: ['infrastructure/language-detection'],
+  },
+  {
+    key: 'visualEffect',
+    label: 'Visual effects',
+    pathParts: [
+      'component-library/components/TextStrokeEffect',
+      'component-library/components/StreamText',
+    ],
+  },
+];
+const COLOR_DOMAIN_KEYS = [
+  ...COLOR_DOMAIN_RULES.map(rule => rule.key),
+  'appUi',
+];
+const COLOR_DOMAIN_LABELS = Object.fromEntries([
+  ...COLOR_DOMAIN_RULES.map(rule => [rule.key, rule.label]),
+  ['appUi', 'App UI'],
+]);
 
 const COLOR_PATTERN =
   /#[0-9a-fA-F]{3,8}\b|rgba?\(\s*[-+]?\d*\.?\d+\s*,\s*[-+]?\d*\.?\d+\s*,\s*[-+]?\d*\.?\d+(?:\s*,\s*(?:[-+]?\d*\.?\d+|var\([^)]+\)))?\s*\)|hsla?\(\s*[-+]?\d*\.?\d+(?:deg|rad|turn)?\s*,\s*[-+]?\d*\.?\d+%\s*,\s*[-+]?\d*\.?\d+%(?:\s*,\s*(?:[-+]?\d*\.?\d+|var\([^)]+\)))?\s*\)/g;
@@ -165,6 +237,25 @@ function isRuntimeContractVarDefinitionFile(relativePath) {
 
 function isExceptionFile(relativePath) {
   return EXCEPTION_PATH_PARTS.some(part => relativePath.toLowerCase().includes(part.toLowerCase()));
+}
+
+function pathMatchesPart(relativePath, pathPart) {
+  const normalizedPath = relativePath.toLowerCase();
+  const normalizedPart = pathPart.toLowerCase();
+  return (
+    normalizedPath === normalizedPart
+    || normalizedPath.startsWith(`${normalizedPart}/`)
+    || normalizedPath.startsWith(`${normalizedPart}.`)
+    || normalizedPath.includes(`/${normalizedPart}/`)
+    || normalizedPath.includes(`/${normalizedPart}.`)
+  );
+}
+
+function getColorDomain(relativePath) {
+  const rule = COLOR_DOMAIN_RULES.find(entry => (
+    entry.pathParts.some(part => pathMatchesPart(relativePath, part))
+  ));
+  return rule?.key ?? 'appUi';
 }
 
 function incrementMap(map, key, amount = 1) {
@@ -488,6 +579,8 @@ function audit(options) {
   const componentFileColorCounts = new Map();
   const exceptionColorCounts = new Map();
   const tokenColorCounts = new Map();
+  const colorDomainCounts = new Map();
+  const colorDomainFiles = new Map();
   const tokenAliasLiteralCounts = new Map();
   const tokenAliasLiteralFiles = new Map();
   const tokenAliasLiteralExamples = new Map();
@@ -501,15 +594,20 @@ function audit(options) {
     const relativePath = normalizePath(path.relative(cwd, file));
     const tokenFile = isTokenFile(relativePath);
     const exceptionFile = isExceptionFile(relativePath);
+    const colorDomain = getColorDomain(relativePath);
     const colors = collectMatches(content, COLOR_PATTERN).map(match => match[0]);
 
     if (colors.length > 0) {
       fileColorCounts.set(relativePath, colors.length);
+      addToSetMap(colorDomainFiles, colorDomain, relativePath);
     }
 
     for (const color of colors) {
       colorOccurrences += 1;
       incrementMap(colorCounts, color);
+      const domainCounts = colorDomainCounts.get(colorDomain) ?? new Map();
+      incrementMap(domainCounts, color);
+      colorDomainCounts.set(colorDomain, domainCounts);
       if (tokenFile) {
         incrementMap(tokenColorCounts, color);
       } else if (exceptionFile) {
@@ -658,6 +756,16 @@ function audit(options) {
     tokenAliasDefinitionsByColorKey,
     limit: options.top,
   });
+  const colorDomainScopes = Object.fromEntries(COLOR_DOMAIN_KEYS.map(key => {
+    const counts = colorDomainCounts.get(key) ?? new Map();
+    const filesWithColors = colorDomainFiles.get(key) ?? new Set();
+    return [key, {
+      occurrences: sumMapValues(counts),
+      filesWithColors: filesWithColors.size,
+      uniqueColors: counts.size,
+      topColors: topEntries(counts, options.top),
+    }];
+  }));
 
   return {
     root: normalizePath(path.relative(cwd, root)) || '.',
@@ -680,6 +788,7 @@ function audit(options) {
         uniqueColors: exceptionColorCounts.size,
       },
     },
+    colorDomainScopes,
     componentColorOccurrences,
     componentFilesWithColors: componentFileColorCounts.size,
     uniqueComponentColors,
@@ -755,6 +864,20 @@ function printText(report) {
 
   console.log('\nTop component/non-token colors:');
   console.log(printRows(report.topComponentColors));
+
+  console.log('\nColor domain scopes:');
+  for (const key of COLOR_DOMAIN_KEYS) {
+    const scope = report.colorDomainScopes[key];
+    if (!scope || scope.occurrences === 0) {
+      continue;
+    }
+    console.log(
+      `  ${COLOR_DOMAIN_LABELS[key].padEnd(18)} ` +
+      `occurrences=${scope.occurrences.toString().padStart(4)}  ` +
+      `unique=${scope.uniqueColors.toString().padStart(4)}  ` +
+      `files=${scope.filesWithColors.toString().padStart(3)}`
+    );
+  }
 
   console.log('\nTop files:');
   console.log(printRows(report.topFiles));

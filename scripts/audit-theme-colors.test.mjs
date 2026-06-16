@@ -71,6 +71,42 @@ test('theme color audit emits scoped machine-readable reports', (t) => {
   assert.equal(report.summary.baseline.enforced, false);
 });
 
+test('theme color audit reports specialized color domains separately from app UI', (t) => {
+  const { dir, sourceRoot } = createFixture({
+    'component-library/styles/tokens.scss': ':root { --color-text-primary: #111111; }\n',
+    'infrastructure/theme/presets/dark-theme.ts': "export const bg = '#222222';\n",
+    'tools/mermaid-editor/theme/mermaidTheme.ts': "export const node = '#333333';\n",
+    'tools/editor/themes/bitfun-dark.theme.ts': "export const editorBg = '#444444';\n",
+    'shared/prism/prismTheme.ts': "export const prism = { keyword: '#555555' };\n",
+    'tools/terminal/utils/xtermTheme.ts': "export const cursor = '#c0c0c0';\n",
+    'tools/generative-widget/themePayload.ts': "export const fallback = { '--color-text-primary': '#666666' };\n",
+    'shared/inspector/inspectorOverlayTheme.ts': "export const overlay = { activeBorder: '#777777' };\n",
+    'infrastructure/language-detection/core/LanguageRegistry.ts': "export const rust = '#888888';\n",
+    'component-library/components/TextStrokeEffect/TextStrokeEffect.tsx': "export const stroke = '#999999';\n",
+    'component-library/components/StreamText/StreamText.scss': ".stream { color: #bbbbbb; }\n",
+    'app/tools/mermaid-editorish/FakePanel.ts': "export const fake = '#cccccc';\n",
+    'app/App.scss': '.app { color: #aaaaaa; }\n',
+  });
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const reportPath = path.join(dir, 'theme-report.json');
+
+  const result = runAudit(['--root', sourceRoot, '--report-json', reportPath, '--no-baseline']);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+
+  const report = readJson(reportPath);
+  assert.equal(report.colorDomainScopes.tokenContract.uniqueColors, 1);
+  assert.equal(report.colorDomainScopes.themePreset.uniqueColors, 1);
+  assert.equal(report.colorDomainScopes.mermaid.uniqueColors, 1);
+  assert.equal(report.colorDomainScopes.editor.uniqueColors, 1);
+  assert.equal(report.colorDomainScopes.syntax.uniqueColors, 1);
+  assert.equal(report.colorDomainScopes.terminal.uniqueColors, 1);
+  assert.equal(report.colorDomainScopes.generatedWidget.uniqueColors, 1);
+  assert.equal(report.colorDomainScopes.debugOverlay.uniqueColors, 1);
+  assert.equal(report.colorDomainScopes.languageIdentity.uniqueColors, 1);
+  assert.equal(report.colorDomainScopes.visualEffect.uniqueColors, 2);
+  assert.equal(report.colorDomainScopes.appUi.uniqueColors, 2);
+});
+
 test('theme color audit counts full CSS var governance debt before row truncation', (t) => {
   const missingRules = Array.from(
     { length: 101 },
