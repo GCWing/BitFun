@@ -1,0 +1,38 @@
+{
+  "title": "语音",
+  "subtitle": "语音识别和语音合成设置",
+  "enabled": {
+    "label": "语音输入/输出",
+    "description": "启用语音识别和语音合成"
+  },
+  "sections": {
+    "stt": "语音识别",
+    "tts": "语音合成"
+  },
+  "stt": {
+    "enabled": {
+      "label": "语音识别",
+      "description": "启用语音转文字（语音输入）"
+    },
+    "provider": "STT 引擎",
+    "providerDescription": "选择语音识别引擎",
+    "providers": {
+      "webspeech": "Web Speech API",
+      "fasterWhisper": "Faster Whisper"
+    }
+  },
+  "tts": {
+    "enabled": {
+      "label": "语音合成",
+      "description": "启用文字转语音（语音输出）"
+    },
+    "provider": "TTS 引擎",
+    "providerDescription": "选择语音合成引擎",
+    "providers": {
+      "edge": "Edge TTS",
+      "elevenlabs": "ElevenLabs"
+    },
+    "voice": "语音",
+    "language": "语言"
+  }
+}

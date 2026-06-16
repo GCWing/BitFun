@@ -156,5 +156,12 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
     { ns: 'settings/quick-actions', key: 'sections.custom.title' },
   ],
 
+  voice: [
+    { ns: 'settings/voice', key: 'title' },
+    { ns: 'settings/voice', key: 'subtitle' },
+    { ns: 'settings/voice', key: 'sections.stt' },
+    { ns: 'settings/voice', key: 'sections.tts' },
+  ],
+
   // lsp: [ ... ], // nav entry temporarily hidden; omit from search index
 };

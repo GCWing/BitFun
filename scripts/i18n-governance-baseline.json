@@ -6,13 +6,13 @@
       "maxTotal": 0
     },
     "sharedTermDuplicates": {
-      "maxTotal": 185,
+      "maxTotal": 184,
       "bySurface": {
         "core": 15,
         "installer": 0,
         "mobile-web": 0,
         "relay-static-homepage": 0,
-        "web-ui": 170
+        "web-ui": 169
       },
       "bySharedKey": {
         "agents.claw": 3,
@@ -22,7 +22,7 @@
         "connectionMethods.bitfunServer": 0,
         "connectionMethods.lan": 0,
         "features.codeAgent": 1,
-        "features.deepReview": 2,
+        "features.deepReview": 1,
         "features.remoteControl": 0,
         "features.settings": 1,
         "features.workspace": 2,

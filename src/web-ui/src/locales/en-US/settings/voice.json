@@ -1,0 +1,38 @@
+{
+  "title": "Voice",
+  "subtitle": "Speech-to-text and text-to-speech settings",
+  "enabled": {
+    "label": "Voice Input/Output",
+    "description": "Enable speech recognition and text-to-speech synthesis"
+  },
+  "sections": {
+    "stt": "Speech-to-Text",
+    "tts": "Text-to-Speech"
+  },
+  "stt": {
+    "enabled": {
+      "label": "Speech Recognition",
+      "description": "Enable speech-to-text (voice input)"
+    },
+    "provider": "STT Provider",
+    "providerDescription": "Select the speech recognition engine",
+    "providers": {
+      "webspeech": "Web Speech API",
+      "fasterWhisper": "Faster Whisper"
+    }
+  },
+  "tts": {
+    "enabled": {
+      "label": "Text-to-Speech",
+      "description": "Enable text-to-speech synthesis (voice output)"
+    },
+    "provider": "TTS Provider",
+    "providerDescription": "Select the text-to-speech engine",
+    "providers": {
+      "edge": "Edge TTS",
+      "elevenlabs": "ElevenLabs"
+    },
+    "voice": "Voice",
+    "language": "Language"
+  }
+}

@@ -4,7 +4,7 @@
  */
 
 import { FlowChatStore } from '../../store/FlowChatStore';
-import { stateMachineManager } from '../../state-machine';
+import { stateMachineManager } from '@/flow_chat';
 import { SessionExecutionEvent, SessionExecutionState } from '../../state-machine/types';
 import { agenticEventListener, type AgenticEventCallbacks } from '../AgenticEventListener';
 import { 
@@ -18,8 +18,8 @@ import {
   type ToolEventData,
   type ParamsPartialToolEvent
 } from '../EventBatcher';
-import { notificationService } from '../../../shared/notification-system/services/NotificationService';
-import type { NotificationAction } from '../../../shared/notification-system/types';
+import { notificationService } from '@/shared/notification-system';
+import type { NotificationAction } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { handleThreadGoalUpdated } from '../threadGoalEventService';
 import { resolveThreadGoalUserMessageDisplay } from '../../utils/threadGoalDisplay';

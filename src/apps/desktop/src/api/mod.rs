@@ -43,6 +43,7 @@ pub mod subagent_api;
 pub mod system_api;
 pub mod terminal_api;
 pub mod tool_api;
+pub mod voice;
 pub mod workspace_activation;
 
 pub use app_state::{AppState, AppStatistics, HealthStatus, RemoteWorkspace};

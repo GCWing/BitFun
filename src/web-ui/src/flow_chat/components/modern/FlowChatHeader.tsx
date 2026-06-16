@@ -5,7 +5,7 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { Activity, Bot, ChevronDown, ChevronUp, GitPullRequest, Keyboard, List, MoreHorizontal, Search, Square, Terminal, X } from 'lucide-react';
+import { Activity, Bot, ChevronDown, ChevronUp, GitPullRequest, Keyboard, List, MoreHorizontal, Search, Square, Terminal, VolumeX, X } from 'lucide-react';
 import { Tooltip, IconButton, Input } from '@/component-library';
 import { useTranslation } from 'react-i18next';
 import { SessionFilesBadge } from './SessionFilesBadge';
@@ -88,6 +88,10 @@ export interface FlowChatHeaderProps {
   backgroundCommands?: FlowChatHeaderCommandSummary[];
   /** Open a background subagent in the right-side panel. */
   onOpenBackgroundSubagent?: (sessionId: string) => void;
+  /** Whether TTS is currently speaking. */
+  isSpeaking?: boolean;
+  /** Called when user clicks to stop TTS playback. */
+  onStopSpeaking?: () => void;
   /** Stop a running background subagent. */
   onStopBackgroundSubagent?: (subagent: FlowChatHeaderSubagentSummary) => void;
   /** Stop all running background subagents. */
@@ -125,6 +129,8 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   backgroundSubagents = [],
   backgroundCommands = [],
   onOpenBackgroundSubagent,
+  isSpeaking = false,
+  onStopSpeaking,
   onStopBackgroundSubagent,
   onStopAllBackgroundSubagents,
   onOpenBackgroundCommandOutput,
@@ -759,6 +765,21 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
         >
           <GitPullRequest size={14} />
         </IconButton>
+        {isSpeaking && (
+          <Tooltip content={t('voice.stopSpeaking')}>
+            <IconButton
+              className="flowchat-header__tts-btn flowchat-header__tts-btn--speaking"
+              variant="ghost"
+              size="xs"
+              onClick={onStopSpeaking}
+              tooltip={t('voice.stopSpeaking')}
+              aria-label={t('voice.stopSpeaking')}
+              data-testid="flowchat-header-tts-stop"
+            >
+              <VolumeX size={14} />
+            </IconButton>
+          </Tooltip>
+        )}
         {isSearchOpen ? (
           <div className="flowchat-header__search" role="search" data-testid="flowchat-header-search-bar">
             <Input

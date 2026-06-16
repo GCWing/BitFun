@@ -12,7 +12,7 @@ import { DotMatrixLoader } from '@/component-library';
 import type { MarkdownTraceContext } from '@/component-library';
 import type { FlowTextItem } from '../types/flow-chat';
 import { useFlowChatContext } from './modern/FlowChatContext';
-import { useTypewriter } from '../hooks/useTypewriter';
+import { useTypewriter } from '@/flow_chat/hooks';
 import { isStartupRenderTraceEnabled } from '@/shared/utils/startupTrace';
 import './FlowTextBlock.scss';
 
@@ -55,12 +55,26 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
   replayStreamingOnMount = true,
   traceContext,
 }) => {
-  const {
-    onFileViewRequest,
-    onTabOpen,
-    onHttpLinkClick,
-    onOpenVisualization,
-  } = useFlowChatContext();
+  const { onFileViewRequest, onTabOpen, onHttpLinkClick, onOpenVisualization, speakingTextItemId } = useFlowChatContext();
+
+  const [isSpeakingEnd, setIsSpeakingEnd] = useState(false);
+  const prevSpeakingRef = useRef(false);
+  const isSpeaking = speakingTextItemId === textItem.id;
+
+  useEffect(() => {
+    if (prevSpeakingRef.current && !isSpeaking && !speakingTextItemId) {
+      setIsSpeakingEnd(true);
+      const timer = setTimeout(() => setIsSpeakingEnd(false), 600);
+      return () => clearTimeout(timer);
+    }
+    prevSpeakingRef.current = isSpeaking;
+  }, [isSpeaking, speakingTextItemId]);
+
+  const wrapperClassName = [
+    className,
+    isSpeaking ? 'flow-text-block--speaking' : null,
+    isSpeakingEnd ? 'flow-text-block--speaking-end' : null,
+  ].filter(Boolean).join(' ');
 
   // Normalize content to a string.
   const content = typeof textItem.content === 'string'
@@ -116,7 +130,7 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
   }
 
   return (
-    <div className={`flow-text-block ${className} ${isActivelyStreaming ? 'streaming flow-text-block--streaming' : ''}`}>
+    <div className={`flow-text-block ${wrapperClassName} ${isActivelyStreaming ? 'streaming flow-text-block--streaming' : ''}`}>
       {textItem.isMarkdown ? (
         <MarkdownRenderer
           content={displayContent}

@@ -6,8 +6,14 @@
 import React, { useMemo, useCallback, useRef, useEffect, useLayoutEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
+import {
+  aiExperienceConfigService,
+  type AIExperienceSettings,
+} from '@/infrastructure/config/services/AIExperienceConfigService';
+import { ChatInputPixelPet } from '../ChatInputPixelPet';
 import { FlowChatManager } from '@/flow_chat/services/FlowChatManager';
 import { useSessionModeStore } from '@/app/stores/sessionModeStore';
+import { useTtsPlayback } from '@/flow_chat/hooks/useTtsPlayback';
 import { VirtualMessageList, VirtualMessageListRef } from './VirtualMessageList';
 import {
   FlowChatHeader,
@@ -237,6 +243,51 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   const virtualListRef = useRef<VirtualMessageListRef>(null);
   const chatScopeRef = useRef<HTMLDivElement>(null);
   const [historyInitialContentReadyKey, setHistoryInitialContentReadyKey] = useState<string | null>(null);
+  const [companionSettings, setCompanionSettings] = useState<AIExperienceSettings>(() =>
+    aiExperienceConfigService.getSettings()
+  );
+
+  useEffect(() => {
+    void aiExperienceConfigService.getSettingsAsync().then(setCompanionSettings);
+    const unsubscribe = aiExperienceConfigService.addChangeListener((settings) => {
+      setCompanionSettings(settings);
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  const showCompanionPet = useMemo(
+    () =>
+      companionSettings.enable_agent_companion &&
+      companionSettings.agent_companion_display_mode === 'input' &&
+      Boolean(companionSettings.agent_companion_pet),
+    [companionSettings]
+  );
+
+  const companionMood = useMemo(() => {
+    if (!showCompanionPet) return 'rest' as const;
+    if (!activeSession || activeSession.dialogTurns.length === 0) {
+      return 'rest' as const;
+    }
+    const lastTurn = activeSession.dialogTurns[activeSession.dialogTurns.length - 1];
+    const isProcessing =
+      lastTurn.status === 'processing' ||
+      lastTurn.status === 'finishing' ||
+      lastTurn.status === 'image_analyzing';
+    if (!isProcessing) return 'rest' as const;
+    if (!lastTurn.modelRounds || lastTurn.modelRounds.length === 0) {
+      return 'working' as const;
+    }
+    const lastRound = lastTurn.modelRounds[lastTurn.modelRounds.length - 1];
+    for (let i = lastRound.items.length - 1; i >= 0; i -= 1) {
+      const item = lastRound.items[i];
+      if (item.type === 'tool' && item.toolName) {
+        return 'waiting' as const;
+      }
+    }
+    return 'working' as const;
+  }, [activeSession, showCompanionPet]);
   const [historyInitialContentPostPaintKey, setHistoryInitialContentPostPaintKey] = useState<string | null>(null);
   const { workspacePath } = useWorkspaceContext();
   const allowUserMessageRollback = !isAcpFlowSession(activeSession);
@@ -262,6 +313,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     onCollapseGroup: handleCollapseGroup,
   } = useExploreGroupState(virtualItems);
   const { handleToolConfirm, handleToolReject } = useFlowChatToolActions();
+  const { isSpeaking: isTtsSpeaking, currentTextItemId: speakingTextItemId, stop: stopTts } = useTtsPlayback();
 
   const { handleFileViewRequest } = useFlowChatFileActions({
     workspacePath,
@@ -393,6 +445,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     searchQuery,
     searchMatchIndices,
     searchCurrentMatchVirtualIndex,
+    speakingTextItemId,
   }), [
     handleFileViewRequest,
     onTabOpen,
@@ -412,6 +465,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     searchQuery,
     searchMatchIndices,
     searchCurrentMatchVirtualIndex,
+    speakingTextItemId,
   ]);
 
   const resolveLocalCommandHeaderTitle = useCallback((metadata: DialogTurn['userMessage']['metadata']) => {
@@ -1344,6 +1398,8 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
           backgroundSubagents={headerBackgroundSubagents}
           backgroundCommands={headerBackgroundCommands}
           onOpenBackgroundSubagent={handleOpenBackgroundSubagent}
+          isSpeaking={isTtsSpeaking}
+          onStopSpeaking={stopTts}
           onStopBackgroundSubagent={handleStopBackgroundSubagent}
           onStopAllBackgroundSubagents={handleStopAllBackgroundSubagents}
           onOpenBackgroundCommandOutput={handleOpenBackgroundCommandOutput}
@@ -1385,7 +1441,56 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
           onMouseDownCapture={blockHistoryOverlayActivation}
           onPointerDownCapture={blockHistoryOverlayActivation}
         >
-          <>
+          {showHistoryPlaceholder ? (
+            <HistorySessionPlaceholder
+              state={
+                historyState === 'failed'
+                  ? 'failed'
+                  : historyState === 'metadata-only'
+                    ? 'metadata-only'
+                    : 'hydrating'
+              }
+              onRetry={handleRetryHistoryLoad}
+            />
+          ) : virtualItems.length === 0 ? (
+            <WelcomePanel
+              key={activeSession?.sessionId ?? 'welcome'}
+              sessionMode={activeSession?.mode}
+              workspacePath={activeSession?.workspacePath}
+              onQuickAction={(command) => {
+                window.dispatchEvent(new CustomEvent('fill-chat-input', {
+                  detail: { message: command }
+                }));
+              }}
+            />
+          ) : (
+            <>
+              <VirtualMessageList
+                // Remount per session so Virtuoso does not reuse the previous
+                // viewport before the new session's auto-pin settles.
+                key={activeSession?.sessionId ?? 'virtual-message-list'}
+                ref={virtualListRef}
+              />
+              {shouldBlockHistoryInitialContentInteraction && (
+                <div className="modern-flowchat-container__history-overlay">
+                  <HistorySessionPlaceholder state="hydrating" />
+                </div>
+              )}
+            </>
+          )}
+          {showCompanionPet && (
+            <div
+              className="modern-flowchat-container__companion-pet"
+              data-testid="modern-flowchat-companion-pet"
+            >
+              <ChatInputPixelPet
+                mood={companionMood}
+                pet={companionSettings.agent_companion_pet}
+                className="modern-flowchat-container__companion-pet-element"
+              />
+            </div>
+          )}
+<>
             {showFailedHistoryPlaceholder ? (
               <HistorySessionPlaceholder
                 state="failed"

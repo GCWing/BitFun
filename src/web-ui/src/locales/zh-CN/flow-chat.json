@@ -1027,6 +1027,7 @@
     "jumpToCurrentTurn": "跳转到第 {{turn}} 轮",
     "backgroundActivities": "后台活动（{{count}}）",
     "backgroundSubagentUntitled": "后台子 Agent",
+    "backgroundSubagents": "后台子 Agent（{{count}}）",
     "backgroundSubagentSection": "后台子 Agent（{{count}}）",
     "backgroundSubagentActions": "子 Agent 操作",
     "backgroundSubagentStop": "取消",
@@ -2188,5 +2189,10 @@
   },
   "actions": {
     "send": "发送"
+  },
+  "voice": {
+    "stopSpeaking": "停止播报",
+    "startListening": "开始语音输入",
+    "stopListening": "停止语音输入"
   }
 }

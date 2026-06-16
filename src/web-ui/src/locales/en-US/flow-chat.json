@@ -1027,6 +1027,7 @@
     "jumpToCurrentTurn": "Jump to Turn {{turn}}",
     "backgroundActivities": "Background activity ({{count}})",
     "backgroundSubagentUntitled": "Background subagent",
+    "backgroundSubagents": "Background subagents ({{count}})",
     "backgroundSubagentSection": "Background subagents ({{count}})",
     "backgroundSubagentActions": "Subagent actions",
     "backgroundSubagentStop": "Cancel",
@@ -1047,6 +1048,11 @@
     "backgroundCommandStopAll": "Stop all",
     "backgroundCommandStopFailed": "Failed to stop background command.",
     "pullRequests": "Pull requests"
+  },
+  "voice": {
+    "stopSpeaking": "Stop speaking",
+    "startListening": "Start voice input",
+    "stopListening": "Stop voice input"
   },
   "backgroundCommandInput": {
     "title": "Send command input",

@@ -2986,11 +2986,10 @@ impl ExecutionEngine {
         }
 
         // P1-6: Track the actual termination reason for downstream reporting.
-        // Defaults to "complete" (model produced a final answer naturally).
-        let effective_finish_reason: &'static str = match finalization_reason {
-            Some(r) => r,
-            None => "complete",
-        };
+        // Defaults to "complete" (model produced a final answer naturally) and
+        // is overridden by finalize / fallback paths below.
+        let mut effective_finish_reason: &'static str = finalization_reason.unwrap_or_else(|| "complete");
+        let mut finalize_fallback_text_used = false;
         let mut has_final_response = finalization_reason.is_none();
         let mut used_local_final_response_synthesis = false;
 

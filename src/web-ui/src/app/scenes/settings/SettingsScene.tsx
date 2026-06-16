@@ -9,7 +9,6 @@
 import React, { lazy, Suspense, useEffect } from 'react';
 import { useSettingsStore } from './settingsStore';
 import './SettingsScene.scss';
-
 const AIModelConfig = lazy(() => import('../../../infrastructure/config/components/AIModelConfig'));
 const McpToolsConfig = lazy(() => import('../../../infrastructure/config/components/McpToolsConfig'));
 const AcpAgentsConfig = lazy(() => import('../../../infrastructure/config/components/AcpAgentsConfig'));
@@ -30,6 +29,7 @@ const SessionPermissionsConfig = lazy(() =>
     default: module.SessionPermissionsConfig,
   }))
 );
+const VoiceConfig = lazy(() => import('../../../infrastructure/config/components/VoiceConfig'));
 
 function SettingsSceneLoading() {
   return (
@@ -70,6 +70,7 @@ const SettingsScene: React.FC = () => {
     case 'mcp-tools':        Content = McpToolsConfig;      break;
     case 'acp-agents':       Content = AcpAgentsConfig;     break;
     case 'editor':           Content = EditorConfig;         break;
+    case 'voice':            Content = VoiceConfig;          break;
     case 'keyboard':         Content = KeyboardShortcutsTab; break;
   }
 
