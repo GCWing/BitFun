@@ -9,6 +9,9 @@ description = "Agent runtime contracts and owner decisions for BitFun"
 name = "bitfun_agent_runtime"
 crate-type = ["rlib"]
 
+[features]
+default = []
+
 [dependencies]
 bitfun-agent-tools = { path = "../tool-contracts" }
 bitfun-events = { path = "../../contracts/events" }

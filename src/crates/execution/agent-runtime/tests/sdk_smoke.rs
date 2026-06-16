@@ -3,21 +3,17 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use bitfun_agent_runtime::sdk::{
-    AgentEventStream, AgentRunRequest, AgentRuntimeBuilder, RuntimeAgentRegistry,
-    RuntimeAgentRegistryQuery, RuntimeHookErrorPolicy, RuntimeHookKind, RuntimeHookPlan,
-    RuntimeHookRegistry, SessionSelector,
+    build_descriptor_harness_registry, AgentEventStream, AgentRunRequest, AgentRuntimeBuilder,
+    AgentRuntimeSdkCompatibility, AgentRuntimeSdkStability, AgentSessionCreateRequest,
+    AgentSessionCreateResult, AgentSubmissionPort, AgentSubmissionRequest, AgentSubmissionResult,
+    AgentSubmissionSource, ClockPort, FileSystemPort, HarnessCapability, HarnessProviderDescriptor,
+    HarnessWorkflow, PermissionDecision, PermissionPort, PermissionRequest, PortResult,
+    RuntimeAgentRegistry, RuntimeAgentRegistryQuery, RuntimeEventEnvelope, RuntimeEventSink,
+    RuntimeEventType, RuntimeHookErrorPolicy, RuntimeHookKind, RuntimeHookPlan,
+    RuntimeHookRegistry, RuntimeServiceCapability, RuntimeServicePort, RuntimeServices,
+    RuntimeServicesBuilder, SessionSelector, SessionStorageKind, SessionStoragePathRequest,
+    SessionStoragePathResolution, SessionStorePort, ToolRegistry, ToolRegistryItem, WorkspacePort,
 };
-use bitfun_agent_tools::{ToolRegistry, ToolRegistryItem};
-use bitfun_harness::{
-    build_descriptor_harness_registry, HarnessCapability, HarnessProviderDescriptor,
-    HarnessWorkflow,
-};
-use bitfun_runtime_ports::{
-    AgentSessionCreateRequest, AgentSessionCreateResult, AgentSubmissionPort,
-    AgentSubmissionRequest, AgentSubmissionResult, AgentSubmissionSource, PortResult,
-    RuntimeEventEnvelope, RuntimeEventType,
-};
-use bitfun_runtime_services::test_support::FakeRuntimeServicesProvider;
 use serde_json::{json, Value};
 
 #[derive(Debug, Default)]
@@ -34,6 +30,23 @@ struct FakeSdkAgentRegistry {
     workspace_agent_ids: Vec<String>,
 }
 
+#[derive(Debug)]
+struct FakeSdkRuntimePort {
+    capability: RuntimeServiceCapability,
+}
+
+#[derive(Debug, Default)]
+struct FakeSdkRuntimeEventSink;
+
+#[test]
+fn sdk_facade_exposes_versioned_preview_compatibility_contract() {
+    let compatibility = AgentRuntimeSdkCompatibility::current();
+
+    assert_eq!(compatibility.api_version, 1);
+    assert_eq!(compatibility.crate_version, env!("CARGO_PKG_VERSION"));
+    assert_eq!(compatibility.stability, AgentRuntimeSdkStability::Preview);
+}
+
 impl RuntimeAgentRegistry for FakeSdkAgentRegistry {
     fn agent_ids(&self, query: RuntimeAgentRegistryQuery<'_>) -> Vec<String> {
         if query.workspace_root.is_some() {
@@ -42,6 +55,82 @@ impl RuntimeAgentRegistry for FakeSdkAgentRegistry {
             self.agent_ids.clone()
         }
     }
+}
+
+impl FakeSdkRuntimePort {
+    fn new(capability: RuntimeServiceCapability) -> Self {
+        Self { capability }
+    }
+}
+
+impl RuntimeServicePort for FakeSdkRuntimePort {
+    fn capability(&self) -> RuntimeServiceCapability {
+        self.capability
+    }
+}
+
+impl FileSystemPort for FakeSdkRuntimePort {}
+impl WorkspacePort for FakeSdkRuntimePort {}
+
+#[async_trait]
+impl SessionStorePort for FakeSdkRuntimePort {
+    async fn resolve_session_storage_path(
+        &self,
+        request: SessionStoragePathRequest,
+    ) -> PortResult<SessionStoragePathResolution> {
+        Ok(SessionStoragePathResolution::new(
+            request.workspace_path.clone(),
+            request.workspace_path,
+            SessionStorageKind::Local,
+            request.remote_connection_id,
+            request.remote_ssh_host,
+        ))
+    }
+}
+
+#[async_trait]
+impl PermissionPort for FakeSdkRuntimePort {
+    async fn request_permission(
+        &self,
+        _request: PermissionRequest,
+    ) -> PortResult<PermissionDecision> {
+        Ok(PermissionDecision::Allow)
+    }
+}
+
+impl ClockPort for FakeSdkRuntimePort {
+    fn now_unix_millis(&self) -> i64 {
+        0
+    }
+}
+
+#[async_trait]
+impl RuntimeEventSink for FakeSdkRuntimeEventSink {
+    async fn publish_runtime_event(&self, _event: RuntimeEventEnvelope) -> PortResult<()> {
+        Ok(())
+    }
+}
+
+fn fake_sdk_services() -> RuntimeServices {
+    RuntimeServicesBuilder::new()
+        .with_filesystem(Arc::new(FakeSdkRuntimePort::new(
+            RuntimeServiceCapability::FileSystem,
+        )))
+        .with_workspace(Arc::new(FakeSdkRuntimePort::new(
+            RuntimeServiceCapability::Workspace,
+        )))
+        .with_session_store(Arc::new(FakeSdkRuntimePort::new(
+            RuntimeServiceCapability::SessionStore,
+        )))
+        .with_permission(Arc::new(FakeSdkRuntimePort::new(
+            RuntimeServiceCapability::Permission,
+        )))
+        .with_events(Arc::new(FakeSdkRuntimeEventSink))
+        .with_clock(Arc::new(FakeSdkRuntimePort::new(
+            RuntimeServiceCapability::Clock,
+        )))
+        .build()
+        .expect("fake SDK services")
 }
 
 #[async_trait]
@@ -148,9 +237,7 @@ async fn sdk_facade_runs_with_fake_provider_and_local_event_stream() {
 #[tokio::test]
 async fn sdk_facade_accepts_fake_services_tools_harnesses_and_hooks_without_core() {
     let provider = Arc::new(FakeSdkAgentProvider::default());
-    let services = FakeRuntimeServicesProvider::with_all_required()
-        .build_services()
-        .expect("fake required services");
+    let services = fake_sdk_services();
     let mut tools = ToolRegistry::new();
     tools.register_tool(Arc::new(FakeSdkTool));
     let harnesses = build_descriptor_harness_registry([HarnessProviderDescriptor::legacy_facade(
@@ -206,5 +293,5 @@ async fn sdk_facade_accepts_fake_services_tools_harnesses_and_hooks_without_core
     assert!(runtime
         .services()
         .expect("services should be injected")
-        .has_capability(bitfun_runtime_ports::RuntimeServiceCapability::SessionStore));
+        .has_capability(RuntimeServiceCapability::SessionStore));
 }

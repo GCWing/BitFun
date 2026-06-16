@@ -2,6 +2,21 @@
 
 export const forbiddenContentRules = [
   {
+    path: 'src/crates/execution/agent-runtime/tests/sdk_smoke.rs',
+    patterns: [
+      {
+        regex: /\bbitfun_runtime_services::test_support\b/,
+        message:
+          'agent-runtime SDK smoke tests must prove the public sdk facade is enough; do not rely on runtime-services test_support',
+      },
+      {
+        regex: /\bFakeRuntimeServicesProvider\b/,
+        message:
+          'agent-runtime SDK smoke tests must build fake services through sdk-reexported ports and RuntimeServicesBuilder',
+      },
+    ],
+  },
+  {
     path: 'src/crates/contracts/core-types/src/ai.rs',
     patterns: [
       {

@@ -35,6 +35,7 @@
 - boundary check 覆盖 owner crate 禁止依赖、旧路径 facade-only、feature gate、six-layer path 解析、Product Assembly 收口和高风险 owner 回流。
 - focused tests 覆盖当前 delivery profile 能力裁剪、ProductAssembler 缺失 service 报告、无直接 core 入口的空 capability plan、SDK fake provider / services / tool / harness / hook / workspace-scoped agent registry 闭环，以及 runtime hook 顺序、timeout、错误策略和重复 id 拦截。
 - focused baseline 覆盖 tool manifest、GetToolSpec、execution admission、workspace search、remote workspace fallback、MCP config/catalog、prompt cache、custom subagent、thread-goal tools、AskUserQuestion、DeepReview policy、tool confirmation、session restore、MiniApp storage/builtin/import、function-agent Git、scheduled-job state 等路径。
+- H4 已完成 Agent Runtime SDK 发布准备的 workspace 内收口：`sdk` facade 暴露 v1 preview 兼容元数据、空默认 feature、稳定注入 registry/service 类型、最小外部 embedder 示例，以及 boundary required rules / self-test 保护。
 
 ## 4. Adapter 边界与后续专项
 
@@ -44,4 +45,4 @@
 - DeepReview concrete Task launch 和 session metadata cache persistence 仍是 core adapter，因为它们依赖 coordinator、session manager、subagent runtime 和产品事件；provider-neutral policy / queue / retry / report shaping 与 queue event payload shaping 已在 `agent-runtime`，core 只负责事件发送。
 - H2 已完成：MiniApp AI / Agent 请求计划、stream payload、runtime event payload、worker restart / draft key / workspace input 规则已迁入 `product-domains`，desktop 命令只保留 AI factory、scheduler、worker pool、目录创建和事件发送等 concrete host 调用。
 - MiniApp larger workflow 的 UI asset / desktop scheduler / AI factory 调用仍属于产品 host adapter；可复用规则不得回流到 desktop 命令内重复实现。
-- Agent Runtime SDK 已具备内部 facade、最小 fake-provider 闭环和 runtime services / tool / harness / hook / workspace-scoped agent registry 注入基线，但尚未冻结为可独立发布的外部 SDK 包、版本策略和兼容承诺。
+- Agent Runtime SDK 已具备 v1 preview workspace 内公开边界、最小 fake-provider 闭环、runtime services / tool / harness / hook / workspace-scoped agent registry 注入基线、最小 feature 证明和外部 embedder 示例。若后续要独立发布为外部包，需要单独评审发布流程、crate packaging、semver 承诺和长期兼容策略。

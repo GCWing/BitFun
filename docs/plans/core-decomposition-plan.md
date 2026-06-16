@@ -37,9 +37,15 @@
 
 ## 4. 后续大块专项
 
-| 专项 | 目标 | 主要范围 | 准出标准 |
-|---|---|---|---|
-| H4 | 外部 Agent Runtime SDK 发布准备 | 版本策略、公开 API 冻结、最小 feature 依赖证明、示例和兼容承诺 | SDK 不依赖 `bitfun-core`、app crate、Tauri、concrete service manager 或产品命令 registry；fake provider / service / tool / harness / hook / workspace-scoped agent registry smoke 保持通过 |
+H4 收口后，设计文档中已批准的大块 owner 迁移专项暂不再保留新的待执行项。
+后续只在出现以下情况时重新开专项：
+
+- Agent Runtime SDK 需要从 workspace 内 preview facade 变成独立发布包。
+- 新产品形态需要改变 Product Assembly 的 capability / provider 选择方式。
+- 下层 crate 需要承接新的 concrete runtime owner，并且能同步删除或显著简化旧 core 主体路径。
+- 主干新增 CLI、tool、terminal、session、scheduler、remote、MiniApp、ACP 或 product interface 逻辑导致当前分层边界失效。
+
+任何新增专项仍必须满足：先补等价保护，再迁移实现主体，并证明不影响不同操作系统和交付形态的功能范围。
 
 ## 5. 固定执行流程
 

@@ -1052,6 +1052,45 @@ export function runManifestParserSelfTest({
       ],
     },
     {
+      path: 'src/crates/execution/agent-runtime/src/sdk.rs',
+      contracts: [
+        'AGENT_RUNTIME_SDK_API_VERSION',
+        '#[non_exhaustive]',
+        'AgentRuntimeSdkStability',
+        'AgentRuntimeSdkCompatibility',
+        'impl AgentRuntimeSdkCompatibility',
+        'bitfun_agent_tools',
+        'bitfun_harness',
+        'bitfun_runtime_services',
+        'PortResult',
+        'RuntimeServicePort',
+        'FileSystemPort',
+        'RemoteWorkspacePort',
+      ],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/Cargo.toml',
+      contracts: ['[features]', 'default = []'],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/tests/sdk_smoke.rs',
+      contracts: [
+        'sdk_facade_exposes_versioned_preview_compatibility_contract',
+        'sdk_facade_runs_with_fake_provider_and_local_event_stream',
+        'sdk_facade_accepts_fake_services_tools_harnesses_and_hooks_without_core',
+      ],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/examples/sdk_minimal.rs',
+      contracts: [
+        'bitfun_agent_runtime::sdk',
+        'AgentRuntimeSdkCompatibility::current',
+        'impl AgentSubmissionPort for ExampleAgentProvider',
+        'AgentRuntimeBuilder::new',
+        'AgentRunRequest::new',
+      ],
+    },
+    {
       path: 'src/crates/execution/agent-runtime/src/agents.rs',
       contracts: [
         'SubagentQueryContext',
@@ -3076,6 +3115,20 @@ export function runManifestParserSelfTest({
   );
   if (!sessionControlRuleText.includes('create_session_with_workspace_and_creator')) {
     throw new Error('SessionControl old create-path boundary rule must cover legacy create path');
+  }
+
+  const sdkSmokeRuleText = forbiddenRuleTextForPath(
+    'src/crates/execution/agent-runtime/tests/sdk_smoke.rs',
+  );
+  for (const forbiddenSdkSmokeImport of [
+    'bitfun_runtime_services::test_support',
+    'FakeRuntimeServicesProvider',
+  ]) {
+    if (!sdkSmokeRuleText.includes(forbiddenSdkSmokeImport)) {
+      throw new Error(
+        `SDK smoke boundary rule must forbid ${forbiddenSdkSmokeImport}`,
+      );
+    }
   }
 
   const remoteWorkspaceRule = forbiddenContentRules.find(

@@ -258,12 +258,117 @@ export const requiredContentRules = [
       'agent-runtime SDK smoke tests must prove the facade works with injected fake provider, services, tools, harnesses, and hooks without core',
     patterns: [
       {
+        regex: /\bsdk_facade_exposes_versioned_preview_compatibility_contract\b/,
+        message: 'missing SDK API version and compatibility smoke',
+      },
+      {
         regex: /\bsdk_facade_runs_with_fake_provider_and_local_event_stream\b/,
         message: 'missing SDK fake-provider event-stream smoke',
       },
       {
         regex: /\bsdk_facade_accepts_fake_services_tools_harnesses_and_hooks_without_core\b/,
         message: 'missing SDK services/tools/harnesses/hooks injection smoke',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/src/sdk.rs',
+    reason:
+      'agent-runtime SDK public facade must expose versioned compatibility metadata and only stable injection contracts',
+    patterns: [
+      {
+        regex: /\bpub const AGENT_RUNTIME_SDK_API_VERSION\b/,
+        message: 'missing SDK API version constant',
+      },
+      {
+        regex: /\bpub enum AgentRuntimeSdkStability\b/,
+        message: 'missing SDK stability contract',
+      },
+      {
+        regex: /#\[non_exhaustive\]\s+pub enum AgentRuntimeSdkStability/s,
+        message: 'SDK stability contract must remain externally extensible',
+      },
+      {
+        regex: /\bpub struct AgentRuntimeSdkCompatibility\b/,
+        message: 'missing SDK compatibility contract',
+      },
+      {
+        regex: /#\[non_exhaustive\]\s+pub struct AgentRuntimeSdkCompatibility/s,
+        message: 'SDK compatibility contract must remain externally extensible',
+      },
+      {
+        regex: /\bimpl AgentRuntimeSdkCompatibility\b/,
+        message: 'missing current SDK compatibility entrypoint',
+      },
+      {
+        regex: /\bpub use bitfun_agent_tools::\{/,
+        message: 'missing SDK tool registry re-exports',
+      },
+      {
+        regex: /\bpub use bitfun_harness::\{/,
+        message: 'missing SDK harness registry re-exports',
+      },
+      {
+        regex: /\bpub use bitfun_runtime_services::\{/,
+        message: 'missing SDK runtime-services re-exports',
+      },
+      {
+        regex: /\bPortResult\b/,
+        message: 'missing SDK port result re-export',
+      },
+      {
+        regex: /\bRuntimeServicePort\b/,
+        message: 'missing SDK runtime service port re-export',
+      },
+      {
+        regex: /\bFileSystemPort\b/,
+        message: 'missing SDK filesystem service port re-export',
+      },
+      {
+        regex: /\bRemoteWorkspacePort\b/,
+        message: 'missing SDK remote workspace service port re-export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/Cargo.toml',
+    reason:
+      'agent-runtime SDK package must keep an explicit empty default feature set for minimal embedders',
+    patterns: [
+      {
+        regex: /\[features\]/,
+        message: 'missing explicit SDK feature section',
+      },
+      {
+        regex: /default = \[\]/,
+        message: 'agent-runtime default feature set must stay empty',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/examples/sdk_minimal.rs',
+    reason:
+      'agent-runtime SDK must keep a minimal external embedder example that uses the sdk facade without core',
+    patterns: [
+      {
+        regex: /\buse bitfun_agent_runtime::sdk::\{/,
+        message: 'SDK example must import through the public sdk facade',
+      },
+      {
+        regex: /\bAgentRuntimeSdkCompatibility::current\b/,
+        message: 'SDK example must expose the compatibility contract',
+      },
+      {
+        regex: /\bimpl AgentSubmissionPort for ExampleAgentProvider\b/,
+        message: 'SDK example must show caller-provided submission port injection',
+      },
+      {
+        regex: /\bAgentRuntimeBuilder::new\(\)/,
+        message: 'SDK example must build through AgentRuntimeBuilder',
+      },
+      {
+        regex: /\bAgentRunRequest::new\b/,
+        message: 'SDK example must run through AgentRunRequest',
       },
     ],
   },

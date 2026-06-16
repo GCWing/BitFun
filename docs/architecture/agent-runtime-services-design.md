@@ -36,6 +36,11 @@ Agent Runtime SDK 的发布边界以调用方能力为准，而不是以物理 c
 - SDK minimal feature 不牵引 Desktop、Tauri、Git provider、MCP client、AI HTTP client、remote SSH 或产品 UI。
 - 完整产品能力只能通过 Product Assembly 或兼容 `bitfun-core/product-full` 组装，不反向污染 SDK API。
 
+SDK 公共 API 以 `AGENT_RUNTIME_SDK_API_VERSION` 标记兼容边界。当前 API version 为 v1 preview：
+小版本更新可以增加可选 builder hook、DTO 字段或 registry 查询能力，但不得改变既有端口语义、
+错误分类、session / turn 标识含义或默认 feature 依赖。任何需要调用方改写现有嵌入代码的变更，
+必须提升 API version 并提供兼容迁移路径。
+
 只要外部调用方仍必须导入 `bitfun-core`、启用 `product-full`、持有 concrete service manager、读取产品命令
 registry 或依赖全局 mutable state，SDK 发布边界就不成立。
 
@@ -285,22 +290,33 @@ pub struct AgentRuntimeBuilder {
 
 pub struct AgentRunRequest {
     pub session: SessionSelector,
-    pub input: AgentInput,
-    pub cancellation: CancellationToken,
+    pub message: String,
+    pub turn_id: Option<String>,
+    pub source: Option<AgentSubmissionSource>,
+    pub attachments: Vec<AgentInputAttachment>,
+    pub metadata: serde_json::Map<String, serde_json::Value>,
 }
 
 pub struct AgentRunHandle {
-    pub session_id: SessionId,
-    pub turn_id: TurnId,
-    pub events: AgentEventStream,
+    pub session_id: String,
+    pub turn_id: String,
+    pub agent_type: Option<String>,
+    pub accepted: bool,
+    pub events: Option<AgentEventStream>,
 }
 
 impl AgentRuntimeBuilder {
+    pub fn with_submission_port(self, port: Arc<dyn AgentSubmissionPort>) -> Self;
+    pub fn with_session_management_port(self, port: Arc<dyn AgentSessionManagementPort>) -> Self;
+    pub fn with_dialog_turn_port(self, port: Arc<dyn AgentDialogTurnPort>) -> Self;
+    pub fn with_lifecycle_delivery_port(self, port: Arc<dyn AgentLifecycleDeliveryPort>) -> Self;
+    pub fn with_cancellation_port(self, port: Arc<dyn AgentTurnCancellationPort>) -> Self;
     pub fn with_services(self, services: RuntimeServices) -> Self;
-    pub fn with_tools(self, tools: Arc<ToolRuntime>) -> Self;
-    pub fn with_harnesses(self, harnesses: Arc<HarnessRegistry>) -> Self;
-    pub fn with_agents(self, agents: Arc<dyn AgentDefinitionRegistry>) -> Self;
-    pub fn with_hooks(self, hooks: RuntimeHookRegistry) -> Self;
+    pub fn with_event_stream(self, events: AgentEventStream) -> Self;
+    pub fn with_tool_registry(self, registry: Arc<dyn RuntimeToolRegistry>) -> Self;
+    pub fn with_harness_registry(self, registry: Arc<HarnessRegistry>) -> Self;
+    pub fn with_hook_registry(self, hooks: RuntimeHookRegistry) -> Self;
+    pub fn with_agent_registry(self, agents: Arc<dyn RuntimeAgentRegistry>) -> Self;
     pub fn build(self) -> Result<AgentRuntime, RuntimeBuildError>;
 }
 
@@ -311,6 +327,9 @@ impl AgentRuntime {
 
 该 facade 是目标 API 形态。它必须只接收已组装的 typed parts，不负责创建
 filesystem、terminal、MCP、AI client、Remote provider 或产品命令。
+当前 v1 preview API 以 message / attachment / metadata 作为最小输入形态；若后续需要把
+model-round cancellation token、structured AgentInput 或更复杂的 event cursor 纳入公开 SDK，
+必须提升 SDK API version 并保留旧路径兼容。
 
 旧路径兼容约束：
 
