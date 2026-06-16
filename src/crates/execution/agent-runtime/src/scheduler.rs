@@ -697,6 +697,29 @@ impl TurnOutcomeLifecyclePlan {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DialogStartRouteFacts {
+    pub has_image_contexts: bool,
+    pub has_prepended_messages: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DialogStartRoute {
+    Plain,
+    WithPrependedMessages,
+    WithImageContexts,
+    WithImageContextsAndPrependedMessages,
+}
+
+pub const fn resolve_dialog_start_route(facts: DialogStartRouteFacts) -> DialogStartRoute {
+    match (facts.has_image_contexts, facts.has_prepended_messages) {
+        (false, false) => DialogStartRoute::Plain,
+        (false, true) => DialogStartRoute::WithPrependedMessages,
+        (true, false) => DialogStartRoute::WithImageContexts,
+        (true, true) => DialogStartRoute::WithImageContextsAndPrependedMessages,
+    }
+}
+
 pub fn resolve_turn_outcome_lifecycle_plan(
     outcome: &TurnOutcome,
     has_active_turn: bool,

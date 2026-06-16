@@ -38,7 +38,6 @@
 
 | 专项 | 目标 | 主要范围 | 准出标准 |
 |---|---|---|---|
-| H1 | Concrete lifecycle owner 迁移 | concrete scheduler lifecycle、tool pipeline scheduler glue、concrete prompt assembly、AI client factory / provider acquisition；prompt-cache persistence IO 仍由 core 执行 | 先补行为等价测试；迁移后 core 只保留兼容 adapter；不同 OS、remote、本地和 product-full 行为不变 |
 | H2 | DeepReview / MiniApp concrete adapter 收口 | DeepReview Task launch、session metadata cache persistence；MiniApp workflow 的 UI asset / desktop scheduler / AI factory 调用；DeepReview queue event 仍由 core coordinator 发送 | 不改变审查队列、报告持久化、MiniApp 执行和权限语义；provider-neutral 规则不得回流 core |
 | H4 | 外部 Agent Runtime SDK 发布准备 | 版本策略、公开 API 冻结、最小 feature 依赖证明、示例和兼容承诺 | SDK 不依赖 `bitfun-core`、app crate、Tauri、concrete service manager 或产品命令 registry；fake provider / service / tool / harness / hook / workspace-scoped agent registry smoke 保持通过 |
 

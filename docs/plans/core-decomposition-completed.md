@@ -40,7 +40,7 @@
 
 - `bitfun-core` 仍承载 compatibility facade / `product-full` assembly 和少量迁移期 adapter；不应继续新增 owner 逻辑。
 - 产品入口的能力裁剪已由 Product Assembly profile plan 表达；后续新增入口必须先明确 `ProductCoreDependencyMode`、unsupported / unavailable 语义和兼容性测试。
-- concrete scheduler lifecycle、tool pipeline scheduler glue、concrete prompt assembly、AI client factory / provider acquisition 仍在 core 或产品 adapter；继续迁移必须单独证明行为等价。Prompt-cache 持久化的 restore / save / delete 决策已迁入 `agent-runtime`，core 只执行实际 persistence IO。
+- H1 剩余 owner 决策已迁出：dialog start route / outcome lifecycle 继续由 `agent-runtime` 给出可测试决策，tool pipeline 的 Task batch 策略由 `tool-execution` 持有，prompt runtime / workspace / user-context 组合由 `agent-runtime` 持有，AI model selector / cache-key 解析由 `bitfun-ai-adapters` 持有。`bitfun-core` 仍只保留 coordinator 调用、config IO、credential overlay、prompt 事实收集和 prompt-cache persistence IO 等 concrete adapter。
 - DeepReview concrete Task launch 和 session metadata cache persistence 仍是 core adapter，因为它们依赖 coordinator、session manager、subagent runtime 和产品事件；provider-neutral policy / queue / retry / report shaping 与 queue event payload shaping 已在 `agent-runtime`，core 只负责事件发送。
 - MiniApp larger workflow 的 UI asset / desktop scheduler / AI factory 调用仍属于产品 host adapter；可复用规则已迁入 `product-domains`，不再在 desktop 命令内重复实现。
 - Agent Runtime SDK 已具备内部 facade、最小 fake-provider 闭环和 runtime services / tool / harness / hook / workspace-scoped agent registry 注入基线，但尚未冻结为可独立发布的外部 SDK 包、版本策略和兼容承诺。

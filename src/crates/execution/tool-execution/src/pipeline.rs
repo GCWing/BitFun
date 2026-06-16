@@ -10,6 +10,14 @@ pub struct ToolBatch {
     pub is_concurrent: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SubagentBatchExecutionPolicy {
+    #[default]
+    SafeOnly,
+    ForceParallel,
+    Serial,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToolExecutionErrorClass {
     Retryable,
@@ -130,6 +138,25 @@ pub fn partition_tool_batches(task_ids: &[String], flags: &[bool]) -> Vec<ToolBa
     }
 
     batches
+}
+
+pub fn tool_call_concurrency_safe_for_batch(
+    tool_name: &str,
+    tool_is_concurrency_safe: bool,
+    same_batch_subagent_call_count: usize,
+    subagent_batch_execution_policy: SubagentBatchExecutionPolicy,
+) -> bool {
+    if tool_name != "Task" {
+        return tool_is_concurrency_safe;
+    }
+
+    match subagent_batch_execution_policy {
+        SubagentBatchExecutionPolicy::SafeOnly => tool_is_concurrency_safe,
+        SubagentBatchExecutionPolicy::ForceParallel => {
+            same_batch_subagent_call_count > 1 || tool_is_concurrency_safe
+        }
+        SubagentBatchExecutionPolicy::Serial => false,
+    }
 }
 
 pub fn should_retry_tool_attempt(facts: ToolRetryAttemptFacts) -> bool {

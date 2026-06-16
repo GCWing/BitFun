@@ -15,6 +15,7 @@ use crate::service::config::{get_global_config_service, ConfigService};
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::AIConfig;
 use anyhow::{anyhow, Result};
+use bitfun_ai_adapters::{resolve_cache_model_selector, resolve_required_model_selector};
 use log::{debug, info, warn};
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock, RwLock};
@@ -25,29 +26,6 @@ pub struct AIClientFactory {
 }
 
 impl AIClientFactory {
-    fn normalize_model_selector(model_id: &str) -> &str {
-        let trimmed = model_id.trim();
-        if trimmed.is_empty() || trimmed == "auto" || trimmed == "default" {
-            "primary"
-        } else {
-            trimmed
-        }
-    }
-
-    fn resolve_model_reference_in_config(
-        global_config: &crate::service::config::GlobalConfig,
-        model_ref: &str,
-    ) -> Option<String> {
-        global_config.ai.resolve_model_reference(model_ref)
-    }
-
-    fn resolve_model_selection_in_config(
-        global_config: &crate::service::config::GlobalConfig,
-        model_ref: &str,
-    ) -> Option<String> {
-        global_config.ai.resolve_model_selection(model_ref)
-    }
-
     fn new(config_service: Arc<ConfigService>) -> Self {
         Self {
             config_service,
@@ -92,17 +70,12 @@ impl AIClientFactory {
     pub async fn get_client_resolved(&self, model_id: &str) -> Result<Arc<AIClient>> {
         let global_config: crate::service::config::GlobalConfig =
             self.config_service.get_config(None).await?;
-        let model_id = Self::normalize_model_selector(model_id);
-
-        let resolved_model_id = match model_id {
-            "primary" => Self::resolve_model_selection_in_config(&global_config, "primary")
-                .ok_or_else(|| anyhow!("Primary model not configured or invalid"))?,
-            "fast" => Self::resolve_model_selection_in_config(&global_config, "fast").ok_or_else(
-                || anyhow!("Fast model not configured or invalid, and primary model not configured or invalid"),
-            )?,
-            _ => Self::resolve_model_reference_in_config(&global_config, model_id)
-                .unwrap_or_else(|| model_id.to_string()),
-        };
+        let resolved_model_id = resolve_required_model_selector(
+            model_id,
+            |selector| global_config.ai.resolve_model_selection(selector),
+            |model_ref| global_config.ai.resolve_model_reference(model_ref),
+        )
+        .map_err(|error| anyhow!(error.to_string()))?;
 
         self.get_or_create_client(&resolved_model_id).await
     }
@@ -147,13 +120,11 @@ impl AIClientFactory {
     async fn get_or_create_client(&self, model_id: &str) -> Result<Arc<AIClient>> {
         let global_config: crate::service::config::GlobalConfig =
             self.config_service.get_config(None).await?;
-        let model_id = Self::normalize_model_selector(model_id);
-        let normalized_model_id = match model_id {
-            "primary" | "fast" => Self::resolve_model_selection_in_config(&global_config, model_id)
-                .unwrap_or_else(|| model_id.to_string()),
-            _ => Self::resolve_model_reference_in_config(&global_config, model_id)
-                .unwrap_or_else(|| model_id.to_string()),
-        };
+        let normalized_model_id = resolve_cache_model_selector(
+            model_id,
+            |selector| global_config.ai.resolve_model_selection(selector),
+            |model_ref| global_config.ai.resolve_model_reference(model_ref),
+        );
 
         {
             let cache = match self.client_cache.read() {
@@ -346,8 +317,10 @@ pub async fn discover_cli_credentials() -> Vec<cli_credentials::DiscoveredCreden
 
 #[cfg(test)]
 mod tests {
-    use super::AIClientFactory;
     use crate::service::config::types::{AIModelConfig, GlobalConfig};
+    use bitfun_ai_adapters::{
+        classify_model_selector, resolve_required_model_selector, ModelSelectorKind,
+    };
 
     fn build_model(id: &str, name: &str, model_name: &str) -> AIModelConfig {
         AIModelConfig {
@@ -370,30 +343,30 @@ mod tests {
         )];
 
         assert_eq!(
-            AIClientFactory::resolve_model_reference_in_config(&config, "model-123"),
+            config.ai.resolve_model_reference("model-123"),
             Some("model-123".to_string())
         );
         assert_eq!(
-            AIClientFactory::resolve_model_reference_in_config(&config, "Primary Chat"),
+            config.ai.resolve_model_reference("Primary Chat"),
             Some("model-123".to_string())
         );
         assert_eq!(
-            AIClientFactory::resolve_model_reference_in_config(&config, "claude-sonnet-4.5"),
+            config.ai.resolve_model_reference("claude-sonnet-4.5"),
             Some("model-123".to_string())
         );
     }
 
     #[test]
     fn auto_model_selectors_normalize_to_primary_for_client_lookup() {
-        assert_eq!(AIClientFactory::normalize_model_selector("auto"), "primary");
+        assert_eq!(classify_model_selector("auto"), ModelSelectorKind::Primary);
         assert_eq!(
-            AIClientFactory::normalize_model_selector(" default "),
-            "primary"
+            classify_model_selector(" default "),
+            ModelSelectorKind::Primary
         );
-        assert_eq!(AIClientFactory::normalize_model_selector(""), "primary");
+        assert_eq!(classify_model_selector(""), ModelSelectorKind::Primary);
         assert_eq!(
-            AIClientFactory::normalize_model_selector("model-primary"),
-            "model-primary"
+            classify_model_selector("model-primary"),
+            ModelSelectorKind::Explicit("model-primary".to_string())
         );
     }
 
@@ -408,8 +381,13 @@ mod tests {
         config.ai.default_models.primary = Some("model-primary".to_string());
 
         assert_eq!(
-            AIClientFactory::resolve_model_selection_in_config(&config, "fast"),
-            Some("model-primary".to_string())
+            resolve_required_model_selector(
+                "fast",
+                |selector| config.ai.resolve_model_selection(selector),
+                |model_ref| config.ai.resolve_model_reference(model_ref),
+            )
+            .expect("fast should fall back to primary"),
+            "model-primary"
         );
     }
 
@@ -425,8 +403,13 @@ mod tests {
         config.ai.default_models.fast = Some("deleted-fast-model".to_string());
 
         assert_eq!(
-            AIClientFactory::resolve_model_selection_in_config(&config, "fast"),
-            Some("model-primary".to_string())
+            resolve_required_model_selector(
+                "fast",
+                |selector| config.ai.resolve_model_selection(selector),
+                |model_ref| config.ai.resolve_model_reference(model_ref),
+            )
+            .expect("stale fast should fall back to primary"),
+            "model-primary"
         );
     }
 }

@@ -1,12 +1,14 @@
 use bitfun_agent_runtime::scheduler::{
     build_thread_goal_objective_updated_delivery_plan, build_thread_goal_resumed_delivery_plan,
     resolve_agent_session_reply_action, resolve_background_delivery_action,
-    resolve_background_delivery_injection, resolve_dialog_steering_action, ActiveDialogTurn,
-    ActiveDialogTurnStore, AgentSessionReplyAction, BackgroundDeliveryAction,
-    BackgroundDeliveryFacts, BackgroundInjectionKind, DialogReplySuppressionSet,
-    DialogRoundInjectionInterrupt, DialogSteeringAction, DialogTurnQueue, DialogTurnQueueError,
-    SessionAbortFlags, SessionRoundInjectionBuffer, ThreadGoalDeliveryReminderKind, TurnOutcome,
-    TurnOutcomeQueueAction, TurnOutcomeStatus, DEFAULT_MAX_DIALOG_QUEUE_DEPTH,
+    resolve_background_delivery_injection, resolve_dialog_start_route,
+    resolve_dialog_steering_action, ActiveDialogTurn, ActiveDialogTurnStore,
+    AgentSessionReplyAction, BackgroundDeliveryAction, BackgroundDeliveryFacts,
+    BackgroundInjectionKind, DialogReplySuppressionSet, DialogRoundInjectionInterrupt,
+    DialogStartRoute, DialogStartRouteFacts, DialogSteeringAction, DialogTurnQueue,
+    DialogTurnQueueError, SessionAbortFlags, SessionRoundInjectionBuffer,
+    ThreadGoalDeliveryReminderKind, TurnOutcome, TurnOutcomeQueueAction, TurnOutcomeStatus,
+    DEFAULT_MAX_DIALOG_QUEUE_DEPTH,
 };
 use bitfun_runtime_ports::{
     AgentSessionReplyRoute, DialogQueuePriority, DialogSessionStateFact, DialogSteerOutcome,
@@ -251,6 +253,38 @@ fn dialog_turn_queue_requeued_turn_keeps_original_priority_for_later_ordering() 
 
     assert_eq!(queue.dequeue_next("s1"), Some("new-high"));
     assert_eq!(queue.dequeue_next("s1"), Some("retry-low"));
+}
+
+#[test]
+fn dialog_start_route_preserves_image_and_prepended_message_matrix() {
+    assert_eq!(
+        resolve_dialog_start_route(DialogStartRouteFacts {
+            has_image_contexts: false,
+            has_prepended_messages: false,
+        }),
+        DialogStartRoute::Plain
+    );
+    assert_eq!(
+        resolve_dialog_start_route(DialogStartRouteFacts {
+            has_image_contexts: false,
+            has_prepended_messages: true,
+        }),
+        DialogStartRoute::WithPrependedMessages
+    );
+    assert_eq!(
+        resolve_dialog_start_route(DialogStartRouteFacts {
+            has_image_contexts: true,
+            has_prepended_messages: false,
+        }),
+        DialogStartRoute::WithImageContexts
+    );
+    assert_eq!(
+        resolve_dialog_start_route(DialogStartRouteFacts {
+            has_image_contexts: true,
+            has_prepended_messages: true,
+        }),
+        DialogStartRoute::WithImageContextsAndPrependedMessages
+    );
 }
 
 #[test]

@@ -18,7 +18,10 @@ use crate::service::workspace::get_global_workspace_service;
 use crate::service::workspace::RelatedPath;
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_agent_runtime::prompt::{
-    PrependedPromptReminders, ToolListingSections, UserContextPolicy, UserContextSection,
+    render_project_layout, render_runtime_context_reminder, render_user_context_reminder,
+    render_workspace_context, PrependedPromptReminders, ProjectLayoutFacts, PromptRelatedPath,
+    RemoteExecutionHints, RuntimeContextFacts, RuntimeContextNeeds, RuntimeShellFacts,
+    ToolListingSections, UserContextPolicy, UserContextSection, WorkspaceContextFacts,
 };
 use log::{debug, warn};
 use std::path::Path;
@@ -31,57 +34,6 @@ const PLACEHOLDER_CLAW_WORKSPACE: &str = "{CLAW_WORKSPACE}";
 const PLACEHOLDER_VISUAL_MODE: &str = "{VISUAL_MODE}";
 const PLACEHOLDER_SESSION_ID: &str = "{SESSION_ID}";
 const PLACEHOLDER_DEEP_RESEARCH_REPORT_LINK: &str = "{DEEP_RESEARCH_REPORT_LINK}";
-const USER_CONTEXT_PROMPT: &str =
-    "As you answer the user's questions, you can use the following context.\nNote: this is a snapshot captured at the start of the conversation and may not reflect real-time changes made afterward.";
-/// SSH remote host facts for system prompt (workspace tools run here, not on the local client).
-#[derive(Debug, Clone)]
-pub struct RemoteExecutionHints {
-    pub connection_display_name: String,
-    pub kernel_name: String,
-    pub hostname: String,
-}
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct RuntimeContextNeeds {
-    pub workspace_tools: bool,
-    pub exec_command: bool,
-    pub exec_control: bool,
-    pub computer_use: bool,
-}
-
-impl RuntimeContextNeeds {
-    pub fn from_tool_names<T, I>(tool_names: I) -> Self
-    where
-        T: AsRef<str>,
-        I: IntoIterator<Item = T>,
-    {
-        let mut needs = Self::default();
-        for tool_name in tool_names {
-            let tool_name = tool_name.as_ref();
-            match tool_name {
-                "Read" | "Write" | "Edit" | "Delete" | "LS" | "Grep" | "Glob" | "ExecCommand"
-                | "WriteStdin" | "ExecControl" => {
-                    needs.workspace_tools = true;
-                    if tool_name == "ExecCommand" {
-                        needs.exec_command = true;
-                    }
-                    if tool_name == "ExecControl" {
-                        needs.exec_control = true;
-                    }
-                }
-                "ComputerUse" | "ControlHub" => {
-                    needs.computer_use = true;
-                }
-                _ => {}
-            }
-        }
-        needs
-    }
-
-    fn is_empty(self) -> bool {
-        !self.workspace_tools && !self.exec_command && !self.exec_control && !self.computer_use
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct PromptBuilderContext {
@@ -262,224 +214,56 @@ impl PromptBuilder {
         }
     }
 
-    fn local_exec_shell_runtime_guidance(shell_type: &str) -> &'static [&'static str] {
-        match shell_type {
-            "powershell" | "pwsh" => &[
-                "- For inline Python or other embedded scripts, prefer PowerShell-friendly forms such as `@'\\nprint(\"Hello\")\\n'@ | python -` instead of heavily nested quoting.",
-                "- In PowerShell, the escape character is the backtick (`), not backslash. `\\\"` is not a reliable way to escape a double quote for the shell.",
-                "- For environment variables, process filtering, and file traversal, prefer native PowerShell cmdlets and syntax over shell-specific Unix patterns.",
-                "- Avoid mixing PowerShell with `cmd.exe` or bash in the same command unless cross-shell behavior is explicitly required.",
-            ],
-            _ => &[],
-        }
-    }
-
-    fn push_local_exec_shell_runtime_context(
-        lines: &mut Vec<String>,
-        shell_display_name: &str,
-        shell_type: &str,
-        shell_invocation: &str,
-    ) {
-        lines.push(format!(
-            "- ExecCommand shell: {shell_display_name} ({shell_type}), invoked as {shell_invocation}."
-        ));
-        lines.extend(
-            Self::local_exec_shell_runtime_guidance(shell_type)
-                .iter()
-                .map(|line| (*line).to_string()),
-        );
-    }
-
-    fn push_runtime_context_section(
-        lines: &mut Vec<String>,
-        title: &str,
-        section_lines: Vec<String>,
-    ) {
-        if section_lines.is_empty() {
-            return;
-        }
-
-        if !lines.is_empty() {
-            lines.push(String::new());
-        }
-        lines.push(format!("## {title}"));
-        lines.extend(section_lines);
-    }
-
-    fn exec_control_runtime_guidance(
-        host_os: &str,
-        remote_execution: bool,
-        exec_control_available: bool,
-    ) -> Vec<String> {
-        if !exec_control_available || remote_execution || host_os != "windows" {
-            return Vec::new();
-        }
-
-        vec![
-            "- On local Windows ExecCommand sessions, `ExecControl` `interrupt` is effectively the same as `kill` for non-TTY processes.".to_string(),
-        ]
-    }
-
     /// Build runtime facts that may change independently from the agent's system prompt.
     pub async fn build_runtime_context_reminder(&self) -> Option<String> {
         let needs = self.context.runtime_context_needs;
-        if needs.is_empty() {
-            return None;
-        }
-
-        let host_os = std::env::consts::OS;
-        let host_family = std::env::consts::FAMILY;
-        let host_arch = std::env::consts::ARCH;
-
-        let computer_use_keys = match host_os {
-            "macos" => "- Computer use / `key_chord`: the local BitFun desktop is macOS. Use `command`, `option`, `control`, and `shift` modifier names.",
-            "windows" => "- Computer use / `key_chord`: the local BitFun desktop is Windows. Use `meta`/`super` for the Windows key, plus `alt`, `control`, and `shift`.",
-            "linux" => "- Computer use / `key_chord`: the local BitFun desktop is Linux. Use `control`, `alt`, `shift`, and `meta`/`super` as appropriate for the desktop environment.",
-            _ => "- Computer use / `key_chord`: match modifier names to the local BitFun desktop OS.",
+        let local_shell = if needs.exec_command && self.context.remote_execution.is_none() {
+            let shell = ExecCommandTool::local_shell_prompt_info().await;
+            Some(RuntimeShellFacts {
+                display_name: shell.display_name,
+                shell_type: shell.shell_type,
+                invocation: shell.invocation,
+            })
+        } else {
+            None
         };
 
-        let mut lines = vec!["# Runtime Context".to_string()];
-
-        if needs.workspace_tools {
-            let mut workspace_lines = Vec::new();
-            if let Some(remote) = &self.context.remote_execution {
-                workspace_lines.push(format!(
-                    "- Workspace file and shell tools operate on remote SSH connection \"{}\".",
-                    remote.connection_display_name.replace('"', "'")
-                ));
-                workspace_lines.push(format!(
-                    "- Remote host: {} (uname/kernel: {})",
-                    remote.hostname.replace('"', "'"),
-                    remote.kernel_name.replace('"', "'")
-                ));
-                workspace_lines.push("- Path conventions for workspace operations: POSIX paths with forward slashes and Unix shell syntax. Do not use PowerShell, `cmd.exe`, or Windows-style paths for remote workspace operations.".to_string());
-            } else {
-                workspace_lines.push(
-                    "- Workspace file and shell tools operate on the local filesystem.".to_string(),
-                );
-            }
-            Self::push_runtime_context_section(&mut lines, "Workspace Execution", workspace_lines);
-        }
-
-        if needs.exec_command {
-            let mut exec_command_lines = Vec::new();
-            if self.context.remote_execution.is_some() {
-                exec_command_lines.push(
-                    "- ExecCommand uses the remote user's default POSIX shell, invoked as `<shell> -lc <cmd>`."
-                        .to_string(),
-                );
-            } else {
-                let shell = ExecCommandTool::local_shell_prompt_info().await;
-                Self::push_local_exec_shell_runtime_context(
-                    &mut exec_command_lines,
-                    &shell.display_name,
-                    &shell.shell_type,
-                    &shell.invocation,
-                );
-            }
-            Self::push_runtime_context_section(&mut lines, "ExecCommand Shell", exec_command_lines);
-        }
-
-        let exec_control_lines = Self::exec_control_runtime_guidance(
-            host_os,
-            self.context.remote_execution.is_some(),
-            needs.exec_control,
-        );
-        Self::push_runtime_context_section(&mut lines, "ExecControl", exec_control_lines);
-
-        if needs.computer_use {
-            let mut local_client_lines = Vec::new();
-            if self.context.remote_execution.is_some() && needs.workspace_tools {
-                local_client_lines.push(
-                    "- Computer use and UI automation operate on the local BitFun desktop, even when workspace file and shell tools target a remote host."
-                        .to_string(),
-                );
-            }
-            local_client_lines.push(format!(
-                "- Local BitFun client OS: {host_os} ({host_family})"
-            ));
-            local_client_lines.push(format!("- Local client architecture: {host_arch}"));
-            local_client_lines.push(computer_use_keys.to_string());
-            Self::push_runtime_context_section(&mut lines, "Local Client", local_client_lines);
-        }
-
-        Some(lines.join("\n"))
+        render_runtime_context_reminder(&RuntimeContextFacts {
+            needs,
+            host_os: std::env::consts::OS.to_string(),
+            host_family: std::env::consts::FAMILY.to_string(),
+            host_arch: std::env::consts::ARCH.to_string(),
+            remote_execution: self.context.remote_execution.clone(),
+            local_shell,
+        })
     }
 
     /// Get workspace context that is intentionally injected outside the system prompt cache.
     pub fn get_workspace_context(&self) -> String {
-        let related_paths_section = if self.context.related_paths.is_empty() {
-            String::new()
-        } else {
-            let items = self
+        render_workspace_context(&WorkspaceContextFacts {
+            workspace_path: self.context.workspace_path.clone(),
+            related_paths: self
                 .context
                 .related_paths
                 .iter()
-                .map(|related_path| {
-                    let path = related_path.path.replace("\\", "/");
-                    match related_path.description.as_deref().map(str::trim) {
-                        Some(description) if !description.is_empty() => {
-                            format!("  - {} — {}", path, description)
-                        }
-                        _ => format!("  - {}", path),
-                    }
+                .map(|related_path| PromptRelatedPath {
+                    path: related_path.path.clone(),
+                    description: related_path.description.clone(),
                 })
-                .collect::<Vec<_>>()
-                .join("\n");
-            format!(
-                "- Related directories (user-specified directories related to this workspace):\n{}",
-                items
-            )
-        };
-
-        if let Some(remote) = &self.context.remote_execution {
-            format!(
-                r#"## Workspace Context
-<workspace_context>
-- Workspace root (file tools, Glob, LS, ExecCommand on workspace): {}
-{}
-- Execution environment: **Remote SSH** — connection "{}".
-- Remote host: {} (uname/kernel: {})
-</workspace_context>
-"#,
-                self.context.workspace_path,
-                if related_paths_section.is_empty() {
-                    String::new()
-                } else {
-                    format!("{}\n", related_paths_section)
-                },
-                remote.connection_display_name.replace('"', "'"),
-                remote.hostname.replace('"', "'"),
-                remote.kernel_name.replace('"', "'"),
-            )
-        } else {
-            format!(
-                r#"## Workspace Context
-<workspace_context>
-- Current Working Directory: {}
-{}
-</workspace_context>
-"#,
-                self.context.workspace_path,
-                if related_paths_section.is_empty() {
-                    String::new()
-                } else {
-                    format!("\n{}", related_paths_section)
-                }
-            )
-        }
+                .collect(),
+            remote_execution: self.context.remote_execution.clone(),
+        })
     }
 
     /// Get workspace file list
     pub fn get_project_layout(&self) -> String {
         if let Some(remote_layout) = &self.context.remote_project_layout {
-            let mut project_layout = "## Workspace Layout\n<project_layout>\n".to_string();
-            project_layout.push_str(
-                "Below is a snapshot of the current workspace's file structure on the **remote** host.\n\n",
-            );
-            project_layout.push_str(remote_layout);
-            project_layout.push_str("\n</project_layout>\n\n");
-            return project_layout;
+            return render_project_layout(&ProjectLayoutFacts {
+                listing: remote_layout.clone(),
+                reached_limit: false,
+                max_entries: self.file_tree_max_entries,
+                remote: true,
+            });
         }
 
         let formatted_listing = get_formatted_directory_listing(
@@ -490,16 +274,12 @@ impl PromptBuilder {
             reached_limit: false,
             text: format!("Error listing directory: {}", e),
         });
-        let mut project_layout = "## Workspace Layout\n<project_layout>\n".to_string();
-        if formatted_listing.reached_limit {
-            project_layout.push_str(&format!("Below is a snapshot of the current workspace's file structure (showing up to {} entries).\n\n", self.file_tree_max_entries));
-        } else {
-            project_layout
-                .push_str("Below is a snapshot of the current workspace's file structure.\n\n");
-        }
-        project_layout.push_str(&formatted_listing.text);
-        project_layout.push_str("\n</project_layout>\n\n");
-        project_layout
+        render_project_layout(&ProjectLayoutFacts {
+            listing: formatted_listing.text,
+            reached_limit: formatted_listing.reached_limit,
+            max_entries: self.file_tree_max_entries,
+            remote: false,
+        })
     }
 
     pub fn build_skill_listing_reminder(&self) -> Option<String> {
@@ -557,19 +337,7 @@ impl PromptBuilder {
             additional_sections.push(self.get_project_layout());
         }
 
-        if additional_sections.is_empty() {
-            None
-        } else {
-            Some(format!(
-                "# User Context\n{}\n\n{}",
-                USER_CONTEXT_PROMPT,
-                additional_sections
-                    .into_iter()
-                    .map(|section| section.trim().to_string())
-                    .collect::<Vec<_>>()
-                    .join("\n\n")
-            ))
-        }
+        render_user_context_reminder(additional_sections)
     }
 
     pub async fn build_prepended_reminders(
@@ -766,7 +534,6 @@ mod tests {
     use super::RemoteExecutionHints;
     use super::RuntimeContextNeeds;
     use super::ToolListingSections;
-    use super::USER_CONTEXT_PROMPT;
     use crate::agentic::agents::UserContextPolicy;
     use crate::service::workspace::RelatedPath;
 
@@ -815,7 +582,7 @@ mod tests {
         assert!(collapsed_tool_listing.contains("# Collapsed Tool Listing"));
         assert!(collapsed_tool_listing.contains("<collapsed_tools>"));
         assert!(user_context.contains("# User Context"));
-        assert!(user_context.contains(USER_CONTEXT_PROMPT));
+        assert!(user_context.contains("As you answer the user's questions"));
         assert!(user_context.contains("Current Working Directory: workspace/root"));
         assert!(runtime_context.contains("# Runtime Context"));
         assert!(runtime_context.contains("## Workspace Execution"));
@@ -883,51 +650,6 @@ mod tests {
         assert!(runtime_context.contains("ExecCommand shell:"));
         assert!(runtime_context.contains("invoked as `"));
         assert!(!runtime_context.contains("## Local Client"));
-    }
-
-    #[test]
-    fn local_exec_shell_runtime_guidance_is_added_for_powershell_shells() {
-        let guidance = PromptBuilder::local_exec_shell_runtime_guidance("powershell");
-
-        assert_eq!(
-            guidance,
-            &[
-                "- For inline Python or other embedded scripts, prefer PowerShell-friendly forms such as `@'\\nprint(\"Hello\")\\n'@ | python -` instead of heavily nested quoting.",
-                "- In PowerShell, the escape character is the backtick (`), not backslash. `\\\"` is not a reliable way to escape a double quote for the shell.",
-                "- For environment variables, process filtering, and file traversal, prefer native PowerShell cmdlets and syntax over shell-specific Unix patterns.",
-                "- Avoid mixing PowerShell with `cmd.exe` or bash in the same command unless cross-shell behavior is explicitly required.",
-            ]
-        );
-    }
-
-    #[test]
-    fn local_exec_shell_runtime_guidance_is_empty_for_non_powershell_shells() {
-        assert!(PromptBuilder::local_exec_shell_runtime_guidance("bash").is_empty());
-    }
-
-    #[test]
-    fn exec_control_runtime_guidance_is_added_for_local_windows() {
-        let guidance = PromptBuilder::exec_control_runtime_guidance("windows", false, true);
-
-        assert_eq!(
-            guidance,
-            vec![
-                "- On local Windows ExecCommand sessions, `ExecControl` `interrupt` is effectively the same as `kill` for non-TTY processes.".to_string()
-            ]
-        );
-    }
-
-    #[test]
-    fn exec_control_runtime_guidance_is_empty_when_exec_control_is_unavailable() {
-        assert!(
-            PromptBuilder::exec_control_runtime_guidance("windows", false, false).is_empty()
-        );
-    }
-
-    #[test]
-    fn exec_control_runtime_guidance_is_empty_for_remote_or_non_windows_hosts() {
-        assert!(PromptBuilder::exec_control_runtime_guidance("linux", false, true).is_empty());
-        assert!(PromptBuilder::exec_control_runtime_guidance("windows", true, true).is_empty());
     }
 
     #[tokio::test]

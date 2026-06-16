@@ -9,6 +9,7 @@ use crate::agentic::WorkspaceBinding;
 use bitfun_runtime_ports::DelegationPolicy;
 use std::collections::HashMap;
 use std::time::SystemTime;
+pub use tool_runtime::pipeline::SubagentBatchExecutionPolicy;
 
 /// Tool execution options
 #[derive(Debug, Clone)]
@@ -34,14 +35,6 @@ impl Default for ToolExecutionOptions {
             confirmation_timeout_secs: None, // Default no timeout (infinite waiting)
         }
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum SubagentBatchExecutionPolicy {
-    #[default]
-    SafeOnly,
-    ForceParallel,
-    Serial,
 }
 
 #[derive(Debug, Clone)]

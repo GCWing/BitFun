@@ -1,6 +1,9 @@
 use bitfun_agent_runtime::prompt::{
-    render_prompt_environment_info, PrependedPromptReminders, PromptEnvironmentFacts,
-    ToolListingSections, UserContextPolicy, UserContextSection,
+    render_project_layout, render_prompt_environment_info, render_runtime_context_reminder,
+    render_user_context_reminder, render_workspace_context, PrependedPromptReminders,
+    ProjectLayoutFacts, PromptEnvironmentFacts, PromptRelatedPath, RemoteExecutionHints,
+    RuntimeContextFacts, RuntimeContextNeeds, RuntimeShellFacts, ToolListingSections,
+    UserContextPolicy, UserContextSection, WorkspaceContextFacts,
 };
 
 #[test]
@@ -100,4 +103,110 @@ fn prompt_environment_info_preserves_local_and_remote_guidance() {
     assert!(remote.contains("- Local BitFun client OS: linux (unix)"));
     assert!(remote.contains("applies to Computer use / UI automation"));
     assert!(remote.contains("Local client architecture: aarch64"));
+}
+
+#[test]
+fn runtime_context_renderer_preserves_local_exec_and_computer_use_guidance() {
+    let reminder = render_runtime_context_reminder(&RuntimeContextFacts {
+        needs: RuntimeContextNeeds::from_tool_names(["Read", "ExecCommand", "ComputerUse"]),
+        host_os: "windows".to_string(),
+        host_family: "windows".to_string(),
+        host_arch: "x86_64".to_string(),
+        remote_execution: None,
+        local_shell: Some(RuntimeShellFacts {
+            display_name: "PowerShell".to_string(),
+            shell_type: "powershell".to_string(),
+            invocation: "powershell.exe -NoLogo".to_string(),
+        }),
+    })
+    .expect("runtime context should render");
+
+    assert!(reminder.contains("# Runtime Context"));
+    assert!(reminder.contains("## Workspace Execution"));
+    assert!(reminder.contains("- Workspace file and shell tools operate on the local filesystem."));
+    assert!(reminder.contains("## ExecCommand Shell"));
+    assert!(reminder.contains("PowerShell (powershell)"));
+    assert!(reminder.contains("prefer native PowerShell cmdlets"));
+    assert!(reminder.contains("## Local Client"));
+    assert!(reminder.contains("- Local BitFun client OS: windows (windows)"));
+    assert!(reminder.contains("meta`/`super`"));
+}
+
+#[test]
+fn runtime_context_renderer_preserves_remote_workspace_split() {
+    let reminder = render_runtime_context_reminder(&RuntimeContextFacts {
+        needs: RuntimeContextNeeds::from_tool_names([
+            "Read",
+            "ExecCommand",
+            "ExecControl",
+            "ComputerUse",
+        ]),
+        host_os: "windows".to_string(),
+        host_family: "windows".to_string(),
+        host_arch: "x86_64".to_string(),
+        remote_execution: Some(RemoteExecutionHints {
+            connection_display_name: "prod \"box\"".to_string(),
+            kernel_name: "Linux".to_string(),
+            hostname: "remote-host".to_string(),
+        }),
+        local_shell: Some(RuntimeShellFacts {
+            display_name: "PowerShell".to_string(),
+            shell_type: "powershell".to_string(),
+            invocation: "powershell.exe".to_string(),
+        }),
+    })
+    .expect("remote runtime context should render");
+
+    assert!(reminder.contains("remote SSH connection \"prod 'box'\""));
+    assert!(reminder.contains("Remote host: remote-host (uname/kernel: Linux)"));
+    assert!(reminder.contains("ExecCommand uses the remote user's default POSIX shell"));
+    assert!(!reminder.contains("## ExecControl"));
+    assert!(reminder.contains("Computer use and UI automation operate on the local BitFun desktop"));
+}
+
+#[test]
+fn workspace_and_user_context_renderers_preserve_section_shape() {
+    let local = render_workspace_context(&WorkspaceContextFacts {
+        workspace_path: "workspace/root".to_string(),
+        related_paths: vec![PromptRelatedPath {
+            path: "sibling\\project".to_string(),
+            description: Some("docs".to_string()),
+        }],
+        remote_execution: None,
+    });
+
+    assert!(local.contains("## Workspace Context"));
+    assert!(local.contains("- Current Working Directory: workspace/root"));
+    assert!(local.contains("sibling/project"));
+    assert!(local.contains("sibling/project — docs"));
+    assert!(local.contains("docs"));
+
+    let remote = render_workspace_context(&WorkspaceContextFacts {
+        workspace_path: "/srv/workspace".to_string(),
+        related_paths: Vec::new(),
+        remote_execution: Some(RemoteExecutionHints {
+            connection_display_name: "remote".to_string(),
+            kernel_name: "Linux".to_string(),
+            hostname: "host".to_string(),
+        }),
+    });
+    assert!(remote.contains(
+        "Workspace root (file tools, Glob, LS, ExecCommand on workspace): /srv/workspace"
+    ));
+    assert!(remote.contains("Execution environment: **Remote SSH**"));
+    assert!(remote.contains("**Remote SSH** — connection"));
+
+    let project_layout = render_project_layout(&ProjectLayoutFacts {
+        listing: "src\nCargo.toml".to_string(),
+        reached_limit: true,
+        max_entries: 2,
+        remote: false,
+    });
+    assert!(project_layout.contains("showing up to 2 entries"));
+
+    let user_context =
+        render_user_context_reminder(vec![local, project_layout]).expect("context should render");
+    assert!(user_context.starts_with("# User Context\nAs you answer"));
+    assert!(user_context.contains("## Workspace Context"));
+    assert!(user_context.contains("## Workspace Layout"));
 }

@@ -39,15 +39,15 @@ port-backed `sdk` / `AgentRuntime` facade that can be built and tested without
   round-boundary yield/injection state, turn-outcome
   queue decisions, registry source/profile facts, prompt-loop user-context
   policy, prompt listing reminder ordering, prompt-cache policy/identity/store,
-  turn skill/agent snapshot state, file-read session state, session evidence
-  ledger projection, finish-reason labels, session-state event labels, and
-  turn-outcome event facts.
-- Keep concrete prompt assembly, workspace context IO, prompt-cache persistence
-  wiring, dynamic environment collection, concrete hook side effects,
-  DeepReview task launch/provider wait/report persistence, DeepResearch
-  storage IO/post-turn hook and concrete product tool execution outside this
-  crate until a reviewed migration proves behavior
-  equivalence.
+  prompt runtime/workspace/user-context rendering, turn skill/agent snapshot
+  state, file-read session state, session evidence ledger projection,
+  finish-reason labels, session-state event labels, and turn-outcome event
+  facts.
+- Keep concrete prompt fact collection, workspace context IO, prompt-cache
+  persistence wiring, dynamic environment collection, concrete hook side
+  effects, DeepReview task launch/provider wait/report persistence,
+  DeepResearch storage IO/post-turn hook and concrete product tool execution
+  outside this crate until a reviewed migration proves behavior equivalence.
 - Add focused tests before moving any runtime decision into this crate.
 
 ## Verification
