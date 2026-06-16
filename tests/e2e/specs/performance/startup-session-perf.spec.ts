@@ -3588,7 +3588,9 @@ type LongSessionOpenMeasurementOptions = {
 
 type RapidLongSessionSwitchMeasurement = {
   appMode: string;
+  requestedSessionIds: string[];
   sessionIds: string[];
+  activeSessionIdAtStart: string | null;
   targetSessionId: string;
   expectedLatestTurnId: string;
   clickedAtMs: number;
@@ -3613,6 +3615,9 @@ type RapidLongSessionSwitchMeasurement = {
       clickDurationMs: number;
       pauseBeforeTargetMs: number;
       clickActionCompletedAtMs: number;
+      timelineClickToLatestContentVisibleMs: number | null;
+      timelineClickToLatestTextVisibleMs: number | null;
+      timelineClickActionCompletedToLatestTextVisibleMs: number | null;
       clickActionCompletedToLatestVisibleMs: number;
       clickActionCompletedToLatestUsableMs: number;
       clickToLatestVisibleMs: number;
@@ -3864,6 +3869,32 @@ function readRapidSwitchSessionIds(): string[] {
   return Array.from(new Set(sessionIds));
 }
 
+function chooseRapidSwitchClickOrder(
+  requestedSessionIds: string[],
+  activeSessionIdAtStart: string | null,
+): string[] {
+  if (!activeSessionIdAtStart) {
+    return requestedSessionIds;
+  }
+
+  const defaultTargetSessionId = requestedSessionIds.at(-1);
+  if (defaultTargetSessionId !== activeSessionIdAtStart) {
+    return requestedSessionIds;
+  }
+
+  const fallbackTargetSessionId = requestedSessionIds
+    .filter(sessionId => sessionId !== activeSessionIdAtStart)
+    .at(-1);
+  if (!fallbackTargetSessionId) {
+    return requestedSessionIds;
+  }
+
+  return [
+    ...requestedSessionIds.filter(sessionId => sessionId !== fallbackTargetSessionId),
+    fallbackTargetSessionId,
+  ];
+}
+
 async function readActiveSessionNavId(): Promise<string | null> {
   return browser.execute(() => {
     const active = document.querySelector<HTMLElement>(
@@ -3875,7 +3906,9 @@ async function readActiveSessionNavId(): Promise<string | null> {
 }
 
 async function collectRapidLongSessionSwitchMeasurement(
+  requestedSessionIds: string[],
   sessionIds: string[],
+  activeSessionIdAtStart: string | null,
   expectedLatestTurnId: string,
 ): Promise<RapidLongSessionSwitchMeasurement | null> {
   if (sessionIds.length < 3) {
@@ -3954,6 +3987,34 @@ async function collectRapidLongSessionSwitchMeasurement(
     viewportTimelineSummary,
     targetSessionId,
   );
+  const targetClickedAtMs =
+    clickPlan.find(entry => entry.sessionId === targetSessionId)?.clickedAtMs ?? clickedAtMs;
+  const targetClickPlanIndex = clickPlan.findIndex(entry => entry.sessionId === targetSessionId);
+  const targetClickPlanEntry = targetClickPlanIndex >= 0
+    ? clickPlan[targetClickPlanIndex]
+    : undefined;
+  const targetClickDurationMs = targetClickPlanEntry?.clickDurationMs ?? 0;
+  const targetClickActionCompletedAtMs = targetClickedAtMs + targetClickDurationMs;
+  const pauseBeforeTargetMs = clickPlan
+    .slice(0, Math.max(0, targetClickPlanIndex))
+    .reduce((total, entry) => total + (entry.pauseDurationMs ?? 0), 0);
+  const targetClickSinceFirstClickMs = targetClickedAtMs - clickedAtMs;
+  const targetClickActionCompletedSinceFirstClickMs =
+    targetClickActionCompletedAtMs - clickedAtMs;
+  const relativeToTargetClick = (timelineMs: number | null): number | null =>
+    timelineMs === null
+      ? null
+      : timelineMs - targetClickSinceFirstClickMs;
+  const relativeToTargetClickActionCompleted = (timelineMs: number | null): number | null =>
+    timelineMs === null
+      ? null
+      : timelineMs - targetClickActionCompletedSinceFirstClickMs;
+  const timelineClickToLatestContentVisibleMs =
+    relativeToTargetClick(viewportTimelineSummary.firstLatestContentVisuallyVisibleAtMs);
+  const timelineClickToLatestTextVisibleMs =
+    relativeToTargetClick(viewportTimelineSummary.firstLatestTextVisibleAtMs);
+  const timelineClickActionCompletedToLatestTextVisibleMs =
+    relativeToTargetClickActionCompleted(viewportTimelineSummary.firstLatestTextVisibleAtMs);
   const finalSnapshot = await readStartupTraceSnapshot();
   const sessionIdSet = new Set(sessionIds);
   const events = finalSnapshot.phases.events.filter(event =>
@@ -3971,17 +4032,6 @@ async function collectRapidLongSessionSwitchMeasurement(
       event.phase === 'git_state_refresh'
     )
   );
-  const targetClickedAtMs =
-    clickPlan.find(entry => entry.sessionId === targetSessionId)?.clickedAtMs ?? clickedAtMs;
-  const targetClickPlanIndex = clickPlan.findIndex(entry => entry.sessionId === targetSessionId);
-  const targetClickPlanEntry = targetClickPlanIndex >= 0
-    ? clickPlan[targetClickPlanIndex]
-    : undefined;
-  const targetClickDurationMs = targetClickPlanEntry?.clickDurationMs ?? 0;
-  const targetClickActionCompletedAtMs = targetClickedAtMs + targetClickDurationMs;
-  const pauseBeforeTargetMs = clickPlan
-    .slice(0, Math.max(0, targetClickPlanIndex))
-    .reduce((total, entry) => total + (entry.pauseDurationMs ?? 0), 0);
   const sessionBreakdowns = clickPlan.map((entry, index) => {
     const sessionEvents = events.filter(event =>
       typeof event.sessionId === 'string' &&
@@ -4000,7 +4050,9 @@ async function collectRapidLongSessionSwitchMeasurement(
 
   return {
     appMode: process.env.BITFUN_E2E_APP_MODE ?? 'auto',
+    requestedSessionIds,
     sessionIds,
+    activeSessionIdAtStart,
     targetSessionId,
     expectedLatestTurnId,
     clickedAtMs,
@@ -4014,11 +4066,14 @@ async function collectRapidLongSessionSwitchMeasurement(
       firstClickToTargetClickMs: targetClickedAtMs - clickedAtMs,
       target: {
         clickedAtMs: targetClickedAtMs,
-        clickSinceFirstClickMs: targetClickedAtMs - clickedAtMs,
+        clickSinceFirstClickMs: targetClickSinceFirstClickMs,
         findDurationMs: targetClickPlanEntry?.findDurationMs ?? 0,
         clickDurationMs: targetClickDurationMs,
         pauseBeforeTargetMs,
         clickActionCompletedAtMs: targetClickActionCompletedAtMs,
+        timelineClickToLatestContentVisibleMs,
+        timelineClickToLatestTextVisibleMs,
+        timelineClickActionCompletedToLatestTextVisibleMs,
         clickActionCompletedToLatestVisibleMs: latestVisible.visibleAtMs - targetClickActionCompletedAtMs,
         clickActionCompletedToLatestUsableMs: latestUsable.usableAtMs - targetClickActionCompletedAtMs,
         clickToLatestVisibleMs: latestVisible.visibleAtMs - targetClickedAtMs,
@@ -4039,6 +4094,58 @@ async function collectRapidLongSessionSwitchMeasurement(
     api: finalSnapshot.api,
     native: finalSnapshot.native,
   };
+}
+
+function expectRapidSwitchMeasurementUsesFreshTargetRestore(
+  measurement: RapidLongSessionSwitchMeasurement,
+): void {
+  const targetSession = measurement.rapidSwitchBreakdown.sessions.find(session =>
+    session.sessionId === measurement.targetSessionId
+  );
+  if (!targetSession) {
+    throw new Error(`Rapid switch target ${measurement.targetSessionId} is missing from session breakdown`);
+  }
+  if (measurement.activeSessionIdAtStart === measurement.targetSessionId) {
+    throw new Error(
+      `Rapid switch target ${measurement.targetSessionId} was already active at test start; ` +
+      'this would measure a startup-preloaded session instead of a first rapid switch.',
+    );
+  }
+
+  const open = targetSession.sessionOpen;
+  const missingSegments = [
+    ['clickToHydrateStartMs', open.clickToHydrateStartMs],
+    ['clickToHydrateEndMs', open.clickToHydrateEndMs],
+    ['restoreDurationMs', open.restoreDurationMs],
+    ['hydrateDurationMs', open.hydrateDurationMs],
+    ['latestFrameSinceHydrateMs', open.latestFrameSinceHydrateMs],
+  ]
+    .filter(([, value]) => typeof value !== 'number' || value <= 0)
+    .map(([name]) => name);
+
+  if (missingSegments.length > 0) {
+    throw new Error(
+      `Rapid switch target ${measurement.targetSessionId} did not produce fresh restore timings ` +
+      `(${missingSegments.join(', ')} missing/invalid). ` +
+      `activeAtStart=${measurement.activeSessionIdAtStart ?? 'none'}, ` +
+      `requested=${measurement.requestedSessionIds.join(',')}, ` +
+      `effective=${measurement.sessionIds.join(',')}`,
+    );
+  }
+
+  const target = measurement.rapidSwitchBreakdown.target;
+  if (
+    target.timelineClickToLatestTextVisibleMs !== null &&
+    target.timelineClickToLatestTextVisibleMs < 0
+  ) {
+    throw new Error(
+      `Rapid switch latest text became visible before target click ` +
+      `(${target.timelineClickToLatestTextVisibleMs.toFixed(1)}ms). ` +
+      `activeAtStart=${measurement.activeSessionIdAtStart ?? 'none'}, ` +
+      `requested=${measurement.requestedSessionIds.join(',')}, ` +
+      `effective=${measurement.sessionIds.join(',')}`,
+    );
+  }
 }
 
 async function collectLongSessionOpenMeasurement(
@@ -4529,7 +4636,14 @@ describe('Performance telemetry', () => {
   it('collects rapid-switch timing across generated long sessions', async function () {
     await ensurePerformanceWorkspace(startupPage);
 
-    const sessionIds = readRapidSwitchSessionIds();
+    const requestedSessionIds = readRapidSwitchSessionIds();
+    const activeSessionIdAtStart = await readActiveSessionNavId();
+    const sessionIds = chooseRapidSwitchClickOrder(requestedSessionIds, activeSessionIdAtStart);
+    if (sessionIds.length < 3) {
+      this.skip();
+      return;
+    }
+
     const targetSessionId = sessionIds[sessionIds.length - 1];
     const expectedLatestTurnId = await readExpectedLatestTurnId(targetSessionId);
     if (!expectedLatestTurnId) {
@@ -4541,7 +4655,9 @@ describe('Performance telemetry', () => {
     }
 
     const measurement = await collectRapidLongSessionSwitchMeasurement(
+      requestedSessionIds,
       sessionIds,
+      activeSessionIdAtStart,
       expectedLatestTurnId,
     );
     if (!measurement) {
@@ -4552,7 +4668,9 @@ describe('Performance telemetry', () => {
 
     console.log('[Perf] long-session-rapid-switch', JSON.stringify({
       appMode: measurement.appMode,
+      requestedSessionIds,
       sessionIds,
+      activeSessionIdAtStart,
       targetSessionId,
       clickToTargetLatestVisibleMs: measurement.clickToTargetLatestVisibleMs,
       clickToTargetLatestUsableMs: measurement.clickToTargetLatestUsableMs,
@@ -4567,6 +4685,12 @@ describe('Performance telemetry', () => {
             measurement.rapidSwitchBreakdown.target.clickActionCompletedToLatestVisibleMs,
           clickActionCompletedToLatestUsableMs:
             measurement.rapidSwitchBreakdown.target.clickActionCompletedToLatestUsableMs,
+          timelineClickToLatestContentVisibleMs:
+            measurement.rapidSwitchBreakdown.target.timelineClickToLatestContentVisibleMs,
+          timelineClickToLatestTextVisibleMs:
+            measurement.rapidSwitchBreakdown.target.timelineClickToLatestTextVisibleMs,
+          timelineClickActionCompletedToLatestTextVisibleMs:
+            measurement.rapidSwitchBreakdown.target.timelineClickActionCompletedToLatestTextVisibleMs,
           clickToLatestVisibleMs: measurement.rapidSwitchBreakdown.target.clickToLatestVisibleMs,
           latestVisibleToUsableMs: measurement.rapidSwitchBreakdown.target.latestVisibleToUsableMs,
           clickToLatestUsableMs: measurement.rapidSwitchBreakdown.target.clickToLatestUsableMs,
@@ -4597,6 +4721,7 @@ describe('Performance telemetry', () => {
 
     await writeReport('long-session-rapid-switch', measurement);
 
+    expectRapidSwitchMeasurementUsesFreshTargetRestore(measurement);
     expect(measurement.activeSessionIdAtEnd).toBe(targetSessionId);
     expect(isLongSessionViewportUsable(measurement.viewport)).toBe(true);
     expect(measurement.visualStateSummary.postLatestTextVisibleLoadingEventCount).toBe(0);
