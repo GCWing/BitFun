@@ -422,9 +422,7 @@ Usage notes:
     async fn get_enabled_agents(context: Option<&ToolUseContext>) -> Vec<AgentInfo> {
         let registry = get_agent_registry();
         let workspace_root = context.and_then(|ctx| ctx.workspace_root());
-        if let Some(workspace_root) = workspace_root {
-            registry.load_custom_subagents(workspace_root).await;
-        }
+        registry.load_custom_agents(workspace_root).await;
         registry
             .get_subagents_for_query(&SubagentQueryContext {
                 parent_agent_type: context.and_then(|ctx| ctx.agent_type.as_deref()),
@@ -1603,6 +1601,11 @@ mod tests {
         get_agent_registry().register_agent(
             Arc::new(PromptOrderTestAgent { id: id.to_string() }),
             AgentCategory::SubAgent,
+            match source {
+                SubAgentSource::Builtin => crate::agentic::agents::AgentSource::Builtin,
+                SubAgentSource::Project => crate::agentic::agents::AgentSource::Project,
+                SubAgentSource::User => crate::agentic::agents::AgentSource::User,
+            },
             Some(source),
             custom_config,
         );
@@ -1917,20 +1920,20 @@ mod tests {
 
         let builtin_a = "AAAPromptOrderBuiltin";
         let builtin_z = "ZZZPromptOrderBuiltin";
-        let user_a = "AAAPromptOrderUser";
-        let user_z = "ZZZPromptOrderUser";
+        let project_a = "AAAPromptOrderProject";
+        let project_z = "ZZZPromptOrderProject";
         register_prompt_order_test_subagent(builtin_z, SubAgentSource::Builtin, None);
         register_prompt_order_test_subagent(builtin_a, SubAgentSource::Builtin, None);
         register_prompt_order_test_subagent(
-            user_z,
-            SubAgentSource::User,
+            project_z,
+            SubAgentSource::Project,
             Some(CustomSubagentConfig {
                 model: "fast".to_string(),
             }),
         );
         register_prompt_order_test_subagent(
-            user_a,
-            SubAgentSource::User,
+            project_a,
+            SubAgentSource::Project,
             Some(CustomSubagentConfig {
                 model: "fast".to_string(),
             }),
@@ -1942,20 +1945,20 @@ mod tests {
 
         let builtin_a_index = find_agent_block_index(&description, builtin_a);
         let builtin_z_index = find_agent_block_index(&description, builtin_z);
-        let user_a_index = find_agent_block_index(&description, user_a);
-        let user_z_index = find_agent_block_index(&description, user_z);
+        let project_a_index = find_agent_block_index(&description, project_a);
+        let project_z_index = find_agent_block_index(&description, project_z);
 
         assert!(
             builtin_a_index < builtin_z_index,
             "builtin subagents should be sorted alphabetically"
         );
         assert!(
-            builtin_z_index < user_a_index,
-            "builtin subagents should render before user subagents"
+            builtin_z_index < project_a_index,
+            "builtin subagents should render before project subagents"
         );
         assert!(
-            user_a_index < user_z_index,
-            "user subagents should be sorted alphabetically"
+            project_a_index < project_z_index,
+            "project subagents should be sorted alphabetically"
         );
     }
 

@@ -4,6 +4,7 @@
  */
 
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
+import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
 import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
 import { notificationService } from '../../../shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
@@ -28,6 +29,10 @@ import {
   consumeRecentHistorySessionOpenIntent,
   hasRenderableSessionContent,
 } from '../sessionOpenIntent';
+import {
+  DEFAULT_CHAT_INPUT_MODE_CONFIG_PATH,
+  normalizeUserDefaultChatInputModeId,
+} from '../../utils/chatInputMode';
 
 const log = createLogger('SessionModule');
 const pendingSessionCreations = new Map<string, Promise<string>>();
@@ -312,14 +317,44 @@ const resolveSessionWorkspace = (
   return pathMatches[0];
 };
 
-const resolveAgentType = (
+export const resolveAgentTypeForSessionCreation = async (
   requestedMode: string | undefined,
   workspace: WorkspaceInfo | null
-): string => {
+): Promise<string> => {
   if (isAssistantWorkspace(workspace)) {
     return 'Claw';
   }
-  return requestedMode || 'agentic';
+
+  const normalizedRequestedMode = requestedMode?.trim();
+  if (normalizedRequestedMode && normalizedRequestedMode !== 'agentic') {
+    return normalizedRequestedMode;
+  }
+
+  try {
+    const configuredDefaultMode = normalizeUserDefaultChatInputModeId(
+      await configAPI.getConfig(DEFAULT_CHAT_INPUT_MODE_CONFIG_PATH, {
+        skipRetryOnNotFound: true,
+      }),
+    );
+    if (!configuredDefaultMode) {
+      return normalizedRequestedMode || 'agentic';
+    }
+
+    const availableModes = await agentAPI.getAvailableModes();
+    if (availableModes.some(mode => mode.id === configuredDefaultMode)) {
+      return configuredDefaultMode;
+    }
+
+    log.warn('Ignoring unavailable default chat input mode preference during session creation', {
+      modeId: configuredDefaultMode,
+    });
+  } catch (error) {
+    log.warn('Failed to resolve default chat input mode preference during session creation', {
+      error,
+    });
+  }
+
+  return normalizedRequestedMode || 'agentic';
 };
 
 function requireSessionWorkspacePath(
@@ -427,14 +462,15 @@ export async function createChatSession(
       workspace?.workspaceKind === WorkspaceKind.Remote
         ? workspace.sshHost?.trim() || undefined
         : undefined;
-    const agentType = resolveAgentType(mode, workspace);
+    const agentType = await resolveAgentTypeForSessionCreation(mode, workspace);
     const sessionMode = normalizeSessionDisplayMode(agentType, workspace);
-    const creationKey =
+    const workspaceCreationKey =
       workspace?.id?.trim()
         ? workspace.id
         : remoteConnectionId != null && remoteConnectionId !== ''
           ? `${remoteConnectionId}\n${workspacePath}`
           : workspacePath;
+    const creationKey = JSON.stringify([workspaceCreationKey, agentType]);
 
     const pendingCreation = pendingSessionCreations.get(creationKey);
     if (pendingCreation) {

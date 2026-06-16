@@ -1,40 +1,24 @@
+use super::common::CustomAgentData;
 use crate::agentic::agents::Agent;
-use crate::agentic::agents::{PromptBuilder, PromptBuilderContext, UserContextPolicy};
+use crate::agentic::agents::{PromptBuilderContext, UserContextPolicy};
 use crate::agentic::session::SystemPromptCacheIdentity;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
-pub use bitfun_agent_runtime::custom_subagent::CustomSubagentKind;
-use bitfun_agent_runtime::custom_subagent::{
-    custom_subagent_read_markdown_file, custom_subagent_save_markdown_parts,
-    CustomSubagentDefinition,
+use bitfun_agent_runtime::custom_agent::{
+    custom_agent_read_markdown_file, default_custom_agent_user_context_policy,
+    CustomAgentDefinition, CustomAgentKind,
 };
-use sha2::{Digest, Sha256};
+pub use bitfun_agent_runtime::custom_subagent::CustomSubagentKind;
+type CustomSubagentDefinition = CustomAgentDefinition;
 
 pub struct CustomSubagent {
-    pub name: String,
-    pub description: String,
-    pub tools: Vec<String>,
-    pub prompt: String,
-    pub readonly: bool,
-    pub review: bool,
-    pub path: String,
-    pub kind: CustomSubagentKind,
-    /// Model ID to use, default "fast"
-    pub model: String,
+    pub(crate) data: CustomAgentData,
 }
 
 impl CustomSubagent {
     pub(crate) fn from_definition(path: String, definition: CustomSubagentDefinition) -> Self {
         Self {
-            name: definition.name,
-            description: definition.description,
-            tools: definition.tools,
-            prompt: definition.prompt,
-            readonly: definition.readonly,
-            review: definition.review,
-            path,
-            kind: definition.kind,
-            model: definition.model,
+            data: CustomAgentData::from_definition(path, definition),
         }
     }
 }
@@ -46,15 +30,15 @@ impl Agent for CustomSubagent {
     }
 
     fn id(&self) -> &str {
-        &self.name
+        &self.data.id
     }
 
     fn name(&self) -> &str {
-        &self.name
+        &self.data.name
     }
 
     fn description(&self) -> &str {
-        &self.description
+        &self.data.description
     }
 
     fn prompt_template_name(&self, _model_name: Option<&str>) -> &str {
@@ -62,37 +46,56 @@ impl Agent for CustomSubagent {
     }
 
     fn system_prompt_cache_identity(&self, _model_name: Option<&str>) -> SystemPromptCacheIdentity {
-        let prompt_hash = hex::encode(Sha256::digest(self.prompt.as_bytes()));
-        SystemPromptCacheIdentity::new(format!("custom_prompt_sha256:{prompt_hash}"))
+        self.data.system_prompt_cache_identity()
     }
 
     async fn build_prompt(&self, context: &PromptBuilderContext) -> BitFunResult<String> {
-        let prompt_builder = PromptBuilder::new(context.clone());
-
-        let prompt = prompt_builder
-            .build_prompt_from_template(&self.prompt)
-            .await?;
-
-        Ok(prompt)
+        self.data.build_prompt(context).await
     }
 
     fn default_tools(&self) -> Vec<String> {
-        self.tools.clone()
+        self.data.tools.clone()
     }
 
     fn user_context_policy(&self) -> UserContextPolicy {
-        UserContextPolicy::empty()
-            .with_workspace_context()
-            .with_workspace_instructions()
-            .with_project_layout()
+        self.data.user_context_policy.clone()
     }
 
     fn is_readonly(&self) -> bool {
-        self.readonly
+        self.data.readonly
     }
 }
 
 impl CustomSubagent {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_with_id(
+        id: String,
+        name: String,
+        description: String,
+        tools: Vec<String>,
+        prompt: String,
+        readonly: bool,
+        path: String,
+        kind: CustomSubagentKind,
+        model: String,
+        user_context_policy: UserContextPolicy,
+    ) -> Self {
+        let definition = CustomAgentDefinition::new(
+            id,
+            name,
+            description,
+            CustomAgentKind::Subagent,
+            tools,
+            prompt,
+            readonly,
+            kind,
+            model,
+            user_context_policy,
+        );
+
+        Self::from_definition(path, definition)
+    }
+
     pub fn new(
         name: String,
         description: String,
@@ -102,17 +105,30 @@ impl CustomSubagent {
         path: String,
         kind: CustomSubagentKind,
     ) -> Self {
-        let definition =
-            CustomSubagentDefinition::new(name, description, tools, prompt, readonly, kind);
-
-        Self::from_definition(path, definition)
+        let id = name.clone();
+        Self::new_with_id(
+            id,
+            name,
+            description,
+            tools,
+            prompt,
+            readonly,
+            path,
+            kind,
+            "fast".to_string(),
+            default_custom_agent_user_context_policy(CustomAgentKind::Subagent),
+        )
     }
 
     pub fn from_file(path: &str, kind: CustomSubagentKind) -> BitFunResult<Self> {
-        let definition =
-            custom_subagent_read_markdown_file(path, kind).map_err(BitFunError::Agent)?;
+        let parsed = custom_agent_read_markdown_file(path, kind).map_err(BitFunError::Agent)?;
+        if parsed.definition.kind != CustomAgentKind::Subagent {
+            return Err(BitFunError::Agent(
+                "Expected custom subagent file".to_string(),
+            ));
+        }
 
-        Ok(Self::from_definition(path.to_string(), definition))
+        Ok(Self::from_definition(path.to_string(), parsed.definition))
     }
 
     /// Save current subagent as markdown file with YAML front matter
@@ -122,18 +138,14 @@ impl CustomSubagent {
     ///
     /// Fields equal to default values are not saved
     pub fn save_to_file(&self, model: Option<&str>) -> BitFunResult<()> {
-        let model = model.unwrap_or(&self.model);
-        custom_subagent_save_markdown_parts(
-            &self.path,
-            &self.name,
-            &self.description,
-            &self.tools,
-            &self.prompt,
-            self.readonly,
-            self.review,
-            model,
-        )
-        .map_err(BitFunError::Agent)
+        self.data.save_to_file(model)
+    }
+
+    pub fn set_review(&mut self, review: bool) {
+        self.data.review = review;
+        if review {
+            self.data.readonly = true;
+        }
     }
 }
 
@@ -179,7 +191,7 @@ mod tests {
             path.clone(),
             CustomSubagentKind::User,
         );
-        subagent.review = true;
+        subagent.data.review = true;
 
         subagent
             .save_to_file(None)
@@ -190,7 +202,7 @@ mod tests {
 
         let loaded = CustomSubagent::from_file(&path, CustomSubagentKind::User)
             .expect("review subagent should load");
-        assert!(loaded.review);
-        assert!(loaded.readonly);
+        assert!(loaded.data.review);
+        assert!(loaded.data.readonly);
     }
 }

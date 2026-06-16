@@ -1,3 +1,4 @@
+use bitfun_agent_runtime::custom_agent::CustomAgentKind;
 use bitfun_agent_runtime::custom_subagent::{
     custom_subagent_possible_dirs, custom_subagent_save_markdown_file,
     load_custom_subagent_definitions, CustomSubagentDefinition, CustomSubagentDiscoveryRoots,
@@ -5,6 +6,29 @@ use bitfun_agent_runtime::custom_subagent::{
 };
 use std::fs;
 use std::path::{Path, PathBuf};
+
+fn build_definition(
+    id: &str,
+    name: &str,
+    description: &str,
+    level: CustomSubagentKind,
+) -> CustomSubagentDefinition {
+    CustomSubagentDefinition::from_front_matter_fields(
+        Some(id),
+        Some(name),
+        Some(description),
+        Some(CustomAgentKind::Subagent),
+        None,
+        None,
+        None,
+        None,
+        None,
+        format!("{name} prompt."),
+        level,
+    )
+    .expect("custom subagent definition should be valid")
+    .definition
+}
 
 #[test]
 fn custom_subagent_discovery_preserves_directory_priority_and_deduplication() {
@@ -24,23 +48,27 @@ fn custom_subagent_discovery_preserves_directory_priority_and_deduplication() {
     write_agent(
         &project_bitfun.join("shared.md"),
         "Shared",
+        "Shared",
         "Project BitFun agent",
         CustomSubagentKind::Project,
     );
     write_agent(
         &project_claude.join("shared.md"),
         "Shared",
+        "Shared duplicate",
         "Project Claude duplicate",
         CustomSubagentKind::Project,
     );
     write_agent(
         &user_bitfun.join("user-only.md"),
         "UserOnly",
+        "UserOnly",
         "BitFun user agent",
         CustomSubagentKind::User,
     );
     write_agent(
         &home_claude.join("home-only.md"),
+        "HomeOnly",
         "HomeOnly",
         "Claude user agent",
         CustomSubagentKind::User,
@@ -51,12 +79,13 @@ fn custom_subagent_discovery_preserves_directory_priority_and_deduplication() {
     write_agent(
         &project_bitfun.join("nested").join("nested.md"),
         "Nested",
+        "Nested",
         "Nested project agent",
         CustomSubagentKind::Project,
     );
 
     let roots = CustomSubagentDiscoveryRoots {
-        workspace_root: workspace.path.clone(),
+        workspace_root: Some(workspace.path.clone()),
         bitfun_user_agents_dir: Some(user_bitfun.clone()),
         home_dir: Some(home.path.clone()),
     };
@@ -74,7 +103,7 @@ fn custom_subagent_discovery_preserves_directory_priority_and_deduplication() {
         ]
     );
     assert_eq!(
-        dirs.iter().map(|entry| entry.kind).collect::<Vec<_>>(),
+        dirs.iter().map(|entry| entry.level).collect::<Vec<_>>(),
         vec![
             CustomSubagentKind::Project,
             CustomSubagentKind::Project,
@@ -89,7 +118,7 @@ fn custom_subagent_discovery_preserves_directory_priority_and_deduplication() {
         report
             .definitions
             .iter()
-            .map(|loaded| loaded.definition.name.as_str())
+            .map(|loaded| loaded.definition.id.as_str())
             .collect::<Vec<_>>(),
         vec!["Shared", "UserOnly", "HomeOnly"]
     );
@@ -110,19 +139,20 @@ fn custom_subagent_discovery_reports_parse_errors_without_dropping_valid_files()
     write_agent(
         &project_bitfun.join("valid.md"),
         "Valid",
+        "Valid",
         "Valid project agent",
         CustomSubagentKind::Project,
     );
 
     let roots = CustomSubagentDiscoveryRoots {
-        workspace_root: workspace.path.clone(),
+        workspace_root: Some(workspace.path.clone()),
         bitfun_user_agents_dir: None,
         home_dir: None,
     };
 
     let report = load_custom_subagent_definitions(&roots);
     assert_eq!(report.definitions.len(), 1);
-    assert_eq!(report.definitions[0].definition.name, "Valid");
+    assert_eq!(report.definitions[0].definition.id, "Valid");
     assert_eq!(report.errors.len(), 1);
     assert_eq!(report.errors[0].path, broken_path);
     assert_eq!(
@@ -149,18 +179,8 @@ impl Drop for TestTempDir {
     }
 }
 
-fn write_agent(path: &Path, name: &str, description: &str, kind: CustomSubagentKind) {
-    let definition = CustomSubagentDefinition::from_front_matter_fields(
-        Some(name),
-        Some(description),
-        None,
-        None,
-        None,
-        None,
-        format!("{name} prompt."),
-        kind,
-    )
-    .expect("custom subagent definition should be valid");
+fn write_agent(path: &Path, id: &str, name: &str, description: &str, level: CustomSubagentKind) {
+    let definition = build_definition(id, name, description, level);
     custom_subagent_save_markdown_file(path, &definition)
         .expect("custom subagent markdown should save");
 }

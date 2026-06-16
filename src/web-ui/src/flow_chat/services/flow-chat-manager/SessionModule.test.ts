@@ -3,6 +3,7 @@ import {
   ensureBackendSession,
   preloadHistoricalSessionForOpen,
   retryCreateBackendSession,
+  resolveAgentTypeForSessionCreation,
   SESSION_ACTIVITY_TOUCH_DELAY_MS,
   switchChatSession,
 } from './SessionModule';
@@ -16,6 +17,11 @@ import type { ReviewTeamRunManifest } from '@/shared/services/reviewTeamService'
 const agentApiMocks = vi.hoisted(() => ({
   ensureCoordinatorSession: vi.fn(),
   createSession: vi.fn(),
+  getAvailableModes: vi.fn(),
+}));
+
+const configApiMocks = vi.hoisted(() => ({
+  getConfig: vi.fn(),
 }));
 
 const persistenceMocks = vi.hoisted(() => ({
@@ -25,6 +31,10 @@ const persistenceMocks = vi.hoisted(() => ({
 
 vi.mock('@/infrastructure/api/service-api/AgentAPI', () => ({
   agentAPI: agentApiMocks,
+}));
+
+vi.mock('@/infrastructure/api/service-api/ConfigAPI', () => ({
+  configAPI: configApiMocks,
 }));
 
 vi.mock('@/infrastructure/api/service-api/SessionAPI', () => ({
@@ -118,6 +128,36 @@ function createContext(session: Session) {
     flowChatStore,
   };
 }
+
+describe('resolveAgentTypeForSessionCreation', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('uses the configured default mode for internal agentic session creation', async () => {
+    configApiMocks.getConfig.mockResolvedValue('PlannerPlus');
+    agentApiMocks.getAvailableModes.mockResolvedValue([
+      { id: 'agentic' },
+      { id: 'PlannerPlus' },
+    ]);
+
+    await expect(resolveAgentTypeForSessionCreation('agentic', null)).resolves.toBe('PlannerPlus');
+  });
+
+  it('does not override explicit non-agentic modes', async () => {
+    await expect(resolveAgentTypeForSessionCreation('Cowork', null)).resolves.toBe('Cowork');
+
+    expect(configApiMocks.getConfig).not.toHaveBeenCalled();
+    expect(agentApiMocks.getAvailableModes).not.toHaveBeenCalled();
+  });
+
+  it('falls back to agentic when the configured default mode is unavailable', async () => {
+    configApiMocks.getConfig.mockResolvedValue('MissingMode');
+    agentApiMocks.getAvailableModes.mockResolvedValue([{ id: 'agentic' }]);
+
+    await expect(resolveAgentTypeForSessionCreation('agentic', null)).resolves.toBe('agentic');
+  });
+});
 
 describe('SessionModule historical session coordination', () => {
   beforeEach(() => {

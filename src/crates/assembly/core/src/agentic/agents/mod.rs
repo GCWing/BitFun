@@ -17,7 +17,11 @@ pub use bitfun_agent_runtime::agents::{
     SHARED_CODING_MODE_CONFIG_PROFILE_ID, SHARED_CODING_MODE_CONFIG_PROFILE_LABEL,
     SHARED_CODING_MODE_IDS, SHARED_CODING_MODE_PROMPT_TEMPLATE,
 };
-pub use definitions::custom::{CustomSubagent, CustomSubagentKind};
+pub use bitfun_agent_runtime::custom_agent::{
+    custom_agent_model_or_default, default_custom_agent_tools,
+    default_custom_agent_user_context_policy, CustomAgentKind, CustomAgentLevel,
+};
+pub use definitions::custom::{CustomMode, CustomSubagent, CustomSubagentKind};
 pub use definitions::hidden::{CodeReviewAgent, DeepReviewAgent, GenerateDocAgent};
 pub use definitions::modes::{
     AgenticMode, ClawMode, CoworkMode, DebugMode, DeepResearchMode, MultitaskMode, PlanMode,
@@ -39,14 +43,14 @@ pub use prompt_builder::{
 };
 pub use registry::catalog::{builtin_agent_specs, BuiltinAgentSpec};
 pub use registry::types::{
-    subagent_source_from_custom_kind, AgentCategory, AgentInfo, AgentToolPolicy,
+    subagent_source_from_custom_kind, AgentCategory, AgentInfo, AgentSource, AgentToolPolicy,
     CustomSubagentConfig, SubAgentSource, SubagentListScope, SubagentQueryContext,
     SubagentStateReason,
 };
 pub use registry::visibility::{
     BuiltinSubagentExposure, SubagentVisibilityPolicy, SubagentVisibilitySummary,
 };
-pub use registry::{get_agent_registry, AgentRegistry, CustomSubagentDetail};
+pub use registry::{get_agent_registry, AgentRegistry, CustomAgentDetail, CustomSubagentDetail};
 use std::any::Any;
 
 // Include embedded prompts generated at compile time

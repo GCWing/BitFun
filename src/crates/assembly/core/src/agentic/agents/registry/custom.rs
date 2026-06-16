@@ -3,13 +3,14 @@ use super::support::{
     get_subagent_overrides, load_project_subagent_overrides_local,
     save_project_subagent_overrides_local,
 };
-use super::types::AgentEntry;
-use super::{AgentRegistry, CustomSubagentDetail};
-use crate::agentic::agents::definitions::custom::{CustomSubagent, CustomSubagentKind};
-use crate::agentic::agents::registry::types::subagent_key_for;
+use super::types::{
+    agent_source_from_custom_level, subagent_key_for, AgentEntry, AgentSource, CustomAgentConfig,
+};
+use super::{AgentRegistry, CustomAgentDetail};
+use crate::agentic::agents::definitions::custom::{CustomAgentData, CustomMode, CustomSubagent};
 use crate::agentic::agents::registry::visibility::SubagentVisibilityPolicy;
 use crate::agentic::agents::{
-    subagent_source_from_custom_kind, Agent, AgentCategory, CustomSubagentConfig, SubAgentSource,
+    subagent_source_from_custom_kind, Agent, AgentCategory, SubAgentSource,
 };
 use crate::agentic::tools::{get_all_registered_tool_names, get_readonly_registered_tool_names};
 use crate::infrastructure::get_path_manager_arc;
@@ -17,8 +18,10 @@ use crate::service::config::global::GlobalConfigManager;
 use crate::service::config::mode_config_canonicalizer::persist_agent_profile_from_value;
 use crate::service::config::types::AgentSubagentOverrideState;
 use crate::util::errors::{BitFunError, BitFunResult};
-use bitfun_agent_runtime::custom_subagent::{
-    load_custom_subagent_definitions, CustomSubagentDiscoveryRoots, LoadedCustomSubagentDefinition,
+use bitfun_agent_runtime::custom_agent::{
+    custom_agent_model_or_default, default_custom_agent_tools, load_custom_agent_definitions,
+    CustomAgentDefinition, CustomAgentDiscoveryRoots, CustomAgentFrontMatterMetadata,
+    CustomAgentKind, CustomAgentLevel,
 };
 use log::{debug, error, warn};
 use std::collections::HashMap;
@@ -26,77 +29,145 @@ use std::path::Path;
 use std::sync::Arc;
 
 impl AgentRegistry {
-    /// load custom subagent: clear project/user source subagents, reload from workspace and register
-    pub async fn load_custom_subagents(&self, workspace_root: &Path) {
-        // get valid tools and models list for verification
+    pub async fn ensure_user_custom_agents_loaded(&self) {
+        if self.user_custom_agents_loaded() {
+            return;
+        }
+        self.load_custom_agents(None).await;
+    }
+
+    /// Load user custom agents globally and project subagents for the given workspace.
+    pub async fn load_custom_agents(&self, workspace_root: Option<&Path>) {
+        self.load_custom_agents_from_discovery_roots(
+            workspace_root,
+            &custom_agent_discovery_roots(workspace_root),
+        )
+        .await;
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn load_custom_agents_from_test_roots(
+        &self,
+        workspace_root: Option<&Path>,
+        roots: &CustomAgentDiscoveryRoots,
+    ) {
+        self.load_custom_agents_from_discovery_roots(workspace_root, roots)
+            .await;
+    }
+
+    async fn load_custom_agents_from_discovery_roots(
+        &self,
+        workspace_root: Option<&Path>,
+        roots: &CustomAgentDiscoveryRoots,
+    ) {
         let valid_tools = get_all_registered_tool_names().await;
         let readonly_tools = get_readonly_registered_tool_names().await;
         let valid_models = Self::get_valid_model_ids().await;
 
-        let custom =
-            load_custom_subagent_definitions(&custom_subagent_discovery_roots(workspace_root));
+        let custom = load_custom_agent_definitions(roots);
         for load_error in custom.errors {
-            let error = BitFunError::Agent(load_error.error);
-            error!(
-                "Failed to load custom subagent from {}: {}",
-                load_error.path.display(),
-                error
-            );
+            if load_error.error == "Project-scoped custom modes are not supported" {
+                warn!(
+                    "Skipping custom agent from {}: {}",
+                    load_error.path.display(),
+                    load_error.error
+                );
+            } else {
+                let error = BitFunError::Agent(load_error.error);
+                error!(
+                    "Failed to load custom agent from {}: {}",
+                    load_error.path.display(),
+                    error
+                );
+            }
         }
-        let mut map = self.write_agents();
-        map.retain(|_, entry| {
-            !(entry.category == AgentCategory::SubAgent
-                && entry.subagent_source == Some(SubAgentSource::User))
-        });
+
+        let mut user_entries = HashMap::new();
         let mut project_entries = HashMap::new();
+
         for loaded in custom.definitions {
-            let mut sub = custom_subagent_from_loaded_definition(loaded);
-            let id = sub.id().to_string();
-            let source = subagent_source_from_custom_kind(sub.kind);
-            // validate and correct tools and model
-            Self::validate_custom_subagent(&mut sub, &valid_tools, &readonly_tools, &valid_models);
-            // create CustomSubagentConfig cache configuration information
-            let custom_config = CustomSubagentConfig {
-                model: sub.model.clone(),
+            let mut definition = loaded.definition;
+            Self::validate_custom_agent(
+                &mut definition,
+                &loaded.metadata,
+                &valid_tools,
+                &readonly_tools,
+                &valid_models,
+            );
+
+            let id = definition.id.clone();
+            let source = agent_source_from_custom_level(definition.level);
+            let subagent_source = (definition.kind == CustomAgentKind::Subagent)
+                .then(|| subagent_source_from_custom_kind(definition.level));
+            let custom_config = CustomAgentConfig {
+                model: definition.model.clone(),
             };
             let entry = AgentEntry {
-                category: AgentCategory::SubAgent,
-                subagent_source: Some(source),
-                agent: Arc::new(sub),
+                category: match definition.kind {
+                    CustomAgentKind::Mode => AgentCategory::Mode,
+                    CustomAgentKind::Subagent => AgentCategory::SubAgent,
+                },
+                source,
+                subagent_source,
+                agent: custom_agent_from_definition(
+                    loaded.path.to_string_lossy().to_string(),
+                    definition,
+                ),
                 visibility_policy: SubagentVisibilityPolicy::public(),
                 custom_config: Some(custom_config),
             };
 
             match source {
-                SubAgentSource::User => {
-                    if map.contains_key(&id) {
-                        warn!(
-                            "Custom subagent {} (source {:?}) conflicts with existing, skip",
-                            id, source
-                        );
-                        continue;
-                    }
-                    map.insert(id, entry);
+                AgentSource::Builtin => {}
+                AgentSource::User => {
+                    user_entries.entry(id).or_insert(entry);
                 }
-                SubAgentSource::Project => {
-                    if map.contains_key(&id) {
-                        warn!(
-                            "Custom subagent {} (source {:?}) conflicts with existing, skip",
-                            id, source
-                        );
-                        continue;
-                    }
-                    project_entries.insert(id, entry);
+                AgentSource::Project => {
+                    project_entries.entry(id).or_insert(entry);
                 }
-                SubAgentSource::Builtin => {}
             }
         }
-        drop(map);
-        self.write_project_subagents()
-            .insert(workspace_root.to_path_buf(), project_entries);
+
+        {
+            let mut map = self.write_agents();
+            map.retain(|_, entry| entry.source != AgentSource::User);
+            for (id, entry) in user_entries {
+                if map.contains_key(&id) {
+                    warn!("Custom agent {} conflicts with existing entry, skip", id);
+                    continue;
+                }
+                map.insert(id, entry);
+            }
+        }
+
+        if let Some(root) = workspace_root {
+            let map = self.read_agents();
+            let filtered_project_entries = project_entries
+                .into_iter()
+                .filter(|(id, _)| {
+                    if map.contains_key(id) {
+                        warn!(
+                            "Custom project agent {} conflicts with global entry, skip",
+                            id
+                        );
+                        return false;
+                    }
+                    true
+                })
+                .collect();
+            drop(map);
+            self.write_project_subagents()
+                .insert(root.to_path_buf(), filtered_project_entries);
+        }
+
+        self.set_user_custom_agents_loaded(true);
     }
 
-    /// get valid model ID list: ai.models id + "primary" + "fast"
+    /// Compatibility wrapper for existing project-subagent callers.
+    pub async fn load_custom_subagents(&self, workspace_root: &Path) {
+        self.load_custom_agents(Some(workspace_root)).await;
+    }
+
     async fn get_valid_model_ids() -> Vec<String> {
         let mut valid_models: Vec<String> =
             if let Ok(config_service) = GlobalConfigManager::get_service().await {
@@ -112,22 +183,28 @@ impl AgentRegistry {
             };
         valid_models.push("primary".to_string());
         valid_models.push("fast".to_string());
+        valid_models.push("auto".to_string());
         valid_models
     }
 
-    /// validate and correct CustomSubagent's tools and model
-    /// - tools: filter out invalid tools, record warning log
-    /// - model: if invalid, set to "fast", record warning log
-    fn validate_custom_subagent(
-        subagent: &mut CustomSubagent,
+    fn validate_custom_agent(
+        definition: &mut CustomAgentDefinition,
+        metadata: &CustomAgentFrontMatterMetadata,
         valid_tools: &[String],
         readonly_tools: &[String],
         valid_models: &[String],
     ) {
-        let agent_id = subagent.name.clone();
+        let agent_id = definition.id.clone();
 
-        // validate tools: filter out invalid tools
-        let original_tools = subagent.tools.clone();
+        if metadata.used_default_tools && definition.kind == CustomAgentKind::Mode {
+            warn!(
+                "[Custom mode {}] No tools configured; defaulting to mode tool set {:?}",
+                agent_id,
+                default_custom_agent_tools(CustomAgentKind::Mode)
+            );
+        }
+
+        let original_tools = definition.tools.clone();
         let valid_tools_set: std::collections::HashSet<&str> =
             valid_tools.iter().map(|s| s.as_str()).collect();
         let (valid, invalid): (Vec<_>, Vec<_>) = original_tools
@@ -135,12 +212,13 @@ impl AgentRegistry {
             .partition(|t| valid_tools_set.contains(t.as_str()));
         if !invalid.is_empty() {
             warn!(
-                "[Subagent {}] Invalid tools filtered out: {:?}",
+                "[Custom agent {}] Invalid tools filtered out: {:?}",
                 agent_id, invalid
             );
         }
-        if subagent.review {
-            subagent.readonly = true;
+
+        if definition.kind == CustomAgentKind::Subagent && definition.review {
+            definition.readonly = true;
             let readonly_tools_set: std::collections::HashSet<&str> =
                 readonly_tools.iter().map(|s| s.as_str()).collect();
             let (review_tools, writable_tools): (Vec<_>, Vec<_>) = valid
@@ -148,22 +226,22 @@ impl AgentRegistry {
                 .partition(|t| readonly_tools_set.contains(t.as_str()));
             if !writable_tools.is_empty() {
                 warn!(
-                    "[Subagent {}] Writable tools filtered out from review subagent: {:?}",
+                    "[Custom subagent {}] Writable tools filtered out from review subagent: {:?}",
                     agent_id, writable_tools
                 );
             }
-            subagent.tools = review_tools;
+            definition.tools = review_tools;
         } else {
-            subagent.tools = valid;
+            definition.tools = valid;
         }
 
-        // validate model: if invalid, set to "fast"
-        if !valid_models.contains(&subagent.model) {
+        if !valid_models.contains(&definition.model) {
+            let fallback = custom_agent_model_or_default(definition.kind, None).to_string();
             warn!(
-                "[Subagent {}] Invalid model '{}', reset to 'fast'",
-                agent_id, subagent.model
+                "[Custom agent {}] Invalid model '{}', reset to '{}'",
+                agent_id, definition.model, fallback
             );
-            subagent.model = "fast".to_string();
+            definition.model = fallback;
         }
     }
 
@@ -191,34 +269,40 @@ impl AgentRegistry {
         )))
     }
 
-    /// clear all custom subagents (project/user source), only keep built-in subagents. called when closing workspace.
-    pub fn clear_custom_subagents(&self) {
+    /// Clear workspace-scoped project custom agents. User custom agents remain loaded globally.
+    pub fn clear_custom_agents(&self) {
         let before = self.read_project_subagents().len();
         self.write_project_subagents().clear();
-        debug!("Cleared project subagent caches: workspaces {}", before);
+        debug!("Cleared project custom agent caches: workspaces {}", before);
     }
 
-    /// get custom subagent configuration (used for updating configuration)
-    /// only custom subagent is valid, return clone of CustomSubagentConfig
-    pub fn get_custom_subagent_config(
+    pub fn clear_custom_subagents(&self) {
+        self.clear_custom_agents();
+    }
+
+    pub fn get_custom_agent_config(
         &self,
         agent_id: &str,
         workspace_root: Option<&Path>,
-    ) -> Option<CustomSubagentConfig> {
+    ) -> Option<CustomAgentConfig> {
         if let Some(entry) = self.read_agents().get(agent_id) {
-            if entry.category == AgentCategory::SubAgent {
-                return entry.custom_config.clone();
-            }
+            return entry.custom_config.clone();
         }
 
         workspace_root
             .and_then(|root| self.read_project_subagents().get(root).cloned())
             .and_then(|entries| entries.get(agent_id).cloned())
-            .and_then(|entry| {
-                (entry.category == AgentCategory::SubAgent)
-                    .then(|| entry.custom_config)
-                    .flatten()
-            })
+            .and_then(|entry| entry.custom_config)
+    }
+
+    pub fn get_custom_subagent_config(
+        &self,
+        agent_id: &str,
+        workspace_root: Option<&Path>,
+    ) -> Option<CustomAgentConfig> {
+        self.find_agent_entry(agent_id, workspace_root)
+            .filter(|entry| entry.category == AgentCategory::SubAgent)
+            .and_then(|entry| entry.custom_config)
     }
 
     pub fn has_project_custom_subagent(&self, agent_id: &str) -> bool {
@@ -231,9 +315,7 @@ impl AgentRegistry {
         })
     }
 
-    /// update custom subagent configuration and save to file
-    /// use as_any() downcast to get prompt etc. data from memory, no need to re-read file
-    pub fn update_and_save_custom_subagent_config(
+    pub fn update_and_save_custom_agent_config(
         &self,
         agent_id: &str,
         model: Option<String>,
@@ -247,22 +329,31 @@ impl AgentRegistry {
 
         let workspace_root = workspace_root.ok_or_else(|| {
             BitFunError::agent(format!(
-                "workspace_path is required to update project subagent '{}'",
+                "workspace_path is required to update project custom agent '{}'",
                 agent_id
             ))
         })?;
         let mut project_maps = self.write_project_subagents();
         let entries = project_maps.get_mut(workspace_root).ok_or_else(|| {
             BitFunError::agent(format!(
-                "Project subagents are not loaded for workspace: {}",
+                "Project custom agents are not loaded for workspace: {}",
                 workspace_root.display()
             ))
         })?;
         let entry = entries
             .get_mut(agent_id)
-            .ok_or_else(|| BitFunError::agent(format!("Subagent not found: {}", agent_id)))?;
+            .ok_or_else(|| BitFunError::agent(format!("Agent not found: {}", agent_id)))?;
 
         Self::update_custom_entry_config(agent_id, entry, model)
+    }
+
+    pub fn update_and_save_custom_subagent_config(
+        &self,
+        agent_id: &str,
+        model: Option<String>,
+        workspace_root: Option<&Path>,
+    ) -> BitFunResult<()> {
+        self.update_and_save_custom_agent_config(agent_id, model, workspace_root)
     }
 
     fn update_custom_entry_config(
@@ -270,107 +361,250 @@ impl AgentRegistry {
         entry: &mut AgentEntry,
         model: Option<String>,
     ) -> BitFunResult<()> {
-        if entry.category != AgentCategory::SubAgent {
-            return Err(BitFunError::agent(format!(
-                "Agent '{}' is not a subagent",
-                agent_id
-            )));
-        }
-
         let config = entry.custom_config.as_mut().ok_or_else(|| {
-            BitFunError::agent(format!("Subagent '{}' is not a custom subagent", agent_id))
+            BitFunError::agent(format!(
+                "Agent '{}' is not a custom file-backed agent",
+                agent_id
+            ))
         })?;
 
-        // calculate new model value
         let new_model = model.unwrap_or_else(|| config.model.clone());
 
-        // get CustomSubagent reference by as_any() downcast
+        if let Some(custom_mode) = entry.agent.as_any().downcast_ref::<CustomMode>() {
+            custom_mode.save_to_file(Some(&new_model))?;
+            config.model = new_model;
+            return Ok(());
+        }
+
         let custom_subagent = entry
             .agent
             .as_any()
             .downcast_ref::<CustomSubagent>()
             .ok_or_else(|| {
                 BitFunError::agent(format!(
-                    "Failed to downcast agent '{}' to CustomSubagent",
+                    "Failed to downcast agent '{}' to a custom file-backed agent",
                     agent_id
                 ))
             })?;
 
-        // save file with data in memory (no need to re-read)
         custom_subagent.save_to_file(Some(&new_model))?;
-
-        // update memory cache
         config.model = new_model;
-
         Ok(())
     }
 
-    /// Load custom subagents if needed, then return full definition for the editor UI
+    pub async fn get_custom_agent_detail(
+        &self,
+        agent_id: &str,
+        workspace_root: Option<&Path>,
+    ) -> BitFunResult<CustomAgentDetail> {
+        self.ensure_user_custom_agents_loaded().await;
+        if let Some(root) = workspace_root {
+            self.load_custom_agents(Some(root)).await;
+        }
+        self.get_custom_agent_detail_inner(agent_id, workspace_root)
+    }
+
     pub async fn get_custom_subagent_detail(
         &self,
         agent_id: &str,
         workspace_root: Option<&Path>,
-    ) -> BitFunResult<CustomSubagentDetail> {
-        if let Some(root) = workspace_root {
-            self.load_custom_subagents(root).await;
-        }
-        self.get_custom_subagent_detail_inner(agent_id, workspace_root)
-    }
-
-    fn get_custom_subagent_detail_inner(
-        &self,
-        agent_id: &str,
-        workspace_root: Option<&Path>,
-    ) -> BitFunResult<CustomSubagentDetail> {
-        let entry = self
-            .find_agent_entry(agent_id, workspace_root)
-            .ok_or_else(|| BitFunError::agent(format!("Subagent not found: {}", agent_id)))?;
-        if entry.category != AgentCategory::SubAgent {
+    ) -> BitFunResult<CustomAgentDetail> {
+        let detail = self
+            .get_custom_agent_detail(agent_id, workspace_root)
+            .await?;
+        if detail.kind != "subagent" {
             return Err(BitFunError::agent(format!(
                 "Agent '{}' is not a subagent",
                 agent_id
             )));
         }
-        if entry.subagent_source == Some(SubAgentSource::Builtin) {
+        Ok(detail)
+    }
+
+    fn get_custom_agent_detail_inner(
+        &self,
+        agent_id: &str,
+        workspace_root: Option<&Path>,
+    ) -> BitFunResult<CustomAgentDetail> {
+        let entry = self
+            .find_agent_entry(agent_id, workspace_root)
+            .ok_or_else(|| BitFunError::agent(format!("Agent not found: {}", agent_id)))?;
+        if entry.source == AgentSource::Builtin {
             return Err(BitFunError::agent(
-                "Built-in subagents cannot be edited here".to_string(),
+                "Built-in agents cannot be edited here".to_string(),
             ));
         }
+
+        if let Some(custom) = entry.agent.as_any().downcast_ref::<CustomMode>() {
+            return Ok(Self::build_custom_agent_detail(
+                &custom.data,
+                &entry,
+                "mode",
+            ));
+        }
+
         let custom = entry
             .agent
             .as_any()
             .downcast_ref::<CustomSubagent>()
             .ok_or_else(|| {
-                BitFunError::agent(format!(
-                    "Subagent '{}' is not a custom subagent file",
-                    agent_id
-                ))
+                BitFunError::agent(format!("Agent '{}' is not a custom agent file", agent_id))
             })?;
-        let model = match &entry.custom_config {
-            Some(c) => c.model.clone(),
-            None => custom.model.clone(),
-        };
-        let enabled = resolve_default_enabled(&entry, None);
-        let level = match custom.kind {
-            CustomSubagentKind::User => "user",
-            CustomSubagentKind::Project => "project",
-        };
-        Ok(CustomSubagentDetail {
-            subagent_id: agent_id.to_string(),
-            name: custom.name.clone(),
-            description: custom.description.clone(),
-            prompt: custom.prompt.clone(),
-            tools: custom.tools.clone(),
-            readonly: custom.readonly,
-            review: custom.review,
-            enabled,
-            model,
-            path: custom.path.clone(),
-            level: level.to_string(),
-        })
+
+        Ok(Self::build_custom_agent_detail(
+            &custom.data,
+            &entry,
+            "subagent",
+        ))
     }
 
-    /// Update description, prompt, tools, and readonly for a custom sub-agent (id and file path unchanged)
+    fn build_custom_agent_detail(
+        data: &CustomAgentData,
+        entry: &AgentEntry,
+        kind: &str,
+    ) -> CustomAgentDetail {
+        let level = match data.level {
+            CustomAgentLevel::User => "user",
+            CustomAgentLevel::Project => "project",
+        };
+        CustomAgentDetail {
+            agent_id: data.id.clone(),
+            kind: kind.to_string(),
+            name: data.name.clone(),
+            description: data.description.clone(),
+            prompt: data.prompt.clone(),
+            tools: data.tools.clone(),
+            readonly: data.readonly,
+            review: data.review,
+            model: entry
+                .custom_config
+                .as_ref()
+                .map(|config| config.model.clone())
+                .unwrap_or_else(|| data.model.clone()),
+            path: data.path.clone(),
+            user_context_policy: data
+                .user_context_policy
+                .sections
+                .iter()
+                .map(|section| match section {
+                    bitfun_agent_runtime::prompt::UserContextSection::WorkspaceContext => {
+                        "workspace_context"
+                    }
+                    bitfun_agent_runtime::prompt::UserContextSection::WorkspaceInstructions => {
+                        "workspace_instructions"
+                    }
+                    bitfun_agent_runtime::prompt::UserContextSection::WorkspaceMemoryFiles => {
+                        "workspace_memory_files"
+                    }
+                    bitfun_agent_runtime::prompt::UserContextSection::ProjectLayout => {
+                        "project_layout"
+                    }
+                })
+                .map(str::to_string)
+                .collect(),
+            level: level.to_string(),
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn update_custom_agent_definition(
+        &self,
+        agent_id: &str,
+        workspace_root: Option<&Path>,
+        name: String,
+        description: String,
+        prompt: String,
+        tools: Option<Vec<String>>,
+        readonly: Option<bool>,
+        review: Option<bool>,
+        user_context_policy: Option<bitfun_agent_runtime::prompt::UserContextPolicy>,
+        model: Option<String>,
+    ) -> BitFunResult<()> {
+        self.ensure_user_custom_agents_loaded().await;
+        if let Some(root) = workspace_root {
+            self.load_custom_agents(Some(root)).await;
+        }
+        let entry = self
+            .find_agent_entry(agent_id, workspace_root)
+            .ok_or_else(|| BitFunError::agent(format!("Agent not found: {}", agent_id)))?;
+        if entry.source == AgentSource::Builtin {
+            return Err(BitFunError::agent(
+                "Built-in agents cannot be edited".to_string(),
+            ));
+        }
+
+        let readonly_tools = get_readonly_registered_tool_names().await;
+        let valid_tools = get_all_registered_tool_names().await;
+        let valid_models = Self::get_valid_model_ids().await;
+
+        let replacement = if let Some(old) = entry.agent.as_any().downcast_ref::<CustomMode>() {
+            let mut definition = old.data.to_definition(model.as_deref());
+            let used_default_tools = tools.is_none();
+            definition.name = name;
+            definition.description = description;
+            definition.prompt = prompt;
+            definition.tools = tools
+                .filter(|value| !value.is_empty())
+                .unwrap_or_else(|| default_custom_agent_tools(CustomAgentKind::Mode));
+            definition.readonly = readonly.unwrap_or(old.data.readonly);
+            definition.user_context_policy =
+                user_context_policy.unwrap_or_else(|| old.data.user_context_policy.clone());
+            Self::validate_custom_agent(
+                &mut definition,
+                &CustomAgentFrontMatterMetadata {
+                    used_default_tools,
+                    ..Default::default()
+                },
+                &valid_tools,
+                &readonly_tools,
+                &valid_models,
+            );
+            custom_agent_from_definition(old.data.path.clone(), definition)
+        } else {
+            let old = entry
+                .agent
+                .as_any()
+                .downcast_ref::<CustomSubagent>()
+                .ok_or_else(|| {
+                    BitFunError::agent(format!("Agent '{}' is not a custom agent file", agent_id))
+                })?;
+            let review = review.unwrap_or(old.data.review);
+            let tools = tools
+                .filter(|value| !value.is_empty())
+                .unwrap_or_else(|| default_custom_agent_tools(CustomAgentKind::Subagent));
+            if review {
+                Self::ensure_review_tools_are_readonly(agent_id, &tools, &readonly_tools)?;
+            }
+            let mut definition = old.data.to_definition(model.as_deref());
+            definition.name = name;
+            definition.description = description;
+            definition.prompt = prompt;
+            definition.tools = tools;
+            definition.readonly = if review {
+                true
+            } else {
+                readonly.unwrap_or(old.data.readonly)
+            };
+            definition.review = review;
+            definition.user_context_policy =
+                user_context_policy.unwrap_or_else(|| old.data.user_context_policy.clone());
+            Self::validate_custom_agent(
+                &mut definition,
+                &CustomAgentFrontMatterMetadata {
+                    used_default_tools: false,
+                    ..Default::default()
+                },
+                &valid_tools,
+                &readonly_tools,
+                &valid_models,
+            );
+            custom_agent_from_definition(old.data.path.clone(), definition)
+        };
+
+        save_runtime_custom_agent(&replacement, model.as_deref())?;
+        self.replace_custom_agent_entry(agent_id, workspace_root, replacement)
+    }
+
     pub async fn update_custom_subagent_definition(
         &self,
         agent_id: &str,
@@ -381,108 +615,51 @@ impl AgentRegistry {
         readonly: Option<bool>,
         review: Option<bool>,
     ) -> BitFunResult<()> {
-        if let Some(root) = workspace_root {
-            self.load_custom_subagents(root).await;
-        }
-        let entry = self
-            .find_agent_entry(agent_id, workspace_root)
-            .ok_or_else(|| BitFunError::agent(format!("Subagent not found: {}", agent_id)))?;
-        if entry.category != AgentCategory::SubAgent {
-            return Err(BitFunError::agent(format!(
-                "Agent '{}' is not a subagent",
-                agent_id
-            )));
-        }
-        if entry.subagent_source == Some(SubAgentSource::Builtin) {
-            return Err(BitFunError::agent(
-                "Built-in subagents cannot be edited".to_string(),
-            ));
-        }
-        let old = entry
-            .agent
-            .as_any()
-            .downcast_ref::<CustomSubagent>()
-            .ok_or_else(|| {
-                BitFunError::agent(format!(
-                    "Subagent '{}' is not a custom subagent file",
-                    agent_id
-                ))
-            })?;
-        let tools = tools.filter(|t| !t.is_empty()).unwrap_or_else(|| {
-            vec![
-                "LS".to_string(),
-                "Read".to_string(),
-                "Glob".to_string(),
-                "Grep".to_string(),
-            ]
-        });
-        let review = review.unwrap_or(old.review);
-        let valid_tools = get_all_registered_tool_names().await;
-        let readonly_tools = get_readonly_registered_tool_names().await;
-        if review {
-            Self::ensure_review_tools_are_readonly(agent_id, &tools, &readonly_tools)?;
-        }
-        let mut new_subagent = CustomSubagent::new(
-            old.name.clone(),
+        let detail = self
+            .get_custom_subagent_detail(agent_id, workspace_root)
+            .await?;
+        self.update_custom_agent_definition(
+            agent_id,
+            workspace_root,
+            detail.name,
             description,
-            tools,
             prompt,
-            if review {
-                true
-            } else {
-                readonly.unwrap_or(old.readonly)
-            },
-            old.path.clone(),
-            old.kind,
-        );
-        new_subagent.review = review;
-        new_subagent.model = old.model.clone();
-
-        let valid_models = Self::get_valid_model_ids().await;
-        Self::validate_custom_subagent(
-            &mut new_subagent,
-            &valid_tools,
-            &readonly_tools,
-            &valid_models,
-        );
-
-        new_subagent.save_to_file(None)?;
-
-        self.replace_custom_subagent_entry(agent_id, workspace_root, new_subagent)
+            tools,
+            readonly,
+            review,
+            None,
+            None,
+        )
+        .await
     }
 
-    fn replace_custom_subagent_entry(
+    fn replace_custom_agent_entry(
         &self,
         agent_id: &str,
         workspace_root: Option<&Path>,
-        new_subagent: CustomSubagent,
+        new_agent: Arc<dyn Agent>,
     ) -> BitFunResult<()> {
         let mut map = self.write_agents();
         if map.contains_key(agent_id) {
             let old_entry = map
                 .get(agent_id)
-                .ok_or_else(|| BitFunError::agent(format!("Subagent not found: {}", agent_id)))?;
-            if old_entry.category != AgentCategory::SubAgent {
-                return Err(BitFunError::agent(format!(
-                    "Agent '{}' is not a subagent",
-                    agent_id
-                )));
-            }
-            if old_entry.subagent_source == Some(SubAgentSource::Builtin) {
+                .ok_or_else(|| BitFunError::agent(format!("Agent not found: {}", agent_id)))?;
+            if old_entry.source == AgentSource::Builtin {
                 return Err(BitFunError::agent(
-                    "Cannot replace built-in subagent".to_string(),
+                    "Cannot replace built-in agent".to_string(),
                 ));
             }
+            let category = old_entry.category;
+            let source = old_entry.source;
             let subagent_source = old_entry.subagent_source;
-            let cfg = CustomSubagentConfig {
-                model: new_subagent.model.clone(),
-            };
+            let cfg = custom_config_from_agent(new_agent.as_ref())?;
             map.insert(
                 agent_id.to_string(),
                 AgentEntry {
-                    category: AgentCategory::SubAgent,
+                    category,
+                    source,
                     subagent_source,
-                    agent: Arc::new(new_subagent),
+                    agent: new_agent,
                     visibility_policy: SubagentVisibilityPolicy::public(),
                     custom_config: Some(cfg),
                 },
@@ -500,28 +677,23 @@ impl AgentRegistry {
         })?;
         let old_entry = entries
             .get(agent_id)
-            .ok_or_else(|| BitFunError::agent(format!("Subagent not found: {}", agent_id)))?;
-        if old_entry.category != AgentCategory::SubAgent {
-            return Err(BitFunError::agent(format!(
-                "Agent '{}' is not a subagent",
-                agent_id
-            )));
-        }
-        if old_entry.subagent_source == Some(SubAgentSource::Builtin) {
+            .ok_or_else(|| BitFunError::agent(format!("Agent not found: {}", agent_id)))?;
+        if old_entry.source == AgentSource::Builtin {
             return Err(BitFunError::agent(
-                "Cannot replace built-in subagent".to_string(),
+                "Cannot replace built-in agent".to_string(),
             ));
         }
+        let category = old_entry.category;
+        let source = old_entry.source;
         let subagent_source = old_entry.subagent_source;
-        let cfg = CustomSubagentConfig {
-            model: new_subagent.model.clone(),
-        };
+        let cfg = custom_config_from_agent(new_agent.as_ref())?;
         entries.insert(
             agent_id.to_string(),
             AgentEntry {
-                category: AgentCategory::SubAgent,
+                category,
+                source,
                 subagent_source,
-                agent: Arc::new(new_subagent),
+                agent: new_agent,
                 visibility_policy: SubagentVisibilityPolicy::public(),
                 custom_config: Some(cfg),
             },
@@ -529,28 +701,16 @@ impl AgentRegistry {
         Ok(())
     }
 
-    /// remove single non-built-in subagent, return its file path (used for caller to delete file)
-    /// only allow removing entries that are SubAgent and not Builtin
-    pub fn remove_subagent(&self, agent_id: &str) -> BitFunResult<Option<String>> {
+    pub fn remove_custom_agent(&self, agent_id: &str) -> BitFunResult<Option<String>> {
         let mut map = self.write_agents();
         if let Some(entry) = map.get(agent_id) {
-            if entry.category != AgentCategory::SubAgent {
+            if entry.source == AgentSource::Builtin {
                 return Err(BitFunError::agent(format!(
-                    "Agent '{}' is not a subagent",
+                    "Cannot remove built-in agent: {}",
                     agent_id
                 )));
             }
-            if entry.subagent_source == Some(SubAgentSource::Builtin) {
-                return Err(BitFunError::agent(format!(
-                    "Cannot remove built-in subagent: {}",
-                    agent_id
-                )));
-            }
-            let path = entry
-                .agent
-                .as_any()
-                .downcast_ref::<CustomSubagent>()
-                .map(|c| c.path.clone());
+            let path = custom_agent_path(entry.agent.as_ref());
             map.remove(agent_id);
             return Ok(path);
         }
@@ -559,26 +719,31 @@ impl AgentRegistry {
         let mut project_maps = self.write_project_subagents();
         for entries in project_maps.values_mut() {
             if let Some(entry) = entries.get(agent_id) {
-                if entry.category != AgentCategory::SubAgent {
-                    return Err(BitFunError::agent(format!(
-                        "Agent '{}' is not a subagent",
-                        agent_id
-                    )));
-                }
-                let path = entry
-                    .agent
-                    .as_any()
-                    .downcast_ref::<CustomSubagent>()
-                    .map(|c| c.path.clone());
+                let path = custom_agent_path(entry.agent.as_ref());
                 entries.remove(agent_id);
                 return Ok(path);
             }
         }
 
-        Err(BitFunError::agent(format!(
-            "Subagent not found: {}",
-            agent_id
-        )))
+        Err(BitFunError::agent(format!("Agent not found: {}", agent_id)))
+    }
+
+    pub fn remove_subagent(&self, agent_id: &str) -> BitFunResult<Option<String>> {
+        let entry = self
+            .find_agent_entry(agent_id, None)
+            .or_else(|| {
+                self.read_project_subagents()
+                    .values()
+                    .find_map(|entries| entries.get(agent_id).cloned())
+            })
+            .ok_or_else(|| BitFunError::agent(format!("Subagent not found: {}", agent_id)))?;
+        if entry.category != AgentCategory::SubAgent {
+            return Err(BitFunError::agent(format!(
+                "Agent '{}' is not a subagent",
+                agent_id
+            )));
+        }
+        self.remove_custom_agent(agent_id)
     }
 
     pub async fn update_subagent_override(
@@ -667,16 +832,53 @@ impl AgentRegistry {
     }
 }
 
-fn custom_subagent_discovery_roots(workspace_root: &Path) -> CustomSubagentDiscoveryRoots {
-    CustomSubagentDiscoveryRoots {
-        workspace_root: workspace_root.to_path_buf(),
+fn custom_agent_discovery_roots(workspace_root: Option<&Path>) -> CustomAgentDiscoveryRoots {
+    CustomAgentDiscoveryRoots {
+        workspace_root: workspace_root.map(Path::to_path_buf),
         bitfun_user_agents_dir: Some(get_path_manager_arc().user_agents_dir()),
         home_dir: dirs::home_dir(),
     }
 }
 
-fn custom_subagent_from_loaded_definition(
-    loaded: LoadedCustomSubagentDefinition,
-) -> CustomSubagent {
-    CustomSubagent::from_definition(loaded.path.to_string_lossy().to_string(), loaded.definition)
+fn custom_agent_from_definition(path: String, definition: CustomAgentDefinition) -> Arc<dyn Agent> {
+    match definition.kind {
+        CustomAgentKind::Mode => Arc::new(CustomMode::from_definition(path, definition)),
+        CustomAgentKind::Subagent => Arc::new(CustomSubagent::from_definition(path, definition)),
+    }
+}
+
+fn save_runtime_custom_agent(agent: &Arc<dyn Agent>, model: Option<&str>) -> BitFunResult<()> {
+    if let Some(custom_mode) = agent.as_any().downcast_ref::<CustomMode>() {
+        return custom_mode.save_to_file(model);
+    }
+    let custom_subagent = agent
+        .as_any()
+        .downcast_ref::<CustomSubagent>()
+        .ok_or_else(|| BitFunError::agent("Failed to save custom agent".to_string()))?;
+    custom_subagent.save_to_file(model)
+}
+
+fn custom_config_from_agent(agent: &dyn Agent) -> BitFunResult<CustomAgentConfig> {
+    if let Some(custom_mode) = agent.as_any().downcast_ref::<CustomMode>() {
+        return Ok(CustomAgentConfig {
+            model: custom_mode.data.model.clone(),
+        });
+    }
+    let custom_subagent = agent
+        .as_any()
+        .downcast_ref::<CustomSubagent>()
+        .ok_or_else(|| BitFunError::agent("Failed to read custom agent config".to_string()))?;
+    Ok(CustomAgentConfig {
+        model: custom_subagent.data.model.clone(),
+    })
+}
+
+fn custom_agent_path(agent: &dyn Agent) -> Option<String> {
+    if let Some(custom_mode) = agent.as_any().downcast_ref::<CustomMode>() {
+        return Some(custom_mode.data.path.clone());
+    }
+    agent
+        .as_any()
+        .downcast_ref::<CustomSubagent>()
+        .map(|custom_subagent| custom_subagent.data.path.clone())
 }

@@ -5,6 +5,7 @@
 
 pub mod agents;
 pub mod checkpoint;
+pub mod custom_agent;
 pub mod custom_subagent;
 pub mod deep_research;
 pub mod deep_review;

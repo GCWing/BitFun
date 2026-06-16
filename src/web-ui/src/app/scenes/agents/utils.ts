@@ -1,6 +1,11 @@
 import type { TFunction } from 'i18next';
-import type { SubagentSource } from '@/infrastructure/api/service-api/SubagentAPI';
-import type { AgentKind, AgentWithCapabilities, CapabilityCategory } from './agentsStore';
+import type { AgentSource } from '@/infrastructure/api/service-api/CustomAgentAPI';
+import {
+  CAPABILITY_CATEGORIES,
+  type AgentKind,
+  type AgentWithCapabilities,
+  type CapabilityCategory,
+} from './agentsStore';
 
 const MODE_DESCRIPTION_KEY_BY_ID: Record<string, string> = {
   agentic: 'Agentic',
@@ -25,8 +30,11 @@ const LEGACY_CAPABILITY_CATEGORY_MAP: Record<string, CapabilityCategory> = {
   '\u8fd0\u7ef4': 'ops',
 };
 
-function normalizeCapabilityCategory(category: string): CapabilityCategory {
-  return LEGACY_CAPABILITY_CATEGORY_MAP[category] ?? 'analysis';
+function normalizeCapabilityCategory(category: string): CapabilityCategory | null {
+  if ((CAPABILITY_CATEGORIES as readonly string[]).includes(category)) {
+    return category as CapabilityCategory;
+  }
+  return LEGACY_CAPABILITY_CATEGORY_MAP[category] ?? null;
 }
 
 function getCapabilityLabel(
@@ -39,9 +47,15 @@ function getCapabilityLabel(
 function getAgentBadge(
   t: TFunction<'scenes/agents'>,
   agentKind?: AgentKind,
-  source?: SubagentSource,
+  source?: AgentSource,
 ): AgentBadgeConfig {
   if (agentKind === 'mode') {
+    if (source === 'user') {
+      return { variant: 'success', label: t('agentCard.badges.userMode') };
+    }
+    if (source === 'project') {
+      return { variant: 'purple', label: t('agentCard.badges.projectMode') };
+    }
     return { variant: 'accent', label: t('agentCard.badges.agent') };
   }
 
@@ -77,18 +91,25 @@ function getAgentDescription(
   return fallback;
 }
 
+function codingAnalysisCapabilities() {
+  return [{ category: 'coding' as const, level: 4 }, { category: 'analysis' as const, level: 4 }];
+}
+
+function analysisCapabilities() {
+  return [{ category: 'analysis' as const, level: 4 }];
+}
+
 function enrichCapabilities(agent: AgentWithCapabilities): AgentWithCapabilities {
   if (agent.capabilities?.length) {
     return {
       ...agent,
-      capabilities: agent.capabilities.map((cap) => ({
-        ...cap,
-        category: normalizeCapabilityCategory(cap.category),
-      })),
+      capabilities: agent.capabilities.flatMap((cap) => {
+        const category = normalizeCapabilityCategory(cap.category);
+        return category ? [{ ...cap, category }] : [];
+      }),
     };
   }
   const id = agent.id.toLowerCase();
-  const name = agent.name.toLowerCase();
 
   if (agent.agentKind === 'mode') {
     if (id === 'agentic') return { ...agent, capabilities: [{ category: 'coding', level: 5 }, { category: 'analysis', level: 4 }] };
@@ -97,19 +118,16 @@ function enrichCapabilities(agent: AgentWithCapabilities): AgentWithCapabilities
     if (id === 'cowork') return { ...agent, capabilities: [{ category: 'analysis', level: 4 }, { category: 'creative', level: 3 }] };
     if (id === 'computeruse') return { ...agent, capabilities: [{ category: 'ops', level: 5 }, { category: 'analysis', level: 3 }] };
     if (id === 'deepresearch') return { ...agent, capabilities: [{ category: 'analysis', level: 5 }, { category: 'docs', level: 4 }] };
+    if (id === 'multitask') return { ...agent, capabilities: codingAnalysisCapabilities() };
+    if (id === 'team') return { ...agent, capabilities: analysisCapabilities() };
   }
 
-  if (id === 'explore') return { ...agent, capabilities: [{ category: 'analysis', level: 4 }] };
-  if (id === 'file_finder') return { ...agent, capabilities: [{ category: 'analysis', level: 3 }, { category: 'coding', level: 2 }] };
-
-  if (name.includes('code') || name.includes('debug') || name.includes('test')) {
-    return { ...agent, capabilities: [{ category: 'coding', level: 4 }] };
-  }
-  if (name.includes('doc') || name.includes('write')) {
-    return { ...agent, capabilities: [{ category: 'docs', level: 4 }] };
+  if (id === 'explore' || id === 'filefinder' || id === 'researchspecialist') return { ...agent, capabilities: [{ category: 'analysis', level: 4 }] };
+  if (id === 'generalpurpose' || id === 'reviewfixer') {
+    return { ...agent, capabilities: codingAnalysisCapabilities() };
   }
 
-  return { ...agent, capabilities: [{ category: 'analysis', level: 3 }] };
+  return { ...agent, capabilities: [] };
 }
 
 export { getAgentBadge, getCapabilityLabel, getAgentDescription, enrichCapabilities };

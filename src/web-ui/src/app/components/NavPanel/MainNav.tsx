@@ -27,6 +27,7 @@ import { useSceneStore } from '../../stores/sceneStore';
 import { useMyAgentStore } from '../../scenes/my-agent/myAgentStore';
 import { useMiniAppCatalogSync } from '../../scenes/miniapps/hooks/useMiniAppCatalogSync';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
+import { resolveAgentTypeForSessionCreation } from '@/flow_chat/services/flow-chat-manager';
 import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { createLogger } from '@/shared/utils/logger';
@@ -217,12 +218,13 @@ const MainNav: React.FC<MainNavProps> = ({
         if (target.id !== currentWorkspace?.id) {
           await setActiveWorkspace(target.id);
         }
-        const reusableId = findReusableEmptySessionId(target, mode);
+        const effectiveMode = await resolveAgentTypeForSessionCreation(mode, target);
+        const reusableId = findReusableEmptySessionId(target, effectiveMode);
         if (reusableId) {
           await flowChatManager.switchChatSession(reusableId);
           return;
         }
-        await flowChatManager.createChatSession(flowChatSessionConfigForWorkspace(target), mode);
+        await flowChatManager.createChatSession(flowChatSessionConfigForWorkspace(target), effectiveMode);
       } catch (err) {
         log.error('Failed to create session', err);
       }

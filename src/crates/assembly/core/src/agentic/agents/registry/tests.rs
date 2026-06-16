@@ -1,9 +1,9 @@
 use super::support::merge_dynamic_mcp_tools;
 use super::AgentRegistry;
-use crate::agentic::agents::definitions::custom::{CustomSubagent, CustomSubagentKind};
+use crate::agentic::agents::definitions::custom::{CustomMode, CustomSubagent, CustomSubagentKind};
 use crate::agentic::agents::registry::builtin::default_model_id_for_builtin_agent;
 use crate::agentic::agents::registry::types::{
-    subagent_source_from_custom_kind, AgentCategory, AgentEntry, CustomSubagentConfig,
+    subagent_source_from_custom_kind, AgentCategory, AgentEntry, AgentSource, CustomSubagentConfig,
     SubAgentSource, SubagentListScope, SubagentOverrideState, SubagentQueryContext,
 };
 use crate::agentic::agents::registry::visibility::{
@@ -12,6 +12,10 @@ use crate::agentic::agents::registry::visibility::{
 use crate::agentic::agents::{resolve_mode_config_profile_id, Agent, UserContextPolicy};
 use crate::service::config::types::AgentSubagentOverrideState;
 use async_trait::async_trait;
+use bitfun_agent_runtime::custom_agent::{
+    custom_agent_save_markdown_file, CustomAgentDefinition, CustomAgentDiscoveryRoots,
+    CustomAgentKind, CustomAgentLevel,
+};
 use bitfun_agent_runtime::sdk::{RuntimeAgentRegistry, RuntimeAgentRegistryQuery};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -55,6 +59,7 @@ impl Agent for TestAgent {
 fn test_project_entry(id: &str, model: &str) -> AgentEntry {
     AgentEntry {
         category: AgentCategory::SubAgent,
+        source: AgentSource::Project,
         subagent_source: Some(SubAgentSource::Project),
         agent: Arc::new(TestAgent { id: id.to_string() }),
         visibility_policy: SubagentVisibilityPolicy::public(),
@@ -350,6 +355,7 @@ async fn prompt_stability_task_visible_subagents_are_sorted_deterministically() 
             id: "zBuiltin".to_string(),
         }),
         AgentCategory::SubAgent,
+        AgentSource::Builtin,
         Some(SubAgentSource::Builtin),
         None,
     );
@@ -358,6 +364,7 @@ async fn prompt_stability_task_visible_subagents_are_sorted_deterministically() 
             id: "ABuiltin".to_string(),
         }),
         AgentCategory::SubAgent,
+        AgentSource::Builtin,
         Some(SubAgentSource::Builtin),
         None,
     );
@@ -380,6 +387,7 @@ async fn prompt_stability_task_visible_subagents_are_sorted_deterministically() 
             id: "zUser".to_string(),
         }),
         AgentCategory::SubAgent,
+        AgentSource::User,
         Some(SubAgentSource::User),
         Some(CustomSubagentConfig {
             model: "fast".to_string(),
@@ -390,11 +398,13 @@ async fn prompt_stability_task_visible_subagents_are_sorted_deterministically() 
             id: "AUser".to_string(),
         }),
         AgentCategory::SubAgent,
+        AgentSource::User,
         Some(SubAgentSource::User),
         Some(CustomSubagentConfig {
             model: "fast".to_string(),
         }),
     );
+    registry.set_user_custom_agents_loaded(true);
 
     let visible = registry
         .get_subagents_for_query(&SubagentQueryContext {
@@ -437,17 +447,20 @@ async fn parent_subagent_overrides_follow_source_scopes() {
             CustomSubagentKind::User,
         )),
         AgentCategory::SubAgent,
+        AgentSource::User,
         Some(SubAgentSource::User),
         Some(CustomSubagentConfig {
             model: "fast".to_string(),
         }),
     );
+    registry.set_user_custom_agents_loaded(true);
 
     let mut project_entries = HashMap::new();
     project_entries.insert(
         "ProjectScout".to_string(),
         AgentEntry {
             category: AgentCategory::SubAgent,
+            source: AgentSource::Project,
             subagent_source: Some(SubAgentSource::Project),
             agent: Arc::new(CustomSubagent::new(
                 "ProjectScout".to_string(),
@@ -558,4 +571,372 @@ async fn parent_subagent_overrides_follow_source_scopes() {
         visible.2.override_state,
         Some(SubagentOverrideState::Disabled)
     );
+}
+
+#[tokio::test]
+async fn explicit_custom_mode_load_exposes_user_mode_metadata_in_modes_info() {
+    let env = CustomAgentTestEnv::new("bitfun-custom-mode-registry-load");
+    let registry = AgentRegistry::new();
+    let mode_path = env.user_agents_dir.join("planner-plus.md");
+    write_user_custom_mode(
+        &mode_path,
+        "PlannerPlus",
+        "Planner Plus",
+        vec!["Read".to_string(), "Grep".to_string()],
+        UserContextPolicy::empty()
+            .with_workspace_instructions()
+            .with_workspace_memory_files(),
+        "primary",
+        true,
+    );
+
+    registry
+        .load_custom_agents_from_test_roots(None, &env.discovery_roots(None))
+        .await;
+
+    let mode = registry
+        .get_modes_info()
+        .await
+        .into_iter()
+        .find(|agent| agent.id == "PlannerPlus")
+        .expect("custom mode should be present in modes info");
+
+    assert_eq!(mode.source, AgentSource::User);
+    assert_eq!(mode.path, Some(mode_path.to_string_lossy().to_string()));
+    assert_eq!(mode.model, Some("primary".to_string()));
+    assert_eq!(
+        mode.default_tools,
+        vec!["Read".to_string(), "Grep".to_string()]
+    );
+    assert!(mode.is_readonly);
+}
+
+#[tokio::test]
+async fn custom_mode_does_not_appear_in_subagent_list() {
+    let env = CustomAgentTestEnv::new("bitfun-custom-mode-registry-separation");
+    let registry = AgentRegistry::new();
+    write_user_custom_mode(
+        &env.user_agents_dir.join("planner-plus.md"),
+        "PlannerPlus",
+        "Planner Plus",
+        vec!["Read".to_string()],
+        UserContextPolicy::empty().with_workspace_instructions(),
+        "auto",
+        false,
+    );
+    write_user_custom_subagent(&env.user_agents_dir.join("helper.md"), "Helper");
+
+    registry
+        .load_custom_agents_from_test_roots(None, &env.discovery_roots(None))
+        .await;
+
+    let subagents = registry.get_subagents_info(None).await;
+    assert!(!subagents.iter().any(|agent| agent.id == "PlannerPlus"));
+    assert!(subagents.iter().any(|agent| agent.id == "Helper"));
+}
+
+#[tokio::test]
+async fn project_scoped_custom_mode_is_skipped_while_project_subagent_loads() {
+    let env = CustomAgentTestEnv::new("bitfun-custom-mode-registry-project");
+    let registry = AgentRegistry::new();
+    let workspace_root = env.workspace_root.clone();
+
+    write_project_custom_mode(
+        &env.workspace_agents_dir.join("project-mode.md"),
+        "ProjectPlanner",
+    );
+    write_project_custom_subagent(
+        &env.workspace_agents_dir.join("project-helper.md"),
+        "ProjectHelper",
+    );
+
+    registry
+        .load_custom_agents_from_test_roots(
+            Some(&workspace_root),
+            &env.discovery_roots(Some(workspace_root.clone())),
+        )
+        .await;
+
+    let modes = registry.get_modes_info().await;
+    let subagents = registry.get_subagents_info(Some(&workspace_root)).await;
+
+    assert!(!modes.iter().any(|agent| agent.id == "ProjectPlanner"));
+    assert!(subagents.iter().any(|agent| agent.id == "ProjectHelper"));
+}
+
+#[tokio::test]
+async fn custom_mode_detail_reports_kind_level_model_path_and_policy() {
+    let env = CustomAgentTestEnv::new("bitfun-custom-mode-registry-detail");
+    let registry = AgentRegistry::new();
+    let mode_path = env.user_agents_dir.join("planner-plus.md");
+    write_user_custom_mode(
+        &mode_path,
+        "PlannerPlus",
+        "Planner Plus",
+        vec!["Read".to_string(), "Grep".to_string()],
+        UserContextPolicy::empty()
+            .with_workspace_instructions()
+            .with_workspace_memory_files(),
+        "primary",
+        true,
+    );
+
+    registry
+        .load_custom_agents_from_test_roots(None, &env.discovery_roots(None))
+        .await;
+
+    let detail = registry
+        .get_custom_agent_detail("PlannerPlus", None)
+        .await
+        .expect("custom mode detail should load");
+
+    assert_eq!(detail.kind, "mode");
+    assert_eq!(detail.level, "user");
+    assert_eq!(detail.model, "primary");
+    assert_eq!(detail.path, mode_path.to_string_lossy().to_string());
+    assert_eq!(
+        detail.user_context_policy,
+        vec![
+            "workspace_instructions".to_string(),
+            "workspace_memory_files".to_string(),
+        ]
+    );
+    assert_eq!(detail.tools, vec!["Read".to_string(), "Grep".to_string()]);
+    assert!(detail.readonly);
+    assert!(!detail.review);
+}
+
+#[tokio::test]
+async fn updating_custom_mode_model_persists_and_keeps_mode_category() {
+    let env = CustomAgentTestEnv::new("bitfun-custom-mode-registry-update-model");
+    let registry = AgentRegistry::new();
+    let mode_path = env.user_agents_dir.join("planner-plus.md");
+    write_user_custom_mode(
+        &mode_path,
+        "PlannerPlus",
+        "Planner Plus",
+        vec!["Read".to_string()],
+        UserContextPolicy::empty().with_workspace_instructions(),
+        "auto",
+        false,
+    );
+
+    registry
+        .load_custom_agents_from_test_roots(None, &env.discovery_roots(None))
+        .await;
+    registry
+        .update_and_save_custom_agent_config("PlannerPlus", Some("primary".to_string()), None)
+        .expect("mode model update should save");
+
+    let mode = registry
+        .get_modes_info()
+        .await
+        .into_iter()
+        .find(|agent| agent.id == "PlannerPlus")
+        .expect("updated mode should still be present");
+    let saved = std::fs::read_to_string(&mode_path).expect("updated mode file should be readable");
+
+    assert_eq!(mode.model, Some("primary".to_string()));
+    assert_eq!(mode.source, AgentSource::User);
+    assert!(registry.get_mode_agent("PlannerPlus").is_some());
+    assert!(!registry
+        .get_subagents_info(None)
+        .await
+        .iter()
+        .any(|agent| agent.id == "PlannerPlus"));
+    assert!(saved.contains("kind: mode"));
+    assert!(saved.contains("model: primary"));
+}
+
+#[tokio::test]
+async fn updating_custom_mode_definition_rewrites_file_and_preserves_mode_kind() {
+    let env = CustomAgentTestEnv::new("bitfun-custom-mode-registry-update-definition");
+    let registry = AgentRegistry::new();
+    let mode_path = env.user_agents_dir.join("planner-plus.md");
+    write_user_custom_mode(
+        &mode_path,
+        "PlannerPlus",
+        "Planner Plus",
+        vec!["Read".to_string()],
+        UserContextPolicy::empty().with_workspace_instructions(),
+        "auto",
+        false,
+    );
+
+    registry
+        .load_custom_agents_from_test_roots(None, &env.discovery_roots(None))
+        .await;
+    registry
+        .update_custom_agent_definition(
+            "PlannerPlus",
+            None,
+            "Planner Pro".to_string(),
+            "Updated planning mode".to_string(),
+            "Always explain your plan first.".to_string(),
+            Some(vec!["Read".to_string(), "Grep".to_string()]),
+            Some(true),
+            None,
+            Some(
+                UserContextPolicy::empty()
+                    .with_workspace_context()
+                    .with_workspace_memory_files(),
+            ),
+            Some("primary".to_string()),
+        )
+        .await
+        .expect("mode definition update should save");
+
+    let detail = registry
+        .get_custom_agent_detail("PlannerPlus", None)
+        .await
+        .expect("updated mode detail should load");
+    let saved = std::fs::read_to_string(&mode_path).expect("updated mode file should be readable");
+
+    assert_eq!(detail.kind, "mode");
+    assert_eq!(detail.name, "Planner Pro");
+    assert_eq!(detail.description, "Updated planning mode");
+    assert_eq!(detail.prompt, "Always explain your plan first.");
+    assert_eq!(detail.model, "primary");
+    assert_eq!(detail.tools, vec!["Read".to_string(), "Grep".to_string()]);
+    assert_eq!(
+        detail.user_context_policy,
+        vec![
+            "workspace_context".to_string(),
+            "workspace_memory_files".to_string(),
+        ]
+    );
+    assert!(saved.contains("kind: mode"));
+    assert!(saved.contains("name: Planner Pro"));
+    assert!(saved.contains("model: primary"));
+    assert!(saved.contains("- workspace_context"));
+    assert!(saved.contains("- workspace_memory_files"));
+}
+
+struct CustomAgentTestEnv {
+    root: PathBuf,
+    workspace_root: PathBuf,
+    workspace_agents_dir: PathBuf,
+    user_agents_dir: PathBuf,
+}
+
+impl CustomAgentTestEnv {
+    fn new(prefix: &str) -> Self {
+        let root = std::env::temp_dir().join(format!("{prefix}-{}", unique_suffix()));
+        let workspace_root = root.join("workspace");
+        let workspace_agents_dir = workspace_root.join(".bitfun").join("agents");
+        let user_agents_dir = root.join("user-root").join("agents");
+        std::fs::create_dir_all(&workspace_agents_dir)
+            .expect("workspace agents dir should be created");
+        std::fs::create_dir_all(&user_agents_dir).expect("user agents dir should be created");
+
+        Self {
+            root,
+            workspace_root,
+            workspace_agents_dir,
+            user_agents_dir,
+        }
+    }
+
+    fn discovery_roots(&self, workspace_root: Option<PathBuf>) -> CustomAgentDiscoveryRoots {
+        CustomAgentDiscoveryRoots {
+            workspace_root,
+            bitfun_user_agents_dir: Some(self.user_agents_dir.clone()),
+            home_dir: None,
+        }
+    }
+}
+
+impl Drop for CustomAgentTestEnv {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.root);
+    }
+}
+
+fn write_user_custom_mode(
+    path: &Path,
+    id: &str,
+    name: &str,
+    tools: Vec<String>,
+    user_context_policy: UserContextPolicy,
+    model: &str,
+    readonly: bool,
+) {
+    let mode = CustomMode::new(
+        id.to_string(),
+        name.to_string(),
+        "User-defined custom mode".to_string(),
+        tools,
+        "Act as a focused project specialist.".to_string(),
+        readonly,
+        path.to_string_lossy().to_string(),
+        model.to_string(),
+        user_context_policy,
+    );
+    mode.save_to_file(None)
+        .expect("custom mode markdown should save");
+}
+
+fn write_project_custom_mode(path: &Path, id: &str) {
+    let definition = CustomAgentDefinition::from_front_matter_fields(
+        Some(id),
+        Some(id),
+        Some("Project custom mode"),
+        Some(CustomAgentKind::Mode),
+        None,
+        None,
+        None,
+        None,
+        None,
+        "Project-scoped modes should be rejected.".to_string(),
+        CustomAgentLevel::Project,
+    )
+    .expect("project mode definition should be valid")
+    .definition;
+    custom_agent_save_markdown_file(path, &definition).expect("project mode markdown should save");
+}
+
+fn write_user_custom_subagent(path: &Path, id: &str) {
+    let subagent = CustomSubagent::new_with_id(
+        id.to_string(),
+        id.to_string(),
+        "User helper subagent".to_string(),
+        vec!["Read".to_string()],
+        "Investigate the relevant files.".to_string(),
+        true,
+        path.to_string_lossy().to_string(),
+        CustomSubagentKind::User,
+        "fast".to_string(),
+        UserContextPolicy::empty().with_workspace_instructions(),
+    );
+    subagent
+        .save_to_file(None)
+        .expect("custom subagent markdown should save");
+}
+
+fn write_project_custom_subagent(path: &Path, id: &str) {
+    let subagent = CustomSubagent::new_with_id(
+        id.to_string(),
+        id.to_string(),
+        "Project helper subagent".to_string(),
+        vec!["Read".to_string()],
+        "Investigate the relevant files.".to_string(),
+        true,
+        path.to_string_lossy().to_string(),
+        CustomSubagentKind::Project,
+        "fast".to_string(),
+        UserContextPolicy::empty().with_workspace_instructions(),
+    );
+    subagent
+        .save_to_file(None)
+        .expect("project subagent markdown should save");
+}
+
+fn unique_suffix() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system time should be after UNIX epoch")
+        .as_nanos()
+        .to_string()
 }

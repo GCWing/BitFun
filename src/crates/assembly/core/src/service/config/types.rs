@@ -111,7 +111,7 @@ pub struct AppConfig {
     pub right_panel: RightPanelConfig,
     pub notifications: NotificationConfig,
     #[serde(default)]
-    pub session_config: AppSessionConfig,
+    pub flow_chat: AppFlowChatConfig,
     pub ai_experience: AIExperienceConfig,
     /// User-defined keyboard shortcut overrides.
     /// Stored as opaque JSON so the backend remains schema-agnostic;
@@ -154,13 +154,13 @@ pub struct ModelExchangeTracingConfig {
     pub mode: ModelExchangeTracingMode,
 }
 
-/// Session-related UI preferences.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// FlowChat UI preferences.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
-pub struct AppSessionConfig {
-    /// Default new session mode used by the frontend.
-    /// Supported values: "code", "cowork".
-    pub default_mode: String,
+pub struct AppFlowChatConfig {
+    /// Optional user override for the default ChatInput mode id.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_mode_id: Option<String>,
 }
 
 /// A user-defined quick action for the FlowChat post-coding actions menu.
@@ -1365,7 +1365,7 @@ impl Default for AppConfig {
                 dialog_completion_notify: true,
                 enable_startup_tips: true,
             },
-            session_config: AppSessionConfig::default(),
+            flow_chat: AppFlowChatConfig::default(),
             ai_experience: AIExperienceConfig::default(),
             keybindings: None,
             close_button_behavior: default_close_button_behavior(),
@@ -1388,14 +1388,6 @@ impl Default for ModelExchangeTracingConfig {
     fn default() -> Self {
         Self {
             mode: ModelExchangeTracingMode::Off,
-        }
-    }
-}
-
-impl Default for AppSessionConfig {
-    fn default() -> Self {
-        Self {
-            default_mode: "code".to_string(),
         }
     }
 }
@@ -1972,7 +1964,6 @@ mod tests {
                     "dialog_completion_notify": true,
                     "enable_startup_tips": true
                 },
-                "session_config": { "default_mode": "code" },
                 "ai_experience": {
                     "enable_session_title_generation": true,
                     "enable_welcome_panel_ai_analysis": false,
@@ -2002,6 +1993,44 @@ mod tests {
         assert_eq!(
             serialized["app"]["ai_experience"]["quick_actions"][0]["id"],
             "custom_1"
+        );
+    }
+
+    #[test]
+    fn legacy_app_session_config_is_ignored() {
+        let config: GlobalConfig = serde_json::from_value(serde_json::json!({
+            "app": {
+                "session_config": {
+                    "default_mode": "cowork"
+                }
+            }
+        }))
+        .expect("legacy app session config should be ignored");
+
+        let serialized = serde_json::to_value(&config).expect("config should serialize");
+        assert!(serialized["app"].get("session_config").is_none());
+    }
+
+    #[test]
+    fn app_flow_chat_default_mode_id_round_trips() {
+        let config: GlobalConfig = serde_json::from_value(serde_json::json!({
+            "app": {
+                "flow_chat": {
+                    "default_mode_id": "PlannerPlus"
+                }
+            }
+        }))
+        .expect("flow chat config should deserialize");
+
+        assert_eq!(
+            config.app.flow_chat.default_mode_id.as_deref(),
+            Some("PlannerPlus")
+        );
+
+        let serialized = serde_json::to_value(&config).expect("config should serialize");
+        assert_eq!(
+            serialized["app"]["flow_chat"]["default_mode_id"],
+            "PlannerPlus"
         );
     }
 

@@ -1,4 +1,4 @@
-use crate::agentic::agents::definitions::custom::{CustomSubagent, CustomSubagentKind};
+use crate::agentic::agents::definitions::custom::{CustomMode, CustomSubagent, CustomSubagentKind};
 use crate::agentic::agents::registry::visibility::{
     SubagentVisibilityPolicy, SubagentVisibilitySummary,
 };
@@ -15,15 +15,26 @@ pub use bitfun_agent_runtime::agents::{
     BuiltinAgentCategory as AgentCategory, SubAgentSource, SubagentListScope,
     SubagentOverrideState, SubagentQueryContext, SubagentStateReason,
 };
+use bitfun_agent_runtime::custom_agent::CustomAgentLevel;
 use bitfun_agent_runtime::prompt_cache::prompt_cache_scope_key;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-/// mutable configuration for custom subagent (model will change, path/kind can be obtained by downcast)
+/// Mutable configuration for file-backed custom agents.
 #[derive(Clone, Debug)]
-pub struct CustomSubagentConfig {
+pub struct CustomAgentConfig {
     /// used model ID
     pub model: String,
+}
+
+pub type CustomSubagentConfig = CustomAgentConfig;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AgentSource {
+    Builtin,
+    Project,
+    User,
 }
 
 #[derive(Debug, Clone)]
@@ -36,12 +47,13 @@ pub struct AgentToolPolicy {
 #[derive(Clone)]
 pub(crate) struct AgentEntry {
     pub(crate) category: AgentCategory,
+    pub(crate) source: AgentSource,
     /// only when category == SubAgent has value
     pub(crate) subagent_source: Option<SubAgentSource>,
     pub(crate) agent: Arc<dyn Agent>,
     pub(crate) visibility_policy: SubagentVisibilityPolicy,
-    /// custom subagent configuration (model), only user/project subagent has value
-    pub(crate) custom_config: Option<CustomSubagentConfig>,
+    /// file-backed custom agent configuration (model)
+    pub(crate) custom_config: Option<CustomAgentConfig>,
 }
 
 /// Information about a agent for frontend display
@@ -75,6 +87,7 @@ pub struct AgentInfo {
     pub override_state: Option<SubagentOverrideState>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub state_reason: Option<SubagentStateReason>,
+    pub source: AgentSource,
     /// subagent source, only subagent has value, used for frontend display
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subagent_source: Option<SubAgentSource>,
@@ -97,23 +110,24 @@ pub fn subagent_source_from_custom_kind(kind: CustomSubagentKind) -> SubAgentSou
     }
 }
 
+pub fn agent_source_from_custom_level(level: CustomAgentLevel) -> AgentSource {
+    match level {
+        CustomAgentLevel::Project => AgentSource::Project,
+        CustomAgentLevel::User => AgentSource::User,
+    }
+}
+
 pub fn subagent_key_for(source: Option<SubAgentSource>, agent: &dyn Agent) -> Option<String> {
     let source = source?;
     let slot = match source {
         SubAgentSource::Builtin => "builtin",
         SubAgentSource::Project => {
-            let custom = agent.as_any().downcast_ref::<CustomSubagent>()?;
-            match custom.kind {
-                CustomSubagentKind::Project => "bitfun",
-                CustomSubagentKind::User => "bitfun",
-            }
+            let _custom = agent.as_any().downcast_ref::<CustomSubagent>()?;
+            "bitfun"
         }
         SubAgentSource::User => {
-            let custom = agent.as_any().downcast_ref::<CustomSubagent>()?;
-            match custom.kind {
-                CustomSubagentKind::Project => "bitfun",
-                CustomSubagentKind::User => "bitfun",
-            }
+            let _custom = agent.as_any().downcast_ref::<CustomSubagent>()?;
+            "bitfun"
         }
     };
     let prefix = match source {
@@ -156,10 +170,7 @@ impl AgentInfo {
             .map(|config| config.model.clone());
 
         // get path by downcast to CustomSubagent (only custom subagent has path)
-        let path = agent
-            .as_any()
-            .downcast_ref::<CustomSubagent>()
-            .map(|c| c.path.clone());
+        let path = custom_agent_path(agent);
 
         AgentInfo {
             key: subagent_key_for(entry.subagent_source, agent)
@@ -182,6 +193,7 @@ impl AgentInfo {
             effective_enabled: true,
             override_state: None,
             state_reason: None,
+            source: entry.source,
             subagent_source: entry.subagent_source,
             path,
             model,
@@ -194,7 +206,7 @@ impl AgentInfo {
 pub(crate) fn is_review_agent_entry(entry: &AgentEntry) -> bool {
     let agent = entry.agent.as_ref();
     if let Some(custom) = agent.as_any().downcast_ref::<CustomSubagent>() {
-        return custom.review;
+        return custom.data.review;
     }
 
     matches!(
@@ -206,4 +218,14 @@ pub(crate) fn is_review_agent_entry(entry: &AgentEntry) -> bool {
             | REVIEWER_FRONTEND_AGENT_TYPE
             | REVIEW_JUDGE_AGENT_TYPE
     )
+}
+
+pub(crate) fn custom_agent_path(agent: &dyn Agent) -> Option<String> {
+    if let Some(custom) = agent.as_any().downcast_ref::<CustomSubagent>() {
+        return Some(custom.data.path.clone());
+    }
+    agent
+        .as_any()
+        .downcast_ref::<CustomMode>()
+        .map(|custom| custom.data.path.clone())
 }

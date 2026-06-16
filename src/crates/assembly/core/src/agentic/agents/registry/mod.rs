@@ -20,23 +20,26 @@ use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 use std::sync::{Arc, OnceLock};
 
-/// Full sub-agent definition for editing (user/project custom agents only)
+/// Full file-backed custom agent definition for editing.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CustomSubagentDetail {
-    pub subagent_id: String,
+pub struct CustomAgentDetail {
+    pub agent_id: String,
+    pub kind: String,
     pub name: String,
     pub description: String,
     pub prompt: String,
     pub tools: Vec<String>,
     pub readonly: bool,
     pub review: bool,
-    pub enabled: bool,
     pub model: String,
     pub path: String,
+    pub user_context_policy: Vec<String>,
     /// `"user"` or `"project"`
     pub level: String,
 }
+
+pub type CustomSubagentDetail = CustomAgentDetail;
 
 /// Registry for managing all available agents
 pub struct AgentRegistry {
@@ -44,6 +47,7 @@ pub struct AgentRegistry {
     agents: RwLock<HashMap<String, AgentEntry>>,
     /// workspace root -> (project subagent id -> agent_entry)
     project_subagents: RwLock<HashMap<PathBuf, HashMap<String, AgentEntry>>>,
+    user_custom_agents_loaded: RwLock<bool>,
 }
 
 impl Default for AgentRegistry {
@@ -155,6 +159,26 @@ impl AgentRegistry {
                 entry.category == AgentCategory::SubAgent && entry.subagent_source == Some(source)
             })
         })
+    }
+
+    fn user_custom_agents_loaded(&self) -> bool {
+        match self.user_custom_agents_loaded.read() {
+            Ok(guard) => *guard,
+            Err(poisoned) => {
+                warn!("Agent custom-user loaded flag read lock poisoned, recovering");
+                *poisoned.into_inner()
+            }
+        }
+    }
+
+    fn set_user_custom_agents_loaded(&self, loaded: bool) {
+        match self.user_custom_agents_loaded.write() {
+            Ok(mut guard) => *guard = loaded,
+            Err(poisoned) => {
+                warn!("Agent custom-user loaded flag write lock poisoned, recovering");
+                *poisoned.into_inner() = loaded;
+            }
+        }
     }
 }
 

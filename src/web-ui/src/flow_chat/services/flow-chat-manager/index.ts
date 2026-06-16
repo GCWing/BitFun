@@ -30,6 +30,7 @@ export {
 
 export {
   getModelMaxTokens,
+  resolveAgentTypeForSessionCreation,
   createChatSession,
   preloadHistoricalSessionForOpen,
   switchChatSession,

@@ -176,7 +176,8 @@
   font-size: 11px;
 }
 
-.th-create-panel__tool-tooltip {
+.th-create-panel__tool-tooltip,
+.th-create-panel__context-tooltip {
   .bitfun-tooltip__content {
     width: max-content;
     max-width: min(520px, calc(100vw - 32px));

@@ -4,7 +4,7 @@ use super::support::{
     merge_dynamic_mcp_tools,
 };
 use super::AgentRegistry;
-use crate::agentic::agents::registry::types::{is_review_agent_entry, AgentEntry};
+use crate::agentic::agents::registry::types::{is_review_agent_entry, AgentEntry, AgentSource};
 use crate::agentic::agents::{
     mode_presentation_rank, resolve_mode_config_profile_id, AgentCategory, AgentInfo,
     AgentToolPolicy, SubagentListScope, SubagentQueryContext,
@@ -96,6 +96,7 @@ impl AgentRegistry {
 
     /// get all mode agent information, used for frontend mode selector etc.
     pub async fn get_modes_info(&self) -> Vec<AgentInfo> {
+        self.ensure_user_custom_agents_loaded().await;
         let map = self.read_agents();
         let mut result: Vec<AgentInfo> = map
             .values()
@@ -103,7 +104,22 @@ impl AgentRegistry {
             .map(AgentInfo::from_agent_entry)
             .collect();
         drop(map);
-        result.sort_by(|a, b| mode_presentation_rank(&a.id).cmp(&mode_presentation_rank(&b.id)));
+        result.sort_by(|a, b| {
+            let a_rank = match a.source {
+                AgentSource::Builtin => mode_presentation_rank(&a.id),
+                AgentSource::User => 100,
+                AgentSource::Project => 101,
+            };
+            let b_rank = match b.source {
+                AgentSource::Builtin => mode_presentation_rank(&b.id),
+                AgentSource::User => 100,
+                AgentSource::Project => 101,
+            };
+            a_rank
+                .cmp(&b_rank)
+                .then_with(|| a.id.to_lowercase().cmp(&b.id.to_lowercase()))
+                .then_with(|| a.id.cmp(&b.id))
+        });
         result
     }
 
@@ -192,11 +208,12 @@ impl AgentRegistry {
         &self,
         query: &SubagentQueryContext<'_>,
     ) -> Vec<AgentInfo> {
+        self.ensure_user_custom_agents_loaded().await;
         if let Some(workspace_root) = query.workspace_root {
             let is_project_cache_loaded =
                 self.read_project_subagents().contains_key(workspace_root);
             if !is_project_cache_loaded {
-                self.load_custom_subagents(workspace_root).await;
+                self.load_custom_agents(Some(workspace_root)).await;
             }
         }
 
@@ -292,7 +309,7 @@ impl AgentRegistry {
             let is_project_cache_loaded =
                 self.read_project_subagents().contains_key(workspace_root);
             if !is_project_cache_loaded {
-                self.load_custom_subagents(workspace_root).await;
+                self.load_custom_agents(Some(workspace_root)).await;
             }
         }
 

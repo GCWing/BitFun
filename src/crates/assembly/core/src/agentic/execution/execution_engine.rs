@@ -1330,11 +1330,14 @@ impl ExecutionEngine {
         context: &ExecutionContext,
     ) -> BitFunResult<CompressionRuntimeScaffold> {
         let agent_registry = get_agent_registry();
-        if let Some(workspace) = context.workspace.as_ref() {
-            agent_registry
-                .load_custom_subagents(workspace.root_path())
-                .await;
-        }
+        agent_registry
+            .load_custom_agents(
+                context
+                    .workspace
+                    .as_ref()
+                    .map(|workspace| workspace.root_path()),
+            )
+            .await;
 
         let current_agent = agent_registry
             .get_agent(
@@ -1994,11 +1997,14 @@ impl ExecutionEngine {
         // Things that remain constant in a dialog turn: 1.agent, 2.system prompt, 3.tools, 4.ai client
         // 1. Get current agent
         let agent_registry = get_agent_registry();
-        if let Some(workspace) = context.workspace.as_ref() {
-            agent_registry
-                .load_custom_subagents(workspace.root_path())
-                .await;
-        }
+        agent_registry
+            .load_custom_agents(
+                context
+                    .workspace
+                    .as_ref()
+                    .map(|workspace| workspace.root_path()),
+            )
+            .await;
         let current_agent = agent_registry
             .get_agent(
                 &agent_type,

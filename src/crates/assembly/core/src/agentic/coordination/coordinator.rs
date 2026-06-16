@@ -1712,13 +1712,13 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         skill_agent_context_vars: &HashMap<String, String>,
     ) -> BitFunResult<WrappedUserInputPayload> {
         let agent_registry = get_agent_registry();
-        if let Some(workspace) = workspace {
-            if !workspace.is_remote() {
-                agent_registry
-                    .load_custom_subagents(workspace.root_path())
-                    .await;
-            }
-        }
+        agent_registry
+            .load_custom_agents(
+                workspace
+                    .filter(|binding| !binding.is_remote())
+                    .map(|binding| binding.root_path()),
+            )
+            .await;
         let current_agent = agent_registry
             .get_agent(agent_type, workspace.map(|binding| binding.root_path()))
             .ok_or_else(|| BitFunError::NotFound(format!("Agent not found: {}", agent_type)))?;

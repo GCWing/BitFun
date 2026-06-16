@@ -1,5 +1,7 @@
 //! Prompt-loop owner facts and reminder ordering.
 
+use serde::{Deserialize, Serialize};
+
 const SKILL_LISTING_TITLE: &str = "# Skill Listing";
 const SKILL_LISTING_GUIDANCE: &str =
     "The following skills are available for use with the Skill tool:";
@@ -387,7 +389,8 @@ fn computer_use_key_chord_guidance(host_os: &str) -> &'static str {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum UserContextSection {
     WorkspaceContext,
     WorkspaceInstructions,
@@ -395,7 +398,7 @@ pub enum UserContextSection {
     ProjectLayout,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UserContextPolicy {
     pub sections: Vec<UserContextSection>,
 }

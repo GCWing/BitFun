@@ -36,6 +36,10 @@ use api::commands::*;
 use api::computer_use_api::*;
 use api::config_api::*;
 use api::cron_api::*;
+use api::custom_agent_api::{
+    create_custom_agent, delete_custom_agent, get_custom_agent_detail, reload_custom_agents,
+    update_custom_agent,
+};
 use api::diff_api::*;
 use api::git_agent_api::*;
 use api::git_api::*;
@@ -873,6 +877,11 @@ pub async fn run() {
             list_subagents,
             list_visible_subagents,
             list_manageable_subagents,
+            get_custom_agent_detail,
+            create_custom_agent,
+            update_custom_agent,
+            delete_custom_agent,
+            reload_custom_agents,
             get_subagent_detail,
             delete_subagent,
             create_subagent,

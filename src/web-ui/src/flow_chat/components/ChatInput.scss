@@ -998,6 +998,15 @@
       background: var(--color-overlay-white-04);
       color: var(--color-text-primary);
     }
+
+    &:hover:not(&--disabled),
+    &:focus-within:not(&--disabled) {
+      .bitfun-chat-input__mode-default-button:not(.bitfun-chat-input__mode-default-button--active) {
+        opacity: 0.72;
+        pointer-events: auto;
+        transform: scale(1);
+      }
+    }
     
     &--active {
       .bitfun-chat-input__mode-option-name {
@@ -1124,6 +1133,58 @@
     font-weight: 500;
     color: var(--color-text-secondary);
     flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__mode-option-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex: 0 0 auto;
+  }
+
+  &__mode-default-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(0.92);
+    transition:
+      background 0.15s ease,
+      color 0.15s ease,
+      opacity 0.15s ease,
+      transform 0.15s ease;
+
+    &:hover:not(:disabled) {
+      background: color-mix(in srgb, currentColor 13%, transparent);
+      color: var(--color-warning);
+      opacity: 1;
+      transform: scale(1.04);
+    }
+
+    &:disabled {
+      cursor: default;
+      opacity: 0.45;
+    }
+
+    &--active {
+      color: var(--color-warning);
+      opacity: 1;
+      pointer-events: auto;
+      transform: scale(1);
+    }
   }
   
   &__mode-option-badge {

@@ -41,7 +41,7 @@ import './AgentsView.scss';
 import './AgentsScene.scss';
 import { useGallerySceneAutoRefresh } from '@/app/hooks/useGallerySceneAutoRefresh';
 import { CORE_AGENT_IDS, isAgentInOverviewZone } from './agentVisibility';
-import { SubagentAPI } from '@/infrastructure/api/service-api/SubagentAPI';
+import { CustomAgentAPI } from '@/infrastructure/api/service-api/CustomAgentAPI';
 import type { ModeSkillInfo } from '@/infrastructure/config/types';
 import type { SubagentInfo } from '@/infrastructure/api/service-api/SubagentAPI';
 import { useNotification } from '@/shared/notification-system';
@@ -519,10 +519,7 @@ const AgentsHomeView: React.FC = () => {
 
   const handleDeleteCustomAgent = useCallback(async () => {
     if (!selectedAgent) return;
-    if (
-      selectedAgent.agentKind !== 'subagent'
-      || (selectedAgent.subagentSource !== 'user' && selectedAgent.subagentSource !== 'project')
-    ) {
+    if ((selectedAgent.source ?? selectedAgent.subagentSource ?? 'builtin') === 'builtin') {
       return;
     }
     const id = selectedAgent.id;
@@ -534,7 +531,7 @@ const AgentsHomeView: React.FC = () => {
     if (!ok) return;
     setDeletingAgent(true);
     try {
-      await SubagentAPI.deleteSubagent(id);
+      await CustomAgentAPI.deleteCustomAgent(id);
       notification.success(t('agentsOverview.deleteSuccess', { name }));
       closeAgentDetails();
       await loadAgents();
@@ -547,10 +544,9 @@ const AgentsHomeView: React.FC = () => {
     }
   }, [selectedAgent, closeAgentDetails, loadAgents, notification, t]);
 
-  const canManageCustomSubagent = Boolean(
+  const canManageCustomAgent = Boolean(
     selectedAgent
-    && selectedAgent.agentKind === 'subagent'
-    && (selectedAgent.subagentSource === 'user' || selectedAgent.subagentSource === 'project'),
+    && (selectedAgent.source ?? selectedAgent.subagentSource ?? 'builtin') !== 'builtin',
   );
 
   return (
@@ -787,9 +783,23 @@ const AgentsHomeView: React.FC = () => {
         title={selectedAgent?.name ?? ''}
         badges={selectedAgent ? (
           <>
-            <Badge variant={getAgentBadge(t, selectedAgent.agentKind, selectedAgent.subagentSource).variant}>
+            <Badge
+              variant={
+                getAgentBadge(
+                  t,
+                  selectedAgent.agentKind,
+                  selectedAgent.source ?? selectedAgent.subagentSource,
+                ).variant
+              }
+            >
               {selectedAgent.agentKind === 'mode' ? <Cpu size={10} /> : <Bot size={10} />}
-              {getAgentBadge(t, selectedAgent.agentKind, selectedAgent.subagentSource).label}
+              {
+                getAgentBadge(
+                  t,
+                  selectedAgent.agentKind,
+                  selectedAgent.source ?? selectedAgent.subagentSource,
+                ).label
+              }
             </Badge>
             {selectedAgent.model ? <Badge variant="neutral">{selectedAgent.model}</Badge> : null}
           </>
@@ -1263,7 +1273,7 @@ const AgentsHomeView: React.FC = () => {
                 ) : null}
               </div>
             ) : null}
-            {canManageCustomSubagent ? (
+            {canManageCustomAgent ? (
               <div className="agent-card__section">
                 <div className="agent-card__section-head">
                   <div className="agent-card__section-title">

@@ -6,7 +6,7 @@
 import React, { useRef, useCallback, useEffect, useReducer, useState, useMemo, useSyncExternalStore } from 'react';
 import path from 'path-browserify';
 import { useTranslation } from 'react-i18next';
-import { ArrowUp, Image, RotateCcw, Plus, X, Sparkles, Loader2, ChevronRight, Files, MessageSquarePlus } from 'lucide-react';
+import { ArrowUp, Image, RotateCcw, Plus, X, Sparkles, Loader2, ChevronRight, Files, MessageSquarePlus, Star } from 'lucide-react';
 import { ContextDropZone, useContextStore } from '../../shared/context-system';
 import { useActiveSessionState } from '@/flow_chat/hooks';
 import { RichTextInput, type MentionState } from './RichTextInput';
@@ -62,7 +62,11 @@ import { PendingQueuePanel } from './PendingQueuePanel';
 import { useAgentCanvasStore } from '@/app/components/panels/content-canvas/stores';
 import { openBtwSessionInAuxPane, selectActiveBtwSessionTab } from '../services/openBtwSession';
 import { resolveSessionRelationship } from '../utils/sessionMetadata';
-import { resolveWorkspaceChatInputMode } from '../utils/chatInputMode';
+import {
+  DEFAULT_CHAT_INPUT_MODE_CONFIG_PATH,
+  normalizeUserDefaultChatInputModeId,
+  resolveAvailableChatInputMode,
+} from '../utils/chatInputMode';
 import { useSceneStore } from '@/app/stores/sceneStore';
 import type { SceneTabId } from '@/app/components/SceneBar/types';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
@@ -640,6 +644,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const currentModeRef = useRef(currentMode);
   currentModeRef.current = currentMode;
   const applyModeChangeRef = useRef<((modeId: string) => void) | null>(null);
+  const suppressNextUserDefaultModeApplicationRef = useRef(false);
 
   /** Code session: modes switchable on top of default agentic */
   const incrementalCodeModes = useMemo(
@@ -653,6 +658,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const openScene = useSceneStore(s => s.openScene);
   const [boostPanelSkills, setBoostPanelSkills] = useState<ModeSkillInfo[]>([]);
   const [boostSkillsLoading, setBoostSkillsLoading] = useState(false);
+  const [userDefaultModeId, setUserDefaultModeId] = useState<string | null>(null);
+  const [defaultModeSavingId, setDefaultModeSavingId] = useState<string | null>(null);
 
   const [skillsFlyoutOpen, setSkillsFlyoutOpen] = useState(false);
   const [skillsFlyoutLeft, setSkillsFlyoutLeft] = useState(false);
@@ -778,6 +785,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   const modeInfoById = useMemo(
     () => new Map(modeState.available.map(mode => [mode.id, mode])),
+    [modeState.available],
+  );
+  const availableModeIds = useMemo(
+    () => new Set(modeState.available.map(mode => mode.id)),
     [modeState.available],
   );
 
@@ -1206,16 +1217,59 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     
     fetchAvailableModes();
     
-    const handleModeConfigUpdated = () => {
+    const handleModeCatalogUpdated = () => {
       fetchAvailableModes();
     };
     
-    globalEventBus.on('mode:config:updated', handleModeConfigUpdated);
+    globalEventBus.on('mode:config:updated', handleModeCatalogUpdated);
+    globalEventBus.on('custom-agent:updated', handleModeCatalogUpdated);
     
     return () => {
-      globalEventBus.off('mode:config:updated', handleModeConfigUpdated);
+      globalEventBus.off('mode:config:updated', handleModeCatalogUpdated);
+      globalEventBus.off('custom-agent:updated', handleModeCatalogUpdated);
     };
   }, []);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const value = await configAPI.getConfig(DEFAULT_CHAT_INPUT_MODE_CONFIG_PATH, {
+          skipRetryOnNotFound: true,
+        });
+        if (!cancelled) {
+          setUserDefaultModeId(normalizeUserDefaultChatInputModeId(value));
+        }
+      } catch (error) {
+        log.warn('Failed to load default chat input mode preference', { error });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  React.useEffect(() => {
+    if (!userDefaultModeId || availableModeIds.size === 0) {
+      return;
+    }
+
+    if (availableModeIds.has(userDefaultModeId)) {
+      return;
+    }
+
+    setUserDefaultModeId(null);
+    void configAPI
+      .setConfig(DEFAULT_CHAT_INPUT_MODE_CONFIG_PATH, null)
+      .catch((error) => {
+        log.warn('Failed to clear unavailable default chat input mode preference', {
+          error,
+          modeId: userDefaultModeId,
+        });
+      });
+  }, [availableModeIds, userDefaultModeId]);
 
   React.useEffect(() => {
     const handleSessionSwitched = (event: Event) => {
@@ -1241,27 +1295,47 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, []);
 
   React.useEffect(() => {
-    const nextMode = resolveWorkspaceChatInputMode({
+    const suppressedUserDefaultApplication = suppressNextUserDefaultModeApplicationRef.current;
+    const userDefaultModeForResolution = suppressedUserDefaultApplication
+      ? null
+      : userDefaultModeId;
+    const nextMode = resolveAvailableChatInputMode({
       currentMode,
       isAssistantWorkspace,
       sessionMode: activeSessionMode,
+      userDefaultModeId: userDefaultModeForResolution,
+      availableModeIds,
     });
+    suppressNextUserDefaultModeApplicationRef.current = false;
 
-    if (nextMode) {
-      log.debug('Syncing mode with workspace and session', {
+    if (nextMode && nextMode !== currentMode) {
+      log.debug('Syncing mode with workspace, session, and available modes', {
         sessionId: effectiveTargetSessionId,
         mode: nextMode,
         sessionMode: activeSessionMode,
         isAssistantWorkspace,
+        availableModeCount: availableModeIds.size,
       });
-      dispatchMode({ type: 'SET_CURRENT_MODE', payload: nextMode });
-      try {
-        sessionStorage.setItem('bitfun:flowchat:lastMode', nextMode);
-      } catch {
-        // ignore
+      const applyModeChange = applyModeChangeRef.current;
+      if (applyModeChange) {
+        applyModeChange(nextMode);
+      } else {
+        dispatchMode({ type: 'SET_CURRENT_MODE', payload: nextMode });
+        try {
+          sessionStorage.setItem('bitfun:flowchat:lastMode', nextMode);
+        } catch {
+          // ignore
+        }
       }
     }
-  }, [activeSessionMode, currentMode, effectiveTargetSessionId, isAssistantWorkspace]);
+  }, [
+    activeSessionMode,
+    availableModeIds,
+    currentMode,
+    effectiveTargetSessionId,
+    isAssistantWorkspace,
+    userDefaultModeId,
+  ]);
 
   React.useEffect(() => {
     const queuedInput = derivedState?.queuedInput;
@@ -2440,6 +2514,41 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     applyModeChange(modeId);
     dispatchMode({ type: 'CLOSE_DROPDOWN' });
   }, [applyModeChange, canSwitchModes, currentMode, switchableModes]);
+
+  const toggleDefaultMode = useCallback(async (modeId: string, modeName: string) => {
+    const previousDefaultModeId = userDefaultModeId;
+    const nextDefaultModeId = previousDefaultModeId === modeId ? null : modeId;
+
+    suppressNextUserDefaultModeApplicationRef.current = true;
+    setDefaultModeSavingId(modeId);
+    setUserDefaultModeId(nextDefaultModeId);
+
+    try {
+      await configAPI.setConfig(DEFAULT_CHAT_INPUT_MODE_CONFIG_PATH, nextDefaultModeId);
+      if (nextDefaultModeId) {
+        notificationService.success(t('chatInput.defaultModeSet', { mode: modeName }), {
+          duration: 2500,
+        });
+      } else {
+        notificationService.success(t('chatInput.defaultModeCleared'), {
+          duration: 2500,
+        });
+      }
+    } catch (error) {
+      suppressNextUserDefaultModeApplicationRef.current = true;
+      setUserDefaultModeId(previousDefaultModeId);
+      notificationService.error(t('chatInput.defaultModeSaveFailed'), {
+        duration: 3500,
+      });
+      log.error('Failed to save default chat input mode preference', {
+        error,
+        modeId,
+        nextDefaultModeId,
+      });
+    } finally {
+      setDefaultModeSavingId(null);
+    }
+  }, [t, userDefaultModeId]);
   
   const selectSlashCommandMode = useCallback((modeId: string) => {
     requestModeChange(modeId);
@@ -3382,6 +3491,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                                   modeOption.name;
                                 const modeName =
                                   t(`chatInput.modeNames.${modeOption.id}`, { defaultValue: '' }) || modeOption.name;
+                                const isDefaultMode = userDefaultModeId === modeOption.id;
+                                const defaultModeTooltip = isDefaultMode
+                                  ? t('chatInput.defaultModeUnsetTooltip')
+                                  : t('chatInput.defaultModeSetTooltip', { mode: modeName });
                                 return (
                                   <Tooltip key={modeOption.id} content={modeDescription} placement="left">
                                     <div
@@ -3392,9 +3505,25 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                                       }}
                                     >
                                       <span className="bitfun-chat-input__mode-option-name">{modeName}</span>
-                                      {modeState.current === modeOption.id && (
-                                        <span className="bitfun-chat-input__slash-command-current">{t('chatInput.current')}</span>
-                                      )}
+                                      <span className="bitfun-chat-input__mode-option-actions">
+                                        {modeState.current === modeOption.id && (
+                                          <span className="bitfun-chat-input__slash-command-current">{t('chatInput.current')}</span>
+                                        )}
+                                        <Tooltip content={defaultModeTooltip} placement="left">
+                                          <button
+                                            type="button"
+                                            className={`bitfun-chat-input__mode-default-button${isDefaultMode ? ' bitfun-chat-input__mode-default-button--active' : ''}`}
+                                            disabled={defaultModeSavingId === modeOption.id}
+                                            aria-label={defaultModeTooltip}
+                                            onClick={e => {
+                                              e.stopPropagation();
+                                              void toggleDefaultMode(modeOption.id, modeName);
+                                            }}
+                                          >
+                                            <Star size={13} fill={isDefaultMode ? 'currentColor' : 'none'} />
+                                          </button>
+                                        </Tooltip>
+                                      </span>
                                     </div>
                                   </Tooltip>
                                 );

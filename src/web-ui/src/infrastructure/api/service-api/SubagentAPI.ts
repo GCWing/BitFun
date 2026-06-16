@@ -38,6 +38,7 @@ export interface SubagentInfo {
   effectiveEnabled: boolean;
   overrideState?: SubagentOverrideState;
   stateReason?: SubagentStateReason;
+  source?: SubagentSource;
   subagentSource?: SubagentSource;
   path?: string;
    

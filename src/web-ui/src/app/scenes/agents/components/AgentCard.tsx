@@ -32,9 +32,11 @@ const AgentCard: React.FC<AgentCardProps> = ({
   onOpenDetails,
 }) => {
   const { t } = useTranslation('scenes/agents');
-  const badge = getAgentBadge(t, agent.agentKind, agent.subagentSource);
+  const badge = getAgentBadge(t, agent.agentKind, agent.source ?? agent.subagentSource);
   const Icon = AGENT_ICON_MAP[(agent.iconKey ?? 'bot') as keyof typeof AGENT_ICON_MAP] ?? Bot;
   const totalTools = toolCount ?? agent.toolCount ?? agent.defaultTools?.length ?? 0;
+  const isCustomMode = agent.agentKind === 'mode' && agent.source !== 'builtin';
+  const showsModelBadge = Boolean(agent.model) && !isCustomMode;
   const openDetails = () => onOpenDetails(agent);
 
   return (
@@ -65,7 +67,7 @@ const AgentCard: React.FC<AgentCardProps> = ({
                 {agent.agentKind === 'mode' ? <Cpu size={10} /> : <Bot size={10} />}
                 {badge.label}
               </Badge>
-              {agent.model ? (
+              {showsModelBadge ? (
                 <Badge variant="neutral">{agent.model}</Badge>
               ) : null}
             </div>
