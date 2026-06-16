@@ -70,7 +70,6 @@ const SettingsScene: React.FC = () => {
     case 'mcp-tools':        Content = McpToolsConfig;      break;
     case 'acp-agents':       Content = AcpAgentsConfig;     break;
     case 'editor':           Content = EditorConfig;         break;
-<<<<<<< HEAD
     case 'voice':            Content = VoiceConfig;          break;
     case 'keyboard':         Content = KeyboardShortcutsTab; break;
   }
