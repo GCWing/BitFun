@@ -1,5 +1,5 @@
 use bitfun_agent_runtime::custom_agent::{
-    custom_agent_read_markdown_file, custom_agent_read_markdown_str,
+    custom_agent_possible_dirs, custom_agent_read_markdown_file, custom_agent_read_markdown_str,
     custom_agent_review_writable_tools, custom_agent_save_markdown_file,
     default_custom_agent_tools, default_custom_agent_user_context_policy,
     load_custom_agent_definitions, validate_custom_agent_definition, CustomAgentDefinition,
@@ -351,6 +351,68 @@ fn custom_agent_validation_forces_review_subagents_to_readonly_tools() {
         ),
         ["Write"]
     );
+}
+
+#[test]
+fn custom_agent_discovery_ignores_non_bitfun_agent_dirs() {
+    let workspace = TestTempDir::new("bitfun-runtime-custom-agent-workspace");
+    let user_root = TestTempDir::new("bitfun-runtime-custom-agent-user");
+    let home = TestTempDir::new("bitfun-runtime-custom-agent-home");
+    let project_bitfun = workspace.path.join(".bitfun").join("agents");
+    let project_claude = workspace.path.join(".claude").join("agents");
+    let user_agents = user_root.path.join("agents");
+    let home_claude = home.path.join(".claude").join("agents");
+    fs::create_dir_all(&project_bitfun).expect("project bitfun agents dir should be created");
+    fs::create_dir_all(&project_claude).expect("project claude agents dir should be created");
+    fs::create_dir_all(&user_agents).expect("user agents dir should be created");
+    fs::create_dir_all(&home_claude).expect("home claude agents dir should be created");
+
+    write_subagent(
+        &project_bitfun.join("project-bitfun.md"),
+        "BitfunProject",
+        CustomAgentLevel::Project,
+    );
+    write_subagent(
+        &project_claude.join("project-claude.md"),
+        "ClaudeProject",
+        CustomAgentLevel::Project,
+    );
+    write_subagent(
+        &user_agents.join("user-bitfun.md"),
+        "BitfunUser",
+        CustomAgentLevel::User,
+    );
+    write_subagent(
+        &home_claude.join("home-claude.md"),
+        "ClaudeHome",
+        CustomAgentLevel::User,
+    );
+
+    let roots = CustomAgentDiscoveryRoots {
+        workspace_root: Some(workspace.path.clone()),
+        bitfun_user_agents_dir: Some(user_agents.clone()),
+        home_dir: Some(home.path.clone()),
+    };
+
+    assert_eq!(
+        custom_agent_possible_dirs(&roots)
+            .iter()
+            .map(|entry| entry.path.as_path())
+            .collect::<Vec<_>>(),
+        vec![project_bitfun.as_path(), user_agents.as_path()]
+    );
+
+    let report = load_custom_agent_definitions(&roots);
+
+    assert_eq!(
+        report
+            .definitions
+            .iter()
+            .map(|loaded| loaded.definition.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["BitfunProject", "BitfunUser"]
+    );
+    assert!(report.errors.is_empty());
 }
 
 struct TestTempDir {

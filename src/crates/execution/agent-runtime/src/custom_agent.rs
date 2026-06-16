@@ -28,12 +28,9 @@ pub const DEFAULT_CUSTOM_SUBAGENT_READONLY: bool = true;
 pub const DEFAULT_CUSTOM_SUBAGENT_REVIEW: bool = false;
 pub const DEFAULT_CUSTOM_MODE_MODEL: &str = "auto";
 pub const DEFAULT_CUSTOM_SUBAGENT_MODEL: &str = "fast";
-pub const CUSTOM_AGENT_PROJECT_AGENT_SUBDIRS: &[(&str, &str)] = &[
-    (".bitfun", "agents"),
-    (".claude", "agents"),
-    (".cursor", "agents"),
-    (".codex", "agents"),
-];
+// Only BitFun custom agents are loaded. Unlike skills, custom subagents from
+// different vendors do not share a stable schema or compatible tool contract.
+pub const CUSTOM_AGENT_PROJECT_AGENT_SUBDIRS: &[(&str, &str)] = &[(".bitfun", "agents")];
 pub const CUSTOM_AGENT_SCHEMA_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -342,21 +339,6 @@ pub fn custom_agent_possible_dirs(roots: &CustomAgentDiscoveryRoots) -> Vec<Cust
                 path: bitfun_agents.clone(),
                 level: CustomAgentLevel::User,
             });
-        }
-    }
-
-    if let Some(home) = &roots.home_dir {
-        for (parent, sub) in CUSTOM_AGENT_PROJECT_AGENT_SUBDIRS {
-            if *parent == ".bitfun" {
-                continue;
-            }
-            let path = home.join(parent).join(sub);
-            if path.exists() && path.is_dir() {
-                entries.push(CustomAgentDirEntry {
-                    path,
-                    level: CustomAgentLevel::User,
-                });
-            }
         }
     }
 

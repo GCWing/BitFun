@@ -273,9 +273,14 @@ impl Tool for SkillTool {
             SkillLocation::Project => "project",
         };
 
+        let loaded_from = if use_stable_key {
+            format!(" from stable key '{}'", skill_data.key)
+        } else {
+            String::new()
+        };
         let result_for_assistant = format!(
-            "Skill '{}' loaded successfully from stable key '{}'. Note: any paths mentioned in this skill are relative to {}, not the workspace.\n\n{}",
-            skill_data.name, skill_data.key, skill_data.path, skill_data.content
+            "Skill '{}' loaded successfully{}. Note: any paths mentioned in this skill are relative to {}, not the workspace.\n\n<skill_content>\n{}\n</skill_content>",
+            skill_data.name, loaded_from, skill_data.path, skill_data.content
         );
 
         let result = ToolResult::Result {
@@ -473,7 +478,12 @@ Use the remote project skill.
             .await
             .expect("explicit cso invocation should load the local built-in skill");
 
-        let ToolResult::Result { data, .. } = &results[0] else {
+        let ToolResult::Result {
+            data,
+            result_for_assistant,
+            ..
+        } = &results[0]
+        else {
             panic!("expected result payload");
         };
         assert_eq!(data["skill_name"], "cso");
@@ -482,6 +492,11 @@ Use the remote project skill.
             .as_str()
             .unwrap_or_default()
             .contains("# /cso"));
+        let assistant = result_for_assistant.as_deref().unwrap_or_default();
+        assert!(assistant.contains("<skill_content>\n"));
+        assert!(assistant.contains("\n</skill_content>"));
+        assert!(assistant.contains("# /cso"));
+        assert!(!assistant.contains("from stable key"));
     }
 
     #[tokio::test]
@@ -507,7 +522,12 @@ Use the remote project skill.
             .await
             .expect("stable key should load BitFun's built-in ppt-design skill");
 
-        let ToolResult::Result { data, .. } = &results[0] else {
+        let ToolResult::Result {
+            data,
+            result_for_assistant,
+            ..
+        } = &results[0]
+        else {
             panic!("expected result payload");
         };
         assert_eq!(data["skill_name"], "ppt-design");
@@ -517,6 +537,11 @@ Use the remote project skill.
             .as_str()
             .unwrap_or_default()
             .contains("references/editable-pptx.md"));
+        let assistant = result_for_assistant.as_deref().unwrap_or_default();
+        assert!(assistant.contains("from stable key 'user::bitfun-system::ppt-design'"));
+        assert!(assistant.contains("<skill_content>\n"));
+        assert!(assistant.contains("\n</skill_content>"));
+        assert!(assistant.contains("references/editable-pptx.md"));
     }
 
     struct OrderingRemoteFs;
