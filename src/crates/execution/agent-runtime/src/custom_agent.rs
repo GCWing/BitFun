@@ -257,6 +257,27 @@ pub struct CustomAgentLoadReport {
     pub errors: Vec<CustomAgentLoadError>,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct CustomAgentValidationContext<'a> {
+    pub valid_tools: &'a [String],
+    pub readonly_tools: &'a [String],
+    pub valid_models: &'a [String],
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CustomAgentValidationReport {
+    pub default_mode_tools_used: bool,
+    pub invalid_tools: Vec<String>,
+    pub writable_review_tools: Vec<String>,
+    pub model_fallback: Option<CustomAgentModelFallback>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CustomAgentModelFallback {
+    pub original: String,
+    pub fallback: String,
+}
+
 struct CustomAgentCandidate {
     definition: CustomAgentDefinition,
     metadata: CustomAgentFrontMatterMetadata,
@@ -404,6 +425,67 @@ pub fn load_custom_agent_definitions(roots: &CustomAgentDiscoveryRoots) -> Custo
         definitions,
         errors,
     }
+}
+
+pub fn validate_custom_agent_definition(
+    definition: &mut CustomAgentDefinition,
+    metadata: &CustomAgentFrontMatterMetadata,
+    context: CustomAgentValidationContext<'_>,
+) -> CustomAgentValidationReport {
+    let default_mode_tools_used =
+        metadata.used_default_tools && definition.kind == CustomAgentKind::Mode;
+
+    let valid_tools_set: HashSet<&str> = context.valid_tools.iter().map(String::as_str).collect();
+    let original_tools = std::mem::take(&mut definition.tools);
+    let (valid_tools, invalid_tools): (Vec<_>, Vec<_>) = original_tools
+        .into_iter()
+        .partition(|tool| valid_tools_set.contains(tool.as_str()));
+
+    let writable_review_tools;
+    if definition.kind == CustomAgentKind::Subagent && definition.review {
+        definition.readonly = true;
+        let readonly_tools_set: HashSet<&str> =
+            context.readonly_tools.iter().map(String::as_str).collect();
+        let (review_tools, writable_tools): (Vec<_>, Vec<_>) = valid_tools
+            .into_iter()
+            .partition(|tool| readonly_tools_set.contains(tool.as_str()));
+        definition.tools = review_tools;
+        writable_review_tools = writable_tools;
+    } else {
+        definition.tools = valid_tools;
+        writable_review_tools = Vec::new();
+    }
+
+    let model_fallback = if context.valid_models.contains(&definition.model) {
+        None
+    } else {
+        let original_model = definition.model.clone();
+        let fallback_model = custom_agent_model_or_default(definition.kind, None).to_string();
+        definition.model = fallback_model.clone();
+        Some(CustomAgentModelFallback {
+            original: original_model,
+            fallback: fallback_model,
+        })
+    };
+
+    CustomAgentValidationReport {
+        default_mode_tools_used,
+        invalid_tools,
+        writable_review_tools,
+        model_fallback,
+    }
+}
+
+pub fn custom_agent_review_writable_tools(
+    tools: &[String],
+    readonly_tools: &[String],
+) -> Vec<String> {
+    let readonly_tools_set: HashSet<&str> = readonly_tools.iter().map(String::as_str).collect();
+    tools
+        .iter()
+        .filter(|tool| !readonly_tools_set.contains(tool.as_str()))
+        .cloned()
+        .collect()
 }
 
 fn list_custom_agent_markdown_files(dir: &Path) -> Vec<PathBuf> {

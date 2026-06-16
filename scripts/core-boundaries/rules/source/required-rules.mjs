@@ -993,69 +993,104 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/execution/agent-runtime/src/custom_subagent.rs',
+    path: 'src/crates/execution/agent-runtime/src/custom_agent.rs',
     reason:
-      'agent-runtime must own custom subagent portable schema defaults, discovery, and markdown front-matter IO',
+      'agent-runtime must own custom agent portable schema defaults, discovery, validation, and markdown front-matter IO',
     patterns: [
       {
-        regex: /\bpub enum CustomSubagentKind\b/,
-        message: 'missing custom subagent source-kind contract',
+        regex: /\bpub enum CustomAgentKind\b/,
+        message: 'missing custom agent kind contract',
       },
       {
-        regex: /\bpub struct CustomSubagentDiscoveryRoots\b/,
-        message: 'missing custom subagent discovery root contract',
+        regex: /\bpub struct CustomAgentDiscoveryRoots\b/,
+        message: 'missing custom agent discovery root contract',
       },
       {
-        regex: /\bpub struct CustomSubagentLoadReport\b/,
-        message: 'missing custom subagent load report contract',
+        regex: /\bpub struct CustomAgentLoadReport\b/,
+        message: 'missing custom agent load report contract',
       },
       {
-        regex: /\bpub struct CustomSubagentDefinition\b/,
-        message: 'missing custom subagent definition schema',
+        regex: /\bpub struct CustomAgentDefinition\b/,
+        message: 'missing custom agent definition schema',
       },
       {
-        regex: /\bpub enum CustomSubagentDefinitionError\b/,
-        message: 'missing custom subagent definition validation errors',
+        regex: /\bpub enum CustomAgentDefinitionError\b/,
+        message: 'missing custom agent definition validation errors',
+      },
+      {
+        regex: /\bDEFAULT_CUSTOM_MODE_TOOLS\b/,
+        message: 'missing custom mode default tools contract',
       },
       {
         regex: /\bDEFAULT_CUSTOM_SUBAGENT_TOOLS\b/,
         message: 'missing custom subagent default tools contract',
       },
       {
-        regex: /\bpub fn custom_subagent_tools_from_front_matter\b/,
-        message: 'missing custom subagent tools front-matter parser',
+        regex: /\bpub fn custom_agent_read_markdown_file\b/,
+        message: 'missing custom agent markdown file reader',
       },
       {
-        regex: /\bpub fn custom_subagent_tools_to_front_matter\b/,
-        message: 'missing custom subagent tools front-matter serializer',
+        regex: /\bpub fn custom_agent_save_markdown_file\b/,
+        message: 'missing custom agent markdown file writer',
       },
       {
-        regex: /\bpub const fn custom_subagent_readonly_should_save\b/,
-        message: 'missing custom subagent readonly save decision',
+        regex: /\bpub fn custom_agent_possible_dirs\b/,
+        message: 'missing custom agent directory discovery owner',
       },
       {
-        regex: /\bpub const fn custom_subagent_review_should_save\b/,
-        message: 'missing custom subagent review save decision',
+        regex: /\bpub fn load_custom_agent_definitions\b/,
+        message: 'missing custom agent definition loading owner',
       },
       {
-        regex: /\bpub fn custom_subagent_model_should_save\b/,
-        message: 'missing custom subagent model save decision',
+        regex: /\bpub struct CustomAgentValidationContext\b/,
+        message: 'missing custom agent validation context',
       },
       {
-        regex: /\bpub fn custom_subagent_read_markdown_file\b/,
-        message: 'missing custom subagent markdown file reader',
+        regex: /\bpub struct CustomAgentValidationReport\b/,
+        message: 'missing custom agent validation report',
       },
       {
-        regex: /\bpub fn custom_subagent_save_markdown_parts\b/,
-        message: 'missing custom subagent markdown file writer',
+        regex: /\bpub struct CustomAgentModelFallback\b/,
+        message: 'missing custom agent model fallback contract',
       },
       {
-        regex: /\bpub fn custom_subagent_possible_dirs\b/,
-        message: 'missing custom subagent directory discovery owner',
+        regex: /\bpub fn validate_custom_agent_definition\b/,
+        message: 'missing custom agent validation owner',
+      },
+      {
+        regex: /\bpub fn custom_agent_review_writable_tools\b/,
+        message: 'missing custom agent review-tool validation owner',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/src/custom_subagent.rs',
+    reason:
+      'agent-runtime custom_subagent module must stay a legacy compatibility wrapper over custom_agent owner decisions',
+    patterns: [
+      {
+        regex: /\bpub type CustomSubagentKind = CustomAgentLevel\b/,
+        message: 'missing custom subagent kind compatibility alias',
+      },
+      {
+        regex: /\bpub type CustomSubagentDefinition = CustomAgentDefinition\b/,
+        message: 'missing custom subagent definition compatibility alias',
+      },
+      {
+        regex: /\bpub type CustomSubagentDiscoveryRoots = CustomAgentDiscoveryRoots\b/,
+        message: 'missing custom subagent discovery root compatibility alias',
       },
       {
         regex: /\bpub fn load_custom_subagent_definitions\b/,
-        message: 'missing custom subagent definition loading owner',
+        message: 'missing custom subagent filtered load wrapper',
+      },
+      {
+        regex: /\bcustom_agent_read_markdown_file\b/,
+        message: 'missing custom subagent markdown read delegation',
+      },
+      {
+        regex: /\bcustom_agent_save_markdown_file\b/,
+        message: 'missing custom subagent markdown save delegation',
       },
     ],
   },
@@ -1102,7 +1137,7 @@ export const requiredContentRules = [
         message: 'missing custom subagent missing-field regression',
       },
       {
-        regex: /\bcustom_subagent_markdown_io_preserves_legacy_front_matter_shape\b/,
+        regex: /\bcustom_subagent_markdown_io_writes_canonical_front_matter\b/,
         message: 'missing custom subagent markdown IO regression',
       },
       {
@@ -1997,42 +2032,46 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/core/src/agentic/agents/definitions/custom/subagent.rs',
     reason:
-      'core custom subagent path must stay a compatibility facade over agent-runtime schema/default and markdown IO decisions',
+      'core custom subagent path must stay a compatibility facade over agent-runtime custom-agent schema/default and markdown IO decisions',
     patterns: [
       {
         regex: /pub use bitfun_agent_runtime::custom_subagent::CustomSubagentKind/,
         message: 'missing custom subagent kind compatibility re-export',
       },
       {
-        regex: /\bCustomSubagentDefinition::new\b/,
-        message: 'missing custom subagent definition construction delegation',
+        regex: /\bCustomAgentDefinition::new\b/,
+        message: 'missing custom agent definition construction delegation',
       },
       {
-        regex: /\bcustom_subagent_read_markdown_file\b/,
-        message: 'missing custom subagent markdown read delegation',
+        regex: /\bcustom_agent_read_markdown_file\b/,
+        message: 'missing custom agent markdown read delegation',
       },
       {
-        regex: /\bcustom_subagent_save_markdown_parts\b/,
-        message: 'missing custom subagent markdown save delegation',
+        regex: /\bCustomAgentData::from_definition\b/,
+        message: 'missing custom agent data adapter delegation',
       },
     ],
   },
   {
     path: 'src/crates/assembly/core/src/agentic/agents/registry/custom.rs',
     reason:
-      'core custom subagent registry must delegate portable discovery/loading to agent-runtime while retaining validation and registry writes',
+      'core custom agent registry must delegate portable discovery/loading and validation to agent-runtime while retaining product tool/model lookup, logging, and registry writes',
     patterns: [
       {
-        regex: /\bload_custom_subagent_definitions\b/,
-        message: 'missing custom subagent runtime load delegation',
+        regex: /\bload_custom_agent_definitions\b/,
+        message: 'missing custom agent runtime load delegation',
       },
       {
-        regex: /\bCustomSubagentDiscoveryRoots\b/,
-        message: 'missing custom subagent runtime discovery root adapter',
+        regex: /\bCustomAgentDiscoveryRoots\b/,
+        message: 'missing custom agent runtime discovery root adapter',
       },
       {
-        regex: /\bCustomSubagent::from_definition\b/,
-        message: 'missing custom subagent runtime definition adapter',
+        regex: /\bvalidate_custom_agent_definition\b/,
+        message: 'missing custom agent runtime validation delegation',
+      },
+      {
+        regex: /\bcustom_agent_from_definition\b/,
+        message: 'missing custom agent runtime definition adapter',
       },
     ],
   },

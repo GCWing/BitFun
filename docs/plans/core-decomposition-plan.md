@@ -20,6 +20,7 @@
 - `bitfun-core --no-default-features` 已裁掉 workspace-search owner、debug ingest HTTP server、AI provider adapter runtime 和 direct `reqwest`。
 - Desktop / CLI / ACP 仍通过 `bitfun-core/product-full` 获取完整能力；Server / Remote / Web / Mobile Web 不直接依赖 core。Product Assembly 已按入口矩阵裁剪能力计划：完整兼容入口保留 product-full 能力，无直接 core 入口不再 materialize product-full capability packs、feature groups、runtime services、tool groups 或 harness routes。
 - Runtime Services、Agent Runtime、Tool Contracts、Tool Execution、Harness、Product Domains、Services Core、Services Integrations 等 owner crate 已建立；Agent Runtime SDK 内部 facade 已能注入 runtime services、tool registry、harness registry、hook registry 和 workspace-scoped agent registry，部分 concrete 生命周期仍由 core concrete manager 或产品命令路径持有。
+- 最新 custom agent / mode 路径已纳入 `agent-runtime` owner：schema、默认值、markdown IO、discovery、validation 与 review 工具过滤规则由 runtime 持有；core 和 desktop 只保留产品工具/模型查询、日志、registry 写入、文件路径选择和命令入口。
 - PR-B 已收口 Agent lifecycle 与 tool side-effect owner：turn skill/agent snapshot DTO / diff / render / store、file-read session state、session evidence ledger 与 compression-contract projection、dialog-turn cancellation token store、tool confirmation / user-question wait channel state 已迁入 `agent-runtime`；background exec output capture、tool cancellation token store 已迁入 `tool-execution`；core 保留 resolver、产品事件、具体工具执行、IO 编排和旧路径兼容 re-export。
 - PR-C 已收口 Harness / product workflow 的低风险 owner：MiniApp AI / Agent permission、rate-limit、model/message/session/workspace/turn-text 规则迁入 `product-domains`；DeepResearch 后处理 gate 迁入 `agent-runtime`，report IO 继续由 `services-integrations` 持有；function-agent AI concrete acquisition 收拢为 core port adapter，旧 `runtime_services` 路径删除。
 - H2 concrete adapter 收口已完成：MiniApp AI / Agent 请求计划、stream payload、runtime event payload、worker restart / draft key / workspace input 规则迁入 `product-domains`；DeepReview concrete Task launch、session metadata cache persistence 和 MiniApp concrete AI factory / scheduler / worker pool 调用已复核为 adapter 边界，不在下层 owner crate 中实现。
@@ -33,7 +34,7 @@
 - `services-integrations` 已承接 remote-connect primitives、workspace search concrete owner、remote SSH/SFTP/PTY owner、MiniApp host dispatch / storage / worker IO、DeepResearch report IO。
 - `product-domains` 已承接 MiniApp workflow planning、compile / permission path adaptation、AI / Agent 请求计划、stream/event payload、worker restart / draft key / workspace input 规则、function-agent prompt / parser / response policy 和部分 Git snapshot/fallback 逻辑。
 - Product Assembly 已承接当前 delivery profile 的能力计划裁剪；下层 owner crate 不按产品形态分支。
-- boundary scripts 已覆盖核心 owner 防回流、six-layer path 解析、facade-only 文件和重点 feature gate。
+- boundary scripts 已覆盖核心 owner 防回流、six-layer path 解析、facade-only 文件、custom agent owner / custom subagent wrapper 保护和重点 feature gate。
 
 ## 4. 后续大块专项
 

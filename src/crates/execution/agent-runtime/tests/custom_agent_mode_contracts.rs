@@ -1,9 +1,11 @@
 use bitfun_agent_runtime::custom_agent::{
     custom_agent_read_markdown_file, custom_agent_read_markdown_str,
-    custom_agent_save_markdown_file, default_custom_agent_tools,
-    default_custom_agent_user_context_policy, load_custom_agent_definitions, CustomAgentDefinition,
+    custom_agent_review_writable_tools, custom_agent_save_markdown_file,
+    default_custom_agent_tools, default_custom_agent_user_context_policy,
+    load_custom_agent_definitions, validate_custom_agent_definition, CustomAgentDefinition,
     CustomAgentDefinitionError, CustomAgentDiscoveryRoots, CustomAgentKind, CustomAgentLevel,
-    ParsedCustomAgentDefinition, DEFAULT_CUSTOM_MODE_MODEL, DEFAULT_CUSTOM_MODE_READONLY,
+    CustomAgentModelFallback, CustomAgentValidationContext, ParsedCustomAgentDefinition,
+    DEFAULT_CUSTOM_MODE_MODEL, DEFAULT_CUSTOM_MODE_READONLY,
 };
 use bitfun_agent_runtime::prompt::UserContextPolicy;
 use std::fs;
@@ -260,6 +262,94 @@ fn custom_mode_discovery_rejects_project_scoped_modes_without_dropping_valid_age
     assert_eq!(
         report.errors[0].path,
         project_agents_dir.join("project-mode.md")
+    );
+}
+
+#[test]
+fn custom_agent_validation_filters_invalid_tools_and_falls_back_model() {
+    let mut definition = build_mode_definition(
+        Some("PlannerPlus"),
+        Some("PlannerPlus"),
+        Some("Custom planning mode"),
+        Some(vec![
+            "Read".to_string(),
+            "MissingTool".to_string(),
+            "Grep".to_string(),
+        ]),
+        None,
+        Some("missing-model"),
+        None,
+        CustomAgentLevel::User,
+    )
+    .expect("mode definition should be valid")
+    .definition;
+
+    let report = validate_custom_agent_definition(
+        &mut definition,
+        &Default::default(),
+        CustomAgentValidationContext {
+            valid_tools: &["Read".to_string(), "Grep".to_string()],
+            readonly_tools: &["Read".to_string()],
+            valid_models: &["auto".to_string(), "primary".to_string()],
+        },
+    );
+
+    assert_eq!(definition.tools, ["Read", "Grep"]);
+    assert_eq!(definition.model, DEFAULT_CUSTOM_MODE_MODEL);
+    assert_eq!(report.invalid_tools, ["MissingTool"]);
+    assert_eq!(
+        report.model_fallback,
+        Some(CustomAgentModelFallback {
+            original: "missing-model".to_string(),
+            fallback: DEFAULT_CUSTOM_MODE_MODEL.to_string(),
+        })
+    );
+    assert!(!report.default_mode_tools_used);
+    assert!(report.writable_review_tools.is_empty());
+}
+
+#[test]
+fn custom_agent_validation_forces_review_subagents_to_readonly_tools() {
+    let mut definition = CustomAgentDefinition::from_front_matter_fields(
+        Some("ReviewExtra"),
+        Some("ReviewExtra"),
+        Some("Review changed files"),
+        Some(CustomAgentKind::Subagent),
+        Some(vec![
+            "Read".to_string(),
+            "Write".to_string(),
+            "UnknownTool".to_string(),
+        ]),
+        Some(false),
+        Some(true),
+        Some("fast"),
+        None,
+        "Review the selected files.".to_string(),
+        CustomAgentLevel::User,
+    )
+    .expect("subagent definition should be valid")
+    .definition;
+
+    let report = validate_custom_agent_definition(
+        &mut definition,
+        &Default::default(),
+        CustomAgentValidationContext {
+            valid_tools: &["Read".to_string(), "Write".to_string()],
+            readonly_tools: &["Read".to_string()],
+            valid_models: &["fast".to_string()],
+        },
+    );
+
+    assert!(definition.readonly);
+    assert_eq!(definition.tools, ["Read"]);
+    assert_eq!(report.invalid_tools, ["UnknownTool"]);
+    assert_eq!(report.writable_review_tools, ["Write"]);
+    assert_eq!(
+        custom_agent_review_writable_tools(
+            &["Read".to_string(), "Write".to_string()],
+            &["Read".to_string()],
+        ),
+        ["Write"]
     );
 }
 

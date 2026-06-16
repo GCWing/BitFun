@@ -18,7 +18,7 @@ pub use bitfun_agent_runtime::agents::{
     SHARED_CODING_MODE_IDS, SHARED_CODING_MODE_PROMPT_TEMPLATE,
 };
 pub use bitfun_agent_runtime::custom_agent::{
-    custom_agent_model_or_default, default_custom_agent_tools,
+    custom_agent_model_or_default, custom_agent_review_writable_tools, default_custom_agent_tools,
     default_custom_agent_user_context_policy, CustomAgentKind, CustomAgentLevel,
 };
 pub use definitions::custom::{CustomMode, CustomSubagent, CustomSubagentKind};

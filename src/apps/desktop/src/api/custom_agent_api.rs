@@ -1,6 +1,6 @@
 use crate::api::app_state::AppState;
 use bitfun_core::agentic::agents::{
-    custom_agent_model_or_default, default_custom_agent_tools,
+    custom_agent_model_or_default, custom_agent_review_writable_tools, default_custom_agent_tools,
     default_custom_agent_user_context_policy, CustomAgentDetail, CustomAgentKind, CustomAgentLevel,
     CustomMode, CustomSubagent, UserContextPolicy, UserContextSection,
 };
@@ -54,7 +54,7 @@ fn policy_from_sections(
         .unwrap_or_else(|| default_custom_agent_user_context_policy(kind))
 }
 
-fn readonly_tool_names(state: &AppState) -> HashSet<String> {
+fn readonly_tool_names(state: &AppState) -> Vec<String> {
     state
         .tool_registry
         .iter()
@@ -69,11 +69,7 @@ fn ensure_review_tools_are_readonly(
     tools: &[String],
 ) -> Result<(), String> {
     let readonly_tools = readonly_tool_names(state);
-    let writable_tools: Vec<&str> = tools
-        .iter()
-        .map(String::as_str)
-        .filter(|tool| !readonly_tools.contains(*tool))
-        .collect();
+    let writable_tools = custom_agent_review_writable_tools(tools, &readonly_tools);
 
     if writable_tools.is_empty() {
         return Ok(());

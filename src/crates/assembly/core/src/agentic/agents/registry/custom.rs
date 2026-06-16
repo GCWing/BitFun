@@ -19,9 +19,10 @@ use crate::service::config::mode_config_canonicalizer::persist_agent_profile_fro
 use crate::service::config::types::AgentSubagentOverrideState;
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_agent_runtime::custom_agent::{
-    custom_agent_model_or_default, default_custom_agent_tools, load_custom_agent_definitions,
-    CustomAgentDefinition, CustomAgentDiscoveryRoots, CustomAgentFrontMatterMetadata,
-    CustomAgentKind, CustomAgentLevel,
+    custom_agent_review_writable_tools, default_custom_agent_tools, load_custom_agent_definitions,
+    validate_custom_agent_definition, CustomAgentDefinition, CustomAgentDiscoveryRoots,
+    CustomAgentFrontMatterMetadata, CustomAgentKind, CustomAgentLevel,
+    CustomAgentValidationContext, CustomAgentValidationReport,
 };
 use log::{debug, error, warn};
 use std::collections::HashMap;
@@ -195,8 +196,21 @@ impl AgentRegistry {
         valid_models: &[String],
     ) {
         let agent_id = definition.id.clone();
+        let report = validate_custom_agent_definition(
+            definition,
+            metadata,
+            CustomAgentValidationContext {
+                valid_tools,
+                readonly_tools,
+                valid_models,
+            },
+        );
 
-        if metadata.used_default_tools && definition.kind == CustomAgentKind::Mode {
+        Self::log_custom_agent_validation_report(&agent_id, &report);
+    }
+
+    fn log_custom_agent_validation_report(agent_id: &str, report: &CustomAgentValidationReport) {
+        if report.default_mode_tools_used {
             warn!(
                 "[Custom mode {}] No tools configured; defaulting to mode tool set {:?}",
                 agent_id,
@@ -204,44 +218,25 @@ impl AgentRegistry {
             );
         }
 
-        let original_tools = definition.tools.clone();
-        let valid_tools_set: std::collections::HashSet<&str> =
-            valid_tools.iter().map(|s| s.as_str()).collect();
-        let (valid, invalid): (Vec<_>, Vec<_>) = original_tools
-            .into_iter()
-            .partition(|t| valid_tools_set.contains(t.as_str()));
-        if !invalid.is_empty() {
+        if !report.invalid_tools.is_empty() {
             warn!(
                 "[Custom agent {}] Invalid tools filtered out: {:?}",
-                agent_id, invalid
+                agent_id, report.invalid_tools
             );
         }
 
-        if definition.kind == CustomAgentKind::Subagent && definition.review {
-            definition.readonly = true;
-            let readonly_tools_set: std::collections::HashSet<&str> =
-                readonly_tools.iter().map(|s| s.as_str()).collect();
-            let (review_tools, writable_tools): (Vec<_>, Vec<_>) = valid
-                .into_iter()
-                .partition(|t| readonly_tools_set.contains(t.as_str()));
-            if !writable_tools.is_empty() {
-                warn!(
-                    "[Custom subagent {}] Writable tools filtered out from review subagent: {:?}",
-                    agent_id, writable_tools
-                );
-            }
-            definition.tools = review_tools;
-        } else {
-            definition.tools = valid;
+        if !report.writable_review_tools.is_empty() {
+            warn!(
+                "[Custom subagent {}] Writable tools filtered out from review subagent: {:?}",
+                agent_id, report.writable_review_tools
+            );
         }
 
-        if !valid_models.contains(&definition.model) {
-            let fallback = custom_agent_model_or_default(definition.kind, None).to_string();
+        if let Some(model_fallback) = &report.model_fallback {
             warn!(
                 "[Custom agent {}] Invalid model '{}', reset to '{}'",
-                agent_id, definition.model, fallback
+                agent_id, model_fallback.original, model_fallback.fallback
             );
-            definition.model = fallback;
         }
     }
 
@@ -250,13 +245,7 @@ impl AgentRegistry {
         tools: &[String],
         readonly_tools: &[String],
     ) -> BitFunResult<()> {
-        let readonly_tools_set: std::collections::HashSet<&str> =
-            readonly_tools.iter().map(|s| s.as_str()).collect();
-        let writable_tools: Vec<&str> = tools
-            .iter()
-            .map(String::as_str)
-            .filter(|tool| !readonly_tools_set.contains(tool))
-            .collect();
+        let writable_tools = custom_agent_review_writable_tools(tools, readonly_tools);
 
         if writable_tools.is_empty() {
             return Ok(());
