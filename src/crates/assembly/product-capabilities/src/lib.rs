@@ -890,6 +890,7 @@ const DEFAULT_PRODUCT_CAPABILITY_PACKS: &[ProductCapabilityPack] = &[
         MINIAPP_HARNESS_PROVIDERS,
     ),
 ];
+const EMPTY_PRODUCT_CAPABILITY_PACKS: &[ProductCapabilityPack] = &[];
 
 pub fn default_product_capability_registry() -> ProductCapabilityRegistry {
     ProductCapabilityRegistry::new(DEFAULT_PRODUCT_CAPABILITY_PACKS)
@@ -900,7 +901,7 @@ pub fn default_product_capability_assembly() -> ProductCapabilityAssembly {
 }
 
 pub fn product_assembly_plan_for_profile(profile: DeliveryProfile) -> ProductAssemblyPlan {
-    default_product_capability_registry().build_assembly_plan(profile)
+    product_capability_registry_for_profile(profile).build_assembly_plan(profile)
 }
 
 pub fn default_product_assembly_plan() -> ProductAssemblyPlan {
@@ -915,4 +916,19 @@ pub fn product_harness_registry_for_profile(
 
 pub fn default_product_harness_registry() -> Result<HarnessRegistry, HarnessRegistryBuildError> {
     product_harness_registry_for_profile(DeliveryProfile::ProductFull)
+}
+
+fn product_capability_registry_for_profile(profile: DeliveryProfile) -> ProductCapabilityRegistry {
+    match profile {
+        DeliveryProfile::ProductFull
+        | DeliveryProfile::Desktop
+        | DeliveryProfile::Cli
+        | DeliveryProfile::Acp => default_product_capability_registry(),
+        DeliveryProfile::Server
+        | DeliveryProfile::Remote
+        | DeliveryProfile::Web
+        | DeliveryProfile::MobileWeb => {
+            ProductCapabilityRegistry::new(EMPTY_PRODUCT_CAPABILITY_PACKS)
+        }
+    }
 }

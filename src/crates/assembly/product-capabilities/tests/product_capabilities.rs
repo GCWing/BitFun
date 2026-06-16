@@ -150,7 +150,7 @@ fn capability_packs_describe_service_tool_and_harness_requirements() {
 }
 
 #[test]
-fn product_assembly_plan_makes_delivery_profile_explicit_without_reducing_capabilities() {
+fn product_assembly_plan_keeps_full_capabilities_only_for_core_compatibility_profiles() {
     let expected_capabilities = vec!["code-agent", "deep-review", "deep-research", "miniapp"];
     let expected_tool_groups = vec![
         "core.basic",
@@ -159,10 +159,12 @@ fn product_assembly_plan_makes_delivery_profile_explicit_without_reducing_capabi
         "core.integration",
     ];
 
-    for profile in DeliveryProfile::all_current_product_profiles()
-        .iter()
-        .copied()
-    {
+    for profile in [
+        DeliveryProfile::ProductFull,
+        DeliveryProfile::Desktop,
+        DeliveryProfile::Cli,
+        DeliveryProfile::Acp,
+    ] {
         let plan = product_assembly_plan_for_profile(profile);
 
         assert_eq!(plan.profile(), profile);
@@ -183,6 +185,48 @@ fn product_assembly_plan_makes_delivery_profile_explicit_without_reducing_capabi
                 .collect::<Vec<_>>(),
             expected_tool_groups,
             "{profile} must preserve current tool provider groups"
+        );
+    }
+}
+
+#[test]
+fn no_direct_core_profiles_do_not_select_product_full_runtime_capabilities() {
+    for profile in [
+        DeliveryProfile::Server,
+        DeliveryProfile::Remote,
+        DeliveryProfile::Web,
+        DeliveryProfile::MobileWeb,
+    ] {
+        let plan = product_assembly_plan_for_profile(profile);
+
+        assert_eq!(plan.profile(), profile);
+        assert!(
+            plan.capability_set().ids().is_empty(),
+            "{profile} must not implicitly select product-full capabilities"
+        );
+        assert!(
+            plan.capability_assembly().capability_ids().is_empty(),
+            "{profile} must not build runtime capability packs"
+        );
+        assert!(
+            plan.capability_assembly().service_requirements().is_empty(),
+            "{profile} must not require product-full runtime services"
+        );
+        assert!(
+            plan.feature_groups().is_empty(),
+            "{profile} must not expose product-full feature groups"
+        );
+        assert!(
+            plan.capability_assembly()
+                .tool_provider_group_plan()
+                .is_empty(),
+            "{profile} must not materialize product-full tool groups"
+        );
+        assert!(
+            plan.capability_assembly()
+                .harness_provider_descriptors()
+                .is_empty(),
+            "{profile} must not register product-full harness routes"
         );
     }
 }
@@ -240,6 +284,59 @@ fn product_delivery_profile_matrix_documents_current_core_dependency_shape() {
         DeliveryProfile::all_current_product_profiles(),
         "delivery profile matrix must cover every current product profile exactly once"
     );
+}
+
+#[test]
+fn product_assembly_plan_follows_core_dependency_matrix() {
+    for entry in product_delivery_profile_entries() {
+        let plan = product_assembly_plan_for_profile(entry.profile());
+
+        match entry.core_dependency_mode() {
+            ProductCoreDependencyMode::ProductFullCompatibility => {
+                assert!(
+                    !plan.capability_set().ids().is_empty(),
+                    "{} must retain product-full capabilities",
+                    entry.profile()
+                );
+                assert!(
+                    !plan
+                        .capability_assembly()
+                        .tool_provider_group_plan()
+                        .is_empty(),
+                    "{} must retain product-full tool groups",
+                    entry.profile()
+                );
+                assert!(
+                    !plan.feature_groups().is_empty(),
+                    "{} must retain product-full feature groups",
+                    entry.profile()
+                );
+            }
+            ProductCoreDependencyMode::NoDirectCoreDependency => {
+                assert!(
+                    plan.capability_set().ids().is_empty(),
+                    "{} must not materialize product-full capabilities",
+                    entry.profile()
+                );
+                assert!(
+                    plan.capability_assembly()
+                        .tool_provider_group_plan()
+                        .is_empty(),
+                    "{} must not materialize product-full tool groups",
+                    entry.profile()
+                );
+                assert!(
+                    plan.feature_groups().is_empty(),
+                    "{} must not expose product-full feature groups",
+                    entry.profile()
+                );
+            }
+            _ => panic!(
+                "{} has an unsupported core dependency mode in the product assembly plan test",
+                entry.profile()
+            ),
+        }
+    }
 }
 
 #[test]
@@ -403,6 +500,30 @@ fn product_assembler_reports_missing_services_without_building_runtime_parts() {
             ],
         }
     );
+}
+
+#[test]
+fn product_assembler_allows_no_direct_core_profiles_without_product_services() {
+    for profile in [
+        DeliveryProfile::Server,
+        DeliveryProfile::Remote,
+        DeliveryProfile::Web,
+        DeliveryProfile::MobileWeb,
+    ] {
+        let services = FakeRuntimeServicesProvider::with_all_required()
+            .build_services()
+            .expect("baseline runtime services should build");
+
+        let parts = ProductAssembler::new()
+            .assemble(ProductAssemblyInput::new(profile, services))
+            .expect("no-direct-core profile should not require product-full runtime services");
+
+        assert_eq!(parts.plan().profile(), profile);
+        assert!(parts.plan().capability_set().ids().is_empty());
+        assert!(parts.service_availability().is_empty());
+        assert!(parts.missing_service_requirements().is_empty());
+        assert!(parts.harness_registry().provider_ids().is_empty());
+    }
 }
 
 #[test]
