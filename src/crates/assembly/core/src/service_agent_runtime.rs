@@ -437,6 +437,20 @@ fn agent_input_attachment_from_image_context(context: ImageContextData) -> Agent
     }
 }
 
+fn core_agent_runtime_builder(
+    submission: Arc<dyn AgentSubmissionPort>,
+    session_management: Arc<dyn AgentSessionManagementPort>,
+    cancellation: Arc<dyn AgentTurnCancellationPort>,
+) -> AgentRuntimeBuilder {
+    let agent_registry: Arc<dyn bitfun_agent_runtime::sdk::RuntimeAgentRegistry> =
+        crate::agentic::agents::get_agent_registry();
+    AgentRuntimeBuilder::new()
+        .with_submission_port(submission)
+        .with_session_management_port(session_management)
+        .with_cancellation_port(cancellation)
+        .with_agent_registry(agent_registry)
+}
+
 impl RemoteImageContextAdapter for ImageContextData {
     fn from_remote_image_context(context: RemoteImageContext) -> Self {
         Self {
@@ -644,10 +658,7 @@ impl CoreServiceAgentRuntime {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management: Arc<dyn AgentSessionManagementPort> = coordinator.clone();
         let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator;
-        AgentRuntimeBuilder::new()
-            .with_submission_port(submission)
-            .with_session_management_port(session_management)
-            .with_cancellation_port(cancellation)
+        core_agent_runtime_builder(submission, session_management, cancellation)
             .build()
             .map_err(|error| error.to_string())
     }
@@ -661,10 +672,7 @@ impl CoreServiceAgentRuntime {
         let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator;
         let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
         let lifecycle_delivery: Arc<dyn AgentLifecycleDeliveryPort> = scheduler;
-        AgentRuntimeBuilder::new()
-            .with_submission_port(submission)
-            .with_session_management_port(session_management)
-            .with_cancellation_port(cancellation)
+        core_agent_runtime_builder(submission, session_management, cancellation)
             .with_dialog_turn_port(dialog_turn)
             .with_lifecycle_delivery_port(lifecycle_delivery)
             .build()
@@ -679,10 +687,7 @@ impl CoreServiceAgentRuntime {
         let session_management: Arc<dyn AgentSessionManagementPort> = coordinator.clone();
         let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator;
         let lifecycle_delivery: Arc<dyn AgentLifecycleDeliveryPort> = scheduler;
-        AgentRuntimeBuilder::new()
-            .with_submission_port(submission)
-            .with_session_management_port(session_management)
-            .with_cancellation_port(cancellation)
+        core_agent_runtime_builder(submission, session_management, cancellation)
             .with_lifecycle_delivery_port(lifecycle_delivery)
             .build()
             .map_err(|error| error.to_string())
@@ -697,10 +702,7 @@ impl CoreServiceAgentRuntime {
         let cancellation: Arc<dyn AgentTurnCancellationPort> = scheduler.clone();
         let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
         let lifecycle_delivery: Arc<dyn AgentLifecycleDeliveryPort> = scheduler;
-        AgentRuntimeBuilder::new()
-            .with_submission_port(submission)
-            .with_session_management_port(session_management)
-            .with_cancellation_port(cancellation)
+        core_agent_runtime_builder(submission, session_management, cancellation)
             .with_dialog_turn_port(dialog_turn)
             .with_lifecycle_delivery_port(lifecycle_delivery)
             .build()

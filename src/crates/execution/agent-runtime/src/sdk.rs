@@ -10,7 +10,8 @@ pub use crate::post_call_hooks::{
 };
 pub use crate::runtime::{
     AgentEventStream, AgentRunHandle, AgentRunRequest, AgentRuntime, AgentRuntimeBuilder,
-    RuntimeBuildError, RuntimeError, RuntimeToolRegistry, SessionSelector,
+    RuntimeAgentRegistry, RuntimeAgentRegistryQuery, RuntimeBuildError, RuntimeError,
+    RuntimeToolRegistry, SessionSelector,
 };
 pub use bitfun_runtime_ports::{
     AgentDialogTurnPort, AgentDialogTurnRequest, AgentInputAttachment, AgentLifecycleDeliveryPort,

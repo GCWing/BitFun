@@ -22,18 +22,10 @@ pub fn builtin_agent_specs() -> Vec<BuiltinAgentSpec> {
         .into_iter()
         .map(|spec| BuiltinAgentSpec {
             factory: builtin_agent_factory(spec.id),
-            category: map_builtin_agent_category(spec.category),
+            category: spec.category,
             visibility_policy: spec.visibility_policy,
         })
         .collect()
-}
-
-fn map_builtin_agent_category(category: runtime_agents::BuiltinAgentCategory) -> AgentCategory {
-    match category {
-        runtime_agents::BuiltinAgentCategory::Mode => AgentCategory::Mode,
-        runtime_agents::BuiltinAgentCategory::SubAgent => AgentCategory::SubAgent,
-        runtime_agents::BuiltinAgentCategory::Hidden => AgentCategory::Hidden,
-    }
 }
 
 fn builtin_agent_factory(id: &str) -> fn() -> Arc<dyn Agent> {

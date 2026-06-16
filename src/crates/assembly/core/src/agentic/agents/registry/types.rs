@@ -12,8 +12,8 @@ use crate::agentic::deep_review_policy::{
     REVIEW_JUDGE_AGENT_TYPE,
 };
 pub use bitfun_agent_runtime::agents::{
-    SubAgentSource, SubagentListScope, SubagentOverrideState, SubagentQueryContext,
-    SubagentStateReason,
+    BuiltinAgentCategory as AgentCategory, SubAgentSource, SubagentListScope,
+    SubagentOverrideState, SubagentQueryContext, SubagentStateReason,
 };
 use bitfun_agent_runtime::prompt_cache::prompt_cache_scope_key;
 use serde::{Deserialize, Serialize};
@@ -30,17 +30,6 @@ pub struct CustomSubagentConfig {
 pub struct AgentToolPolicy {
     pub allowed_tools: Vec<String>,
     pub exposure_overrides: AgentToolPolicyOverrides,
-}
-
-/// Agent category
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AgentCategory {
-    /// mode agent (displayed in frontend mode selector)
-    Mode,
-    /// subagent (displayed in frontend subagent list, discovered by TaskTool)
-    SubAgent,
-    /// hidden agent (not displayed in frontend, not discovered by TaskTool, used internally)
-    Hidden,
 }
 
 /// one agent record in registry

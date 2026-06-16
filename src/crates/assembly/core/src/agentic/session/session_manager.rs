@@ -11,11 +11,13 @@ use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::persistence::PersistenceManager;
 use crate::agentic::session::session_store_port::CoreSessionStorePort;
 use crate::agentic::session::{
-    CachedSystemPrompt, CachedUserContext, EvidenceLedgerCheckpoint, EvidenceLedgerEvent,
-    EvidenceLedgerEventStatus, EvidenceLedgerSummary, EvidenceLedgerTargetKind, FileReadState,
-    FileReadStateStore, PromptCacheLookup, PromptCachePolicy, PromptCacheScope,
-    SessionContextStore, SessionEvidenceLedger, SessionPromptCache, SessionPromptCacheStore,
-    SystemPromptCacheIdentity, TurnSkillAgentSnapshotStore, UserContextCacheIdentity,
+    prompt_cache_persist_action, reconcile_prompt_cache_restore, CachedSystemPrompt,
+    CachedUserContext, EvidenceLedgerCheckpoint, EvidenceLedgerEvent, EvidenceLedgerEventStatus,
+    EvidenceLedgerSummary, EvidenceLedgerTargetKind, FileReadState, FileReadStateStore,
+    PromptCacheLookup, PromptCachePersistenceWriteAction, PromptCachePolicy,
+    PromptCacheRestoreDecision, PromptCacheScope, SessionContextStore, SessionEvidenceLedger,
+    SessionPromptCache, SessionPromptCacheStore, SystemPromptCacheIdentity,
+    TurnSkillAgentSnapshotStore, UserContextCacheIdentity,
 };
 use crate::agentic::skill_agent_snapshot::TurnSkillAgentSnapshot;
 use crate::infrastructure::ai::get_global_ai_client_factory;
@@ -732,7 +734,7 @@ impl SessionManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<Option<SessionPromptCache>> {
-        let mut cache = match self
+        let cache = match self
             .persistence_manager
             .load_prompt_cache(workspace_path, session_id)
             .await?
@@ -741,24 +743,22 @@ impl SessionManager {
             None => return Ok(None),
         };
 
-        let expired_entries_removed =
-            cache.apply_persistence_ttl(self.config.prompt_cache_policy.persistence_ttl);
-
-        if !expired_entries_removed {
-            return Ok(Some(cache));
+        let decision =
+            reconcile_prompt_cache_restore(cache, self.config.prompt_cache_policy.persistence_ttl);
+        match &decision {
+            PromptCacheRestoreDecision::DeleteExpired => {
+                self.persistence_manager
+                    .delete_prompt_cache(workspace_path, session_id)
+                    .await?;
+            }
+            PromptCacheRestoreDecision::SavePruned(cache) => {
+                self.persistence_manager
+                    .save_prompt_cache(workspace_path, session_id, cache)
+                    .await?;
+            }
+            PromptCacheRestoreDecision::Keep(_) => {}
         }
-
-        if cache.is_empty() {
-            self.persistence_manager
-                .delete_prompt_cache(workspace_path, session_id)
-                .await?;
-            Ok(None)
-        } else {
-            self.persistence_manager
-                .save_prompt_cache(workspace_path, session_id, &cache)
-                .await?;
-            Ok(Some(cache))
-        }
+        Ok(decision.into_cache())
     }
 
     async fn persist_prompt_cache_best_effort(&self, session_id: &str, reason: &str) {
@@ -779,14 +779,17 @@ impl SessionManager {
             .get_cache(session_id)
             .unwrap_or_default();
 
-        let persist_result = if cache.system_prompt.is_none() && cache.user_context.is_none() {
-            self.persistence_manager
-                .delete_prompt_cache(&workspace_path, session_id)
-                .await
-        } else {
-            self.persistence_manager
-                .save_prompt_cache(&workspace_path, session_id, &cache)
-                .await
+        let persist_result = match prompt_cache_persist_action(&cache) {
+            PromptCachePersistenceWriteAction::Delete => {
+                self.persistence_manager
+                    .delete_prompt_cache(&workspace_path, session_id)
+                    .await
+            }
+            PromptCachePersistenceWriteAction::Save => {
+                self.persistence_manager
+                    .save_prompt_cache(&workspace_path, session_id, &cache)
+                    .await
+            }
         };
 
         if let Err(error) = persist_result {

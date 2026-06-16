@@ -4,6 +4,7 @@
 //! future SDK consumers a narrow agent entrypoint without depending on
 //! `bitfun-core`, app crates, Tauri, or concrete service managers.
 
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use bitfun_agent_tools::{ToolRegistry, ToolRegistryItem};
@@ -82,6 +83,15 @@ impl AgentEventStream {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct RuntimeAgentRegistryQuery<'a> {
+    pub workspace_root: Option<&'a Path>,
+}
+
+pub trait RuntimeAgentRegistry: Send + Sync {
+    fn agent_ids(&self, query: RuntimeAgentRegistryQuery<'_>) -> Vec<String>;
+}
+
 #[derive(Clone)]
 pub struct AgentRuntime {
     submission: Arc<dyn AgentSubmissionPort>,
@@ -94,6 +104,7 @@ pub struct AgentRuntime {
     tool_registry: Option<Arc<dyn RuntimeToolRegistry>>,
     harness_registry: Option<Arc<HarnessRegistry>>,
     hook_registry: RuntimeHookRegistry,
+    agent_registry: Option<Arc<dyn RuntimeAgentRegistry>>,
 }
 
 impl std::fmt::Debug for AgentRuntime {
@@ -145,6 +156,13 @@ impl std::fmt::Debug for AgentRuntime {
                 &self.harness_registry.as_ref().map(|_| "<HarnessRegistry>"),
             )
             .field("hook_count", &self.hook_registry.hooks().len())
+            .field(
+                "agent_registry",
+                &self
+                    .agent_registry
+                    .as_ref()
+                    .map(|_| "<dyn RuntimeAgentRegistry>"),
+            )
             .finish()
     }
 }
@@ -174,6 +192,7 @@ pub struct AgentRuntimeBuilder {
     tool_registry: Option<Arc<dyn RuntimeToolRegistry>>,
     harness_registry: Option<Arc<HarnessRegistry>>,
     hook_registry: RuntimeHookRegistry,
+    agent_registry: Option<Arc<dyn RuntimeAgentRegistry>>,
 }
 
 impl AgentRuntimeBuilder {
@@ -237,6 +256,11 @@ impl AgentRuntimeBuilder {
         self
     }
 
+    pub fn with_agent_registry(mut self, registry: Arc<dyn RuntimeAgentRegistry>) -> Self {
+        self.agent_registry = Some(registry);
+        self
+    }
+
     pub fn build(self) -> Result<AgentRuntime, RuntimeBuildError> {
         Ok(AgentRuntime {
             submission: self
@@ -251,6 +275,7 @@ impl AgentRuntimeBuilder {
             tool_registry: self.tool_registry,
             harness_registry: self.harness_registry,
             hook_registry: self.hook_registry,
+            agent_registry: self.agent_registry,
         })
     }
 }
@@ -372,6 +397,13 @@ impl AgentRuntime {
 
     pub fn hook_registry(&self) -> &RuntimeHookRegistry {
         &self.hook_registry
+    }
+
+    pub fn registered_agent_ids(&self, query: RuntimeAgentRegistryQuery<'_>) -> Vec<String> {
+        self.agent_registry
+            .as_ref()
+            .map(|registry| registry.agent_ids(query))
+            .unwrap_or_default()
     }
 
     pub async fn create_session(

@@ -1,9 +1,11 @@
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use bitfun_agent_runtime::sdk::{
-    AgentEventStream, AgentRunRequest, AgentRuntimeBuilder, RuntimeHookErrorPolicy,
-    RuntimeHookKind, RuntimeHookPlan, RuntimeHookRegistry, SessionSelector,
+    AgentEventStream, AgentRunRequest, AgentRuntimeBuilder, RuntimeAgentRegistry,
+    RuntimeAgentRegistryQuery, RuntimeHookErrorPolicy, RuntimeHookKind, RuntimeHookPlan,
+    RuntimeHookRegistry, SessionSelector,
 };
 use bitfun_agent_tools::{ToolRegistry, ToolRegistryItem};
 use bitfun_harness::{
@@ -25,6 +27,22 @@ struct FakeSdkAgentProvider {
 }
 
 struct FakeSdkTool;
+
+#[derive(Debug)]
+struct FakeSdkAgentRegistry {
+    agent_ids: Vec<String>,
+    workspace_agent_ids: Vec<String>,
+}
+
+impl RuntimeAgentRegistry for FakeSdkAgentRegistry {
+    fn agent_ids(&self, query: RuntimeAgentRegistryQuery<'_>) -> Vec<String> {
+        if query.workspace_root.is_some() {
+            self.workspace_agent_ids.clone()
+        } else {
+            self.agent_ids.clone()
+        }
+    }
+}
 
 #[async_trait]
 impl ToolRegistryItem for FakeSdkTool {
@@ -157,12 +175,34 @@ async fn sdk_facade_accepts_fake_services_tools_harnesses_and_hooks_without_core
         .with_tool_registry(Arc::new(tools))
         .with_harness_registry(Arc::new(harnesses))
         .with_hook_registry(hooks)
+        .with_agent_registry(Arc::new(FakeSdkAgentRegistry {
+            agent_ids: vec!["agentic".to_string(), "Explore".to_string()],
+            workspace_agent_ids: vec![
+                "agentic".to_string(),
+                "Explore".to_string(),
+                "ProjectReviewer".to_string(),
+            ],
+        }))
         .build()
         .expect("sdk runtime");
 
     assert_eq!(runtime.registered_tool_names(), vec!["sdk_echo"]);
     assert_eq!(runtime.harness_provider_ids(), vec!["sdk.fake_harness"]);
     assert_eq!(runtime.hook_registry().hooks()[0].id(), "sdk.post_call");
+    assert_eq!(
+        runtime.registered_agent_ids(RuntimeAgentRegistryQuery::default()),
+        vec!["agentic".to_string(), "Explore".to_string()]
+    );
+    assert_eq!(
+        runtime.registered_agent_ids(RuntimeAgentRegistryQuery {
+            workspace_root: Some(Path::new("/workspace/project")),
+        }),
+        vec![
+            "agentic".to_string(),
+            "Explore".to_string(),
+            "ProjectReviewer".to_string()
+        ]
+    );
     assert!(runtime
         .services()
         .expect("services should be injected")

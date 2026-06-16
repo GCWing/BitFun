@@ -11,6 +11,7 @@ crate-type = ["rlib"]
 
 [dependencies]
 bitfun-agent-tools = { path = "../tool-contracts" }
+bitfun-events = { path = "../../contracts/events" }
 bitfun-harness = { path = "../harness" }
 bitfun-runtime-ports = { path = "../../contracts/runtime-ports" }
 bitfun-runtime-services = { path = "../runtime-services" }
