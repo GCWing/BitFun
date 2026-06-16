@@ -1823,13 +1823,17 @@ impl ExecutionEngine {
                 compression_contract.as_ref(),
                 trace_config,
             )
-            .await.unwrap_or_else(|err| {
-            warn!(
+            .await
+        {
+            Ok(summary) => summary,
+            Err(err) => {
+                warn!(
                     "Model-based manual compaction failed, falling back to structured local compression: {}",
                     err
                 );
-            None
-        });
+                None
+            }
+        };
         match self.context_compressor.compress_turns_with_contract(
             &session_id,
             context_window,
@@ -2986,6 +2990,8 @@ impl ExecutionEngine {
         // is overridden by finalize / fallback paths below.
         let mut effective_finish_reason: &'static str = finalization_reason.unwrap_or_else(|| "complete");
         let mut finalize_fallback_text_used = false;
+        let mut has_final_response = finalization_reason.is_none();
+        let mut used_local_final_response_synthesis = false;
 
         if let Some(reason) = finalization_reason {
             let finalize_reminder = match reason {
