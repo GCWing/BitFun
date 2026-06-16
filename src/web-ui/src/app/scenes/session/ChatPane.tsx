@@ -6,7 +6,8 @@
  */
 
 import React, { useCallback, memo, useEffect, useRef } from 'react';
-import { FlowChatContainer, ChatInput } from '../../../flow_chat';
+import { ModernFlowChatContainer as FlowChatContainer } from '../../../flow_chat/components/modern/ModernFlowChatContainer';
+import { ChatInput } from '../../../flow_chat/components/ChatInput';
 import { useCanvasStore } from '../../components/panels/content-canvas/stores/canvasStore';
 import type { LineRange } from '@/component-library';
 import path from 'path-browserify';

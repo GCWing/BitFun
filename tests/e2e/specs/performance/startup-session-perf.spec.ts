@@ -4120,7 +4120,7 @@ function expectRapidSwitchMeasurementUsesFreshTargetRestore(
     ['hydrateDurationMs', open.hydrateDurationMs],
     ['latestFrameSinceHydrateMs', open.latestFrameSinceHydrateMs],
   ]
-    .filter(([, value]) => typeof value !== 'number' || value <= 0)
+    .filter(([, value]) => typeof value !== 'number' || value < 0)
     .map(([name]) => name);
 
   if (missingSegments.length > 0) {

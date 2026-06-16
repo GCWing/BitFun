@@ -24,7 +24,7 @@ import {
   hideStartupOverlay,
   isStartupOverlayPresent,
 } from './startup/startupOverlay';
-import { ToolbarModeProvider } from '../flow_chat/components/toolbar-mode';
+import { ToolbarModeProvider } from '../flow_chat/components/toolbar-mode/ToolbarModeProvider';
 
 const log = createLogger('App');
 

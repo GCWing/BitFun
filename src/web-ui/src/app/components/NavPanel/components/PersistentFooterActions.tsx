@@ -22,7 +22,6 @@ import { useToolbarModeContext } from '@/flow_chat/components/toolbar-mode/Toolb
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { useNotification } from '@/shared/notification-system';
 import NotificationButton from '../../TitleBar/NotificationButton';
-import { AboutDialog } from '../../AboutDialog';
 import {
   RemoteConnectDisclaimerContent,
 } from '../../RemoteConnectDialog/RemoteConnectDisclaimer';
@@ -32,6 +31,9 @@ import {
 } from '../../RemoteConnectDialog/remoteConnectDisclaimerStorage';
 
 const RemoteConnectDialog = lazy(() => import('../../RemoteConnectDialog'));
+const AboutDialog = lazy(() =>
+  import('../../AboutDialog').then(module => ({ default: module.AboutDialog }))
+);
 
 const PersistentFooterActions: React.FC = () => {
   const { t } = useI18n('common');
@@ -274,7 +276,11 @@ const PersistentFooterActions: React.FC = () => {
           <NotificationButton className="bitfun-nav-panel__footer-btn" navFooterHoverIconSwap />
         </div>
       </div>
-      <AboutDialog isOpen={showAbout} onClose={() => setShowAbout(false)} />
+      {showAbout && (
+        <Suspense fallback={null}>
+          <AboutDialog isOpen={showAbout} onClose={() => setShowAbout(false)} />
+        </Suspense>
+      )}
       {showRemoteConnect && (
         <Suspense fallback={null}>
           <RemoteConnectDialog isOpen={showRemoteConnect} onClose={() => setShowRemoteConnect(false)} />

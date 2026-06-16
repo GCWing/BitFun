@@ -47,7 +47,7 @@ import {
 } from '../services/sessionOpenIntent';
 import { useThreadGoalController } from '../hooks/useThreadGoalController';
 import { ThreadGoalDialogs } from './thread-goal/ThreadGoalDialogs';
-import { FlowChatManager } from '@/flow_chat';
+import { FlowChatManager } from '@/flow_chat/services/FlowChatManager';
 import {
   DEEP_REVIEW_SLASH_COMMAND,
   getDeepReviewLaunchErrorMessage,

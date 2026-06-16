@@ -61,33 +61,215 @@ async function getFreshWorkspaceManager() {
   return WorkspaceManager.getInstance();
 }
 
+async function flushAsyncWork(): Promise<void> {
+  await new Promise(resolve => setTimeout(resolve, 0));
+}
+
 describe('WorkspaceManager startup initialization', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     configureGlobalState();
   });
 
-  it('waits for the identity listener before loading startup workspace state with one IPC', async () => {
-    let resolveListener: ((unlisten: () => void) => void) | null = null;
-    listenMock.mockReturnValue(new Promise(resolve => {
-      resolveListener = resolve;
-    }));
+  it('does not block startup workspace state on identity listener registration', async () => {
+    listenMock.mockReturnValue(new Promise(() => undefined));
     const manager = await getFreshWorkspaceManager();
 
     const initializePromise = manager.initialize();
-    await new Promise(resolve => setTimeout(resolve, 20));
+    const initializeResult = await Promise.race([
+      initializePromise.then(() => 'initialized'),
+      new Promise(resolve => setTimeout(() => resolve('timeout'), 20)),
+    ]);
 
     expect(listenMock).toHaveBeenCalledWith('workspace-identity-changed', expect.any(Function));
-    expect(globalStateMocks.initializeWorkspaceStartupState).not.toHaveBeenCalled();
-
-    resolveListener?.(() => undefined);
-    await initializePromise;
-
+    expect(initializeResult).toBe('initialized');
     expect(globalStateMocks.initializeWorkspaceStartupState).toHaveBeenCalledTimes(1);
     expect(globalStateMocks.cleanupInvalidWorkspaces).not.toHaveBeenCalled();
     expect(globalStateMocks.getCurrentWorkspace).not.toHaveBeenCalled();
     expect(globalStateMocks.getRecentWorkspaces).not.toHaveBeenCalled();
     expect(globalStateMocks.getOpenedWorkspaces).not.toHaveBeenCalled();
+  });
+
+  it('applies identity updates after delayed listener registration completes', async () => {
+    const workspace = {
+      id: 'assistant-1',
+      name: 'Assistant 1',
+      rootPath: 'D:/workspace/assistant-1',
+      workspaceKind: 'assistant',
+      identity: null,
+    };
+    globalStateMocks.initializeWorkspaceStartupState.mockResolvedValue({
+      cleanupRemovedCount: 0,
+      recentWorkspaces: [workspace],
+      openedWorkspaces: [workspace],
+      currentWorkspace: workspace,
+      legacyRemoteWorkspace: null,
+    });
+    globalStateMocks.getCurrentWorkspace.mockResolvedValue(workspace);
+    globalStateMocks.getRecentWorkspaces.mockResolvedValue([workspace]);
+    globalStateMocks.getOpenedWorkspaces.mockResolvedValue([workspace]);
+
+    let identityHandler:
+      | ((event: {
+          payload: {
+            workspaceId: string;
+            workspacePath: string;
+            name: string;
+            identity: { name: string };
+            changedFields: string[];
+          };
+        }) => void)
+      | null = null;
+    let resolveListener: ((unlisten: () => void) => void) | null = null;
+    listenMock.mockImplementation((_eventName, handler) => {
+      identityHandler = handler;
+      return new Promise(resolve => {
+        resolveListener = resolve;
+      });
+    });
+
+    const manager = await getFreshWorkspaceManager();
+    await manager.initialize();
+
+    expect(manager.getState().currentWorkspace?.name).toBe('Assistant 1');
+
+    resolveListener?.(() => undefined);
+    await flushAsyncWork();
+
+    identityHandler?.({
+      payload: {
+        workspaceId: 'assistant-1',
+        workspacePath: 'D:/workspace/assistant-1',
+        name: 'Assistant renamed',
+        identity: { name: 'Assistant renamed' },
+        changedFields: ['name'],
+      },
+    });
+
+    expect(manager.getState().currentWorkspace?.name).toBe('Assistant renamed');
+  });
+
+  it('refreshes workspace identity once the delayed listener is ready after startup', async () => {
+    const startupWorkspace = {
+      id: 'assistant-1',
+      name: 'Assistant 1',
+      rootPath: 'D:/workspace/assistant-1',
+      workspaceKind: 'assistant',
+      identity: null,
+    };
+    const refreshedWorkspace = {
+      ...startupWorkspace,
+      name: 'Assistant renamed',
+      identity: { name: 'Assistant renamed' },
+    };
+    globalStateMocks.initializeWorkspaceStartupState.mockResolvedValue({
+      cleanupRemovedCount: 0,
+      recentWorkspaces: [startupWorkspace],
+      openedWorkspaces: [startupWorkspace],
+      currentWorkspace: startupWorkspace,
+      legacyRemoteWorkspace: null,
+    });
+    globalStateMocks.getCurrentWorkspace.mockResolvedValue(refreshedWorkspace);
+    globalStateMocks.getRecentWorkspaces.mockResolvedValue([refreshedWorkspace]);
+    globalStateMocks.getOpenedWorkspaces.mockResolvedValue([refreshedWorkspace]);
+
+    let resolveListener: ((unlisten: () => void) => void) | null = null;
+    listenMock.mockReturnValue(new Promise(resolve => {
+      resolveListener = resolve;
+    }));
+
+    const manager = await getFreshWorkspaceManager();
+    await manager.initialize();
+
+    expect(manager.getState().currentWorkspace?.name).toBe('Assistant 1');
+
+    resolveListener?.(() => undefined);
+    await flushAsyncWork();
+
+    expect(globalStateMocks.getCurrentWorkspace).toHaveBeenCalledTimes(1);
+    expect(manager.getState().currentWorkspace?.name).toBe('Assistant renamed');
+  });
+
+  it('refreshes workspace identity when an identity event arrives before startup state is committed', async () => {
+    const startupWorkspace = {
+      id: 'assistant-1',
+      name: 'Assistant 1',
+      rootPath: 'D:/workspace/assistant-1',
+      workspaceKind: 'assistant',
+      identity: null,
+    };
+    const refreshedWorkspace = {
+      ...startupWorkspace,
+      name: 'Assistant renamed',
+      identity: { name: 'Assistant renamed' },
+    };
+    let resolveStartupState: ((value: {
+      cleanupRemovedCount: number;
+      recentWorkspaces: typeof startupWorkspace[];
+      openedWorkspaces: typeof startupWorkspace[];
+      currentWorkspace: typeof startupWorkspace;
+      legacyRemoteWorkspace: null;
+    }) => void) | null = null;
+    globalStateMocks.initializeWorkspaceStartupState.mockReturnValue(new Promise(resolve => {
+      resolveStartupState = resolve;
+    }));
+    globalStateMocks.getCurrentWorkspace.mockResolvedValue(refreshedWorkspace);
+    globalStateMocks.getRecentWorkspaces.mockResolvedValue([refreshedWorkspace]);
+    globalStateMocks.getOpenedWorkspaces.mockResolvedValue([refreshedWorkspace]);
+
+    let identityHandler:
+      | ((event: {
+          payload: {
+            workspaceId: string;
+            workspacePath: string;
+            name: string;
+            identity: { name: string };
+            changedFields: string[];
+          };
+        }) => void)
+      | null = null;
+    listenMock.mockImplementation((_eventName, handler) => {
+      identityHandler = handler;
+      return Promise.resolve(() => undefined);
+    });
+
+    const manager = await getFreshWorkspaceManager();
+    const initializePromise = manager.initialize();
+    await flushAsyncWork();
+
+    identityHandler?.({
+      payload: {
+        workspaceId: 'assistant-1',
+        workspacePath: 'D:/workspace/assistant-1',
+        name: 'Assistant renamed',
+        identity: { name: 'Assistant renamed' },
+        changedFields: ['name'],
+      },
+    });
+
+    resolveStartupState?.({
+      cleanupRemovedCount: 0,
+      recentWorkspaces: [startupWorkspace],
+      openedWorkspaces: [startupWorkspace],
+      currentWorkspace: startupWorkspace,
+      legacyRemoteWorkspace: null,
+    });
+    await initializePromise;
+    await flushAsyncWork();
+
+    expect(globalStateMocks.getCurrentWorkspace).toHaveBeenCalledTimes(1);
+    expect(manager.getState().currentWorkspace?.name).toBe('Assistant renamed');
+  });
+
+  it('keeps startup workspace state available when identity listener registration fails', async () => {
+    listenMock.mockRejectedValue(new Error('listener unavailable'));
+    const manager = await getFreshWorkspaceManager();
+
+    await expect(manager.initialize()).resolves.toBeUndefined();
+
+    expect(globalStateMocks.initializeWorkspaceStartupState).toHaveBeenCalledTimes(1);
+    expect(manager.getState().loading).toBe(false);
+    expect(manager.getState().error).toBeNull();
   });
 
   it('stores the startup legacy remote workspace snapshot for one reconnect pass', async () => {

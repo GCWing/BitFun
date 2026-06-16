@@ -18,15 +18,10 @@ import { useApp } from '../hooks/useApp';
 import { useSceneStore } from '../stores/sceneStore';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
-
-type TransitionDirection = 'entering' | 'returning' | null;
 import { FlowChatManager } from '../../flow_chat/services/FlowChatManager';
 import WorkspaceBody from './WorkspaceBody';
-import { ToolbarMode, useToolbarModeContext } from '../../flow_chat/components/toolbar-mode';
-import { FloatingMiniChat } from './FloatingMiniChat';
-import { AboutDialog } from '../components/AboutDialog';
+import { useToolbarModeContext } from '../../flow_chat/components/toolbar-mode/ToolbarModeContext';
 import { MCPInteractionDialog } from '../components/MCPInteractionDialog/MCPInteractionDialog';
-import { WorkspaceManager } from '../../tools/workspace';
 import { workspaceAPI } from '@/infrastructure/api';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import type { CloseBehavior } from '@/infrastructure/api/service-api/SystemAPI';
@@ -41,11 +36,25 @@ import { useSessionModeStore } from '../stores/sessionModeStore';
 import { isMacOSDesktopRuntime } from '@/infrastructure/runtime';
 import './AppLayout.scss';
 
+type TransitionDirection = 'entering' | 'returning' | null;
+
 const log = createLogger('AppLayout');
 const ACP_SESSION_PENDING_TIMEOUT_MS = 75_000;
 const NewProjectDialog = lazy(() =>
   import('../components/NewProjectDialog').then(module => ({ default: module.NewProjectDialog }))
 );
+const ToolbarMode = lazy(() =>
+  import('../../flow_chat/components/toolbar-mode/ToolbarMode').then(module => ({
+    default: module.ToolbarMode,
+  }))
+);
+const FloatingMiniChat = lazy(() =>
+  import('./FloatingMiniChat').then(module => ({ default: module.FloatingMiniChat }))
+);
+const AboutDialog = lazy(() =>
+  import('../components/AboutDialog').then(module => ({ default: module.AboutDialog }))
+);
+const WorkspaceManager = lazy(() => import('../../tools/workspace/components/WorkspaceManager'));
 
 interface AppLayoutProps {
   className?: string;
@@ -427,7 +436,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
 
         const persistInterruptedTurnsForExit = async () => {
           try {
-            await FlowChatManager.getInstance().saveAllInProgressTurns();
+            const flowChatManager = FlowChatManager.getInstance();
+            await flowChatManager.saveAllInProgressTurns();
           } catch (error) {
             log.error('Failed to save conversations before quit', error);
           }
@@ -682,7 +692,9 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
     return (
       <>
         <DailyAppUpdateGate />
-        <ToolbarMode />
+        <Suspense fallback={null}>
+          <ToolbarMode />
+        </Suspense>
       </>
     );
   }
@@ -716,7 +728,11 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
         </main>
 
         {/* Non-agent scenes: floating mini chat button */}
-        {!isWelcomeScene && !isAgentScene && <FloatingMiniChat />}
+        {!isWelcomeScene && !isAgentScene && (
+          <Suspense fallback={null}>
+            <FloatingMiniChat />
+          </Suspense>
+        )}
         {pendingAcpSessionClients.length > 0 && (
           <div className="bitfun-app-acp-session-loading" role="status" aria-live="polite">
             <LoaderCircle size={18} className="bitfun-app-acp-session-loading__spinner" />
@@ -744,15 +760,23 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
           />
         </Suspense>
       )}
-      <AboutDialog
-        isOpen={showAboutDialog}
-        onClose={() => setShowAboutDialog(false)}
-      />
-      <WorkspaceManager
-        isVisible={showWorkspaceStatus}
-        onClose={() => setShowWorkspaceStatus(false)}
-        onWorkspaceSelect={() => {}}
-      />
+      {showAboutDialog && (
+        <Suspense fallback={null}>
+          <AboutDialog
+            isOpen={showAboutDialog}
+            onClose={() => setShowAboutDialog(false)}
+          />
+        </Suspense>
+      )}
+      {showWorkspaceStatus && (
+        <Suspense fallback={null}>
+          <WorkspaceManager
+            isVisible={showWorkspaceStatus}
+            onClose={() => setShowWorkspaceStatus(false)}
+            onWorkspaceSelect={() => {}}
+          />
+        </Suspense>
+      )}
       <MCPInteractionDialog />
     </>
   );
