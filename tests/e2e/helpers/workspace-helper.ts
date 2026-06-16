@@ -25,11 +25,101 @@ export interface WorkspaceReadyOptions {
   requireWorkspaceLabel?: boolean;
 }
 
+interface FrontendNavigationMarker {
+  readyState: DocumentReadyState;
+  timeOrigin: number;
+  traceId: string | null;
+}
+
+type StartupTraceWindow = Window & typeof globalThis & {
+  __BITFUN_STARTUP_TRACE__?: {
+    snapshot?: () => unknown;
+  };
+};
+
+type StartupTraceSnapshotLike = {
+  traceId?: string;
+  phases?: {
+    events?: Array<{ phase?: string }>;
+  };
+};
+
+async function readFrontendNavigationMarker(): Promise<FrontendNavigationMarker | null> {
+  return browser.execute(() => {
+    try {
+      const startupTraceWindow = window as unknown as StartupTraceWindow;
+      const snapshot = startupTraceWindow.__BITFUN_STARTUP_TRACE__?.snapshot?.();
+      const traceSnapshot = snapshot && typeof snapshot === 'object'
+        ? snapshot as StartupTraceSnapshotLike
+        : null;
+      return {
+        readyState: document.readyState,
+        timeOrigin: performance.timeOrigin,
+        traceId: traceSnapshot?.traceId ?? null,
+      };
+    } catch {
+      return null;
+    }
+  });
+}
+
+async function waitForFrontendReload(previousMarker: FrontendNavigationMarker | null): Promise<void> {
+  await browser.waitUntil(async () => {
+    const marker = await readFrontendNavigationMarker();
+    if (!marker || marker.readyState === 'loading') {
+      return false;
+    }
+
+    if (!previousMarker) {
+      return true;
+    }
+
+    return marker.timeOrigin !== previousMarker.timeOrigin ||
+      (Boolean(previousMarker.traceId) && Boolean(marker.traceId) && marker.traceId !== previousMarker.traceId);
+  }, {
+    timeout: 15000,
+    interval: 100,
+    timeoutMsg: 'Frontend did not reload after bundled workspace switch',
+  });
+}
+
+async function waitForPostReloadShellReady(projectName: string, workspacePath: string): Promise<void> {
+  await browser.waitUntil(async () => {
+    try {
+      return browser.execute((expectedProjectName: string) => {
+        const startupTraceWindow = window as unknown as StartupTraceWindow;
+        const snapshot = startupTraceWindow.__BITFUN_STARTUP_TRACE__?.snapshot?.();
+        const traceSnapshot = snapshot && typeof snapshot === 'object'
+          ? snapshot as StartupTraceSnapshotLike
+          : null;
+        const phases = traceSnapshot?.phases?.events ?? [];
+        const interactiveShellReady = phases.some((event: { phase?: string }) =>
+          event.phase === 'interactive_shell_ready'
+        );
+        const startupOverlayGone = document.getElementById('bitfun-startup-overlay') === null;
+        const labels = Array.from(document.querySelectorAll('.bitfun-nav-panel__workspace-item-label'))
+          .map(element => element.textContent?.trim() || '')
+          .filter(Boolean);
+        const targetWorkspaceVisible = labels.some(label => label.includes(expectedProjectName));
+
+        return interactiveShellReady && startupOverlayGone && targetWorkspaceVisible;
+      }, projectName);
+    } catch {
+      return false;
+    }
+  }, {
+    timeout: 20000,
+    interval: 100,
+    timeoutMsg: `Frontend shell did not become ready after bundled workspace switch: ${workspacePath}`,
+  });
+}
+
 /**
  * Open a workspace through the frontend state layer so the UI stays in sync.
  */
 export async function openWorkspaceThroughFrontend(workspacePath: string): Promise<void> {
-  await browser.execute(async (targetWorkspacePath: string) => {
+  const previousNavigationMarker = await readFrontendNavigationMarker().catch(() => null);
+  const openedViaBundledIpc = await browser.execute(async (targetWorkspacePath: string) => {
     const invoke = window.__TAURI__?.core?.invoke;
     if (typeof invoke === 'function') {
       const workspace = await invoke('open_workspace', { request: { path: targetWorkspacePath } }) as {
@@ -38,12 +128,20 @@ export async function openWorkspaceThroughFrontend(workspacePath: string): Promi
       if (workspace?.id) {
         await invoke('set_active_workspace', { request: { workspaceId: workspace.id } });
       }
-      return;
+      return true;
     }
 
     const { workspaceManager } = await import('/src/infrastructure/services/business/workspaceManager.ts');
     await workspaceManager.openWorkspace(targetWorkspacePath);
+    return false;
   }, workspacePath);
+
+  if (openedViaBundledIpc) {
+    const projectName = path.basename(workspacePath);
+    await browser.refresh();
+    await waitForFrontendReload(previousNavigationMarker);
+    await waitForPostReloadShellReady(projectName, workspacePath);
+  }
 }
 
 /**

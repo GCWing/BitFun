@@ -76,6 +76,9 @@ class WorkspaceManager {
   private isInitialized = false;
   private isInitializing = false;
   private identityEventListening = false;
+  private identityListenerReady = false;
+  private identityListenerRegistrationPromise: Promise<void> | null = null;
+  private identityListenerReadyResyncPending = false;
   private startupLegacyRemoteWorkspaceSnapshotAvailable = false;
   private startupLegacyRemoteWorkspaceSnapshotConsumed = false;
   private startupLegacyRemoteWorkspace: RemoteWorkspaceSnapshot | null = null;
@@ -336,26 +339,79 @@ class WorkspaceManager {
   }
 
   private async ensureIdentityChangeListener(): Promise<void> {
+    if (this.identityListenerRegistrationPromise) {
+      return this.identityListenerRegistrationPromise;
+    }
     if (this.identityEventListening) {
       return;
     }
 
     this.identityEventListening = true;
+    this.identityListenerReady = false;
     const registrationStartedAt = nowMs();
 
-    try {
-      await listen<WorkspaceIdentityChangedEvent>('workspace-identity-changed', event => {
+    this.identityListenerRegistrationPromise = listen<WorkspaceIdentityChangedEvent>(
+      'workspace-identity-changed',
+      event => {
         this.applyIdentityUpdate(event.payload);
+      }
+    )
+      .then(() => {
+        this.identityListenerReady = true;
+        startupTrace.markPhase('workspace_identity_listener_ready', {
+          durationMs: elapsedMs(registrationStartedAt),
+        });
+        if (this.identityListenerReadyResyncPending && this.isInitialized) {
+          void this.syncWorkspaceStateAfterIdentityListenerReady();
+        }
+      })
+      .catch(error => {
+        this.identityEventListening = false;
+        this.identityListenerReady = false;
+        this.identityListenerReadyResyncPending = false;
+        startupTrace.markPhase('workspace_identity_listener_failed', {
+          durationMs: elapsedMs(registrationStartedAt),
+        });
+        log.error('Failed to subscribe workspace identity updates', { error });
+      })
+      .finally(() => {
+        this.identityListenerRegistrationPromise = null;
       });
-      startupTrace.markPhase('workspace_identity_listener_ready', {
-        durationMs: elapsedMs(registrationStartedAt),
+
+    return this.identityListenerRegistrationPromise;
+  }
+
+  private async syncWorkspaceStateAfterIdentityListenerReady(): Promise<void> {
+    if (!this.identityListenerReadyResyncPending || !this.isInitialized || !this.identityListenerReady) {
+      return;
+    }
+    this.identityListenerReadyResyncPending = false;
+
+    const syncStartedAt = nowMs();
+    try {
+      const [currentWorkspace, recentWorkspaces, openedWorkspaces] = await Promise.all([
+        globalStateAPI.getCurrentWorkspace(),
+        globalStateAPI.getRecentWorkspaces(),
+        globalStateAPI.getOpenedWorkspaces(),
+      ]);
+      this.updateWorkspaceState(
+        currentWorkspace,
+        recentWorkspaces,
+        openedWorkspaces,
+        this.state.loading,
+        this.state.error,
+        currentWorkspace
+          ? { type: 'workspace:updated', workspace: currentWorkspace }
+          : { type: 'workspace:recent-updated' }
+      );
+      startupTrace.markPhase('workspace_identity_listener_post_ready_sync_end', {
+        durationMs: elapsedMs(syncStartedAt),
       });
     } catch (error) {
-      this.identityEventListening = false;
-      startupTrace.markPhase('workspace_identity_listener_failed', {
-        durationMs: elapsedMs(registrationStartedAt),
+      startupTrace.markPhase('workspace_identity_listener_post_ready_sync_failed', {
+        durationMs: elapsedMs(syncStartedAt),
       });
-      log.error('Failed to subscribe workspace identity updates', { error });
+      log.warn('Failed to refresh workspace identity state after listener registration', { error });
     }
   }
 
@@ -399,6 +455,9 @@ class WorkspaceManager {
           null;
 
     if (!updatedWorkspace) {
+      if (!this.isInitialized) {
+        this.identityListenerReadyResyncPending = true;
+      }
       return;
     }
 
@@ -425,9 +484,9 @@ class WorkspaceManager {
       log.info('Initializing workspace state');
 
       const identityListenerStartedAt = markWorkspaceStartupStepStart('ensure_identity_listener');
-      await this.ensureIdentityChangeListener();
+      void this.ensureIdentityChangeListener();
       markWorkspaceStartupStepEnd('ensure_identity_listener', identityListenerStartedAt, {
-        blocking: true,
+        blocking: false,
       });
 
       const startupStateStartedAt = markWorkspaceStartupStepStart('initialize_workspace_startup_state');
@@ -438,6 +497,9 @@ class WorkspaceManager {
         currentWorkspace,
         legacyRemoteWorkspace,
       } = await globalStateAPI.initializeWorkspaceStartupState();
+      if (!this.identityListenerReady) {
+        this.identityListenerReadyResyncPending = true;
+      }
       this.startupLegacyRemoteWorkspace = legacyRemoteWorkspace;
       this.startupLegacyRemoteWorkspaceSnapshotAvailable = true;
       this.startupLegacyRemoteWorkspaceSnapshotConsumed = false;
@@ -477,6 +539,9 @@ class WorkspaceManager {
 
       this.emit({ type: 'workspace:loading', loading: false });
       this.isInitialized = true;
+      if (this.identityListenerReadyResyncPending) {
+        void this.syncWorkspaceStateAfterIdentityListenerReady();
+      }
       startupTrace.markPhase('workspace_initialize_end', {
         durationMs: elapsedMs(initializeStartedAt),
         recentCount: recentWorkspaces.length,
