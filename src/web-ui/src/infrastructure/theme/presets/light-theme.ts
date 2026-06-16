@@ -1,6 +1,13 @@
  
 
 import { ThemeConfig } from '../types';
+import {
+  createStandardEasing,
+  createStandardRadius,
+  createStandardSpacing,
+  createStandardTypography,
+  createWindowControls,
+} from './shared';
 
 export const bitfunLightTheme: ThemeConfig = {
   
@@ -145,27 +152,9 @@ export const bitfunLightTheme: ThemeConfig = {
       intense: 'blur(20px) saturate(1.12) brightness(1.03)',
     },
     
-    radius: {
-      sm: '6px',
-      base: '8px',
-      lg: '12px',
-      xl: '16px',
-      '2xl': '20px',
-      full: '9999px',
-    },
+    radius: createStandardRadius(),
     
-    spacing: {
-      1: '4px',
-      2: '8px',
-      3: '12px',
-      4: '16px',
-      5: '20px',
-      6: '24px',
-      8: '32px',
-      10: '40px',
-      12: '48px',
-      16: '64px',
-    },
+    spacing: createStandardSpacing(),
     
     opacity: {
       disabled: 0.55,
@@ -185,61 +174,17 @@ export const bitfunLightTheme: ThemeConfig = {
       lazy: '1s',
     },
     
-    easing: {
-      standard: 'cubic-bezier(0.4, 0, 0.2, 1)',
-      decelerate: 'cubic-bezier(0, 0, 0.2, 1)',
-      accelerate: 'cubic-bezier(0.4, 0, 1, 1)',
-      bounce: 'cubic-bezier(0.68, -0.55, 0.265, 1.55)',
-      smooth: 'cubic-bezier(0.4, 0, 0.2, 1)',
-    },
+    easing: createStandardEasing(),
   },
   
   
-  typography: {
-    font: {
-      sans: "'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif",
-      mono: "'JetBrains Mono', 'FiraCode', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, 'Cascadia Mono', 'Cascadia Code', Consolas, 'Liberation Mono', 'Courier New', monospace",
-    },
-    
-    weight: {
-      normal: 400,
-      medium: 500,
-      semibold: 600,
-      bold: 700,
-    },
-    
-    size: {
-      xs: '12px',
-      sm: '13px',
-      base: '14px',
-      lg: '15px',
-      xl: '16px',
-      '2xl': '18px',
-      '3xl': '22px',
-      '4xl': '26px',
-      '5xl': '32px',
-    },
-    
-    lineHeight: {
-      tight: 1.2,
-      base: 1.5,
-      relaxed: 1.6,
-    },
-  },
+  typography: createStandardTypography(),
   
   
   components: {
     
-    windowControls: {
-      minimize: {
-        dot: 'rgba(100, 116, 139, 0.5)',
-        dotShadow: '0 0 4px rgba(15, 23, 42, 0.12)',
-        hoverBg: 'rgba(15, 23, 42, 0.08)',
-        hoverColor: '#475569',
-        hoverBorder: 'rgba(100, 116, 139, 0.28)',
-        hoverShadow: '0 2px 8px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.6)',
-      },
-      maximize: {
+    windowControls: createWindowControls({
+      standard: {
         dot: 'rgba(100, 116, 139, 0.5)',
         dotShadow: '0 0 4px rgba(15, 23, 42, 0.12)',
         hoverBg: 'rgba(15, 23, 42, 0.08)',
@@ -261,7 +206,7 @@ export const bitfunLightTheme: ThemeConfig = {
         disabledDot: 'rgba(100, 116, 139, 0.15)',
         flowGradient: 'linear-gradient(90deg, transparent, rgba(100, 116, 139, 0.06), rgba(100, 116, 139, 0.1), rgba(100, 116, 139, 0.06), transparent)',
       },
-    },
+    }),
     
     button: {
       

@@ -4,27 +4,53 @@ export type WidgetThemePayload = {
   vars: Record<string, string>;
 };
 
-export const WIDGET_THEME_FALLBACK_VARS = {
-  '--color-text-primary': '#e8e8e8',
-  '--color-text-secondary': '#b0b0b0',
-  '--color-text-muted': '#858585',
-  '--color-accent-500': '#60a5fa',
-  '--color-accent-600': '#3b82f6',
-  '--color-bg-secondary': '#1c1c1f',
-  '--color-success': '#34d399',
-  '--color-warning': '#f59e0b',
-  '--color-error': '#ef4444',
-  '--color-static-white': '#ffffff',
-  '--border-subtle': 'rgba(255, 255, 255, 0.1)',
-  '--border-base': 'rgba(255, 255, 255, 0.16)',
-  '--border-medium': 'rgba(255, 255, 255, 0.24)',
-  '--element-bg-subtle': 'rgba(255, 255, 255, 0.05)',
-  '--element-bg-base': 'rgba(255, 255, 255, 0.08)',
-  '--element-bg-medium': 'rgba(255, 255, 255, 0.14)',
-  '--element-bg-soft': 'rgba(255, 255, 255, 0.08)',
-  '--shadow-xs': '0 1px 2px rgba(0, 0, 0, 0.4)',
-  '--shadow-sm': '0 2px 4px rgba(0, 0, 0, 0.4)',
+const FALLBACK_VAR = {
+  textPrimary: '--color-text-primary',
+  textSecondary: '--color-text-secondary',
+  textMuted: '--color-text-muted',
+  accent500: '--color-accent-500',
+  accent600: '--color-accent-600',
+  bgSecondary: '--color-bg-secondary',
+  success: '--color-success',
+  warning: '--color-warning',
+  error: '--color-error',
+  staticWhite: '--color-static-white',
+  borderSubtle: '--border-subtle',
+  borderBase: '--border-base',
+  borderMedium: '--border-medium',
+  elementBgSubtle: '--element-bg-subtle',
+  elementBgBase: '--element-bg-base',
+  elementBgMedium: '--element-bg-medium',
+  elementBgSoft: '--element-bg-soft',
+  shadowXs: '--shadow-xs',
+  shadowSm: '--shadow-sm',
 } as const;
+
+type WidgetThemeFallbackVarName = typeof FALLBACK_VAR[keyof typeof FALLBACK_VAR];
+
+// Keep this fallback map small and self-contained. It is the last-resort iframe
+// contract for static widget rendering before the host theme payload arrives.
+export const WIDGET_THEME_FALLBACK_VARS = {
+  [FALLBACK_VAR.textPrimary]: '#e8e8e8',
+  [FALLBACK_VAR.textSecondary]: '#b0b0b0',
+  [FALLBACK_VAR.textMuted]: '#858585',
+  [FALLBACK_VAR.accent500]: '#60a5fa',
+  [FALLBACK_VAR.accent600]: '#3b82f6',
+  [FALLBACK_VAR.bgSecondary]: '#1c1c1f',
+  [FALLBACK_VAR.success]: '#34d399',
+  [FALLBACK_VAR.warning]: '#f59e0b',
+  [FALLBACK_VAR.error]: '#ef4444',
+  [FALLBACK_VAR.staticWhite]: '#ffffff',
+  [FALLBACK_VAR.borderSubtle]: 'rgba(255, 255, 255, 0.1)',
+  [FALLBACK_VAR.borderBase]: 'rgba(255, 255, 255, 0.16)',
+  [FALLBACK_VAR.borderMedium]: 'rgba(255, 255, 255, 0.24)',
+  [FALLBACK_VAR.elementBgSubtle]: 'rgba(255, 255, 255, 0.05)',
+  [FALLBACK_VAR.elementBgBase]: 'rgba(255, 255, 255, 0.08)',
+  [FALLBACK_VAR.elementBgMedium]: 'rgba(255, 255, 255, 0.14)',
+  [FALLBACK_VAR.elementBgSoft]: 'rgba(255, 255, 255, 0.08)',
+  [FALLBACK_VAR.shadowXs]: '0 1px 2px rgba(0, 0, 0, 0.4)',
+  [FALLBACK_VAR.shadowSm]: '0 2px 4px rgba(0, 0, 0, 0.4)',
+} as const satisfies Record<WidgetThemeFallbackVarName, string>;
 
 export function createWidgetThemeFallbackCss(): string {
   return Object.entries(WIDGET_THEME_FALLBACK_VARS)
@@ -32,9 +58,12 @@ export function createWidgetThemeFallbackCss(): string {
     .join('\n');
 }
 
-const THEME_VAR_NAMES = [
+// Host -> generated-widget iframe theme contract. Keep groups explicit so
+// isolated widgets receive stable tokens without scraping every root variable.
+const WIDGET_THEME_VAR_GROUPS = {
+  staticAndOverlay: [
   '--color-bg-primary',
-  '--color-static-white',
+  FALLBACK_VAR.staticWhite,
   '--color-static-black',
   '--color-overlay-white-02',
   '--color-overlay-white-03',
@@ -58,7 +87,9 @@ const THEME_VAR_NAMES = [
   '--color-overlay-black-40',
   '--color-overlay-black-50',
   '--color-overlay-black-80',
-  '--color-bg-secondary',
+  ],
+  backgroundSurface: [
+  FALLBACK_VAR.bgSecondary,
   '--color-bg-tertiary',
   '--color-bg-quaternary',
   '--color-bg-elevated',
@@ -85,23 +116,27 @@ const THEME_VAR_NAMES = [
   '--color-surface-elevated',
   '--color-surface-hover',
   '--color-bg-tooltip',
-  '--color-text-primary',
-  '--color-text-secondary',
+  ],
+  text: [
+  FALLBACK_VAR.textPrimary,
+  FALLBACK_VAR.textSecondary,
   '--color-text-tertiary',
   '--text-primary',
   '--text-secondary',
   '--text-tertiary',
   '--text-muted',
   '--text-disabled',
-  '--color-text-muted',
+  FALLBACK_VAR.textMuted,
   '--color-text-disabled',
+  ],
+  accent: [
   '--color-accent-50',
   '--color-accent-100',
   '--color-accent-200',
   '--color-accent-300',
   '--color-accent-400',
-  '--color-accent-500',
-  '--color-accent-600',
+  FALLBACK_VAR.accent500,
+  FALLBACK_VAR.accent600,
   '--color-accent-700',
   '--color-accent-800',
   '--color-accent',
@@ -117,18 +152,20 @@ const THEME_VAR_NAMES = [
   '--color-primary-bg-subtle',
   '--accent-primary',
   '--accent-primary-hover',
-  '--color-success',
+  ],
+  semantic: [
+  FALLBACK_VAR.success,
   '--color-success-bg',
   '--color-success-border',
   '--color-success-100',
   '--color-success-500',
-  '--color-warning',
+  FALLBACK_VAR.warning,
   '--color-warning-bg',
   '--color-warning-border',
   '--color-warning-100',
   '--color-warning-500',
   '--color-warning-700',
-  '--color-error',
+  FALLBACK_VAR.error,
   '--color-error-bg',
   '--color-error-border',
   '--color-semantic-error',
@@ -141,10 +178,12 @@ const THEME_VAR_NAMES = [
   '--color-info',
   '--color-info-bg',
   '--color-info-border',
-  '--border-subtle',
+  ],
+  border: [
+  FALLBACK_VAR.borderSubtle,
   '--border-color',
-  '--border-base',
-  '--border-medium',
+  FALLBACK_VAR.borderBase,
+  FALLBACK_VAR.borderMedium,
   '--border-hover',
   '--border-strong',
   '--border-prominent',
@@ -153,6 +192,8 @@ const THEME_VAR_NAMES = [
   '--color-border',
   '--color-border-primary',
   '--color-border-subtle',
+  ],
+  zIndex: [
   '--z-base',
   '--z-decoration',
   '--z-content',
@@ -172,10 +213,12 @@ const THEME_VAR_NAMES = [
   '--z-notification',
   '--z-context-menu',
   '--z-extreme',
-  '--element-bg-subtle',
-  '--element-bg-soft',
-  '--element-bg-base',
-  '--element-bg-medium',
+  ],
+  elementGlassShadow: [
+  FALLBACK_VAR.elementBgSubtle,
+  FALLBACK_VAR.elementBgSoft,
+  FALLBACK_VAR.elementBgBase,
+  FALLBACK_VAR.elementBgMedium,
   '--element-bg-strong',
   '--element-bg-elevated',
   '--element-bg',
@@ -196,11 +239,13 @@ const THEME_VAR_NAMES = [
   '--glass-shadow-base',
   '--glass-shadow-lg',
   '--glass-shadow-xl',
-  '--shadow-xs',
-  '--shadow-sm',
+  FALLBACK_VAR.shadowXs,
+  FALLBACK_VAR.shadowSm,
   '--shadow-base',
   '--shadow-lg',
   '--shadow-xl',
+  ],
+  shapeSpacingTypography: [
   '--radius-sm',
   '--radius-base',
   '--radius-md',
@@ -246,6 +291,8 @@ const THEME_VAR_NAMES = [
   '--opacity-disabled',
   '--opacity-hover',
   '--opacity-focus',
+  ],
+  flowChat: [
   '--flowchat-font-size-xxs',
   '--flowchat-font-size-2xs',
   '--flowchat-font-size-xs',
@@ -291,10 +338,14 @@ const THEME_VAR_NAMES = [
   '--flowchat-markdown-code-block-pad-x',
   '--flowchat-markdown-table-cell-pad-y',
   '--flowchat-markdown-table-cell-pad-x',
+  ],
+  navigation: [
   '--bitfun-nav-row-action-size',
   '--bitfun-nav-row-action-icon-size',
   '--bitfun-nav-row-action-offset',
   '--bitfun-nav-row-action-gap',
+  ],
+  motionAndFonts: [
   '--motion-fast',
   '--motion-normal',
   '--motion-base',
@@ -308,6 +359,8 @@ const THEME_VAR_NAMES = [
   '--markdown-font-mono',
   '--tool-card-font-mono',
   '--tool-compact-summary-font',
+  ],
+  buttons: [
   '--btn-primary-bg',
   '--btn-primary-color',
   '--btn-primary-border',
@@ -336,6 +389,8 @@ const THEME_VAR_NAMES = [
   '--btn-ghost-active-border',
   '--btn-ghost-active-shadow',
   '--btn-ghost-active-transform',
+  ],
+  toolCard: [
   '--tool-card-bg-primary',
   '--tool-card-bg-secondary',
   '--tool-card-bg-hover',
@@ -356,7 +411,10 @@ const THEME_VAR_NAMES = [
   '--tool-card-action-font-size',
   '--tool-card-action-line-height',
   '--tool-card-action-font-weight',
-] as const;
+  ],
+} as const;
+
+const WIDGET_THEME_VAR_NAMES = Object.values(WIDGET_THEME_VAR_GROUPS).flat();
 
 export function readWidgetThemePayload(): WidgetThemePayload | null {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
@@ -367,7 +425,7 @@ export function readWidgetThemePayload(): WidgetThemePayload | null {
   const styles = window.getComputedStyle(root);
   const vars: Record<string, string> = {};
 
-  for (const name of THEME_VAR_NAMES) {
+  for (const name of WIDGET_THEME_VAR_NAMES) {
     const value = styles.getPropertyValue(name).trim();
     if (value) {
       vars[name] = value;

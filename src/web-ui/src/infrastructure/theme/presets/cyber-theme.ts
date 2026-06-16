@@ -1,6 +1,13 @@
  
 
 import { ThemeConfig } from '../types';
+import {
+  createCompactRadius,
+  createExpressiveTypography,
+  createStandardEasing,
+  createStandardSpacing,
+  createWindowControls,
+} from './shared';
 
 export const bitfunCyberTheme: ThemeConfig = {
   
@@ -136,27 +143,9 @@ export const bitfunCyberTheme: ThemeConfig = {
       intense: 'blur(20px) saturate(1.6) brightness(1.2)',
     },
     
-    radius: {
-      sm: '4px',
-      base: '6px',
-      lg: '10px',
-      xl: '14px',
-      '2xl': '18px',
-      full: '9999px',
-    },
+    radius: createCompactRadius(),
     
-    spacing: {
-      1: '4px',
-      2: '8px',
-      3: '12px',
-      4: '16px',
-      5: '20px',
-      6: '24px',
-      8: '32px',
-      10: '40px',
-      12: '48px',
-      16: '64px',
-    },
+    spacing: createStandardSpacing(),
     
     opacity: {
       disabled: 0.5,
@@ -176,61 +165,17 @@ export const bitfunCyberTheme: ThemeConfig = {
       lazy: '0.8s',
     },
     
-    easing: {
-      standard: 'cubic-bezier(0.4, 0, 0.2, 1)',
-      decelerate: 'cubic-bezier(0, 0, 0.2, 1)',
-      accelerate: 'cubic-bezier(0.4, 0, 1, 1)',
-      bounce: 'cubic-bezier(0.68, -0.55, 0.265, 1.55)',
-      smooth: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-    },
+    easing: createStandardEasing('cubic-bezier(0.25, 0.46, 0.45, 0.94)'),
   },
   
   
-  typography: {
-    font: {
-      sans: "'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif",
-      mono: "'JetBrains Mono', 'FiraCode', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, 'Cascadia Mono', 'Cascadia Code', Consolas, 'Liberation Mono', 'Courier New', monospace",
-    },
-    
-    weight: {
-      normal: 400,
-      medium: 500,
-      semibold: 600,
-      bold: 700,
-    },
-    
-    size: {
-      xs: '12px',
-      sm: '13px',
-      base: '14px',
-      lg: '15px',
-      xl: '16px',
-      '2xl': '18px',
-      '3xl': '22px',
-      '4xl': '26px',
-      '5xl': '32px',
-    },
-    
-    lineHeight: {
-      tight: 1.3,
-      base: 1.5,
-      relaxed: 1.65,
-    },
-  },
+  typography: createExpressiveTypography(),
   
   
   components: {
     
-    windowControls: {
-      minimize: {
-        dot: 'rgba(0, 230, 255, 0.5)',
-        dotShadow: '0 0 6px rgba(0, 230, 255, 0.35)',
-        hoverBg: 'rgba(0, 230, 255, 0.15)',
-        hoverColor: '#00e6ff',
-        hoverBorder: 'rgba(0, 230, 255, 0.3)',
-        hoverShadow: '0 0 12px rgba(0, 230, 255, 0.3), 0 2px 8px rgba(0, 230, 255, 0.2), inset 0 1px 0 rgba(0, 230, 255, 0.2)',
-      },
-      maximize: {
+    windowControls: createWindowControls({
+      standard: {
         dot: 'rgba(0, 230, 255, 0.5)',
         dotShadow: '0 0 6px rgba(0, 230, 255, 0.35)',
         hoverBg: 'rgba(0, 230, 255, 0.15)',
@@ -252,7 +197,7 @@ export const bitfunCyberTheme: ThemeConfig = {
         disabledDot: 'rgba(0, 230, 255, 0.1)',
         flowGradient: 'linear-gradient(90deg, transparent, rgba(0, 230, 255, 0.08), rgba(0, 230, 255, 0.12), rgba(0, 230, 255, 0.08), transparent)',
       },
-    },
+    }),
     
     button: {
       

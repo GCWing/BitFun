@@ -1,6 +1,16 @@
  
 
 import { ThemeConfig } from '../types';
+import {
+  createDarkNeutralBorder,
+  createDarkNeutralElement,
+  createDarkNeutralScrollbar,
+  createSlateRadius,
+  createStandardEasing,
+  createStandardSpacing,
+  createStandardTypography,
+  createWindowControls,
+} from './shared';
 
 export const bitfunSlateTheme: ThemeConfig = {
   
@@ -83,22 +93,9 @@ export const bitfunSlateTheme: ThemeConfig = {
       highlightBg: 'rgba(255, 255, 255, 0.1)',
     },
     
-    border: {
-      subtle: 'rgba(255, 255, 255, 0.12)',    
-      base: 'rgba(255, 255, 255, 0.18)',      
-      medium: 'rgba(255, 255, 255, 0.24)',    
-      strong: 'rgba(255, 255, 255, 0.32)',    
-      prominent: 'rgba(255, 255, 255, 0.4)',  
-    },
+    border: createDarkNeutralBorder(),
     
-    element: {
-      subtle: 'rgba(255, 255, 255, 0.05)',
-      soft: 'rgba(255, 255, 255, 0.07)',
-      base: 'rgba(255, 255, 255, 0.095)',
-      medium: 'rgba(255, 255, 255, 0.125)',
-      strong: 'rgba(255, 255, 255, 0.155)',
-      elevated: 'rgba(255, 255, 255, 0.19)',
-    },
+    element: createDarkNeutralElement(),
     
     git: {
       branch: '#9ca6b8',
@@ -113,10 +110,7 @@ export const bitfunSlateTheme: ThemeConfig = {
       stagedBg: 'rgba(127, 184, 153, 0.1)',
     },
     
-    scrollbar: {
-      thumb: 'rgba(255, 255, 255, 0.15)',
-      thumbHover: 'rgba(255, 255, 255, 0.28)',
-    },
+    scrollbar: createDarkNeutralScrollbar(),
   },
   
   
@@ -144,27 +138,9 @@ export const bitfunSlateTheme: ThemeConfig = {
       intense: 'blur(20px) saturate(1.18) brightness(0.96)',
     },
     
-    radius: {
-      sm: '4px',
-      base: '6px',
-      lg: '8px',
-      xl: '12px',
-      '2xl': '16px',
-      full: '9999px',
-    },
+    radius: createSlateRadius(),
     
-    spacing: {
-      1: '4px',
-      2: '8px',
-      3: '12px',
-      4: '16px',
-      5: '20px',
-      6: '24px',
-      8: '32px',
-      10: '40px',
-      12: '48px',
-      16: '64px',
-    },
+    spacing: createStandardSpacing(),
     
     opacity: {
       disabled: 0.5,
@@ -184,61 +160,17 @@ export const bitfunSlateTheme: ThemeConfig = {
       lazy: '0.8s',
     },
     
-    easing: {
-      standard: 'cubic-bezier(0.4, 0, 0.2, 1)',
-      decelerate: 'cubic-bezier(0, 0, 0.2, 1)',
-      accelerate: 'cubic-bezier(0.4, 0, 1, 1)',
-      bounce: 'cubic-bezier(0.68, -0.55, 0.265, 1.55)',
-      smooth: 'cubic-bezier(0.4, 0, 0.2, 1)',
-    },
+    easing: createStandardEasing(),
   },
   
   
-  typography: {
-    font: {
-      sans: "'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif",
-      mono: "'JetBrains Mono', 'FiraCode', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, 'Cascadia Mono', 'Cascadia Code', Consolas, 'Liberation Mono', 'Courier New', monospace",
-    },
-    
-    weight: {
-      normal: 400,
-      medium: 500,
-      semibold: 600,
-      bold: 700,
-    },
-    
-    size: {
-      xs: '12px',
-      sm: '13px',
-      base: '14px',
-      lg: '15px',
-      xl: '16px',
-      '2xl': '18px',
-      '3xl': '22px',
-      '4xl': '26px',
-      '5xl': '32px',
-    },
-    
-    lineHeight: {
-      tight: 1.2,
-      base: 1.5,
-      relaxed: 1.6,
-    },
-  },
+  typography: createStandardTypography(),
   
   
   components: {
     
-    windowControls: {
-      minimize: {
-        dot: 'rgba(203, 213, 225, 0.42)',
-        dotShadow: '0 0 4px rgba(0, 0, 0, 0.35)',
-        hoverBg: 'rgba(255, 255, 255, 0.09)',
-        hoverColor: '#e2e6eb',
-        hoverBorder: 'rgba(255, 255, 255, 0.14)',
-        hoverShadow: '0 2px 8px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.06)',
-      },
-      maximize: {
+    windowControls: createWindowControls({
+      standard: {
         dot: 'rgba(203, 213, 225, 0.42)',
         dotShadow: '0 0 4px rgba(0, 0, 0, 0.35)',
         hoverBg: 'rgba(255, 255, 255, 0.09)',
@@ -260,7 +192,7 @@ export const bitfunSlateTheme: ThemeConfig = {
         disabledDot: 'rgba(168, 171, 176, 0.2)',
         flowGradient: 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.05), transparent)',
       },
-    },
+    }),
     
     button: {
       

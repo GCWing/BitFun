@@ -429,7 +429,7 @@ $content-max: 1480px;
 }
 
 :root[data-theme-type='light'] .gallery-grid--skeleton {
-  --skeleton-shimmer-0: rgba(0, 0, 0, 0);
+  --skeleton-shimmer-0: #00000000;
   --skeleton-shimmer-peak: rgba(0, 0, 0, 0.07);
 }
 

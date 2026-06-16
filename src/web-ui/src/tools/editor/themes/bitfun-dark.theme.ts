@@ -13,6 +13,8 @@
 
 import type { editor } from 'monaco-editor';
 
+const TRANSPARENT_MONACO_BORDER = '#00000000';
+
 /**
  * BitFun Dark Theme Configuration
  * Follows Monaco Editor official theme format
@@ -225,8 +227,8 @@ export const BitFunDarkTheme: editor.IStandaloneThemeData = {
 
   colors: {
     // Global Border
-    'focusBorder': '#00000000',
-    'contrastBorder': '#00000000',
+    'focusBorder': TRANSPARENT_MONACO_BORDER,
+    'contrastBorder': TRANSPARENT_MONACO_BORDER,
 
     // Editor Body
     'editor.background': '#121214',
@@ -276,7 +278,7 @@ export const BitFunDarkTheme: editor.IStandaloneThemeData = {
     // Bracket Matching
     'editorBracketMatch.background': '#E1AB8030',
     'editorBracketMatch.border': '#E1AB80',
-    'editorBracketHighlight.foreground1': '#FFD700',
+    'editorBracketHighlight.foreground1': '#ffd700',
     'editorBracketHighlight.foreground2': '#E1AB80',
     'editorBracketHighlight.foreground3': '#C792EA',
     'editorBracketHighlight.foreground4': '#4ECDC4',
@@ -298,7 +300,7 @@ export const BitFunDarkTheme: editor.IStandaloneThemeData = {
     'editorHoverWidget.statusBarBackground': '#202024',
 
     // Inlay Hints
-    'editorInlayHint.background': '#00000000',
+    'editorInlayHint.background': TRANSPARENT_MONACO_BORDER,
     'editorInlayHint.foreground': '#6A737D',
     'editorInlayHint.typeForeground': '#6A737D',
     'editorInlayHint.parameterForeground': '#6A737D',
@@ -359,12 +361,12 @@ export const BitFunDarkTheme: editor.IStandaloneThemeData = {
     // Diff Editor (GitHub Dark style)
     'diffEditor.insertedTextBackground': '#23863625',
     'diffEditor.insertedLineBackground': '#23863630',
-    'diffEditor.insertedTextBorder': '#00000000',
+    'diffEditor.insertedTextBorder': TRANSPARENT_MONACO_BORDER,
     'diffEditorGutter.insertedLineBackground': '#23863638',
 
     'diffEditor.removedTextBackground': '#DA363325',
     'diffEditor.removedLineBackground': '#DA363330',
-    'diffEditor.removedTextBorder': '#00000000',
+    'diffEditor.removedTextBorder': TRANSPARENT_MONACO_BORDER,
     'diffEditorGutter.removedLineBackground': '#DA363338',
 
     'diffEditor.modifiedTextBackground': '#1F6FEB20',

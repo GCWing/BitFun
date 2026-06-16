@@ -1,6 +1,13 @@
  
 
 import { ThemeConfig } from '../types';
+import {
+  createChinaTypography,
+  createCompactRadius,
+  createStandardEasing,
+  createStandardSpacing,
+  createWindowControls,
+} from './shared';
 
 export const bitfunChinaNightTheme: ThemeConfig = {
   
@@ -133,27 +140,9 @@ export const bitfunChinaNightTheme: ThemeConfig = {
       intense: 'blur(20px) saturate(1.3) brightness(1.08)',
     },
     
-    radius: {
-      sm: '4px',                   
-      base: '6px',
-      lg: '10px',
-      xl: '14px',
-      '2xl': '18px',
-      full: '9999px',
-    },
+    radius: createCompactRadius(),
     
-    spacing: {
-      1: '4px',
-      2: '8px',
-      3: '12px',
-      4: '16px',
-      5: '20px',
-      6: '24px',
-      8: '32px',
-      10: '40px',
-      12: '48px',
-      16: '64px',
-    },
+    spacing: createStandardSpacing(),
     
     opacity: {
       disabled: 0.45,
@@ -173,61 +162,17 @@ export const bitfunChinaNightTheme: ThemeConfig = {
       lazy: '1.2s',
     },
     
-    easing: {
-      standard: 'cubic-bezier(0.4, 0, 0.2, 1)',
-      decelerate: 'cubic-bezier(0, 0, 0.2, 1)',
-      accelerate: 'cubic-bezier(0.4, 0, 1, 1)',
-      bounce: 'cubic-bezier(0.68, -0.55, 0.265, 1.55)',
-      smooth: 'cubic-bezier(0.25, 0.1, 0.25, 1)',
-    },
+    easing: createStandardEasing('cubic-bezier(0.25, 0.1, 0.25, 1)'),
   },
   
   
-  typography: {
-    font: {
-      sans: "'Noto Sans SC', 'Source Han Sans CN', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif",
-      mono: "'Source Han Mono CN', 'Noto Sans Mono CJK SC', 'JetBrains Mono', 'FiraCode', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, 'Cascadia Mono', 'Cascadia Code', Consolas, 'Liberation Mono', 'Courier New', monospace",
-    },
-    
-    weight: {
-      normal: 400,
-      medium: 500,
-      semibold: 600,
-      bold: 700,
-    },
-    
-    size: {
-      xs: '12px',
-      sm: '13px',
-      base: '14px',
-      lg: '15px',
-      xl: '16px',
-      '2xl': '18px',
-      '3xl': '22px',
-      '4xl': '26px',
-      '5xl': '32px',
-    },
-    
-    lineHeight: {
-      tight: 1.3,
-      base: 1.6,
-      relaxed: 1.8,
-    },
-  },
+  typography: createChinaTypography(),
   
   
   components: {
     
-    windowControls: {
-      minimize: {
-        dot: 'rgba(115, 165, 204, 0.45)',
-        dotShadow: '0 0 4px rgba(115, 165, 204, 0.2)',
-        hoverBg: 'rgba(115, 165, 204, 0.12)',
-        hoverColor: '#73a5cc',
-        hoverBorder: 'rgba(115, 165, 204, 0.2)',
-        hoverShadow: '0 2px 8px rgba(115, 165, 204, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
-      },
-      maximize: {
+    windowControls: createWindowControls({
+      standard: {
         dot: 'rgba(115, 165, 204, 0.45)',
         dotShadow: '0 0 4px rgba(115, 165, 204, 0.2)',
         hoverBg: 'rgba(115, 165, 204, 0.12)',
@@ -249,7 +194,7 @@ export const bitfunChinaNightTheme: ThemeConfig = {
         disabledDot: 'rgba(255, 255, 255, 0.1)',
         flowGradient: 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.05), transparent)',
       },
-    },
+    }),
     
     button: {
       

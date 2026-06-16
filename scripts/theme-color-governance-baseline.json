@@ -6,10 +6,10 @@
       "max": 31
     },
     "colorScopes.appUi.uniqueColors": {
-      "max": 492
+      "max": 489
     },
     "colorScopes.appUi.occurrences": {
-      "max": 831
+      "max": 827
     },
     "colorScopes.token.uniqueColors": {
       "max": 698
@@ -41,20 +41,50 @@
     "tokenAliasLiterals.uniqueColors": {
       "max": 34
     },
+    "colorDomainScopes.themePreset.occurrences": {
+      "max": 1033
+    },
+    "colorDomainScopes.themePreset.uniqueColors": {
+      "max": 611
+    },
+    "colorDomainScopes.themeRuntime.occurrences": {
+      "max": 62
+    },
+    "colorDomainScopes.tokenContract.occurrences": {
+      "max": 268
+    },
+    "colorDomainScopes.generatedWidget.occurrences": {
+      "max": 19
+    },
+    "colorDomainScopes.generatedWidget.uniqueColors": {
+      "max": 17
+    },
     "colorDomainScopes.editor.occurrences": {
-      "max": 210
+      "max": 206
+    },
+    "colorDomainScopes.syntax.occurrences": {
+      "max": 18
+    },
+    "colorDomainScopes.terminal.occurrences": {
+      "max": 39
+    },
+    "colorDomainScopes.languageIdentity.occurrences": {
+      "max": 48
     },
     "colorDomainScopes.visualEffect.occurrences": {
       "max": 42
     },
     "colorDomainScopes.appUi.occurrences": {
-      "max": 566
+      "max": 559
     },
     "colorDomainScopes.appUi.uniqueColors": {
-      "max": 344
+      "max": 343
     },
     "colorDomainScopes.mermaid.occurrences": {
       "max": 149
+    },
+    "colorDomainScopes.mermaid.uniqueColors": {
+      "max": 95
     }
   }
 }
