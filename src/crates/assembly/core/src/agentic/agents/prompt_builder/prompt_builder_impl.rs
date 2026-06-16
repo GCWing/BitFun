@@ -45,7 +45,7 @@ pub struct PromptBuilderContext {
     pub remote_execution: Option<RemoteExecutionHints>,
     /// Pre-built tree text for `{PROJECT_LAYOUT}` when the workspace is not on the local disk.
     pub remote_project_layout: Option<String>,
-    /// When `Some(false)`, system prompt append Computer use text-only guidance (no screenshot tool output).
+    /// When `Some(false)`, runtime context includes Computer use text-only guidance (no screenshot tool output).
     pub supports_image_understanding: Option<bool>,
     /// Dynamic tool listings injected outside tool descriptions for cache stability.
     pub tool_listing_sections: ToolListingSections,
@@ -235,6 +235,7 @@ impl PromptBuilder {
             host_arch: std::env::consts::ARCH.to_string(),
             remote_execution: self.context.remote_execution.clone(),
             local_shell,
+            supports_image_understanding: self.context.supports_image_understanding,
         })
     }
 
@@ -513,16 +514,6 @@ Do not read from, modify, create, move, or delete files outside this workspace u
             result = result.replace(PLACEHOLDER_DEEP_RESEARCH_REPORT_LINK, &report_link);
         }
 
-        if self.context.supports_image_understanding == Some(false) {
-            result.push_str(
-                "\n\n# Computer use (text-only primary model)\n\n\
-The configured **primary model does not accept image inputs**. When using **`ComputerUse`** (or **`ControlHub`** with **`domain: \"browser\"`**):\n\
-- **Do not** use **`screenshot`** (desktop) and **avoid** `domain:\"browser\" action:\"screenshot\"` — the JPEG bytes will be unreadable.\n\
-- **ACTION PRIORITY:** 1) Terminal/CLI/system commands (`ExecCommand`, or `ComputerUse` `run_script`; use `WriteStdin`/`ExecControl` for running ExecCommand sessions) 2) Keyboard shortcuts (**`key_chord`**, **`type_text`**) 3) UI control: **`click_element`** (AX) → **`locate`** → **`move_to_text`** (use **`move_to_text_match_index`** when multiple OCR hits listed) → **`mouse_move`** (**`use_screen_coordinates`: true** with coordinates from tool JSON) → **`click`**. For browser work prefer `snapshot` → click by `@e*` ref over screenshots.\n\
-- **Never guess coordinates** — always use precise methods (AX, OCR, system coordinates from tool results, or browser snapshot refs).\n",
-            );
-        }
-
         Ok(result.trim().to_string())
     }
 }
@@ -667,6 +658,52 @@ mod tests {
         assert!(!runtime_context.contains("## Workspace Execution"));
         assert!(!runtime_context.contains("## ExecCommand Shell"));
         assert!(!runtime_context.contains("ExecCommand shell:"));
+    }
+
+    #[tokio::test]
+    async fn runtime_context_includes_text_only_computer_use_guidance_for_non_visual_models() {
+        let context = PromptBuilderContext::new(r"workspace\root", None, None)
+            .with_supports_image_understanding(false)
+            .with_runtime_context_needs(RuntimeContextNeeds::from_tool_names(["ComputerUse"]));
+        let runtime_context = PromptBuilder::new(context)
+            .build_runtime_context_reminder()
+            .await
+            .expect("runtime context should build");
+
+        assert!(runtime_context.contains("## Computer Use Input Strategy"));
+        assert!(runtime_context.contains("primary model does not accept image inputs"));
+        assert!(runtime_context.contains("do not use `screenshot`"));
+        assert!(runtime_context.contains("prefer `snapshot` then click by `@e*` ref"));
+    }
+
+    #[tokio::test]
+    async fn runtime_context_omits_text_only_computer_use_guidance_for_visual_models() {
+        let context = PromptBuilderContext::new(r"workspace\root", None, None)
+            .with_supports_image_understanding(true)
+            .with_runtime_context_needs(RuntimeContextNeeds::from_tool_names(["ComputerUse"]));
+        let runtime_context = PromptBuilder::new(context)
+            .build_runtime_context_reminder()
+            .await
+            .expect("runtime context should build");
+
+        assert!(runtime_context.contains("## Local Client"));
+        assert!(!runtime_context.contains("## Computer Use Input Strategy"));
+        assert!(!runtime_context.contains("primary model does not accept image inputs"));
+    }
+
+    #[tokio::test]
+    async fn system_prompt_template_does_not_append_text_only_computer_use_guidance() {
+        let context = PromptBuilderContext::new(r"workspace\root", None, None)
+            .with_supports_image_understanding(false)
+            .with_runtime_context_needs(RuntimeContextNeeds::from_tool_names(["ComputerUse"]));
+        let prompt = PromptBuilder::new(context)
+            .build_prompt_from_template("Base system prompt")
+            .await
+            .expect("prompt should build");
+
+        assert_eq!(prompt, "Base system prompt");
+        assert!(!prompt.contains("Computer Use Input Strategy"));
+        assert!(!prompt.contains("primary model does not accept image inputs"));
     }
 
     #[tokio::test]

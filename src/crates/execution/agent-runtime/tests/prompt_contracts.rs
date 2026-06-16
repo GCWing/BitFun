@@ -118,6 +118,7 @@ fn runtime_context_renderer_preserves_local_exec_and_computer_use_guidance() {
             shell_type: "powershell".to_string(),
             invocation: "powershell.exe -NoLogo".to_string(),
         }),
+        supports_image_understanding: None,
     })
     .expect("runtime context should render");
 
@@ -154,6 +155,7 @@ fn runtime_context_renderer_preserves_remote_workspace_split() {
             shell_type: "powershell".to_string(),
             invocation: "powershell.exe".to_string(),
         }),
+        supports_image_understanding: None,
     })
     .expect("remote runtime context should render");
 
@@ -162,6 +164,46 @@ fn runtime_context_renderer_preserves_remote_workspace_split() {
     assert!(reminder.contains("ExecCommand uses the remote user's default POSIX shell"));
     assert!(!reminder.contains("## ExecControl"));
     assert!(reminder.contains("Computer use and UI automation operate on the local BitFun desktop"));
+}
+
+#[test]
+fn runtime_context_renderer_adds_text_only_computer_use_guidance_for_non_visual_models() {
+    let reminder = render_runtime_context_reminder(&RuntimeContextFacts {
+        needs: RuntimeContextNeeds::from_tool_names(["ComputerUse"]),
+        host_os: "windows".to_string(),
+        host_family: "windows".to_string(),
+        host_arch: "x86_64".to_string(),
+        remote_execution: None,
+        local_shell: None,
+        supports_image_understanding: Some(false),
+    })
+    .expect("runtime context should render");
+
+    assert!(reminder.contains("## Local Client"));
+    assert!(reminder.contains("## Computer Use Input Strategy"));
+    assert!(reminder.contains("primary model does not accept image inputs"));
+    assert!(reminder.contains("do not use `screenshot`"));
+    assert!(reminder.contains("prefer `snapshot` then click by `@e*` ref"));
+}
+
+#[test]
+fn runtime_context_renderer_omits_text_only_guidance_for_visual_or_unknown_models() {
+    for supports_image_understanding in [Some(true), None] {
+        let reminder = render_runtime_context_reminder(&RuntimeContextFacts {
+            needs: RuntimeContextNeeds::from_tool_names(["ComputerUse"]),
+            host_os: "windows".to_string(),
+            host_family: "windows".to_string(),
+            host_arch: "x86_64".to_string(),
+            remote_execution: None,
+            local_shell: None,
+            supports_image_understanding,
+        })
+        .expect("runtime context should render");
+
+        assert!(reminder.contains("## Local Client"));
+        assert!(!reminder.contains("## Computer Use Input Strategy"));
+        assert!(!reminder.contains("primary model does not accept image inputs"));
+    }
 }
 
 #[test]
