@@ -9,6 +9,7 @@ const REPAINT_TAIL_SUPPRESSION_MS = 80;
 const MIN_EXISTING_LINES_FOR_REPAINT_MATCH = 3;
 const MIN_MATCHING_EXISTING_LINES = 2;
 const MIN_LINE_SIGNATURE_LENGTH = 8;
+const MAX_PROMPT_REDRAW_TEXT_LENGTH = 32;
 
 export interface ResizeRepaintScreenSnapshot {
   bufferType: 'normal' | 'alternate';
@@ -117,6 +118,13 @@ function normalizeOutputForComparison(value: string): string {
     .toLowerCase();
 }
 
+function printableTextFromOutput(value: string): string {
+  return stripTerminalControlSequences(value)
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function lineSignature(value: string): string | null {
   const normalized = normalizeLineForComparison(value);
   return normalized.length >= MIN_LINE_SIGNATURE_LENGTH ? normalized : null;
@@ -172,6 +180,67 @@ function hasHomeRepaintPrefix(data: string): boolean {
   return clearMatch.index <= 96;
 }
 
+// eslint-disable-next-line no-control-regex -- Matching absolute cursor positioning commands in terminal output.
+const ABSOLUTE_CURSOR_POSITION_RE = /\x1b\[(\d+);(\d+)H/g;
+// eslint-disable-next-line no-control-regex -- Matching erase-in-line commands in terminal output.
+// Keep this regex non-global: inspect() is called repeatedly on the same guard,
+// and a stateful /g test here would intermittently miss identical redraw packets.
+const ERASE_IN_LINE_RE = /\x1b\[[0-2]?K/;
+
+function isPromptOnlyResizeRedraw(
+  pending: PendingResizeRepaint,
+  data: string,
+): { suppress: true; promptLine: string; promptText: string } | null {
+  // Git Bash sometimes skips the full repaint and only reissues "$" plus
+  // absolute cursor moves for the old viewport row. Letting that through places
+  // the visible prompt back into historical output after a panel resize.
+  if (pending.shellType !== 'Bash') {
+    return null;
+  }
+
+  if (/[\r\n]/.test(data)) {
+    return null;
+  }
+
+  const cursorPositions = Array.from(data.matchAll(ABSOLUTE_CURSOR_POSITION_RE));
+  if (cursorPositions.length < 2) {
+    return null;
+  }
+
+  if (!ERASE_IN_LINE_RE.test(data)) {
+    return null;
+  }
+
+  const promptText = printableTextFromOutput(data);
+  if (promptText.length === 0 || promptText.length > MAX_PROMPT_REDRAW_TEXT_LENGTH) {
+    return null;
+  }
+
+  const promptLine = pending.screen.visibleNonEmptyLines[pending.screen.visibleNonEmptyLines.length - 1]?.trim() ?? '';
+  if (promptLine.length === 0) {
+    return null;
+  }
+
+  const normalizedPromptText = normalizeLineForComparison(promptText);
+  const normalizedPromptLine = normalizeLineForComparison(promptLine);
+  if (normalizedPromptText.length === 0 || normalizedPromptLine.length === 0) {
+    return null;
+  }
+
+  if (
+    normalizedPromptText !== normalizedPromptLine &&
+    !normalizedPromptLine.endsWith(normalizedPromptText)
+  ) {
+    return null;
+  }
+
+  return {
+    suppress: true,
+    promptLine: normalizedPromptLine,
+    promptText: normalizedPromptText,
+  };
+}
+
 function buildSuppressionDecision(
   pending: PendingResizeRepaint,
   data: string,
@@ -183,6 +252,26 @@ function buildSuppressionDecision(
 
   if (pending.screen.bufferType !== 'normal') {
     return { suppress: false, reason: 'alternate-buffer' };
+  }
+
+  const promptOnlyRedraw = isPromptOnlyResizeRedraw(pending, data);
+  if (promptOnlyRedraw) {
+    return {
+      suppress: true,
+      details: {
+        reason: 'prompt-only-resize-redraw',
+        pending: {
+          cols: pending.cols,
+          rows: pending.rows,
+          previousCols: pending.previousCols,
+          previousRows: pending.previousRows,
+          shellType: pending.shellType,
+          ageMs: Math.round(nowMs - pending.markedAtMs),
+        },
+        topLine: promptOnlyRedraw.promptLine,
+        matchingLines: [promptOnlyRedraw.promptText],
+      },
+    };
   }
 
   if (!hasHomeRepaintPrefix(data)) {

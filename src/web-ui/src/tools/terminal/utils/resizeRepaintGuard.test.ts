@@ -233,6 +233,50 @@ describe('ResizeRepaintGuard', () => {
     expect(decision).toEqual({ suppress: false, reason: 'repaint-starts-with-top-line' });
   });
 
+  it('suppresses a Git Bash prompt-only redraw that lands on the old viewport row after resize', () => {
+    const guard = new ResizeRepaintGuard();
+    const promptOnlyRedraw = '\x1b]633;B\x07\x1b[6;1H$\x1b[K\x1b[6;3H';
+
+    const mark = (nowMs: number) => {
+      guard.markResize({
+        cols: 212,
+        rows: 28,
+        previousCols: 212,
+        previousRows: 6,
+        shellType: 'Bash',
+        screen: createGitBashScreenSnapshot({
+          cols: 212,
+          rows: 28,
+          visibleNonEmptyLines: [
+            'wsp@DESKTOP-NP1CI6M MINGW64 /e/Projects/ForTest/smallgames (master)',
+            '$ ll',
+            'total 4',
+            'drwxr-xr-x 1 wsp 197121    0  6月 15 15:37 css/',
+            '-rw-r--r-- 1 wsp 197121 1838  6月 15 16:42 index.html',
+            'drwxr-xr-x 1 wsp 197121    0  6月 15 15:38 js/',
+            'wsp@DESKTOP-NP1CI6M MINGW64 /e/Projects/ForTest/smallgames (master)',
+            '$',
+          ],
+        }),
+        nowMs,
+      });
+    };
+
+    for (const [index, nowMs] of [1000, 2000].entries()) {
+      mark(nowMs);
+      const decision = guard.inspect(promptOnlyRedraw, nowMs + 120);
+
+      expect(decision.suppress).toBe(true);
+      if (decision.suppress) {
+        expect(decision.details.reason).toBe('prompt-only-resize-redraw');
+        expect(decision.details.topLine).toBe('$');
+        expect(decision.details.matchingLines).toEqual(['$']);
+      } else {
+        throw new Error(`Expected prompt-only redraw to be suppressed on pass ${index + 1}`);
+      }
+    }
+  });
+
   it('does not suppress alternate-buffer repaint output', () => {
     const guard = new ResizeRepaintGuard();
     guard.markResize({
