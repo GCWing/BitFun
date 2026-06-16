@@ -223,7 +223,8 @@
         "btwFill": "開啟側問會話",
         "stopGeneration": "停止生成",
         "activateInput": "激活輸入框",
-        "newSession": "新增會話"
+        "newSession": "新增會話",
+        "insertNewline": "在輸入框中插入換行"
       },
       "filetree": {
         "rename": "重新命名",

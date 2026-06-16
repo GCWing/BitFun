@@ -223,7 +223,8 @@
         "btwFill": "Start side-thread session",
         "stopGeneration": "Stop Generation",
         "activateInput": "Activate Input",
-        "newSession": "New Session"
+        "newSession": "New Session",
+        "insertNewline": "Insert Newline in Chat Input"
       },
       "filetree": {
         "rename": "Rename",

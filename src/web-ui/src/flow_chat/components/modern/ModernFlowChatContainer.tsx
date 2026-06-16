@@ -1310,6 +1310,15 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     { priority: 15, description: 'keyboard.shortcuts.chat.search' }
   );
 
+  useShortcut(
+    'chat.insertNewline',
+    { key: 'Enter', ctrl: true, scope: 'chat', allowInInput: true },
+    () => {
+      document.execCommand('insertLineBreak');
+    },
+    { priority: 25, description: 'keyboard.shortcuts.chat.insertNewline' }
+  );
+
   return (
     <FlowChatContext.Provider value={contextValue}>
       <div

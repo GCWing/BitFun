@@ -485,7 +485,7 @@
     "openWorkspaceFolderFailed": "打开工作区文件夹失败：{{error}}",
     "spaceToActivate": "按<space>空格键</space>快速键入",
     "assistantPlaceholder": "给 {{name}} 发送消息...",
-    "sendHint": "Enter 发送 / Shift+Enter 换行"
+    "sendHint": "Enter 发送 / Ctrl+Enter 或 Shift+Enter 换行"
   },
   "workspaceStrip": {
     "branchTooltipUnavailable": "非 Git 仓库或当前无分支"

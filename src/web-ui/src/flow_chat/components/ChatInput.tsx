@@ -2912,7 +2912,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }
     }
     
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
       if (isComposing) {
         return;
       }
