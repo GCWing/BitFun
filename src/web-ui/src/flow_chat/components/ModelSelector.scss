@@ -309,9 +309,9 @@
       backdrop-filter: none;
       -webkit-backdrop-filter: none;
       box-shadow:
-        0 4px 18px rgba(15, 23, 42, 0.04),
-        0 1px 3px rgba(15, 23, 42, 0.03),
-        inset 0 1px 0 rgba(255, 255, 255, 0.95);
+        0 4px 18px var(--color-overlay-slate-04),
+        0 1px 3px var(--color-overlay-slate-03),
+        inset 0 1px 0 var(--color-overlay-white-95);
     }
 
     &__dropdown-header {
@@ -319,10 +319,10 @@
     }
 
     &__list::-webkit-scrollbar-thumb {
-      background: rgba(15, 23, 42, 0.08);
+      background: var(--color-overlay-slate-08);
 
       &:hover {
-        background: rgba(15, 23, 42, 0.14);
+        background: var(--color-overlay-slate-14);
       }
     }
   }

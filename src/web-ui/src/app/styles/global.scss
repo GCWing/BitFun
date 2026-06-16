@@ -222,7 +222,7 @@ li {
   :root {
     --glass-border-base: rgba(255, 255, 255, 0.3);
     --glass-border-hover: rgba(255, 255, 255, 0.5);
-    --glass-border-focus: rgba(255, 255, 255, 0.7);
+    --glass-border-focus: var(--color-overlay-white-70);
   }
 }
 

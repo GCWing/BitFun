@@ -134,13 +134,13 @@
 
 .header-btn.close-btn {
   background: var(--color-overlay-white-05);
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--color-overlay-white-70);
   border: 1px solid var(--color-overlay-white-10);
 }
 
 .header-btn.close-btn:hover {
   background: var(--color-overlay-white-10);
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--color-overlay-white-90);
 }
 
 .header-divider {
@@ -171,7 +171,7 @@
   border: none;
   border-radius: 4px;
   background: var(--color-overlay-white-05);
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--color-overlay-white-70);
   cursor: pointer;
   transition: all 0.2s ease;
   flex-shrink: 0;
@@ -179,7 +179,7 @@
 
 .nav-btn:hover:not(:disabled) {
   background: var(--color-overlay-white-10);
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--color-overlay-white-90);
 }
 
 .nav-btn:disabled {
@@ -220,7 +220,7 @@
 
 .file-tab:hover {
   background: var(--color-overlay-white-05);
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--color-overlay-white-80);
 }
 
 .file-tab.active {
@@ -294,7 +294,7 @@
 .file-details .file-name {
   font-size: 14px;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--color-overlay-white-90);
   font-family: 'Monaco', 'Menlo', monospace;
 }
 
@@ -395,7 +395,7 @@
   align-items: center;
   justify-content: center;
   gap: 12px;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--color-overlay-white-90);
   font-size: 14px;
 }
 

@@ -29,6 +29,7 @@ import {
   WebElementCardRenderer,
 } from './types/WebElementContextImpl';
 import { i18nService } from '@/infrastructure/i18n';
+import { UI_EXCEPTION_ACCENTS } from '@/shared/theme/uiExceptionAccents';
 import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('ContextRegistry');
@@ -157,7 +158,7 @@ export function registerDefaultContextTypes(): void {
       displayName: i18nService.t('components:contextSystem.contextRegistry.webElement.name'),
       description: i18nService.t('components:contextSystem.contextRegistry.webElement.description'),
       icon: React.createElement(Code2Icon, { size: 16 }),
-      color: '#38bdf8',
+      color: UI_EXCEPTION_ACCENTS.generativeUi,
       category: 'reference',
       transformer: new WebElementContextTransformer(),
       validator: new WebElementContextValidator(),

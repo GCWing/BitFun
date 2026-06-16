@@ -18,11 +18,11 @@
 }
 
 :root[data-theme-type="light"] {
-  --flowchat-md-table-border: rgba(15, 23, 42, 0.12);
-  --flowchat-md-table-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+  --flowchat-md-table-border: var(--color-overlay-slate-12);
+  --flowchat-md-table-shadow: 0 4px 14px var(--color-overlay-slate-06);
   --flowchat-md-table-surface: var(--color-static-white);
-  --flowchat-md-table-cell-border: rgba(15, 23, 42, 0.1);
-  --flowchat-md-table-col-divider: rgba(15, 23, 42, 0.08);
+  --flowchat-md-table-cell-border: var(--color-overlay-slate-10);
+  --flowchat-md-table-col-divider: var(--color-overlay-slate-08);
   --flowchat-md-table-th-bg: #f3f6fb;
   --flowchat-md-table-th-fg: #0f172a;
   --flowchat-md-table-td-fg: var(--color-text-primary);

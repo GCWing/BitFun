@@ -1,7 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import morphdomRuntime from 'morphdom/dist/morphdom-umd.js?raw';
 import { themeService } from '@/infrastructure/theme';
-import { readWidgetThemePayload, type WidgetThemePayload } from './themePayload';
+import {
+  createWidgetThemeFallbackCss,
+  readWidgetThemePayload,
+  type WidgetThemePayload,
+} from './themePayload';
 import './GenerativeWidgetFrame.scss';
 
 export type WidgetMessage =
@@ -87,25 +91,7 @@ export const GENERATIVE_WIDGET_SHELL_HTML = `<!DOCTYPE html>
   <style>
     * { box-sizing: border-box; }
     :root {
-      --color-text-primary: #e8e8e8;
-      --color-text-secondary: #b0b0b0;
-      --color-text-muted: #858585;
-      --color-accent-500: #60a5fa;
-      --color-accent-600: #3b82f6;
-      --color-bg-secondary: #1c1c1f;
-      --color-success: #34d399;
-      --color-warning: #f59e0b;
-      --color-error: #ef4444;
-      --color-static-white: #ffffff;
-      --border-subtle: rgba(255, 255, 255, 0.1);
-      --border-base: rgba(255, 255, 255, 0.16);
-      --border-medium: rgba(255, 255, 255, 0.24);
-      --element-bg-subtle: rgba(255, 255, 255, 0.05);
-      --element-bg-base: rgba(255, 255, 255, 0.08);
-      --element-bg-medium: rgba(255, 255, 255, 0.14);
-      --element-bg-soft: rgba(255, 255, 255, 0.08);
-      --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
-      --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.4);
+${createWidgetThemeFallbackCss()}
       --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       --font-mono: "SF Mono", Consolas, monospace;
       --font-size-xs: 12px;

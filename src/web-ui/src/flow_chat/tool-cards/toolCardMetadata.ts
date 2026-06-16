@@ -7,6 +7,7 @@
 
 import type { FlowItem, FlowToolItem, ToolCardConfig } from '../types/flow-chat';
 import { isMcpToolName, parseMcpToolName } from '@/infrastructure/mcp/toolName';
+import { UI_EXCEPTION_ACCENTS } from '@/shared/theme/uiExceptionAccents';
 
 // Tool card config map - uses backend tool names
 export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
@@ -59,7 +60,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: 'List directory contents',
     displayMode: 'compact',
-    primaryColor: '#6366f1'
+    primaryColor: 'var(--color-indigo-500)'
   },
 
   // Search tools
@@ -125,7 +126,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: 'Manage task lists',
     displayMode: 'standard',
-    primaryColor: '#0d9488'
+    primaryColor: UI_EXCEPTION_ACCENTS.todo
   },
   'submit_code_review': {
     toolName: 'submit_code_review',
@@ -145,7 +146,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Compress conversation context to reduce tokens',
     displayMode: 'compact',
-    primaryColor: '#a855f7'
+    primaryColor: UI_EXCEPTION_ACCENTS.contextCompression
   },
   'GetToolSpec': {
     toolName: 'GetToolSpec',
@@ -155,7 +156,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Read usage instructions and schema for a collapsed tool',
     displayMode: 'compact',
-    primaryColor: '#14b8a6'
+    primaryColor: UI_EXCEPTION_ACCENTS.tealAction
   },
 
   // Skill tool
@@ -317,7 +318,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Create Mini App skeleton for editing',
     displayMode: 'standard',
-    primaryColor: '#7c8cef'
+    primaryColor: UI_EXCEPTION_ACCENTS.miniApp
   },
   'GenerativeUI': {
     toolName: 'GenerativeUI',
@@ -327,7 +328,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Render interactive widget previews inline in FlowChat',
     displayMode: 'detailed',
-    primaryColor: '#38bdf8'
+    primaryColor: UI_EXCEPTION_ACCENTS.generativeUi
   },
 };
 

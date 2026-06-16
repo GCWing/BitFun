@@ -4,6 +4,34 @@ export type WidgetThemePayload = {
   vars: Record<string, string>;
 };
 
+export const WIDGET_THEME_FALLBACK_VARS = {
+  '--color-text-primary': '#e8e8e8',
+  '--color-text-secondary': '#b0b0b0',
+  '--color-text-muted': '#858585',
+  '--color-accent-500': '#60a5fa',
+  '--color-accent-600': '#3b82f6',
+  '--color-bg-secondary': '#1c1c1f',
+  '--color-success': '#34d399',
+  '--color-warning': '#f59e0b',
+  '--color-error': '#ef4444',
+  '--color-static-white': '#ffffff',
+  '--border-subtle': 'rgba(255, 255, 255, 0.1)',
+  '--border-base': 'rgba(255, 255, 255, 0.16)',
+  '--border-medium': 'rgba(255, 255, 255, 0.24)',
+  '--element-bg-subtle': 'rgba(255, 255, 255, 0.05)',
+  '--element-bg-base': 'rgba(255, 255, 255, 0.08)',
+  '--element-bg-medium': 'rgba(255, 255, 255, 0.14)',
+  '--element-bg-soft': 'rgba(255, 255, 255, 0.08)',
+  '--shadow-xs': '0 1px 2px rgba(0, 0, 0, 0.4)',
+  '--shadow-sm': '0 2px 4px rgba(0, 0, 0, 0.4)',
+} as const;
+
+export function createWidgetThemeFallbackCss(): string {
+  return Object.entries(WIDGET_THEME_FALLBACK_VARS)
+    .map(([name, value]) => `      ${name}: ${value};`)
+    .join('\n');
+}
+
 const THEME_VAR_NAMES = [
   '--color-bg-primary',
   '--color-static-white',
@@ -343,6 +371,8 @@ export function readWidgetThemePayload(): WidgetThemePayload | null {
     const value = styles.getPropertyValue(name).trim();
     if (value) {
       vars[name] = value;
+    } else if (name in WIDGET_THEME_FALLBACK_VARS) {
+      vars[name] = WIDGET_THEME_FALLBACK_VARS[name as keyof typeof WIDGET_THEME_FALLBACK_VARS];
     }
   }
 

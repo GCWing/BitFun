@@ -25,7 +25,7 @@
   // Default state without glass effect
   background: color-mix(in srgb, var(--color-warning) 8%, transparent);
   border: 1px solid color-mix(in srgb, var(--color-warning) 20%, transparent);
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--color-overlay-white-70);
   box-shadow: none;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;

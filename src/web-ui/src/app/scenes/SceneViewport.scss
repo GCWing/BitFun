@@ -16,8 +16,8 @@
   background: var(--color-bg-scene);
   // Soft lift off workbench — layered shadow, kept subtle
   box-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.04),
-    0 8px 24px -6px rgba(15, 23, 42, 0.08);
+    0 1px 2px var(--color-overlay-slate-04),
+    0 8px 24px -6px var(--color-overlay-slate-08);
 
   // Subtle token reads too faint on white scene surface — use stronger edge on light themes
   :root[data-theme-type='light'] & {

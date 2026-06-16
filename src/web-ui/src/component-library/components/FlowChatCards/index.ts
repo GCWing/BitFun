@@ -4,6 +4,7 @@
  */
 
 import { i18nService } from '@/infrastructure/i18n';
+import { UI_EXCEPTION_ACCENTS } from '@/shared/theme/uiExceptionAccents';
 
 export { BaseToolCard } from './BaseToolCard';
 export type { BaseToolCardProps } from './BaseToolCard';
@@ -142,7 +143,7 @@ export const FLOWCHAT_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: i18nService.t('components:flowChatCards.toolConfig.todoWrite.description'),
     displayMode: 'standard',
-    primaryColor: '#0d9488'
+    primaryColor: UI_EXCEPTION_ACCENTS.todo
   },
   'ContextCompression': {
     toolName: 'ContextCompression',
@@ -152,7 +153,7 @@ export const FLOWCHAT_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: i18nService.t('components:flowChatCards.toolConfig.contextCompression.description'),
     displayMode: 'standard',
-    primaryColor: '#a855f7'
+    primaryColor: UI_EXCEPTION_ACCENTS.contextCompression
   }
 };
 

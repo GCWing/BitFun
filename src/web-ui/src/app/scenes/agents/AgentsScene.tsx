@@ -33,7 +33,8 @@ import {
   useAgentsStore,
 } from './agentsStore';
 import { useAgentsList } from './hooks/useAgentsList';
-import { AGENT_ICON_MAP, CAPABILITY_ACCENT } from './agentsIcons';
+import { AGENT_ICON_MAP } from './agentsIcons';
+import { CAPABILITY_ACCENT, CORE_AGENT_ACCENTS, DEFAULT_CORE_AGENT_ACCENT } from './agentTheme';
 import { getCardGradient } from '@/shared/utils/cardGradients';
 import { getAgentBadge, getAgentDescription, getCapabilityLabel } from './utils';
 import './AgentsView.scss';
@@ -258,18 +259,15 @@ const AgentsHomeView: React.FC = () => {
   const coreAgentMeta = useMemo((): Record<string, CoreAgentMeta> => ({
     agentic: {
       role: t('coreAgentsZone.modes.agentic.role'),
-      accentColor: '#6366f1',
-      accentBg: 'rgba(99, 102, 241, 0.1)',
+      ...CORE_AGENT_ACCENTS.agentic,
     },
     Cowork: {
       role: t('coreAgentsZone.modes.cowork.role'),
-      accentColor: '#14b8a6',
-      accentBg: 'rgba(20, 184, 166, 0.1)',
+      ...CORE_AGENT_ACCENTS.Cowork,
     },
     ComputerUse: {
       role: t('coreAgentsZone.modes.computerUse.role'),
-      accentColor: '#f59e0b',
-      accentBg: 'rgba(245, 158, 11, 0.1)',
+      ...CORE_AGENT_ACCENTS.ComputerUse,
     },
   }), [t]);
 
@@ -631,7 +629,7 @@ const AgentsHomeView: React.FC = () => {
                   key={agent.id}
                   agent={agent}
                   index={index}
-                  meta={coreAgentMeta[agent.id] ?? { role: agent.name, accentColor: '#6366f1', accentBg: 'rgba(99, 102, 241, 0.1)' }}
+                  meta={coreAgentMeta[agent.id] ?? { role: agent.name, ...DEFAULT_CORE_AGENT_ACCENT }}
                   toolCount={getDisplayedToolCount(agent)}
                   skillCount={agent.agentKind === 'mode' && modeHasSkillTool(getModeConfig(agent.id)?.enabled_tools ?? agent.defaultTools ?? [])
                     ? getConfiguredEnabledSkillKeys(getModeSkills(agent.id)).length

@@ -12,7 +12,7 @@
   --tool-card-border: var(--color-overlay-white-08);
   --tool-card-border-subtle: var(--color-overlay-white-04);
   
-  --tool-card-text-primary: #e8e8e8;
+  --tool-card-text-primary: var(--color-text-primary);
   --tool-card-text-secondary: #a0a0a0;
   --tool-card-text-muted: #6b7280;
   

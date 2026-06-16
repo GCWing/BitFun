@@ -29,7 +29,7 @@
   
   &.bitfun-context-drop-zone--can-accept {
     .bitfun-chat-input__box {
-      border-color: rgba(255, 255, 255, 0.22);
+      border-color: var(--color-overlay-white-22);
       box-shadow: 
         0 12px 32px rgba(0, 0, 0, 0.45),
         inset 0 1px 0 var(--color-overlay-white-12);
@@ -253,7 +253,7 @@
 
       &:hover {
         background: var(--color-bg-tertiary);
-        border-color: rgba(255, 255, 255, 0.22);
+        border-color: var(--color-overlay-white-22);
         box-shadow: 0 4px 16px var(--color-overlay-black-20);
       }
 
@@ -396,14 +396,14 @@
       -webkit-backdrop-filter: blur(8px);
       box-shadow:
         0 2px 8px var(--color-overlay-black-06),
-        inset 0 1px 0 rgba(255, 255, 255, 0.8);
+        inset 0 1px 0 var(--color-overlay-white-80);
 
       &:hover {
         background: rgba(255, 255, 255, 0.45);
         border-color: rgba(0, 0, 0, 0.14);
         box-shadow:
           0 12px 24px var(--color-overlay-black-10),
-          inset 0 1px 0 rgba(255, 255, 255, 0.9);
+          inset 0 1px 0 var(--color-overlay-white-90);
       }
     }
     
@@ -1296,9 +1296,9 @@
       backdrop-filter: none;
       -webkit-backdrop-filter: none;
       box-shadow:
-        0 4px 18px rgba(15, 23, 42, 0.04),
-        0 1px 3px rgba(15, 23, 42, 0.03),
-        inset 0 1px 0 rgba(255, 255, 255, 0.95);
+        0 4px 18px var(--color-overlay-slate-04),
+        0 1px 3px var(--color-overlay-slate-03),
+        inset 0 1px 0 var(--color-overlay-white-95);
     }
 
     &__mode-option:not(.bitfun-chat-input__mode-option--disabled):hover {
@@ -1306,7 +1306,7 @@
     }
 
     &__mode-submenu-content {
-      background: rgba(15, 23, 42, 0.03);
+      background: var(--color-overlay-slate-03);
 
       .bitfun-chat-input__mode-option:hover:not(.bitfun-chat-input__mode-option--disabled) {
         background: var(--element-bg-soft);
@@ -1318,10 +1318,10 @@
     }
 
     &__slash-command-list::-webkit-scrollbar-thumb {
-      background: rgba(15, 23, 42, 0.08);
+      background: var(--color-overlay-slate-08);
 
       &:hover {
-        background: rgba(15, 23, 42, 0.14);
+        background: var(--color-overlay-slate-14);
       }
     }
   }

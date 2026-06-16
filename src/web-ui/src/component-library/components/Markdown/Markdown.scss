@@ -596,13 +596,13 @@
 :root[data-theme-type="light"] .markdown-renderer,
 [data-theme-type="light"] .markdown-renderer,
 .light .markdown-renderer {
-  --markdown-link-color: #0969da;
-  --markdown-link-hover-color: #0550ae;
+  --markdown-link-color: var(--flowchat-link-color);
+  --markdown-link-hover-color: var(--flowchat-link-hover-color);
   --markdown-code-bg-elevated: #f6f8fa;
   --markdown-inline-code-bg: rgba(0, 0, 0, 0.05);
   --markdown-inline-code-border: var(--color-overlay-black-12);
   --markdown-pre-bg: #f6f8fa;
-  --markdown-pre-border: rgba(15, 23, 42, 0.12);
+  --markdown-pre-border: var(--color-overlay-slate-12);
   --markdown-blockquote-bg: var(--flowchat-md-bq-bg);
   --markdown-blockquote-border: var(--flowchat-md-bq-border);
 
@@ -618,7 +618,7 @@
 
   .code-block-toolbar {
     background: #eef1f6;
-    border-bottom-color: rgba(15, 23, 42, 0.1);
+    border-bottom-color: var(--color-overlay-slate-10);
   }
 
   .copy-button {
@@ -626,8 +626,8 @@
   }
 
   .copy-button:hover {
-    background: rgba(15, 23, 42, 0.06);
-    color: #0969da;
+    background: var(--color-overlay-slate-06);
+    color: var(--markdown-link-color);
   }
 
   .copy-button.copy-success {

@@ -11,7 +11,7 @@
     color-mix(in srgb, var(--color-accent-500) 20%, transparent) 0%,
     color-mix(in srgb, var(--color-accent-600) 20%, transparent) 100%);
   border: 2px solid color-mix(in srgb, var(--color-accent-500) 30%, transparent);
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--color-overlay-white-90);
   font-weight: 500;
   vertical-align: middle;
   backdrop-filter: blur(8px);

@@ -3,9 +3,14 @@
  */
 import { create } from 'zustand';
 import type { SubagentInfo } from '@/infrastructure/api/service-api/SubagentAPI';
+import {
+  CAPABILITY_ACCENT,
+  CAPABILITY_CATEGORIES,
+  type CapabilityCategory,
+} from './agentTheme';
 
-export const CAPABILITY_CATEGORIES = ['coding', 'docs', 'analysis', 'testing', 'creative', 'ops'] as const;
-export type CapabilityCategory = (typeof CAPABILITY_CATEGORIES)[number];
+export { CAPABILITY_CATEGORIES };
+export type { CapabilityCategory };
 
 /** 'mode' = primary agent mode (e.g. Agentic/Plan/Debug); 'subagent' = sub-agent */
 export type AgentKind = 'mode' | 'subagent';
@@ -23,14 +28,7 @@ export interface AgentWithCapabilities extends SubagentInfo {
   visibleSubagentCount?: number;
 }
 
-export const CAPABILITY_COLORS: Record<CapabilityCategory, string> = {
-  coding: '#60a5fa',
-  docs: '#6eb88c',
-  analysis: '#8b5cf6',
-  testing: '#c9944d',
-  creative: '#e879a0',
-  ops: '#5ea3a3',
-};
+export const CAPABILITY_COLORS: Record<CapabilityCategory, string> = CAPABILITY_ACCENT;
 
 export type AgentsScenePage = 'home' | 'createAgent' | 'reviewTeam';
 export type AgentEditorMode = 'create' | 'edit';

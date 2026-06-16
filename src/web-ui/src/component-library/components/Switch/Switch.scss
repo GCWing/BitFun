@@ -143,7 +143,7 @@
   }
 
   &__input:checked + &__track &__loading {
-    color: rgba(255, 255, 255, 0.92);
+    color: var(--color-overlay-white-92);
   }
 
   &__input:active:not(:disabled) + &__track {

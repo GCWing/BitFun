@@ -73,7 +73,7 @@
 }
 
 .file-icon {
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--color-overlay-white-70);
   flex-shrink: 0;
 }
 
@@ -82,7 +82,7 @@
 }
 
 .file-name {
-  color: rgba(255, 255, 255, 0.95);
+  color: var(--color-overlay-white-95);
   font-size: 14px;
   font-weight: 600;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
@@ -117,7 +117,7 @@
   cursor: pointer;
   transition: all 0.2s ease;
   background: var(--color-overlay-white-05);
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--color-overlay-white-80);
   border: 1px solid var(--color-overlay-white-10);
 }
 
@@ -227,7 +227,7 @@
   align-items: center;
   justify-content: center;
   gap: 12px;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--color-overlay-white-90);
   font-size: 14px;
   backdrop-filter: blur(4px);
   z-index: 1000;
@@ -237,7 +237,7 @@
   width: 24px;
   height: 24px;
   border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top: 2px solid rgba(255, 255, 255, 0.9);
+  border-top: 2px solid var(--color-overlay-white-90);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }

@@ -14,6 +14,7 @@
  *    box model, colors, attributes) and send to Rust via Tauri command
  *  - Zero performance impact when inactive
  */
+import { INSPECTOR_OVERLAY_THEME } from '@/shared/inspector/inspectorOverlayTheme';
 
 const INSPECTOR_SCRIPT_BODY = /* js */ `
 (function () {
@@ -27,8 +28,8 @@ const INSPECTOR_SCRIPT_BODY = /* js */ `
   var overlay = document.createElement('div');
   overlay.style.cssText = [
     'position:fixed',
-    'border:2px solid #3b82f6',
-    'background:rgba(59, 130, 246, 0.12)',
+    'border:2px solid ${INSPECTOR_OVERLAY_THEME.activeBorder}',
+    'background:${INSPECTOR_OVERLAY_THEME.activeBackground}',
     'pointer-events:none',
     'z-index:2147483646',
     'box-sizing:border-box',
@@ -40,8 +41,8 @@ const INSPECTOR_SCRIPT_BODY = /* js */ `
   var tooltip = document.createElement('div');
   tooltip.style.cssText = [
     'position:fixed',
-    'background:rgba(15, 23, 42, 0.95)',
-    'color:#e2e8f0',
+    'background:${INSPECTOR_OVERLAY_THEME.mainTooltipBackground}',
+    'color:${INSPECTOR_OVERLAY_THEME.tooltipText}',
     'padding:8px 12px',
     'border-radius:6px',
     'font-size:11px',
@@ -50,16 +51,16 @@ const INSPECTOR_SCRIPT_BODY = /* js */ `
     'pointer-events:none',
     'display:none',
     'max-width:520px',
-    'box-shadow:0 4px 12px rgba(0, 0, 0, 0.5)',
+    'box-shadow:0 4px 12px ${INSPECTOR_OVERLAY_THEME.tooltipShadow}',
     'line-height:1.5',
-    'border:1px solid rgba(59, 130, 246, 0.4)',
+    'border:1px solid ${INSPECTOR_OVERLAY_THEME.activeBorderSubtle}',
   ].join(';');
 
   var sizeLabel = document.createElement('div');
   sizeLabel.style.cssText = [
     'position:fixed',
-    'background:#3b82f6',
-    'color:#ffffff',
+    'background:${INSPECTOR_OVERLAY_THEME.activeBorder}',
+    'color:${INSPECTOR_OVERLAY_THEME.staticWhite}',
     'padding:2px 6px',
     'border-radius:3px',
     'font-size:10px',
@@ -282,11 +283,11 @@ const INSPECTOR_SCRIPT_BODY = /* js */ `
 
     invokeTauri('debug_element_picked', data);
 
-    overlay.style.borderColor = '#22c55e';
-    overlay.style.background = 'rgba(34, 197, 94, 0.18)';
+    overlay.style.borderColor = '${INSPECTOR_OVERLAY_THEME.selectedBorder}';
+    overlay.style.background = '${INSPECTOR_OVERLAY_THEME.selectedBackground}';
     setTimeout(function () {
-      overlay.style.borderColor = '#3b82f6';
-      overlay.style.background = 'rgba(59, 130, 246, 0.12)';
+      overlay.style.borderColor = '${INSPECTOR_OVERLAY_THEME.activeBorder}';
+      overlay.style.background = '${INSPECTOR_OVERLAY_THEME.activeBackground}';
     }, 400);
   }
 
