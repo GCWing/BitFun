@@ -1,9 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const globalStateMocks = vi.hoisted(() => ({
-  initializeGlobalState: vi.fn(),
+  initializeWorkspaceStartupState: vi.fn(),
   cleanupInvalidWorkspaces: vi.fn(),
-  cleanupInvalidWorkspacesAndGetWorkspaceStateSnapshot: vi.fn(),
   getRecentWorkspaces: vi.fn(),
   getOpenedWorkspaces: vi.fn(),
   getCurrentWorkspace: vi.fn(),
@@ -42,15 +41,14 @@ vi.mock('@/shared/utils/startupTrace', () => ({
 }));
 
 function configureGlobalState(): void {
-  globalStateMocks.initializeGlobalState.mockResolvedValue('initialized');
-  globalStateMocks.cleanupInvalidWorkspaces.mockResolvedValue(0);
-  globalStateMocks.cleanupInvalidWorkspacesAndGetWorkspaceStateSnapshot.mockResolvedValue({
+  globalStateMocks.initializeWorkspaceStartupState.mockResolvedValue({
     cleanupRemovedCount: 0,
     recentWorkspaces: [],
     openedWorkspaces: [],
     currentWorkspace: null,
     legacyRemoteWorkspace: null,
   });
+  globalStateMocks.cleanupInvalidWorkspaces.mockResolvedValue(0);
   globalStateMocks.getRecentWorkspaces.mockResolvedValue([]);
   globalStateMocks.getOpenedWorkspaces.mockResolvedValue([]);
   globalStateMocks.getCurrentWorkspace.mockResolvedValue(null);
@@ -69,7 +67,7 @@ describe('WorkspaceManager startup initialization', () => {
     configureGlobalState();
   });
 
-  it('overlaps global state initialization with identity listener registration but waits before publishing state', async () => {
+  it('waits for the identity listener before loading startup workspace state with one IPC', async () => {
     let resolveListener: ((unlisten: () => void) => void) | null = null;
     listenMock.mockReturnValue(new Promise(resolve => {
       resolveListener = resolve;
@@ -80,13 +78,12 @@ describe('WorkspaceManager startup initialization', () => {
     await new Promise(resolve => setTimeout(resolve, 20));
 
     expect(listenMock).toHaveBeenCalledWith('workspace-identity-changed', expect.any(Function));
-    expect(globalStateMocks.initializeGlobalState).toHaveBeenCalledTimes(1);
-    expect(globalStateMocks.cleanupInvalidWorkspacesAndGetWorkspaceStateSnapshot).not.toHaveBeenCalled();
+    expect(globalStateMocks.initializeWorkspaceStartupState).not.toHaveBeenCalled();
 
     resolveListener?.(() => undefined);
     await initializePromise;
 
-    expect(globalStateMocks.cleanupInvalidWorkspacesAndGetWorkspaceStateSnapshot).toHaveBeenCalledTimes(1);
+    expect(globalStateMocks.initializeWorkspaceStartupState).toHaveBeenCalledTimes(1);
     expect(globalStateMocks.cleanupInvalidWorkspaces).not.toHaveBeenCalled();
     expect(globalStateMocks.getCurrentWorkspace).not.toHaveBeenCalled();
     expect(globalStateMocks.getRecentWorkspaces).not.toHaveBeenCalled();
@@ -100,7 +97,7 @@ describe('WorkspaceManager startup initialization', () => {
       remotePath: '/repo',
       sshHost: 'devbox',
     };
-    globalStateMocks.cleanupInvalidWorkspacesAndGetWorkspaceStateSnapshot.mockResolvedValue({
+    globalStateMocks.initializeWorkspaceStartupState.mockResolvedValue({
       cleanupRemovedCount: 0,
       recentWorkspaces: [],
       openedWorkspaces: [],

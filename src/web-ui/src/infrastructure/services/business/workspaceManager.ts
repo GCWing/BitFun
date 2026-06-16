@@ -425,33 +425,25 @@ class WorkspaceManager {
       log.info('Initializing workspace state');
 
       const identityListenerStartedAt = markWorkspaceStartupStepStart('ensure_identity_listener');
-      const identityListenerReady = this.ensureIdentityChangeListener()
-        .finally(() => {
-          markWorkspaceStartupStepEnd('ensure_identity_listener', identityListenerStartedAt, {
-            blocking: true,
-            overlappedWithGlobalState: true,
-          });
-        });
+      await this.ensureIdentityChangeListener();
+      markWorkspaceStartupStepEnd('ensure_identity_listener', identityListenerStartedAt, {
+        blocking: true,
+      });
 
-      const globalStateStartedAt = markWorkspaceStartupStepStart('initialize_global_state');
-      const initResult = await globalStateAPI.initializeGlobalState();
-      markWorkspaceStartupStepEnd('initialize_global_state', globalStateStartedAt);
-      log.debug('Backend initialization completed', { result: initResult });
-      await identityListenerReady;
-
-      const cleanupStartedAt = markWorkspaceStartupStepStart('cleanup_invalid_workspaces');
+      const startupStateStartedAt = markWorkspaceStartupStepStart('initialize_workspace_startup_state');
       const {
         cleanupRemovedCount,
         recentWorkspaces,
         openedWorkspaces,
         currentWorkspace,
         legacyRemoteWorkspace,
-      } = await globalStateAPI.cleanupInvalidWorkspacesAndGetWorkspaceStateSnapshot();
+      } = await globalStateAPI.initializeWorkspaceStartupState();
       this.startupLegacyRemoteWorkspace = legacyRemoteWorkspace;
       this.startupLegacyRemoteWorkspaceSnapshotAvailable = true;
       this.startupLegacyRemoteWorkspaceSnapshotConsumed = false;
-      markWorkspaceStartupStepEnd('cleanup_invalid_workspaces', cleanupStartedAt, {
+      markWorkspaceStartupStepEnd('initialize_workspace_startup_state', startupStateStartedAt, {
         removedCount: cleanupRemovedCount,
+        includesGlobalStateInitialization: true,
         includesWorkspaceStateSnapshot: true,
         includesLegacyRemoteWorkspace: true,
       });

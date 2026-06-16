@@ -133,13 +133,11 @@ export interface ScanWorkspaceInfoRequest {
 
 export class GlobalAPI {
    
-  async initializeGlobalState(): Promise<string> {
+  async initializeWorkspaceStartupState(): Promise<WorkspaceStartupStateSnapshot> {
     try {
-      return await api.invoke('initialize_global_state', { 
-        request: {} 
-      });
+      return await api.invoke('initialize_workspace_startup_state');
     } catch (error) {
-      throw createTauriCommandError('initialize_global_state', error);
+      throw createTauriCommandError('initialize_workspace_startup_state', error);
     }
   }
 
@@ -305,17 +303,6 @@ export class GlobalAPI {
       });
     } catch (error) {
       throw createTauriCommandError('get_recent_workspaces', error);
-    }
-  }
-
-  async cleanupInvalidWorkspacesAndGetWorkspaceStateSnapshot(): Promise<WorkspaceStartupStateSnapshot> {
-    try {
-      return await api.invoke('cleanup_invalid_workspaces_and_get_workspace_state_snapshot');
-    } catch (error) {
-      throw createTauriCommandError(
-        'cleanup_invalid_workspaces_and_get_workspace_state_snapshot',
-        error
-      );
     }
   }
 

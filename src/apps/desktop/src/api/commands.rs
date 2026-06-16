@@ -1018,14 +1018,12 @@ async fn apply_active_workspace_context(
     }
 }
 
-#[tauri::command]
-pub async fn initialize_global_state(
-    state: State<'_, AppState>,
-    app: tauri::AppHandle,
-    startup_trace: State<'_, DesktopStartupTrace>,
-) -> Result<String, String> {
-    let command_started = Instant::now();
-    let trace = startup_trace.inner();
+async fn initialize_global_state_impl(
+    state: &State<'_, AppState>,
+    app: &tauri::AppHandle,
+    trace: &DesktopStartupTrace,
+) {
+    let total_started = Instant::now();
     let step_started = Instant::now();
     let current_workspace = state.workspace_service.get_current_workspace().await;
     trace.record_elapsed_step(
@@ -1062,11 +1060,8 @@ pub async fn initialize_global_state(
     trace.record_elapsed_step(
         "tauri_command",
         "initialize_global_state.total",
-        command_started,
+        total_started,
     );
-    trace.record_tauri_command_elapsed("initialize_global_state", None, command_started);
-
-    Ok("Global state initialized successfully".to_string())
 }
 
 #[tauri::command]
@@ -2025,28 +2020,32 @@ pub async fn cleanup_invalid_workspaces(
 }
 
 #[tauri::command]
-pub async fn cleanup_invalid_workspaces_and_get_workspace_state_snapshot(
+pub async fn initialize_workspace_startup_state(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
     startup_trace: State<'_, DesktopStartupTrace>,
 ) -> Result<WorkspaceStartupStateSnapshotDto, String> {
-    let trace_started = Instant::now();
+    let command_started = Instant::now();
+    let trace = startup_trace.inner();
+
+    initialize_global_state_impl(&state, &app, trace).await;
+
     let cleanup_removed_count = match cleanup_invalid_workspaces_impl(
         &state,
         &app,
         &startup_trace,
-        "cleanup_invalid_workspaces_and_get_workspace_state_snapshot",
+        "initialize_workspace_startup_state.cleanup_invalid_workspaces",
         None,
-        trace_started,
+        command_started,
     )
     .await
     {
         Ok(removed_count) => removed_count,
         Err(error) => {
             startup_trace.record_tauri_command_elapsed(
-                "cleanup_invalid_workspaces_and_get_workspace_state_snapshot",
+                "initialize_workspace_startup_state",
                 None,
-                trace_started,
+                command_started,
             );
             return Err(error);
         }
@@ -2056,13 +2055,13 @@ pub async fn cleanup_invalid_workspaces_and_get_workspace_state_snapshot(
     let snapshot = collect_workspace_state_snapshot(&state).await;
     startup_trace.record_elapsed_step(
         "tauri_command",
-        "cleanup_invalid_workspaces_and_get_workspace_state_snapshot.collect_workspace_state_snapshot",
+        "initialize_workspace_startup_state.collect_workspace_state_snapshot",
         snapshot_started,
     );
     startup_trace.record_tauri_command_elapsed(
-        "cleanup_invalid_workspaces_and_get_workspace_state_snapshot",
+        "initialize_workspace_startup_state",
         None,
-        trace_started,
+        command_started,
     );
 
     Ok(WorkspaceStartupStateSnapshotDto {
