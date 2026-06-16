@@ -350,33 +350,41 @@ class WorkspaceManager {
     this.identityListenerReady = false;
     const registrationStartedAt = nowMs();
 
-    this.identityListenerRegistrationPromise = listen<WorkspaceIdentityChangedEvent>(
-      'workspace-identity-changed',
-      event => {
-        this.applyIdentityUpdate(event.payload);
-      }
-    )
-      .then(() => {
-        this.identityListenerReady = true;
-        startupTrace.markPhase('workspace_identity_listener_ready', {
-          durationMs: elapsedMs(registrationStartedAt),
-        });
-        if (this.identityListenerReadyResyncPending && this.isInitialized) {
-          void this.syncWorkspaceStateAfterIdentityListenerReady();
-        }
-      })
-      .catch(error => {
-        this.identityEventListening = false;
-        this.identityListenerReady = false;
-        this.identityListenerReadyResyncPending = false;
-        startupTrace.markPhase('workspace_identity_listener_failed', {
-          durationMs: elapsedMs(registrationStartedAt),
-        });
-        log.error('Failed to subscribe workspace identity updates', { error });
-      })
-      .finally(() => {
-        this.identityListenerRegistrationPromise = null;
+    const handleRegistrationFailure = (error: unknown): void => {
+      this.identityEventListening = false;
+      this.identityListenerReady = false;
+      this.identityListenerReadyResyncPending = false;
+      startupTrace.markPhase('workspace_identity_listener_failed', {
+        durationMs: elapsedMs(registrationStartedAt),
       });
+      log.error('Failed to subscribe workspace identity updates', { error });
+    };
+
+    try {
+      this.identityListenerRegistrationPromise = listen<WorkspaceIdentityChangedEvent>(
+        'workspace-identity-changed',
+        event => {
+          this.applyIdentityUpdate(event.payload);
+        }
+      )
+        .then(() => {
+          this.identityListenerReady = true;
+          startupTrace.markPhase('workspace_identity_listener_ready', {
+            durationMs: elapsedMs(registrationStartedAt),
+          });
+          if (this.identityListenerReadyResyncPending && this.isInitialized) {
+            void this.syncWorkspaceStateAfterIdentityListenerReady();
+          }
+        })
+        .catch(handleRegistrationFailure)
+        .finally(() => {
+          this.identityListenerRegistrationPromise = null;
+        });
+    } catch (error) {
+      handleRegistrationFailure(error);
+      this.identityListenerRegistrationPromise = null;
+      return;
+    }
 
     return this.identityListenerRegistrationPromise;
   }

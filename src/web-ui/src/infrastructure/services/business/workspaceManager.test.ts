@@ -272,6 +272,19 @@ describe('WorkspaceManager startup initialization', () => {
     expect(manager.getState().error).toBeNull();
   });
 
+  it('keeps startup workspace state available when identity listener registration throws synchronously', async () => {
+    listenMock.mockImplementation(() => {
+      throw new Error('listener unavailable');
+    });
+    const manager = await getFreshWorkspaceManager();
+
+    await expect(manager.initialize()).resolves.toBeUndefined();
+
+    expect(globalStateMocks.initializeWorkspaceStartupState).toHaveBeenCalledTimes(1);
+    expect(manager.getState().loading).toBe(false);
+    expect(manager.getState().error).toBeNull();
+  });
+
   it('stores the startup legacy remote workspace snapshot for one reconnect pass', async () => {
     const legacyRemoteWorkspace = {
       connectionId: 'conn-1',

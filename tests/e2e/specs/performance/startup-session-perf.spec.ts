@@ -3869,32 +3869,6 @@ function readRapidSwitchSessionIds(): string[] {
   return Array.from(new Set(sessionIds));
 }
 
-function chooseRapidSwitchClickOrder(
-  requestedSessionIds: string[],
-  activeSessionIdAtStart: string | null,
-): string[] {
-  if (!activeSessionIdAtStart) {
-    return requestedSessionIds;
-  }
-
-  const defaultTargetSessionId = requestedSessionIds.at(-1);
-  if (defaultTargetSessionId !== activeSessionIdAtStart) {
-    return requestedSessionIds;
-  }
-
-  const fallbackTargetSessionId = requestedSessionIds
-    .filter(sessionId => sessionId !== activeSessionIdAtStart)
-    .at(-1);
-  if (!fallbackTargetSessionId) {
-    return requestedSessionIds;
-  }
-
-  return [
-    ...requestedSessionIds.filter(sessionId => sessionId !== fallbackTargetSessionId),
-    fallbackTargetSessionId,
-  ];
-}
-
 async function readActiveSessionNavId(): Promise<string | null> {
   return browser.execute(() => {
     const active = document.querySelector<HTMLElement>(
@@ -3903,6 +3877,49 @@ async function readActiveSessionNavId(): Promise<string | null> {
     );
     return active?.getAttribute('data-session-id') ?? null;
   });
+}
+
+async function ensureRapidSwitchTargetStartsInactive(
+  targetSessionId: string,
+  requestedSessionIds: string[],
+): Promise<string | null> {
+  const activeSessionId = await readActiveSessionNavId();
+  if (activeSessionId !== targetSessionId) {
+    return activeSessionId;
+  }
+
+  const setupSessionId = requestedSessionIds.find(sessionId => sessionId !== targetSessionId);
+  if (!setupSessionId) {
+    return activeSessionId;
+  }
+
+  const setupItem = await findSessionItem(setupSessionId);
+  if (!setupItem) {
+    return activeSessionId;
+  }
+
+  const beforeSnapshot = await readStartupTraceSnapshot();
+  const frameCountBefore = countPhase(
+    beforeSnapshot,
+    'historical_session_after_state_commit_frame',
+  );
+  const clickedAtMs = await readPerformanceNow();
+  await setupItem.click();
+  const afterFrameSnapshot = await waitForOptionalTracePhaseForSessionSince(
+    'historical_session_after_state_commit_frame',
+    setupSessionId,
+    clickedAtMs,
+    10000,
+  );
+  if (countPhase(afterFrameSnapshot, 'historical_session_after_state_commit_frame') <= frameCountBefore) {
+    await waitForOptionalPhaseCount(
+      'historical_session_after_state_commit_frame',
+      frameCountBefore + 1,
+      1000,
+    );
+  }
+  await browser.pause(50);
+  return readActiveSessionNavId();
 }
 
 async function collectRapidLongSessionSwitchMeasurement(
@@ -4637,14 +4654,17 @@ describe('Performance telemetry', () => {
     await ensurePerformanceWorkspace(startupPage);
 
     const requestedSessionIds = readRapidSwitchSessionIds();
-    const activeSessionIdAtStart = await readActiveSessionNavId();
-    const sessionIds = chooseRapidSwitchClickOrder(requestedSessionIds, activeSessionIdAtStart);
+    const sessionIds = requestedSessionIds;
     if (sessionIds.length < 3) {
       this.skip();
       return;
     }
 
     const targetSessionId = sessionIds[sessionIds.length - 1];
+    const activeSessionIdAtStart = await ensureRapidSwitchTargetStartsInactive(
+      targetSessionId,
+      requestedSessionIds,
+    );
     const expectedLatestTurnId = await readExpectedLatestTurnId(targetSessionId);
     if (!expectedLatestTurnId) {
       console.log(
