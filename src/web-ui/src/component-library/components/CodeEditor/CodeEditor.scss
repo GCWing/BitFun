@@ -91,7 +91,7 @@
         }
 
         .selected-text {
-          background: rgba(59, 130, 246, 0.35) !important;
+          background: color-mix(in srgb, var(--color-accent-600) 35%, transparent) !important;
         }
 
         .monaco-scrollable-element > .scrollbar {
@@ -444,7 +444,7 @@
       top: 16px;
       right: 16px;
       background: color-mix(in srgb, var(--color-bg-primary) 90%, transparent);
-      border-color: rgba(59, 130, 246, 0.5);
+      border-color: color-mix(in srgb, var(--color-accent-600) 50%, transparent);
 
       &:hover {
         background: var(--color-bg-primary);

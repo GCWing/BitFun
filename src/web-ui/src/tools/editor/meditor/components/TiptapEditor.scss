@@ -576,27 +576,27 @@
     &:not(:disabled) {
       background: linear-gradient(
         135deg,
-        rgba(80, 130, 255, 0.85),
-        rgba(120, 100, 255, 0.9)
+        color-mix(in srgb, var(--color-accent-500) 85%, transparent),
+        color-mix(in srgb, var(--color-purple-500) 90%, transparent)
       );
-      border: 1px solid rgba(140, 160, 255, 0.6);
+      border: 1px solid color-mix(in srgb, var(--color-accent-500) 60%, transparent);
       color: var(--color-static-white);
       box-shadow:
-        0 2px 8px rgba(100, 140, 255, 0.4),
-        0 0 12px rgba(120, 100, 255, 0.25);
+        0 2px 8px color-mix(in srgb, var(--color-accent-500) 40%, transparent),
+        0 0 12px color-mix(in srgb, var(--color-purple-500) 25%, transparent);
     }
 
     &:hover:not(:disabled) {
       background: linear-gradient(
         135deg,
-        rgba(90, 150, 255, 1),
-        rgba(140, 120, 255, 1)
+        color-mix(in srgb, var(--color-accent-500) 94%, var(--color-static-white)),
+        color-mix(in srgb, var(--color-purple-500) 92%, var(--color-static-white))
       );
-      border-color: rgba(160, 180, 255, 0.8);
+      border-color: color-mix(in srgb, var(--color-accent-500) 80%, transparent);
       transform: scale(1.06);
       box-shadow:
-        0 4px 14px rgba(100, 140, 255, 0.5),
-        0 0 18px rgba(140, 100, 255, 0.35);
+        0 4px 14px color-mix(in srgb, var(--color-accent-500) 50%, transparent),
+        0 0 18px color-mix(in srgb, var(--color-purple-500) 35%, transparent);
     }
 
     &:active:not(:disabled) {

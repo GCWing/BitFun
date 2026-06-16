@@ -258,7 +258,7 @@
   }
   
   &--invalid {
-    border-color: var(--color-error)-border;
+    border-color: var(--color-error-border);
     
     .bitfun-context-card__indicator {
       background-color: var(--color-error) !important;
@@ -298,10 +298,10 @@
     &:hover {
       background: linear-gradient(135deg,
         var(--color-accent-100) 0%,
-        rgba(96, 165, 250, 0.06) 50%,
+        color-mix(in srgb, var(--color-accent-500) 6%, transparent) 50%,
         var(--card-bg-accent) 100%
       );
-      border-color: rgba(96, 165, 250, 0.3);
+      border-color: color-mix(in srgb, var(--color-accent-500) 30%, transparent);
       transform: translateY(-2px);
       box-shadow: 
         0 8px 24px var(--color-accent-200),
@@ -344,7 +344,7 @@
   
   &--image {
     .bitfun-context-card__icon {
-      color: #22c55e;
+      color: var(--color-success);
     }
   }
 }

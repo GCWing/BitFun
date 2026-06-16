@@ -8,9 +8,9 @@
   justify-content: center;
   overflow: hidden;
   background: linear-gradient(135deg,
-    rgba(96, 165, 250, 0.2) 0%,
-    rgba(59, 130, 246, 0.2) 100%);
-  border: 2px solid rgba(96, 165, 250, 0.3);
+    color-mix(in srgb, var(--color-accent-500) 20%, transparent) 0%,
+    color-mix(in srgb, var(--color-accent-600) 20%, transparent) 100%);
+  border: 2px solid color-mix(in srgb, var(--color-accent-500) 30%, transparent);
   color: rgba(255, 255, 255, 0.9);
   font-weight: 500;
   vertical-align: middle;
@@ -79,7 +79,7 @@
     &:hover {
       transform: translateY(-2px);
       z-index: 1;
-      box-shadow: 0 4px 12px rgba(96, 165, 250, 0.3);
+      box-shadow: 0 4px 12px color-mix(in srgb, var(--color-accent-500) 30%, transparent);
     }
   }
 

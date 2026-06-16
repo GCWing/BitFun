@@ -71,7 +71,7 @@ function createMockToolItem(
       resultDisplayType: 'summary',
       description: '',
       displayMode: 'compact',
-      primaryColor: '#6b7280'
+      primaryColor: 'var(--color-text-muted)'
     }
   } as FlowToolItem;
 }
@@ -362,7 +362,7 @@ export const componentRegistry: ComponentCategory[] = [
                 padding: '20px',
                 background: 'rgba(255, 255, 255, 0.02)',
                 borderRadius: '8px',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
+                border: '1px solid var(--color-overlay-white-10)',
                 maxWidth: '700px'
               }}>
                 <StreamText
@@ -458,10 +458,10 @@ name: 'Search - Demo',
                     <button
                       style={{
                         padding: '4px 6px',
-                        background: searchOptions.caseSensitive ? 'rgba(96, 165, 250, 0.2)' : 'transparent',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        background: searchOptions.caseSensitive ? 'color-mix(in srgb, var(--color-accent-500) 20%, transparent)' : 'transparent',
+                        border: '1px solid var(--color-overlay-white-10)',
                         borderRadius: '4px',
-                        color: searchOptions.caseSensitive ? 'var(--color-accent-500)' : '#a0a0a0',
+                        color: searchOptions.caseSensitive ? 'var(--color-accent-500)' : 'var(--color-text-muted)',
                         cursor: 'pointer',
                         fontSize: '12px',
                       }}
@@ -473,10 +473,10 @@ name: 'Search - Demo',
                     <button
                       style={{
                         padding: '4px 6px',
-                        background: searchOptions.useRegex ? 'rgba(96, 165, 250, 0.2)' : 'transparent',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        background: searchOptions.useRegex ? 'color-mix(in srgb, var(--color-accent-500) 20%, transparent)' : 'transparent',
+                        border: '1px solid var(--color-overlay-white-10)',
                         borderRadius: '4px',
-                        color: searchOptions.useRegex ? 'var(--color-accent-500)' : '#a0a0a0',
+                        color: searchOptions.useRegex ? 'var(--color-accent-500)' : 'var(--color-text-muted)',
                         cursor: 'pointer',
                         fontSize: '12px',
                       }}

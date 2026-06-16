@@ -23,8 +23,8 @@
   border-radius: 11px;
   
   // Default state without glass effect
-  background: rgba(245, 158, 11, 0.08);
-  border: 1px solid rgba(245, 158, 11, 0.2);
+  background: color-mix(in srgb, var(--color-warning) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-warning) 20%, transparent);
   color: rgba(255, 255, 255, 0.7);
   box-shadow: none;
   backdrop-filter: none;
@@ -57,18 +57,18 @@
   // Hover: enable glass effect
   &:hover {
     background: linear-gradient(135deg,
-      rgba(245, 158, 11, 0.2) 0%,
-      rgba(251, 191, 36, 0.17) 30%,
-      rgba(245, 158, 11, 0.13) 60%,
-      rgba(245, 158, 11, 0.23) 100%
+      color-mix(in srgb, var(--color-warning) 20%, transparent) 0%,
+      color-mix(in srgb, var(--color-warning) 17%, transparent) 30%,
+      color-mix(in srgb, var(--color-warning) 13%, transparent) 60%,
+      color-mix(in srgb, var(--color-warning) 23%, transparent) 100%
     );
-    border-color: rgba(245, 158, 11, 0.5);
+    border-color: color-mix(in srgb, var(--color-warning) 50%, transparent);
     color: var(--color-text-primary);
     box-shadow: 
-      0 10px 20px rgba(245, 158, 11, 0.2),
-      0 6px 12px rgba(251, 191, 36, 0.15),
+      0 10px 20px color-mix(in srgb, var(--color-warning) 20%, transparent),
+      0 6px 12px color-mix(in srgb, var(--color-warning) 15%, transparent),
       $inner-glow-top-hover,
-      inset 0 -1px 0 rgba(245, 158, 11, 0.15);
+      inset 0 -1px 0 color-mix(in srgb, var(--color-warning) 15%, transparent);
     backdrop-filter: blur(12px) saturate(1.2) brightness(1.05);
     -webkit-backdrop-filter: blur(12px) saturate(1.2) brightness(1.05);
     transform: translateY(-1px);
@@ -87,8 +87,8 @@
     width: 5px;
     height: 5px;
     border-radius: 50%;
-    background: rgba(245, 158, 11, 0.9);
-    box-shadow: 0 0 6px rgba(245, 158, 11, 0.6);
+    background: color-mix(in srgb, var(--color-warning) 90%, transparent);
+    box-shadow: 0 0 6px color-mix(in srgb, var(--color-warning) 60%, transparent);
     animation: bitfun-planner-button-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
     flex-shrink: 0;
     position: relative;

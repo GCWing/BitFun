@@ -162,7 +162,7 @@
     
     .error-text {
       font-size: var(--tool-card-action-font-size);
-      color: rgba(239, 68, 68, 0.9);
+      color: color-mix(in srgb, var(--color-error) 90%, transparent);
       font-weight: 600;
     }
   }
@@ -219,13 +219,13 @@
   }
 
   .git-output-stderr {
-    background: rgba(239, 68, 68, 0.06);
+    background: color-mix(in srgb, var(--color-error) 6%, transparent);
     color: var(--color-text-primary);
   }
 
   .git-output-warning {
-    border-left: 3px solid rgba(234, 179, 8, 0.45);
-    background: rgba(234, 179, 8, 0.06);
+    border-left: 3px solid color-mix(in srgb, var(--color-warning) 45%, transparent);
+    background: color-mix(in srgb, var(--color-warning) 6%, transparent);
   }
 
   .git-result-footer {
@@ -289,10 +289,10 @@
   .error-content {
     padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
     background: var(--glass-red-subtle);
-    border-top: 1px solid rgba(239, 68, 68, 0.2);
+    border-top: 1px solid color-mix(in srgb, var(--color-error) 20%, transparent);
 
     .error-message {
-      color: rgba(239, 68, 68, 0.9);
+      color: color-mix(in srgb, var(--color-error) 90%, transparent);
       font-size: var(--tool-card-action-font-size);
       line-height: var(--flowchat-support-line-height);
       margin-bottom: var(--flowchat-card-gap);
@@ -314,22 +314,22 @@
 
       .error-operation,
       .error-args {
-        color: rgba(239, 68, 68, 0.7);
+        color: color-mix(in srgb, var(--color-error) 70%, transparent);
         font-family: var(--tool-card-font-mono);
       }
     }
   }
 
   .icon-completed {
-    color: rgba(34, 197, 94, 0.9);
+    color: var(--tool-card-positive-icon);
   }
 
   .icon-warning {
-    color: rgba(234, 179, 8, 0.9);
+    color: color-mix(in srgb, var(--color-warning) 90%, transparent);
   }
 
   .git-confirm-btn {
-    color: rgba(34, 197, 94, 0.8);
+    color: color-mix(in srgb, var(--tool-card-positive-color) 80%, transparent);
     
     &:hover:not(:disabled) {
       background: var(--git-color-staged-bg-hover);
@@ -337,12 +337,12 @@
     }
 
     &:active:not(:disabled) {
-      background: rgba(34, 197, 94, 0.25);
+      background: color-mix(in srgb, var(--tool-card-positive-color) 25%, transparent);
     }
   }
 
   .git-reject-btn {
-    color: rgba(239, 68, 68, 0.8);
+    color: color-mix(in srgb, var(--color-error) 80%, transparent);
     
     &:hover:not(:disabled) {
       background: var(--git-color-deleted-bg-hover);
@@ -350,7 +350,7 @@
     }
 
     &:active:not(:disabled) {
-      background: rgba(239, 68, 68, 0.25);
+      background: color-mix(in srgb, var(--color-error) 25%, transparent);
     }
   }
 }

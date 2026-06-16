@@ -41,8 +41,8 @@
 
   &--info {
     .notification-item__icon {
-      color: #ca8a04;
-      background: rgba(234, 179, 8, 0.18);
+      color: var(--color-warning);
+      background: color-mix(in srgb, var(--color-warning) 18%, transparent);
     }
   }
 

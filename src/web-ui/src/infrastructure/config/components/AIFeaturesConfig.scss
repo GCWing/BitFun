@@ -83,7 +83,7 @@
     max-width: 100%;
     padding: 6px 10px;
     border-radius: $size-radius-sm;
-    border: 1px dashed rgba(234, 179, 8, 0.4);
+    border: 1px dashed color-mix(in srgb, var(--color-warning) 40%, transparent);
     color: var(--color-warning);
     font-size: var(--font-size-xs);
     line-height: $line-height-relaxed;

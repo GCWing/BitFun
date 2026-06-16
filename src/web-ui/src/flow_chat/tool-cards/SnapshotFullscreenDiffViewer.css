@@ -19,7 +19,7 @@
 .snapshot-fullscreen-container {
   width: 95vw;
   height: 95vh;
-  background: #1a1a1a;
+  background: var(--color-bg-secondary);
   border-radius: 12px;
   display: flex;
   flex-direction: column;
@@ -51,7 +51,7 @@
   justify-content: center;
   width: 32px;
   height: 32px;
-  background: rgba(59, 130, 246, 0.1);
+  background: color-mix(in srgb, var(--color-accent-600) 10%, transparent);
   border-radius: 6px;
   color: var(--color-accent-600);
 }
@@ -251,7 +251,7 @@
 }
 
 .file-tab .file-status[data-status="partial"] {
-  color: #6b7280;
+  color: var(--color-text-muted);
 }
 
 /* Current file header */

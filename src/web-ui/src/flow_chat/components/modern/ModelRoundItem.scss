@@ -184,8 +184,8 @@
 // Copy button
 .model-round-item__copy-btn {
   &.copied {
-    color: #22c55e;
-    background: rgba(34, 197, 94, 0.1);
+    color: var(--flowchat-copy-success-color);
+    background: var(--color-success-bg);
   }
 }
 

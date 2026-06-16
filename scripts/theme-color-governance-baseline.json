@@ -6,16 +6,16 @@
       "max": 31
     },
     "colorScopes.appUi.uniqueColors": {
-      "max": 727
+      "max": 517
     },
     "colorScopes.appUi.occurrences": {
-      "max": 1610
+      "max": 1014
     },
     "colorScopes.token.uniqueColors": {
-      "max": 683
+      "max": 700
     },
     "colorScopes.exception.uniqueColors": {
-      "max": 177
+      "max": 172
     },
     "cssVarDefinitions.unresolvedRequiredUnique": {
       "max": 0
@@ -36,10 +36,10 @@
       "max": 0
     },
     "tokenAliasLiterals.occurrences": {
-      "max": 129
+      "max": 105
     },
     "tokenAliasLiterals.uniqueColors": {
-      "max": 40
+      "max": 39
     }
   }
 }

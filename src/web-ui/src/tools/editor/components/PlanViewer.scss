@@ -175,7 +175,7 @@
 
         &--active {
           color: var(--color-info);
-          background: rgba(59, 130, 246, 0.1);
+          background: color-mix(in srgb, var(--color-accent-600) 10%, transparent);
           border-color: var(--color-info);
 
           &:hover {

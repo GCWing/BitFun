@@ -89,7 +89,7 @@ export function registerDefaultContextTypes(): void {
       displayName: i18nService.t('components:contextSystem.contextRegistry.codeSnippet.name'),
       description: i18nService.t('components:contextSystem.contextRegistry.codeSnippet.description'),
       icon: React.createElement(Code, { size: 16 }),
-      color: '#a78bfa', 
+      color: 'var(--color-purple-soft)',
       category: 'code',
       transformer: new CodeSnippetContextTransformer(),
       validator: new CodeSnippetContextValidator(),

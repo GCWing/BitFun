@@ -45,8 +45,8 @@
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    background: rgba(234, 179, 8, 0.18);
-    color: #ca8a04;
+    background: color-mix(in srgb, var(--color-warning) 18%, transparent);
+    color: var(--color-warning);
   }
 
   &__spinner {
@@ -100,7 +100,7 @@
   &__percentage {
     font-size: var(--font-size-xs);
     font-weight: $font-weight-semibold;
-    color: #ca8a04;
+    color: var(--color-warning);
     font-variant-numeric: tabular-nums;
     font-family: $font-family-mono;
   }

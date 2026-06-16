@@ -67,7 +67,7 @@ export const WebSearchCard: React.FC<WebSearchCardProps> = ({
       displayMode={displayMode}
       input={input}
       result={result}
-      primaryColor="#0ea5e9"
+      primaryColor="var(--tool-card-web-search-color)"
       className={`web-search-card web-search-card--${searchType}`}
       {...baseProps}
     >

@@ -36,29 +36,29 @@
   }
 
   &--green {
-    background: rgba(52, 211, 153, 0.14);
+    background: color-mix(in srgb, var(--color-success) 14%, transparent);
     color: tokens.$color-success;
 
     &:hover {
-      background: rgba(52, 211, 153, 0.2);
+      background: color-mix(in srgb, var(--color-success) 20%, transparent);
     }
   }
 
   &--red {
-    background: rgba(239, 68, 68, 0.14);
+    background: color-mix(in srgb, var(--color-error) 14%, transparent);
     color: tokens.$color-error;
 
     &:hover {
-      background: rgba(239, 68, 68, 0.2);
+      background: color-mix(in srgb, var(--color-error) 20%, transparent);
     }
   }
 
   &--yellow {
-    background: rgba(245, 158, 11, 0.14);
+    background: color-mix(in srgb, var(--color-warning) 14%, transparent);
     color: tokens.$color-warning;
 
     &:hover {
-      background: rgba(245, 158, 11, 0.2);
+      background: color-mix(in srgb, var(--color-warning) 20%, transparent);
     }
   }
 
@@ -67,7 +67,7 @@
     color: tokens.$color-purple-500;
 
     &:hover {
-      background: rgba(139, 92, 246, 0.2);
+      background: color-mix(in srgb, var(--color-purple-500) 20%, transparent);
     }
   }
 

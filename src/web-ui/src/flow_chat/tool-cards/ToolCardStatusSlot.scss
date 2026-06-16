@@ -52,7 +52,7 @@
 
 .tcss-error {
   color: var(--color-error);
-  filter: drop-shadow(0 0 3px rgba(248, 113, 113, 0.35));
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--color-error) 35%, transparent));
 }
 
 .tcss-cancelled {

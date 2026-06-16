@@ -24,7 +24,7 @@ $_diff-padding-desktop: 32px;
     background: var(--color-bg-primary);
     border: 1px solid var(--color-error-border);
     border-radius: 0;
-    border-bottom: 1px solid rgba(239, 68, 68, 0.5);
+    border-bottom: 1px solid color-mix(in srgb, var(--color-error) 50%, transparent);
     color: var(--color-error);
     font-size: var(--font-size-sm);
     font-weight: $font-weight-medium;
@@ -33,7 +33,7 @@ $_diff-padding-desktop: 32px;
 
     svg {
       flex-shrink: 0;
-      filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.4));
+      filter: drop-shadow(0 0 8px color-mix(in srgb, var(--color-error) 40%, transparent));
     }
   }
 
@@ -261,7 +261,7 @@ $_diff-padding-desktop: 32px;
     border-radius: $size-radius-full;
     animation: git-diff-editor-spin $motion-lazy $easing-standard infinite;
     box-shadow: 
-      0 0 20px rgba(96, 165, 250, 0.3),
+      0 0 20px color-mix(in srgb, var(--color-accent-500) 30%, transparent),
       0 0 40px var(--color-accent-200);
   }
 
@@ -294,8 +294,8 @@ $_diff-padding-desktop: 32px;
       );
       color: var(--color-static-white);
       box-shadow: 
-        0 8px 24px rgba(34, 197, 94, 0.4),
-        0 0 40px rgba(34, 197, 94, 0.2);
+        0 8px 24px color-mix(in srgb, var(--git-color-staged) 40%, transparent),
+        0 0 40px color-mix(in srgb, var(--git-color-staged) 20%, transparent);
     }
 
     &--rejected {
@@ -305,8 +305,8 @@ $_diff-padding-desktop: 32px;
       );
       color: var(--color-static-white);
       box-shadow: 
-        0 8px 24px rgba(239, 68, 68, 0.4),
-        0 0 40px rgba(239, 68, 68, 0.2);
+        0 8px 24px color-mix(in srgb, var(--color-error) 40%, transparent),
+        0 0 40px color-mix(in srgb, var(--color-error) 20%, transparent);
     }
 
     svg {

@@ -108,7 +108,7 @@
   }
 
   .markdown-renderer .code-block-wrapper .copy-button.copy-success:hover {
-    color: #22c55e;
+    color: var(--markdown-copy-success-color);
     transform: scale(1.08);
   }
 

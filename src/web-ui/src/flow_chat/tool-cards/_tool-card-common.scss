@@ -206,6 +206,6 @@
 
   .icon-error {
     color: var(--color-error);
-    filter: drop-shadow(0 0 4px rgba(239, 68, 68, 0.4));
+    filter: drop-shadow(0 0 4px color-mix(in srgb, var(--color-error) 40%, transparent));
   }
 }

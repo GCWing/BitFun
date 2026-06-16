@@ -311,7 +311,7 @@
     font-size: var(--tool-card-action-font-size);
     color: var(--color-error);
     background: var(--glass-red-base);
-    border: 1px solid rgba(239, 68, 68, 0.2);
+    border: 1px solid color-mix(in srgb, var(--color-error) 20%, transparent);
     flex-shrink: 0;
 
     svg {

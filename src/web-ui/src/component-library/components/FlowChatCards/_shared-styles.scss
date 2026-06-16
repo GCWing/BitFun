@@ -25,7 +25,7 @@
 @mixin compact-hover {
   &:hover {
     background: var(--color-overlay-white-08);
-    border-color: rgba(255, 255, 255, 0.35);
+    border-color: color-mix(in srgb, var(--color-static-white) 35%, transparent);
   }
 }
 
@@ -33,7 +33,7 @@
 @mixin standard-hover {
   &:hover {
     background: var(--color-overlay-white-08);
-    border-color: rgba(255, 255, 255, 0.35);
+    border-color: color-mix(in srgb, var(--color-static-white) 35%, transparent);
     transform: translateY(-1px);
   }
 }
@@ -52,16 +52,16 @@
   transition: all tokens.$motion-base tokens.$easing-standard;
 
   svg {
-    color: rgba(255, 255, 255, 0.75);
+    color: color-mix(in srgb, var(--color-static-white) 75%, transparent);
     transition: all tokens.$motion-base;
   }
 
   &:hover {
     background: var(--color-overlay-white-10);
-    border-color: rgba(255, 255, 255, 0.35);
+    border-color: color-mix(in srgb, var(--color-static-white) 35%, transparent);
 
     svg {
-      color: rgba(255, 255, 255, 0.95);
+      color: color-mix(in srgb, var(--color-static-white) 95%, transparent);
     }
   }
 }
@@ -82,8 +82,8 @@
     border-color: tokens.$color-success-border;
 
     &:hover:not(:disabled) {
-      background: rgba(52, 211, 153, 0.18);
-      border-color: rgba(52, 211, 153, 0.4);
+      background: color-mix(in srgb, var(--color-success) 18%, transparent);
+      border-color: color-mix(in srgb, var(--color-success) 40%, transparent);
     }
   } @else if $variant == 'error' {
     background: var(--color-error-bg);
@@ -91,8 +91,8 @@
     border-color: tokens.$color-error-border;
 
     &:hover:not(:disabled) {
-      background: rgba(239, 68, 68, 0.18);
-      border-color: rgba(239, 68, 68, 0.4);
+      background: color-mix(in srgb, var(--color-error) 18%, transparent);
+      border-color: color-mix(in srgb, var(--color-error) 40%, transparent);
     }
   } @else if $variant == 'primary' {
     background: var(--card-bg-accent);
@@ -100,7 +100,7 @@
     border-color: tokens.$color-info-border;
 
     &:hover:not(:disabled) {
-      background: rgba(96, 165, 250, 0.18);
+      background: color-mix(in srgb, var(--color-accent-500) 18%, transparent);
       border-color: var(--color-accent-400);
     }
   } @else {

@@ -205,7 +205,9 @@ export const CodePreview: React.FC<CodePreviewProps> = memo(({
     return {
       style: {
         display: 'block',
-        backgroundColor: isHighlighted ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
+        backgroundColor: isHighlighted
+          ? 'color-mix(in srgb, var(--color-accent-500) 15%, transparent)'
+          : 'transparent',
         borderLeft: isHighlighted ? '3px solid var(--color-accent-500)' : '3px solid transparent',
         marginLeft: '-3px',
         paddingLeft: '3px',

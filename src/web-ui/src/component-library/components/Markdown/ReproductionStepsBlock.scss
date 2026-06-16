@@ -21,7 +21,7 @@
 
 
   &:hover:not(.proceeded) {
-    box-shadow: 0 0 12px rgba(245, 158, 11, 0.25);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--color-warning) 25%, transparent);
   }
 
 
@@ -151,7 +151,7 @@
     min-width: 20px;
     height: 20px;
     padding: 0 4px;
-    background: rgba(245, 158, 11, 0.12);
+    background: color-mix(in srgb, var(--color-warning) 12%, transparent);
     color: var(--color-warning);
     border-radius: var(--radius-sm);
     font-size: var(--flowchat-font-size-xxs);

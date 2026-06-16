@@ -54,18 +54,18 @@
 }
 
 .copy-output-button.copied {
-  background: rgba(34, 197, 94, 0.9);
-  border-color: rgba(34, 197, 94, 0.7);
-  color: white;
+  background: color-mix(in srgb, var(--flowchat-copy-success-color) 90%, transparent);
+  border-color: color-mix(in srgb, var(--flowchat-copy-success-color) 70%, transparent);
+  color: var(--color-static-white);
   opacity: 1;
   pointer-events: auto;
 }
 
 .copy-output-button.copied:hover {
-  background: rgba(34, 197, 94, 0.9);
-  border-color: rgba(34, 197, 94, 0.7);
+  background: color-mix(in srgb, var(--flowchat-copy-success-color) 90%, transparent);
+  border-color: color-mix(in srgb, var(--flowchat-copy-success-color) 70%, transparent);
   transform: translateY(0);
-  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.4);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--flowchat-copy-success-color) 40%, transparent);
 }
 
 .button-icon {
@@ -136,9 +136,9 @@
 }
 
 .copy-output-button.edit-button:hover {
-  background: rgba(139, 92, 246, 0.8);
-  border-color: rgba(139, 92, 246, 0.6);
-  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+  background: color-mix(in srgb, var(--color-purple-500) 80%, transparent);
+  border-color: color-mix(in srgb, var(--color-purple-500) 60%, transparent);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--color-purple-500) 30%, transparent);
 }
 
 .copy-output-button.edit-button:active {

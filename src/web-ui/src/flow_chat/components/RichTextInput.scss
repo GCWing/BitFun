@@ -59,8 +59,8 @@
   display: inline-block;
   padding: 2px 8px;
   margin: 0 2px;
-  background: rgba(99, 102, 241, 0.1);
-  border: 1px dashed rgba(99, 102, 241, 0.35);
+  background: color-mix(in srgb, var(--color-accent-500) 10%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--color-accent-500) 35%, transparent);
   border-radius: 6px;
   font-size: var(--flowchat-font-size-sm);
   font-weight: 500;
@@ -73,25 +73,25 @@
   white-space: nowrap;
   
   &:hover {
-    background: rgba(99, 102, 241, 0.15);
-    border-color: rgba(99, 102, 241, 0.5);
+    background: color-mix(in srgb, var(--color-accent-500) 15%, transparent);
+    border-color: color-mix(in srgb, var(--color-accent-500) 50%, transparent);
   }
   
   &--active {
-    background: rgba(99, 102, 241, 0.15);
-    border: 1px solid rgba(99, 102, 241, 0.5);
+    background: color-mix(in srgb, var(--color-accent-500) 15%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-accent-500) 50%, transparent);
     color: var(--color-accent-400);
     
     &:hover {
-      background: rgba(99, 102, 241, 0.2);
-      border-color: rgba(99, 102, 241, 0.6);
+      background: color-mix(in srgb, var(--color-accent-500) 20%, transparent);
+      border-color: color-mix(in srgb, var(--color-accent-500) 60%, transparent);
     }
   }
   
   &:focus {
     outline: none;
-    background: rgba(99, 102, 241, 0.18);
-    border-color: rgba(99, 102, 241, 0.6);
+    background: color-mix(in srgb, var(--color-accent-500) 18%, transparent);
+    border-color: color-mix(in srgb, var(--color-accent-500) 60%, transparent);
   }
 }
 
@@ -104,12 +104,12 @@
   gap: 4px;
   padding: 2px 6px 2px 8px;
   margin: 0 3px;
-  background: rgba(96, 165, 250, 0.12);
+  background: color-mix(in srgb, var(--color-accent-500) 12%, transparent);
   border: none;
   border-radius: 10px;
   font-size: var(--flowchat-font-size-sm);
   font-weight: 500;
-  color: rgba(96, 165, 250, 0.95);
+  color: color-mix(in srgb, var(--color-accent-500) 95%, transparent);
   cursor: default;
   user-select: none;
   vertical-align: middle;
@@ -117,16 +117,16 @@
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   
   &:hover {
-    background: rgba(96, 165, 250, 0.18);
+    background: color-mix(in srgb, var(--color-accent-500) 18%, transparent);
   }
   
   // Context type colors.
   &[data-context-type="file"] {
-    background: rgba(96, 165, 250, 0.12);
-    color: rgba(96, 165, 250, 0.95);
+    background: color-mix(in srgb, var(--color-accent-500) 12%, transparent);
+    color: color-mix(in srgb, var(--color-accent-500) 95%, transparent);
     
     &:hover {
-      background: rgba(96, 165, 250, 0.18);
+      background: color-mix(in srgb, var(--color-accent-500) 18%, transparent);
     }
   }
   
@@ -187,11 +187,11 @@
 }
 
 .rich-text-tag-pill--widget-ref {
-  background: rgba(16, 185, 129, 0.14);
-  color: rgba(110, 231, 183, 0.96);
+  background: color-mix(in srgb, var(--color-success) 14%, transparent);
+  color: color-mix(in srgb, var(--color-success) 96%, var(--color-text-primary));
 
   &:hover {
-    background: rgba(16, 185, 129, 0.22);
+    background: color-mix(in srgb, var(--color-success) 22%, transparent);
   }
 }
 
@@ -203,7 +203,7 @@
   height: 16px;
   padding: 0 5px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.16);
+  background: var(--color-overlay-white-15);
   color: inherit;
   font-size: var(--flowchat-font-size-xxs);
   font-weight: 700;

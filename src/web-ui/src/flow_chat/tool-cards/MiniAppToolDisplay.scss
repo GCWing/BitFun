@@ -75,7 +75,7 @@
 
     .error-text {
       font-size: var(--tool-card-action-font-size);
-      color: rgba(239, 68, 68, 0.9);
+      color: color-mix(in srgb, var(--color-error) 90%, transparent);
       font-weight: 600;
     }
   }
@@ -159,10 +159,10 @@
   .error-content {
     padding: var(--flowchat-card-expanded-pad-y) var(--size-gap-4);
     background: var(--glass-red-subtle);
-    border-top: 1px solid rgba(239, 68, 68, 0.2);
+    border-top: 1px solid color-mix(in srgb, var(--color-error) 20%, transparent);
 
     .error-message {
-      color: rgba(239, 68, 68, 0.9);
+      color: color-mix(in srgb, var(--color-error) 90%, transparent);
       font-size: var(--flowchat-font-size-sm);
       margin-bottom: var(--flowchat-card-gap);
       font-family: var(--tool-card-font-mono);
@@ -178,7 +178,7 @@
       color: var(--tool-card-text-secondary);
 
       .error-operation {
-        color: rgba(239, 68, 68, 0.7);
+        color: color-mix(in srgb, var(--color-error) 70%, transparent);
         font-family: var(--tool-card-font-mono);
       }
     }

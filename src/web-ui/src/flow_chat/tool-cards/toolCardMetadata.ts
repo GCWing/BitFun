@@ -29,7 +29,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: 'Write or create a file',
     displayMode: 'standard',
-    primaryColor: '#22c55e'
+    primaryColor: 'var(--tool-card-write-color)'
   },
   'Edit': {
     toolName: 'Edit',
@@ -81,7 +81,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: 'Search files by pattern',
     displayMode: 'compact',
-    primaryColor: '#06b6d4'
+    primaryColor: 'var(--tool-card-file-search-color)'
   },
 
   // Web tools
@@ -93,7 +93,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Search the web',
     displayMode: 'compact',
-    primaryColor: '#0ea5e9'
+    primaryColor: 'var(--tool-card-web-search-color)'
   },
   'WebFetch': {
     toolName: 'WebFetch',
@@ -103,7 +103,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Fetch webpage content',
     displayMode: 'standard',
-    primaryColor: '#0ea5e9'
+    primaryColor: 'var(--tool-card-web-search-color)'
   },
 
   // Advanced tools
@@ -190,7 +190,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'hidden',
     description: 'Review session summary marker',
     displayMode: 'detailed',
-    primaryColor: '#0ea5e9'
+    primaryColor: 'var(--tool-card-web-search-color)'
   },
 
   // Git version control tool
@@ -202,7 +202,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Run Git commands',
     displayMode: 'compact',
-    primaryColor: '#f97316' // Orange, Git brand color
+    primaryColor: 'var(--tool-card-git-color)' // Orange, Git brand color
   },
 
   // GetFileDiff tool
@@ -272,7 +272,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Run commands in the terminal',
     displayMode: 'standard',
-    primaryColor: '#10b981' // Teal, classic terminal color
+    primaryColor: 'var(--tool-card-terminal-color)' // Teal, classic terminal color
   },
 
   'ExecCommand': {
@@ -283,7 +283,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Run a command in a fresh process',
     displayMode: 'standard',
-    primaryColor: '#10b981'
+    primaryColor: 'var(--tool-card-terminal-color)'
   },
 
   'WriteStdin': {
@@ -294,7 +294,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Write to or poll a running command process',
     displayMode: 'standard',
-    primaryColor: '#10b981'
+    primaryColor: 'var(--tool-card-terminal-color)'
   },
 
   'ExecControl': {
@@ -361,7 +361,7 @@ export function getToolCardConfig(toolName: string): ToolCardConfig {
     resultDisplayType: 'summary',
     description: `Run ${toolName} tool`,
     displayMode: 'standard',
-    primaryColor: '#6b7280'
+    primaryColor: 'var(--color-text-muted)'
   };
 }
 

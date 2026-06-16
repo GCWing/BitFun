@@ -22,7 +22,7 @@
   transition: all var(--motion-fast) var(--easing-standard);
 
   &:focus-visible {
-    outline: 2px solid rgba(96, 165, 250, 0.5);
+    outline: 2px solid color-mix(in srgb, var(--color-accent-500) 50%, transparent);
     outline-offset: 1px;
   }
 
@@ -184,20 +184,20 @@
   }
 
   &-ai {
-    background: rgba(139, 92, 246, 0.18);
-    color: tokens.$color-purple-500;
+    background: color-mix(in srgb, var(--color-purple-500) 18%, transparent);
+    color: var(--color-purple-500);
 
     &:hover {
-      background: rgba(139, 92, 246, 0.28);
+      background: color-mix(in srgb, var(--color-purple-500) 28%, transparent);
       color: var(--color-static-white);
 
       svg {
-        color: tokens.$color-purple-500;
+        color: var(--color-purple-500);
       }
     }
 
     &:active {
-      background: rgba(139, 92, 246, 0.22);
+      background: color-mix(in srgb, var(--color-purple-500) 22%, transparent);
     }
   }
 

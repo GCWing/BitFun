@@ -114,7 +114,7 @@
 
 .params-streaming-indicator {
   font-size: var(--flowchat-font-size-xxs);
-  color: rgba(139, 92, 246, 0.75);
+  color: color-mix(in srgb, var(--color-purple-500) 75%, transparent);
   background: var(--color-purple-100);
   padding: 0.125rem var(--flowchat-inline-gap);
   border-radius: 3px;

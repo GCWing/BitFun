@@ -353,11 +353,11 @@
 }
 
 .markdown-renderer .copy-button:active {
-  color: #2563eb;
+  color: var(--markdown-primary-color);
 }
 
 .markdown-renderer .copy-button.copy-success {
-  color: #22c55e;
+  color: var(--markdown-copy-success-color);
 }
 
 .markdown-renderer pre:has(.code-block-wrapper),
@@ -463,7 +463,7 @@
 }
 
 .markdown-renderer .markdown-image--error {
-  outline: 1px dashed rgba(239, 68, 68, 0.35);
+  outline: 1px dashed color-mix(in srgb, var(--color-error) 35%, transparent);
 }
 
 .markdown-renderer .katex-display {

@@ -79,8 +79,8 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
   border: none;
   background: linear-gradient(
     135deg,
-    rgba(16, 185, 129, 0.1) 0%,
-    rgba(59, 130, 246, 0.07) 55%,
+    color-mix(in srgb, var(--color-success) 10%, transparent) 0%,
+    color-mix(in srgb, var(--color-accent-600) 7%, transparent) 55%,
     var(--card-bg-purple) 100%
   );
   position: relative;
@@ -178,8 +178,8 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     gap: 4px;
     padding: 2px 7px;
     border-radius: $size-radius-full;
-    border: 1px solid rgba(52, 211, 153, 0.18);
-    background: rgba(52, 211, 153, 0.06);
+    border: 1px solid color-mix(in srgb, var(--color-success) 18%, transparent);
+    background: color-mix(in srgb, var(--color-success) 6%, transparent);
     font-size: var(--font-size-2xs);
     font-weight: $font-weight-medium;
     color: var(--color-text-muted);
@@ -190,8 +190,8 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
       background $motion-fast $easing-standard;
 
     &--accent {
-      border-color: rgba(96, 165, 250, 0.22);
-      background: rgba(96, 165, 250, 0.07);
+      border-color: color-mix(in srgb, var(--color-accent-500) 22%, transparent);
+      background: color-mix(in srgb, var(--color-accent-500) 7%, transparent);
     }
 
     &--muted {
@@ -200,8 +200,8 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     }
 
     &--token {
-      border-color: rgba(251, 191, 36, 0.2);
-      background: rgba(251, 191, 36, 0.06);
+      border-color: color-mix(in srgb, var(--color-warning) 20%, transparent);
+      background: color-mix(in srgb, var(--color-warning) 6%, transparent);
     }
   }
 
@@ -211,8 +211,8 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     background: var(--color-success-bg);
 
     &--accent {
-      border-color: rgba(96, 165, 250, 0.36);
-      background: rgba(96, 165, 250, 0.12);
+      border-color: color-mix(in srgb, var(--color-accent-500) 36%, transparent);
+      background: color-mix(in srgb, var(--color-accent-500) 12%, transparent);
     }
 
     &--muted {
@@ -221,8 +221,8 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     }
 
     &--token {
-      border-color: rgba(251, 191, 36, 0.36);
-      background: rgba(251, 191, 36, 0.1);
+      border-color: color-mix(in srgb, var(--color-warning) 36%, transparent);
+      background: color-mix(in srgb, var(--color-warning) 10%, transparent);
     }
   }
 
@@ -530,7 +530,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
       color 0.15s ease;
 
     &:hover {
-      background: rgba(239, 68, 68, 0.18);
+      background: color-mix(in srgb, var(--color-error) 18%, transparent);
       color: var(--color-error);
     }
 
@@ -552,7 +552,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     font-size: var(--font-size-2xs);
     font-weight: $font-weight-semibold;
     color: var(--color-accent-400);
-    background: rgba(96, 165, 250, 0.12);
+    background: color-mix(in srgb, var(--color-accent-500) 12%, transparent);
     white-space: nowrap;
     flex-shrink: 0;
   }
@@ -628,7 +628,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
       color: var(--color-error);
 
       &:hover:not(:disabled) {
-        background: rgba(239, 68, 68, 0.25);
+        background: color-mix(in srgb, var(--color-error) 25%, transparent);
       }
     }
   }
@@ -1934,7 +1934,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
 
     &--mcp {
       color: var(--color-warning);
-      background: rgba(251, 146, 60, 0.1);
+      background: color-mix(in srgb, var(--color-warning) 10%, transparent);
       border-color: transparent;
     }
   }
@@ -2159,8 +2159,8 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     border-radius: 14px;
     background:
       linear-gradient(135deg,
-        rgba(16, 185, 129, 0.09) 0%,
-        rgba(59, 130, 246, 0.06) 55%,
+        color-mix(in srgb, var(--color-success) 9%, transparent) 0%,
+        color-mix(in srgb, var(--color-accent-600) 6%, transparent) 55%,
         var(--color-purple-100) 100%
       ),
       var(--element-bg-subtle);
@@ -2254,26 +2254,26 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     gap: 4px;
     padding: 2px 7px;
     border-radius: $size-radius-full;
-    border: 1px solid rgba(52, 211, 153, 0.18);
-    background: rgba(52, 211, 153, 0.06);
+    border: 1px solid color-mix(in srgb, var(--color-success) 18%, transparent);
+    background: color-mix(in srgb, var(--color-success) 6%, transparent);
     font-size: var(--font-size-2xs);
     font-weight: $font-weight-medium;
     color: var(--color-text-muted);
     letter-spacing: 0.1px;
 
     &--fast {
-      border-color: rgba(96, 165, 250, 0.22);
-      background: rgba(96, 165, 250, 0.07);
+      border-color: color-mix(in srgb, var(--color-accent-500) 22%, transparent);
+      background: color-mix(in srgb, var(--color-accent-500) 7%, transparent);
     }
 
     &--tools {
-      border-color: rgba(251, 191, 36, 0.22);
-      background: rgba(251, 191, 36, 0.06);
+      border-color: color-mix(in srgb, var(--color-warning) 22%, transparent);
+      background: color-mix(in srgb, var(--color-warning) 6%, transparent);
     }
 
     &--skills {
-      border-color: rgba(139, 92, 246, 0.22);
-      background: rgba(139, 92, 246, 0.07);
+      border-color: color-mix(in srgb, var(--color-purple-500) 22%, transparent);
+      background: color-mix(in srgb, var(--color-purple-500) 7%, transparent);
     }
   }
 }
@@ -2495,22 +2495,22 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     &--healthy {
       color: var(--color-success);
       background: var(--glass-green-base);
-      border-color: rgba(52, 211, 153, 0.22);
+      border-color: color-mix(in srgb, var(--color-success) 22%, transparent);
     }
 
     &--starting,
     &--reconnecting {
       color: var(--color-warning);
-      background: rgba(245, 158, 11, 0.08);
-      border-color: rgba(245, 158, 11, 0.22);
+      background: color-mix(in srgb, var(--color-warning) 8%, transparent);
+      border-color: color-mix(in srgb, var(--color-warning) 22%, transparent);
     }
 
     &--failed,
     &--stopped,
     &--stopping {
       color: var(--color-error);
-      background: rgba(248, 113, 113, 0.08);
-      border-color: rgba(248, 113, 113, 0.22);
+      background: color-mix(in srgb, var(--color-error) 8%, transparent);
+      border-color: color-mix(in srgb, var(--color-error) 22%, transparent);
     }
 
     &--unknown,
@@ -2604,7 +2604,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
 
     &--mcp {
       color: var(--color-warning);
-      background: rgba(251, 146, 60, 0.1);
+      background: color-mix(in srgb, var(--color-warning) 10%, transparent);
     }
   }
 
@@ -3013,9 +3013,9 @@ $acp-content-top: clamp(40px, 4.5vh, 52px);
   border-radius: $size-radius-base;
   background: linear-gradient(
     135deg,
-    rgba(16, 185, 129, 0.06) 0%,
-    rgba(59, 130, 246, 0.04) 55%,
-    rgba(139, 92, 246, 0.06) 100%
+    color-mix(in srgb, var(--color-success) 6%, transparent) 0%,
+    color-mix(in srgb, var(--color-accent-600) 4%, transparent) 55%,
+    color-mix(in srgb, var(--color-purple-500) 6%, transparent) 100%
   );
   border: 1px solid var(--border-subtle);
 

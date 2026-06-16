@@ -46,10 +46,10 @@
         }
         
         .code-line--highlighted {
-          background-color: rgba(99, 102, 241, 0.15) !important;
+          background-color: color-mix(in srgb, var(--color-accent-500) 15%, transparent) !important;
           
           &:hover {
-            background-color: rgba(99, 102, 241, 0.2) !important;
+            background-color: color-mix(in srgb, var(--color-accent-500) 20%, transparent) !important;
           }
         }
       }
@@ -100,11 +100,11 @@
     }
 
     &--highlighted {
-      background-color: rgba(99, 102, 241, 0.15);
+      background-color: color-mix(in srgb, var(--color-accent-500) 15%, transparent);
       border-left-color: var(--color-accent-500);
 
       &:hover {
-        background-color: rgba(99, 102, 241, 0.2);
+        background-color: color-mix(in srgb, var(--color-accent-500) 20%, transparent);
       }
     }
   }

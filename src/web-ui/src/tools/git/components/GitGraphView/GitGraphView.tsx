@@ -13,6 +13,7 @@ import {
   GitGraphInteractionState 
 } from '../../types/graph';
 import { i18nService } from '@/infrastructure/i18n';
+import { useThemeStore } from '@/infrastructure/theme/store/themeStore';
 import { createLogger } from '@/shared/utils/logger';
 import './GitGraphView.scss';
 
@@ -25,14 +26,14 @@ const DEFAULT_CONFIG: GitGraphViewConfig = {
   nodeSize: 5,
   lineWidth: 1.5,
   colors: [
-    '#60a5fa',
-    '#10b981',
-    '#f59e0b',
-    '#8b5cf6',
-    '#ef4444',
-    '#06b6d4',
-    '#ec4899',
-    '#f97316',
+    'var(--git-graph-lane-blue)',
+    'var(--git-graph-lane-green)',
+    'var(--git-graph-lane-warning)',
+    'var(--git-graph-lane-purple)',
+    'var(--git-graph-lane-error)',
+    'var(--git-graph-lane-cyan)',
+    'var(--git-graph-lane-pink)',
+    'var(--git-graph-lane-orange)',
   ],
   showAvatar: false,
   showRelativeTime: true,
@@ -46,6 +47,7 @@ export const GitGraphView: React.FC<GitGraphViewProps> = ({
   className = ''
 }) => {
   const { t } = useTranslation('panels/git');
+  const themeId = useThemeStore(state => state.currentThemeId);
   const viewConfig = useMemo(() => ({ ...DEFAULT_CONFIG, ...config }), [config]);
 
 
@@ -175,12 +177,13 @@ export const GitGraphView: React.FC<GitGraphViewProps> = ({
 
     ctx.clearRect(0, 0, totalWidth, totalHeight);
 
+    const resolveCanvasColor = createCanvasColorResolver();
 
     graphData.nodes.forEach((node, index) => {
       const y = index * viewConfig.rowHeight!;
-      drawNodeWithInfo(ctx, node, y, viewConfig, { isSelected: false, isHovered: false });
+      drawNodeWithInfo(ctx, node, y, viewConfig, { isSelected: false, isHovered: false }, resolveCanvasColor);
     });
-  }, [graphData, viewConfig]);
+  }, [graphData, viewConfig, themeId]);
 
 
 
@@ -428,7 +431,8 @@ function drawNodeWithInfo(
   node: GitGraphNode,
   y: number,
   config: GitGraphViewConfig,
-  state: { isSelected: boolean; isHovered: boolean }
+  state: { isSelected: boolean; isHovered: boolean },
+  resolveCanvasColor: (color: string) => string
 ) {
   const laneWidth = config.laneWidth!;
   const nodeSize = config.nodeSize!;
@@ -438,7 +442,7 @@ function drawNodeWithInfo(
 
   const x = (node.lane + 1) * laneWidth;
   const centerY = y + rowHeight / 2;
-  const color = colors[node.lane % colors.length];
+  const color = resolveCanvasColor(colors[node.lane % colors.length]);
 
 
 
@@ -469,7 +473,7 @@ function drawNodeWithInfo(
 
   node.forkingLanes.forEach(forkLane => {
     const forkX = (forkLane + 1) * laneWidth;
-    const forkColor = colors[forkLane % colors.length];
+    const forkColor = resolveCanvasColor(colors[forkLane % colors.length]);
     
     ctx.strokeStyle = forkColor;
     ctx.lineWidth = lineWidth;
@@ -485,7 +489,7 @@ function drawNodeWithInfo(
 
   node.mergingLanes.forEach(mergeLane => {
     const mergeX = (mergeLane + 1) * laneWidth;
-    const mergeColor = colors[mergeLane % colors.length];
+    const mergeColor = resolveCanvasColor(colors[mergeLane % colors.length]);
     
     ctx.strokeStyle = mergeColor;
     ctx.lineWidth = lineWidth;
@@ -501,7 +505,7 @@ function drawNodeWithInfo(
 
   node.passingLanes.forEach(passLane => {
     const passX = (passLane + 1) * laneWidth;
-    const passColor = colors[passLane % colors.length];
+    const passColor = resolveCanvasColor(colors[passLane % colors.length]);
     
     ctx.strokeStyle = passColor;
     ctx.lineWidth = lineWidth;
@@ -522,7 +526,7 @@ function drawNodeWithInfo(
   
 
   if (state.isSelected) {
-    ctx.strokeStyle = '#ffffff';
+    ctx.strokeStyle = resolveCanvasColor('var(--git-graph-static-white)');
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(x, centerY, nodeSize + 1.5, 0, Math.PI * 2);
@@ -578,7 +582,13 @@ function drawNodeWithInfo(
     seenRefs.add(refKey);
     
 
-    const bgColor = ref.refType === 'branch' ? '#60a5fa' : ref.refType === 'tag' ? '#f59e0b' : '#8b5cf6';
+    const bgColor = resolveCanvasColor(
+      ref.refType === 'branch'
+        ? 'var(--git-graph-lane-blue)'
+        : ref.refType === 'tag'
+          ? 'var(--git-graph-lane-warning)'
+          : 'var(--git-graph-lane-purple)'
+    );
     const text = displayName;
     
     ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
@@ -597,7 +607,7 @@ function drawNodeWithInfo(
 
     if (ref.isCurrent) {
       ctx.save();
-      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle = resolveCanvasColor('var(--git-graph-static-white)');
       ctx.beginPath();
       ctx.arc(refX + refWidth - 4, centerY - refHeight / 2 + 4, 2, 0, Math.PI * 2);
       ctx.fill();
@@ -606,7 +616,7 @@ function drawNodeWithInfo(
     
 
     ctx.save();
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = resolveCanvasColor('var(--git-graph-static-white)');
     ctx.font = '500 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
@@ -623,7 +633,7 @@ function drawNodeWithInfo(
   ctx.save();
   
 
-  ctx.fillStyle = '#d1d5db';
+  ctx.fillStyle = resolveCanvasColor('var(--git-graph-text-primary)');
   ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
@@ -644,7 +654,7 @@ function drawNodeWithInfo(
   const metaX = textX + ctx.measureText(displayText).width + 20;
 
 
-  ctx.fillStyle = '#6b7280';
+  ctx.fillStyle = resolveCanvasColor('var(--git-graph-text-muted)');
   ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
   
   let authorName = node.authorName;
@@ -664,11 +674,32 @@ function drawNodeWithInfo(
   const hashX = metaX + ctx.measureText(metaText).width + 16;
   const hashText = node.hash.substring(0, 7);
   
-  ctx.fillStyle = '#4b5563';
+  ctx.fillStyle = resolveCanvasColor('var(--git-graph-text-disabled)');
   ctx.font = '11px "SF Mono", "Monaco", "Courier New", monospace';
   ctx.fillText(hashText, hashX, centerY);
   
   ctx.restore();
+}
+
+function createCanvasColorResolver(): (color: string) => string {
+  const cache = new Map<string, string>();
+
+  return (color: string) => {
+    if (cache.has(color)) {
+      return cache.get(color)!;
+    }
+
+    const match = /^var\(\s*(--[a-zA-Z0-9_-]+)(?:\s*,\s*([^)]+))?\s*\)$/.exec(color);
+    if (!match || typeof document === 'undefined') {
+      const fallback = match?.[2]?.trim() || color;
+      cache.set(color, fallback);
+      return fallback;
+    }
+
+    const resolved = getComputedStyle(document.documentElement).getPropertyValue(match[1]).trim() || match[2]?.trim() || color;
+    cache.set(color, resolved);
+    return resolved;
+  };
 }
 
 function formatRelativeTime(timestamp: number): string {

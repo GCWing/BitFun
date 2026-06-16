@@ -59,7 +59,7 @@ export const FLOWCHAT_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: i18nService.t('components:flowChatCards.toolConfig.write.description'),
     displayMode: 'standard',
-    primaryColor: '#22c55e'
+    primaryColor: 'var(--tool-card-write-color)'
   },
   'Edit': {
     toolName: 'Edit',
@@ -100,7 +100,7 @@ export const FLOWCHAT_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: i18nService.t('components:flowChatCards.toolConfig.glob.description'),
     displayMode: 'compact',
-    primaryColor: '#06b6d4'
+    primaryColor: 'var(--tool-card-file-search-color)'
   },
 
   'WebSearch': {
@@ -111,7 +111,7 @@ export const FLOWCHAT_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: i18nService.t('components:flowChatCards.toolConfig.webSearch.description'),
     displayMode: 'compact',
-    primaryColor: '#0ea5e9'
+    primaryColor: 'var(--tool-card-web-search-color)'
   },
   'WebFetch': {
     toolName: 'WebFetch',
@@ -121,7 +121,7 @@ export const FLOWCHAT_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: i18nService.t('components:flowChatCards.toolConfig.webFetch.description'),
     displayMode: 'standard',
-    primaryColor: '#0ea5e9'
+    primaryColor: 'var(--tool-card-web-search-color)'
   },
 
   'Task': {
@@ -165,7 +165,7 @@ export function getFlowChatCardConfig(toolName: string): ToolCardConfig {
     resultDisplayType: 'summary',
     description: i18nService.t('components:flowChatCards.toolConfig.default.description', { toolName }),
     displayMode: 'standard',
-    primaryColor: '#6b7280'
+    primaryColor: 'var(--color-text-muted)'
   };
 }
 

@@ -474,9 +474,9 @@
     }
 
     &--active {
-      color: rgba(155, 190, 255, 0.95);
+      color: color-mix(in srgb, var(--color-accent-500) 95%, var(--color-text-primary));
       font-weight: 500;
-      background: rgba(80, 130, 255, 0.09);
+      background: color-mix(in srgb, var(--color-accent-500) 9%, transparent);
     }
   }
 
@@ -653,7 +653,7 @@
     background: color-mix(in srgb, var(--color-text-muted) 14%, transparent);
 
     &--Plan {
-      background: rgba(245, 158, 11, 0.15);
+      background: color-mix(in srgb, var(--color-warning) 15%, transparent);
       color: rgba(180, 110, 0, 0.98);
     }
 
@@ -903,7 +903,7 @@
   &__boost-submenu-item-icon {
     flex-shrink: 0;
     opacity: 0.75;
-    color: rgba(96, 165, 250, 0.88);
+    color: color-mix(in srgb, var(--color-accent-500) 88%, transparent);
   }
 
   &__boost-submenu-item-name {
@@ -923,7 +923,7 @@
     background: transparent;
     font-size: var(--flowchat-font-size-xxs);
     font-weight: 500;
-    color: rgba(120, 160, 255, 0.95);
+    color: color-mix(in srgb, var(--color-accent-500) 95%, var(--color-text-primary));
     cursor: pointer;
     text-align: center;
     user-select: none;
@@ -931,7 +931,7 @@
 
     &:hover {
       background: var(--element-bg-medium);
-      color: rgba(150, 185, 255, 1);
+      color: color-mix(in srgb, var(--color-accent-500) 94%, var(--color-text-primary));
     }
   }
 
@@ -948,7 +948,7 @@
 
   &__mode-pending-indicator {
     font-size: var(--flowchat-font-size-xxs);
-    color: rgba(251, 146, 60, 0.9);
+    color: color-mix(in srgb, var(--color-warning) 90%, transparent);
     margin-left: 4px;
     display: inline-flex;
     align-items: center;
@@ -1001,7 +1001,7 @@
     
     &--active {
       .bitfun-chat-input__mode-option-name {
-        color: rgba(140, 180, 255, 0.95);
+        color: color-mix(in srgb, var(--color-accent-500) 95%, var(--color-text-primary));
       }
     }
     
@@ -1078,7 +1078,7 @@
     
     &--has-active {
       .bitfun-chat-input__mode-submenu-label {
-        color: rgba(140, 180, 255, 0.9);
+        color: color-mix(in srgb, var(--color-accent-500) 90%, var(--color-text-primary));
       }
     }
   }
@@ -1090,7 +1090,7 @@
   
   &__mode-submenu-active-name {
     font-size: var(--flowchat-font-size-xxs);
-    color: rgba(140, 180, 255, 0.9);
+    color: color-mix(in srgb, var(--color-accent-500) 90%, var(--color-text-primary));
     font-weight: 500;
     margin-left: auto;
     padding-left: 8px;
@@ -1140,8 +1140,8 @@
     margin-left: 6px;
     
     &--wip {
-      background: rgba(100, 140, 255, 0.12);
-      color: rgba(140, 180, 255, 0.9);
+      background: color-mix(in srgb, var(--color-accent-500) 12%, transparent);
+      color: color-mix(in srgb, var(--color-accent-500) 90%, var(--color-text-primary));
     }
   }
   
@@ -1239,7 +1239,7 @@
     
     &--active {
       .bitfun-chat-input__slash-command-name {
-        color: rgba(140, 180, 255, 0.95);
+        color: color-mix(in srgb, var(--color-accent-500) 95%, var(--color-text-primary));
       }
     }
   }
@@ -1247,7 +1247,7 @@
   &__slash-command-name {
     font-size: var(--flowchat-font-size-2xs);
     font-weight: 500;
-    color: rgba(120, 160, 255, 0.9);
+    color: color-mix(in srgb, var(--color-accent-500) 90%, var(--color-text-primary));
     font-family: var(--font-mono);
     flex: 0 0 112px;
     min-width: 0;
@@ -1272,8 +1272,8 @@
     font-size: var(--flowchat-font-size-xxs);
     padding: 0.12rem 0.32rem;
     border-radius: 3px;
-    background: rgba(100, 140, 255, 0.15);
-    color: rgba(140, 180, 255, 0.9);
+    background: color-mix(in srgb, var(--color-accent-500) 15%, transparent);
+    color: color-mix(in srgb, var(--color-accent-500) 90%, var(--color-text-primary));
     font-weight: 500;
     flex: 0 0 auto;
   }
@@ -1664,12 +1664,14 @@
 @keyframes bitfun-breathing-pulse {
   0%, 100% {
     transform: scale(1);
-    box-shadow: 0 0 12px rgba(251, 146, 60, 0.5);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--color-warning) 50%, transparent);
     opacity: 1;
   }
   50% {
     transform: scale(1.15);
-    box-shadow: 0 0 20px rgba(251, 146, 60, 0.8), 0 0 30px rgba(251, 146, 60, 0.4);
+    box-shadow:
+      0 0 20px color-mix(in srgb, var(--color-warning) 80%, transparent),
+      0 0 30px color-mix(in srgb, var(--color-warning) 40%, transparent);
     opacity: 0.9;
   }
 }
@@ -1677,11 +1679,13 @@
 @keyframes bitfun-breathing-pulse-fast {
   0%, 100% {
     transform: scale(1);
-    box-shadow: 0 0 12px rgba(251, 146, 60, 0.6);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--color-warning) 60%, transparent);
   }
   50% {
     transform: scale(1.2);
-    box-shadow: 0 0 24px rgba(251, 146, 60, 0.9), 0 0 40px rgba(251, 146, 60, 0.5);
+    box-shadow:
+      0 0 24px color-mix(in srgb, var(--color-warning) 90%, transparent),
+      0 0 40px color-mix(in srgb, var(--color-warning) 50%, transparent);
   }
 }
 

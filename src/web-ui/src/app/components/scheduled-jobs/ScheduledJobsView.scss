@@ -420,8 +420,8 @@
     line-height: $line-height-relaxed;
     padding: $size-gap-2 $size-gap-3;
     border-radius: $size-radius-base;
-    background: rgba(248, 113, 113, 0.06);
-    border: 1px solid rgba(248, 113, 113, 0.2);
+    background: color-mix(in srgb, var(--color-error) 6%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-error) 20%, transparent);
   }
 
   &__prompt-textarea {

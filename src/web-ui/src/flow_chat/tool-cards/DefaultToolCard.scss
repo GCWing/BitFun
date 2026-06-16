@@ -8,13 +8,13 @@
 @keyframes defaultToolConfirmationPulse {
   0%, 100% {
     box-shadow:
-      0 0 0 1px rgba(245, 158, 11, 0.14),
-      0 0 12px rgba(245, 158, 11, 0.16);
+      0 0 0 1px color-mix(in srgb, var(--color-warning) 14%, transparent),
+      0 0 12px color-mix(in srgb, var(--color-warning) 16%, transparent);
   }
   50% {
     box-shadow:
-      0 0 0 2px rgba(245, 158, 11, 0.2),
-      0 0 16px rgba(245, 158, 11, 0.22);
+      0 0 0 2px color-mix(in srgb, var(--color-warning) 20%, transparent),
+      0 0 16px color-mix(in srgb, var(--color-warning) 22%, transparent);
   }
 }
 
@@ -131,7 +131,7 @@
 
   .default-tool-card__error-message {
     padding: var(--flowchat-card-pad-y) var(--flowchat-card-pad-x);
-    border: 1px solid rgba(239, 68, 68, 0.24);
+    border: 1px solid color-mix(in srgb, var(--color-error) 24%, transparent);
     border-radius: 8px;
     background: var(--glass-red-base);
     color: var(--color-error);
@@ -164,14 +164,14 @@
   }
 
   .default-tool-card__button--confirm {
-    background: rgba(34, 197, 94, 0.12);
-    border-color: rgba(34, 197, 94, 0.26);
+    background: color-mix(in srgb, var(--tool-card-positive-color) 12%, transparent);
+    border-color: color-mix(in srgb, var(--tool-card-positive-color) 26%, transparent);
     color: #86efac;
   }
 
   .default-tool-card__button--confirm:hover:not(:disabled) {
-    background: rgba(34, 197, 94, 0.18);
-    border-color: rgba(34, 197, 94, 0.4);
+    background: color-mix(in srgb, var(--tool-card-positive-color) 18%, transparent);
+    border-color: color-mix(in srgb, var(--tool-card-positive-color) 40%, transparent);
   }
 
   .default-tool-card__button--reject {
@@ -187,9 +187,9 @@
   &.requires-confirmation {
     .compact-tool-card {
       border-radius: 8px;
-      background: rgba(245, 158, 11, 0.05) !important;
+      background: color-mix(in srgb, var(--color-warning) 5%, transparent) !important;
       box-shadow:
-        inset 0 0 0 1px rgba(245, 158, 11, 0.18),
+        inset 0 0 0 1px color-mix(in srgb, var(--color-warning) 18%, transparent),
         0 0 0 1px var(--color-warning-bg);
       animation: defaultToolConfirmationPulse 2s ease-in-out infinite;
     }

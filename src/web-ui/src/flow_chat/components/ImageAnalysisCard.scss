@@ -265,13 +265,13 @@
 // Dark mode support
 @media (prefers-color-scheme: dark) {
   .image-analysis-card {
-    --image-analysis-surface: #1e1e1e;
-    --image-analysis-background: #121212;
-    --image-analysis-border: #333333;
-    --image-analysis-text: #e0e0e0;
-    --image-analysis-text-secondary: #a0a0a0;
+    --image-analysis-surface: var(--color-bg-elevated);
+    --image-analysis-background: var(--color-bg-primary);
+    --image-analysis-border: var(--border-base);
+    --image-analysis-text: var(--color-text-primary);
+    --image-analysis-text-secondary: var(--color-text-muted);
     --image-analysis-primary: var(--color-accent-500);
-    --image-analysis-success: #22c55e;
+    --image-analysis-success: var(--color-success);
     --image-analysis-error: var(--color-error);
   }
 }

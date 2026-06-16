@@ -130,7 +130,7 @@
   box-shadow: 
     0 4px 16px var(--glass-red-hover),
     0 2px 8px var(--color-overlay-black-08),
-    0 0 0 2px rgba(239, 68, 68, 0.2);
+    0 0 0 2px color-mix(in srgb, var(--color-error) 20%, transparent);
 }
 
 /* Success state */
@@ -147,7 +147,7 @@
   box-shadow: 
     0 4px 16px var(--glass-green-hover),
     0 2px 8px var(--color-overlay-black-08),
-    0 0 0 2px rgba(52, 211, 153, 0.2);
+    0 0 0 2px color-mix(in srgb, var(--color-success) 20%, transparent);
 }
 
 /* Disabled state */

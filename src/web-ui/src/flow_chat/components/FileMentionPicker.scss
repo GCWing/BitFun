@@ -22,7 +22,7 @@
   box-shadow:
     0 8px 32px rgba(0, 0, 0, 0.35),
     0 4px 16px var(--color-overlay-black-20),
-    0 0 1px rgba(96, 165, 250, 0.3),
+    0 0 1px color-mix(in srgb, var(--color-accent-500) 30%, transparent),
     inset 0 1px 0 var(--color-overlay-white-05);
   overflow: hidden;
   z-index: 1100;
@@ -145,7 +145,7 @@
     }
     
     &--selected {
-      background: linear-gradient(135deg, var(--color-accent-200), rgba(59, 130, 246, 0.1));
+      background: linear-gradient(135deg, var(--color-accent-200), color-mix(in srgb, var(--color-accent-600) 10%, transparent));
       
       .file-mention-picker__item-name {
         color: rgba(147, 197, 253, 1);
@@ -161,11 +161,11 @@
     flex-shrink: 0;
     
     &--file {
-      color: rgba(96, 165, 250, 0.85);
+      color: color-mix(in srgb, var(--color-accent-500) 85%, transparent);
     }
     
     &--folder {
-      color: rgba(251, 191, 36, 0.85);
+      color: color-mix(in srgb, var(--color-warning) 85%, transparent);
     }
   }
   

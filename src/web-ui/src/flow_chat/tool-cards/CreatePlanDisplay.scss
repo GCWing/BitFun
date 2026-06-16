@@ -53,8 +53,8 @@
     padding: var(--flowchat-card-pad-y) var(--flowchat-card-pad-x);
     background: linear-gradient(
       90deg,
-      rgba(245, 158, 11, 0.07) 0%,
-      rgba(245, 158, 11, 0.04) 50%,
+      color-mix(in srgb, var(--color-warning) 7%, transparent) 0%,
+      color-mix(in srgb, var(--color-warning) 4%, transparent) 50%,
       var(--color-overlay-white-02) 100%
     );
     border-bottom: 1px solid var(--border-base);
@@ -144,8 +144,8 @@
       transition: all 0.15s ease;
 
       &:hover:not(:disabled) {
-        border-color: rgba(245, 158, 11, 0.35);
-        background: rgba(245, 158, 11, 0.07);
+        border-color: color-mix(in srgb, var(--color-warning) 35%, transparent);
+        background: color-mix(in srgb, var(--color-warning) 7%, transparent);
         color: var(--color-warning);
       }
 
@@ -210,8 +210,8 @@
       }
 
       &:hover {
-        border-color: rgba(245, 158, 11, 0.35);
-        background: rgba(245, 158, 11, 0.07);
+        border-color: color-mix(in srgb, var(--color-warning) 35%, transparent);
+        background: color-mix(in srgb, var(--color-warning) 7%, transparent);
         color: var(--color-warning);
       }
     }
@@ -377,7 +377,11 @@
       font-size: var(--tool-card-action-font-size);
       font-weight: 500;
       color: var(--color-static-white);
-      background: linear-gradient(135deg, var(--color-warning) 0%, #d97706 100%);
+      background: linear-gradient(
+        135deg,
+        var(--color-warning) 0%,
+        color-mix(in srgb, var(--color-warning) 82%, var(--color-text-primary)) 100%
+      );
       border: none;
       border-radius: 4px;
       cursor: pointer;
@@ -385,7 +389,11 @@
       box-shadow: 0 1px 2px var(--color-overlay-black-10);
 
       &:hover:not(:disabled) {
-        background: linear-gradient(135deg, #fbbf24 0%, var(--color-warning) 100%);
+        background: linear-gradient(
+          135deg,
+          color-mix(in srgb, var(--color-warning) 90%, var(--color-static-white)) 0%,
+          var(--color-warning) 100%
+        );
         box-shadow: 0 2px 4px var(--color-warning-border);
       }
 
@@ -405,15 +413,27 @@
 
       // Building state keeps the orange styling.
       &--building {
-        background: linear-gradient(135deg, var(--color-warning) 0%, #d97706 100%);
+        background: linear-gradient(
+          135deg,
+          var(--color-warning) 0%,
+          color-mix(in srgb, var(--color-warning) 82%, var(--color-text-primary)) 100%
+        );
       }
 
       // Built state uses the success green styling.
       &--built {
-        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        background: linear-gradient(
+          135deg,
+          var(--color-success) 0%,
+          color-mix(in srgb, var(--color-success) 82%, var(--color-text-primary)) 100%
+        );
         
         &:hover {
-          background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+          background: linear-gradient(
+            135deg,
+            var(--color-success) 0%,
+            color-mix(in srgb, var(--color-success) 82%, var(--color-text-primary)) 100%
+          );
           box-shadow: 0 1px 2px var(--color-overlay-black-10);
         }
       }

@@ -233,9 +233,9 @@ export const MissionControl: React.FC<MissionControlProps> = ({
             {hasMultipleGroups && (
               <div className="canvas-mission-control__group-filters">
                 {[
-                  { id: 'primary' as EditorGroupId, labelKey: 'canvas.groupPrimaryFull', shortLabelKey: 'canvas.groupPrimary', color: '#3b82f6' },
-                  { id: 'secondary' as EditorGroupId, labelKey: 'canvas.groupSecondaryFull', shortLabelKey: 'canvas.groupSecondary', color: '#10b981' },
-                  { id: 'tertiary' as EditorGroupId, labelKey: 'canvas.groupTertiaryFull', shortLabelKey: 'canvas.groupTertiary', color: '#f59e0b' },
+                  { id: 'primary' as EditorGroupId, labelKey: 'canvas.groupPrimaryFull', shortLabelKey: 'canvas.groupPrimary', color: 'var(--mission-control-group-primary-color)' },
+                  { id: 'secondary' as EditorGroupId, labelKey: 'canvas.groupSecondaryFull', shortLabelKey: 'canvas.groupSecondary', color: 'var(--mission-control-group-secondary-color)' },
+                  { id: 'tertiary' as EditorGroupId, labelKey: 'canvas.groupTertiaryFull', shortLabelKey: 'canvas.groupTertiary', color: 'var(--mission-control-group-tertiary-color)' },
                 ].map(({ id, labelKey, shortLabelKey, color }) => {
                   const hasTabs = organizedTabs[id as keyof typeof organizedTabs].length > 0;
                   if (!hasTabs) return null;

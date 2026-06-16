@@ -85,7 +85,7 @@
   }
 
   &__input:checked + &__box {
-    background: rgba(99, 102, 241, 0.1);
+    background: color-mix(in srgb, var(--color-accent-500) 10%, transparent);
     border-color: var(--color-accent-500);
   }
 
@@ -96,7 +96,7 @@
   }
 
   &__input:indeterminate + &__box {
-    background: rgba(99, 102, 241, 0.1);
+    background: color-mix(in srgb, var(--color-accent-500) 10%, transparent);
     border-color: var(--color-accent-500);
   }
 
@@ -118,7 +118,7 @@
 
   &:hover:not(&--disabled) &__input:checked + &__box,
   &:hover:not(&--disabled) &__input:indeterminate + &__box {
-    background: rgba(99, 102, 241, 0.15);
+    background: color-mix(in srgb, var(--color-accent-500) 15%, transparent);
     border-color: var(--color-accent-400);
   }
 
@@ -132,12 +132,12 @@
   }
 
   &--error &__box {
-    border-color: rgba(239, 68, 68, 0.6);
+    border-color: color-mix(in srgb, var(--color-error) 60%, transparent);
   }
 
   &--error &__input:checked + &__box {
     background: var(--color-error-bg);
-    border-color: rgba(239, 68, 68, 0.8);
+    border-color: color-mix(in srgb, var(--color-error) 80%, transparent);
   }
 
   &--error &__input:checked + &__box &__icon {

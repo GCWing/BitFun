@@ -66,7 +66,7 @@
   }
 
   &--highlight {
-    background: rgba(99, 102, 241, 0.06);
+    background: color-mix(in srgb, var(--color-accent-500) 6%, transparent);
 
     .bitfun-update-available__value {
       color: var(--color-accent-400);

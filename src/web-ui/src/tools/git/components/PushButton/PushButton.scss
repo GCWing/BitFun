@@ -102,22 +102,22 @@
     &:hover {
       background: linear-gradient(135deg,
         var(--border-accent-subtle) 0%,
-        rgba(59, 130, 246, 0.12) 30%,
+        color-mix(in srgb, var(--color-accent-600) 12%, transparent) 30%,
         var(--glass-blue-subtle) 60%,
-        rgba(59, 130, 246, 0.18) 100%);
+        color-mix(in srgb, var(--color-accent-600) 18%, transparent) 100%);
       border-color: var(--border-accent);
       color: var(--color-static-white);
       box-shadow: 
-        0 4px 12px rgba(59, 130, 246, 0.2),
+        0 4px 12px color-mix(in srgb, var(--color-accent-600) 20%, transparent),
         0 2px 6px var(--border-accent-subtle),
         $inner-glow-top-hover;
     }
 
     &:active {
       background: linear-gradient(135deg,
-        rgba(59, 130, 246, 0.25) 0%,
-        rgba(59, 130, 246, 0.22) 50%,
-        rgba(59, 130, 246, 0.18) 100%);
+        color-mix(in srgb, var(--color-accent-600) 25%, transparent) 0%,
+        color-mix(in srgb, var(--color-accent-600) 22%, transparent) 50%,
+        color-mix(in srgb, var(--color-accent-600) 18%, transparent) 100%);
       transform: scale(0.98);
     }
 

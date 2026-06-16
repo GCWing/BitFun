@@ -49,7 +49,7 @@
     }
     
     &--open {
-      background: rgba(100, 140, 255, 0.15);
+      background: color-mix(in srgb, var(--color-accent-500) 15%, transparent);
       color: var(--color-text-primary);
       opacity: 1;
     }
@@ -78,8 +78,8 @@
     justify-content: center;
     padding: 1px 4px;
     border-radius: 3px;
-    background: rgba(100, 140, 255, 0.15);
-    color: rgba(140, 180, 255, 0.9);
+    background: color-mix(in srgb, var(--color-accent-500) 15%, transparent);
+    color: color-mix(in srgb, var(--color-accent-500) 90%, var(--color-text-primary));
     font-size: var(--flowchat-font-size-2xs);
     font-weight: 600;
     letter-spacing: 0.5px;
@@ -92,8 +92,8 @@
     justify-content: center;
     padding: 1px 4px;
     border-radius: 3px;
-    background: rgba(100, 200, 160, 0.15);
-    color: rgba(100, 200, 160, 0.9);
+    background: color-mix(in srgb, var(--color-success) 15%, transparent);
+    color: color-mix(in srgb, var(--color-success) 90%, var(--color-text-primary));
     font-size: var(--flowchat-font-size-2xs);
     font-weight: 600;
     letter-spacing: 0.3px;
@@ -111,12 +111,12 @@
     flex-shrink: 0;
 
     &--warning {
-      color: rgba(251, 146, 60, 0.9);
+      color: color-mix(in srgb, var(--color-warning) 90%, transparent);
       opacity: 0.9;
     }
 
     &--critical {
-      color: rgba(248, 113, 113, 0.95);
+      color: color-mix(in srgb, var(--color-error) 95%, var(--color-text-primary));
       opacity: 1;
       animation: bitfun-ctx-critical-pulse 2s ease-in-out infinite;
     }
@@ -224,7 +224,7 @@
       background: var(--element-bg-subtle);
 
       .bitfun-model-selector__option-name {
-        color: rgba(140, 180, 255, 0.95);
+        color: color-mix(in srgb, var(--color-accent-500) 95%, var(--color-text-primary));
       }
 
       &:hover {
@@ -234,7 +234,7 @@
     
     &--primary {
       .bitfun-model-selector__option-name {
-        color: rgba(160, 140, 255, 0.9);
+        color: color-mix(in srgb, var(--color-purple-500) 90%, var(--color-text-primary));
       }
       
       &:hover {
@@ -296,7 +296,7 @@
   }
   
   &__option-check {
-    color: rgba(100, 180, 255, 0.8);
+    color: color-mix(in srgb, var(--color-accent-500) 80%, transparent);
     flex-shrink: 0;
   }
 

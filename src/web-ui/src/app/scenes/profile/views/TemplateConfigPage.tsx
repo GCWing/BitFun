@@ -59,7 +59,7 @@ const CTX_SEGMENT_ORDER: readonly CtxSegKey[] = ['systemPrompt', 'toolInjection'
 const CTX_SEGMENT_COLORS: Record<CtxSegKey, string> = {
   systemPrompt: 'var(--color-success)',
   toolInjection: 'var(--color-accent-500)',
-  rules: '#a78bfa',
+  rules: 'var(--color-purple-soft)',
   memories: '#f472b6',
 };
 

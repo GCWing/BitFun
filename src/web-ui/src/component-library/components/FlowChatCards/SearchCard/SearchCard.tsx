@@ -87,7 +87,7 @@ export const SearchCard: React.FC<SearchCardProps> = ({
   const isGrepSearch = searchType === 'grep';
   const cardTitle = isGrepSearch ? t('flowChatCards.searchCard.grepTitle') : t('flowChatCards.searchCard.globTitle');
   const cardIcon = isGrepSearch ? <Search size={18} /> : <FolderOpen size={18} />;
-  const cardColor = isGrepSearch ? 'var(--color-purple-500)' : '#06b6d4';
+  const cardColor = isGrepSearch ? 'var(--color-purple-500)' : 'var(--tool-card-file-search-color)';
 
   const getStatusIcon = () => {
     switch (status) {

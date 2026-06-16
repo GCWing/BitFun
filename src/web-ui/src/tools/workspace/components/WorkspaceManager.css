@@ -15,11 +15,11 @@
     var(--glass-red-subtle) 100%);
   color: var(--color-error);
   border-radius: 12px;
-  border: 1px solid rgba(239, 68, 68, 0.2);
+  border: 1px solid color-mix(in srgb, var(--color-error) 20%, transparent);
   backdrop-filter: blur(12px) saturate(1.05);
   -webkit-backdrop-filter: blur(12px) saturate(1.05);
   box-shadow: 
-    0 8px 32px rgba(239, 68, 68, 0.12),
+    0 8px 32px color-mix(in srgb, var(--color-error) 12%, transparent),
     0 4px 16px var(--color-overlay-black-06),
     inset 0 1px 0 var(--color-overlay-white-10);
 }
@@ -43,12 +43,12 @@
   padding: 20px 24px;
   background: linear-gradient(135deg,
     var(--color-accent-100) 0%,
-    rgba(59, 130, 246, 0.04) 50%,
-    rgba(96, 165, 250, 0.06) 100%);
+    color-mix(in srgb, var(--color-accent-600) 4%, transparent) 50%,
+    color-mix(in srgb, var(--color-accent-500) 6%, transparent) 100%);
   backdrop-filter: blur(12px) saturate(1.05);
   -webkit-backdrop-filter: blur(12px) saturate(1.05);
   box-shadow: 
-    0 8px 32px rgba(96, 165, 250, 0.12),
+    0 8px 32px color-mix(in srgb, var(--color-accent-500) 12%, transparent),
     0 4px 16px var(--color-overlay-black-06),
     inset 0 1px 0 var(--color-overlay-white-10),
     inset 0 -1px 0 var(--color-overlay-white-05);
@@ -66,7 +66,7 @@
   background: linear-gradient(135deg,
     var(--color-overlay-white-02) 0%,
     transparent 50%,
-    rgba(255, 255, 255, 0.01) 100%);
+    color-mix(in srgb, var(--color-static-white) 1%, transparent) 100%);
   pointer-events: none;
   border-radius: 16px;
   z-index: 1;
@@ -77,7 +77,7 @@
   background: linear-gradient(135deg,
     var(--color-accent-200) 0%,
     var(--glass-blue-subtle) 50%,
-    rgba(96, 165, 250, 0.12) 100%);
+    color-mix(in srgb, var(--color-accent-500) 12%, transparent) 100%);
   box-shadow: 
     0 8px 32px var(--color-accent-200),
     0 4px 16px var(--color-overlay-black-08),
@@ -93,8 +93,8 @@
 .workspace-card.recent:hover {
   border-color: var(--color-accent-300);
   background: linear-gradient(135deg,
-    rgba(96, 165, 250, 0.12) 0%,
-    rgba(59, 130, 246, 0.06) 50%,
+    color-mix(in srgb, var(--color-accent-500) 12%, transparent) 0%,
+    color-mix(in srgb, var(--color-accent-600) 6%, transparent) 50%,
     var(--color-accent-100) 100%);
   transform: translateY(-2px);
   box-shadow: 
@@ -120,7 +120,7 @@
   width: 48px;
   height: 48px;
   background: linear-gradient(135deg, var(--color-accent-500) 0%, var(--color-accent-600) 100%);
-  color: white;
+  color: var(--color-static-white);
   border-radius: 12px;
   flex-shrink: 0;
   box-shadow: 
@@ -132,8 +132,8 @@
 .workspace-icon:hover {
   transform: scale(1.05);
   box-shadow: 
-    0 6px 20px rgba(96, 165, 250, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    0 6px 20px color-mix(in srgb, var(--color-accent-500) 30%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--color-static-white) 25%, transparent);
 }
 
 .workspace-info {
@@ -153,13 +153,13 @@
 
 .workspace-name__ssh-host {
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.55);
+  color: color-mix(in srgb, var(--color-static-white) 55%, transparent);
   margin-right: 2px;
 }
 
 .workspace-path {
   font-size: 14px;
-  color: rgba(255, 255, 255, 0.7);
+  color: color-mix(in srgb, var(--color-static-white) 70%, transparent);
   margin-bottom: 12px;
   word-break: break-all;
   font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
@@ -197,7 +197,7 @@
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.4px;
-  color: rgba(255, 255, 255, 0.55);
+  color: color-mix(in srgb, var(--color-static-white) 55%, transparent);
 }
 
 .workspace-identity__value {
@@ -229,8 +229,8 @@
 .workspace-related-paths__more {
   padding: 8px 10px;
   border-radius: 10px;
-  background: rgba(96, 165, 250, 0.06);
-  border: 1px solid rgba(96, 165, 250, 0.12);
+  background: color-mix(in srgb, var(--color-accent-500) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-accent-500) 12%, transparent);
 }
 
 .workspace-related-paths__path {
@@ -245,13 +245,13 @@
   display: block;
   margin-top: 4px;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.72);
+  color: color-mix(in srgb, var(--color-static-white) 72%, transparent);
   line-height: 1.45;
 }
 
 .workspace-related-paths__more {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.62);
+  color: color-mix(in srgb, var(--color-static-white) 62%, transparent);
 }
 
 .workspace-type {
@@ -298,7 +298,7 @@
   padding: 12px 16px;
   background: linear-gradient(135deg,
     var(--color-accent-50) 0%,
-    rgba(59, 130, 246, 0.02) 100%);
+    color-mix(in srgb, var(--color-accent-600) 2%, transparent) 100%);
   border-radius: 8px;
   border: 1px solid var(--card-bg-accent);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -307,7 +307,7 @@
 .stat-item:hover {
   background: linear-gradient(135deg,
     var(--color-accent-100) 0%,
-    rgba(59, 130, 246, 0.04) 100%);
+    color-mix(in srgb, var(--color-accent-600) 4%, transparent) 100%);
   border-color: var(--color-accent-200);
   transform: translateY(-1px);
 }
@@ -337,10 +337,10 @@
   text-align: center;
   color: var(--color-overlay-white-60);
   background: linear-gradient(135deg,
-    rgba(96, 165, 250, 0.03) 0%,
-    rgba(59, 130, 246, 0.01) 100%);
+    color-mix(in srgb, var(--color-accent-500) 3%, transparent) 0%,
+    color-mix(in srgb, var(--color-accent-600) 1%, transparent) 100%);
   border-radius: 12px;
-  border: 1px dashed rgba(96, 165, 250, 0.2);
+  border: 1px dashed color-mix(in srgb, var(--color-accent-500) 20%, transparent);
 }
 
 .no-workspace svg {

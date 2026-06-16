@@ -637,28 +637,28 @@
     }
 
     &--text_chat {
-      background: rgba(96, 165, 250, 0.12);
+      background: color-mix(in srgb, var(--color-accent-500) 12%, transparent);
       color: var(--color-accent-400);
     }
 
     &--embedding {
-      background: rgba(34, 197, 94, 0.12);
+      background: color-mix(in srgb, var(--color-success) 12%, transparent);
       color: var(--color-success);
     }
 
     &--search {
-      background: rgba(234, 179, 8, 0.12);
+      background: color-mix(in srgb, var(--color-warning) 12%, transparent);
       color: var(--color-warning);
     }
 
     &--code_specialized {
-      background: rgba(6, 182, 212, 0.12);
+      background: color-mix(in srgb, var(--color-cyan-500) 12%, transparent);
       color: var(--color-info);
     }
 
     &--function_calling {
-      background: rgba(99, 102, 241, 0.12);
-      color: rgba(129, 140, 248, 1);
+      background: color-mix(in srgb, var(--color-indigo-500) 12%, transparent);
+      color: color-mix(in srgb, var(--color-indigo-500) 80%, var(--color-static-white));
     }
 
     &--more {
@@ -1565,7 +1565,7 @@
     padding: $size-gap-3;
     background: transparent;
     
-    border: 1px dashed rgba(234, 179, 8, 0.4);
+    border: 1px dashed color-mix(in srgb, var(--color-warning) 40%, transparent);
     border-radius: $size-radius-sm;
     margin-top: $size-gap-2;
     color: var(--color-warning);

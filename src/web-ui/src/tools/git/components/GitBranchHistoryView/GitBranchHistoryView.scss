@@ -141,7 +141,7 @@
       }
       
       &:hover .git-branch-history-view__commit-main {
-        background: rgba(96, 165, 250, 0.12);
+        background: color-mix(in srgb, var(--color-accent-500) 12%, transparent);
       }
     }
 
@@ -303,7 +303,7 @@
     }
 
     &--copied {
-      background: rgba(16, 185, 129, 0.15);
+      background: color-mix(in srgb, var(--color-success) 15%, transparent);
       color: var(--color-success);
 
       .git-branch-history-view__copy-icon {

@@ -291,7 +291,7 @@
     gap: 8px;
     padding: 10px 12px;
     background: var(--glass-red-base);
-    border: 1px solid rgba(239, 68, 68, 0.2);
+    border: 1px solid color-mix(in srgb, var(--color-error) 20%, transparent);
     border-radius: 8px;
     animation: new-project-error-shake 0.4s ease-out;
     

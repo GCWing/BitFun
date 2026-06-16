@@ -650,13 +650,13 @@
       padding: 6px 8px;
       border-radius: 4px;
       background: var(--glass-blue-subtle);
-      border: 1px solid rgba(59, 130, 246, 0.16);
+      border: 1px solid color-mix(in srgb, var(--color-accent-600) 16%, transparent);
       font-size: var(--flowchat-font-size-xs);
     }
 
     .issue-suggestion {
-      background: rgba(34, 197, 94, 0.06);
-      border: 1px solid rgba(34, 197, 94, 0.15);
+      background: color-mix(in srgb, var(--tool-card-positive-color) 6%, transparent);
+      border: 1px solid var(--tool-card-positive-bg-hover);
       border-radius: 4px;
       padding: 8px;
       display: flex;
@@ -875,13 +875,13 @@
           padding: 6px 8px;
           border-radius: 4px;
           background: var(--glass-blue-subtle);
-          border: 1px solid rgba(59, 130, 246, 0.16);
+          border: 1px solid color-mix(in srgb, var(--color-accent-600) 16%, transparent);
           font-size: var(--flowchat-font-size-xs);
         }
 
         .issue-suggestion {
-          background: rgba(34, 197, 94, 0.06);
-          border: 1px solid rgba(34, 197, 94, 0.15);
+          background: color-mix(in srgb, var(--tool-card-positive-color) 6%, transparent);
+          border: 1px solid var(--tool-card-positive-bg-hover);
           border-radius: 4px;
           padding: 8px;
           display: flex;

@@ -30,17 +30,19 @@ type ContentPart =
   | { type: 'text'; content: string }
   | { type: 'tag'; tagType: string; label: string };
 
+type InlineTagColor = 'blue' | 'green' | 'red' | 'yellow' | 'purple' | 'gray';
+
 // Tag metadata
 const TAG_CONFIG = {
-  file: { icon: File, color: '#60a5fa', label: 'File' },
-  dir: { icon: Folder, color: '#a78bfa', label: 'Directory' },
-  code: { icon: Code, color: '#4ade80', label: 'Code' },
-  img: { icon: Image, color: '#fb923c', label: 'Image' },
-  cmd: { icon: Terminal, color: '#94a3b8', label: 'Command' },
-  chart: { icon: FileText, color: '#22d3ee', label: 'Chart' },
-  git: { icon: GitBranch, color: '#f87171', label: 'Git' },
-  link: { icon: Link, color: '#60a5fa', label: 'Link' },
-  pr: { icon: GitPullRequest, color: '#a78bfa', label: 'Pull Request' }
+  file: { icon: File, color: 'var(--flowchat-inline-tag-blue)', tagColor: 'blue' as InlineTagColor, label: 'File' },
+  dir: { icon: Folder, color: 'var(--flowchat-inline-tag-purple)', tagColor: 'purple' as InlineTagColor, label: 'Directory' },
+  code: { icon: Code, color: 'var(--flowchat-inline-tag-green)', tagColor: 'green' as InlineTagColor, label: 'Code' },
+  img: { icon: Image, color: 'var(--flowchat-inline-tag-yellow)', tagColor: 'yellow' as InlineTagColor, label: 'Image' },
+  cmd: { icon: Terminal, color: 'var(--flowchat-inline-tag-gray)', tagColor: 'gray' as InlineTagColor, label: 'Command' },
+  chart: { icon: FileText, color: 'var(--flowchat-inline-tag-cyan)', tagColor: 'gray' as InlineTagColor, label: 'Chart' },
+  git: { icon: GitBranch, color: 'var(--flowchat-inline-tag-red)', tagColor: 'red' as InlineTagColor, label: 'Git' },
+  link: { icon: Link, color: 'var(--flowchat-inline-tag-blue)', tagColor: 'blue' as InlineTagColor, label: 'Link' },
+  pr: { icon: GitPullRequest, color: 'var(--flowchat-inline-tag-purple)', tagColor: 'purple' as InlineTagColor, label: 'Pull Request' }
 };
 
 /**
@@ -107,21 +109,9 @@ const InlineContextTag: React.FC<{ tagType: string; label: string }> = ({ tagTyp
   const config = TAG_CONFIG[tagType as keyof typeof TAG_CONFIG] || TAG_CONFIG.file;
   const IconComponent = config.icon;
   
-  // Map hex color to Tag color tokens.
-  const getTagColor = (color: string): 'blue' | 'green' | 'red' | 'yellow' | 'purple' | 'gray' => {
-    if (color.includes('60a5fa') || color.includes('3b82f6')) return 'blue';
-    if (color.includes('4ade80') || color.includes('34c197')) return 'green';
-    if (color.includes('f87171') || color.includes('ef4444')) return 'red';
-    if (color.includes('fb923c') || color.includes('f59e0b')) return 'yellow';
-    if (color.includes('a78bfa') || color.includes('8b5cf6')) return 'purple';
-    return 'gray';
-  };
-
-  const tagColor = getTagColor(config.color);
-  
   return (
     <Tag 
-      color={tagColor}
+      color={config.tagColor}
       size="small"
       className="inline-context-tag"
       title={`${config.label}: ${label}`}

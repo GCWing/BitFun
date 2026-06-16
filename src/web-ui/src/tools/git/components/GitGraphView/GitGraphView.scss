@@ -377,11 +377,11 @@
 
 @keyframes search-highlight {
   0% {
-    background: rgba(251, 191, 36, 0.4);
+    background: color-mix(in srgb, var(--color-warning) 40%, transparent);
     transform: scaleY(1.05);
   }
   100% {
-    background: rgba(251, 191, 36, 0.15);
+    background: color-mix(in srgb, var(--color-warning) 15%, transparent);
     transform: scaleY(1);
   }
 }

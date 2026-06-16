@@ -51,9 +51,9 @@ import './CodeReviewToolCard.scss';
 const log = createLogger('CodeReviewToolCard');
 
 const riskLevelColors: Record<string, string> = {
-  low: '#22c55e',
+  low: 'var(--tool-card-positive-color)',
   medium: 'var(--color-warning)',
-  high: '#f97316',
+  high: 'var(--tool-card-risk-high-color)',
   critical: 'var(--color-error)',
 };
 
@@ -382,9 +382,9 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
       case 'low':
         return <Info size={14} style={{ color: riskLevelColors.low }} />;
       case 'info':
-        return <Info size={14} style={{ color: '#6b7280' }} />;
+        return <Info size={14} style={{ color: 'var(--color-text-muted)' }} />;
       default:
-        return <Info size={14} style={{ color: '#6b7280' }} />;
+        return <Info size={14} style={{ color: 'var(--color-text-muted)' }} />;
     }
   };
 

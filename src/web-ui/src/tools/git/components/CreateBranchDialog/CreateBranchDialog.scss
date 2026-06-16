@@ -156,10 +156,10 @@
     }
 
     &--error {
-      border-color: rgba(239, 68, 68, 0.5);
+      border-color: color-mix(in srgb, var(--color-error) 50%, transparent);
       
       &:focus {
-        border-color: rgba(239, 68, 68, 0.8);
+        border-color: color-mix(in srgb, var(--color-error) 80%, transparent);
         box-shadow: 0 0 0 2px var(--glass-red-hover);
       }
     }
@@ -171,7 +171,7 @@
     gap: $size-gap-2;
     padding: $size-gap-2 $size-gap-3;
     background: var(--glass-red-base);
-    border: 1px solid rgba(239, 68, 68, 0.25);
+    border: 1px solid color-mix(in srgb, var(--color-error) 25%, transparent);
     border-radius: $size-radius-sm;
     color: var(--color-error);
     font-size: var(--font-size-xs);

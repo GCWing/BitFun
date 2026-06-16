@@ -50,7 +50,7 @@ $_editor-padding-desktop: 32px;
     animation: code-editor-spin $motion-lazy $easing-standard infinite;
     margin-bottom: $size-gap-4;
     box-shadow: 
-      0 0 20px rgba(96, 165, 250, 0.3),
+      0 0 20px color-mix(in srgb, var(--color-accent-500) 30%, transparent),
       0 0 40px var(--color-accent-200);
   }
   
@@ -159,7 +159,7 @@ $_editor-padding-desktop: 32px;
     position: absolute;
     top: $size-gap-4;
     right: $size-gap-4;
-    background: rgba(96, 165, 250, 0.9);
+    background: color-mix(in srgb, var(--color-accent-500) 90%, transparent);
     color: var(--color-bg-primary);
     padding: $size-gap-2 $size-gap-4;
     border-radius: $size-radius-base;
@@ -186,14 +186,14 @@ $_editor-padding-desktop: 32px;
     .monaco-editor {
       .ctrl-hover-underline {
         text-decoration: underline;
-        text-decoration-color: rgba(96, 165, 250, 0.8);
+        text-decoration-color: color-mix(in srgb, var(--color-accent-500) 80%, transparent);
         text-underline-offset: 2px;
         cursor: pointer !important;
       }
       
       .monaco-cross-file-link {
         text-decoration: underline;
-        text-decoration-color: rgba(96, 165, 250, 0.8);
+        text-decoration-color: color-mix(in srgb, var(--color-accent-500) 80%, transparent);
         text-decoration-thickness: 1px;
         text-underline-offset: 2px;
         cursor: pointer !important;

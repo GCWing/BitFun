@@ -87,25 +87,25 @@
   &--normal {
     background: var(--glass-blue-subtle);
     color: var(--color-accent-500);
-    border: 1px solid rgba(59, 130, 246, 0.25);
+    border: 1px solid color-mix(in srgb, var(--color-accent-600) 25%, transparent);
     
     .bitfun-token-usage__progress-fill {
       background: linear-gradient(
         90deg,
         var(--border-accent-soft),
-        rgba(96, 165, 250, 0.5)
+        color-mix(in srgb, var(--color-accent-500) 50%, transparent)
       );
     }
     
     &:hover {
-      background: rgba(59, 130, 246, 0.12);
+      background: color-mix(in srgb, var(--color-accent-600) 12%, transparent);
       border-color: var(--color-accent-400);
       
       .bitfun-token-usage__progress-fill {
         background: linear-gradient(
           90deg,
           var(--border-accent),
-          rgba(96, 165, 250, 0.6)
+          color-mix(in srgb, var(--color-accent-500) 60%, transparent)
         );
       }
     }
@@ -113,29 +113,29 @@
   
   // Warning state (80%+)
   &--warning {
-    background: rgba(251, 146, 60, 0.08);
-    color: rgb(251, 146, 60);
-    border: 1px solid rgba(251, 146, 60, 0.25);
+    background: color-mix(in srgb, var(--color-warning) 8%, transparent);
+    color: var(--color-warning);
+    border: 1px solid color-mix(in srgb, var(--color-warning) 25%, transparent);
     animation: pulse-warning 2s ease-in-out infinite;
     
     .bitfun-token-usage__progress-fill {
       background: linear-gradient(
         90deg,
-        rgba(251, 146, 60, 0.3),
-        rgba(251, 146, 60, 0.5)
+        color-mix(in srgb, var(--color-warning) 30%, transparent),
+        color-mix(in srgb, var(--color-warning) 50%, transparent)
       );
       animation: progress-pulse 2s ease-in-out infinite;
     }
     
     &:hover {
-      background: rgba(251, 146, 60, 0.12);
-      border-color: rgba(251, 146, 60, 0.4);
+      background: color-mix(in srgb, var(--color-warning) 12%, transparent);
+      border-color: color-mix(in srgb, var(--color-warning) 40%, transparent);
       
       .bitfun-token-usage__progress-fill {
         background: linear-gradient(
           90deg,
-          rgba(251, 146, 60, 0.4),
-          rgba(251, 146, 60, 0.6)
+          color-mix(in srgb, var(--color-warning) 40%, transparent),
+          color-mix(in srgb, var(--color-warning) 60%, transparent)
         );
       }
     }
@@ -145,10 +145,10 @@
 // Warning pulse animation
 @keyframes pulse-warning {
   0%, 100% {
-    box-shadow: 0 0 0 rgba(251, 146, 60, 0);
+    box-shadow: 0 0 0 color-mix(in srgb, var(--color-warning) 0%, transparent);
   }
   50% {
-    box-shadow: 0 0 8px rgba(251, 146, 60, 0.4);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--color-warning) 40%, transparent);
   }
 }
 
