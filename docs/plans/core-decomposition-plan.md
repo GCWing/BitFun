@@ -22,6 +22,7 @@
 - Runtime Services、Agent Runtime、Tool Contracts、Tool Execution、Harness、Product Domains、Services Core、Services Integrations 等 owner crate 已建立；Agent Runtime SDK 内部 facade 已能注入 runtime services、tool registry、harness registry、hook registry 和 workspace-scoped agent registry，部分 concrete 生命周期仍由 core concrete manager 或产品命令路径持有。
 - PR-B 已收口 Agent lifecycle 与 tool side-effect owner：turn skill/agent snapshot DTO / diff / render / store、file-read session state、session evidence ledger 与 compression-contract projection、dialog-turn cancellation token store、tool confirmation / user-question wait channel state 已迁入 `agent-runtime`；background exec output capture、tool cancellation token store 已迁入 `tool-execution`；core 保留 resolver、产品事件、具体工具执行、IO 编排和旧路径兼容 re-export。
 - PR-C 已收口 Harness / product workflow 的低风险 owner：MiniApp AI / Agent permission、rate-limit、model/message/session/workspace/turn-text 规则迁入 `product-domains`；DeepResearch 后处理 gate 迁入 `agent-runtime`，report IO 继续由 `services-integrations` 持有；function-agent AI concrete acquisition 收拢为 core port adapter，旧 `runtime_services` 路径删除。
+- H2 concrete adapter 收口已完成：MiniApp AI / Agent 请求计划、stream payload、runtime event payload、worker restart / draft key / workspace input 规则迁入 `product-domains`；DeepReview concrete Task launch、session metadata cache persistence 和 MiniApp concrete AI factory / scheduler / worker pool 调用已复核为 adapter 边界，不在下层 owner crate 中实现。
 
 ## 3. 已完成但仍需保持的边界
 
@@ -30,7 +31,7 @@
 - `agent-runtime` 已承接 provider-neutral scheduler decisions、dialog lifecycle port contracts、background delivery decisions、thread-goal facts、prompt-cache facts 与持久化写入决策、turn skill/agent snapshot state、file-read session state、session evidence ledger、dialog-turn cancellation token store、tool confirmation / user-question wait channel state、DeepReview provider-neutral policy / queue / retry / diagnostics shaping 与 queue event payload shaping。
 - `tool-contracts` / `tool-execution` 已承接 tool manifest / catalog / admission、batching plan、retry policy、state counting、cancellation-state/token-store policy、background exec output capture、shell helper 和部分 local / remote IO helper。
 - `services-integrations` 已承接 remote-connect primitives、workspace search concrete owner、remote SSH/SFTP/PTY owner、MiniApp host dispatch / storage / worker IO、DeepResearch report IO。
-- `product-domains` 已承接 MiniApp workflow planning、compile / permission path adaptation、function-agent prompt / parser / response policy 和部分 Git snapshot/fallback 逻辑。
+- `product-domains` 已承接 MiniApp workflow planning、compile / permission path adaptation、AI / Agent 请求计划、stream/event payload、worker restart / draft key / workspace input 规则、function-agent prompt / parser / response policy 和部分 Git snapshot/fallback 逻辑。
 - Product Assembly 已承接当前 delivery profile 的能力计划裁剪；下层 owner crate 不按产品形态分支。
 - boundary scripts 已覆盖核心 owner 防回流、six-layer path 解析、facade-only 文件和重点 feature gate。
 
@@ -38,7 +39,6 @@
 
 | 专项 | 目标 | 主要范围 | 准出标准 |
 |---|---|---|---|
-| H2 | DeepReview / MiniApp concrete adapter 收口 | DeepReview Task launch、session metadata cache persistence；MiniApp workflow 的 UI asset / desktop scheduler / AI factory 调用；DeepReview queue event 仍由 core coordinator 发送 | 不改变审查队列、报告持久化、MiniApp 执行和权限语义；provider-neutral 规则不得回流 core |
 | H4 | 外部 Agent Runtime SDK 发布准备 | 版本策略、公开 API 冻结、最小 feature 依赖证明、示例和兼容承诺 | SDK 不依赖 `bitfun-core`、app crate、Tauri、concrete service manager 或产品命令 registry；fake provider / service / tool / harness / hook / workspace-scoped agent registry smoke 保持通过 |
 
 ## 5. 固定执行流程

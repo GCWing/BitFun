@@ -4,8 +4,16 @@ use crate::api::app_state::AppState;
 use crate::startup_trace::DesktopStartupTrace;
 use bitfun_core::infrastructure::events::{emit_global_event, BackendEvent};
 use bitfun_core::miniapp::ai_bridge::{
-    available_models_for_permissions, build_ai_message_plan, require_enabled_ai_permissions,
-    validate_model, MiniAppAiMessageRole, MiniAppAiModelDescriptor, MiniAppAiModelInfo,
+    ai_stream_chunk_payload, ai_stream_done_payload, ai_stream_error_payload,
+    available_models_for_permissions, plan_ai_chat_request, plan_ai_complete_request,
+    require_enabled_ai_permissions, require_non_empty_ai_messages, require_non_empty_stream_id,
+    MiniAppAiMessagePlan, MiniAppAiMessageRole, MiniAppAiModelDescriptor, MiniAppAiModelInfo,
+    MiniAppAiUsage,
+};
+use bitfun_core::miniapp::lifecycle::{
+    draft_worker_key, miniapp_runtime_event_payload, miniapp_worker_stopped_payload,
+    should_emit_worker_restarted, should_stop_worker_for_runtime_update, worker_restart_reason,
+    workspace_root_from_input,
 };
 use bitfun_core::miniapp::rate_limit::{MiniAppRateLimitState, MiniAppRateLimitSubject};
 use bitfun_core::miniapp::{
@@ -264,23 +272,6 @@ pub struct RecompileResult {
     pub warnings: Option<Vec<String>>,
 }
 
-fn miniapp_payload(app: &MiniApp, reason: &str) -> Value {
-    json!({
-        "id": app.id,
-        "name": app.name,
-        "version": app.version,
-        "updatedAt": app.updated_at,
-        "reason": reason,
-        "runtime": {
-            "sourceRevision": app.runtime.source_revision,
-            "depsRevision": app.runtime.deps_revision,
-            "depsDirty": app.runtime.deps_dirty,
-            "workerRestartRequired": app.runtime.worker_restart_required,
-            "uiRecompileRequired": app.runtime.ui_recompile_required,
-        }
-    })
-}
-
 async fn emit_miniapp_event(event_name: &str, payload: Value) {
     let _ = emit_global_event(BackendEvent::Custom {
         event_name: event_name.to_string(),
@@ -289,25 +280,14 @@ async fn emit_miniapp_event(event_name: &str, payload: Value) {
     .await;
 }
 
-fn workspace_root_from_input(workspace_path: Option<&str>) -> Option<PathBuf> {
-    workspace_path
-        .map(str::trim)
-        .filter(|path| !path.is_empty())
-        .map(PathBuf::from)
-}
-
-fn draft_worker_key(app_id: &str, draft_id: &str) -> String {
-    format!("{app_id}:draft:{draft_id}")
-}
-
 async fn maybe_stop_worker(state: &State<'_, AppState>, app: &MiniApp) {
-    if app.runtime.worker_restart_required {
+    if should_stop_worker_for_runtime_update(app) {
         if let Some(ref pool) = state.js_worker_pool {
             pool.stop(&app.id).await;
         }
         emit_miniapp_event(
             "miniapp-worker-stopped",
-            json!({ "id": app.id, "reason": "pending-restart" }),
+            miniapp_worker_stopped_payload(&app.id, "pending-restart"),
         )
         .await;
     }
@@ -351,7 +331,11 @@ async fn ensure_worker_dependencies(
         .mark_deps_installed(app_id)
         .await
         .map_err(|e| e.to_string())?;
-    emit_miniapp_event("miniapp-updated", miniapp_payload(app, "deps-installed")).await;
+    emit_miniapp_event(
+        "miniapp-updated",
+        miniapp_runtime_event_payload(app, "deps-installed"),
+    )
+    .await;
     Ok(true)
 }
 
@@ -420,7 +404,11 @@ pub async fn create_miniapp(
         )
         .await
         .map_err(|e| e.to_string())?;
-    emit_miniapp_event("miniapp-created", miniapp_payload(&app, "create")).await;
+    emit_miniapp_event(
+        "miniapp-created",
+        miniapp_runtime_event_payload(&app, "create"),
+    )
+    .await;
     Ok(app)
 }
 
@@ -448,7 +436,11 @@ pub async fn update_miniapp(
         .await
         .map_err(|e| e.to_string())?;
     maybe_stop_worker(&state, &app).await;
-    emit_miniapp_event("miniapp-updated", miniapp_payload(&app, "update")).await;
+    emit_miniapp_event(
+        "miniapp-updated",
+        miniapp_runtime_event_payload(&app, "update"),
+    )
+    .await;
     Ok(app)
 }
 
@@ -494,8 +486,16 @@ pub async fn rollback_miniapp(
         .await
         .map_err(|e| e.to_string())?;
     maybe_stop_worker(&state, &app).await;
-    emit_miniapp_event("miniapp-rolled-back", miniapp_payload(&app, "rollback")).await;
-    emit_miniapp_event("miniapp-updated", miniapp_payload(&app, "rollback")).await;
+    emit_miniapp_event(
+        "miniapp-rolled-back",
+        miniapp_runtime_event_payload(&app, "rollback"),
+    )
+    .await;
+    emit_miniapp_event(
+        "miniapp-updated",
+        miniapp_runtime_event_payload(&app, "rollback"),
+    )
+    .await;
     Ok(app)
 }
 
@@ -597,7 +597,11 @@ pub async fn miniapp_worker_call(
     let worker_revision = state
         .miniapp_manager
         .build_worker_revision(&app, &policy_json);
-    let should_emit_restart = !was_running || deps_installed || app.runtime.worker_restart_required;
+    let should_emit_restart = should_emit_worker_restarted(
+        was_running,
+        deps_installed,
+        app.runtime.worker_restart_required,
+    );
     let result = pool
         .call(
             &request.app_id,
@@ -617,14 +621,7 @@ pub async fn miniapp_worker_call(
             .map_err(|e| e.to_string())?;
         emit_miniapp_event(
             "miniapp-worker-restarted",
-            miniapp_payload(
-                &app,
-                if deps_installed {
-                    "deps-installed"
-                } else {
-                    "runtime-restart"
-                },
-            ),
+            miniapp_runtime_event_payload(&app, worker_restart_reason(deps_installed)),
         )
         .await;
     }
@@ -683,7 +680,7 @@ pub async fn miniapp_worker_stop(state: State<'_, AppState>, app_id: String) -> 
     }
     emit_miniapp_event(
         "miniapp-worker-stopped",
-        json!({ "id": app_id, "reason": "manual-stop" }),
+        miniapp_worker_stopped_payload(&app_id, "manual-stop"),
     )
     .await;
     Ok(())
@@ -729,7 +726,11 @@ pub async fn miniapp_install_deps(
             .mark_deps_installed(&app_id)
             .await
             .map_err(|e| e.to_string())?;
-        emit_miniapp_event("miniapp-updated", miniapp_payload(&app, "deps-installed")).await;
+        emit_miniapp_event(
+            "miniapp-updated",
+            miniapp_runtime_event_payload(&app, "deps-installed"),
+        )
+        .await;
     }
     Ok(install)
 }
@@ -746,8 +747,16 @@ pub async fn miniapp_recompile(
         .recompile(&request.app_id, theme_type, workspace_root.as_deref())
         .await
         .map_err(|e| e.to_string())?;
-    emit_miniapp_event("miniapp-recompiled", miniapp_payload(&app, "recompile")).await;
-    emit_miniapp_event("miniapp-updated", miniapp_payload(&app, "recompile")).await;
+    emit_miniapp_event(
+        "miniapp-recompiled",
+        miniapp_runtime_event_payload(&app, "recompile"),
+    )
+    .await;
+    emit_miniapp_event(
+        "miniapp-updated",
+        miniapp_runtime_event_payload(&app, "recompile"),
+    )
+    .await;
     Ok(RecompileResult {
         success: true,
         warnings: None,
@@ -778,7 +787,11 @@ pub async fn miniapp_import_from_path(
         .await
         .map_err(|e| e.to_string())?;
     maybe_stop_worker(&state, &app).await;
-    emit_miniapp_event("miniapp-created", miniapp_payload(&app, "import")).await;
+    emit_miniapp_event(
+        "miniapp-created",
+        miniapp_runtime_event_payload(&app, "import"),
+    )
+    .await;
     Ok(app)
 }
 
@@ -795,7 +808,11 @@ pub async fn miniapp_sync_from_fs(
         .await
         .map_err(|e| e.to_string())?;
     maybe_stop_worker(&state, &app).await;
-    emit_miniapp_event("miniapp-updated", miniapp_payload(&app, "sync-from-fs")).await;
+    emit_miniapp_event(
+        "miniapp-updated",
+        miniapp_runtime_event_payload(&app, "sync-from-fs"),
+    )
+    .await;
     Ok(app)
 }
 
@@ -911,10 +928,14 @@ pub async fn miniapp_apply_draft(
     }
     emit_miniapp_event(
         "miniapp-draft-applied",
-        miniapp_payload(&app, "draft-apply"),
+        miniapp_runtime_event_payload(&app, "draft-apply"),
     )
     .await;
-    emit_miniapp_event("miniapp-updated", miniapp_payload(&app, "draft-apply")).await;
+    emit_miniapp_event(
+        "miniapp-updated",
+        miniapp_runtime_event_payload(&app, "draft-apply"),
+    )
+    .await;
     Ok(app)
 }
 
@@ -1178,14 +1199,6 @@ pub struct MiniAppAiCompleteResponse {
     pub usage: Option<MiniAppAiUsage>,
 }
 
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MiniAppAiUsage {
-    pub prompt_tokens: u32,
-    pub completion_tokens: u32,
-    pub total_tokens: u32,
-}
-
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MiniAppAiChatRequest {
@@ -1221,37 +1234,15 @@ pub struct MiniAppAiListModelsRequest {
     pub app_id: String,
 }
 
-// ---- Payload structs for Tauri events ----
-
-#[derive(Debug, Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-struct AiStreamChunkPayload {
-    pub app_id: String,
-    pub stream_id: String,
-    #[serde(rename = "type")]
-    pub payload_type: String,
-    pub data: serde_json::Value,
-}
-
-// ---- Helper: build Message list from request ----
-
-fn build_messages_for_ai(
-    system_prompt: Option<&str>,
-    chat_messages: &[MiniAppAiChatMessage],
-) -> Vec<Message> {
-    build_ai_message_plan(
-        system_prompt,
-        chat_messages
-            .iter()
-            .map(|message| (message.role.as_str(), message.content.as_str())),
-    )
-    .into_iter()
-    .map(|message| match message.role {
-        MiniAppAiMessageRole::System => Message::system(message.content),
-        MiniAppAiMessageRole::Assistant => Message::assistant(message.content),
-        MiniAppAiMessageRole::User => Message::user(message.content),
-    })
-    .collect()
+fn build_messages_for_ai_plan(messages: Vec<MiniAppAiMessagePlan>) -> Vec<Message> {
+    messages
+        .into_iter()
+        .map(|message| match message.role {
+            MiniAppAiMessageRole::System => Message::system(message.content),
+            MiniAppAiMessageRole::Assistant => Message::assistant(message.content),
+            MiniAppAiMessageRole::User => Message::user(message.content),
+        })
+        .collect()
 }
 
 // ---- Commands ----
@@ -1281,21 +1272,20 @@ pub async fn miniapp_ai_complete(
             MiniAppRateLimitSubject::Ai,
         )?;
 
-    let model_ref = validate_model(request.model.as_deref(), ai_perms)?;
+    let ai_plan = plan_ai_complete_request(
+        ai_perms,
+        request.model.as_deref(),
+        request.system_prompt.as_deref(),
+        &request.prompt,
+    )?;
 
     let ai_client = state
         .ai_client_factory
-        .get_client_resolved(&model_ref)
+        .get_client_resolved(&ai_plan.model_ref)
         .await
         .map_err(|e| format!("Failed to get AI client: {}", e))?;
 
-    let messages = build_messages_for_ai(
-        request.system_prompt.as_deref(),
-        &[MiniAppAiChatMessage {
-            role: "user".to_string(),
-            content: request.prompt.clone(),
-        }],
-    );
+    let messages = build_messages_for_ai_plan(ai_plan.messages);
 
     let stream_response = ai_client
         .send_message_stream(messages, None, None)
@@ -1339,12 +1329,8 @@ pub async fn miniapp_ai_chat(
     state: State<'_, AppState>,
     request: MiniAppAiChatRequest,
 ) -> Result<MiniAppAiChatStartedResponse, String> {
-    if request.stream_id.trim().is_empty() {
-        return Err("streamId is required".to_string());
-    }
-    if request.messages.is_empty() {
-        return Err("messages must not be empty".to_string());
-    }
+    let stream_id = require_non_empty_stream_id(&request.stream_id)?;
+    require_non_empty_ai_messages(request.messages.len())?;
 
     let miniapp = state
         .miniapp_manager
@@ -1365,15 +1351,23 @@ pub async fn miniapp_ai_chat(
             MiniAppRateLimitSubject::Ai,
         )?;
 
-    let model_ref = validate_model(request.model.as_deref(), ai_perms)?;
+    let ai_plan = plan_ai_chat_request(
+        ai_perms,
+        request.model.as_deref(),
+        request.system_prompt.as_deref(),
+        request
+            .messages
+            .iter()
+            .map(|message| (message.role.as_str(), message.content.as_str())),
+    )?;
 
     let ai_client = state
         .ai_client_factory
-        .get_client_resolved(&model_ref)
+        .get_client_resolved(&ai_plan.model_ref)
         .await
         .map_err(|e| format!("Failed to get AI client: {}", e))?;
 
-    let messages = build_messages_for_ai(request.system_prompt.as_deref(), &request.messages);
+    let messages = build_messages_for_ai_plan(ai_plan.messages);
 
     let stream_response = ai_client
         .send_message_stream(messages, None, None)
@@ -1386,10 +1380,10 @@ pub async fn miniapp_ai_chat(
         let mut registry = ai_stream_registry()
             .lock()
             .unwrap_or_else(|p| p.into_inner());
-        registry.insert(request.stream_id.clone(), cancel_flag.clone());
+        registry.insert(stream_id.clone(), cancel_flag.clone());
     }
 
-    let stream_id = request.stream_id.clone();
+    let response_stream_id = stream_id.clone();
     let app_id = request.app_id.clone();
     let app_handle = app.clone();
 
@@ -1417,15 +1411,12 @@ pub async fn miniapp_ai_chat(
                         if let Some(ref t) = chunk.text {
                             full_text.push_str(t);
                         }
-                        let payload = AiStreamChunkPayload {
-                            app_id: app_id.clone(),
-                            stream_id: stream_id.clone(),
-                            payload_type: "chunk".to_string(),
-                            data: json!({
-                                "text": chunk.text,
-                                "reasoningContent": chunk.reasoning_content,
-                            }),
-                        };
+                        let payload = ai_stream_chunk_payload(
+                            &app_id,
+                            &stream_id,
+                            chunk.text,
+                            chunk.reasoning_content,
+                        );
                         if let Err(e) = app_handle.emit("miniapp://ai-stream", &payload) {
                             log::warn!("Failed to emit AI stream chunk: {}", e);
                         }
@@ -1446,12 +1437,7 @@ pub async fn miniapp_ai_chat(
                     }
                 }
                 Err(e) => {
-                    let payload = AiStreamChunkPayload {
-                        app_id: app_id.clone(),
-                        stream_id: stream_id.clone(),
-                        payload_type: "error".to_string(),
-                        data: json!({ "message": e.to_string() }),
-                    };
+                    let payload = ai_stream_error_payload(&app_id, &stream_id, e.to_string());
                     let _ = app_handle.emit("miniapp://ai-stream", &payload);
                     // Clean up registry
                     let mut registry = ai_stream_registry()
@@ -1464,22 +1450,7 @@ pub async fn miniapp_ai_chat(
         }
 
         // Emit done
-        let usage_val = last_usage.map(|u| {
-            json!({
-                "promptTokens": u.prompt_tokens,
-                "completionTokens": u.completion_tokens,
-                "totalTokens": u.total_tokens,
-            })
-        });
-        let done_payload = AiStreamChunkPayload {
-            app_id: app_id.clone(),
-            stream_id: stream_id.clone(),
-            payload_type: "done".to_string(),
-            data: json!({
-                "fullText": full_text,
-                "usage": usage_val,
-            }),
-        };
+        let done_payload = ai_stream_done_payload(&app_id, &stream_id, full_text, last_usage);
         let _ = app_handle.emit("miniapp://ai-stream", &done_payload);
 
         // Clean up registry
@@ -1490,7 +1461,7 @@ pub async fn miniapp_ai_chat(
     });
 
     Ok(MiniAppAiChatStartedResponse {
-        stream_id: request.stream_id,
+        stream_id: response_stream_id,
     })
 }
 

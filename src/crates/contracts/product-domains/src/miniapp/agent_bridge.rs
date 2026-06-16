@@ -7,7 +7,7 @@
 use crate::miniapp::rate_limit::{MiniAppRateLimitState, MiniAppRateLimitSubject};
 use crate::miniapp::types::AgentPermissions;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -23,6 +23,25 @@ pub const WORKSPACE_MISMATCH_MESSAGE: &str =
 pub const APP_DATA_WORKSPACE_INVALID_MESSAGE: &str =
     "appDataWorkspace must be a clean relative path";
 pub const WORKSPACE_REQUIRED_MESSAGE: &str = "workspacePath is required for MiniApp agent runs";
+pub const AGENT_PROMPT_REQUIRED_MESSAGE: &str = "prompt is required";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MiniAppAgentWorkspacePlan {
+    pub path: PathBuf,
+    pub workspace_path: String,
+    pub create_if_missing: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MiniAppAgentSubmissionPlan {
+    pub run_id: String,
+    pub owner: String,
+    pub session_name: String,
+    pub requested_session_id: Option<String>,
+    pub workspace_path: String,
+    pub enable_tools: bool,
+    pub metadata: Value,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -142,6 +161,13 @@ pub fn require_enabled_agent_permissions(
     Ok(agent_permissions)
 }
 
+pub fn require_agent_prompt(prompt: &str) -> Result<(), String> {
+    if prompt.trim().is_empty() {
+        return Err(AGENT_PROMPT_REQUIRED_MESSAGE.to_string());
+    }
+    Ok(())
+}
+
 pub fn is_clean_relative_subdir(subdir: &str) -> bool {
     let relative = Path::new(subdir);
     !relative.as_os_str().is_empty()
@@ -175,8 +201,48 @@ pub fn resolve_agent_workspace_path(
         .ok_or_else(|| WORKSPACE_REQUIRED_MESSAGE.to_string())
 }
 
+pub fn plan_agent_workspace(
+    explicit_workspace_path: Option<&str>,
+    app_data_workspace: Option<&str>,
+    app_data_dir: &Path,
+) -> Result<MiniAppAgentWorkspacePlan, String> {
+    if let Some(subdir) = app_data_workspace
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        let path = app_data_workspace_path(app_data_dir, subdir)?;
+        return Ok(MiniAppAgentWorkspacePlan {
+            workspace_path: path.to_string_lossy().to_string(),
+            path,
+            create_if_missing: true,
+        });
+    }
+
+    let workspace_path = explicit_workspace_path
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| WORKSPACE_REQUIRED_MESSAGE.to_string())?;
+    Ok(MiniAppAgentWorkspacePlan {
+        path: PathBuf::from(workspace_path),
+        workspace_path: workspace_path.to_string(),
+        create_if_missing: false,
+    })
+}
+
 pub fn default_agent_run_id(app_id: &str, sequence: u64) -> String {
     format!("miniapp-agent-{}-{}", app_id, sequence)
+}
+
+pub fn agent_run_id_from_request(
+    app_id: &str,
+    requested_run_id: Option<&str>,
+    sequence: u64,
+) -> String {
+    requested_run_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| default_agent_run_id(app_id, sequence))
 }
 
 pub fn agent_owner(app_id: &str, run_id: &str) -> String {
@@ -225,6 +291,25 @@ pub fn agent_run_metadata(app_id: &str, run_id: &str) -> serde_json::Value {
         "runId": run_id,
         "acp_transport": true,
     })
+}
+
+pub fn build_agent_submission_plan(
+    app_id: &str,
+    run_id: &str,
+    session_name: Option<&str>,
+    requested_session: Option<&str>,
+    workspace_path: &str,
+    enable_tools: Option<bool>,
+) -> MiniAppAgentSubmissionPlan {
+    MiniAppAgentSubmissionPlan {
+        run_id: run_id.to_string(),
+        owner: agent_owner(app_id, run_id),
+        session_name: session_name_or_default(session_name),
+        requested_session_id: requested_session_id(requested_session),
+        workspace_path: workspace_path.to_string(),
+        enable_tools: enable_tools.unwrap_or(true),
+        metadata: agent_run_metadata(app_id, run_id),
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -334,6 +419,76 @@ mod tests {
             )
             .unwrap_err(),
             WORKSPACE_MISMATCH_MESSAGE
+        );
+    }
+
+    #[test]
+    fn agent_run_plan_helpers_preserve_workspace_identity_and_metadata_contract() {
+        assert_eq!(
+            require_agent_prompt("   ").unwrap_err(),
+            AGENT_PROMPT_REQUIRED_MESSAGE
+        );
+        assert!(require_agent_prompt(" plan ").is_ok());
+
+        let explicit_workspace =
+            plan_agent_workspace(Some(" /workspace "), None, Path::new("/appdata"))
+                .expect("explicit workspace");
+        assert_eq!(explicit_workspace.path, PathBuf::from("/workspace"));
+        assert_eq!(explicit_workspace.workspace_path, "/workspace");
+        assert!(!explicit_workspace.create_if_missing);
+
+        let appdata_workspace =
+            plan_agent_workspace(None, Some("decks/deck-123"), Path::new("/appdata"))
+                .expect("appdata workspace");
+        assert_eq!(
+            appdata_workspace.path,
+            PathBuf::from("/appdata").join("decks").join("deck-123")
+        );
+        assert_eq!(
+            appdata_workspace.workspace_path,
+            appdata_workspace.path.to_string_lossy()
+        );
+        assert!(appdata_workspace.create_if_missing);
+
+        assert_eq!(
+            plan_agent_workspace(None, Some("../outside"), Path::new("/appdata")).unwrap_err(),
+            APP_DATA_WORKSPACE_INVALID_MESSAGE
+        );
+        assert_eq!(
+            plan_agent_workspace(None, None, Path::new("/appdata")).unwrap_err(),
+            WORKSPACE_REQUIRED_MESSAGE
+        );
+
+        assert_eq!(
+            agent_run_id_from_request("app-1", Some(" run-1 "), 9),
+            "run-1"
+        );
+        assert_eq!(
+            agent_run_id_from_request("app-1", Some("   "), 9),
+            "miniapp-agent-app-1-9"
+        );
+
+        let plan = build_agent_submission_plan(
+            "app-1",
+            "run-1",
+            Some(" Session "),
+            Some(" session-1 "),
+            "/workspace",
+            Some(false),
+        );
+        assert_eq!(plan.owner, "miniapp-agent:app-1:run-1");
+        assert_eq!(plan.session_name, "Session");
+        assert_eq!(plan.requested_session_id.as_deref(), Some("session-1"));
+        assert_eq!(plan.workspace_path, "/workspace");
+        assert!(!plan.enable_tools);
+        assert_eq!(
+            plan.metadata,
+            serde_json::json!({
+                "surface": MINIAPP_AGENT_SURFACE,
+                "appId": "app-1",
+                "runId": "run-1",
+                "acp_transport": true,
+            })
         );
     }
 
