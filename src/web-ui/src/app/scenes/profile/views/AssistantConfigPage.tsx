@@ -1,5 +1,5 @@
 import React, {
-  useCallback, useEffect, useMemo, useRef, useState,
+  useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState,
   lazy,
   Suspense,
 } from 'react';
@@ -23,7 +23,12 @@ import { WorkspaceKind } from '@/shared/types';
 import { useMyAgentStore } from '@/app/scenes/my-agent/myAgentStore';
 import { useAgentIdentityDocument } from '@/app/scenes/my-agent/useAgentIdentityDocument';
 import { useTheme } from '@/infrastructure/theme/hooks/useTheme';
-import { MEditor } from '@/tools/editor/meditor';
+import { EditArea, MEditor } from '@/tools/editor/meditor';
+import { analyzeMarkdownEditability } from '@/tools/editor/meditor/utils/tiptapMarkdown';
+import {
+  joinMarkdownFrontmatter,
+  splitMarkdownFrontmatter,
+} from '@/app/scenes/my-agent/identityDocument';
 import SessionsSection from '@/app/components/NavPanel/sections/sessions/SessionsSection';
 import AssistantQuickInput from './AssistantQuickInput';
 import { useNurseryStore } from '../nurseryStore';
@@ -51,10 +56,43 @@ type RightPanelView = 'info' | 'personaDoc';
 
 interface PersonaDocState {
   fileName: PersonaDocFile;
+  originalContent: string;
   content: string;
   loading: boolean;
   error: string | null;
 }
+
+interface AutoResizeTextareaProps {
+  value: string;
+  onChange: (value: string) => void;
+  className?: string;
+}
+
+const AutoResizeTextarea: React.FC<AutoResizeTextareaProps> = ({
+  value,
+  onChange,
+  className = '',
+}) => {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = 'auto';
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  }, [value]);
+
+  return (
+    <textarea
+      ref={textareaRef}
+      className={`m-editor-textarea ${className}`.trim()}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      spellCheck={false}
+      rows={1}
+    />
+  );
+};
 
 const AssistantConfigPage: React.FC = () => {
   const { t } = useTranslation('scenes/profile');
@@ -122,6 +160,13 @@ const AssistantConfigPage: React.FC = () => {
     const fullPath = personaDocFullPath(workspacePath, file);
     try {
       await workspaceAPI.writeFileContent(workspacePath, fullPath, content);
+      if (
+        personaPendingRef.current?.file === file &&
+        personaPendingRef.current?.content === content
+      ) {
+        personaPendingRef.current = null;
+      }
+      setPersonaDoc((prev) => prev?.fileName === file ? { ...prev, originalContent: content } : prev);
       if (file === 'IDENTITY.md') {
         await reloadIdentityDocument();
       }
@@ -141,7 +186,7 @@ const AssistantConfigPage: React.FC = () => {
       return;
     }
 
-    setPersonaDoc({ fileName, content: '', loading: true, error: null });
+    setPersonaDoc({ fileName, originalContent: '', content: '', loading: true, error: null });
     setRightView('personaDoc');
     personaPendingRef.current = null;
 
@@ -149,16 +194,32 @@ const AssistantConfigPage: React.FC = () => {
     const fullPath = personaDocFullPath(workspacePath, fileName);
     workspaceAPI.readFileContent(fullPath)
       .then((content) => {
-        setPersonaDoc((prev) => prev?.fileName === fileName ? { ...prev, content, loading: false } : prev);
-        personaPendingRef.current = { file: fileName, content };
+        setPersonaDoc((prev) => prev?.fileName === fileName ? {
+          ...prev,
+          originalContent: content,
+          content,
+          loading: false,
+        } : prev);
+        personaPendingRef.current = null;
       })
       .catch((err) => {
         if (isFileMissingError(err)) {
-          setPersonaDoc((prev) => prev?.fileName === fileName ? { ...prev, content: '', loading: false } : prev);
-          personaPendingRef.current = { file: fileName, content: '' };
+          setPersonaDoc((prev) => prev?.fileName === fileName ? {
+            ...prev,
+            originalContent: '',
+            content: '',
+            loading: false,
+          } : prev);
+          personaPendingRef.current = null;
         } else {
           setPersonaDoc((prev) => prev?.fileName === fileName
-            ? { ...prev, content: '', loading: false, error: err instanceof Error ? err.message : String(err) }
+            ? {
+              ...prev,
+              originalContent: '',
+              content: '',
+              loading: false,
+              error: err instanceof Error ? err.message : String(err),
+            }
             : prev);
         }
       });
@@ -166,7 +227,10 @@ const AssistantConfigPage: React.FC = () => {
 
   const handlePersonaDocChange = useCallback((value: string) => {
     if (!personaDoc) return;
-    const { fileName } = personaDoc;
+    const { fileName, content: previousContent } = personaDoc;
+    if (value === previousContent) {
+      return;
+    }
     setPersonaDoc((prev) => prev ? { ...prev, content: value } : prev);
     personaPendingRef.current = { file: fileName, content: value };
     if (personaSaveTimerRef.current) {
@@ -180,8 +244,42 @@ const AssistantConfigPage: React.FC = () => {
     }, 600);
   }, [personaDoc, workspacePath, flushPersonaWrite]);
 
+  const personaDocSections = useMemo(
+    () => (personaDoc ? splitMarkdownFrontmatter(personaDoc.content) : null),
+    [personaDoc]
+  );
+
+  const handlePersonaDocFrontmatterChange = useCallback((frontmatter: string) => {
+    if (!personaDocSections?.hasFrontmatter) {
+      return;
+    }
+
+    handlePersonaDocChange(joinMarkdownFrontmatter(frontmatter, personaDocSections.body, {
+      preserveFrontmatterBlock: true,
+    }));
+  }, [handlePersonaDocChange, personaDocSections]);
+
+  const handlePersonaDocBodyChange = useCallback((body: string) => {
+    if (!personaDocSections) {
+      return;
+    }
+
+    if (personaDocSections.hasFrontmatter) {
+      handlePersonaDocChange(joinMarkdownFrontmatter(personaDocSections.frontmatter, body, {
+        preserveFrontmatterBlock: true,
+      }));
+      return;
+    }
+
+    handlePersonaDocChange(body);
+  }, [handlePersonaDocChange, personaDocSections]);
+
   const closePersonaDoc = useCallback(() => {
-    if (personaDoc && personaPendingRef.current) {
+    if (
+      personaDoc &&
+      personaPendingRef.current &&
+      personaPendingRef.current.content !== personaDoc.originalContent
+    ) {
       const { file, content } = personaPendingRef.current;
       void flushPersonaWriteRef.current(file, content);
     }
@@ -309,6 +407,10 @@ const AssistantConfigPage: React.FC = () => {
     if (!personaDoc) return null;
     const { fileName, content, loading, error } = personaDoc;
     const docLabelKey = fileName.replace(/\.md$/i, '') as 'SOUL' | 'USER' | 'IDENTITY';
+    const sections = personaDocSections ?? splitMarkdownFrontmatter(content);
+    const bodyEditability = analyzeMarkdownEditability(sections.body);
+    const usesHybridEditor = sections.hasFrontmatter;
+    const usesSourceBodyEditor = bodyEditability.mode === 'unsafe';
     return (
       <div className="acp-right-info">
         <div className="acp-right-shell acp-right-shell--editor">
@@ -341,17 +443,55 @@ const AssistantConfigPage: React.FC = () => {
               {error && <p className="acp-persona-editor__error">{t('nursery.assistant.personaDocLoadFailed')}: {error}</p>}
               {loading ? (
                 <div className="acp-loading"><RefreshCw size={14} className="nursery-spinning" /></div>
-              ) : (
-                <MEditor
+              ) : usesHybridEditor ? (
+                <div className="acp-persona-editor__hybrid">
+                  <section className="acp-persona-editor__frontmatter">
+                    <AutoResizeTextarea
+                      key={`${fileName}-frontmatter`}
+                      value={sections.frontmatter}
+                      onChange={handlePersonaDocFrontmatterChange}
+                      className="acp-persona-editor__frontmatter-textarea"
+                    />
+                  </section>
+                  <div className="acp-persona-editor__divider" aria-hidden="true" />
+                  <section className="acp-persona-editor__body-editor">
+                      {usesSourceBodyEditor ? (
+                        <EditArea
+                          key={`${fileName}-body-source`}
+                          value={sections.body}
+                          onChange={handlePersonaDocBodyChange}
+                        />
+                      ) : (
+                        <MEditor
+                          key={`${fileName}-body`}
+                          value={sections.body}
+                          onChange={handlePersonaDocBodyChange}
+                          theme={isLight ? 'light' : 'dark'}
+                          toolbar={false}
+                          mode="ir"
+                          height="100%"
+                          className="acp-persona-editor__meditor"
+                        />
+                      )}
+                  </section>
+                </div>
+              ) : usesSourceBodyEditor ? (
+                <EditArea
                   key={fileName}
                   value={content}
                   onChange={handlePersonaDocChange}
-                  theme={isLight ? 'light' : 'dark'}
-                  toolbar={false}
-                  mode="ir"
-                  height="100%"
-                  className="acp-persona-editor__meditor"
                 />
+              ) : (
+                  <MEditor
+                    key={fileName}
+                    value={content}
+                    onChange={handlePersonaDocBodyChange}
+                    theme={isLight ? 'light' : 'dark'}
+                    toolbar={false}
+                    mode="ir"
+                    height="100%"
+                    className="acp-persona-editor__meditor"
+                  />
               )}
             </div>
           </div>

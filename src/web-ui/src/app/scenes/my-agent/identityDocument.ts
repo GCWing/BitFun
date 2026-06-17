@@ -31,6 +31,12 @@ const FRONTMATTER_FIELDS: Array<keyof Omit<IdentityDocument, 'body'>> = [
   'modelFast',
 ];
 
+export interface MarkdownFrontmatterSections {
+  hasFrontmatter: boolean;
+  frontmatter: string;
+  body: string;
+}
+
 function normalizeLineEndings(content: string): string {
   return content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 }
@@ -47,26 +53,61 @@ function serializeScalar(value: string): string {
   return yaml.stringify(value).trimEnd();
 }
 
-export function parseIdentityDocument(content: string): IdentityDocument {
+export function splitMarkdownFrontmatter(content: string): MarkdownFrontmatterSections {
   const normalizedContent = normalizeLineEndings(content || '');
   const frontmatterMatch = normalizedContent.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
 
   if (!frontmatterMatch) {
     return {
-      ...EMPTY_IDENTITY_DOCUMENT,
-      body: normalizedContent.trim(),
+      hasFrontmatter: false,
+      frontmatter: '',
+      body: normalizedContent.trimEnd(),
     };
   }
 
-  const parsed = (yaml.parse(frontmatterMatch[1]) || {}) as Record<string, unknown>;
-  const body = frontmatterMatch[2] ?? '';
+  return {
+    hasFrontmatter: true,
+    frontmatter: frontmatterMatch[1] ?? '',
+    body: (frontmatterMatch[2] ?? '').replace(/^\n+/, '').trimEnd(),
+  };
+}
+
+export function joinMarkdownFrontmatter(
+  frontmatter: string,
+  body: string,
+  options?: { preserveFrontmatterBlock?: boolean }
+): string {
+  const normalizedFrontmatter = normalizeLineEndings(frontmatter || '')
+    .replace(/^\n+/, '')
+    .trimEnd();
+  const normalizedBody = normalizeLineEndings(body || '')
+    .replace(/^\n+/, '')
+    .trimEnd();
+
+  if (!normalizedFrontmatter && !options?.preserveFrontmatterBlock) {
+    return normalizedBody ? `${normalizedBody}\n` : '';
+  }
+
+  return `---\n${normalizedFrontmatter}\n---\n\n${normalizedBody}`.trimEnd() + '\n';
+}
+
+export function parseIdentityDocument(content: string): IdentityDocument {
+  const sections = splitMarkdownFrontmatter(content);
+  if (!sections.hasFrontmatter) {
+    return {
+      ...EMPTY_IDENTITY_DOCUMENT,
+      body: sections.body.trim(),
+    };
+  }
+
+  const parsed = (yaml.parse(sections.frontmatter) || {}) as Record<string, unknown>;
 
   return {
     name: normalizeShortField(parsed.name),
     creature: normalizeShortField(parsed.creature),
     vibe: normalizeShortField(parsed.vibe),
     emoji: normalizeShortField(parsed.emoji),
-    body: body.replace(/^\n+/, '').trimEnd(),
+    body: sections.body,
     modelPrimary: normalizeShortField(parsed.modelPrimary),
     modelFast: normalizeShortField(parsed.modelFast),
   };
@@ -95,7 +136,7 @@ export function serializeIdentityDocument(document: IdentityDocument): string {
     })
     .join('\n');
 
-  return `---\n${frontmatter}\n---\n\n${normalized.body}`.trimEnd() + '\n';
+  return joinMarkdownFrontmatter(frontmatter, normalized.body);
 }
 
 export function getIdentityFilePath(workspaceRoot: string): string {

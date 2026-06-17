@@ -126,9 +126,10 @@ describe('tiptap markdown compatibility', () => {
   it('treats frontmatter as unsafe for the IR editor', () => {
     const markdown = [
       '---',
-      'title: Demo',
-      'tags:',
-      '  - test',
+      'name: Demo',
+      'creature: Cat',
+      'vibe: Calm',
+      'emoji: 🙂',
       '---',
       '',
       '# Body',
@@ -138,6 +139,9 @@ describe('tiptap markdown compatibility', () => {
 
     expect(analysis.mode).toBe('unsafe');
     expect(analysis.hardIssues).toContain('frontmatter');
+    expect(analysis.hardIssues).toContain('semanticMismatch');
+    expect(analysis.softIssues).toContain('roundTripMismatch');
+    expect(analysis.canonicalMarkdown).toContain('## name: Demo');
   });
 
   it('upgrades simple details regions into structured details nodes', () => {
