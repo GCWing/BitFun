@@ -251,7 +251,7 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl }) => 
     }
     setIsInspectorActive(false);
 
-    if (!isTauri) {
+    if (!isTauri || webviewUnavailable) {
       setIsLoading(false);
       return;
     }
@@ -301,7 +301,7 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl }) => 
     } finally {
       setIsLoading(false);
     }
-  }, [isTauri, recreateWebview, shouldShowWebview, syncWebviewBounds]);
+  }, [isTauri, recreateWebview, shouldShowWebview, syncWebviewBounds, webviewUnavailable]);
 
   const queueSync = useCallback(() => {
     if (resizeFrameRef.current !== null) window.cancelAnimationFrame(resizeFrameRef.current);

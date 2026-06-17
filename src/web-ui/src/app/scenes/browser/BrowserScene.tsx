@@ -268,7 +268,7 @@ const BrowserScene: React.FC = () => {
     setError(null);
     setIsLoading(true);
 
-    if (!isTauri) {
+    if (!isTauri || webviewUnavailable) {
       setIsLoading(false);
       return;
     }
@@ -318,7 +318,7 @@ const BrowserScene: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [isActive, isTauri, recreateWebview, syncWebviewBounds]);
+  }, [isActive, isTauri, recreateWebview, syncWebviewBounds, webviewUnavailable]);
 
   const queueSync = useCallback(() => {
     if (resizeFrameRef.current !== null) {
