@@ -1,7 +1,28 @@
 //! Session-scoped file read state used to gate Edit/Write reliability.
 
+use bitfun_agent_tools::{
+    file_read_facts_are_fresh, file_read_facts_content_matches, FileReadFreshnessFacts,
+};
 use dashmap::DashMap;
 use std::sync::Arc;
+
+pub const FILE_UNEXPECTEDLY_MODIFIED_ERROR: &str =
+    "File has been unexpectedly modified. Read it again before attempting to write it.";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileMutationKind {
+    Edit,
+    Write,
+}
+
+impl FileMutationKind {
+    fn tool_name(self) -> &'static str {
+        match self {
+            Self::Edit => "Edit",
+            Self::Write => "Write",
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileReadState {
@@ -18,6 +39,41 @@ pub struct FileReadState {
 }
 
 impl FileReadState {
+    pub fn from_read_tool_content(
+        content: String,
+        timestamp_ms: u64,
+        start_line: usize,
+        end_line: usize,
+        total_lines: usize,
+    ) -> Self {
+        Self {
+            content,
+            timestamp_ms,
+            start_line,
+            end_line,
+            total_lines,
+            is_partial_view: false,
+        }
+    }
+
+    pub fn from_full_content(content: &str, timestamp_ms: u64) -> Self {
+        let line_count = content.lines().count();
+        let (start_line, end_line) = if line_count == 0 {
+            (0, 0)
+        } else {
+            (1, line_count)
+        };
+
+        Self {
+            content: content.to_string(),
+            timestamp_ms,
+            start_line,
+            end_line,
+            total_lines: line_count,
+            is_partial_view: false,
+        }
+    }
+
     pub fn is_full_file_read(&self) -> bool {
         if self.is_partial_view {
             return false;
@@ -28,6 +84,122 @@ impl FileReadState {
         }
 
         self.start_line == 1 && self.end_line >= self.total_lines
+    }
+}
+
+pub fn validate_prior_read_state(
+    logical_path: &str,
+    read_state: Option<&FileReadState>,
+    mutation: FileMutationKind,
+) -> Option<String> {
+    let Some(read_state) = read_state else {
+        return Some(format!(
+            "Use Read to load the current contents of {} before calling {} on it.",
+            logical_path,
+            mutation.tool_name()
+        ));
+    };
+
+    if read_state.is_partial_view {
+        return Some(format!(
+            "Use Read to load the full contents of {} before calling {} on it.",
+            logical_path,
+            mutation.tool_name()
+        ));
+    }
+
+    None
+}
+
+pub fn content_unchanged_since_full_read(
+    read_state: &FileReadState,
+    current_content: &str,
+) -> bool {
+    file_read_facts_content_matches(file_read_freshness_facts(read_state), current_content)
+}
+
+pub fn assert_file_not_unexpectedly_modified(
+    read_state: Option<&FileReadState>,
+    current_content: &str,
+    current_mtime_ms: Option<u64>,
+) -> Result<(), String> {
+    let Some(read_state) = read_state else {
+        return Err(FILE_UNEXPECTEDLY_MODIFIED_ERROR.to_string());
+    };
+
+    if !file_read_facts_are_fresh(
+        file_read_freshness_facts(read_state),
+        current_content,
+        current_mtime_ms,
+    ) {
+        return Err(FILE_UNEXPECTEDLY_MODIFIED_ERROR.to_string());
+    }
+
+    Ok(())
+}
+
+pub fn validate_edit_content_freshness_against_read_state(
+    logical_path: &str,
+    read_state: &FileReadState,
+    current_content: &str,
+    current_mtime_ms: Option<u64>,
+) -> Option<String> {
+    if file_read_facts_are_fresh(
+        file_read_freshness_facts(read_state),
+        current_content,
+        current_mtime_ms,
+    ) {
+        return None;
+    }
+
+    if current_mtime_ms.is_some() {
+        return Some(format!(
+            "The file {} changed after it was last read. Use Read again, then retry Edit.",
+            logical_path
+        ));
+    }
+
+    Some(format!(
+        "The file {} no longer matches the last Read result. Use Read again, then retry Edit.",
+        logical_path
+    ))
+}
+
+pub fn validate_write_mtime_freshness_against_read_state(
+    logical_path: &str,
+    read_state: &FileReadState,
+    current_mtime_ms: u64,
+) -> Option<String> {
+    if current_mtime_ms > read_state.timestamp_ms {
+        return Some(format!(
+            "The file {} changed after it was last read. Use Read again, then retry Write.",
+            logical_path
+        ));
+    }
+
+    None
+}
+
+pub fn validate_write_content_freshness_against_read_state(
+    logical_path: &str,
+    read_state: &FileReadState,
+    current_content: &str,
+) -> Option<String> {
+    if !file_read_facts_are_fresh(file_read_freshness_facts(read_state), current_content, None) {
+        return Some(format!(
+            "The file {} no longer matches the last Read result. Use Read again, then retry Write.",
+            logical_path
+        ));
+    }
+
+    None
+}
+
+fn file_read_freshness_facts(read_state: &FileReadState) -> FileReadFreshnessFacts<'_> {
+    FileReadFreshnessFacts {
+        content: &read_state.content,
+        timestamp_ms: read_state.timestamp_ms,
+        is_full_file_read: read_state.is_full_file_read(),
     }
 }
 
@@ -74,7 +246,12 @@ impl FileReadStateStore {
 
 #[cfg(test)]
 mod tests {
-    use super::{FileReadState, FileReadStateStore};
+    use super::{
+        assert_file_not_unexpectedly_modified, validate_edit_content_freshness_against_read_state,
+        validate_prior_read_state, validate_write_content_freshness_against_read_state,
+        validate_write_mtime_freshness_against_read_state, FileMutationKind, FileReadState,
+        FileReadStateStore,
+    };
 
     fn sample_state(
         start_line: usize,
@@ -141,5 +318,221 @@ mod tests {
 
         store.delete_session("session-b");
         assert!(store.get("session-b", "src/lib.rs").is_none());
+    }
+
+    #[test]
+    fn validate_prior_read_state_requires_initial_read() {
+        assert_eq!(
+            validate_prior_read_state("src/main.rs", None, FileMutationKind::Edit).as_deref(),
+            Some("Use Read to load the current contents of src/main.rs before calling Edit on it.")
+        );
+    }
+
+    #[test]
+    fn validate_prior_read_state_rejects_auto_injected_partial_view() {
+        let state = sample_state(1, 10, 10, true);
+
+        assert_eq!(
+            validate_prior_read_state("src/main.rs", Some(&state), FileMutationKind::Write)
+                .as_deref(),
+            Some("Use Read to load the full contents of src/main.rs before calling Write on it.")
+        );
+    }
+
+    #[test]
+    fn validate_prior_read_state_accepts_read_tool_range() {
+        let state = sample_state(50, 100, 556, false);
+
+        assert!(
+            validate_prior_read_state("src/main.rs", Some(&state), FileMutationKind::Edit)
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn file_read_state_from_full_content_sets_empty_file_range() {
+        let state = FileReadState::from_full_content("", 100);
+
+        assert_eq!(state.start_line, 0);
+        assert_eq!(state.end_line, 0);
+        assert_eq!(state.total_lines, 0);
+        assert!(state.is_full_file_read());
+    }
+
+    #[test]
+    fn content_unchanged_since_full_read_rejects_partial_ranges() {
+        let state = sample_state(50, 100, 556, false);
+
+        assert!(!super::content_unchanged_since_full_read(
+            &state, "middle\n"
+        ));
+    }
+
+    #[test]
+    fn validate_edit_content_freshness_rejects_partial_read_range_without_full_file() {
+        let state = FileReadState {
+            content: "middle\n".to_string(),
+            timestamp_ms: 100,
+            start_line: 50,
+            end_line: 100,
+            total_lines: 556,
+            is_partial_view: false,
+        };
+
+        assert!(validate_edit_content_freshness_against_read_state(
+            "src/state.js",
+            &state,
+            "different full file\n",
+            Some(200),
+        )
+        .is_some());
+    }
+
+    #[test]
+    fn assert_file_not_unexpectedly_modified_allows_matching_full_read_after_newer_mtime() {
+        let state = read_state("alpha\n", 100);
+
+        assert!(assert_file_not_unexpectedly_modified(Some(&state), "alpha\n", Some(200)).is_ok());
+    }
+
+    #[test]
+    fn assert_file_not_unexpectedly_modified_rejects_changed_full_read_after_newer_mtime() {
+        let state = read_state("alpha\n", 100);
+
+        assert!(assert_file_not_unexpectedly_modified(Some(&state), "beta\n", Some(200)).is_err());
+    }
+
+    #[test]
+    fn assert_file_not_unexpectedly_modified_rejects_partial_read_after_newer_mtime() {
+        let state = FileReadState {
+            content: "middle\n".to_string(),
+            timestamp_ms: 100,
+            start_line: 50,
+            end_line: 100,
+            total_lines: 556,
+            is_partial_view: false,
+        };
+
+        assert!(
+            assert_file_not_unexpectedly_modified(Some(&state), "full file\n", Some(200)).is_err()
+        );
+    }
+
+    fn read_state(content: &str, timestamp_ms: u64) -> FileReadState {
+        FileReadState {
+            content: content.to_string(),
+            timestamp_ms,
+            start_line: 1,
+            end_line: 1,
+            total_lines: 1,
+            is_partial_view: false,
+        }
+    }
+
+    #[test]
+    fn validate_edit_content_freshness_allows_matching_remote_content_without_mtime() {
+        let state = read_state("alpha\n", 100);
+
+        assert!(validate_edit_content_freshness_against_read_state(
+            "src/main.rs",
+            &state,
+            "alpha\n",
+            None,
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn validate_edit_content_freshness_rejects_changed_remote_content_without_mtime() {
+        let state = read_state("alpha\n", 100);
+
+        assert_eq!(
+            validate_edit_content_freshness_against_read_state(
+                "src/main.rs",
+                &state,
+                "beta\n",
+                None,
+            )
+            .as_deref(),
+            Some(
+                "The file src/main.rs no longer matches the last Read result. Use Read again, then retry Edit."
+            )
+        );
+    }
+
+    #[test]
+    fn validate_edit_content_freshness_allows_newer_mtime_when_full_read_content_matches() {
+        let state = read_state("alpha\n", 100);
+
+        assert!(validate_edit_content_freshness_against_read_state(
+            "src/main.rs",
+            &state,
+            "alpha\n",
+            Some(200),
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn validate_edit_content_freshness_rejects_newer_mtime_when_content_differs() {
+        let state = read_state("alpha\n", 100);
+
+        assert!(validate_edit_content_freshness_against_read_state(
+            "src/main.rs",
+            &state,
+            "beta\n",
+            Some(200),
+        )
+        .is_some());
+    }
+
+    #[test]
+    fn validate_edit_content_freshness_ignores_older_mtime_even_when_content_differs() {
+        let state = read_state("alpha\n", 200);
+
+        assert!(validate_edit_content_freshness_against_read_state(
+            "src/main.rs",
+            &state,
+            "beta\n",
+            Some(100),
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn validate_write_mtime_freshness_rejects_newer_mtime_before_content_compare() {
+        let state = read_state("alpha\n", 100);
+
+        assert_eq!(
+            validate_write_mtime_freshness_against_read_state("src/main.rs", &state, 200)
+                .as_deref(),
+            Some("The file src/main.rs changed after it was last read. Use Read again, then retry Write.")
+        );
+    }
+
+    #[test]
+    fn validate_write_mtime_freshness_allows_older_mtime_without_content_compare() {
+        let state = read_state("alpha\n", 200);
+
+        assert!(
+            validate_write_mtime_freshness_against_read_state("src/main.rs", &state, 100).is_none()
+        );
+    }
+
+    #[test]
+    fn validate_write_content_freshness_rejects_changed_remote_content_without_mtime() {
+        let state = read_state("alpha\n", 100);
+
+        assert_eq!(
+            validate_write_content_freshness_against_read_state(
+                "src/main.rs",
+                &state,
+                "beta\n",
+            )
+            .as_deref(),
+            Some(
+                "The file src/main.rs no longer matches the last Read result. Use Read again, then retry Write."
+            )
+        );
     }
 }

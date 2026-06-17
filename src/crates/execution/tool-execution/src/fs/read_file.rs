@@ -15,6 +15,51 @@ pub struct ReadFileResult {
     pub hit_total_char_limit: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReadFilePresentation {
+    pub result_for_assistant: String,
+    pub lines_read: usize,
+}
+
+fn read_file_lines_read(result: &ReadFileResult) -> usize {
+    if result.total_lines == 0 || result.end_line < result.start_line {
+        0
+    } else {
+        result.end_line - result.start_line + 1
+    }
+}
+
+pub fn build_read_file_presentation(
+    logical_path: &str,
+    result: &ReadFileResult,
+) -> ReadFilePresentation {
+    let mut result_for_assistant = format!(
+        "Read lines {}-{} from {} ({} total lines)\n<file_content>\n{}\n</file_content>",
+        result.start_line, result.end_line, logical_path, result.total_lines, result.content
+    );
+
+    let has_more = result.end_line < result.total_lines;
+    let next_start_line = has_more.then_some(result.end_line + 1);
+    if let Some(next_start) = next_start_line {
+        if result.hit_total_char_limit {
+            result_for_assistant.push_str(&format!(
+                "\n\n[Output truncated after reaching the Read tool size limit. Use start_line={} and limit to continue reading.]",
+                next_start
+            ));
+        } else {
+            result_for_assistant.push_str(&format!(
+                "\n\n[Showing lines {}-{} of {} total. Use start_line={} and limit to continue reading.]",
+                result.start_line, result.end_line, result.total_lines, next_start
+            ));
+        }
+    }
+
+    ReadFilePresentation {
+        result_for_assistant,
+        lines_read: read_file_lines_read(result),
+    }
+}
+
 pub fn build_remote_read_command(
     resolved_path: &str,
     start_line: usize,
@@ -211,7 +256,7 @@ pub fn read_file(
 
 #[cfg(test)]
 mod tests {
-    use super::read_file;
+    use super::{build_read_file_presentation, read_file, read_file_lines_read, ReadFileResult};
     use std::fs;
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -260,5 +305,39 @@ mod tests {
         assert_eq!(result.end_line, 3);
         assert!(!result.hit_total_char_limit);
         assert_eq!(result.content, "     1\tone\n     2\ttwo\n     3\tthree");
+    }
+
+    #[test]
+    fn read_file_presentation_reports_continuation_window() {
+        let result = ReadFileResult {
+            start_line: 1,
+            end_line: 2,
+            total_lines: 4,
+            content: "     1\tone\n     2\ttwo".to_string(),
+            hit_total_char_limit: false,
+        };
+
+        let presentation = build_read_file_presentation("src/lib.rs", &result);
+
+        assert_eq!(presentation.lines_read, 2);
+        assert!(presentation
+            .result_for_assistant
+            .contains("Read lines 1-2 from src/lib.rs (4 total lines)"));
+        assert!(presentation
+            .result_for_assistant
+            .contains("Use start_line=3 and limit to continue reading."));
+    }
+
+    #[test]
+    fn read_file_lines_read_handles_empty_files() {
+        let result = ReadFileResult {
+            start_line: 0,
+            end_line: 0,
+            total_lines: 0,
+            content: String::new(),
+            hit_total_char_limit: false,
+        };
+
+        assert_eq!(read_file_lines_read(&result), 0);
     }
 }
