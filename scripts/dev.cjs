@@ -67,7 +67,7 @@ function isDesktopMode(mode) {
 
 function getDesktopBinaryPath() {
   const suffix = process.platform === 'win32' ? '.exe' : '';
-  const binaryName = `bitfun-desktop${suffix}`;
+  const binaryName = `BitFun${suffix}`;
 
   if (process.platform === 'darwin') {
     return path.join(ROOT_DIR, 'target', 'debug', 'BitFun.app', 'Contents', 'MacOS', 'BitFun');
