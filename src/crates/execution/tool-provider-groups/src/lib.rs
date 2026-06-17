@@ -110,6 +110,8 @@ const CORE_INTEGRATION_FEATURE_GROUPS: &[ToolPackFeatureGroup] = &[
     ToolPackFeatureGroup::AgentControl,
 ];
 
+const CORE_OPENHARMONY_FEATURE_GROUPS: &[ToolPackFeatureGroup] = &[ToolPackFeatureGroup::Basic];
+
 const PRODUCT_TOOL_PROVIDER_GROUP_PLAN: &[ToolProviderGroupPlan] = &[
     ToolProviderGroupPlan {
         provider_id: "core.basic",
@@ -144,7 +146,6 @@ const PRODUCT_TOOL_PROVIDER_GROUP_PLAN: &[ToolProviderGroupPlan] = &[
             "GetToolSpec",
             "GetFileDiff",
             "Log",
-            "Calendar",
         ],
     },
     ToolProviderGroupPlan {
@@ -170,6 +171,11 @@ const PRODUCT_TOOL_PROVIDER_GROUP_PLAN: &[ToolProviderGroupPlan] = &[
             "ComputerUse",
             "Playbook",
         ],
+    },
+    ToolProviderGroupPlan {
+        provider_id: "core.openharmony",
+        feature_groups: CORE_OPENHARMONY_FEATURE_GROUPS,
+        tool_names: &["Calendar"],
     },
 ];
 

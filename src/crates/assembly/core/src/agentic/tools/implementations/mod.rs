@@ -51,6 +51,7 @@ pub use crate::agentic::tools::product_runtime::GetToolSpecTool;
 pub mod harmony_build_tool;
 pub use ask_user_question_tool::AskUserQuestionTool;
 pub use bash_tool::BashTool;
+pub use calendar_tool::CalendarTool;
 pub use code_review_tool::CodeReviewTool;
 pub use computer_use_mouse_click_tool::ComputerUseMouseClickTool;
 pub use computer_use_mouse_precise_tool::ComputerUseMousePreciseTool;
