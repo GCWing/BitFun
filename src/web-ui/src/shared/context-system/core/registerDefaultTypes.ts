@@ -113,7 +113,7 @@ export function registerDefaultContextTypes(): void {
       displayName: i18nService.t('components:contextSystem.contextRegistry.mermaidDiagram.name'),
       description: i18nService.t('components:contextSystem.contextRegistry.mermaidDiagram.description'),
       icon: React.createElement(Network, { size: 16 }),
-      color: '#22c55e', 
+      color: UI_EXCEPTION_ACCENTS.mermaidDiagram,
       category: 'diagram',
       transformer: new MermaidDiagramContextTransformer(),
       validator: new MermaidDiagramContextValidator(),

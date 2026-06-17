@@ -4,6 +4,7 @@ export const UI_EXCEPTION_ACCENTS = {
   contextCompression: '#a855f7',
   generativeUi: '#38bdf8',
   miniApp: '#7c8cef',
+  mermaidDiagram: '#22c55e',
   tealAction: '#14b8a6',
   todo: '#0d9488',
   textStroke: [

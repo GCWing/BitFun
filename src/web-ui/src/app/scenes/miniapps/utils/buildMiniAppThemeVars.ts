@@ -3,23 +3,13 @@
  * Maps to --bitfun-* CSS variables for iframe theme sync.
  */
 import type { ThemeConfig, ThemeType } from '@/infrastructure/theme/types';
+import { MINI_APP_SCROLLBAR_FALLBACKS } from '@/shared/theme/themeBoundaryFallbacks';
 
 export interface MiniAppThemePayload {
   type: ThemeType;
   id: string;
   vars: Record<string, string>;
 }
-
-const MINI_APP_SCROLLBAR_FALLBACKS: Record<ThemeType, { thumb: string; thumbHover: string }> = {
-  dark: {
-    thumb: 'rgba(255, 255, 255, 0.12)',
-    thumbHover: 'rgba(255, 255, 255, 0.22)',
-  },
-  light: {
-    thumb: 'rgba(0, 0, 0, 0.15)',
-    thumbHover: 'rgba(0, 0, 0, 0.28)',
-  },
-};
 
 export function buildMiniAppThemeVars(theme: ThemeConfig | null): MiniAppThemePayload | null {
   if (!theme) return null;

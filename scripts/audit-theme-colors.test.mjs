@@ -124,8 +124,10 @@ test('theme color audit reports specialized color domains separately from app UI
     'shared/prism/prismTheme.ts': "export const prism = { keyword: '#555555' };\n",
     'tools/terminal/utils/xtermTheme.ts': "export const cursor = '#c0c0c0';\n",
     'tools/generative-widget/themePayload.ts': "export const fallback = { '--color-text-primary': '#666666' };\n",
+    'shared/theme/themeBoundaryFallbacks.ts': "export const fallback = { text: '#999000' };\n",
     'shared/inspector/inspectorOverlayTheme.ts': "export const overlay = { activeBorder: '#777777' };\n",
     'shared/theme/uiExceptionAccents.ts': "export const accents = { tool: '#dddddd' };\n",
+    'shared/theme/languageIdentityAccents.ts': "export const accents = { rust: '#aa5500' };\n",
     'infrastructure/language-detection/core/LanguageRegistry.ts': "export const rust = '#888888';\n",
     'component-library/components/TextStrokeEffect/TextStrokeEffect.tsx': "export const stroke = '#999999';\n",
     'component-library/components/StreamText/StreamText.scss': ".stream { color: #bbbbbb; }\n",
@@ -146,9 +148,10 @@ test('theme color audit reports specialized color domains separately from app UI
   assert.equal(report.colorDomainScopes.syntax.uniqueColors, 1);
   assert.equal(report.colorDomainScopes.terminal.uniqueColors, 1);
   assert.equal(report.colorDomainScopes.generatedWidget.uniqueColors, 1);
+  assert.equal(report.colorDomainScopes.boundaryFallback.uniqueColors, 1);
   assert.equal(report.colorDomainScopes.debugOverlay.uniqueColors, 1);
   assert.equal(report.colorDomainScopes.uiException.uniqueColors, 1);
-  assert.equal(report.colorDomainScopes.languageIdentity.uniqueColors, 1);
+  assert.equal(report.colorDomainScopes.languageIdentity.uniqueColors, 2);
   assert.equal(report.colorDomainScopes.visualEffect.uniqueColors, 2);
   assert.equal(report.colorDomainScopes.appUi.uniqueColors, 2);
 });

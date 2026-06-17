@@ -9,16 +9,16 @@
       "max": 10
     },
     "colorScopes.appUi.uniqueColors": {
-      "max": 255
+      "max": 235
     },
     "colorScopes.appUi.occurrences": {
-      "max": 309
+      "max": 273
     },
     "colorScopes.token.uniqueColors": {
       "max": 697
     },
     "colorScopes.exception.uniqueColors": {
-      "max": 188
+      "max": 212
     },
     "cssVarDefinitions.unresolvedRequiredUnique": {
       "max": 0
@@ -45,10 +45,10 @@
       "max": 0
     },
     "tokenAliasLiterals.occurrences": {
-      "max": 34
+      "max": 13
     },
     "tokenAliasLiterals.uniqueColors": {
-      "max": 26
+      "max": 11
     },
     "colorDomainScopes.themePreset.occurrences": {
       "max": 1033
@@ -63,10 +63,16 @@
       "max": 268
     },
     "colorDomainScopes.generatedWidget.occurrences": {
-      "max": 17
+      "max": 0
     },
     "colorDomainScopes.generatedWidget.uniqueColors": {
-      "max": 17
+      "max": 0
+    },
+    "colorDomainScopes.boundaryFallback.occurrences": {
+      "max": 21
+    },
+    "colorDomainScopes.boundaryFallback.uniqueColors": {
+      "max": 21
     },
     "colorDomainScopes.editor.occurrences": {
       "max": 151
@@ -81,22 +87,25 @@
       "max": 0
     },
     "colorDomainScopes.uiException.occurrences": {
-      "max": 20
+      "max": 21
     },
     "colorDomainScopes.uiException.uniqueColors": {
       "max": 19
     },
     "colorDomainScopes.languageIdentity.occurrences": {
-      "max": 48
+      "max": 57
+    },
+    "colorDomainScopes.languageIdentity.uniqueColors": {
+      "max": 50
     },
     "colorDomainScopes.visualEffect.occurrences": {
-      "max": 26
+      "max": 22
     },
     "colorDomainScopes.appUi.occurrences": {
-      "max": 123
+      "max": 108
     },
     "colorDomainScopes.appUi.uniqueColors": {
-      "max": 108
+      "max": 94
     },
     "colorDomainScopes.mermaid.occurrences": {
       "max": 139
@@ -155,7 +164,7 @@
       {
         "key": "--scene-viewport-border-width",
         "owner": "src/web-ui/src/app/scenes/SceneViewport.scss",
-        "reason": "runtime viewport layout override with zero-width default"
+        "reason": "runtime viewport layout override with stable one-pixel default"
       }
     ]
   }

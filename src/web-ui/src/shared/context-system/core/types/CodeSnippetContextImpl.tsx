@@ -9,6 +9,7 @@ import type {
   ContextCardRenderer 
 } from '../../../services/ContextRegistry';
 import { i18nService } from '@/infrastructure/i18n';
+import { getCodeSnippetLanguageAccent } from '@/shared/theme/languageIdentityAccents';
 
 
 
@@ -180,17 +181,5 @@ export function getLanguageDisplayName(language?: string): string {
 }
 
 export function getLanguageColor(language?: string): string {
-  const colorMap: Record<string, string> = {
-    'javascript': '#f7df1e',
-    'typescript': '#3178c6',
-    'python': '#3776ab',
-    'rust': 'var(--color-bg-primary)',
-    'go': '#00add8',
-    'java': '#007396',
-    'html': '#e34c26',
-    'css': '#1572b6',
-    'scss': '#cc6699'
-  };
-  
-  return language ? (colorMap[language] || '#858585') : '#858585';
+  return getCodeSnippetLanguageAccent(language);
 }

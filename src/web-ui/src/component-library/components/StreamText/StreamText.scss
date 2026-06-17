@@ -16,6 +16,11 @@
   --stream-text-sunset-coral: #ff6b6b;
   --stream-text-sunset-yellow: #ffd93d;
   --stream-text-sunset-pink: #ff9ff3;
+  --stream-text-glitch-magenta: #ff00ff;
+  --stream-text-glitch-cyan: #00ffff;
+  --stream-text-theme-purple: #a855f7;
+  --stream-text-theme-purple-neon: #c084fc;
+  --stream-text-theme-green: #22c55e;
 
   display: inline;
   font-family: var(--font-family-sans);
@@ -129,8 +134,8 @@
     opacity: 0;
     transform: translate(calc(var(--char-index, 0) * -2px), 0);
     text-shadow:
-      2px 0 #ff00ff,
-      -2px 0 #00ffff;
+      2px 0 var(--stream-text-glitch-magenta),
+      -2px 0 var(--stream-text-glitch-cyan);
   }
   20% {
     transform: translate(calc(var(--char-index, 0) * 2px), -2px);
@@ -140,8 +145,8 @@
   }
   60% {
     text-shadow:
-      1px 0 #ff00ff,
-      -1px 0 #00ffff;
+      1px 0 var(--stream-text-glitch-magenta),
+      -1px 0 var(--stream-text-glitch-cyan);
   }
   100% {
     opacity: 1;
@@ -157,8 +162,8 @@
   20%, 60% {
     opacity: 0.8;
     text-shadow:
-      1px 0 #ff00ff,
-      -1px 0 #00ffff;
+      1px 0 var(--stream-text-glitch-magenta),
+      -1px 0 var(--stream-text-glitch-cyan);
   }
 }
 
@@ -471,16 +476,16 @@
 
 
 .stream-text--theme-purple {
-  color: #a855f7;
+  color: var(--stream-text-theme-purple);
 }
 
 .stream-text--theme-purple.stream-text--neon {
-  color: #c084fc;
+  color: var(--stream-text-theme-purple-neon);
 }
 
 
 .stream-text--theme-green {
-  color: #22c55e;
+  color: var(--stream-text-theme-green);
 }
 
 .stream-text--theme-green.stream-text--neon {

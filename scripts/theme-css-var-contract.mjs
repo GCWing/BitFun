@@ -29,6 +29,8 @@ export const RUNTIME_CONTRACT_VAR_DEFINITION_PATH_PARTS = [
 
 export const EXCEPTION_PATH_PARTS = [
   'shared/theme/uiExceptionAccents',
+  'shared/theme/languageIdentityAccents',
+  'shared/theme/themeBoundaryFallbacks',
   'monaco',
   'terminal',
   'mermaid',
@@ -56,6 +58,11 @@ export const COLOR_DOMAIN_RULES = [
     key: 'generatedWidget',
     label: 'Generated widget',
     pathParts: ['tools/generative-widget'],
+  },
+  {
+    key: 'boundaryFallback',
+    label: 'Boundary fallback',
+    pathParts: ['shared/theme/themeBoundaryFallbacks'],
   },
   {
     key: 'mermaid',
@@ -94,7 +101,7 @@ export const COLOR_DOMAIN_RULES = [
   {
     key: 'languageIdentity',
     label: 'Language identity',
-    pathParts: ['infrastructure/language-detection'],
+    pathParts: ['infrastructure/language-detection', 'shared/theme/languageIdentityAccents'],
   },
   {
     key: 'visualEffect',

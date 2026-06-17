@@ -1,3 +1,5 @@
+import { WIDGET_IFRAME_FALLBACK_COLOR } from '@/shared/theme/themeBoundaryFallbacks';
+
 export type WidgetThemePayload = {
   id: string;
   type: string;
@@ -27,26 +29,6 @@ const FALLBACK_VAR = {
 } as const;
 
 type WidgetThemeFallbackVarName = typeof FALLBACK_VAR[keyof typeof FALLBACK_VAR];
-
-const WIDGET_IFRAME_FALLBACK_COLOR = {
-  textPrimary: '#e8e8e8',
-  textSecondary: '#b0b0b0',
-  textMuted: '#858585',
-  accent500: '#60a5fa',
-  accent600: '#3b82f6',
-  bgSecondary: '#1c1c1f',
-  success: '#34d399',
-  warning: '#f59e0b',
-  error: '#ef4444',
-  staticWhite: '#ffffff',
-  borderSubtle: 'rgba(255, 255, 255, 0.1)',
-  borderBase: 'rgba(255, 255, 255, 0.16)',
-  borderMedium: 'rgba(255, 255, 255, 0.24)',
-  elementBgSubtle: 'rgba(255, 255, 255, 0.05)',
-  elementBgBase: 'rgba(255, 255, 255, 0.08)',
-  elementBgMedium: 'rgba(255, 255, 255, 0.14)',
-  shadowBase: 'rgba(0, 0, 0, 0.4)',
-} as const;
 
 // Keep this fallback map small and self-contained. It is the last-resort iframe
 // contract for static widget rendering before the host theme payload arrives.
