@@ -245,15 +245,6 @@ const PersistentFooterActions: React.FC = () => {
                     type="button"
                     className="bitfun-nav-panel__footer-menu-item"
                     role="menuitem"
-                    onClick={handleFeedback}
-                  >
-                    <MessageCircle size={14} />
-                    <span>{t('header.feedback')}</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="bitfun-nav-panel__footer-menu-item"
-                    role="menuitem"
                     onClick={handleShowAbout}
                   >
                     <Info size={14} />
