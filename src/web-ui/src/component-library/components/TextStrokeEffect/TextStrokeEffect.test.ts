@@ -4,19 +4,26 @@ import {
   TEXT_STROKE_GRADIENT_COLORS,
   buildTextStrokeColorCycle,
 } from './TextStrokeEffectGradient';
+import { UI_EXCEPTION_ACCENTS } from '@/shared/theme/uiExceptionAccents';
+
+const MIGRATED_TEXT_STROKE_VISUAL_SEQUENCE = [
+  '#eab308',
+  '#ef4444',
+  '#3b82f6',
+  '#06b6d4',
+  '#8b5cf6',
+] as const;
 
 describe('TextStrokeEffect color cycles', () => {
   it('keeps gradient animation values closed over the original visual color sequence', () => {
-    expect(TEXT_STROKE_GRADIENT_COLORS).toEqual([
-      '#eab308',
-      '#ef4444',
-      '#3b82f6',
-      '#06b6d4',
-      '#8b5cf6',
-    ]);
+    expect(UI_EXCEPTION_ACCENTS.textStroke).toEqual(MIGRATED_TEXT_STROKE_VISUAL_SEQUENCE);
+    expect(TEXT_STROKE_GRADIENT_COLORS).toBe(UI_EXCEPTION_ACCENTS.textStroke);
 
-    expect(buildTextStrokeColorCycle(2)).toBe(
-      '#3b82f6; #06b6d4; #8b5cf6; #eab308; #ef4444; #3b82f6',
-    );
+    const expectedCycle = [
+      ...MIGRATED_TEXT_STROKE_VISUAL_SEQUENCE.slice(2),
+      ...MIGRATED_TEXT_STROKE_VISUAL_SEQUENCE.slice(0, 2),
+      MIGRATED_TEXT_STROKE_VISUAL_SEQUENCE[2],
+    ].join('; ');
+    expect(buildTextStrokeColorCycle(2)).toBe(expectedCycle);
   });
 });

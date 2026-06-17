@@ -5,17 +5,20 @@
     "fallbackOccurrences": {
       "max": 31
     },
+    "fallbackUniqueTokens": {
+      "max": 10
+    },
     "colorScopes.appUi.uniqueColors": {
-      "max": 268
+      "max": 255
     },
     "colorScopes.appUi.occurrences": {
-      "max": 398
+      "max": 309
     },
     "colorScopes.token.uniqueColors": {
-      "max": 698
+      "max": 697
     },
     "colorScopes.exception.uniqueColors": {
-      "max": 172
+      "max": 188
     },
     "cssVarDefinitions.unresolvedRequiredUnique": {
       "max": 0
@@ -42,10 +45,10 @@
       "max": 0
     },
     "tokenAliasLiterals.occurrences": {
-      "max": 54
+      "max": 34
     },
     "tokenAliasLiterals.uniqueColors": {
-      "max": 29
+      "max": 26
     },
     "colorDomainScopes.themePreset.occurrences": {
       "max": 1033
@@ -54,19 +57,19 @@
       "max": 611
     },
     "colorDomainScopes.themeRuntime.occurrences": {
-      "max": 62
+      "max": 54
     },
     "colorDomainScopes.tokenContract.occurrences": {
       "max": 268
     },
     "colorDomainScopes.generatedWidget.occurrences": {
-      "max": 19
+      "max": 17
     },
     "colorDomainScopes.generatedWidget.uniqueColors": {
       "max": 17
     },
     "colorDomainScopes.editor.occurrences": {
-      "max": 206
+      "max": 151
     },
     "colorDomainScopes.syntax.occurrences": {
       "max": 18
@@ -74,23 +77,86 @@
     "colorDomainScopes.terminal.occurrences": {
       "max": 38
     },
+    "colorDomainScopes.debugOverlay.occurrences": {
+      "max": 0
+    },
+    "colorDomainScopes.uiException.occurrences": {
+      "max": 20
+    },
+    "colorDomainScopes.uiException.uniqueColors": {
+      "max": 19
+    },
     "colorDomainScopes.languageIdentity.occurrences": {
       "max": 48
     },
     "colorDomainScopes.visualEffect.occurrences": {
-      "max": 42
+      "max": 26
     },
     "colorDomainScopes.appUi.occurrences": {
-      "max": 129
+      "max": 123
     },
     "colorDomainScopes.appUi.uniqueColors": {
-      "max": 112
+      "max": 108
     },
     "colorDomainScopes.mermaid.occurrences": {
-      "max": 149
+      "max": 139
     },
     "colorDomainScopes.mermaid.uniqueColors": {
       "max": 95
     }
+  },
+  "allowlists": {
+    "intentionalFallbackTokens": [
+      {
+        "key": "--surface-stagger-index",
+        "owner": "src/web-ui/src/app/components/GalleryLayout; app scene cards",
+        "reason": "runtime inline animation index with zero fallback for first-paint and non-animated states"
+      },
+      {
+        "key": "--mission-control-group-color",
+        "owner": "src/web-ui/src/app/components/panels/content-canvas/mission-control",
+        "reason": "runtime group identity color with accent fallback when no group color is assigned"
+      },
+      {
+        "key": "--char-index",
+        "owner": "src/web-ui/src/component-library/components/StreamText",
+        "reason": "runtime per-character animation offset with zero fallback outside animated rendering"
+      },
+      {
+        "key": "--shadow-color",
+        "owner": "agent surface cards and Markdown Mermaid block",
+        "reason": "surface-local shadow tint override with governed default shadow fallbacks"
+      },
+      {
+        "key": "--assistant-card-gradient",
+        "owner": "src/web-ui/src/app/scenes/profile/views/NurseryView.scss",
+        "reason": "runtime assistant identity gradient with static visual fallback for unloaded card metadata"
+      },
+      {
+        "key": "--gallery-grid-min",
+        "owner": "src/web-ui/src/app/components/GalleryLayout",
+        "reason": "runtime layout sizing input with stable grid fallback"
+      },
+      {
+        "key": "--gallery-skeleton-height",
+        "owner": "src/web-ui/src/app/components/GalleryLayout",
+        "reason": "runtime skeleton sizing input with stable placeholder fallback"
+      },
+      {
+        "key": "--operation-color",
+        "owner": "src/web-ui/src/component-library/components/FlowChatCards/SnapshotCard",
+        "reason": "runtime snapshot operation identity color with accent fallback"
+      },
+      {
+        "key": "--primary-color",
+        "owner": "src/web-ui/src/component-library/components/Markdown",
+        "reason": "embedded markdown primary accent override with global accent fallback"
+      },
+      {
+        "key": "--scene-viewport-border-width",
+        "owner": "src/web-ui/src/app/scenes/SceneViewport.scss",
+        "reason": "runtime viewport layout override with zero-width default"
+      }
+    ]
   }
 }

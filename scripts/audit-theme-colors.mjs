@@ -129,6 +129,13 @@ function normalizePath(filePath) {
   return filePath.split(path.sep).join('/');
 }
 
+function isAuditTestFile(relativePath) {
+  return (
+    /(^|\/)__tests__\//.test(relativePath)
+    || /\.(?:test|spec)\.[a-z0-9]+$/i.test(relativePath)
+  );
+}
+
 function isTokenFile(relativePath) {
   return TOKEN_PATH_PARTS.some(part => relativePath.includes(part));
 }
@@ -640,6 +647,13 @@ function applyBaseline(report, options) {
     category: 'nonContractCssPrivate',
     reportField: 'nonContractCssPrivateVars',
   }));
+  baselineSummary.failures.push(...evaluateAllowlistCategory({
+    report,
+    baseline,
+    baselineLabel,
+    category: 'intentionalFallbackTokens',
+    reportField: 'fallbackVars',
+  }));
 
   return baselineSummary;
 }
@@ -649,11 +663,13 @@ function audit(options) {
   const checksFullThemeSourceRoot = root === path.resolve(DEFAULT_ROOT);
   const files = walkFiles(root);
   const cwd = process.cwd();
-  const tokenAliasDefinitionsByColorKey = collectTokenAliasDefinitions(files, cwd);
+  const auditedFiles = files.filter(file => !isAuditTestFile(normalizePath(path.relative(cwd, file))));
+  const tokenAliasDefinitionsByColorKey = collectTokenAliasDefinitions(auditedFiles, cwd);
 
   const colorCounts = new Map();
   const componentColorCounts = new Map();
   const fallbackTokenCounts = new Map();
+  const fallbackTokenFiles = new Map();
   const varUsageCounts = new Map();
   const varDefinitionCounts = new Map();
   const varDefinitionKinds = new Map();
@@ -678,7 +694,7 @@ function audit(options) {
   let componentColorOccurrences = 0;
   let fallbackOccurrences = 0;
 
-  for (const file of files) {
+  for (const file of auditedFiles) {
     const relativePath = normalizePath(path.relative(cwd, file));
     const content = createAuditContent(fs.readFileSync(file, 'utf8'), relativePath);
     const tokenFile = isTokenFile(relativePath);
@@ -761,6 +777,7 @@ function audit(options) {
     for (const match of collectMatches(content, VAR_FALLBACK_PATTERN)) {
       fallbackOccurrences += 1;
       incrementMap(fallbackTokenCounts, match[1]);
+      addToSetMap(fallbackTokenFiles, match[1], relativePath);
     }
   }
 
@@ -869,10 +886,18 @@ function audit(options) {
       topColors: topEntries(counts, options.top),
     }];
   }));
+  const fallbackVars = Array.from(fallbackTokenCounts.entries())
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([key, count]) => ({
+      key,
+      count,
+      files: Array.from(fallbackTokenFiles.get(key) ?? []).sort().slice(0, 5),
+    }));
 
   return {
     root: normalizePath(path.relative(cwd, root)) || '.',
-    filesScanned: files.length,
+    filesScanned: auditedFiles.length,
+    ignoredTestFiles: files.length - auditedFiles.length,
     filesWithColors: fileColorCounts.size,
     colorOccurrences,
     uniqueColors: colorCounts.size,
@@ -898,6 +923,7 @@ function audit(options) {
     tokenUniqueColors: tokenColorCounts.size,
     exceptionUniqueColors: exceptionColorCounts.size,
     fallbackOccurrences,
+    fallbackUniqueTokens: fallbackVars.length,
     budget: {
       uniqueAppColorBudget: options.budget,
       uniqueComponentColors,
@@ -906,7 +932,8 @@ function audit(options) {
     topColors: topEntries(colorCounts, options.top),
     topComponentColors: topEntries(componentColorCounts, options.top),
     topFiles: topEntries(fileColorCounts, options.top),
-    topFallbackTokens: topEntries(fallbackTokenCounts, options.top),
+    topFallbackTokens: fallbackVars.slice(0, options.top).map(({ key, count }) => ({ key, count })),
+    fallbackVars,
     tokenAliasLiterals: {
       occurrences: sumMapValues(tokenAliasLiteralCounts),
       uniqueColors: tokenAliasLiteralCounts.size,
@@ -954,6 +981,7 @@ function printText(report) {
 
   console.log(`Theme color audit: ${report.root}`);
   console.log(`Files scanned: ${report.filesScanned}`);
+  console.log(`Ignored test files: ${report.ignoredTestFiles}`);
   console.log(`Files with colors: ${report.filesWithColors}`);
   console.log(`Color occurrences: ${report.colorOccurrences}`);
   console.log(`Unique colors: ${report.uniqueColors}`);
@@ -963,6 +991,7 @@ function printText(report) {
   console.log(`Unique component color budget: ${report.budget.uniqueAppColorBudget}`);
   console.log(`Over budget by: ${report.budget.overBudgetBy}`);
   console.log(`Fallback var occurrences: ${report.fallbackOccurrences}`);
+  console.log(`Fallback var unique tokens: ${report.fallbackUniqueTokens}`);
   console.log(`Token-equivalent app literal occurrences: ${report.tokenAliasLiterals.occurrences}`);
   console.log(`Token-equivalent app literal unique colors: ${report.tokenAliasLiterals.uniqueColors}`);
 

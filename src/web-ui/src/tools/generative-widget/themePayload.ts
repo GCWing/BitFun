@@ -28,28 +28,48 @@ const FALLBACK_VAR = {
 
 type WidgetThemeFallbackVarName = typeof FALLBACK_VAR[keyof typeof FALLBACK_VAR];
 
+const WIDGET_IFRAME_FALLBACK_COLOR = {
+  textPrimary: '#e8e8e8',
+  textSecondary: '#b0b0b0',
+  textMuted: '#858585',
+  accent500: '#60a5fa',
+  accent600: '#3b82f6',
+  bgSecondary: '#1c1c1f',
+  success: '#34d399',
+  warning: '#f59e0b',
+  error: '#ef4444',
+  staticWhite: '#ffffff',
+  borderSubtle: 'rgba(255, 255, 255, 0.1)',
+  borderBase: 'rgba(255, 255, 255, 0.16)',
+  borderMedium: 'rgba(255, 255, 255, 0.24)',
+  elementBgSubtle: 'rgba(255, 255, 255, 0.05)',
+  elementBgBase: 'rgba(255, 255, 255, 0.08)',
+  elementBgMedium: 'rgba(255, 255, 255, 0.14)',
+  shadowBase: 'rgba(0, 0, 0, 0.4)',
+} as const;
+
 // Keep this fallback map small and self-contained. It is the last-resort iframe
 // contract for static widget rendering before the host theme payload arrives.
 export const WIDGET_THEME_FALLBACK_VARS = {
-  [FALLBACK_VAR.textPrimary]: '#e8e8e8',
-  [FALLBACK_VAR.textSecondary]: '#b0b0b0',
-  [FALLBACK_VAR.textMuted]: '#858585',
-  [FALLBACK_VAR.accent500]: '#60a5fa',
-  [FALLBACK_VAR.accent600]: '#3b82f6',
-  [FALLBACK_VAR.bgSecondary]: '#1c1c1f',
-  [FALLBACK_VAR.success]: '#34d399',
-  [FALLBACK_VAR.warning]: '#f59e0b',
-  [FALLBACK_VAR.error]: '#ef4444',
-  [FALLBACK_VAR.staticWhite]: '#ffffff',
-  [FALLBACK_VAR.borderSubtle]: 'rgba(255, 255, 255, 0.1)',
-  [FALLBACK_VAR.borderBase]: 'rgba(255, 255, 255, 0.16)',
-  [FALLBACK_VAR.borderMedium]: 'rgba(255, 255, 255, 0.24)',
-  [FALLBACK_VAR.elementBgSubtle]: 'rgba(255, 255, 255, 0.05)',
-  [FALLBACK_VAR.elementBgBase]: 'rgba(255, 255, 255, 0.08)',
-  [FALLBACK_VAR.elementBgMedium]: 'rgba(255, 255, 255, 0.14)',
-  [FALLBACK_VAR.elementBgSoft]: 'rgba(255, 255, 255, 0.08)',
-  [FALLBACK_VAR.shadowXs]: '0 1px 2px rgba(0, 0, 0, 0.4)',
-  [FALLBACK_VAR.shadowSm]: '0 2px 4px rgba(0, 0, 0, 0.4)',
+  [FALLBACK_VAR.textPrimary]: WIDGET_IFRAME_FALLBACK_COLOR.textPrimary,
+  [FALLBACK_VAR.textSecondary]: WIDGET_IFRAME_FALLBACK_COLOR.textSecondary,
+  [FALLBACK_VAR.textMuted]: WIDGET_IFRAME_FALLBACK_COLOR.textMuted,
+  [FALLBACK_VAR.accent500]: WIDGET_IFRAME_FALLBACK_COLOR.accent500,
+  [FALLBACK_VAR.accent600]: WIDGET_IFRAME_FALLBACK_COLOR.accent600,
+  [FALLBACK_VAR.bgSecondary]: WIDGET_IFRAME_FALLBACK_COLOR.bgSecondary,
+  [FALLBACK_VAR.success]: WIDGET_IFRAME_FALLBACK_COLOR.success,
+  [FALLBACK_VAR.warning]: WIDGET_IFRAME_FALLBACK_COLOR.warning,
+  [FALLBACK_VAR.error]: WIDGET_IFRAME_FALLBACK_COLOR.error,
+  [FALLBACK_VAR.staticWhite]: WIDGET_IFRAME_FALLBACK_COLOR.staticWhite,
+  [FALLBACK_VAR.borderSubtle]: WIDGET_IFRAME_FALLBACK_COLOR.borderSubtle,
+  [FALLBACK_VAR.borderBase]: WIDGET_IFRAME_FALLBACK_COLOR.borderBase,
+  [FALLBACK_VAR.borderMedium]: WIDGET_IFRAME_FALLBACK_COLOR.borderMedium,
+  [FALLBACK_VAR.elementBgSubtle]: WIDGET_IFRAME_FALLBACK_COLOR.elementBgSubtle,
+  [FALLBACK_VAR.elementBgBase]: WIDGET_IFRAME_FALLBACK_COLOR.elementBgBase,
+  [FALLBACK_VAR.elementBgMedium]: WIDGET_IFRAME_FALLBACK_COLOR.elementBgMedium,
+  [FALLBACK_VAR.elementBgSoft]: WIDGET_IFRAME_FALLBACK_COLOR.elementBgBase,
+  [FALLBACK_VAR.shadowXs]: `0 1px 2px ${WIDGET_IFRAME_FALLBACK_COLOR.shadowBase}`,
+  [FALLBACK_VAR.shadowSm]: `0 2px 4px ${WIDGET_IFRAME_FALLBACK_COLOR.shadowBase}`,
 } as const satisfies Record<WidgetThemeFallbackVarName, string>;
 
 export function createWidgetThemeFallbackCss(): string {

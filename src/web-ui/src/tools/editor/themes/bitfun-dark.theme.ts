@@ -15,6 +15,39 @@ import type { editor } from 'monaco-editor';
 
 const TRANSPARENT_MONACO_BORDER = '#00000000';
 
+const MONACO_DARK_SURFACE = {
+  background: '#121214',
+  elevated: '#18181a',
+  borderSubtle: '#202024',
+  diffDeep: '#0D0D0F',
+} as const;
+
+const MONACO_EDITOR_TEXT = {
+  primary: '#D6DEEB',
+  secondary: '#E0E6F0',
+  muted: '#6A737D',
+} as const;
+
+const MONACO_BRAND_ACCENT = {
+  base: '#E1AB80',
+  light: '#F6D0A3',
+  alpha20: '#E1AB8020',
+  alpha30: '#E1AB8030',
+  alpha40: '#E1AB8040',
+  alpha60: '#E1AB8060',
+  alpha70: '#E1AB8070',
+  alpha80: '#E1AB8080',
+  alphaA0: '#E1AB80A0',
+} as const;
+
+const MONACO_STATUS_COLOR = {
+  error: '#FF5370',
+  warning: '#FFCB6B',
+  info: '#82AAFF',
+  success: '#ADDB67',
+  link: '#7DCFFF',
+} as const;
+
 /**
  * BitFun Dark Theme Configuration
  * Follows Monaco Editor official theme format
@@ -231,132 +264,132 @@ export const BitFunDarkTheme: editor.IStandaloneThemeData = {
     'contrastBorder': TRANSPARENT_MONACO_BORDER,
 
     // Editor Body
-    'editor.background': '#121214',
-    'editor.foreground': '#D6DEEB',
+    'editor.background': MONACO_DARK_SURFACE.background,
+    'editor.foreground': MONACO_EDITOR_TEXT.primary,
 
     // Line Numbers
     'editorLineNumber.foreground': '#707070',
-    'editorLineNumber.activeForeground': '#E1AB80',
+    'editorLineNumber.activeForeground': MONACO_BRAND_ACCENT.base,
     'editorLineNumber.dimmedForeground': '#454545',
 
     // Cursor and Selection
-    'editorCursor.foreground': '#E1AB80',
-    'editorCursor.background': '#121214',
-    'editor.selectionBackground': '#E1AB8040',
+    'editorCursor.foreground': MONACO_BRAND_ACCENT.base,
+    'editorCursor.background': MONACO_DARK_SURFACE.background,
+    'editor.selectionBackground': MONACO_BRAND_ACCENT.alpha40,
     'editor.selectionForeground': '#ffffff',
-    'editor.inactiveSelectionBackground': '#E1AB8020',
-    'editor.selectionHighlightBackground': '#E1AB8030',
-    'editor.selectionHighlightBorder': '#E1AB80',
+    'editor.inactiveSelectionBackground': MONACO_BRAND_ACCENT.alpha20,
+    'editor.selectionHighlightBackground': MONACO_BRAND_ACCENT.alpha30,
+    'editor.selectionHighlightBorder': MONACO_BRAND_ACCENT.base,
 
     // Current Line Highlight
-    'editor.lineHighlightBackground': '#18181a',
-    'editor.lineHighlightBorder': '#202024',
+    'editor.lineHighlightBackground': MONACO_DARK_SURFACE.elevated,
+    'editor.lineHighlightBorder': MONACO_DARK_SURFACE.borderSubtle,
 
     // Find and Match
-    'editor.findMatchBackground': '#E1AB80',
-    'editor.findMatchHighlightBackground': '#E1AB8040',
-    'editor.findRangeHighlightBackground': '#E1AB8020',
-    'editor.findMatchBorder': '#F6D0A3',
-    'editor.findMatchHighlightBorder': '#E1AB8080',
+    'editor.findMatchBackground': MONACO_BRAND_ACCENT.base,
+    'editor.findMatchHighlightBackground': MONACO_BRAND_ACCENT.alpha40,
+    'editor.findRangeHighlightBackground': MONACO_BRAND_ACCENT.alpha20,
+    'editor.findMatchBorder': MONACO_BRAND_ACCENT.light,
+    'editor.findMatchHighlightBorder': MONACO_BRAND_ACCENT.alpha80,
 
     // Word Highlight
-    'editor.wordHighlightBackground': '#E1AB8020',
-    'editor.wordHighlightStrongBackground': '#E1AB8040',
-    'editor.wordHighlightBorder': '#E1AB8060',
-    'editor.wordHighlightStrongBorder': '#E1AB80',
+    'editor.wordHighlightBackground': MONACO_BRAND_ACCENT.alpha20,
+    'editor.wordHighlightStrongBackground': MONACO_BRAND_ACCENT.alpha40,
+    'editor.wordHighlightBorder': MONACO_BRAND_ACCENT.alpha60,
+    'editor.wordHighlightStrongBorder': MONACO_BRAND_ACCENT.base,
 
     // Code Highlight and Decorations
-    'editor.hoverHighlightBackground': '#E1AB8020',
-    'editor.symbolHighlightBackground': '#E1AB8020',
-    'editor.symbolHighlightBorder': '#E1AB8060',
+    'editor.hoverHighlightBackground': MONACO_BRAND_ACCENT.alpha20,
+    'editor.symbolHighlightBackground': MONACO_BRAND_ACCENT.alpha20,
+    'editor.symbolHighlightBorder': MONACO_BRAND_ACCENT.alpha60,
 
     // Indent Guides and Rulers
-    'editorIndentGuide.background': '#202024',
-    'editorIndentGuide.activeBackground': '#E1AB8060',
-    'editorRuler.foreground': '#202024',
+    'editorIndentGuide.background': MONACO_DARK_SURFACE.borderSubtle,
+    'editorIndentGuide.activeBackground': MONACO_BRAND_ACCENT.alpha60,
+    'editorRuler.foreground': MONACO_DARK_SURFACE.borderSubtle,
 
     // Bracket Matching
-    'editorBracketMatch.background': '#E1AB8030',
-    'editorBracketMatch.border': '#E1AB80',
+    'editorBracketMatch.background': MONACO_BRAND_ACCENT.alpha30,
+    'editorBracketMatch.border': MONACO_BRAND_ACCENT.base,
     'editorBracketHighlight.foreground1': '#ffd700',
-    'editorBracketHighlight.foreground2': '#E1AB80',
+    'editorBracketHighlight.foreground2': MONACO_BRAND_ACCENT.base,
     'editorBracketHighlight.foreground3': '#C792EA',
     'editorBracketHighlight.foreground4': '#4ECDC4',
     'editorBracketHighlight.foreground5': '#F78C6C',
     'editorBracketHighlight.foreground6': '#A5E844',
 
     // Suggest Widget
-    'editorSuggestWidget.background': '#18181a',
-    'editorSuggestWidget.border': '#E1AB80',
-    'editorSuggestWidget.foreground': '#E0E6F0',
-    'editorSuggestWidget.highlightForeground': '#E1AB80',
-    'editorSuggestWidget.selectedBackground': '#E1AB8030',
+    'editorSuggestWidget.background': MONACO_DARK_SURFACE.elevated,
+    'editorSuggestWidget.border': MONACO_BRAND_ACCENT.base,
+    'editorSuggestWidget.foreground': MONACO_EDITOR_TEXT.secondary,
+    'editorSuggestWidget.highlightForeground': MONACO_BRAND_ACCENT.base,
+    'editorSuggestWidget.selectedBackground': MONACO_BRAND_ACCENT.alpha30,
     'editorSuggestWidget.focusHighlightForeground': '#A5E844',
 
     // Hover Widget
-    'editorHoverWidget.background': '#18181a',
-    'editorHoverWidget.border': '#E1AB80',
-    'editorHoverWidget.foreground': '#E0E6F0',
-    'editorHoverWidget.statusBarBackground': '#202024',
+    'editorHoverWidget.background': MONACO_DARK_SURFACE.elevated,
+    'editorHoverWidget.border': MONACO_BRAND_ACCENT.base,
+    'editorHoverWidget.foreground': MONACO_EDITOR_TEXT.secondary,
+    'editorHoverWidget.statusBarBackground': MONACO_DARK_SURFACE.borderSubtle,
 
     // Inlay Hints
     'editorInlayHint.background': TRANSPARENT_MONACO_BORDER,
-    'editorInlayHint.foreground': '#6A737D',
-    'editorInlayHint.typeForeground': '#6A737D',
-    'editorInlayHint.parameterForeground': '#6A737D',
+    'editorInlayHint.foreground': MONACO_EDITOR_TEXT.muted,
+    'editorInlayHint.typeForeground': MONACO_EDITOR_TEXT.muted,
+    'editorInlayHint.parameterForeground': MONACO_EDITOR_TEXT.muted,
 
     // Errors and Warnings
-    'editorError.foreground': '#FF5370',
-    'editorWarning.foreground': '#FFCB6B',
-    'editorInfo.foreground': '#82AAFF',
-    'editorHint.foreground': '#6A737D',
+    'editorError.foreground': MONACO_STATUS_COLOR.error,
+    'editorWarning.foreground': MONACO_STATUS_COLOR.warning,
+    'editorInfo.foreground': MONACO_STATUS_COLOR.info,
+    'editorHint.foreground': MONACO_EDITOR_TEXT.muted,
 
     // Scrollbar
-    'scrollbar.shadow': '#121214',
-    'scrollbarSlider.background': '#E1AB8040',
-    'scrollbarSlider.hoverBackground': '#E1AB8070',
-    'scrollbarSlider.activeBackground': '#E1AB80A0',
+    'scrollbar.shadow': MONACO_DARK_SURFACE.background,
+    'scrollbarSlider.background': MONACO_BRAND_ACCENT.alpha40,
+    'scrollbarSlider.hoverBackground': MONACO_BRAND_ACCENT.alpha70,
+    'scrollbarSlider.activeBackground': MONACO_BRAND_ACCENT.alphaA0,
 
     // Minimap
-    'minimap.background': '#121214',
-    'minimap.selectionHighlight': '#E1AB8040',
-    'minimap.findMatchHighlight': '#E1AB80',
-    'minimap.errorHighlight': '#FF5370',
-    'minimap.warningHighlight': '#FFCB6B',
-    'minimapSlider.background': '#E1AB8040',
-    'minimapSlider.hoverBackground': '#E1AB8070',
-    'minimapSlider.activeBackground': '#E1AB80A0',
+    'minimap.background': MONACO_DARK_SURFACE.background,
+    'minimap.selectionHighlight': MONACO_BRAND_ACCENT.alpha40,
+    'minimap.findMatchHighlight': MONACO_BRAND_ACCENT.base,
+    'minimap.errorHighlight': MONACO_STATUS_COLOR.error,
+    'minimap.warningHighlight': MONACO_STATUS_COLOR.warning,
+    'minimapSlider.background': MONACO_BRAND_ACCENT.alpha40,
+    'minimapSlider.hoverBackground': MONACO_BRAND_ACCENT.alpha70,
+    'minimapSlider.activeBackground': MONACO_BRAND_ACCENT.alphaA0,
 
     // Widget Borders
-    'editorWidget.background': '#18181a',
-    'editorWidget.border': '#E1AB8040',
-    'editorWidget.foreground': '#D6DEEB',
-    'editorWidget.resizeBorder': '#E1AB8060',
+    'editorWidget.background': MONACO_DARK_SURFACE.elevated,
+    'editorWidget.border': MONACO_BRAND_ACCENT.alpha40,
+    'editorWidget.foreground': MONACO_EDITOR_TEXT.primary,
+    'editorWidget.resizeBorder': MONACO_BRAND_ACCENT.alpha60,
 
     // Code Lens
-    'editorCodeLens.foreground': '#6A737D',
+    'editorCodeLens.foreground': MONACO_EDITOR_TEXT.muted,
 
     // Links
-    'editorLink.activeForeground': '#7DCFFF',
+    'editorLink.activeForeground': MONACO_STATUS_COLOR.link,
 
     // Whitespace
     'editorWhitespace.foreground': '#3A4A5A',
 
     // Overview Ruler
-    'editorOverviewRuler.border': '#18181a',
-    'editorOverviewRuler.background': '#121214',
-    'editorOverviewRuler.currentContentForeground': '#E1AB8080',
+    'editorOverviewRuler.border': MONACO_DARK_SURFACE.elevated,
+    'editorOverviewRuler.background': MONACO_DARK_SURFACE.background,
+    'editorOverviewRuler.currentContentForeground': MONACO_BRAND_ACCENT.alpha80,
     'editorOverviewRuler.incomingContentForeground': '#7FDBCA80',
     'editorOverviewRuler.findMatchForeground': '#FFCB6B80',
-    'editorOverviewRuler.rangeHighlightForeground': '#E1AB8040',
-    'editorOverviewRuler.selectionHighlightForeground': '#E1AB8060',
+    'editorOverviewRuler.rangeHighlightForeground': MONACO_BRAND_ACCENT.alpha40,
+    'editorOverviewRuler.selectionHighlightForeground': MONACO_BRAND_ACCENT.alpha60,
     'editorOverviewRuler.wordHighlightForeground': '#C792EA60',
-    'editorOverviewRuler.modifiedForeground': '#FFCB6B',
-    'editorOverviewRuler.addedForeground': '#ADDB67',
-    'editorOverviewRuler.deletedForeground': '#FF5370',
-    'editorOverviewRuler.errorForeground': '#FF5370',
-    'editorOverviewRuler.warningForeground': '#FFCB6B',
-    'editorOverviewRuler.infoForeground': '#E1AB80',
+    'editorOverviewRuler.modifiedForeground': MONACO_STATUS_COLOR.warning,
+    'editorOverviewRuler.addedForeground': MONACO_STATUS_COLOR.success,
+    'editorOverviewRuler.deletedForeground': MONACO_STATUS_COLOR.error,
+    'editorOverviewRuler.errorForeground': MONACO_STATUS_COLOR.error,
+    'editorOverviewRuler.warningForeground': MONACO_STATUS_COLOR.warning,
+    'editorOverviewRuler.infoForeground': MONACO_BRAND_ACCENT.base,
 
     // Diff Editor (GitHub Dark style)
     'diffEditor.insertedTextBackground': '#23863625',
@@ -374,8 +407,8 @@ export const BitFunDarkTheme: editor.IStandaloneThemeData = {
 
     'diffEditor.border': '#2A2D35',
     'diffEditor.diagonalFill': '#16181D',
-    'diffEditor.unchangedRegionBackground': '#0D0D0F',
-    'diffEditor.unchangedCodeBackground': '#0D0D0F',
+    'diffEditor.unchangedRegionBackground': MONACO_DARK_SURFACE.diffDeep,
+    'diffEditor.unchangedCodeBackground': MONACO_DARK_SURFACE.diffDeep,
 
     'diffEditorOverview.insertedForeground': '#3FB950',
     'diffEditorOverview.removedForeground': '#F85149',

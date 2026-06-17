@@ -10,6 +10,17 @@ export interface MiniAppThemePayload {
   vars: Record<string, string>;
 }
 
+const MINI_APP_SCROLLBAR_FALLBACKS: Record<ThemeType, { thumb: string; thumbHover: string }> = {
+  dark: {
+    thumb: 'rgba(255, 255, 255, 0.12)',
+    thumbHover: 'rgba(255, 255, 255, 0.22)',
+  },
+  light: {
+    thumb: 'rgba(0, 0, 0, 0.15)',
+    thumbHover: 'rgba(0, 0, 0, 0.28)',
+  },
+};
+
 export function buildMiniAppThemeVars(theme: ThemeConfig | null): MiniAppThemePayload | null {
   if (!theme) return null;
 
@@ -53,10 +64,9 @@ export function buildMiniAppThemeVars(theme: ThemeConfig | null): MiniAppThemePa
     vars['--bitfun-scrollbar-thumb'] = colors.scrollbar.thumb;
     vars['--bitfun-scrollbar-thumb-hover'] = colors.scrollbar.thumbHover;
   } else {
-    vars['--bitfun-scrollbar-thumb'] =
-      theme.type === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.15)';
-    vars['--bitfun-scrollbar-thumb-hover'] =
-      theme.type === 'dark' ? 'rgba(255, 255, 255, 0.22)' : 'rgba(0, 0, 0, 0.28)';
+    const scrollbarFallback = MINI_APP_SCROLLBAR_FALLBACKS[theme.type];
+    vars['--bitfun-scrollbar-thumb'] = scrollbarFallback.thumb;
+    vars['--bitfun-scrollbar-thumb-hover'] = scrollbarFallback.thumbHover;
   }
 
   return {

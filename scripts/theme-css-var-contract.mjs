@@ -28,6 +28,7 @@ export const RUNTIME_CONTRACT_VAR_DEFINITION_PATH_PARTS = [
 ];
 
 export const EXCEPTION_PATH_PARTS = [
+  'shared/theme/uiExceptionAccents',
   'monaco',
   'terminal',
   'mermaid',
@@ -84,6 +85,11 @@ export const COLOR_DOMAIN_RULES = [
     key: 'debugOverlay',
     label: 'Debug overlay',
     pathParts: ['shared/inspector'],
+  },
+  {
+    key: 'uiException',
+    label: 'UI exception registry',
+    pathParts: ['shared/theme/uiExceptionAccents'],
   },
   {
     key: 'languageIdentity',

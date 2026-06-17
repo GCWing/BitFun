@@ -125,6 +125,7 @@ test('theme color audit reports specialized color domains separately from app UI
     'tools/terminal/utils/xtermTheme.ts': "export const cursor = '#c0c0c0';\n",
     'tools/generative-widget/themePayload.ts': "export const fallback = { '--color-text-primary': '#666666' };\n",
     'shared/inspector/inspectorOverlayTheme.ts': "export const overlay = { activeBorder: '#777777' };\n",
+    'shared/theme/uiExceptionAccents.ts': "export const accents = { tool: '#dddddd' };\n",
     'infrastructure/language-detection/core/LanguageRegistry.ts': "export const rust = '#888888';\n",
     'component-library/components/TextStrokeEffect/TextStrokeEffect.tsx': "export const stroke = '#999999';\n",
     'component-library/components/StreamText/StreamText.scss': ".stream { color: #bbbbbb; }\n",
@@ -146,6 +147,7 @@ test('theme color audit reports specialized color domains separately from app UI
   assert.equal(report.colorDomainScopes.terminal.uniqueColors, 1);
   assert.equal(report.colorDomainScopes.generatedWidget.uniqueColors, 1);
   assert.equal(report.colorDomainScopes.debugOverlay.uniqueColors, 1);
+  assert.equal(report.colorDomainScopes.uiException.uniqueColors, 1);
   assert.equal(report.colorDomainScopes.languageIdentity.uniqueColors, 1);
   assert.equal(report.colorDomainScopes.visualEffect.uniqueColors, 2);
   assert.equal(report.colorDomainScopes.appUi.uniqueColors, 2);
@@ -291,6 +293,25 @@ test('theme color audit reports app literals that duplicate token values', (t) =
   assert.equal(report.colorScopes.exception.occurrences, 1);
 });
 
+test('theme color audit excludes test files from production color budgets', (t) => {
+  const { dir, sourceRoot } = createFixture({
+    'component-library/styles/tokens.scss': ':root { --color-error: #ef4444; }\n',
+    'app/App.scss': '.app { color: #ef4444; }\n',
+    'app/App.test.tsx': "expect(button).toHaveStyle({ color: '#ef4444' });\n",
+    'app/__tests__/Fixture.tsx': "export const visualLock = '#ef4444';\n",
+  });
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  const result = runAudit(['--root', sourceRoot, '--json', '--no-baseline']);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.filesScanned, 2);
+  assert.equal(report.ignoredTestFiles, 2);
+  assert.equal(report.colorScopes.appUi.occurrences, 1);
+  assert.equal(report.tokenAliasLiterals.occurrences, 1);
+});
+
 test('theme color audit fails when metrics exceed the checked baseline', (t) => {
   const { dir, sourceRoot } = createFixture({
     'app/App.scss': [
@@ -314,6 +335,76 @@ test('theme color audit fails when metrics exceed the checked baseline', (t) => 
   assert.match(
     `${result.stdout}\n${result.stderr}`,
     /fallbackOccurrences has 1 candidate\(s\), baseline is 0/,
+  );
+});
+
+test('theme color audit requires intentional fallback tokens to be allowlisted', (t) => {
+  const { dir, sourceRoot } = createFixture({
+    'app/App.scss': [
+      '.app {',
+      '  color: var(--runtime-accent, var(--color-accent-500));',
+      '}',
+      '',
+    ].join('\n'),
+  });
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const baselinePath = path.join(dir, 'theme-baseline.json');
+  const baseline = {
+    version: 1,
+    budgets: {
+      fallbackUniqueTokens: { max: 1 },
+    },
+    allowlists: {
+      intentionalFallbackTokens: [],
+    },
+  };
+  writeText(baselinePath, `${JSON.stringify(baseline, null, 2)}\n`);
+
+  const blocked = runAudit(['--root', sourceRoot, '--baseline', baselinePath]);
+  assert.notEqual(blocked.status, 0, 'unallowlisted fallback tokens must fail the audit');
+  assert.match(
+    `${blocked.stdout}\n${blocked.stderr}`,
+    /intentionalFallbackTokens is missing allowlist entry for --runtime-accent/,
+  );
+
+  baseline.allowlists.intentionalFallbackTokens.push({
+    key: '--runtime-accent',
+    owner: 'scripts/audit-theme-colors.test.mjs',
+    reason: 'fixture runtime color fallback',
+  });
+  writeText(baselinePath, `${JSON.stringify(baseline, null, 2)}\n`);
+
+  const allowed = runAudit(['--root', sourceRoot, '--baseline', baselinePath]);
+  assert.equal(allowed.status, 0, allowed.stderr || allowed.stdout);
+});
+
+test('theme color audit fails stale intentional fallback token allowlist entries', (t) => {
+  const { dir, sourceRoot } = createFixture({
+    'app/App.scss': '.app { color: var(--color-accent-500); }\n',
+  });
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const baselinePath = path.join(dir, 'theme-baseline.json');
+  writeText(baselinePath, `${JSON.stringify({
+    version: 1,
+    budgets: {
+      fallbackUniqueTokens: { max: 0 },
+    },
+    allowlists: {
+      intentionalFallbackTokens: [
+        {
+          key: '--removed-fallback',
+          owner: 'scripts/audit-theme-colors.test.mjs',
+          reason: 'fixture stale fallback token',
+        },
+      ],
+    },
+  }, null, 2)}\n`);
+
+  const result = runAudit(['--root', sourceRoot, '--baseline', baselinePath]);
+  assert.notEqual(result.status, 0, 'stale fallback allowlist entries must fail the audit');
+  assert.match(
+    `${result.stdout}\n${result.stderr}`,
+    /intentionalFallbackTokens allowlist entry --removed-fallback is stale/,
   );
 });
 
