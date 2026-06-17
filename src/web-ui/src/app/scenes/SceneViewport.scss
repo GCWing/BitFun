@@ -25,7 +25,7 @@
   }
 
   :root[data-theme-type='dark'] & {
-    box-shadow: 0 10px 32px -8px rgba(0, 0, 0, 0.55);
+    box-shadow: 0 10px 32px -8px rgba(var(--color-static-black-rgb), 0.55);
   }
 
   &__clip {

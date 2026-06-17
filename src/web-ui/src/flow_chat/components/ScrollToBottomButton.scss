@@ -26,7 +26,7 @@
   -webkit-backdrop-filter: blur(14px) saturate(1.15);
 
   box-shadow:
-    0 4px 18px rgba(0, 0, 0, 0.38),
+    0 4px 18px rgba(var(--color-static-black-rgb), 0.38),
     0 0 0 1px color-mix(in srgb, var(--color-text-primary) 28%, transparent),
     inset 0 1px 0 color-mix(in srgb, var(--color-text-primary) 12%, transparent);
   
@@ -42,7 +42,7 @@
     transform: translateY(-2px);
 
     box-shadow:
-      0 8px 22px rgba(0, 0, 0, 0.42),
+      0 8px 22px rgba(var(--color-static-black-rgb), 0.42),
       0 0 0 1px color-mix(in srgb, var(--color-text-primary) 40%, transparent),
       inset 0 1px 0 color-mix(in srgb, var(--color-text-primary) 16%, transparent);
   }

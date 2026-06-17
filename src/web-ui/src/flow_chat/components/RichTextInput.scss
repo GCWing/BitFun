@@ -131,47 +131,47 @@
   }
   
   &[data-context-type="directory"] {
-    background: rgba(168, 85, 247, 0.12);
-    color: rgba(192, 132, 252, 0.95);
+    background: rgba(var(--rich-text-context-directory-bg-rgb), 0.12);
+    color: rgba(var(--rich-text-context-directory-fg-rgb), 0.95);
     
     &:hover {
-      background: rgba(168, 85, 247, 0.18);
+      background: rgba(var(--rich-text-context-directory-bg-rgb), 0.18);
     }
   }
   
   &[data-context-type="code-snippet"] {
-    background: rgba(74, 222, 128, 0.12);
-    color: rgba(74, 222, 128, 0.95);
+    background: rgba(var(--rich-text-context-code-bg-rgb), 0.12);
+    color: rgba(var(--rich-text-context-code-fg-rgb), 0.95);
     
     &:hover {
-      background: rgba(74, 222, 128, 0.18);
+      background: rgba(var(--rich-text-context-code-bg-rgb), 0.18);
     }
   }
   
   &[data-context-type="mermaid-diagram"] {
-    background: rgba(34, 197, 94, 0.12);
-    color: rgba(52, 211, 153, 0.95);
+    background: rgba(var(--rich-text-context-mermaid-diagram-bg-rgb), 0.12);
+    color: rgba(var(--rich-text-context-mermaid-diagram-fg-rgb), 0.95);
     
     &:hover {
-      background: rgba(34, 197, 94, 0.18);
+      background: rgba(var(--rich-text-context-mermaid-diagram-bg-rgb), 0.18);
     }
   }
   
   &[data-context-type="mermaid-node"] {
-    background: rgba(6, 182, 212, 0.12);
-    color: rgba(34, 211, 238, 0.95);
+    background: rgba(var(--rich-text-context-mermaid-node-bg-rgb), 0.12);
+    color: rgba(var(--rich-text-context-mermaid-node-fg-rgb), 0.95);
     
     &:hover {
-      background: rgba(6, 182, 212, 0.18);
+      background: rgba(var(--rich-text-context-mermaid-node-bg-rgb), 0.18);
     }
   }
   
   &[data-context-type="image"] {
-    background: rgba(251, 146, 60, 0.12);
-    color: rgba(251, 146, 60, 0.95);
+    background: rgba(var(--rich-text-context-image-bg-rgb), 0.12);
+    color: rgba(var(--rich-text-context-image-fg-rgb), 0.95);
     
     &:hover {
-      background: rgba(251, 146, 60, 0.18);
+      background: rgba(var(--rich-text-context-image-bg-rgb), 0.18);
     }
   }
 }

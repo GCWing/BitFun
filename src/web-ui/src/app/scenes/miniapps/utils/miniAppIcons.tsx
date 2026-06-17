@@ -19,12 +19,12 @@ import {
 } from 'lucide-react';
 
 const ICON_GRADIENTS = [
-  'linear-gradient(135deg, rgba(59, 130, 246, 0.35) 0%, rgba(139, 92, 246, 0.25) 100%)',
-  'linear-gradient(135deg, rgba(16, 185, 129, 0.3) 0%, rgba(59, 130, 246, 0.25) 100%)',
-  'linear-gradient(135deg, rgba(245, 158, 11, 0.3) 0%, rgba(239, 68, 68, 0.2) 100%)',
-  'linear-gradient(135deg, rgba(139, 92, 246, 0.35) 0%, rgba(236, 72, 153, 0.2) 100%)',
-  'linear-gradient(135deg, rgba(6, 182, 212, 0.3) 0%, rgba(59, 130, 246, 0.25) 100%)',
-  'linear-gradient(135deg, rgba(239, 68, 68, 0.25) 0%, rgba(245, 158, 11, 0.2) 100%)',
+  'var(--miniapp-icon-gradient-0)',
+  'var(--miniapp-icon-gradient-1)',
+  'var(--miniapp-icon-gradient-2)',
+  'var(--miniapp-icon-gradient-3)',
+  'var(--miniapp-icon-gradient-4)',
+  'var(--miniapp-icon-gradient-5)',
 ];
 
 const MINI_APP_ICONS = {

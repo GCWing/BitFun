@@ -14,7 +14,7 @@
   align-items: center;
   gap: 4px;
   padding: 6px 10px;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(var(--color-static-black-rgb), 0.7);
   border: 1px solid var(--color-overlay-white-20);
   border-radius: 6px;
   color: var(--color-overlay-white-80);
@@ -108,7 +108,7 @@
 /* High contrast mode support */
 @media (prefers-contrast: high) {
   .copy-output-button {
-    background: rgba(0, 0, 0, 0.9);
+    background: rgba(var(--color-static-black-rgb), 0.9);
     border-color: var(--color-overlay-white-60);
     color: white;
   }

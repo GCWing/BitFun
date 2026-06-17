@@ -98,7 +98,7 @@
     border: 1px solid var(--border-subtle);
     border-radius: 10px;
     background: var(--panel-bg);
-    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
+    box-shadow: 0 10px 28px rgba(var(--color-static-black-rgb), 0.24);
     z-index: 8;
   }
 
@@ -210,7 +210,7 @@
     border: 1px solid var(--border-subtle);
     border-radius: 10px;
     background: var(--panel-bg);
-    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
+    box-shadow: 0 10px 28px rgba(var(--color-static-black-rgb), 0.24);
     z-index: 8;
   }
 

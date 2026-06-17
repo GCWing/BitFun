@@ -492,8 +492,8 @@
   // Keep expand/collapse press feedback subtle inside grouped subagent cards.
   .flow-tool-card-wrapper .base-tool-card-wrapper.task-tool-display:active {
     box-shadow:
-      0 1px 3px rgba(0, 0, 0, 0.14),
-      inset 0 1px 2px rgba(0, 0, 0, 0.18);
+      0 1px 3px rgba(var(--color-static-black-rgb), 0.14),
+      inset 0 1px 2px rgba(var(--color-static-black-rgb), 0.18);
   }
 
   // Expanded state: the wrapper becomes the unified visual container.
@@ -568,7 +568,7 @@
   // Hover over expanded card: stronger elevation.
   &.task-with-subagent-wrapper--expanded:hover {
     box-shadow:
-      0 2px 8px rgba(0, 0, 0, 0.18),
+      0 2px 8px rgba(var(--color-static-black-rgb), 0.18),
       0 1px 4px var(--color-overlay-black-12),
       inset 0 1px 0 var(--color-overlay-white-04);
     border-color: var(--border-medium);

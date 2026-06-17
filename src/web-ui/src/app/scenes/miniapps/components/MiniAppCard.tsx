@@ -62,8 +62,8 @@ const MiniAppCard: React.FC<MiniAppCardProps> = ({
       style={{
         '--surface-stagger-index': index,
         '--miniapp-card-gradient': isRunning
-          ? 'linear-gradient(135deg, rgba(52, 211, 153, 0.28) 0%, rgba(16, 185, 129, 0.18) 100%)'
-          : 'linear-gradient(135deg, rgba(59, 130, 246, 0.28) 0%, rgba(139, 92, 246, 0.18) 100%)',
+          ? 'var(--miniapp-card-gradient-running)'
+          : 'var(--miniapp-card-gradient-idle)',
       } as React.CSSProperties}
       onClick={handleOpenDetails}
       role="button"

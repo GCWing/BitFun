@@ -374,7 +374,7 @@ $opacity-high: 0.8 !default;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0, 0, 0, 0.6);
+    background: rgba(var(--color-static-black-rgb), 0.6);
     z-index: $z-modal;
     backdrop-filter: blur(4px);
     animation: bitfun-git-diff-view-fade-in 0.2s ease-out;
@@ -415,7 +415,7 @@ $opacity-high: 0.8 !default;
   &__ai-spinner {
     width: 14px;
     height: 14px;
-    border: 2px solid rgba(255, 255, 255, 0.3);
+    border: 2px solid rgba(var(--color-static-white-rgb), 0.3);
     border-top-color: currentColor;
     border-radius: 50%;
     animation: bitfun-git-diff-view-spin 0.8s linear infinite;

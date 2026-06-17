@@ -76,7 +76,7 @@
     border-radius: $size-radius-lg;
     background: var(--color-bg-elevated);
     box-shadow:
-      0 24px 70px rgba(0, 0, 0, 0.34),
+      0 24px 70px rgba(var(--color-static-black-rgb), 0.34),
       0 0 0 1px color-mix(in srgb, var(--color-static-white) 4%, transparent);
   }
 
@@ -205,7 +205,7 @@
   background: var(--color-bg-elevated);
   color: var(--color-text-primary);
   box-shadow:
-    0 24px 70px rgba(0, 0, 0, 0.36),
+    0 24px 70px rgba(var(--color-static-black-rgb), 0.36),
     0 0 0 1px color-mix(in srgb, var(--color-static-white) 4%, transparent);
   isolation: isolate;
 

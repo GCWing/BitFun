@@ -40,7 +40,7 @@
   :root[data-theme-type='dark'] & {
     box-shadow:
       0 1px 0 color-mix(in srgb, var(--color-static-white) 4%, transparent),
-      0 10px 28px -8px rgba(0, 0, 0, 0.55);
+      0 10px 28px -8px rgba(var(--color-static-black-rgb), 0.55);
   }
 
   &.visible {

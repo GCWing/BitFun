@@ -240,7 +240,7 @@
     height: 30px;
     border-radius: $size-radius-sm;
     border: none;
-    background: rgba(247, 234, 234, 0.3);
+    background: rgba(var(--miniapp-card-action-bg-rgb), 0.3);
     color: var(--color-text-secondary);
     cursor: pointer;
     transition:
@@ -252,17 +252,17 @@
     }
 
     &--primary:hover {
-      background: rgba(247, 234, 234, 0.6);
+      background: rgba(var(--miniapp-card-action-bg-rgb), 0.6);
       color: var(--color-accent-400);
     }
 
     &--danger:hover {
-      background: rgba(247, 234, 234, 0.6);
+      background: rgba(var(--miniapp-card-action-bg-rgb), 0.6);
       color: var(--color-error);
     }
 
     &--stop:hover {
-      background: rgba(247, 234, 234, 0.6);
+      background: rgba(var(--miniapp-card-action-bg-rgb), 0.6);
       color: var(--color-success);
     }
   }

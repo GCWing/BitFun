@@ -284,7 +284,7 @@
   background: linear-gradient(90deg,
     transparent 0%,
     var(--color-overlay-white-20) 20%,
-    rgba(255, 255, 255, 0.3) 50%,
+    rgba(var(--color-static-white-rgb), 0.3) 50%,
     var(--color-overlay-white-20) 80%,
     transparent 100%);
   border-radius: 2px;

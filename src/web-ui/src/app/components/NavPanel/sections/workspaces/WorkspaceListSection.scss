@@ -712,7 +712,7 @@
     border-radius: 999px;
     overflow: hidden;
     background: color-mix(in srgb, var(--element-bg-strong) 68%, transparent);
-    box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.22);
+    box-shadow: inset 0 1px 1px rgba(var(--color-static-black-rgb), 0.22);
   }
 
   &__workspace-index-tooltip-progress-fill {

@@ -21,12 +21,12 @@
   --markdown-table-cell-pad-y: var(--flowchat-markdown-table-cell-pad-y);
   --markdown-table-cell-pad-x: var(--flowchat-markdown-table-cell-pad-x);
   --markdown-code-bg-elevated: color-mix(in srgb, var(--color-bg-primary) 92%, var(--color-static-white) 8%);
-  --markdown-inline-code-bg: rgba(255, 255, 255, 0.045);
+  --markdown-inline-code-bg: rgba(var(--color-static-white-rgb), 0.045);
   --markdown-inline-code-border: var(--color-overlay-white-08);
   --markdown-pre-bg: var(--color-bg-primary);
   --markdown-pre-border: var(--border-color);
-  --markdown-blockquote-bg: rgba(255, 255, 255, 0.025);
-  --markdown-blockquote-border: rgba(255, 255, 255, 0.16);
+  --markdown-blockquote-bg: rgba(var(--color-static-white-rgb), 0.025);
+  --markdown-blockquote-border: rgba(var(--color-static-white-rgb), 0.16);
   --markdown-table-border: var(--flowchat-md-table-border);
   --markdown-table-surface: var(--flowchat-md-table-surface);
   --markdown-table-header-bg: var(--flowchat-md-table-th-bg);
@@ -198,7 +198,7 @@
   border: 1px solid var(--markdown-inline-code-border);
   border-radius: 5px;
   background: var(--markdown-inline-code-bg);
-  color: color-mix(in srgb, var(--color-text-primary) 88%, #a8b4c8 12%);
+  color: color-mix(in srgb, var(--color-text-primary) 88%, rgb(var(--markdown-inline-code-tint-rgb)) 12%);
   font-family: var(--markdown-font-mono);
   font-size: 0.88em;
   font-weight: 500;
@@ -212,9 +212,9 @@
 }
 
 .markdown-renderer .inline-code:hover {
-  background: rgba(255, 255, 255, 0.075);
-  border-color: rgba(255, 255, 255, 0.14);
-  color: color-mix(in srgb, var(--color-text-primary) 92%, #c5d0e2 8%);
+  background: rgba(var(--color-static-white-rgb), 0.075);
+  border-color: rgba(var(--color-static-white-rgb), 0.14);
+  color: color-mix(in srgb, var(--color-text-primary) 92%, rgb(var(--markdown-inline-code-hover-tint-rgb)) 8%);
 }
 
 .markdown-renderer pre {
@@ -598,26 +598,26 @@
 .light .markdown-renderer {
   --markdown-link-color: var(--flowchat-link-color);
   --markdown-link-hover-color: var(--flowchat-link-hover-color);
-  --markdown-code-bg-elevated: #f6f8fa;
-  --markdown-inline-code-bg: rgba(0, 0, 0, 0.05);
+  --markdown-code-bg-elevated: var(--markdown-code-bg-light);
+  --markdown-inline-code-bg: rgba(var(--color-static-black-rgb), 0.05);
   --markdown-inline-code-border: var(--color-overlay-black-12);
-  --markdown-pre-bg: #f6f8fa;
+  --markdown-pre-bg: var(--markdown-code-bg-light);
   --markdown-pre-border: var(--color-overlay-slate-12);
   --markdown-blockquote-bg: var(--flowchat-md-bq-bg);
   --markdown-blockquote-border: var(--flowchat-md-bq-border);
 
   .inline-code {
-    color: #24292f;
+    color: var(--markdown-inline-code-text-light);
   }
 
   .inline-code:hover {
     background: var(--color-overlay-black-08);
-    border-color: rgba(0, 0, 0, 0.18);
-    color: #1f2328;
+    border-color: rgba(var(--color-static-black-rgb), 0.18);
+    color: var(--markdown-inline-code-hover-text-light);
   }
 
   .code-block-toolbar {
-    background: #eef1f6;
+    background: var(--markdown-code-toolbar-bg-light);
     border-bottom-color: var(--color-overlay-slate-10);
   }
 
@@ -631,7 +631,7 @@
   }
 
   .copy-button.copy-success {
-    color: #1a7f37;
+    color: var(--markdown-copy-success-color-light);
   }
 
   blockquote,
@@ -643,7 +643,7 @@
 @media (prefers-color-scheme: dark) {
   .markdown-renderer {
     --markdown-code-bg-elevated: color-mix(in srgb, var(--color-bg-primary) 94%, var(--color-static-white) 6%);
-    --markdown-pre-border: rgba(255, 255, 255, 0.09);
+    --markdown-pre-border: rgba(var(--color-static-white-rgb), 0.09);
   }
 }
 

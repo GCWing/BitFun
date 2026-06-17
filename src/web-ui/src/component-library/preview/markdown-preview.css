@@ -4,7 +4,7 @@
   min-height: 100vh;
   height: 100vh;
   background: var(--color-bg-primary);
-  color: #e0e0e0;
+  color: var(--preview-text-primary);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -15,8 +15,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 20px 32px;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-  border-bottom: 1px solid #2a2a2a;
+  background: var(--markdown-preview-header-bg);
+  border-bottom: 1px solid var(--markdown-preview-header-border);
   box-shadow: 0 2px 8px var(--color-overlay-black-50);
 }
 
@@ -35,12 +35,12 @@
 
 .badge {
   padding: 4px 12px;
-  background: rgba(102, 126, 234, 0.2);
-  border: 1px solid rgba(102, 126, 234, 0.4);
+  background: var(--markdown-preview-badge-bg);
+  border: 1px solid var(--markdown-preview-badge-border);
   border-radius: 12px;
   font-size: 12px;
   font-weight: 500;
-  color: #8b9eff;
+  color: var(--markdown-preview-badge-text);
 }
 
 .header-right {
@@ -53,8 +53,8 @@
   align-items: center;
   gap: 32px;
   padding: 16px 32px;
-  background: #0a0a0a;
-  border-bottom: 1px solid #1a1a1a;
+  background: var(--preview-panel-bg);
+  border-bottom: 1px solid var(--preview-border);
 }
 
 .control-group {
@@ -65,7 +65,7 @@
 
 .control-group label {
   font-size: 14px;
-  color: #888888;
+  color: var(--color-text-muted);
   font-weight: 500;
 }
 
@@ -100,7 +100,7 @@
   background: var(--color-overlay-white-02);
   border: 1px solid var(--color-overlay-white-08);
   border-radius: 8px;
-  color: #e0e0e0;
+  color: var(--preview-text-primary);
   font-family: 'Courier New', Consolas, Monaco, monospace;
   font-size: 14px;
   line-height: 1.6;
@@ -112,17 +112,17 @@
 
 .markdown-editor:focus {
   border-color: var(--border-accent);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 3px rgba(var(--app-card-gradient-blue-rgb), 0.1);
 }
 
 .markdown-editor::placeholder {
-  color: #666666;
+  color: var(--preview-text-disabled);
 }
 
 .usage-guide {
   padding: 24px;
-  background: #0a0a0a;
-  border: 1px solid #1a1a1a;
+  background: var(--preview-panel-bg);
+  border: 1px solid var(--preview-border);
   border-radius: 12px;
   max-width: 900px;
   margin: 32px auto 0;

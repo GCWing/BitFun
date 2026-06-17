@@ -1063,6 +1063,9 @@ export const Markdown = React.memo<MarkdownProps>(({
       const codeTagStyle: React.CSSProperties = {
         fontFamily: 'var(--markdown-font-mono)',
       };
+      const gutterColor = isLight
+        ? 'rgb(var(--markdown-code-gutter-light-rgb))'
+        : 'rgb(var(--markdown-code-gutter-dark-rgb))';
 
       return (
         <div className={`code-block-wrapper${hasMultipleLines ? '' : ' code-block-wrapper--single-line'}`}>
@@ -1085,7 +1088,7 @@ export const Markdown = React.memo<MarkdownProps>(({
               language={normalizedLang}
               bodyStyle={codeBodyStyle}
               codeTagStyle={codeTagStyle}
-              gutterColor={isLight ? '#999999' : '#666666'}
+              gutterColor={gutterColor}
             />
           ) : (
             <AsyncPrismSyntaxHighlighter
@@ -1095,7 +1098,7 @@ export const Markdown = React.memo<MarkdownProps>(({
               customStyle={codeBodyStyle}
               codeTagProps={{ style: codeTagStyle }}
               lineNumberStyle={{
-                color: isLight ? '#999999' : '#666666',
+                color: gutterColor,
                 paddingRight: '1em',
                 textAlign: 'right',
                 userSelect: 'none',
@@ -1107,7 +1110,7 @@ export const Markdown = React.memo<MarkdownProps>(({
                 language: normalizedLang,
                 bodyStyle: codeBodyStyle,
                 codeTagStyle,
-                gutterColor: isLight ? '#999999' : '#666666',
+                gutterColor,
               }}
               traceContext={traceContext}
             >

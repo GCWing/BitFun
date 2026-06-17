@@ -348,7 +348,7 @@
   background:
     radial-gradient(circle at top right, color-mix(in srgb, var(--color-accent-500) 12%, transparent), transparent 42%),
     linear-gradient(180deg, color-mix(in srgb, var(--color-accent-500) 7%, var(--color-bg-secondary)), var(--color-bg-secondary));
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 10px 30px rgba(var(--color-static-black-rgb), 0.05);
 }
 
 .skills-suite__hero-copy {
@@ -515,7 +515,7 @@
   border: 1px solid var(--border-subtle);
   border-radius: $size-radius-lg;
   background: var(--color-bg-secondary);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 8px 24px rgba(var(--color-static-black-rgb), 0.04);
 }
 
 .skills-suite__group-head {

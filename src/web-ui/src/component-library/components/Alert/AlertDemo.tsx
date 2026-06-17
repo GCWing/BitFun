@@ -18,7 +18,7 @@ export const AlertDemo: React.FC = () => {
         <h2 style={{ color: 'var(--color-text-primary)', fontSize: '16px', fontWeight: '500', marginBottom: '4px' }}>
           {t('componentLibrary.alertDemo.title')}
         </h2>
-        <p style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '13px' }}>
+        <p style={{ color: 'rgba(var(--color-static-white-rgb), 0.5)', fontSize: '13px' }}>
           {t('componentLibrary.alertDemo.subtitle')}
         </p>
       </div>

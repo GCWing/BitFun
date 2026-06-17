@@ -187,6 +187,179 @@ function collectMatches(content, pattern) {
   return Array.from(content.matchAll(pattern));
 }
 
+function previousNonWhitespace(chars) {
+  for (let index = chars.length - 1; index >= 0; index -= 1) {
+    const char = chars[index];
+    if (!/\s/.test(char)) {
+      return char;
+    }
+  }
+  return null;
+}
+
+function isRegexLiteralStart(chars) {
+  const previous = previousNonWhitespace(chars);
+  return previous == null || '([{=,:;!?&|+-*~^<>'.includes(previous);
+}
+
+function stripCommentsForAudit(content, { stripLineComments = true } = {}) {
+  const result = [];
+  let state = 'code';
+  let regexCharClass = false;
+  let returnState = 'code';
+  let commentReturnState = 'code';
+  let templateExpressionDepth = 0;
+  const templateReturnStates = [];
+
+  for (let index = 0; index < content.length; index += 1) {
+    const char = content[index];
+    const next = content[index + 1];
+
+    if (state === 'line-comment') {
+      if (char === '\n' || char === '\r') {
+        state = commentReturnState;
+        result.push(char);
+      } else {
+        result.push(' ');
+      }
+      continue;
+    }
+
+    if (state === 'block-comment') {
+      if (char === '*' && next === '/') {
+        result.push(' ', ' ');
+        index += 1;
+        state = commentReturnState;
+      } else {
+        result.push(char === '\n' || char === '\r' ? char : ' ');
+      }
+      continue;
+    }
+
+    if (state === 'regex') {
+      result.push(char);
+      if (char === '\\') {
+        index += 1;
+        if (index < content.length) {
+          result.push(content[index]);
+        }
+        continue;
+      }
+      if (char === '[') {
+        regexCharClass = true;
+      } else if (char === ']') {
+        regexCharClass = false;
+      } else if (char === '/' && !regexCharClass) {
+        state = returnState;
+      }
+      continue;
+    }
+
+    if (state === 'single-quote' || state === 'double-quote') {
+      result.push(char);
+      if (char === '\\') {
+        index += 1;
+        if (index < content.length) {
+          result.push(content[index]);
+        }
+        continue;
+      }
+      if (
+        (state === 'single-quote' && char === "'")
+        || (state === 'double-quote' && char === '"')
+      ) {
+        state = returnState;
+      }
+      continue;
+    }
+
+    if (state === 'template') {
+      result.push(char);
+      if (char === '\\') {
+        index += 1;
+        if (index < content.length) {
+          result.push(content[index]);
+        }
+        continue;
+      }
+      if (char === '$' && next === '{') {
+        result.push(next);
+        index += 1;
+        templateExpressionDepth = 1;
+        state = 'template-expression';
+        continue;
+      }
+      if (char === '`') {
+        state = templateReturnStates.pop() ?? 'code';
+      }
+      continue;
+    }
+
+    if (state === 'template-expression') {
+      if (char === '{') {
+        templateExpressionDepth += 1;
+        result.push(char);
+        continue;
+      }
+      if (char === '}') {
+        templateExpressionDepth -= 1;
+        result.push(char);
+        if (templateExpressionDepth <= 0) {
+          templateExpressionDepth = 0;
+          state = 'template';
+        }
+        continue;
+      }
+    }
+
+    if (char === '/' && next === '*') {
+      result.push(' ', ' ');
+      index += 1;
+      commentReturnState = state;
+      state = 'block-comment';
+      continue;
+    }
+
+    if (stripLineComments && char === '/' && next === '/') {
+      result.push(' ', ' ');
+      index += 1;
+      commentReturnState = state;
+      state = 'line-comment';
+      continue;
+    }
+
+    if (char === '/' && isRegexLiteralStart(result)) {
+      regexCharClass = false;
+      returnState = state;
+      state = 'regex';
+      result.push(char);
+      continue;
+    }
+
+    if (char === "'" || char === '"' || char === '`') {
+      if (char === '`') {
+        templateReturnStates.push(state);
+        state = 'template';
+      } else {
+        returnState = state;
+        state = char === "'" ? 'single-quote' : 'double-quote';
+      }
+      result.push(char);
+      continue;
+    }
+
+    result.push(char);
+  }
+
+  return result.join('');
+}
+
+function createAuditContent(content, relativePath) {
+  return stripCommentsForAudit(content, {
+    stripLineComments: !relativePath.endsWith('.css'),
+  });
+}
+
 function parseColor(color) {
   const trimmed = color.trim().toLowerCase();
   const hex = /^#([0-9a-f]{3,8})$/.exec(trimmed);
@@ -278,7 +451,7 @@ function collectTokenAliasDefinitions(files, cwd) {
     if (!isTokenAliasSourceFile(relativePath)) {
       continue;
     }
-    const content = fs.readFileSync(file, 'utf8');
+    const content = createAuditContent(fs.readFileSync(file, 'utf8'), relativePath);
     for (const match of collectMatches(content, TOKEN_ALIAS_DEFINITION_PATTERN)) {
       const colorKey = canonicalColorKey(match[2]);
       if (!colorKey) {
@@ -506,8 +679,8 @@ function audit(options) {
   let fallbackOccurrences = 0;
 
   for (const file of files) {
-    const content = fs.readFileSync(file, 'utf8');
     const relativePath = normalizePath(path.relative(cwd, file));
+    const content = createAuditContent(fs.readFileSync(file, 'utf8'), relativePath);
     const tokenFile = isTokenFile(relativePath);
     const exceptionFile = isExceptionFile(relativePath);
     const colorDomain = getColorDomain(relativePath);

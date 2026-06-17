@@ -218,11 +218,11 @@
     }
 
     &.is-cowork {
-      color: color-mix(in srgb, #0f8f74 80%, var(--color-text-primary));
+      color: color-mix(in srgb, rgb(var(--workspace-batch-cowork-rgb)) 80%, var(--color-text-primary));
     }
 
     &.is-claw {
-      color: color-mix(in srgb, #d97706 80%, var(--color-text-primary));
+      color: color-mix(in srgb, rgb(var(--workspace-batch-claw-rgb)) 80%, var(--color-text-primary));
     }
   }
 
@@ -282,13 +282,13 @@
     }
 
     &.is-cowork {
-      background: color-mix(in srgb, #0f8f74 11%, transparent);
-      color: color-mix(in srgb, #0f8f74 82%, var(--color-text-primary));
+      background: color-mix(in srgb, rgb(var(--workspace-batch-cowork-rgb)) 11%, transparent);
+      color: color-mix(in srgb, rgb(var(--workspace-batch-cowork-rgb)) 82%, var(--color-text-primary));
     }
 
     &.is-claw {
-      background: color-mix(in srgb, #d97706 11%, transparent);
-      color: color-mix(in srgb, #d97706 82%, var(--color-text-primary));
+      background: color-mix(in srgb, rgb(var(--workspace-batch-claw-rgb)) 11%, transparent);
+      color: color-mix(in srgb, rgb(var(--workspace-batch-claw-rgb)) 82%, var(--color-text-primary));
     }
   }
 

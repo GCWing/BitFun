@@ -58,7 +58,7 @@ $toast-width: 320px;
       transform: rotate(8deg);
       background: var(--color-bg-tertiary);
       border: 1px solid var(--border-subtle);
-      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.09);
+      box-shadow: 0 6px 16px rgba(var(--color-static-black-rgb), 0.09);
     }
   }
 

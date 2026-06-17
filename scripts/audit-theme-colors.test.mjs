@@ -151,6 +151,55 @@ test('theme color audit reports specialized color domains separately from app UI
   assert.equal(report.colorDomainScopes.appUi.uniqueColors, 2);
 });
 
+test('theme color audit ignores comment-only color-like text', (t) => {
+  const { dir, sourceRoot } = createFixture({
+    'app/App.tsx': [
+      'export const real = "#123456";',
+      '// issue #1176 should not be counted as a color',
+      '// comment mentions `template` before issue #2026',
+      'const escaped = real.replace(/["\\\\]/g, "\\\\$&"); // issue #3456 after a regex',
+      'const interpolated = `${real /* issue #7890 inside a template expression */}`;',
+      'const url = "https://example.com/#keep-strings";',
+      '/*',
+      ' * retired value: #abcdef',
+      ' */',
+      '',
+    ].join('\n'),
+  });
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const reportPath = path.join(dir, 'theme-report.json');
+
+  const result = runAudit(['--root', sourceRoot, '--report-json', reportPath, '--no-baseline']);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+
+  const report = readJson(reportPath);
+  assert.equal(report.colorOccurrences, 1);
+  assert.equal(report.uniqueColors, 1);
+  assert.equal(report.topColors[0].key, '#123456');
+  assert.equal(report.colorDomainScopes.appUi.uniqueColors, 1);
+});
+
+test('theme color audit keeps template literal and expression color values', (t) => {
+  const { dir, sourceRoot } = createFixture({
+    'app/App.tsx': [
+      'export const literal = `#abcdef`;',
+      'export const expression = `${enabled ? "#654321" : "#111111"}`;',
+      '',
+    ].join('\n'),
+  });
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const reportPath = path.join(dir, 'theme-report.json');
+
+  const result = runAudit(['--root', sourceRoot, '--report-json', reportPath, '--no-baseline']);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+
+  const report = readJson(reportPath);
+  assert.equal(report.colorOccurrences, 3);
+  assert.equal(report.uniqueColors, 3);
+  assert.deepEqual(new Set(report.topColors.map(entry => entry.key)), new Set(['#abcdef', '#654321', '#111111']));
+  assert.equal(report.colorDomainScopes.appUi.uniqueColors, 3);
+});
+
 test('theme color audit counts full CSS var governance debt before row truncation', (t) => {
   const missingRules = Array.from(
     { length: 101 },

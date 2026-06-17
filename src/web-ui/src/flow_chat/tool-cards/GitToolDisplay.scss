@@ -309,7 +309,7 @@
       color: var(--tool-card-text-secondary);
 
       .error-separator {
-        color: rgba(255, 255, 255, 0.3);
+        color: rgba(var(--color-static-white-rgb), 0.3);
       }
 
       .error-operation,

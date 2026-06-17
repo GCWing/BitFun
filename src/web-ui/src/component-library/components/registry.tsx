@@ -281,25 +281,25 @@ export const componentRegistry: ComponentCategory[] = [
           <div style={{ display: 'flex', flexDirection: 'column', gap: '32px', padding: '20px' }}>
             {}
             <div>
-              <div style={{ fontSize: '12px', color: '#666666', marginBottom: '16px', fontWeight: 500 }}>尺寸</div>
+              <div style={{ fontSize: '12px', color: 'var(--preview-text-disabled)', marginBottom: '16px', fontWeight: 500 }}>尺寸</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '48px', alignItems: 'flex-end' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
                   <CubeLoading size="small" />
-                  <span style={{ fontSize: '12px', color: '#999999' }}>Small</span>
+                  <span style={{ fontSize: '12px', color: 'var(--preview-text-subtle)' }}>Small</span>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
                   <CubeLoading size="medium" />
-                  <span style={{ fontSize: '12px', color: '#999999' }}>Medium</span>
+                  <span style={{ fontSize: '12px', color: 'var(--preview-text-subtle)' }}>Medium</span>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
                   <CubeLoading size="large" />
-                  <span style={{ fontSize: '12px', color: '#999999' }}>Large</span>
+                  <span style={{ fontSize: '12px', color: 'var(--preview-text-subtle)' }}>Large</span>
                 </div>
               </div>
             </div>
             {}
             <div>
-              <div style={{ fontSize: '12px', color: '#666666', marginBottom: '16px', fontWeight: 500 }}>With text</div>
+              <div style={{ fontSize: '12px', color: 'var(--preview-text-disabled)', marginBottom: '16px', fontWeight: 500 }}>With text</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '48px', alignItems: 'flex-start' }}>
                 <CubeLoading text="加载中.." />
                 <CubeLoading size="large" text="加载中.." />
@@ -360,7 +360,7 @@ export const componentRegistry: ComponentCategory[] = [
                 lineHeight: '1.8',
                 minHeight: '120px',
                 padding: '20px',
-                background: 'rgba(255, 255, 255, 0.02)',
+                background: 'var(--color-overlay-white-02)',
                 borderRadius: '8px',
                 border: '1px solid var(--color-overlay-white-10)',
                 maxWidth: '700px'

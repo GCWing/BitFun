@@ -200,7 +200,7 @@
       border-radius: 2px;
       
       &:hover {
-        background: rgba(255, 255, 255, 0.25);
+        background: rgba(var(--color-static-white-rgb), 0.25);
       }
     }
   }

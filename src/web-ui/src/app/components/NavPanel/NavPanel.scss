@@ -813,7 +813,7 @@ $_section-header-height: 24px;
 
     &:hover {
       transform: translateY(-2px) scale(1.06);
-      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.24);
+      box-shadow: 0 10px 20px rgba(var(--color-static-black-rgb), 0.24);
       filter: saturate(1);
       opacity: 1;
     }
@@ -821,7 +821,7 @@ $_section-header-height: 24px;
     &.is-active {
       filter: saturate(1);
       opacity: 1;
-      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22),
+      box-shadow: 0 8px 18px rgba(var(--color-static-black-rgb), 0.22),
                   0 0 0 3px color-mix(in srgb, var(--color-primary) 28%, transparent);
     }
 
@@ -831,7 +831,7 @@ $_section-header-height: 24px;
     }
 
     &.is-active.is-customizing {
-      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22),
+      box-shadow: 0 8px 18px rgba(var(--color-static-black-rgb), 0.22),
                   0 0 0 3px color-mix(in srgb, var(--color-primary) 28%, transparent),
                   0 0 0 5px color-mix(in srgb, var(--color-accent-500) 28%, transparent);
     }
@@ -844,7 +844,7 @@ $_section-header-height: 24px;
       height: 6px;
       border-radius: 999px;
       background: var(--color-accent-500);
-      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.28), 0 0 7px color-mix(in srgb, var(--color-accent-500) 72%, transparent);
+      box-shadow: 0 0 0 1px rgba(var(--color-static-black-rgb), 0.28), 0 0 7px color-mix(in srgb, var(--color-accent-500) 72%, transparent);
     }
 
     &--more {
@@ -1610,7 +1610,7 @@ $_section-header-height: 24px;
   background: var(--color-bg-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: $size-radius-base;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28), 0 2px 8px rgba(0, 0, 0, 0.16);
+  box-shadow: 0 8px 24px rgba(var(--color-static-black-rgb), 0.28), 0 2px 8px rgba(var(--color-static-black-rgb), 0.16);
   z-index: 9999;
   transform-origin: bottom center;
   animation: bitfun-multimodal-menu-in 0.14s $easing-decelerate forwards;

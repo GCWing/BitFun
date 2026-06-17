@@ -1,6 +1,6 @@
 import React from 'react';
 import { Package, Puzzle } from 'lucide-react';
-import { getCardGradient, getCardColorRgb } from '@/shared/utils/cardGradients';
+import { getCardGradient } from '@/shared/utils/cardGradients';
 import './SkillCard.scss';
 
 type SkillCardActionTone = 'primary' | 'danger' | 'success' | 'muted';
@@ -47,7 +47,6 @@ const SkillCard: React.FC<SkillCardProps> = ({
       style={{
         '--surface-stagger-index': index,
         '--skill-card-gradient': getCardGradient(accentSeed ?? name),
-        '--skill-card-color-rgb': getCardColorRgb(accentSeed ?? name),
       } as React.CSSProperties}
       onClick={openDetails}
       tabIndex={0}
