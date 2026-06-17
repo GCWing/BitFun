@@ -13,7 +13,7 @@ use bitfun_agent_runtime::scheduler::{
 use bitfun_runtime_ports::{
     AgentSessionReplyRoute, DialogQueuePriority, DialogSessionStateFact, DialogSteerOutcome,
     DialogSubmissionPolicy, DialogTriggerSource, RoundInjection, RoundInjectionKind,
-    RoundInjectionTarget, ThreadGoal, ThreadGoalStatus,
+    RoundInjectionTarget, RoundInjectionToolPreemption, ThreadGoal, ThreadGoalStatus,
 };
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -91,6 +91,10 @@ fn background_delivery_injection_builds_thread_goal_current_turn_message() {
     assert_eq!(injection.content, "prompt");
     assert_eq!(injection.display_content, "display");
     assert_eq!(injection.created_at, created_at);
+    assert_eq!(
+        injection.execution_policy.tool_preemption,
+        RoundInjectionToolPreemption::None
+    );
 }
 
 #[test]
@@ -111,6 +115,10 @@ fn background_delivery_injection_builds_background_result_with_display_fallback(
     assert_eq!(injection.content, "result content");
     assert_eq!(injection.display_content, "result content");
     assert_eq!(injection.created_at, created_at);
+    assert_eq!(
+        injection.execution_policy.tool_preemption,
+        RoundInjectionToolPreemption::None
+    );
 }
 
 fn thread_goal() -> ThreadGoal {
@@ -465,6 +473,10 @@ fn dialog_steering_action_buffers_exact_running_turn_with_display_fallback() {
     assert_eq!(injection.display_content, "steer content");
     assert_eq!(injection.created_at, created_at);
     assert_eq!(
+        injection.execution_policy.tool_preemption,
+        RoundInjectionToolPreemption::InterruptAfterCurrentAtomicUnit
+    );
+    assert_eq!(
         outcome,
         DialogSteerOutcome::Buffered {
             session_id: "session-1".to_string(),
@@ -544,6 +556,11 @@ fn round_injection_buffer_drains_only_messages_for_the_active_turn() {
     let interrupt =
         DialogRoundInjectionInterrupt::new("s1".to_string(), "turn-a".to_string(), buffer.clone());
     assert!(interrupt.should_interrupt());
+    assert!(!interrupt.should_cancel_running_tools());
+    assert_eq!(
+        interrupt.pending_tool_preemption(),
+        RoundInjectionToolPreemption::InterruptAfterCurrentAtomicUnit
+    );
 
     let drained = buffer.drain_for_turn("s1", "turn-a");
     assert_eq!(drained.len(), 2);
@@ -561,6 +578,7 @@ fn exact_turn_msg(turn_id: &str, content: &str) -> RoundInjection {
     RoundInjection {
         id: format!("id-{turn_id}-{content}"),
         kind: RoundInjectionKind::UserSteering,
+        execution_policy: RoundInjectionKind::UserSteering.default_execution_policy(),
         target: RoundInjectionTarget::ExactTurn(turn_id.to_string()),
         content: content.to_string(),
         display_content: content.to_string(),
@@ -572,6 +590,7 @@ fn current_turn_msg(content: &str) -> RoundInjection {
     RoundInjection {
         id: format!("id-current-{content}"),
         kind: RoundInjectionKind::BackgroundResult,
+        execution_policy: RoundInjectionKind::BackgroundResult.default_execution_policy(),
         target: RoundInjectionTarget::CurrentRunningTurn,
         content: content.to_string(),
         display_content: content.to_string(),

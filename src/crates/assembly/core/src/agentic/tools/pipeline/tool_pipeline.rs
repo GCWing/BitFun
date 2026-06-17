@@ -28,6 +28,7 @@ use bitfun_agent_tools::{
     ToolExecutionAdmissionRejection, ToolExecutionAdmissionRequest, GET_TOOL_SPEC_TOOL_NAME,
     USER_STEERING_INTERRUPTED_MESSAGE,
 };
+use bitfun_runtime_ports::RoundInjectionToolPreemption;
 use futures::future::join_all;
 use log::{debug, error, info, warn};
 use std::sync::Arc;
@@ -209,6 +210,9 @@ fn build_user_steering_interrupted_result(
     }
 }
 
+const ROUND_INJECTION_RUNNING_TOOL_CANCELLED_MESSAGE: &str =
+    "Tool execution cancelled because a pending round injection requested running-tool preemption for this turn.";
+
 fn should_retry_tool_error(error: &BitFunError) -> bool {
     matches!(
         error,
@@ -245,6 +249,7 @@ fn map_tool_execution_admission_rejection(error: ToolExecutionAdmissionRejection
 const SUBAGENT_LAUNCH_TOOL_NAME: &str = "Task";
 
 /// Tool pipeline
+#[derive(Clone)]
 pub struct ToolPipeline {
     tool_registry: Arc<TokioRwLock<ToolRegistry>>,
     state_manager: Arc<ToolStateManager>,
@@ -272,12 +277,20 @@ impl ToolPipeline {
         self.computer_use_host.clone()
     }
 
-    fn should_interrupt_for_steering(&self, context: &ToolExecutionContext) -> bool {
+    fn pending_round_injection_tool_preemption(
+        &self,
+        context: &ToolExecutionContext,
+    ) -> RoundInjectionToolPreemption {
         context
             .steering_interrupt
             .as_ref()
-            .map(|interrupt| interrupt.should_interrupt())
-            .unwrap_or(false)
+            .map(|interrupt| interrupt.pending_tool_preemption())
+            .unwrap_or(RoundInjectionToolPreemption::None)
+    }
+
+    fn should_interrupt_for_round_injection(&self, context: &ToolExecutionContext) -> bool {
+        self.pending_round_injection_tool_preemption(context)
+            .should_interrupt_after_current_atomic_unit()
     }
 
     async fn build_steering_interrupted_results(
@@ -303,6 +316,65 @@ impl ToolPipeline {
             results.push(build_user_steering_interrupted_result(&task_id, task));
         }
         results
+    }
+
+    fn append_execution_result(
+        &self,
+        task_id: &str,
+        result: BitFunResult<ToolExecutionResult>,
+        all_results: &mut Vec<ToolExecutionResult>,
+    ) {
+        match result {
+            Ok(execution_result) => all_results.push(execution_result),
+            Err(error) => {
+                error!("Tool execution failed: error={}", error);
+                let error_result = build_error_execution_result(
+                    task_id,
+                    self.state_manager.get_task(task_id),
+                    &error,
+                );
+                all_results.push(error_result);
+            }
+        }
+    }
+
+    async fn cancel_tools_for_round_injection(
+        &self,
+        task_ids: impl IntoIterator<Item = String>,
+    ) -> BitFunResult<()> {
+        for task_id in task_ids {
+            self.cancel_tool(
+                &task_id,
+                ROUND_INJECTION_RUNNING_TOOL_CANCELLED_MESSAGE.to_string(),
+            )
+            .await?;
+        }
+        Ok(())
+    }
+
+    fn spawn_round_injection_cancellation_watch(
+        &self,
+        task_ids: Vec<String>,
+        interrupt: Option<crate::agentic::round_preempt::DialogRoundInjectionInterrupt>,
+    ) -> Option<tokio::task::JoinHandle<()>> {
+        if interrupt.is_none() {
+            return None;
+        }
+
+        let pipeline = self.clone();
+        Some(tokio::spawn(async move {
+            let Some(interrupt) = interrupt else {
+                return;
+            };
+
+            loop {
+                if interrupt.should_cancel_running_tools() {
+                    let _ = pipeline.cancel_tools_for_round_injection(task_ids).await;
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(25)).await;
+            }
+        }))
     }
 
     /// Execute multiple tool calls using partitioned mixed scheduling.
@@ -399,7 +471,7 @@ impl ToolPipeline {
                 .map(|task| task.context);
             if batch_context
                 .as_ref()
-                .is_some_and(|context| self.should_interrupt_for_steering(context))
+                .is_some_and(|context| self.should_interrupt_for_round_injection(context))
             {
                 let remaining_task_ids = batch
                     .task_ids
@@ -434,29 +506,29 @@ impl ToolPipeline {
         &self,
         task_ids: Vec<String>,
     ) -> BitFunResult<Vec<ToolExecutionResult>> {
+        let batch_interrupt = task_ids
+            .first()
+            .and_then(|task_id| self.state_manager.get_task(task_id))
+            .and_then(|task| task.context.steering_interrupt.clone());
+        let watch_handle =
+            self.spawn_round_injection_cancellation_watch(task_ids.clone(), batch_interrupt);
+
         let futures: Vec<_> = task_ids
             .iter()
             .map(|id| self.execute_single_tool(id.clone()))
             .collect();
 
         let results = join_all(futures).await;
+        if let Some(handle) = watch_handle {
+            handle.abort();
+            let _ = handle.await;
+        }
 
         // Collect results, including failed results
         let mut all_results = Vec::new();
         for (idx, result) in results.into_iter().enumerate() {
-            match result {
-                Ok(r) => all_results.push(r),
-                Err(e) => {
-                    error!("Tool execution failed: error={}", e);
-                    let task_id = &task_ids[idx];
-                    let error_result = build_error_execution_result(
-                        task_id,
-                        self.state_manager.get_task(task_id),
-                        &e,
-                    );
-                    all_results.push(error_result);
-                }
-            }
+            let task_id = &task_ids[idx];
+            self.append_execution_result(task_id, result, &mut all_results);
         }
 
         Ok(all_results)
@@ -474,7 +546,7 @@ impl ToolPipeline {
             let task = self.state_manager.get_task(&task_id);
             if task
                 .as_ref()
-                .is_some_and(|task| self.should_interrupt_for_steering(&task.context))
+                .is_some_and(|task| self.should_interrupt_for_round_injection(&task.context))
             {
                 let remaining_task_ids = std::iter::once(task_id).chain(task_iter);
                 results.extend(
@@ -484,18 +556,15 @@ impl ToolPipeline {
                 break;
             }
 
-            match self.execute_single_tool(task_id.clone()).await {
-                Ok(result) => results.push(result),
-                Err(e) => {
-                    error!("Tool execution failed: error={}", e);
-                    let error_result = build_error_execution_result(
-                        &task_id,
-                        self.state_manager.get_task(&task_id),
-                        &e,
-                    );
-                    results.push(error_result);
-                }
+            let interrupt = task.and_then(|task| task.context.steering_interrupt.clone());
+            let watch_handle =
+                self.spawn_round_injection_cancellation_watch(vec![task_id.clone()], interrupt);
+            let result = self.execute_single_tool(task_id.clone()).await;
+            if let Some(handle) = watch_handle {
+                handle.abort();
+                let _ = handle.await;
             }
+            self.append_execution_result(&task_id, result, &mut results);
         }
 
         Ok(results)
@@ -1265,11 +1334,82 @@ mod tests {
     use super::*;
     use crate::agentic::core::ToolExecutionState;
     use crate::agentic::events::{EventQueue, EventQueueConfig};
-    use crate::agentic::tools::framework::Tool;
+    use crate::agentic::round_preempt::{
+        DialogRoundInjectionInterrupt, SessionRoundInjectionBuffer,
+    };
+    use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
     use crate::agentic::tools::implementations::task_tool::TaskTool;
     use crate::agentic::tools::ToolRuntimeRestrictions;
+    use async_trait::async_trait;
+    use bitfun_runtime_ports::{
+        RoundInjection, RoundInjectionExecutionPolicy, RoundInjectionKind, RoundInjectionTarget,
+        RoundInjectionToolPreemption,
+    };
     use serde_json::json;
     use std::collections::HashMap;
+    use std::sync::Arc;
+    use std::time::SystemTime;
+    use tokio::time::{sleep, Duration};
+
+    struct StaticTestTool {
+        name: String,
+        response: serde_json::Value,
+        delay_ms: u64,
+    }
+
+    #[async_trait]
+    impl Tool for StaticTestTool {
+        fn name(&self) -> &str {
+            &self.name
+        }
+
+        async fn description(&self) -> BitFunResult<String> {
+            Ok("static test tool".to_string())
+        }
+
+        fn short_description(&self) -> String {
+            "static test tool".to_string()
+        }
+
+        fn is_readonly(&self) -> bool {
+            true
+        }
+
+        fn input_schema(&self) -> serde_json::Value {
+            json!({ "type": "object" })
+        }
+
+        async fn validate_input(
+            &self,
+            _input: &serde_json::Value,
+            _context: Option<&ToolUseContext>,
+        ) -> ValidationResult {
+            ValidationResult {
+                result: true,
+                message: None,
+                error_code: None,
+                meta: None,
+            }
+        }
+
+        async fn call_impl(
+            &self,
+            _input: &serde_json::Value,
+            _context: &ToolUseContext,
+        ) -> BitFunResult<Vec<ToolResult>> {
+            if self.delay_ms > 0 {
+                sleep(Duration::from_millis(self.delay_ms)).await;
+            }
+            Ok(vec![ToolResult::Result {
+                data: self.response.clone(),
+                result_for_assistant: Some(render_tool_result_for_assistant(
+                    &self.name,
+                    &self.response,
+                )),
+                image_attachments: None,
+            }])
+        }
+    }
 
     fn test_tool_pipeline() -> ToolPipeline {
         let registry = Arc::new(TokioRwLock::new(ToolRegistry::new()));
@@ -1316,6 +1456,38 @@ mod tests {
             test_tool_execution_context(),
             ToolExecutionOptions::default(),
         )
+    }
+
+    async fn register_static_test_tool(
+        pipeline: &ToolPipeline,
+        name: &str,
+        response: serde_json::Value,
+        delay_ms: u64,
+    ) {
+        pipeline
+            .tool_registry
+            .write()
+            .await
+            .register_tool(Arc::new(StaticTestTool {
+                name: name.to_string(),
+                response,
+                delay_ms,
+            }));
+    }
+
+    fn test_round_injection(
+        kind: RoundInjectionKind,
+        tool_preemption: RoundInjectionToolPreemption,
+    ) -> RoundInjection {
+        RoundInjection {
+            id: format!("injection-{:?}-{:?}", kind, tool_preemption),
+            kind,
+            execution_policy: RoundInjectionExecutionPolicy::new(tool_preemption),
+            target: RoundInjectionTarget::CurrentRunningTurn,
+            content: "test injection".to_string(),
+            display_content: "test injection".to_string(),
+            created_at: SystemTime::now(),
+        }
     }
 
     fn assert_failed_task_contains(pipeline: &ToolPipeline, tool_id: &str, expected: &str) {
@@ -1457,6 +1629,124 @@ mod tests {
             "tool_1",
             "Call GetToolSpec first with {\"tool_name\":\"WebFetch\"}",
         );
+    }
+
+    #[tokio::test]
+    async fn background_result_pending_does_not_skip_tool_execution() {
+        let pipeline = test_tool_pipeline();
+        register_static_test_tool(&pipeline, "Read", json!({ "ok": true }), 0).await;
+
+        let buffer = Arc::new(SessionRoundInjectionBuffer::default());
+        buffer.push(
+            "session_1",
+            test_round_injection(
+                RoundInjectionKind::BackgroundResult,
+                RoundInjectionKind::BackgroundResult
+                    .default_execution_policy()
+                    .tool_preemption,
+            ),
+        );
+
+        let mut context = test_tool_execution_context();
+        context.steering_interrupt = Some(DialogRoundInjectionInterrupt::new(
+            "session_1".to_string(),
+            "turn_1".to_string(),
+            buffer,
+        ));
+
+        let results = pipeline
+            .execute_tools(
+                vec![test_tool_call("tool_1", "Read")],
+                context,
+                ToolExecutionOptions::default(),
+            )
+            .await
+            .expect("background result should not skip tool execution");
+
+        assert_eq!(results.len(), 1);
+        assert!(!results[0].result.is_error);
+        assert_eq!(results[0].result.result["ok"], json!(true));
+    }
+
+    #[tokio::test]
+    async fn user_steering_pending_still_skips_remaining_tool_plan() {
+        let pipeline = test_tool_pipeline();
+        let buffer = Arc::new(SessionRoundInjectionBuffer::default());
+        buffer.push(
+            "session_1",
+            test_round_injection(
+                RoundInjectionKind::UserSteering,
+                RoundInjectionKind::UserSteering
+                    .default_execution_policy()
+                    .tool_preemption,
+            ),
+        );
+
+        let mut context = test_tool_execution_context();
+        context.steering_interrupt = Some(DialogRoundInjectionInterrupt::new(
+            "session_1".to_string(),
+            "turn_1".to_string(),
+            buffer,
+        ));
+
+        let results = pipeline
+            .execute_tools(
+                vec![
+                    test_tool_call("tool_1", "Read"),
+                    test_tool_call("tool_2", "Write"),
+                ],
+                context,
+                ToolExecutionOptions::default(),
+            )
+            .await
+            .expect("user steering skip should be surfaced as tool results");
+
+        assert_eq!(results.len(), 2);
+        assert_eq!(
+            results[0].result.result["category"],
+            json!("user_steering_interrupted")
+        );
+        assert_eq!(
+            results[1].result.result["category"],
+            json!("user_steering_interrupted")
+        );
+    }
+
+    #[tokio::test]
+    async fn custom_round_injection_can_cancel_running_tool_cooperatively() {
+        let pipeline = test_tool_pipeline();
+        register_static_test_tool(&pipeline, "Read", json!({ "ok": true }), 30_000).await;
+
+        let buffer = Arc::new(SessionRoundInjectionBuffer::default());
+        let buffer_for_injection = buffer.clone();
+        tokio::spawn(async move {
+            sleep(Duration::from_millis(50)).await;
+            buffer_for_injection.push(
+                "session_1",
+                test_round_injection(
+                    RoundInjectionKind::UserSteering,
+                    RoundInjectionToolPreemption::CancelRunningCooperatively,
+                ),
+            );
+        });
+
+        let mut context = test_tool_execution_context();
+        context.steering_interrupt = Some(DialogRoundInjectionInterrupt::new(
+            "session_1".to_string(),
+            "turn_1".to_string(),
+            buffer,
+        ));
+        let mut options = ToolExecutionOptions::default();
+        options.allow_parallel = false;
+
+        let results = pipeline
+            .execute_tools(vec![test_tool_call("tool_1", "Read")], context, options)
+            .await
+            .expect("cooperative cancel should still return a tool result");
+
+        assert_eq!(results.len(), 1);
+        assert!(results[0].result.is_error);
+        assert_eq!(results[0].result.result["category"], json!("cancelled"));
     }
 
     #[test]

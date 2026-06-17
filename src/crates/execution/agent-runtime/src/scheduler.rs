@@ -6,7 +6,8 @@ use bitfun_runtime_ports::{
     should_skip_agent_session_reply, should_suppress_agent_session_cancelled_reply,
     AgentSessionReplyRoute, DialogQueuePriority, DialogRoundInjectionSource,
     DialogSessionStateFact, DialogSteerOutcome, DialogSubmissionPolicy, DialogTriggerSource,
-    RoundInjection, RoundInjectionKind, RoundInjectionTarget, ThreadGoal,
+    RoundInjection, RoundInjectionKind, RoundInjectionTarget, RoundInjectionToolPreemption,
+    ThreadGoal,
 };
 use std::collections::VecDeque;
 use std::fmt;
@@ -434,6 +435,14 @@ impl DialogRoundInjectionSource for NoopDialogRoundInjectionSource {
         false
     }
 
+    fn pending_tool_preemption(
+        &self,
+        _session_id: &str,
+        _turn_id: &str,
+    ) -> RoundInjectionToolPreemption {
+        RoundInjectionToolPreemption::None
+    }
+
     fn take_pending(&self, _session_id: &str, _turn_id: &str) -> Vec<RoundInjection> {
         Vec::new()
     }
@@ -468,8 +477,22 @@ impl DialogRoundInjectionInterrupt {
         }
     }
 
+    pub fn pending_tool_preemption(&self) -> RoundInjectionToolPreemption {
+        self.source
+            .pending_tool_preemption(&self.session_id, &self.turn_id)
+    }
+
+    pub fn should_interrupt_after_current_atomic_unit(&self) -> bool {
+        self.pending_tool_preemption()
+            .should_interrupt_after_current_atomic_unit()
+    }
+
+    pub fn should_cancel_running_tools(&self) -> bool {
+        self.pending_tool_preemption().should_cancel_running_tools()
+    }
+
     pub fn should_interrupt(&self) -> bool {
-        self.source.has_pending(&self.session_id, &self.turn_id)
+        self.should_interrupt_after_current_atomic_unit()
     }
 }
 
@@ -521,6 +544,29 @@ impl SessionRoundInjectionBuffer {
             .unwrap_or(false)
     }
 
+    pub fn pending_tool_preemption_for_turn(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+    ) -> RoundInjectionToolPreemption {
+        self.inner
+            .get(session_id)
+            .map(|entry| {
+                entry
+                    .iter()
+                    .filter(|msg| match &msg.target {
+                        RoundInjectionTarget::ExactTurn(target_turn_id) => {
+                            target_turn_id == turn_id
+                        }
+                        RoundInjectionTarget::CurrentRunningTurn => true,
+                    })
+                    .map(|msg| msg.execution_policy.tool_preemption)
+                    .max()
+                    .unwrap_or(RoundInjectionToolPreemption::None)
+            })
+            .unwrap_or(RoundInjectionToolPreemption::None)
+    }
+
     /// Drop all messages for a session (e.g. session deleted or unrecoverable error).
     pub fn clear(&self, session_id: &str) {
         self.inner.remove(session_id);
@@ -534,6 +580,14 @@ impl SessionRoundInjectionBuffer {
 impl DialogRoundInjectionSource for SessionRoundInjectionBuffer {
     fn has_pending(&self, session_id: &str, turn_id: &str) -> bool {
         self.has_pending_for_turn(session_id, turn_id)
+    }
+
+    fn pending_tool_preemption(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+    ) -> RoundInjectionToolPreemption {
+        self.pending_tool_preemption_for_turn(session_id, turn_id)
     }
 
     fn take_pending(&self, session_id: &str, turn_id: &str) -> Vec<RoundInjection> {
@@ -566,14 +620,16 @@ pub fn resolve_background_delivery_injection(
     created_at: SystemTime,
 ) -> RoundInjection {
     let display_content = display_content.unwrap_or_else(|| content.clone());
+    let kind = match kind {
+        BackgroundInjectionKind::ThreadGoalObjectiveUpdated => {
+            RoundInjectionKind::ThreadGoalObjectiveUpdated
+        }
+        BackgroundInjectionKind::BackgroundResult => RoundInjectionKind::BackgroundResult,
+    };
     RoundInjection {
         id: injection_id,
-        kind: match kind {
-            BackgroundInjectionKind::ThreadGoalObjectiveUpdated => {
-                RoundInjectionKind::ThreadGoalObjectiveUpdated
-            }
-            BackgroundInjectionKind::BackgroundResult => RoundInjectionKind::BackgroundResult,
-        },
+        kind,
+        execution_policy: kind.default_execution_policy(),
         target: RoundInjectionTarget::CurrentRunningTurn,
         content,
         display_content,
@@ -804,6 +860,7 @@ pub fn resolve_dialog_steering_action(
         injection: RoundInjection {
             id: steering_id.clone(),
             kind: RoundInjectionKind::UserSteering,
+            execution_policy: RoundInjectionKind::UserSteering.default_execution_policy(),
             target: RoundInjectionTarget::ExactTurn(turn_id.to_string()),
             content,
             display_content: display,
