@@ -79,7 +79,9 @@
     "e2e:test:smoke": "cross-env BITFUN_E2E_APP_MODE=debug pnpm --dir tests/e2e run test:smoke",
     "e2e:test:chat": "cross-env BITFUN_E2E_APP_MODE=debug pnpm --dir tests/e2e run test:chat",
     "e2e:test:perf:debug": "cross-env BITFUN_E2E_APP_MODE=debug E2E_LOG_LEVEL=warn pnpm --dir tests/e2e run test:perf",
-    "e2e:test:perf:release-fast": "cross-env BITFUN_E2E_APP_MODE=release-fast E2E_LOG_LEVEL=warn pnpm --dir tests/e2e run test:perf"
+    "e2e:test:perf:release-fast": "cross-env BITFUN_E2E_APP_MODE=release-fast E2E_LOG_LEVEL=warn pnpm --dir tests/e2e run test:perf",
+    "e2e:test:perf:startup-stability:release-fast": "cross-env BITFUN_E2E_APP_MODE=release-fast E2E_LOG_LEVEL=warn node tests/e2e/scripts/run-startup-stability.mjs",
+    "e2e:test:perf:long-session-interactions:release-fast": "cross-env BITFUN_E2E_APP_MODE=release-fast E2E_LOG_LEVEL=warn node tests/e2e/scripts/run-long-session-interaction-matrix.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.10.0",

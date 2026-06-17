@@ -13,7 +13,7 @@
 //! The context menu is rebuilt every time the user left-clicks (for freshness),
 //! periodically, and after locale changes.
 
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
 
 use tauri::menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder};
@@ -28,6 +28,8 @@ use crate::api::app_state::AppState;
 use crate::startup_trace::DesktopStartupTrace;
 
 static TRAY_ICON: OnceLock<tauri::tray::TrayIcon> = OnceLock::new();
+static TRAY_SETUP_LOCK: Mutex<()> = Mutex::new(());
+const TRAY_TRACE_CATEGORY: &str = "native_background";
 
 struct TrayStrings {
     show_app: &'static str,
@@ -167,16 +169,27 @@ async fn tray_toggle_desktop_pet(app: &AppHandle) -> Result<(), String> {
 
 /// Build and attach the system tray icon to the Tauri application.
 pub fn setup_tray(
-    app: &tauri::App,
+    app: &tauri::AppHandle,
     startup_trace: &DesktopStartupTrace,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    if TRAY_ICON.get().is_some() {
+        return Ok(());
+    }
+
+    let _guard = TRAY_SETUP_LOCK
+        .lock()
+        .map_err(|_| "Tray setup lock poisoned")?;
+    if TRAY_ICON.get().is_some() {
+        return Ok(());
+    }
+
     let step_started = Instant::now();
     let pet_item = CheckMenuItemBuilder::with_id("toggle_desktop_pet", STRINGS_EN_US.desktop_pet)
         .checked(false)
         .build(app)?;
     let show_item = MenuItemBuilder::with_id("show_window", STRINGS_EN_US.show_app).build(app)?;
     let quit_item = MenuItemBuilder::with_id("quit", STRINGS_EN_US.quit_app).build(app)?;
-    startup_trace.record_elapsed_step("native_setup", "setup_tray.menu_items", step_started);
+    startup_trace.record_elapsed_step(TRAY_TRACE_CATEGORY, "setup_tray.menu_items", step_started);
 
     let step_started = Instant::now();
     let initial_menu = MenuBuilder::new(app)
@@ -186,14 +199,14 @@ pub fn setup_tray(
         .separator()
         .item(&quit_item)
         .build()?;
-    startup_trace.record_elapsed_step("native_setup", "setup_tray.menu", step_started);
+    startup_trace.record_elapsed_step(TRAY_TRACE_CATEGORY, "setup_tray.menu", step_started);
 
     let step_started = Instant::now();
     let icon = app
         .default_window_icon()
         .ok_or("No default window icon")?
         .clone();
-    startup_trace.record_elapsed_step("native_setup", "setup_tray.icon", step_started);
+    startup_trace.record_elapsed_step(TRAY_TRACE_CATEGORY, "setup_tray.icon", step_started);
 
     let step_started = Instant::now();
     let tray = TrayIconBuilder::new()
@@ -234,14 +247,14 @@ pub fn setup_tray(
             _ => {}
         })
         .build(app)?;
-    startup_trace.record_elapsed_step("native_setup", "setup_tray.build", step_started);
+    startup_trace.record_elapsed_step(TRAY_TRACE_CATEGORY, "setup_tray.build", step_started);
 
     let step_started = Instant::now();
     let _ = TRAY_ICON.set(tray);
-    startup_trace.record_elapsed_step("native_setup", "setup_tray.store", step_started);
+    startup_trace.record_elapsed_step(TRAY_TRACE_CATEGORY, "setup_tray.store", step_started);
 
     let step_started = Instant::now();
-    let app_handle = app.handle().clone();
+    let app_handle = app.clone();
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
         rebuild_tray_menu(&app_handle).await;
@@ -252,7 +265,7 @@ pub fn setup_tray(
             rebuild_tray_menu(&app_handle).await;
         }
     });
-    startup_trace.record_elapsed_step("native_setup", "setup_tray.spawn_refresh", step_started);
+    startup_trace.record_elapsed_step(TRAY_TRACE_CATEGORY, "setup_tray.spawn_refresh", step_started);
 
     Ok(())
 }

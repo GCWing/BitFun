@@ -3,6 +3,7 @@
 use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::api::app_state::AppState;
+use crate::startup_trace::DesktopStartupTrace;
 use bitfun_core::service::system;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, Position, Size, State};
@@ -400,7 +401,13 @@ pub async fn quit_app(app: tauri::AppHandle) -> Result<(), String> {
 /// Hide the main window so it lives only in the system tray (used by the "ask"
 /// dialog when the user chooses to minimize instead of quitting).
 #[tauri::command]
-pub async fn minimize_to_tray(app: tauri::AppHandle) -> Result<(), String> {
+pub async fn minimize_to_tray(
+    app: tauri::AppHandle,
+    startup_trace: State<'_, DesktopStartupTrace>,
+) -> Result<(), String> {
+    if let Err(error) = crate::tray::setup_tray(&app, &startup_trace) {
+        log::warn!("Failed to initialize tray before minimizing: {}", error);
+    }
     if let Some(window) = app.get_webview_window("main") {
         window.hide().map_err(|e| e.to_string())?;
         log::info!("Main window minimized to tray via command");
@@ -408,10 +415,20 @@ pub async fn minimize_to_tray(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Initialize the desktop tray after the startup shell has become interactive.
+#[tauri::command]
+pub async fn initialize_tray_after_startup(
+    app: tauri::AppHandle,
+    startup_trace: State<'_, DesktopStartupTrace>,
+) -> Result<(), String> {
+    crate::tray::setup_tray(&app, &startup_trace).map_err(|e| e.to_string())
+}
+
 /// Minimal startup-window controls used by the static pre-React splash.
 #[tauri::command]
 pub async fn startup_window_control(
     state: State<'_, AppState>,
+    startup_trace: State<'_, DesktopStartupTrace>,
     app: tauri::AppHandle,
     request: StartupWindowControlRequest,
 ) -> Result<(), String> {
@@ -450,6 +467,9 @@ pub async fn startup_window_control(
                 crate::perform_process_exit_cleanup();
                 app.exit(0);
             } else {
+                if let Err(error) = crate::tray::setup_tray(&app, &startup_trace) {
+                    log::warn!("Failed to initialize tray before startup close: {}", error);
+                }
                 window.hide().map_err(|error| {
                     format!("Failed to hide main window during startup close: {}", error)
                 })?;

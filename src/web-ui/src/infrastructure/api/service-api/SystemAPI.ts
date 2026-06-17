@@ -229,6 +229,15 @@ export class SystemAPI {
     }
   }
 
+  /** Desktop only: initialize the system tray after the startup shell is visible. */
+  async initializeTrayAfterStartup(): Promise<void> {
+    try {
+      await api.invoke('initialize_tray_after_startup', { request: {} });
+    } catch (error) {
+      throw createTauriCommandError('initialize_tray_after_startup', error);
+    }
+  }
+
   /**
    * Desktop only: toggle OS-window fullscreen for the main window.
    *

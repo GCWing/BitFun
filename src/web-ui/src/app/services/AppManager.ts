@@ -69,6 +69,13 @@ export class AppManager implements IAppManager {
   }
 
   updateLayout(layout: Partial<LayoutState>): void {
+    const hasLayoutChange = Object.entries(layout).some(([key, value]) => (
+      this.state.layout[key as keyof LayoutState] !== value
+    ));
+    if (!hasLayoutChange) {
+      return;
+    }
+
     if (typeof layout.rightPanelWidth === 'number') {
       savePanelWidth(STORAGE_KEYS.RIGHT_PANEL_LAST_WIDTH, layout.rightPanelWidth);
     }

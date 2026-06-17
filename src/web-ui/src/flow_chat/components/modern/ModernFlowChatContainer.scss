@@ -38,6 +38,13 @@
     background: transparent;
   }
 
+  &__messages[data-history-state="ready"][data-is-partial="true"] {
+    .user-message-item,
+    .model-round-item {
+      animation: none;
+    }
+  }
+
   &__input {
     flex-shrink: 0;
     padding: var(--flowchat-card-expanded-pad-x);

@@ -69,6 +69,9 @@ const LazyAppLayout = lazy(async () => {
  */
 // Minimum time (ms) the splash is shown, so the animation is never a flash.
 const MIN_SPLASH_MS = 900;
+// Keep hidden tray setup out of the first post-handoff interaction window.
+// Close-to-tray initializes it on demand if the user closes earlier.
+const DEFERRED_TRAY_INIT_DELAY_MS = 1500;
 
 function App() {
   const { t } = useI18n('settings/basics');
@@ -356,6 +359,58 @@ function App() {
     return () => {
       disposed = true;
       editorWarmupHandle?.cancel();
+    };
+  }, [interactiveShellReady, startupOverlayVisible]);
+
+  useEffect(() => {
+    if (!isTauriRuntime() || !interactiveShellReady || startupOverlayVisible) {
+      return;
+    }
+
+    let disposed = false;
+    let trayInitHandle: { promise: Promise<void>; cancel: () => void } | null = null;
+
+    const timer = window.setTimeout(() => {
+      void import('@/shared/utils/backgroundTaskScheduler')
+        .then(({ backgroundTaskScheduler }) => {
+          if (disposed) {
+            return;
+          }
+
+          trayInitHandle = backgroundTaskScheduler.schedule(async signal => {
+            if (signal.aborted || disposed) {
+              return;
+            }
+            startupTrace.markPhase('desktop_tray_deferred_init_start');
+            const { systemAPI } = await import('@/infrastructure/api/service-api/SystemAPI');
+            if (signal.aborted || disposed) {
+              return;
+            }
+            await systemAPI.initializeTrayAfterStartup();
+            startupTrace.markPhase('desktop_tray_deferred_init_end');
+          }, {
+            idle: true,
+            inFlightKey: 'desktop-tray:startup-init',
+            priority: 'low',
+          });
+
+          trayInitHandle.promise.catch(error => {
+            if (!disposed && !isBackgroundTaskCancelledError(error)) {
+              log.warn('Deferred tray initialization failed', error);
+            }
+          });
+        })
+        .catch(error => {
+          if (!disposed) {
+            log.warn('Failed to schedule deferred tray initialization', error);
+          }
+        });
+    }, DEFERRED_TRAY_INIT_DELAY_MS);
+
+    return () => {
+      disposed = true;
+      window.clearTimeout(timer);
+      trayInitHandle?.cancel();
     };
   }, [interactiveShellReady, startupOverlayVisible]);
 

@@ -668,12 +668,8 @@ pub async fn run() {
             logging::spawn_log_cleanup_task();
             startup_trace.record_elapsed_step("native_setup", "spawn_log_cleanup_task", step_started);
 
-            // Set up system tray icon.
             let step_started = Instant::now();
-            if let Err(error) = crate::tray::setup_tray(app, &startup_trace) {
-                log::warn!("Failed to set up system tray: {}", error);
-            }
-            startup_trace.record_elapsed_step("native_setup", "setup_tray", step_started);
+            startup_trace.record_elapsed_step("native_setup", "setup_tray_deferred", step_started);
 
             let setup_duration_ms = elapsed_ms(setup_started);
             let since_process_start_ms = elapsed_ms(startup_started);
@@ -1117,6 +1113,7 @@ pub async fn run() {
             send_system_notification,
             api::system_api::quit_app,
             api::system_api::minimize_to_tray,
+            api::system_api::initialize_tray_after_startup,
             api::system_api::startup_window_control,
             api::system_api::toggle_main_window_fullscreen,
             check_command_exists,

@@ -143,10 +143,18 @@ async function flushAsyncWork(): Promise<void> {
 }
 
 async function advanceReleasedLocalFullHistoryCompletion(): Promise<void> {
-  await vi.advanceTimersByTimeAsync(250);
   await flushAsyncWork();
   await vi.advanceTimersByTimeAsync(1500);
   await flushAsyncWork();
+}
+
+function resetStartupTraceEventsForTest(): void {
+  const trace = startupTrace as unknown as {
+    phaseEvents: number;
+    phaseRecords: unknown[];
+  };
+  trace.phaseEvents = 0;
+  trace.phaseRecords.length = 0;
 }
 
 describe('FlowChatStore metadata persistence callbacks', () => {
@@ -758,6 +766,53 @@ describe('FlowChatStore historical session hydration state', () => {
     });
   });
 
+  it('starts model config lookup while a paged metadata request is in flight', async () => {
+    const events: string[] = [];
+    const page = createDeferred<{
+      sessions: any[];
+      totalTopLevelCount: number;
+      loadedTopLevelCount: number;
+      nextCursor?: string;
+      hasMore: boolean;
+    }>();
+    apiMocks.listSessionsPage.mockImplementationOnce(() => {
+      events.push('page-request-start');
+      return page.promise;
+    });
+    configManagerMock.getConfigs.mockImplementationOnce(async () => {
+      events.push('model-config-start');
+      return {
+        'ai.models': [],
+        'ai.default_models': {},
+      };
+    });
+
+    const load = flowChatStore.loadSessionMetadataPage(
+      'D:/workspace/BitFun',
+      5,
+      undefined,
+      undefined,
+      undefined,
+      'nav_initial'
+    );
+
+    await vi.waitFor(() => {
+      expect(apiMocks.listSessionsPage).toHaveBeenCalledTimes(1);
+    });
+    await flushAsyncWork();
+
+    expect(events).toContain('page-request-start');
+    expect(events).toContain('model-config-start');
+
+    page.resolve({
+      sessions: [],
+      totalTopLevelCount: 0,
+      loadedTopLevelCount: 0,
+      hasMore: false,
+    });
+    await load;
+  });
+
   it('marks historical sessions hydrating while turns are loading and ready after completion', async () => {
     const turns = createDeferred<any[]>();
     apiMocks.restoreSessionView.mockImplementationOnce(async () => ({
@@ -784,9 +839,10 @@ describe('FlowChatStore historical session hydration state', () => {
     }));
 
     const load = flowChatStore.loadSessionHistory('history-1', 'D:/workspace/BitFun');
-    await flushAsyncWork();
 
-    expect(flowChatStore.getState().sessions.get('history-1')?.historyState).toBe('hydrating');
+    await vi.waitFor(() => {
+      expect(flowChatStore.getState().sessions.get('history-1')?.historyState).toBe('hydrating');
+    });
 
     turns.resolve([]);
     await load;
@@ -796,6 +852,131 @@ describe('FlowChatStore historical session hydration state', () => {
       historyState: 'ready',
       dialogTurns: [],
     });
+  });
+
+  it('starts backend restore before notifying hydrating state', async () => {
+    const events: string[] = [];
+    const restore = createDeferred<{
+      session: {
+        sessionId: string;
+        sessionName: string;
+        agentType: string;
+        state: string;
+        turnCount: number;
+        createdAt: number;
+      };
+      turns: any[];
+      contextRestoreState: 'pending';
+    }>();
+    apiMocks.restoreSessionView.mockImplementationOnce(() => {
+      events.push('restore-start');
+      return restore.promise;
+    });
+    flowChatStore.setState(() => ({
+      sessions: new Map([
+        ['history-1', createSession({
+          sessionId: 'history-1',
+          isHistorical: true,
+          historyState: 'metadata-only',
+        })],
+      ]),
+      activeSessionId: 'history-1',
+    }));
+    const unsubscribe = flowChatStore.subscribe(state => {
+      if (state.sessions.get('history-1')?.historyState === 'hydrating') {
+        events.push('hydrating-notified');
+      }
+    });
+
+    try {
+      const load = flowChatStore.loadSessionHistory('history-1', 'D:/workspace/BitFun');
+      await vi.waitFor(() => {
+        expect(apiMocks.restoreSessionView).toHaveBeenCalledTimes(1);
+      });
+
+      expect(events).toEqual(['restore-start', 'hydrating-notified']);
+
+      restore.resolve({
+        session: {
+          sessionId: 'history-1',
+          sessionName: 'History 1',
+          agentType: 'agentic',
+          state: 'Idle',
+          turnCount: 0,
+          createdAt: 1,
+        },
+        turns: [],
+        contextRestoreState: 'pending',
+      });
+      await load;
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  it('keeps active deferred metadata-only sessions stable while initial restore is pending', async () => {
+    const restore = createDeferred<{
+      session: {
+        sessionId: string;
+        sessionName: string;
+        agentType: string;
+        state: string;
+        turnCount: number;
+        createdAt: number;
+      };
+      turns: any[];
+      contextRestoreState: 'pending';
+    }>();
+    const observedStates: string[] = [];
+    apiMocks.restoreSessionView.mockReturnValueOnce(restore.promise);
+    flowChatStore.setState(() => ({
+      sessions: new Map([
+        ['history-1', createSession({
+          sessionId: 'history-1',
+          isHistorical: true,
+          historyState: 'metadata-only',
+        })],
+      ]),
+      activeSessionId: 'history-1',
+    }));
+    const unsubscribe = flowChatStore.subscribe(state => {
+      observedStates.push(state.sessions.get('history-1')?.historyState ?? 'missing');
+    });
+
+    try {
+      const load = flowChatStore.loadSessionHistory(
+        'history-1',
+        'D:/workspace/BitFun',
+        undefined,
+        undefined,
+        undefined,
+        { deferFullHistoryUntilActive: true },
+      );
+      await vi.waitFor(() => {
+        expect(apiMocks.restoreSessionView).toHaveBeenCalledTimes(1);
+      });
+
+      expect(flowChatStore.getState().sessions.get('history-1')?.historyState).toBe('metadata-only');
+      expect(observedStates).not.toContain('hydrating');
+
+      restore.resolve({
+        session: {
+          sessionId: 'history-1',
+          sessionName: 'History 1',
+          agentType: 'agentic',
+          state: 'Idle',
+          turnCount: 0,
+          createdAt: 1,
+        },
+        turns: [],
+        contextRestoreState: 'pending',
+      });
+      await load;
+
+      expect(flowChatStore.getState().sessions.get('history-1')?.historyState).toBe('ready');
+    } finally {
+      unsubscribe();
+    }
   });
 
   it('marks historical sessions failed when hydrate fails', async () => {
@@ -1046,7 +1227,7 @@ describe('FlowChatStore historical session hydration state', () => {
         undefined,
         expect.any(String),
         undefined,
-        8,
+        3,
       );
       expect(
         flowChatStore.getState().sessions.get('history-1')?.dialogTurns.map(turn => turn.userMessage.content)
@@ -1187,7 +1368,7 @@ describe('FlowChatStore historical session hydration state', () => {
     }
   });
 
-  it('defers full history completion when partial hydrate finishes after switching away', async () => {
+  it('skips committing stale local history hydrate when switching away before restore finishes', async () => {
     vi.useFakeTimers();
     const latestTurn = {
       turnId: 'turn-2',
@@ -1248,8 +1429,9 @@ describe('FlowChatStore historical session hydration state', () => {
 
       expect(flowChatStore.getState().activeSessionId).toBe('history-2');
       expect(flowChatStore.getState().sessions.get('history-1')).toMatchObject({
-        historyState: 'ready',
-        isPartial: true,
+        isHistorical: true,
+        historyState: 'metadata-only',
+        dialogTurns: [],
       });
       expect(flowChatStore.hasPendingSessionHistoryCompletion('history-1')).toBe(false);
 
@@ -1716,13 +1898,6 @@ describe('FlowChatStore historical session hydration state', () => {
 
       flowChatStore.releaseSessionHistoryCompletionAfterInitialPaint('history-1');
 
-      expect(idleCallback).toBeNull();
-      await vi.advanceTimersByTimeAsync(249);
-      await flushAsyncWork();
-      expect(idleCallback).toBeNull();
-
-      await vi.advanceTimersByTimeAsync(1);
-      await flushAsyncWork();
       expect(idleCallback).toBeTypeOf('function');
       const hydrationPromise = Array.from(
         ((flowChatStore as any).fullHistoryHydrationRequests as Map<string, { promise: Promise<void> }>).values()
@@ -1824,7 +1999,7 @@ describe('FlowChatStore historical session hydration state', () => {
 
       flowChatStore.releaseSessionHistoryCompletionAfterInitialPaint('history-1');
 
-      await vi.advanceTimersByTimeAsync(1749);
+      await vi.advanceTimersByTimeAsync(1499);
       await flushAsyncWork();
       expect(apiMocks.restoreSessionView).toHaveBeenCalledTimes(1);
 
@@ -2179,6 +2354,7 @@ describe('FlowChatStore historical session hydration state', () => {
   });
 
   it('records scalar restore timing fields for historical session diagnostics', async () => {
+    resetStartupTraceEventsForTest();
     const restoredTurn = {
       turnId: 'turn-1',
       turnIndex: 0,
@@ -2210,7 +2386,7 @@ describe('FlowChatStore historical session hydration state', () => {
         normalizeTurnIdsDurationMs: 4,
         totalDurationMs: 44,
         turnLoad: {
-          requestedTailTurnCount: 8,
+          requestedTailTurnCount: 3,
           loadedTurnCount: 1,
           totalTurnCount: 2,
           turnFileCount: 2,
@@ -2239,9 +2415,13 @@ describe('FlowChatStore historical session hydration state', () => {
 
     await flowChatStore.loadSessionHistory('history-1', 'D:/workspace/BitFun');
 
-    const restoreEvents = startupTrace.getSnapshot().phases.events
-      .filter(event => event.phase === 'historical_session_restore_end');
-    expect(restoreEvents[restoreEvents.length - 1]).toMatchObject({
+    const restoreEvent = startupTrace.getSnapshot().phases.events
+      .find(event =>
+        event.phase === 'historical_session_restore_end' &&
+        event.sessionId === 'history-1' &&
+        event.restoreTotalDurationMs === 44
+      );
+    expect(restoreEvent).toMatchObject({
       restoreTotalDurationMs: 44,
       restoreLoadSessionWithTurnsDurationMs: 37,
       restoreTurnReadDurationMs: 8,

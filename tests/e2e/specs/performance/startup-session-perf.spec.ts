@@ -612,6 +612,30 @@ function numericEnv(name: string): number | undefined {
   return Number.isFinite(value) ? value : undefined;
 }
 
+async function assertReleaseFastPerfRuntime(): Promise<{
+  runtimeUrl: string;
+  runtimeHostname: string;
+}> {
+  const runtime = await browser.execute(() => ({
+    runtimeUrl: window.location.href,
+    runtimeHostname: window.location.hostname,
+  }));
+  const appMode = (process.env.BITFUN_E2E_APP_MODE ?? '').toLowerCase();
+  const allowDevServer = process.env.BITFUN_E2E_ALLOW_RELEASE_FAST_DEV_SERVER === '1';
+  const isDevServerRuntime =
+    runtime.runtimeHostname === 'localhost' || runtime.runtimeHostname === '127.0.0.1';
+
+  if (appMode === 'release-fast' && isDevServerRuntime && !allowDevServer) {
+    throw new Error(
+      `release-fast perf run loaded a dev-server URL: ${runtime.runtimeUrl}. ` +
+        'Build with pnpm run desktop:build:release-fast, or set ' +
+        'BITFUN_E2E_ALLOW_RELEASE_FAST_DEV_SERVER=1 only for explicit dev-server diagnostics.',
+    );
+  }
+
+  return runtime;
+}
+
 const DEFAULT_POST_VISIBLE_OBSERVE_MS = 3000;
 
 async function waitForOptionalPhaseCount(
@@ -4366,12 +4390,16 @@ function expectLongSessionMeasurementUsable(
   options: LongSessionOpenMeasurementOptions = {},
 ): void {
   const requireLatestModelRound = requiresLatestModelRoundForFixture(measurement.fixtureScenario);
+  const requireFrameTrace = options.requireFrameTrace !== false;
   expect(measurement.clickToLatestVisibleMs).toBeGreaterThan(0);
   expect(measurement.clickToLatestUsableMs).toBeGreaterThan(0);
-  if (options.requireFrameTrace !== false && measurement.traceWaitErrors.length === 0) {
-    expect(measurement.clickToPostHydrateUsableMs).toBeGreaterThan(0);
+  if (requireFrameTrace && measurement.traceWaitErrors.length > 0) {
+    throw new Error(
+      `Long session measurement missing required trace phases: ${measurement.traceWaitErrors.join('; ')}`,
+    );
   }
-  if (options.requireFrameTrace !== false && measurement.traceWaitErrors.length === 0) {
+  if (requireFrameTrace) {
+    expect(measurement.clickToPostHydrateUsableMs).toBeGreaterThan(0);
     expect(measurement.sessionOpen.hydrateDurationMs).toBeGreaterThan(0);
     expect(measurement.sessionOpen.latestFrameSinceHydrateMs).toBeGreaterThan(0);
     expect(measurement.sessionOpen.clickToLatestFrameMs).toBeGreaterThan(0);
@@ -4545,9 +4573,11 @@ describe('Performance telemetry', () => {
 
   before(async () => {
     await waitForTracePhaseCount('interactive_shell_ready', 1, 30000);
+    await assertReleaseFastPerfRuntime();
   });
 
   it('collects startup timing from the current build', async () => {
+    const runtime = await assertReleaseFastPerfRuntime();
     const snapshot = await readStartupTraceSnapshot();
     const startup = summarizeStartup(snapshot);
     const breakdown = summarizeStartupBreakdown(snapshot);
@@ -4556,6 +4586,7 @@ describe('Performance telemetry', () => {
 
     console.log('[Perf] startup', JSON.stringify({
       appMode: process.env.BITFUN_E2E_APP_MODE ?? 'auto',
+      ...runtime,
       traceId: snapshot.traceId,
       startup,
       breakdown,
@@ -4564,6 +4595,7 @@ describe('Performance telemetry', () => {
     }));
     await writeReport('startup', {
       appMode: process.env.BITFUN_E2E_APP_MODE ?? 'auto',
+      ...runtime,
       traceId: snapshot.traceId,
       startup,
       breakdown,

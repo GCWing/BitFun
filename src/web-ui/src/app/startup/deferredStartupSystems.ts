@@ -25,7 +25,6 @@ export interface DeferredStartupSystemsDependencies {
   initializeIdeControl?: () => Promise<void>;
   initializeMcpServers?: () => Promise<void>;
   initializeAcpClients?: () => Promise<void>;
-  probeAcpClientRequirements?: () => Promise<void>;
   preloadDeferredRenderers?: () => Promise<void>;
 }
 
@@ -42,11 +41,6 @@ async function initializeMcpServersDefault(): Promise<void> {
 async function initializeAcpClientsDefault(): Promise<void> {
   const { ACPClientAPI } = await import('@/infrastructure/api/service-api/ACPClientAPI');
   await ACPClientAPI.initializeClients();
-}
-
-async function probeAcpClientRequirementsDefault(): Promise<void> {
-  const { ACPClientAPI } = await import('@/infrastructure/api/service-api/ACPClientAPI');
-  await ACPClientAPI.probeClientRequirements();
 }
 
 async function preloadDeferredRenderersDefault(): Promise<void> {
@@ -73,8 +67,6 @@ export function scheduleDeferredStartupSystems(
   const initializeIdeControl = dependencies.initializeIdeControl ?? initializeIdeControlDefault;
   const initializeMcpServers = dependencies.initializeMcpServers ?? initializeMcpServersDefault;
   const initializeAcpClients = dependencies.initializeAcpClients ?? initializeAcpClientsDefault;
-  const probeAcpClientRequirements =
-    dependencies.probeAcpClientRequirements ?? probeAcpClientRequirementsDefault;
   const preloadDeferredRenderers = dependencies.preloadDeferredRenderers ?? preloadDeferredRenderersDefault;
 
   return scheduler.schedule(async signal => {
@@ -99,7 +91,6 @@ export function scheduleDeferredStartupSystems(
     await runStep('ide_control', initializeIdeControl);
     await runStep('mcp_servers', initializeMcpServers);
     await runStep('acp_clients', initializeAcpClients);
-    await runStep('acp_client_requirements', probeAcpClientRequirements);
     await runStep('renderer_preloads', preloadDeferredRenderers);
 
     if (!signal.aborted) {
