@@ -9,7 +9,7 @@ description: Use when creating new skills, editing existing skills, or verifying
 
 **Writing skills IS Test-Driven Development applied to process documentation.**
 
-**Personal skills live in agent-specific directories (`$HOME/.bitfun/skills` for BitFun Code, `$HOME/.bitfun/skills/` for Codex)**
+**Personal skills live in `%APPDATA%/BitFun/skills` on Windows, `~/Library/Application Support/BitFun/skills` on macOS, and `~/.local/share/BitFun/skills` on Linux.**
 
 You write test cases (pressure scenarios with subagents), watch them fail (baseline behavior), write the skill (documentation), watch tests pass (agents comply), and refactor (close loopholes).
 
